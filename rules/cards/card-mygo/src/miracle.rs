@@ -11,13 +11,13 @@
 //! > （3）若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new("MyGO:难以复刻的奇迹", &[
     On::Play(miracle),
-    On::Hook(&[TriggerKind::PassPlayer], pass_player),
+    On::Hook(&[HookKind::PassPlayer], pass_player),
 ]);
 
 const ID: &str = "MyGO:难以复刻的奇迹";

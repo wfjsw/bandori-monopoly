@@ -8,14 +8,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const ONE_OF_US: CardDef = CardDef::new("AG:ONE OF US", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::BeforeOut], before_out),
+    On::Hook(&[HookKind::BeforeOut], before_out),
 ]);
 
 fn owns_shop(player_id: i32) -> bool {
@@ -127,7 +127,7 @@ fn play(player_id: i32) {
     // needs the raw `H.State.seats[].money` add (not `H.GainR`). Until both land
     // the split cannot key on the designated tiles without over-firing.
     // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
-    // -- the deed hand-over is `On::Hook(&[TriggerKind::BeforeOut], ...)` below
+    // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], ...)` below
     // (C# `CardOneOfUs.BeforeOut`).
 }
 

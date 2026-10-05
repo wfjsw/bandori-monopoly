@@ -19,5 +19,7 @@ card_sdk::bandori_ruleset!(
     card_ppp::CARDS,
     card_ras::CARDS,
     card_roselia::CARDS,
-    card_sumimi::CARDS
+    card_sumimi::CARDS,
+    skill_bands::CARDS,
+    skill_characters::CARDS
 );

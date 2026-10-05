@@ -10,13 +10,12 @@
 //! > 3. 事件卡的效果手牌则则抵消其所有的效果。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const NET_ERROR: CardDef = CardDef::new("通用:网络链接异常", &[
-    On::React(
-        &[TriggerKind::Card, TriggerKind::Event, TriggerKind::Target],
+    On::React(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
         can_react,
         react,
     ),
@@ -36,8 +35,9 @@ fn can_react(player_id: i32) -> bool {
         }
         // 规则书（1）的可表达半边: a player-designation of this player (C# `H.Target`,
         // not `H.TargetTile` -- the `immune<p>` tag only guards `H.Target`).
-        TriggerKind::Target => {
-            trigger::tile() < 0
+        TriggerKind::Effect => {
+            ctx::effect::has(TriggerKind::Target)
+                && trigger::tile() < 0
                 && trigger::target() == player_id
                 && trigger::by_card().is_some_and(|by| by != player_id)
         }

@@ -8,16 +8,16 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHANGE_WORLD: CardDef = CardDef::new("RAS:Change the world", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
-    On::Hook(&[TriggerKind::PayAdd], pay_choose),
-    On::Hook(&[TriggerKind::PayAfter], pay_after),
+    On::Hook(&[HookKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::PayAdd], pay_choose),
+    On::Hook(&[HookKind::PayAfter], pay_after),
 ]);
 
 const ID: &str = "RAS:Change the world";
@@ -81,9 +81,10 @@ fn play(player_id: i32) {
     // placement is bound to `tile` rather than the player's field; needs field-card
     // tile placement (`H.PlaceFromPlay(c, owner, tile)`). The tile is remembered
     // in `SLOT_TILE` so the hooks below can key on it.
-    // TODO(规则书): 「你的本次移动掷骰变为3d20」 -- needs the move dice plan
-    // (C# `H._turnCtx.Plan.Base.Clear()` + `Add((3, 20, ...))`); no dice-plan
-    // surface (`set_fixed_roll` only pins one number).
+    // 规则书: 「你的本次移动掷骰变为3d20」 -- C# `H._turnCtx.Plan.Base.Clear()` +
+    // `Add((3, 20, "（Change the world）"))`.
+    ctx::plan::set_base_dice(3, 20, "（Change the world）");
+    ctx::log(player_id, &Msg::new(key!("change_world_dice")).player_id("who", player_id));
 }
 
 /// C# `CardChangeWorld.PassTile` -- while the card is placed, its owner's main

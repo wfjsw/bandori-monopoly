@@ -12,7 +12,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -82,11 +82,11 @@ fn clear_held(player_id: i32) {
 }
 
 pub const HERE_THE_WORLD: CardDef = CardDef::new("Sumimi:Here the world", &[
-    On::React(&[TriggerKind::TwoCards], can_react, react),
+    On::React(&[ChainKind::TwoCards], can_react, react),
     // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-    On::Hook(&[TriggerKind::Drew], drew),
+    On::Hook(&[HookKind::Drew], drew),
     // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-    On::Hook(&[TriggerKind::TurnStart], turn_start),
+    On::Hook(&[HookKind::TurnStart], turn_start),
 ]);
 
 fn can_react(player_id: i32) -> bool {

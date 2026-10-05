@@ -65,7 +65,7 @@ fn strong_flower(player_id: i32) {
     // the stop+settle half now maps to `ctx::plan::set_stop_at(tile)` +
     // `ctx::plan::set_resolve(true)` (C# `m.Stopped = true; m.Resolve = true`),
     // but the trigger is still unmapped: the Fx.PassTile hook is landed
-    // (`TriggerKind::PassTile`) yet the card cannot be tile-bound
+    // (`HookKind::PassTile`) yet the card cannot be tile-bound
     // (`H.PlaceFromPlay(c, owner, tile)`) so `Tile` is unknown and the gate
     // `t == Tile` cannot fire. Remaining unmapped halves: tile binding,
     // H.TryResonance for the 1,500, and unplace-to-discard.

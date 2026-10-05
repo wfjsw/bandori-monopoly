@@ -11,7 +11,7 @@
 //! > （3）当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -26,10 +26,10 @@ pub const UMIRI_CARD: CardDef = CardDef::new("Mujica:（海铃）", &[
     On::Play(umiri_card),
     On::CantPlay(cant_play),
     // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-    On::Hook(&[TriggerKind::TurnStart], turn_start),
+    On::Hook(&[HookKind::TurnStart], turn_start),
     // 规则书（3）: the discard + draw when the card is back at the user's field
     // (C# `CardUmiriCard.TurnEnd` -> `End`).
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
 ]);
 
 /// C# `CardUmiriCard.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.

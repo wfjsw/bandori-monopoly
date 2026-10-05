@@ -7,13 +7,13 @@
 //! > （2）视为打出一张@Tsugu ycm
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TSUGUMI_CAN: CardDef = CardDef::new("AG:（鸫）微小的『能做到』的事", &[
     On::Play(play),
-    On::React(&[TriggerKind::Card], can_react, react),
+    On::React(&[ChainKind::Card], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {

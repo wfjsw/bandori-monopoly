@@ -7,13 +7,13 @@
 //! > （2）此卡可在你的移动掷骰后作为[反击]使用。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TWO_IN_ONE: CardDef = CardDef::new("Sumimi:Sumimi是二人一体的", &[
     On::Play(play),
-    On::React(&[TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 fn play(player_id: i32) {

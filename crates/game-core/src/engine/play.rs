@@ -347,7 +347,7 @@ impl Cx<'_> {
                 plan = self.w.turn.plan.clone();
                 plan.roll = match self.w.turn.fixed_roll {
                     Some(n) => n,
-                    None => self.w.rng.d(20),
+                    None => self.roll_tables(&plan),
                 };
                 let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
                 plan.roll = t.value.max(0);
@@ -388,9 +388,23 @@ impl Cx<'_> {
             return Ok(());
         }
         self.w.turn.main_moved = true;
-        let mut m = Move::new(i);
+        // Start from the turn's plan, not a fresh move: a **Play** body may have
+        // shaped this move earlier in the turn (change_world's 「你的本次移动掷骰
+        // 变为3d20」 writes the dice table at play time). C# `MoveCtx m =
+        // _turnCtx.Plan`. Only the identity and the walk's *progress* are
+        // forced/ cleared here -- everything a card shaped carries over.
+        let mut m = self.w.turn.plan.clone();
+        m.player_id = i;
         m.roller = roller;
         m.main = true;
+        m.from = 0;
+        m.to = 0;
+        m.path.clear();
+        m.total = 0;
+        m.remaining = 0;
+        m.passed_players.clear();
+        m.stopped = false;
+        m.cancelled = false;
         if !self.out(i) {
             // `roll` (pre) -- before the d20 is cast. `value = -1` is the
             // sentinel meaning "no roll yet": the bridge would otherwise
@@ -417,10 +431,12 @@ impl Cx<'_> {
                 self.w.st.step = 3;
                 return Ok(());
             }
-            // C# `TurnCtx.Plan.FixedRoll` replaces the d20 when a card set it.
+            // C# `DoMoveRoll` + `TurnCtx.Plan.FixedRoll`: a stored fixed face
+            // replaces the roll, otherwise sum the `base` + `dice` tables
+            // (default 1d20; `sides == 0` is a flat `count`).
             m.roll = match self.w.turn.fixed_roll {
                 Some(n) => n,
-                None => self.w.rng.d(20), // MoveCtx.Base = 1d20
+                None => self.roll_tables(&m),
             };
             // `rollAfter` (Fx) -- C# `Each(RollAfter)` runs on the fresh roll,
             // *before* the moveRoll [反击] window; a field card may rewrite it
@@ -457,11 +473,31 @@ impl Cx<'_> {
         Ok(())
     }
 
+    /// `DoMoveRoll` -- sum the move's `base` + `dice` tables into one face.
+    ///
+    /// Each term is `count`d`sides`, or a flat `count` when `sides <= 0` (see
+    /// [`crate::engine::move_ctx::Roll`]). This is what makes a Play body's
+    /// 「掷骰变为3d20」 (`set_base_dice(3, 20)`) actually roll three dice.
+    fn roll_tables(&mut self, m: &Move) -> i32 {
+        let mut total = 0;
+        for t in m.base.iter().chain(m.dice.iter()) {
+            if t.sides <= 0 {
+                total += t.count;
+            } else {
+                for _ in 0..t.count.max(0) {
+                    total += self.w.rng.d(t.sides.max(1));
+                }
+            }
+        }
+        total
+    }
+
     /// `WalkMove` -- step tile by tile; passing CiRCLE pays the reward.
     fn walk(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         let n = self.data.tiles.len() as i32;
-        let steps = m.roll;
+        // C# `WalkMoveSteps`: `steps = (m.Steps >= 0 ? m.Steps : m.Roll)`.
+        let steps = if m.steps >= 0 { m.steps } else { m.roll };
         let head = |still: bool| {
             let base = if m.main {
                 Msg::new("log.roll").opt("by", (m.roller != i).then(|| Msg::new("log.part.rolled_by").player_id("who", m.roller)))
@@ -630,14 +666,14 @@ impl Cx<'_> {
         let owner = self.w.st.owners.get(at).copied().unwrap_or(-1);
         let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
         // C# 24448: a cancelled settle ends here -- no Land, no SettleAfter.
-        if self.out(i) || t.cancelled {
+        if self.out(i) || t.is_cancelled() {
             return Ok(());
         }
         // `settleInstead` (Fx) -- C# `SettleInstead`: the first field card that
         // replaces the tile's effect does its own thing and calls
         // `trigger::set_cancelled()`; a later one should check `cancelled()`.
         let si = raise!(self, "settleInstead", i, @m m, tile = at as i32, target = owner)?;
-        if !si.cancelled {
+        if !si.is_cancelled() {
             self.land(i, m.main)?;
         }
         // C# 24493: SettleAfter only while the player is in and the match plays.
@@ -1310,6 +1346,38 @@ impl Cx<'_> {
         let rent = p.kind == "rent";
         let mut amount = p.amount;
         let mut to = p.to;
+        // ---- declaration ------------------------------------------------
+        // The payment is declared with its **declared** amount, before any
+        // modifier has touched it. That is the stable fact a counter listens
+        // to: `vocal_too_hard`'s 「5000以上」 reads this, not whatever the
+        // settlement has drifted to.
+        //
+        // `effect` is the [反击] chain. Counters may negate the payment
+        // outright, spare a party, or reshape its amount and payee.
+        if let Some(f) = p.from.filter(|_| amount > 0) {
+            let t = raise!(self, "effect", f,
+                target = to.map_or(-1, |t| t as i32),
+                value = amount,
+                by_card = p.by_card,
+                pay_is_rent = rent,
+                tile = p.tile.map_or(-1, |t| t as i32),
+                effects = vec![super::rules::Effect {
+                    kind: "pay",
+                    target: to.map_or(-1, |t| t as i32),
+                    from: p.from.map_or(-1, |x| x as i32),
+                    tile: p.tile.map_or(-1, |t| t as i32),
+                    value: amount,
+                }],
+            )?;
+            if t.is_cancelled() || !t.settles_for(f as i32) {
+                raise!(self, "payAfter", side, player_id = payer, target = to.map_or(-1, |t| t as i32), value = 0, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
+                return Ok(Paid::default());
+            }
+            amount = t.value.max(0);
+            to = (t.target >= 0).then_some(t.target as usize);
+        }
+        // ---- settlement -------------------------------------------------
+        // Modifiers run now, against the amount the effect settled on.
         for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
             if amount <= 0 {
                 break;
@@ -1317,10 +1385,11 @@ impl Cx<'_> {
             let t = raise!(self, kind, side, player_id = payer, target = to.map_or(-1, |t| t as i32), value = amount, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
             amount = t.value.max(0);
         }
-        // `pay` (pre) -- the [反击] window, on the payer. A reaction may rewrite
-        // the amount (0 cancels) and/or the payee (`set_pay_target`, -1 = bank).
-        if let Some(f) = p.from.filter(|_| amount > 0) {
-            let t = raise!(self, "pay", f, target = to.map_or(-1, |t| t as i32), value = amount, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
+        // `pay` is a settlement hook now: what the payment actually was. It
+        // fires after the chain, so it can no longer be used to reconstruct
+        // 「被…效果影响」 -- that is `effect`'s job.
+        if amount > 0 {
+            let t = raise!(self, "pay", side, player_id = payer, target = to.map_or(-1, |t| t as i32), value = amount, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
             amount = t.value.max(0);
             to = (t.target >= 0).then_some(t.target as usize);
         }
@@ -1740,7 +1809,7 @@ impl Cx<'_> {
         let rules = self.rules;
         // `Trigger.Cancelled` -- the play is negated; the card still goes to its
         // Dest below but its effect body does not run.
-        let dest = if t.cancelled {
+        let dest = if t.is_cancelled() {
             Dest::Graveyard
         } else {
             rules.play(self, i, id)?
@@ -1797,7 +1866,7 @@ impl Cx<'_> {
         let rules = self.rules;
         // `Trigger.Cancelled` -- the event's effect is negated; it is still
         // filed away below but does not resolve.
-        let placed = if t.cancelled {
+        let placed = if t.is_cancelled() {
             false
         } else {
             rules.event(self, i, &id)?

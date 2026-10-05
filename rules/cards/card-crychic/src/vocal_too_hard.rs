@@ -6,18 +6,18 @@
 //! > [反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const VOCAL_TOO_HARD: CardDef = CardDef::new("CRYCHIC:主唱太拼命了", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「一次性向其他玩家支付5000以上资金时」 -- C#
     // `t.Kind == "pay" && t.Pay.from == seat && t.Pay.PayToOther && t.Pay.amount >= 5000`.
-    if trigger::kind() != TriggerKind::Pay || trigger::player_id() != player_id {
+    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
     // 规则书[反击]: 「向其他玩家支付」 -- C# `t.Pay.PayToOther` (`Pay.from >= 0

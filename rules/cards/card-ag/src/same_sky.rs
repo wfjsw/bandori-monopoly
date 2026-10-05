@@ -6,13 +6,13 @@
 //! > [反击]抽出此卡时立刻打出，如果你手牌数大于等于3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SAME_SKY: CardDef = CardDef::new("AG:朝同一片天空迈进", &[
-    On::Hook(&[TriggerKind::Drawn], react),
-    On::Hook(&[TriggerKind::DeckAtGameStart], return_at_opening),
+    On::Hook(&[HookKind::Drawn], react),
+    On::Hook(&[HookKind::DeckAtGameStart], return_at_opening),
 ]);
 
 const ID: &str = "AG:朝同一片天空迈进";
@@ -20,7 +20,7 @@ const ID: &str = "AG:朝同一片天空迈进";
 /// 规则书[反击]: 「（开局时抽到此卡洗回）」 -- C# `ReturnAtOpening` /
 /// `FixOpeningHand`. The opening deal and mulligan raise no `Drawn` hooks, so
 /// the old `step() == 0` branch is unreachable; the brief maps this to
-/// `On::Hook(&[TriggerKind::DeckAtGameStart], ...)`, which fires on this card
+/// `On::Hook(&[HookKind::DeckAtGameStart], ...)`, which fires on this card
 /// over draw + hand after the mulligan.
 fn return_at_opening(player_id: i32) {
     // Pull every copy out of the opening hand and shuffle it back into the deck.

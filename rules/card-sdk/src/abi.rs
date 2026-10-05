@@ -72,7 +72,7 @@ use alloc::{string::String, vec::Vec};
 ///      `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
 ///      `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_no_build` /
 ///      `set_build_anywhere` / `set_teleport_walk` / `set_min_roll` /
-///      `set_bonus` / `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
+///      `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
 ///      `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
 ///      on the move being planned (guest: `ctx::plan::*`).
 /// v25: card-driven `give_stay` / `give_stun` / `give_exile` / `teleport_to`
@@ -94,9 +94,15 @@ use alloc::{string::String, vec::Vec};
 ///      resolves [结算]). C# `TeleportWalk` becomes a Teleport whose destination
 ///      is computed from the roll; C# `Resolve = false` clears DEST. FIRE_ROLL
 ///      is card-owned state now (`plan::set_tag` / `trigger::move_tag`), not an
-///      engine flag. Play context (`CardDef.targeting`, `trigger::play_*`,
-///      `set_immune`), `ctx::card_move` / `ctx::agent_landing`, `add_mark_flags`,
-///      and the plan's `set_start` / `set_teleport_to` / Base-Dice tables.
+///      engine flag. `ctx::card_move` / `ctx::agent_landing` run a move or an
+///      agent landing from inside a card; the plan gained `set_kind` / `set_tag`
+///      / `set_start` / `set_teleport_to` and the Base/Dice roll tables
+///      (`set_base_dice` / `add_base_dice` / `add_extra_dice` -- a flat add is a
+///      `0`-sided term, which is what C# `Bonus` was).
+///      NOT yet in v27, though named in earlier drafts of this line: the play
+///      context (`CardDef.targeting`, `trigger::play_*`, `set_immune`,
+///      `add_mark_flags(.., NO_TARGET)`) and `plan::set_stopped`. Targeting is
+///      the `HostRequest::Target` gate; the rest is unported.
 pub const ABI_VERSION: i32 = 27;
 
 /// Wasm import module name for every host function.
@@ -453,6 +459,16 @@ pub enum TriggerKind {
     /// v26: C# `IRedirect.Redirects` -- a single-target card is about to target
     /// `t.target`; a field card takes the hit with `trigger::set_target(player_id)`.
     Redirect = 71,
+    /// v27: **a card effect is declared at someone**. This is the [反击] key for
+    /// 「被其他玩家的卡效果影响」 -- one stable fact, not a union of outcome
+    /// kinds. It is raised when a link's recipients are named, before any
+    /// settlement, and carries the link's effect list (`ctx::effect`).
+    ///
+    /// The old `Target` / `Abnormal` / `Pay` windows are settlement hooks now:
+    /// they fire as the effect settles and can no longer reconstruct this
+    /// clause. A counter that means "an effect hit me" listens here and asks
+    /// `effect::`; one that means "a payment settled" listens at [`HookKind::PayAfter`].
+    Effect = 72,
 }
 
 impl TriggerKind {
@@ -529,6 +545,7 @@ impl TriggerKind {
             69 => Self::ImmuneAll,
             70 => Self::Untargetable,
             71 => Self::Redirect,
+            72 => Self::Effect,
             _ => Self::None,
         }
     }
@@ -608,6 +625,7 @@ impl TriggerKind {
             Self::ImmuneAll => "immuneAll",
             Self::Untargetable => "untargetable",
             Self::Redirect => "redirect",
+            Self::Effect => "effect",
         }
     }
 
@@ -685,8 +703,250 @@ impl TriggerKind {
             "immuneAll" => Self::ImmuneAll,
             "untargetable" => Self::Untargetable,
             "redirect" => Self::Redirect,
+            "effect" => Self::Effect,
             _ => Self::None,
         }
+    }
+
+    /// Which of the three vocabularies this event belongs to. Derived from the
+    /// typed views below -- there is no second list to keep in step.
+    pub const fn role(self) -> EventRole {
+        let v = self as i32;
+        if GateKind::from_i32(v).is_some() {
+            EventRole::Gate
+        } else if ChainKind::from_i32(v).is_some() {
+            EventRole::Link
+        } else {
+            EventRole::Hook
+        }
+    }
+}
+
+/// Which vocabulary an event kind belongs to.
+///
+/// [`TriggerKind`] is the *wire* enum: every event the engine raises, and what
+/// crosses the guest boundary. Cards do not declare against it -- they declare
+/// against one of the three typed views, and the type says what the event is
+/// for:
+///
+/// * [`ChainKind`] -- a chain link answers it, so a [反击] window opens.
+/// * [`HookKind`] -- a field-card (`Fx`) settlement point; placed cards run
+///   automatically, no window.
+/// * [`GateKind`] -- a question posed to placed cards at declaration or at
+///   resolution (`may this effect name S?` / `does anything land on S?`).
+///
+/// The `matches!` list that used to be `is_hook_only` is now
+/// [`TriggerKind::role`] reading these types.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum EventRole {
+    /// Opens a [反击] window -- a chain link can answer it.
+    Link = 0,
+    /// Field-card hook only -- no window.
+    Hook = 1,
+    /// A query to placed cards -- no window.
+    Gate = 2,
+}
+
+macro_rules! declare_kinds {
+    ($(#[$doc:meta])* $name:ident { $($(#[$vdoc:meta])* $variant:ident = $val:expr,)* }) => {
+        $(#[$doc])*
+        #[repr(i32)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum $name {
+            $($(#[$vdoc])* $variant = $val,)*
+        }
+
+        impl $name {
+            /// The wire value, shared with [`TriggerKind`].
+            pub const fn as_i32(self) -> i32 {
+                self as i32
+            }
+
+            pub const fn from_i32(v: i32) -> Option<Self> {
+                Some(match v {
+                    $($val => Self::$variant,)*
+                    _ => return None,
+                })
+            }
+        }
+
+        impl PartialEq<TriggerKind> for $name {
+            fn eq(&self, other: &TriggerKind) -> bool {
+                *self as i32 == *other as i32
+            }
+        }
+
+        impl PartialEq<$name> for TriggerKind {
+            fn eq(&self, other: &$name) -> bool {
+                *self as i32 == *other as i32
+            }
+        }
+    };
+}
+
+declare_kinds! {
+    /// What a chain link answers: the [反击] selectors.
+    ///
+    /// A card declares these on `On::React`. These are the moments at which a
+    /// counter may be played -- an effect being *declared*, not an outcome
+    /// having settled. [`HookKind`] and [`GateKind`] values are deliberately
+    /// absent: a reaction cannot be offered at a settlement hook or at a gate.
+    ChainKind {
+        Roll = 1,
+        MoveRoll = 2,
+        TurnStart = 3,
+        Pass = 4,
+        PassPlayer = 5,
+        SettleBefore = 6,
+        Settle = 7,
+        Mortgage = 8,
+        Paid = 10,
+        Bankrupt = 11,
+        Card = 12,
+        Event = 13,
+        Stop = 16,
+        Teleport = 17,
+        SkillTeleport = 18,
+        Stun = 19,
+        Stay = 20,
+        Exile = 21,
+        Forced = 22,
+        State = 23,
+        Reacted = 24,
+        DrawOut = 25,
+        CircleAffected = 26,
+        TwoCards = 27,
+        TurnStartBefore = 28,
+        PassBefore = 29,
+        MortgageBefore = 30,
+        BankruptBefore = 31,
+        CardAfter = 32,
+        EventAfter = 33,
+        SettleAfter = 34,
+        BuyBefore = 35,
+        BuyAfter = 36,
+        BuildBefore = 37,
+        BuildAfter = 38,
+        DiscardBefore = 39,
+        DiscardAfter = 40,
+        EndTurnBefore = 41,
+        EndTurnAfter = 42,
+        LeaveBefore = 43,
+        LeaveAfter = 44,
+        /// The effect declaration itself -- the [反击] key for 「被…效果影响」.
+        Effect = 72,
+    }
+}
+
+declare_kinds! {
+    /// What a placed card can hook: everything except the [`GateKind`] questions.
+    ///
+    /// A card declares these on `On::Hook`. The engine runs every *placed*
+    /// card's entry against them automatically -- no declaration, no prompt.
+    ///
+    /// This **overlaps** [`ChainKind`] on purpose. A kind may be both a [反击]
+    /// point and a hook point -- `SettleBefore` is a moment at which a hand card
+    /// can be played *and* a field card can react -- and the two declarations
+    /// are distinct entries (`On::React` vs `On::Hook`). The engine's dispatch
+    /// has always worked this way; the types now say so. Kinds that are *only*
+    /// hooks (most of `Fx`) simply have no [`ChainKind`] counterpart.
+    HookKind {
+        Roll = 1,
+        MoveRoll = 2,
+        TurnStart = 3,
+        Pass = 4,
+        PassPlayer = 5,
+        SettleBefore = 6,
+        Settle = 7,
+        Mortgage = 8,
+        Pay = 9,
+        Paid = 10,
+        Bankrupt = 11,
+        Card = 12,
+        Event = 13,
+        Abnormal = 14,
+        Target = 15,
+        Stop = 16,
+        Teleport = 17,
+        SkillTeleport = 18,
+        Stun = 19,
+        Stay = 20,
+        Exile = 21,
+        Forced = 22,
+        State = 23,
+        Reacted = 24,
+        DrawOut = 25,
+        CircleAffected = 26,
+        TwoCards = 27,
+        TurnStartBefore = 28,
+        PassBefore = 29,
+        MortgageBefore = 30,
+        BankruptBefore = 31,
+        CardAfter = 32,
+        EventAfter = 33,
+        SettleAfter = 34,
+        BuyBefore = 35,
+        BuyAfter = 36,
+        BuildBefore = 37,
+        BuildAfter = 38,
+        DiscardBefore = 39,
+        DiscardAfter = 40,
+        EndTurnBefore = 41,
+        EndTurnAfter = 42,
+        LeaveBefore = 43,
+        LeaveAfter = 44,
+        TurnEnd = 45,
+        Drawn = 46,
+        PassTile = 47,
+        PayAfter = 48,
+        RollAfter = 49,
+        CardPlayed = 50,
+        Targeted = 51,
+        PayChoose = 52,
+        TurnEndBefore = 53,
+        TurnEndAfter = 54,
+        PayAdd = 55,
+        PayMul = 56,
+        PayAt = 57,
+        Discarded = 58,
+        DeckBeforeGame = 59,
+        DeckAtGameStart = 60,
+        Drew = 61,
+        Reshuffled = 62,
+        Bought = 63,
+        SettleInstead = 64,
+        BeforeOut = 65,
+        Teleported = 66,
+        RollPlan = 67,
+    }
+}
+
+declare_kinds! {
+    /// Questions posed to placed cards, at declaration or at resolution.
+    ///
+    /// A card declares these on `On::Gate`. These are not occurrences -- nothing
+    /// "happened" -- so they are not triggers and cannot be [反击]'d. They ask
+    /// a placed card whether an effect may name someone, or whether anything
+    /// lands on them.
+    GateKind {
+        /// An abnormal effect is about to hit `t.target`; block with
+        /// `trigger::set_cancelled()`. Then, if someone else caused it, the
+        /// `abnormal` [反击] window opens.
+        AbnormalGuard = 68,
+        /// Is `t.player_id` untouchable by `t.by_card`'s effects? Asked at
+        /// **resolution** -- the effect is named, the chain forms, and it lands
+        /// as nothing. Claim with `trigger::set_cancelled()`.
+        ImmuneAll = 69,
+        /// `t.by_card`'s card is about to name `t.player_id`. Asked at
+        /// **declaration** -- block and the effect cannot name them at all, so
+        /// no chain forms against them. Claim with `trigger::set_cancelled()`.
+        Untargetable = 70,
+        /// A single-target effect is about to name `t.target`; a placed card
+        /// takes the hit with `trigger::set_target(player_id)`. **Declaration
+        /// re-naming**: the recipient set is settled before the chain opens, so
+        /// whoever holds the name is the one who answers.
+        Redirect = 71,
     }
 }
 
@@ -730,6 +990,7 @@ pub enum OnKind {
     Hook = 3,
     AtEnd = 4,
     RollPlan = 5,
+    Gate = 6,
 }
 
 impl OnKind {
@@ -741,6 +1002,7 @@ impl OnKind {
             3 => Self::Hook,
             4 => Self::AtEnd,
             5 => Self::RollPlan,
+            6 => Self::Gate,
             _ => return None,
         })
     }

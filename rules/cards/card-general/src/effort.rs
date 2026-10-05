@@ -25,23 +25,23 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn play(player_id: i32) {
     // 规则书[手]: 「本回合的[主要移动]改为移动1到6以内的任意整数」 -- C#
-    // `H.AskNumber(c.Seat, ..., 1, max=6, ...)` picks the step count.
+    // `int max = c.N(0, 6)` sizes the ask; `H.AskNumber(c.Seat, ..., 1, max, ...)`
+    // picks the step count.
+    let max = ctx::n(0, 6);
     let steps = ctx::ask_number(
         player_id,
         &Msg::new(key!("effort_title")),
         &Msg::new(key!("effort_ask")),
         1,
-        6,
+        max,
     );
     // 规则书[手]: 「立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]」
-    // -- C# `H.CardMove(c, new MoveCtx { Steps = Math.Max(1, r.value) })`.
+    // -- C# `H.CardMove(c, new MoveCtx { Steps = Math.Max(1, r.value) })`
+    // (MatchHost.cs:2326-2329): `Steps` >= 0 walks exactly that many with no roll,
+    // `Resolve` defaults to true (the landing settles), and `H.CardMove` is the
+    // turn's main move (`MainMoveAs`).
     let steps = steps.max(1);
-    let to = ctx::tile_steps_ahead(player_id, steps);
-    if to >= 0 {
-        ctx::teleport_to(player_id, to);
-    }
-    // TODO(规则书): 「立刻进入移动阶段…并[结算]」 -- needs the H.CardMove / main-move
-    // routine (C# `H.CardMove(c, new MoveCtx { Steps = ... })`) so the walk is the
-    // turn's main move and settles on arrival; `teleport_to` moves without settling
-    // and leaves the normal main move in place.
+    ctx::plan::set_steps(steps);
+    ctx::plan::set_resolve(true);
+    ctx::card_move(player_id);
 }

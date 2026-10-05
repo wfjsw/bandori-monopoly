@@ -5,6 +5,7 @@
 //! >  投掷4次3d20并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动
 //!
 
+use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 use alloc::vec::Vec;
 
@@ -41,11 +42,13 @@ fn play(player_id: i32) {
     let title = Msg::new(key!("balloon_show_ask_title"));
     let text = Msg::new(key!("balloon_show_ask_text"));
     let to = ctx::ask_tile(player_id, &title, &text, &tiles);
-    // 规则书: 「传送至结果对应序号的格子」 -- C# `H.CardMove(..., TeleportTo)`.
-    ctx::teleport_to(player_id, to);
+    // 规则书: 「传送至结果对应序号的格子」 -- C# `H.CardMove(c, new MoveCtx
+    // { TeleportTo = to })` (`Resolve` defaults to true, so it settles).
+    ctx::plan::set_kind(MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(true);
+    // 规则书: 「视为你的主要移动」 -- C# `H.CardMove` (`MainMoveAs`) consumes the
+    // turn's main move and runs the teleport immediately.
+    ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("balloon_show_moved")).player_id("who", player_id).tile("tile", to));
-    // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move routine
-    // so this teleport consumes the turn's main move (C# `H.CardMove(c, new MoveCtx
-    // { TeleportTo = ... })`). Until then the player_id still gets its normal main move
-    // after the teleport.
 }

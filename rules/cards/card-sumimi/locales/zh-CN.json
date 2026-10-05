@@ -26,10 +26,14 @@
   "sweet_escape_none": "没有可以去的格子（Sweet Escape）",
   "sweet_escape_short": "前后两格内的收费标价之和不到 2,000（现在 {{n}}），「Sweet Escape」没有效果",
   "sweet_escape_title": "Sweet Escape",
+  "two_donuts_ask": "[传送] 到哪一格并结算？（你原本的格子和 {{by}} 的终点之间）",
   "two_donuts_ended": "{{who}} 的 [除外] 结束了（{{by}} 经过了原本所在的格子）",
   "two_donuts_exile": "{{who}} [除外] 到有人经过 {{tile}} 为止（一人两个甜甜圈）",
   "two_donuts_fire": "一人两个甜甜圈：+2 火罐",
+  "two_donuts_moved": "{{who}} [传送] 到 {{tile}} 并结算（一人两个甜甜圈）",
   "two_donuts_note": "[除外] 到有人经过原本所在的格子为止（一人两个甜甜圈）",
   "two_donuts_overflow": "一人两个甜甜圈：超出上限的火罐（{{n}} 个 × 500 资金）",
+  "two_donuts_title": "一人两个甜甜圈",
+  "two_donuts_yes": "要 [传送] 并结算吗？（你原本的格子和 {{by}} 的终点之间，可不传送）",
   "two_in_one_swap": "{{who}} 换成 Sumimi 的另一名角色（Sumimi是二人一体的）"
 }

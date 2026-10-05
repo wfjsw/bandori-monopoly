@@ -147,7 +147,18 @@ mod sys {
         pub fn trig_set_pay_amount(v: i32);
         pub fn trig_set_pay_target(to: i32);
         pub fn trig_set_cancelled();
+        pub fn trig_set_negate_effect();
+        pub fn trig_set_spare(seat: i32);
         pub fn trig_cancelled() -> i32;
+        pub fn trig_seq() -> i32;
+        pub fn trig_answers() -> i32;
+        pub fn trig_effect_count() -> i32;
+        pub fn trig_effect_kind(i: i32) -> i32;
+        pub fn trig_effect_target(i: i32) -> i32;
+        pub fn trig_effect_from(i: i32) -> i32;
+        pub fn trig_effect_tile(i: i32) -> i32;
+        pub fn trig_effect_value(i: i32) -> i32;
+        pub fn declare_effect(kind: i32, target: i32, from: i32, tile: i32, value: i32);
         pub fn trig_card_is(ptr: i32, len: i32) -> i32;
         pub fn play_card(id_ptr: i32, id_len: i32, player_id: i32) -> i32;
         pub fn card_move(player_id: i32) -> i32;
@@ -167,6 +178,12 @@ mod sys {
         pub fn set_no_build(on: i32);
         pub fn set_build_anywhere(on: i32);
         pub fn set_kind(kind: i32);
+        pub fn set_teleport_to(tile: i32);
+        pub fn set_start(tile: i32, ptr: i32, len: i32);
+        pub fn set_base_dice(count: i32, sides: i32, ptr: i32, len: i32);
+        pub fn add_base_dice(count: i32, sides: i32, ptr: i32, len: i32);
+        pub fn add_extra_dice(count: i32, sides: i32, ptr: i32, len: i32);
+        pub fn move_stopped() -> i32;
         pub fn set_min_roll(n: i32);
         pub fn set_extra_steps(n: i32);
         pub fn set_more_steps(n: i32);
@@ -1097,10 +1114,42 @@ pub mod plan {
         unsafe { sys::set_settle_as_agent(on as i32) }
     }
 
-    /// C# `Bonus` -- add `n` to the roll; `why` is shown on the move's log line.
-    pub fn set_bonus(n: i32, why: &Msg) {
-        let (p, l) = mj(why);
-        unsafe { sys::set_bonus(n, p, l) }
+    /// C# `TeleportTo` -- the teleport's destination. -1 derives it from the
+    /// roll (the 「视为 [传送]（只触发终点）」 shape).
+    pub fn set_teleport_to(tile: i32) {
+        unsafe { sys::set_teleport_to(tile) }
+    }
+
+    /// The tile the walk begins on instead of the player's own; -1 for the
+    /// player's own. `why` is shown on the move's log line.
+    pub fn set_start(tile: i32, why: &str) {
+        let (p, l) = s(why);
+        unsafe { sys::set_start(tile, p, l) }
+    }
+
+    /// C# `Base` -- replace the roll's dice table with `count`d`sides`.
+    pub fn set_base_dice(count: i32, sides: i32, why: &str) {
+        let (p, l) = s(why);
+        unsafe { sys::set_base_dice(count, sides, p, l) }
+    }
+
+    /// Append `count`d`sides` to the roll's base dice.
+    pub fn add_base_dice(count: i32, sides: i32, why: &str) {
+        let (p, l) = s(why);
+        unsafe { sys::add_base_dice(count, sides, p, l) }
+    }
+
+    /// Append `count`d`sides` to the roll as an extra term. A flat add is a
+    /// `0`-sided term: `add_extra_dice(n, 0, why)` is what C# `Bonus` did.
+    pub fn add_extra_dice(count: i32, sides: i32, why: &str) {
+        let (p, l) = s(why);
+        unsafe { sys::add_extra_dice(count, sides, p, l) }
+    }
+
+    /// Did the walk stop before its full length? Read-only: the walk loop sets
+    /// it. To force a stop, name the tile with [`Self::set_stop_at`].
+    pub fn stopped() -> bool {
+        unsafe { sys::move_stopped() != 0 }
     }
 
     /// C# `StopAt`, or -1.
@@ -1416,12 +1465,26 @@ pub mod trigger {
         unsafe { sys::trig_set_pay_target(player_id) }
     }
 
-    /// Negate this trigger's effect outright (C# `trigger.Cancelled = true`).
-    /// The engine then skips the effect body -- the landed tile does not
-    /// resolve, the event does not run, the played card has no effect -- while
-    /// the point's Before/After hooks still fire.
+    /// Negate this link's **activation** (Yu-Gi-Oh: the card "did not
+    /// activate"). It never happened -- nothing settles -- and a listener on the
+    /// effect does not see it. The effect body is skipped while the point's
+    /// Before/After hooks still fire.
     pub fn set_cancelled() {
         unsafe { sys::trig_set_cancelled() }
+    }
+
+    /// Negate this link's **effect** (Yu-Gi-Oh: it activated, its effect does
+    /// nothing). A listener on the effect still sees it; it just settles to
+    /// nothing. Weaker than [`set_cancelled`], and does not undo it.
+    pub fn negate_effect() {
+        unsafe { sys::trig_set_negate_effect() }
+    }
+
+    /// Take one recipient out of settlement. The effect still settles for
+    /// everyone else -- this is *not* a complete invalidation; use
+    /// [`set_cancelled`] for that. Counter cards differ on which they mean.
+    pub fn spare(seat: i32) {
+        unsafe { sys::trig_set_spare(seat) }
     }
 
     /// Has a reaction already cancelled this trigger (`Trigger.Cancelled`)?
@@ -1433,5 +1496,78 @@ pub mod trigger {
     pub fn card_is(id: &str) -> bool {
         let (p, l) = s(id);
         unsafe { sys::trig_card_is(p, l) != 0 }
+    }
+
+    /// Position of this link within the current chain, 1-based. 0 = not on a
+    /// chain (a bare hook or gate raise).
+    pub fn seq() -> i32 {
+        unsafe { sys::trig_seq() }
+    }
+
+    /// Which link this one answers. 0 = this is the effect declaration itself.
+    pub fn answers() -> i32 {
+        unsafe { sys::trig_answers() }
+    }
+}
+
+/// The effects a chain link declares, with their recipients already named.
+///
+/// A [反击] card chooses how much of this to read. For the rulebook's recurring
+/// 「被其他玩家的卡效果影响」 clause the *whole list* is the right view -- any
+/// effect of that play touching me -- while a card like
+/// `CRYCHIC:主唱太拼命了` (「一次性向其他玩家支付5000以上资金时」) wants one
+/// entry. Both are here; the card picks.
+pub mod effect {
+    use super::sys;
+    use crate::abi::TriggerKind;
+
+    /// How many effects this link declares.
+    pub fn count() -> i32 {
+        unsafe { sys::trig_effect_count() }
+    }
+
+    /// What effect `i` does, as a [`TriggerKind`] wire value.
+    pub fn kind(i: i32) -> TriggerKind {
+        TriggerKind::from_i32(unsafe { sys::trig_effect_kind(i) })
+    }
+
+    /// The seat effect `i` is aimed at (-1 for none).
+    pub fn target(i: i32) -> i32 {
+        unsafe { sys::trig_effect_target(i) }
+    }
+
+    /// The other party to effect `i`, where it has one. A payment touches both
+    /// its payer and its payee.
+    pub fn from(i: i32) -> i32 {
+        unsafe { sys::trig_effect_from(i) }
+    }
+
+    /// The tile effect `i` is aimed at (-1 for none).
+    pub fn tile(i: i32) -> i32 {
+        unsafe { sys::trig_effect_tile(i) }
+    }
+
+    /// The amount effect `i` carries, where it has one.
+    pub fn value(i: i32) -> i32 {
+        unsafe { sys::trig_effect_value(i) }
+    }
+
+    /// Does any declared effect touch `seat`? The whole-list view: 「被…效果
+    /// 影响」 without asking which effect. A payment touches both its payer and
+    /// its payee.
+    pub fn hits(seat: i32) -> bool {
+        (0..count()).any(|i| target(i) == seat || from(i) == seat)
+    }
+
+    /// Is any declared effect of `kind`? The per-effect view, for a card that
+    /// means one thing specifically.
+    pub fn has(kind: TriggerKind) -> bool {
+        (0..count()).any(|i| self::kind(i) == kind)
+    }
+
+    /// Append an effect to the current link, naming its recipient now -- at
+    /// declaration, not at settlement.
+    pub fn declare(kind: TriggerKind, target: i32, from: i32, tile: i32, value: i32) {
+        unsafe { sys::declare_effect(kind as i32, target, from, tile, value) }
     }
 }

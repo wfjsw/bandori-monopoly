@@ -41,6 +41,8 @@ fn noble_blue(player_id: i32) {
     // 规则书2: 「在该地块上放置一个标记，有标记时此地块不能被指定」
     ctx::add_mark(pos, player_id, key!("noble_blue_mark"), &Msg::new(key!("noble_blue_mark_note")));
     ctx::log(player_id, &Msg::new(key!("noble_blue_placed")).tile("tile", pos).player_id("who", player_id));
-    // TODO(规则书)2: 「有标记时此地块不能被指定」 -- needs the H.Target / Untargetable
-    // gate so a tile carrying this mark cannot be chosen as a target.
+    // TODO(规则书)2: 「有标记时此地块不能被指定」 -- the mark is placed above;
+    //   the gate itself is engine-side (C# `H.TargetTile` checks
+    //   `CountMarks(tile, "高贵的微蓝") > 0` before anything else). That engine
+    //   mark check is still held (「高贵的微蓝 tile mark」).
 }

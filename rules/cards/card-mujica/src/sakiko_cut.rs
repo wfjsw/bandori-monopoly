@@ -112,22 +112,22 @@ fn sakiko_cut(player_id: i32) {
         &pool,
     );
     // 规则书: 「立刻传送至任意可购买或已拥有的格子并触发结算」 -- C# `H.CardMove`
-    // with `TeleportTo = to` (`MoveCtx { TeleportTo = to, Resolve = true }`).
-    // `ctx::plan::set_resolve(true)` is the settle half; there is no
-    // teleport-plan shape (`set_teleport_to`) in `ctx::plan` and the bare
-    // `teleport_to` never settles, so the settle stays TODO'd.
+    // with `TeleportTo = to` (`MoveCtx { TeleportTo = to }`, `Resolve` defaults
+    // to true, MatchHost.cs:5807-5810) = `set_teleport_to(to)` +
+    // `set_resolve(true)` + `card_move(player_id)`. `set_teleport_to` also
+    // flips the kind to `MoveKind::Teleport`.
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
     ctx::plan::set_resolve(true);
-    ctx::teleport_to(player_id, to);
+    ctx::card_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("sakiko_cut_moved")).player_id("who", player_id).tile("tile", to),
     );
-    // TODO(ABI): 「并触发结算」 -- teleport-with-settle (C# `H.CardMove` /
-    // `H.Teleport(..., resolve: true)`). `ctx::plan` has no teleport-to shape
-    // and `teleport_to` never settles; the walk routine is not in the
-    // vocabulary yet.
-    // TODO(规则书): 「作为你的主要移动」 -- this teleport must count as the
-    // turn's main move (C# `H.CardMove(Forced = true)` sets
-    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
-    // `ctx::card_move`.
+    // 规则书: 「并触发结算」 -- the settle half is `set_resolve(true)` above
+    // (the teleport runs `settleBefore` -> `settle` -> `land` -> `settleAfter`
+    // on the destination).
+    // 规则书: 「作为你的主要移动」 -- `card_move` runs `MainMoveAs`
+    // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
+    // player; that is exactly `card_move`'s bookkeeping.
 }

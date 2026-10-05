@@ -32,10 +32,52 @@ pub enum Dest {
 // what it resolves is `super::move_ctx::Settle` -- two categories, not one flag
 // soup. Card-owned move state (a [火罐] roll, say) rides on the move's tags.
 
-/// Points in the flow where reaction cards may answer (C# `Trigger.Kind`).
+/// How a counter invalidated a chain link (Yu-Gi-Oh's two negations, plus the
+/// per-recipient one the rulebook needs).
+///
+/// This replaces the single `Trigger.Cancelled` flag, which could only ever say
+/// "something cancelled this" and could not distinguish "the effect never
+/// happened" from "it happened and settled to nothing".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Negation {
+    /// Nothing invalidated the link; it settles for its surviving recipients.
+    #[default]
+    None,
+    /// The link's **activation** is void. It never happened -- nothing settles,
+    /// and a listener on the effect does not see it.
+    Activation,
+    /// The link's **effect** is void. It happened -- a listener on the effect
+    /// sees it -- but it settles to nothing.
+    Effect,
+}
+
+/// One effect a chain link declares. The recipient is **named at declaration**,
+/// not at settlement: this is the stable thing a [反击] listens to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Effect {
+    /// What it does -- the raise site's kind name (`"pay"`, `"target"`, `"stay"`, ...).
+    pub kind: &'static str,
+    /// The seat it is aimed at (-1 for none).
+    pub target: i32,
+    /// The other party, where the effect has one. A payment touches both its
+    /// payer and its payee; without this, 「被…效果影响」 would have to know
+    /// that a payment's payer rides on the link and not on the effect -- the
+    /// inconsistency that made the clause a three-kind union.
+    pub from: i32,
+    /// The tile it is aimed at (-1 for none).
+    pub tile: i32,
+    /// The amount, where the effect has one (a payment's sum, a draw count, ...).
+    pub value: i32,
+}
+
+/// One link in a chain (Yu-Gi-Oh's `ChainLink`), and the engine's reaction trigger.
 ///
 /// The kind name itself encodes pre/post (`"settleBefore"` vs `"settle"`,
 /// `"buyBefore"` vs `"buyAfter"`), so there is no separate `when` field.
+///
+/// A link is either the **effect declaration** (L1, `seq == 1`, `answers == 0`)
+/// or a [反击] answering an earlier link (`answers` names it). Resolution is
+/// LIFO over the closed chain; see `game-rules`' `hand_reactions`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trigger {
     pub kind: &'static str,
@@ -68,9 +110,21 @@ pub struct Trigger {
     pub move_main: bool,
     /// `t.Move.Dir` -- 1 forward, -1 backward. Only meaningful when `move_flags.is_move()`.
     pub move_dir: i32,
-    /// `Trigger.Cancelled` -- a reaction negated this trigger's effect. The
-    /// effect body is skipped; the Before/After hooks still fire.
-    pub cancelled: bool,
+    /// How a counter invalidated this link. The effect body is skipped when this
+    /// is not [`Negation::None`]; the Before/After hooks still fire.
+    pub negation: Negation,
+    /// Recipients a counter spared from settlement (`spare(link, seat)`). The
+    /// effect still settles for everyone else.
+    pub spared: Vec<i32>,
+    /// Position within the current chain, 1-based. 0 = not on a chain (a bare
+    /// hook or gate raise).
+    pub seq: u32,
+    /// The link this one answers. 0 = this is the effect declaration itself.
+    pub answers: u32,
+    /// The effects this link declares, with their recipients already named.
+    /// Empty on a bare hook/gate raise, and on a link whose card has not
+    /// declared its list (see `ctx::declare_effect`).
+    pub effects: Vec<Effect>,
     /// `t.Move.Remaining` -- steps the move has left to walk.
     pub move_remaining: i32,
     /// `t.Move.Total` -- the move's path length (C# `m.Path.Count`).
@@ -96,11 +150,50 @@ impl Trigger {
             move_tags: Vec::new(),
             move_main: false,
             move_dir: 1,
-            cancelled: false,
+            negation: Negation::None,
+            spared: Vec::new(),
+            seq: 0,
+            answers: 0,
+            effects: Vec::new(),
             move_remaining: 0,
             move_total: 0,
             cards: Vec::new(),
         }
+    }
+
+    /// Did a counter negate this link at all?
+    pub fn is_cancelled(&self) -> bool {
+        self.negation != Negation::None
+    }
+
+    /// Yu-Gi-Oh's *negate the activation*: the link never happened. Nothing
+    /// settles, and a listener on the effect does not see it.
+    pub fn negate_activation(&mut self) {
+        self.negation = Negation::Activation;
+    }
+
+    /// Yu-Gi-Oh's *negate the effect*: the link happened -- a listener on the
+    /// effect sees it -- but it settles to nothing. A stronger negation already
+    /// in place is not weakened.
+    pub fn negate_effect(&mut self) {
+        if self.negation == Negation::None {
+            self.negation = Negation::Effect;
+        }
+    }
+
+    /// Take one recipient out of settlement. The effect still settles for the
+    /// rest. Complete invalidation is [`Self::negate_activation`], not a
+    /// `spare` per seat -- the two are deliberately distinct.
+    pub fn spare(&mut self, seat: i32) {
+        if !self.spared.contains(&seat) {
+            self.spared.push(seat);
+        }
+    }
+
+    /// Does this link settle for `seat`? False when the whole link was negated,
+    /// or when a counter spared this one recipient.
+    pub fn settles_for(&self, seat: i32) -> bool {
+        self.negation == Negation::None && !self.spared.contains(&seat)
     }
 
     /// Copy the move context (C# `t.Move`) onto this trigger.

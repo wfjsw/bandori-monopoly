@@ -7,14 +7,13 @@
 //! > 将此卡置于当前格子上，每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶，当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个“抹茶芭菲”或强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。 由此卡效果导致[触发结算]时需支付资金减半
 //!
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANA_FUNNY: CardDef = CardDef::new("MyGO:（乐奈）有趣的女人", &[
     On::Play(rana_funny),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::PassTile], pass_tile),
 ]);
 
 const ID: &str = "MyGO:（乐奈）有趣的女人";
@@ -88,18 +87,16 @@ fn trap(owner: i32, who: i32, tile: i32) {
     }
     // 规则书: 「强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。由此卡效果导致[触发结算]
     // 时需支付资金减半」 -- C# `m.Stopped = true; m.Resolve = true; m.PayFactor *= 0.5`
-    // then `H.Unplace(this, "discard", ...)`. `set_stop_at` is the forced stop
-    // (the walk loop turns `StopAt == pos` into `Stopped`); the pay factor is
-    // milli-units (500 = x0.5). The C# multiplies the in-flight factor; this
-    // sets the x0.5 value the walk starts from.
+    // then `H.Unplace(this, "discard", ...)` (MatchHost.cs:6836-6847, behind
+    // `H.WithCard(User, H.AbnormalGate(a))`). `set_stop_at` is the forced stop
+    // from this `PassTile` hook (the walk settles at the stop tile;
+    // `plan::stopped()` is the read-only check); the pay factor is milli-units
+    // (500 = x0.5). The C# multiplies the in-flight factor; this sets the x0.5
+    // value the walk starts from.
     ctx::plan::set_stop_at(tile);
     ctx::plan::set_resolve(true);
     ctx::plan::set_pay_factor(500);
     ctx::log(owner, &Msg::new(key!("rana_funny_stop")).player_id("who", who).tile("tile", tile));
     ctx::unplace_card(owner);
     ctx::to_discard(owner, ID);
-    // TODO(规则书): the C# wraps the forced stop in `H.WithCard(User,
-    // H.AbnormalGate(a))` -- an [abnormal] reaction window (so 「普通与理所当然」
-    // and friends can answer the forced stop). `AbnormalGate` is still held,
-    // so the stop lands uncountered.
 }

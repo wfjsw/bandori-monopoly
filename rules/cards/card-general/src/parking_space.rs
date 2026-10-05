@@ -13,7 +13,7 @@
 //! > （2）位于此卡所在格子上的玩家无法使用角色及乐队技能。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -26,7 +26,7 @@ pub const PARKING_SPACE: CardDef = CardDef::new("通用:[都筑诗船]Parking Sp
     On::Play(play),
     On::CantPlay(cant_play),
     // C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` -- field hooks, not [反击].
-    On::Hook(&[TriggerKind::SettleInstead, TriggerKind::TurnEndAfter], react),
+    On::Hook(&[HookKind::SettleInstead, HookKind::TurnEndAfter], react),
 ]);
 
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile

@@ -1,5 +1,5 @@
 {
-  "centrifugal_blocked": "{{who}} is immune to other players' effects and nullifies this abnormal effect (Centrifugal)",
+  "centrifugal_blocked": "{{who}} is now unaffected by other players' effects (Centrifugal)",
   "centrifugal_end": "{{who}}'s Centrifugal effect ends",
   "centrifugal_log": "{{who}} is immune to other players' effects until their next turn (Centrifugal)",
   "centrifugal_note": "Until the owner's next turn: immune to other players' effects",

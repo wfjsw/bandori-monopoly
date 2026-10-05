@@ -27,15 +27,15 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{CardPile, TriggerKind};
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:Returns";
 
 pub const RETURNS: CardDef = CardDef::new("PPP:Returns", &[
-    On::Hook(&[TriggerKind::DeckBeforeGame], deck_before_game),
-    On::Hook(&[TriggerKind::DeckAtGameStart], deck_at_game_start),
+    On::Hook(&[HookKind::DeckBeforeGame], deck_before_game),
+    On::Hook(&[HookKind::DeckAtGameStart], deck_at_game_start),
 ]);
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive

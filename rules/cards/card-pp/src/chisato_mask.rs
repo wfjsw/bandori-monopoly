@@ -15,13 +15,13 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHISATO_MASK: CardDef = CardDef::new("PP:[白鹭千圣]微笑的铁假面", &[
     On::Play(chisato_mask),
-    On::Hook(&[TriggerKind::Reshuffled], reshuffled),
+    On::Hook(&[HookKind::Reshuffled], reshuffled),
 ]);
 
 fn chisato_mask(player_id: i32) {

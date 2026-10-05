@@ -27,6 +27,9 @@
 #[cfg(target_arch = "wasm32")]
 extern crate alloc;
 
+#[cfg(target_arch = "wasm32")]
+use alloc::vec::Vec;
+
 pub mod abi;
 pub mod msg;
 
@@ -47,8 +50,8 @@ pub mod rt;
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play(play),
-///     On::Hook(&[TriggerKind::TurnEnd], decay),
-///     On::Hook(&[TriggerKind::PayChoose], pay_choose),
+///     On::Hook(&[HookKind::TurnEnd], decay),
+///     On::Gate(&[GateKind::ImmuneAll], immune),
 /// ]);
 /// ```
 #[derive(Clone, Copy)]
@@ -64,8 +67,10 @@ impl CardDef {
     }
 }
 
-/// One entry point of a card (a C# `Card` override). Trigger-keyed entries list
-/// the kinds they answer; an empty list is never dispatched.
+/// One entry point of a card (a C# `Card` override). The variant says what the
+/// entry is for, and its kind list is typed to match -- a reaction can only be
+/// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
+/// at a [`abi::GateKind`]. An empty list is never dispatched.
 #[derive(Clone, Copy)]
 pub enum On {
     /// `Card.Play` -- the effect when played from hand.
@@ -73,14 +78,18 @@ pub enum On {
     /// `Card.WhyNot` -- why it cannot be played right now: a pure query with no
     /// prompts (`None` = playable).
     CantPlay(fn(player_id: i32) -> Option<Msg>),
-    /// A [反击] at these trigger kinds: the guard (`Card.CanReact`) decides
+    /// A [反击] at these chain links: the guard (`Card.CanReact`) decides
     /// whether the card is offered in the hand window, then the effect
     /// (`Card.React`) resolves. The guard is a pure query.
-    React(&'static [abi::TriggerKind], fn(player_id: i32) -> bool, fn(player_id: i32)),
-    /// A field-card (`Fx`) hook at these trigger kinds: runs automatically, with
-    /// no declaration, while the card is in play (`Drawn`: the card just drawn,
-    /// still in hand). `player_id` is where the card is placed.
-    Hook(&'static [abi::TriggerKind], fn(player_id: i32)),
+    React(&'static [abi::ChainKind], fn(player_id: i32) -> bool, fn(player_id: i32)),
+    /// A field-card (`Fx`) hook at these settlement points: runs automatically,
+    /// with no declaration, while the card is in play (`Drawn`: the card just
+    /// drawn, still in hand). `player_id` is where the card is placed.
+    Hook(&'static [abi::HookKind], fn(player_id: i32)),
+    /// A question posed to this placed card at declaration or at resolution --
+    /// see [`abi::GateKind`]. Runs automatically like a hook, but it is not an
+    /// occurrence and cannot be [反击]'d.
+    Gate(&'static [abi::GateKind], fn(player_id: i32)),
     /// `Card.RollPlan` -- this card has a movement routine. Called when the
     /// walk is being planned (C# `RollPlan(MoveCtx)`); the routine shapes the
     /// walk through `ctx` (steps, dice, teleport, stop-at, ...).
@@ -97,15 +106,21 @@ impl On {
             On::CantPlay(_) => abi::OnKind::CantPlay,
             On::React(..) => abi::OnKind::React,
             On::Hook(..) => abi::OnKind::Hook,
+            On::Gate(..) => abi::OnKind::Gate,
             On::AtEnd(_) => abi::OnKind::AtEnd,
             On::RollPlan(_) => abi::OnKind::RollPlan,
         }
     }
 
-    pub const fn triggers(&self) -> &'static [abi::TriggerKind] {
+    /// The wire values this entry answers (empty for non-trigger entries).
+    /// The three kind enums share [`abi::TriggerKind`]'s numbering, so this is
+    /// what the manifest carries.
+    pub fn triggers(&self) -> Vec<i32> {
         match self {
-            On::React(k, ..) | On::Hook(k, _) => k,
-            _ => &[],
+            On::React(k, ..) => k.iter().map(|x| *x as i32).collect(),
+            On::Hook(k, _) => k.iter().map(|x| *x as i32).collect(),
+            On::Gate(k, _) => k.iter().map(|x| *x as i32).collect(),
+            _ => Vec::new(),
         }
     }
 }

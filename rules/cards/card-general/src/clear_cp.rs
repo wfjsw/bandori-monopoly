@@ -13,14 +13,14 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CLEAR_CP: CardDef = CardDef::new("通用:该清CP了", &[
     On::Play(clear_cp),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::TurnStart, TriggerKind::SettleAfter], react),
+    On::Hook(&[HookKind::TurnStart, HookKind::SettleAfter], react),
 ]);
 
 /// Where the spread countdown is written down (C# `CPControl.Spread`).

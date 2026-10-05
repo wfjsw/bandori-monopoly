@@ -58,7 +58,15 @@ impl CardInfo {
 
     /// Declares a field-card hook at this trigger kind.
     pub fn hooks(&self, trigger: crate::TriggerKind) -> bool {
-        self.entry(OnKind::Hook, Some(trigger)).is_some()
+        self.hook_entry(trigger).is_some()
+    }
+
+    /// The field-card entry that answers `trigger`, whether it was declared as a
+    /// settlement hook (`On::Hook`) or as a gate (`On::Gate`). Both run
+    /// automatically on a placed card and neither opens a [反击] window; they
+    /// are separate declarations only so the type can say which is a question.
+    pub fn hook_entry(&self, trigger: crate::TriggerKind) -> Option<i32> {
+        self.entry(OnKind::Hook, Some(trigger)).or_else(|| self.entry(OnKind::Gate, Some(trigger)))
     }
 
     pub fn has_at_end(&self) -> bool {
@@ -320,7 +328,7 @@ impl Ruleset {
         let entry = match call {
             Call::Play { .. } => info.entry(OnKind::Play, None),
             Call::React { .. } => info.entry(OnKind::React, Some(world.trigger().kind)),
-            Call::Hook { kind, .. } => info.entry(OnKind::Hook, Some(kind)),
+            Call::Hook { kind, .. } => info.hook_entry(kind),
             Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
             Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
         };
@@ -983,7 +991,31 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "trig_set_pay_amount", |mut c: C<W>, v: i32| c.data_mut().w().set_trigger_value(v))?;
     l.func_wrap(m, "trig_set_pay_target", |mut c: C<W>, to: i32| c.data_mut().w().set_trigger_target(to))?;
     l.func_wrap(m, "trig_set_cancelled", |mut c: C<W>| c.data_mut().w().set_trigger_cancelled())?;
-    l.func_wrap(m, "trig_cancelled", |c: C<W>| c.data().wr().trigger().cancelled as i32)?;
+    l.func_wrap(m, "trig_set_negate_effect", |mut c: C<W>| c.data_mut().w().set_trigger_negate_effect())?;
+    l.func_wrap(m, "trig_set_spare", |mut c: C<W>, seat: i32| c.data_mut().w().set_trigger_spare(seat))?;
+    l.func_wrap(m, "trig_cancelled", |c: C<W>| c.data().wr().trigger().is_cancelled() as i32)?;
+    l.func_wrap(m, "trig_seq", |c: C<W>| c.data().wr().trigger().seq as i32)?;
+    l.func_wrap(m, "trig_answers", |c: C<W>| c.data().wr().trigger().answers as i32)?;
+    l.func_wrap(m, "trig_effect_count", |c: C<W>| c.data().wr().trigger().effects.len() as i32)?;
+    l.func_wrap(m, "trig_effect_kind", |c: C<W>, i: i32| -> i32 {
+        let t = c.data().wr().trigger();
+        t.effects.get(i.max(0) as usize).map_or(-1, |e| crate::TriggerKind::from_str(e.kind) as i32)
+    })?;
+    l.func_wrap(m, "trig_effect_target", |c: C<W>, i: i32| -> i32 {
+        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(-1, |e| e.target)
+    })?;
+    l.func_wrap(m, "trig_effect_from", |c: C<W>, i: i32| -> i32 {
+        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(-1, |e| e.from)
+    })?;
+    l.func_wrap(m, "trig_effect_tile", |c: C<W>, i: i32| -> i32 {
+        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(-1, |e| e.tile)
+    })?;
+    l.func_wrap(m, "trig_effect_value", |c: C<W>, i: i32| -> i32 {
+        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(0, |e| e.value)
+    })?;
+    l.func_wrap(m, "declare_effect", |mut c: C<W>, kind: i32, target: i32, from: i32, tile: i32, value: i32| {
+        c.data_mut().w().declare_trigger_effect(kind, target, from, tile, value)
+    })?;
     l.func_wrap(m, "trig_card_is", |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
         let id = guest_str(&mut c, p, n)?;
         Ok(c.data().wr().trig_card_is(&id))
@@ -1071,6 +1103,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "set_no_buy", |mut c: C<W>, v: i32| c.data_mut().w().set_no_buy(v != 0))?;
     l.func_wrap(m, "set_no_build", |mut c: C<W>, v: i32| c.data_mut().w().set_no_build(v != 0))?;
     l.func_wrap(m, "set_kind", |mut c: C<W>, v: i32| c.data_mut().w().set_kind(v))?;
+    l.func_wrap(m, "set_teleport_to", |mut c: C<W>, v: i32| c.data_mut().w().set_teleport_to(v))?;
+    l.func_wrap(m, "set_start", |mut c: C<W>, t: i32, p: i32, n: i32| -> Result<(), Error> {
+        let why = guest_str(&mut c, p, n)?;
+        c.data_mut().w().set_start(t, &why);
+        Ok(())
+    })?;
+    l.func_wrap(m, "set_base_dice", |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
+        let why = guest_str(&mut c, p, n)?;
+        c.data_mut().w().set_base_dice(count, sides, &why);
+        Ok(())
+    })?;
+    l.func_wrap(m, "add_base_dice", |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
+        let why = guest_str(&mut c, p, n)?;
+        c.data_mut().w().add_base_dice(count, sides, &why);
+        Ok(())
+    })?;
+    l.func_wrap(m, "add_extra_dice", |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
+        let why = guest_str(&mut c, p, n)?;
+        c.data_mut().w().add_extra_dice(count, sides, &why);
+        Ok(())
+    })?;
     l.func_wrap(m, "set_tag", |mut c: C<W>, kp: i32, kl: i32, v: i32| -> Result<(), Error> {
         let key = guest_str(&mut c, kp, kl)?;
         c.data_mut().w().set_tag(&key, v);
@@ -1090,6 +1143,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "set_more_steps", |mut c: C<W>, v: i32| c.data_mut().w().set_more_steps(v))?;
     l.func_wrap(m, "set_no_circle_reward", |mut c: C<W>, v: i32| c.data_mut().w().set_no_circle_reward(v != 0))?;
     l.func_wrap(m, "move_stop_at", |c: C<W>| c.data().wr().move_stop_at())?;
+    l.func_wrap(m, "move_stopped", |c: C<W>| c.data().wr().move_stopped() as i32)?;
     l.func_wrap(m, "move_parity", |c: C<W>| c.data().wr().move_parity())?;
     l.func_wrap(m, "move_resolve", |c: C<W>| c.data().wr().move_resolve() as i32)?;
     l.func_wrap(m, "move_kind", |c: C<W>| c.data().wr().move_kind())?;
@@ -1282,6 +1336,9 @@ impl CardWorld for NullWorld {
     fn set_trigger_value(&mut self, _: i32) {}
     fn set_trigger_target(&mut self, _: i32) {}
     fn set_trigger_cancelled(&mut self) {}
+    fn set_trigger_negate_effect(&mut self) {}
+    fn set_trigger_spare(&mut self, _: i32) {}
+    fn declare_trigger_effect(&mut self, _: i32, _: i32, _: i32, _: i32, _: i32) {}
     fn trig_card_is(&self, _: &str) -> i32 {
         0
     }

@@ -6,13 +6,13 @@
 //! >  使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new("Mujica:无法将视线移开", &[
     On::Play(play),
-    On::React(&[TriggerKind::Reacted], can_react, react),
+    On::React(&[ChainKind::Reacted], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -58,10 +58,10 @@ fn run(player_id: i32) {
                 Msg::new(key!("cant_look_away_backward")),
             ],
         ) == 0;
-        // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk`
-        // (resolve: true) builds `MoveCtx { Steps = n, Reverse = !forward,
-        // Resolve = true, Forced = true }`. The MoveCtx shape maps onto
-        // `ctx::plan::*`.
+        // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
+        // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds
+        // `MoveCtx { Steps = n, Reverse = !forward, Resolve = true,
+        // Forced = true }`. The MoveCtx shape maps onto `ctx::plan::*`.
         ctx::plan::set_steps(n);
         ctx::plan::set_reverse(!forward);
         ctx::plan::set_resolve(true);
@@ -71,13 +71,15 @@ fn run(player_id: i32) {
                 .player_id("who", p)
                 .i("n", n as i64),
         );
-        // TODO(ABI): run the shaped walk now -- C# `H.ForceWalk(p, forward ? n
-        // : -n, resolve: true, player, ...)`. The MoveCtx fields above are
-        // written; the walk routine itself (`ctx::card_move` / a force-walk)
-        // is not in the vocabulary yet, so the player does not actually move.
+        // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- run the shaped walk
+        // now (C# `H.ForceWalk`, MatchHost.cs:23453-23480, through the move
+        // plan).
+        ctx::card_move(p);
     }
-    // TODO(规则书): 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
-    // -- the self-target walk must consume the turn's main move (C#
-    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
-    // `ctx::card_move`.
+    // 规则书: 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
+    // -- `card_move` runs `MainMoveAs` (MatchHost.cs:23102-23120), which sets
+    // `_turnCtx.MainMoved` when the walked player is the turn player, so a
+    // self walk on one's own turn consumes the main move. (The C# `Reactors`
+    // list is others-only, so the clause is vacuous there; the bookkeeping is
+    // right either way.)
 }

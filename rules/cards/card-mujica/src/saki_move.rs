@@ -30,6 +30,12 @@ fn saki_move(player_id: i32) {
         &Msg::new(key!("saki_move_ask")),
         &candidates,
     );
+    // C# `H.PickTarget` (MatchHost.cs:18036-18057) = `AskSeat` + `H.Target`:
+    // the pick runs the targeting pipeline and lands on the player actually
+    // hit (redirect may move it). None = designation failed, the play folds.
+    let Some(hit) = ctx::target(who) else {
+        return;
+    };
     // 规则书: 「向你选择的方向」
     let forward = ctx::ask_pick(
         player_id,
@@ -40,8 +46,9 @@ fn saki_move(player_id: i32) {
             Msg::new(key!("saki_move_backward")),
         ],
     ) == 0;
-    // 规则书: 「移动3格并[触发结算]」 -- C# `H.CardMove` (self) /
-    // `H.ForceWalk(who, forward ? 3 : -3, resolve: true, ...)` (others) builds
+    // 规则书: 「移动3格并[触发结算]」 -- C# `H.CardMove` (self,
+    // MatchHost.cs:5526-5532) / `H.ForceWalk(hit, forward ? 3 : -3,
+    // resolve: true, ...)` (others, MatchHost.cs:5533-5536) build
     // `MoveCtx { Steps = 3, Reverse = !forward, Resolve = true, Forced = true,
     // PayFactor = 0.5 }`. The MoveCtx shape maps onto `ctx::plan::*`.
     ctx::plan::set_steps(3);
@@ -53,16 +60,15 @@ fn saki_move(player_id: i32) {
     ctx::log(
         player_id,
         &Msg::new(key!("saki_move_ordered"))
-            .player_id("who", who)
+            .player_id("who", hit)
             .i("n", 3),
     );
-    // TODO(ABI): run the shaped walk now -- C# `H.CardMove` (self, settles and
-    // consumes the main move) / `H.ForceWalk` (others, a forced side walk).
-    // The MoveCtx fields above are written; the walk routine itself
-    // (`ctx::card_move` / a force-walk) is not in the vocabulary yet, so the
-    // player does not actually move here.
-    // TODO(规则书): 「可在掷骰前选择自己以代替主要移动」 -- the self-target walk
-    // must consume the turn's main move (C# `H.CardMove(Forced = true)` sets
-    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
-    // `ctx::card_move`.
+    // 规则书: 「移动3格并[触发结算]」 -- run the shaped walk now (C# `H.CardMove`
+    // for self / `H.ForceWalk` for others, both through the move plan).
+    ctx::card_move(hit);
+    // 规则书: 「（可在掷骰前选择自己以代替主要移动）」 -- C# `H.CardMove(Forced =
+    // true)` runs `MainMoveAs` (MatchHost.cs:23102-23120), which sets
+    // `_turnCtx.MainMoved` when the walked player is the turn player; that is
+    // exactly `card_move`'s bookkeeping, so choosing self replaces the main
+    // move and choosing another player does not.
 }

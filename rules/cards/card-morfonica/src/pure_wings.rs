@@ -25,16 +25,19 @@ fn pure_wings(player_id: i32) {
     if to < 0 {
         return;
     }
-    // 规则书: 「（不触发结算）」 -- C# `H.ForceTeleport(i, to, resolve: false, ...)`.
-    ctx::teleport_to(player_id, to);
+    // 规则书: 「（不触发结算）」 -- C# `H.ForceTeleport(i, to, resolve: false, ...)`
+    //   = `set_kind(Teleport)` + `set_teleport_to(to)` + `set_resolve(false)` +
+    //   `card_move(player_id)`.
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(false);
+    ctx::card_move(player_id);
     if ctx::player_out(player_id) {
         return;
     }
-    // 规则书: 「立刻进行移动掷骰」
-    // TODO(规则书): 「立刻进行移动掷骰」 -- needs the main-move routine (C#
-    // `H.MainMove(i, H.State.roller >= 0 ? H.State.roller : i)` when
-    // `!H._turnCtx.MainMoved`) so the teleport is followed by that turn's move
-    // roll; today the player still gets its normal main move separately.
-    // 规则书: 「立刻进行移动掷骰」 -- until the main-move hook lands this is only a log.
+    // 规则书: 「立刻进行移动掷骰」 -- C# `H.MainMove(i, ...)` when `!MainMoved`.
+    // TODO(规则书): 「立刻进行移动掷骰」 -- needs the main-move dice-roll routine
+    // (`H.MainMove`); `card_move` runs a planned move but does not roll the
+    // turn's move dice. Today the player still gets its normal main move separately.
     ctx::log(player_id, &Msg::new(key!("pure_wings_roll")).player_id("who", player_id));
 }

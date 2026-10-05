@@ -10,13 +10,13 @@
 //! crystals for 2,000 + 500·X, then stays in play as [持续] until a draw
 //! leaves the owner holding 7+ cards.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const FOREVER: CardDef = CardDef::new("CRYCHIC:如果能一直持续下去...", &[
     On::Play(forever),
-    On::Hook(&[TriggerKind::Drew], on_drew),
+    On::Hook(&[HookKind::Drew], on_drew),
 ]);
 
 const ID: &str = "CRYCHIC:如果能一直持续下去...";

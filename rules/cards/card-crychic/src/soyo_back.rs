@@ -8,13 +8,13 @@
 //! > （2）[手] 获得500资金
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SOYO_BACK: CardDef = CardDef::new("CRYCHIC:（soyo）回到曾经", &[
     On::Play(soyo_back),
-    On::Hook(&[TriggerKind::Drawn], on_drawn),
+    On::Hook(&[HookKind::Drawn], on_drawn),
 ]);
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";

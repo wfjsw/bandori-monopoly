@@ -8,16 +8,16 @@
 //!
 //! Reaction-only (`Normal => false`).
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind, GateKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 const ID: &str = "Mor:离心力，不为所动";
 
 pub const CENTRIFUGAL: CardDef = CardDef::new("Mor:离心力，不为所动", &[
-    On::React(&[TriggerKind::Target], can_react, react),
-    On::Hook(&[TriggerKind::AbnormalGuard], abnormal_guard),
-    On::Hook(&[TriggerKind::TurnStart], turn_start),
+    On::React(&[ChainKind::Effect], can_react, react),
+    On::Gate(&[GateKind::ImmuneAll], immune_all),
+    On::Hook(&[HookKind::TurnStart], turn_start),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -25,7 +25,7 @@ fn can_react(player_id: i32) -> bool {
     // C# `t.Kind == "target" && t.Target == seat && t.ByCard >= 0 && t.ByCard != seat`
     //   and `H._targeted[player_id] >= 2` (the counter is bumped on every target raise
     //   between the player's turns, `MatchHost.cs:19138` / reset at `:25775`).
-    if trigger::kind() != TriggerKind::Target {
+    if trigger::kind() != ChainKind::Effect {
         return false;
     }
     // `t.Target` is the one being aimed at (C# `t.Target == seat`).
@@ -36,11 +36,9 @@ fn can_react(player_id: i32) -> bool {
     if !trigger::by_card().is_some_and(|by| by != player_id) {
         return false;
     }
-    // TODO(ABI): the between-turns target counter (`H._targeted`) has no
-    //   raise/reset hook -- so the 「第二次」 gate cannot be checked. This window
-    //   opens on every targeting of the player by another player's card
-    //   (over-permissive on the count, correct on the source).
-    true
+    // 规则书[反击]: 「第二次」 -- C# `H._targeted[seat] >= 2`; the engine bumps
+    //   the counter on every `H.Target` of this player (before the [反击] window).
+    ctx::targeted_count(player_id) >= 2
 }
 
 fn react(player_id: i32) {
@@ -50,23 +48,19 @@ fn react(player_id: i32) {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("centrifugal_note")));
     ctx::log(player_id, &Msg::new(key!("centrifugal_log")).player_id("who", player_id));
-    // TODO(规则书)[反击]: 「无效化你受到的所有效果」 also covers targeting (C#
-    //   `ImmuneAll` at `H.Target`) and money transfers (C# `ImmuneAll` in the
-    //   pay pipeline) -- only abnormal effects are guarded so far (v25
-    //   `AbnormalGuard`).
+    // 规则书[反击]: 「无效化你受到的所有效果」 -- the ImmuneAll hook below covers
+    //   targeting (`H.Target`), money transfers (the pay pipeline), and abnormal
+    //   effects (the gate checks ImmuneAll first).
 }
 
-/// `Fx.ImmuneAll` (C# `CardCentrifugal.ImmuneAll`) via the v25 `abnormalGuard`
-/// hook: while placed, nullify abnormal effects aimed at the owner by another
-/// player (C# `a.By != a.Seat && AnyFx(a.Seat, f => f.ImmuneAll)`).
-fn abnormal_guard(player_id: i32) {
-    // The hook runs on every placed card across all players; only guard effects
-    // aimed at us (`t.target` = the victim).
-    if trigger::target() != player_id {
-        return;
-    }
-    // C# `ImmuneAll`: self-inflicted abnormals pass through.
-    if trigger::player_id() == player_id {
+/// `Fx.ImmuneAll` (C# `CardCentrifugal.ImmuneAll`): while placed, the owner is
+/// untouchable by other players' effects. The engine checks ImmuneAll before
+/// targeting, before abnormals, and before card-driven payments, so this one
+/// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`).
+fn immune_all(player_id: i32) {
+    // The hook runs on every placed card across all players; only claim
+    // immunity for our own seat (`t.player` = the protected seat).
+    if trigger::player_id() != player_id {
         return;
     }
     trigger::set_cancelled();

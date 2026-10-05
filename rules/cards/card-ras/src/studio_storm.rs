@@ -9,15 +9,15 @@
 //! > （2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的(4-X)/4倍，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const STUDIO_STORM: CardDef = CardDef::new("RAS:练习室里的风暴", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
-    On::Hook(&[TriggerKind::SettleAfter], settle_after),
+    On::Hook(&[HookKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::SettleAfter], settle_after),
 ]);
 
 const ID: &str = "RAS:练习室里的风暴";

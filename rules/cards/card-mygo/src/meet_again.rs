@@ -7,13 +7,12 @@
 //! move roll, keep re-rolling movement dice until the total passes the next
 //! player in the direction of travel.
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MEET_AGAIN: CardDef = CardDef::new("MyGO:若能再次交汇", &[
-    On::React(&[TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// Distance in the direction of travel to the nearest other player who can be

@@ -158,6 +158,11 @@ impl World {
 
     // getters the cards read back off the same MoveCtx
     /// `StopAt` -- where the walk is forced to stop, or -1.
+    /// Did the walk stop before its full length? The walk loop sets it.
+    pub fn move_stopped(&self) -> bool {
+        self.turn.plan.stopped
+    }
+
     pub fn move_stop_at(&self) -> i32 {
         self.turn.plan.stop_at
     }

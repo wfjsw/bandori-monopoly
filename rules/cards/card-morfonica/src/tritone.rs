@@ -8,19 +8,19 @@
 //!
 //! Reaction-only (`Normal => false`): the player is about to lose or pay money.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TRITONE: CardDef = CardDef::new("Mor:迷茫之蝶们的三全音", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
-    On::Hook(&[TriggerKind::TurnEnd], react),
+    On::React(&[ChainKind::Effect], can_react, react),
+    On::Hook(&[HookKind::TurnEnd], react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.amount > 0 && !t.Pay.cancel`.
-    if trigger::kind() != TriggerKind::Pay || trigger::player_id() != player_id {
+    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
     // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0

@@ -12,13 +12,13 @@
 //! >
 //! > （3）此卡在自身游玩区域时[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new("PPP:Tomorrow's Door", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::SettleAfter], settle_after),
+    On::Hook(&[HookKind::SettleAfter], settle_after),
 ]);
 
 /// 规则书（1）: 「此卡指定的序列（从前往后）为…」 -- C# `CardTomorrowsDoor.Route`.

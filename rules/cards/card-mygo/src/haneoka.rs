@@ -7,7 +7,7 @@
 //! on your own tile: 11+ builds a free house, 16+ draws, 20 keeps the card in
 //! play so it can cancel a payment later.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -15,7 +15,7 @@ pub const HANEOKA: CardDef = CardDef::new("MyGO:羽丘的不可思议女孩", &[
     On::Play(haneoka),
     On::CantPlay(cant_play),
     // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-    On::Hook(&[TriggerKind::PayChoose], pay_choose),
+    On::Hook(&[HookKind::PayChoose], pay_choose),
 ]);
 
 const ID: &str = "MyGO:羽丘的不可思议女孩";

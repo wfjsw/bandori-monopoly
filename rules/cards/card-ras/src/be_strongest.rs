@@ -10,7 +10,14 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const BE_STRONGEST: CardDef = CardDef::new("RAS:成为最强", &[
     On::Play(be_strongest),
+    On::CantPlay(cant_play),
 ]);
+
+/// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
+/// turn's main move.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    ctx::cant_move(player_id)
+}
 
 /// C# `H._tiles[t].group == 6` in tile-index order (board.json). Index 0 is the
 /// destination for a 1d10 roll of 1.
@@ -49,12 +56,13 @@ fn be_strongest(player_id: i32) {
             ctx::tile_named(LIVEHOUSES[(r - 1) as usize])
         }
     };
-    if to >= 0 {
-        ctx::teleport_to(player_id, to);
-        ctx::log(player_id, &Msg::new(key!("be_strongest_to")).player_id("who", player_id).tile("tile", to));
+    if to < 0 {
+        return;
     }
-    // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move
-    // routine so this teleport consumes the turn's main move (C# `H.CardMove(c,
-    // new MoveCtx { TeleportTo = teleportTo })`). Until then the player_id still gets
-    // its normal main move after the teleport.
+    ctx::log(player_id, &Msg::new(key!("be_strongest_to")).player_id("who", player_id).tile("tile", to));
+    // 规则书: 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo
+    // = teleportTo })`: a teleport to the chosen tile that consumes the turn's
+    // main move and settles where it lands (Resolve defaults to true).
+    ctx::plan::set_teleport_to(to);
+    ctx::card_move(player_id);
 }

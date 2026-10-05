@@ -7,7 +7,7 @@
 //! > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -15,9 +15,9 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 
 pub const MOCA_HALF: CardDef = CardDef::new("AG:（摩卡）0.5倍速", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
-    On::Hook(&[TriggerKind::RollAfter], roll_after),
-    On::Hook(&[TriggerKind::PayMul], pay_mul),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::RollAfter], roll_after),
+    On::Hook(&[HookKind::PayMul], pay_mul),
 ]);
 
 fn play(player_id: i32) {

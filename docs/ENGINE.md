@@ -32,6 +32,20 @@
 
 Routines: `Opening`, `NextTurn`, `Ai(player_id)`, `Act(player_id, command)`, `Leftovers(deeds)`.
 
+### Effect vs settlement
+
+A card **effect** is a chain link (`Trigger`), separate from its settlement.
+`ChainKind::Effect` is raised when the link's recipients are *named*, before any
+modifier has touched it -- that is the stable [反击] key for the rulebook's
+「被其他玩家的卡效果影响」. `Target` / `Abnormal` / `Pay` are settlement hooks:
+they fire as the effect settles and cannot be used to reconstruct that clause.
+
+Counters are Yu-Gi-Oh chains: the declaration is L1, a counter pushes onto it as
+L2 and resolves **before** it. `Negation::{Activation, Effect}` and `spare(seat)`
+replace the single `Cancelled` flag -- "the link never happened", "it happened
+and settled to nothing", and "everyone but this seat settles" are three different
+things. See `game-core/src/engine/rules.rs`.
+
 ### Why host events are deferred
 
 The world's event and prompt counters are re-derived on every replay, so ids stay

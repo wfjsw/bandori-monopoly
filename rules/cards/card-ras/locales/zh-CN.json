@@ -4,6 +4,7 @@
   "change_world_ask": "放到哪块盖了房屋的 Live House 上？",
   "change_world_bonus": "Change the world 收费 +{{n}}",
   "change_world_crystal": "{{who}} 经过 {{tile}}：「Change the world」获得 1 个奇迹水晶",
+  "change_world_dice": "{{who}} 这次移动掷骰改为 3d20（Change the world）",
   "change_world_discarded": "{{who}} 的「Change the world」触发后放入弃牌堆",
   "change_world_no_houses": "你没有盖了房屋的 Live House 格子",
   "change_world_note": "Change the world",

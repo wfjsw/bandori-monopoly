@@ -10,12 +10,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const GUERRILLA: CardDef = CardDef::new("RAS:游击演出", &[
-    On::React(&[TriggerKind::Paid], can_react, react),
+    On::React(&[ChainKind::Paid], can_react, react),
     On::AtEnd(check),
 ]);
 

@@ -225,7 +225,12 @@ fn a_card_targets_another_player_and_counts_it() {
 }
 
 #[test]
-fn an_immune_player_cannot_be_targeted_stunned_or_counted() {
+fn an_immune_player_is_named_but_the_effect_lands_as_nothing() {
+    // `ImmuneAll` is a **resolution** gate: the effect names its recipient, the
+    // chain forms, and only then does the immunity void what lands. So the
+    // player *is* 「成为目标」 -- the declaration reached them -- while the
+    // effect settles to nothing. `Untargetable` is the declaration gate and is
+    // the one that stops a player being named at all.
     let mut m = match_with_rules("TEST:shield", rules_with_fixtures());
     m.give_cards(1, &["TEST:aimer", "TEST:stunner"]);
     let other = other_player(&m);
@@ -235,10 +240,46 @@ fn an_immune_player_cannot_be_targeted_stunned_or_counted() {
     m.act(1, &play("TEST:stunner")).expect("play the stun");
     let st = m.state();
     let done = fixture_events(&st, "aimer_done");
-    assert_eq!(int_arg(done[0], "got"), -1, "ImmuneAll fails the targeting");
-    assert_eq!(int_arg(done[0], "count"), 0, "an immune player is not counted as targeted");
+    assert_eq!(int_arg(done[0], "got"), -1, "ImmuneAll fails the targeting at resolution");
+    assert_eq!(int_arg(done[0], "count"), 1, "but the player was named, so the designation counts");
     assert_eq!(st.players[other].stun(), before, "ImmuneAll blocks the abnormal effect");
     assert_eq!(fixture_events(&st, "shield_held").len(), 2, "asked once for the target, once for the stun");
+}
+
+#[test]
+fn a_counter_negates_the_effect_declaration_before_it_settles() {
+    // The chain: the effect declaration is L1, the counter pushes onto it as L2
+    // and resolves **before** L1. `set_cancelled` negates L1's activation, so
+    // the effect never settles at all -- as against `negate_effect`, which
+    // would let a listener see the effect and only void what lands.
+    //
+    // Both players are human: a [反击] window is never offered to a bot.
+    let members = vec![member(1, false), member(2, false)];
+    let mut m = Match::new(data(), Arc::new(rules_with_fixtures()), &members, 20261004, MatchMode::Casual, ScoreWeights::default());
+    m.quick_start();
+    for _ in 0..2000 {
+        let st = m.state();
+        if st.phase == "play" && st.turn >= 0 && st.step == 1
+            && st.players.get(st.turn as usize).is_some_and(|s| s.member == 1)
+        {
+            break;
+        }
+        m.tick(0.25);
+    }
+    let (actor, other) = (1, 2);
+    m.give_cards(actor, &["TEST:aimer"]);
+    m.give_cards(other, &["TEST:counter"]);
+    m.act(actor, &play("TEST:aimer")).expect("play the aimer");
+    // The reaction window is offered to the named recipient; play the counter.
+    let st = m.state();
+    assert_eq!(st.prompt.kind, "choice", "a [反击] window should be pending: {:?}", st.prompt);
+    let prompt = st.prompt.id;
+    m.act(other, &NetMessage { prompt, value: 0, ..NetMessage::act("answer") }).expect("play the counter");
+    let st = m.state();
+    let done = fixture_events(&st, "aimer_done");
+    assert_eq!(done.len(), 1);
+    assert_eq!(int_arg(done[0], "got"), -1, "the counter negated the declaration, so the targeting never landed");
+    assert_eq!(fixture_events(&st, "counter_fired").len(), 1, "the counter ran");
 }
 
 #[test]

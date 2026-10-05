@@ -215,10 +215,13 @@ impl MoveCtx {
         Self { player_id, roller: player_id, ..Default::default() }
     }
 
-    /// `SetSteps` -- set the walk length, keeping the sign of the current roll
-    /// so a reverse move stays reverse.
+    /// `SetSteps` -- fix the walk length, so the move walks exactly `n` steps
+    /// and does not roll (C# `Steps >= 0` suppresses `RollMove`; `WalkMoveSteps`
+    /// then reads `Steps` instead of `Roll`). The sign of the current roll is
+    /// kept so a reverse move stays reverse.
     pub fn set_steps(&mut self, n: i32) {
         let n = n.max(0);
+        self.steps = n;
         self.roll = if self.roll < 0 { -n } else { n };
     }
 

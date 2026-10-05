@@ -9,14 +9,13 @@
 //! > 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。
 //!
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new("PPP:（香澄）大家我都喜欢哦", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::PassTile], pass_tile),
 ]);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
@@ -70,11 +69,10 @@ fn pass_tile(player_id: i32) {
     if trigger::move_kind() == Some(MoveKind::Teleport) {
         return;
     }
-    // TODO(规则书)[持续]: the `H.AbnormalGate` stop guard (C# `Abnormal{Kind = "stop"}`
-    //   -> `m.Stopped = true; m.Resolve = true`) is still held -- a blocker with a
-    //   「不可阻挡」-style bypass is not in the vocabulary. The stop + rent shaping
-    //   itself is written below.
-    // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`.
+    // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`
+    // (MatchHost.cs:9063-9078, behind `H.WithCard(User, H.AbnormalGate(a))`).
+    // `set_stop_at` is the forced stop from this `PassTile` hook: the walk
+    // settles at the stop tile (`plan::stopped()` is the read-only check).
     ctx::plan::set_stop_at(tile);
     ctx::plan::set_resolve(true);
     // 规则书[持续]: 「那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半」

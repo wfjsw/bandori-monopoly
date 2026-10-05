@@ -8,6 +8,7 @@
 //! > 2. 本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算。
 //!
 
+use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const STAR_BEAT: CardDef = CardDef::new("PPP:STAR BEAT!", &[
@@ -70,26 +71,29 @@ fn play(player_id: i32) {
             &Msg::new(key!("star_beat_stickers")).player_id("who", player_id).i("n", 2),
         );
         // 规则书1: 「本回合的主要移动改为[传送]到(45×…) mod 60格并结算」 -- C#
-        // `H.CardMove(c, new MoveCtx { TeleportTo = tile })` (teleport *with* settle).
+        // `H.CardMove(c, new MoveCtx { TeleportTo = tile })` (MatchHost.cs:8717;
+        // teleport *with* settle -- `MoveCtx.Resolve` defaults to true). The plan
+        // names the destination and settles, and `card_move` runs it as the main
+        // move.
         if to >= 0 {
-            ctx::teleport_to(player_id, to);
+            ctx::plan::set_kind(MoveKind::Teleport);
+            ctx::plan::set_teleport_to(to);
+            ctx::plan::set_resolve(true);
             ctx::log(
                 player_id,
                 &Msg::new(key!("star_beat_moved")).player_id("who", player_id).tile("tile", to),
             );
+            ctx::card_move(player_id);
         }
-        // TODO(ABI): 「并结算」 / 「本回合的主要移动改为[传送]」 -- `ctx::teleport_to`
-        //   is `H.ForceTeleport(..., resolve: false)` (no settle, does not consume the
-        //   main move). Needs `H.CardMove` / `H.ForceTeleport(..., resolve: true)` so
-        //   the landing settles and the turn's main move is this teleport.
     } else {
         // 规则书2: 「本回合的主要移动改为移动(2×…)d10格并结算」 -- C#
-        // `H.CardMove(c, new MoveCtx { Base = { (dice, 10, ...) } })`. The dice are
-        // rolled for the log; the walk itself still needs `H.CardMove` (TODO below).
-        let _sum = ctx::roll(player_id, dice, 10);
-        // TODO(ABI): 「移动(2×“资金数包含5的玩家数量+1”)d10格并结算」 -- needs
-        //   `H.CardMove` with a multi-die base (`MoveCtx.Base.Add((dice, 10, ...))`)
-        //   so the walk passes tiles and settles on arrival. The bare `ctx::roll`
-        //   above only burns the dice; it does not move the player.
+        // `H.CardMove(c, new MoveCtx { Base.Clear(); Base.Add((dice, 10, ...)) })`
+        // (MatchHost.cs:8723-8730): the base dice table becomes `dice`d10
+        // (`set_base_dice` replaces the default 1d20) and the walk runs and
+        // settles (`MoveCtx.Resolve` defaults to true). `card_move` rolls the
+        // dice and walks; no separate `ctx::roll`.
+        ctx::plan::set_base_dice(dice, 10, "（STAR BEAT!）");
+        ctx::plan::set_resolve(true);
+        ctx::card_move(player_id);
     }
 }

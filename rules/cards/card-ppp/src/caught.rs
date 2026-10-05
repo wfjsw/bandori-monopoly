@@ -47,15 +47,18 @@ fn play(player_id: i32) {
         &Msg::new(key!("caught_ask")).player_id("who", player_id),
         &list,
     );
-    let _steps = ctx::tile_forward(pos, ctx::player_pos(who));
+    let steps = ctx::tile_forward(pos, ctx::player_pos(who));
     // C# `H._turnCtx.BuildOk = true` -- the optional build after this move.
-    // TODO(规则书): 「视为本回合的主要移动且可选择盖房」 -- needs the H.CardMove /
-    //   main-move routine (C# `H.CardMove(c, new MoveCtx { Steps = H.Forward(...) })`)
-    //   so the walk passes intervening tiles and settles on the target, plus the
-    //   `BuildOk` turn flag (`H.OfferBuildAmong` afterwards). Until then the player is
-    //   not moved at all; only the target choice runs.
+    // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove(c, new MoveCtx { Steps =
+    // H.Forward(...) })`: the walk passes intervening tiles and settles on the
+    // target, and `card_move` consumes the turn's main move (`MainMoveAs`).
+    // TODO(规则书): 「且可选择盖房」 -- needs the `BuildOk` turn flag (C#
+    //   `H._turnCtx.BuildOk = true`) plus the `H.OfferBuildAmong` build routine
+    //   after the move; both still held.
+    ctx::plan::set_steps(steps);
     ctx::log(
         player_id,
-        &Msg::new(key!("caught_target")).player_id("who", player_id).player_id("target", who).i("n", _steps as i64),
+        &Msg::new(key!("caught_target")).player_id("who", player_id).player_id("target", who).i("n", steps as i64),
     );
+    ctx::card_move(player_id);
 }

@@ -58,16 +58,15 @@ fn doll_garden(player_id: i32) {
         // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
         let r = ctx::roll(p, 1, 20);
         sum += r;
-        // C# `H.Walk(p, r, resolve: false, ...)` builds `MoveCtx { Steps = r,
-        // Resolve = false }` -- a walk without settling. The MoveCtx shape
-        // maps onto `ctx::plan::*`; `teleport_to` stands in for the landing.
+        // C# `H.Walk(p, r, resolve: false, ...)` (MatchHost.cs:5965) builds
+        // `MoveCtx { Steps = r, Resolve = false }` -- a walk without settling.
+        // The MoveCtx shape maps onto `ctx::plan::*`.
         ctx::plan::set_steps(r);
         ctx::plan::set_resolve(false);
-        // TODO(ABI): run the shaped walk now -- C# `H.Walk(p, r, resolve:
-        // false, ...)`. The MoveCtx fields above are written; the walk routine
-        // itself is not in the vocabulary yet, so `teleport_to` jumps to the
-        // landing tile without walking the path.
-        ctx::teleport_to(p, ctx::tile_steps_ahead(p, r));
+        // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」 -- run the
+        // shaped walk now (C# `H.Walk`, MatchHost.cs:23072-23088, through the
+        // move plan).
+        ctx::card_move(p);
         ctx::log(
             player_id,
             &Msg::new(key!("doll_garden_walked")).player_id("who", p).i("n", r as i64),
@@ -83,19 +82,16 @@ fn doll_garden(player_id: i32) {
         player_id,
         &Msg::new(key!("doll_garden_sum")).player_id("who", player_id).i("n", sum as i64),
     );
-    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- C#
-    // `H.CardMove(c, new MoveCtx { Steps = sum, Forced = true })` builds
+    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- C# `H.CardMove(c, new
+    // MoveCtx { Steps = sum, Forced = true })` (MatchHost.cs:5973-5977) builds
     // `MoveCtx { Steps = sum, Resolve = true, Forced = true }`. The MoveCtx
     // shape maps onto `ctx::plan::*`.
     ctx::plan::set_steps(sum);
     ctx::plan::set_resolve(true);
-    // TODO(ABI): run the shaped walk now -- C# `H.CardMove(c, Steps = sum,
-    // Forced = true)`. The MoveCtx fields above are written; `ctx::card_move`
-    // is not in the vocabulary yet, so `teleport_to` jumps without settling.
-    let to = ctx::tile_steps_ahead(player_id, sum);
-    ctx::teleport_to(player_id, to);
-    // TODO(规则书): 「视为你本回合的主要移动」 -- this forced walk must count as
-    // the turn's main move (C# `H.CardMove(Forced = true)` sets
-    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
-    // `ctx::card_move`.
+    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- run the shaped walk now
+    // (C# `H.CardMove`, MatchHost.cs:18073-18080, through the move plan).
+    ctx::card_move(player_id);
+    // 规则书: 「视为你本回合的主要移动」 -- `H.CardMove` runs `MainMoveAs`
+    // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
+    // player; that is exactly `card_move`'s bookkeeping.
 }

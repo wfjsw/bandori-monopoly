@@ -5,10 +5,11 @@
 //! >  将此卡放置于场上（充能3，衰减1）并向一名玩家场上放置一个怪盗标记，你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算。此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）和1d10（距离）进行结算。
 //!
 //! Place this card in play and put a thief mark on one other player. The
-//! crystal decay and the RollPlan dice (1d2 direction + 1d10 distance) are in;
-//! the force-stop stays a TODO below.
+//! crystal decay, the RollPlan dice (1d2 direction + 1d10 distance) and the
+//! optional force-stop are in; the `H.AbnormalGate` wrapper around the stop
+//! stays a narrow TODO.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -17,7 +18,8 @@ const ID: &str = "HHW:（薰）怪盗hello happy";
 pub const KAORU_THIEF: CardDef = CardDef::new("HHW:（薰）怪盗hello happy", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::PassPlayer], pass_player),
     On::RollPlan(roll_plan),
 ]);
 
@@ -54,13 +56,58 @@ fn play(player_id: i32) {
     // mark on the gate's answer (the player actually hit, after any redirect).
     if let Some(who) = hit {
         ctx::add_tok(who, key!("kaoru_thief_tok"), 1, i32::MAX);
+        // C# `card.Mem["marked"] = r.index; card.Mem["turn"] = H.TurnKey` -- the
+        // PassPlayer force-stop only works on the turn the mark was placed.
+        ctx::set_slot(player_id, "kaoru_thief_marked", who);
+        ctx::set_slot(player_id, "kaoru_thief_turn", ctx::turn_key());
         ctx::log(player_id, &Msg::new(key!("kaoru_thief_marked")).player_id("who", who));
     }
-    // TODO(规则书): 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
-    // -- needs the Fx.PassSeat hook body (C# `CardKaoruThief.PassSeat` ->
-    // `Stop`, `m.Stopped = true`) -- the `passPlayer` kind exists but the
-    // force-stop is an immediate-move routine (`H.AbnormalGate` + `MoveCtx`
-    // mutation) that is still landing in another session.
+}
+
+/// 规则书: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
+/// -- C# `CardKaoruThief.PassSeat` -> `Stop` (MatchHost.cs:3834-3860).
+fn pass_player(player_id: i32) {
+    if !ctx::is_placed(player_id) {
+        return;
+    }
+    // C# `m.Seat != Seat` -- only the owner's own walk.
+    if trigger::player_id() != player_id {
+        return;
+    }
+    // C# `other != Marked` -- only when passing the marked player.
+    let marked = ctx::slot(player_id, "kaoru_thief_marked");
+    if marked < 0 || trigger::target() != marked {
+        return;
+    }
+    // C# `m.Remaining <= 0` -- only mid-move.
+    if trigger::move_remaining() <= 0 {
+        return;
+    }
+    // C# `Mem["turn"] != H.TurnKey` -- only the turn the mark was placed.
+    if ctx::slot(player_id, "kaoru_thief_turn") != ctx::turn_key() {
+        return;
+    }
+    // 规则书: 「可以选择在经过该玩家时使自己强制停下并触发结算」 -- C#
+    // `H.AskYes(..., aiYes: false)` then `m.Stopped = true; m.Resolve = true`.
+    let who = marked;
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("kaoru_thief_stop_title")),
+        &Msg::new(key!("kaoru_thief_stop_ask")).player_id("who", who),
+    ) {
+        return;
+    }
+    // C# `m.Stopped = true; m.Resolve = true` -- stop at the marked player's
+    // tile and settle (`plan::set_stop_at` + `set_resolve`).
+    let tile = trigger::tile();
+    if tile >= 0 {
+        ctx::plan::set_stop_at(tile);
+        ctx::plan::set_resolve(true);
+    }
+    // TODO(规则书): the `H.AbnormalGate` wrapper around this stop (C#
+    //   `CardKaoruThief.Stop`) is not in the vocabulary -- the `abnormalGuard`
+    //   hook path and the `_turnCtx.Unstoppable` play-context flag are not
+    //   reachable from here.
 }
 
 /// 规则书: 「（充能3，衰减1）」 -- C# `DecayCard.TurnEnd` (`turn == DecayOn` =
@@ -100,17 +147,17 @@ fn roll_plan(player_id: i32) {
     // 规则书: 「（前后）」 -- C# `m.Reverse = num == 2` (`set_reverse` is
     // `Plan.Reverse`).
     ctx::plan::set_reverse(dir == 2);
-    // 规则书: 「和1d10（距离）」 -- C# `m.Base = { (1, 10, ...) }`; the planned
-    // roll is the 1d10 face (`set_fixed_roll` is `Plan.FixedRoll`). The C#
-    // `m.Base.Clear(); m.Base.Add((1, 10, ...))` dice-shape rewrite has no
-    // `set_base` counterpart, so the 1d10 is pre-rolled as the fixed roll.
-    let dist = ctx::roll(mover, 1, 10);
-    ctx::set_fixed_roll(dist);
+    // 规则书: 「和1d10（距离）」 -- C# `m.Base.Clear(); m.Base.Add((1, 10, ...))`
+    // rewrites the roll's base dice to 1d10 (`plan::set_base_dice` is that).
+    // TODO(ABI): the C# also runs `m.Dice.Clear()` (MatchHost.cs:3865) so the
+    //   face is exactly 1d10 even when another card added extra dice (e.g.
+    //   「CRUSH ON THE DRUM!!!」's `Plan.Dice`); `set_base_dice` only clears
+    //   `Base`, and there is no clear-extra-dice op yet.
+    ctx::plan::set_base_dice(1, 10, "（怪盗hello happy）");
     ctx::log(
         mover,
         &Msg::new(key!("kaoru_thief_rollplan"))
             .player_id("who", mover)
-            .i("dir", dir as i64)
-            .i("dist", dist as i64),
+            .i("dir", dir as i64),
     );
 }

@@ -9,7 +9,14 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const UNSTOPPABLE: CardDef = CardDef::new("RAS:UNSTOPPABLE", &[
     On::Play(unstoppable),
+    On::CantPlay(cant_play),
 ]);
+
+/// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
+/// turn's main move.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    ctx::cant_move(player_id)
+}
 
 /// C# `CardUnstoppable.Spots` -- the six destinations, indexed by the 1d6.
 const SPOTS: [&str; 6] = [
@@ -27,16 +34,17 @@ fn unstoppable(player_id: i32) {
     let spot = SPOTS[(r.clamp(1, 6) - 1) as usize];
     let to = ctx::tile_named(spot);
     if to >= 0 {
-        // 规则书: 「本次传送不触发结算」 -- C# `H.ForceTeleport(..., resolve: false)`.
-        ctx::teleport_to(player_id, to);
+        // 规则书: 「本次传送不触发结算，视为你的主要移动」 -- C#
+        // `H.CardMove(c, new MoveCtx { TeleportTo = ..., Resolve = false })`:
+        // a teleport to the chosen tile that consumes the turn's main move and
+        // does not settle.
+        ctx::plan::set_teleport_to(to);
+        ctx::plan::set_resolve(false);
+        ctx::card_move(player_id);
     }
     // 规则书: 「且若骰点为1-3获得2000资金，若为4-6则获得1000资金」
     if !ctx::player_out(player_id) {
         let money = if r <= 3 { 2000 } else { 1000 };
         ctx::gain(player_id, money, &Msg::new(key!("unstoppable_why")).i("roll", r as i64));
     }
-    // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move
-    // routine so this teleport consumes the turn's main move (C#
-    // `H.CardMove(c, new MoveCtx { TeleportTo = ..., Resolve = false })`).
-    // Until then the player still gets its normal main move after the teleport.
 }

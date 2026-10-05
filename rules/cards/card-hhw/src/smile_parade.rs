@@ -8,15 +8,15 @@
 //! > （3）[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 const ID: &str = "HHW:笑容大游行";
 
 pub const SMILE_PARADE: CardDef = CardDef::new("HHW:笑容大游行", &[
-    On::React(&[TriggerKind::Pass], can_react, react),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
+    On::React(&[ChainKind::Pass], can_react, react),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
 ]);
 
 /// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).

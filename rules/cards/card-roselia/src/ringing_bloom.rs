@@ -12,13 +12,13 @@
 //! place this card on your field; it then fakes your house counts up to your
 //! best tile and pays out when one of your non-RiNG tiles collects rent.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const RINGING_BLOOM: CardDef = CardDef::new("R:（燐子）Ringing Bloom", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::PayAfter], pay_after),
+    On::Hook(&[HookKind::PayAfter], pay_after),
 ]);
 
 const ID: &str = "R:（燐子）Ringing Bloom";

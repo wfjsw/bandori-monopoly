@@ -8,19 +8,19 @@
 //!
 //! Reaction-only (`Normal => false`).
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MASHIRO_PAY: CardDef = CardDef::new("Mor:（小白）", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当你将要向其他玩家支付时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.PayToOther && !t.Pay.cancel
     //   && t.Pay.amount > 0` (`t.Pay.to` on pay triggers is `trigger::target`).
-    if trigger::kind() != TriggerKind::Pay || trigger::player_id() != player_id {
+    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
     let to = trigger::target();

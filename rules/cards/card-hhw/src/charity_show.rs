@@ -11,8 +11,7 @@
 //! stand-in and files it to the discard pile at the owner's turn end (C#
 //! `CharityFx.TurnEndAfter` -> `H.RemoveExtra(this)`).
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -27,7 +26,7 @@ const SLOT_TURN: &str = "charity_show_turn";
 
 pub const CHARITY_SHOW: CardDef = CardDef::new("HHW:爱心义演", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::PayMul, TriggerKind::TurnEndAfter, TriggerKind::PassTile], hook),
+    On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], hook),
 ]);
 
 fn play(player_id: i32) {
@@ -35,6 +34,7 @@ fn play(player_id: i32) {
     // 规则书: 「打出此卡的回合内」 -- C# `H._turnCtx.HalfPayToOthers = true` and
     // `CharityFx.Turn = H.TurnKey` live on the turn, not on the card.
     ctx::set_slot(player_id, SLOT_TURN, ctx::turn_key());
+    ctx::set_slot(player_id, "charity_extra_total", 0);
     // 规则书: 「打出此卡的回合内」 -- C# `H.ExtraOf<CharityFx>(seat)`. The hook
     // dispatch only runs on placed cards, so this placement stands in for the
     // player attachment (same pattern as `card-sumimi`'s 儿时玩伴的鼓励); the
@@ -140,11 +140,22 @@ fn hook(player_id: i32) {
                 player_id,
                 &Msg::new(key!("charity_show_pass")).player_id("who", player_id).tile("tile", t),
             );
-            // TODO(规则书): 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk
-            // (the walk loop bound is `steps + m.ExtraSteps`, re-read every
-            // step). The plan's `set_extra_steps` assigns a pre-roll field the
-            // walk loop does not read, so the +2 cannot extend an in-flight
-            // walk yet.
+            // 规则书: 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk.
+            // The walk loop bound is `steps + m.ExtraSteps`, re-read each
+            // step (play.rs). `set_extra_steps` assigns, so keep a running
+            // count in a slot and write the sum.
+            let mut extra = ctx::slot(player_id, "charity_extra_total");
+            if extra < 0 {
+                extra = 0;
+            }
+            extra += 2;
+            ctx::set_slot(player_id, "charity_extra_total", extra);
+            ctx::plan::set_extra_steps(extra);
+            // TODO(规则书): the walk reads `m.extra_steps` off the in-flight
+            //   `Move` clone, while `set_extra_steps` writes
+            //   `TurnCtx::plan.extra_steps` -- the two are not yet synced
+            //   mid-walk, so the +2 may not extend an in-flight walk until the
+            //   engine mirrors plan writes onto the live move.
         }
         // 规则书: 「打出此卡的回合内」 -- C# `CharityFx.TurnEndAfter` (`turn ==
         // Player` -> `H.RemoveExtra(this)`): both effects end with the turn.

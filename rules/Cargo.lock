@@ -32,6 +32,8 @@ dependencies = [
  "card-roselia",
  "card-sdk",
  "card-sumimi",
+ "skill-bands",
+ "skill-characters",
 ]
 
 [[package]]
@@ -206,6 +208,20 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "skill-bands"
+version = "0.1.0"
+dependencies = [
+ "card-sdk",
+]
+
+[[package]]
+name = "skill-characters"
+version = "0.1.0"
+dependencies = [
+ "card-sdk",
 ]
 
 [[package]]

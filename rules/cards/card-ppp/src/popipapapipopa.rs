@@ -13,13 +13,13 @@
 //! A pure [持续] card: the C# has no `Play`, it is placed by `CardPipopa`
 //! (`place_card` in `pipopa.rs`). Both continuous clauses are Fx hooks.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new("PPP:[衍生]Popipapapipopa", &[
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
-    On::Hook(&[TriggerKind::PayChoose], pay_choose),
+    On::Hook(&[HookKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::PayChoose], pay_choose),
 ]);
 
 /// C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal.

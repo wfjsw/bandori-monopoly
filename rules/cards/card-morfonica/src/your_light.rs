@@ -34,8 +34,12 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn your_light(player_id: i32) {
     // 规则书: 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」
     // C# `H._turnCtx.Plan.Start = School; Plan.StartWhy = CardName`.
-    // TODO(规则书): 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」 -- needs
-    // the move-plan start override (C# `H._turnCtx.Plan.Start` / `Plan.StartWhy`) so
-    // the turn's main move leaves from 月之森女子学院 without passing the start tile.
+    // 规则书: 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」
+    // C# `H._turnCtx.Plan.Start = School; Plan.StartWhy = CardName` =
+    //   `plan::set_start(school, why)`.
+    let school = ctx::tile_named("月之森女子学院");
+    if school >= 0 {
+        ctx::plan::set_start(school, "你的光芒将照亮前路");
+    }
     ctx::log(player_id, &Msg::new(key!("your_light_start")).player_id("who", player_id)); // 规则书: 「此次移动以…为起点」
 }

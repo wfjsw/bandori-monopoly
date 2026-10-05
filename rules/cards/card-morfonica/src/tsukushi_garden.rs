@@ -65,18 +65,26 @@ fn tsukushi_garden(player_id: i32) {
         &Msg::new(key!("tsukushi_garden_settle_title")),
         &Msg::new(key!("tsukushi_garden_settle_text")).tile("tile", to),
     );
-    // 规则书: 「并视为主要移动」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo = to,
-    //   Resolve = rs.yes })` (or `Steps = 1` when `who == i`).
-    // TODO(规则书): 「并视为主要移动」 and 「（不触发结算 / 触发结算）」 -- needs the
-    //   H.CardMove / main-move routine so the hop consumes the turn's main move and
-    //   honours the settle answer (`MoveCtx.Resolve`). `ctx::teleport_to` always
-    //   skips settling; a self-picked 「前进一格」 is approximated as a teleport to
-    //   the tile ahead.
+    // 规则书: 「并视为主要移动」 -- C# `H.CardMove(c, new MoveCtx { ... })`.
     if settle {
         ctx::log(player_id, &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to)); // 规则书: 「可以选择是否触发结算」
     }
-    // 规则书: 「传送到行动条上对应玩家前一格」 / 「选中自己则前进一格」
-    ctx::teleport_to(player_id, to);
+    if who == player_id {
+        // 规则书: 「选中自己则前进一格」 -- C# `new MoveCtx { Steps = 1,
+        //   Resolve = rs.yes }` = `set_steps(1)` + `set_resolve(settle)` +
+        //   `card_move(player_id)`.
+        ctx::plan::set_steps(1);
+        ctx::plan::set_resolve(settle);
+        ctx::card_move(player_id);
+    } else {
+        // 规则书: 「传送到行动条上对应玩家前一格」 -- C# `new MoveCtx {
+        //   TeleportTo = to, Resolve = rs.yes }` = `set_kind(Teleport)` +
+        //   `set_teleport_to(to)` + `set_resolve(settle)` + `card_move(player_id)`.
+        ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+        ctx::plan::set_teleport_to(to);
+        ctx::plan::set_resolve(settle);
+        ctx::card_move(player_id);
+    }
     if ctx::player_out(player_id) {
         return;
     }

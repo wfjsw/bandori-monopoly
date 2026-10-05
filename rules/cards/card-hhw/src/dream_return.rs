@@ -7,12 +7,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const DREAM_RETURN: CardDef = CardDef::new("HHW:梦幻的回礼", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
@@ -40,7 +40,7 @@ fn can_react(player_id: i32) -> bool {
     // `CanReact`: `t.Kind == "pay" && t.Pay != null && t.Pay.IsRent &&
     // t.Pay.from >= 0 && t.Pay.from != player && t.Pay.to != player &&
     // Targets(player).Count > 0 && H.CanPay(player)`.
-    if trigger::kind() != TriggerKind::Pay {
+    if trigger::kind() != ChainKind::Effect {
         return false;
     }
     // On pay triggers `t.Seat == t.Pay.from` and `t.Target == t.Pay.to`.

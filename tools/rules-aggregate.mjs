@@ -18,29 +18,34 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CARDS = join(ROOT, "rules", "cards");
+const SKILLS = join(ROOT, "rules", "skills");
 const OUT = join(CARDS, "card-all");
 
-/** [{dir, name}] of every band crate, sorted. */
-function bandCrates() {
-  return readdirSync(CARDS, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && e.name !== "card-all")
-    .map((e) => e.name)
-    .sort()
-    .flatMap((dir) => {
-      const toml = join(CARDS, dir, "Cargo.toml");
-      const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
-      if (!m) throw new Error(`${toml}: no package name`);
-      return [{ dir, name: m[1] }];
-    });
+/** [{root, dir, name}] of every rule crate, sorted. Covers `rules/cards/*`
+ *  (the cards you draw) and `rules/skills/*` (character / band skills) -- two
+ *  areas on purpose, one shipped module. */
+function ruleCrates() {
+  return [CARDS, SKILLS].flatMap((root) =>
+    readdirSync(root, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name !== "card-all")
+      .map((e) => e.name)
+      .sort()
+      .flatMap((dir) => {
+        const toml = join(root, dir, "Cargo.toml");
+        const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
+        if (!m) throw new Error(`${toml}: no package name`);
+        return [{ root, dir, name: m[1] }];
+      })
+  );
 }
 
-const crates = bandCrates();
+const crates = ruleCrates();
 if (!crates.length) {
-  console.error("no band crates found");
+  console.error("no rule crates found");
   process.exit(1);
 }
 
-const deps = crates.map((c) => `${c.name} = { path = "../${c.dir}" }`).join("\n");
+const deps = crates.map((c) => `${c.name} = { path = "${c.root === SKILLS ? "../../skills/" : "../"}${c.dir}" }`).join("\n");
 const tables = crates.map((c) => `    ${c.name.replaceAll("-", "_")}::CARDS`).join(",\n");
 
 mkdirSync(join(OUT, "src"), { recursive: true });
@@ -77,4 +82,4 @@ ${tables}
 `);
 
 console.log(`card-all: ${crates.length} band crates linked`);
-for (const c of crates) console.log(`  ${c.name} <- rules/cards/${c.dir}`);
+for (const c of crates) console.log(`  ${c.name} <- rules/${c.root === SKILLS ? "skills" : "cards"}/${c.dir}`);

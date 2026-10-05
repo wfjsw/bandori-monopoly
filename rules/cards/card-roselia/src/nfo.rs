@@ -10,13 +10,13 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NFO: CardDef = CardDef::new("R:NFO", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::PayAt], react),
+    On::Hook(&[HookKind::PayAt], react),
     On::AtEnd(at_end),
 ]);
 
@@ -92,27 +92,29 @@ fn effect(player_id: i32, k: i32) {
             let pos2 = ctx::player_pos(num);
             // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- `H.SeatsOn(pos2, i)`.
             let payers: Vec<i32> = ctx::players_on(pos2, player_id);
-            // 规则书: 「立刻移动到你前方最近一名玩家的前方一格」 -- `H.Forward(pos, pos2) + 1`
-            // steps lands one tile past that player.
-            let to = ctx::tile_steps_ahead(player_id, ctx::tile_forward(pos, pos2) + 1);
+            // 规则书: 「立刻移动到你前方最近一名玩家的前方一格」 -- C#
+            // `H.CardMove(c, new MoveCtx { Steps = H.Forward(pos, pos2) + 1,
+            // Resolve = false })`: a forward walk of that many steps lands one
+            // tile past that player.
+            let steps = ctx::tile_forward(pos, pos2) + 1;
+            ctx::plan::set_steps(steps);
+            // 规则书: 「不[触发结算]」 -- C# `Resolve = false`.
+            ctx::plan::set_resolve(false);
+            // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove` (`MainMoveAs`)
+            // consumes the turn's main move and walks the plan immediately.
+            ctx::card_move(player_id);
+            let to = ctx::tile_steps_ahead(player_id, steps);
             if to >= 0 {
-                // 规则书: 「不[触发结算]」 -- C# `H.CardMove(c, new MoveCtx { Steps = ...,
-                // Resolve = false })`.
-                ctx::teleport_to(player_id, to);
                 ctx::log(
                     player_id,
                     &Msg::new(key!("nfo_move")).player_id("who", player_id).tile("tile", to),
                 );
             }
-            // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- `H.SplitPay(payers, i,
+            // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- C# `H.SplitPay(payers, i,
             // 1000, ...)`, only if the move did not knock the player_id out (C# `if (!H.Out(i))`).
             if !ctx::player_out(player_id) {
                 split_pay(&payers, player_id, 1000, &Msg::new(key!("nfo_pay")));
             }
-            // TODO(规则书): 「视为本回合的主要移动」 -- needs the H.CardMove / main-move
-            // routine (C# `H.CardMove(c, new MoveCtx { Steps = ..., Resolve = false })`)
-            // so this consumes the turn's main move; `teleport_to` only moves the player
-            // without settling and without touching the main-move budget.
         }
         // 规则书: 「若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」
         3 => {

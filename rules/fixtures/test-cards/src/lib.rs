@@ -3,7 +3,7 @@
 //! Test-only cards for the host's cross-module tests.
 
 use card_sdk::ctx::{self, trigger, CardPile};
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{ChainKind, GateKind};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// Plays another card (in another module) in the middle of its own effect.
@@ -14,7 +14,7 @@ const RECURSE: CardDef = CardDef::new("TEST:recurse", &[On::Play(recurse)]);
 /// Logs from both `play` and `react`, with no kind guard: the host must run its
 /// `react` exactly once per play (at its own `card` trigger), not again at
 /// `cardAfter` / `cardPlayed`.
-const ECHO: CardDef = CardDef::new("TEST:echo", &[On::Play(echo_play), On::React(&[TriggerKind::Card], never, echo_react)]);
+const ECHO: CardDef = CardDef::new("TEST:echo", &[On::Play(echo_play), On::React(&[ChainKind::Card], never, echo_react)]);
 /// Lists its player's hand through `cards_in` (the host->guest list) and logs
 /// the count next to `hand_size`, so a test can check the two agree.
 const LISTER: CardDef = CardDef::new("TEST:lister", &[On::Play(lister)]);
@@ -23,14 +23,20 @@ const LISTER: CardDef = CardDef::new("TEST:lister", &[On::Play(lister)]);
 const STUNNER: CardDef = CardDef::new("TEST:stunner", &[On::Play(stunner)]);
 /// Placed on the first other player's field; guards that player against every
 /// abnormal effect (C# `IAbnormalGuard`).
-const GUARD: CardDef = CardDef::new("TEST:guard", &[On::Play(guard_play), On::Hook(&[TriggerKind::AbnormalGuard], guard)]);
+const GUARD: CardDef = CardDef::new("TEST:guard", &[On::Play(guard_play), On::Gate(&[GateKind::AbnormalGuard], guard)]);
 
 /// Targets the first other player (C# `H.Target`) and logs what it got and that
 /// player's `_targeted` counter.
 const AIMER: CardDef = CardDef::new("TEST:aimer", &[On::Play(aimer)]);
 /// Placed on the first other player's field; makes that player immune to other
-/// players' effects (C# `ImmuneAll`).
-const SHIELD: CardDef = CardDef::new("TEST:shield", &[On::Play(shield_play), On::Hook(&[TriggerKind::ImmuneAll], shield)]);
+/// players' effects (C# `ImmuneAll`). A **resolution** gate: the effect names
+/// the player and the chain forms, and only what lands is voided.
+const SHIELD: CardDef = CardDef::new("TEST:shield", &[On::Play(shield_play), On::Gate(&[GateKind::ImmuneAll], shield)]);
+
+/// A [反击] that answers an **effect declaration** and negates its activation --
+/// the link never happened, so nothing settles. This is the Yu-Gi-Oh "negate
+/// the activation" as against "negate the effect".
+const COUNTER: CardDef = CardDef::new("TEST:counter", &[On::React(&[ChainKind::Effect], counter_yes, counter)]);
 
 fn aimer(player_id: i32) {
     let Some(&target) = ctx::others(player_id).first() else { return };
@@ -118,4 +124,17 @@ fn recurse(player_id: i32) {
     ctx::play_card("TEST:recurse", player_id);
 }
 
-card_sdk::bandori_ruleset!(&[RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER]);
+fn counter_yes(player_id: i32) -> bool {
+    // Whole-list view: any effect another player's card declared at me.
+    trigger::by_card().is_some_and(|by| by != player_id) && ctx::effect::hits(player_id)
+}
+
+fn counter(player_id: i32) {
+    // Negate the **activation**: the declaration never happened, so the
+    // targeting never lands. (`negate_effect` would let it be seen as an effect
+    // and settle to nothing -- the two are deliberately distinct.)
+    trigger::set_cancelled();
+    ctx::log(player_id, &Msg::new(key!("counter_fired")));
+}
+
+card_sdk::bandori_ruleset!(&[RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER]);

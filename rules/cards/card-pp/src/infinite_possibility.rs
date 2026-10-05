@@ -15,12 +15,12 @@
 //! Not a hand play (C# `Normal => false`, no `Play` override): the [特] places it
 //! out of a deck inspection; the crystal growth runs on the `Drew` hook.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new("PP:[大和麻弥]可能性为∞", &[
-    On::Hook(&[TriggerKind::Drew], drew),
+    On::Hook(&[HookKind::Drew], drew),
 ]);
 
 // TODO(规则书): [特]「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]

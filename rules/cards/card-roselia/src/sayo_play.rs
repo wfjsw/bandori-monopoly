@@ -8,12 +8,12 @@
 //! as H.AnnounceSkill plus SkillSayo's roll bump (+1 or +2, no fire cost); only
 //! the bump is expressible here (see the TODOs).
 
-use card_sdk::abi::{MoveKind, TriggerKind};
+use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SAYO_PLAY: CardDef = CardDef::new("R:（纱夜）弹奏弹奏弹奏，继续弹奏", &[
-    On::React(&[TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// 规则书: 「[反击] 时机合适时打出」 -- reaction-only (C# `Normal => false`).

@@ -10,16 +10,15 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const COUNCIL_CHECK: CardDef = CardDef::new("R:学生会的检查", &[
-    On::React(&[TriggerKind::SettleBefore], can_react, react),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
-    On::Hook(&[TriggerKind::PayAfter], pay_after),
-    On::Hook(&[TriggerKind::SettleAfter], settle_after),
+    On::React(&[ChainKind::SettleBefore], can_react, react),
+    On::Hook(&[HookKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::PayAfter], pay_after),
+    On::Hook(&[HookKind::SettleAfter], settle_after),
 ]);
 
 /// C# `CardCouncilCheck.Near` -- own deeds within 3 tiles either way (`H.Dist`).

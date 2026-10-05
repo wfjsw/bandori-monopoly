@@ -104,11 +104,14 @@ fn play(player_id: i32) {
             })
             .unwrap_or(-1);
         // 规则书: 「移动到下一个可被购买的livehouse格子」 -- C# `H.Walk(i, Forward(pos, to),
-        // resolve: true, null, "向着顶点")`.
+        // resolve: true, null, "向着顶点")` = a forward walk of `Forward(pos, to)`
+        // steps that settles at the destination.
+        let num = ctx::tile_forward(pos, to);
+        let num = if num == 0 { ctx::tile_count() } else { num };
+        ctx::plan::set_steps(num);
+        ctx::plan::set_resolve(true);
+        ctx::card_move(player_id);
         ctx::log(player_id, &Msg::new(key!("to_the_peak_walk")).player_id("who", player_id).tile("tile", to));
-        // TODO(规则书): 「移动到」 -- needs the H.Walk movement routine (walk the ring
-        // and settle at the destination, C# `H.Walk(..., resolve: true)`); the
-        // vocabulary has no movement routine, so the player is not moved at all.
         return;
     }
     // 规则书: 「若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋」

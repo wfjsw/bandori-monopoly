@@ -10,7 +10,7 @@
 //!
 //! A pure [特] card (C# has no `Play`, `Normal => false`, `Immune => true`).
 
-use card_sdk::abi::{CardPile, TriggerKind};
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,7 @@ const ID: &str = "PPP:[衍生]拍卖撤下来了";
 const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(ID, &[
-    On::Hook(&[TriggerKind::Drawn, TriggerKind::TurnStart], hook),
+    On::Hook(&[HookKind::Drawn, HookKind::TurnStart], hook),
 ]);
 
 /// `Fx.Drawn` (C# `CardAuctionPulled.Drawn`) -- pull the card out of the hand

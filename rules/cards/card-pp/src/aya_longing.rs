@@ -18,13 +18,13 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AYA_LONGING: CardDef = CardDef::new("PP:[丸山彩]憧憬的前方", &[
     On::Play(aya_longing),
-    On::Hook(&[TriggerKind::PayAdd], pay_add),
+    On::Hook(&[HookKind::PayAdd], pay_add),
 ]);
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].

@@ -97,16 +97,18 @@ fn play(player_id: i32) {
         return;
     }
     // 规则书（2）: 「传送至」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo = to })`.
-    ctx::teleport_to(player_id, to);
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    // 规则书（2）: 「（不触发结算）」 -- C# `Resolve = false` on the RiNG 4 fallback
+    // only; the free-Livehouse teleport settles on arrival (`Resolve` defaults true).
+    ctx::plan::set_resolve(!fallback);
+    // C# `H.CardMove` (`MainMoveAs`) consumes the turn's main move and runs the
+    // teleport immediately.
+    ctx::card_move(player_id);
     let why = if fallback {
         Msg::new(key!("blue_rose_ring4")).player_id("who", player_id).tile("tile", to)
     } else {
         Msg::new(key!("blue_rose_teleport")).player_id("who", player_id).tile("tile", to)
     };
     ctx::log(player_id, &why);
-    // TODO(规则书)（2）: 「（不触发结算）」 applies only to the RiNG 4 fallback (C#
-    //   `Resolve = false`); the free-Livehouse teleport settles on arrival. Needs the
-    //   H.CardMove / main-move routine (C# `H.CardMove(c, new MoveCtx { TeleportTo })`)
-    //   so the teleport is this turn's main move and settles (or not) as written;
-    //   `teleport_to` is `H.ForceTeleport(..., resolve: false)` and never settles.
 }

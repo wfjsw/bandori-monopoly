@@ -18,13 +18,13 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SHINE_AGAIN: CardDef = CardDef::new("PP:再次闪耀", &[
     On::Play(shine_again),
-    On::Hook(&[TriggerKind::PayChoose], pay_choose),
+    On::Hook(&[HookKind::PayChoose], pay_choose),
 ]);
 
 /// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the

@@ -7,12 +7,12 @@
 //! > [反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MARINA_WORK: CardDef = CardDef::new("通用:[月岛麻里奈]今天也要加油工作喔", &[
-    On::React(&[TriggerKind::CircleAffected], can_react, react),
+    On::React(&[ChainKind::CircleAffected], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {

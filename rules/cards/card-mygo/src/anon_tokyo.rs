@@ -68,8 +68,12 @@ fn anon_tokyo(player_id: i32) {
         &Msg::new(key!("anon_tokyo_ask")),
         &adj,
     );
-    // TODO(规则书): the C# `H.TargetTile(c, t, tt)` targeting gate after the tile
-    // prompt -- needs the H.Target targeting pipeline.
+    // 规则书[手]: 「[指定]…可购买格子」 -- C# `H.TargetTile(c, t, tt)` after the
+    // tile prompt: another player's tile also targets its owner (ImmuneAll +
+    // the targeted/target [反击] window). Fail = the card does nothing more.
+    if !ctx::target_tile(t) {
+        return;
+    }
     if ctx::tile_owner(here) == player_id && ctx::tile_owner(t) == player_id {
         // 规则书[手]1: 「[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的
         // 资金的一半」 -- C# `PayCtx { amount = max(price(here), price(t)) / 2,
@@ -89,7 +93,7 @@ fn anon_tokyo(player_id: i32) {
             &Msg::new(key!("anon_tokyo_linked")).tile("a", here).tile("b", t).card("card", "MyGO:[千早爱音]Anon Tokyo"),
         );
         // TODO(规则书)1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
-        // 一半」 -- the `Fx.PayAdd` hook kind is in (`On::Hook(&[TriggerKind::PayAdd], …)`),
+        // 一半」 -- the `Fx.PayAdd` hook kind is in (`On::Hook(&[HookKind::PayAdd], …)`),
         // but the C# puts the body on `AnonLinkFx`, an `H.ExtraOf` attachment on
         // the player that outlives this hand card (which goes to the graveyard
         // after Play, so its own hooks never run). Still held on `H.ExtraOf`
@@ -101,11 +105,12 @@ fn anon_tokyo(player_id: i32) {
         // 改为向前或后移动1格到被[指定]格子且[结算]」 -- C# gates this branch on
         // `H.MoveWhyNot(i) == null` (else it logs 「这回合不能移动了」 and sets
         // `c.Effective = false`), then `H.CardMove(c, new MoveCtx { Steps = 1,
-        // Reverse = Forward(here, t) != 1 })`.
+        // Reverse = Forward(here, t) != 1 })`. `card_move` is that main move;
+        // `MoveCtx.Resolve` defaults to true, so the landing settles.
+        ctx::plan::set_steps(1);
+        // Forward(here, t) != 1 means the chosen tile is the step behind.
+        ctx::plan::set_reverse(ctx::tile_forward(here, t) != 1);
         ctx::log(player_id, &Msg::new(key!("anon_tokyo_step")).tile("tile", t));
-        // TODO(规则书)2: 「进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]
-        // 格子且[结算]」 -- needs the H.CardMove / main-move routine (one step
-        // toward the target, settling on arrival). `teleport_to` jumps without
-        // settling and does not consume the main move.
+        ctx::card_move(player_id);
     }
 }

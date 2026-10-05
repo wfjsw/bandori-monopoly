@@ -8,13 +8,13 @@
 //! > （2）[自动]若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部奇迹水晶并使你下次的移动掷骰结果额外增加20-X；若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new("CRYCHIC:想要成为人类", &[
     On::Play(want_human),
-    On::Hook(&[TriggerKind::TurnStart, TriggerKind::RollAfter, TriggerKind::TurnEnd], react),
+    On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], react),
 ]);
 
 /// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).

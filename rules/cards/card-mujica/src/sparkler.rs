@@ -6,7 +6,7 @@
 //! > 将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,7 +17,7 @@ pub const SPARKLER: CardDef = CardDef::new("Mujica:燃尽前的线香花火", &[
     // C# `CardSparkler.TurnEndAfter` -> `Burn` -- a field hook on the card's own
     // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
     // matching the C# `Fx.TurnEndAfter` dispatch).
-    On::Hook(&[TriggerKind::TurnEndAfter], turn_end),
+    On::Hook(&[HookKind::TurnEndAfter], turn_end),
 ]);
 
 fn sparkler(player_id: i32) {

@@ -6,6 +6,7 @@
 //! >  投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子（例：在弦卷豪宅骰到4则传送到商店街），视为你的主要移动。
 //!
 
+use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const HAPPY_LUCKY: CardDef = CardDef::new("HHW:Happy, Lucky, Smile, Yeah！", &[
@@ -69,14 +70,15 @@ fn play(player_id: i32) {
         _ => from_grid(15, y), // 右 (face 4 -> num 0)
     };
     // 规则书: 「传送至直线距离最远的格子」 -- C# `H.CardMove(c, new MoveCtx
-    // { TeleportTo = num2 })`; `ctx::teleport_to` moves without settling.
-    ctx::teleport_to(player_id, to);
+    // { TeleportTo = to })` (`Resolve` defaults to true, so it settles).
+    ctx::plan::set_kind(MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(true);
+    // 规则书: 「视为你的主要移动」 -- C# `H.CardMove` (`MainMoveAs`) consumes the
+    // turn's main move and runs the teleport immediately.
+    ctx::card_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("happy_lucky_moved")).player_id("who", player_id).i("roll", r as i64).tile("tile", to),
     );
-    // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move
-    // routine so this teleport consumes the turn's main move (C# `H.CardMove(c,
-    // new MoveCtx { TeleportTo = ... })`). Until then the player_id still gets its
-    // normal main move after the teleport.
 }

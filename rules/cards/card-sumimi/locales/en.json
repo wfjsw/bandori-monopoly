@@ -26,10 +26,14 @@
   "sweet_escape_none": "no tile to go to (Sweet Escape)",
   "sweet_escape_short": "price tags within two tiles either side sum to less than 2,000 (now {{n}}) — \"Sweet Escape\" has no effect",
   "sweet_escape_title": "Sweet Escape",
+  "two_donuts_ask": "[Teleport] to which tile and settle? (between your original tile and {{by}}'s end)",
   "two_donuts_ended": "{{who}}'s [exile] ended ({{by}} passed the original tile)",
   "two_donuts_exile": "{{who}} is [exiled] until someone passes {{tile}} (Two Donuts Each)",
   "two_donuts_fire": "Two Donuts Each: +2 fire pots",
+  "two_donuts_moved": "{{who}} [teleported] to {{tile}} and settled (Two Donuts Each)",
   "two_donuts_note": "[exiled] until someone passes the original tile (Two Donuts Each)",
   "two_donuts_overflow": "Two Donuts Each: fire pots over the cap ({{n}} × 500 money)",
+  "two_donuts_title": "Two Donuts Each",
+  "two_donuts_yes": "[Teleport] and settle? (between your original tile and {{by}}'s end; you may decline)",
   "two_in_one_swap": "{{who}} swapped to the other Sumimi character (Sumimi Is Two in One)"
 }

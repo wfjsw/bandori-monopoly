@@ -123,18 +123,23 @@ fn sweet_escape(player_id: i32) {
         &Msg::new(key!("sweet_escape_ask")),
         &picks,
     );
-    // 规则书: 「…并触发结算」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo = to })`.
-    // `teleport_to` is the resolve:false form; used here as the best-effort stand-in.
-    ctx::teleport_to(player_id, to);
+    // 规则书: 「…并触发结算」 / 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
+    // { TeleportTo = to })` (`Resolve` defaults to true) = `set_teleport_to(to)`
+    // + `set_resolve(true)` + `card_move(player_id)`.
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(true);
+    ctx::card_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("sweet_escape_moved")).player_id("who", player_id).tile("tile", to),
     );
-    // TODO(规则书): 「并触发结算」 -- needs the H.CardMove teleport-with-settle
-    // routine (C# `H.CardMove(..., TeleportTo)` settles on arrival).
-    // TODO(规则书): 「若为可购买格子则必须购买」 -- C# `H.BuyRoutine` when the tile is
-    // unowned and `money >= H.BuyPriceFor`; needs a buy routine
-    // (`H.BuyRoutine` / buy-price-for-player).
-    // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move routine
-    // so this teleport consumes the turn's main move.
+    // 规则书: 「视为你的主要移动」 -- `card_move` runs `MainMoveAs`
+    // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
+    // player; that is exactly `card_move`'s bookkeeping.
+    // 规则书: 「若为可购买格子则必须购买」 -- C# `H.BuyRoutine` when the tile is
+    // unowned and `money >= H.BuyPriceFor`.
+    // TODO(规则书): 「若为可购买格子则必须购买」 -- needs a buy routine
+    // (`H.BuyRoutine` / buy-price-for-player); until then the must-buy step is
+    // unclaimed after the settle.
 }

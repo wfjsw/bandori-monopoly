@@ -7,37 +7,36 @@
 //! > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const DECLARE_WAR: CardDef = CardDef::new("AG:宣战布告", &[
-    On::React(&[TriggerKind::Pay, TriggerKind::Abnormal, TriggerKind::Target], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
-    // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」 -- C#
-    // `H.HitByOtherCard(t, seat)`: `t.ByCard` is a different player and the trigger
-    // is `target` / `pay` / `abnormal` aimed at you.
-    // TODO(规则书): 「或你拥有的格子」 -- narrowed to the C#: `HitByOtherCard`
-    // only keys on effects aimed at the player (`t.Target == seat` /
-    // `t.Pay.from == seat`). A `H.TargetTile` on a tile you own does raise
-    // `target` with `t.Target == you` (the owner), so the [指定] half of the
-    // clause already lands here; other tile-affecting effects (house removal
-    // and friends) raise nothing aimed at the owner and stay out of reach --
-    // the same gap the C# has.
+    // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」
+    //
+    // One condition on the *effect*, and it now reads as one: any effect another
+    // player's card declared at me. It used to be reconstructed by unioning
+    // `Target`/`Abnormal` (via `t.Target`) with `Pay` (via `t.Pay.from`) and
+    // matching on two different fields -- the union this refactor removes.
+    // `effect::hits` covers both because a payment touches its payer *and* its
+    // payee.
+    //
+    // TODO(规则书): 「或你拥有的格子」 -- the declaration names the owner when a
+    // tile-affecting effect aims at a tile, so the [指定] half lands here;
+    // effects that touch a tile without naming its owner (house removal and
+    // friends) declare nothing aimed at the owner and stay out of reach -- the
+    // same gap the C# has.
     let Some(by) = trigger::by_card().filter(|&by| by != player_id) else {
         return false;
     };
-    match trigger::kind() {
-        // C# `target`/`abnormal`: `t.Target == seat`, `!H.Out(t.ByCard)`.
-        TriggerKind::Target | TriggerKind::Abnormal => {
-            trigger::target() == player_id && !ctx::player_out(by)
-        }
-        // C# `pay`: `t.Pay.from == seat` (this player is the one paying).
-        TriggerKind::Pay => trigger::player_id() == player_id && !ctx::player_out(by),
-        _ => false,
+    if ctx::player_out(by) {
+        return false;
     }
+    ctx::effect::hits(player_id)
 }
 
 fn react(player_id: i32) {

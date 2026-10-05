@@ -11,7 +11,7 @@
 //! > （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -20,7 +20,7 @@ const ID: &str = "通用:[衍生]FEVER!";
 pub const FEVER: CardDef = CardDef::new("通用:[衍生]FEVER!", &[
     On::Play(fever),
     // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-    On::Hook(&[TriggerKind::PayAdd, TriggerKind::TurnStart], react),
+    On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], react),
 ]);
 
 fn fever(player_id: i32) {

@@ -6,15 +6,15 @@
 //! >  将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHUCHU_MUSIC: CardDef = CardDef::new("RAS:（chuchu）演奏我的音乐吧", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
-    On::Hook(&[TriggerKind::BuyAfter], buy_after),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::BuyAfter], buy_after),
 ]);
 
 const ID: &str = "RAS:（chuchu）演奏我的音乐吧";
@@ -41,25 +41,30 @@ fn play(player_id: i32) {
     }
     // 规则书: 「将此卡放置于你以外的一名玩家场上」 -- C# `H.PickTarget` over
     // `H.Others(seat)` then `H.PlaceFromPlay(c, r.index, -1, 3)`.
-    // C# `H.PickTarget` also runs the `H.Target` targeting gate (Untargetable
-    // check) after the player prompt -- no such gate in the vocabulary yet.
+    // `H.PickTarget` = the player prompt, then the `H.Target` gate (C#
+    // `Target(c, r.index, t); res.index = t.yes ? t.index : -1`); a failed
+    // target means `c.Effective = false` and no placement.
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("chuchu_music_title")),
         &Msg::new(key!("chuchu_music_ask")),
         &others,
     );
+    let hit = match ctx::target(who) {
+        Some(h) => h,
+        None => return,
+    };
     // 规则书: 「将此卡放置于你以外的一名玩家场上」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(who, ID, &Msg::new(key!("chuchu_music_note")));
+    ctx::place_card(hit, ID, &Msg::new(key!("chuchu_music_note")));
     // 规则书: 「并为其添加3个奇迹水晶」 -- C# `H.PlaceFromPlay(c, r.index, -1, 3)`.
-    ctx::set_crystals(who, 3);
+    ctx::set_crystals(hit, 3);
     // C# `User` is the player who played the card; `Mem["hits"]` starts at 0.
-    ctx::set_slot(who, SLOT_USER, player_id);
-    ctx::set_slot(who, SLOT_HITS, 0);
+    ctx::set_slot(hit, SLOT_USER, player_id);
+    ctx::set_slot(hit, SLOT_HITS, 0);
     ctx::log(
         player_id,
-        &Msg::new(key!("chuchu_music_placed")).player_id("who", player_id).player_id("target", who),
+        &Msg::new(key!("chuchu_music_placed")).player_id("who", player_id).player_id("target", hit),
     );
 }
 

@@ -8,11 +8,21 @@
 //! Roll 4d20 twice, offer the (distinct) resulting tiles, place a mark on the
 //! chosen one. The prompt's options come from dice rolled inside the effect;
 //! replay re-rolls them identically on every run.
+//!
+//! The mid-walk stop rides the `PassTile` hook: the C# `HagumiMarkFx` is an
+//! `H.ExtraOf` player attachment, and the hook surface only dispatches to
+//! *placed* cards, so the play body places this card as the `HagumiMarkFx`
+//! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, On, Msg};
+
+const ID: &str = "HHW:（育美）";
 
 pub const HAGUMI_MARKS: CardDef = CardDef::new("HHW:（育美）", &[
     On::Play(play),
+    On::Hook(&[HookKind::PassTile], hook),
 ]);
 
 fn play(player_id: i32) {
@@ -48,13 +58,82 @@ fn play(player_id: i32) {
     ctx::add_mark(tile, player_id, key!("hagumi_marks_mark"), &note);
     ctx::log(player_id, &Msg::new(key!("hagumi_marks_placed")).tile("tile", tile));
     // 规则书（1）: 「你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记」
-    // -- C# `HagumiMarkFx.PassTile` / `Stop` (an `H.ExtraOf` attachment).
-    // TODO(规则书)（1）: the optional force-stop (`m.Stopped = true` behind
-    // `H.AbnormalGate`, gated on `m.Remaining > 0 && !m.Teleport`) has no
-    // move-mutation API; without it the gain / mark-removal never runs.
-    // TODO(规则书)（2）[反击]: 「此卡可在你回合外收到资金的回合结束时打出，当前回合内你
-    // 每获得过一次资金，此卡的投掷次数+1」 -- needs a [反击] window at the turn end
-    // of a turn in which the holder gained money off-turn (`PayAfter` / `TurnEndAfter`
-    // are hook-only and open no reaction window; the C# `CardHagumiMarks` has no
-    // `React` body either).
+    // -- C# `HagumiMarkFx.PassTile` / `Stop` (an `H.ExtraOf` attachment). The
+    // hook surface only dispatches to placed cards, so this placement stands in
+    // for the player attachment (same pattern as `HHW:爱心义演`); the `PassTile`
+    // hook below is the stop body.
+    if !ctx::is_placed(player_id) {
+        ctx::set_dest(ctx::Dest::Field);
+        ctx::place_card(player_id, ID, &Msg::new(key!("hagumi_marks_note")));
+    }
+}
+
+/// C# `HagumiMarkFx.PassTile` / `Stop` (MatchHost.cs:4314-4384).
+fn hook(player_id: i32) {
+    if !ctx::is_placed(player_id) {
+        return;
+    }
+    if trigger::kind() != TriggerKind::PassTile {
+        return;
+    }
+    // C# `m.Seat != Seat` -- only the owner's own walk.
+    if trigger::player_id() != player_id {
+        return;
+    }
+    // C# `m.Teleport` -- not a teleport.
+    if trigger::move_kind() == Some(MoveKind::Teleport) {
+        return;
+    }
+    let t = trigger::tile();
+    if t < 0 {
+        return;
+    }
+    // C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on this tile.
+    if ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) <= 0 {
+        return;
+    }
+    // 规则书（1）: 「可在那格强制停下并获得2000资金」 -- C# `Stop`:
+    // `H.AskYes(..., aiYes: true)` then `m.Stopped = true` (behind
+    // `H.AbnormalGate`), remove the mark, `H.GainR(Seat, 2000, ...)`.
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("hagumi_marks_stop_title")),
+        &Msg::new(key!("hagumi_marks_stop_ask")).tile("tile", t),
+    ) {
+        return;
+    }
+    // C# `m.Remaining > 0 && !m.Teleport` -- force-stop only mid-walk.
+    if trigger::move_remaining() > 0 {
+        // C# `m.Stopped = true` -- the walk settles at the stop tile.
+        ctx::plan::set_stop_at(t);
+    }
+    // TODO(规则书)（1）: the `H.AbnormalGate` wrapper around the stop (C#
+    //   `HagumiMarkFx.Stop`) is not invoked by `set_stop_at` -- the
+    //   `abnormalGuard` hook path and the `_turnCtx.Unstoppable` play-context
+    //   flag are not reachable from here.
+    // 规则书（1）: 「然后移除该标记」 -- C# decrements the mark count and drops
+    // the mark when it reaches 0.
+    ctx::remove_marks(t, key!("hagumi_marks_mark"), player_id);
+    // 规则书（1）: 「获得2000资金」 -- C# `H.GainR(Seat, 2000, "育美标记")`.
+    ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hagumi_marks_stop_done")).player_id("who", player_id).tile("tile", t),
+    );
+    // Stand-in cleanup: when the owner has no marks left the attachment is
+    // spent (C# `HagumiMarkFx` just goes quiet; the field-card stand-in files
+    // itself away).
+    if !any_marks(player_id) {
+        ctx::unplace_card(player_id);
+        ctx::to_discard(player_id, ID);
+    }
+    // TODO(规则书)（1）: C# `HagumiMarkFx.PassTile` also has a circle-tile case
+    //   (`H.Tile(t)?.kind == "circle"` -> `All(n)`: remove every 育美标记 and
+    //   gain 1,000 per mark 「经过起点」). Not in the rulebook text, so held.
+}
+
+/// Does `player_id` still own any 育美标记 on the board?
+fn any_marks(player_id: i32) -> bool {
+    let n = ctx::tile_count();
+    (0..n).any(|t| ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) > 0)
 }

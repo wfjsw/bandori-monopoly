@@ -8,15 +8,14 @@
 //! > （2）效果），并将下一次的移动掷骰变更为1d6
 //!
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const DETOUR: CardDef = CardDef::new("AG:回家的路上绕个道", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::React(&[TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
@@ -65,18 +64,26 @@ fn play(player_id: i32) {
             ctx::plan::set_parity(if pick == 2 { 1 } else { 0 });
         }
         _ => {
-            // TODO(规则书(2)): Tomoe -- `plan.Start = (pos + toward * 10) % n`
-            // (10 tiles toward 银河拉面馆) + `plan.StartWhy`. `MoveCtx.start`
-            // exists but `ctx::plan::*` has no `set_start` write, so this half
-            // stays held.
+            // Tomoe: `plan.Start = (pos + toward * 10) % n` -- 10 tiles toward
+            // 银河拉面馆 (C# `num3 = (Forward(pos, b) <= n - Forward(pos, b)) ? 1
+            // : -1`), `plan.StartWhy = "回家的路上绕个道"` =
+            // `plan::set_start(start, why)`.
+            let n = ctx::tile_count();
+            let pos = ctx::player_pos(player_id);
+            let b = ctx::tile_named("银河拉面馆");
+            if n > 0 && pos >= 0 && b >= 0 {
+                let forward = ctx::tile_forward(pos, b);
+                let toward = if forward <= n - forward { 1 } else { -1 };
+                let start = (pos + toward * 10).rem_euclid(n);
+                ctx::plan::set_start(start, "回家的路上绕个道");
+            }
         }
     }
-    // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `plan.Base = { (1, 6) }`
-    // replaces this turn's move dice. The 1d6 face is pinned via `set_fixed_roll`
-    // (`Plan.FixedRoll`, consumed at the roll) -- the kaoru_thief pattern for a
-    // single-die base. The reaction path's `NextRollFx` half is separate (below).
-    let n = ctx::roll(player_id, 1, 6);
-    ctx::set_fixed_roll(n);
+    // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `plan.Base.Clear();
+    // plan.Base.Add((1, 6, "（回家的路上绕个道）"))` (MatchHost.cs:1337-1338)
+    // replaces this turn's move dice with 1d6 (`plan::set_base_dice` is that).
+    // The reaction path's `NextRollFx` half is separate (below).
+    ctx::plan::set_base_dice(1, 6, "（回家的路上绕个道）");
     ctx::log(player_id, &Msg::new(key!("detour_planned")).player_id("who", player_id));
 }
 
@@ -92,9 +99,11 @@ fn react(player_id: i32) {
     // (moveRoll runs before `walk`) but nothing flips those fields on the live
     // move.
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `H.ExtraOf<NextRollFx>`
-    // replaces the next main roll's dice plan with 1d6.
+    // replaces the next main roll's dice plan with 1d6 (its `RollPlan` runs
+    // `m.Base.Clear(); m.Base.Add(Dice)` on that move).
     // TODO(规则书(2)): needs the `H.ExtraOf` / NextRollFx attachment (a persistent
-    // one-shot dice-plan override) -- unmapped half: `set_fixed_roll` is
-    // per-turn and this turn's roll has already been consumed.
+    // one-shot dice-plan override) -- unmapped half: `set_base_dice` shapes the
+    // plan being built, and this reaction runs on an in-flight roll (the plan's
+    // dice have already been consumed).
     ctx::log(player_id, &Msg::new(key!("detour_react")).player_id("who", player_id));
 }

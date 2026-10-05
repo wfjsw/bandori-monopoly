@@ -6,12 +6,12 @@
 //! > [反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new("AG:刻入天穹傲岸的烈光", &[
-    On::React(&[TriggerKind::PassPlayer], can_react, react),
+    On::React(&[ChainKind::PassPlayer], can_react, react),
 ]);
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).

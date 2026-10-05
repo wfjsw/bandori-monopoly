@@ -1,0 +1,12 @@
+[package]
+name = "skill-bands"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Band skills as card rules (one file per skill) -- kept apart from the regular cards on purpose."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../../card-sdk", features = ["guest"] }

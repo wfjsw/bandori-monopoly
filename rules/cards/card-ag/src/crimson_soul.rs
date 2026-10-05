@@ -16,7 +16,7 @@
 //! > （3）此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -25,8 +25,8 @@ const ID: &str = "AG:绯红之魂";
 pub const CRIMSON_SOUL: CardDef = CardDef::new("AG:绯红之魂", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::PayChoose], pay_choose),
-    On::Hook(&[TriggerKind::PayAfter], pay_after),
+    On::Hook(&[HookKind::PayChoose], pay_choose),
+    On::Hook(&[HookKind::PayAfter], pay_after),
 ]);
 
 /// C# `CardCrimsonSoul.WhyNot`: refuses under 500.

@@ -239,7 +239,22 @@ impl CardWorld for TestWorld {
         self.trigger.target = to;
     }
     fn set_trigger_cancelled(&mut self) {
-        self.trigger.cancelled = true;
+        self.trigger.negate_activation();
+    }
+    fn set_trigger_negate_effect(&mut self) {
+        self.trigger.negate_effect();
+    }
+    fn set_trigger_spare(&mut self, seat: i32) {
+        self.trigger.spare(seat);
+    }
+    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32) {
+        self.trigger.declare(game_core::engine::rules::Effect {
+            kind: card_sdk::abi::TriggerKind::from_i32(kind).as_str(),
+            target,
+            from,
+            tile,
+            value,
+        });
     }
     fn trig_card_is(&self, id: &str) -> i32 {
         (self.trigger.card == id) as i32

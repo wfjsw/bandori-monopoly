@@ -27,8 +27,9 @@ fn play(player_id: i32) {
     // -- C# `H._turnCtx.Plan.Dice.Add((discard.Count, 20, ...))`.
     let count = ctx::discard_size(player_id);
     if count > 0 {
-        // TODO(规则书): the move dice plan (`MoveCtx.Plan.Dice`) to add Xd20 is
-        // still missing; the count is read but cannot yet be injected.
+        // 规则书[手]: 「本回合主要移动掷骰额外添加Xd20」 -- C#
+        // `H._turnCtx.Plan.Dice.Add((count, 20, "（CRUSH ON THE DRUM!!!）"))`.
+        ctx::plan::add_extra_dice(count, 20, "（CRUSH ON THE DRUM!!!）");
     }
     ctx::log(
         player_id,

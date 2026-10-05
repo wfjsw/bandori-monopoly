@@ -7,7 +7,7 @@
 //! players within 1 tile (and cancel the payment when stunned).
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,8 +17,7 @@ pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
     On::Play(play),
     // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.PayChoose` +
     // `CardJ11.Targeted` -- all field hooks, not [反击]s.
-    On::Hook(
-        &[TriggerKind::TurnEnd, TriggerKind::PayChoose, TriggerKind::Targeted],
+    On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted],
         react,
     ),
 ]);

@@ -84,7 +84,8 @@ fn branch_shuffle(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("mutsumi_never_added")).player_id("who", player_id));
     // 规则书（3）: 「然后抽2张卡」
     ctx::draw(player_id, 2);
-    // TODO(规则书): （3） 「你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）」
-    //   -- needs the main-move plan override (C# `H._turnCtx.Plan.Start = 0` /
-    //   `StartWhy`, and the "skip the start-tile effect" flag on that move).
+    // 规则书: （3） 「你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）」
+    //   -- C# `H._turnCtx.Plan.Start = 0; Plan.StartWhy = CardName` =
+    //   `plan::set_start(0, ...)`. CiRCLE is tile 0.
+    ctx::plan::set_start(0, "（睦）从没有觉得...");
 }

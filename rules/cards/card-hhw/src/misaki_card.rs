@@ -7,12 +7,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MISAKI_CARD: CardDef = CardDef::new("HHW:（美咲）", &[
-    On::React(&[TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
@@ -69,17 +69,19 @@ fn react(player_id: i32) {
     if fire > 0 {
         ctx::spend_fire(player_id, fire, &Msg::new(key!("misaki_card_pay")));
     }
-    // 规则书[反击]: 「传送至...玩家所在的格子并触发结算」 -- C# `H.TeleportMove`
-    // (teleport + settle). `ctx::teleport_to` moves without settling.
+    // 规则书[反击]: 「传送至...玩家所在的格子并触发结算」
     let to = ctx::player_pos(who);
-    ctx::teleport_to(player_id, to);
+    // C# `m.Cancelled = true` -- the original fire-pot move roll is voided.
+    trigger::set_cancelled();
+    // C# `H.TeleportMove(m2)` with `TeleportTo = to`, `Resolve` default true,
+    // `Main = m.Main` (「视为你的主要移动」). `card_move` runs the teleport.
+    ctx::plan::set_kind(MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(true);
+    // 规则书[反击]: 「（视为你的主要移动）」 -- C# `m2.Main = m.Main`; `card_move`
+    // (`MainMoveAs`) runs the teleport now.
+    ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("misaki_card_moved")).player_id("who", player_id).tile("tile", to));
-    // TODO(规则书): 「并触发结算」 -- needs a teleport-with-settle routine (C#
-    // `H.TeleportMove(m2)`). `ctx::teleport_to` is `H.ForceTeleport(..., resolve:
-    // false)`.
-    // TODO(规则书): 「（视为你的主要移动）」 -- needs the H.CardMove / main-move
-    // routine (C# `m2.Main = m.Main`) so this teleport consumes the turn's main
-    // move.
     if ctx::player_out(player_id) {
         return;
     }

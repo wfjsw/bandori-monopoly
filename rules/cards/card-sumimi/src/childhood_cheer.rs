@@ -11,14 +11,14 @@
 //! discard pile when the effect finishes (or at turn end, C#
 //! `AfterMoveFireFx.TurnEndAfter`).
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new("Sumimi:(初华（Sumimi）)儿时玩伴的鼓励", &[
     On::Play(childhood_cheer),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::SettleAfter], after_move),
+    On::Hook(&[HookKind::SettleAfter], after_move),
     On::AtEnd(at_end),
 ]);
 
@@ -33,17 +33,14 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn childhood_cheer(player_id: i32) {
     // 规则书: 「使本次移动以“小豆岛”为起点」 -- C# `H._turnCtx.Plan.Start =
-    // H.TileNamed("小豆岛")`. The move plan hook is missing, so approximate by
-    // putting the player on 小豆岛 without settling; the dice move then starts there.
+    // H.TileNamed("小豆岛"); Plan.StartWhy = CardName` =
+    // `plan::set_start(tile, why)`. The player stays put until the move runs
+    // (and the plan rolls back cleanly if the move never happens).
     let start = ctx::tile_named("小豆岛");
     if start >= 0 {
-        ctx::teleport_to(player_id, start);
+        ctx::plan::set_start(start, ID);
         ctx::log(player_id, &Msg::new(key!("childhood_cheer_start")).player_id("who", player_id).tile("tile", start));
     }
-    // TODO(规则书): the C# `Plan.Start` form of 「以“小豆岛”为起点」 keeps the player
-    // put until the move runs (and rolls back cleanly if the move never happens);
-    // the `teleport_to` stand-in above cannot. There is no plan-start setter
-    // (`On::RollPlan` + `set_next_steps` / `set_fixed_roll` shape steps/roll only).
     // 规则书: 「并在移动后获得一个火罐」 -- C# `H.ExtraOf<AfterMoveFireFx>(seat)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("childhood_cheer_note")));

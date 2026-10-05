@@ -11,8 +11,8 @@
 //! > 2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
 //! > 3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。
 //!
-//! The teleport is approximated with `teleport_to` (see the TODO on the main
-//! move); the turn-end body is scheduled with `at_turn_end`.
+//! The teleport is the turn's main move (`ctx::plan::set_teleport_to` +
+//! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
 
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, On, Msg};
@@ -37,19 +37,19 @@ fn overlapping_voices(player_id: i32) {
     // TODO(规则书)[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」 -- needs
     // unplace-another-field-card (C# `H.Unplace(card, "removed", "重叠的声音")` on
     // the placed `CardFirstLiveAccident`); `unplace_card` only removes this card.
-    // 规则书[手]2: 「[传送]到“bandori车站”且不[结算]」 -- C#
-    // `H.TileNamed("Bandori车站")` + `H.ForceTeleport(..., resolve: false)`.
+    // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
+    // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))` (before the move).
+    ctx::at_turn_end(player_id);
+    // 规则书[手]2: 「进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”
+    // 且不[结算]」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo =
+    // H.TileNamed("Bandori车站"), Resolve = false })`: a teleport to the tile
+    // that consumes the turn's main move and does not settle.
     let to = ctx::tile_named("Bandori车站");
     if to >= 0 {
-        ctx::teleport_to(player_id, to);
+        ctx::plan::set_teleport_to(to);
+        ctx::plan::set_resolve(false);
+        ctx::card_move(player_id);
     }
-    // TODO(规则书)[手]2: 「进入移动阶段并将本回合的[主要移动]改为」 -- HELD:
-    // `ctx::card_move` (run the move now as the main move, C# `H.CardMove(c, new
-    // MoveCtx { TeleportTo = ..., Resolve = false })`) is not landed yet. Until
-    // then the player still gets its normal main move after the teleport.
-    // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
-    // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))`.
-    ctx::at_turn_end(player_id);
 }
 
 /// C# `CardOverlappingVoices.After` -- the scheduled turn-end body.

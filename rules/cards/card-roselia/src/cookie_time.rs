@@ -42,6 +42,6 @@ fn play(player_id: i32) {
     // 规则书: the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the player.
     // v25: `sweep_to_deck` now raises `reshuffled` from the host (the C# card
     // body calls `H.Each(Reshuffled)` itself; the host folds that into the
-    // sweep's commit). Listener cards declare `On::Hook(&[TriggerKind::Reshuffled], ...)`
+    // sweep's commit). Listener cards declare `On::Hook(&[HookKind::Reshuffled], ...)`
     // and get the notification without any card-side raise.
 }

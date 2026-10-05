@@ -6,12 +6,12 @@
 //!
 //! until the face is new this turn.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TAKI_EVEN_IF: CardDef = CardDef::new("CRYCHIC:（立希）即便比不上...", &[
-    On::React(&[TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {

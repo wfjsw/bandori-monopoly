@@ -524,7 +524,22 @@ impl CardWorld for Run {
         self.trigger.target = to;
     }
     fn set_trigger_cancelled(&mut self) {
-        self.trigger.cancelled = true;
+        self.trigger.negate_activation();
+    }
+    fn set_trigger_negate_effect(&mut self) {
+        self.trigger.negate_effect();
+    }
+    fn set_trigger_spare(&mut self, seat: i32) {
+        self.trigger.spare(seat);
+    }
+    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32) {
+        self.trigger.declare(game_core::engine::rules::Effect {
+            kind: card_sdk::abi::TriggerKind::from_i32(kind).as_str(),
+            target,
+            from,
+            tile,
+            value,
+        });
     }
     fn trig_card_is(&self, id: &str) -> i32 {
         (self.trigger.card == id) as i32
@@ -636,6 +651,24 @@ impl CardWorld for Run {
 
     fn set_no_circle_reward(&mut self, v: bool) {
         self.world.set_no_circle_reward(v);
+    }
+    fn set_teleport_to(&mut self, v: i32) {
+        self.world.set_teleport_to(v);
+    }
+    fn set_start(&mut self, v: i32, why: &str) {
+        self.world.set_start(v, why);
+    }
+    fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+        self.world.set_base_dice(count, sides, why);
+    }
+    fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
+        self.world.add_base_dice(count, sides, why);
+    }
+    fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
+        self.world.add_extra_dice(count, sides, why);
+    }
+    fn move_stopped(&self) -> bool {
+        self.world.move_stopped()
     }
     fn move_stop_at(&self) -> i32 {
         self.world.move_stop_at()
@@ -872,15 +905,36 @@ impl WasmRules {
             t.value = kind as i32;
             t.by_card = Some(by);
         };
-        // C# `ImmuneAll` first: a player immune to others' effects is not hit.
+        // `AbnormalGuard` is a gate at declaration: a field card may block the
+        // effect before anyone answers it.
+        if self.raise_core(cx, "abnormalGuard", by, on)?.is_cancelled() {
+            return Ok(false);
+        }
+        // Then the chain: the recipient answers the effect declaration.
+        if by != player_id {
+            let declared = self.raise_core(cx, "effect", by, |t| {
+                on(t);
+                t.effects.push(game_core::engine::rules::Effect {
+                    kind: "abnormal",
+                    target: player_id,
+                    from: -1,
+                    tile: -1,
+                    value: kind as i32,
+                });
+            })?;
+            if declared.is_cancelled() {
+                return Ok(false);
+            }
+        }
+        // Then resolution: `ImmuneAll` lets the effect name them and still land
+        // as nothing.
         if by != player_id && self.immune(cx, player_id, by)? {
             return Ok(false);
         }
-        if self.raise_core(cx, "abnormalGuard", by, on)?.cancelled {
-            return Ok(false);
-        }
-        if by != player_id && self.raise_core(cx, "abnormal", by, on)?.cancelled {
-            return Ok(false);
+        // Settlement: what actually landed. `abnormal` is a hook now -- it is
+        // the outcome, and cannot be [反击]'d.
+        if by != player_id {
+            self.raise_core(cx, "abnormal", by, on)?;
         }
         let mut w = cx.world_copy();
         if w.turn.abnormal.len() <= s {
@@ -896,10 +950,10 @@ impl WasmRules {
     /// `set_cancelled`.) Logged when it holds.
     fn immune(&self, cx: &mut Cx, player_id: i32, by: i32) -> Flow<bool> {
         let t = self.raise_core(cx, "immuneAll", player_id, |t| t.by_card = Some(by))?;
-        if t.cancelled {
+        if t.is_cancelled() {
             cx.log(player_id, Msg::new("log.immune_all").player_id("who", player_id));
         }
-        Ok(t.cancelled)
+        Ok(t.is_cancelled())
     }
 
     /// C# `H.Target(c, p)`: `by`'s card `card` tries to target player `p`.
@@ -917,19 +971,15 @@ impl WasmRules {
         if cx.state().players[s].exile() > 0 {
             return Ok(-1);
         }
-        if self.immune(cx, p, by)? {
-            return Ok(-1);
-        }
-        let mut w = cx.world_copy();
-        if w.targeted.len() <= s {
-            w.targeted.resize(s + 1, 0);
-        }
-        w.targeted[s] += 1;
-        cx.swap_world(w);
-        if self.raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?.cancelled {
+        // ---- declaration ----------------------------------------------
+        // `Untargetable` governs who may be *named*. Block here and the effect
+        // cannot name `p` at all, so no chain forms against them.
+        if self.raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?.is_cancelled() {
             cx.log(p, Msg::new("log.untargetable").player_id("who", p));
             return Ok(-1);
         }
+        // `Redirect` is declaration re-naming: the recipient set is settled
+        // before the chain opens, so whoever holds the name is who answers.
         let mut p = p;
         if single {
             let r = self.raise_core(cx, "redirect", by, |t| {
@@ -944,7 +994,25 @@ impl WasmRules {
                 p = to;
             }
         }
+        // Named. Count it *after* naming, so a player who cannot be named does
+        // not accrue 「成为目标」 counts (see `centrifugal`'s 「第二次」).
+        if let Ok(s) = usize::try_from(p) {
+            let mut w = cx.world_copy();
+            if w.targeted.len() <= s {
+                w.targeted.resize(s + 1, 0);
+            }
+            w.targeted[s] += 1;
+            cx.swap_world(w);
+        }
+        // ---- chain ----------------------------------------------------
+        // Counters answer the declaration; they may negate or spare it.
         if p != by && !self.target_window(cx, p, -1, by, card)? {
+            return Ok(-1);
+        }
+        // ---- resolution -----------------------------------------------
+        // `ImmuneAll` is asked here, not at declaration: the effect named its
+        // recipient, the chain formed, and it still lands as nothing.
+        if self.immune(cx, p, by)? {
             return Ok(-1);
         }
         Ok(p)
@@ -957,30 +1025,55 @@ impl WasmRules {
         let Some(&owner) = usize::try_from(tile).ok().and_then(|t| cx.state().owners.get(t)) else { return Ok(-1) };
         let live = usize::try_from(owner).is_ok_and(|o| !cx.world_copy().out(o));
         if owner >= 0 && owner != by && live {
-            if self.immune(cx, owner, by)? {
+            // Chain first: the owner answers the declaration. Then resolution.
+            if !self.target_window(cx, owner, tile, by, card)? {
                 return Ok(-1);
             }
-            if !self.target_window(cx, owner, tile, by, card)? {
+            if self.immune(cx, owner, by)? {
                 return Ok(-1);
             }
         }
         Ok(tile)
     }
 
-    /// The C# `target` trigger: every field card's `Targeted` hook, then the
-    /// `target` [反击] window. False when either cancelled it.
+    /// The effect declaration for a targeting: `targeted` (a field hook), then
+    /// the `effect` [反击] chain, then `target` as a settlement hook.
+    ///
+    /// The chain is keyed on the **effect**, not on the outcome: 「被其他玩家
+    /// 的卡效果影响」 listens to `effect` and reads `ctx::effect` for the list.
+    /// `target` fires only once the effect actually settles, so it can no
+    /// longer be used to reconstruct that clause -- it is what happened, not
+    /// what was declared. False when a counter negated the declaration.
     fn target_window(&self, cx: &mut Cx, p: i32, tile: i32, by: i32, card: &str) -> Flow<bool> {
-        let mut cancelled = false;
-        for kind in ["targeted", "target"] {
-            let t = self.raise_core(cx, kind, by, |t| {
-                t.target = p;
-                t.tile = tile;
-                t.card = card.to_string();
-                t.by_card = Some(by);
-            })?;
-            cancelled |= t.cancelled;
+        self.raise_core(cx, "targeted", by, |t| {
+            t.target = p;
+            t.tile = tile;
+            t.card = card.to_string();
+            t.by_card = Some(by);
+        })?;
+        let declared = self.raise_core(cx, "effect", by, |t| {
+            t.target = p;
+            t.tile = tile;
+            t.card = card.to_string();
+            t.by_card = Some(by);
+            t.effects.push(game_core::engine::rules::Effect {
+                kind: "target",
+                target: p,
+                from: -1,
+                tile,
+                value: 0,
+            });
+        })?;
+        if declared.is_cancelled() {
+            return Ok(false);
         }
-        Ok(!cancelled)
+        self.raise_core(cx, "target", by, |t| {
+            t.target = p;
+            t.tile = tile;
+            t.card = card.to_string();
+            t.by_card = Some(by);
+        })?;
+        Ok(true)
     }
 
     /// Raise an engine trigger from the bridge itself (what a committed card
@@ -1013,110 +1106,99 @@ impl WasmRules {
     /// flagged for a later pass):
     ///
     /// * **The acting card's own follow-up** (`CardRules::react` step (1)) runs
-    ///   *before* this window, outside the stack. A card answering its own play
-    ///   is not competing with reactions to it, so it never loses its place.
-    /// * **One declaration per player per window** -- a player with two eligible
-    ///   cards must pick one; it cannot stack both in a single window.
-    /// * **Nested counter-windows are separate stacks** (depth-capped by
-    ///   `MAX_REACT_DEPTH`); ordering is LIFO within each window, not across
-    ///   the whole chain.
-    /// * **Multi-player declaration order** is fixed by player position, not
-    ///   chosen by the players. If two players both want to respond, the player
-    ///   order decides who is prompted first, and LIFO decides who resolves
-    ///   first -- there is no way for a later-declaring player to deliberately
-    ///   resolve "before" an earlier one other than by declaring later.
+    ///   before this window, outside the chain.
+    ///
+    /// The [反击] window is a Yu-Gi-Oh **chain**. `t` is **L1**, the effect
+    /// declaration -- the card effect already aimed at its named recipients.
+    /// Counters push onto it as L2, L3, ... and resolve **before** it, so a
+    /// counter can invalidate the effect before it settles.
+    ///
+    /// * **Build** is YGO priority: after every declaration priority circulates
+    ///   the table again, closing only when every player passes consecutively.
+    ///   A P1<->P0 counter war runs as far as it needs to; there is no
+    ///   single-pass limit and no seat-order asymmetry.
+    /// * **Resolution is flat** over the closed link list. There are no nested
+    ///   counter-windows: a response to a link is another link in *this* chain,
+    ///   and a response to a link that has already resolved is a *new* chain.
+    /// * Each counter answers the current top of the chain, and its guard reads
+    ///   that link (`Run.trigger`) -- so `effect::` sees the effects that link
+    ///   declared, and `set_cancelled` / `negate_effect` / `spare` land on it.
+    /// * **One declaration per player per priority pass** -- a player with two
+    ///   eligible cards must pick one.
     fn hand_reactions(&self, cx: &mut Cx, t: &CoreTrigger, trigger: &mut Trigger, depth: u32) -> Flow<()> {
         if depth >= MAX_REACT_DEPTH || !cx.playing() {
             return Ok(());
         }
-
-        let start = if t.player_id >= 0 { t.player_id as usize } else { cx.state().turn.max(0) as usize };
-        let mut declared: Vec<(usize, i32, String)> = Vec::new();
-        for s in cx.present_from(start) {
-            if !can_react_now(cx, s) {
-                continue;
-            }
-            // Hand cards that answer this trigger (C# `_hidden[s].hand.Distinct()`).
-            let mut options: Vec<(String, i32)> = Vec::new();
-            let mut seen: Vec<String> = Vec::new();
-            for id in hand_of(cx, s) {
-                if seen.contains(&id) {
-                    continue;
-                }
-                seen.push(id.clone());
-                let Some(idx) = self.ruleset.card(&id) else { continue };
-                if !self.ruleset.cards()[idx as usize].reacts_to(trigger.kind) {
-                    continue;
-                }
-                let run = Run {
-                    world: cx.world_copy(),
-                    data: self.data.clone(),
-                    trigger: trigger.clone(),
-                    current_card: id.clone(),
-                    dest: DEST_GRAVEYARD,
-                    paid_log: vec![],
-                    discard_log: vec![],
-                    reshuffle_log: vec![],
-                    doubled: -1,
-                };
-                if self.ruleset.can_react(&run, idx, s as i32).unwrap_or(false) {
-                    options.push((id, idx));
-                }
-            }
-            if options.is_empty() {
-                continue;
-            }
-            // C#: labels "打出「…」" + "不打"; the hint is the first ReactHint or
-            // the trigger's description. ReactHint is not in the ABI yet (TODO).
-            let mut labels: Vec<Msg> = options
-                .iter()
-                .map(|(id, _)| Msg::new("ask.react.play").card("card", id.clone()))
-                .collect();
-            labels.push(Msg::new("ask.react.skip"));
-            let fallback = labels.len() as i32 - 1;
-            let ask = Ask::choice(
-                vec![s],
-                Msg::new("ask.react.title"),
-                Msg::new("ask.react.text").msg("detail", describe_trigger(t)),
-                labels,
-                fallback,
-                12.0,
-            );
-            let reply = cx.ask(ask)?;
-            let pick = reply.a.answers.first().copied().filter(|&x| x >= 0).unwrap_or(reply.fallback) as usize;
-            if pick >= options.len() {
-                continue;
-            }
-            let (id, idx) = options[pick].clone();
-            // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
-            let mut w = cx.world_copy();
-            if let Some(p) = w.hidden[s].hand.iter().position(|c| c == &id) {
-                w.hidden[s].hand.remove(p);
-            }
-            cx.swap_world(w);
-            declared.push((s, idx, id));
+        let n = cx.state().players.len();
+        if n == 0 {
+            return Ok(());
         }
 
-        for (s, idx, id) in declared.into_iter().rev() {
-            // C# `PlayCard`: the play is logged, the play itself opens a
-            // counter-reaction window, then the effect resolves.
-            cx.log(s as i32, Msg::new("log.play_react").player_id("who", s as i32).card("card", id.clone()));
-            let mut answer = CoreTrigger::new("card", s);
-            answer.card = id.clone();
-            answer.step = cx.state().step;
-            answer.by_card = Some(s as i32);
-            // The counter-window answers *this play* (kind `card`), not the
-            // trigger the reaction answers -- its guards see `card`, and what
-            // it rewrites stays on the play.
-            let mut on_play = bridge_trigger(&answer);
-            self.hand_reactions(cx, &answer, &mut on_play, depth + 1)?;
-            // C# `play.Cancelled`: a counter that cancelled the play stops the
-            // reaction's effect; the card is still spent.
-            let dest = if on_play.cancelled {
-                DEST_GRAVEYARD
+        // The chain as it stands. Index 0 is L1, the effect declaration.
+        let mut chain: Vec<Trigger> = vec![trigger.clone()];
+        // (seat, card handle, card id, index into `chain` this counter answers)
+        let mut decls: Vec<(usize, i32, String, usize)> = Vec::new();
+
+        let start = if t.player_id >= 0 {
+            t.player_id as usize % n
+        } else {
+            cx.state().turn.max(0) as usize % n
+        };
+
+        // ---- build: YGO priority passes ---------------------------------
+        let mut passed = vec![false; n];
+        let mut cursor = start;
+        // Hard bound: the chain is only as long as the hands involved, so this
+        // is a runaway guard, not a design limit.
+        let mut budget = MAX_REACT_DEPTH * n as u32 + 8;
+        while budget > 0 {
+            budget -= 1;
+            let answered = chain.len() - 1;
+            let declared = if can_react_now(cx, cursor) {
+                match self.declare_one(cx, cursor, &chain[answered], t)? {
+                    Some((id, idx)) => {
+                        // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
+                        let mut w = cx.world_copy();
+                        if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
+                            w.hidden[cursor].hand.remove(pos);
+                        }
+                        cx.swap_world(w);
+                        let mut link = CoreTrigger::new("card", cursor);
+                        link.card = id.clone();
+                        link.step = cx.state().step;
+                        link.by_card = Some(cursor as i32);
+                        link.seq = (chain.len() + 1) as u32;
+                        link.answers = answered as u32;
+                        chain.push(bridge_trigger(&link));
+                        decls.push((cursor, idx, id, answered));
+                        true
+                    }
+                    None => false,
+                }
             } else {
-                self.drive(cx, Call::React { card: idx, player_id: s as i32 }, &id, trigger)?
+                false
             };
+            if declared {
+                // A declaration reopens priority for everyone.
+                passed.fill(false);
+            } else {
+                passed[cursor] = true;
+                if passed.iter().all(|&p| p) {
+                    break;
+                }
+            }
+            cursor = (cursor + 1) % n;
+        }
+
+        // ---- resolve: flat LIFO -----------------------------------------
+        for (s, idx, id, answered) in decls.into_iter().rev() {
+            cx.log(s as i32, Msg::new("log.play_react").player_id("who", s as i32).card("card", id.clone()));
+            // The counter's body runs against the link it answers, so its
+            // `set_cancelled` / `negate_effect` / `spare` land there -- and the
+            // effect settles only after every counter has had its say.
+            let mut on_link = chain[answered].clone();
+            let dest = self.drive(cx, Call::React { card: idx, player_id: s as i32 }, &id, &mut on_link)?;
+            chain[answered] = on_link;
             let mut w = cx.world_copy();
             let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(s);
             match dest_from(dest) {
@@ -1133,17 +1215,76 @@ impl WasmRules {
             if spent {
                 self.raise_core(cx, "discarded", s as i32, |t| t.card = id.clone())?;
             }
-            // C# `Trigger { Kind = "reacted", Player = declared, Target = t.Seat }`.
-            if t.player_id >= 0 && s as i32 != t.player_id {
-                let mut r = CoreTrigger::new("reacted", s);
-                r.target = t.player_id;
-                r.card = id.clone();
-                r.step = cx.state().step;
-                r.by_card = Some(s as i32);
-                self.hand_reactions(cx, &r, &mut bridge_trigger(&r), depth + 1)?;
-            }
+        }
+
+        // L1's fate is whatever the counters did to it.
+        if let Some(root) = chain.into_iter().next() {
+            *trigger = root;
         }
         Ok(())
+    }
+
+    /// Offer one player a [反击] window answering `top`. Returns the card they
+    /// declared, if any. `t` is the chain root, for the prompt's description.
+    fn declare_one(
+        &self,
+        cx: &mut Cx,
+        s: usize,
+        top: &Trigger,
+        t: &CoreTrigger,
+    ) -> Flow<Option<(String, i32)>> {
+        // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
+        let mut options: Vec<(String, i32)> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        for id in hand_of(cx, s) {
+            if seen.contains(&id) {
+                continue;
+            }
+            seen.push(id.clone());
+            let Some(idx) = self.ruleset.card(&id) else { continue };
+            if !self.ruleset.cards()[idx as usize].reacts_to(top.kind) {
+                continue;
+            }
+            let run = Run {
+                world: cx.world_copy(),
+                data: self.data.clone(),
+                trigger: top.clone(),
+                current_card: id.clone(),
+                dest: DEST_GRAVEYARD,
+                paid_log: vec![],
+                discard_log: vec![],
+                reshuffle_log: vec![],
+                doubled: -1,
+            };
+            if self.ruleset.can_react(&run, idx, s as i32).unwrap_or(false) {
+                options.push((id, idx));
+            }
+        }
+        if options.is_empty() {
+            return Ok(None);
+        }
+        // C#: labels "打出「...」" + "不打"; the hint is the first ReactHint or
+        // the trigger's description. ReactHint is not in the ABI yet (TODO).
+        let mut labels: Vec<Msg> = options
+            .iter()
+            .map(|(id, _)| Msg::new("ask.react.play").card("card", id.clone()))
+            .collect();
+        labels.push(Msg::new("ask.react.skip"));
+        let fallback = labels.len() as i32 - 1;
+        let ask = Ask::choice(
+            vec![s],
+            Msg::new("ask.react.title"),
+            Msg::new("ask.react.text").msg("detail", describe_trigger(t)),
+            labels,
+            fallback,
+            12.0,
+        );
+        let reply = cx.ask(ask)?;
+        let pick = reply.a.answers.first().copied().filter(|&x| x >= 0).unwrap_or(reply.fallback) as usize;
+        if pick >= options.len() {
+            return Ok(None);
+        }
+        Ok(Some(options[pick].clone()))
     }
 }
 
@@ -1167,7 +1308,11 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         move_tags: t.move_tags.clone(),
         move_main: t.move_main,
         move_dir: t.move_dir,
-        cancelled: t.cancelled,
+        negation: t.negation,
+        spared: t.spared.clone(),
+        seq: t.seq,
+        answers: t.answers,
+        effects: t.effects.clone(),
         move_remaining: t.move_remaining,
         move_total: t.move_total,
         cards: t.cards.clone(),
@@ -1299,7 +1444,11 @@ impl CardRules for WasmRules {
             move_tags: Vec::new(),
             move_main: false,
             move_dir: 1,
-            cancelled: false,
+            negation: Default::default(),
+            spared: Vec::new(),
+            seq: 0,
+            answers: 0,
+            effects: Vec::new(),
             move_remaining: 0,
             move_total: 0,
             cards: Vec::new(),
@@ -1330,7 +1479,11 @@ impl CardRules for WasmRules {
             move_tags: Vec::new(),
             move_main: false,
             move_dir: 1,
-            cancelled: false,
+            negation: Default::default(),
+            spared: Vec::new(),
+            seq: 0,
+            answers: 0,
+            effects: Vec::new(),
             move_remaining: 0,
             move_total: 0,
             cards: Vec::new(),
@@ -1440,7 +1593,12 @@ impl CardRules for WasmRules {
         // amount is rewritten in `trigger.value`. The engine reads the result
         // back off `t.value` after `react` returns.
         t.value = trigger.move_roll.unwrap_or(trigger.value);
-        t.cancelled = t.cancelled || trigger.cancelled;
+        if trigger.negation != Default::default() {
+            t.negation = trigger.negation;
+        }
+        for s in trigger.spared {
+            t.spare(s);
+        }
         t.target = trigger.target;
         Ok(())
     }

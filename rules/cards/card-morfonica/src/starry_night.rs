@@ -11,7 +11,7 @@
 //!
 //! ×1000 to stock X crystals; each removal pays the owner 1,000.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -20,7 +20,7 @@ const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 pub const STARRY_NIGHT: CardDef = CardDef::new("Mor:蝴蝶飞舞的星月夜", &[
     On::Play(starry_night),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::RollAfter, TriggerKind::PassTile], hook),
+    On::Hook(&[HookKind::RollAfter, HookKind::PassTile], hook),
 ]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {

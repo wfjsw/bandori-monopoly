@@ -7,18 +7,18 @@
 //! >  [反击] 受到异常移动效果影响后可打出，使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的移动格数。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const ORDINARY: CardDef = CardDef::new("MyGO:普通与理所当然", &[
-    On::React(&[TriggerKind::Abnormal], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「受到异常移动效果影响后可打出」 -- C# `t.Kind == "abnormal"
     // && t.Target == player`.
-    if trigger::kind() != TriggerKind::Abnormal || trigger::target() != player_id {
+    if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
         return false;
     }
     // C# also requires `H.V(seat, "lastWalk") > 0` -- there must be a previous

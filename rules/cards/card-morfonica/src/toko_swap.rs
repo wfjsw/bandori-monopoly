@@ -83,9 +83,11 @@ fn toko_swap(player_id: i32) {
     if other < 0 || other == player_id || ctx::player_out(other) {
         return;
     }
-    // TODO(规则书): the C# confirms the picked tile with `H.TargetTile` before the
-    //   swap (`MatchHost.cs:4973`); that targeting gate is not on the ABI, so the
-    //   swap goes through without the confirmation.
+    // 规则书: the C# confirms the picked tile with `H.TargetTile` before the
+    //   swap (`MatchHost.cs:4973`); false when the tile cannot be targeted.
+    if !ctx::target_tile(theirs) {
+        return;
+    }
     let num = value(mine);
     let num2 = value(theirs);
     // 规则书: 「交换」 -- C# `H.State.owners[m] = other; H.State.owners[t] = i`.

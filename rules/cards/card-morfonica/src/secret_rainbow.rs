@@ -10,12 +10,12 @@
 //! Reaction-only (`Normal => false`). The C# grades are
 //! `MatchHost.cs:17294` (`Grades[character]`, bigger = older).
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new("Mor:秘密与青春的虹彩", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -24,7 +24,7 @@ fn can_react(player_id: i32) -> bool {
     // C# `t.Kind == "pay" && t.Pay.PayToOther && !t.Pay.cancel && t.Pay.amount > 0`,
     // then `t.Pay.from == seat` + `GradeOf(t.Pay.to) <= GradeOf(player_id)` or
     // `t.Pay.to == seat` + `GradeOf(t.Pay.from) >= GradeOf(player_id)`.
-    if trigger::kind() != TriggerKind::Pay || trigger::value() <= 0 {
+    if trigger::kind() != ChainKind::Effect || trigger::value() <= 0 {
         return false;
     }
     let from = trigger::player_id();

@@ -6,12 +6,12 @@
 //!
 //! Reaction: after a (move) roll, add 1d4 to the result.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const YOLO: CardDef = CardDef::new("AG:Y.O.L.O", &[
-    On::React(&[TriggerKind::Roll, TriggerKind::MoveRoll], can_react, react),
+    On::React(&[ChainKind::Roll, ChainKind::MoveRoll], can_react, react),
 ]);
 
 fn can_react(_player: i32) -> bool {

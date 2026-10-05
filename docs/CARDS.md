@@ -196,8 +196,17 @@ cannot ship with a raw key showing to players.
   the decay counter `DecayCard.TurnEnd` uses.
 * A reaction can reshape the trigger it answered: `set_move_roll` rewrites a
   move roll, `set_pay_amount` reduces or cancels (0) a payment, `set_pay_target`
-  redirects its payee (-1 = the bank), and `set_cancelled` negates the trigger's
-  effect outright. The engine honours all four once the reaction window closes.
+  redirects its payee (-1 = the bank), and `set_cancelled` / `negate_effect` / `spare` shape what settles. The engine honours all four once the reaction window closes.
+* **[反击] is keyed on the effect, not on an outcome.** `ChainKind::Effect` is
+  raised when an effect's recipients are named, before settlement; `ctx::effect`
+  lists what that link declared (`count` / `kind` / `target` / `from` / `tile` /
+  `value`), so a guard can take the whole list (「被…效果影响」 -- `effect::hits`)
+  or one entry (「一次性支付5000以上」 -- `effect::has(TriggerKind::Pay)`).
+  `Target` / `Abnormal` / `Pay` are settlement hooks now and cannot reconstruct
+  that clause. A reaction is a chain link: it resolves **before** the effect and
+  may `set_cancelled()` (negate the activation -- the link never happened),
+  `negate_effect()` (it happened, settles to nothing), or `spare(seat)` (everyone
+  but that seat settles).
 * `trigger::by_card()` is the player whose card caused the trigger (`None` when it
   was board-driven, e.g. rent or a buy). This is what 「来自你以外」 checks against
   (C# `H.HitByOtherCard`): `by_card().is_some_and(|by| by != player_id)`. It is

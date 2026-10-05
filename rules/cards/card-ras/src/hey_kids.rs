@@ -8,12 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const HEY_KIDS: CardDef = CardDef::new("RAS:狂乱Hey Kids!!", &[
-    On::React(&[TriggerKind::Settle], can_react, react),
+    On::React(&[ChainKind::Settle], can_react, react),
 ]);
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`

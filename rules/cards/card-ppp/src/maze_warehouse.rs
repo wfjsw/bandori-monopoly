@@ -66,11 +66,21 @@ fn play(player_id: i32) {
         player_id,
         &Msg::new(key!("maze_warehouse_free_buy")).player_id("who", player_id).i("n", want as i64),
     );
-    // TODO(ABI): 「视为你的主要移动」 / the walk itself -- needs `H.CardMove` with
-    //   `MoveCtx { Steps, Start = ryuseido, StopAt = ryuseido when looped }` so the
-    //   player actually passes tiles and settles (or force-stops) on `dest`.
     // TODO(ABI): 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」
     //   -- needs the turn flags `FreeBuy` / `RazeOnBuy` (C# `H._turnCtx`).
+    // 规则书: 「视为你的主要移动」 / 「从“流星堂”开始移动」 -- C# `H.CardMove(c, new
+    // MoveCtx { Steps = steps, Start = ryuseido, StartWhy = "迷宫般的仓库" })`
+    // (MatchHost.cs:8854-8859): the walk runs now as the main move, starting from
+    // 流星堂 (`set_start`) for `steps` tiles (`set_steps`) and settling on
+    // arrival (`MoveCtx.Resolve` defaults to true).
+    ctx::plan::set_steps(steps);
+    ctx::plan::set_start(ryuseido, "迷宫般的仓库");
+    // 规则书: 「如果[经过]“流星堂”则[强制停下]」 -- C# `moveCtx.StopAt = ryuseido`
+    // when the walk wraps: `set_stop_at` forces the walk to stop on 流星堂 (the
+    // walk settles at the stop tile; `plan::stopped()` is the read-only check).
+    if looped {
+        ctx::plan::set_stop_at(ryuseido);
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("maze_warehouse_walk"))
@@ -78,14 +88,11 @@ fn play(player_id: i32) {
             .tile("tile", dest)
             .i("n", steps as i64),
     );
-    if looped {
-        // 规则书: 「如果[经过]“流星堂”则[强制停下]且[消耗]6000资金」 -- C#
-        // `H.LoseR(i, 6000, ...)` after the forced stop. The walk itself is TODO
-        // above, so the penalty is only logged here (charging without moving would
-        // be the cost without the travel).
+    ctx::card_move(player_id);
+    if looped && !ctx::player_out(player_id) {
+        // 规则书: 「[消耗]6000资金」 -- C# `H.LoseR(i, 6000, "迷宫般的仓库")`
+        // (MatchHost.cs:8866-8869) after the forced stop.
         ctx::log(player_id, &Msg::new(key!("maze_warehouse_loop")).player_id("who", player_id));
-        // TODO(ABI): 「[强制停下]且[消耗]6000资金」 -- needs the AbnormalGate forced-stop
-        //   gate (C# `Abnormal{Kind = "stop"}` / `m.Stopped`) and then
-        //   `ctx::pay(player_id, 6000, ...)` against a `maze_warehouse_lose` reason.
+        ctx::pay(player_id, 6000, &Msg::new(key!("maze_warehouse_lose")));
     }
 }

@@ -15,13 +15,15 @@
 //! card as the `DonutFx` stand-in and files it to the discard pile when the
 //! effect finishes -- the same carrier pattern as the other `Fx` cards.
 
-use card_sdk::abi::TriggerKind;
+use alloc::vec::Vec;
+
+use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TWO_DONUTS: CardDef = CardDef::new("Sumimi:一人两个甜甜圈", &[
     On::Play(two_donuts),
-    On::Hook(&[TriggerKind::PassTile, TriggerKind::SettleAfter], fx),
+    On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], fx),
 ]);
 
 const ID: &str = "Sumimi:一人两个甜甜圈";
@@ -83,12 +85,13 @@ fn fx(player_id: i32) {
     }
 }
 
-/// C# `DonutFx.Back` -- end the exile, return to `Orig`, hand out 2 fire each,
-/// drop the attachment. The in-between settle-teleport is held (below).
-fn back(player_id: i32, by: i32, _dir: i32) {
+/// C# `DonutFx.Back` -- end the exile, return to `Orig`, offer the in-between
+/// settle-teleport, hand out 2 fire each, drop the attachment.
+fn back(player_id: i32, by: i32, dir: i32) {
     ctx::set_slot(player_id, SLOT_BY, -1);
     let orig = ctx::slot(player_id, SLOT_ORIG);
-    // C# `me.exile = 0; me.exileTo = -1; me.pos = Orig`.
+    // C# `me.exile = 0; me.exileTo = -1; me.pos = Orig` -- a plain position set,
+    // no settle (`ctx::teleport_to` is `H.ForceTeleport(..., resolve: false)`).
     ctx::give_exile(player_id, -99, -1);
     ctx::teleport_to(player_id, orig);
     ctx::log(
@@ -99,12 +102,43 @@ fn back(player_id: i32, by: i32, _dir: i32) {
     // 本次移动终点间的任一格并触发结算」 -- C# `H.AskTileOf(..., allowNone: true)`
     // over the tiles from `Orig` (exclusive) along the passer's direction to
     // their end (`for i in 1..=n { t = (Orig + dir*i) mod n; ... break at their end }`),
-    // then `H.Teleport(Seat, r.index, resolve: true)`.
-    // TODO(规则书)（2）: 「选择传送至…并触发结算」 -- needs the teleport-with-settle
-    // routine (`H.Teleport(..., resolve: true)` / `H.CardMove`); `ctx::teleport_to`
-    // is the resolve:false form, so the in-between tile choice cannot settle and
-    // the prompt is skipped. The exile end / return to 原本所在格子 / fire below
-    // run at `SettleAfter` now. (`trigger::move_dir()` is the passer's `t.Move.Dir`.)
+    // then `H.Teleport(Seat, r.index, resolve: true)`. `allowNone` has no ctx
+    // counterpart, so a yes/no stands in for the 「不传送」 branch (the
+    // `card-general/tsugu_ycm` pattern).
+    let n = ctx::tile_count();
+    let mut tiles: Vec<i32> = Vec::new();
+    if n > 0 && orig >= 0 {
+        let end = ctx::player_pos(by);
+        let d = if dir < 0 { -1 } else { 1 };
+        for i in 1..=n {
+            let t = ((orig + d * i) % n + n) % n;
+            tiles.push(t);
+            if t == end {
+                break;
+            }
+        }
+    }
+    if !tiles.is_empty() {
+        let title = Msg::new(key!("two_donuts_title"));
+        // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
+        if ctx::ask_yes(player_id, &title, &Msg::new(key!("two_donuts_yes"))) {
+            let to = ctx::ask_tile(player_id, &title, &Msg::new(key!("two_donuts_ask")).player_id("by", by), &tiles);
+            // C# `H.Teleport(Seat, r.index, resolve: true, ...)` (MatchHost.cs
+            // DonutFx.Back) = `set_teleport_to(to)` + `set_resolve(true)` +
+            // `card_move(player_id)`. C# calls `H.Teleport` (TeleportMove) rather
+            // than `H.CardMove` (MainMoveAs), so this settle-teleport does not
+            // consume the main move; `card_move` is the closest shape and only
+            // marks `MainMoved` when the owner is the turn player.
+            ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+            ctx::plan::set_teleport_to(to);
+            ctx::plan::set_resolve(true);
+            ctx::card_move(player_id);
+            ctx::log(
+                player_id,
+                &Msg::new(key!("two_donuts_moved")).player_id("who", player_id).tile("tile", to),
+            );
+        }
+    }
     // 规则书（2）: 「之后你们各获得2火罐（超出上限的每个火罐转化为500资金）」
     for who in [player_id, by] {
         if ctx::player_out(who) {

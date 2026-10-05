@@ -8,6 +8,7 @@
 //!
 
 use alloc::vec::Vec;
+use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TO_YOU_FAR_AWAY: CardDef = CardDef::new("PPP:献给远方的你", &[
@@ -41,7 +42,10 @@ fn play(player_id: i32) {
     if far.is_empty() {
         return;
     }
-    // C# `H.AskSeat` only when several players share the maximum.
+    // C# `H.AskSeat` only when several players share the maximum. Re-verified
+    // against `CardToYouFarAway.Play` (MatchHost.cs:8873-8918): the farthest-player
+    // choice is a bare `H.AskSeat` with **no** `H.Target` gate (no ImmuneAll /
+    // Untargetable / `target` [反击] window here), so no `ctx::target` call.
     let who = if far.len() > 1 {
         far.sort();
         ctx::ask_player(
@@ -54,8 +58,14 @@ fn play(player_id: i32) {
         far[0]
     };
     let to = ctx::player_pos(who);
-    // 规则书: 「[传送]至…玩家的格子」
-    ctx::teleport_to(player_id, to);
+    // 规则书: 「[传送]至…玩家的格子」/「并[结算]」 -- C#
+    // `H.ForceTeleport(i, H.State.seats[who].pos, resolve: true, i, "献给远方的你")`
+    // (MatchHost.cs:8902): a teleport that settles on arrival. The plan names
+    // the destination and settles (`set_teleport_to` implies `MoveKind::Teleport`,
+    // `set_resolve(true)`), and `card_move` runs it now.
+    ctx::plan::set_kind(MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(true);
     ctx::log(
         player_id,
         &Msg::new(key!("to_you_far_away_moved"))
@@ -63,9 +73,7 @@ fn play(player_id: i32) {
             .player_id("target", who)
             .tile("tile", to),
     );
-    // TODO(ABI): 「并[结算]」 -- `ctx::teleport_to` is `H.ForceTeleport(..., resolve:
-    //   false)` (no settle). Needs `H.ForceTeleport(..., resolve: true)` (C#
-    //   `CardToYouFarAway.Play`) so the landing settles.
+    ctx::card_move(player_id);
     if ctx::player_out(player_id) {
         return;
     }

@@ -15,14 +15,14 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new("PP:不要背负期待", &[
     On::Play(no_expectation),
-    On::Hook(&[TriggerKind::RollAfter, TriggerKind::PayAdd], hook),
-    On::Hook(&[TriggerKind::Reshuffled], reshuffled),
+    On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], hook),
+    On::Hook(&[HookKind::Reshuffled], reshuffled),
 ]);
 
 /// C# `Mem["stacks"]` -- how many times the pay bend is stacked (2 on place,

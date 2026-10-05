@@ -7,19 +7,19 @@
 //! on an abnormal move (not [除外]): choose whether this move (or the end of a
 //! movement-locked turn) settles.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger, AbKind};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const OWN_STAGE: CardDef = CardDef::new("R:选择自己的舞台", &[
-    On::React(&[TriggerKind::Abnormal], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// 规则书[反击]: 「[反击] 受到[除外]以外的异常移动效果影响时可打出此卡」
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「受到[除外]以外的异常移动效果影响时」 -- C# `t.Kind == "abnormal" &&
     // t.Target == player && t.Ab != null && t.Ab.Kind != "exile"`.
-    if trigger::kind() != TriggerKind::Abnormal || trigger::target() != player_id {
+    if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
         return false;
     }
     // 规则书[反击]: 「[除外]以外」 -- C# `t.Ab != null && t.Ab.Kind != "exile"`

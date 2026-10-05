@@ -10,13 +10,13 @@
 //! > （3）效果）。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new("CRYCHIC:一起演奏音乐的命运共同体", &[
     On::Play(fate_together),
-    On::Hook(&[TriggerKind::PayAfter, TriggerKind::TurnStart], react),
+    On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], react),
 ]);
 
 const ID: &str = "CRYCHIC:一起演奏音乐的命运共同体";
@@ -66,11 +66,11 @@ fn react(player_id: i32) {
             for i in 1..n {
                 let tile = (pos + i).rem_euclid(n);
                 if ctx::tile_owner(tile) == num {
-                    // 规则书（1）: 「（不触发结算）」 -- C# `H.Walk(Seat, i, resolve: false)`.
-                    // TODO(ABI): the walk itself is the H.Walk movement routine (a
-                    //   tile-by-tile walk so `PassTile` fires per tile); `teleport_to`
-                    //   is the raw endpoint write the host already exposes.
-                    ctx::teleport_to(player_id, tile);
+                    // 规则书（1）: 「（不触发结算）」 -- C# `H.Walk(Seat, i, resolve: false)`
+                    //   = `set_steps(i)` + `set_resolve(false)` + `card_move(player_id)`.
+                    ctx::plan::set_steps(i);
+                    ctx::plan::set_resolve(false);
+                    ctx::card_move(player_id);
                     ctx::set_slot(player_id, SLOT_HIT, 1);
                     ctx::log(
                         player_id,

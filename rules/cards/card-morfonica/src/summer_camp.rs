@@ -6,15 +6,19 @@
 //!
 //! by others until your next turn, then draw if nothing was blocked.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind, GateKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 const ID: &str = "Mor:夏日合宿";
 
+/// C# `Mem["blocked"]` -- how many targetings this card negated.
+const SLOT_BLOCKED: &str = "summer_camp_blocked";
+
 pub const SUMMER_CAMP: CardDef = CardDef::new("Mor:夏日合宿", &[
     On::Play(summer_camp),
-    On::Hook(&[TriggerKind::TurnStart], turn_start),
+    On::Gate(&[GateKind::Untargetable], untargetable),
+    On::Hook(&[HookKind::TurnStart], turn_start),
 ]);
 
 fn summer_camp(player_id: i32) {
@@ -24,10 +28,28 @@ fn summer_camp(player_id: i32) {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("summer_camp_note")));
     ctx::log(player_id, &Msg::new(key!("summer_camp_placed")).player_id("who", player_id));
-    // TODO(规则书): 「你只会被自己发动的效果指定」 -- needs the Fx.Untargetable hook
-    // (C# `CardSummerCamp.Untargetable` refuses any `by != Player` and counts
-    // `Mem["blocked"]`).
+    // 规则书: 「你只会被自己发动的效果指定」 -- the Untargetable hook below refuses
+    //   any `by != player_id` and counts negations in `SLOT_BLOCKED`.
     // The Fx.TurnStart hook below ends the effect on the owner's next turn.
+}
+
+/// `Fx.Untargetable` (C# `CardSummerCamp.Untargetable`): while placed, only the
+/// owner's own effects may target them. Counts negations for the draw gate.
+fn untargetable(player_id: i32) {
+    // The hook runs on every placed card across all players; only guard our own
+    // seat (`t.player` = the target).
+    if trigger::player_id() != player_id {
+        return;
+    }
+    // 规则书: 「只会被自己发动的效果指定」 -- C# `if (seat != Seat || by == Seat)
+    //   return false;` self-targeting passes (the engine already allows it).
+    let by = trigger::by_card();
+    if by.is_none_or(|b| b == player_id) {
+        return;
+    }
+    // C# `Mem["blocked"] = Blocked + 1; return true;`.
+    ctx::inc_slot(player_id, SLOT_BLOCKED, 1);
+    trigger::set_cancelled();
 }
 
 /// `Fx.TurnStart` (C# `CardSummerCamp.TurnStart` -> `End`): the effect ends at
@@ -45,8 +67,10 @@ fn turn_start(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("summer_camp_end")).player_id("who", player_id));
     // 规则书: 「你没有因为此卡效果无效化任何影响则抽一张牌」 -- C# `End`:
     // `H.DrawR(Seat, 1, ...)` when `Blocked == 0`.
-    // TODO(规则书): the `Blocked == 0` gate needs the Fx.Untargetable hook (above)
-    //   to count negations; with nothing able to negate, the draw always fires.
-    ctx::draw(player_id, 1);
-    ctx::log(player_id, &Msg::new(key!("summer_camp_draw")).player_id("who", player_id));
+    let blocked = ctx::slot(player_id, SLOT_BLOCKED);
+    ctx::set_slot(player_id, SLOT_BLOCKED, 0);
+    if blocked == 0 {
+        ctx::draw(player_id, 1);
+        ctx::log(player_id, &Msg::new(key!("summer_camp_draw")).player_id("who", player_id));
+    }
 }

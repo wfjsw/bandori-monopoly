@@ -48,7 +48,7 @@ fn soyo_colors(player_id: i32) {
     // be built through a matching-colour agent.
     // TODO(规则书): 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
     // 减半收费基础上额外减半」 -- the `Fx.PayMul` hook kind is in
-    // (`On::Hook(&[TriggerKind::PayMul], …)`), but the C# guard keys on
+    // (`On::Hook(&[HookKind::PayMul], …)`), but the C# guard keys on
     // `H._agentGroup` (the colour group of the 地产商 tile being settled, set
     // only inside `AgentLanding`'s half-price pass) and that has no ctx read,
     // so the body cannot tell an agent-landing charge from ordinary rent.

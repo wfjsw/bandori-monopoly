@@ -41,8 +41,16 @@ pub struct Trigger {
     pub move_main: bool,
     /// `t.Move.Dir` -- 1 forward, -1 backward. Only meaningful when the move caused it.
     pub move_dir: i32,
-    /// `Trigger.Cancelled` -- a reaction negated this trigger's effect.
-    pub cancelled: bool,
+    /// How a counter invalidated this link -- see [`game_core::engine::rules::Negation`].
+    pub negation: game_core::engine::rules::Negation,
+    /// Recipients a counter spared from settlement.
+    pub spared: Vec<i32>,
+    /// Position within the current chain, 1-based. 0 = not on a chain.
+    pub seq: u32,
+    /// The link this one answers. 0 = the effect declaration itself.
+    pub answers: u32,
+    /// The effects this link declares, recipients already named.
+    pub effects: Vec<game_core::engine::rules::Effect>,
     /// `t.Move.Remaining` / `t.Move.Path.Count`.
     pub move_remaining: i32,
     pub move_total: i32,
@@ -52,6 +60,39 @@ pub struct Trigger {
     pub move_roll: Option<i32>,
     /// `t.Card` -- the card id on card/event/reacted triggers (`""` otherwise).
     pub card: String,
+}
+
+impl Trigger {
+    /// Did a counter negate this link at all?
+    pub fn is_cancelled(&self) -> bool {
+        self.negation != game_core::engine::rules::Negation::None
+    }
+
+    /// Negate the activation: the link never happened.
+    pub fn negate_activation(&mut self) {
+        self.negation = game_core::engine::rules::Negation::Activation;
+    }
+
+    /// Negate the effect: it happened, but settles to nothing. Does not weaken
+    /// a stronger negation already in place.
+    pub fn negate_effect(&mut self) {
+        use game_core::engine::rules::Negation;
+        if self.negation == Negation::None {
+            self.negation = Negation::Effect;
+        }
+    }
+
+    /// Take one recipient out of settlement.
+    pub fn spare(&mut self, seat: i32) {
+        if !self.spared.contains(&seat) {
+            self.spared.push(seat);
+        }
+    }
+
+    /// Append a declared effect. The recipient is named now, at declaration.
+    pub fn declare(&mut self, effect: game_core::engine::rules::Effect) {
+        self.effects.push(effect);
+    }
 }
 
 pub trait CardWorld: Clone + 'static {
@@ -277,6 +318,14 @@ pub trait CardWorld: Clone + 'static {
     fn set_trigger_target(&mut self, to: i32);
     /// Negate the trigger's effect (C# `trigger.Cancelled = true`).
     fn set_trigger_cancelled(&mut self);
+    /// Yu-Gi-Oh's *negate the effect*: the link happened, but settles to nothing.
+    fn set_trigger_negate_effect(&mut self);
+    /// Take one recipient out of settlement; the effect still settles for the rest.
+    fn set_trigger_spare(&mut self, seat: i32);
+    /// Append a declared effect to the current chain link, naming its recipient
+    /// now -- at declaration, not at settlement. `kind` is a `TriggerKind` wire
+    /// value.
+    fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32);
     /// `t.Card == id` -- is this trigger about that card?
     fn trig_card_is(&self, id: &str) -> i32;
 
@@ -369,6 +418,10 @@ pub trait CardWorld: Clone + 'static {
     fn set_kind(&mut self, _v: i32) {}
     /// The teleport's destination; -1 derives it from the roll.
     fn set_teleport_to(&mut self, _v: i32) {}
+    /// Did the walk stop before its full length? The walk loop sets it.
+    fn move_stopped(&self) -> bool {
+        false
+    }
     /// The tile the walk begins on instead of the player's own; -1 for the player.
     fn set_start(&mut self, _v: i32, _why: &str) {}
     /// Extra steps added mid-walk (the walk grows as it runs).

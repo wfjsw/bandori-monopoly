@@ -8,14 +8,14 @@
 //! > （2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new("MyGO:哪怕这旅程没有终点", &[
     On::Play(endless_journey),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
-    On::Hook(&[TriggerKind::SettleAfter], settle_after),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::SettleAfter], settle_after),
 ]);
 
 const ID: &str = "MyGO:哪怕这旅程没有终点";

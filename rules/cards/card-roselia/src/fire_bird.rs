@@ -8,15 +8,15 @@
 //! pay 400 and burn one crystal at every turn end, all your tiles charge 1.5x
 //! rent, and the card hits the discard when the crystals run out.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const FIRE_BIRD: CardDef = CardDef::new("R:Fire bird", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
-    On::Hook(&[TriggerKind::PayMul], pay_mul),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::PayMul], pay_mul),
 ]);
 
 const ID: &str = "R:Fire bird";

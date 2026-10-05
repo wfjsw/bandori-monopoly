@@ -7,17 +7,15 @@
 //! >
 //! > （2）[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]
 //! >
-//! the card stays in play; the 流星堂 stop is live on the `PassTile` hook (the
-//! `H.AbnormalGate` stop guard is still held -- see the TODO in `pass_tile`).
+//! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const RANDOM_STAR: CardDef = CardDef::new("PPP:仓库里的Random Star", &[
     On::Play(random_star),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::PassTile], pass_tile),
 ]);
 
 fn random_star(player_id: i32) {
@@ -69,10 +67,10 @@ fn pass_tile(player_id: i32) {
     ) {
         return;
     }
-    // 规则书（2）: 「在“流星堂”强制停下并[结算]」 -- C# `m.Stopped = true; m.Resolve = true`.
-    // TODO(规则书)（2）: the `H.AbnormalGate` stop guard (C# `Abnormal{Kind = "stop"}`
-    //   before the stop lands) is still held -- a blocker with a 「不可阻挡」-style
-    //   bypass is not in the vocabulary; the stop + settle shaping itself is below.
+    // 规则书（2）: 「在“流星堂”强制停下并[结算]」 -- C# `m.Stopped = true; m.Resolve = true`
+    // (MatchHost.cs:8955-8963, behind `H.AbnormalGate`). `set_stop_at` is the
+    // forced stop from this `PassTile` hook: the walk settles at the stop tile
+    // (`plan::stopped()` is the read-only check).
     ctx::plan::set_stop_at(ryuseido);
     ctx::plan::set_resolve(true);
     // 规则书（2）: 「使用2星星贴纸」 -- C# `H.AddTok(Seat, "星星贴纸", -2)`.

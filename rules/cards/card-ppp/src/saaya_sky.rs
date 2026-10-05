@@ -9,7 +9,7 @@
 //! > （2）[使用者][经过]此卡后在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -17,8 +17,8 @@ const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
 
 pub const SAAYA_SKY: CardDef = CardDef::new("PPP:（沙绫）总有一天要给这片天空命名", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
-    On::Hook(&[TriggerKind::TurnEndAfter], turn_end_after),
+    On::Hook(&[HookKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::TurnEndAfter], turn_end_after),
 ]);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).

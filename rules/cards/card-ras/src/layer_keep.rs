@@ -6,13 +6,13 @@
 //! > 当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const LAYER_KEEP: CardDef = CardDef::new("RAS:（和奏瑞依）寄于指尖的执念", &[
     On::Play(play),
-    On::Hook(&[TriggerKind::RollAfter], roll_after),
+    On::Hook(&[HookKind::RollAfter], roll_after),
 ]);
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";

@@ -9,14 +9,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const THAT_DAY_RAIN: CardDef = CardDef::new("MyGO:那天的雨", &[
     On::Play(that_day_rain),
     // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-    On::Hook(&[TriggerKind::TurnStart, TriggerKind::TurnEnd], hook),
+    On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook),
 ]);
 
 const ID: &str = "MyGO:那天的雨";

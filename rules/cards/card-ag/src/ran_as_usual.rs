@@ -9,20 +9,20 @@
 //! > （2）受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）。
 //! >
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const RAN_AS_USUAL: CardDef = CardDef::new("AG:(兰) 像往常一样", &[
     On::Play(play),
-    On::React(&[TriggerKind::Abnormal], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
     On::AtEnd(at_end),
 ]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书（1）: 「此卡可以当反击使用」 -- C# reacts on an `abnormal` trigger
     // aimed at the player.
-    if trigger::kind() != TriggerKind::Abnormal {
+    if trigger::kind() != ChainKind::Effect {
         return false;
     }
     if trigger::target() != player_id {

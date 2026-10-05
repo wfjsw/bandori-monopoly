@@ -1,5 +1,5 @@
 {
-  "centrifugal_blocked": "{{who}} 不受别人的效果影响，不受这次异常效果（离心力，不为所动）",
+  "centrifugal_blocked": "{{who}} 现在不受别人的效果影响（离心力，不为所动）",
   "centrifugal_end": "{{who}} 的「离心力，不为所动」效果结束了",
   "centrifugal_log": "{{who}} 到下个回合开始前不受别人的效果影响（离心力，不为所动）",
   "centrifugal_note": "到下个回合开始：不受别人的效果影响",

@@ -44,20 +44,22 @@ fn play(player_id: i32) {
         &tiles,
     );
     // 规则书: 「期间[不可阻挡]」 -- C# `H._turnCtx.Unstoppable = true` for the move.
+    // TODO(规则书): 「期间[不可阻挡]」 -- the `Unstoppable` turn flag (C#
+    //   `H._turnCtx.Unstoppable`) is still held; a blocker can still stop this walk.
     // 规则书: 「并[结算]」 / 「本回合的[主要移动]改为…」 -- C# `H.CardMove` with
     // `Steps` (forward, or `Reverse` with `n - steps` when the target is behind).
+    // `MoveCtx.Resolve` defaults to true, so the landing settles.
     let steps = ctx::tile_forward(pos, to);
     let reverse = steps > 4;
-    let _len = if reverse { n - steps } else { steps };
+    let len = if reverse { n - steps } else { steps };
+    ctx::plan::set_steps(len);
+    ctx::plan::set_reverse(reverse);
     ctx::log(
         player_id,
         &Msg::new(key!("rimi_choco_moved"))
             .player_id("who", player_id)
             .tile("tile", to)
-            .i("n", _len as i64),
+            .i("n", len as i64),
     );
-    // TODO(ABI): 「本回合的[主要移动]改为移动到…并[结算]，期间[不可阻挡]」 -- needs
-    //   `H.CardMove` (so the walk settles on `to` and consumes the main move) and
-    //   the `Unstoppable` turn flag (C# `H._turnCtx.Unstoppable`). Until then the
-    //   player is not moved; only the destination choice runs.
+    ctx::card_move(player_id);
 }

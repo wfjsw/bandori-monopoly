@@ -10,13 +10,13 @@
 //! > （2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const WELCOME_MUJICA: CardDef = CardDef::new("Mujica:欢迎来到ave mujica的世界", &[
     On::Play(play),
-    On::React(&[TriggerKind::State], can_react, react),
+    On::React(&[ChainKind::State], can_react, react),
 ]);
 
 fn play(player_id: i32) {
@@ -36,12 +36,21 @@ fn play(player_id: i32) {
         &Msg::new(key!("welcome_mujica_ask")),
         &candidates,
     );
-    // 规则书（1）: 「转换任意一名玩家的状态」
+    // C# `H.PickTarget` = `AskSeat` + `H.Target` (MatchHost.cs:18036-18057):
+    // the pick runs the full targeting pipeline (out / exile / ImmuneAll /
+    // _targeted / Untargetable / redirect / `target` [反击] window) and lands
+    // on the player actually hit (`Some(hit)`, redirect may move it). None =
+    // the designation failed and the play folds.
+    let Some(hit) = ctx::target(who) else {
+        return;
+    };
+    // 规则书（1）: 「转换任意一名玩家的状态」 -- C# applies `H.SwitchState` to
+    // `r.index`, the post-redirect target (`res.index = t.index`).
     ctx::log(
         player_id,
-        &Msg::new(key!("welcome_mujica_switched")).player_id("who", who),
+        &Msg::new(key!("welcome_mujica_switched")).player_id("who", hit),
     );
-    // TODO(ABI): `H.SwitchState(who, (skillState == 2) ? 1 : 2, ...)` -- the
+    // TODO(ABI): `H.SwitchState(hit, (skillState == 2) ? 1 : 2, ...)` -- the
     // skill-state toggle has no ctx counterpart.
 }
 

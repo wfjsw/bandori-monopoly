@@ -9,19 +9,18 @@
 //! > （2）如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]
 //!
 
-use card_sdk::abi::{CardPile, TriggerKind};
+use card_sdk::abi::{HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 /// C# `Normal => false` with no `Play`/`React`: the card is shown out of the
 /// deck before the opening hands and lives on the field from there.
 pub const LOCK_DREAM: CardDef = CardDef::new("RAS:（LOCK）追逐梦想的步伐", &[
-    On::Hook(&[TriggerKind::DeckBeforeGame], deck_before_game),
-    On::Hook(&[TriggerKind::DeckAtGameStart], deck_at_game_start),
-    On::Hook(&[TriggerKind::PassTile], pass_tile),
-    On::Hook(&[TriggerKind::SettleBefore], settle_before),
+    On::Hook(&[HookKind::DeckBeforeGame], deck_before_game),
+    On::Hook(&[HookKind::DeckAtGameStart], deck_at_game_start),
+    On::Hook(&[HookKind::PassTile], pass_tile),
+    On::Hook(&[HookKind::SettleBefore], settle_before),
 ]);
-
 
 /// C# `m.Tags["lockStation"]` -- the owner's main move passed Bandori车站.
 const SLOT_TAG: &str = "lock_dream_tag";

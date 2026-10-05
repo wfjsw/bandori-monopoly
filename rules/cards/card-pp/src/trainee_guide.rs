@@ -18,13 +18,13 @@
 //! The crystal counter and the turn-end tick are live; the mark bookkeeping
 //! and the cash-in still need hooks the ABI lacks.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TRAINEE_GUIDE: CardDef = CardDef::new("PP:练习生解密指南", &[
     On::Play(trainee_guide),
-    On::Hook(&[TriggerKind::TurnEnd], turn_end),
+    On::Hook(&[HookKind::TurnEnd], turn_end),
 ]);
 
 fn trainee_guide(player_id: i32) {

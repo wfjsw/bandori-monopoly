@@ -8,12 +8,12 @@
 //! > （2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new("RAS:PLEASE CHOOSE", &[
-    On::React(&[TriggerKind::Settle], can_react, react),
+    On::React(&[ChainKind::Settle], can_react, react),
 ]);
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
@@ -69,8 +69,9 @@ fn react(player_id: i32) {
     );
     if pick == 0 {
         // TODO(规则书)[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
-        // -- see above; the forced play needs `Card.Targeting` and a force-target
-        // tag. `ctx::cards_in(other, CardPile::Hand)` lists the hand now.
+        // -- see above; the forced play needs `CardDef.targeting()` / `Normal`
+        // (hand filter) and a force-target play tag. `ctx::cards_in(other,
+        // CardPile::Hand)` lists the hand now.
         ctx::log(
             other,
             &Msg::new(key!("please_choose_opt1_todo")).player_id("who", other).player_id("reactor", player_id),

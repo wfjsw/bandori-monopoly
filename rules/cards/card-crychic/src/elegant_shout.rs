@@ -6,12 +6,12 @@
 //! >  ：[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new("CRYCHIC:优雅的呐喊", &[
-    On::React(&[TriggerKind::DrawOut], can_react, react),
+    On::React(&[ChainKind::DrawOut], can_react, react),
     On::AtEnd(at_end),
 ]);
 

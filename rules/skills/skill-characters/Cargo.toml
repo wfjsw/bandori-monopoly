@@ -1,0 +1,13 @@
+[package]
+name = "skill-characters"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Character skills as card rules (one file per skill) -- kept apart from the regular cards on purpose."
+
+[lib]
+# rlib: the shipped module (card-all) links this alongside the band crates.
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../../card-sdk", features = ["guest"] }

@@ -7,19 +7,19 @@
 //!
 //! just before you pay another player: take a [眩晕] layer instead of paying.
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const AKO_DARK: CardDef = CardDef::new("R:（亚子）黑暗大魔姬亚子", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// 规则书（1）[反击]: 「[反击] 当你即将向其他玩家支付资金时可打出此卡」
 fn can_react(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「当你即将向其他玩家支付资金时」 -- C# `t.Kind == "pay" &&
     // t.Pay.from == player && t.Pay.PayToOther`.
-    if trigger::kind() != TriggerKind::Pay || trigger::player_id() != player_id {
+    if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
     // `t.Pay.PayToOther` -- the payee is another player (`t.Pay.to` = `trigger::target()`).

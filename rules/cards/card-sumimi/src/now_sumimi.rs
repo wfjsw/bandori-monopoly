@@ -6,12 +6,12 @@
 //! > [反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new("Sumimi:现在她是Sumimi的小初啦", &[
-    On::React(&[TriggerKind::Pay], can_react, react),
+    On::React(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
@@ -44,7 +44,7 @@ fn price_tag(player_id: i32) -> i32 {
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当…失去资金的总额即将超过你所在格子的[收费标价]时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.amount > 0 && !t.Pay.cancel`
-    if trigger::kind() != TriggerKind::Pay {
+    if trigger::kind() != ChainKind::Effect {
         return false;
     }
     if trigger::player_id() != player_id || trigger::value() <= 0 {

@@ -8,12 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const LISA_BOND: CardDef = CardDef::new("R:必然的联系（莉莎）", &[
-    On::React(&[TriggerKind::SkillTeleport], can_react, react),
+    On::React(&[ChainKind::SkillTeleport], can_react, react),
 ]);
 
 /// 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」

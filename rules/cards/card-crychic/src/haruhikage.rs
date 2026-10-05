@@ -10,14 +10,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const HARUHIKAGE: CardDef = CardDef::new("CRYCHIC:春日影", &[
     On::Play(play),
-    On::React(&[TriggerKind::MoveRoll, TriggerKind::SettleBefore, TriggerKind::Pay], can_react, react),
-    On::Hook(&[TriggerKind::Drawn], on_drawn),
+    On::React(&[ChainKind::Effect, ChainKind::MoveRoll, ChainKind::SettleBefore], can_react, react),
+    On::Hook(&[HookKind::Drawn], on_drawn),
 ]);
 
 const ID: &str = "CRYCHIC:春日影";
@@ -115,13 +115,16 @@ fn can_react(player_id: i32) -> bool {
         // 规则书（2）[反击]: same, C# `t.Kind == "pay" && t.Pay.IsRent && t.Pay.to ==
         // player && t.Pay.from != player && t.Pay.tile >= 0 && !t.Pay.cancel` runs
         // 长崎素世（CRYCHIC）'s skill (cancels the rent).
-        TriggerKind::Pay => {
-            // on pay triggers `t.Pay.from == trigger::seat()`, `t.Pay.to == trigger::target()`
-            trigger::player_id() != player_id
+        //
+        // The payment is now declared as an `effect`; `pay_is_rent` on the link
+        // is what tells it apart from a targeting or an abnormal.
+        TriggerKind::Effect => {
+            // on a payment effect `from` is the payer and `target` the payee.
+            trigger::pay_is_rent()
+                && trigger::player_id() != player_id
                 && trigger::target() == player_id
                 && trigger::tile() >= 0
                 && trigger::value() > 0
-                && trigger::pay_is_rent()
         }
         _ => false,
     }

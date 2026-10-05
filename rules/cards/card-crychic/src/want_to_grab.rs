@@ -10,8 +10,9 @@
 //! > （3）你的下回合开始前，若没有玩家经过你，你在回合开始时立即选择并[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子（可穿过地图，不可为自身所在格）并[触发结算]，视为你的主要移动。
 //!
 //! grab / jump effects are the GrabFx hooks: `PassPlayer` / `SettleBefore` /
-//! `TurnStart` are hook kinds now, but the walk-with-settle and the
-//! 「视为你的主要移动」 teleport are still held (see the TODOs below).
+//! `TurnStart` are hook kinds now; the walk body is expressible with
+//! `card_move`, but the `GrabFx` attachment and the grid-nearest teleport
+//! (「视为你的主要移动」) are still held (see the TODOs below).
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
@@ -25,14 +26,14 @@ fn want_to_grab(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("want_to_grab_note")).player_id("who", player_id));
     // TODO(规则书)（2）: 「当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。」
     //   -- `TriggerKind::PassPlayer` / `SettleBefore` exist now (C# `GrabFx.PassSeat`
-    //   remembers the passer, `GrabFx.SettleBefore` runs the grab), but the grab
-    //   body is `H.Walk(Seat, 1, resolve: true)` -- an immediate walk-with-settle
-    //   -- and no walk/settle routine is in the guest ABI (`ctx::teleport_to`
-    //   never settles). The `GrabFx` attachment (C# `H.ExtraOf<GrabFx>`) that
-    //   remembers the passer is also still held.
+    //   remembers the passer, `GrabFx.SettleBefore` runs the grab). The grab body
+    //   `H.Walk(Seat, 1, resolve: true)` is now `plan::set_steps(1)` +
+    //   `plan::set_resolve(true)` + `card_move(player_id)`, but the `GrabFx`
+    //   attachment (C# `H.ExtraOf<GrabFx>`) that remembers the passer is still
+    //   held, so the effect cannot be wired faithfully yet.
     // TODO(规则书)（3）: 「[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动。」
     //   -- `TriggerKind::TurnStart` and `ctx::ask_tile` exist now; still missing
     //   the board grid geometry (C# `Grid` / `FromGrid` ray-nearest search over
-    //   the four axis directions) and `H.MainMoveAs` (teleport + settle
-    //   **as the main move** -- the held `ctx::card_move` family).
+    //   the four axis directions) and `plan::set_teleport_to` (the
+    //   teleport-with-settle shape for `H.MainMoveAs`).
 }

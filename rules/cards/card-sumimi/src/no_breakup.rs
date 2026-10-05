@@ -91,20 +91,25 @@ fn no_breakup(player_id: i32) {
         picks,
     );
     // 规则书: 「进行一次…传送，视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
-    // { TeleportTo = teleportTo })` (teleport with settle, consuming the main move).
-    // `teleport_to` is the resolve:false form, used here as the best-effort stand-in.
-    ctx::teleport_to(player_id, to);
+    // { TeleportTo = teleportTo })` (`Resolve` defaults to true) =
+    // `set_teleport_to(to)` + `set_resolve(true)` + `card_move(player_id)`.
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
+    ctx::plan::set_teleport_to(to);
+    ctx::plan::set_resolve(true);
+    ctx::card_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("no_breakup_moved")).player_id("who", player_id).tile("tile", to),
     );
+    // 规则书: 「视为你的主要移动」 -- `card_move` runs `MainMoveAs`
+    // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
+    // player; that is exactly `card_move`'s bookkeeping.
     // 规则书: 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」
     // -- C# snapshots pos / stay / stun / exile / every player's money / owners /
     // houses / mortgaged before the move and restores them all when
     // `!RepeatedDigits(money) && !H.Out(i)` after the settle.
-    // TODO(规则书): needs the H.CardMove teleport-with-settle routine plus a
-    // world-snapshot / restore (C# `CardNoBreakup.Play`); until then the teleport
-    // neither settles nor reverts, and 「视为你的主要移动」 is also unclaimed.
-    // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move routine
-    // so this teleport consumes the turn's main move.
+    // TODO(规则书): the revert half -- a world-snapshot / restore (C#
+    // `CardNoBreakup.Play`); the teleport now settles and consumes the main
+    // move, but nothing rolls the world back when the money still lacks a
+    // repeated digit.
 }

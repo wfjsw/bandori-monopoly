@@ -17,12 +17,13 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn play(player_id: i32) {
     // 规则书: 「本回合的主要移动设为移动60格子」 -- C# `H.CardMove(c, new MoveCtx
-    // { Steps = 60, Resolve = false })`; the step count is the plan shape.
-    ctx::set_next_steps(player_id, 60);
+    // { Steps = 60, Resolve = false })`: the walk runs now and is the main move.
+    ctx::plan::set_steps(60);
     // 规则书: 「并不触发结算」 -- C# `MoveCtx.Resolve = false` on the same move:
     // the 60-step walk passes every tile without landing on one.
     ctx::plan::set_resolve(false);
     ctx::log(player_id, &Msg::new(key!("signpost_move")).player_id("who", player_id).i("n", 60));
+    ctx::card_move(player_id);
     // 规则书: 「回合结束时[失去]1000资金」 -- C# `H._turnCtx.AtEnd.Add(() =>
     // H.LoseR(i, 1000, ...))`, scheduled onto `On::AtEnd`.
     ctx::before_turn_end(player_id);

@@ -4,6 +4,7 @@
   "change_world_ask": "Which house-bearing Live House should this go on?",
   "change_world_bonus": "Change the world rent +{{n}}",
   "change_world_crystal": "{{who}} passed {{tile}}: Change the world gains 1 miracle crystal",
+  "change_world_dice": "{{who}}'s move roll becomes 3d20 (Change the world)",
   "change_world_discarded": "{{who}}'s Change the world discarded after firing",
   "change_world_no_houses": "you have no house-bearing Live House tile",
   "change_world_note": "Change the world",

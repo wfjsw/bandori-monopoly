@@ -5,7 +5,7 @@
 //! >  支付10000资金（视为买地花费）并将此卡置于CiRCLE上，若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -14,7 +14,7 @@ const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 pub const KOKORO_CIRCLE: CardDef = CardDef::new("HHW:（kkr）前往笑容集结的地方！", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::Hook(&[TriggerKind::SettleAfter], settle_after),
+    On::Hook(&[HookKind::SettleAfter], settle_after),
 ]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {

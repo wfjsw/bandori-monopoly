@@ -19,8 +19,13 @@ fn play(player_id: i32) {
     // (C# `CardKanonMarch.Arrive`, `m.Reverse && !m.Teleport`) to add one 水母标记
     // per backward move (`ctx::add_tok(player_id, "kanon_march_tok", 1, ...)`).
     // TODO(规则书): 「当水母标记到达9个时可以清除所有标记传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后置入弃牌堆」
-    // -- needs the Fx.MoveBefore hook (C# `CardKanonMarch.MoveBefore` -> `Jump`,
-    // `H.AskTileOf(..., allowNone: true)` over 水族馆 / 弦卷豪宅) and the
-    // H.CardMove main-move routine for the teleport; the 9-mark check itself is
-    // `ctx::tok(player_id, "kanon_march_tok") >= 9`.
+    // -- the body is expressible with the landed ops (`AskTileOf` over
+    // 水族馆 / 弦卷豪宅 -> `plan::set_kind(MoveKind::Teleport)` +
+    // `plan::set_teleport_to(to)` + `plan::set_resolve(true)` + unplace;
+    // 9-mark check is `ctx::tok(player_id, "kanon_march_tok") >= 9`) but no
+    // `TriggerKind::MoveBefore` hook point exists (C#
+    // `CardKanonMarch.MoveBefore` -> `Jump`), so it cannot fire. `On::RollPlan`
+    // is the closest pre-dice hook but `main_move` does not branch on
+    // `teleport_to` the way C# `MainMove` does (`m.TeleportTo >= 0 && m.Steps < 0`
+    // -> `TeleportMove`), so the rewrite would still walk.
 }

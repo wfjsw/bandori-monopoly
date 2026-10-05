@@ -20,14 +20,14 @@
 //! placed by `DeckBeforeGame`. The settle tax is live in the `SettleAfter`
 //! hook; the crystal growth runs on the `Drew` hook.
 
-use card_sdk::abi::{CardPile, TriggerKind};
+use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_AHEAD: CardDef = CardDef::new("PP:梦在前方，结彩当下", &[
-    On::Hook(&[TriggerKind::DeckBeforeGame], deck_before_game),
-    On::Hook(&[TriggerKind::Drew], drew),
-    On::Hook(&[TriggerKind::SettleAfter], settle_after),
+    On::Hook(&[HookKind::DeckBeforeGame], deck_before_game),
+    On::Hook(&[HookKind::Drew], drew),
+    On::Hook(&[HookKind::SettleAfter], settle_after),
 ]);
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).

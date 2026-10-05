@@ -17,7 +17,7 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
             on: c
                 .on
                 .iter()
-                .map(|o| ManifestOn { kind: o.kind() as i32, triggers: o.triggers().iter().map(|k| *k as i32).collect() })
+                .map(|o| ManifestOn { kind: o.kind() as i32, triggers: o.triggers() })
                 .collect(),
         })
         .collect();
@@ -49,8 +49,8 @@ pub fn on(bands: &'static [&'static [CardDef]], idx: i32, entry: i32, op: i32, p
     let Some(o) = card(bands, idx).on.get(entry.max(0) as usize) else { panic!("bad entry {entry} on card {idx}") };
     match (*o, op) {
         (On::React(_, guard, _), export::OP_GUARD) => guard(player_id) as i64,
-        (On::React(_, _, run), _) | (On::Play(run), _) | (On::Hook(_, run), _) | (On::AtEnd(run), _)
-        | (On::RollPlan(run), _) => {
+        (On::React(_, _, run), _) | (On::Play(run), _) | (On::Hook(_, run), _) | (On::Gate(_, run), _)
+        | (On::AtEnd(run), _) | (On::RollPlan(run), _) => {
             run(player_id);
             0
         }
@@ -92,7 +92,7 @@ macro_rules! bandori_ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::React(&[TriggerKind::MoveRoll], can_react, react)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::React(&[ChainKind::MoveRoll], can_react, react)]);
 /// card_sdk::bandori_card!(CARD);
 /// ```
 #[macro_export]

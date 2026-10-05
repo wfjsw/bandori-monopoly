@@ -6,7 +6,7 @@
 //! >  将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
@@ -19,10 +19,10 @@ const ID: &str = "Mujica:骰子已经掷下";
 pub const DICE_CAST: CardDef = CardDef::new("Mujica:骰子已经掷下", &[
     On::Play(play),
     On::CantPlay(cant_play),
-    On::React(&[TriggerKind::Card], can_react, react),
+    On::React(&[ChainKind::Card], can_react, react),
     // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
     // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-    On::Hook(&[TriggerKind::TurnEndAfter], turn_end),
+    On::Hook(&[HookKind::TurnEndAfter], turn_end),
 ]);
 
 fn can_react(player_id: i32) -> bool {

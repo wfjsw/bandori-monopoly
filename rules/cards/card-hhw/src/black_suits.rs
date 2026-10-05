@@ -6,12 +6,12 @@
 //! > [反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。
 //!
 
-use card_sdk::abi::TriggerKind;
+use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const BLACK_SUITS: CardDef = CardDef::new("HHW:黑衣人的补给", &[
-    On::React(&[TriggerKind::Pass], can_react, react),
+    On::React(&[ChainKind::Pass], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
