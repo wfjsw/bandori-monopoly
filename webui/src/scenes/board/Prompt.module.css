@@ -1,0 +1,27 @@
+.prompt { display: flex; gap: 22px; min-height: 340px; }
+.side { width: 250px; flex: none; background: var(--light-pill); border-radius: 12px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.sideTitle { font-size: 18px; font-weight: 700; }
+.sideCards { display: flex; flex-wrap: wrap; gap: 8px; }
+.handCard { width: 108px; }
+.sideCard { width: 100%; }
+.sideHint { margin-top: auto; font-size: 13px; color: var(--sub); }
+.main { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+.timer { align-self: flex-end; display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 16px; border-radius: 16px; background: var(--pink-pale); color: var(--pink); font-size: 16px; }
+.text { font-size: 19px; line-height: 1.65; white-space: pre-wrap; text-align: center; }
+.withSide .text { text-align: left; }
+.options { display: flex; flex-direction: column; gap: 14px; align-items: center; margin-top: 20px; }
+.opt { width: 432px; min-height: 58px; font-size: 21px; }
+.sub { font-size: 14px; color: var(--sub); }
+.checks { width: 100%; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow: auto; }
+.check { display: flex; align-items: center; gap: 10px; background: var(--light-pill); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
+.check input { width: 20px; height: 20px; accent-color: var(--pink); }
+.check i { width: 8px; height: 26px; border-radius: 4px; }
+.check b { margin-left: auto; color: var(--pink); }
+.sum b { color: var(--tag-red); }
+.sum b.ok { color: var(--green); }
+.pick { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.auction { width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: center; }
+.auctionTop { font-size: 20px; }
+.auctionTop b { color: var(--pink); font-size: 26px; }
+.bidRow { display: flex; gap: 12px; align-items: center; }
+.bidInput { width: 180px; }

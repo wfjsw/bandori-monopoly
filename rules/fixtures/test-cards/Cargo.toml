@@ -1,0 +1,12 @@
+[package]
+name = "fixture-test-cards"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Test-only cards. Not shipped. Also proves a module may hold several cards."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+card-sdk = { path = "../../card-sdk", features = ["guest"] }

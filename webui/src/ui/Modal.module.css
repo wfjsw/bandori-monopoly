@@ -1,0 +1,17 @@
+.back { position: absolute; inset: 0; z-index: 40; background: rgba(60, 40, 50, 0.38); display: flex; align-items: center; justify-content: center; animation: fade 0.15s; }
+@keyframes fade { from { opacity: 0; } }
+.window { width: 834px; max-height: 840px; display: flex; flex-direction: column; background: #fff; border-radius: 20px; padding: 8px; box-shadow: 0 20px 60px rgba(60, 20, 40, 0.3); animation: pop 0.18s ease-out; }
+@keyframes pop { from { transform: scale(0.94); opacity: 0; } }
+.small { width: 520px; }
+.mid { width: 660px; }
+.normal { width: 834px; }
+.wide { width: 1000px; }
+.xl { width: 1250px; }
+.head { position: relative; flex: none; height: 54px; border-radius: 14px; background: linear-gradient(var(--pink-light), var(--pink)); display: flex; align-items: center; justify-content: center; }
+.head h2 { color: #fff; font-size: 25px; font-weight: 700; letter-spacing: 1px; max-width: calc(100% - 120px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.x { position: absolute; right: 6px; top: 5px; width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--pink); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
+.x i { width: 24px; height: 24px; }
+.body { overflow: auto; padding: 18px 18px 14px; font-size: 17px; line-height: 1.6; }
+.ask { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
+.ask p { font-size: 19px; white-space: pre-wrap; }
+.row { display: flex; gap: 14px; justify-content: center; }

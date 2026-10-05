@@ -1,0 +1,13 @@
+[package]
+name = "card-ras"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Official ras cards (one crate per band, one file per card)."
+
+[lib]
+# rlib: these are libraries the shipped module (card-all) links.
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../../card-sdk", features = ["guest"] }

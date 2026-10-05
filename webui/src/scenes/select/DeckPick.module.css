@@ -1,0 +1,17 @@
+.pick h3 { font-size: 22px; }
+.pick > p { font-size: 14px; color: var(--sub); margin: 4px 0 14px; }
+.rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
+.row { display: flex; align-items: center; gap: 16px; height: 104px; border-radius: 12px; background: #fff; border: 2px solid #f1f1f4; padding: 0 16px; text-align: left; }
+.on { background: var(--pink-pale); border-color: var(--pink-pale); }
+.off { cursor: default; }
+.off .name b { color: var(--faint); }
+.check { width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex: none; }
+.on .check { background: var(--pink); color: #fff; }
+.name { width: 160px; display: flex; flex-direction: column; }
+.name b { font-size: 22px; }
+.name small { color: var(--sub); font-size: 14px; }
+.cards { flex: 1; display: grid; grid-template-columns: repeat(10, 1fr); gap: 10px; }
+.card { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 3px; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0, 0, 0, 0.12); }
+.empty { display: flex; align-items: center; justify-content: center; background: linear-gradient(#f9b7c9, #f39bb3); }
+.empty img { width: 50%; filter: sepia(1) saturate(5) hue-rotate(5deg) brightness(1.1); }
+.foot { display: flex; justify-content: center; }

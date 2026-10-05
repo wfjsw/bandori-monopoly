@@ -1,0 +1,26 @@
+.card { position: relative; display: flex; flex-direction: column; width: 124px; background: #fff; border-radius: 6px; padding: 5px 5px 0; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.1); transition: transform 0.1s, box-shadow 0.15s; }
+.card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(80, 40, 60, 0.16); }
+.art { height: 128px; overflow: hidden; border-radius: 3px; background: linear-gradient(#f6f2f8, #eceaf2); }
+.art img { width: 100%; height: 190%; object-fit: cover; object-position: 50% 4%; }
+.line { height: 4px; }
+.name { height: 30px; line-height: 30px; text-align: center; font-size: 15px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.dim { opacity: 0.55; filter: grayscale(0.4); }
+.chosen { box-shadow: 0 0 0 4px var(--pink-light), 0 6px 14px rgba(237, 78, 118, 0.25); }
+.stamp { position: absolute; left: 14px; right: 14px; top: 100px; height: 28px; line-height: 28px; text-align: center; border-radius: 4px; color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.pink { background: rgba(237, 78, 118, 0.78); }
+.gray { background: rgba(80, 80, 80, 0.75); }
+.teal { background: rgba(62, 193, 201, 0.88); top: 8px; left: auto; right: 8px; padding: 0 8px; font-size: 12px; height: 22px; line-height: 22px; }
+.check { position: absolute; right: 6px; top: 6px; width: 32px; height: 32px; border-radius: 50%; background: var(--pink); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
+.home { background: var(--gold); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, 124px); gap: 14px; align-content: start; }
+
+.avatar { position: relative; border-radius: 50%; border-style: solid; background: #f3eff4; overflow: hidden; flex: none; }
+.avatar img { position: absolute; left: 50%; top: -4%; width: 150%; transform: translateX(-50%); }
+.empty::after { content: ""; position: absolute; inset: 20% 26% 0; border-radius: 50% 50% 0 0; background: #cfcfd6; }
+
+.plate { display: block; }
+.cssPlate { display: flex; flex-direction: column; justify-content: center; height: 90px; padding: 0 30px; border-radius: 45px; background: linear-gradient(90deg, var(--plate), color-mix(in srgb, var(--plate) 70%, #fff)); color: #fff; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); }
+.cssPlate b { font-size: 36px; line-height: 1.1; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.15); }
+.cssPlate small { font-size: 14px; letter-spacing: 2px; }
+.logo { max-width: 210px; max-height: 92px; object-fit: contain; display: block; }
+.logoText { font-size: 32px; font-weight: 700; font-style: italic; text-shadow: 0 2px 0 #fff; }

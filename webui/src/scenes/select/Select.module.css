@@ -1,0 +1,44 @@
+.steps { position: absolute; left: 1097px; top: 20px; width: 466px; height: 60px; border-radius: 30px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+.steps > i { font-style: normal; color: var(--faint); font-size: 12px; }
+.mode { height: 36px; line-height: 36px; padding: 0 22px; border-radius: 18px; color: #fff; font-weight: 700; font-size: 16px; background: var(--blue); margin-right: 10px; }
+.casual { background: var(--teal); }
+.ranked { background: var(--purple); }
+.step { height: 34px; line-height: 34px; padding: 0 16px; border-radius: 17px; background: var(--light-pill); color: var(--faint); font-size: 16px; font-weight: 700; }
+.stepDone { background: var(--pink-pale); color: var(--pink-light); }
+.stepOn { background: var(--pink); color: #fff; }
+.skip { opacity: 0.6; }
+.quick { position: absolute; left: 560px; top: 40px; z-index: 6; }
+
+.band { position: absolute; left: 62px; top: 145px; z-index: 2; }
+.stand { position: absolute; left: 170px; top: 140px; height: 860px; }
+.plate { position: absolute; left: 64px; top: 585px; z-index: 2; }
+.skill { position: absolute; left: 60px; top: 695px; width: 548px; height: 195px; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 12px 18px 12px 32px; z-index: 3; }
+.skill::before { content: ""; position: absolute; left: 12px; top: 14px; bottom: 14px; width: 6px; border-radius: 3px; background: var(--accent); }
+.skillHead { display: flex; align-items: center; gap: 8px; }
+.skillHead b { font-size: 21px; color: var(--pink); margin-left: 6px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.skillHead span { color: var(--sub); font-size: 14px; }
+.skillTab { height: 30px; padding: 0 12px; border-radius: 15px; background: var(--light-pill); color: var(--sub); font-size: 14px; font-weight: 700; flex: none; }
+.skillTabOn { background: var(--pink); color: #fff; }
+.skillText { margin-top: 8px; font-size: 14px; line-height: 1.7; max-height: 128px; overflow: auto; }
+
+.tabs { position: absolute; left: 700px; top: 137px; }
+.gridPanel { position: absolute; left: 700px; top: 185px; width: 866px; height: 550px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 18px 18px 18px 20px; }
+.grid { height: 100%; overflow: auto; display: grid; grid-template-columns: repeat(6, 124px); gap: 14px 13px; align-content: start; padding: 4px; }
+
+.order { position: absolute; left: 692px; top: 755px; width: 600px; height: 110px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); }
+.orderTab { position: absolute; left: 20px; top: -22px; height: 30px; font-size: 14px; }
+.strip { display: flex; gap: 14px; padding: 16px 16px 0; overflow-x: auto; }
+.seat { width: 86px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.av { position: relative; }
+.turn .av > div { border-color: var(--pink) !important; box-shadow: 0 0 0 3px var(--pink-pale); }
+.n { position: absolute; left: -8px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 13px; text-align: center; line-height: 24px; box-shadow: 0 0 0 2px #fff; }
+.bot, .ok { position: absolute; right: -6px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
+.ok { background: var(--green); left: -6px; right: auto; }
+.bot i, .ok i { width: 16px; height: 16px; }
+.name { font-size: 13px; white-space: nowrap; max-width: 100px; overflow: hidden; text-overflow: ellipsis; font-weight: 700; }
+.name b { color: var(--pink); }
+.ban { font-size: 11px; color: var(--sub); }
+.hint { position: absolute; left: 1350px; top: 745px; width: 215px; text-align: center; color: var(--pink); font-size: 15px; font-weight: 700; }
+.go { position: absolute; left: 1350px; top: 772px; width: 215px; height: 78px; font-size: 32px; }
+.tabs > div { flex-wrap: nowrap; gap: 7px; }
+.tabs button { padding: 0 13px; height: 38px; font-size: 16px; }

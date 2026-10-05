@@ -1,0 +1,13 @@
+{
+ "_说明": "事件「Kizuna Music」用：卡名是歌名的卡（写游戏里显示的卡名）。X = 所有玩家卡组里这些卡的总数。可以直接改这个文件。",
+ "cards": [
+  "Returns", "STAR BEAT!",
+  "宣战布告", "Y.O.L.O", "ONE OF US",
+  "TITLE IDOL",
+  "louder", "Fire bird", "Ringing Bloom", "Sprechchor", "轨迹",
+  "R. I. O. T.", "狂乱Hey Kids!!", "UNSTOPPABLE",
+  "壱雫空", "无路矢", "轮符雨",
+  "黑色生日", "骰子已经掷下",
+  "春日影"
+ ]
+}

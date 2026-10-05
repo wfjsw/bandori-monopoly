@@ -1,0 +1,42 @@
+.stand { position: absolute; left: 150px; top: 112px; height: 860px; cursor: pointer; filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.12)); }
+.dialog { position: absolute; left: 200px; top: 678px; width: 503px; }
+.tag { position: relative; width: 290px; height: 40px; background: var(--pink); color: #fff; border-radius: 12px 12px 0 0; font-size: 22px; font-weight: 700; padding: 3px 22px; }
+.tag img { position: absolute; right: -6px; top: -2px; height: 44px; }
+.box { min-height: 120px; background: rgba(255, 255, 255, 0.95); border-radius: 0 12px 12px 12px; box-shadow: var(--shadow); padding: 22px 36px; display: flex; align-items: center; font-size: 22px; line-height: 1.6; }
+
+.tile { position: absolute; transition: transform 0.08s, filter 0.15s; }
+.tile:active:not(:disabled) { transform: translateY(3px); }
+.tile:hover:not(:disabled) { filter: brightness(1.04); }
+.badge { position: absolute; right: -14px; top: -16px; width: 56px; height: 56px; }
+
+.small { composes: tile; top: 175px; height: 62px; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 22px; font-weight: 700; background: linear-gradient(#fff, #f3f3f6); box-shadow: 0 4px 0 #d9d9df, 0 6px 12px rgba(0, 0, 0, 0.08); }
+.small i { width: 28px; height: 28px; }
+.history { left: 860px; width: 178px; }
+.settings { left: 1055px; width: 105px; }
+.settings i { color: var(--gold); }
+.fire { left: 1276px; width: 120px; }
+.fire img { width: 34px; height: 34px; }
+.ribbon { position: absolute; left: 0; right: 0; top: -14px; height: 24px; border-radius: 6px 6px 0 0; background: var(--tag-red); color: #fff; font-size: 12px; line-height: 24px; text-align: center; }
+
+.big { composes: tile; border-radius: 14px; color: #fff; border: 6px solid #fff; box-shadow: 0 4px 0 #ddd, 0 8px 18px rgba(0, 0, 0, 0.1); display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 8px; }
+.label { font-size: 30px; font-weight: 700; letter-spacing: 2px; }
+.pic { width: 150px; }
+.story { left: 862px; top: 263px; width: 255px; height: 175px; background: linear-gradient(#d797f6, #c27bf0); }
+.story .pic { width: 110px; margin-bottom: -6px; }
+.soon { background: #fff; color: var(--purple); border-radius: 12px; font-size: 14px; padding: 0 16px; margin-bottom: 2px; }
+.solo { left: 862px; top: 465px; width: 255px; height: 170px; background: linear-gradient(#7ec5f5, #5aaeea); }
+.solo .pic { width: 130px; }
+.resume { position: absolute; right: 8px; top: 8px; background: #fff; color: #4fa3e8; border-radius: 12px; font-size: 14px; font-weight: 700; padding: 0 12px; }
+.online { left: 1142px; top: 263px; width: 262px; height: 372px; background: linear-gradient(#f0587f, #e54670); justify-content: space-between; padding: 8px 0 22px; }
+.online .pic { width: 160px; }
+.wins { display: flex; align-items: center; gap: 8px; width: 210px; height: 38px; border-radius: 19px; background: #fff; color: var(--text); padding: 0 16px 0 6px; font-size: 14px; }
+.wins img { width: 30px; }
+.wins b { margin-left: auto; font-size: 22px; }
+.modes { background: #fff; color: var(--pink); border-radius: 13px; font-size: 16px; padding: 0 22px; }
+
+.foot { white-space: pre-line; composes: tile; top: 669px; width: 168px; height: 150px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; background: linear-gradient(#f4f0fb, #e9e4f4); box-shadow: 0 4px 0 #d6d0e2, 0 6px 12px rgba(0, 0, 0, 0.08); font-size: 22px; line-height: 1.3; text-align: center; }
+.foot i { width: 64px; height: 64px; color: var(--pink); }
+.logo { width: 130px; }
+.rules { left: 859px; }
+.deck { left: 1047px; }
+.gallery { left: 1233px; }

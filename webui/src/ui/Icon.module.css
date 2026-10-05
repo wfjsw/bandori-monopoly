@@ -1,0 +1,4 @@
+.icon {
+  display: inline-block; width: 1.1em; height: 1.1em; flex: none; background: currentColor; vertical-align: -0.15em;
+  -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat;
+}

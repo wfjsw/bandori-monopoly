@@ -1,0 +1,5 @@
+.host { position: absolute; left: 0; right: 0; top: 470px; display: flex; justify-content: center; pointer-events: none; z-index: 80; }
+.toast { max-width: 900px; padding: 14px 48px; border-radius: 28px; background: rgba(60, 50, 60, 0.82); color: #fff; font-size: 20px; text-align: center; animation: rise 0.2s ease-out; transition: opacity 0.35s; }
+.error { background: rgba(160, 40, 70, 0.88); }
+.out { opacity: 0; }
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }

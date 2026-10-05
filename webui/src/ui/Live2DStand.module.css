@@ -1,0 +1,15 @@
+/* Live2D stand layers. The scene class on .stand positions the stand art box and
+   sets its height; the width follows the stand art's 582 x 910 ratio. Inside it
+   sits the 3:4 portrait window (Live2DPortrait's FitInParent raw image) and the
+   canvas rect Live2DPortrait.Draw maps the model onto. */
+.stand { aspect-ratio: 582 / 910; }
+.anim { position: absolute; inset: 0; }
+.bounce { animation: live2dBounce 0.35s ease-out; }
+@keyframes live2dBounce { 40% { transform: translateY(-12px); } }
+.art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; transition: opacity 0.25s; }
+.hide { opacity: 0; }
+.window { position: absolute; overflow: hidden; }
+.model { position: absolute; }
+.fill { width: 100%; height: 100%; }
+.loading { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 4px 14px; border-radius: 14px; background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 14px; white-space: nowrap; }
+.missing { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sub); font-size: 16px; }

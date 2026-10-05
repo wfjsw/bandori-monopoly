@@ -1,0 +1,39 @@
+/* Global layer: theme variables (BDTheme), reset, the scaled 1600 x 900 stage.
+   Everything else lives in the components' CSS modules. */
+
+:root {
+  --pink: #ed4e76;
+  --pink-light: #f7688c;
+  --pink-deep: #cd3860;
+  --pink-pale: #ffe3eb;
+  --text: #5b5b5b;
+  --sub: #8e8e93;
+  --faint: #b4b4ba;
+  --purple: #c97dfc;
+  --blue: #6bbaf1;
+  --teal: #3ec1c9;
+  --dark-pill: #4f4f4f;
+  --light-pill: #efeff3;
+  --exp: #c362dc;
+  --tag-red: #ee5e4a;
+  --gold: #f6b21e;
+  --green: #4cc38a;
+  --shield: #5bb6f2;
+  --note: #7b5cc4;
+  --panel: rgba(255, 255, 255, 0.93);
+  --shadow: 0 4px 14px rgba(80, 40, 60, 0.12);
+  font-family: "BDRounded", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-weight: 500;
+  color: var(--text);
+}
+
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #f4e4ea; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; padding: 0; }
+button:disabled { cursor: default; }
+h1, h2, h3, p { margin: 0; }
+img { user-select: none; -webkit-user-drag: none; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #e0cfd6; border-radius: 4px; }
+::-webkit-scrollbar-track { background: transparent; }

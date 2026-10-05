@@ -1,0 +1,21 @@
+[package]
+name = "game-rules"
+version.workspace = true
+edition.workspace = true
+description = "Host for the WASM card ruleset. The browser runs wasmi (interpreter); the server runs wasmtime (optimizing compiler). Deterministic replay on both."
+
+[dependencies]
+game-core = { path = "../game-core" }
+card-sdk = { workspace = true }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+wasmi = { workspace = true }
+sha2 = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+# Run the interpreter even natively (the tests then cover both backends).
+wasmi-native = []
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+wasmtime = "37"

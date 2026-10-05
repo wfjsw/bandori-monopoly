@@ -1,0 +1,96 @@
+.wrap { position: absolute; left: 397px; top: 22px; width: 856px; height: 856px; border-radius: 16px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); }
+.ring { position: relative; width: 856px; height: 856px; display: grid; grid-template-columns: 78px repeat(14, 50px) 78px; grid-template-rows: 78px repeat(14, 50px) 78px; }
+
+/* tiles: the group color bar sits on the inner edge */
+.tile { position: relative; display: flex; cursor: pointer; background: #fff; overflow: hidden; transition: background 0.2s; }
+.tile:hover { filter: brightness(0.97); }
+.bar { flex: none; }
+.body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-width: 0; }
+.name { font-size: 11px; line-height: 1.2; white-space: pre-line; }
+.ringName { color: #cd1146; font-weight: 700; font-size: 12px; }
+.price { font-size: 10px; color: var(--sub); margin-top: 2px; }
+.agent { font-size: 10px; color: var(--tag-red); margin-top: 2px; }
+.s0 { flex-direction: column; }
+.s2 { flex-direction: column-reverse; }
+.s0 .bar, .s2 .bar { height: 13px; margin: 0 2px; }
+.s1 { flex-direction: row-reverse; }
+.s3 { flex-direction: row; }
+.s1 .bar, .s3 .bar { width: 13px; margin: 2px 0; }
+.owned { background: color-mix(in srgb, var(--owner) 16%, #fff); box-shadow: inset 0 0 0 2px var(--owner); }
+.mortgaged .body { opacity: 0.45; }
+.mortgaged::after { content: "抵押"; position: absolute; inset: auto 0 2px 0; text-align: center; font-size: 10px; color: #fff; background: rgba(90, 90, 90, 0.6); }
+.landed { box-shadow: inset 0 0 0 3px var(--pink); z-index: 2; }
+.pickable { animation: glow 0.9s ease-in-out infinite alternate; z-index: 3; }
+@keyframes glow { from { box-shadow: inset 0 0 0 3px var(--gold); } to { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8); background: #fff6dc; } }
+.houses { position: absolute; display: flex; gap: 1px; pointer-events: none; }
+.houses img { width: 13px; height: 13px; }
+.s0 .houses { top: 0; left: 50%; transform: translateX(-50%); }
+.s2 .houses { bottom: 0; left: 50%; transform: translateX(-50%); }
+.s1 .houses { right: 0; top: 50%; transform: translateY(-50%); flex-direction: column; }
+.s3 .houses { left: 0; top: 50%; transform: translateY(-50%); flex-direction: column; }
+.marks { position: absolute; left: 2px; bottom: 2px; display: flex; gap: 1px; pointer-events: none; }
+.mark { width: 14px; height: 14px; border-radius: 50%; color: #fff; font-size: 9px; text-align: center; line-height: 14px; }
+.ember { background: var(--tag-red); }
+
+.corner { flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 3px; }
+.cornerArt { width: 70px; }
+.ribbon { position: absolute; left: 4px; top: 3px; height: 18px; line-height: 18px; padding: 0 8px; border-radius: 3px; background: var(--tag-red); color: #fff; font-size: 11px; z-index: 1; }
+.cornerName { font-size: 11px; color: var(--tag-red); font-weight: 700; white-space: nowrap; }
+.circle .cornerName { background: var(--pink); color: #fff; border-radius: 9px; padding: 0 14px; font-size: 13px; }
+
+/* tokens: chibi SD art standing on the tile center */
+.tokens { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+.token { position: absolute; width: 0; height: 0; transition: left 0.13s ease, top 0.13s ease; }
+.sd { position: absolute; left: -22px; bottom: -4px; width: 44px; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25)); }
+.shadow { position: absolute; left: -16px; top: -8px; width: 32px; opacity: 0.6; }
+.dot { position: absolute; left: -15px; top: -30px; width: 30px; height: 30px; border-radius: 50%; color: #fff; text-align: center; line-height: 30px; font-weight: 700; box-shadow: 0 0 0 2px #fff; }
+.current .sd { animation: bob 1.2s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(-3px); } }
+.hop.sd { animation: hop 0.13s ease-out; }
+@keyframes hop { 50% { transform: translateY(-18px); } }
+
+/* center */
+.inner { grid-row: 2 / 16; grid-column: 2 / 16; position: relative; margin: 6px; border-radius: 6px; background: center / cover; overflow: hidden; }
+.inner::before { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.52); }
+.field { position: absolute; left: 22px; top: 70px; width: 656px; height: 210px; border-radius: 10px; background: rgba(255, 255, 255, 0.92); box-shadow: var(--shadow); padding: 14px 18px; display: flex; flex-direction: column; gap: 8px; }
+.fieldHead { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--sub); }
+.fieldHead b { color: var(--pink); font-size: 18px; padding-left: 10px; border-left: 4px solid var(--pink); }
+.fieldHead small { margin-left: auto; }
+.fieldRows { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.fieldRow { display: flex; gap: 10px; align-items: center; background: var(--light-pill); border-radius: 6px; padding: 4px 8px; border-left: 4px solid; }
+.who { display: flex; align-items: center; gap: 6px; width: 120px; flex: none; font-size: 14px; font-weight: 700; }
+.fieldCards { display: flex; gap: 6px; flex-wrap: wrap; }
+.fieldCard { display: flex; align-items: center; gap: 6px; background: #fff; border-radius: 4px; padding: 3px 8px 3px 3px; max-width: 220px; text-align: left; }
+.fieldCard img { width: 30px; height: 30px; object-fit: cover; border-radius: 3px; }
+.fieldCard div { display: flex; flex-direction: column; min-width: 0; }
+.fieldCard b { font-size: 12px; }
+.fieldCard small { font-size: 10px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eventChips { display: flex; gap: 6px; }
+.eventChip { font-size: 12px; padding: 2px 10px; border-radius: 11px; background: var(--purple); color: #fff; }
+
+.piles { position: absolute; left: 0; right: 0; top: 330px; display: flex; justify-content: center; gap: 70px; }
+.pile { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.stack { position: relative; width: 96px; height: 128px; transition: transform 0.12s; }
+.pile:hover .stack { transform: translateY(-3px); }
+.stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 4px 4px 0 #fff, 5px 5px 0 #f0b3c3, 0 6px 14px rgba(0, 0, 0, 0.18); }
+.stack img.face { border: 3px solid #fff; }
+.pileEmpty { position: absolute; inset: 0; border-radius: 8px; border: 3px dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(255, 255, 255, 0.5); }
+.pileLabel { height: 32px; padding: 0 16px; border-radius: 16px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 16px; font-weight: 700; line-height: 32px; white-space: nowrap; }
+.pileLabel b { color: var(--pink); margin-left: 6px; }
+.hint { position: absolute; left: 0; right: 0; bottom: 48px; text-align: center; color: var(--sub); font-size: 16px; }
+
+.banner { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); z-index: 20; min-width: 360px; max-width: 600px; pointer-events: none; background: rgba(255, 255, 255, 0.96); border-radius: 14px; box-shadow: 0 10px 30px rgba(80, 30, 50, 0.25); padding: 12px 26px; text-align: center; display: flex; flex-direction: column; gap: 4px; border-top: 6px solid var(--pink); animation: banner 2.2s ease forwards; }
+@keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 8%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+/* Stage transition (Master Duel-like): a wide light bar sweeps the phase name
+   across the board centre -- in once, shine pass, out. */
+.phaseFlash { position: absolute; left: 50%; top: 208px; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.9s ease forwards; }
+.phaseFlash span { display: block; font-size: 34px; font-weight: 800; letter-spacing: 0.14em; white-space: nowrap; background: linear-gradient(90deg, var(--pink) 0%, #c23a7c 48%, var(--pink) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.phaseFlash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.9) 50%, transparent 68%); transform: translateX(-120%); animation: phaseSweep 1.1s ease-out forwards; }
+@keyframes phaseFlash { 0% { opacity: 0; transform: translate(-50%, -16px) scale(0.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1); } 78% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 10px) scale(1.05); } }
+@keyframes phaseSweep { to { transform: translateX(120%); } }
+.banner b { font-size: 26px; color: var(--pink); }
+.banner span { font-size: 15px; }
+.reveal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 25; animation: reveal 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
+.reveal > div { width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); }
+.revealOut { opacity: 0; transform: translate(-50%, -60%); }
+@keyframes reveal { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }

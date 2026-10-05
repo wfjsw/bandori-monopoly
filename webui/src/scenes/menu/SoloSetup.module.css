@@ -1,0 +1,21 @@
+.setup { display: flex; flex-direction: column; gap: 14px; }
+.top { display: flex; gap: 20px; align-items: flex-start; }
+.desc { flex: 1; font-size: 13px; color: var(--sub); line-height: 1.6; }
+.score { min-width: 184px; }
+.rows { display: flex; flex-direction: column; gap: 9px; width: 386px; min-height: 260px; max-height: 330px; overflow: auto; }
+.row { display: flex; align-items: center; gap: 12px; height: 56px; flex: none; border-radius: 10px; background: var(--light-pill); padding: 0 10px; font-size: 19px; }
+.row b { flex: 1; }
+.you { background: var(--pink-pale); }
+.ic { width: 38px; height: 38px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; color: var(--sub); }
+.you .ic { color: var(--pink); }
+.tag { width: 76px; text-align: center; font-size: 13px; color: var(--sub); }
+.youTag { background: var(--pink); color: #fff; border-radius: 13px; line-height: 26px; }
+.x, .xSpace { width: 34px; height: 34px; flex: none; }
+.x { border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }
+.foot { display: flex; align-items: center; gap: 36px; padding: 10px 20px 4px; }
+.add { width: 284px; }
+.count { width: 180px; font-size: 24px; }
+.count small { font-size: 16px; color: var(--sub); }
+.go { width: 248px; }
+.resume { display: flex; flex-direction: column; gap: 20px; align-items: center; font-size: 19px; }
+.resumeBtns { display: flex; gap: 16px; }

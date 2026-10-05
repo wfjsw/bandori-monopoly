@@ -1,0 +1,11 @@
+[package]
+name = "game-core"
+version.workspace = true
+edition.workspace = true
+description = "Shared match state, data models, step machine and Ruleset boundary. Compiles native AND wasm32."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

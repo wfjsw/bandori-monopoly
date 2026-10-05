@@ -1,0 +1,40 @@
+//! `R:（燐子）Ringing Bloom` -- C# `CardRingingBloom` (MatchHost.cs:10815-10847):
+//!
+//! 规则书（docs/rulebook/cards.json, id `R:（燐子）Ringing Bloom`）:
+//! > （燐子）Ringing Bloom：
+//! >
+//! > （1）将此卡放置于自身场上
+//! >
+//! > （2）你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此效果影响获得额外房屋数的格子收费减半
+//! >
+//! > （3）你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。
+//!
+//! place this card on your field; it then fakes your house counts up to your
+//! best tile and pays out when one of your non-RiNG tiles collects rent.
+
+use card_sdk::{ctx, key, CardDef, Msg};
+
+pub const RINGING_BLOOM: CardDef = CardDef {
+    id: "R:（燐子）Ringing Bloom",
+    play: Some(play),
+    can_react: None,
+    react: None,
+    why_not: None,
+};
+
+fn play(seat: i32) {
+    // 规则书（1）: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(seat, "R:（燐子）Ringing Bloom", &Msg::new(key!("ringing_bloom_note")));
+    ctx::log(seat, &Msg::new(key!("ringing_bloom_placed")).seat("who", seat));
+    // 规则书（2）: 「你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此效果影响获得额外房屋数的格子收费减半」
+    // TODO(规则书)（2）: the house-count override and its half-rent live in the rent
+    //   routine (C# `H.RentHouses` + `boosted`): while this card is in play every
+    //   your tile's rent reads as if it had your max house count (capped by the
+    //   rent table), and a tile whose count this raised charges half. Needs a
+    //   rent-house-count / rent-multiplier hook.
+    // 规则书（3）: 「你的任意非RiNG格子收费后，此卡置入弃牌堆，然后你获得500*X资金，X为你收费格上的房屋数。」
+    // TODO(规则书)（3）: needs the Fx.PayAfter hook (C# `CardRingingBloom.PayAfter` ->
+    //   `Done`): after a non-RiNG rent lands on this seat, unplace to discard and
+    //   `H.GainR(Seat, 500 * houses, ...)`.
+}

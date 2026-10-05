@@ -1,0 +1,29 @@
+[package]
+name = "server"
+version.workspace = true
+edition.workspace = true
+description = "Dedicated server: HTTP GET/POST + Server-Sent Events."
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+game-core = { path = "../game-core" }
+game-rules = { path = "../game-rules" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+tower-http = { version = "0.7", features = ["fs"] }
+getrandom = "0.4"
+
+[dev-dependencies]
+reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }
+tower = { version = "0.5", features = ["util"] }
+bytes = "1"

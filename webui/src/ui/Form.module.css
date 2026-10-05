@@ -1,0 +1,7 @@
+.input { height: 46px; border: none; border-radius: 23px; background: var(--light-pill); padding: 0 18px; font-size: 18px; color: var(--text); outline: none; min-width: 0; }
+.input:focus { box-shadow: 0 0 0 2px var(--pink-light); }
+.form { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; align-items: center; gap: 16px; font-size: 18px; }
+.row .input { flex: 1; }
+.label { width: 90px; flex: none; color: var(--sub); }
+.center { display: flex; gap: 14px; justify-content: center; align-items: center; flex-wrap: wrap; text-align: center; }

@@ -1,0 +1,20 @@
+{
+  "note": "对局数值，改完数字保存就行（打包的 exe 要重新打包）。得分（投票结束 / 单机结算）= 资金 × money + 地产 × property + 房屋 × houses，分高的赢；地产 = 拥有的地契的地价（抵押中的按一半算），房屋 = 盖好的房屋的建筑费。RiNG 地租 = 地主拥有的 RiNG 数量 × ringMultiplier × 1d20（ringMultiplier 是 RiNG 的基础乘数）。",
+  "money": 1.0,
+  "property": 1.0,
+  "houses": 1.0,
+  "ringMultiplier": 10,
+  "botNames": [
+    "星星收集者",
+    "夕阳红茶",
+    "面包爱好者",
+    "雨天的伞",
+    "猫猫队长",
+    "RiNG 常客",
+    "吉他初学者",
+    "掷骰达人",
+    "大富翁新人",
+    "咖啡续杯"
+  ],
+  "defaultHomeCharacter": "高松灯"
+}

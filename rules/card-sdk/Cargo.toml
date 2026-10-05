@@ -1,0 +1,19 @@
+[package]
+name = "card-sdk"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM ruleset."
+
+# Used from two places:
+#  * rules/ruleset (guest, wasm32)  -> constants + `ctx` host imports + `bandori_ruleset!`
+#  * crates/game-rules (host, native and wasm32) -> constants only (`abi`)
+[dependencies]
+
+serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+
+[features]
+# Guest builds (no_std cdylibs): panic handler + bump allocator. Enable it in
+# the card crate AND put `#![cfg_attr(target_arch = "wasm32", no_std)]` there too.
+guest = []

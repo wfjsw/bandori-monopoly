@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/game-core",
+    "crates/game-rules",
+    "crates/server",
+    "crates/web-glue",
+]
+# The guest side (cards compiled to wasm32) is a separate workspace: rules/
+# It shares only the ABI crate (`rules/card-sdk`, constants + types, no imports
+# on native).
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = ""
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wasmi = "2"
+sha2 = "0.10"
+card-sdk = { path = "rules/card-sdk" }
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+
+[profile.dev]
+debug = true

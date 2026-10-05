@@ -1,0 +1,41 @@
+# Build outputs -- everything a build regenerates.
+/target/
+/rules/target/
+/dist/
+/webui/dist/
+/webui/node_modules/
+/webui/src/wasm/
+/.venv/
+
+# Live2d assets: the Quadrism archives, their raw extracts and the compiled
+# models the web client serves. Regenerate with `node tools/live2d/build.mjs`
+# (the archives themselves come from the game's model.moc files).
+/live2d/
+/live2d-src/
+/webui/public/assets/live2d/
+
+# Extracted game assets -- `tools/asset-pipe/extract.py` rebuilds these from
+# BandoriMonopoly_Data. Same category as the Live2d assets above.
+/webui/public/assets/img/
+/webui/public/assets/audio/
+/webui/public/assets/fonts/
+
+# Published ruleset copies (a second copy of dist/cards, from
+# `node tools/build-ruleset.mjs`).
+/webui/public/assets/rules/
+/webui/public/assets/i18n/
+
+# Browser verification screenshots.
+/tmp-shots/
+
+# Python tooling.
+__pycache__/
+*.py[cod]
+
+# Editors / OS.
+*.swp
+.DS_Store
+Thumbs.db
+
+
+docs/ui-ref
