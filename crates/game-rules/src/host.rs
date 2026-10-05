@@ -216,6 +216,10 @@ struct Inner {
     slots: Vec<Slot>,
     by_id: HashMap<String, i32>,
     sha256: String,
+    /// Bitset of every trigger kind any card declares, so `react` can skip the
+    /// whole bridge when nothing in the set listens. `TriggerKind` values fit in
+    /// 0..128, so this is one word and costs no allocation.
+    declared: u128,
 }
 
 /// Builds a [`Ruleset`] from any number of card modules (normally one per card).
@@ -252,6 +256,16 @@ impl RulesetBuilder {
         let mut hashes: Vec<&str> = self.modules.iter().map(|m| m.sha256.as_str()).collect();
         hashes.sort_unstable();
         let sha256 = hex_sha256(hashes.join("\n").as_bytes());
+        let mut declared = 0u128;
+        for c in &self.cards {
+            for o in &c.on {
+                for &k in &o.triggers {
+                    if (0..128).contains(&k) {
+                        declared |= 1u128 << k;
+                    }
+                }
+            }
+        }
         Ok(Ruleset {
             inner: Arc::new(Inner {
                 engine: self.engine,
@@ -260,6 +274,7 @@ impl RulesetBuilder {
                 slots: self.slots,
                 by_id,
                 sha256,
+                declared,
             }),
             fuel: DEFAULT_FUEL,
         })
@@ -309,6 +324,15 @@ impl Ruleset {
 
     pub fn cards(&self) -> &[CardInfo] {
         &self.inner.cards
+    }
+
+    /// Does any card in the set declare an entry at this kind? The cheap
+    /// whole-set question that lets `react` skip building the bridge trigger at
+    /// all when the answer is no -- with `StubRules`, or at a kind nothing
+    /// listens to, that is every raise.
+    pub fn declares(&self, kind: crate::TriggerKind) -> bool {
+        let v = kind as i32;
+        (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
     }
 
     /// Handle for a card id from `cards.json`, e.g. `"AG:Y.O.L.O"`.
@@ -558,7 +582,7 @@ fn guest_msg<W: CardWorld>(caller: &mut Caller<'_, HostState<W>>, ptr: i32, len:
 fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
     use card_sdk::msg::Arg as G;
     use game_core::msg::Arg as E;
-    let mut out = crate::Msg::new(&m.k);
+    let mut out = crate::Msg::new(m.k.as_str());
     for (name, arg) in m.a {
         let arg = match arg {
             G::PlayerId(v) => E::PlayerId(v),
@@ -569,7 +593,7 @@ fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
             G::I(v) => E::I(v),
             G::Msg(v) => E::Msg(Box::new(engine_msg(*v))),
         };
-        out.a.insert(name, arg);
+        out.set_arg(name, arg);
     }
     out
 }

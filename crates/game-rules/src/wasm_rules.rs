@@ -1495,6 +1495,14 @@ impl CardRules for WasmRules {
     }
 
     fn react(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
+        // Nothing in the set declares an entry at this kind, so no hook, no
+        // gate and no [反击] can fire: skip building the bridge trigger at all.
+        // This is most raises even with cards in play, and every raise for a
+        // kind nobody listens to. Nothing could have rewritten `t`, so the
+        // write-back below is a no-op and is safe to skip with it.
+        if !self.ruleset.declares(trigger_kind(t.kind)) {
+            return Ok(());
+        }
         // The module's view of the trigger. `move_roll` is C# `t.Move.Roll`,
         // which a reaction may rewrite; the engine reads it back afterwards.
         let mut trigger = bridge_trigger(t);

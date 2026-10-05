@@ -12,15 +12,25 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+
+/// Args are shared across [`Msg`] clones: a match keeps hundreds of messages in
+/// its event tail and clones them into every routine snapshot, so a deep copy
+/// per clone was a real cost. Building a message still copy-on-writes, which is
+/// free in practice -- a message is written once and then only read.
+fn args_empty(a: &Arc<BTreeMap<String, Arg>>) -> bool {
+    a.is_empty()
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct Msg {
     /// i18next key, e.g. `log.roll`, `err.not_your_turn`.
-    pub k: String,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub a: BTreeMap<String, Arg>,
+    #[serde(default)]
+    pub k: Arc<str>,
+    #[serde(default, skip_serializing_if = "args_empty")]
+    pub a: Arc<BTreeMap<String, Arg>>,
 }
 
 /// A message argument. The client turns each into text before interpolation.
@@ -52,8 +62,14 @@ pub enum Arg {
 }
 
 impl Msg {
-    pub fn new(key: impl Into<String>) -> Self {
-        Self { k: key.into(), a: BTreeMap::new() }
+    pub fn new(key: impl AsRef<str>) -> Self {
+        Self { k: Arc::from(key.as_ref()), a: Arc::default() }
+    }
+
+    /// Insert one argument in place (for bridges that build a message field by
+    /// field). Prefer the builder methods, which chain.
+    pub fn set_arg(&mut self, name: impl Into<String>, v: Arg) {
+        Arc::make_mut(&mut self.a).insert(name.into(), v);
     }
 
     pub fn key(&self) -> &str {
@@ -65,7 +81,7 @@ impl Msg {
     }
 
     pub fn arg(mut self, name: &str, v: Arg) -> Self {
-        self.a.insert(name.into(), v);
+        Arc::make_mut(&mut self.a).insert(name.into(), v);
         self
     }
 

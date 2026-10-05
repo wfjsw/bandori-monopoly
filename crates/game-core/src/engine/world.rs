@@ -6,6 +6,7 @@
 //! bidding and the end-match vote belong to the host ([`super::Match`]) instead.
 
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -95,13 +96,126 @@ pub enum Signal {
     TurnBegan,
 }
 
+/// How many events are frozen into one immutable chunk.
+const CHUNK: usize = 32;
+
+/// The event tail: a frozen, shared prefix plus a small copy-on-write suffix.
+///
+/// A [`World`] clone happens twice per routine -- the replay snapshot and the
+/// working copy -- and the tail holds up to [`EVENT_KEEP`] messages, each
+/// carrying a [`Msg`]. Deep-copying that was the dominant cost of a bot match
+/// (measured: 1559 -> 374 ms/game just by shortening the tail). Here the frozen
+/// chunks sit behind `Arc`, so a clone is a handful of refcount bumps; only the
+/// small unfrozen suffix is ever copied, and only when a world that shares it
+/// actually logs.
+#[derive(Debug, Default)]
+pub struct EventTail {
+    /// Frozen chunks, oldest first. Immutable once created.
+    chunks: Vec<Arc<Vec<MatchEvent>>>,
+    /// How many events at the front of `chunks[0]` are no longer visible.
+    start: usize,
+    /// The chunk currently being written. Copy-on-write.
+    tail: Arc<Vec<MatchEvent>>,
+    /// Visible event count, so `len` is O(1).
+    len: usize,
+}
+
+impl Clone for EventTail {
+    fn clone(&self) -> Self {
+        Self {
+            chunks: self.chunks.clone(),
+            start: self.start,
+            tail: Arc::clone(&self.tail),
+            len: self.len,
+        }
+    }
+}
+
+impl PartialEq for EventTail {
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len && self.iter().eq(other.iter())
+    }
+}
+
+impl Serialize for EventTail {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_seq(self.iter())
+    }
+}
+
+impl<'de> Deserialize<'de> for EventTail {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = Vec::<MatchEvent>::deserialize(d)?;
+        let mut t = EventTail::default();
+        for e in v {
+            t.push_back(e);
+        }
+        Ok(t)
+    }
+}
+
+impl EventTail {
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Every visible event, oldest first.
+    pub fn iter(&self) -> impl Iterator<Item = &MatchEvent> {
+        let head = self.chunks.first().map_or(&[][..], |c| &c[self.start.min(c.len())..]);
+        let mid = self.chunks.iter().skip(1).flat_map(|c| c.iter());
+        head.iter().chain(mid).chain(self.tail.iter())
+    }
+
+    pub fn back(&self) -> Option<&MatchEvent> {
+        self.tail.last().or_else(|| self.chunks.last().and_then(|c| c.last()))
+    }
+
+    pub fn back_mut(&mut self) -> Option<&mut MatchEvent> {
+        Arc::make_mut(&mut self.tail).last_mut()
+    }
+
+    pub fn push_back(&mut self, e: MatchEvent) {
+        if self.tail.len() >= CHUNK {
+            // Freeze what has been written and start a fresh chunk. O(1): the
+            // old tail moves into `chunks`, nothing is copied.
+            let done = std::mem::take(&mut self.tail);
+            self.chunks.push(done);
+        }
+        Arc::make_mut(&mut self.tail).push(e);
+        self.len += 1;
+    }
+
+    /// Drop `n` events from the front.
+    pub fn drain_front(&mut self, n: usize) {
+        let n = n.min(self.len);
+        self.start += n;
+        self.len -= n;
+        while let Some(c) = self.chunks.first() {
+            if self.start >= c.len() {
+                self.start -= c.len();
+                self.chunks.remove(0);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct World {
     pub st: MatchState,
     pub hidden: Vec<Hidden>,
     pub rng: Rng,
     pub next_event: i32,
-    pub recent: VecDeque<MatchEvent>,
+    /// The event tail. See [`EventTail`]: a routine snapshot needs this only to
+    /// re-derive it on replay, never to mutate what came before, so cloning a
+    /// [`World`] bumps refcounts instead of deep-copying `EVENT_KEEP` messages --
+    /// which was the single hottest cost in a bot match.
+    pub recent: EventTail,
     pub turn: TurnCtx,
     pub extra_turns: Vec<usize>,
     pub out_count: i32,
@@ -132,7 +246,7 @@ impl World {
             hidden: vec![Hidden::default(); players],
             rng: Rng::new(seed),
             next_event: 1,
-            recent: VecDeque::new(),
+            recent: EventTail::default(),
             turn: TurnCtx::default(),
             extra_turns: vec![],
             out_count: 0,
@@ -156,7 +270,7 @@ impl World {
         self.recent.push_back(e);
         if self.recent.len() > EVENT_KEEP + 50 {
             let drop = self.recent.len() - EVENT_KEEP;
-            self.recent.drain(..drop);
+            self.recent.drain_front(drop);
         }
         self.recent.back_mut().expect("just pushed")
     }
