@@ -17,8 +17,8 @@ use card_sdk::{key, CardDef, Msg, On};
 use alloc::string::String;
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new("MyGO:（灯）不再迷茫", &[
-    On::Play(tomori_no_longer),
-]);
+    On::Play(None, tomori_no_longer),
+    On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep)]);
 
 const ID: &str = "MyGO:（灯）不再迷茫";
 
@@ -56,7 +56,22 @@ fn tomori_no_longer(player_id: i32) {
     // TODO(规则书)（2）: 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐
     // 消耗」 -- needs the skill-use attachment hook (C# `CardTomoriNoLonger.Use`
     // via `H.ExtraOf`) to spend one crystal instead of the skill's fire cost.
-    // TODO(规则书)（3）: 「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- the C# exhaustion
-    // path lives inside `Use` (`H.Unplace(this, "removed", ...)` when the spend
-    // takes the last crystal); held together with (2).
+    // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept at the turn end rather
+    // than inside the spend, so it also catches a spend from another card.
+}
+
+fn mine(player_id: i32) -> bool {
+    ctx::trigger::player_id() == player_id
+}
+
+/// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」.
+fn sweep(player_id: i32) {
+    if ctx::card_crystals(player_id, "MyGO:（灯）不再迷茫") > 0 {
+        return;
+    }
+    if !ctx::is_placed(player_id) {
+        return;
+    }
+    ctx::unplace_card_named(player_id, "MyGO:（灯）不再迷茫");
+    ctx::to_discard(player_id, "MyGO:（灯）不再迷茫");
 }

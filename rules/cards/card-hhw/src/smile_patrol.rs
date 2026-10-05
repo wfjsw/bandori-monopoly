@@ -9,24 +9,17 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const SMILE_PATROL: CardDef = CardDef::new("HHW:微笑巡逻队", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSmilePatrol.WhyNot`: refuses without a tile you can afford to
     // build on (`H.WhyNotBuildOn(seat, t) == null && money >= BuildCostFor`).
-    // TODO(规则书): the C# `H.WhyNotBuildOn` also checks the ring/rent-tier cap,
-    // the turn's NoBuild flag and live Fx blockers; those hooks are still
-    // missing, so the gate covers only the expressible checks (buyable, owned,
-    // unmortgaged, can-pay, affordable).
+    // 规则书: the destination must be one the player could build on -- the same
+    // `WhyNotBuildOn` gate the build step uses (ring / rent-tier cap / house cap
+    // / ownership / mortgage / can-pay included).
     let money = ctx::money(player_id);
     for t in ctx::owned_tiles(player_id) {
-        if ctx::is_buyable(t)
-            && !ctx::mortgaged_of(t)
-            && ctx::can_pay(player_id)
-            && money >= ctx::build_cost(t)
-        {
+        if ctx::can_build_on(player_id, t) && money >= ctx::build_cost(t) {
             return None;
         }
     }
@@ -36,8 +29,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn play(player_id: i32) {
     // 规则书: 「付款并在任意自己的格子加盖一层房屋」 -- C#
     // `H.OfferBuildAmong(i, H.OwnedBy(i), CardName)` pays the tile's build cost
-    // and raises one house. TODO(规则书): the paid-build routine (`H.BuildRoutine`
-    // / `H.OfferBuildAmong`) is still missing -- only the free build below runs.
+    // and raises one house. Then the free build below is the second, separate
+    // half of the clause.
+    ctx::card_offer_build(player_id, &ctx::owned_tiles(player_id));
     // 规则书: 「投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）」
     // -- C# `H.Roll(i, 3, 20, CardName)`; the tile is `(roll - 1) % tiles.Length`.
     let n = ctx::tile_count();

@@ -57,6 +57,8 @@ export interface MatchEvent {
  * tile after k+1 steps; `steps` is how far along it the seat has got. */
 export interface MovePlan {
   playerId: number; from: number; steps: number; started: boolean; reach: number[];
+  /** Whether this move can build where it lands. */
+  canBuild: boolean;
 }
 export interface MatchState {
   phase: string; matchId: number; seq: number; mode: number; turn: number; round: number; step: number;

@@ -27,6 +27,7 @@
   "hitoshizuku_pay": "Hitoshizuku: cost of the cleared effect",
   "hitoshizuku_self_gain": "Hitoshizuku: cleared your own effect",
   "meet_again_reroll": "re-rolled: +{{add}} (now {{total}}, the next player is {{dist}} tile(s) away)",
+  "miracle_built": "Miracle: spent 1 [Miracle Crystal] instead of money",
   "miracle_crystals_moved": "{{who}} moved {{n}} miracle crystal(s) from the band skill onto “A Miracle Hard to Repeat”",
   "miracle_note": "miracle crystals: spend 1 instead of money when building; after passing every player once, collect the reward",
   "miracle_placed": "“A Miracle Hard to Repeat” is now on {{who}}'s field",

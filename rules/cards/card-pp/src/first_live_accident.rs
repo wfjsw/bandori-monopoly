@@ -14,8 +14,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const FIRST_LIVE_ACCIDENT: CardDef = CardDef::new("PP:初次演出事故", &[
-    On::Play(first_live_accident),
-]);
+    On::Play(None, first_live_accident)]);
 
 fn first_live_accident(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」

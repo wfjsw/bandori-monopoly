@@ -11,9 +11,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new("Sumimi:Sweet Escape", &[
-    On::Play(sweet_escape),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), sweet_escape)]);
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
 /// tile-kind surface is `is_buyable` / `is_shop` / `tile_group`, and the RiNG
@@ -138,8 +136,9 @@ fn sweet_escape(player_id: i32) {
     // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
     // player; that is exactly `card_move`'s bookkeeping.
     // 规则书: 「若为可购买格子则必须购买」 -- C# `H.BuyRoutine` when the tile is
-    // unowned and `money >= H.BuyPriceFor`.
-    // TODO(规则书): 「若为可购买格子则必须购买」 -- needs a buy routine
-    // (`H.BuyRoutine` / buy-price-for-player); until then the must-buy step is
-    // unclaimed after the settle.
+    // unowned and `money >= H.BuyPriceFor`. The settle already ran on arrival
+    // (`set_resolve(true)`); this is the must-buy that follows it.
+    if ctx::is_buyable(to) && ctx::tile_owner(to) < 0 && ctx::money(player_id) >= ctx::buy_price(to) {
+        ctx::card_buy(player_id, to);
+    }
 }

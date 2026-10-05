@@ -14,10 +14,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const THAT_DAY_RAIN: CardDef = CardDef::new("MyGO:那天的雨", &[
-    On::Play(that_day_rain),
+    On::Play(None, that_day_rain),
     // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-    On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook),
-]);
+    On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook_guard, hook)]);
 
 const ID: &str = "MyGO:那天的雨";
 
@@ -37,14 +36,16 @@ const AGENTS: &[(&str, &[&str])] = &[
     ("大学路", &["庆鹏女子大学", "四叶女子大学"]),
     ("梦开始的地方", &["星星小巷", "星之鼓动山丘"]),
     ("商店街", &["羽泽咖啡厅", "山吹面包房", "银河拉面馆", "北泽精肉店", "旭汤澡堂"]),
-    ("高级住宅区", &["六本木大厦", "CHUCHU的公寓", "旧古河庭园", "广町家画室"]),
-];
+    ("高级住宅区", &["六本木大厦", "CHUCHU的公寓", "旧古河庭园", "广町家画室"])];
 
 /// C# `CardThatDayRain.TurnStart` (own turns -> `Rain`) and `DecayCard.TurnEnd`.
+/// Pure guard for [`hook`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn hook_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn hook(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书: 「及你的每回合开始时投掷1d10并...」 -- C# `TurnStart(int turn)`
         // refuses other players' turns (`turn != Player`).

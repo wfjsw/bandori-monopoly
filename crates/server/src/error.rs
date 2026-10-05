@@ -18,7 +18,11 @@ pub type ApiResult<T> = Result<T, ApiError>;
 
 impl ApiError {
     pub fn new(status: StatusCode, message: impl Into<Msg>) -> Self {
-        Self { status, reason: None, message: message.into() }
+        Self {
+            status,
+            reason: None,
+            message: message.into(),
+        }
     }
 
     /// 400 -- the request is understood but not allowed right now.
@@ -40,8 +44,16 @@ impl ApiError {
 
     /// Joining was refused (`NetProtocol.Reject*`), with the original message.
     pub fn reject(code: &'static str) -> Self {
-        let status = if code == net::reject::PASSWORD { StatusCode::FORBIDDEN } else { StatusCode::CONFLICT };
-        Self { status, reason: Some(code), message: net::describe(code) }
+        let status = if code == net::reject::PASSWORD {
+            StatusCode::FORBIDDEN
+        } else {
+            StatusCode::CONFLICT
+        };
+        Self {
+            status,
+            reason: Some(code),
+            message: net::describe(code),
+        }
     }
 }
 

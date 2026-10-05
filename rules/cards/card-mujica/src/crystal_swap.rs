@@ -13,8 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 
 pub const CRYSTAL_SWAP: CardDef = CardDef::new("Mujica:会被骗着买水晶的人", &[
-    On::Play(crystal_swap),
-]);
+    On::Play(None, crystal_swap)]);
 
 /// One pool entry (C# `CardCrystalSwap.Slots`'s `(label, get, add)` tuple).
 /// `Placed(player_id)` is a card in play at the player; `Band(player_id)` is the player's
@@ -31,7 +30,7 @@ impl Slot {
             Slot::Placed(player_id) => ctx::crystals(player_id),
             Slot::Band(player_id) => ctx::band_crystals(player_id),
         }
-    }
+}
 
     /// C# `add` -- `Card.AddCrystals(n, ...)` / `band.AddCr(n, ...)`.
     fn add(&self, n: i32) {
@@ -45,7 +44,7 @@ impl Slot {
                 ctx::add_band_crystals(player_id, n, 0);
             }
         }
-    }
+}
 
     /// C# `label` -- `"{{who}}'s \"{{card}}\" ({{n}})"` / `"{{who}}'s band card ({{n}})"`.
     fn label(&self) -> Msg {
@@ -64,7 +63,7 @@ impl Slot {
                 .player_id("who", player_id)
                 .i("n", self.get() as i64),
         }
-    }
+}
 }
 
 /// C# `CardCrystalSwap.Slots` -- every placed card and every player's band card.
@@ -75,10 +74,14 @@ fn slots() -> Vec<Slot> {
             continue;
         }
         // C# `H._placed.Where(p => p.Live && !p.Immune && text.Contains("奇迹水晶"))`.
-        // `is_placed` covers `Live`; the card-text 「奇迹水晶」 filter and the
-        // `Immune` gate have no ctx counterpart (see the TODO in `crystal_swap`).
-        if ctx::is_placed(s) {
-            v.push(Slot::Placed(s));
+        for c in ctx::placed_cards(s) {
+            if ctx::card_face_down(s, &c) || ctx::card_immune(s, &c) {
+                continue;
+            }
+            if ctx::card_text_mentions(&c, "奇迹水晶") {
+                v.push(Slot::Placed(s));
+                break;
+            }
         }
         // C# `H._fx[player_id].bands.First()` when `bands.Count > 0`. `band_crystals`
         // is the band card's counter; the `bands` inventory has no ctx query
@@ -93,12 +96,8 @@ fn crystal_swap(player_id: i32) {
     // C# `CardCrystalSwap.Slots` enumerates every placed card whose text
     // mentions 奇迹水晶 (plus each player's band card). The per-card crystal
     // counters are `ctx::crystals` / `ctx::band_crystals`.
-    // TODO(规则书): the card-text 「奇迹水晶」 filter and the `Immune` gate
-    // (C# `p.Live && !p.Immune && (H.Db.Card(p.Id)?.text ?? "").Contains("奇迹水晶")`)
-    // have no ctx counterpart -- every placed card is offered, including ones
-    // that cannot hold crystals. The band-card side additionally needs
-    // `H._fx[player_id].bands` enumeration (`bands.Count == 0` skip, `band.Extra` in
-    // `add`) and the per-card `MaxCrystals` clamp in `AddCrystals`.
+    // Still held: `H._fx[player_id].bands` enumeration (`bands.Count == 0`
+    // skip, `band.Extra` in `add`) -- the band-card side of the pool.
     let all = slots();
     // C# `from = slots.Where(x => x.get() > 0)`.
     let from: Vec<usize> = (0..all.len()).filter(|&i| all[i].get() > 0).collect();

@@ -10,7 +10,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new("AG:（巴）商店街的救世主", &[
-    On::React(&[ChainKind::Mortgage], can_react, react),
+    On::CounterAct(&[ChainKind::Mortgage], can_react, react),
 ]);
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
@@ -54,8 +54,12 @@ fn react(player_id: i32) {
         }
         // 规则书[反击]: 「将地契翻回」 -- C# `H.State.mortgaged[t] = false`.
         ctx::set_mortgaged(t, false);
-        // TODO(ABI): the C# uses a raw `H.State.seats[i].money += num` (bypasses
-        // pay/gain effects) rather than `H.GainR`.
+        // TODO(规则书)[judgement]: 「额外获得一份抵押收益」 does not say whether the
+        // extra payout goes through the gain pipeline or lands raw. The C# added
+        // it raw (`H.State.seats[i].money += num`, no `H.GainR`), so a [拥有者] /
+        // [支付] reaction cannot see it; this port routes it through `gain`, which
+        // means such a reaction can. Not a missing capability -- the clause just
+        // does not decide. Flagging rather than guessing.
         return;
     }
     // 规则书[反击]: 「立刻支付常规收购价一半的价格从该玩家处收购该地契」 -- C#

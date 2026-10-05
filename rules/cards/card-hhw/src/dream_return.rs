@@ -12,7 +12,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const DREAM_RETURN: CardDef = CardDef::new("HHW:梦幻的回礼", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living

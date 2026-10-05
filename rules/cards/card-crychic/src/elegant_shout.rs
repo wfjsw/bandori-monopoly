@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const ELEGANT_SHOUT: CardDef = CardDef::new("CRYCHIC:优雅的呐喊", &[
-    On::React(&[ChainKind::DrawOut], can_react, react),
+    On::CounterAct(&[ChainKind::DrawOut], can_react, react),
     On::AtEnd(at_end),
 ]);
 

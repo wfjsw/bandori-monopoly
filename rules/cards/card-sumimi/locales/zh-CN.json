@@ -7,9 +7,12 @@
   "here_the_world_placed": "「Here the world」放到了 {{who}} 的场上（{{by}} 打出）",
   "here_the_world_returned": "扣着的卡回到了 {{who}} 的手牌（Here the world）",
   "idol_and_band_no_effect": "资金已经有 3,000 以上，没有效果",
+  "idol_and_band_redeemed": "你本回合已经赎回过。",
   "idol_and_band_why": "资金重设为 3,000（兼顾偶像与乐队）",
   "l11_note": "团技能要移除奇迹水晶时用这张卡上的代替",
   "l11_placed": "「#L11」放在了 {{who}} 的场上，2 个奇迹水晶",
+  "l12_back": "{{who}} 的 #L12 回到手牌",
+  "l12_fire_spent": "消耗 {{n}} 个火罐，#L12 添加 {{n}} 个 [奇迹水晶]",
   "l12_note": "消耗火罐时 +1 个奇迹水晶，满 6 个回到手牌；手牌上限 -1",
   "l12_placed": "「#L12」放在了 {{who}} 的场上",
   "l12_search": "从弃卡区 / 抽卡区选一张 Sumimi 卡加入手牌（#L12）",
@@ -17,6 +20,7 @@
   "l12_title": "#L12",
   "mana_champion_log": "「歌唱大赛5连冠」：让其他人替 {{who}} 打出 [反击]",
   "no_breakup_ask": "[传送] 到哪一格？（结算后资金要变成有相同数字，否则回到原处并取消受到的效果）",
+  "no_breakup_mortgaged": "你本回合已经抵押/赎回过。",
   "no_breakup_moved": "{{who}} [传送] 到 {{tile}}（Sumimi不会解散哦）",
   "no_breakup_repeated": "资金里有相同的数字",
   "no_breakup_title": "Sumimi不会解散哦",
@@ -35,5 +39,6 @@
   "two_donuts_overflow": "一人两个甜甜圈：超出上限的火罐（{{n}} 个 × 500 资金）",
   "two_donuts_title": "一人两个甜甜圈",
   "two_donuts_yes": "要 [传送] 并结算吗？（你原本的格子和 {{by}} 的终点之间，可不传送）",
+  "two_in_one_note": "替换为另一名角色",
   "two_in_one_swap": "{{who}} 换成 Sumimi 的另一名角色（Sumimi是二人一体的）"
 }

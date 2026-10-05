@@ -16,8 +16,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 use crate::want_human::SLOT_X;
 
 pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new("CRYCHIC:（灯）内心的呐喊", &[
-    On::Play(tomori_inner_shout),
-]);
+    On::Play(None, tomori_inner_shout)]);
 
 fn tomori_inner_shout(player_id: i32) {
     // 规则书（1）: 「打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得
@@ -66,12 +65,8 @@ fn tomori_inner_shout(player_id: i32) {
             let remembered = ctx::slot(player_id, "firstTile") - 1;
             let tile = if owned.contains(&remembered) { remembered } else { first };
             ctx::set_dest(ctx::Dest::Field);
-            ctx::place_card(player_id, "CRYCHIC:（灯）内心的呐喊", &Msg::new(key!("tomori_inner_shout_note")));
+            ctx::place_card_on(player_id, tile, "CRYCHIC:（灯）内心的呐喊", &Msg::new(key!("tomori_inner_shout_note")));
             ctx::log(player_id, &Msg::new(key!("tomori_inner_shout_placed")).player_id("who", player_id).tile("tile", tile));
-            // TODO(规则书)（3）: field-card tile placement -- C# `H.PlaceFromPlay(c, i, tile)`
-            //   puts the card on `tile` rather than at the player; the ABI's
-            //   `place_card_at` has no tile parameter yet. The card is placed at
-            //   the player as a stand-in; the computed `tile` is logged above.
         }
     }
     // TODO(规则书)（3）: 「你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯

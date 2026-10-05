@@ -12,7 +12,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const ENCORE: CardDef = CardDef::new("通用:安可", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {

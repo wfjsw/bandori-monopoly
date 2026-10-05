@@ -8,8 +8,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[
-    On::Play(pure_wings),
-]);
+    On::Play(None, pure_wings)]);
 
 fn pure_wings(player_id: i32) {
     let n = ctx::tile_count();
@@ -36,8 +35,11 @@ fn pure_wings(player_id: i32) {
         return;
     }
     // 规则书: 「立刻进行移动掷骰」 -- C# `H.MainMove(i, ...)` when `!MainMoved`.
-    // TODO(规则书): 「立刻进行移动掷骰」 -- needs the main-move dice-roll routine
-    // (`H.MainMove`); `card_move` runs a planned move but does not roll the
-    // turn's move dice. Today the player still gets its normal main move separately.
+    // A `card_move` with no fixed step count rolls the plan's dice and walks
+    // that far; the teleport above did not settle, so this is the movement.
+    // It consumes the turn's main move, which is what 「主要移动」 means.
+    ctx::plan::set_kind(card_sdk::abi::MoveKind::Walk);
+    ctx::plan::set_steps(-1);
+    ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("pure_wings_roll")).player_id("who", player_id));
 }

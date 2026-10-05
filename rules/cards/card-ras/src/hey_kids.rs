@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const HEY_KIDS: CardDef = CardDef::new("RAS:狂乱Hey Kids!!", &[
-    On::React(&[ChainKind::Settle], can_react, react),
+    On::CounterAct(&[ChainKind::Settle], can_react, react),
 ]);
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
@@ -24,15 +24,12 @@ pub const HEY_KIDS: CardDef = CardDef::new("RAS:狂乱Hey Kids!!", &[
 //   != "ring", rent-array capacity, house cap, `H._turnCtx.NoBuild`, event
 //   "卡池BUG", `Fx.CanBuild`) is still missing; only buyable / mortgaged /
 //   can-pay are checked here.
+/// 「属于你的可建造格子」 -- the same gate the build step uses (`WhyNotBuildOn`),
+/// so a transfer target cannot be one the engine would refuse to build on.
 fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
     ctx::owned_tiles(player_id)
         .into_iter()
-        .filter(|&t| {
-            t != from
-                && ctx::is_buyable(t)
-                && !ctx::mortgaged_of(t)
-                && ctx::can_pay(player_id)
-        })
+        .filter(|&t| t != from && ctx::can_build_on(player_id, t))
         .collect()
 }
 
@@ -53,9 +50,6 @@ fn can_react(player_id: i32) -> bool {
     if ctx::houses_of(t) <= 0 {
         return false;
     }
-    // TODO(ABI): C# also requires at least one other owned buildable tile
-    // (`H.WhyNotBuildOn`) as a transfer target -- the build gate is still
-    // missing; the approximation in `buildable_targets` is used instead.
     !buildable_targets(player_id, t).is_empty()
 }
 

@@ -12,7 +12,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MISAKI_CARD: CardDef = CardDef::new("HHW:（美咲）", &[
-    On::React(&[ChainKind::MoveRoll], can_react, react),
+    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,

@@ -66,7 +66,11 @@ pub fn set_fuel<T>(store: &mut Store<T>, fuel: u64) -> Result<(), String> {
     store.set_fuel(fuel).map_err(|e| e.to_string())
 }
 
-pub fn instantiate<T>(linker: &Linker<T>, store: &mut Store<T>, module: &Module) -> Result<Instance, Error> {
+pub fn instantiate<T>(
+    linker: &Linker<T>,
+    store: &mut Store<T>,
+    module: &Module,
+) -> Result<Instance, Error> {
     linker.instantiate(&mut *store, module)
 }
 
@@ -74,10 +78,20 @@ pub fn has_func(inst: &Instance, store: &mut Store<impl Sized>, name: &str) -> b
     inst.get_func(store, name).is_some()
 }
 
-pub fn read_mem(inst: &Instance, store: &mut Store<impl Sized>, ptr: i32, len: i32) -> Result<Vec<u8>, Error> {
-    let mem = inst.get_memory(&mut *store, card_sdk::abi::export::MEMORY).ok_or_else(|| err("no exported memory"))?;
+pub fn read_mem(
+    inst: &Instance,
+    store: &mut Store<impl Sized>,
+    ptr: i32,
+    len: i32,
+) -> Result<Vec<u8>, Error> {
+    let mem = inst
+        .get_memory(&mut *store, card_sdk::abi::export::MEMORY)
+        .ok_or_else(|| err("no exported memory"))?;
     let (ptr, len) = (ptr as u32 as usize, len as u32 as usize);
-    let bytes = mem.data(&mut *store).get(ptr..ptr + len).ok_or_else(|| err("memory read out of bounds"))?;
+    let bytes = mem
+        .data(&mut *store)
+        .get(ptr..ptr + len)
+        .ok_or_else(|| err("memory read out of bounds"))?;
     Ok(bytes.to_vec())
 }
 
@@ -87,7 +101,10 @@ pub fn read_guest<W>(caller: &mut Caller<'_, W>, ptr: i32, len: i32) -> Result<V
         .and_then(|e| e.into_memory())
         .ok_or_else(|| err("guest has no memory export"))?;
     let (ptr, len) = (ptr as u32 as usize, len as u32 as usize);
-    let bytes = mem.data(&*caller).get(ptr..ptr + len).ok_or_else(|| err("guest read out of bounds"))?;
+    let bytes = mem
+        .data(&*caller)
+        .get(ptr..ptr + len)
+        .ok_or_else(|| err("guest read out of bounds"))?;
     Ok(bytes.to_vec())
 }
 
@@ -99,7 +116,10 @@ pub fn write_guest<W>(caller: &mut Caller<'_, W>, ptr: i32, bytes: &[u8]) -> Res
         .and_then(|e| e.into_memory())
         .ok_or_else(|| err("guest has no memory export"))?;
     let ptr = ptr as u32 as usize;
-    let dst = mem.data_mut(&mut *caller).get_mut(ptr..ptr + bytes.len()).ok_or_else(|| err("guest write out of bounds"))?;
+    let dst = mem
+        .data_mut(&mut *caller)
+        .get_mut(ptr..ptr + bytes.len())
+        .ok_or_else(|| err("guest write out of bounds"))?;
     dst.copy_from_slice(bytes);
     Ok(())
 }

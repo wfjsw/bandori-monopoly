@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play(resolve)]);
+pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play(None, resolve)]);
 
 fn resolve(player_id: i32) {
     ctx::set_dest(ctx::Dest::Banished);

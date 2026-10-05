@@ -43,7 +43,8 @@
   "tsugu_pick": "结果 {{roll}}（小于 26）：选一个",
   "tsugu_pick_gain": "[获得] {{n}} 资金",
   "tsugu_pick_move": "[传送] 到 Bandori车站并 [结算]（视为主要移动）",
-  "tsugu_pick_title": "@Tsugu ycm",
+"tsugu_discount": "本回合买地少花 {{n}}",
+    "tsugu_pick_title": "@Tsugu ycm",
   "tsugu_why": "@Tsugu ycm",
   "x_no_money_1500": "资金不够 1,500"
 }

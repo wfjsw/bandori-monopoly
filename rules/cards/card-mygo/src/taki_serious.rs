@@ -12,9 +12,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TAKI_SERIOUS: CardDef = CardDef::new("MyGO:（立希）想认真去做", &[
-    On::Play(taki_serious),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), taki_serious)]);
 
 /// C# `CardTakiSerious.Stayers` -- present players holding [停留].
 fn stayers() -> Vec<i32> {

@@ -11,15 +11,30 @@ use game_core::MatchMode;
 
 fn data() -> Arc<GameData> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap())
+    Arc::new(
+        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
+            .unwrap(),
+    )
 }
 
 fn member(id: i32, bot: bool) -> RoomMember {
-    RoomMember { id, player: format!("P{id}"), bot, ..Default::default() }
+    RoomMember {
+        id,
+        player: format!("P{id}"),
+        bot,
+        ..Default::default()
+    }
 }
 
 fn new_match(members: &[RoomMember], seed: u64, mode: MatchMode) -> Match {
-    Match::new(data(), Arc::new(StubRules), members, seed, mode, ScoreWeights::default())
+    Match::new(
+        data(),
+        Arc::new(StubRules),
+        members,
+        seed,
+        mode,
+        ScoreWeights::default(),
+    )
 }
 
 /// Invariants that must hold at every step of every game.
@@ -33,10 +48,17 @@ fn check_invariants(st: &MatchState, d: &GameData) {
         assert!(o >= -1 && o < n, "tile {t} owner {o}");
         if o >= 0 {
             assert!(d.tiles[t].is_buyable(), "unbuyable tile {t} owned");
-            assert!(!st.players[o as usize].out(), "tile {t} owned by a player that is out");
+            assert!(
+                !st.players[o as usize].out(),
+                "tile {t} owned by a player that is out"
+            );
         }
         let max = d.tiles[t].rent.len().saturating_sub(1) as i32;
-        assert!(st.houses[t] >= 0 && st.houses[t] <= max, "tile {t} has {} houses", st.houses[t]);
+        assert!(
+            st.houses[t] >= 0 && st.houses[t] <= max,
+            "tile {t} has {} houses",
+            st.houses[t]
+        );
     }
     for w in st.events.windows(2) {
         assert!(w[0].id < w[1].id, "event ids not increasing");
@@ -56,7 +78,10 @@ fn play_out(m: &mut Match, max_rounds: i32, d: &GameData) -> u32 {
         }
         let new = m.events_since(last_event);
         if let Some(e) = new.last() {
-            assert!(new.windows(2).all(|w| w[1].id == w[0].id + 1), "event ids must be contiguous");
+            assert!(
+                new.windows(2).all(|w| w[1].id == w[0].id + 1),
+                "event ids must be contiguous"
+            );
             last_event = e.id;
         }
         if st.round > max_rounds {
@@ -78,7 +103,11 @@ fn bot_games_play_to_the_end_and_rank_everyone() {
 
         let st = m.state();
         assert_eq!(st.phase, "ended");
-        assert!(["last", "settle", "out"].contains(&st.end_reason.as_str()), "{}", st.end_reason);
+        assert!(
+            ["last", "settle", "out"].contains(&st.end_reason.as_str()),
+            "{}",
+            st.end_reason
+        );
         let mut ranks: Vec<i32> = st.players.iter().map(|s| s.rank).collect();
         ranks.sort();
         assert_eq!(ranks, [1, 2, 3, 4], "seed {seed}");
@@ -91,7 +120,10 @@ fn bot_games_play_to_the_end_and_rank_everyone() {
         let mut alive: Vec<_> = st.players.iter().filter(|s| !s.out()).collect();
         alive.sort_by_key(|s| s.rank);
         if st.end_reason == "settle" {
-            assert!(alive.windows(2).all(|w| w[0].score >= w[1].score), "seed {seed}: survivors not ranked by score");
+            assert!(
+                alive.windows(2).all(|w| w[0].score >= w[1].score),
+                "seed {seed}: survivors not ranked by score"
+            );
         }
     }
 }
@@ -111,12 +143,18 @@ fn ranked_games_run_the_ban_phase() {
     assert!(saw_ban, "ranked must ban before picking");
     let st = m.state();
     assert_eq!(st.phase, "play");
-    assert!(st.players.iter().all(|s| !s.character.is_empty() && s.deck_ready));
+    assert!(st
+        .players
+        .iter()
+        .all(|s| !s.character.is_empty() && s.deck_ready));
     let mut chars: Vec<&str> = st.players.iter().map(|s| s.character.as_str()).collect();
     chars.sort();
     chars.dedup();
     assert_eq!(chars.len(), 5, "characters are unique");
-    assert!(st.players.iter().all(|s| !st.bans.contains(&s.character)), "nobody picked a banned character");
+    assert!(
+        st.players.iter().all(|s| !st.bans.contains(&s.character)),
+        "nobody picked a banned character"
+    );
 }
 
 #[test]
@@ -127,7 +165,10 @@ fn same_seed_same_game() {
         let mut m = new_match(&members, seed, MatchMode::Casual);
         m.quick_start();
         play_out(&mut m, 25, &d);
-        (serde_json::to_string(&m.state()).unwrap(), m.events_since(0).len())
+        (
+            serde_json::to_string(&m.state()).unwrap(),
+            m.events_since(0).len(),
+        )
     };
     assert_eq!(run(42), run(42));
     assert_ne!(run(42).0, run(43).0);
@@ -140,11 +181,23 @@ fn answer_first(m: &mut Match, member: i32) {
         if let Some(player_id) = st.players.iter().position(|s| s.member == member) {
             if st.prompt.waiting(player_id as i32) {
                 let msg = match st.prompt.kind.as_str() {
-                    "mortgage" => NetMessage { cards: st.prompt.items.clone(), ..NetMessage::act("answer") },
-                    "auction" => NetMessage { value: -1, ..NetMessage::act("answer") },
-                    _ => NetMessage { value: 0, ..NetMessage::act("answer") },
+                    "mortgage" => NetMessage {
+                        cards: st.prompt.items.clone(),
+                        ..NetMessage::act("answer")
+                    },
+                    "auction" => NetMessage {
+                        value: -1,
+                        ..NetMessage::act("answer")
+                    },
+                    _ => NetMessage {
+                        value: 0,
+                        ..NetMessage::act("answer")
+                    },
                 };
-                let msg = NetMessage { prompt: st.prompt.id, ..msg };
+                let msg = NetMessage {
+                    prompt: st.prompt.id,
+                    ..msg
+                };
                 m.act(member, &msg).unwrap();
             }
         }
@@ -165,14 +218,25 @@ fn a_human_plays_a_turn_with_commands() {
     assert_eq!(st.prompt.kind, "mulligan");
     assert_eq!(st.prompt.players.len(), 1, "only humans are asked");
     assert!(st.busy);
-    assert_eq!(m.act(1, &NetMessage::act("roll")).unwrap_err().key(), "err.no_roll_now");
-    let wrong = NetMessage { prompt: st.prompt.id + 7, ..NetMessage::act("answer") };
+    assert_eq!(
+        m.act(1, &NetMessage::act("roll")).unwrap_err().key(),
+        "err.no_roll_now"
+    );
+    let wrong = NetMessage {
+        prompt: st.prompt.id + 7,
+        ..NetMessage::act("answer")
+    };
     assert_eq!(m.act(1, &wrong).unwrap_err().key(), "err.prompt_over");
     answer_first(&mut m, 1);
     assert_eq!(m.state().prompt.id, 0);
 
     // Run until it is the human's turn to roll.
-    let me = m.state().players.iter().position(|s| s.member == 1).unwrap() as i32;
+    let me = m
+        .state()
+        .players
+        .iter()
+        .position(|s| s.member == 1)
+        .unwrap() as i32;
     let mut guard = 0;
     while !(m.state().turn == me && m.state().step == 1 && !m.state().busy) {
         m.tick(0.25);
@@ -180,8 +244,14 @@ fn a_human_plays_a_turn_with_commands() {
         guard += 1;
         assert!(guard < 10_000, "never got a turn");
     }
-    assert_eq!(m.act(1, &NetMessage::act("end")).unwrap_err().key(), "err.roll_first");
-    assert_eq!(m.act(1, &NetMessage::act("fly")).unwrap_err().key(), "err.unknown_act");
+    assert_eq!(
+        m.act(1, &NetMessage::act("end")).unwrap_err().key(),
+        "err.roll_first"
+    );
+    assert_eq!(
+        m.act(1, &NetMessage::act("fly")).unwrap_err().key(),
+        "err.unknown_act"
+    );
     let before = m.state().players[me as usize].pos;
     m.act(1, &NetMessage::act("roll")).unwrap();
     while m.state().busy {
@@ -190,8 +260,14 @@ fn a_human_plays_a_turn_with_commands() {
     }
     let st = m.state();
     assert_eq!(st.step, 3);
-    assert_ne!(st.players[me as usize].pos, before, "the roll moved the token");
-    assert!(m.events_since(0).iter().any(|e| e.r#type == "roll" && e.player_id == me));
+    assert_ne!(
+        st.players[me as usize].pos, before,
+        "the roll moved the token"
+    );
+    assert!(m
+        .events_since(0)
+        .iter()
+        .any(|e| e.r#type == "roll" && e.player_id == me));
 
     // Buy if we landed on unowned land and can afford it.
     let pos = st.players[me as usize].pos as usize;
@@ -203,7 +279,10 @@ fn a_human_plays_a_turn_with_commands() {
         let st = m.state();
         assert_eq!(st.owners[pos], me);
         assert_eq!(st.players[me as usize].money, money - price);
-        assert_eq!(m.act(1, &NetMessage::act("buy")).unwrap_err().key(), "err.cannot_buy");
+        assert_eq!(
+            m.act(1, &NetMessage::act("buy")).unwrap_err().key(),
+            "err.cannot_buy"
+        );
     }
     if m.state().players[me as usize].hand as usize <= 5 {
         m.act(1, &NetMessage::act("end")).unwrap();
@@ -227,7 +306,11 @@ fn prompts_time_out_to_the_fallback_and_replay_without_duplicate_events() {
     let seen = st.events.last().unwrap().id;
 
     // Player 1 redraws; player 2 never answers.
-    let redo = NetMessage { prompt: st.prompt.id, value: 1, ..NetMessage::act("answer") };
+    let redo = NetMessage {
+        prompt: st.prompt.id,
+        value: 1,
+        ..NetMessage::act("answer")
+    };
     m.act(1, &redo).unwrap();
     assert_eq!(m.act(1, &redo).unwrap_err().key(), "err.answered");
     assert!(m.state().busy, "still waiting for player 2");
@@ -238,7 +321,10 @@ fn prompts_time_out_to_the_fallback_and_replay_without_duplicate_events() {
     assert!(!st.busy && st.prompt.id == 0, "timed out");
     let p1 = st.players.iter().find(|s| s.member == 1).unwrap();
     let p2 = st.players.iter().find(|s| s.member == 2).unwrap();
-    assert!(p1.mulligan && !p2.mulligan, "answer applied; time-out used the fallback (keep)");
+    assert!(
+        p1.mulligan && !p2.mulligan,
+        "answer applied; time-out used the fallback (keep)"
+    );
 
     // The replay re-created the events before the prompt with the same ids: the
     // new ones simply continue the sequence.
@@ -258,30 +344,99 @@ fn unanimous_vote_ends_the_match() {
         answer_first(&mut m, 2);
         m.tick(0.25);
     }
-    assert_eq!(m.act(2, &NetMessage { value: 0, ..NetMessage::act("vote") }).unwrap_err().key(), "err.no_vote");
-    m.act(1, &NetMessage { value: 1, ..NetMessage::act("vote") }).unwrap();
+    assert_eq!(
+        m.act(
+            2,
+            &NetMessage {
+                value: 0,
+                ..NetMessage::act("vote")
+            }
+        )
+        .unwrap_err()
+        .key(),
+        "err.no_vote"
+    );
+    m.act(
+        1,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
     assert_eq!(m.state().vote.players.len(), 2, "only humans still in vote");
-    assert_eq!(m.act(1, &NetMessage { value: 1, ..NetMessage::act("vote") }).unwrap_err().key(), "err.voted");
+    assert_eq!(
+        m.act(
+            1,
+            &NetMessage {
+                value: 1,
+                ..NetMessage::act("vote")
+            }
+        )
+        .unwrap_err()
+        .key(),
+        "err.voted"
+    );
 
     // A "no" fails the vote and starts a cool-down.
-    m.act(2, &NetMessage { value: 0, ..NetMessage::act("vote") }).unwrap();
+    m.act(
+        2,
+        &NetMessage {
+            value: 0,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
     assert_eq!(m.state().vote.id, 0);
-    assert!(m.act(1, &NetMessage { value: 1, ..NetMessage::act("vote") }).unwrap_err().key() == "err.vote_cooldown");
+    assert!(
+        m.act(
+            1,
+            &NetMessage {
+                value: 1,
+                ..NetMessage::act("vote")
+            }
+        )
+        .unwrap_err()
+        .key()
+            == "err.vote_cooldown"
+    );
 
     for _ in 0..140 {
         m.tick(0.25); // cool-down
         answer_first(&mut m, 1);
         answer_first(&mut m, 2);
     }
-    m.act(1, &NetMessage { value: 1, ..NetMessage::act("vote") }).unwrap();
-    m.act(2, &NetMessage { value: 1, ..NetMessage::act("vote") }).unwrap();
+    m.act(
+        1,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    m.act(
+        2,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
     let st = m.state();
-    assert_eq!((st.phase.as_str(), st.end_reason.as_str()), ("ended", "vote"));
+    assert_eq!(
+        (st.phase.as_str(), st.end_reason.as_str()),
+        ("ended", "vote")
+    );
 }
 
 #[test]
 fn leaving_forfeits_and_the_last_human_leaving_ends_the_match() {
-    let members = [member(1, false), member(2, false), member(3, true), member(4, true)];
+    let members = [
+        member(1, false),
+        member(2, false),
+        member(3, true),
+        member(4, true),
+    ];
     let mut m = new_match(&members, 9, MatchMode::Casual);
     m.quick_start();
     while m.state().turn < 0 {
@@ -298,14 +453,20 @@ fn leaving_forfeits_and_the_last_human_leaving_ends_the_match() {
     let p1 = st.players.iter().find(|s| s.member == 1).unwrap();
     assert!(p1.left && p1.out() && p1.money == 0);
     assert_eq!(st.phase, "play", "one human is still in");
-    assert!(st.owners.iter().all(|&o| o < 0 || st.players[o as usize].member != 1));
+    assert!(st
+        .owners
+        .iter()
+        .all(|&o| o < 0 || st.players[o as usize].member != 1));
 
     m.act(2, &NetMessage::act("leave")).unwrap();
     for _ in 0..20 {
         m.tick(0.25);
     }
     let st = m.state();
-    assert_eq!((st.phase.as_str(), st.end_reason.as_str()), ("ended", "out"));
+    assert_eq!(
+        (st.phase.as_str(), st.end_reason.as_str()),
+        ("ended", "out")
+    );
 }
 
 #[test]
@@ -320,12 +481,19 @@ fn disconnect_hands_the_player_to_the_ai_and_reconnect_takes_it_back() {
         }
         m.member_left(1, true); // during the mulligan prompt: deferred, auto-answered
     }
-    assert!(m.player_of_member(1).unwrap().ai, "applied once the prompt finished");
+    assert!(
+        m.player_of_member(1).unwrap().ai,
+        "applied once the prompt finished"
+    );
     m.member_back(1);
     assert!(!m.player_of_member(1).unwrap().ai);
     let log = m.events_since(0);
-    assert!(log.iter().any(|e| e.r#type == "ai" && e.msg.key().starts_with("log.dropped")));
-    assert!(log.iter().any(|e| e.r#type == "ai" && e.msg.key() == "log.reconnected"));
+    assert!(log
+        .iter()
+        .any(|e| e.r#type == "ai" && e.msg.key().starts_with("log.dropped")));
+    assert!(log
+        .iter()
+        .any(|e| e.r#type == "ai" && e.msg.key() == "log.reconnected"));
 }
 
 #[test]
@@ -340,12 +508,20 @@ fn save_and_restore_continue_identically() {
         }
         let json = a.save();
         let mut b = Match::restore(d.clone(), Arc::new(StubRules), &json).unwrap();
-        assert_eq!(a.state(), b.state(), "restored state differs at {checkpoint}");
+        assert_eq!(
+            a.state(),
+            b.state(),
+            "restored state differs at {checkpoint}"
+        );
         for _ in 0..200 {
             a.tick(0.25);
             b.tick(0.25);
         }
-        assert_eq!(a.state(), b.state(), "diverged after restore at {checkpoint}");
+        assert_eq!(
+            a.state(),
+            b.state(),
+            "diverged after restore at {checkpoint}"
+        );
         assert_eq!(a.save(), b.save());
     }
     assert!(Match::restore(d, Arc::new(StubRules), "{\"version\":0}").is_err());

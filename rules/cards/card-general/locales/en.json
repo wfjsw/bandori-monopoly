@@ -43,7 +43,8 @@
   "tsugu_pick": "Rolled {{roll}} (< 26): pick one",
   "tsugu_pick_gain": "Gain {{n}}",
   "tsugu_pick_move": "Teleport to Bandori Station and settle (as your main move)",
-  "tsugu_pick_title": "@Tsugu ycm",
+"tsugu_discount": "buys this turn cost {{n}} less",
+    "tsugu_pick_title": "@Tsugu ycm",
   "tsugu_why": "@Tsugu ycm",
   "x_no_money_1500": "Not enough money (need 1,500)"
 }

@@ -18,10 +18,9 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "通用:[衍生]FEVER!";
 
 pub const FEVER: CardDef = CardDef::new("通用:[衍生]FEVER!", &[
-    On::Play(fever),
+    On::Play(None, fever),
     // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-    On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], react),
-]);
+    On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], react_guard, react)]);
 
 fn fever(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
@@ -33,21 +32,26 @@ fn fever(player_id: i32) {
     // 规则书（1）[持续] runs in `react` at `payAdd`; 规则书（2）[持续] at `turnStart`.
 }
 
-/// C# `CardFever.X` -- 600 minus 200 per *other* card on the owner's field
-/// (`H.PlacedOf(Seat).Count(p => p != this && !p.FaceDown)`), free to go below 0.
-/// TODO(ABI): the face-down half of the C# filter (`!p.FaceDown`) is not
-/// expressible -- `cards_in(Field)` lists face-down cards too.
+/// C# `CardFever.X` -- 600 minus 200 per *other* **face-up** card on the owner's
+/// field (`H.PlacedOf(Seat).Count(p => p != this && !p.FaceDown)`), free to go
+/// below 0. A face-down card is not one of the ones the drop counts.
 fn x_of(player_id: i32) -> i32 {
-    let others = (ctx::cards_in(player_id, ctx::CardPile::Field).len() as i32 - 1).max(0);
+    let others = ctx::cards_in(player_id, ctx::CardPile::Field)
+        .iter()
+        .filter(|id| id.as_str() != ID && !ctx::card_face_down(player_id, id))
+        .count() as i32;
     // 规则书（1）: 「X为600」 -- C# `c.N(0, 600)`; the 200-per-card drop is the
     // C# `X` property body, not one of the card's declared numbers.
     ctx::n(0, 600) - 200 * others
 }
 
+/// Pure guard for [`react`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn react_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn react(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
         // [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PayAdd`

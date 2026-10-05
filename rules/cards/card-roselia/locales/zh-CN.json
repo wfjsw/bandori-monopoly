@@ -1,4 +1,5 @@
 {
+  "ako_dark_drawn": "从手牌以外打出，抽 1 张卡",
   "ako_dark_stun": "{{who}} 获得一层 [眩晕]（黑暗大魔姬亚子）",
   "before_live_stop": "{{who}} 将在 {{tile}} [强制停下] 并 [触发结算]（live前的准备）",
   "blue_rose_gain": "蓝玫瑰的骄傲：Livehouse 地契价值 {{n}} 的 20%",
@@ -58,6 +59,7 @@
   "sayo_play_ask_title": "{{card}}",
   "sayo_play_plus_one": "+1 格",
   "sayo_play_plus_two": "+2 格",
+  "sprechchor_why_not": "只能在 Livehouse 地块开始回合时打出",
   "sprechchor_why": "Sprechchor",
   "to_the_peak_ask_text": "所有 Live House 都有主了：花 1.5 倍造价为哪块 Live House 加盖一层？",
   "to_the_peak_ask_title": "向着顶点",

@@ -7,7 +7,6 @@ use axum::extract::{Path, State};
 use axum::http::header;
 use axum::response::IntoResponse;
 use axum::Json;
-use game_core::engine::Match;
 use game_core::net::{self, NetMessage, RoomInfo};
 use game_core::scoring::ScoreWeights;
 use game_core::state::MatchState;
@@ -50,7 +49,10 @@ fn view(s: &Session) -> SessionView {
 
 /// `POST /api/session` -- a new player session. Also sets the cookie the browser's
 /// `EventSource` will send.
-pub async fn create_session(State(s): S, Json(req): Json<SessionReq>) -> ApiResult<impl IntoResponse> {
+pub async fn create_session(
+    State(s): S,
+    Json(req): Json<SessionReq>,
+) -> ApiResult<impl IntoResponse> {
     let player = net::clean_name(&req.player);
     if player.is_empty() {
         return Err(ApiError::bad("err.name_required"));
@@ -64,7 +66,10 @@ pub async fn create_session(State(s): S, Json(req): Json<SessionReq>) -> ApiResu
     };
     let body = view(&session);
     let cookie = format!("{COOKIE}={}; HttpOnly; SameSite=Lax; Path=/", session.token);
-    s.sessions.lock().unwrap().insert(session.token.clone(), session);
+    s.sessions
+        .lock()
+        .unwrap()
+        .insert(session.token.clone(), session);
     Ok(([(header::SET_COOKIE, cookie)], Json(body)))
 }
 
@@ -106,7 +111,13 @@ pub struct CreateRoom {
 
 impl Default for CreateRoom {
     fn default() -> Self {
-        Self { name: String::new(), ranked: false, max_players: 6, password: String::new(), weights: None }
+        Self {
+            name: String::new(),
+            ranked: false,
+            max_players: 6,
+            password: String::new(),
+            weights: None,
+        }
     }
 }
 
@@ -122,8 +133,16 @@ fn rules_weights(s: &Server) -> ScoreWeights {
 
 /// Leave whatever room the session is in.
 fn leave_current(s: &Server, sess: &Session) {
-    let Some((rid, member)) = &sess.room else { return };
+    let Some((rid, member)) = &sess.room else {
+        return;
+    };
     if let Some(room) = s.room(rid) {
+        // Mid-match, leaving forfeits: run that on the handle first, with the
+        // room lock dropped, then take it again for the room bookkeeping.
+        let m = room.lock().unwrap().match_handle();
+        if let Some(m) = m {
+            let _ = m.act(*member, &game_core::net::NetMessage::act("leave"));
+        }
         let dissolved = {
             let mut r = room.lock().unwrap();
             r.leave(*member);
@@ -137,7 +156,11 @@ fn leave_current(s: &Server, sess: &Session) {
 }
 
 /// `POST /api/rooms` -- create a room and join it as host.
-pub async fn create_room(State(s): S, Auth(sess): Auth, Json(req): Json<CreateRoom>) -> ApiResult<Json<Joined>> {
+pub async fn create_room(
+    State(s): S,
+    Auth(sess): Auth,
+    Json(req): Json<CreateRoom>,
+) -> ApiResult<Json<Joined>> {
     leave_current(&s, &sess);
     let id = loop {
         let id = room_code();
@@ -149,11 +172,27 @@ pub async fn create_room(State(s): S, Auth(sess): Auth, Json(req): Json<CreateRo
     let name = req.name.trim().to_string();
     let defaults = rules_weights(&s);
     let weights = req.weights.unwrap_or(defaults).sanitized(defaults);
-    let mut room = Room::new(id.clone(), &name, req.ranked, req.max_players, &req.password, weights);
-    let who = NewMember { token: &sess.token, player: &sess.player, character: &sess.character, cn_id: &sess.cn_id };
+    let mut room = Room::new(
+        id.clone(),
+        &name,
+        req.ranked,
+        req.max_players,
+        &req.password,
+        weights,
+        s.engine.clone(),
+    );
+    let who = NewMember {
+        token: &sess.token,
+        player: &sess.player,
+        character: &sess.character,
+        cn_id: &sess.cn_id,
+    };
     let you = room.join(who, &req.password, "")?;
     let info = room.info.clone();
-    s.rooms.lock().unwrap().insert(id.clone(), Arc::new(Mutex::new(room)));
+    s.rooms
+        .lock()
+        .unwrap()
+        .insert(id.clone(), Arc::new(Mutex::new(room)));
     s.set_room(&sess.token, Some((id, you)));
     Ok(Json(Joined { room: info, you }))
 }
@@ -166,8 +205,15 @@ pub struct JoinReq {
 }
 
 /// `POST /api/rooms/{id}/join` -- join (or rejoin) a room.
-pub async fn join_room(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(req): Json<JoinReq>) -> ApiResult<Json<Joined>> {
-    let room = s.room(&id).ok_or_else(|| ApiError::not_found("err.room.gone"))?;
+pub async fn join_room(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(req): Json<JoinReq>,
+) -> ApiResult<Json<Joined>> {
+    let room = s
+        .room(&id)
+        .ok_or_else(|| ApiError::not_found("err.room.gone"))?;
     if sess.room.as_ref().is_some_and(|r| r.0 != id) {
         leave_current(&s, &sess);
     }
@@ -176,7 +222,12 @@ pub async fn join_room(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Js
         if r.dissolved.is_some() {
             return Err(ApiError::not_found("err.room.gone"));
         }
-        let who = NewMember { token: &sess.token, player: &sess.player, character: &sess.character, cn_id: &sess.cn_id };
+        let who = NewMember {
+            token: &sess.token,
+            player: &sess.player,
+            character: &sess.character,
+            cn_id: &sess.cn_id,
+        };
         let you = r.join(who, &req.password, &req.version)?;
         (you, r.info.clone())
     };
@@ -186,11 +237,16 @@ pub async fn join_room(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Js
 
 /// The session's room and member id, checked against `id`.
 pub fn member_room(s: &Server, sess: &Session, id: &str) -> ApiResult<(Arc<Mutex<Room>>, i32)> {
-    let (rid, member) = sess.room.clone().ok_or_else(|| ApiError::bad("err.room.not_member"))?;
+    let (rid, member) = sess
+        .room
+        .clone()
+        .ok_or_else(|| ApiError::bad("err.room.not_member"))?;
     if rid != id {
         return Err(ApiError::bad("err.room.not_member"));
     }
-    let room = s.room(id).ok_or_else(|| ApiError::not_found("err.room.gone"))?;
+    let room = s
+        .room(id)
+        .ok_or_else(|| ApiError::not_found("err.room.gone"))?;
     if room.lock().unwrap().member_of(&sess.token) != Some(member) {
         return Err(ApiError::bad("err.room.not_member"));
     }
@@ -203,7 +259,12 @@ pub struct ReadyReq {
     pub on: bool,
 }
 
-pub async fn ready(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(req): Json<ReadyReq>) -> ApiResult<Json<RoomInfo>> {
+pub async fn ready(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(req): Json<ReadyReq>,
+) -> ApiResult<Json<RoomInfo>> {
     let (room, me) = member_room(&s, &sess, &id)?;
     let mut r = room.lock().unwrap();
     r.set_ready(me, req.on)?;
@@ -218,7 +279,12 @@ pub struct BotReq {
     pub member: i32,
 }
 
-pub async fn bots(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(req): Json<BotReq>) -> ApiResult<Json<RoomInfo>> {
+pub async fn bots(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(req): Json<BotReq>,
+) -> ApiResult<Json<RoomInfo>> {
     let (room, me) = member_room(&s, &sess, &id)?;
     let mut r = room.lock().unwrap();
     match req.op.as_str() {
@@ -229,7 +295,12 @@ pub async fn bots(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(re
     Ok(Json(r.info.clone()))
 }
 
-pub async fn weights(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(w): Json<ScoreWeights>) -> ApiResult<Json<RoomInfo>> {
+pub async fn weights(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(w): Json<ScoreWeights>,
+) -> ApiResult<Json<RoomInfo>> {
     let (room, me) = member_room(&s, &sess, &id)?;
     let defaults = rules_weights(&s);
     let mut r = room.lock().unwrap();
@@ -244,14 +315,28 @@ pub struct StartReq {
     pub force: bool,
 }
 
-pub async fn start(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(req): Json<StartReq>) -> ApiResult<Json<RoomInfo>> {
+pub async fn start(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(req): Json<StartReq>,
+) -> ApiResult<Json<RoomInfo>> {
     let (room, me) = member_room(&s, &sess, &id)?;
-    let mut r = room.lock().unwrap();
-    r.start(me, req.force, s.data.clone(), s.rules.clone(), random_u64())?;
-    Ok(Json(r.info.clone()))
+    let info = tokio::task::spawn_blocking(move || {
+        let mut r = room.lock().unwrap();
+        r.start(me, req.force, random_u64())?;
+        Ok::<_, ApiError>(r.info.clone())
+    })
+    .await
+    .map_err(|e| ApiError::bad(format!("start task: {e}").as_str()))??;
+    Ok(Json(info))
 }
 
-pub async fn leave(State(s): S, Auth(sess): Auth, Path(id): Path<String>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn leave(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+) -> ApiResult<Json<serde_json::Value>> {
     member_room(&s, &sess, &id)?;
     leave_current(&s, &sess);
     Ok(Json(serde_json::json!({ "ok": true })))
@@ -259,8 +344,9 @@ pub async fn leave(State(s): S, Auth(sess): Auth, Path(id): Path<String>) -> Api
 
 // ------------------------------------------------------------------ match
 
-/// What one member may see: the shared state plus their own hand.
-#[derive(Debug, Serialize)]
+/// What one member may see: the shared state plus their own hand. The worker
+/// produces this shape; it is only re-typed here.
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatchView {
     pub state: MatchState,
@@ -270,10 +356,10 @@ pub struct MatchView {
     pub player_id: i32,
 }
 
-pub fn match_view(g: &Match, member: i32) -> MatchView {
-    let state = g.state();
-    let player_id = state.player_of(member);
-    MatchView { hand: g.hand_of(member), hand_notes: g.hand_notes_of(member), state, you: member, player_id }
+/// Ask the worker for one member's view. Blocking; see `pool`.
+pub fn match_view(m: &crate::room::MatchHandle, member: i32) -> ApiResult<MatchView> {
+    let v = m.view(member).map_err(|e| ApiError::bad(e.as_str()))?;
+    serde_json::from_value(v).map_err(|e| ApiError::bad(format!("view: {e}").as_str()))
 }
 
 #[derive(Debug, Serialize)]
@@ -285,15 +371,55 @@ pub struct RoomState {
 }
 
 /// `GET /api/rooms/{id}/state` -- full snapshot (reconnect, or clients that poll).
-pub async fn room_state(State(s): S, Auth(sess): Auth, Path(id): Path<String>) -> ApiResult<Json<RoomState>> {
+pub async fn room_state(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+) -> ApiResult<Json<RoomState>> {
     let (room, me) = member_room(&s, &sess, &id)?;
-    let r = room.lock().unwrap();
-    Ok(Json(RoomState { room: r.info.clone(), you: me, game: r.game.as_ref().map(|g| match_view(g, me)) }))
+    // Check the match out and drop the room lock: the round-trip must not hold
+    // it. The view is a worker call, so it also runs off the async runtime.
+    let (info, m) = {
+        let r = room.lock().unwrap();
+        (r.info.clone(), r.match_handle())
+    };
+    let game = match m {
+        None => None,
+        Some(m) => Some(
+            tokio::task::spawn_blocking(move || match_view(&m, me))
+                .await
+                .map_err(|e| ApiError::bad(format!("view task: {e}").as_str()))?,
+        ),
+    };
+    let game = game.transpose()?;
+    Ok(Json(RoomState {
+        room: info,
+        you: me,
+        game,
+    }))
 }
 
 /// `POST /api/rooms/{id}/act` -- a match command (`NetMessage` with `act` set).
-pub async fn act(State(s): S, Auth(sess): Auth, Path(id): Path<String>, Json(msg): Json<NetMessage>) -> ApiResult<Json<serde_json::Value>> {
+pub async fn act(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(msg): Json<NetMessage>,
+) -> ApiResult<Json<serde_json::Value>> {
     let (room, me) = member_room(&s, &sess, &id)?;
-    room.lock().unwrap().act(me, &msg)?;
+    // Check the match out, drop the room lock, then run the command.
+    let m = {
+        let r = room.lock().unwrap();
+        r.match_handle()
+            .ok_or_else(|| ApiError::bad("err.room.no_match"))?
+    };
+    let err = tokio::task::spawn_blocking(move || m.act(me, &msg))
+        .await
+        .map_err(|e| ApiError::bad(format!("act task: {e}").as_str()))?
+        .map_err(|e| ApiError::bad(e.as_str()))?;
+    if let Some(e) = err {
+        return Err(ApiError::bad(e));
+    }
+    room.lock().unwrap().notify();
     Ok(Json(serde_json::json!({ "ok": true })))
 }

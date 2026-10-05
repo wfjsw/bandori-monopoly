@@ -18,8 +18,8 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "Mor:再次牵起手来";
 
 pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new("Mor:再次牵起手来", &[
-    On::React(&[ChainKind::Paid], can_react, react),
-    On::Hook(&[HookKind::PayAt], pay_at),
+    On::CounterAct(&[ChainKind::Paid], can_react, react),
+    On::Hook(&[HookKind::PayAt], |_| true, pay_at),
 ]);
 
 fn can_react(player_id: i32) -> bool {

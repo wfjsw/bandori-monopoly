@@ -15,10 +15,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NFO: CardDef = CardDef::new("R:NFO", &[
-    On::Play(play),
-    On::Hook(&[HookKind::PayAt], react),
-    On::AtEnd(at_end),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::PayAt], |_| true, react),
+    On::AtEnd(at_end)]);
 
 const ID: &str = "R:NFO";
 

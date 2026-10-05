@@ -64,6 +64,7 @@
   "to_you_far_away_moved": "{{who}} [传送]到了 {{target}} 所在的 {{tile}}（献给远方的你）",
   "to_you_far_away_none": "{{who}} 没有别的玩家，「献给远方的你」无法打出",
   "to_you_far_away_title": "献给远方的你",
+  "tomorrows_door_hop": "「Tomorrow's Door」前进到第 {{n}} 站",
   "tomorrows_door_note": "沿着流星堂 → 大阪中之岛公园前进，走完后别人在你的地 / 梦开始的地方结算时额外付星之鼓动山丘房屋数 ×100",
   "tomorrows_door_placed": "「Tomorrow's Door」放在了 {{who}} 的场地上",
   "tomorrows_door_tax": "「Tomorrow's Door」向 {{who}} 收取 {{target}} 的 {{money}}"

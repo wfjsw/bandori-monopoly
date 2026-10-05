@@ -15,10 +15,16 @@ impl Cx<'_> {
 
     /// `AiAgentChoice` -- first affordable purchase, else first build, else none.
     pub(crate) fn ai_agent_choice(&self, p: usize, options: &[usize]) -> i32 {
-        if let Some(k) = options.iter().position(|&t| self.w.st.owners[t] < 0 && self.ai_wants_buy(p, t)) {
+        if let Some(k) = options
+            .iter()
+            .position(|&t| self.w.st.owners[t] < 0 && self.ai_wants_buy(p, t))
+        {
             return k as i32;
         }
-        if let Some(k) = options.iter().position(|&t| self.w.st.owners[t] == p as i32 && self.ai_wants_build(p, t)) {
+        if let Some(k) = options
+            .iter()
+            .position(|&t| self.w.st.owners[t] == p as i32 && self.ai_wants_build(p, t))
+        {
             return k as i32;
         }
         options.len() as i32
@@ -26,9 +32,13 @@ impl Cx<'_> {
 
     /// `AiRedeemChoice` -- most valuable mortgaged deed that leaves 4,000.
     fn ai_redeem_choice(&self, i: usize) -> Option<usize> {
-        let mut deeds: Vec<usize> = (0..self.data.tiles.len()).filter(|&t| self.w.st.owners[t] == i as i32 && self.w.st.mortgaged[t]).collect();
+        let mut deeds: Vec<usize> = (0..self.data.tiles.len())
+            .filter(|&t| self.w.st.owners[t] == i as i32 && self.w.st.mortgaged[t])
+            .collect();
         deeds.sort_by_key(|&t| std::cmp::Reverse(self.tile(t).price));
-        deeds.into_iter().find(|&t| self.w.st.players[i].money - self.redeem_cost(t) >= 4000)
+        deeds
+            .into_iter()
+            .find(|&t| self.w.st.players[i].money - self.redeem_cost(t) >= 4000)
     }
 
     /// `AiCardChoice` -- a random playable card the rules say a bot would play.
@@ -68,7 +78,11 @@ impl Cx<'_> {
             if self.w.st.skip_move {
                 return self.end_turn_cmd(i);
             }
-            let roller = if self.w.st.roller >= 0 { self.w.st.roller as usize } else { i };
+            let roller = if self.w.st.roller >= 0 {
+                self.w.st.roller as usize
+            } else {
+                i
+            };
             return self.main_move(i, roller);
         }
         let pos = self.w.st.players[i].pos as usize;

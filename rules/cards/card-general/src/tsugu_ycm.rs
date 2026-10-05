@@ -11,13 +11,13 @@
 //! > 4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。
 //!
 
+use card_sdk::abi::MoveKind;
+use card_sdk::ctx::plan;
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TSUGU_YCM: CardDef = CardDef::new("通用:@Tsugu ycm", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `H.TileNamed("Bandori车站")` -- the rulebook spells it “bandori车站”.
 const STATION: &str = "Bandori车站";
@@ -45,14 +45,15 @@ fn play(player_id: i32) {
     // “bandori车站”并不[结算]」 -- C# `H.CardMove(c, MoveCtx{TeleportTo=station,
     // Resolve=false})`.
     if r >= 26 {
+        // 规则书（2）: 「进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”
+        // 并不[结算]」 -- one move: it is the turn's main move, it consumes it, and
+        // 「不[结算]」 is the landing not resolving.
         if station >= 0 {
-            ctx::teleport_to(player_id, station);
+            plan::set_kind(MoveKind::Teleport);
+            plan::set_teleport_to(station);
+            plan::set_resolve(false);
+            ctx::card_move(player_id);
         }
-        // TODO(规则书)（2）: 「进进入移动阶段并将本回合的[主要移动]改为[传送]…并不[结算]」
-        // -- needs the H.CardMove / main-move routine (C# `H.CardMove(c, new MoveCtx
-        // { TeleportTo = station, Resolve = false })`) so the teleport consumes the
-        // turn's main move and skips settle. Until then the player is only moved and
-        // still gets its normal main move afterwards.
         // 规则书（2）[手]: 「且可选择购买任意无主的[可购买格子]」 -- C#
         // `H._tiles[t].IsBuyable && owners[t] < 0 && money >= BuyPriceFor(i, t)`
         // (`ctx::is_buyable` is `TileData.IsBuyable`, a deed tile).
@@ -68,10 +69,10 @@ fn play(player_id: i32) {
             let text = Msg::new(key!("tsugu_buy_ask"));
             if ctx::ask_yes(player_id, &title, &text) {
                 let tile = ctx::ask_tile(player_id, &title, &text, &free);
-                // TODO(规则书)（2）: 「购买」 -- needs the H.BuyRoutine purchase routine
-                // (C# `H.BuyRoutine(i, rt.index)`); until then the tile is only named.
+                // 规则书（2）: 「购买」 -- C# `H.BuyRoutine(i, rt.index)`.
                 // C# also defaults the prompt to the most expensive free tile
                 // (`free.OrderByDescending(price).First()`).
+                ctx::card_buy(player_id, tile);
                 ctx::log(
                     player_id,
                     &Msg::new(key!("tsugu_buy"))
@@ -85,9 +86,10 @@ fn play(player_id: i32) {
 
     // 规则书（3）[手]: 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」
     if r >= 28 {
-        // TODO(规则书)（3）: the turn's buy discount (C# `H._turnCtx.BuyDiscount =
-        // c.N(0, 1500)` logged as 「本回合买地少花 1,500」) -- needs a turn-scoped
-        // buy-discount hook; until then purchases cost full price.
+        // 规则书（3）: 「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- C#
+        // `H._turnCtx.BuyDiscount = 1500`.
+        ctx::set_buy_discount(1500);
+        ctx::log(player_id, &Msg::new(key!("tsugu_discount")).player_id("who", player_id).n("n", 1500));
     }
 
     // 规则书（4）[手]: 「结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]
@@ -99,8 +101,7 @@ fn play(player_id: i32) {
             &Msg::new(key!("tsugu_pick")).i("roll", r as i64),
             &[
                 Msg::new(key!("tsugu_pick_gain")).n("n", 1000),
-                Msg::new(key!("tsugu_pick_move")),
-            ],
+                Msg::new(key!("tsugu_pick_move"))],
         );
         if pick == 1 {
             // C# `rr.index == 1 && !H._turnCtx.MainMoved` -- the teleport is a
@@ -108,12 +109,11 @@ fn play(player_id: i32) {
             // passes (`ctx::cant_move(player_id).is_none()`).
             if station >= 0 && ctx::cant_move(player_id).is_none() {
                 // 规则书（4）[手]: 「进入移动阶段并将本回合的[主要移动]改为[传送]到
-                // “bandori车站”并[结算]」 -- C# `H.CardMove(c, MoveCtx{TeleportTo=station})`.
-                ctx::teleport_to(player_id, station);
-                // TODO(规则书)（4）: 「进入移动阶段并将本回合的[主要移动]改为…并[结算]」
-                // -- needs the H.CardMove / main-move setter (C# `H.CardMove(c,
-                // new MoveCtx { TeleportTo = station })`) so the teleport consumes
-                // the turn's main move and settles on arrival.
+                // “bandori车站”并[结算]」 -- one move: the turn's main move, and it
+                // settles on arrival (the default).
+                plan::set_kind(MoveKind::Teleport);
+                plan::set_teleport_to(station);
+                ctx::card_move(player_id);
             } else {
                 // 规则书（4）[手]: 「[获得]1000资金」 -- no station tile, or the main
                 // move is no longer available (C# falls back to the gain).

@@ -15,10 +15,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const HARUHIKAGE: CardDef = CardDef::new("CRYCHIC:春日影", &[
-    On::Play(play),
-    On::React(&[ChainKind::Effect, ChainKind::MoveRoll, ChainKind::SettleBefore], can_react, react),
-    On::Hook(&[HookKind::Drawn], on_drawn),
-]);
+    On::Play(None, play),
+    On::CounterAct(&[ChainKind::Effect, ChainKind::MoveRoll, ChainKind::SettleBefore], can_react, react),
+    On::Hook(&[HookKind::Drawn], |_| true, on_drawn)]);
 
 const ID: &str = "CRYCHIC:春日影";
 
@@ -53,13 +52,29 @@ fn play(player_id: i32) {
     // borrowed CRYCHIC skills (`H.CrychicChars` x `H.BorrowedActions`, then
     // `H.RunBorrowed`).
     ctx::log(player_id, &Msg::new(key!("haruhikage_play")).player_id("who", player_id));
-    // TODO(ABI): （2） 「使用一次Crychic角色的技能」 -- needs the skill-attachment
-    //   surface (`H.BorrowedActions` / `H.RunBorrowed` / `H.ExtraOf` skills) so
-    //   the player can pick and run one of 高松灯/椎名立希/丰川祥子/若叶睦/长崎素世
-    //   （CRYCHIC）'s skills. The [反击] path below already runs the three skills
-    //   the C# `React` wires to its trigger windows.
-    // TODO(规则书): the C# `WhyNot` refuses the card when no CRYCHIC skill is
-    //   usable (`现在没有能使用的 CRYCHIC 角色技能`) -- needs the `WhyNot` hook.
+    // 规则书（2）: 「使用一次Crychic角色的技能」 -- pick one of the five CRYCHIC
+    // skills and run its `On::Play` entry. `ctx::play_card` is that run: the
+    // skill is a card rule and this invokes it under its own id.
+    const CRYCHIC: [&str; 5] = [
+        "skill:高松灯（CRYCHIC）:跌跌撞撞...",
+        "skill:椎名立希（CRYCHIC）:克服劣等感",
+        "skill:长崎素世（CRYCHIC）:雨中祈晴",
+        "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
+        "skill:若叶睦（CRYCHIC）:精致的人偶",
+    ];
+    let options: alloc::vec::Vec<Msg> = CRYCHIC
+        .iter()
+        .map(|id| Msg::new(key!("haruhikage_option")).card("card", *id))
+        .collect();
+    let k = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("haruhikage_title")),
+        &Msg::new(key!("haruhikage_ask")),
+        &options,
+    );
+    if let Some(&id) = CRYCHIC.get(k) {
+        ctx::play_card(id, player_id);
+    }
 }
 
 /// 规则书（1）[特]: 「若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，
@@ -143,8 +158,8 @@ fn react(player_id: i32) {
 fn reroll_skill(player_id: i32) {
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `React` "moveRoll" branch:
     // `int num = Math.Max(0, H.DoMoveRoll(move)); move.Roll = num;`.
-    // TODO: C# rerolls with H.DoMoveRoll (honours the move dice plan / bonuses).
-    let x = ctx::roll(player_id, 1, 20);
+    // C# rerolls with `H.DoMoveRoll`, which sums the move's whole dice table.
+    let x = ctx::do_move_roll(player_id);
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- the new face becomes the move roll.
     trigger::set_move_roll(x);
     ctx::log(
@@ -198,7 +213,8 @@ fn cancel_pay_skill(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("haruhikage_pay_note")).player_id("who", player_id));
     // 规则书（2）: cancel the rent being paid to you.
     trigger::set_pay_amount(0);
-    // TODO(ABI): `H.ExtraOf<SoyoTeleportFx>` (C# `SoyoTeleportFx.MoveBefore`:
+    // TODO(规则书)[judgement](ABI): `H.ExtraOf<SoyoTeleportFx>` (C# `SoyoTeleportFx.MoveBefore`:
+    //   the clause under-specifies -- see the note above it
     //   `m.TeleportTo = t.Pay.tile`) -- needs the Fx.MoveBefore hook and a
     //   remembered tile (C# `H.SetV(i, "soyoC", tile + 1)`).
 }

@@ -18,10 +18,8 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 
 pub const STARRY_NIGHT: CardDef = CardDef::new("Mor:蝴蝶飞舞的星月夜", &[
-    On::Play(starry_night),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::RollAfter, HookKind::PassTile], hook),
-]);
+    On::Play(Some(cant_play), starry_night),
+    On::Hook(&[HookKind::RollAfter, HookKind::PassTile], |_| true, hook)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardStarryNight.WhyNot` refuses the play with less than 1,000
@@ -48,7 +46,13 @@ fn starry_night(player_id: i32) {
     let paid = ctx::pay(player_id, 1000 * x, &Msg::new(key!("starry_night_why")).i("n", x as i64));
     if paid < 1000 * x {
         // C# `c.Effective = false` when the payment does not go through.
-        // TODO(ABI): `PlayCtx.Effective` is not writable; the card is spent anyway.
+// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
+        // side channel and is not being ported (a routine should *return* whether
+        // it took effect); but before that lands, what "not effective" changes has
+        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
+        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
+        // implies no)? And what counts a use that this would suppress?
         return;
     }
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
@@ -117,9 +121,9 @@ fn reroll(player_id: i32, roll: i32) {
     ) {
         return;
     }
-    // TODO(规则书): the C# rerolls with `H.DoMoveRoll` (honours the move's dice
-    //   plan / bonuses); `ctx::roll(1d20)` is the default `MoveCtx.Base` shape.
-    let new_roll = ctx::roll(player_id, 1, 20);
+    // 规则书: the C# rerolls with `H.DoMoveRoll`, which sums the move's whole
+    // dice table (base + extra dice + flat bonuses) rather than a bare 1d20.
+    let new_roll = ctx::do_move_roll(player_id);
     trigger::set_move_roll(new_roll);
     ctx::log(
         player_id,

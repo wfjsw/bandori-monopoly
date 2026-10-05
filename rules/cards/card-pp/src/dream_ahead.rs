@@ -20,14 +20,15 @@
 //! placed by `DeckBeforeGame`. The settle tax is live in the `SettleAfter`
 //! hook; the crystal growth runs on the `Drew` hook.
 
+use card_sdk::abi::state_key;
 use card_sdk::abi::{TriggerKind, HookKind, CardPile};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_AHEAD: CardDef = CardDef::new("PP:梦在前方，结彩当下", &[
-    On::Hook(&[HookKind::DeckBeforeGame], deck_before_game),
-    On::Hook(&[HookKind::Drew], drew),
-    On::Hook(&[HookKind::SettleAfter], settle_after),
+    On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
+    On::Hook(&[HookKind::Drew], drew_guard, drew),
+    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
 ]);
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).
@@ -63,10 +64,13 @@ fn deck_before_game(player_id: i32) {
 /// cap each further card bumps X instead.
 /// 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每
 /// 获得一个超出上限的[奇迹水晶]就为此卡的X加1（X初始0）」
+/// Pure guard for [`drew`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn drew_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn drew(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     for _ in 0..trigger::value().max(0) {
         if ctx::crystals(player_id) < 5 {
             ctx::add_crystals(player_id, 1, 5);
@@ -80,9 +84,19 @@ fn drew(player_id: i32) {
     }
 }
 
-// TODO(规则书): [持续]（2）「[拥有者]不可盖房且手卡上限数量减1」 -- needs the
-// Fx.CanBuild hook (C# `Card.CanBuild` returning `player_id != Player`) and
-// Fx.HandLimitDelta (C# `Card.HandLimitDelta` returning -1 for the owner).
+/// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are
+/// keyed flags the engine already reads: `noBuild` gates `why_not_build_on`,
+/// `handLimit` is the limit itself.
+/// Pure guard for [`no_build`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn no_build_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
+fn no_build(player_id: i32) {
+    ctx::state::add(player_id, state_key::NO_BUILD, 1);
+    ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
+}
 
 /// C# `CardDreamAhead.SettleAfter`: someone else settles on an owned deed --
 /// they pay the owner `fans × X + min(X×30, 300)`.

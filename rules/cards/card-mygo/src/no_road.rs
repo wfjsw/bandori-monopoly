@@ -9,9 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const NO_ROAD: CardDef = CardDef::new("MyGO:无路矢", &[
-    On::Play(no_road),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), no_road)]);
 
 /// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
 /// refuses the card with no other player alive ("没有别的玩家").
@@ -42,14 +40,19 @@ fn no_road(player_id: i32) {
     let who = match ctx::target(picked) {
         Some(hit) => hit,
         None => {
-            // TODO(规则书): C# sets `c.Effective = false` here (PlayCtx.Effective is
-            //   still held); the effect body is skipped either way.
+// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
+        // side channel and is not being ported (a routine should *return* whether
+        // it took effect); but before that lands, what "not effective" changes has
+        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
+        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
+        // implies no)? And what counts a use that this would suppress?
             return;
         }
     };
     let tile = ctx::player_pos(who);
     // 规则书: 「获得2层[除外]并在[除外]层数归0后[传送]至该格子」
-    // `H.GiveExile(seat, 2, tile)` stores the return tile; the engine teleports
+    // `H.GiveExile(seat, 2, tile)` stores the return Ok(tile); the engine teleports
     // there when the last layer ticks away.
     ctx::give_exile(player_id, 2, tile);
     // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`.

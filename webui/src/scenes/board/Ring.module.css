@@ -1,4 +1,6 @@
-.wrap { position: absolute; left: 397px; top: 22px; width: 856px; height: 856px; border-radius: 16px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); }
+/* The ring is a fixed 856 square (its tile grid is), so it is a fixed-basis
+   flex item in Board.module.css's row and the gutters absorb the slack. */
+.wrap { position: relative; flex: 0 0 856px; width: 856px; height: 856px; margin-top: 22px; border-radius: 16px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); }
 .ring { position: relative; width: 856px; height: 856px; display: grid; grid-template-columns: 78px repeat(14, 50px) 78px; grid-template-rows: 78px repeat(14, 50px) 78px; }
 
 /* tiles: the group color bar sits on the inner edge */
@@ -83,9 +85,18 @@
 @keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 8%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
 /* Stage transition (Master Duel-like): a wide light bar sweeps the phase name
    across the board centre -- in once, shine pass, out. */
-.phaseFlash { position: absolute; left: 50%; top: 208px; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.9s ease forwards; }
+.phaseFlash { position: absolute; left: 50%; top: 208px; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.5s ease forwards; }
 .phaseFlash span { display: block; font-size: 34px; font-weight: 800; letter-spacing: 0.14em; white-space: nowrap; background: linear-gradient(90deg, var(--pink) 0%, #c23a7c 48%, var(--pink) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.phaseFlash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.9) 50%, transparent 68%); transform: translateX(-120%); animation: phaseSweep 1.1s ease-out forwards; }
+.phaseFlash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.9) 50%, transparent 68%); transform: translateX(-120%); animation: phaseSweep 0.9s ease-out forwards; }
+/* Master Duel's chain resolve: links snap across the banner, then a white flash. */
+.phaseFlash::before { content: ""; position: absolute; inset: -20%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.95) 0%, rgba(255, 214, 230, 0.5) 45%, transparent 72%); opacity: 0; animation: resolveFlash 1.5s ease-out forwards; }
+.link { position: absolute; top: -13px; width: 21px; height: 32px; border: 4px solid rgba(226, 66, 118, 0.8); border-radius: 11px; background: rgba(255, 255, 255, 0.55); opacity: 0; transform: rotate(90deg) scale(0.3); animation: linkSnap 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+.link:nth-of-type(1) { left: 10%; animation-delay: 0s; }
+.link:nth-of-type(2) { left: 30%; animation-delay: 0.11s; }
+.link:nth-of-type(3) { left: 62%; animation-delay: 0.22s; }
+.link:nth-of-type(4) { left: 82%; animation-delay: 0.33s; }
+@keyframes linkSnap { to { opacity: 1; transform: rotate(90deg) scale(1); } }
+@keyframes resolveFlash { 0% { opacity: 0; transform: scale(0.55); } 32% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.25); } }
 @keyframes phaseFlash { 0% { opacity: 0; transform: translate(-50%, -16px) scale(0.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1); } 78% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 10px) scale(1.05); } }
 @keyframes phaseSweep { to { transform: translateX(120%); } }
 .banner b { font-size: 26px; color: var(--pink); }

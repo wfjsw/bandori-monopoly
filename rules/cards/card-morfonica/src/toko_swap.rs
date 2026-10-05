@@ -11,9 +11,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TOKO_SWAP: CardDef = CardDef::new("Mor:（toko）", &[
-    On::Play(toko_swap),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), toko_swap)]);
 
 /// One swappable pair: `(mine, theirs)` -- both mortgaged, same colour group,
 /// `theirs` owned by another still-in player (C# `CardTokoSwap.Pairs`).

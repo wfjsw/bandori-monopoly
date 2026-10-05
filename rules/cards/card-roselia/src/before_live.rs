@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const BEFORE_LIVE: CardDef = CardDef::new("R:live前的准备", &[
-    On::React(&[ChainKind::Pass], can_react, react),
+    On::CounterAct(&[ChainKind::Pass], can_react, react),
 ]);
 
 /// 规则书[反击]: 「[反击] 经过江户川乐器店时可打出此卡」
@@ -40,13 +40,12 @@ fn react(player_id: i32) {
     );
     // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.React`:
     // `m.Stopped = true; m.Resolve = true` behind `H.AbnormalGate`.
+    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+        return;
+    }
     let shop = ctx::tile_named("江户川乐器店");
     if shop >= 0 {
         ctx::plan::set_stop_at(shop);
         ctx::plan::set_resolve(true);
     }
-    // TODO(规则书)[反击]: the `H.AbnormalGate` wrapper around this stop (C#
-    //   `CardBeforeLive.React`) is not invoked by `set_stop_at` -- the
-    //   `abnormalGuard` hook path and the `_turnCtx.Unstoppable` play-context
-    //   flag are unreachable from here.
 }

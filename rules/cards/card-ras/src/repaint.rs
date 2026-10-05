@@ -10,7 +10,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const REPAINT: CardDef = CardDef::new("RAS:Repaint", &[
-    On::React(&[ChainKind::MoveRoll], can_react, react),
+    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// `CardRepaint.OnPath` -- tiles of `me` on `them`'s planned path.
@@ -56,7 +56,7 @@ fn can_react(player_id: i32) -> bool {
 }
 
 fn react(player_id: i32) {
-    let Some(roll) = trigger::move_roll() else { return };
+    let Some(roll) = trigger::move_roll() else { return; };
     let them = trigger::player_id();
     // 规则书: 「X为对方原本预计路径上你拥有的格子数」
     let x = on_path(player_id, them, roll);

@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new("Sumimi:现在她是Sumimi的小初啦", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
@@ -54,7 +54,8 @@ fn can_react(player_id: i32) -> bool {
     if tag <= 0 {
         return false;
     }
-    // TODO(规则书)[反击]: 「失去资金的总额即将超过」 -- C# compares
+    // TODO(规则书)[judgement][反击]: 「失去资金的总额即将超过」 -- C# compares
+    //   the clause under-specifies -- see the note above it
     // `H._lostSinceTurn[player_id]` (money lost since this player's turn started) plus
     // `t.Pay.amount` against `Tag`, firing when `lost <= Tag && lost + amount >
     // Tag`. The trigger half is ready (`trigger::value()` is `t.Pay.amount`;

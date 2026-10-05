@@ -16,9 +16,14 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new("MyGO:难以复刻的奇迹", &[
-    On::Play(miracle),
-    On::Hook(&[HookKind::PassPlayer], pass_player),
-]);
+    On::Play(None, miracle),
+    On::Hook(&[HookKind::BuildBefore], mine, before_build),
+    On::Hook(&[HookKind::BuildAfter], mine, after_build),
+    On::Hook(&[HookKind::PassPlayer], |_| true, pass_player)]);
+
+fn mine(player_id: i32) -> bool {
+    trigger::player_id() == player_id && ctx::is_placed(player_id)
+}
 
 const ID: &str = "MyGO:难以复刻的奇迹";
 
@@ -38,10 +43,28 @@ fn miracle(player_id: i32) {
         &Msg::new(key!("miracle_crystals_moved")).player_id("who", player_id).i("n", n as i64),
     );
     ctx::log(player_id, &Msg::new(key!("miracle_placed")).player_id("who", player_id));
-    // TODO(规则书)（1）[手]: 「当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费」
-    // -- needs the Fx.BuildCost / Fx.Built hooks (C# `CardMiracle.BuildCost`
-    // returns 0 while a crystal remains, `Built` spends one); the build cost
-    // query is part of the build routine, not a declared hook kind.
+}
+
+/// （1）「当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费」 -- C#
+/// `CardMiracle.BuildCost` returns 0 while a crystal remains.
+fn before_build(player_id: i32) {
+    if ctx::card_crystals(player_id, ID) < 1 {
+        return;
+    }
+    let t = trigger::tile();
+    if t < 0 {
+        return;
+    }
+    ctx::set_build_discount(ctx::build_cost(t), 1);
+}
+
+/// （1）'s 「移除此卡上的一个奇迹水晶」 -- C# `CardMiracle.Built` spends one.
+fn after_build(player_id: i32) {
+    if ctx::card_crystals(player_id, ID) < 1 {
+        return;
+    }
+    ctx::add_card_crystals(player_id, ID, -1, i32::MAX);
+    ctx::log(player_id, &Msg::new(key!("miracle_built")));
 }
 
 /// C# `CardMiracle.PassSeat` -- remember each player [经过], and when every
@@ -102,7 +125,8 @@ fn pass_player(player_id: i32) {
     ctx::unplace_card(player_id);
     ctx::to_discard(player_id, ID);
     if left {
-        // TODO(规则书)（3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- needs
+        // TODO(规则书)[judgement]（3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- needs
+        //   the clause under-specifies -- see the note above it
         // PlayCtx.Effective / `H.CardWasted` (C# `H.CardWasted(Seat, Id)` when the
         // card is discarded with crystals left).
         ctx::log(player_id, &Msg::new(key!("miracle_wasted")).player_id("who", player_id));

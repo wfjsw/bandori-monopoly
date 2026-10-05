@@ -34,8 +34,8 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "PPP:Returns";
 
 pub const RETURNS: CardDef = CardDef::new("PPP:Returns", &[
-    On::Hook(&[HookKind::DeckBeforeGame], deck_before_game),
-    On::Hook(&[HookKind::DeckAtGameStart], deck_at_game_start),
+    On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
+    On::Hook(&[HookKind::DeckAtGameStart], |_| true, deck_at_game_start),
 ]);
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive

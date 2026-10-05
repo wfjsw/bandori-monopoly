@@ -20,10 +20,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const NO_EXPECTATION: CardDef = CardDef::new("PP:不要背负期待", &[
-    On::Play(no_expectation),
-    On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], hook),
-    On::Hook(&[HookKind::Reshuffled], reshuffled),
-]);
+    On::Play(None, no_expectation),
+    On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], hook_guard, hook),
+    On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled)]);
 
 /// C# `Mem["stacks"]` -- how many times the pay bend is stacked (2 on place,
 /// +2 per reshuffle).
@@ -48,16 +47,20 @@ fn no_expectation(player_id: i32) {
     );
     // 规则书[手]: 「然后抽1张牌」
     ctx::draw(player_id, 1);
-    // TODO(规则书): [特] 「此卡不受任何其他效果影响」 -- needs the C# `Card.Immune`
-    // flag so other effects skip this field card.
+    // 规则书[特]: 「此卡不受任何其他效果影响」 -- C# `Card.Immune`. A flag on the
+    // card: effects that would touch it read `card_immune` and skip.
+    ctx::set_card_immune(player_id, "PP:不要背负期待", true);
 }
 
 /// C# `CardNoExpectation.RollAfter` / `PayAdd` -- both [持续] halves that the
 /// hook surface can express.
+/// Pure guard for [`hook`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn hook_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn hook(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
         // `CardNoExpectation.RollAfter` (`m.Roll = max(0, m.Roll - 2)`).
@@ -117,9 +120,12 @@ fn hook(player_id: i32) {
 /// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
 /// shuffled back into the draw pile, the pay/gain bend gains 2 more stacks.
 /// 规则书[持续]（2）: 「每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次」
+/// Pure guard for [`reshuffled`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn reshuffled_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn reshuffled(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     ctx::inc_slot(player_id, SLOT_STACKS, 2);
 }

@@ -9,8 +9,8 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const L11: CardDef = CardDef::new("Sumimi:#L11", &[
-    On::Play(l11),
-]);
+    On::Play(None, l11),
+    On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep)]);
 
 fn l11(player_id: i32) {
     // 规则书: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 2)`.
@@ -24,9 +24,23 @@ fn l11(player_id: i32) {
     // -- needs the band-skill crystal-removal call site to consult
     // `CardL11.Cover(n)` (spend this card's crystals first). The counter half is
     // ready (`ctx::add_crystals`); only the call site is missing.
-    // TODO(规则书): 「此卡[奇迹水晶]数为0时放入弃牌堆」 -- C# `CardL11.Cover`'s empty
-    // branch (`H.Unplace(this, "discard", ...)`). `ctx::unplace_card` +
-    // `ctx::to_discard` are ready; the branch only runs inside the same missing
-    // `Cover(n)` call site.
+    // 「此卡[奇迹水晶]数为0时放入弃牌堆」 -- swept at the turn end rather than
+    // inside `Cover`, so it also catches a spend from another card.
     // C# `NoteText` shows the crystal count; CardDef has no NoteText hook.
+}
+
+fn mine(player_id: i32) -> bool {
+    ctx::trigger::player_id() == player_id
+}
+
+/// 「此卡[奇迹水晶]数为0时放入弃牌堆」.
+fn sweep(player_id: i32) {
+    if ctx::card_crystals(player_id, "Sumimi:#L11") > 0 {
+        return;
+    }
+    if !ctx::is_placed(player_id) {
+        return;
+    }
+    ctx::unplace_card_named(player_id, "Sumimi:#L11");
+    ctx::to_discard(player_id, "Sumimi:#L11");
 }

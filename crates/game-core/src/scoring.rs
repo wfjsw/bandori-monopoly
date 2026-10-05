@@ -18,7 +18,11 @@ pub struct ScoreWeights {
 
 impl Default for ScoreWeights {
     fn default() -> Self {
-        Self { money: 1.0, property: 1.0, houses: 1.0 }
+        Self {
+            money: 1.0,
+            property: 1.0,
+            houses: 1.0,
+        }
     }
 }
 
@@ -30,7 +34,11 @@ impl ScoreWeights {
 
     /// `ScoreWeights.Default` -- from `match_rules.json`.
     pub fn from_rules(r: &MatchRulesData) -> Self {
-        Self { money: r.money, property: r.property, houses: r.houses }
+        Self {
+            money: r.money,
+            property: r.property,
+            houses: r.houses,
+        }
     }
 
     /// `this[k]`: 0 = money, 1 = property, anything else = houses.
@@ -58,9 +66,14 @@ impl ScoreWeights {
                 return 0.0;
             }
             // C# Mathf.Round rounds half to even.
-            ((v / ScoreWeights::STEP).round_ties_even() * ScoreWeights::STEP).clamp(0.0, ScoreWeights::MAX)
+            ((v / ScoreWeights::STEP).round_ties_even() * ScoreWeights::STEP)
+                .clamp(0.0, ScoreWeights::MAX)
         }
-        let w = Self { money: fix(self.money), property: fix(self.property), houses: fix(self.houses) };
+        let w = Self {
+            money: fix(self.money),
+            property: fix(self.property),
+            houses: fix(self.houses),
+        };
         if w.money + w.property + w.houses > 0.0 {
             w
         } else {
@@ -71,7 +84,9 @@ impl ScoreWeights {
     /// `ScoreWeights.SameAs` (Mathf.Approximately per weight).
     pub fn same_as(&self, o: &ScoreWeights) -> bool {
         let approx = |a: f32, b: f32| (a - b).abs() < f32::EPSILON.max(1e-6 * a.abs().max(b.abs()));
-        approx(self.money, o.money) && approx(self.property, o.property) && approx(self.houses, o.houses)
+        approx(self.money, o.money)
+            && approx(self.property, o.property)
+            && approx(self.houses, o.houses)
     }
 }
 
@@ -82,10 +97,27 @@ mod tests {
     #[test]
     fn sanitize_snaps_clamps_and_falls_back() {
         let d = ScoreWeights::default();
-        let w = ScoreWeights { money: 1.3, property: 9.0, houses: -2.0 }.sanitized(d);
-        assert_eq!(w, ScoreWeights { money: 1.5, property: 5.0, houses: 0.0 });
+        let w = ScoreWeights {
+            money: 1.3,
+            property: 9.0,
+            houses: -2.0,
+        }
+        .sanitized(d);
+        assert_eq!(
+            w,
+            ScoreWeights {
+                money: 1.5,
+                property: 5.0,
+                houses: 0.0
+            }
+        );
         // 0.25 / 0.5 = 0.5 -> ties to even -> 0, like C# Mathf.Round
-        let z = ScoreWeights { money: 0.25, property: 0.0, houses: 0.0 }.sanitized(d);
+        let z = ScoreWeights {
+            money: 0.25,
+            property: 0.0,
+            houses: 0.0,
+        }
+        .sanitized(d);
         assert_eq!(z, d, "all-zero falls back to default");
     }
 }

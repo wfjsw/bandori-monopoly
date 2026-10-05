@@ -9,9 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const BE_STRONGEST: CardDef = CardDef::new("RAS:成为最强", &[
-    On::Play(be_strongest),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), be_strongest)]);
 
 /// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.
@@ -30,18 +28,13 @@ const LIVEHOUSES: [&str; 9] = [
     "武道馆",
     "Space",
     "Live House Galaxy",
-    "RiNG 4",
-];
+    "RiNG 4"];
 
 fn be_strongest(player_id: i32) {
     // 规则书: 「若你没有Livehouse格子，传送到“Live House”」
-    // -- C# `H.OwnedBy(i).Any((int t) => H.IsLiveHouse(i, t))`.
-    // TODO(规则书): `H.IsLiveHouse` also counts ExtraColor tiles (e.g.
-    // 「游击演出」's designated deed); no such hook here.
-    let owns_livehouse = LIVEHOUSES.iter().any(|&n| {
-        let t = ctx::tile_named(n);
-        t >= 0 && ctx::tile_owner(t) == player_id
-    });
+    // -- C# `H.OwnedBy(i).Any((int t) => H.IsLiveHouse(i, t))`, which also
+    // counts an `Fx.ExtraColor` deed (e.g. 「游击演出」's designated one).
+    let owns_livehouse = ctx::owned_tiles(player_id).into_iter().any(|t| ctx::is_live_house_for(player_id, t));
     let live_house = ctx::tile_named("Live House");
     let to = if !owns_livehouse {
         // 规则书: 「若你没有Livehouse格子，传送到“Live House”」

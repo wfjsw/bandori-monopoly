@@ -5,7 +5,9 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 
-use card_sdk::abi::{self, export, AbKind, ManifestOn, OnKind, PromptKind, ABI_VERSION, IMPORT_MODULE};
+use card_sdk::abi::{
+    self, export, AbKind, ManifestOn, OnKind, PromptKind, ABI_VERSION, IMPORT_MODULE,
+};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 // The engine behind the host: wasmi (an interpreter) in the browser, wasmtime
@@ -17,8 +19,11 @@ mod be;
 #[path = "be_wasmtime.rs"]
 mod be;
 
+use be::{
+    err, error_text, has_func, instantiate, is_need_input, need_input, read_guest, read_mem,
+    set_fuel, write_guest,
+};
 use be::{Caller, Engine, Error, Linker, Module, Store};
-use be::{err, error_text, has_func, instantiate, is_need_input, need_input, read_guest, read_mem, set_fuel, write_guest};
 
 use crate::world::CardWorld;
 
@@ -43,7 +48,9 @@ impl CardInfo {
     pub fn entry(&self, kind: OnKind, trigger: Option<crate::TriggerKind>) -> Option<i32> {
         self.on
             .iter()
-            .position(|o| o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&(t as i32))))
+            .position(|o| {
+                o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&(t as i32)))
+            })
             .map(|i| i as i32)
     }
 
@@ -52,8 +59,8 @@ impl CardInfo {
     }
 
     /// Declares a [反击] at this trigger kind.
-    pub fn reacts_to(&self, trigger: crate::TriggerKind) -> bool {
-        self.entry(OnKind::React, Some(trigger)).is_some()
+    pub fn counter_acts_to(&self, trigger: crate::TriggerKind) -> bool {
+        self.entry(OnKind::CounterAct, Some(trigger)).is_some()
     }
 
     /// Declares a field-card hook at this trigger kind.
@@ -66,7 +73,8 @@ impl CardInfo {
     /// automatically on a placed card and neither opens a [反击] window; they
     /// are separate declarations only so the type can say which is a question.
     pub fn hook_entry(&self, trigger: crate::TriggerKind) -> Option<i32> {
-        self.entry(OnKind::Hook, Some(trigger)).or_else(|| self.entry(OnKind::Gate, Some(trigger)))
+        self.entry(OnKind::Hook, Some(trigger))
+            .or_else(|| self.entry(OnKind::Gate, Some(trigger)))
     }
 
     pub fn has_at_end(&self) -> bool {
@@ -80,10 +88,14 @@ impl CardInfo {
 pub enum Call {
     /// `On::Play` -- the effect when played from hand.
     Play { card: i32, player_id: i32 },
-    /// `On::React` -- the reaction effect, for the world's current trigger kind.
-    React { card: i32, player_id: i32 },
+    /// `On::CounterAct` -- the reaction effect, for the world's current trigger kind.
+    CounterAct { card: i32, player_id: i32 },
     /// `On::Hook` -- the field-card hook for `kind`.
-    Hook { card: i32, kind: crate::TriggerKind, player_id: i32 },
+    Hook {
+        card: i32,
+        kind: crate::TriggerKind,
+        player_id: i32,
+    },
     /// `On::AtEnd` -- the scheduled turn-end callback.
     AtEnd { card: i32, player_id: i32 },
     /// `On::RollPlan` -- the card's movement routine, called while the walk
@@ -96,14 +108,20 @@ impl Call {
     /// effect does.
     pub fn player_id(&self) -> i32 {
         match *self {
-            Call::Play { player_id, .. } | Call::React { player_id, .. } | Call::Hook { player_id, .. } | Call::AtEnd { player_id, .. }
+            Call::Play { player_id, .. }
+            | Call::CounterAct { player_id, .. }
+            | Call::Hook { player_id, .. }
+            | Call::AtEnd { player_id, .. }
             | Call::RollPlan { player_id, .. } => player_id,
         }
     }
 
     pub fn card(&self) -> i32 {
         match *self {
-            Call::Play { card, .. } | Call::React { card, .. } | Call::Hook { card, .. } | Call::AtEnd { card, .. }
+            Call::Play { card, .. }
+            | Call::CounterAct { card, .. }
+            | Call::Hook { card, .. }
+            | Call::AtEnd { card, .. }
             | Call::RollPlan { card, .. } => card,
         }
     }
@@ -145,15 +163,37 @@ pub enum HostRequest {
     /// `H.Target` / `H.TargetTile` pipeline and answers with the player (or tile)
     /// actually targeted, or -1 when the targeting failed. `single` lets a
     /// field `redirect` hook move the hit (C# `CardDef.SingleTarget`).
-    Target { player_id: i32, tile: i32, single: bool },
+    Target {
+        player_id: i32,
+        tile: i32,
+        single: bool,
+    },
     /// C# `H.CardMove(c, m)`: the card shaped the move (via the plan ops) and
     /// asked for it to run now. The engine runs `Cx::card_move` -- it may open
     /// prompts -- and the effect then replays past this call. `plan` is the
     /// plan as the card left it.
-    Move { player_id: i32, plan: game_core::engine::MoveCtx },
+    Move {
+        player_id: i32,
+        plan: game_core::engine::MoveCtx,
+    },
     /// C# `H.AgentLanding`: the player lands on `agent` as a 「星光代理」 (the
     /// buy-or-pay-rent routine). Runs engine-side; the effect replays past it.
     AgentLanding { player_id: i32, agent: i32 },
+    /// C# `H.SettleAt`: a full [触发结算] of `tile` for this player. The player
+    /// does not move.
+    SettleAt {
+        player_id: i32,
+        tile: i32,
+        main: bool,
+    },
+    /// C# `H.BuyRoutine`: the purchase itself.
+    Buy { player_id: i32, tile: i32 },
+    /// C# `H.BuildRoutine`: pay and raise one house on `tile`.
+    Build { player_id: i32, tile: i32 },
+    /// C# `H.OfferBuildAmong`: prompt to build on one of `tiles`, then build.
+    OfferBuild { player_id: i32, tiles: Vec<i32> },
+    /// C# `H.MortgageRoutine`: mortgage one of the player's deeds.
+    Mortgage { player_id: i32, tile: i32 },
 }
 
 #[derive(Debug, Clone)]
@@ -238,10 +278,16 @@ impl RulesetBuilder {
         let sha256 = hex_sha256(wasm);
         let m = self.modules.len();
         for (local, c) in cards.into_iter().enumerate() {
-            self.slots.push(Slot { module: m, local: local as i32 });
+            self.slots.push(Slot {
+                module: m,
+                local: local as i32,
+            });
             self.cards.push(c);
         }
-        self.modules.push(LoadedModule { module, sha256: sha256.clone() });
+        self.modules.push(LoadedModule {
+            module,
+            sha256: sha256.clone(),
+        });
         Ok(sha256)
     }
 
@@ -290,7 +336,12 @@ pub struct Ruleset {
 
 impl Ruleset {
     pub fn builder() -> RulesetBuilder {
-        RulesetBuilder { engine: be::new_engine(), modules: vec![], cards: vec![], slots: vec![] }
+        RulesetBuilder {
+            engine: be::new_engine(),
+            modules: vec![],
+            cards: vec![],
+            slots: vec![],
+        }
     }
 
     /// Convenience: a ruleset made of exactly one module.
@@ -345,23 +396,39 @@ impl Ruleset {
     /// `world` is never modified. On [`Outcome::Done`] the caller commits the returned
     /// world; on [`Outcome::NeedInput`] it publishes the prompt, and once the answer
     /// arrives calls again with the **same** `world` and `answers` + the new answer.
-    pub fn run<W: CardWorld>(&self, world: &W, call: Call, answers: &[i32]) -> Result<Outcome<W>, RuleError> {
+    pub fn run<W: CardWorld>(
+        &self,
+        world: &W,
+        call: Call,
+        answers: &[i32],
+    ) -> Result<Outcome<W>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         self.check(card)?;
         let info = &self.inner.cards[card as usize];
         let entry = match call {
             Call::Play { .. } => info.entry(OnKind::Play, None),
-            Call::React { .. } => info.entry(OnKind::React, Some(world.trigger().kind)),
+            Call::CounterAct { .. } => info.entry(OnKind::CounterAct, Some(world.trigger().kind)),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
             Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
         };
-        let Some(entry) = entry else { return Ok(Outcome::Done(world.clone())) };
+        let Some(entry) = entry else {
+            return Ok(Outcome::Done(world.clone()));
+        };
         let mut store = self.store(world.clone(), answers)?;
-        let res = call_card(&self.inner, &mut store, card, entry, export::OP_RUN, player_id);
+        let res = call_card(
+            &self.inner,
+            &mut store,
+            card,
+            entry,
+            export::OP_RUN,
+            player_id,
+        );
         let state = store.into_data();
         match res {
-            Ok(_) => Ok(Outcome::Done(state.world.expect("world is restored after nested calls"))),
+            Ok(_) => Ok(Outcome::Done(
+                state.world.expect("world is restored after nested calls"),
+            )),
             Err(e) if is_need_input(&e) => {
                 if let Some(req) = state.host_request {
                     Ok(Outcome::NeedHost(req))
@@ -377,15 +444,68 @@ impl Ruleset {
 
     /// `Card.CanReact` against the current trigger. Runs on a throwaway copy, so it
     /// cannot change the world even if the card calls a mutating function.
-    pub fn can_react<W: CardWorld>(&self, world: &W, card: i32, player_id: i32) -> Result<bool, RuleError> {
+    pub fn can_react<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+    ) -> Result<bool, RuleError> {
         self.check(card)?;
         // Only a card that declared a [反击] at this kind is ever asked.
-        let Some(entry) = self.inner.cards[card as usize].entry(OnKind::React, Some(world.trigger().kind)) else {
+        let Some(entry) =
+            self.inner.cards[card as usize].entry(OnKind::CounterAct, Some(world.trigger().kind))
+        else {
             return Ok(false);
         };
         let mut store = self.store(world.clone(), &[])?;
-        match call_card(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id) {
+        match call_card(
+            &self.inner,
+            &mut store,
+            card,
+            entry,
+            export::OP_GUARD,
+            player_id,
+        ) {
             Ok(v) => Ok(v != 0),
+            Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
+            Err(e) => Err(trap(e)),
+        }
+    }
+
+    /// The pure guard on an `On::Hook` entry, against the current trigger.
+    ///
+    /// Answers `Some(passed)`: the guard is the **activation** gate, so `false`
+    /// means the card is not activated at all (no body, nothing on the UI) and
+    /// `true` means it fires and is shown. Answers `None` for an entry that has
+    /// no guard to ask -- `On::Gate` is a question the card *answers*, not an
+    /// activation -- and the caller runs it unconditionally, as before.
+    ///
+    /// Same throwaway-copy contract as [`Self::can_react`]: it cannot change the
+    /// world even if the card calls a mutating function by mistake, and a
+    /// prompting guard fails closed.
+    pub fn can_hook<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+    ) -> Result<Option<bool>, RuleError> {
+        self.check(card)?;
+        let kind = world.trigger().kind;
+        let info = &self.inner.cards[card as usize];
+        let Some(entry) = info.entry(OnKind::Hook, Some(kind)) else {
+            // A gate (or nothing) at this kind: no guard exists.
+            return Ok(None);
+        };
+        let mut store = self.store(world.clone(), &[])?;
+        match call_card(
+            &self.inner,
+            &mut store,
+            card,
+            entry,
+            export::OP_GUARD,
+            player_id,
+        ) {
+            Ok(v) => Ok(Some(v != 0)),
             Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
             Err(e) => Err(trap(e)),
         }
@@ -394,9 +514,16 @@ impl Ruleset {
     /// `Card.WhyNot` -- the reason the card cannot be played now, or `None` when
     /// it can. Also a pure query on a throwaway copy (a prompting guard reports
     /// [`RuleError::GuardPrompted`]).
-    pub fn cant_play<W: CardWorld>(&self, world: &W, card: i32, player_id: i32) -> Result<Option<crate::Msg>, RuleError> {
+    pub fn cant_play<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+    ) -> Result<Option<crate::Msg>, RuleError> {
         self.check(card)?;
-        let Some(entry) = self.inner.cards[card as usize].entry(OnKind::CantPlay, None) else { return Ok(None) };
+        let Some(entry) = self.inner.cards[card as usize].entry(OnKind::Play, None) else {
+            return Ok(None);
+        };
         let mut store = self.store(world.clone(), &[])?;
         match call_card_msg(&self.inner, &mut store, card, entry, player_id) {
             Ok(v) => Ok(v),
@@ -412,7 +539,11 @@ impl Ruleset {
         Ok(())
     }
 
-    fn store<W: CardWorld>(&self, world: W, answers: &[i32]) -> Result<Store<HostState<W>>, RuleError> {
+    fn store<W: CardWorld>(
+        &self,
+        world: W,
+        answers: &[i32],
+    ) -> Result<Store<HostState<W>>, RuleError> {
         let state = HostState::new(self.inner.clone(), world, answers.to_vec(), 0);
         let mut store = Store::new(&self.inner.engine, state);
         store.set_fuel(self.fuel).map_err(trap)?;
@@ -425,7 +556,10 @@ fn trap(e: Error) -> RuleError {
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Per-run store data. `world` is `None` only while a nested `play_card` has
@@ -456,11 +590,15 @@ impl<W> HostState<W> {
     }
 
     fn w(&mut self) -> &mut W {
-        self.world.as_mut().expect("world borrowed by a nested call")
+        self.world
+            .as_mut()
+            .expect("world borrowed by a nested call")
     }
 
     fn wr(&self) -> &W {
-        self.world.as_ref().expect("world borrowed by a nested call")
+        self.world
+            .as_ref()
+            .expect("world borrowed by a nested call")
     }
 }
 
@@ -477,10 +615,11 @@ fn call_card<W: CardWorld>(
     let slot = rules.slots[card as usize];
     let linker = linker::<W>(rules)?;
     let inst = instantiate(&linker, &mut *store, &rules.modules[slot.module].module)?;
-    inst.get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?.call(&mut *store, (slot.local, entry, op, player_id))
+    inst.get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+        .call(&mut *store, (slot.local, entry, op, player_id))
 }
 
-/// Like [`call_card`] for a `CantPlay` entry, which answers with a packed `Msg`
+/// Like [`call_card`] for a `Play` gate, which answers with a packed `Msg`
 /// buffer: the buffer is read back before the instance drops.
 fn call_card_msg<W: CardWorld>(
     rules: &Inner,
@@ -500,8 +639,11 @@ fn call_card_msg<W: CardWorld>(
     }
     let (ptr, len) = abi::unpack(packed);
     let bytes = read_mem(&inst, store, ptr as i32, len as i32)?;
-    let m: card_sdk::msg::Msg =
-        postcard::from_bytes(&bytes).map_err(|e| err(format!("cant_play: guest message is not Msg postcard ({e})")))?;
+    let m: card_sdk::msg::Msg = postcard::from_bytes(&bytes).map_err(|e| {
+        err(format!(
+            "cant_play: guest message is not Msg postcard ({e})"
+        ))
+    })?;
     Ok(Some(engine_msg(m)))
 }
 
@@ -522,7 +664,9 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
         .and_then(|f| f.call(&mut store, ()))
         .map_err(|e| load(format!("{}: {e}", export::ABI_VERSION)))?;
     if version != ABI_VERSION {
-        return Err(load(format!("module built for ABI v{version}, host speaks v{ABI_VERSION}")));
+        return Err(load(format!(
+            "module built for ABI v{version}, host speaks v{ABI_VERSION}"
+        )));
     }
 
     let packed = inst
@@ -530,10 +674,14 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
         .and_then(|f| f.call(&mut store, ()))
         .map_err(|e| load(format!("{}: {e}", export::MANIFEST)))?;
     let (ptr, len) = abi::unpack(packed);
-    let bytes = read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
+    let bytes =
+        read_mem(&inst, &mut store, ptr as i32, len as i32).map_err(|e| load(error_text(&e)))?;
     let entries: Vec<card_sdk::abi::ManifestEntry> =
         postcard::from_bytes(&bytes).map_err(|e| load(format!("manifest: {e}")))?;
-    let cards: Vec<CardInfo> = entries.into_iter().map(|e| CardInfo { id: e.id, on: e.on }).collect();
+    let cards: Vec<CardInfo> = entries
+        .into_iter()
+        .map(|e| CardInfo { id: e.id, on: e.on })
+        .collect();
     if cards.is_empty() {
         return Err(load("module declares no cards".into()));
     }
@@ -551,7 +699,11 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
 /// The C# `AbnormalGate` from inside a card run: on replay the logged answer
 /// says whether the effect went through; otherwise the run is paused with a
 /// `Gate` request and the engine adjudicates it.
-fn gate<W: CardWorld>(c: &mut Caller<'_, HostState<W>>, player_id: i32, kind: AbKind) -> Result<bool, Error> {
+fn gate<W: CardWorld>(
+    c: &mut Caller<'_, HostState<W>>,
+    player_id: i32,
+    kind: AbKind,
+) -> Result<bool, Error> {
     let st = c.data_mut();
     if let Some(&allowed) = st.answers.get(st.next_answer) {
         st.next_answer += 1;
@@ -561,7 +713,11 @@ fn gate<W: CardWorld>(c: &mut Caller<'_, HostState<W>>, player_id: i32, kind: Ab
     Err(need_input())
 }
 
-fn guest_str<W>(caller: &mut Caller<'_, HostState<W>>, ptr: i32, len: i32) -> Result<String, Error> {
+fn guest_str<W>(
+    caller: &mut Caller<'_, HostState<W>>,
+    ptr: i32,
+    len: i32,
+) -> Result<String, Error> {
     let bytes = read_guest(caller, ptr, len)?;
     String::from_utf8(bytes).map_err(|_| err("guest string is not UTF-8"))
 }
@@ -570,10 +726,14 @@ fn guest_str<W>(caller: &mut Caller<'_, HostState<W>>, ptr: i32, len: i32) -> Re
 /// `Msg`). A card that sends anything else traps instead of showing raw text to
 /// players. Decoding uses the same `serde` type the guest encodes with, so the
 /// two sides cannot disagree on the layout.
-fn guest_msg<W: CardWorld>(caller: &mut Caller<'_, HostState<W>>, ptr: i32, len: i32) -> Result<crate::Msg, Error> {
+fn guest_msg<W: CardWorld>(
+    caller: &mut Caller<'_, HostState<W>>,
+    ptr: i32,
+    len: i32,
+) -> Result<crate::Msg, Error> {
     let bytes = read_guest(caller, ptr, len)?;
-    let m: card_sdk::msg::Msg =
-        postcard::from_bytes(&bytes).map_err(|e| err(format!("guest message is not Msg postcard ({e})")))?;
+    let m: card_sdk::msg::Msg = postcard::from_bytes(&bytes)
+        .map_err(|e| err(format!("guest message is not Msg postcard ({e})")))?;
     Ok(engine_msg(m))
 }
 
@@ -609,11 +769,16 @@ thread_local! {
 }
 
 fn linker<W: CardWorld + 'static>(rules: &Inner) -> Result<Linker<HostState<W>>, Error> {
-    let key = (&rules.engine as *const Engine as usize, std::any::TypeId::of::<W>());
+    let key = (
+        &rules.engine as *const Engine as usize,
+        std::any::TypeId::of::<W>(),
+    );
     let cached = LINKERS.with(|c| {
-        c.borrow()
-            .get(&key)
-            .map(|hit| hit.downcast_ref::<Linker<HostState<W>>>().expect("cache is keyed by TypeId").clone())
+        c.borrow().get(&key).map(|hit| {
+            hit.downcast_ref::<Linker<HostState<W>>>()
+                .expect("cache is keyed by TypeId")
+                .clone()
+        })
     });
     if let Some(hit) = cached {
         return Ok(hit);
@@ -628,73 +793,239 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     let m = IMPORT_MODULE;
     type C<'a, W> = Caller<'a, HostState<W>>;
 
-    l.func_wrap(m, "roll", |mut c: C<W>, player_id: i32, count: i32, sides: i32| -> Result<i32, Error> {
-        if !(1..=100).contains(&count) || !(1..=1000).contains(&sides) {
-            return Err(err(format!("roll({count}d{sides}) out of range")));
-        }
-        Ok(c.data_mut().w().roll(player_id, count, sides))
-    })?;
-    l.func_wrap(m, "log", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-        let msg = guest_msg(&mut c, p, n)?;
-        c.data_mut().w().log(player_id, msg);
-        Ok(())
-    })?;
+    l.func_wrap(
+        m,
+        "roll",
+        |mut c: C<W>, player_id: i32, count: i32, sides: i32| -> Result<i32, Error> {
+            if !(1..=100).contains(&count) || !(1..=1000).contains(&sides) {
+                return Err(err(format!("roll({count}d{sides}) out of range")));
+            }
+            Ok(c.data_mut().w().roll(player_id, count, sides))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "log",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
+            let msg = guest_msg(&mut c, p, n)?;
+            c.data_mut().w().log(player_id, msg);
+            Ok(())
+        },
+    )?;
     l.func_wrap(m, "tile_count", |c: C<W>| c.data().wr().tile_count())?;
-    l.func_wrap(m, "add_mark", |mut c: C<W>, tile: i32, player_id: i32, kp: i32, kl: i32, p: i32, n: i32| -> Result<(), Error> {
-        let kind = guest_str(&mut c, kp, kl)?;
-        let note = guest_msg(&mut c, p, n)?;
-        c.data_mut().w().add_mark(tile, player_id, &kind, note);
+    l.func_wrap(
+        m,
+        "add_mark",
+        |mut c: C<W>,
+         tile: i32,
+         player_id: i32,
+         kp: i32,
+         kl: i32,
+         p: i32,
+         n: i32|
+         -> Result<(), Error> {
+            let kind = guest_str(&mut c, kp, kl)?;
+            let note = guest_msg(&mut c, p, n)?;
+            c.data_mut().w().add_mark(tile, player_id, &kind, note);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(m, "money", |c: C<W>, player_id: i32| {
+        c.data().wr().money(player_id)
+    })?;
+    l.func_wrap(
+        m,
+        "gain",
+        |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let src = guest_msg(&mut c, p, n)?;
+            Ok(c.data_mut().w().gain(player_id, amount, src))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "pay",
+        |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let src = guest_msg(&mut c, p, n)?;
+            let st = c.data_mut();
+            // A card-driven payment is paused so the engine can raise a `pay`
+            // trigger (and the [反击] window) before the money moves. The answer is
+            // the final amount to move -- 0 cancels the payment outright.
+            if let Some(&final_amount) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(st.w().pay(player_id, final_amount, src));
+            }
+            st.host_request = Some(HostRequest::Pay {
+                from: player_id,
+                to: -1,
+                amount,
+            });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(m, "player_count", |c: C<W>| c.data().wr().player_count())?;
+    l.func_wrap(m, "player_out", |c: C<W>, player_id: i32| {
+        c.data().wr().player_out(player_id)
+    })?;
+    l.func_wrap(m, "others_count", |c: C<W>, player_id: i32| {
+        c.data().wr().others_count(player_id)
+    })?;
+    l.func_wrap(m, "others_at", |c: C<W>, player_id: i32, index: i32| {
+        c.data().wr().others_at(player_id, index)
+    })?;
+    l.func_wrap(
+        m,
+        "tile_named",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            let name = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().tile_named(&name))
+        },
+    )?;
+    l.func_wrap(m, "tile_owner", |c: C<W>, tile: i32| {
+        c.data().wr().tile_owner(tile)
+    })?;
+    l.func_wrap(m, "player_pos", |c: C<W>, player_id: i32| {
+        c.data().wr().player_pos(player_id)
+    })?;
+    l.func_wrap(
+        m,
+        "tile_steps_ahead",
+        |c: C<W>, player_id: i32, steps: i32| c.data().wr().tile_steps_ahead(player_id, steps),
+    )?;
+    l.func_wrap(m, "rent_of", |c: C<W>, tile: i32| {
+        c.data().wr().rent_of(tile)
+    })?;
+    l.func_wrap(m, "buy_price", |c: C<W>, tile: i32| {
+        c.data().wr().buy_price(tile)
+    })?;
+    l.func_wrap(m, "build_cost", |c: C<W>, tile: i32| {
+        c.data().wr().build_cost(tile)
+    })?;
+    l.func_wrap(m, "mortgage_value", |c: C<W>, tile: i32| {
+        c.data().wr().mortgage_value(tile)
+    })?;
+    l.func_wrap(m, "owned_count", |c: C<W>, player_id: i32| {
+        c.data().wr().owned_count(player_id)
+    })?;
+    l.func_wrap(m, "owned_at", |c: C<W>, player_id: i32, index: i32| {
+        c.data().wr().owned_at(player_id, index)
+    })?;
+    l.func_wrap(m, "is_buyable", |c: C<W>, tile: i32| {
+        c.data().wr().is_buyable(tile)
+    })?;
+    l.func_wrap(m, "is_shop", |c: C<W>, tile: i32| {
+        c.data().wr().is_shop(tile)
+    })?;
+    l.func_wrap(m, "is_ring", |c: C<W>, tile: i32| {
+        c.data().wr().is_ring(tile)
+    })?;
+    l.func_wrap(m, "is_circle", |c: C<W>, tile: i32| {
+        c.data().wr().is_circle(tile)
+    })?;
+    l.func_wrap(m, "set_tile_color", |mut c: C<W>, tile: i32, group: i32| {
+        c.data_mut().w().set_tile_color(tile, group);
         Ok(())
     })?;
-    l.func_wrap(m, "money", |c: C<W>, player_id: i32| c.data().wr().money(player_id))?;
-    l.func_wrap(m, "gain", |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let src = guest_msg(&mut c, p, n)?;
-        Ok(c.data_mut().w().gain(player_id, amount, src))
+    l.func_wrap(
+        m,
+        "set_extra_color",
+        |mut c: C<W>, player_id: i32, tile: i32, group: i32| {
+            c.data_mut().w().set_extra_color(player_id, tile, group);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_color",
+        |c: C<W>, player_id: i32, tile: i32, group: i32| {
+            c.data().wr().is_color(player_id, tile, group) as i32
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_live_house_for",
+        |c: C<W>, player_id: i32, tile: i32| c.data().wr().is_live_house_for(player_id, tile),
+    )?;
+    l.func_wrap(m, "set_buy_discount", |mut c: C<W>, n: i32| {
+        c.data_mut().w().set_buy_discount(n);
+        Ok(())
     })?;
-    l.func_wrap(m, "pay", |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let src = guest_msg(&mut c, p, n)?;
-        let st = c.data_mut();
-        // A card-driven payment is paused so the engine can raise a `pay`
-        // trigger (and the [反击] window) before the money moves. The answer is
-        // the final amount to move -- 0 cancels the payment outright.
-        if let Some(&final_amount) = st.answers.get(st.next_answer) {
-            st.next_answer += 1;
-            return Ok(st.w().pay(player_id, final_amount, src));
-        }
-        st.host_request = Some(HostRequest::Pay { from: player_id, to: -1, amount });
-        Err(need_input())
+    l.func_wrap(m, "paid_in_settle", |c: C<W>| {
+        c.data().wr().paid_in_settle()
     })?;
-    l.func_wrap(m, "player_count", |c: C<W>| c.data().wr().player_count())?;
-    l.func_wrap(m, "player_out", |c: C<W>, player_id: i32| c.data().wr().player_out(player_id))?;
-    l.func_wrap(m, "others_count", |c: C<W>, player_id: i32| c.data().wr().others_count(player_id))?;
-    l.func_wrap(m, "others_at", |c: C<W>, player_id: i32, index: i32| c.data().wr().others_at(player_id, index))?;
-    l.func_wrap(m, "tile_named", |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-        let name = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().tile_named(&name))
+    l.func_wrap(m, "set_free_buy", |mut c: C<W>, on: i32| {
+        c.data_mut().w().set_free_buy(on != 0);
+        Ok(())
     })?;
-    l.func_wrap(m, "tile_owner", |c: C<W>, tile: i32| c.data().wr().tile_owner(tile))?;
-    l.func_wrap(m, "player_pos", |c: C<W>, player_id: i32| c.data().wr().player_pos(player_id))?;
-    l.func_wrap(m, "tile_steps_ahead", |c: C<W>, player_id: i32, steps: i32| c.data().wr().tile_steps_ahead(player_id, steps))?;
-    l.func_wrap(m, "rent_of", |c: C<W>, tile: i32| c.data().wr().rent_of(tile))?;
-    l.func_wrap(m, "buy_price", |c: C<W>, tile: i32| c.data().wr().buy_price(tile))?;
-    l.func_wrap(m, "build_cost", |c: C<W>, tile: i32| c.data().wr().build_cost(tile))?;
-    l.func_wrap(m, "mortgage_value", |c: C<W>, tile: i32| c.data().wr().mortgage_value(tile))?;
-    l.func_wrap(m, "owned_count", |c: C<W>, player_id: i32| c.data().wr().owned_count(player_id))?;
-    l.func_wrap(m, "owned_at", |c: C<W>, player_id: i32, index: i32| c.data().wr().owned_at(player_id, index))?;
-    l.func_wrap(m, "is_buyable", |c: C<W>, tile: i32| c.data().wr().is_buyable(tile))?;
-    l.func_wrap(m, "is_shop", |c: C<W>, tile: i32| c.data().wr().is_shop(tile))?;
-    l.func_wrap(m, "is_ring", |c: C<W>, tile: i32| c.data().wr().is_ring(tile))?;
-    l.func_wrap(m, "is_circle", |c: C<W>, tile: i32| c.data().wr().is_circle(tile))?;
-    l.func_wrap(m, "is_live_house", |c: C<W>, tile: i32| c.data().wr().is_live_house(tile))?;
-    l.func_wrap(m, "tile_group", |c: C<W>, tile: i32| c.data().wr().tile_group(tile))?;
-    l.func_wrap(m, "tile_price", |c: C<W>, tile: i32| c.data().wr().tile_price(tile))?;
-    l.func_wrap(m, "houses_of", |c: C<W>, tile: i32| c.data().wr().houses_of(tile))?;
+    l.func_wrap(
+        m,
+        "turn_rolls",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            let rolls = c.data().wr().turn_rolls();
+            let bytes = postcard::to_allocvec(&rolls)
+                .map_err(|e| err(format!("turn_rolls encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_build_discount",
+        |mut c: C<W>, n: i32, layers: i32| {
+            c.data_mut().w().set_build_discount(n, layers);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(m, "set_build_cost_pct", |mut c: C<W>, pct: i32| {
+        c.data_mut().w().set_build_cost_pct(pct);
+        Ok(())
+    })?;
+    l.func_wrap(m, "turn_start_pos", |c: C<W>, player_id: i32| {
+        c.data().wr().turn_start_pos(player_id)
+    })?;
+    l.func_wrap(
+        m,
+        "turn_snap",
+        |mut c: C<W>, player_id: i32, buf: i32| -> Result<i32, Error> {
+            let (pos, stay, stun, exile) = c.data().wr().turn_snap(player_id);
+            let mut out = [0u8; 16];
+            for (i, v) in [pos, stay, stun, exile].into_iter().enumerate() {
+                out[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
+            }
+            write_guest(&mut c, buf, &out)?;
+            Ok(16)
+        },
+    )?;
+    l.func_wrap(m, "set_raze_on_buy", |mut c: C<W>, on: i32| {
+        c.data_mut().w().set_raze_on_buy(on != 0);
+        Ok(())
+    })?;
+    l.func_wrap(m, "is_agent", |c: C<W>, tile: i32| {
+        c.data().wr().is_agent(tile)
+    })?;
+    l.func_wrap(m, "is_live_house", |c: C<W>, tile: i32| {
+        c.data().wr().is_live_house(tile)
+    })?;
+    l.func_wrap(m, "tile_group", |c: C<W>, tile: i32| {
+        c.data().wr().tile_group(tile)
+    })?;
+    l.func_wrap(m, "tile_price", |c: C<W>, tile: i32| {
+        c.data().wr().tile_price(tile)
+    })?;
+    l.func_wrap(m, "houses_of", |c: C<W>, tile: i32| {
+        c.data().wr().houses_of(tile)
+    })?;
     l.func_wrap(m, "set_houses", |mut c: C<W>, tile: i32, n: i32| {
         c.data_mut().w().set_houses(tile, n);
         Ok(())
     })?;
-    l.func_wrap(m, "add_house", |mut c: C<W>, tile: i32, n: i32| c.data_mut().w().add_house(tile, n))?;
-    l.func_wrap(m, "mortgaged_of", |c: C<W>, tile: i32| c.data().wr().mortgaged_of(tile))?;
+    l.func_wrap(m, "add_house", |mut c: C<W>, tile: i32, n: i32| {
+        c.data_mut().w().add_house(tile, n)
+    })?;
+    l.func_wrap(m, "mortgaged_of", |c: C<W>, tile: i32| {
+        c.data().wr().mortgaged_of(tile)
+    })?;
     l.func_wrap(m, "set_mortgaged", |mut c: C<W>, tile: i32, v: i32| {
         c.data_mut().w().set_mortgaged(tile, v);
         Ok(())
@@ -703,280 +1034,765 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         c.data_mut().w().set_owner(tile, player_id);
         Ok(())
     })?;
-    l.func_wrap(m, "dist", |c: C<W>, a: i32, b: i32| c.data().wr().dist(a, b))?;
-    l.func_wrap(m, "tile_forward", |c: C<W>, a: i32, b: i32| c.data().wr().tile_forward(a, b))?;
-    l.func_wrap(m, "neighbor", |c: C<W>, player_id: i32, dir: i32| c.data().wr().neighbor(player_id, dir))?;
-    l.func_wrap(m, "players_on_count", |c: C<W>, tile: i32, except: i32| c.data().wr().players_on_count(tile, except))?;
-    l.func_wrap(m, "players_on_at", |c: C<W>, tile: i32, except: i32, index: i32| c.data().wr().players_on_at(tile, except, index))?;
-    l.func_wrap(m, "draw", |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-        Ok(c.data_mut().w().draw(player_id, n))
+    l.func_wrap(m, "dist", |c: C<W>, a: i32, b: i32| {
+        c.data().wr().dist(a, b)
     })?;
-    l.func_wrap(m, "add_to_hand", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-        let card = guest_str(&mut c, p, n)?;
-        c.data_mut().w().add_to_hand(player_id, &card);
-        Ok(())
+    l.func_wrap(m, "tile_forward", |c: C<W>, a: i32, b: i32| {
+        c.data().wr().tile_forward(a, b)
     })?;
-    l.func_wrap(m, "add_to_deck", |mut c: C<W>, player_id: i32, p: i32, n: i32, shuffle: i32| -> Result<(), Error> {
-        let card = guest_str(&mut c, p, n)?;
-        c.data_mut().w().add_to_deck(player_id, &card, shuffle != 0);
-        Ok(())
+    l.func_wrap(m, "neighbor", |c: C<W>, player_id: i32, dir: i32| {
+        c.data().wr().neighbor(player_id, dir)
     })?;
-    l.func_wrap(m, "add_to_deck_at", |mut c: C<W>, player_id: i32, p: i32, n: i32, pos: i32| -> Result<(), Error> {
-        let card = guest_str(&mut c, p, n)?;
-        c.data_mut().w().add_to_deck_at(player_id, &card, pos);
-        Ok(())
+    l.func_wrap(m, "players_on_count", |c: C<W>, tile: i32, except: i32| {
+        c.data().wr().players_on_count(tile, except)
     })?;
-    l.func_wrap(m, "take_card", |mut c: C<W>, player_id: i32, pile: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let pile = crate::CardPile::from_i32(pile).ok_or_else(|| err(format!("bad card pile {pile}")))?;
-        let id = guest_str(&mut c, p, n)?;
-        Ok(c.data_mut().w().take_card(player_id, pile, &id) as i32)
-    })?;
+    l.func_wrap(
+        m,
+        "players_on_at",
+        |c: C<W>, tile: i32, except: i32, index: i32| {
+            c.data().wr().players_on_at(tile, except, index)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "draw",
+        |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
+            Ok(c.data_mut().w().draw(player_id, n))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_to_hand",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
+            let card = guest_str(&mut c, p, n)?;
+            c.data_mut().w().add_to_hand(player_id, &card);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_to_deck",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, shuffle: i32| -> Result<(), Error> {
+            let card = guest_str(&mut c, p, n)?;
+            c.data_mut().w().add_to_deck(player_id, &card, shuffle != 0);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_to_deck_at",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, pos: i32| -> Result<(), Error> {
+            let card = guest_str(&mut c, p, n)?;
+            c.data_mut().w().add_to_deck_at(player_id, &card, pos);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "take_card",
+        |mut c: C<W>, player_id: i32, pile: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let pile = crate::CardPile::from_i32(pile)
+                .ok_or_else(|| err(format!("bad card pile {pile}")))?;
+            let id = guest_str(&mut c, p, n)?;
+            Ok(c.data_mut().w().take_card(player_id, pile, &id) as i32)
+        },
+    )?;
     // Host->guest list: the guest passes its own buffer; the host writes the
     // postcard bytes only if they fit and always returns the length needed.
-    l.func_wrap(m, "cards_in", |mut c: C<W>, player_id: i32, pile: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-        let pile = crate::CardPile::from_i32(pile).ok_or_else(|| err(format!("bad card pile {pile}")))?;
-        let list = c.data().wr().cards_in(player_id, pile);
-        let bytes = postcard::to_allocvec(&list).map_err(|e| err(format!("cards_in encode: {e}")))?;
-        if bytes.len() as i32 <= cap {
-            write_guest(&mut c, buf, &bytes)?;
-        }
-        Ok(bytes.len() as i32)
+    l.func_wrap(
+        m,
+        "cards_in",
+        |mut c: C<W>, player_id: i32, pile: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let pile = crate::CardPile::from_i32(pile)
+                .ok_or_else(|| err(format!("bad card pile {pile}")))?;
+            let list = c.data().wr().cards_in(player_id, pile);
+            let bytes =
+                postcard::to_allocvec(&list).map_err(|e| err(format!("cards_in encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "to_discard",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
+            let card = guest_str(&mut c, p, n)?;
+            c.data_mut().w().to_discard(player_id, &card);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "hand_count",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().hand_count(player_id, &card))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "discard_count",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().discard_count(player_id, &card))
+        },
+    )?;
+    l.func_wrap(m, "hand_size", |c: C<W>, player_id: i32| {
+        c.data().wr().hand_size(player_id)
     })?;
-    l.func_wrap(m, "to_discard", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-        let card = guest_str(&mut c, p, n)?;
-        c.data_mut().w().to_discard(player_id, &card);
-        Ok(())
+    l.func_wrap(m, "deck_count", |c: C<W>, player_id: i32| {
+        c.data().wr().deck_count(player_id)
     })?;
-    l.func_wrap(m, "hand_count", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let card = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().hand_count(player_id, &card))
+    l.func_wrap(m, "discard_size", |c: C<W>, player_id: i32| {
+        c.data().wr().discard_size(player_id)
     })?;
-    l.func_wrap(m, "discard_count", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let card = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().discard_count(player_id, &card))
+    l.func_wrap(
+        m,
+        "discard_from_hand",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, p, n)?;
+            Ok(c.data_mut().w().discard_from_hand(player_id, &card))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "shuffle_into_deck",
+        |mut c: C<W>, player_id: i32, hand: i32, discard: i32| {
+            c.data_mut()
+                .w()
+                .shuffle_into_deck(player_id, hand != 0, discard != 0)
+        },
+    )?;
+    l.func_wrap(m, "unplace_card", |mut c: C<W>, player_id: i32| {
+        c.data_mut().w().unplace_card(player_id) as i32
     })?;
-    l.func_wrap(m, "hand_size", |c: C<W>, player_id: i32| c.data().wr().hand_size(player_id))?;
-    l.func_wrap(m, "deck_count", |c: C<W>, player_id: i32| c.data().wr().deck_count(player_id))?;
-    l.func_wrap(m, "discard_size", |c: C<W>, player_id: i32| c.data().wr().discard_size(player_id))?;
-    l.func_wrap(m, "discard_from_hand", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let card = guest_str(&mut c, p, n)?;
-        Ok(c.data_mut().w().discard_from_hand(player_id, &card))
+    l.func_wrap(
+        m,
+        "placed_cards",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let names = c.data().wr().placed_cards(player_id);
+            let bytes = postcard::to_allocvec(&names)
+                .map_err(|e| err(format!("placed_cards encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_text_mentions",
+        |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            let needle = guest_str(&mut c, np, nl)?;
+            Ok(c.data().wr().card_text_mentions(&card, &needle) as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_crystals",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data().wr().card_crystals(player_id, &card))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_card_crystals",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data_mut().w().add_card_crystals(player_id, &card, n, max))
+        },
+    )?;
+    l.func_wrap(m, "is_placed", |c: C<W>, player_id: i32| {
+        c.data().wr().is_placed(player_id)
     })?;
-    l.func_wrap(m, "shuffle_into_deck", |mut c: C<W>, player_id: i32, hand: i32, discard: i32| {
-        c.data_mut().w().shuffle_into_deck(player_id, hand != 0, discard != 0)
+    l.func_wrap(m, "crystals", |c: C<W>, player_id: i32| {
+        c.data().wr().crystals(player_id)
     })?;
-    l.func_wrap(m, "unplace_card", |mut c: C<W>, player_id: i32| c.data_mut().w().unplace_card(player_id) as i32)?;
-    l.func_wrap(m, "is_placed", |c: C<W>, player_id: i32| c.data().wr().is_placed(player_id))?;
-    l.func_wrap(m, "crystals", |c: C<W>, player_id: i32| c.data().wr().crystals(player_id))?;
-    l.func_wrap(m, "set_crystals", |mut c: C<W>, player_id: i32, n: i32| c.data_mut().w().set_crystals(player_id, n))?;
-    l.func_wrap(m, "add_crystals", |mut c: C<W>, player_id: i32, n: i32, max: i32| c.data_mut().w().add_crystals(player_id, n, max))?;
-    l.func_wrap(m, "count_marks", |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
-        let kind = guest_str(&mut c, kp, kl)?;
-        Ok(c.data().wr().count_marks(tile, &kind, owner))
+    l.func_wrap(m, "set_crystals", |mut c: C<W>, player_id: i32, n: i32| {
+        c.data_mut().w().set_crystals(player_id, n)
     })?;
-    l.func_wrap(m, "remove_marks", |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
-        let kind = guest_str(&mut c, kp, kl)?;
-        Ok(c.data_mut().w().remove_marks(tile, &kind, owner))
-    })?;
-    l.func_wrap(m, "tok", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let name = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().tok(player_id, &name))
-    })?;
-    l.func_wrap(m, "set_tok", |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-        let name = guest_str(&mut c, p, n)?;
-        c.data_mut().w().set_tok(player_id, &name, v);
-        Ok(())
-    })?;
-    l.func_wrap(m, "add_tok", |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32, max: i32| -> Result<i32, Error> {
-        let name = guest_str(&mut c, p, n)?;
-        Ok(c.data_mut().w().add_tok(player_id, &name, by, max))
-    })?;
+    l.func_wrap(
+        m,
+        "add_crystals",
+        |mut c: C<W>, player_id: i32, n: i32, max: i32| {
+            c.data_mut().w().add_crystals(player_id, n, max)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "count_marks",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
+            let kind = guest_str(&mut c, kp, kl)?;
+            Ok(c.data().wr().count_marks(tile, &kind, owner))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "remove_marks",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
+            let kind = guest_str(&mut c, kp, kl)?;
+            Ok(c.data_mut().w().remove_marks(tile, &kind, owner))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tok",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let name = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().tok(player_id, &name))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_tok",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
+            let name = guest_str(&mut c, p, n)?;
+            c.data_mut().w().set_tok(player_id, &name, v);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_tok",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32, max: i32| -> Result<i32, Error> {
+            let name = guest_str(&mut c, p, n)?;
+            Ok(c.data_mut().w().add_tok(player_id, &name, by, max))
+        },
+    )?;
     // Keyed state: `{value, min, max, expires}` items. `field` selects the
     // column (0 = value, 1 = min, 2 = max, 3 = expires: 0 none / 1 turn-start /
     // 2 turn-end). The engine holds these and enforces nothing.
-    l.func_wrap(m, "state_get", |mut c: C<W>, player_id: i32, p: i32, n: i32, field: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, p, n)?;
-        Ok(match field {
-            1 => c.data().wr().state_min(player_id, &key),
-            2 => c.data().wr().state_max(player_id, &key),
-            3 => match c.data().wr().state_expires(player_id, &key) {
-                None => 0,
-                Some(game_core::state::Tick::TurnStart) => 1,
-                Some(game_core::state::Tick::TurnEnd) => 2,
-            },
-            _ => c.data().wr().state_get(player_id, &key),
-        })
-    })?;
-    l.func_wrap(m, "state_set", |mut c: C<W>, player_id: i32, p: i32, n: i32, field: i32, v: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, p, n)?;
-        Ok(match field {
-            1 => {
-                let max = c.data().wr().state_max(player_id, &key);
-                c.data_mut().w().state_set_bounds(player_id, &key, v, max);
-                v
-            }
-            2 => {
-                let min = c.data().wr().state_min(player_id, &key);
-                c.data_mut().w().state_set_bounds(player_id, &key, min, v);
-                v
-            }
-            3 => {
-                let e = match v { 1 => Some(game_core::state::Tick::TurnStart), 2 => Some(game_core::state::Tick::TurnEnd), _ => None };
-                c.data_mut().w().state_set_expires(player_id, &key, e);
-                v
-            }
-            _ => c.data_mut().w().state_set(player_id, &key, v),
-        })
-    })?;
-    l.func_wrap(m, "state_add", |mut c: C<W>, player_id: i32, p: i32, n: i32, delta: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, p, n)?;
-        Ok(c.data_mut().w().state_add(player_id, &key, delta))
-    })?;
+    l.func_wrap(
+        m,
+        "state_get",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, field: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, p, n)?;
+            Ok(match field {
+                1 => c.data().wr().state_min(player_id, &key),
+                2 => c.data().wr().state_max(player_id, &key),
+                3 => match c.data().wr().state_expires(player_id, &key) {
+                    None => 0,
+                    Some(game_core::state::Tick::TurnStart) => 1,
+                    Some(game_core::state::Tick::TurnEnd) => 2,
+                },
+                _ => c.data().wr().state_get(player_id, &key),
+            })
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "state_set",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, field: i32, v: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, p, n)?;
+            Ok(match field {
+                1 => {
+                    let max = c.data().wr().state_max(player_id, &key);
+                    c.data_mut().w().state_set_bounds(player_id, &key, v, max);
+                    v
+                }
+                2 => {
+                    let min = c.data().wr().state_min(player_id, &key);
+                    c.data_mut().w().state_set_bounds(player_id, &key, min, v);
+                    v
+                }
+                3 => {
+                    let e = match v {
+                        1 => Some(game_core::state::Tick::TurnStart),
+                        2 => Some(game_core::state::Tick::TurnEnd),
+                        _ => None,
+                    };
+                    c.data_mut().w().state_set_expires(player_id, &key, e);
+                    v
+                }
+                _ => c.data_mut().w().state_set(player_id, &key, v),
+            })
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "state_add",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, delta: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, p, n)?;
+            Ok(c.data_mut().w().state_add(player_id, &key, delta))
+        },
+    )?;
 
-    l.func_wrap(m, "slot", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().slot(player_id, &key))
+    l.func_wrap(
+        m,
+        "slot",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().slot(player_id, &key))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_slot",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
+            let key = guest_str(&mut c, p, n)?;
+            c.data_mut().w().set_slot(player_id, &key, v);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "inc_slot",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, p, n)?;
+            Ok(c.data_mut().w().inc_slot(player_id, &key, by))
+        },
+    )?;
+    l.func_wrap(m, "band_crystals", |c: C<W>, player_id: i32| {
+        c.data().wr().band_crystals(player_id)
     })?;
-    l.func_wrap(m, "set_slot", |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-        let key = guest_str(&mut c, p, n)?;
-        c.data_mut().w().set_slot(player_id, &key, v);
-        Ok(())
+    l.func_wrap(
+        m,
+        "add_band_crystals",
+        |mut c: C<W>, player_id: i32, n: i32, max: i32| {
+            c.data_mut().w().add_band_crystals(player_id, n, max)
+        },
+    )?;
+    l.func_wrap(m, "fire", |c: C<W>, player_id: i32| {
+        c.data().wr().fire(player_id)
     })?;
-    l.func_wrap(m, "inc_slot", |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, p, n)?;
-        Ok(c.data_mut().w().inc_slot(player_id, &key, by))
+    l.func_wrap(m, "fire_max", |c: C<W>, player_id: i32| {
+        c.data().wr().fire_max(player_id)
     })?;
-    l.func_wrap(m, "band_crystals", |c: C<W>, player_id: i32| c.data().wr().band_crystals(player_id))?;
-    l.func_wrap(m, "add_band_crystals", |mut c: C<W>, player_id: i32, n: i32, max: i32| c.data_mut().w().add_band_crystals(player_id, n, max))?;
-    l.func_wrap(m, "fire", |c: C<W>, player_id: i32| c.data().wr().fire(player_id))?;
-    l.func_wrap(m, "fire_max", |c: C<W>, player_id: i32| c.data().wr().fire_max(player_id))?;
-    l.func_wrap(m, "gain_fire", |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-        let why = guest_msg(&mut c, p, l)?;
-        Ok(c.data_mut().w().gain_fire(player_id, n, why))
-    })?;
+    l.func_wrap(
+        m,
+        "gain_fire",
+        |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
+            let why = guest_msg(&mut c, p, l)?;
+            Ok(c.data_mut().w().gain_fire(player_id, n, why))
+        },
+    )?;
     // Abnormal effects pass the C# `AbnormalGate` first (C# `GiveStay` /
     // `GiveStun` / `GiveExile` / `ForceTeleport` all run it): a blocked one
     // does nothing.
-    l.func_wrap(m, "give_stay", |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-        if n > 0 && gate(&mut c, player_id, AbKind::Stay)? {
-            c.data_mut().w().give_stay(player_id, n);
-        }
-        Ok(())
-    })?;
-    l.func_wrap(m, "give_stun", |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-        if n > 0 && gate(&mut c, player_id, AbKind::Stun)? {
-            c.data_mut().w().give_stun(player_id, n);
-        }
-        Ok(())
-    })?;
-    l.func_wrap(m, "give_exile", |mut c: C<W>, player_id: i32, n: i32, to: i32| -> Result<(), Error> {
-        if n > 0 && gate(&mut c, player_id, AbKind::Exile)? {
-            c.data_mut().w().give_exile(player_id, n, to);
-        }
-        Ok(())
-    })?;
+    l.func_wrap(
+        m,
+        "give_stay",
+        |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
+            if n > 0 && gate(&mut c, player_id, AbKind::Stay)? {
+                c.data_mut().w().give_stay(player_id, n);
+            }
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "give_stun",
+        |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
+            if n > 0 && gate(&mut c, player_id, AbKind::Stun)? {
+                c.data_mut().w().give_stun(player_id, n);
+            }
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "give_exile",
+        |mut c: C<W>, player_id: i32, n: i32, to: i32| -> Result<(), Error> {
+            if n > 0 && gate(&mut c, player_id, AbKind::Exile)? {
+                c.data_mut().w().give_exile(player_id, n, to);
+            }
+            Ok(())
+        },
+    )?;
     l.func_wrap(m, "give_extra_turn", |mut c: C<W>, player_id: i32| {
         c.data_mut().w().give_extra_turn(player_id);
         Ok(())
     })?;
-    l.func_wrap(m, "can_pay", |c: C<W>, player_id: i32| c.data().wr().can_pay(player_id))?;
-    l.func_wrap(m, "cant_move", |c: C<W>, player_id: i32| c.data().wr().cant_move(player_id))?;
-    l.func_wrap(m, "spend_fire", |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-        let why = guest_msg(&mut c, p, l)?;
-        Ok(c.data_mut().w().spend_fire(player_id, n, why))
+    l.func_wrap(m, "can_pay", |c: C<W>, player_id: i32| {
+        c.data().wr().can_pay(player_id)
     })?;
-    l.func_wrap(m, "stay_of", |c: C<W>, player_id: i32| c.data().wr().stay_of(player_id))?;
-    l.func_wrap(m, "stun_of", |c: C<W>, player_id: i32| c.data().wr().stun_of(player_id))?;
+    l.func_wrap(m, "cant_move", |c: C<W>, player_id: i32| {
+        c.data().wr().cant_move(player_id)
+    })?;
+    l.func_wrap(
+        m,
+        "spend_fire",
+        |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
+            let why = guest_msg(&mut c, p, l)?;
+            Ok(c.data_mut().w().spend_fire(player_id, n, why))
+        },
+    )?;
+    l.func_wrap(m, "stay_of", |c: C<W>, player_id: i32| {
+        c.data().wr().stay_of(player_id)
+    })?;
+    l.func_wrap(m, "stun_of", |c: C<W>, player_id: i32| {
+        c.data().wr().stun_of(player_id)
+    })?;
     l.func_wrap(m, "turn_player", |c: C<W>| c.data().wr().turn_player())?;
     l.func_wrap(m, "round_no", |c: C<W>| c.data().wr().round_no())?;
     l.func_wrap(m, "turn_key", |c: C<W>| c.data().wr().turn_key())?;
-    l.func_wrap(m, "character_is", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let name = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().character_is(player_id, &name))
+    l.func_wrap(
+        m,
+        "character_is",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let name = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().character_is(player_id, &name))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "in_band",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let name = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().in_band(player_id, &name))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "bump_mark",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32, delta: i32| -> Result<i32, Error> {
+            let kind = guest_str(&mut c, kp, kl)?;
+            Ok(c.data_mut().w().bump_mark(tile, &kind, owner, delta))
+        },
+    )?;
+    // `H.DoMoveRoll` -- plain, like `roll`: no prompts and no raise points (the
+    // caller is usually *inside* `moveRoll`), so there is nothing to pause for.
+    l.func_wrap(
+        m,
+        "do_move_roll",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            Ok(c.data_mut().w().do_move_roll(player_id))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tok_names",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let prefix = guest_str(&mut c, p, n)?;
+            let names = c.data().wr().tok_names(player_id, &prefix);
+            let bytes =
+                postcard::to_allocvec(&names).map_err(|e| err(format!("tok_names encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "unplace_card_named",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data_mut().w().unplace_card_named(player_id, &card) as i32)
+        },
+    )?;
+    l.func_wrap(m, "can_build_on", |c: C<W>, player_id: i32, tile: i32| {
+        c.data().wr().can_build_on(player_id, tile) as i32
     })?;
-    l.func_wrap(m, "in_band", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let name = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().in_band(player_id, &name))
+    l.func_wrap(
+        m,
+        "card_face_down",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data().wr().card_face_down(player_id, &card) as i32)
+        },
+    )?;
+    l.func_wrap(m, "extreme", |c: C<W>| c.data().wr().extreme())?;
+    l.func_wrap(m, "set_extreme", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_extreme(v)
     })?;
-    l.func_wrap(m, "place_card_at", |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
-        let card = guest_str(&mut c, cp, cl)?;
-        let note = guest_msg(&mut c, p, n)?;
-        c.data_mut().w().place_card(player_id, &card, note);
-        Ok(())
+    l.func_wrap(m, "play_from_hand", |c: C<W>| {
+        c.data().wr().play_from_hand() as i32
     })?;
-    l.func_wrap(m, "set_dest", |mut c: C<W>, dest: i32| {
-        c.data_mut().w().set_dest(dest);
-        Ok(())
-    })?;
-    l.func_wrap(m, "ring_multiplier", |c: C<W>| c.data().wr().ring_multiplier())?;
-    l.func_wrap(m, "add_ring_bonus", |mut c: C<W>, n: i32| c.data_mut().w().add_ring_bonus(n))?;
-    l.func_wrap(m, "teleport_to", |mut c: C<W>, player_id: i32, tile: i32| -> Result<(), Error> {
-        if gate(&mut c, player_id, AbKind::Teleport)? {
-            c.data_mut().w().teleport_to(player_id, tile);
-        }
-        Ok(())
-    })?;
-    l.func_wrap(m, "abnormal_count", |c: C<W>, player_id: i32| c.data().wr().abnormal_count(player_id))?;
-    l.func_wrap(m, "targeted_count", |c: C<W>, player_id: i32| c.data().wr().targeted_count(player_id))?;
-    l.func_wrap(m, "target", |mut c: C<W>, player_id: i32, tile: i32, single: i32| -> Result<i32, Error> {
-        // Paused like `gate`: the engine runs the targeting pipeline (it
-        // raises hooks and opens the `target` [反击] window) and the replay
-        // reads its answer.
-        let st = c.data_mut();
-        if let Some(&got) = st.answers.get(st.next_answer) {
-            st.next_answer += 1;
-            return Ok(got);
-        }
-        st.host_request = Some(HostRequest::Target { player_id, tile, single: single != 0 });
-        Err(need_input())
-    })?;
-    l.func_wrap(m, "card_move", |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-        // C# `H.CardMove(c, m)` -- the card shaped the plan and wants the move
-        // to run *now*. Paused like the others: the engine runs `Cx::card_move`
-        // (which may prompt) and the replay reads the answer. The plan is
-        // captured here because the run's world copy is discarded on pause.
-        let st = c.data_mut();
-        if let Some(&ok) = st.answers.get(st.next_answer) {
-            st.next_answer += 1;
-            return Ok(ok);
-        }
-        let plan = st.w().move_plan();
-        st.host_request = Some(HostRequest::Move { player_id, plan });
-        Err(need_input())
-    })?;
-    l.func_wrap(m, "agent_landing", |mut c: C<W>, player_id: i32, agent: i32| -> Result<i32, Error> {
-        let st = c.data_mut();
-        if let Some(&ok) = st.answers.get(st.next_answer) {
-            st.next_answer += 1;
-            return Ok(ok);
-        }
-        st.host_request = Some(HostRequest::AgentLanding { player_id, agent });
-        Err(need_input())
-    })?;
-    l.func_wrap(m, "placed_tile", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let id = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().placed_tile(player_id, &id))
-    })?;
-    l.func_wrap(m, "play_doubled", |c: C<W>| c.data().wr().play_doubled())?;
-    l.func_wrap(m, "trig_cards", |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
-        let list = c.data().wr().trigger().cards;
-        let bytes = postcard::to_allocvec(&list).map_err(|e| err(format!("trig_cards encode: {e}")))?;
-        if bytes.len() as i32 <= cap {
-            write_guest(&mut c, buf, &bytes)?;
-        }
-        Ok(bytes.len() as i32)
-    })?;
-    l.func_wrap(m, "opt_int", |mut c: C<W>, v: i32| c.data_mut().options.push(PromptOption::Int(v)))?;
-    l.func_wrap(m, "opt_str", |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
-        let s = guest_msg(&mut c, p, n)?;
-        c.data_mut().options.push(PromptOption::Str(s));
+    l.func_wrap(
+        m,
+        "gain_fixed",
+        |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let why = guest_msg(&mut c, p, n)?;
+            Ok(c.data_mut().w().gain_fixed(player_id, amount, why))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_card_face_down",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, down: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data_mut()
+                .w()
+                .set_card_face_down(player_id, &card, down != 0) as i32)
+        },
+    )?;
+    l.func_wrap(m, "clear_dice", |mut c: C<W>| -> Result<(), Error> {
+        c.data_mut().w().clear_dice();
         Ok(())
     })?;
     l.func_wrap(
         m,
+        "set_card_immune",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, on: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data_mut().w().set_card_immune(player_id, &card, on != 0) as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_immune",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data().wr().card_immune(player_id, &card) as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_card_tile",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, tile: i32| -> Result<i32, Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            Ok(c.data_mut().w().set_card_tile(player_id, &card, tile) as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "place_card_on",
+        |mut c: C<W>,
+         player_id: i32,
+         tile: i32,
+         cp: i32,
+         cl: i32,
+         p: i32,
+         n: i32|
+         -> Result<(), Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            let note = guest_msg(&mut c, p, n)?;
+            c.data_mut().w().place_card_on(player_id, tile, &card, note);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "place_card_at",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+            let card = guest_str(&mut c, cp, cl)?;
+            let note = guest_msg(&mut c, p, n)?;
+            c.data_mut().w().place_card(player_id, &card, note);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(m, "set_dest", |mut c: C<W>, dest: i32| {
+        c.data_mut().w().set_dest(dest);
+        Ok(())
+    })?;
+    l.func_wrap(m, "ring_multiplier", |c: C<W>| {
+        c.data().wr().ring_multiplier()
+    })?;
+    l.func_wrap(m, "add_ring_bonus", |mut c: C<W>, n: i32| {
+        c.data_mut().w().add_ring_bonus(n)
+    })?;
+    l.func_wrap(
+        m,
+        "teleport_to",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<(), Error> {
+            if gate(&mut c, player_id, AbKind::Teleport)? {
+                c.data_mut().w().teleport_to(player_id, tile);
+            }
+            Ok(())
+        },
+    )?;
+    // The C# `H.AbnormalGate` -- the helper above has been here since the
+    // `Gate` request landed, but never got a linker entry, so no card could
+    // open the path. This is the entry.
+    l.func_wrap(
+        m,
+        "gate",
+        |mut c: C<W>, player_id: i32, kind: i32| -> Result<i32, Error> {
+            let Some(kind) = crate::AbKind::from_i32(kind) else {
+                return Err(err(format!("gate: unknown abnormal kind {kind}")));
+            };
+            Ok(gate(&mut c, player_id, kind)? as i32)
+        },
+    )?;
+    l.func_wrap(m, "abnormal_count", |c: C<W>, player_id: i32| {
+        c.data().wr().abnormal_count(player_id)
+    })?;
+    l.func_wrap(m, "targeted_count", |c: C<W>, player_id: i32| {
+        c.data().wr().targeted_count(player_id)
+    })?;
+    l.func_wrap(
+        m,
+        "target",
+        |mut c: C<W>, player_id: i32, tile: i32, single: i32| -> Result<i32, Error> {
+            // Paused like `gate`: the engine runs the targeting pipeline (it
+            // raises hooks and opens the `target` [反击] window) and the replay
+            // reads its answer.
+            let st = c.data_mut();
+            if let Some(&got) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(got);
+            }
+            st.host_request = Some(HostRequest::Target {
+                player_id,
+                tile,
+                single: single != 0,
+            });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_move",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            // C# `H.CardMove(c, m)` -- the card shaped the plan and wants the move
+            // to run *now*. Paused like the others: the engine runs `Cx::card_move`
+            // (which may prompt) and the replay reads the answer. The plan is
+            // captured here because the run's world copy is discarded on pause.
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            let plan = st.w().move_plan();
+            st.host_request = Some(HostRequest::Move { player_id, plan });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "agent_landing",
+        |mut c: C<W>, player_id: i32, agent: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::AgentLanding { player_id, agent });
+            Err(need_input())
+        },
+    )?;
+    // The rest of the routine family, same shape as `card_move`: the card asks,
+    // the run pauses, the engine runs the real routine, the effect replays past.
+    l.func_wrap(
+        m,
+        "card_settle_at",
+        |mut c: C<W>, player_id: i32, tile: i32, main: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::SettleAt {
+                player_id,
+                tile,
+                main: main != 0,
+            });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_buy",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::Buy { player_id, tile });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_build",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::Build { player_id, tile });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_offer_build",
+        |mut c: C<W>, player_id: i32, buf: i32, n: i32| -> Result<i32, Error> {
+            let bytes = read_guest(&mut c, buf, n)?;
+            let tiles: Vec<i32> = bytes
+                .chunks_exact(4)
+                .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .collect();
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::OfferBuild { player_id, tiles });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_mortgage",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::Mortgage { player_id, tile });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "placed_tile",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().placed_tile(player_id, &id))
+        },
+    )?;
+    l.func_wrap(m, "play_doubled", |c: C<W>| c.data().wr().play_doubled())?;
+    l.func_wrap(m, "set_play_doubled", |mut c: C<W>, n: i32| -> Result<(), Error> {
+        c.data_mut().w().set_play_doubled(n);
+        Ok(())
+    })?;
+    l.func_wrap(
+        m,
+        "trig_cards",
+        |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
+            let list = c.data().wr().trigger().cards;
+            let bytes =
+                postcard::to_allocvec(&list).map_err(|e| err(format!("trig_cards encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(m, "opt_int", |mut c: C<W>, v: i32| {
+        c.data_mut().options.push(PromptOption::Int(v))
+    })?;
+    l.func_wrap(
+        m,
+        "opt_str",
+        |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
+            let s = guest_msg(&mut c, p, n)?;
+            c.data_mut().options.push(PromptOption::Str(s));
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
         "ask",
-        |mut c: C<W>, kind: i32, player_id: i32, tp: i32, tl: i32, xp: i32, xl: i32| -> Result<i32, Error> {
-            let kind = PromptKind::from_i32(kind).ok_or_else(|| err(format!("bad prompt kind {kind}")))?;
+        |mut c: C<W>,
+         kind: i32,
+         player_id: i32,
+         tp: i32,
+         tl: i32,
+         xp: i32,
+         xl: i32|
+         -> Result<i32, Error> {
+            let kind =
+                PromptKind::from_i32(kind).ok_or_else(|| err(format!("bad prompt kind {kind}")))?;
             let title = guest_msg(&mut c, tp, tl)?;
             let text = guest_msg(&mut c, xp, xl)?;
             let st = c.data_mut();
@@ -988,191 +1804,411 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 st.next_answer += 1;
                 return Ok(a);
             }
-            st.asked = Some(Prompt { kind, player_id, title, text, options, answer_slot: st.next_answer });
+            st.asked = Some(Prompt {
+                kind,
+                player_id,
+                title,
+                text,
+                options,
+                answer_slot: st.next_answer,
+            });
             Err(need_input())
         },
     )?;
-    l.func_wrap(m, "trig_kind", |c: C<W>| c.data().wr().trigger().kind as i32)?;
-    l.func_wrap(m, "trig_player", |c: C<W>| c.data().wr().trigger().player_id)?;
+    l.func_wrap(m, "trig_kind", |c: C<W>| {
+        c.data().wr().trigger().kind as i32
+    })?;
+    l.func_wrap(m, "trig_player", |c: C<W>| {
+        c.data().wr().trigger().player_id
+    })?;
     l.func_wrap(m, "trig_target", |c: C<W>| c.data().wr().trigger().target)?;
     l.func_wrap(m, "trig_tile", |c: C<W>| c.data().wr().trigger().tile)?;
     l.func_wrap(m, "trig_value", |c: C<W>| c.data().wr().trigger().value)?;
     l.func_wrap(m, "trig_step", |c: C<W>| c.data().wr().trigger().step)?;
-    l.func_wrap(m, "trig_by_card", |c: C<W>| c.data().wr().trigger().by_card.unwrap_or(-1))?;
-    l.func_wrap(m, "trig_pay_is_rent", |c: C<W>| c.data().wr().trigger().pay_is_rent as i32)?;
-    l.func_wrap(m, "trig_move_kind", |c: C<W>| c.data().wr().trigger().move_kind.map_or(-1, |k| k as i32))?;
-    l.func_wrap(m, "trig_move_resolve", |c: C<W>| c.data().wr().trigger().move_resolve as i32)?;
-    l.func_wrap(m, "trig_move_tag", |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().trigger().move_tags.iter().find(|(k, _)| *k == key).map_or(0, |(_, v)| *v))
+    l.func_wrap(m, "trig_by_card", |c: C<W>| {
+        c.data().wr().trigger().by_card.unwrap_or(-1)
     })?;
-    l.func_wrap(m, "trig_move_main", |c: C<W>| c.data().wr().trigger().move_main as i32)?;
-    l.func_wrap(m, "trig_move_dir", |c: C<W>| c.data().wr().trigger().move_dir)?;
-    l.func_wrap(m, "trig_move_remaining", |c: C<W>| c.data().wr().trigger().move_remaining)?;
-    l.func_wrap(m, "trig_move_total", |c: C<W>| c.data().wr().trigger().move_total)?;
-    l.func_wrap(m, "trig_move_roll", |c: C<W>| c.data().wr().trigger().move_roll.unwrap_or(-1))?;
-    l.func_wrap(m, "trig_set_move_roll", |mut c: C<W>, v: i32| c.data_mut().w().set_trigger_move_roll(v))?;
-    l.func_wrap(m, "trig_set_pay_amount", |mut c: C<W>, v: i32| c.data_mut().w().set_trigger_value(v))?;
-    l.func_wrap(m, "trig_set_pay_target", |mut c: C<W>, to: i32| c.data_mut().w().set_trigger_target(to))?;
-    l.func_wrap(m, "trig_set_cancelled", |mut c: C<W>| c.data_mut().w().set_trigger_cancelled())?;
-    l.func_wrap(m, "trig_set_negate_effect", |mut c: C<W>| c.data_mut().w().set_trigger_negate_effect())?;
-    l.func_wrap(m, "trig_set_spare", |mut c: C<W>, seat: i32| c.data_mut().w().set_trigger_spare(seat))?;
-    l.func_wrap(m, "trig_cancelled", |c: C<W>| c.data().wr().trigger().is_cancelled() as i32)?;
+    l.func_wrap(m, "trig_pay_is_rent", |c: C<W>| {
+        c.data().wr().trigger().pay_is_rent as i32
+    })?;
+    l.func_wrap(m, "trig_move_kind", |c: C<W>| {
+        c.data().wr().trigger().move_kind.map_or(-1, |k| k as i32)
+    })?;
+    l.func_wrap(m, "trig_move_resolve", |c: C<W>| {
+        c.data().wr().trigger().move_resolve as i32
+    })?;
+    l.func_wrap(
+        m,
+        "trig_move_tag",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, p, n)?;
+            Ok(c.data()
+                .wr()
+                .trigger()
+                .move_tags
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map_or(0, |(_, v)| *v))
+        },
+    )?;
+    l.func_wrap(m, "trig_move_main", |c: C<W>| {
+        c.data().wr().trigger().move_main as i32
+    })?;
+    l.func_wrap(m, "trig_move_dir", |c: C<W>| {
+        c.data().wr().trigger().move_dir
+    })?;
+    l.func_wrap(m, "trig_move_remaining", |c: C<W>| {
+        c.data().wr().trigger().move_remaining
+    })?;
+    l.func_wrap(m, "trig_move_total", |c: C<W>| {
+        c.data().wr().trigger().move_total
+    })?;
+    l.func_wrap(m, "trig_move_roll", |c: C<W>| {
+        c.data().wr().trigger().move_roll.unwrap_or(-1)
+    })?;
+    l.func_wrap(m, "trig_set_move_roll", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_move_roll(v)
+    })?;
+    l.func_wrap(m, "trig_set_pay_amount", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_value(v)
+    })?;
+    l.func_wrap(m, "trig_set_pay_target", |mut c: C<W>, to: i32| {
+        c.data_mut().w().set_trigger_target(to)
+    })?;
+    l.func_wrap(m, "trig_set_cancelled", |mut c: C<W>| {
+        c.data_mut().w().set_trigger_cancelled()
+    })?;
+    l.func_wrap(m, "trig_set_negate_effect", |mut c: C<W>| {
+        c.data_mut().w().set_trigger_negate_effect()
+    })?;
+    l.func_wrap(m, "trig_set_spare", |mut c: C<W>, seat: i32| {
+        c.data_mut().w().set_trigger_spare(seat)
+    })?;
+    l.func_wrap(m, "trig_cancelled", |c: C<W>| {
+        c.data().wr().trigger().is_cancelled() as i32
+    })?;
     l.func_wrap(m, "trig_seq", |c: C<W>| c.data().wr().trigger().seq as i32)?;
-    l.func_wrap(m, "trig_answers", |c: C<W>| c.data().wr().trigger().answers as i32)?;
-    l.func_wrap(m, "trig_effect_count", |c: C<W>| c.data().wr().trigger().effects.len() as i32)?;
+    l.func_wrap(m, "trig_answers", |c: C<W>| {
+        c.data().wr().trigger().answers as i32
+    })?;
+    l.func_wrap(m, "trig_effect_count", |c: C<W>| {
+        c.data().wr().trigger().effects.len() as i32
+    })?;
     l.func_wrap(m, "trig_effect_kind", |c: C<W>, i: i32| -> i32 {
         let t = c.data().wr().trigger();
-        t.effects.get(i.max(0) as usize).map_or(-1, |e| crate::TriggerKind::from_str(e.kind) as i32)
+        t.effects
+            .get(i.max(0) as usize)
+            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind) as i32)
     })?;
     l.func_wrap(m, "trig_effect_target", |c: C<W>, i: i32| -> i32 {
-        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(-1, |e| e.target)
+        c.data()
+            .wr()
+            .trigger()
+            .effects
+            .get(i.max(0) as usize)
+            .map_or(-1, |e| e.target)
     })?;
     l.func_wrap(m, "trig_effect_from", |c: C<W>, i: i32| -> i32 {
-        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(-1, |e| e.from)
+        c.data()
+            .wr()
+            .trigger()
+            .effects
+            .get(i.max(0) as usize)
+            .map_or(-1, |e| e.from)
     })?;
     l.func_wrap(m, "trig_effect_tile", |c: C<W>, i: i32| -> i32 {
-        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(-1, |e| e.tile)
+        c.data()
+            .wr()
+            .trigger()
+            .effects
+            .get(i.max(0) as usize)
+            .map_or(-1, |e| e.tile)
     })?;
     l.func_wrap(m, "trig_effect_value", |c: C<W>, i: i32| -> i32 {
-        c.data().wr().trigger().effects.get(i.max(0) as usize).map_or(0, |e| e.value)
+        c.data()
+            .wr()
+            .trigger()
+            .effects
+            .get(i.max(0) as usize)
+            .map_or(0, |e| e.value)
     })?;
-    l.func_wrap(m, "declare_effect", |mut c: C<W>, kind: i32, target: i32, from: i32, tile: i32, value: i32| {
-        c.data_mut().w().declare_trigger_effect(kind, target, from, tile, value)
-    })?;
-    l.func_wrap(m, "trig_card_is", |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-        let id = guest_str(&mut c, p, n)?;
-        Ok(c.data().wr().trig_card_is(&id))
-    })?;
+    l.func_wrap(
+        m,
+        "declare_effect",
+        |mut c: C<W>, kind: i32, target: i32, from: i32, tile: i32, value: i32| {
+            c.data_mut()
+                .w()
+                .declare_trigger_effect(kind, target, from, tile, value)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_card_is",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, p, n)?;
+            Ok(c.data().wr().trig_card_is(&id))
+        },
+    )?;
 
     // Cross-module call: run another card's `play` inside this run. The world, the
     // answer log position and the remaining fuel move into a nested store and back,
     // so a prompt raised by the inner card aborts (and later replays) the outer run.
-    l.func_wrap(m, "play_card", |mut c: C<W>, p: i32, n: i32, player_id: i32| -> Result<i32, Error> {
-        let id = guest_str(&mut c, p, n)?;
-        let rules = c.data().rules.clone().ok_or_else(|| err("play_card unavailable here"))?;
-        let card = *rules.by_id.get(&id).ok_or_else(|| err(format!("play_card: unknown card {id:?}")))?;
-        if c.data().depth >= MAX_NESTING {
-            return Err(err(format!("play_card nested deeper than {MAX_NESTING}")));
-        }
-        let fuel = c.get_fuel()?;
-        let st = c.data_mut();
-        // The inner card runs as itself: its own id for place/crystals and its
-        // own `Dest`, which must not overwrite the outer card's.
-        let saved = st.w().enter_card(&id);
-        let mut nested = HostState::new(rules.clone(), st.world.take().expect("world present"), std::mem::take(&mut st.answers), st.depth + 1);
-        nested.next_answer = st.next_answer;
-        let mut store = Store::new(&rules.engine, nested);
-        store.set_fuel(fuel)?;
-        let res = match rules.cards[card as usize].entry(OnKind::Play, None) {
-            Some(entry) => call_card(&rules, &mut store, card, entry, export::OP_RUN, player_id).map(|_| ()),
-            None => Ok(()),
-        };
-        let left = store.get_fuel().unwrap_or(0);
-        let inner = store.into_data();
-        let st = c.data_mut();
-        st.world = inner.world;
-        st.answers = inner.answers;
-        st.next_answer = inner.next_answer;
-        if inner.asked.is_some() {
-            st.asked = inner.asked;
-        }
-        if inner.host_request.is_some() {
-            st.host_request = inner.host_request;
-        }
-        let dest = st.w().leave_card(saved);
-        c.set_fuel(left)?;
-        res.map(|()| dest)
-    })?;
+    l.func_wrap(
+        m,
+        "play_card",
+        |mut c: C<W>, p: i32, n: i32, player_id: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, p, n)?;
+            let rules = c
+                .data()
+                .rules
+                .clone()
+                .ok_or_else(|| err("play_card unavailable here"))?;
+            let card = *rules
+                .by_id
+                .get(&id)
+                .ok_or_else(|| err(format!("play_card: unknown card {id:?}")))?;
+            if c.data().depth >= MAX_NESTING {
+                return Err(err(format!("play_card nested deeper than {MAX_NESTING}")));
+            }
+            let fuel = c.get_fuel()?;
+            let st = c.data_mut();
+            // The inner card runs as itself: its own id for place/crystals and its
+            // own `Dest`, which must not overwrite the outer card's.
+            let saved = st.w().enter_card(&id);
+            // `PlayCtx.FromDeck` -- a card run through `play_card` did not come out
+            // of a hand (「从手牌以外的地方打出」). Restored after so the outer card
+            // still sees its own origin.
+            let was_from_hand = st.w().play_from_hand();
+            st.w().set_play_from_hand(false);
+            let mut nested = HostState::new(
+                rules.clone(),
+                st.world.take().expect("world present"),
+                std::mem::take(&mut st.answers),
+                st.depth + 1,
+            );
+            nested.next_answer = st.next_answer;
+            let mut store = Store::new(&rules.engine, nested);
+            store.set_fuel(fuel)?;
+            let res = match rules.cards[card as usize].entry(OnKind::Play, None) {
+                Some(entry) => {
+                    call_card(&rules, &mut store, card, entry, export::OP_RUN, player_id)
+                        .map(|_| ())
+                }
+                None => Ok(()),
+            };
+            let left = store.get_fuel().unwrap_or(0);
+            let inner = store.into_data();
+            let st = c.data_mut();
+            st.world = inner.world;
+            if let Some(w) = st.world.as_mut() {
+                w.set_play_from_hand(was_from_hand);
+            }
+            st.answers = inner.answers;
+            st.next_answer = inner.next_answer;
+            if inner.asked.is_some() {
+                st.asked = inner.asked;
+            }
+            if inner.host_request.is_some() {
+                st.host_request = inner.host_request;
+            }
+            let dest = st.w().leave_card(saved);
+            c.set_fuel(left)?;
+            res.map(|()| dest)
+        },
+    )?;
 
     // `H.CanReplay` -- could `player_id` play card `id` now? A pure query: the card's
     // `cant_play` runs on a throwaway copy of the world. A card with no `play`
     // effect is never replayable; a guard that prompts or traps counts as "no".
-    l.func_wrap(m, "card_replayable", |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-        let id = guest_str(&mut c, p, n)?;
-        let rules = c.data().rules.clone().ok_or_else(|| err("card_replayable unavailable here"))?;
-        let Some(&card) = rules.by_id.get(&id) else { return Ok(0) };
-        if !rules.cards[card as usize].has_play() || c.data().depth >= MAX_NESTING {
-            return Ok(0);
-        }
-        let Some(entry) = rules.cards[card as usize].entry(OnKind::CantPlay, None) else { return Ok(1) };
-        let fuel = c.get_fuel()?;
-        let mut world = c.data().wr().clone();
-        world.enter_card(&id);
-        let depth = c.data().depth + 1;
-        let mut store = Store::new(&rules.engine, HostState::new(rules.clone(), world, vec![], depth));
-        store.set_fuel(fuel)?;
-        let res = call_card_msg(&rules, &mut store, card, entry, player_id);
-        let left = store.get_fuel().unwrap_or(0);
-        c.set_fuel(left)?;
-        Ok(matches!(res, Ok(None)) as i32)
-    })?;
+    l.func_wrap(
+        m,
+        "card_replayable",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, p, n)?;
+            let rules = c
+                .data()
+                .rules
+                .clone()
+                .ok_or_else(|| err("card_replayable unavailable here"))?;
+            let Some(&card) = rules.by_id.get(&id) else {
+                return Ok(0);
+            };
+            if !rules.cards[card as usize].has_play() || c.data().depth >= MAX_NESTING {
+                return Ok(0);
+            }
+            let Some(entry) = rules.cards[card as usize].entry(OnKind::Play, None) else {
+                return Ok(1);
+            };
+            let fuel = c.get_fuel()?;
+            let mut world = c.data().wr().clone();
+            world.enter_card(&id);
+            let depth = c.data().depth + 1;
+            let mut store = Store::new(
+                &rules.engine,
+                HostState::new(rules.clone(), world, vec![], depth),
+            );
+            store.set_fuel(fuel)?;
+            let res = call_card_msg(&rules, &mut store, card, entry, player_id);
+            let left = store.get_fuel().unwrap_or(0);
+            c.set_fuel(left)?;
+            Ok(matches!(res, Ok(None)) as i32)
+        },
+    )?;
     // `mode`: bit 1 = the end of `player_id`'s next turn, bit 2 = before the wear-off.
-    l.func_wrap(m, "schedule_turn_end", |mut c: C<W>, player_id: i32, mode: i32| {
-        c.data_mut().w().schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0)
+    l.func_wrap(
+        m,
+        "schedule_turn_end",
+        |mut c: C<W>, player_id: i32, mode: i32| {
+            c.data_mut()
+                .w()
+                .schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0)
+        },
+    )?;
+    l.func_wrap(m, "set_no_money_loss", |mut c: C<W>, player_id: i32| {
+        c.data_mut().w().set_no_money_loss(player_id)
     })?;
-    l.func_wrap(m, "set_no_money_loss", |mut c: C<W>, player_id: i32| c.data_mut().w().set_no_money_loss(player_id))?;
-    l.func_wrap(m, "set_fixed_roll", |mut c: C<W>, n: i32| c.data_mut().w().set_fixed_roll(n))?;
+    l.func_wrap(m, "set_fixed_roll", |mut c: C<W>, n: i32| {
+        c.data_mut().w().set_fixed_roll(n)
+    })?;
     l.func_wrap(m, "fixed_roll", |c: C<W>| c.data().wr().fixed_roll())?;
-    l.func_wrap(m, "set_next_steps", |mut c: C<W>, player_id: i32, n: i32| c.data_mut().w().set_next_steps(player_id, n))?;
-    l.func_wrap(m, "turn_main_steps", |c: C<W>| c.data().wr().turn_main_steps())?;
-    l.func_wrap(m, "add_fire_max", |mut c: C<W>, player_id: i32, n: i32| c.data_mut().w().add_fire_max(player_id, n))?;
+    l.func_wrap(
+        m,
+        "set_next_steps",
+        |mut c: C<W>, player_id: i32, n: i32| c.data_mut().w().set_next_steps(player_id, n),
+    )?;
+    l.func_wrap(m, "turn_main_steps", |c: C<W>| {
+        c.data().wr().turn_main_steps()
+    })?;
+    l.func_wrap(m, "add_fire_max", |mut c: C<W>, player_id: i32, n: i32| {
+        c.data_mut().w().add_fire_max(player_id, n)
+    })?;
     // movement shaping: the move being planned (TurnCtx.plan)
-    l.func_wrap(m, "set_steps", |mut c: C<W>, v: i32| c.data_mut().w().set_steps(v))?;
-    l.func_wrap(m, "set_reverse", |mut c: C<W>, v: i32| c.data_mut().w().set_reverse(v != 0))?;
-    l.func_wrap(m, "set_signed", |mut c: C<W>, v: i32| c.data_mut().w().set_signed(v != 0))?;
-    l.func_wrap(m, "set_stop_at", |mut c: C<W>, v: i32| c.data_mut().w().set_stop_at(v))?;
-    l.func_wrap(m, "set_parity", |mut c: C<W>, v: i32| c.data_mut().w().set_parity(v))?;
-    l.func_wrap(m, "set_resolve", |mut c: C<W>, v: i32| c.data_mut().w().set_resolve(v != 0))?;
-    l.func_wrap(m, "set_no_buy", |mut c: C<W>, v: i32| c.data_mut().w().set_no_buy(v != 0))?;
-    l.func_wrap(m, "set_no_build", |mut c: C<W>, v: i32| c.data_mut().w().set_no_build(v != 0))?;
-    l.func_wrap(m, "set_kind", |mut c: C<W>, v: i32| c.data_mut().w().set_kind(v))?;
-    l.func_wrap(m, "set_teleport_to", |mut c: C<W>, v: i32| c.data_mut().w().set_teleport_to(v))?;
-    l.func_wrap(m, "set_start", |mut c: C<W>, t: i32, p: i32, n: i32| -> Result<(), Error> {
-        let why = guest_str(&mut c, p, n)?;
-        c.data_mut().w().set_start(t, &why);
-        Ok(())
+    l.func_wrap(m, "set_steps", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_steps(v)
     })?;
-    l.func_wrap(m, "set_base_dice", |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
-        let why = guest_str(&mut c, p, n)?;
-        c.data_mut().w().set_base_dice(count, sides, &why);
-        Ok(())
+    l.func_wrap(m, "set_reverse", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_reverse(v != 0)
     })?;
-    l.func_wrap(m, "add_base_dice", |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
-        let why = guest_str(&mut c, p, n)?;
-        c.data_mut().w().add_base_dice(count, sides, &why);
-        Ok(())
+    l.func_wrap(m, "set_signed", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_signed(v != 0)
     })?;
-    l.func_wrap(m, "add_extra_dice", |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
-        let why = guest_str(&mut c, p, n)?;
-        c.data_mut().w().add_extra_dice(count, sides, &why);
-        Ok(())
+    l.func_wrap(m, "set_stop_at", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_stop_at(v)
     })?;
-    l.func_wrap(m, "set_tag", |mut c: C<W>, kp: i32, kl: i32, v: i32| -> Result<(), Error> {
-        let key = guest_str(&mut c, kp, kl)?;
-        c.data_mut().w().set_tag(&key, v);
-        Ok(())
+    l.func_wrap(m, "set_parity", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_parity(v)
     })?;
-    l.func_wrap(m, "set_min_roll", |mut c: C<W>, v: i32| c.data_mut().w().set_min_roll(v))?;
-    l.func_wrap(m, "set_extra_steps", |mut c: C<W>, v: i32| c.data_mut().w().set_extra_steps(v))?;
-    l.func_wrap(m, "move_tag", |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
-        let key = guest_str(&mut c, kp, kl)?;
-        Ok(c.data().wr().move_tag(&key))
+    l.func_wrap(m, "set_resolve", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_resolve(v != 0)
     })?;
-    l.func_wrap(m, "set_settle_tile", |mut c: C<W>, v: i32| c.data_mut().w().set_settle_tile(v))?;
-    l.func_wrap(m, "set_pay_factor", |mut c: C<W>, v: i32| c.data_mut().w().set_pay_factor(v))?;
-    l.func_wrap(m, "set_rent_factor", |mut c: C<W>, v: i32| c.data_mut().w().set_rent_factor(v))?;
-    l.func_wrap(m, "set_build_anywhere", |mut c: C<W>, v: i32| c.data_mut().w().set_build_anywhere(v != 0))?;
-    l.func_wrap(m, "set_settle_as_agent", |mut c: C<W>, v: i32| c.data_mut().w().set_settle_as_agent(v != 0))?;
-    l.func_wrap(m, "set_more_steps", |mut c: C<W>, v: i32| c.data_mut().w().set_more_steps(v))?;
-    l.func_wrap(m, "set_no_circle_reward", |mut c: C<W>, v: i32| c.data_mut().w().set_no_circle_reward(v != 0))?;
+    l.func_wrap(m, "set_no_buy", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_no_buy(v != 0)
+    })?;
+    l.func_wrap(m, "set_kind", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_kind(v)
+    })?;
+    l.func_wrap(m, "set_trigger_target", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_target(v)
+    })?;
+    l.func_wrap(m, "set_trigger_cancelled", |mut c: C<W>| {
+        c.data_mut().w().set_trigger_cancelled()
+    })?;
+    l.func_wrap(m, "set_teleport_to", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_teleport_to(v)
+    })?;
+    l.func_wrap(
+        m,
+        "set_start",
+        |mut c: C<W>, t: i32, p: i32, n: i32| -> Result<(), Error> {
+            let why = guest_str(&mut c, p, n)?;
+            c.data_mut().w().set_start(t, &why);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_base_dice",
+        |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
+            let why = guest_str(&mut c, p, n)?;
+            c.data_mut().w().set_base_dice(count, sides, &why);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_base_dice",
+        |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
+            let why = guest_str(&mut c, p, n)?;
+            c.data_mut().w().add_base_dice(count, sides, &why);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_extra_dice",
+        |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
+            let why = guest_str(&mut c, p, n)?;
+            c.data_mut().w().add_extra_dice(count, sides, &why);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_tag",
+        |mut c: C<W>, kp: i32, kl: i32, v: i32| -> Result<(), Error> {
+            let key = guest_str(&mut c, kp, kl)?;
+            c.data_mut().w().set_tag(&key, v);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(m, "set_min_roll", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_min_roll(v)
+    })?;
+    l.func_wrap(m, "set_extra_steps", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_extra_steps(v)
+    })?;
+    l.func_wrap(
+        m,
+        "move_tag",
+        |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, kp, kl)?;
+            Ok(c.data().wr().move_tag(&key))
+        },
+    )?;
+    l.func_wrap(m, "set_settle_tile", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_settle_tile(v)
+    })?;
+    l.func_wrap(m, "set_pay_factor", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_pay_factor(v)
+    })?;
+    l.func_wrap(m, "set_rent_factor", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_rent_factor(v)
+    })?;
+    l.func_wrap(m, "set_can_build", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_can_build(v != 0)
+    })?;
+    l.func_wrap(m, "set_settle_as_agent", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_settle_as_agent(v != 0)
+    })?;
+    l.func_wrap(m, "set_more_steps", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_more_steps(v)
+    })?;
+    l.func_wrap(m, "set_no_circle_reward", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_no_circle_reward(v != 0)
+    })?;
     l.func_wrap(m, "move_stop_at", |c: C<W>| c.data().wr().move_stop_at())?;
-    l.func_wrap(m, "move_stopped", |c: C<W>| c.data().wr().move_stopped() as i32)?;
+    l.func_wrap(m, "move_stopped", |c: C<W>| {
+        c.data().wr().move_stopped() as i32
+    })?;
     l.func_wrap(m, "move_parity", |c: C<W>| c.data().wr().move_parity())?;
-    l.func_wrap(m, "move_resolve", |c: C<W>| c.data().wr().move_resolve() as i32)?;
+    l.func_wrap(m, "move_resolve", |c: C<W>| {
+        c.data().wr().move_resolve() as i32
+    })?;
     l.func_wrap(m, "move_kind", |c: C<W>| c.data().wr().move_kind())?;
     l.func_wrap(m, "move_steps", |c: C<W>| c.data().wr().move_steps())?;
-    l.func_wrap(m, "move_remaining", |c: C<W>| c.data().wr().move_remaining())?;
+    l.func_wrap(m, "move_remaining", |c: C<W>| {
+        c.data().wr().move_remaining()
+    })?;
     l.func_wrap(m, "move_total", |c: C<W>| c.data().wr().move_total())?;
     l.func_wrap(m, "move_dir", |c: C<W>| c.data().wr().move_dir())?;
 
@@ -1181,7 +2217,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
 
 impl HostState<NullWorld> {
     fn without_rules() -> Self {
-        Self { rules: None, world: Some(NullWorld), answers: vec![], next_answer: 0, options: vec![], asked: None, host_request: None, depth: 0 }
+        Self {
+            rules: None,
+            world: Some(NullWorld),
+            answers: vec![],
+            next_answer: 0,
+            options: vec![],
+            asked: None,
+            host_request: None,
+            depth: 0,
+        }
     }
 }
 
@@ -1190,6 +2235,7 @@ impl HostState<NullWorld> {
 struct NullWorld;
 
 impl CardWorld for NullWorld {
+    fn place_card_on(&mut self, _player_id: i32, _tile: i32, _card: &str, _note: crate::Msg) {}
     // keyed state: storage the null world does not have
     fn state_var(&self, _player_id: i32, _key: &str) -> game_core::state::StateVar {
         game_core::state::StateVar::default()
@@ -1213,7 +2259,13 @@ impl CardWorld for NullWorld {
         delta
     }
     fn state_set_bounds(&mut self, _player_id: i32, _key: &str, _min: i32, _max: i32) {}
-    fn state_set_expires(&mut self, _player_id: i32, _key: &str, _expires: Option<game_core::state::Tick>) {}
+    fn state_set_expires(
+        &mut self,
+        _player_id: i32,
+        _key: &str,
+        _expires: Option<game_core::state::Tick>,
+    ) {
+    }
     fn tick_state(&mut self, _player_id: i32, _when: game_core::state::Tick) -> Vec<(String, i32)> {
         Vec::new()
     }

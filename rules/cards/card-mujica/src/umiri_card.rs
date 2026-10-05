@@ -23,14 +23,12 @@ const ID: &str = "Mujica:（海铃）";
 const USER_KEY: &str = "umiri_user";
 
 pub const UMIRI_CARD: CardDef = CardDef::new("Mujica:（海铃）", &[
-    On::Play(umiri_card),
-    On::CantPlay(cant_play),
+    On::Play(Some(cant_play), umiri_card),
     // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-    On::Hook(&[HookKind::TurnStart], turn_start),
+    On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
     // 规则书（3）: the discard + draw when the card is back at the user's field
     // (C# `CardUmiriCard.TurnEnd` -> `End`).
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-]);
+    On::Hook(&[HookKind::TurnEnd], |_| true, turn_end)]);
 
 /// C# `CardUmiriCard.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {

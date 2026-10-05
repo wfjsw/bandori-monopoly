@@ -11,18 +11,15 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
-/// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`).
-fn livehouses() -> Vec<i32> {
+/// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
+/// where `IsColor` sees both the global `_tileColors` re-colour and this
+/// player's `Fx.ExtraColor`.
+fn livehouses(player_id: i32) -> Vec<i32> {
     (0..ctx::tile_count())
-        .filter(|&t| ctx::is_buyable(t) && ctx::tile_group(t) == 6)
+        .filter(|&t| ctx::is_buyable(t) && ctx::is_color(player_id, t, 6))
         .collect()
-    // TODO(规则书): `H.IsColor` also reads `_tileColors[t]` and every live
-    //   `Fx.ExtraColor` (band skills that re-colour a tile); neither is in the
-    //   vocabulary, so those swaps are not seen here.
 }
 
 /// C# `WhyNotBuildOn`'s 「RiNG 不能加盖房屋」: a RiNG deed is the buyable
@@ -62,7 +59,7 @@ const MAX_HOUSES: i32 = 3;
 
 /// C# `CardToThePeak.WhyNot`.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    let free: Vec<i32> = livehouses()
+    let free: Vec<i32> = livehouses(player_id)
         .into_iter()
         .filter(|&t| ctx::tile_owner(t) < 0)
         .collect();
@@ -80,7 +77,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     }
     // C# the build branch: `H.LiveHouses(i, t => owners[t] == i &&
     // H.WhyNotBuildOn(i, t) == null)` (no money check here -- that is in Play).
-    if livehouses().into_iter().any(|t| {
+    if livehouses(player_id).into_iter().any(|t| {
         ctx::tile_owner(t) == player_id && why_not_build_on(player_id, t).is_none()
     }) {
         return None;
@@ -91,7 +88,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn play(player_id: i32) {
     let pos = ctx::player_pos(player_id);
     // 规则书: 「移动到下一个可被购买的livehouse格子」 -- unowned Livehouses, nearest ahead.
-    let free: Vec<i32> = livehouses()
+    let free: Vec<i32> = livehouses(player_id)
         .into_iter()
         .filter(|&t| ctx::tile_owner(t) < 0)
         .collect();
@@ -116,7 +113,7 @@ fn play(player_id: i32) {
     }
     // 规则书: 「若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋」
     let mut mine: Vec<i32> = Vec::new();
-    for t in livehouses() {
+    for t in livehouses(player_id) {
         if why_not_build_on(player_id, t).is_some() {
             continue;
         }
@@ -147,9 +144,8 @@ fn play(player_id: i32) {
         ctx::add_house(tile, 1);
         ctx::log(player_id, &Msg::new(key!("to_the_peak_build")).player_id("who", player_id).tile("tile", tile));
     }
-    // TODO(规则书): the C# `BuildRoutine` then fires `H.Each((Fx f) => f.Built(i, t,
-    //   full))` / `f.HouseAdded(...)` -- needs those persistent Fx hooks (and the
-    //   build is still a bare `H.AddHouse`, free of the `BuildRoutine` bookkeeping).
+    // The raise above goes out as `houseAdded` once the run commits, so a
+    // persistent Fx listening for 「加盖」 sees this build too.
 }
 
 /// C# `CeilTo(x, unit)` -- round up to a multiple of `unit`.

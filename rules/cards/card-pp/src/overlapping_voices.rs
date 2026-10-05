@@ -18,10 +18,8 @@ use card_sdk::ctx;
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new("PP:[衍生]重叠的声音", &[
-    On::Play(overlapping_voices),
-    On::CantPlay(cant_play),
-    On::AtEnd(at_end),
-]);
+    On::Play(Some(cant_play), overlapping_voices),
+    On::AtEnd(at_end)]);
 
 /// C# `CardOverlappingVoices.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -34,9 +32,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn overlapping_voices(player_id: i32) {
     // 规则书[手]1: 「[移除]此卡」 -- C# `c.Dest = "removed"`.
     ctx::set_dest(ctx::Dest::Banished);
-    // TODO(规则书)[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」 -- needs
-    // unplace-another-field-card (C# `H.Unplace(card, "removed", "重叠的声音")` on
-    // the placed `CardFirstLiveAccident`); `unplace_card` only removes this card.
+    // 规则书[手]1: 「和[使用者][场地]上的“初次演出事故”（如果有）」 -- the other
+    // card is named, so it is a named unplace rather than this card's own.
+    ctx::unplace_card_named(player_id, "PP:初次演出事故");
     // 规则书[手]3: 「回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”
     // 加入手卡」 -- C# `H._turnCtx.AfterEnd.Add(() => After(i))` (before the move).
     ctx::at_turn_end(player_id);
@@ -62,8 +60,5 @@ fn at_end(player_id: i32) {
     ctx::add_to_hand(player_id, "PP:[衍生]明天见");
     ctx::log(player_id, &Msg::new(key!("overlapping_voices_after")).player_id("who", player_id));
 }
-// TODO(规则书): [特]「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
-// 的“初次演出事故”（如果有）」 -- the `Discarded` hook kind is landed (C#
-// `Card.OnDiscarded(int)`); the body still needs unplace-another-field-card
-// (C# `H.Unplace(card, "removed", ...)` on the placed 「初次演出事故」),
-// which `unplace_card` cannot express (it only removes *this* card).
+// 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上
+// 的“初次演出事故”（如果有）」 -- a named unplace on the discard.

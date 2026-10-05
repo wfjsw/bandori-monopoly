@@ -23,11 +23,10 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "AG:绯红之魂";
 
 pub const CRIMSON_SOUL: CardDef = CardDef::new("AG:绯红之魂", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::PayChoose], pay_choose),
-    On::Hook(&[HookKind::PayAfter], pay_after),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
+    On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after),
+    On::Hook(&[HookKind::SkillUsed], skill_used_guard, skill_used)]);
 
 /// C# `CardCrimsonSoul.WhyNot`: refuses under 500.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -66,19 +65,18 @@ fn play(player_id: i32) {
         ctx::log(player_id, &Msg::new(key!("crimson_soul_no_crystals")).player_id("who", player_id));
         return;
     }
-    // TODO(规则书[持续]（2）): 「[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」
-    // -- needs the Fx.SkillUsed hook (C# `CardCrimsonSoul.SkillUsed`); there is no
-    // `TriggerKind` for a skill use yet. Once it lands, spend a crystal there and
-    // run `check` like the PayChoose path does.
 }
 
 /// 规则书[持续]（1）: 「[拥有者]因导致的[消耗]或[支付]时可选择移除此卡的1个[奇迹水晶]，此次
 /// [消耗]或[支付]金额减少1000」 -- C# `CardCrimsonSoul.PayChoose` / `Use`:
 /// the owner is about to pay -> may spend 1 crystal for −1,000 (0 floor).
+/// Pure guard for [`pay_choose`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pay_choose_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn pay_choose(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     let amount = trigger::value();
     if amount <= 0 || ctx::crystals(player_id) <= 0 {
         return;
@@ -111,10 +109,13 @@ fn pay_choose(player_id: i32) {
 
 /// 规则书[持续]（1）: 「若为[支付]则被[支付]玩家[获得]500资金」 -- C#
 /// `CardCrimsonSoul.PayAfter` (`p.tags["crimson"]` -> `H.GainR(p.to, 500, ...)`).
+/// Pure guard for [`pay_after`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pay_after_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pay_after(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     let due = ctx::slot(player_id, "crimson_payee") - 1;
     if due < 0 {
         return;
@@ -124,6 +125,21 @@ fn pay_after(player_id: i32) {
         return;
     }
     ctx::gain(due, 500, &Msg::new(key!("crimson_soul_payee")).player_id("who", due));
+}
+
+/// 规则书[持续]（2）: 「[拥有者]使用自己原有的技能（2）时移除此卡的1个[奇迹水晶]」 --
+/// C# `CardCrimsonSoul.SkillUsed`.
+/// Pure guard for [`skill_used`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn skill_used_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id && ctx::crystals(player_id) > 0
+}
+
+fn skill_used(player_id: i32) {
+    ctx::add_crystals(player_id, -1, 0);
+    ctx::log(player_id, &Msg::new(key!("crimson_soul_skill")).player_id("who", player_id));
+    // 规则书[持续]（3）: runs when the spend took the last one.
+    check(player_id);
 }
 
 /// 规则书[持续]（3）: 「此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区」 -- C# `Check` ->

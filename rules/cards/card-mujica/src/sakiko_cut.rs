@@ -12,9 +12,7 @@ use card_sdk::{key, CardDef, On, Msg};
 
 
 pub const SAKIKO_CUT: CardDef = CardDef::new("Mujica:（祥子）斩断留恋，忘却一切", &[
-    On::Play(sakiko_cut),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), sakiko_cut)]);
 
 /// C# `H.Mortgageable(seat)`: owned ∧ `IsBuyable` ∧ `kind != "ring"` ∧ not
 /// mortgaged.
@@ -41,7 +39,8 @@ fn sakiko_cut(player_id: i32) {
     // 规则书: 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」
     // C# `c.FromDeck` gates the three-way pick. No FromDeck flag in the
     // vocabulary, so the base case (always discard) is taken.
-    // TODO(规则书): 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」 -- needs
+    // TODO(规则书)[judgement]: 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」 -- needs
+    //   the clause under-specifies -- see the note above it
     // the `FromDeck` play-source flag (C# `PlayCtx.FromDeck`) so the 3-way prompt
     // (skip the discard / discard as usual / don't fire) can appear; without it
     // the discard below always runs.
@@ -60,10 +59,9 @@ fn sakiko_cut(player_id: i32) {
         .into_iter()
         .reduce(|a, b| if ctx::tile_price(b) > ctx::tile_price(a) { b } else { a });
     if let Some(t) = best {
-        // TODO(规则书): 「抵押」 -- C# `H.MortgageRoutine(i, t, ...)`. The query
-        // half (`H.Mortgageable` / `_tiles[t].price` / `mortgaged`) is real now;
-        // only the mortgage routine is missing.
-        let _ = t;
+        // 规则书: 「抵押」 -- C# `H.MortgageRoutine(i, t, ...)`. The engine refuses
+        // (and logs its own reason) when the deed cannot be mortgaged.
+        ctx::card_mortgage(player_id, t);
     }
     // 规则书: 「并弃置一张手牌（若无手牌则弃掉下一张抽到的牌）」
     if !skip_discard {

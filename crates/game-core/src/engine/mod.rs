@@ -16,16 +16,16 @@
 //! event ids.
 
 mod ai;
-mod move_ctx;
 mod cx;
+mod move_ctx;
 mod ops;
 mod play;
 pub mod rules;
 mod setup;
 mod world;
 
-pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use cx::{Answered, Ask, Cx, Flow, Halt, Reply};
+pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use rules::{CardRules, Dest, StubRules, Trigger};
 pub use world::{Hidden, Scheduled, TurnCtx, World};
 
@@ -86,7 +86,15 @@ struct Live {
 impl Live {
     fn new(ask: Ask) -> Self {
         let n = ask.view.players.len();
-        Self { answers: vec![-1; n], picked: vec![], ai_at: vec![None; n], time_left: ask.view.time_left, bid: 0, bidder: -1, ask }
+        Self {
+            answers: vec![-1; n],
+            picked: vec![],
+            ai_at: vec![None; n],
+            time_left: ask.view.time_left,
+            bid: 0,
+            bidder: -1,
+            ask,
+        }
     }
 
     fn kind(&self) -> &str {
@@ -184,8 +192,13 @@ impl Match {
     }
 
     /// Rebuild a match written by [`Match::save`].
-    pub fn restore(data: Arc<GameData>, rules: Arc<dyn CardRules>, json: &str) -> Result<Self, Msg> {
-        let s: Saved = serde_json::from_str(json).map_err(|e| Msg::new("err.save_corrupt").text("detail", e.to_string()))?;
+    pub fn restore(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        json: &str,
+    ) -> Result<Self, Msg> {
+        let s: Saved = serde_json::from_str(json)
+            .map_err(|e| Msg::new("err.save_corrupt").text("detail", e.to_string()))?;
         if s.version != SAVE_VERSION {
             return Err(Msg::new("err.save_version"));
         }
@@ -226,7 +239,13 @@ impl Match {
             mode: mode as i32,
             players: members
                 .iter()
-                .map(|m| MatchPlayer { member: m.id, player: m.player.clone(), bot: m.bot, ai: m.bot, ..MatchPlayer::default() })
+                .map(|m| MatchPlayer {
+                    member: m.id,
+                    player: m.player.clone(),
+                    bot: m.bot,
+                    ai: m.bot,
+                    ..MatchPlayer::default()
+                })
                 .collect(),
             score_money: w.money,
             score_property: w.property,
@@ -300,11 +319,20 @@ impl Match {
 
     /// Events with id greater than `last_id` (`EventsSince`).
     pub fn events_since(&self, last_id: i32) -> Vec<MatchEvent> {
-        self.world.recent.iter().filter(|e| e.id > last_id).cloned().collect()
+        self.world
+            .recent
+            .iter()
+            .filter(|e| e.id > last_id)
+            .cloned()
+            .collect()
     }
 
     fn player_index(&self, member: i32) -> Option<usize> {
-        self.world.st.players.iter().position(|s| s.member == member)
+        self.world
+            .st
+            .players
+            .iter()
+            .position(|s| s.member == member)
     }
 
     pub fn player_of_member(&self, member: i32) -> Option<&MatchPlayer> {
@@ -317,27 +345,38 @@ impl Match {
     pub fn set_character(&mut self, member: i32, character: &str) {
         if let Some(i) = self.player_index(member) {
             self.world.st.players[i].character = character.to_string();
+            self.world.bind_skills(self.data.as_ref(), i as i32);
         }
     }
 
     /// Test seam: put cards straight into a player's hand.
     #[doc(hidden)]
     pub fn give_cards(&mut self, member: i32, cards: &[&str]) {
-        let Some(i) = self.player_index(member) else { return };
+        let Some(i) = self.player_index(member) else {
+            return;
+        };
         for c in cards {
             self.world.hidden[i].hand.push((*c).to_string());
         }
     }
 
     pub fn hand_of(&self, member: i32) -> Vec<String> {
-        self.player_index(member).map(|i| self.world.hidden[i].hand.clone()).unwrap_or_default()
+        self.player_index(member)
+            .map(|i| self.world.hidden[i].hand.clone())
+            .unwrap_or_default()
     }
 
     /// Per-card notes for the member's hand.
     pub fn hand_notes_of(&self, member: i32) -> Vec<Msg> {
-        let Some(i) = self.player_index(member) else { return vec![] };
+        let Some(i) = self.player_index(member) else {
+            return vec![];
+        };
         let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
-        self.world.hidden[i].hand.iter().map(|c| self.rules.hand_note(&cx, i, c)).collect()
+        self.world.hidden[i]
+            .hand
+            .iter()
+            .map(|c| self.rules.hand_note(&cx, i, c))
+            .collect()
     }
 
     // ---------------------------------------------------------------- running routines
@@ -345,7 +384,10 @@ impl Match {
     /// Run `f` directly on the world (no prompts possible). Only valid with no
     /// routine pending.
     fn direct<R>(&mut self, f: impl FnOnce(&mut Cx) -> R) -> R {
-        debug_assert!(self.pending.is_none(), "direct world mutation while a routine is pending");
+        debug_assert!(
+            self.pending.is_none(),
+            "direct world mutation while a routine is pending"
+        );
         let (data, rules) = (self.data.clone(), self.rules.clone());
         let mut cx = Cx::new(self.world.clone(), &data, &*rules, &[]);
         let r = f(&mut cx);
@@ -388,7 +430,12 @@ impl Match {
             Err(Halt(HaltKind::Ask(ask))) => {
                 w.signals.clear();
                 self.world = w;
-                self.pending = Some(Pending { routine, snapshot, answers, live: Live::new(*ask) });
+                self.pending = Some(Pending {
+                    routine,
+                    snapshot,
+                    answers,
+                    live: Live::new(*ask),
+                });
             }
         }
     }
@@ -397,7 +444,12 @@ impl Match {
         let Some(p) = self.pending.take() else { return };
         let fallback = p.live.ask.view.fallback;
         let a = Answered {
-            answers: p.live.answers.iter().map(|&x| if x < 0 { fallback } else { x }).collect(),
+            answers: p
+                .live
+                .answers
+                .iter()
+                .map(|&x| if x < 0 { fallback } else { x })
+                .collect(),
             picked: p.live.picked,
             bid: p.live.bid,
             bidder: p.live.bidder,
@@ -410,7 +462,8 @@ impl Match {
     /// Host-side log line; deferred while a routine is pending.
     fn host_log(&mut self, kind: &str, player_id: i32, text: Msg) {
         if self.pending.is_some() {
-            self.deferred.push(Deferred::Log(kind.into(), player_id, text));
+            self.deferred
+                .push(Deferred::Log(kind.into(), player_id, text));
         } else {
             self.direct(|cx| {
                 cx.w.log(kind, player_id, text);
@@ -437,7 +490,10 @@ impl Match {
     /// Is this prompt player answered by the machine (bot, or a human who left)?
     fn auto_player(&self, player_id: usize) -> bool {
         self.world.st.players[player_id].ai
-            || self.deferred.iter().any(|d| matches!(d, Deferred::Leave(s) | Deferred::Left(s, _) if *s == player_id))
+            || self
+                .deferred
+                .iter()
+                .any(|d| matches!(d, Deferred::Leave(s) | Deferred::Left(s, _) if *s == player_id))
     }
 
     // ---------------------------------------------------------------- clock
@@ -456,7 +512,13 @@ impl Match {
                 self.world.st.time_left = self.wait.max(0.0);
                 if self.wait <= 0.0 {
                     let ranked = self.mode == MatchMode::Ranked;
-                    self.direct(|cx| if ranked { cx.begin_ban() } else { cx.begin_pick() });
+                    self.direct(|cx| {
+                        if ranked {
+                            cx.begin_ban()
+                        } else {
+                            cx.begin_pick()
+                        }
+                    });
                     self.wait = CHOICE_WAIT;
                 }
             }
@@ -487,15 +549,25 @@ impl Match {
             }
             return;
         }
-        let Some(cur) = self.world.st.current() else { return };
-        let due = if cur.ai { self.wait <= 0.0 } else { self.world.st.time_left <= 0.0 };
+        let Some(cur) = self.world.st.current() else {
+            return;
+        };
+        let due = if cur.ai {
+            self.wait <= 0.0
+        } else {
+            self.world.st.time_left <= 0.0
+        };
         if !due {
             return;
         }
         let turn = self.world.st.turn as usize;
         if self.world.st.phase == "ban" {
             self.direct(|cx| {
-                let pick = if cx.w.st.players[turn].ai && cx.w.rng.chance(0.5) { cx.random_character(false) } else { String::new() };
+                let pick = if cx.w.st.players[turn].ai && cx.w.rng.chance(0.5) {
+                    cx.random_character(false)
+                } else {
+                    String::new()
+                };
                 cx.do_ban(turn, &pick);
             });
         } else {
@@ -552,7 +624,11 @@ impl Match {
             return;
         }
         let st = &self.world.st;
-        let actor = if st.step == 1 && !st.skip_move && st.roller >= 0 { st.roller as usize } else { turn };
+        let actor = if st.step == 1 && !st.skip_move && st.roller >= 0 {
+            st.roller as usize
+        } else {
+            turn
+        };
         if !st.players[actor].ai && !self.timed_out {
             if self.shield > 0.0 {
                 self.shield = (self.shield - dt).max(0.0);
@@ -563,7 +639,11 @@ impl Match {
                 return;
             }
             self.timed_out = true;
-            self.host_log("text", turn as i32, Msg::new("log.timeout").player_id("who", turn));
+            self.host_log(
+                "text",
+                turn as i32,
+                Msg::new("log.timeout").player_id("who", turn),
+            );
         }
         self.start(Routine::Ai(turn));
     }
@@ -574,11 +654,21 @@ impl Match {
     #[allow(clippy::needless_range_loop)]
     fn tick_live(&mut self, dt: f32) {
         let players: Vec<usize> = match &self.pending {
-            Some(p) => p.live.ask.view.players.iter().map(|&s| s as usize).collect(),
+            Some(p) => p
+                .live
+                .ask
+                .view
+                .players
+                .iter()
+                .map(|&s| s as usize)
+                .collect(),
             None => return,
         };
         let auto: Vec<bool> = players.iter().map(|&s| self.auto_player(s)).collect();
-        let money: Vec<i32> = players.iter().map(|&s| self.world.st.players[s].money).collect();
+        let money: Vec<i32> = players
+            .iter()
+            .map(|&s| self.world.st.players[s].money)
+            .collect();
         let can_pay: Vec<bool> = players
             .iter()
             .map(|&s| {
@@ -613,12 +703,18 @@ impl Match {
                     _ => {}
                 }
             }
-            let open = (0..players.len()).filter(|&k| l.answers[k] < 0 && l.bidder != players[k] as i32).count();
+            let open = (0..players.len())
+                .filter(|&k| l.answers[k] < 0 && l.bidder != players[k] as i32)
+                .count();
             l.time_left <= 0.0 || open == 0
         } else {
             let picks = matches!(l.kind(), "pick" | "mortgage");
             let fallback = l.ask.view.fallback;
-            let max = if l.kind() == "tile" { l.ask.view.items.len() as i32 } else { l.ask.view.options.len() as i32 - 1 };
+            let max = if l.kind() == "tile" {
+                l.ask.view.items.len() as i32
+            } else {
+                l.ask.view.options.len() as i32 - 1
+            };
             for k in 0..players.len() {
                 if l.answers[k] >= 0 || !auto[k] {
                     continue;
@@ -640,7 +736,8 @@ impl Match {
             let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
             if l.answers.iter().all(|&a| a >= 0) {
                 true
-            } else if l.time_left > 0.0 || (l.time_left > -REMOTE_GRACE && !solo && humans_pending) {
+            } else if l.time_left > 0.0 || (l.time_left > -REMOTE_GRACE && !solo && humans_pending)
+            {
                 false
             } else {
                 for k in 0..players.len() {
@@ -669,10 +766,16 @@ impl Match {
 
     /// A player command (`Act`). `Err` carries the message shown to the player.
     pub fn act(&mut self, member: i32, m: &NetMessage) -> Result<(), Msg> {
-        let i = self.player_index(member).ok_or_else(|| Msg::new("err.not_in_match"))?;
+        let i = self
+            .player_index(member)
+            .ok_or_else(|| Msg::new("err.not_in_match"))?;
         let s = &self.world.st.players[i];
         if s.out() && m.act != "leave" {
-            return Err(Msg::new(if s.bankrupt { "err.spectating" } else { "err.left_match" }));
+            return Err(Msg::new(if s.bankrupt {
+                "err.spectating"
+            } else {
+                "err.left_match"
+            }));
         }
         let phase = self.world.st.phase.clone();
         let busy = self.pending.is_some();
@@ -729,7 +832,12 @@ impl Match {
                     self.start(Routine::Act(i, Box::new(m.clone())));
                 }
             }
-            "skill" => return Err(Msg::new("err.skill_not_ported")),
+            "skill" => {
+                if let Some(why) = self.with_cx(|cx| why_not_act(cx, i, m, busy)) {
+                    return Err(why);
+                }
+                self.start(Routine::Act(i, Box::new(m.clone())));
+            }
             "debug" => return Err(Msg::new("err.debug_not_ported")),
             "roll" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" | "end" => {
                 if let Some(why) = self.with_cx(|cx| why_not_act(cx, i, m, busy)) {
@@ -752,14 +860,25 @@ impl Match {
         let money = self.world.st.players[i].money;
         let can_pay = self.with_cx(|cx| cx.can_pay(i));
         let data = self.data.clone();
-        let p = self.pending.as_mut().ok_or_else(|| Msg::new("err.prompt_over"))?;
+        let p = self
+            .pending
+            .as_mut()
+            .ok_or_else(|| Msg::new("err.prompt_over"))?;
         let l = &mut p.live;
         if m.prompt != l.ask.view.id {
             return Err(Msg::new("err.prompt_over"));
         }
-        let k = l.ask.view.player_index(i as i32).ok_or_else(|| Msg::new("err.prompt_not_yours"))?;
+        let k = l
+            .ask
+            .view
+            .player_index(i as i32)
+            .ok_or_else(|| Msg::new("err.prompt_not_yours"))?;
         if l.answers[k] >= 0 {
-            return Err(Msg::new(if l.kind() == "auction" { "err.auction_passed" } else { "err.answered" }));
+            return Err(Msg::new(if l.kind() == "auction" {
+                "err.auction_passed"
+            } else {
+                "err.answered"
+            }));
         }
         let picked = |items: &[String]| -> Vec<String> {
             let mut out: Vec<String> = vec![];
@@ -801,9 +920,15 @@ impl Match {
             }
             "mortgage" => {
                 let got = picked(&l.ask.view.items);
-                let sum: i32 = got.iter().filter_map(|t| t.parse::<usize>().ok()).map(|t| data.tiles[t].price / 2).sum();
+                let sum: i32 = got
+                    .iter()
+                    .filter_map(|t| t.parse::<usize>().ok())
+                    .map(|t| data.tiles[t].price / 2)
+                    .sum();
                 if sum < l.ask.view.bid {
-                    return Err(Msg::new("err.mortgage_short").n("need", l.ask.view.bid).n("sum", sum));
+                    return Err(Msg::new("err.mortgage_short")
+                        .n("need", l.ask.view.bid)
+                        .n("sum", sum));
                 }
                 l.picked = got;
                 l.answers[k] = 0;
@@ -828,7 +953,11 @@ impl Match {
         self.seq += 1;
         if complete {
             self.complete_prompt();
-        } else if self.pending.as_ref().is_some_and(|p| p.live.kind() == "auction") {
+        } else if self
+            .pending
+            .as_ref()
+            .is_some_and(|p| p.live.kind() == "auction")
+        {
             self.tick_live(0.0);
         }
         Ok(())
@@ -837,7 +966,9 @@ impl Match {
     // ---------------------------------------------------------------- vote
 
     fn voters(&self) -> Vec<usize> {
-        (0..self.world.player_count()).filter(|&p| !self.world.out(p) && !self.world.st.players[p].ai).collect()
+        (0..self.world.player_count())
+            .filter(|&p| !self.world.out(p) && !self.world.st.players[p].ai)
+            .collect()
     }
 
     /// `Vote` -- start or answer the vote to end the match by score.
@@ -861,17 +992,33 @@ impl Match {
                 id: self.vote_seq,
                 by: i as i32,
                 players: voters.iter().map(|&p| p as i32).collect(),
-                answers: voters.iter().map(|&p| if p == i { 1 } else { -1 }).collect(),
+                answers: voters
+                    .iter()
+                    .map(|&p| if p == i { 1 } else { -1 })
+                    .collect(),
                 time_left: VOTE_SECONDS,
             };
-            self.host_log("vote", i as i32, Msg::new("log.vote_start").player_id("who", i));
+            self.host_log(
+                "vote",
+                i as i32,
+                Msg::new("log.vote_start").player_id("who", i),
+            );
         } else {
-            let k = self.vote.players.iter().position(|&s| s == i as i32).ok_or_else(|| Msg::new("err.vote_not_yours"))?;
+            let k = self
+                .vote
+                .players
+                .iter()
+                .position(|&s| s == i as i32)
+                .ok_or_else(|| Msg::new("err.vote_not_yours"))?;
             if self.vote.answers[k] >= 0 {
                 return Err(Msg::new("err.voted"));
             }
             self.vote.answers[k] = yes as i32;
-            self.host_log("vote", i as i32, Msg::new(if yes { "log.vote_yes" } else { "log.vote_no" }).player_id("who", i));
+            self.host_log(
+                "vote",
+                i as i32,
+                Msg::new(if yes { "log.vote_yes" } else { "log.vote_no" }).player_id("who", i),
+            );
         }
         self.changed = true;
         self.check_vote();
@@ -902,7 +1049,10 @@ impl Match {
 
     fn check_vote(&mut self) {
         if let Some(k) = self.vote.answers.iter().position(|&a| a == 0) {
-            self.end_vote(false, Msg::new("vote.against").player_id("who", self.vote.players[k]));
+            self.end_vote(
+                false,
+                Msg::new("vote.against").player_id("who", self.vote.players[k]),
+            );
         } else if self.vote.id != 0 && self.vote.answers.iter().all(|&a| a == 1) {
             self.end_vote(true, Msg::default());
         }
@@ -951,6 +1101,8 @@ impl Match {
                     let c = cx.random_character(true);
                     cx.w.st.players[i].character = c;
                 }
+                let d = cx.data;
+                cx.w.bind_skills(d, i as i32);
                 if !cx.w.st.players[i].deck_ready {
                     cx.submit_deck(i, None);
                 }
@@ -962,7 +1114,9 @@ impl Match {
     /// A member disconnected or left a room before play (`MemberLeft`): the
     /// machine takes over the player.
     pub fn member_left(&mut self, member: i32, can_return: bool) {
-        let Some(i) = self.player_index(member) else { return };
+        let Some(i) = self.player_index(member) else {
+            return;
+        };
         if self.pending.is_some() {
             self.deferred.push(Deferred::Left(i, can_return));
             self.tick_live(0.0);
@@ -995,9 +1149,12 @@ impl Match {
 
     /// The member reconnected (`MemberBack`).
     pub fn member_back(&mut self, member: i32) {
-        let Some(i) = self.player_index(member) else { return };
+        let Some(i) = self.player_index(member) else {
+            return;
+        };
         if self.pending.is_some() {
-            self.deferred.retain(|d| !matches!(d, Deferred::Left(s, _) if *s == i));
+            self.deferred
+                .retain(|d| !matches!(d, Deferred::Left(s, _) if *s == i));
             self.deferred.push(Deferred::Back(i));
         } else {
             self.apply_back(i);
@@ -1011,7 +1168,11 @@ impl Match {
         }
         self.direct(|cx| {
             cx.w.st.players[i].ai = false;
-            cx.w.log("ai", i as i32, Msg::new("log.reconnected").player_id("who", i));
+            cx.w.log(
+                "ai",
+                i as i32,
+                Msg::new("log.reconnected").player_id("who", i),
+            );
         });
     }
 }
@@ -1044,6 +1205,7 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                     Ok(())
                 }
                 "play" => cx.play_from_hand(i, &m.card),
+                "skill" => cx.use_skill(i, &m.card),
                 "discard" => cx.discard(i, &m.card),
                 "end" => cx.end_turn_cmd(i),
                 "leave" => cx.forfeit(i),
@@ -1058,7 +1220,9 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
     let st = &cx.w.st;
     let my_turn = cx.playing() && st.turn == i as i32;
     let pos = st.players[i].pos;
-    let moved_off = |key: &str| (m.value > 0 && m.value != pos).then(|| Msg::new(key).tile("was", m.value).tile("now", pos));
+    let moved_off = |key: &str| {
+        (m.value > 0 && m.value != pos).then(|| Msg::new(key).tile("was", m.value).tile("now", pos))
+    };
     match m.act.as_str() {
         "roll" => {
             if !cx.playing() || st.step != 1 || busy {
@@ -1074,6 +1238,18 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
                 return Some(Msg::new("err.roller_other").player_id("who", st.roller));
             }
             None
+        }
+        "skill" => {
+            // 「运营阶段」 -- the same window every other turn action gets.
+            if !cx.playing() || st.step != 1 || busy {
+                return Some(Msg::new("err.skill_not_now"));
+            }
+            if m.card.is_empty() {
+                return Some(Msg::new("err.skill_unknown"));
+            }
+            // The rule's own gate (`On::Play`'s), so the cost check stays in the
+            // rule body where the 规则书 clause lives.
+            cx.rules.cant_play(cx, i, &m.card)
         }
         "buy" => {
             if !my_turn || st.step != 3 || busy {

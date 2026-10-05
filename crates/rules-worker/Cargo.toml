@@ -1,0 +1,20 @@
+[package]
+name = "rules-worker"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Stateless match worker: long-running, many requests, no shared mutable state."
+
+[lib]
+name = "rules_worker"
+path = "src/lib.rs"
+
+[[bin]]
+name = "rules-worker"
+path = "src/main.rs"
+
+[dependencies]
+game-core = { path = "../game-core" }
+game-rules = { path = "../game-rules" }
+serde = { workspace = true }
+serde_json = { workspace = true }

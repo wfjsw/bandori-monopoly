@@ -18,9 +18,8 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "PPP:（有咲）等等等一下";
 
 pub const ARISA_WAIT: CardDef = CardDef::new("PPP:（有咲）等等等一下", &[
-    On::Play(arisa_wait),
-    On::Hook(&[HookKind::EventAfter], event_after),
-]);
+    On::Play(None, arisa_wait),
+    On::Hook(&[HookKind::EventAfter], event_after_guard, event_after)]);
 
 fn arisa_wait(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]。」
@@ -38,10 +37,13 @@ fn arisa_wait(player_id: i32) {
 
 /// `IEventDefer.Resolved` (C# `CardArisaWait.Resolved`) -- any event that
 /// settles banks a crystal on this card.
+/// Pure guard for [`event_after`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn event_after_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn event_after(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
     // C# `by != Title` filters out this card's own deferred releases; while
     // Defer (2) is held there are none, so every `eventAfter` is foreign.

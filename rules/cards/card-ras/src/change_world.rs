@@ -13,12 +13,10 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHANGE_WORLD: CardDef = CardDef::new("RAS:Change the world", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-    On::Hook(&[HookKind::PayAdd], pay_choose),
-    On::Hook(&[HookKind::PayAfter], pay_after),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+    On::Hook(&[HookKind::PayAdd], |_| true, pay_choose),
+    On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after)]);
 
 const ID: &str = "RAS:Change the world";
 
@@ -47,7 +45,6 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 }
 
 /// Where the card's tile is written down (C# `Mem` on a tile-bound field card).
-const SLOT_TILE: &str = "change_world_tile";
 /// The turn the card was played (C# `Mem["turn"] = H.TurnKey`).
 const SLOT_TURN: &str = "change_world_turn";
 
@@ -68,7 +65,7 @@ fn play(player_id: i32) {
     // 规则书: 「将此卡放置于你的一个有房屋的livehouse格子上」
     // -- C# `H.PlaceFromPlay(c, i, tile)` binds the card to that tile.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("change_world_note")));
+    ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("change_world_note")));
     ctx::log(
         player_id,
         &Msg::new(key!("change_world_placed")).player_id("who", player_id).tile("tile", tile),
@@ -76,11 +73,6 @@ fn play(player_id: i32) {
     // C# `Mem["turn"] = H.TurnKey` and the tile the card sits on; the player slot
     // stands in for the per-field-card `Mem` map.
     ctx::set_slot(player_id, SLOT_TURN, ctx::turn_key());
-    ctx::set_slot(player_id, SLOT_TILE, tile);
-    // TODO(规则书): 「将此卡放置于你的一个有房屋的livehouse格子上」 -- the
-    // placement is bound to `tile` rather than the player's field; needs field-card
-    // tile placement (`H.PlaceFromPlay(c, owner, tile)`). The tile is remembered
-    // in `SLOT_TILE` so the hooks below can key on it.
     // 规则书: 「你的本次移动掷骰变为3d20」 -- C# `H._turnCtx.Plan.Base.Clear()` +
     // `Add((3, 20, "（Change the world）"))`.
     ctx::plan::set_base_dice(3, 20, "（Change the world）");
@@ -89,10 +81,13 @@ fn play(player_id: i32) {
 
 /// C# `CardChangeWorld.PassTile` -- while the card is placed, its owner's main
 /// move passing a non-owned buyable Live House adds a crystal.
+/// Pure guard for [`pass_tile`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_tile_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pass_tile(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `m.Seat != Seat || !m.Main || Mem["turn"] != H.TurnKey`.
     if trigger::player_id() != player_id || !trigger::move_is_main() {
         return;
@@ -122,7 +117,7 @@ fn pay_choose(player_id: i32) {
     if trigger::target() != player_id {
         return;
     }
-    let tile = ctx::slot(player_id, SLOT_TILE);
+    let tile = ctx::placed_tile(player_id, ID).unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return;
     }
@@ -145,17 +140,20 @@ fn pay_choose(player_id: i32) {
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the
 /// card.
+/// Pure guard for [`pay_after`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pay_after_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pay_after(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // 规则书: 「触发后将该卡放入弃牌堆」 -- C# `PayAfter` fires when the pay
     // carried the `changeWorld` tag (i.e. `PayAdd` ran). Re-check the same
     // conditions: rent on the card's tile to the card's owner with a nonzero bonus.
     if !trigger::pay_is_rent() || trigger::target() != player_id {
         return;
     }
-    let tile = ctx::slot(player_id, SLOT_TILE);
+    let tile = ctx::placed_tile(player_id, ID).unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile || ctx::houses_of(tile) <= 0 {
         return;
     }

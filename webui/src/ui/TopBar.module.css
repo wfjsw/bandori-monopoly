@@ -1,8 +1,8 @@
-.bar { position: absolute; left: 0; top: 0; width: 1600px; height: 110px; z-index: 5; }
+.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: 5; }
 .squareBtn { display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--pink); background: linear-gradient(#fff, #f2f2f5); box-shadow: 0 4px 0 #d9d9df, 0 8px 16px rgba(0, 0, 0, 0.08); }
 .squareBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #d9d9df; }
 .back { composes: squareBtn; position: absolute; left: 38px; top: 18px; width: 82px; height: 80px; }
-.menu { composes: squareBtn; position: absolute; left: 1480px; top: 17px; width: 82px; height: 82px; }
+.menu { composes: squareBtn; position: absolute; right: 38px; top: 17px; width: 82px; height: 82px; }
 .back i, .menu i { width: 40px; height: 40px; }
 .crumb { position: absolute; left: 145px; top: 16px; width: 386px; }
 .section { height: 38px; width: 352px; border-radius: 19px 19px 19px 4px; background: var(--pink); color: #fff; font-size: 18px; font-weight: 700; padding: 6px 24px 0; white-space: nowrap; overflow: hidden; }
@@ -15,7 +15,7 @@
 .compact .crumb { left: 125px; width: 263px; }
 .compact .section { width: 208px; }
 
-.status { position: absolute; left: 913px; top: 17px; width: 547px; height: 84px; border-radius: 42px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 12px 0 34px; gap: 14px; }
+.status { position: absolute; right: 140px; top: 17px; width: 547px; height: 84px; border-radius: 42px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 12px 0 34px; gap: 14px; }
 .level { width: 68px; text-align: center; font-size: 16px; }
 .level b { display: block; font-size: 30px; line-height: 1.1; }
 .mid { width: 150px; display: flex; flex-direction: column; gap: 8px; }

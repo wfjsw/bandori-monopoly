@@ -14,26 +14,56 @@
 //! `card_move`, but the `GrabFx` attachment and the grid-nearest teleport
 //! (「视为你的主要移动」) are still held (see the TODOs below).
 
+use card_sdk::abi::HookKind;
+use card_sdk::ctx::{plan, trigger};
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
+/// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`
+/// attachment: it is a value the card stores under its own key.
+const PASSER: &str = "want_to_grab_passer";
+
 pub const WANT_TO_GRAB: CardDef = CardDef::new("CRYCHIC:想要抓住...", &[
-    On::Play(want_to_grab),
-]);
+    On::Play(None, want_to_grab),
+    On::Hook(&[HookKind::PassPlayer], |_| true, on_pass),
+    On::Hook(&[HookKind::SettleBefore], |_| true, grab)]);
 
 fn want_to_grab(player_id: i32) {
     // 规则书（1）: 「获得一层[停留]。」
     ctx::give_stay(player_id, 1);
     ctx::log(player_id, &Msg::new(key!("want_to_grab_note")).player_id("who", player_id));
-    // TODO(规则书)（2）: 「当第一位其他玩家经过你，在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]。」
-    //   -- `TriggerKind::PassPlayer` / `SettleBefore` exist now (C# `GrabFx.PassSeat`
-    //   remembers the passer, `GrabFx.SettleBefore` runs the grab). The grab body
-    //   `H.Walk(Seat, 1, resolve: true)` is now `plan::set_steps(1)` +
-    //   `plan::set_resolve(true)` + `card_move(player_id)`, but the `GrabFx`
-    //   attachment (C# `H.ExtraOf<GrabFx>`) that remembers the passer is still
-    //   held, so the effect cannot be wired faithfully yet.
-    // TODO(规则书)（3）: 「[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动。」
+    // 规则书（2）: 「当第一位其他玩家经过你」 -- arm the grab; the first passer
+    // is the one it fires on.
+    ctx::state::set(player_id, PASSER, -1);
+}
+
+/// 「当第一位其他玩家经过你」 -- remember the *first* passer only.
+fn on_pass(player_id: i32) {
+    let passer = ctx::trigger::player_id();
+    if passer == player_id || passer < 0 {
+        return;
+    }
+    if ctx::state::get(player_id, PASSER) >= 0 {
+        return;
+    }
+    ctx::state::set(player_id, PASSER, passer);
+}
+
+/// 「在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]」 -- the grab runs
+/// before the remembered passer settles.
+fn grab(player_id: i32) {
+    let passer = ctx::state::get(player_id, PASSER);
+    if passer < 0 || ctx::trigger::player_id() != passer {
+        return;
+    }
+    ctx::state::set(player_id, PASSER, -1);
+    // 「你立刻向前移动一格并[触发结算]」 -- a one-step walk that settles.
+    plan::set_steps(1);
+    plan::set_resolve(true);
+    ctx::card_move(player_id);
+}
+
+// TODO(规则书)（3）: 「[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动。」
     //   -- `TriggerKind::TurnStart` and `ctx::ask_tile` exist now; still missing
     //   the board grid geometry (C# `Grid` / `FromGrid` ray-nearest search over
     //   the four axis directions) and `plan::set_teleport_to` (the
     //   teleport-with-settle shape for `H.MainMoveAs`).
-}

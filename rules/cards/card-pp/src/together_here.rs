@@ -5,13 +5,12 @@
 //! > [手]：
 //! > 将X个反面[P✽P粉丝]变正；X为5，如果[使用者]拥有的正面[P✽P粉丝]数量少于反面[P✽P粉丝]数量则X额外添加反面和正面[P✽P粉丝]数量的差的一半（向上取整），如果[共鸣]则X减少5并抽1张卡。
 //!
-//! X is 5, +ceil((down - up)/2) while down > up. The resonance branch is TODO.
+//! X is 5, +ceil((down - up)/2) while down > up; [共鸣] cuts X by 5 and draws.
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TOGETHER_HERE: CardDef = CardDef::new("PP:有你与我在这里共度", &[
-    On::Play(together_here),
-]);
+    On::Play(None, together_here)]);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -25,8 +24,11 @@ fn together_here(player_id: i32) {
     if up < down {
         x += (down - up + 1) / 2;
     }
-    // TODO(规则书): 「如果[共鸣]则X减少5并抽1张卡」 -- needs H.TryResonance (discard
-    // 「PP:[衍生]共鸣」 from hand) to take the -5 / draw-1 branch.
+    // 规则书[手]: 「如果[共鸣]则X减少5并抽1张卡」
+    if crate::resonance::try_resonance(player_id) {
+        x -= 5;
+        ctx::draw(player_id, 1);
+    }
     // 规则书[手]: 「将X个反面[P✽P粉丝]变正」
     let flip = x.max(0).min(down);
     if flip > 0 {

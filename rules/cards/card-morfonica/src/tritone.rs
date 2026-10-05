@@ -13,8 +13,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TRITONE: CardDef = CardDef::new("Mor:迷茫之蝶们的三全音", &[
-    On::React(&[ChainKind::Effect], can_react, react),
-    On::Hook(&[HookKind::TurnEnd], react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
+    On::Hook(&[HookKind::TurnEnd], |_| true, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -34,10 +34,9 @@ fn react(player_id: i32) {
         TriggerKind::Pay => {
             let amount = trigger::value();
             // 规则书[反击]: 「立刻获得此次失去的资金金额」
-            // C# `H.Money(new PayCtx { to = seat, amount, kind = "gain", fixedAmount = true })`.
-            // TODO(ABI): `fixedAmount` (skills / crits may not modify this gain) is
-            //   not expressible; the gain goes through the normal `H.GainR` path.
-            ctx::gain(player_id, amount, &Msg::new(key!("tritone_why")).n("money", amount as i64));
+            // C# `H.Money(new PayCtx { to = seat, amount, kind = "gain", fixedAmount = true })`
+            // -- `fixedAmount`, so no skill or crit bends the figure.
+            ctx::gain_fixed(player_id, amount, &Msg::new(key!("tritone_why")).n("money", amount as i64));
             // 规则书[反击]: 「此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, "Mor:迷茫之蝶们的三全音", &Msg::new(key!("tritone_note")).n("money", amount as i64));

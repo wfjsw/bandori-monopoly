@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new("RAS:PLEASE CHOOSE", &[
-    On::React(&[ChainKind::Settle], can_react, react),
+    On::CounterAct(&[ChainKind::Settle], can_react, react),
 ]);
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
@@ -41,17 +41,16 @@ fn can_react(player_id: i32) -> bool {
         return false;
     }
     // 规则书[反击]: 「在livehouse格子上结算」 -- C# `H.IsLiveHouse` + `IsBuyable`.
-    // `IsBuyable` is now `ctx::is_buyable`; `H.IsLiveHouse` (color group /
-    // ExtraColor) still uses the name list.
-    // TODO(ABI): `H.IsLiveHouse` (color group / ExtraColor) is not queryable;
-    // the name list is board.json's group-6 buyable tiles.
-    LIVEHOUSE_BUYABLE.iter().any(|&n| ctx::tile_named(n) == t) && ctx::is_buyable(t)
+    // `is_live_house_for` is the whole check: group 6 (or this player's
+    // `Fx.ExtraColor`) and buyable.
+    ctx::is_live_house_for(player_id, t)
 }
 
 fn react(player_id: i32) {
     let other = trigger::player_id();
     // 规则书[反击]: 「使对方选择以下效果之一执行」 -- C# `H.AskPick` of `other`.
-    // TODO(规则书)[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
+    // TODO(规则书)[judgement][反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
+    //   the clause under-specifies -- see the note above it
     // -- C# filters `other`'s hand for `Normal && Targeting && WhyNot == null`,
     // `H.AskCard`, then `H.PlayCard` with `Tags["force"] = player_id`. Hand listing
     // (`ctx::cards_in`) and the replayable gate (`ctx::card_replayable`) are
@@ -68,7 +67,8 @@ fn react(player_id: i32) {
         &[opt1, opt2],
     );
     if pick == 0 {
-        // TODO(规则书)[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
+        // TODO(规则书)[judgement][反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
+        //   the clause under-specifies -- see the note above it
         // -- see above; the forced play needs `CardDef.targeting()` / `Normal`
         // (hand filter) and a force-target play tag. `ctx::cards_in(other,
         // CardPile::Hand)` lists the hand now.
@@ -88,7 +88,8 @@ fn react(player_id: i32) {
             &Msg::new(key!("please_choose_moved")).player_id("who", player_id).tile("tile", to),
         );
     }
-    // TODO(规则书)[反击]（2）: 「（不触发结算但视为可触发乐队技能）」 -- the
+    // TODO(规则书)[judgement][反击]（2）: 「（不触发结算但视为可触发乐队技能）」 -- the
+    //   the clause under-specifies -- see the note above it
     // no-settle half is `ctx::teleport_to`; the band-skill half needs the
     // `BandBase.PassTile` fan-out (C# `H.EachOf(i, f => f.PassTile(m, to))`).
 }

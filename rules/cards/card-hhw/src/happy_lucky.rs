@@ -10,9 +10,7 @@ use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const HAPPY_LUCKY: CardDef = CardDef::new("HHW:Happy, Lucky, Smile, Yeah！", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `CardHappyLucky.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

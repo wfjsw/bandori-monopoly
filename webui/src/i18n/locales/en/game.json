@@ -5,8 +5,10 @@
   "ask.agent.title": "Dealer · {{agent}}",
   "ask.auction.text": "Land price {{price}}{{extra}}. Minimum bid 100, raises of at least 100; the highest bidder pays and takes the deed. After a bid it waits 6 more seconds; with no new bid the deed is sold.",
   "ask.auction.title": "Auction: {{tile}}",
+  "ask.build.among": "{{who}} may add a house ({{why}}) on one of {{n}} tiles",
   "ask.build.no": "No",
   "ask.build.text": "{{who}} stopped on {{tile}}: pay {{cost}} to add a house?",
+  "ask.build.tile": "{{tile}}  house #{{nth}}  {{cost}}",
   "ask.build.title": "Build a house",
   "ask.build.yes": "Build",
   "ask.buy.text": "{{who}} stopped on the unowned {{tile}}: buy it for {{price}}?{{extra}}",
@@ -58,7 +60,8 @@
   "err.build_full": "This tile is fully built",
   "err.build_mortgaged": "Cannot build on mortgaged land (redeem it first)",
   "err.build_not_on_own": "You can only build on your own land",
-  "err.build_not_own": "This is not your land",
+"err.build_blocked": "you cannot build right now",
+    "err.build_not_own": "This is not your land",
   "err.build_only_settling": "You can only build while settling on your own land",
   "err.build_ring": "RiNG tiles cannot have houses",
   "err.built_already": "You already built on this settle (one house per settle)",
@@ -192,6 +195,7 @@
   "log.forfeit": "{{who}} left the match (forfeit) -- out, like a bankruptcy",
   "log.gain": "{{who}} gained {{amount}}{{src}}",
   "log.gain_fire": "gained {{n}} [Fire] ({{why}}, now {{fire}}/{{max}})",
+  "log.hook_fire": "{{who}}'s {{card}} takes effect",
   "log.land": "{{who}} stopped on {{tile}}",
   "log.land_circle": "{{who}} stopped on CiRCLE and drew 1 card",
   "log.land_draw": "{{who}} stopped on {{tile}} and drew 1 card",
@@ -282,5 +286,8 @@
   "status.move_not_your_turn": "You can only do this on your own turn",
   "status.stunned": "[Stunned]",
   "vote.against": "{{who}} voted against",
-  "vote.timeout": "time ran out with votes missing"
+  "vote.timeout": "time ran out with votes missing",
+  "err.skill_not_now": "A skill cannot be used right now.",
+  "err.skill_unknown": "No such skill.",
+  "err.build_denied": "This move cannot build here."
 }

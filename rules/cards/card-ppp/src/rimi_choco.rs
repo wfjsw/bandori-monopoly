@@ -11,9 +11,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const RIMI_CHOCO: CardDef = CardDef::new("PPP:（里美）我的心就像巧克力螺", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `CardRimiChoco.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -43,9 +41,11 @@ fn play(player_id: i32) {
         &Msg::new(key!("rimi_choco_ask")),
         &tiles,
     );
-    // 规则书: 「期间[不可阻挡]」 -- C# `H._turnCtx.Unstoppable = true` for the move.
-    // TODO(规则书): 「期间[不可阻挡]」 -- the `Unstoppable` turn flag (C#
-    //   `H._turnCtx.Unstoppable`) is still held; a blocker can still stop this walk.
+    // 规则书: 「期间[不可阻挡]」 -- a blocker cannot stop this walk. The window is
+    // the move, and the move is the turn's main move and consumes it, so a
+    // turn-end expiry is the same window here.
+    ctx::state::set(player_id, "unstoppable", 1);
+    ctx::state::set_expires(player_id, "unstoppable", ctx::state::TURN_END);
     // 规则书: 「并[结算]」 / 「本回合的[主要移动]改为…」 -- C# `H.CardMove` with
     // `Steps` (forward, or `Reverse` with `n - steps` when the target is behind).
     // `MoveCtx.Resolve` defaults to true, so the landing settles.

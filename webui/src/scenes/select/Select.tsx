@@ -108,60 +108,64 @@ export function Select({ sess }: { sess: GameSession }) {
       {sess instanceof SoloSession && st.phase !== "deck" && (
         <Btn size="small" icon="redo" className={s.quick} title={tr("select.quickHint")} onClick={() => sess.quickStart()}>{tr("select.quickStart")}</Btn>
       )}
-      {preview && <Preview c={preview} />}
+      <div className={s.body}>
+        {preview && <Preview c={preview} />}
 
-      <div className={s.tabs}>
-        <Chips items={tabLabels()} on={tab as (ReturnType<typeof tabLabels>)[number]} onPick={setTab} />
-      </div>
-      <div className={s.gridPanel}>
-        <div className={s.grid}>
-          {D.characters.filter((c) => inTab(c, tab)).map((c) => {
-            const banned = st.bans.includes(c.name);
-            const taken = takenBy.get(c.name);
-            const mine = taken?.playerId === view.playerId;
-            return (
-              <CharCard
-                key={c.name}
-                c={c}
-                dim={banned || (!!taken && !mine)}
-                chosen={c.name === chosen}
-                stamp={banned ? tr("select.stepBan") : taken ? (mine ? tr("common.you") : taken.name) : undefined}
-                stampKind={banned ? "gray" : "pink"}
-                check={c.name === chosen && (mine || myTurn)}
-                onClick={() => {
-                  sfx("place");
-                  if (!me.character) setPicked(c.name);
-                }}
-              />
-            );
-          })}
+        <div className={s.right}>
+          <div className={s.tabs}>
+            <Chips items={tabLabels()} on={tab as (ReturnType<typeof tabLabels>)[number]} onPick={setTab} />
+          </div>
+          <div className={s.gridPanel}>
+            <div className={s.grid}>
+              {D.characters.filter((c) => inTab(c, tab)).map((c) => {
+                const banned = st.bans.includes(c.name);
+                const taken = takenBy.get(c.name);
+                const mine = taken?.playerId === view.playerId;
+                return (
+                  <CharCard
+                    key={c.name}
+                    c={c}
+                    dim={banned || (!!taken && !mine)}
+                    chosen={c.name === chosen}
+                    stamp={banned ? tr("select.stepBan") : taken ? (mine ? tr("common.you") : taken.name) : undefined}
+                    stampKind={banned ? "gray" : "pink"}
+                    check={c.name === chosen && (mine || myTurn)}
+                    onClick={() => {
+                      sfx("place");
+                      if (!me.character) setPicked(c.name);
+                    }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={s.order}>
+            <PanelTab className={s.orderTab}>{tr("select.order")}</PanelTab>
+            <div className={s.strip}>
+              {st.players.map((x, i) => {
+                const c = D.character(x.character);
+                const turn = (st.phase === "ban" || st.phase === "pick") && st.turn === i;
+                return (
+                  <div key={i} className={cx(s.playerId, turn && s.turn)}>
+                    <div className={s.av}>
+                      <Avatar c={c} size={56} />
+                      <span className={s.n}>{i + 1}</span>
+                      {x.bot && <span className={s.bot}><Icon name="smart_toy" /></span>}
+                      {st.phase === "deck" && x.deckReady && <span className={s.ok}><Icon name="check" /></span>}
+                    </div>
+                    <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
+                    {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.character(x.ban)?.display ?? "" })}</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={s.hint}>{hint}{secs > 0 && tr("select.secsSuffix", { n: secs })}</div>
+          <Btn kind="pink" className={s.go} disabled={!onGo} onClick={() => onGo?.()}>{label}</Btn>
         </div>
       </div>
-
-      <div className={s.order}>
-        <PanelTab className={s.orderTab}>{tr("select.order")}</PanelTab>
-        <div className={s.strip}>
-          {st.players.map((x, i) => {
-            const c = D.character(x.character);
-            const turn = (st.phase === "ban" || st.phase === "pick") && st.turn === i;
-            return (
-              <div key={i} className={cx(s.playerId, turn && s.turn)}>
-                <div className={s.av}>
-                  <Avatar c={c} size={56} />
-                  <span className={s.n}>{i + 1}</span>
-                  {x.bot && <span className={s.bot}><Icon name="smart_toy" /></span>}
-                  {st.phase === "deck" && x.deckReady && <span className={s.ok}><Icon name="check" /></span>}
-                </div>
-                <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
-                {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.character(x.ban)?.display ?? "" })}</div>}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className={s.hint}>{hint}{secs > 0 && tr("select.secsSuffix", { n: secs })}</div>
-      <Btn kind="pink" className={s.go} disabled={!onGo} onClick={() => onGo?.()}>{label}</Btn>
     </>
   );
 }
@@ -171,9 +175,13 @@ function Preview({ c }: { c: CharacterData }) {
   const band = D.band(c.band);
   const char = tab === "char";
   return (
-    <>
+    <div className={s.left}>
       <div className={s.band}><BandMark band={c.band} /></div>
-      <Live2DStand key={D.artId(c)} id={D.artId(c)} className={s.stand} headroom={0.03} />
+      {/* The eyes share one line across characters (the anchor ignores each
+          model's height). `fit="top"` gives the head the room vertical
+          centring wastes, and `headroom` clamps the tallest hairdos (004) so
+          they drop a little rather than being sliced by the portrait rect. */}
+      <Live2DStand key={D.artId(c)} id={D.artId(c)} className={s.stand} fit="top" zoom={1.22} headroom={0.03} eyeFrac={0.27} />
       <div className={s.plate}><NamePlate c={c} /></div>
       <div className={s.skill} style={{ ["--accent" as string]: c.color }}>
         <div className={s.skillHead}>
@@ -184,7 +192,7 @@ function Preview({ c }: { c: CharacterData }) {
         </div>
         <div className={s.skillText}><SkillTextToggle className={s.skillSwitch} />{skillText(char ? c : band)}</div>
       </div>
-    </>
+    </div>
   );
 }
 

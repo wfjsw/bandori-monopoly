@@ -19,10 +19,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const JENNIFER: CardDef = CardDef::new("PP:找回珍妮弗", &[
-    On::Play(jennifer),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-]);
+    On::Play(Some(cant_play), jennifer),
+    On::Hook(&[HookKind::PassTile], |_| true, pass_tile)]);
 
 /// Stand-in for C# `Card.User` (per-card Mem): the player who played the card,
 /// stored on the owner's player while it is in play.

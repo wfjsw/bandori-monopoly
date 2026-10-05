@@ -7,7 +7,7 @@
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play(rui_devil)]);
+pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play(None, rui_devil)]);
 
 fn rui_devil(player_id: i32) {
     ctx::set_slot(player_id, "ruiHit", 0);

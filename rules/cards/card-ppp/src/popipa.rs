@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play(popipa)]);
+pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play(None, popipa)]);
 
 fn popipa(player_id: i32) {
     ctx::set_dest(ctx::Dest::Banished);

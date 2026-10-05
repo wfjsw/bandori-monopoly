@@ -12,11 +12,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new("MyGO:羽丘的不可思议女孩", &[
-    On::Play(haneoka),
-    On::CantPlay(cant_play),
+    On::Play(Some(cant_play), haneoka),
     // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-    On::Hook(&[HookKind::PayChoose], pay_choose),
-]);
+    On::Hook(&[HookKind::PayChoose], |_| true, pay_choose)]);
 
 const ID: &str = "MyGO:羽丘的不可思议女孩";
 
@@ -37,7 +35,7 @@ fn haneoka(player_id: i32) {
         return;
     }
     // 规则书: 「投掷1d20」
-    // TODO: the C# rolls with H.CardRoll (PlayCtx.Extreme can force max/min).
+    // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
     let r = ctx::roll(player_id, 1, 20);
     if r < 10 {
         // 规则书: 「若严格小于10，此卡放入弃牌堆且视为此卡未生效」
@@ -47,8 +45,13 @@ fn haneoka(player_id: i32) {
                 .card("card", ID)
                 .i("roll", r as i64),
         );
-        // TODO(规则书): 「且视为此卡未生效」 -- needs PlayCtx.Effective (C#
-        // `c.Effective = false`, so the play does not count as a card use).
+// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
+        // side channel and is not being ported (a routine should *return* whether
+        // it took effect); but before that lands, what "not effective" changes has
+        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
+        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
+        // implies no)? And what counts a use that this would suppress?
         return;
     }
     if r > 10 {
@@ -76,10 +79,9 @@ fn haneoka(player_id: i32) {
                     .card("card", ID),
             );
         }
-        // TODO(规则书): 「免费加盖一层房屋」 -- the C# `AddHouse` itself clamps at
-        // the tile's rent-table max (`rent.Length - 1`) and `H.WhyNotBuildOn`
-        // covers the agent-build gates; neither has a query, so the host
-        // `add_house` (which only floors at 0) may overshoot the cap.
+        // 规则书: 「免费加盖一层房屋」 -- `add_house` itself clamps at the tile's
+        // rent-table max (`rent.Length - 1`), so a tile that cannot take another
+        // house simply does not move.
     }
     if r > 15 {
         // 规则书: 「若出目大于15，则额外抽一张卡」

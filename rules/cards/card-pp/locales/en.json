@@ -47,6 +47,12 @@
   "strong_flower_note": "the user stops here [Forced Stop] and settles when passing",
   "strong_flower_title": "Cute and Sturdy Flower",
   "strong_flower_why_not": "You do not own any land yet",
-  "together_here_up": "{{who}} flipped {{n}} face-down [P✽P Fan] face-up (Together Here)",
-  "trainee_guide_note": "miracle crystals and mono/dual marks; hand limit −1"
+"title_idol_crystals": "{{n}} [Miracle Crystal] on every card whose text mentions them",
+    "together_here_up": "{{who}} flipped {{n}} face-down [P✽P Fan] face-up (Together Here)",
+  "trainee_guide_note": "miracle crystals and mono/dual marks; hand limit −1",
+  "trainee_guide_resonance_cost": "[共鸣] pay 500",
+  "resonance_title": "Resonance",
+  "resonance_text": "Discard [Resonance] to upgrade this effect?",
+  "chisato_mask_resonance": "Resonance: the others split-pay you 1,500",
+  "strong_flower_gain": "Strong Flower: +1,500"
 }

@@ -259,7 +259,7 @@ pub trait CardRules: Send + Sync {
     /// (otherwise it is discarded).
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool>;
 
-    /// Reaction window at `t` (C# `React(trigger)`); may raise prompts.
+    /// Reaction window at `t` (C# `React(trigger)` -- the counter-act window); may raise prompts.
     ///
     /// `t` is mutable: a reaction may rewrite the move roll (`t.value` /
     /// `t.Move.Roll`) and the engine then uses the new face (C# shares the
@@ -280,12 +280,18 @@ pub struct StubRules;
 
 impl CardRules for StubRules {
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
-        cx.log(player_id as i32, Msg::new("log.card_not_ported").card("card", card));
+        cx.log(
+            player_id as i32,
+            Msg::new("log.card_not_ported").card("card", card),
+        );
         Ok(Dest::Graveyard)
     }
 
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool> {
-        cx.log(player_id as i32, Msg::new("log.event_not_ported").event("event", id));
+        cx.log(
+            player_id as i32,
+            Msg::new("log.event_not_ported").event("event", id),
+        );
         Ok(false)
     }
 }

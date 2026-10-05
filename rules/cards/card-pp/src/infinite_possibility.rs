@@ -20,7 +20,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new("PP:[大和麻弥]可能性为∞", &[
-    On::Hook(&[HookKind::Drew], drew),
+    On::Hook(&[HookKind::Drew], drew_guard, drew),
 ]);
 
 // TODO(规则书): [特]「观看卡组并观看到此卡时将此卡展示给所有玩家并将其放置在自己[场上]
@@ -33,10 +33,13 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new("PP:[大和麻弥]可能�
 /// 规则书[持续]（1）: 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡
 /// 添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个
 /// [奇迹水晶]」
+/// Pure guard for [`drew`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn drew_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn drew(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     if trigger::value() <= 0 {
         return;
     }

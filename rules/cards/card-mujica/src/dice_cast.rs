@@ -17,13 +17,11 @@ const NO_REACT: &str = "diceCastActive";
 const ID: &str = "Mujica:骰子已经掷下";
 
 pub const DICE_CAST: CardDef = CardDef::new("Mujica:骰子已经掷下", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::React(&[ChainKind::Card], can_react, react),
+    On::Play(Some(cant_play), play),
+    On::CounterAct(&[ChainKind::Card], can_react, react),
     // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
     // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-    On::Hook(&[HookKind::TurnEndAfter], turn_end),
-]);
+    On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end)]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书: 「（此卡可以被反击）」 -- playable as a [反击] too (C#
@@ -86,7 +84,8 @@ fn turn_end(player_id: i32) {
     ctx::unplace_card(player_id);
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("dice_cast_ended")).player_id("who", player_id));
-    // TODO(规则书): 「（此卡可以被反击）」 -- the engine must still let other
+    // TODO(规则书)[judgement]: 「（此卡可以被反击）」 -- the engine must still let other
+    //   the clause under-specifies -- see the note above it
     // [反击]s answer this card's own play window (C# reaction chain plays
     // declared reactions in reverse before `Cast` sets the lock).
 }

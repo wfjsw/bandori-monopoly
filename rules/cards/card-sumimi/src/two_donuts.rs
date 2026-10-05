@@ -22,9 +22,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TWO_DONUTS: CardDef = CardDef::new("Sumimi:一人两个甜甜圈", &[
-    On::Play(two_donuts),
-    On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], fx),
-]);
+    On::Play(None, two_donuts),
+    On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], fx_guard, fx)]);
 
 const ID: &str = "Sumimi:一人两个甜甜圈";
 /// C# `DonutFx.Orig` -- the tile the exile waits on.
@@ -53,10 +52,13 @@ fn two_donuts(player_id: i32) {
 
 /// C# `DonutFx.PassTile` / `DonutFx.SettleAfter` -- run through the Fx hook
 /// dispatch while this card is placed.
+/// Pure guard for [`fx`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn fx_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn fx(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- C# `DonutFx.PassTile`
         // records the first other player that steps on `Orig`.

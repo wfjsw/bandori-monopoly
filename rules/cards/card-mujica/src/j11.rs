@@ -14,13 +14,12 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "Mujica:#J11";
 
 pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
-    On::Play(play),
+    On::Play(None, play),
     // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.PayChoose` +
     // `CardJ11.Targeted` -- all field hooks, not [反击]s.
     On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted],
-        react,
-    ),
-]);
+        |_| true, react,
+    )]);
 
 fn play(player_id: i32) {
     // C# `H.PlaceFromPlay(c, -1, -1, 2)` -- place with 2 miracle crystals.

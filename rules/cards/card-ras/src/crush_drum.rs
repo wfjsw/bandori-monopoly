@@ -12,9 +12,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const CRUSH_DRUM: CardDef = CardDef::new("RAS:（MASKING）CRUSH ON THE DRUM!!!", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `CardCrushDrum.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -39,7 +37,8 @@ fn play(player_id: i32) {
     // -- C# sets `H._turnCtx.DiceCardsImmune = true`, and the play flow then
     // skips `React` for any `def.AddsDice` card of this player (MatchHost.cs
     // ~18912).
-    // TODO(ABI): needs a turn-level dice-immunity flag (C#
+    // TODO(规则书)[judgement](ABI): needs a turn-level dice-immunity flag (C#
+    //   the clause under-specifies -- see the note above it
     // `H._turnCtx.DiceCardsImmune`) and a way for the engine to know a card is
     // dice-adding. The Trigger payload of a card play is only
     // `{ Kind: Card, Player, Card, Play }` -- it does not expose `Play.Def.AddsDice`,

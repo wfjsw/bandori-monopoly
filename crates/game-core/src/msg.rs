@@ -63,7 +63,10 @@ pub enum Arg {
 
 impl Msg {
     pub fn new(key: impl AsRef<str>) -> Self {
-        Self { k: Arc::from(key.as_ref()), a: Arc::default() }
+        Self {
+            k: Arc::from(key.as_ref()),
+            a: Arc::default(),
+        }
     }
 
     /// Insert one argument in place (for bridges that build a message field by
@@ -198,11 +201,20 @@ mod tests {
 
     #[test]
     fn wire_form_is_compact_and_round_trips() {
-        let m = Msg::new("log.roll").player_id("who", 2).i("n", 6).opt("why", None);
+        let m = Msg::new("log.roll")
+            .player_id("who", 2)
+            .i("n", 6)
+            .opt("why", None);
         let j = serde_json::to_string(&m).unwrap();
-        assert_eq!(j, r#"{"k":"log.roll","a":{"n":{"i":6},"who":{"playerId":2},"why":{"msg":{"k":"blank"}}}}"#);
+        assert_eq!(
+            j,
+            r#"{"k":"log.roll","a":{"n":{"i":6},"who":{"playerId":2},"why":{"msg":{"k":"blank"}}}}"#
+        );
         assert_eq!(serde_json::from_str::<Msg>(&j).unwrap(), m);
-        assert_eq!(serde_json::to_string(&Msg::new("err.x")).unwrap(), r#"{"k":"err.x"}"#);
+        assert_eq!(
+            serde_json::to_string(&Msg::new("err.x")).unwrap(),
+            r#"{"k":"err.x"}"#
+        );
         assert_eq!(m.to_string(), "log.roll{n=6,who=playerId:2,why=(blank)}");
     }
 }

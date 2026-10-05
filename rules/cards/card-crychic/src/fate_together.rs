@@ -15,9 +15,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const FATE_TOGETHER: CardDef = CardDef::new("CRYCHIC:一起演奏音乐的命运共同体", &[
-    On::Play(fate_together),
-    On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], react),
-]);
+    On::Play(None, fate_together),
+    On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], react_guard, react)]);
 
 const ID: &str = "CRYCHIC:一起演奏音乐的命运共同体";
 
@@ -36,10 +35,13 @@ fn fate_together(player_id: i32) {
 }
 
 /// C# `FateFx.PayAfter` / `FateFx.TurnStart`.
+/// Pure guard for [`react`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn react_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn react(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书（1）: 「每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列
         // 后一名玩家的格子（不触发结算）。」 -- C# `FateFx.PayAfter`:

@@ -3,8 +3,8 @@
 //! These never prompt, so they run directly on the world without replay.
 
 use super::cx::Cx;
-use crate::msg::{Arg, Msg};
 use crate::deck;
+use crate::msg::{Arg, Msg};
 
 /// Seconds per ban / pick / deck decision (`StartChoice`).
 pub const BAN_SECONDS: f32 = 20.0;
@@ -21,7 +21,9 @@ impl Cx<'_> {
         let mut rerolled = false;
         loop {
             let tied: Vec<usize> = (0..n)
-                .filter(|&i| (0..n).any(|j| j != i && self.w.st.players[j].roll == self.w.st.players[i].roll))
+                .filter(|&i| {
+                    (0..n).any(|j| j != i && self.w.st.players[j].roll == self.w.st.players[i].roll)
+                })
                 .collect();
             if tied.is_empty() {
                 break;
@@ -38,9 +40,19 @@ impl Cx<'_> {
         self.w.st.players = order.iter().map(|&i| players[i].clone()).collect();
         self.w.hidden = order.iter().map(|&i| hidden[i].clone()).collect();
         let list = (0..self.w.st.players.len())
-            .map(|p| Arg::Msg(Box::new(Msg::new("log.part.player_roll").player_id("who", p).i("n", self.w.st.players[p].roll))))
+            .map(|p| {
+                Arg::Msg(Box::new(
+                    Msg::new("log.part.player_roll")
+                        .player_id("who", p)
+                        .i("n", self.w.st.players[p].roll),
+                ))
+            })
             .collect();
-        let key = if rerolled { "log.order_rerolled" } else { "log.order" };
+        let key = if rerolled {
+            "log.order_rerolled"
+        } else {
+            "log.order"
+        };
         self.w.log("text", -1, Msg::new(key).list("rolls", list));
     }
 
@@ -59,9 +71,19 @@ impl Cx<'_> {
             .characters
             .iter()
             .map(|c| c.name.as_str())
-            .filter(|c| if for_pick { self.pickable(c) } else { self.bannable(c) })
+            .filter(|c| {
+                if for_pick {
+                    self.pickable(c)
+                } else {
+                    self.bannable(c)
+                }
+            })
             .collect();
-        let with_art: Vec<&str> = all.iter().copied().filter(|c| self.data.character(c).is_some_and(|x| !x.cn_id.is_empty())).collect();
+        let with_art: Vec<&str> = all
+            .iter()
+            .copied()
+            .filter(|c| self.data.character(c).is_some_and(|x| !x.cn_id.is_empty()))
+            .collect();
         let list = if with_art.is_empty() { all } else { with_art };
         if list.is_empty() {
             return String::new();
@@ -97,7 +119,9 @@ impl Cx<'_> {
         let text = if character.is_empty() {
             Msg::new("log.no_ban").player_id("who", i)
         } else {
-            Msg::new("log.ban").player_id("who", i).chara("chara", character)
+            Msg::new("log.ban")
+                .player_id("who", i)
+                .chara("chara", character)
         };
         self.w.log("ban", i as i32, text);
         self.w.st.turn -= 1;
@@ -111,12 +135,24 @@ impl Cx<'_> {
     /// `DoPick`. Bots submit their deck as soon as the deck phase opens.
     pub(crate) fn do_pick(&mut self, i: usize, character: &str) {
         self.w.st.players[i].character = character.into();
-        self.w.log("pick", i as i32, Msg::new("log.pick").player_id("who", i).chara("chara", character));
+        let d = self.data;
+        self.w.bind_skills(d, i as i32);
+        self.w.log(
+            "pick",
+            i as i32,
+            Msg::new("log.pick")
+                .player_id("who", i)
+                .chara("chara", character),
+        );
         self.w.st.turn += 1;
         if self.w.st.turn as usize >= self.w.player_count() {
             self.w.st.phase = "deck".into();
             self.w.st.turn = -1;
-            self.w.log("text", -1, Msg::new("log.deck_phase").i("n", crate::deck::SIZE as i64));
+            self.w.log(
+                "text",
+                -1,
+                Msg::new("log.deck_phase").i("n", crate::deck::SIZE as i64),
+            );
             for p in 0..self.w.player_count() {
                 if self.w.st.players[p].ai {
                     self.submit_deck(p, None);
@@ -141,7 +177,11 @@ impl Cx<'_> {
         self.w.hidden[i].draw = list;
         self.w.st.players[i].deck_ready = true;
         if !self.w.st.players[i].ai {
-            self.w.log("deck", i as i32, Msg::new("log.deck_ready").player_id("who", i));
+            self.w.log(
+                "deck",
+                i as i32,
+                Msg::new("log.deck_ready").player_id("who", i),
+            );
         }
     }
 }

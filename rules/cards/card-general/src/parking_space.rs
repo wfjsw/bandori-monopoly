@@ -23,11 +23,9 @@ const ID: &str = "通用:[都筑诗船]Parking Space";
 const SLOT_STAY: &str = "parking_space_stay";
 
 pub const PARKING_SPACE: CardDef = CardDef::new("通用:[都筑诗船]Parking Space", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
+    On::Play(Some(cant_play), play),
     // C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` -- field hooks, not [反击].
-    On::Hook(&[HookKind::SettleInstead, HookKind::TurnEndAfter], react),
-]);
+    On::Hook(&[HookKind::SettleInstead, HookKind::TurnEndAfter], react_guard, react)]);
 
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile
 /// (`没有 Space`).
@@ -42,13 +40,10 @@ fn play(player_id: i32) {
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- C# `H.PlaceFromPlay(c, i, s)`
     // with `s = H.TileNamed("Space")`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("parking_space_note")));
     let space = ctx::tile_named("Space");
-    // TODO(规则书)[手]: 「将此卡放置于“Space”格子上」 -- the placement is bound to
-    // the player's field, not the Space tile; needs field-card tile placement
-    // (`H.PlaceFromPlay(c, owner, tile)`), the same gap as `kokoro_circle`.
-    // The `SettleInstead` body below therefore keys off the Space tile id
-    // rather than this card's `Tile`.
+    // 规则书[手]: 「将此卡放置于“Space”格子上」 -- bound to the Space tile, not
+    // to the player's field.
+    ctx::place_card_on(player_id, space, ID, &Msg::new(key!("parking_space_note")));
     // TODO(规则书)（2）[持续]: 「位于此卡所在格子上的玩家无法使用角色及乐队技能」
     // -- needs a skill-suppression hook (C# `CardParkingSpace.NoteText` /
     // `Fx` gate on skill use at this tile).
@@ -69,12 +64,10 @@ fn play(player_id: i32) {
         if t == space {
             continue;
         }
-        // TODO(规则书)[手]: the C# destination filter is `H.WhyNotBuildOn(i, t) == null`
-        // (kind != "ring", rent capacity, house cap, `H._turnCtx.NoBuild`, the
-        // "卡池BUG" event, `Fx.CanBuild`) -- only buyable / not-mortgaged /
-        // can-pay are expressible here, and `ctx::add_house` does not clamp at
-        // the C# house cap either. Same gap as `hey_kids`.
-        if !ctx::is_buyable(t) || ctx::mortgaged_of(t) || !ctx::can_pay(player_id) {
+        // 规则书[手]: the destination must be one the player could build on --
+        // the same gate the build step uses, so it cannot hand over a house to a
+        // tile the engine would refuse.
+        if !ctx::can_build_on(player_id, t) {
             continue;
         }
         ctx::add_house(space, -1);
@@ -86,10 +79,13 @@ fn play(player_id: i32) {
 
 /// C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` (MatchHost.cs:2469-2495).
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击].
+/// Pure guard for [`react`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn react_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn react(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」 -- C#
         // `CardParkingSpace.SettleInstead`: when the settle lands on the card's

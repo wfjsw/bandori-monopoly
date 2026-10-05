@@ -1,5 +1,8 @@
-// The fixed 1600 x 900 stage (the original's reference resolution), scaled to
-// fit the window, over a blurred per-screen backdrop that fills the letterbox.
+// The 1600 x 900 design canvas (the original's reference resolution) scaled to
+// fit the window, over a blurred per-screen backdrop. The stage itself grows to
+// fill the window: the design is a *minimum*, not a frame, so a wide monitor
+// gets a wider stage and the edge-anchored panels (see the scenes' `right:`)
+// slide out to the sides instead of leaving a letterbox.
 
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
@@ -23,19 +26,29 @@ export function useBackdrop(name: string | null): void {
   useEffect(() => setBackdrop(name), [name]);
 }
 
-function useScale(): number {
-  const calc = () => Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
-  const [scale, set] = useState(calc);
+/**
+ * The uniform scale that fits the 1600 x 900 design in the window, plus the
+ * stage width that fills the window at that scale (in design px). The width
+ * grows past 1600 so a wide monitor isn't left with letterbox bars; the height
+ * stays at the design's 900 (a taller window letterboxes instead of stranding
+ * the top-anchored UI at the top of a very tall stage).
+ */
+function useStage(): { scale: number; w: number } {
+  const calc = () => {
+    const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+    return { scale, w: window.innerWidth / scale };
+  };
+  const [box, set] = useState(calc);
   useEffect(() => {
     const on = () => set(calc());
     window.addEventListener("resize", on);
     return () => window.removeEventListener("resize", on);
   }, []);
-  return scale;
+  return box;
 }
 
 export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
-  const scale = useScale();
+  const { scale, w } = useStage();
   const bg = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
@@ -47,7 +60,10 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
   return (
     <>
       <div className={s.backdrop} style={{ backgroundImage: src ? `url("${src}")` : undefined }} />
-      <div className={s.stage} style={{ transform: `translate(-50%, -50%) scale(${scale})` }}>
+      <div
+        className={s.stage}
+        style={{ width: w, height: STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }}
+      >
         {children}
         <div className={fading ? `${s.fader} ${s.on}` : s.fader} />
       </div>

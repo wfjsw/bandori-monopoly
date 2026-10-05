@@ -10,10 +10,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const EXIST: CardDef = CardDef::new("RAS:EXIST", &[
-    On::Play(exist),
+    On::Play(None, exist),
     On::Gate(&[GateKind::Redirect], redirect),
-    On::Hook(&[HookKind::TurnStart], turn_start),
-]);
+    On::Hook(&[HookKind::TurnStart], turn_start_guard, turn_start)]);
 
 const ID: &str = "RAS:EXIST";
 
@@ -44,7 +43,8 @@ fn redirect(player_id: i32) {
     // C# calls `Used()` only when the redirect actually lands (`card.Seat != p
     // && card.Seat != c.Seat`) -- never when the play is our own.
     if trigger::player_id() != player_id {
-        // TODO(规则书): 「造成影响」 is taken to mean *the effect resolved* -- a
+        // TODO(规则书)[judgement]: 「造成影响」 is taken to mean *the effect resolved* -- a
+        //   the clause under-specifies -- see the note above it
         // judgement call, not something the text settles. This is written at
         // **declaration** (the redirect re-names the recipient before the chain
         // opens), so a later counter that negates the effect still leaves the
@@ -56,10 +56,13 @@ fn redirect(player_id: i32) {
 
 /// C# `CardExist.TurnStart` -> `End()` -- flip the card into the discard at the
 /// start of this player's next turn; draw 1 when it never redirected anything.
+/// Pure guard for [`turn_start`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_start_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn turn_start(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     // 规则书: 「你的下回合开始时将其翻入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
     let used = ctx::slot(player_id, SLOT_USED);
     ctx::unplace_card(player_id);

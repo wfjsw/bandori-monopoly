@@ -51,31 +51,44 @@ export function Menu() {
         <div className={s.box}>{line}</div>
       </div>
 
-      <button type="button" className={cx(s.small, s.history)} onClick={showHistory}><Icon name="history" />{tr("menu.history")}{badge(hasNew("history"))}</button>
-      <button type="button" className={cx(s.small, s.settings)} onClick={showSettings}><Icon name="chevrons" />{tr("menu.settings")}</button>
-      <button type="button" className={cx(s.small, s.fire)} onClick={showFire}>
-        <div className={s.ribbon}>{tr("menu.fireRibbon", { n: p.firePerGame })}</div>
-        <img src={sceneImg("icon_fire")} alt="" />{tr("menu.settings")}
-      </button>
-      <button type="button" className={cx(s.big, s.story)} disabled title={tr("menu.comingSoon")}>
-        <img className={s.pic} src={sceneImg("pic_story")} alt="" />
-        <div className={s.soon}>{tr("menu.comingSoon")}</div>
-        <div className={s.label}>{tr("menu.story")}</div>
-      </button>
-      <button type="button" className={cx(s.big, s.solo)} onClick={showSoloSetup}>
-        <img className={s.pic} src={sceneImg("pic_single")} alt="" />
-        {SoloSession.hasSave() && <div className={s.resume}>{tr("menu.resume")}</div>}
-        <div className={s.label}>{tr("menu.solo")}</div>
-      </button>
-      <button type="button" className={cx(s.big, s.online)} onClick={() => navigate({ name: "lobby" })}>
-        <div className={s.wins}><img src={sceneImg("icon_medal")} alt="" /><span>{tr("menu.rankFirst")}</span><b>{p.rankedWins}</b></div>
-        <img className={s.pic} src={sceneImg("pic_group")} alt="" />
-        <div className={s.modes}>{tr("menu.onlineModes")}</div>
-        <div className={s.label}>{tr("menu.online")}</div>
-      </button>
-      <button type="button" className={cx(s.foot, s.rules)} onClick={showRules}><img className={s.logo} src={sceneImg("logo_game")} alt="" />{tr("menu.tileRules")}{badge(hasNew("rules"))}</button>
-      <button type="button" className={cx(s.foot, s.deck)} onClick={() => navigate({ name: "deck" })}><Icon name="playing_cards" />{tr("menu.tileDeck")}{badge(hasNew("deck"))}</button>
-      <button type="button" className={cx(s.foot, s.gallery)} onClick={() => navigate({ name: "gallery" })}><Icon name="kid_star" />{tr("menu.tileGallery")}{badge(hasNew("gallery"))}</button>
+      {/* The tile cluster is a flex column of rows: the two grouped pills sit
+          left, the fire pill is pushed to the row's end, so the cluster keeps
+          its shape at any width instead of drifting apart as the stage grows. */}
+      <div className={s.cluster}>
+        <div className={s.topRow}>
+          <button type="button" className={cx(s.small, s.history)} onClick={showHistory}><Icon name="history" />{tr("menu.history")}{badge(hasNew("history"))}</button>
+          <button type="button" className={cx(s.small, s.settings)} onClick={showSettings}><Icon name="chevrons" />{tr("menu.settings")}</button>
+          <button type="button" className={cx(s.small, s.fire)} onClick={showFire}>
+            <div className={s.ribbon}>{tr("menu.fireRibbon", { n: p.firePerGame })}</div>
+            <img src={sceneImg("icon_fire")} alt="" />{tr("menu.settings")}
+          </button>
+        </div>
+        <div className={s.midRow}>
+          <div className={s.midLeft}>
+            <button type="button" className={cx(s.big, s.story)} disabled title={tr("menu.comingSoon")}>
+              <img className={s.pic} src={sceneImg("pic_story")} alt="" />
+              <div className={s.soon}>{tr("menu.comingSoon")}</div>
+              <div className={s.label}>{tr("menu.story")}</div>
+            </button>
+            <button type="button" className={cx(s.big, s.solo)} onClick={showSoloSetup}>
+              <img className={s.pic} src={sceneImg("pic_single")} alt="" />
+              {SoloSession.hasSave() && <div className={s.resume}>{tr("menu.resume")}</div>}
+              <div className={s.label}>{tr("menu.solo")}</div>
+            </button>
+          </div>
+          <button type="button" className={cx(s.big, s.online)} onClick={() => navigate({ name: "lobby" })}>
+            <div className={s.wins}><img src={sceneImg("icon_medal")} alt="" /><span>{tr("menu.rankFirst")}</span><b>{p.rankedWins}</b></div>
+            <img className={s.pic} src={sceneImg("pic_group")} alt="" />
+            <div className={s.modes}>{tr("menu.onlineModes")}</div>
+            <div className={s.label}>{tr("menu.online")}</div>
+          </button>
+        </div>
+        <div className={s.botRow}>
+          <button type="button" className={cx(s.foot, s.rules)} onClick={showRules}><img className={s.logo} src={sceneImg("logo_game")} alt="" />{tr("menu.tileRules")}{badge(hasNew("rules"))}</button>
+          <button type="button" className={cx(s.foot, s.deck)} onClick={() => navigate({ name: "deck" })}><Icon name="playing_cards" />{tr("menu.tileDeck")}{badge(hasNew("deck"))}</button>
+          <button type="button" className={cx(s.foot, s.gallery)} onClick={() => navigate({ name: "gallery" })}><Icon name="kid_star" />{tr("menu.tileGallery")}{badge(hasNew("gallery"))}</button>
+        </div>
+      </div>
     </>
   );
 }

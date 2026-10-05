@@ -9,14 +9,18 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const IDOL_AND_BAND: CardDef = CardDef::new("Sumimi:兼顾偶像与乐队", &[
-    On::Play(idol_and_band),
-]);
+    On::Play(Some(cant_play), idol_and_band)]);
+
+/// 规则书: 「当你本回合未进行过赎回操作时可打出」 -- the redeem step records
+/// itself and clears at the turn end, so this is just asking that record.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if ctx::state::get(player_id, "redeemed") != 0 {
+        return Some(Msg::new(key!("idol_and_band_redeemed")));
+    }
+    None
+}
 
 fn idol_and_band(player_id: i32) {
-    // TODO(规则书): 「当你本回合未进行过赎回操作时可打出」-- the C#
-    //   `CardIdolAndBand.WhyNot` is only the `H._turnCtx.Redeemed` check
-    //   （「本回合进行过赎回操作」）; that turn-context flag is still off the ABI,
-    //   so `cant_play` has nothing expressible to refuse here.
     let have = ctx::money(player_id);
     if have >= 3000 {
         // 规则书: 「若你的资金为3000以上则无效果」

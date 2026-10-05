@@ -9,9 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[
-    On::Play(gacha10),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), gacha10)]);
 
 /// C# `CardGacha10.WhyNot`: refuses the card with less than 1,500 (`资金不够 1,500`).
 fn cant_play(player_id: i32) -> Option<Msg> {

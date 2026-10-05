@@ -40,6 +40,20 @@ pub struct Hidden {
     pub next_steps: Option<i32>,
 }
 
+fn full_build_cost() -> i32 {
+    100
+}
+
+/// One player's `_turnSnap[i]`: the status a turn-end undo restores to.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TurnSnap {
+    pub pos: i32,
+    pub stay: i32,
+    pub stun: i32,
+    pub exile: i32,
+}
+
 /// Per-turn bookkeeping (the parts of C# `TurnCtx` the shell uses).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct TurnCtx {
@@ -66,6 +80,52 @@ pub struct TurnCtx {
     /// this turn (indexed by player; a new turn starts them all at 0).
     #[serde(default)]
     pub abnormal: Vec<i32>,
+    /// C# `PlayCtx.Extreme` -- the play being resolved settles its number-range
+    /// dice at the theoretical extreme: `1` = max, `-1` = min, `0` = plain.
+    /// Set mid-play by a [反击] (「以理论最大值或最小值结算」) and cleared when
+    /// the play ends, so it does not leak into the next one.
+    #[serde(default)]
+    pub extreme: i32,
+    /// C# `PlayCtx.FromDeck` -- the play being resolved came from somewhere
+    /// other than the hand (`false`). 「若此卡从手牌以外的地方打出」 reads this.
+    #[serde(default)]
+    pub play_from_hand: bool,
+    /// C# `TurnCtx.BuyDiscount` -- 「本回合购买格子时[消耗]资金时降低N」. A value,
+    /// not a policy: `buy()` subtracts it from the price (floored at 0).
+    #[serde(default)]
+    pub buy_discount: i32,
+    /// C# `TurnCtx.PaidInSettle` -- money paid to other players during this
+    /// turn's [触发结算]s. 「本回合的[结算]向其他玩家支付了至少1000资金」.
+    #[serde(default)]
+    pub paid_in_settle: i32,
+    /// C# `TurnCtx.FreeBuy` -- 「本回合购买格子不[消耗]资金」.
+    #[serde(default)]
+    pub free_buy: bool,
+    /// C# `TurnCtx.RazeOnBuy` -- 「如果购买则拆除那个格子上的所有房屋」.
+    #[serde(default)]
+    pub raze_on_buy: bool,
+    /// C# `_turnSnap[i].pos` -- where each player stood when the turn started.
+    /// 「在Livehouse地块开始回合时」 is a question about that square, not the
+    /// one a mid-turn walk has since reached.
+    #[serde(default)]
+    pub turn_start_pos: Vec<i32>,
+    /// C# `_turnSnap[i]` -- each player's pos / stay / stun / exile when the turn
+    /// started. 「回到起始地点并取消所有受到的效果」 restores from here.
+    #[serde(default)]
+    pub turn_snap: Vec<TurnSnap>,
+    /// C# `_turnCtx.Rolls` -- every face rolled this turn, in order. 「与本回合内
+    /// 你骰出过的所有骰点都不同」 compares against this.
+    #[serde(default)]
+    pub turn_rolls: Vec<i32>,
+    /// C# `BuildDiscountFx` -- 「下次盖房时减免N（可溢出），盖房后减少1层」.
+    /// A layered cut on the build cost; each build pops one layer.
+    #[serde(default)]
+    pub build_discount: i32,
+    pub build_discount_layers: i32,
+    /// 「加盖房屋时半价」 -- the build cost as a percentage of its table price.
+    /// 100 = full, 50 = half, 0 = free (「本回合加盖房屋变为免费」).
+    #[serde(default = "full_build_cost")]
+    pub build_cost_pct: i32,
 }
 
 /// A card that asked to be called at a turn end (C# `TurnCtx.AfterEnd` /
@@ -165,13 +225,18 @@ impl EventTail {
 
     /// Every visible event, oldest first.
     pub fn iter(&self) -> impl Iterator<Item = &MatchEvent> {
-        let head = self.chunks.first().map_or(&[][..], |c| &c[self.start.min(c.len())..]);
+        let head = self
+            .chunks
+            .first()
+            .map_or(&[][..], |c| &c[self.start.min(c.len())..]);
         let mid = self.chunks.iter().skip(1).flat_map(|c| c.iter());
         head.iter().chain(mid).chain(self.tail.iter())
     }
 
     pub fn back(&self) -> Option<&MatchEvent> {
-        self.tail.last().or_else(|| self.chunks.last().and_then(|c| c.last()))
+        self.tail
+            .last()
+            .or_else(|| self.chunks.last().and_then(|c| c.last()))
     }
 
     pub fn back_mut(&mut self) -> Option<&mut MatchEvent> {
@@ -265,7 +330,13 @@ impl World {
 
     /// Append an event (`MatchHost.Log`). Returns it for further fields.
     pub fn log(&mut self, kind: &str, player_id: i32, msg: Msg) -> &mut MatchEvent {
-        let e = MatchEvent { id: self.next_event, r#type: kind.into(), player_id, msg, ..MatchEvent::default() };
+        let e = MatchEvent {
+            id: self.next_event,
+            r#type: kind.into(),
+            player_id,
+            msg,
+            ..MatchEvent::default()
+        };
         self.next_event += 1;
         self.recent.push_back(e);
         if self.recent.len() > EVENT_KEEP + 50 {
@@ -292,7 +363,12 @@ impl World {
             player_id.discard = h.discard.clone();
         }
         let n = self.recent.len();
-        st.events = self.recent.iter().skip(n.saturating_sub(STATE_EVENTS)).cloned().collect();
+        st.events = self
+            .recent
+            .iter()
+            .skip(n.saturating_sub(STATE_EVENTS))
+            .cloned()
+            .collect();
         st.event_deck = self.event_deck.len() as i32;
         st.event_discard = self.event_discard.clone();
         st.event_removed = self.event_removed.clone();

@@ -12,9 +12,15 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TSUGUMI_CAN: CardDef = CardDef::new("AG:（鸫）微小的『能做到』的事", &[
-    On::Play(play),
-    On::React(&[ChainKind::Card], can_react, react),
-]);
+    On::Play(Some(cant_play), play),
+    On::CounterAct(&[ChainKind::Card], can_react, react)]);
+
+/// 规则书（1）: the gate is 「这回合已经移动过了」 -- the same main-move latch the
+/// movement rules use (`H.MoveWhyNot`), so the card is refused once the turn's
+/// main move is spent.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    ctx::cant_move(player_id)
+}
 
 fn can_react(player_id: i32) -> bool {
     // 规则书（1）【反击】: 「时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算」
@@ -29,7 +35,8 @@ fn can_react(player_id: i32) -> bool {
     if trigger::card_is("通用:@Tsugu ycm") {
         return false;
     }
-    // TODO(ABI): `t.Play.Def.RangeCard` / `t.Play.Extreme` are not in the
+    // TODO(规则书)[judgement](ABI): `t.Play.Def.RangeCard` / `t.Play.Extreme` are not in the
+    //   the clause under-specifies -- see the note above it
     // trigger vocabulary. Matching every `card` trigger over-fires (the
     // passage's example says YOLO yes, 「无论是何种颜色的夕阳」 no); the RangeCard
     // filter is what keeps those apart.
@@ -52,16 +59,11 @@ fn react(player_id: i32) {
         &Msg::new(key!("tsugumi_can_ask")),
         &[
             Msg::new(key!("tsugumi_can_max")),
-            Msg::new(key!("tsugumi_can_min")),
-        ],
+            Msg::new(key!("tsugumi_can_min"))],
     );
-    // TODO(规则书（1）): 「以理论最大值或最小值结算」 -- needs `PlayCtx.Extreme`
-    // (C# `target.Extreme = 1 / -1`) so the target play's dice resolve at their
-    // theoretical extremes (`H.CardRoll`). Until then the choice is only logged.
-    let _ = pick;
+    // 规则书（1）: 「以理论最大值或最小值结算」 -- C# `target.Extreme = 1 / -1`,
+    // so the play being reacted to settles its number ranges at the theoretical
+    // extreme the picker named.
+    ctx::set_extreme(if pick == 0 { 1 } else { -1 });
     ctx::log(player_id, &Msg::new(key!("tsugumi_can_forced")).player_id("who", player_id));
-    // TODO(规则书): the C# `WhyNot` delegates to `@Tsugu ycm` (C#
-    // `CardTsuguYcm.WhyNot` -> `H._turnCtx.MainMoved` -> 「这回合已经移动过了」)
-    // -- the main-move latch is still missing from the vocabulary, so the gate
-    // stays unimplemented (`cant_play: None`).
 }

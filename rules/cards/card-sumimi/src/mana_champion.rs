@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MANA_CHAMPION: CardDef = CardDef::new("Sumimi:（真奈）歌唱大赛5连冠", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -43,7 +43,8 @@ fn react(player_id: i32) {
     // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」 --
     // C# `H.DrawR(i, 1, ...)` on `!anyone` (MatchHost.cs:11586-11589).
     ctx::draw(player_id, 1);
-    // TODO(ABI): nested reaction half (C# `H.React(copy, p)`,
+    // TODO(规则书)[judgement](ABI): nested reaction half (C# `H.React(copy, p)`,
+    //   the clause under-specifies -- see the note above it
     // MatchHost.cs:11573) -- 「此时场上其他玩家可如同自身的对应目标被指定一般
     // 打出[反击]卡，且其反击卡中针对打出玩家自身的效果改为你。若以此种方式使你
     // 免于受到该影响，打出那张[反击]卡的玩家可抽一张卡。」 The copy trigger

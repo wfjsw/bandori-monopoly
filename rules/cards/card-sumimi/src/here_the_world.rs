@@ -82,11 +82,11 @@ fn clear_held(player_id: i32) {
 }
 
 pub const HERE_THE_WORLD: CardDef = CardDef::new("Sumimi:Here the world", &[
-    On::React(&[ChainKind::TwoCards], can_react, react),
+    On::CounterAct(&[ChainKind::TwoCards], can_react, react),
     // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-    On::Hook(&[HookKind::Drew], drew),
+    On::Hook(&[HookKind::Drew], |_| true, drew),
     // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-    On::Hook(&[HookKind::TurnStart], turn_start),
+    On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
 ]);
 
 fn can_react(player_id: i32) -> bool {

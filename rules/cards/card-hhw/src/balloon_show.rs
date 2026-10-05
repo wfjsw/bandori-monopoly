@@ -10,9 +10,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 use alloc::vec::Vec;
 
 pub const BALLOON_SHOW: CardDef = CardDef::new("HHW:热气球演出", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `CardBalloonShow.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

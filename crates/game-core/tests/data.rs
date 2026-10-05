@@ -27,7 +27,13 @@ fn game_data_counts_match_the_original() {
     assert_eq!((kind("property"), kind("agent"), kind("ring")), (41, 11, 4));
     assert_eq!(d.tiles.iter().filter(|t| t.is_corner()).count(), 4);
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);
-    assert!(d.tiles.iter().enumerate().all(|(i, t)| t.index == i as i32 + 1), "tiles are 1-indexed in order");
+    assert!(
+        d.tiles
+            .iter()
+            .enumerate()
+            .all(|(i, t)| t.index == i as i32 + 1),
+        "tiles are 1-indexed in order"
+    );
 }
 
 #[test]
@@ -41,7 +47,10 @@ fn lookups() {
     assert_eq!(kasumi.art_id(), "001");
     assert!(!d.voice_lines_for(kasumi).is_empty());
     // Characters added later carry an explicit `art` id instead of cnId.
-    assert!(d.characters.iter().any(|c| !c.art.is_empty() && c.art_id() == c.art));
+    assert!(d
+        .characters
+        .iter()
+        .any(|c| !c.art.is_empty() && c.art_id() == c.art));
 
     assert_eq!(d.school_of("户山香澄"), "花咲川女子学院");
     assert_eq!(d.school_of("nobody"), "周边学区");
@@ -54,7 +63,10 @@ fn lookups() {
 fn json_defaults_match_csharp_initializers() {
     let s: MatchState = serde_json::from_str("{}").unwrap();
     assert_eq!((s.turn, s.roller, s.landed, s.winner), (-1, -1, -1, -1));
-    assert_eq!((s.score_money, s.score_property, s.score_houses), (1.0, 1.0, 1.0));
+    assert_eq!(
+        (s.score_money, s.score_property, s.score_houses),
+        (1.0, 1.0, 1.0)
+    );
     assert_eq!((s.prompt.tile, s.prompt.bidder, s.vote.by), (-1, -1, -1));
     assert!(!s.active());
 
@@ -63,20 +75,41 @@ fn json_defaults_match_csharp_initializers() {
     assert!(player_id.out());
 
     let e: MatchEvent = serde_json::from_str(r#"{"id":7,"type":"dice"}"#).unwrap();
-    assert_eq!((e.id, e.r#type.as_str(), e.player_id, e.other), (7, "dice", -1, -1));
+    assert_eq!(
+        (e.id, e.r#type.as_str(), e.player_id, e.other),
+        (7, "dice", -1, -1)
+    );
 
     let m: NetMessage = serde_json::from_str(r#"{"t":"act","act":"roll"}"#).unwrap();
     assert_eq!(m.target, -1);
     let json = serde_json::to_value(&m).unwrap();
-    assert!(json.get("match").is_none() && json.get("room").is_none(), "absent nested objects stay absent");
+    assert!(
+        json.get("match").is_none() && json.get("room").is_none(),
+        "absent nested objects stay absent"
+    );
 }
 
 #[test]
 fn match_state_round_trips_with_camel_case_names() {
-    let mut s = MatchState { phase: "play".into(), turn: 2, ..Default::default() };
-    s.players.push(MatchPlayer { member: 3, money: 15000, ..Default::default() });
+    let mut s = MatchState {
+        phase: "play".into(),
+        turn: 2,
+        ..Default::default()
+    };
+    s.players.push(MatchPlayer {
+        member: 3,
+        money: 15000,
+        ..Default::default()
+    });
     let v = serde_json::to_value(&s).unwrap();
-    for key in ["matchId", "skipMove", "tileColors", "eventActive", "endReason", "scoreHouses"] {
+    for key in [
+        "matchId",
+        "skipMove",
+        "tileColors",
+        "eventActive",
+        "endReason",
+        "scoreHouses",
+    ] {
         assert!(v.get(key).is_some(), "missing {key}");
     }
     // Keyed state is one map of {value, min, max, expires} items.
@@ -111,22 +144,51 @@ fn deck_rules_reject_with_csharp_reasons() {
     let d = data();
     let kasumi = d.character("户山香澄").unwrap();
     let derived = d.cards.iter().find(|c| c.derived).unwrap();
-    assert_eq!(deck::cant_play(&d, kasumi, derived).unwrap().key(), "err.deck_derived");
+    assert_eq!(
+        deck::cant_play(&d, kasumi, derived).unwrap().key(),
+        "err.deck_derived"
+    );
 
-    let other_band = d.cards.iter().find(|c| !c.general() && !c.exclusive() && c.band != kasumi.band && !c.derived).unwrap();
-    assert_eq!(deck::cant_play(&d, kasumi, other_band).unwrap().key(), "err.deck_band");
+    let other_band = d
+        .cards
+        .iter()
+        .find(|c| !c.general() && !c.exclusive() && c.band != kasumi.band && !c.derived)
+        .unwrap();
+    assert_eq!(
+        deck::cant_play(&d, kasumi, other_band).unwrap().key(),
+        "err.deck_band"
+    );
 
-    let someone_elses = d.cards.iter().find(|c| c.exclusive() && c.owner != kasumi.name && !c.derived).unwrap();
-    assert_eq!(deck::cant_play(&d, kasumi, someone_elses).unwrap().key(), "err.deck_exclusive");
+    let someone_elses = d
+        .cards
+        .iter()
+        .find(|c| c.exclusive() && c.owner != kasumi.name && !c.derived)
+        .unwrap();
+    assert_eq!(
+        deck::cant_play(&d, kasumi, someone_elses).unwrap().key(),
+        "err.deck_exclusive"
+    );
 
     // Sumimi members share exclusives (the original has exactly two members).
     let sumimi: Vec<_> = d.characters.iter().filter(|c| c.band == "Sumimi").collect();
     assert_eq!(sumimi.len(), 2);
     let (a, b) = (sumimi[0], sumimi[1]);
-    let shared = d.cards.iter().filter(|k| k.exclusive() && k.owner == b.name && !k.derived).count();
-    let usable = d.cards.iter().filter(|k| k.exclusive() && k.owner == b.name && !k.derived && deck::can_use(&d, a, k)).count();
+    let shared = d
+        .cards
+        .iter()
+        .filter(|k| k.exclusive() && k.owner == b.name && !k.derived)
+        .count();
+    let usable = d
+        .cards
+        .iter()
+        .filter(|k| k.exclusive() && k.owner == b.name && !k.derived && deck::can_use(&d, a, k))
+        .count();
     assert!(shared > 0, "{} should own exclusive cards", b.name);
-    assert_eq!(usable, shared, "{} should be able to use all of {}'s exclusives", a.name, b.name);
+    assert_eq!(
+        usable, shared,
+        "{} should be able to use all of {}'s exclusives",
+        a.name, b.name
+    );
 }
 
 #[test]
@@ -147,16 +209,29 @@ fn deck_slots_save_choose_and_delete() {
 
     let half: Vec<&String> = preset.iter().take(5).collect();
     assert!(deck::save(&d, &mut p, c, 2, &half));
-    assert_eq!(deck::chosen_slot(&d, &p, c), 0, "incomplete slot falls back to preset");
+    assert_eq!(
+        deck::chosen_slot(&d, &p, c),
+        0,
+        "incomplete slot falls back to preset"
+    );
 
-    assert!(deck::save(&d, &mut p, c, 2, &Vec::<String>::new()), "empty deletes");
+    assert!(
+        deck::save(&d, &mut p, c, 2, &Vec::<String>::new()),
+        "empty deletes"
+    );
     assert!(p.decks.is_empty());
 }
 
 #[test]
 fn profile_create_and_apply_match() {
     let d = data();
-    let mut p = PlayerProfile::create(&d, "  Tomori  ", "123456789", "2026-10-04 12:00", "2026-10-04");
+    let mut p = PlayerProfile::create(
+        &d,
+        "  Tomori  ",
+        "123456789",
+        "2026-10-04 12:00",
+        "2026-10-04",
+    );
     assert_eq!(p.player_name, "Tomori");
     assert!(!p.has_any_new(&d), "a new profile has seen everything");
     assert!(p.refresh_daily("2026-10-05"));
@@ -165,12 +240,18 @@ fn profile_create_and_apply_match() {
 
     p.set_fire_per_game(3);
     let r = p.apply_match(MatchMode::Ranked, 1, 6, "户山香澄", "2026-10-05 20:00");
-    assert_eq!((r.base_exp, r.fire_used, r.multiplier, r.exp), (200, 3, 4, 800));
+    assert_eq!(
+        (r.base_exp, r.fire_used, r.multiplier, r.exp),
+        (200, 3, 4, 800)
+    );
     assert_eq!(p.fire, 2);
     // 800 EXP from level 0: 100 + 115 + 130 + 145 + 160 = 650 -> level 5, 150 left.
     assert_eq!((p.level, p.exp, p.total_exp), (5, 150, 800));
     assert_eq!((r.coins, p.coins, p.ranked_wins, p.stars), (500, 500, 1, 1));
-    assert_eq!(p.stat_of("户山香澄").map(|s| (s.uses, s.firsts)), Some((1, 1)));
+    assert_eq!(
+        p.stat_of("户山香澄").map(|s| (s.uses, s.firsts)),
+        Some((1, 1))
+    );
     assert!(p.has_new(&d, Seen::History));
 
     // Coins never go below zero, and the reward reports the actual change.
@@ -193,7 +274,10 @@ fn profile_normalize_migrates_v1_saves() {
     let p = PlayerProfile::from_json(&d, v1).unwrap();
     assert_eq!(p.save_version, 3);
     assert_eq!((p.level, p.fire_per_game), (500, 3));
-    assert_eq!(p.home_character, d.match_rules.default_home_character, "empty home -> data default");
+    assert_eq!(
+        p.home_character, d.match_rules.default_home_character,
+        "empty home -> data default"
+    );
     assert!(d.character(&p.home_character).is_some());
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);
@@ -210,7 +294,11 @@ fn live2d_picks() {
     assert_eq!(p.live2d_for(c, &opts), "001");
     assert!(p.set_live2d(c, "001b", &opts));
     assert_eq!(p.live2d_for(c, &opts), "001b");
-    assert_eq!(p.live2d_for(c, &["001"]), "001", "pick no longer offered falls back");
+    assert_eq!(
+        p.live2d_for(c, &["001"]),
+        "001",
+        "pick no longer offered falls back"
+    );
     assert!(p.set_live2d(c, "001", &opts));
     assert!(p.live2d_picks.is_empty(), "default is not stored");
 }
@@ -218,7 +306,10 @@ fn live2d_picks() {
 #[test]
 fn clean_name_counts_utf16_units_like_csharp() {
     assert_eq!(clean_name("   "), "");
-    assert_eq!(clean_name("一二三四五六七八九十一二三四五六七"), "一二三四五六七八九十一二三四五六");
+    assert_eq!(
+        clean_name("一二三四五六七八九十一二三四五六七"),
+        "一二三四五六七八九十一二三四五六"
+    );
     // 15 units + a 2-unit emoji would be 17: the emoji is dropped, not split.
     assert_eq!(clean_name("aaaaaaaaaaaaaaa🎸"), "aaaaaaaaaaaaaaa");
 }
@@ -229,7 +320,13 @@ fn bot_names_follow_the_list_then_suffix() {
     let names = &data().match_rules.bot_names;
     assert!(names.len() >= 3, "bot names come from match_rules.json");
     assert_eq!(bot_name(names, [].iter().copied()), names[0]);
-    assert_eq!(bot_name(names, [names[0].as_str(), "someone"].iter().copied()), names[1]);
+    assert_eq!(
+        bot_name(names, [names[0].as_str(), "someone"].iter().copied()),
+        names[1]
+    );
     let all: Vec<&str> = names.iter().map(String::as_str).collect();
-    assert_eq!(bot_name(names, all.iter().copied()), format!("{}2", names[0]));
+    assert_eq!(
+        bot_name(names, all.iter().copied()),
+        format!("{}2", names[0])
+    );
 }

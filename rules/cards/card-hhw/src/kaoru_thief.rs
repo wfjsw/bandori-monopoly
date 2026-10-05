@@ -16,12 +16,10 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "HHW:（薰）怪盗hello happy";
 
 pub const KAORU_THIEF: CardDef = CardDef::new("HHW:（薰）怪盗hello happy", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-    On::Hook(&[HookKind::PassPlayer], pass_player),
-    On::RollPlan(roll_plan),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+    On::Hook(&[HookKind::PassPlayer], pass_player_guard, pass_player),
+    On::RollPlan(roll_plan)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardKaoruThief.WhyNot`: refuses the play with no other player alive.
@@ -66,10 +64,13 @@ fn play(player_id: i32) {
 
 /// 规则书: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
 /// -- C# `CardKaoruThief.PassSeat` -> `Stop` (MatchHost.cs:3834-3860).
+/// Pure guard for [`pass_player`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_player_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pass_player(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `m.Seat != Seat` -- only the owner's own walk.
     if trigger::player_id() != player_id {
         return;
@@ -99,24 +100,27 @@ fn pass_player(player_id: i32) {
     }
     // C# `m.Stopped = true; m.Resolve = true` -- stop at the marked player's
     // tile and settle (`plan::set_stop_at` + `set_resolve`).
+    // 规则书: 「[强制停下]」 -- behind `H.AbnormalGate`.
+    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+        return;
+    }
     let tile = trigger::tile();
     if tile >= 0 {
         ctx::plan::set_stop_at(tile);
         ctx::plan::set_resolve(true);
     }
-    // TODO(规则书): the `H.AbnormalGate` wrapper around this stop (C#
-    //   `CardKaoruThief.Stop`) is not in the vocabulary -- the `abnormalGuard`
-    //   hook path and the `_turnCtx.Unstoppable` play-context flag are not
-    //   reachable from here.
 }
 
 /// 规则书: 「（充能3，衰减1）」 -- C# `DecayCard.TurnEnd` (`turn == DecayOn` =
 /// the owner's turn) -> `AddCrystals(-1)`; empty -> `Empty()` /
 /// `H.Unplace(this, "discard")`. `ctx::decay` is that body.
+/// Pure guard for [`turn_end`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_end_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn turn_end(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     if ctx::decay(player_id, ID) == 0 {
         ctx::log(player_id, &Msg::new(key!("kaoru_thief_decayed")).player_id("who", player_id));
     }
@@ -148,11 +152,9 @@ fn roll_plan(player_id: i32) {
     // `Plan.Reverse`).
     ctx::plan::set_reverse(dir == 2);
     // 规则书: 「和1d10（距离）」 -- C# `m.Base.Clear(); m.Base.Add((1, 10, ...))`
-    // rewrites the roll's base dice to 1d10 (`plan::set_base_dice` is that).
-    // TODO(ABI): the C# also runs `m.Dice.Clear()` (MatchHost.cs:3865) so the
-    //   face is exactly 1d10 even when another card added extra dice (e.g.
-    //   「CRUSH ON THE DRUM!!!」's `Plan.Dice`); `set_base_dice` only clears
-    //   `Base`, and there is no clear-extra-dice op yet.
+    // plus `m.Dice.Clear()`: the face is *exactly* 1d10, so another card's
+    // extra dice come off too.
+    ctx::plan::clear_dice();
     ctx::plan::set_base_dice(1, 10, "（怪盗hello happy）");
     ctx::log(
         mover,

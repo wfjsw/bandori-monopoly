@@ -32,7 +32,10 @@ pub struct TileData {
 impl TileData {
     /// The four corner tiles (start, café, music store, Ryuseido).
     pub fn is_corner(&self) -> bool {
-        matches!(self.kind.as_str(), "circle" | "cafe" | "edogawa" | "ryuseido")
+        matches!(
+            self.kind.as_str(),
+            "circle" | "cafe" | "edogawa" | "ryuseido"
+        )
     }
 
     pub fn is_buyable(&self) -> bool {
@@ -259,6 +262,16 @@ struct EventFile {
 /// Bump when the rules book changes; drives the "NEW" badge (`BandoriDatabase.rulesVersion`).
 pub const RULES_VERSION: i32 = 1;
 
+/// The rule id of a character or band skill (the crates under `rules/skills`).
+///
+/// The id **names its owner**, which is the binding: a player's two skills
+/// follow mechanically from the character they picked, and a skill can be
+/// resolved the same way a card is -- by id. The `skill:` prefix keeps it from
+/// ever colliding with a card id (`AG:即使夕阳落山`).
+pub fn skill_id(owner: &str, skill: &str) -> String {
+    format!("skill:{owner}:{skill}")
+}
+
 /// All static game data plus the `BandoriDatabase` lookups.
 #[derive(Debug, Clone, Default)]
 pub struct GameData {
@@ -297,13 +310,33 @@ fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, St
 }
 
 impl GameData {
+    /// The rule ids of `character`'s own skill and of its band's skill, in that
+    /// order. This is the binding: see [`skill_id`]. Empty entries (a character
+    /// or band with no skill) are skipped, so the result is 0..=2 ids.
+    pub fn skill_rules_of(&self, character: &str) -> Vec<String> {
+        let Some(c) = self.characters.iter().find(|c| c.name == character) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        if !c.skill.is_empty() {
+            out.push(skill_id(&c.name, &c.skill));
+        }
+        if let Some(b) = self.bands.iter().find(|b| b.name == c.band) {
+            if !b.skill.is_empty() {
+                out.push(skill_id(&b.name, &b.skill));
+            }
+        }
+        out
+    }
+
     /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`.
     pub fn load(mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Self, String> {
         let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
         let mut d = GameData {
             tiles: parse::<BoardFile>("board.json", &get("board.json")?)?.tiles,
             cards: parse::<CardFile>("cards.json", &get("cards.json")?)?.cards,
-            characters: parse::<CharacterFile>("characters.json", &get("characters.json")?)?.characters,
+            characters: parse::<CharacterFile>("characters.json", &get("characters.json")?)?
+                .characters,
             bands: parse::<BandFile>("bands.json", &get("bands.json")?)?.bands,
             events: parse::<EventFile>("events.json", &get("events.json")?)?.events,
             schools: parse("schools.json", &get("schools.json")?)?,
@@ -388,7 +421,12 @@ impl GameData {
             .characters
             .iter()
             .find(|x| x.id == c.cn_id)
-            .map(|x| x.lines.iter().filter(|l| !l.text.is_empty() && !l.voice.is_empty()).collect())
+            .map(|x| {
+                x.lines
+                    .iter()
+                    .filter(|l| !l.text.is_empty() && !l.voice.is_empty())
+                    .collect()
+            })
             .unwrap_or_default()
     }
 }

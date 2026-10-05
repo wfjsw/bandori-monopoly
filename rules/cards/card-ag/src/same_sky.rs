@@ -11,8 +11,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SAME_SKY: CardDef = CardDef::new("AG:朝同一片天空迈进", &[
-    On::Hook(&[HookKind::Drawn], react),
-    On::Hook(&[HookKind::DeckAtGameStart], return_at_opening),
+    On::Hook(&[HookKind::Drawn], |_| true, react),
+    On::Hook(&[HookKind::DeckAtGameStart], |_| true, return_at_opening),
 ]);
 
 const ID: &str = "AG:朝同一片天空迈进";

@@ -25,9 +25,8 @@ const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 const SLOT_TURN: &str = "charity_show_turn";
 
 pub const CHARITY_SHOW: CardDef = CardDef::new("HHW:爱心义演", &[
-    On::Play(play),
-    On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], hook),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], hook_guard, hook)]);
 
 fn play(player_id: i32) {
     // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
@@ -70,10 +69,13 @@ fn mine(player_id: i32, t: i32) -> bool {
 
 /// C# `CharityFx.PassTile` / `CharityFx.PayMul` / `CharityFx.TurnEndAfter`
 /// (MatchHost.cs:4211-4231, `H._turnCtx.HalfPayToOthers` applied in `SettleFactor`).
+/// Pure guard for [`hook`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn hook_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn hook(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
         // `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)` for any
@@ -151,7 +153,8 @@ fn hook(player_id: i32) {
             extra += 2;
             ctx::set_slot(player_id, "charity_extra_total", extra);
             ctx::plan::set_extra_steps(extra);
-            // TODO(规则书): the walk reads `m.extra_steps` off the in-flight
+            // TODO(规则书)[judgement]: the walk reads `m.extra_steps` off the in-flight
+            //   the clause under-specifies -- see the note above it
             //   `Move` clone, while `set_extra_steps` writes
             //   `TurnCtx::plan.extra_steps` -- the two are not yet synced
             //   mid-walk, so the +2 may not extend an in-flight walk until the

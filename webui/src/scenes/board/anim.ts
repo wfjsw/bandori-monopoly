@@ -28,7 +28,7 @@ export class Animator {
   dice = 0;
   rolling = false;
   banner: { title: string; body: string; id: number } | null = null;
-  /** Master Duel-style stage transition: the i18n key of the phase sweeping in. */
+  /** Stage transition: the i18n key of the stage name sweeping in. */
   phase: { key: string; id: number } | null = null;
   reveal: { card: string; out: boolean; id: number } | null = null;
   hop: { playerId: number; id: number } | null = null;
@@ -82,14 +82,16 @@ export class Animator {
     this.bump();
   }
 
-  /** Sweep the phase name across the board (Master Duel's stage transition). */
+  /** Chain/resolve the stage name across the board (Master Duel's phase change):
+   *  chain links snap in across the banner, then it resolves. The effect runs
+   *  for STAGE_HOLD ms -- the same length the marker holds each stage. */
   showPhase(key: string): void {
     this.phase = { key, id: ++this.seq };
     clearTimeout(this.phaseTimer);
     this.phaseTimer = window.setTimeout(() => {
       this.phase = null;
       this.bump();
-    }, 1900);
+    }, 1500);
     this.bump();
   }
 
@@ -263,12 +265,14 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
         const prev = viewRef.current?.state;
         viewRef.current = v;
         set({ view: v, at: performance.now() });
-        // Stage transition (Master Duel): every turn-stage change sweeps the
-        // phase name across the board. Stages mirror Yu-Gi-Oh's turn phases:
+        // Stage transition: every turn-stage change sweeps the
+        // stage name across the board. Stages are the game's own:
         // step 1 = Main Phase 1 (运营), 2 = Battle Phase (移动), 3 = Main Phase 2.
         const now = v.state;
         if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
-          a.showPhase(now.step >= 3 ? "board.phase.main2" : now.step === 2 ? "board.phase.battle" : "board.phase.main1");
+          // The four stages are [start, ops, move, end]; `step` 1/2/3 maps to the
+        // first three, and `end` is swept only by the end-turn button.
+        a.showPhase(now.step >= 3 ? "board.stepMove" : now.step === 2 ? "board.stepOps" : "common.start");
         }
       },
       (e) => a.push(e),

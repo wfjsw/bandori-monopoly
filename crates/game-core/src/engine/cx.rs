@@ -69,7 +69,14 @@ impl Ask {
     }
 
     /// `Choice`: pick one of `options`.
-    pub fn choice(players: Vec<usize>, title: Msg, text: Msg, options: Vec<Msg>, fallback: i32, time: f32) -> Self {
+    pub fn choice(
+        players: Vec<usize>,
+        title: Msg,
+        text: Msg,
+        options: Vec<Msg>,
+        fallback: i32,
+        time: f32,
+    ) -> Self {
         let mut a = Self::new("choice", players, title, text, time);
         a.view.options = options;
         a.view.fallback = fallback;
@@ -78,7 +85,13 @@ impl Ask {
     }
 
     /// `TileAsk`: pick one of `tiles` (answer == len means "none").
-    pub fn tile(player_id: usize, title: Msg, text: Msg, tiles: &[usize], labels: Vec<Msg>) -> Self {
+    pub fn tile(
+        player_id: usize,
+        title: Msg,
+        text: Msg,
+        tiles: &[usize],
+        labels: Vec<Msg>,
+    ) -> Self {
         let mut a = Self::new("tile", vec![player_id], title, text, 20.0);
         a.view.items = tiles.iter().map(|t| t.to_string()).collect();
         a.view.options = labels;
@@ -88,8 +101,20 @@ impl Ask {
     }
 
     /// `MortgageAsk`: choose deeds worth at least `need`.
-    pub fn mortgage(player_id: usize, need: i32, text: Msg, deeds: &[usize], ai_pick: Vec<String>) -> Self {
-        let mut a = Self::new("mortgage", vec![player_id], Msg::new("ask.mortgage.title"), text, 25.0);
+    pub fn mortgage(
+        player_id: usize,
+        need: i32,
+        text: Msg,
+        deeds: &[usize],
+        ai_pick: Vec<String>,
+    ) -> Self {
+        let mut a = Self::new(
+            "mortgage",
+            vec![player_id],
+            Msg::new("ask.mortgage.title"),
+            text,
+            25.0,
+        );
         a.view.items = deeds.iter().map(|t| t.to_string()).collect();
         a.view.bid = need;
         a.ai_picked = vec![ai_pick];
@@ -97,7 +122,13 @@ impl Ask {
     }
 
     /// `Auction`: open bidding on a tile.
-    pub fn auction(tile: usize, players: Vec<usize>, title: Msg, text: Msg, worth: Vec<i32>) -> Self {
+    pub fn auction(
+        tile: usize,
+        players: Vec<usize>,
+        title: Msg,
+        text: Msg,
+        worth: Vec<i32>,
+    ) -> Self {
         let mut a = Self::new("auction", players, title, text, 10.0);
         a.view.tile = tile as i32;
         a.view.bid = 0;
@@ -164,6 +195,14 @@ pub struct Cx<'a> {
 }
 
 impl<'a> Cx<'a> {
+    /// Press a skill button: run the rule's `On::Play` entry under its own id.
+    ///
+    /// A skill is a card rule -- it just lives on the player's field rather than
+    /// in a hand -- so the card's play entry answers for it. Nothing moves: there
+    /// is no hand card to spend and no destination to resolve, unlike playing a
+    /// card. The gate is not re-checked here; `why_not_act` has already asked the
+    /// rule's `cant_play` and refused the press if it named a reason, which is
+    /// the same shape as every other turn action.
     /// A copy of the replayable world (a rules host runs against one).
     pub fn world_copy(&self) -> World {
         self.w.clone()
@@ -184,9 +223,20 @@ impl<'a> Cx<'a> {
         self.rules
     }
 
-
-    pub fn new(w: World, data: &'a GameData, rules: &'a dyn CardRules, answers: &'a [Answered]) -> Self {
-        Self { w, data, rules, answers, cursor: 0, delay: 0.0 }
+    pub fn new(
+        w: World,
+        data: &'a GameData,
+        rules: &'a dyn CardRules,
+        answers: &'a [Answered],
+    ) -> Self {
+        Self {
+            w,
+            data,
+            rules,
+            answers,
+            cursor: 0,
+            delay: 0.0,
+        }
     }
 
     /// Raise a prompt. Returns the logged answer, or halts the routine.
@@ -196,7 +246,11 @@ impl<'a> Cx<'a> {
         if let Some(a) = self.answers.get(self.cursor) {
             self.cursor += 1;
             self.delay = 0.0;
-            return Ok(Reply { players: ask.view.players, fallback: ask.view.fallback, a: a.clone() });
+            return Ok(Reply {
+                players: ask.view.players,
+                fallback: ask.view.fallback,
+                a: a.clone(),
+            });
         }
         self.w.st.prompt = ask.view.clone();
         Err(Halt(HaltKind::Ask(Box::new(ask))))
@@ -227,7 +281,11 @@ impl<'a> Cx<'a> {
         let faces: Vec<i32> = (0..count).map(|_| self.w.rng.d(sides)).collect();
         let sum = faces.iter().sum();
         let detail = (count > 1).then(|| {
-            let joined = faces.iter().map(|f| f.to_string()).collect::<Vec<_>>().join("+");
+            let joined = faces
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<Vec<_>>()
+                .join("+");
             Msg::new("log.part.dice_faces").text("faces", joined)
         });
         let text = Msg::new("log.dice")
@@ -280,6 +338,9 @@ impl<'a> Cx<'a> {
     /// (C# `From(from)` / `H.PresentFrom`).
     pub fn present_from(&self, from: usize) -> Vec<usize> {
         let n = self.w.player_count();
-        (0..n).map(|k| (from + k) % n).filter(|&i| !self.out(i) && self.w.st.players[i].exile() == 0).collect()
+        (0..n)
+            .map(|k| (from + k) % n)
+            .filter(|&i| !self.out(i) && self.w.st.players[i].exile() == 0)
+            .collect()
     }
 }

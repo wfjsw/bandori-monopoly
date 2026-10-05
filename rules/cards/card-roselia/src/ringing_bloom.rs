@@ -17,9 +17,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const RINGING_BLOOM: CardDef = CardDef::new("R:（燐子）Ringing Bloom", &[
-    On::Play(play),
-    On::Hook(&[HookKind::PayAfter], pay_after),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after)]);
 
 const ID: &str = "R:（燐子）Ringing Bloom";
 
@@ -41,10 +40,13 @@ fn play(player_id: i32) {
 /// C# `CardRingingBloom.PayAfter` -> `Done`: after a non-RiNG rent lands on this
 /// player, unplace to discard and gain 500 per standing house on the charged tile.
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
+/// Pure guard for [`pay_after`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pay_after_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pay_after(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     if trigger::kind() != TriggerKind::PayAfter || !trigger::pay_is_rent() {
         return;
     }

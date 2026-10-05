@@ -132,6 +132,8 @@ export function Deck() {
   return (
     <>
       <TopBar section={tr("deck.section")} title={tr("deck.title")} onBack={() => navigate({ name: "menu" })} />
+      <div className={s.body}>
+        <div className={s.left}>
       <div className={s.char}>
         <div className={s.glow} style={{ background: character.color }} />
         <Live2DStand key={D.artId(character)} id={D.artId(character)} className={s.stand} zoom={1.25} focusTop={0.13} headroom={0.103} />
@@ -159,7 +161,9 @@ export function Deck() {
           );
         })}
       </div>
+        </div>
 
+        <div className={s.right}>
       <div className={s.strip}>
         <div className={s.stripHead}>
           <b>{character.display} · {slotName(slot)}</b>
@@ -198,6 +202,8 @@ export function Deck() {
               </CardFace>
             );
           })}
+        </div>
+      </div>
         </div>
       </div>
     </>

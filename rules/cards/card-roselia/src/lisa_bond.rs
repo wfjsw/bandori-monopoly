@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const LISA_BOND: CardDef = CardDef::new("R:必然的联系（莉莎）", &[
-    On::React(&[ChainKind::SkillTeleport], can_react, react),
+    On::CounterAct(&[ChainKind::SkillTeleport], can_react, react),
 ]);
 
 /// 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」

@@ -18,41 +18,84 @@
 use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, On, Msg};
 
+const ID: &str = "Mor:（NNM）稍微努力了一下";
+/// The counter names 「角色标记:*」.
+const TOKEN_PREFIX: &str = "角色标记:";
+
 pub const NANAMI_EFFORT: CardDef = CardDef::new("Mor:（NNM）稍微努力了一下", &[
-    On::Play(nanami_effort),
-    On::AtEnd(discard_down_to_five),
-]);
+    On::Play(None, nanami_effort),
+    On::AtEnd(discard_down_to_five)]);
 
 fn nanami_effort(player_id: i32) {
-    // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」
-    // C# `Tokens` walks `players[player_id].tokens` for `name.StartsWith("角色标记:") &&
-    //   value > 0` (`MatchHost.cs:4805-4810`), `H.AskNumber` picks x in `1..total`,
-    //   then one `H.AskPick` per spent token and a second `H.AskPick` over the
-    //   three effects.
-    // TODO(ABI): 「弃置手中x枚角色标记」 -- needs a token-list query so the player's
-    //   `角色标记:*` counters can be counted (`CardNanamiEffort.Tokens`) and spent
-    //   (`H.AddTok(i, name, -1)`). `ctx::ask_number` (C# `H.AskNumber`) exists now,
-    //   but without the token list there is no `total` to size x against, so the
-    //   play still folds.
-    // C# `WhyNot` also refuses the play with no character tokens
-    // ("你没有角色标记") -- blocked on the same token-list query.
-    ctx::log(player_id, &Msg::new(key!("nanami_effort_no_tok")).player_id("who", player_id));
-    // Effect (1) body is `effect_draw` below -- the [AtEnd] scheduling half is
-    // live there (`ctx::before_turn_end`); the draw half is still TODO'd.
-    // Effect (2): `ctx::gain(player_id, x * 2000, ...)`.
-    // TODO(规则书)（2）: 「获得x*2000资金」 -- `ctx::gain(player_id, x * 2000, ...)`, blocked
-    //   on x.
-    // Effect (3): `ctx::place_card` + `ctx::add_crystals(player_id, x, 0)`.
+    // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」 -- the tokens are the
+    // `角色标记:*` counters; x is chosen from what the player actually holds, then
+    // they are spent and one effect is picked.
+    let names = ctx::tok_names(player_id, TOKEN_PREFIX);
+    let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
+    if total <= 0 {
+        ctx::log(player_id, &Msg::new(key!("nanami_effort_no_tok")).player_id("who", player_id));
+        return;
+    }
+    let x = ctx::ask_number(
+        player_id,
+        &Msg::new(key!("nanami_effort_how_many")),
+        &Msg::new(key!("nanami_effort_how_many_text")),
+        1,
+        total,
+    );
+    // 「弃置…x枚」 -- spend them lowest-index first until x is gone.
+    let mut left = x;
+    for name in &names {
+        if left <= 0 {
+            break;
+        }
+        let take = ctx::tok(player_id, name).min(left);
+        if take > 0 {
+            ctx::add_tok(player_id, name, -take, i32::MAX);
+            left -= take;
+        }
+    }
+    // 「发动以下效果中的一个」
+    let k = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("nanami_effort_pick_title")),
+        &Msg::new(key!("nanami_effort_pick_text")),
+        &[
+            Msg::new(key!("nanami_effort_effect_1")),
+            Msg::new(key!("nanami_effort_effect_2")),
+            Msg::new(key!("nanami_effort_effect_3")),
+        ],
+    );
+    match k {
+        // (1) 「回合结束时抽x张卡（可超过上限）」 -- scheduled, runs in `effect_draw`.
+        0 => effect_draw(player_id, x),
+        // (2) 「获得x*2000资金」
+        1 => {
+            let got = x * 2000;
+            ctx::gain(player_id, got, &Msg::new(key!("nanami_effort_money")).i("n", got as i64));
+        }
+        // (3) 「将此卡放置在场上并为其放置x个奇迹水晶」 -- placed with x crystals
+        // on it; (4) is its exhaustion.
+        2 => {
+            ctx::set_dest(ctx::Dest::Field);
+            ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
+            ctx::add_crystals(player_id, x, 0);
+            ctx::log(player_id, &Msg::new(key!("nanami_effort_placed")).i("n", x as i64));
+        }
+        _ => {}
+    }
     // TODO(规则书)（3）: 「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受
-    //   数量或轮数限制」 -- the crystal counter is `ctx::add_crystals` now, but
-    //   spending one for the owner's skill (2) needs the skill hook
-    //   (`ISkillHook.SkillAnnounced` / `H.AnnounceSkill`); x is blocked on the
-    //   token-list query.
-    // Effect (4): when the crystals hit 0 -- `ctx::add_crystals` returns 0 ->
-    //   `ctx::unplace_card` + `ctx::to_discard` (C# `CardNanamiEffort.Take`).
-    // TODO(规则书)（4）: 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the empty branch is
-    //   `unplace_card` + `to_discard`, but the crystal-spending path is the skill
-    //   hook above (held), so nothing can drain the crystals yet.
+    //   数量或轮数限制」 -- spending a crystal for the owner's skill (2) needs the
+    //   skill hook; the crystal counter itself is ready.
+}
+
+/// 规则书（4）: 「当奇迹水晶耗尽时，将此卡置入弃牌堆」 -- the exhaustion half of
+/// effect (3). Nothing drains the crystals yet (that is the skill hook above),
+/// but the branch is what runs when they hit 0.
+#[allow(dead_code)]
+fn exhausted(player_id: i32) {
+    ctx::unplace_card(player_id);
+    ctx::to_discard(player_id, ID);
 }
 
 /// Effect (1) 「抽x张卡（可超过上限），回合结束后将手牌弃置到五张」 -- C# case 0 of
@@ -62,11 +105,14 @@ fn nanami_effort(player_id: i32) {
 /// body below. Unreachable until the token-list query lands (the play folds
 /// first); written now so the queued scheduling is already the right hook.
 #[allow(dead_code)]
-fn effect_draw(player_id: i32, _x: i32) {
-    // TODO(规则书)（1）: 「抽x张卡（可超过上限）」 -- the draw itself is
-    //   `ctx::draw(player_id, x)`, but x is blocked on the token-list query in the
-    //   play and 「可超过上限」 needs the NoLimit hand-limit attachment (C#
-    //   `NoLimitFx.NoHandLimit`).
+fn effect_draw(player_id: i32, x: i32) {
+    // 规则书（1）: 「抽x张卡（可超过上限）」 -- 「可超过上限」 is the hand limit
+    // itself, so lift it for the draw and put it back (the limit is keyed state,
+    // which is what `NoLimitFx` was an attachment for).
+    let cap = ctx::state::get(player_id, card_sdk::abi::state_key::HAND_LIMIT);
+    ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, i32::MAX);
+    ctx::draw(player_id, x);
+    ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
     // 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C#
     // `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))`.
     ctx::before_turn_end(player_id);

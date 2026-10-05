@@ -15,8 +15,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const HINA_SOUND: CardDef = CardDef::new("PP:[冰川日菜]会发出怎样的声音呢？", &[
-    On::Play(hina_sound),
-]);
+    On::Play(None, hina_sound)]);
 
 /// C# `CardHinaSound.Subs` -- the exclusive cards this can stand in for when
 /// played from hand (each has a hand-play [手] and places itself).
@@ -27,8 +26,7 @@ pub const HINA_SOUND: CardDef = CardDef::new("PP:[冰川日菜]会发出怎样�
 const SUBS: [&str; 3] = [
     "PP:[丸山彩]憧憬的前方",
     "PP:[白鹭千圣]微笑的铁假面",
-    "PP:[若宫伊芙]属于我的武士道！",
-];
+    "PP:[若宫伊芙]属于我的武士道！"];
 
 fn hina_sound(player_id: i32) {
     // 规则书[特]（1）: 「此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡」

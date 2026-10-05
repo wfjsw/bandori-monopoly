@@ -11,11 +11,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHUCHU_MUSIC: CardDef = CardDef::new("RAS:（chuchu）演奏我的音乐吧", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-    On::Hook(&[HookKind::BuyAfter], buy_after),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+    On::Hook(&[HookKind::BuyAfter], buy_after_guard, buy_after)]);
 
 const ID: &str = "RAS:（chuchu）演奏我的音乐吧";
 
@@ -71,10 +69,13 @@ fn play(player_id: i32) {
 /// `DecayCard.TurnEnd` (C# `CardChuchuMusic : DecayCard`) -- burn one miracle
 /// crystal at the holder's turn end; at 0 the card goes to the user's discard
 /// and the user draws (C# `Empty` -> `Done`).
+/// Pure guard for [`turn_end`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_end_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn turn_end(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
     if ctx::add_crystals(player_id, -1, 0) > 0 {
         return;
@@ -93,10 +94,13 @@ fn turn_end(player_id: i32) {
 /// C# `CardChuchuMusic.Bought` / `Move` -- when the holder buys a tile, the user
 /// gains `Pay` money, the card hops to the next non-user player, and crystals
 /// refill to 3.
+/// Pure guard for [`buy_after`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn buy_after_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn buy_after(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     let user = ctx::slot(player_id, SLOT_USER);
     if user < 0 || ctx::player_out(user) {
         return;

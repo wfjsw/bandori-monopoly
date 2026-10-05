@@ -10,9 +10,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardCaught.WhyNot`: `H.MoveWhyNot` first (main move still available),
@@ -48,17 +46,17 @@ fn play(player_id: i32) {
         &list,
     );
     let steps = ctx::tile_forward(pos, ctx::player_pos(who));
-    // C# `H._turnCtx.BuildOk = true` -- the optional build after this move.
     // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove(c, new MoveCtx { Steps =
     // H.Forward(...) })`: the walk passes intervening tiles and settles on the
     // target, and `card_move` consumes the turn's main move (`MainMoveAs`).
-    // TODO(规则书): 「且可选择盖房」 -- needs the `BuildOk` turn flag (C#
-    //   `H._turnCtx.BuildOk = true`) plus the `H.OfferBuildAmong` build routine
-    //   after the move; both still held.
     ctx::plan::set_steps(steps);
     ctx::log(
         player_id,
         &Msg::new(key!("caught_target")).player_id("who", player_id).player_id("target", who).i("n", steps as i64),
     );
     ctx::card_move(player_id);
+    // 规则书: 「且可选择盖房」 -- C# arms `H._turnCtx.BuildOk` and lets the engine
+    // offer afterwards. An explicit `H.OfferBuildAmong` on the tile reached is
+    // the same effect without a hidden turn flag: ask, then build there.
+    ctx::card_offer_build(player_id, &[ctx::player_pos(player_id)]);
 }

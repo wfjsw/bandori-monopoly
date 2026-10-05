@@ -14,9 +14,7 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "HHW:因为我一直相信着你";
 
 pub const BELIEVE_YOU: CardDef = CardDef::new("HHW:因为我一直相信着你", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBelieveYou.WhyNot`: refuses without another hand card / 800 money

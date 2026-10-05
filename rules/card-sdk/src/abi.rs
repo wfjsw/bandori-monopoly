@@ -55,7 +55,7 @@ use alloc::{string::String, vec::Vec};
 ///      `play_card` now returns the inner card's `Dest`, and the inner card runs
 ///      as itself (its own id and `Dest`, no longer the outer card's).
 /// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
-///      points (`Play`, `CantPlay`, `React(kinds, guard, effect)`,
+///      points (`Play(gate, effect)`, `CounterAct(kinds, guard, effect)`,
 ///      `Hook(kinds, effect)`, `AtEnd`). The manifest lists each entry with
 ///      its trigger kinds, so the host dispatches only to cards that declared
 ///      the kind at hand; one export `bandori_on(card, entry, op, player_id)`
@@ -70,8 +70,8 @@ use alloc::{string::String, vec::Vec};
 ///      `RollPlan` is the point `On::RollPlan` (v22) is dispatched at.
 /// v24: movement shaping -- `set_steps` / `set_reverse` / `set_signed` /
 ///      `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
-///      `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_no_build` /
-///      `set_build_anywhere` / `set_teleport_walk` / `set_min_roll` /
+///      `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_can_build` /
+///      `set_can_build` / `set_teleport_walk` / `set_min_roll` /
 ///      `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
 ///      `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
 ///      on the move being planned (guest: `ctx::plan::*`).
@@ -115,8 +115,8 @@ pub mod export {
     pub const MANIFEST: &str = "bandori_manifest";
     /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
     /// `entry` (an index into the card's manifest `on` list). `op` is
-    /// [`OP_RUN`] or, for a `React` entry, [`OP_GUARD`]. Returns 0, the guard's
-    /// 0/1, or (for `CantPlay`) a packed `(ptr << 32) | len` postcard `Msg`
+    /// [`OP_RUN`] or, for a `CounterAct` entry, [`OP_GUARD`]. Returns 0, the guard's
+    /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
     /// reason with 0 meaning "playable".
     pub const ON: &str = "bandori_on";
     pub const OP_RUN: i32 = 0;
@@ -151,6 +151,16 @@ pub mod state_key {
     pub const HAND_LIMIT: &str = "handLimit";
     /// Skill-system scratch.
     pub const SKILL_STATE: &str = "skillState";
+    /// 「[拥有者]不可盖房」 -- `why_not_build_on` refuses while this is set.
+    pub const NO_BUILD: &str = "noBuild";
+}
+
+/// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
+/// reacts to these two by name so a card can arm a gate without the engine
+/// hardcoding the card's own name (the C# checked `CountMarks(t, "高贵的微蓝")`).
+pub mod mark {
+    /// Carrying tiles cannot be named as a target (`H.TargetTile` answers -1).
+    pub const NO_TARGET: &str = "noTarget";
 }
 
 /// `i32_exit` status the host uses to abort a run that reached an unanswered prompt.
@@ -469,6 +479,15 @@ pub enum TriggerKind {
     /// clause. A counter that means "an effect hit me" listens here and asks
     /// `effect::`; one that means "a payment settled" listens at [`HookKind::PayAfter`].
     Effect = 72,
+    /// v28: C# `Fx.Built` / `HouseAdded` -- a house was just added to
+    /// `t.tile` (now `t.value` houses) by `t.player_id`.
+    HouseAdded = 75,
+    /// v28: C# `Fx.FireSpent` -- `t.player_id` just spent `t.value` fire
+    /// (「每当你消耗火罐时」). Fires after the spend commits.
+    FireSpent = 73,
+    /// v28: C# `Fx.SkillUsed` -- `t.player_id` just used their character skill
+    /// (「使用自己原有的技能（2）时」). `t.card` is the skill rule's id.
+    SkillUsed = 74,
 }
 
 impl TriggerKind {
@@ -546,6 +565,9 @@ impl TriggerKind {
             70 => Self::Untargetable,
             71 => Self::Redirect,
             72 => Self::Effect,
+            75 => Self::HouseAdded,
+            73 => Self::FireSpent,
+            74 => Self::SkillUsed,
             _ => Self::None,
         }
     }
@@ -626,6 +648,9 @@ impl TriggerKind {
             Self::Untargetable => "untargetable",
             Self::Redirect => "redirect",
             Self::Effect => "effect",
+            Self::HouseAdded => "houseAdded",
+            Self::FireSpent => "fireSpent",
+            Self::SkillUsed => "skillUsed",
         }
     }
 
@@ -704,6 +729,9 @@ impl TriggerKind {
             "untargetable" => Self::Untargetable,
             "redirect" => Self::Redirect,
             "effect" => Self::Effect,
+            "houseAdded" => Self::HouseAdded,
+            "fireSpent" => Self::FireSpent,
+            "skillUsed" => Self::SkillUsed,
             _ => Self::None,
         }
     }
@@ -788,7 +816,7 @@ macro_rules! declare_kinds {
 declare_kinds! {
     /// What a chain link answers: the [反击] selectors.
     ///
-    /// A card declares these on `On::React`. These are the moments at which a
+    /// A card declares these on `On::CounterAct`. These are the moments at which a
     /// counter may be played -- an effect being *declared*, not an outcome
     /// having settled. [`HookKind`] and [`GateKind`] values are deliberately
     /// absent: a reaction cannot be offered at a settlement hook or at a gate.
@@ -836,6 +864,9 @@ declare_kinds! {
         LeaveAfter = 44,
         /// The effect declaration itself -- the [反击] key for 「被…效果影响」.
         Effect = 72,
+        HouseAdded = 75,
+        FireSpent = 73,
+        SkillUsed = 74,
     }
 }
 
@@ -848,7 +879,7 @@ declare_kinds! {
     /// This **overlaps** [`ChainKind`] on purpose. A kind may be both a [反击]
     /// point and a hook point -- `SettleBefore` is a moment at which a hand card
     /// can be played *and* a field card can react -- and the two declarations
-    /// are distinct entries (`On::React` vs `On::Hook`). The engine's dispatch
+    /// are distinct entries (`On::CounterAct` vs `On::Hook`). The engine's dispatch
     /// has always worked this way; the types now say so. Kinds that are *only*
     /// hooks (most of `Fx`) simply have no [`ChainKind`] counterpart.
     HookKind {
@@ -919,6 +950,9 @@ declare_kinds! {
         BeforeOut = 65,
         Teleported = 66,
         RollPlan = 67,
+        FireSpent = 73,
+        SkillUsed = 74,
+        HouseAdded = 75,
     }
 }
 
@@ -985,8 +1019,8 @@ pub struct ManifestOn {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnKind {
     Play = 0,
-    CantPlay = 1,
-    React = 2,
+    // 1 was `CantPlay`, folded into `Play`'s gate.
+    CounterAct = 2,
     Hook = 3,
     AtEnd = 4,
     RollPlan = 5,
@@ -997,8 +1031,7 @@ impl OnKind {
     pub fn from_i32(v: i32) -> Option<Self> {
         Some(match v {
             0 => Self::Play,
-            1 => Self::CantPlay,
-            2 => Self::React,
+            2 => Self::CounterAct,
             3 => Self::Hook,
             4 => Self::AtEnd,
             5 => Self::RollPlan,

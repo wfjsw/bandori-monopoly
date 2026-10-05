@@ -18,7 +18,7 @@ const ID: &str = "PPP:[衍生]拍卖撤下来了";
 const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(ID, &[
-    On::Hook(&[HookKind::Drawn, HookKind::TurnStart], hook),
+    On::Hook(&[HookKind::Drawn, HookKind::TurnStart], |_| true, hook),
 ]);
 
 /// `Fx.Drawn` (C# `CardAuctionPulled.Drawn`) -- pull the card out of the hand
@@ -39,12 +39,12 @@ fn hook(player_id: i32) {
             // 规则书[持续]: 「此卡拥有者火罐上限加1」 -- C# `FireMaxDelta() => 1`.
             ctx::add_fire_max(player_id, 1);
             ctx::log(player_id, &Msg::new(key!("auction_pulled_placed")).player_id("who", player_id));
-            // TODO(ABI)[持续]: 「且不受任何其他效果影响」 -- needs the card `Immune`
-            //   flag (C# `CardAuctionPulled.Immune => true`) so other effects skip
-            //   this card.
+            // 规则书[持续]: 「且不受任何其他效果影响」 -- C# `Card.Immune`, a flag
+            // on the card that effects read and skip.
+            ctx::set_card_immune(player_id, ID, true);
         }
         TriggerKind::TurnStart => {
-            // C# `TurnStart(int turn)`: `if (turn != Player) return null;` -- only
+            // C# `TurnStart(int turn)`: `if (turn != Player) return Ok(null);` -- only
             // the owner's own turn start.
             if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
                 return;

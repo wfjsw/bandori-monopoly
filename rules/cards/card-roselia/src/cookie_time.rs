@@ -10,9 +10,7 @@ use card_sdk::ctx;
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.
 fn cant_play(player_id: i32) -> Option<Msg> {

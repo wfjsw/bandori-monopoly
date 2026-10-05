@@ -15,13 +15,13 @@ use std::sync::Arc;
 use game_core::data::{CharacterData, GameData};
 use game_core::deck;
 use game_core::engine::{CardRules, Match, StubRules};
+use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::profile::{PlayerProfile, Seen};
 use game_core::progression;
 use game_core::scoring::ScoreWeights;
-use game_core::msg::Msg;
-use game_rules::WasmRules;
 use game_core::MatchMode;
+use game_rules::WasmRules;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -30,7 +30,8 @@ thread_local! {
 }
 
 fn data() -> Result<Arc<GameData>, JsError> {
-    DATA.with(|d| d.borrow().clone()).ok_or_else(|| JsError::new("game data not loaded (call load_data first)"))
+    DATA.with(|d| d.borrow().clone())
+        .ok_or_else(|| JsError::new("game data not loaded (call load_data first)"))
 }
 
 fn json<T: Serialize>(v: &T) -> String {
@@ -42,14 +43,16 @@ fn parse<T: serde::de::DeserializeOwned>(what: &str, s: &str) -> Result<T, JsErr
 }
 
 fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a CharacterData, JsError> {
-    d.character(name).ok_or_else(|| JsError::new(&format!("unknown character {name}")))
+    d.character(name)
+        .ok_or_else(|| JsError::new(&format!("unknown character {name}")))
 }
 
 /// `files_json`: `{"board.json": "<contents>", ...}` for every file in `DATA_FILES`.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
-    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string())).map_err(|e| JsError::new(&e))?;
+    let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()))
+        .map_err(|e| JsError::new(&e))?;
     DATA.with(|slot| *slot.borrow_mut() = Some(Arc::new(d)));
     Ok(())
 }
@@ -67,7 +70,9 @@ pub fn data_files() -> String {
 pub fn deck_pool(character_name: &str) -> Result<String, JsError> {
     let d = data()?;
     let c = character(&d, character_name)?;
-    Ok(json(&deck::pool(&d, c).iter().map(|k| &k.id).collect::<Vec<_>>()))
+    Ok(json(
+        &deck::pool(&d, c).iter().map(|k| &k.id).collect::<Vec<_>>(),
+    ))
 }
 
 #[wasm_bindgen]
@@ -94,15 +99,29 @@ pub fn deck_why_not(character_name: &str, card: &str) -> Result<Option<String>, 
 }
 
 #[wasm_bindgen]
-pub fn deck_slot_cards(profile_json: &str, character_name: &str, slot: i32) -> Result<String, JsError> {
+pub fn deck_slot_cards(
+    profile_json: &str,
+    character_name: &str,
+    slot: i32,
+) -> Result<String, JsError> {
     let d = data()?;
     let p: PlayerProfile = parse("profile", profile_json)?;
-    Ok(json(&deck::cards(&d, &p, character(&d, character_name)?, slot)))
+    Ok(json(&deck::cards(
+        &d,
+        &p,
+        character(&d, character_name)?,
+        slot,
+    )))
 }
 
 /// Save a slot (an empty list deletes it). Returns the updated profile.
 #[wasm_bindgen]
-pub fn deck_save(profile_json: &str, character_name: &str, slot: i32, ids_json: &str) -> Result<String, JsError> {
+pub fn deck_save(
+    profile_json: &str,
+    character_name: &str,
+    slot: i32,
+    ids_json: &str,
+) -> Result<String, JsError> {
     let d = data()?;
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let ids: Vec<String> = parse("ids", ids_json)?;
@@ -130,9 +149,16 @@ pub fn deck_chosen_slot(profile_json: &str, character_name: &str) -> Result<i32,
 
 /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`; `today`: `yyyy-MM-dd`.
 #[wasm_bindgen]
-pub fn profile_create(name: &str, player_id: &str, now: &str, today: &str) -> Result<String, JsError> {
+pub fn profile_create(
+    name: &str,
+    player_id: &str,
+    now: &str,
+    today: &str,
+) -> Result<String, JsError> {
     let d = data()?;
-    Ok(json(&PlayerProfile::create(&d, name, player_id, now, today)))
+    Ok(json(&PlayerProfile::create(
+        &d, name, player_id, now, today,
+    )))
 }
 
 /// Parse and repair/migrate a saved profile.
@@ -165,7 +191,14 @@ struct Applied {
 
 /// Record a finished match: `{profile, reward}`.
 #[wasm_bindgen]
-pub fn profile_apply_match(profile_json: &str, mode: i32, rank: i32, players: i32, character_name: &str, now: &str) -> Result<String, JsError> {
+pub fn profile_apply_match(
+    profile_json: &str,
+    mode: i32,
+    rank: i32,
+    players: i32,
+    character_name: &str,
+    now: &str,
+) -> Result<String, JsError> {
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let mode = MatchMode::from_i32(mode).unwrap_or_default();
     let reward = p.apply_match(mode, rank, players, character_name, now);
@@ -215,7 +248,10 @@ pub fn exp_to_next(level: i32) -> i32 {
 #[wasm_bindgen]
 pub fn bot_name(taken_json: &str) -> Result<String, JsError> {
     let taken: Vec<String> = parse("names", taken_json)?;
-    Ok(game_core::net::bot_name(&data()?.match_rules.bot_names, taken.iter().map(String::as_str)))
+    Ok(game_core::net::bot_name(
+        &data()?.match_rules.bot_names,
+        taken.iter().map(String::as_str),
+    ))
 }
 
 // ------------------------------------------------------------------ card modules
@@ -241,7 +277,10 @@ pub fn ruleset_add(bytes: &[u8]) -> Result<(), JsError> {
 #[wasm_bindgen]
 pub fn ruleset_build() -> Result<usize, JsError> {
     PENDING.with(|p| {
-        let built = p.borrow_mut().take().ok_or_else(|| JsError::new("ruleset_add was never called"))?;
+        let built = p
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
         let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
         let n = set.module_count();
         let rules = WasmRules::new(set, data()?);
@@ -251,7 +290,9 @@ pub fn ruleset_build() -> Result<usize, JsError> {
 }
 
 fn rules() -> Result<Arc<dyn CardRules>, JsError> {
-    Ok(RULES.with(|r| r.borrow().clone()).unwrap_or_else(|| Arc::new(StubRules) as Arc<dyn CardRules>))
+    Ok(RULES
+        .with(|r| r.borrow().clone())
+        .unwrap_or_else(|| Arc::new(StubRules) as Arc<dyn CardRules>))
 }
 
 // ------------------------------------------------------------------ solo match
@@ -266,16 +307,29 @@ pub struct SoloMatch {
 impl SoloMatch {
     /// `members_json`: `RoomMember[]`; `mode`: 0 solo, 1 casual, 2 ranked.
     #[wasm_bindgen(constructor)]
-    pub fn new(members_json: &str, seed: u32, mode: i32, weights_json: &str) -> Result<SoloMatch, JsError> {
+    pub fn new(
+        members_json: &str,
+        seed: u32,
+        mode: i32,
+        weights_json: &str,
+    ) -> Result<SoloMatch, JsError> {
         let members: Vec<RoomMember> = parse("members", members_json)?;
-        let weights: ScoreWeights = if weights_json.is_empty() { ScoreWeights::default() } else { parse("weights", weights_json)? };
+        let weights: ScoreWeights = if weights_json.is_empty() {
+            ScoreWeights::default()
+        } else {
+            parse("weights", weights_json)?
+        };
         let mode = MatchMode::from_i32(mode).unwrap_or_default();
-        Ok(SoloMatch { m: Match::new(data()?, rules()?, &members, seed as u64, mode, weights) })
+        Ok(SoloMatch {
+            m: Match::new(data()?, rules()?, &members, seed as u64, mode, weights),
+        })
     }
 
     /// Rebuild a match from [`SoloMatch::save`] (page refresh).
     pub fn restore(json: &str) -> Result<SoloMatch, JsError> {
-        Ok(SoloMatch { m: Match::restore(data()?, rules()?, json).map_err(|e| JsError::new(&e.to_string()))? })
+        Ok(SoloMatch {
+            m: Match::restore(data()?, rules()?, json).map_err(|e| JsError::new(&e.to_string()))?,
+        })
     }
 
     /// The whole match as JSON, for `restore`.
@@ -296,7 +350,12 @@ impl SoloMatch {
     /// `Msg` JSON (the client renders it).
     pub fn act(&mut self, member: i32, msg_json: &str) -> String {
         match serde_json::from_str::<NetMessage>(msg_json) {
-            Ok(msg) => self.m.act(member, &msg).err().map(|e| json(&e)).unwrap_or_default(),
+            Ok(msg) => self
+                .m
+                .act(member, &msg)
+                .err()
+                .map(|e| json(&e))
+                .unwrap_or_default(),
             Err(e) => json(&Msg::new("err.bad_command").text("detail", e.to_string())),
         }
     }

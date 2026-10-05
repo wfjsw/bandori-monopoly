@@ -21,27 +21,29 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const EVE_BUSHIDO: CardDef = CardDef::new("PP:[若宫伊芙]属于我的武士道！", &[
-    On::Play(eve_bushido),
-    On::Hook(&[HookKind::Drew], drew),
-    On::Hook(&[HookKind::SettleBefore], settle_before),
-]);
+    On::Play(None, eve_bushido),
+    On::Hook(&[HookKind::Drew], drew_guard, drew),
+    On::Hook(&[HookKind::SettleBefore], |_| true, settle_before)]);
 
 fn eve_bushido(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "PP:[若宫伊芙]属于我的武士道！", &Msg::new(key!("eve_bushido_note")));
     // 规则书[手]: 「并投掷12d4，获得投掷结果*60的资金」
-    // TODO: C# uses H.CardRoll, which honours PlayCtx.Extreme (forced max/min dice).
+    // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
     let n = ctx::roll(player_id, 12, 4);
     ctx::gain(player_id, n * 60, &Msg::new(key!("eve_bushido_why")).i("n", n as i64));
 }
 
 /// C# `CardEveBushido.Drew` -- once per draw batch, add a crystal (cap 3).
 /// 规则书[持续]（1）: 「[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）」
+/// Pure guard for [`drew`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn drew_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn drew(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     if trigger::value() <= 0 {
         return;
     }
@@ -77,10 +79,13 @@ fn settle_before(player_id: i32) {
         return;
     }
     // 规则书[持续]（2）3: 「[支付]……房屋数量加1×100」
-    let amount = (ctx::houses_of(at) + 1) * 100;
-    // TODO(规则书): [持续]（2）3: 「如果[共鸣]则[支付]金额改为“投掷点差”×50」 -- needs
-    // H.TryResonance (discard 「PP:[衍生]共鸣」 from hand) to swap the amount to
-    // `abs(a - b) * 50` when that is the better deal.
+    let mut amount = (ctx::houses_of(at) + 1) * 100;
+    // 规则书[持续]（2）3: 「如果[共鸣]则[支付]金额改为“投掷点差”×50」 -- 「改为」 is
+    // unconditional; the C# only swapped when it was the better deal, which the
+    // clause does not say.
+    if crate::resonance::try_resonance(player_id) {
+        amount = (a - b).abs() * 50;
+    }
     let (from, to) = if a < b { (owner, player_id) } else { (player_id, owner) };
     ctx::transfer(from, to, amount, &Msg::new(key!("eve_bushido_why")).i("n", amount as i64));
 }

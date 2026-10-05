@@ -15,9 +15,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const FOREVER: CardDef = CardDef::new("CRYCHIC:如果能一直持续下去...", &[
-    On::Play(forever),
-    On::Hook(&[HookKind::Drew], on_drew),
-]);
+    On::Play(None, forever),
+    On::Hook(&[HookKind::Drew], |_| true, on_drew)]);
 
 const ID: &str = "CRYCHIC:如果能一直持续下去...";
 

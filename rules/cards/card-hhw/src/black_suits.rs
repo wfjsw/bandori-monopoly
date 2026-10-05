@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const BLACK_SUITS: CardDef = CardDef::new("HHW:黑衣人的补给", &[
-    On::React(&[ChainKind::Pass], can_react, react),
+    On::CounterAct(&[ChainKind::Pass], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {

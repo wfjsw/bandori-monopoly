@@ -15,7 +15,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const GUERRILLA: CardDef = CardDef::new("RAS:游击演出", &[
-    On::React(&[ChainKind::Paid], can_react, react),
+    On::CounterAct(&[ChainKind::Paid], can_react, react),
     On::AtEnd(check),
 ]);
 
@@ -80,21 +80,21 @@ fn react(player_id: i32) {
         pool,
     );
     // 规则书[手][反击]: 「传送至任意无主可购买的格子」 -- C# `H.ForceTeleport(i,
-    // to, resolve: false, ...)`.
+    // to, resolve: false, ...)`; the settle is the clause's own separate half.
     ctx::teleport_to(player_id, to);
-    // 规则书[手][反击]: 「并[结算]，且必须购买」 -- C# `H.BuyRoutine(i, to, free:
-    // false, ...)` after the teleport's settle, or a "资金不够，买不下" log.
-    // TODO(规则书)[手][反击]: 「并[结算]」 -- needs the settle routine on the
-    // teleported tile (C# `H.ForceTeleport` with `resolve: true`-style settle,
-    // here forced by the `BuyRoutine` follow-up).
-    // TODO(规则书)[手][反击]: 「且必须购买」 -- needs `H.BuyRoutine` (the buy
-    // itself; `ctx::buy_price` only reads the price).
+    // 规则书[手][反击]: 「并[结算]」 -- C# `H.SettleAt` on the teleported tile.
+    // `main` so the landing only logs (「必须购买」 below is what buys; an
+    // optional buy prompt here would be a second, weaker offer).
+    ctx::card_settle_at(player_id, to, true);
+    // 规则书[手][反击]: 「且必须购买」 -- C# `H.BuyRoutine(i, to, free: false,
+    // ...)`, or the "资金不够，买不下" log when the player cannot pay.
     if ctx::money(player_id) < ctx::buy_price(to) {
         ctx::log(
             player_id,
             &Msg::new(key!("guerrilla_broke")).player_id("who", player_id).tile("tile", to),
         );
     } else {
+        ctx::card_buy(player_id, to);
         ctx::log(
             player_id,
             &Msg::new(key!("guerrilla_moved")).player_id("who", player_id).tile("tile", to),
@@ -114,12 +114,9 @@ fn check(player_id: i32) {
     ctx::set_slot(player_id, SLOT_ARMED, 0);
     // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金
     // 且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子」
-    // TODO(规则书)[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- needs
-    // `H._turnCtx.PaidInSettle` (the turn's settle-to-others total); no such
-    // query in the vocabulary. The check below is the rest of the gate and stays
-    // inert until that counter is readable.
-    let paid_in_settle_ok = false; // TODO: `H._turnCtx.PaidInSettle >= 1000`
-    if !paid_in_settle_ok {
+    // 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- C#
+    // `H._turnCtx.PaidInSettle`, the turn's running settle-to-others total.
+    if ctx::paid_in_settle() < 1000 {
         return;
     }
     // 「你不拥有任何可盖房的live house格子」 -- owns no buildable Live House.
@@ -153,7 +150,9 @@ fn check(player_id: i32) {
         player_id,
         &Msg::new(key!("guerrilla_revived")).player_id("who", player_id).tile("tile", best),
     );
-    // TODO(规则书)[特]: 「使其对你视为live house格子」 -- needs the `ExtraColor`
-    // override (C# `CardGuerrilla.ExtraColor`) that makes the designated deed a
-    // Live House for this player; `H.IsLiveHouse` does not see it yet.
+    // 规则书[特]: 「使其对你视为live house格子」 -- C# `CardGuerrilla.ExtraColor`:
+    // the deed counts as a Live House for this player only.
+    if best >= 0 {
+        ctx::set_extra_color(player_id, best, 6);
+    }
 }

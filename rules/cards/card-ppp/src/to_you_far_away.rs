@@ -12,9 +12,7 @@ use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TO_YOU_FAR_AWAY: CardDef = CardDef::new("PPP:献给远方的你", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardToYouFarAway.WhyNot`: refuses with 「没有别的玩家」 when `H.Others` is
@@ -84,8 +82,7 @@ fn play(player_id: i32) {
     let mine = ctx::owned_tiles(player_id);
     let best = mine.iter().map(|&t| ctx::dist(at, t)).max().unwrap_or(0);
     let far_tiles: Vec<i32> = mine.into_iter().filter(|&t| ctx::dist(at, t) == best).collect();
-    // TODO(ABI): 「加盖」 -- needs `H.OfferBuildAmong` / `H.WhyNotBuildOn` (pay
-    //   `ctx::build_cost` and raise one house). `ctx::build_cost` is a query only.
-    //   Candidates today would be `far_tiles`.
-    let _ = far_tiles;
+    // 规则书: 「加盖」 -- `H.OfferBuildAmong` over those: prompt to pay
+    // `build_cost` and raise one house. Skips silently when none can take one.
+    ctx::card_offer_build(player_id, &far_tiles);
 }

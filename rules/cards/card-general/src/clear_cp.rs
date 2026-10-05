@@ -18,10 +18,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CLEAR_CP: CardDef = CardDef::new("通用:该清CP了", &[
-    On::Play(clear_cp),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::TurnStart, HookKind::SettleAfter], react),
-]);
+    On::Play(Some(cant_play), clear_cp),
+    On::Hook(&[HookKind::TurnStart, HookKind::SettleAfter], react_guard, react)]);
 
 /// Where the spread countdown is written down (C# `CPControl.Spread`).
 const SLOT_SPREAD: &str = "clear_cp_spread";
@@ -76,10 +74,13 @@ fn clear_cp(player_id: i32) {
 
 /// `CPControl.TurnStart` / `CPControl.SettleAfter` (C# `Fx` overrides).
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
+/// Pure guard for [`react`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn react_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn react(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书（2）[特]: 「[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]
         // 及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」 -- C#

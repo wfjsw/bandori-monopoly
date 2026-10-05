@@ -9,9 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new("PPP:迷宫般的仓库", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「位于“流星堂”前后5格内时，可打出此卡」 -- C# `CardMazeWarehouse.WhyNot`
@@ -66,8 +64,10 @@ fn play(player_id: i32) {
         player_id,
         &Msg::new(key!("maze_warehouse_free_buy")).player_id("who", player_id).i("n", want as i64),
     );
-    // TODO(ABI): 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」
-    //   -- needs the turn flags `FreeBuy` / `RazeOnBuy` (C# `H._turnCtx`).
+    // 规则书: 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」
+    // -- C# `H._turnCtx.FreeBuy = true; H._turnCtx.RazeOnBuy = true`.
+    ctx::set_free_buy(true);
+    ctx::set_raze_on_buy(true);
     // 规则书: 「视为你的主要移动」 / 「从“流星堂”开始移动」 -- C# `H.CardMove(c, new
     // MoveCtx { Steps = steps, Start = ryuseido, StartWhy = "迷宫般的仓库" })`
     // (MatchHost.cs:8854-8859): the walk runs now as the main move, starting from

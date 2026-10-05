@@ -13,9 +13,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const WANT_HUMAN: CardDef = CardDef::new("CRYCHIC:想要成为人类", &[
-    On::Play(want_human),
-    On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], react),
-]);
+    On::Play(None, want_human),
+    On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], react_guard, react)]);
 
 /// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).
 /// A per-player slot stands in for the per-field-card `Mem` map; 0 means
@@ -54,10 +53,13 @@ const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 
 /// `Fx.RollAfter` / `Fx.TurnStart` (C# `CardWantHuman.RollAfter` / `TurnStart`).
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
+/// Pure guard for [`react`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn react_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn react(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书（1）: 「每当你的移动掷骰小于X，为此卡添加一个奇迹水晶。」
         TriggerKind::RollAfter => {

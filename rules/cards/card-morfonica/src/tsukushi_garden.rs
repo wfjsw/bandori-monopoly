@@ -8,9 +8,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const TSUKUSHI_GARDEN: CardDef = CardDef::new("Mor:（筑紫）迷茫的庭园", &[
-    On::Play(tsukushi_garden),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), tsukushi_garden)]);
 
 /// C# `CardTsukushiGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -88,10 +86,10 @@ fn tsukushi_garden(player_id: i32) {
     if ctx::player_out(player_id) {
         return;
     }
-    // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- C#
-    // `H.ExtraOf<GardenGuardFx>(i).Until = H.State.round`.
-    // TODO(规则书): 「直到下个你的回合开始时，你无法被异常移动」 -- needs the
-    //   GardenGuard Fx (C# `GardenGuardFx`, an `H.ExtraOf` attachment that refuses
-    //   abnormal movement until the owner's next turn starts).
+    // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- `unstoppable` is
+    // exactly that gate, and `expires: TurnStart` is the 「直到下个你的回合
+    // 开始时」 half (it wears off at the top of the next turn).
+    ctx::state::add(player_id, card_sdk::abi::state_key::UNSTOPPABLE, 1);
+    ctx::state::set_expires(player_id, card_sdk::abi::state_key::UNSTOPPABLE, card_sdk::ctx::state::TURN_START);
     ctx::log(player_id, &Msg::new(key!("tsukushi_garden_guard")).player_id("who", player_id));
 }

@@ -12,10 +12,9 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "HHW:运动的天赋";
 
 pub const SPORTS_TALENT: CardDef = CardDef::new("HHW:运动的天赋", &[
-    On::Play(play),
-    On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], react),
-    On::RollPlan(roll_plan),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], react_guard, react),
+    On::RollPlan(roll_plan)]);
 
 /// C# `CardSportsTalent.Next` / `Mem["next"]` -- the next dice-roll reward
 /// (starts at 700, drops by 100, floors at 100). The player slot stands in for
@@ -35,10 +34,13 @@ fn play(player_id: i32) {
 }
 
 /// C# `CardSportsTalent : DecayCard` + `RollAfter`.
+/// Pure guard for [`react`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn react_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn react(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     match trigger::kind() {
         // 规则书: 「每回合结束时失去一个，为0时置入弃牌堆」 -- C# `DecayCard.TurnEnd`
         // (`turn == DecayOn` = the owner's turn) -> `AddCrystals(-1)`; empty ->
@@ -64,6 +66,8 @@ fn react(player_id: i32) {
                 return;
             }
             reward(player_id);
+            // 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」
+            reroll_to_ten(player_id);
         }
         _ => {}
     }
@@ -98,9 +102,17 @@ fn roll_plan(player_id: i32) {
     ctx::plan::set_min_roll(10);
 }
 
-// TODO(规则书): 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- the
-// C# `CardSportsTalent.Rolls` reroll loop (`H.DoMoveRoll` until `m.Roll >= 10`,
-// a `Reward` after each reroll, bail-outs on `H.Out` and when the dice cannot
-// reach 10, at most 10 attempts) is still unmapped; `set_min_roll(10)` above
-// only clamps the final face. The first `Reward` of `Rolls` is the `RollAfter`
-// hook.
+/// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with
+/// `H.DoMoveRoll` until the face is at least 10 (at most 10 attempts, bailing
+/// out when the player is out). Called from the `RollAfter` branch of [`react`].
+fn reroll_to_ten(player_id: i32) {
+    let mut x = trigger::move_roll().unwrap_or(trigger::value());
+    for _ in 0..10 {
+        if x >= 10 || ctx::player_out(player_id) {
+            break;
+        }
+        x = ctx::do_move_roll(player_id).max(0);
+        trigger::set_move_roll(x);
+    }
+    ctx::log(player_id, &Msg::new(key!("sports_talent_reroll")).player_id("who", player_id).i("n", x as i64));
+}

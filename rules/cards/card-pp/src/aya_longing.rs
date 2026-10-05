@@ -23,9 +23,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AYA_LONGING: CardDef = CardDef::new("PP:[丸山彩]憧憬的前方", &[
-    On::Play(aya_longing),
-    On::Hook(&[HookKind::PayAdd], pay_add),
-]);
+    On::Play(None, aya_longing),
+    On::Hook(&[HookKind::PayAdd], |_| true, pay_add)]);
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 fn shave_x(player_id: i32) -> i32 {
@@ -90,9 +89,9 @@ fn pay_add(player_id: i32) {
     let amount = trigger::value();
     trigger::set_pay_amount((amount - x).max(0));
     ctx::log(player_id, &Msg::new(key!("aya_longing_shave")).i("n", x as i64));
-    // TODO(规则书): [持续]（2）「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」
-    // -- C# `CardAyaLonging.PayChoose` -> `Resonate`; needs H.TryResonance (discard
-    // 「PP:[衍生]共鸣」 from hand) to offer the optional −1,500 on top of the X shave
-    // above (`p.amount = max(0, p.amount - 1500)`). The PayChoose hook kind is
-    // landed; only TryResonance is still held.
+    // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
+    // on top of the X shave above, floored at 0.
+    if crate::resonance::try_resonance(player_id) {
+        trigger::set_pay_amount((trigger::value() - 1500).max(0));
+    }
 }

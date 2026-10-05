@@ -19,7 +19,12 @@ use alloc::{boxed::Box, collections::BTreeMap, string::String, vec::Vec};
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-#[cfg(not(target_arch = "wasm32"))]
+// Decoding is the *host's* job -- card guests only ever encode a Msg to hand to
+// the host, so the derive is kept off their cdylibs. Gate on the `guest`
+// feature rather than on `target_arch`: the solo engine is game-rules built for
+// wasm32 and it decodes guest messages, so "wasm32" was never the real
+// condition (it left `postcard::from_bytes::<Msg>` unbuildable there).
+#[cfg(not(feature = "guest"))]
 use serde::Deserialize;
 
 /// One typed argument, as the engine's `Msg.a` values.
@@ -27,7 +32,7 @@ use serde::Deserialize;
 /// The tag names are the wire form (`{"player_id": 1}`); they must match the engine's
 /// `Arg` enum in `game-core/src/msg.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Deserialize))]
+#[cfg_attr(not(feature = "guest"), derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub enum Arg {
     /// A player -> that player's name.
@@ -48,7 +53,7 @@ pub enum Arg {
 
 /// A message by key with typed arguments.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(not(target_arch = "wasm32"), derive(Deserialize))]
+#[cfg_attr(not(feature = "guest"), derive(Deserialize))]
 pub struct Msg {
     pub k: String,
     /// Always present: postcard is not self-describing, so a skipped field
@@ -68,7 +73,10 @@ impl Msg {
     /// A message by key. Card keys: `Msg::new(key!("name"))`; engine keys (e.g.
     /// `log.part.why`) may be used too.
     pub fn new(key: &str) -> Self {
-        Self { k: key.into(), a: BTreeMap::new() }
+        Self {
+            k: key.into(),
+            a: BTreeMap::new(),
+        }
     }
 
     fn with(mut self, name: &str, arg: Arg) -> Self {
@@ -124,7 +132,6 @@ impl Msg {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::{Arg, Msg};
@@ -135,14 +142,21 @@ mod tests {
 
     #[test]
     fn round_trips_the_host_wire_form() {
-        let m = Msg::new(crate::key!("placed")).tile("tile", 3).player_id("who", 1).msg("why", &Msg::new("x\"y"));
+        let m = Msg::new(crate::key!("placed"))
+            .tile("tile", 3)
+            .player_id("who", 1)
+            .msg("why", &Msg::new("x\"y"));
         assert_eq!(roundtrip(&m), m);
         assert_eq!(roundtrip(&Msg::new("k")), Msg::new("k"));
     }
 
     #[test]
     fn round_trips_every_argument_kind() {
-        let mut m = Msg::new("k").card("c", "id").chara("ch", "name").n("n", -5).i("i", 7);
+        let mut m = Msg::new("k")
+            .card("c", "id")
+            .chara("ch", "name")
+            .n("n", -5)
+            .i("i", 7);
         m = m.with("nest", Arg::Msg(Box::new(Msg::new("inner"))));
         assert_eq!(roundtrip(&m), m);
     }

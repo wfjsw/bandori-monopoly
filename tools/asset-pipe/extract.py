@@ -422,6 +422,17 @@ def run(args) -> int:
             p.manifest["fonts"] = old.get("fonts") or {}
         if "live2d" not in only and old.get("live2d"):
             p.manifest["live2d"] = old["live2d"]
+        # A partial run must never leave a section **empty** that the previous
+        # manifest had populated -- that is how a `--only data` run once wiped
+        # every character/card/band/room/fx path and blanked the UI's images.
+        # Carry the old value over whenever the new one is empty.
+        for key, val in old.items():
+            if key in ("version",):
+                continue
+            cur = p.manifest.get(key)
+            if (cur is None or cur == {} or cur == []) and val:
+                p.manifest[key] = val
+                print(f"   manifest: kept the previous {key} (this run did not populate it)")
     mf.write_text(json.dumps(p.manifest, ensure_ascii=False, indent=1), encoding="utf-8")
 
     print(f"\n== done in {time.time() - t0:.0f}s -> {out}")

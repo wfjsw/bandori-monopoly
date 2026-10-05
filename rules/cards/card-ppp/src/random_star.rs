@@ -14,9 +14,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const RANDOM_STAR: CardDef = CardDef::new("PPP:仓库里的Random Star", &[
-    On::Play(random_star),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-]);
+    On::Play(None, random_star),
+    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile)]);
 
 fn random_star(player_id: i32) {
     // 规则书（1）: 「将此卡放置自身场上」
@@ -34,10 +33,13 @@ fn random_star(player_id: i32) {
 
 /// 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]」
 /// -- C# `CardRandomStar.PassTile` -> `Stop`.
+/// Pure guard for [`pass_tile`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_tile_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pass_tile(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `m.Seat != Seat || t != Ryuseido || m.Remaining <= 0 || m.Teleport ||
     // H.Tok(Player, "星星贴纸") < 2`.
     if trigger::player_id() != player_id {

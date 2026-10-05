@@ -10,9 +10,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const SOYO_COLORS: CardDef = CardDef::new("MyGO:（soyo）混合的颜色", &[
-    On::Play(soyo_colors),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), soyo_colors)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- C# `CardSoyoColors.WhyNot`
@@ -37,15 +35,14 @@ fn soyo_colors(player_id: i32) {
         &mine,
     );
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "MyGO:（soyo）混合的颜色", &Msg::new(key!("soyo_colors_note")).tile("tile", tile));
+    // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- bound to the chosen tile.
+    ctx::place_card_on(player_id, tile, "MyGO:（soyo）混合的颜色", &Msg::new(key!("soyo_colors_note")).tile("tile", tile));
     ctx::log(player_id, &Msg::new(key!("soyo_colors_placed")).tile("tile", tile).player_id("who", player_id));
-    // TODO(规则书): 「将此卡放置于你拥有地契的一个格子」 -- the placement is bound
-    // to the chosen tile (`Card.Tile`); `place_card` only attaches to the
-    // player's field, so needs field-card tile placement.
-    // TODO(规则书): 「该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房）」 -- needs
-    // the Fx.ExtraColor hook (C# `CardSoyoColors.ExtraColor`) so the tile
-    // counts as every colour for agent builds, while the tile itself may only
-    // be built through a matching-colour agent.
+    // 规则书: 「该格获得所有颜色」 -- `ALL_COLORS` is exactly that: `is_color`
+    // answers true for every group. (The parenthetical -- the tile itself may
+    // only be built through a matching-colour agent -- is `why_not_build_on`,
+    // which reads the tile's *own* group and so already refuses.)
+    ctx::set_tile_color(tile, ctx::ALL_COLORS);
     // TODO(规则书): 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
     // 减半收费基础上额外减半」 -- the `Fx.PayMul` hook kind is in
     // (`On::Hook(&[HookKind::PayMul], …)`), but the C# guard keys on

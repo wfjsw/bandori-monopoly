@@ -102,30 +102,32 @@ export function Lobby() {
   return (
     <>
       <TopBar section={tr("menu.online")} title={tr("lobby.title")} onBack={() => navigate({ name: "menu" })} />
-      {status === "offline" ? (
-        <div className={s.area}><Empty title={tr("lobby.offlineTitle")} text={tr("lobby.offlineText")} /></div>
-      ) : (
-        <>
-          <div className={s.area}>
-            <div className={s.filters}>
-              <span className={s.listLabel}><Icon name="groups" />{tr("lobby.roomList")}</span>
-              <Chips items={FILTERS.map(filterLabel)} on={filterLabel(filter)} onPick={(l) => setFilter(FILTERS.find((f) => filterLabel(f) === l) ?? "all")} className={s.chips} />
+      <div className={s.body}>
+        {status === "offline" ? (
+          <div className={s.area}><Empty title={tr("lobby.offlineTitle")} text={tr("lobby.offlineText")} /></div>
+        ) : (
+          <>
+            <div className={s.area}>
+              <div className={s.filters}>
+                <span className={s.listLabel}><Icon name="groups" />{tr("lobby.roomList")}</span>
+                <Chips items={FILTERS.map(filterLabel)} on={filterLabel(filter)} onPick={(l) => setFilter(FILTERS.find((f) => filterLabel(f) === l) ?? "all")} className={s.chips} />
+              </div>
+              {error ? <Empty title={tr("lobby.offlineTitle")} text={error} />
+                : shown.length ? <div className={s.grid}>{shown.map((r) => <RoomCard key={r.id} r={r} />)}</div>
+                : <Empty title={status === "connecting" ? tr("lobby.loading") : tr("lobby.emptyTitle")} text={tr("lobby.emptyText")} />}
             </div>
-            {error ? <Empty title={tr("lobby.offlineTitle")} text={error} />
-              : shown.length ? <div className={s.grid}>{shown.map((r) => <RoomCard key={r.id} r={r} />)}</div>
-              : <Empty title={status === "connecting" ? tr("lobby.loading") : tr("lobby.emptyTitle")} text={tr("lobby.emptyText")} />}
-          </div>
-          <div className={s.foot}>
-            <form className={s.joinPill} onSubmit={(e) => { e.preventDefault(); if (code.trim()) void join(code.trim().toUpperCase(), false); }}>
-              <span>{tr("lobby.roomId")}</span>
-              <TextInput placeholder={tr("lobby.roomIdPlaceholder")} maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} className={s.joinInput} />
-              <Btn kind="pink" type="submit" className={s.joinBtn}>{tr("lobby.join")}</Btn>
-            </form>
-            <button type="button" className={cx(s.bigTile, s.blue)} onClick={quickJoin}><img src={sceneImg("pic_single")} alt="" /><span>{tr("lobby.quickJoin")}</span></button>
-            <button type="button" className={cx(s.bigTile, s.pink)} onClick={showCreateRoom}><img src={sceneImg("pic_group")} alt="" /><span>{tr("lobby.createRoom")}</span></button>
-          </div>
-        </>
-      )}
+            <div className={s.foot}>
+              <form className={s.joinPill} onSubmit={(e) => { e.preventDefault(); if (code.trim()) void join(code.trim().toUpperCase(), false); }}>
+                <span>{tr("lobby.roomId")}</span>
+                <TextInput placeholder={tr("lobby.roomIdPlaceholder")} maxLength={6} value={code} onChange={(e) => setCode(e.target.value)} className={s.joinInput} />
+                <Btn kind="pink" type="submit" className={s.joinBtn}>{tr("lobby.join")}</Btn>
+              </form>
+              <button type="button" className={cx(s.bigTile, s.blue)} onClick={quickJoin}><img src={sceneImg("pic_single")} alt="" /><span>{tr("lobby.quickJoin")}</span></button>
+              <button type="button" className={cx(s.bigTile, s.pink)} onClick={showCreateRoom}><img src={sceneImg("pic_group")} alt="" /><span>{tr("lobby.createRoom")}</span></button>
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }

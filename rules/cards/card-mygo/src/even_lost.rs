@@ -14,7 +14,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const EVEN_LOST: CardDef = CardDef::new("MyGO:即使迷茫着", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// 规则书[反击]（1）: 「当你被其他人的卡的效果影响时」 -- C# `H.HitByOtherCard`.

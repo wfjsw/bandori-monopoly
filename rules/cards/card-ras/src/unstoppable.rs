@@ -8,9 +8,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const UNSTOPPABLE: CardDef = CardDef::new("RAS:UNSTOPPABLE", &[
-    On::Play(unstoppable),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), unstoppable)]);
 
 /// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.
@@ -25,8 +23,7 @@ const SPOTS: [&str; 6] = [
     "瑟罗希亚国际学校",
     "银河拉面馆",
     "旭汤澡堂",
-    "CHUCHU的公寓",
-];
+    "CHUCHU的公寓"];
 
 fn unstoppable(player_id: i32) {
     // 规则书: 「投掷1d6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」

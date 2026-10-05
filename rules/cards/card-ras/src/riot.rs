@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, trigger, CardPile};
 use card_sdk::{CardDef, On};
 
 pub const RIOT: CardDef = CardDef::new("RAS:R. I. O. T.", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// 规则书[反击]: 「当你被其他人的卡效果影响时打出此卡」 -- C# `H.HitByOtherCard`.

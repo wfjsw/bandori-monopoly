@@ -47,6 +47,12 @@
   "strong_flower_note": "使用者经过时在这里 [强制停下] 并结算",
   "strong_flower_title": "可爱又强壮的花朵",
   "strong_flower_why_not": "你还没有地",
-  "together_here_up": "{{who}} 的 {{n}} 个反面 [P✽P粉丝] 翻正（有你与我在这里共度）",
-  "trainee_guide_note": "奇迹水晶与单色/双色标记；手牌上限 −1"
+"title_idol_crystals": "为所有含「奇迹水晶」效果的卡各添加 {{n}} 个 [奇迹水晶]",
+    "together_here_up": "{{who}} 的 {{n}} 个反面 [P✽P粉丝] 翻正（有你与我在这里共度）",
+  "trainee_guide_note": "奇迹水晶与单色/双色标记；手牌上限 −1",
+  "trainee_guide_resonance_cost": "[共鸣] 支付 500 资金",
+  "resonance_title": "共鸣",
+  "resonance_text": "弃置「PP:[衍生]共鸣」以强化这个效果？",
+  "chisato_mask_resonance": "共鸣：其他玩家分摊支付你 1,500",
+  "strong_flower_gain": "可爱又强壮的花朵：+1,500"
 }

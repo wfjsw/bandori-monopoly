@@ -13,9 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 use alloc::string::String;
 
 pub const BACKSTAGE_TOUR: CardDef = CardDef::new("HHW:出发！后台之旅！", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBackstageTour.WhyNot` refuses the play when the draw pile and the

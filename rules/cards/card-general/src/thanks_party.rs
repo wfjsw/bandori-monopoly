@@ -12,8 +12,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 use alloc::vec::Vec;
 
 pub const THANKS_PARTY: CardDef = CardDef::new("通用:CiRCLE THANKS PARTY!", &[
-    On::Play(thanks_party),
-]);
+    On::Play(None, thanks_party)]);
 
 fn thanks_party(player_id: i32) {
     let why = Msg::new(key!("thanks_party_why"));

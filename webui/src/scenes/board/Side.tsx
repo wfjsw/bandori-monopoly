@@ -1,7 +1,7 @@
 // Right column: current turn card with the turn timer, phase steps, the d20,
 // action buttons, end turn, and the hand (with a full-size hover preview).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
@@ -22,8 +22,13 @@ import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf, stateOf } from "../../core/names";
 
-/** The stage names mirror Yu-Gi-Oh's turn phases (Master Duel's phase track). */
-const phases = () => [tr("board.phase.main1"), tr("board.phase.battle"), tr("board.phase.main2"), tr("board.phase.end")];
+/** The turn stages, by the game's own names (开始 / 运营 / 移动 / 结束) -- the
+ *  sweep effect that announces them is separate and unchanged. */
+/// How long a stage stays on the marker -- the length of the transition
+/// effect, so every stage is readable.
+const STAGE_HOLD = 1500;
+
+const phases = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
 
 function timerOf(m: Model, elapsed: number): { value: string; caption: string; frac: number; cls: string } {
   const S = m.S;
@@ -43,7 +48,26 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   const cur = S.players[S.turn];
   const c = S.turn >= 0 ? m.charOf(S.turn) : undefined;
   const t = timerOf(m, elapsed);
-  const step = S.phase === "play" ? (anim.phase?.key === "board.phase.end" ? 3 : Math.min(2, Math.max(0, S.step - 1))) : -1;
+  const step = S.phase === "play" ? (anim.phase?.key === "board.stepEnd" ? 3 : Math.min(2, Math.max(0, S.step - 1))) : -1;
+  // Master Duel lets every phase stay readable: the marker **lags** the game
+  // state so a stage is held for the length of its transition effect. Without
+  // this stage 1 (roll) and stage 4 (end) flash past because nothing happens in
+  // them. `canRoll` & co. still read the real `S.step` -- only the display lags.
+  const [shown, setShown] = useState(step);
+  const shownAt = useRef(0);
+  useEffect(() => {
+    if (step < 0) {
+      setShown(step);
+      return;
+    }
+    if (step === shown) return;
+    const wait = Math.max(0, STAGE_HOLD - (performance.now() - shownAt.current));
+    const id = window.setTimeout(() => {
+      shownAt.current = performance.now();
+      setShown(step);
+    }, wait);
+    return () => window.clearTimeout(id);
+  }, [step, shown]);
   const animating = anim.animating;
   const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 1 && !S.skipMove && !S.busy && !m.asking && !animating;
   const can = m.myTurn && !S.busy && !m.asking && !animating;
@@ -83,16 +107,16 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
       </div>
 
       <div className={s.steps}>
-        {phases().map((label, i) => <span key={label} className={cx(s.step, i === step ? s.stepOn : i < step && s.stepDone)}>{label}</span>)}
+        {phases().map((label, i) => <span key={label} className={cx(s.step, i === shown ? s.stepOn : i < shown && s.stepDone)}>{label}</span>)}
       </div>
 
       <button type="button" className={cx(s.dice, canRoll && s.can, anim.rolling && s.rolling)} disabled={!canRoll} onClick={() => void act(sess, { act: "roll" })}>
         <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />
         <div className={s.diceNum}>{anim.dice || ""}</div>
         <div className={s.diceHint}>{hint}</div>
-        <div className={s.diceCap}>{tr("board.dice")}<small>1d20</small></div>
+        <div className={s.diceCap}>{tr("board.dice")}<small>{" "}1d20</small></div>
         <img className={cx(s.star, s.starA)} src={sceneImg("star5")} alt="" />
-        <img className={cx(s.star, s.starB)} src={sceneImg("star5")} alt="" />
+        <img className={cx(s.star, s.note)} src={sceneImg("ic_music_note")} alt="" />
       </button>
 
       <div className={s.actions}>
@@ -101,7 +125,7 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
         <Btn icon="redo" className={s.act} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
         <Btn icon="construction" className={s.act} onClick={buildFromButton}>{tr("board.build")}</Btn>
       </div>
-      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && (S.step === 3 || (S.step === 1 && S.skipMove)) && !m.overHand)} onClick={() => { anim.showPhase("board.phase.end"); void act(sess, { act: "end" }); }}>
+      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && (S.step === 3 || (S.step === 1 && S.skipMove)) && !m.overHand)} onClick={() => { anim.showPhase("board.stepEnd"); void act(sess, { act: "end" }); }}>
         {m.myTurn && S.step === 1 && S.skipMove ? tr("board.endTurnSkip") : tr("board.endTurn")}
       </Btn>
 

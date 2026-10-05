@@ -12,9 +12,7 @@ use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const STAR_BEAT: CardDef = CardDef::new("PPP:STAR BEAT!", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -60,8 +58,7 @@ fn play(player_id: i32) {
         &Msg::new(key!("star_beat_ask")).i("n", n as i64),
         &[
             Msg::new(key!("star_beat_opt_teleport")).tile("tile", to),
-            Msg::new(key!("star_beat_opt_move")).i("n", dice as i64),
-        ],
+            Msg::new(key!("star_beat_opt_move")).i("n", dice as i64)],
     );
     if pick == 0 {
         // 规则书1: 「获得2个星星贴纸」 -- C# `H.AddTok(i, "星星贴纸", 2)`.

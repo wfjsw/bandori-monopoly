@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SAYO_PLAY: CardDef = CardDef::new("R:（纱夜）弹奏弹奏弹奏，继续弹奏", &[
-    On::React(&[ChainKind::MoveRoll], can_react, react),
+    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// 规则书: 「[反击] 时机合适时打出」 -- reaction-only (C# `Normal => false`).
@@ -34,7 +34,7 @@ fn react(player_id: i32) {
     // TODO(规则书): 「打出时视为使用一次此卡使用者的技能」-- needs H.AnnounceSkill
     //   (ReactSkill + Fx.SkillUsed) so the use is announced and cancellable; what
     //   follows is only the C# body after `use.cancelled` (the skill's roll bump).
-    let Some(before) = trigger::move_roll() else { return };
+    let Some(before) = trigger::move_roll() else { return; };
     let n = match ctx::ask_pick(
         player_id,
         &Msg::new(key!("sayo_play_ask_title")).card("card", "R:（纱夜）弹奏弹奏弹奏，继续弹奏"),

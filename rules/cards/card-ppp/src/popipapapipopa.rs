@@ -18,8 +18,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new("PPP:[衍生]Popipapapipopa", &[
-    On::Hook(&[HookKind::PassTile], pass_tile),
-    On::Hook(&[HookKind::PayChoose], pay_choose),
+    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+    On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
 ]);
 
 /// C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal.
@@ -30,10 +30,13 @@ const MAX_CRYSTALS: i32 = 10;
 
 /// `Fx.PassTile` (C# `CardPopipapapipopa.PassTile`) -- the owner passing one of
 /// the five named tiles banks a crystal on this card.
+/// Pure guard for [`pass_tile`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_tile_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pass_tile(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `m.Seat != Seat` -- only the owner's own move feeds this card.
     if trigger::player_id() != player_id {
         return;
@@ -65,10 +68,13 @@ fn pass_tile(player_id: i32) {
 
 /// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
 /// spend crystals to shrink the pending payment by 150 each.
+/// Pure guard for [`pay_choose`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pay_choose_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pay_choose(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `p.from != Player` -- only the owner's own payment.
     if trigger::player_id() != player_id {
         return;

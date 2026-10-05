@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TAKI_EVEN_IF: CardDef = CardDef::new("CRYCHIC:（立希）即便比不上...", &[
-    On::React(&[ChainKind::MoveRoll], can_react, react),
+    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -22,14 +22,14 @@ fn can_react(player_id: i32) -> bool {
 }
 
 fn react(player_id: i32) {
-    let Some(before) = trigger::move_roll() else { return };
-    // 规则书[反击]: 「进行一次重骰」
-    // TODO: C# rerolls with H.DoMoveRoll (honours the move's dice plan / bonuses).
-    let mut seen = vec![before.abs()];
-    // TODO(规则书)[反击]: 「与本回合内你骰出过的所有骰点都不同」-- the C# seeds
-    //   `seen` from H._turnCtx.Rolls (every die this turn). The ABI has no
-    //   turn-roll history; only this card's own rerolls are compared.
-    let mut x = ctx::roll(player_id, 1, 20);
+    let Some(before) = trigger::move_roll() else { return; };
+    // 规则书[反击]: 「进行一次重骰」 -- `H.DoMoveRoll`, which sums the move's
+    // whole dice table.
+    // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- `H._turnCtx.Rolls`,
+    // every face rolled this turn (not just this card's own rerolls).
+    let mut seen: alloc::vec::Vec<i32> = ctx::turn_rolls().into_iter().map(|r| r.abs()).collect();
+    seen.push(before.abs());
+    let mut x = ctx::do_move_roll(player_id);
     ctx::log(player_id, &Msg::new(key!("taki_reroll")).player_id("who", player_id).i("n", x as i64));
     for _ in 0..10 {
         // 规则书[反击]: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」

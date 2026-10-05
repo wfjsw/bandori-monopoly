@@ -14,14 +14,31 @@ use crate::MatchMode;
 
 fn data() -> Arc<GameData> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
-    Arc::new(GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap())
+    Arc::new(
+        GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string()))
+            .unwrap(),
+    )
 }
 
 /// A world in the play phase, player 0 to move, nobody owning anything.
 fn setup(players: i32) -> (Arc<GameData>, World) {
     let d = data();
-    let members: Vec<RoomMember> = (1..=players).map(|i| RoomMember { id: i, player: format!("P{i}"), bot: true, ..Default::default() }).collect();
-    let mut m = Match::new(d.clone(), Arc::new(StubRules), &members, 1, MatchMode::Casual, ScoreWeights::default());
+    let members: Vec<RoomMember> = (1..=players)
+        .map(|i| RoomMember {
+            id: i,
+            player: format!("P{i}"),
+            bot: true,
+            ..Default::default()
+        })
+        .collect();
+    let mut m = Match::new(
+        d.clone(),
+        Arc::new(StubRules),
+        &members,
+        1,
+        MatchMode::Casual,
+        ScoreWeights::default(),
+    );
     m.quick_start();
     let mut w = m.world.clone();
     w.st.turn = 0;
@@ -45,7 +62,10 @@ fn run(d: &GameData, w: &World, answers: &[Answered], f: impl FnOnce(&mut Cx) ->
 }
 
 fn pick(v: i32) -> Answered {
-    Answered { answers: vec![v], ..Default::default() }
+    Answered {
+        answers: vec![v],
+        ..Default::default()
+    }
 }
 
 fn first(d: &GameData, f: impl Fn(&crate::data::TileData) -> bool) -> usize {
@@ -65,13 +85,18 @@ fn rent_follows_the_rent_table() {
     assert_eq!(w2.st.players[0].money, 10_000 - rent);
     assert_eq!(w2.st.players[1].money, 10_000 + rent);
     let e = w2.recent.back().unwrap();
-    assert_eq!((e.r#type.as_str(), e.value, e.other, e.to), ("rent", rent, 1, t as i32));
+    assert_eq!(
+        (e.r#type.as_str(), e.value, e.other, e.to),
+        ("rent", rent, 1, t as i32)
+    );
 }
 
 #[test]
 fn ring_rent_is_rings_times_multiplier_times_d20() {
     let (d, mut w) = setup(2);
-    let rings: Vec<usize> = (0..d.tiles.len()).filter(|&t| d.tiles[t].kind == "ring").collect();
+    let rings: Vec<usize> = (0..d.tiles.len())
+        .filter(|&t| d.tiles[t].kind == "ring")
+        .collect();
     assert_eq!(rings.len(), 4);
     w.st.owners[rings[0]] = 1;
     w.st.owners[rings[1]] = 1;
@@ -80,7 +105,10 @@ fn ring_rent_is_rings_times_multiplier_times_d20() {
         w.rng = crate::rng::Rng::new(seed);
         let (w2, _) = run(&d, &w, &[], |cx| cx.land(0, true));
         let paid = 10_000 - w2.st.players[0].money;
-        assert!(paid % 20 == 0 && (20..=400).contains(&paid), "2 rings x 10 x 1d20, got {paid}");
+        assert!(
+            paid % 20 == 0 && (20..=400).contains(&paid),
+            "2 rings x 10 x 1d20, got {paid}"
+        );
     }
 }
 
@@ -89,13 +117,18 @@ fn agent_charges_half_rent_when_the_whole_group_belongs_to_others() {
     let (d, mut w) = setup(2);
     let agent = first(&d, |x| x.kind == "agent");
     let g = d.tiles[agent].group;
-    let group: Vec<usize> = (0..d.tiles.len()).filter(|&t| d.tiles[t].is_buyable() && d.tiles[t].group == g).collect();
+    let group: Vec<usize> = (0..d.tiles.len())
+        .filter(|&t| d.tiles[t].is_buyable() && d.tiles[t].group == g)
+        .collect();
     assert!(!group.is_empty());
     for &t in &group {
         w.st.owners[t] = 1;
     }
     w.st.players[0].pos = agent as i32;
-    let expected: i32 = group.iter().map(|&t| ((d.tiles[t].rent[0] as f64 / 2.0 / 10.0).ceil() as i32) * 10).sum();
+    let expected: i32 = group
+        .iter()
+        .map(|&t| ((d.tiles[t].rent[0] as f64 / 2.0 / 10.0).ceil() as i32) * 10)
+        .sum();
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert!(p.is_none());
     assert_eq!(10_000 - w2.st.players[0].money, expected);
@@ -110,7 +143,11 @@ fn agent_offers_purchases_in_its_group() {
     let (_, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     let p = p.expect("tile prompt");
     assert_eq!(p.kind, "tile");
-    assert_eq!(p.fallback, p.items.len() as i32, "fallback = choose nothing");
+    assert_eq!(
+        p.fallback,
+        p.items.len() as i32,
+        "fallback = choose nothing"
+    );
     let t: usize = p.items[0].parse().unwrap();
     assert_eq!(d.tiles[t].group, g);
 
@@ -127,13 +164,18 @@ fn agent_offers_purchases_in_its_group() {
 #[test]
 fn short_of_cash_mortgages_then_pays() {
     let (d, mut w) = setup(2);
-    let t = first(&d, |x| x.kind == "property" && x.rent.len() >= 3 && x.rent[2] >= 1000);
+    let t = first(&d, |x| {
+        x.kind == "property" && x.rent.len() >= 3 && x.rent[2] >= 1000
+    });
     let rent = d.tiles[t].rent[2];
     w.st.owners[t] = 1;
     w.st.houses[t] = 2;
     w.st.players[0].pos = t as i32;
     w.st.players[0].money = 100;
-    let deeds: Vec<usize> = (0..d.tiles.len()).filter(|&x| d.tiles[x].kind == "property" && x != t).take(4).collect();
+    let deeds: Vec<usize> = (0..d.tiles.len())
+        .filter(|&x| d.tiles[x].kind == "property" && x != t)
+        .take(4)
+        .collect();
     for &x in &deeds {
         w.st.owners[x] = 0;
     }
@@ -144,7 +186,11 @@ fn short_of_cash_mortgages_then_pays() {
     assert_eq!(p.bid, rent - 100, "asks for the shortfall");
 
     // Pick every deed: enough to cover it.
-    let answer = Answered { answers: vec![0], picked: p.items.clone(), ..Default::default() };
+    let answer = Answered {
+        answers: vec![0],
+        picked: p.items.clone(),
+        ..Default::default()
+    };
     let (w2, p2) = run(&d, &w, &[answer], |cx| cx.land(0, true));
     assert!(p2.is_none());
     let raised: i32 = deeds.iter().map(|&x| d.tiles[x].price / 2).sum();
@@ -165,7 +211,10 @@ fn bankruptcy_pays_the_creditor_and_can_end_the_game() {
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert!(p.is_none());
     assert!(w2.st.players[0].bankrupt && w2.st.players[0].out_order == 1);
-    assert_eq!(w2.st.players[1].money, 10_007, "creditor receives everything");
+    assert_eq!(
+        w2.st.players[1].money, 10_007,
+        "creditor receives everything"
+    );
     assert_eq!(w2.st.phase, "ended");
     assert_eq!((w2.st.end_reason.as_str(), w2.st.winner), ("last", 1));
     assert_eq!((w2.st.players[1].rank, w2.st.players[0].rank), (1, 2));
@@ -190,7 +239,12 @@ fn bankrupt_land_is_freed_and_auctioned() {
     assert_eq!((p.kind.as_str(), p.tile), ("auction", mine as i32));
     assert_eq!(p.players, vec![1, 2], "remaining players bid");
 
-    let won = Answered { answers: vec![1, -1], bid: 300, bidder: 2, ..Default::default() };
+    let won = Answered {
+        answers: vec![1, -1],
+        bid: 300,
+        bidder: 2,
+        ..Default::default()
+    };
     let (w3, _) = run(&d, &w, &[won], |cx| cx.land(0, true));
     assert_eq!(w3.st.owners[mine], 2);
     assert_eq!(w3.st.players[2].money, 10_000 - 300);
@@ -208,7 +262,10 @@ fn mortgaged_land_can_be_force_bought_at_double() {
 
     let (w1, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert_eq!(p.expect("prompt").title.key(), "ask.force_buy.title");
-    assert_eq!(w1.st.players[0].money, 10_000, "mortgaged land charges no rent");
+    assert_eq!(
+        w1.st.players[0].money, 10_000,
+        "mortgaged land charges no rent"
+    );
 
     let (w2, _) = run(&d, &w, &[pick(0)], |cx| cx.land(0, true));
     assert_eq!(w2.st.owners[t], 0);
@@ -262,7 +319,10 @@ fn replays_are_exact() {
             // Answering continues from exactly the halted world.
             let (c, _) = run(&d, &w, &[pick(p.fallback)], |cx| cx.main_move(0, 0));
             let shared = a.recent.len();
-            assert_eq!(&c.recent.iter().take(shared).cloned().collect::<Vec<_>>(), &a.recent.iter().cloned().collect::<Vec<_>>());
+            assert_eq!(
+                &c.recent.iter().take(shared).cloned().collect::<Vec<_>>(),
+                &a.recent.iter().cloned().collect::<Vec<_>>()
+            );
         }
     }
 }
@@ -270,7 +330,9 @@ fn replays_are_exact() {
 #[test]
 fn final_score_and_ranking() {
     let (d, mut w) = setup(4);
-    let props: Vec<usize> = (0..d.tiles.len()).filter(|&t| d.tiles[t].kind == "property").collect();
+    let props: Vec<usize> = (0..d.tiles.len())
+        .filter(|&t| d.tiles[t].kind == "property")
+        .collect();
     w.st.players[0].money = 5_000;
     w.st.owners[props[0]] = 0;
     w.st.houses[props[0]] = 2;
@@ -292,10 +354,20 @@ fn final_score_and_ranking() {
     let p0 = &d.tiles[props[0]];
     let p1 = &d.tiles[props[1]];
     assert_eq!(s[0].assets, 5_000 + p0.price + 2 * p0.house);
-    assert_eq!(s[0].score, (5_000.0 + 2.0 * p0.price as f32 + 0.5 * (2 * p0.house) as f32).round() as i32);
-    assert_eq!(s[1].score, 6_000 + 2 * (p1.price / 2), "mortgaged land counts half");
+    assert_eq!(
+        s[0].score,
+        (5_000.0 + 2.0 * p0.price as f32 + 0.5 * (2 * p0.house) as f32).round() as i32
+    );
+    assert_eq!(
+        s[1].score,
+        6_000 + 2 * (p1.price / 2),
+        "mortgaged land counts half"
+    );
     let order: Vec<i32> = s.iter().map(|x| x.rank).collect();
-    let (r0, r1) = if s[0].score >= s[1].score { (1, 2) } else { (2, 1) };
+    let (r0, r1) = if s[0].score >= s[1].score {
+        (1, 2)
+    } else {
+        (2, 1)
+    };
     assert_eq!(order, vec![r0, r1, 4, 3], "later elimination ranks higher");
 }
-

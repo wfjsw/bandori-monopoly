@@ -17,9 +17,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const ANON_TOKYO: CardDef = CardDef::new("MyGO:[千早爱音]Anon Tokyo", &[
-    On::Play(anon_tokyo),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), anon_tokyo)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     let n = ctx::tile_count();

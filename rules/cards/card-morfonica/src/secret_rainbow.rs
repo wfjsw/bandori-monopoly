@@ -15,7 +15,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new("Mor:秘密与青春的虹彩", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 fn can_react(player_id: i32) -> bool {
@@ -34,7 +34,8 @@ fn can_react(player_id: i32) -> bool {
     }
     // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0
     // reads as `value() == 0`, so the >0 guard above covers it.
-    // TODO(ABI): 「学妹或同级生」/「学姐或同级生」 needs a grade query
+    // TODO(规则书)[judgement](ABI): 「学妹或同级生」/「学姐或同级生」 needs a grade query
+    //   the clause under-specifies -- see the note above it
     //   (`H.GradeOf`, `MatchHost.cs:18282`), so the window opens on every
     //   player-to-player pay that involves `player_id` (over-permissive).
     from == player_id || to == player_id

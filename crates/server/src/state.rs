@@ -11,6 +11,7 @@ use std::time::Duration;
 use game_core::data::GameData;
 use game_core::engine::CardRules;
 
+use crate::pool::Pool;
 use crate::room::Room;
 
 /// Seconds a seated player may be without an open stream before the AI takes over
@@ -30,6 +31,8 @@ pub struct Session {
 pub struct Server {
     pub data: Arc<GameData>,
     pub rules: Arc<dyn CardRules>,
+    /// Match execution. Workers hold no match state, so this is shared freely.
+    pub engine: Arc<Pool>,
     pub sessions: Mutex<HashMap<String, Session>>,
     pub rooms: Mutex<HashMap<String, Arc<Mutex<Room>>>>,
     /// Overridable for tests.
@@ -39,10 +42,11 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(data: Arc<GameData>, rules: Arc<dyn CardRules>) -> Arc<Self> {
+    pub fn new(data: Arc<GameData>, rules: Arc<dyn CardRules>, engine: Arc<Pool>) -> Arc<Self> {
         Arc::new(Self {
             data,
             rules,
+            engine,
             sessions: Mutex::new(HashMap::new()),
             rooms: Mutex::new(HashMap::new()),
             presence_timeout: PRESENCE_TIMEOUT,
@@ -83,5 +87,7 @@ pub fn room_code() -> String {
     const ALPHABET: &[u8] = b"23456789ABCDEFGHJKMNPQRSTUVWXYZ";
     let mut buf = [0u8; 6];
     getrandom::fill(&mut buf).expect("OS randomness");
-    buf.iter().map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char).collect()
+    buf.iter()
+        .map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char)
+        .collect()
 }

@@ -13,12 +13,11 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "Mujica:燃尽前的线香花火";
 
 pub const SPARKLER: CardDef = CardDef::new("Mujica:燃尽前的线香花火", &[
-    On::Play(sparkler),
+    On::Play(None, sparkler),
     // C# `CardSparkler.TurnEndAfter` -> `Burn` -- a field hook on the card's own
     // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
     // matching the C# `Fx.TurnEndAfter` dispatch).
-    On::Hook(&[HookKind::TurnEndAfter], turn_end),
-]);
+    On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end)]);
 
 fn sparkler(player_id: i32) {
     // 规则书: 「将此卡放置于场上并放置2个奇迹水晶（上限2）」

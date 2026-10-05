@@ -13,11 +13,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const FIRE_BIRD: CardDef = CardDef::new("R:Fire bird", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-    On::Hook(&[HookKind::PayMul], pay_mul),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+    On::Hook(&[HookKind::PayMul], pay_mul_guard, pay_mul)]);
 
 const ID: &str = "R:Fire bird";
 
@@ -35,8 +33,13 @@ fn play(player_id: i32) {
     // 规则书: 「支付1600资金」 -- C# `PayCtx { amount = 1600, kind = "pay", must = false }`.
     let paid = ctx::pay(player_id, 1600, &Msg::new(key!("fire_bird_why")));
     if paid < 1600 {
-        // TODO(规则书): the C# sets `c.Effective = false` when the payment does not
-        // go through (the play is wasted); the ABI has no set_effective hook.
+// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
+        // side channel and is not being ported (a routine should *return* whether
+        // it took effect); but before that lands, what "not effective" changes has
+        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
+        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
+        // implies no)? And what counts a use that this would suppress?
         return;
     }
     // 规则书: 「并为其添加X（自选）个奇迹水晶」 -- C# `H.AskNumber(i, ..., 1, 10, ...)`.
@@ -69,10 +72,13 @@ fn play(player_id: i32) {
 /// C# `CardFireBird.PayMul`: rent paid to this card's owner is charged at
 /// `CeilTo(amount * 1.5, 10)`. Runs through the Fx hook dispatch at `payMul`
 /// (after `PayAdd`, before `PayChoose`), so this is a field effect, not a [反击].
+/// Pure guard for [`pay_mul`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pay_mul_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pay_mul(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     if trigger::kind() != TriggerKind::PayMul || !trigger::pay_is_rent() {
         return;
     }
@@ -101,10 +107,13 @@ fn pay_mul(player_id: i32) {
 /// `DecayCard.TurnEnd` -> `CardFireBird.Burn` (C# `H.LoseR(Seat, 400, "Fire bird")`
 /// then `AddCrystals(-1)`; empty -> `H.Unplace(this, "discard")`). Runs through the
 /// Fx hook dispatch, so this is a field effect, not a [反击].
+/// Pure guard for [`turn_end`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_end_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn turn_end(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     if trigger::kind() != TriggerKind::TurnEnd {
         return;
     }

@@ -12,7 +12,7 @@ use card_sdk::ctx::{self, trigger, AbKind};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const OWN_STAGE: CardDef = CardDef::new("R:选择自己的舞台", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// 规则书[反击]: 「[反击] 受到[除外]以外的异常移动效果影响时可打出此卡」

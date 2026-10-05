@@ -14,11 +14,10 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "AG:（摩卡）0.5倍速";
 
 pub const MOCA_HALF: CardDef = CardDef::new("AG:（摩卡）0.5倍速", &[
-    On::Play(play),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-    On::Hook(&[HookKind::RollAfter], roll_after),
-    On::Hook(&[HookKind::PayMul], pay_mul),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+    On::Hook(&[HookKind::RollAfter], |_| true, roll_after),
+    On::Hook(&[HookKind::PayMul], |_| true, pay_mul)]);
 
 fn play(player_id: i32) {
     // 规则书(1): 「将此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
@@ -33,10 +32,13 @@ fn play(player_id: i32) {
 /// 规则书(1): 「你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆」
 /// -- C# `DecayCard.TurnEnd` -> `AddCrystals(-1)`; empty -> `Empty()` /
 /// `H.Unplace(this, "discard")`. `ctx::decay` is that body.
+/// Pure guard for [`turn_end`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_end_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn turn_end(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     if ctx::decay(player_id, ID) == 0 {
         ctx::log(player_id, &Msg::new(key!("moca_half_decayed")).player_id("who", player_id));
     }

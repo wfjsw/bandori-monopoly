@@ -11,15 +11,13 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[
-    On::Play(rain),
-]);
+    On::Play(None, rain)]);
 
 fn rain(player_id: i32) {
     // 规则书[手]: 「投掷2d2并记录结果为X」
-    let x = ctx::roll(player_id, 2, 2);
-    // TODO(规则书): the C# `x = (c.Doubled == 0) ? x * 2 : x` doubles X when the
-    // band skill 「后勤人员的努力」 chose to double the card's number
-    // (`PlayCtx.Doubled`) -- held per the brief (the `Doubled` play-side).
+    // 投掷2d2并记录结果为X -- `ctx::n(1, ...)` so 「后勤人员的努力」 can double
+    // this card's first number (C# `x = (c.Doubled == 0) ? x * 2 : x`).
+    let x = ctx::n(1, ctx::roll(player_id, 2, 2));
     // 规则书[手]: 「[指定]X名玩家（其中必须包括[使用者]）」 -- the user is always
     // one of them (C# `targets = { i }`), the rest come one prompt at a time.
     let mut targets: Vec<i32> = Vec::new();

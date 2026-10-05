@@ -758,6 +758,22 @@ export function eyeLine(model: ModelJson): number | null {
   return top <= bot ? top + 0.15 * (bot - top) : null;
 }
 
+/**
+ * Canvas-space y of the top of the figure at the default pose -- the highest
+ * point any visible mesh reaches. The stand keeps `headroom` of its window
+ * clear above this so a tall hairdo never gets sliced off by the portrait
+ * rect. `null` when the model draws nothing.
+ */
+export function figureTop(model: ModelJson): number | null {
+  const pose = evalPose(model);
+  let top = Infinity;
+  for (const f of pose.meshes) {
+    if (!f.visible) continue;
+    for (let k = 1; k < f.positions.length; k += 2) top = Math.min(top, f.positions[k]);
+  }
+  return top === Infinity ? null : top;
+}
+
 /** Canvas-space bounding box of a composed mesh (2 * nverts flat). */
 export function boundsOf(positions: ArrayLike<number>): [number, number, number, number] {
   let minX = Infinity;

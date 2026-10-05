@@ -15,9 +15,9 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "Mor:离心力，不为所动";
 
 pub const CENTRIFUGAL: CardDef = CardDef::new("Mor:离心力，不为所动", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
     On::Gate(&[GateKind::ImmuneAll], immune_all),
-    On::Hook(&[HookKind::TurnStart], turn_start),
+    On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
 ]);
 
 fn can_react(player_id: i32) -> bool {

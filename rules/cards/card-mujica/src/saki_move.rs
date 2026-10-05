@@ -9,8 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[
-    On::Play(saki_move),
-]);
+    On::Play(None, saki_move)]);
 
 fn saki_move(player_id: i32) {
     // 规则书: 「强制一名玩家向你选择的方向移动3格」 -- pick the target.
@@ -43,8 +42,7 @@ fn saki_move(player_id: i32) {
         &Msg::new(key!("saki_move_dir_ask")),
         &[
             Msg::new(key!("saki_move_forward")),
-            Msg::new(key!("saki_move_backward")),
-        ],
+            Msg::new(key!("saki_move_backward"))],
     ) == 0;
     // 规则书: 「移动3格并[触发结算]」 -- C# `H.CardMove` (self,
     // MatchHost.cs:5526-5532) / `H.ForceWalk(hit, forward ? 3 : -3,

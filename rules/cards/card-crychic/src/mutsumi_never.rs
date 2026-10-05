@@ -19,8 +19,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new("CRYCHIC:（睦）从没有觉得...", &[
-    On::Play(mutsumi_never),
-]);
+    On::Play(None, mutsumi_never)]);
 
 fn mutsumi_never(player_id: i32) {
     // 规则书（1）: 「打出此卡时，使用者可以选择（2）或（3）效果之一发动。」 -- C#

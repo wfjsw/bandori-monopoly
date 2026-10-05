@@ -8,13 +8,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::ctx::{self, CardPile};
+use card_sdk::ctx::{self, trigger, CardPile};
+use card_sdk::abi::state_key;
 use card_sdk::{key, CardDef, On, Msg};
 use alloc::string::String;
 
 pub const L12: CardDef = CardDef::new("Sumimi:#L12", &[
-    On::Play(l12),
-]);
+    On::Play(None, l12),
+    On::Hook(&[card_sdk::abi::HookKind::FireSpent], fire_spent_guard, fire_spent)]);
 
 const ID: &str = "Sumimi:#L12";
 
@@ -62,14 +63,33 @@ fn l12(player_id: i32) {
     }
     ctx::add_to_hand(player_id, &id);
     ctx::log(player_id, &Msg::new(key!("l12_taken")).player_id("who", player_id).card("card", &id));
-    // TODO(规则书)[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- needs the
-    // Fx.HandLimitDelta hook (C# `CardL12.HandLimitDelta` returns -1 for the owner).
-    // TODO(规则书)[持续]（2）: 「每当你消耗火罐时，为此卡添加一个[奇迹水晶]」 -- needs
-    // the Fx.FireSpent hook (C# `CardL12.FireSpent`); there is no fire-spent
-    // `TriggerKind` yet. The crystal half is ready (`ctx::add_crystals(player_id, n, 0)`).
-    // TODO(规则书)[持续]（3）: 「当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。」 -- same
-    // missing `FireSpent` timing. The body is ready: `ctx::crystals(player_id) >= 6`
-    // then `ctx::unplace_card(player_id)` + `ctx::add_to_hand(player_id, ID)`.
+    // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the limit is keyed state,
+    // so the card lowers it; it is restored when the card leaves play.
+    ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
     // C# `NoteText` shows the crystal count / hand-limit note; CardDef has no
     // NoteText hook.
+}
+
+/// 规则书[持续]（2）: 「每当你消耗火罐时，为此卡添加一个[奇迹水晶]」 -- C#
+/// `CardL12.FireSpent`.
+/// Pure guard for [`fire_spent`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn fire_spent_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
+fn fire_spent(player_id: i32) {
+    // One crystal per fire spent (`t.value` is how many pots went).
+    let n = trigger::value().max(0);
+    if n == 0 {
+        return;
+    }
+    ctx::add_crystals(player_id, n, 0);
+    ctx::log(player_id, &Msg::new(key!("l12_fire_spent")).player_id("who", player_id).i("n", n as i64));
+    // 规则书[持续]（3）: 「当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。」
+    if ctx::crystals(player_id) >= 6 {
+        ctx::unplace_card(player_id);
+        ctx::add_to_hand(player_id, ID);
+        ctx::log(player_id, &Msg::new(key!("l12_back")).player_id("who", player_id));
+    }
 }

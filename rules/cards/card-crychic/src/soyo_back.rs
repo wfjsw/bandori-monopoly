@@ -13,9 +13,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SOYO_BACK: CardDef = CardDef::new("CRYCHIC:（soyo）回到曾经", &[
-    On::Play(soyo_back),
-    On::Hook(&[HookKind::Drawn], on_drawn),
-]);
+    On::Play(None, soyo_back),
+    On::Hook(&[HookKind::Drawn], |_| true, on_drawn)]);
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";
 
@@ -34,8 +33,7 @@ fn on_drawn(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("soyo_back_special")).player_id("who", player_id));
     let options = [
         Msg::new(key!("soyo_back_opt1")),
-        Msg::new(key!("soyo_back_opt2")),
-    ];
+        Msg::new(key!("soyo_back_opt2"))];
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("soyo_back_title")),
@@ -70,12 +68,25 @@ fn branch_discard(player_id: i32) {
     }
     // 规则书（1）1: 「抽1张卡」
     ctx::draw(player_id, 1);
-    // 规则书（1）1: 「为你的一个格子付费加盖一间房屋」 -- C# `H.OfferBuildAmong(seat,
-    // H.OwnedBy(player), CardName)`.
-    // TODO(规则书)（1）1: 「为你的一个格子付费加盖一间房屋」 -- needs the build routine
-    //   (`H.OfferBuildAmong` / `H.BuyRoutine`-family): a prompt over the owned
-    //   tiles that pays `ctx::build_cost` and runs `ctx::add_house`. The rest of
-    //   branch 1 is expressible.
+    // 规则书（1）1: 「为你的一个格子付费加盖一间房屋」 -- the clause names the
+    // player's own tiles and says 「付费」, so: choose one of them, pay its build
+    // cost, put a house on it. A player who cannot pay just does not build.
+    let owned = ctx::owned_tiles(player_id);
+    if !owned.is_empty() {
+        let t = ctx::ask_tile(
+            player_id,
+            &Msg::new(key!("soyo_back_build_title")),
+            &Msg::new(key!("soyo_back_build_text")),
+            &owned,
+        );
+        if t >= 0 {
+            let cost = ctx::build_cost(t);
+            if ctx::pay(player_id, cost, &Msg::new(key!("soyo_back_build_why")).tile("tile", t)) > 0 {
+                ctx::add_house(t, 1);
+                ctx::log(player_id, &Msg::new(key!("soyo_back_built")).tile("tile", t));
+            }
+        }
+    }
     // 规则书（1）1: 「然后[移除]此卡」 -- already taken out of hand above and never
     // put back anywhere (C# just logs 「回到曾经」被 [移除]）。
     ctx::log(player_id, &Msg::new(key!("soyo_back_removed")).player_id("who", player_id));

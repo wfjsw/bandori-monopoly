@@ -1,4 +1,5 @@
 {
+  "ako_dark_drawn": "played from outside the hand -- draw 1",
   "ako_dark_stun": "{{who}} takes a [Stun] layer (Ako's Dark Witch)",
   "before_live_stop": "{{who}} will [force-stop] and settle on {{tile}} (Before the Live)",
   "blue_rose_gain": "Pride of the Blue Rose: 20% of Livehouse deed value {{n}}",
@@ -58,6 +59,7 @@
   "sayo_play_ask_title": "{{card}}",
   "sayo_play_plus_one": "+1 tile",
   "sayo_play_plus_two": "+2 tiles",
+  "sprechchor_why_not": "only playable when the turn started on a Livehouse tile",
   "sprechchor_why": "Sprechchor",
   "to_the_peak_ask_text": "Every Live House is owned: pay 1.5x build cost to raise a house on which one?",
   "to_the_peak_ask_title": "To the Peak",

@@ -13,10 +13,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const ONE_OF_US: CardDef = CardDef::new("AG:ONE OF US", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::BeforeOut], before_out),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::BeforeOut], |_| true, before_out)]);
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.
@@ -119,7 +117,8 @@ fn play(player_id: i32) {
     ctx::set_slot(player_id, "one_of_us_partner", partner + 1);
     ctx::set_slot(player_id, "one_of_us_mine", a + 1);
     ctx::set_slot(player_id, "one_of_us_theirs", b + 1);
-    // TODO(规则书): 「触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）」
+    // TODO(规则书)[judgement]: 「触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）」
+    //   the clause under-specifies -- see the note above it
     // -- the Fx.PayAfter hook (`TriggerKind::PayAfter`) exists and `pay_is_rent()` /
     // `value()` carry `p.IsRent` / `p.finalGain`, but the designated-tile match
     // (`p.tile == MyTile` / `p.tile == TheirTile`) needs `t.Pay.tile` on the pay

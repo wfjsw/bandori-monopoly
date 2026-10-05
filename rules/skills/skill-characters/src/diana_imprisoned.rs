@@ -1,0 +1,137 @@
+//! `skill:三角初华:Imprisoned XII`（Ave Mujica）
+//!
+//! 规则书（skill sheet, 三角初华）:
+//! > 状态1：移动改为10+1d10，每当你经过CiRCLE的回合结束后，若你自从上一次经过CiRCLE
+//! > 后未在任何[回忆地块]（小豆岛，武道馆，旧古河庭园）触发结算则可在你的下回合开始
+//! > 时进入状态2。若满足前述条件，你可在你经过CiRCLE的回合结束后立刻获得一个新的回合。
+//! > 状态2：（火罐上限3）获得[不可阻挡]，并且在此状态下主动移动经过任何玩家都将向
+//! > 其收取200资金，每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）
+//!
+//! 「状态1 / 状态2」 is the axis the Ave Mujica band skill owns
+//! ([`skill_bands::ave_mujica`]); this skill writes it and reads it back.
+//!
+//! 状态1's 「移动改为10+1d10」 is the plan's dice table. 「未在任何[回忆地块]…触发结算」
+//! is a latch a `Settle` onto one of the three named tiles sets, and the entry
+//! into 状态2 is gated on it having stayed clear since the last CiRCLE pass.
+//!
+//! 状态2's 「获得[不可阻挡]」 is the `unstoppable` key the abnormal gate already
+//! reads. 「主动移动经过任何玩家都将向其收取200资金」 is `PassPlayer`, and
+//! 「额外移动1d6（最多4次）」 is a dice bonus capped at four.
+
+use card_sdk::abi::{state_key, HookKind};
+use card_sdk::ctx::{self, plan, state};
+use card_sdk::{key, CardDef, Msg, On};
+
+/// 「回忆地块」 -- the three the clause names.
+const MEMORY: [&str; 3] = ["小豆岛", "武道馆", "旧古河庭园"];
+/// Settled on a memory tile since the last CiRCLE pass.
+const DIRTY: &str = "skill.dianaImprisoned.dirty";
+/// 1d6 bonuses taken in 状态2 this move. Cap 4.
+const BONUS: &str = "skill.dianaImprisoned.bonus";
+
+pub const DIANA_IMPRISONED: CardDef = CardDef::new("skill:三角初华:Imprisoned XII", &[
+    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+    On::Hook(&[HookKind::RollPlan], in_one, on_plan),
+    On::Hook(&[HookKind::Pass], mine, on_pass),
+    On::Hook(&[HookKind::Settle], any, on_settle),
+    On::Hook(&[HookKind::PassPlayer], in_two, on_pass_player),
+    On::Hook(&[HookKind::SettleBefore], in_two, before_settle)]);
+
+fn mine(player_id: i32) -> bool {
+    ctx::trigger::player_id() == player_id
+}
+
+fn any(_player_id: i32) -> bool {
+    true
+}
+
+fn in_one(player_id: i32) -> bool {
+    mine(player_id) && state::get(player_id, state_key::SKILL_STATE) != 2
+}
+
+fn in_two(player_id: i32) -> bool {
+    mine(player_id) && state::get(player_id, state_key::SKILL_STATE) == 2
+}
+
+/// 状态1's entry offer, and 状态2's cap.
+fn at_turn_start(player_id: i32) {
+    if state::get(player_id, state_key::SKILL_STATE) == 2 {
+        // 「（火罐上限3）」
+        state::set_bounds(player_id, state_key::FIRE, 0, 3);
+        // 「获得[不可阻挡]」
+        state::set(player_id, state_key::UNSTOPPABLE, 1);
+        return;
+    }
+    // 「可在你的下回合开始时进入状态2」 -- offered only when the memory tiles
+    // stayed clear since the last CiRCLE pass.
+    if state::get(player_id, DIRTY) != 0 {
+        return;
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("diana_imprisoned_title")),
+        &Msg::new(key!("diana_imprisoned_enter")),
+    ) {
+        return;
+    }
+    state::set(player_id, state_key::SKILL_STATE, 2);
+    ctx::log(player_id, &Msg::new(key!("diana_imprisoned_two")));
+}
+
+/// 状态1: 「移动改为10+1d10」.
+fn on_plan(player_id: i32) {
+    plan::set_base_dice(1, 10, "Imprisoned XII");
+    plan::add_base_dice(1, 10, "Imprisoned XII");
+    plan::set_steps(10);
+}
+
+/// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch.
+fn on_pass(player_id: i32) {
+    if !ctx::is_circle(ctx::trigger::tile()) {
+        return;
+    }
+    state::set(player_id, DIRTY, 0);
+}
+
+/// 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- settling on one
+/// sets the latch.
+fn on_settle(player_id: i32) {
+    if !mine(player_id) {
+        return;
+    }
+    let t = ctx::trigger::tile();
+    if t >= 0 && MEMORY.iter().any(|&n| t == ctx::tile_named(n)) {
+        state::set(player_id, DIRTY, 1);
+    }
+}
+
+/// 状态2: 「主动移动经过任何玩家都将向其收取200资金」.
+fn on_pass_player(player_id: i32) {
+    if !ctx::trigger::move_is_main() {
+        return;
+    }
+    let other = ctx::trigger::player_id();
+    if other == player_id {
+        return;
+    }
+    ctx::transfer(other, player_id, 200, &Msg::new(key!("diana_imprisoned_fee")));
+    ctx::log(player_id, &Msg::new(key!("diana_imprisoned_charged")).player_id("who", other));
+}
+
+/// 状态2: 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」.
+fn before_settle(player_id: i32) {
+    if state::get(player_id, BONUS) >= 4 {
+        return;
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("diana_imprisoned_title")),
+        &Msg::new(key!("diana_imprisoned_extra")),
+    ) {
+        return;
+    }
+    let d = ctx::roll(player_id, 1, 6).max(0);
+    state::set(player_id, BONUS, state::get(player_id, BONUS) + 1);
+    ctx::plan::set_extra_steps(d);
+    ctx::log(player_id, &Msg::new(key!("diana_imprisoned_moved")).i("n", d as i64));
+}

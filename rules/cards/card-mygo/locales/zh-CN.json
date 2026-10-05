@@ -27,6 +27,7 @@
   "hitoshizuku_pay": "壱雫空：清除了效果的费用",
   "hitoshizuku_self_gain": "壱雫空：清除了自己的效果",
   "meet_again_reroll": "再掷一次：+{{add}}（现在 {{total}}，下一名玩家在 {{dist}} 格外）",
+  "miracle_built": "奇迹：消耗1个奇迹水晶代替资金花费",
   "miracle_crystals_moved": "{{who}} 将乐队技能上的 {{n}} 个奇迹水晶转移到「难以复刻的奇迹」上",
   "miracle_note": "奇迹水晶：盖房时用 1 个代替资金；经过所有玩家各一次后结算奖励",
   "miracle_placed": "「难以复刻的奇迹」放在了 {{who}} 的场上",

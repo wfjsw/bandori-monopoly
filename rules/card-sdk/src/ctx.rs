@@ -125,7 +125,14 @@ mod sys {
         // prompts & trigger
         pub fn opt_int(v: i32);
         pub fn opt_str(ptr: i32, len: i32);
-        pub fn ask(kind: i32, player_id: i32, title_ptr: i32, title_len: i32, text_ptr: i32, text_len: i32) -> i32;
+        pub fn ask(
+            kind: i32,
+            player_id: i32,
+            title_ptr: i32,
+            title_len: i32,
+            text_ptr: i32,
+            text_len: i32,
+        ) -> i32;
         pub fn trig_kind() -> i32;
         pub fn trig_player() -> i32;
         pub fn trig_target() -> i32;
@@ -203,6 +210,7 @@ mod sys {
         pub fn targeted_count(player_id: i32) -> i32;
         pub fn placed_tile(player_id: i32, ptr: i32, len: i32) -> i32;
         pub fn play_doubled() -> i32;
+        pub fn set_play_doubled(n: i32);
         // turn plan & scheduling
         pub fn schedule_turn_end(player_id: i32, mode: i32);
         pub fn set_no_money_loss(player_id: i32);
@@ -211,21 +219,73 @@ mod sys {
         pub fn set_next_steps(player_id: i32, n: i32);
         pub fn turn_main_steps() -> i32;
         pub fn add_fire_max(player_id: i32, n: i32) -> i32;
+        pub fn card_crystals(player_id: i32, cp: i32, cl: i32) -> i32;
+        pub fn card_build(player_id: i32, tile: i32) -> i32;
+        pub fn set_can_build(on: i32);
+        pub fn clear_dice();
+        pub fn can_build_on(player_id: i32, tile: i32) -> i32;
+        pub fn card_buy(player_id: i32, tile: i32) -> i32;
+        pub fn card_immune(player_id: i32, cp: i32, cl: i32) -> i32;
+        pub fn card_mortgage(player_id: i32, tile: i32) -> i32;
+        pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32;
+        pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
+        pub fn is_agent(tile: i32) -> i32;
+        pub fn paid_in_settle() -> i32;
+        pub fn place_card_on(player_id: i32, tile: i32, cp: i32, cl: i32, ptr: i32, len: i32);
+        pub fn play_from_hand() -> i32;
+        pub fn set_build_discount(n: i32, layers: i32);
+        pub fn set_buy_discount(n: i32);
+        pub fn set_card_immune(player_id: i32, cp: i32, cl: i32, on: i32) -> i32;
+        pub fn set_card_tile(player_id: i32, cp: i32, cl: i32, tile: i32) -> i32;
+        pub fn set_extreme(v: i32);
+        pub fn set_free_buy(on: i32);
+        pub fn set_raze_on_buy(on: i32);
+        pub fn set_tile_color(tile: i32, group: i32);
+        pub fn turn_rolls(buf: i32, cap: i32) -> i32;
+        pub fn turn_snap(player_id: i32, buf: i32) -> i32;
+        pub fn turn_start_pos(player_id: i32) -> i32;
+        pub fn is_color(player_id: i32, tile: i32, group: i32) -> i32;
+        pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32;
+        pub fn bump_mark(tile: i32, kp: i32, kl: i32, owner: i32, delta: i32) -> i32;
+        pub fn tok_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32;
+        pub fn gate(player_id: i32, kind: i32) -> i32;
+        pub fn card_settle_at(player_id: i32, tile: i32, main: i32) -> i32;
+        pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32;
+        pub fn do_move_roll(player_id: i32) -> i32;
+        pub fn is_live_house_for(player_id: i32, tile: i32) -> i32;
+        pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn set_build_cost_pct(pct: i32);
+        pub fn set_card_face_down(player_id: i32, cp: i32, cl: i32, down: i32) -> i32;
+        pub fn set_extra_color(player_id: i32, tile: i32, group: i32);
+        pub fn add_card_crystals(player_id: i32, cp: i32, cl: i32, n: i32, max: i32) -> i32;
+        pub fn card_face_down(player_id: i32, cp: i32, cl: i32) -> i32;
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 fn s(v: &str) -> (i32, i32) {
     (v.as_ptr() as i32, v.len() as i32)
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn s(v: &str) -> (i32, i32) {
+    crate::native::intern(v.as_bytes())
+}
+
 /// The i32 wire form of a message: `postcard` bytes leaked for the host to read
 /// (same lifetime convention as every other buffer crossing the ABI).
+#[cfg(target_arch = "wasm32")]
 fn mj(m: &Msg) -> (i32, i32) {
     let b = m.to_bytes();
     let p = b.as_ptr() as i32;
     let l = b.len() as i32;
     core::mem::forget(b);
     (p, l)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn mj(m: &Msg) -> (i32, i32) {
+    crate::native::intern(&m.to_bytes())
 }
 
 // ------------------------------------------------------------- dice & log
@@ -293,7 +353,9 @@ pub fn owned_at(player_id: i32, index: i32) -> i32 {
 
 /// The player's deeds as tile indices (`H.OwnedBy`-style walks).
 pub fn owned_tiles(player_id: i32) -> Vec<i32> {
-    (0..owned_count(player_id)).map(|i| owned_at(player_id, i)).collect()
+    (0..owned_count(player_id))
+        .map(|i| owned_at(player_id, i))
+        .collect()
 }
 
 /// `TileData.IsBuyable` -- a deed tile (property / RiNG).
@@ -380,7 +442,9 @@ pub fn neighbor(player_id: i32, dir: i32) -> i32 {
 
 /// C# `H.SeatsOn(tile, except)` -- present players standing on a tile.
 pub fn players_on(tile: i32, except: i32) -> Vec<i32> {
-    (0..players_on_count(tile, except)).map(|i| players_on_at(tile, except, i)).collect()
+    (0..players_on_count(tile, except))
+        .map(|i| players_on_at(tile, except, i))
+        .collect()
 }
 
 fn players_on_count(tile: i32, except: i32) -> i32 {
@@ -412,7 +476,9 @@ pub fn others_at(player_id: i32, index: i32) -> i32 {
 
 /// The other players still in the game (`H.Others`).
 pub fn others(player_id: i32) -> Vec<i32> {
-    (0..others_count(player_id)).map(|i| others_at(player_id, i)).collect()
+    (0..others_count(player_id))
+        .map(|i| others_at(player_id, i))
+        .collect()
 }
 
 pub fn money(player_id: i32) -> i32 {
@@ -1004,7 +1070,6 @@ pub fn card_replayable(player_id: i32, id: &str) -> bool {
     unsafe { sys::card_replayable(player_id, p, l) != 0 }
 }
 
-
 /// The move being planned (C# `TurnCtx.Plan`, a `MoveCtx`): what an
 /// `On::RollPlan` body shapes before the dice, and what a card shapes before
 /// running a move of its own. (`trigger::move_*` is different: it describes the
@@ -1186,6 +1251,15 @@ pub mod plan {
     pub fn dir() -> i32 {
         unsafe { sys::move_dir() }
     }
+    /// names the whole face means exactly that face.
+    pub fn clear_dice() {
+        unsafe { sys::clear_dice() }
+    }
+    /// C# `MoveCtx.CanBuild` -- may this move build where it lands?
+    pub fn set_can_build(on: bool) {
+        unsafe { sys::set_can_build(on as i32) }
+    }
+
 }
 
 /// C# `H.Target(c, seat)` for a single-target card -- try to target `player_id`.
@@ -1234,6 +1308,13 @@ pub fn placed_tile(player_id: i32, id: &str) -> Option<i32> {
     let (p, l) = s(id);
     let v = unsafe { sys::placed_tile(player_id, p, l) };
     (v >= -1).then_some(v)
+}
+
+/// Arm the doubling for the run in progress -- the *playing* card's
+/// `PlayCtx.Doubled`. CiRCLE's band skill sets it from outside that card, which
+/// is why it is a world setter and not something the card owns. `-1` clears.
+pub fn set_play_doubled(n: i32) {
+    unsafe { sys::set_play_doubled(n) }
 }
 
 /// C# `PlayCtx.N(k, value)` -- a number from this card's text, doubled when the
@@ -1570,4 +1651,302 @@ pub mod effect {
     pub fn declare(kind: TriggerKind, target: i32, from: i32, tile: i32, value: i32) {
         unsafe { sys::declare_effect(kind as i32, target, from, tile, value) }
     }
+}
+
+// ------------------------------------------------------------- placement & skills
+
+/// C# `H.IsColor` -- does `tile` count as colour `group` for `player_id`?
+pub fn is_color(player_id: i32, tile: i32, group: i32) -> bool {
+    unsafe { sys::is_color(player_id, tile, group) != 0 }
+}
+
+/// `H.Unplace` -- take this card out of play. True when it was there.
+/// Take a *named* card off the player's field (C# `H.Unplace(card, ...)`).
+/// [`unplace_card`] is the special case where the named card is the one running.
+pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
+    let (p, l) = s(card);
+    unsafe { sys::unplace_card_named(player_id, p, l) != 0 }
+}
+
+/// Move one matching mark's `count` by `delta`, dropping it at 0 (C#
+/// `mark.count--`). [`remove_marks`] clears every match; this is the single-tick
+/// form the 「移除一个」 clauses want. Returns the count now stored.
+pub fn bump_mark(tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
+    let (kp, kl) = s(kind);
+    unsafe { sys::bump_mark(tile, kp, kl, owner, delta) }
+}
+
+/// Names of the player's non-zero counters whose name starts with `prefix`.
+/// The listing half of the counter query; [`tok`] reads one by name.
+pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
+    let (p, l) = s(prefix);
+    let cap = 4096;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::tok_names(player_id, p, l, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// The C# `H.AbnormalGate` -- ask the engine whether an abnormal effect of
+/// `kind` (`[强制停下]`, `[传送]`, ...) may land on `player_id`. Returns `false`
+/// when a field card guarded it, the player is immune, or they are
+/// `unstoppable`. Call this **before** applying the effect, and skip on `false`.
+pub fn gate(player_id: i32, kind: crate::abi::AbKind) -> bool {
+    unsafe { sys::gate(player_id, kind as i32) != 0 }
+}
+
+/// `H.SettleAt` -- a full [触发结算] of `tile` for this player. The player does
+/// not move; the tile's own effect resolves. `main` marks it as the turn's
+/// landing (it writes `landed`).
+pub fn card_settle_at(player_id: i32, tile: i32, main: bool) -> bool {
+    unsafe { sys::card_settle_at(player_id, tile, main as i32) != 0 }
+}
+
+/// `H.OfferBuildAmong` -- prompt to build on one of `tiles`, then build there.
+/// Silently skips when none of them can take a house.
+pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
+    let mut buf = alloc::vec![0u8; tiles.len() * 4];
+    for (i, &t) in tiles.iter().enumerate() {
+        buf[i * 4..i * 4 + 4].copy_from_slice(&t.to_le_bytes());
+    }
+    unsafe { sys::card_offer_build(player_id, buf.as_ptr() as i32, buf.len() as i32) != 0 }
+}
+
+/// `H.DoMoveRoll` -- sum the planned move's dice tables into one face. The
+/// `rollAfter` / `moveRoll` hooks are **not** raised: a re-roll is usually being
+/// requested from inside one of them, and re-raising would recurse.
+pub fn do_move_roll(player_id: i32) -> i32 {
+    unsafe { sys::do_move_roll(player_id) }
+}
+
+/// `H.IsLiveHouse` for one player: the base check plus their `Fx.ExtraColor`.
+pub fn is_live_house_for(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::is_live_house_for(player_id, tile) != 0 }
+}
+
+/// Is this card in play at the player?
+/// Ids of the player's placed field cards, in placement order.
+pub fn placed_cards(player_id: i32) -> Vec<String> {
+    let cap = 4096;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::placed_cards(player_id, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// 「加盖房屋时半价」 / 「本回合加盖房屋变为免费」 -- the build cost as a
+/// percentage of its table price (100 = full, 50 = half, 0 = free).
+pub fn set_build_cost_pct(pct: i32) {
+    unsafe { sys::set_build_cost_pct(pct) }
+}
+
+/// Flip a placed card face-down / face-up (C# `H.SwitchState`).
+pub fn set_card_face_down(player_id: i32, card: &str, down: bool) -> bool {
+    let (cp, cl) = s(card);
+    unsafe { sys::set_card_face_down(player_id, cp, cl, down as i32) != 0 }
+}
+
+/// C# `Fx.ExtraColor` -- re-colour a tile for one player (「使其对你视为live
+/// house格子」). `-1` clears.
+pub fn set_extra_color(player_id: i32, tile: i32, group: i32) {
+    unsafe { sys::set_extra_color(player_id, tile, group) }
+}
+
+/// C# `Card.AddCrystals` on a named placed card; `max` caps (0 = uncapped).
+pub fn add_card_crystals(player_id: i32, card: &str, n: i32, max: i32) -> i32 {
+    let (cp, cl) = s(card);
+    unsafe { sys::add_card_crystals(player_id, cp, cl, n, max) }
+}
+
+/// Is this placed card face-down? The `!p.FaceDown` half of the C# field
+/// filters; [`cards_in`] lists face-down cards too.
+pub fn card_face_down(player_id: i32, card: &str) -> bool {
+    let (p, l) = s(card);
+    unsafe { sys::card_face_down(player_id, p, l) != 0 }
+}
+
+// ------------------------------------------------------------- placement & skills
+
+/// `H.PlaceCard` -- put a specific card (a derived one) into play at a player.
+/// `WhyNotBuildOn` -- may this player build on this tile? The same gate the
+/// build step uses, so a card choosing a destination cannot pick one the engine
+/// would then refuse.
+pub fn can_build_on(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::can_build_on(player_id, tile) != 0 }
+}
+
+/// `H.BuyRoutine` -- buy `tile` now (the 「必须购买」 clauses).
+pub fn card_buy(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::card_buy(player_id, tile) != 0 }
+}
+
+/// Is this placed field card immune to other effects?
+pub fn card_immune(player_id: i32, card: &str) -> bool {
+    let (cp, cl) = s(card);
+    unsafe { sys::card_immune(player_id, cp, cl) != 0 }
+}
+
+/// `H.MortgageRoutine` -- mortgage one of the player's deeds.
+pub fn card_mortgage(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::card_mortgage(player_id, tile) != 0 }
+}
+
+/// Does this card's rule text mention `needle`? 「所有效果包含[奇迹水晶]的卡」
+/// is this query.
+pub fn card_text_mentions(card: &str, needle: &str) -> bool {
+    let (cp, cl) = s(card);
+    let (np, nl) = s(needle);
+    unsafe { sys::card_text_mentions(cp, cl, np, nl) != 0 }
+}
+
+/// A gain skills and crits may not bend (C# `fixedAmount`). The money moves;
+/// the `payAdd` / `payMul` / `payChoose` hooks do not see it.
+pub fn gain_fixed(player_id: i32, amount: i32, why: &Msg) -> i32 {
+    let (p, l) = mj(why);
+    unsafe { sys::gain_fixed(player_id, amount, p, l) }
+}
+
+/// Is this the 地产商 tile (C# `kind == "agent"`)?
+pub fn is_agent(tile: i32) -> bool {
+    unsafe { sys::is_agent(tile) != 0 }
+}
+
+/// What this turn's [触发结算]s have cost the player so far (C#
+/// `TurnCtx.PaidInSettle`).
+pub fn paid_in_settle() -> i32 {
+    unsafe { sys::paid_in_settle() }
+}
+
+pub fn place_card_on(player_id: i32, tile: i32, card: &str, note: &Msg) {
+    let (cp, cl) = s(card);
+    let (p, l) = mj(note);
+    unsafe { sys::place_card_on(player_id, tile, cp, cl, p, l) }
+}
+
+/// Did the play being resolved come from the hand? `false` when the card was
+/// played from somewhere else -- 「若此卡从手牌以外的地方打出」.
+pub fn play_from_hand() -> bool {
+    unsafe { sys::play_from_hand() != 0 }
+}
+
+/// 「下次盖房时减免N（可溢出），盖房后减少1层」 -- a layered cut on the build
+/// cost. Each build pops one layer.
+pub fn set_build_discount(n: i32, layers: i32) {
+    unsafe { sys::set_build_discount(n, layers) }
+}
+
+/// 「本回合购买格子时[消耗]资金时降低N（最低0）」 (C# `TurnCtx.BuyDiscount`).
+pub fn set_buy_discount(n: i32) {
+    unsafe { sys::set_buy_discount(n) }
+}
+
+/// C# `Card.Immune` -- 「此卡不受…效果影响」. Set it at play time; effects that
+/// would touch the card read [`card_immune`] and skip.
+pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
+    let (cp, cl) = s(card);
+    unsafe { sys::set_card_immune(player_id, cp, cl, on as i32) != 0 }
+}
+
+/// Move a placed field card to `tile` (C# `card.Tile = t`). The card is already
+/// in play; this only changes where it sits. `tile: -1` puts it back with its
+/// owner.
+pub fn set_card_tile(player_id: i32, card: &str, tile: i32) -> bool {
+    let (cp, cl) = s(card);
+    unsafe { sys::set_card_tile(player_id, cp, cl, tile) != 0 }
+}
+
+/// Force the play's number ranges to their theoretical max (`1`) or min
+/// (`-1`) -- 「以理论最大值或最小值结算」. `0` clears.
+pub fn set_extreme(v: i32) {
+    unsafe { sys::set_extreme(v) }
+}
+
+/// 「本回合购买格子不[消耗]资金」 (C# `TurnCtx.FreeBuy`).
+pub fn set_free_buy(on: bool) {
+    unsafe { sys::set_free_buy(on as i32) }
+}
+
+/// 「如果购买则拆除那个格子上的所有房屋」 (C# `TurnCtx.RazeOnBuy`).
+pub fn set_raze_on_buy(on: bool) {
+    unsafe { sys::set_raze_on_buy(on as i32) }
+}
+
+/// Re-colour a tile for everyone.
+pub fn set_tile_color(tile: i32, group: i32) {
+    unsafe { sys::set_tile_color(tile, group) }
+}
+
+/// C# `_turnCtx.Rolls` -- every face rolled this turn, in order.
+/// 「与本回合内你骰出过的所有骰点都不同」 compares against this.
+pub fn turn_rolls() -> Vec<i32> {
+    let cap = 4096;
+    #[cfg(target_arch = "wasm32")]
+    let (p, buf) = {
+        let mut buf = alloc::vec![0u8; cap as usize];
+        (buf.as_mut_ptr() as i32, buf)
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let (p, mut buf) = {
+        let (h, l) = crate::native::reserve(cap as usize);
+        (h, alloc::vec![0u8; l as usize])
+    };
+    let n = unsafe { sys::turn_rolls(p, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let buf = crate::native::read(p, n as usize);
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// C# `_turnSnap[i]` -- `(pos, stay, stun, exile)` when the turn started. The
+/// four things 「回到起始地点并取消所有受到的效果」 restores.
+pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
+    #[cfg(target_arch = "wasm32")]
+    let (p, mut buf) = {
+        let mut buf = [0u8; 16];
+        (buf.as_mut_ptr() as i32, buf)
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    let (p, mut buf) = {
+        let (h, _) = crate::native::reserve(16);
+        (h, [0u8; 16])
+    };
+    let n = unsafe { sys::turn_snap(player_id, p) };
+    #[cfg(not(target_arch = "wasm32"))]
+    let buf = crate::native::read(p, n.max(0) as usize);
+    if n < 16 {
+        return (-1, 0, 0, 0);
+    }
+    let g = |i: usize| i32::from_le_bytes([buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]);
+    (g(0), g(4), g(8), g(12))
+}
+
+/// Where the player stood when this turn started (C# `_turnSnap[i].pos`).
+/// 「在Livehouse地块开始回合时」 is a question about that square.
+pub fn turn_start_pos(player_id: i32) -> i32 {
+    unsafe { sys::turn_start_pos(player_id) }
+}
+
+/// C# `H.IsLiveHouse` -- a Live House deed (buyable, colour group 6). The
+/// `ExtraColor` band-skill colours are not visible here (TODO in the cards).
+/// C# `_tileColors[t]` -- re-colour a tile for everyone. `-1` clears;
+/// [`ALL_COLORS`] means it counts as every colour (「该格获得所有颜色」).
+pub const ALL_COLORS: i32 = -2;
+
+// --------------------------------------------- card crystals & build
+
+/// C# `Card.Crystals` on a named placed card.
+pub fn card_crystals(player_id: i32, card: &str) -> i32 {
+    let (cp, cl) = s(card);
+    unsafe { sys::card_crystals(player_id, cp, cl) }
+}
+
+/// `H.BuildRoutine` -- pay `tile`'s build cost and raise one house.
+pub fn card_build(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::card_build(player_id, tile) != 0 }
 }

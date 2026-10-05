@@ -72,7 +72,7 @@ for (const out of ["dist/cards", "dist/fixtures"]) {
 }
 
 cargo("run", "-q", "-p", "game-rules", "--example", "card_locales",
-      "--", "rules/cards", "dist/cards");
+      "--", "rules/cards", "rules/skills", "dist/cards");
 cargo("run", "-q", "-p", "game-rules", "--example", "card_locales",
       "--", "rules/fixtures", "dist/fixtures");
 

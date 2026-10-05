@@ -14,19 +14,16 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), play)]);
 
 /// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(player_id, t, 6)`, and
 /// `H.LiveHouses` also wants `IsBuyable`).
-fn livehouses() -> Vec<i32> {
+fn livehouses(player_id: i32) -> Vec<i32> {
+    // `H.IsLiveHouses` = `IsBuyable && IsColor(t, 6)`, and `IsColor` sees both
+    // the global `_tileColors` re-colour and this player's `Fx.ExtraColor`.
     (0..ctx::tile_count())
-        .filter(|&t| ctx::is_buyable(t) && ctx::tile_group(t) == 6)
+        .filter(|&t| ctx::is_buyable(t) && ctx::is_color(player_id, t, 6))
         .collect()
-    // TODO(规则书): `H.IsColor` also reads `_tileColors[t]` and every live
-    //   `Fx.ExtraColor` (band skills that re-colour a tile); neither is in the
-    //   vocabulary, so those swaps are not seen here.
 }
 
 /// C# `CardBlueRose.Rich` -- Livehouses at least half of your deeds (and you have one).
@@ -37,7 +34,7 @@ fn is_rich(player_id: i32) -> bool {
 }
 
 fn live_deeds(player_id: i32) -> Vec<i32> {
-    let ids = livehouses();
+    let ids = livehouses(player_id);
     ctx::owned_tiles(player_id)
         .into_iter()
         .filter(|t| ids.contains(t))
@@ -72,7 +69,7 @@ fn play(player_id: i32) {
     }
     // 规则书（2）: 「传送至下一个未被购买的Livehouse格子」 -- nearest unowned ahead (C#
     //   `H.LiveHouses(i, t => owners[t] < 0)` ordered by `H.Forward`).
-    let free: Vec<i32> = livehouses()
+    let free: Vec<i32> = livehouses(player_id)
         .into_iter()
         .filter(|&t| ctx::tile_owner(t) < 0)
         .collect();

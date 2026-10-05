@@ -9,9 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const SAKIKO_LEAD: CardDef = CardDef::new("CRYCHIC:（祥子）带领着大家", &[
-    On::Play(sakiko_lead),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), sakiko_lead)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSakikoLead.WhyNot`: refuses with 「没有和你重合的玩家」 when no

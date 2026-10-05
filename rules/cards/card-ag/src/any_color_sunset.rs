@@ -12,8 +12,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const ANY_COLOR_SUNSET: CardDef = CardDef::new("AG:无论是何种颜色的夕阳", &[
-    On::Play(play),
-]);
+    On::Play(None, play)]);
 
 fn play(player_id: i32) {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」
@@ -89,8 +88,7 @@ fn effect(player_id: i32, k: i32) {
                     &Msg::new(key!("any_color_sunset_fire_ask")),
                     &[
                         Msg::new(key!("any_color_sunset_fire_fill")),
-                        Msg::new(key!("any_color_sunset_fire_money")),
-                    ],
+                        Msg::new(key!("any_color_sunset_fire_money"))],
                 );
                 take_money = pick != 0;
             }

@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const SIGNPOST: CardDef = CardDef::new("PPP:向着未来的路标", &[On::Play(play), On::CantPlay(cant_play), On::AtEnd(at_end)]);
+pub const SIGNPOST: CardDef = CardDef::new("PPP:向着未来的路标", &[On::Play(Some(cant_play), play), On::AtEnd(at_end)]);
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

@@ -20,6 +20,10 @@ pub struct MovePlan {
     pub started: bool,
     /// `reach[k]` is the tile after k+1 steps of the plan.
     pub reach: Vec<i32>,
+    /// Whether this move can build where it lands (see `MoveCtx::can_build`).
+    /// Carried here so the build gate at step 3 can still read it -- the live
+    /// `MoveCtx` is gone by then.
+    pub can_build: bool,
 }
 
 impl MovePlan {
@@ -148,7 +152,9 @@ impl MatchState {
 
     /// Player whose turn it is.
     pub fn current(&self) -> Option<&MatchPlayer> {
-        usize::try_from(self.turn).ok().and_then(|t| self.players.get(t))
+        usize::try_from(self.turn)
+            .ok()
+            .and_then(|t| self.players.get(t))
     }
 
     pub fn asking(&self) -> bool {
@@ -166,7 +172,10 @@ impl MatchState {
 
     /// Player index of a room member, or -1.
     pub fn player_of(&self, member: i32) -> i32 {
-        self.players.iter().position(|s| s.member == member).map_or(-1, |i| i as i32)
+        self.players
+            .iter()
+            .position(|s| s.member == member)
+            .map_or(-1, |i| i as i32)
     }
 
     /// Is the event active and face-up?
@@ -241,6 +250,21 @@ pub mod key {
     pub const HAND_LIMIT: &str = "handLimit";
     /// Skill-system scratch (C# `MatchSeat.skill_state`).
     pub const SKILL_STATE: &str = "skillState";
+    /// Per-player `Fx.ExtraColor`: `extraColor:<tile>` = the group that tile
+    /// counts as **for this player** (`-1` clears).
+    pub const EXTRA_COLOR: &str = "extraColor:";
+    /// The `tile_colors` / `extraColor` value that means 「该格获得所有颜色」.
+    pub const ALL_COLORS: i32 = -2;
+    /// This player has built this turn (set by the build step).
+    pub const BUILT: &str = "built";
+    /// This player has bought this turn (set by the buy step).
+    pub const BOUGHT: &str = "bought";
+    /// This player has redeemed a deed this turn (「本回合进行过赎回操作」).
+    pub const REDEEMED: &str = "redeemed";
+    /// This player has mortgaged a deed this turn (「本回合进行过抵押操作」).
+    pub const MORTGAGED: &str = "mortgaged";
+    /// A card has closed building for this turn (「本回合无法加盖房屋」).
+    pub const NO_BUILD: &str = "noBuild";
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -319,8 +343,20 @@ impl Default for MatchPlayer {
                 // The two pots whose C# field initializers are not 0. Everything
                 // else falls out of .
                 let mut m = BTreeMap::new();
-                m.insert(key::HAND_LIMIT.to_string(), StateVar { value: 5, ..StateVar::default() });
-                m.insert(key::EXILE_TO.to_string(), StateVar { value: -1, ..StateVar::default() });
+                m.insert(
+                    key::HAND_LIMIT.to_string(),
+                    StateVar {
+                        value: 5,
+                        ..StateVar::default()
+                    },
+                );
+                m.insert(
+                    key::EXILE_TO.to_string(),
+                    StateVar {
+                        value: -1,
+                        ..StateVar::default()
+                    },
+                );
                 m
             },
             field: vec![],
@@ -464,7 +500,10 @@ impl MatchPlayer {
 
     /// `MatchPlayer::token(name)` -- 0 if absent.
     pub fn token(&self, name: &str) -> i32 {
-        self.tokens.iter().find(|c| c.name == name).map_or(0, |c| c.value)
+        self.tokens
+            .iter()
+            .find(|c| c.name == name)
+            .map_or(0, |c| c.value)
     }
 }
 
@@ -520,7 +559,9 @@ impl MatchPrompt {
 
     /// Is `player_id` asked and has not answered yet?
     pub fn waiting(&self, player_id: i32) -> bool {
-        self.player_index(player_id).and_then(|i| self.answers.get(i)).is_some_and(|&a| a < 0)
+        self.player_index(player_id)
+            .and_then(|i| self.answers.get(i))
+            .is_some_and(|&a| a < 0)
     }
 }
 
@@ -537,7 +578,13 @@ pub struct MatchVote {
 
 impl Default for MatchVote {
     fn default() -> Self {
-        Self { id: 0, by: -1, players: vec![], answers: vec![], time_left: 0.0 }
+        Self {
+            id: 0,
+            by: -1,
+            players: vec![],
+            answers: vec![],
+            time_left: 0.0,
+        }
     }
 }
 
@@ -547,7 +594,11 @@ impl MatchVote {
     }
 
     pub fn waiting(&self, player_id: i32) -> bool {
-        self.players.iter().position(|&s| s == player_id).and_then(|i| self.answers.get(i)).is_some_and(|&a| a < 0)
+        self.players
+            .iter()
+            .position(|&s| s == player_id)
+            .and_then(|i| self.answers.get(i))
+            .is_some_and(|&a| a < 0)
     }
 }
 
@@ -599,7 +650,14 @@ pub struct ActiveEvent {
 
 impl Default for ActiveEvent {
     fn default() -> Self {
-        Self { id: String::new(), player_id: -1, counter: 0, counter2: 0, note: Msg::default(), face_down: false }
+        Self {
+            id: String::new(),
+            player_id: -1,
+            counter: 0,
+            counter2: 0,
+            note: Msg::default(),
+            face_down: false,
+        }
     }
 }
 
@@ -614,12 +672,25 @@ pub struct FieldCard {
     pub tile: i32,
     pub crystals: i32,
     pub face_down: bool,
+    /// C# `Card.Immune` -- 「此卡不受…效果影响」. A value on the card, not a
+    /// subclass override: effects that would touch it read this and skip.
+    pub immune: bool,
     pub note: Msg,
 }
 
 impl Default for FieldCard {
     fn default() -> Self {
-        Self { uid: 0, card: String::new(), owner: -1, user: -1, tile: -1, crystals: 0, face_down: false, note: Msg::default() }
+        Self {
+            uid: 0,
+            card: String::new(),
+            owner: -1,
+            user: -1,
+            tile: -1,
+            crystals: 0,
+            face_down: false,
+            immune: false,
+            note: Msg::default(),
+        }
     }
 }
 
@@ -640,7 +711,15 @@ pub struct TileMark {
 
 impl Default for TileMark {
     fn default() -> Self {
-        Self { uid: 0, tile: 0, kind: String::new(), owner: -1, count: 1, card: String::new(), note: Msg::default() }
+        Self {
+            uid: 0,
+            tile: 0,
+            kind: String::new(),
+            owner: -1,
+            count: 1,
+            card: String::new(),
+            note: Msg::default(),
+        }
     }
 }
 

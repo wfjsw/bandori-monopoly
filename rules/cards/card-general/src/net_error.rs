@@ -15,7 +15,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const NET_ERROR: CardDef = CardDef::new("通用:网络链接异常", &[
-    On::React(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
+    On::CounterAct(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
         can_react,
         react,
     ),
@@ -30,7 +30,8 @@ fn can_react(player_id: i32) -> bool {
         TriggerKind::Card => {
             // C# `t.Play != null && !t.Play.Cancelled && t.Seat != seat`.
             trigger::player_id() != player_id
-            // TODO(ABI): the trigger carries no PlayCtx, so `t.Play == null` and
+            // TODO(规则书)[judgement](ABI): the trigger carries no PlayCtx, so `t.Play == null` and
+            //   the clause under-specifies -- see the note above it
             // `t.Play.Cancelled` cannot be checked (C# `CardNetError.CanReact`).
         }
         // 规则书（1）的可表达半边: a player-designation of this player (C# `H.Target`,
@@ -53,7 +54,8 @@ fn react(player_id: i32) {
             // 「网络链接异常：事件「…」的效果被抵消」.
             trigger::set_cancelled();
             ctx::log(player_id, &Msg::new(key!("net_error_event")).player_id("who", player_id));
-            // TODO(ABI): the C# log also names the event (`H.EventTitle(t.Card)`);
+            // TODO(规则书)[judgement](ABI): the C# log also names the event (`H.EventTitle(t.Card)`);
+            //   the clause under-specifies -- see the note above it
             // reading the trigger's card id back needs a host->guest string.
         }
         TriggerKind::Card => {

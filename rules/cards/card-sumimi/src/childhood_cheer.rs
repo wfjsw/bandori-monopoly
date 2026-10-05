@@ -16,11 +16,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new("Sumimi:(初华（Sumimi）)儿时玩伴的鼓励", &[
-    On::Play(childhood_cheer),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::SettleAfter], after_move),
-    On::AtEnd(at_end),
-]);
+    On::Play(Some(cant_play), childhood_cheer),
+    On::Hook(&[HookKind::SettleAfter], after_move_guard, after_move),
+    On::AtEnd(at_end)]);
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 
@@ -52,10 +50,13 @@ fn childhood_cheer(player_id: i32) {
 /// C# `AfterMoveFireFx.Arrive` -- after the owner's main move, +1 fire and drop.
 /// Runs through the Fx hook dispatch (`settleAfter`), so this is a field effect,
 /// not a [反击].
+/// Pure guard for [`after_move`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn after_move_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn after_move(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     if trigger::kind() != TriggerKind::SettleAfter {
         return;
     }

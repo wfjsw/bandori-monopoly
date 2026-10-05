@@ -18,6 +18,7 @@ import { openPrompt, waitingOn } from "./Prompt";
 import { showResults } from "./Results";
 import { Ring } from "./Ring";
 import { Side } from "./Side";
+import s from "./Board.module.css";
 
 export function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
@@ -70,10 +71,16 @@ export function Board({ sess }: { sess: GameSession }) {
   return (
     <>
       <TopBar compact help={false} section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })} title={tr("board.round", { n: Math.max(1, S.round) })} onBack={leave} right={<></>} />
-      <Players m={m} />
-      <Log lines={anim.log} />
-      <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
-      <Side m={m} sess={sess} anim={anim} elapsed={(performance.now() - at) / 1000} />
+      <div className={s.body}>
+        <div className={s.left}>
+          <Players m={m} />
+          <Log lines={anim.log} />
+        </div>
+        <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+        <div className={s.right}>
+          <Side m={m} sess={sess} anim={anim} elapsed={(performance.now() - at) / 1000} />
+        </div>
+      </div>
     </>
   );
 }

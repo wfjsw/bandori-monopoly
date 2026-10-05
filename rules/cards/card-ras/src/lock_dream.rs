@@ -16,10 +16,10 @@ use card_sdk::{key, CardDef, On, Msg};
 /// C# `Normal => false` with no `Play`/`React`: the card is shown out of the
 /// deck before the opening hands and lives on the field from there.
 pub const LOCK_DREAM: CardDef = CardDef::new("RAS:（LOCK）追逐梦想的步伐", &[
-    On::Hook(&[HookKind::DeckBeforeGame], deck_before_game),
-    On::Hook(&[HookKind::DeckAtGameStart], deck_at_game_start),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-    On::Hook(&[HookKind::SettleBefore], settle_before),
+    On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
+    On::Hook(&[HookKind::DeckAtGameStart], deck_at_game_start_guard, deck_at_game_start),
+    On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+    On::Hook(&[HookKind::SettleBefore], |_| true, settle_before),
 ]);
 
 /// C# `m.Tags["lockStation"]` -- the owner's main move passed Bandori车站.
@@ -46,10 +46,13 @@ fn deck_before_game(player_id: i32) {
 // 规则书（1）: 「游戏开始时[传送]到“东京外”获得3层[除外]」
 /// C# `CardLockDream.AtGameStart` -> `H.Teleport` to `H.TileNamed("东京外")`
 /// with `resolve: false` and `H.GiveExile(Seat, 3, to)`.
+/// Pure guard for [`deck_at_game_start`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn deck_at_game_start_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn deck_at_game_start(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     let to = ctx::tile_named("东京外");
     if to < 0 {
         return;

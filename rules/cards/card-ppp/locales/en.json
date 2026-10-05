@@ -64,6 +64,7 @@
   "to_you_far_away_moved": "{{who}} [teleport]ed to {{tile}}, where {{target}} is (To You, Far Away)",
   "to_you_far_away_none": "{{who}} has no other players; To You, Far Away cannot be played",
   "to_you_far_away_title": "To You, Far Away",
+  "tomorrows_door_hop": "「Tomorrow's Door」 advances to stop {{n}}",
   "tomorrows_door_note": "Walks Ryuseido → Nakanoshima Park, Osaka; once finished, others settling on your land / Dream Start pay the house count on Hill of Starbeat ×100 extra",
   "tomorrows_door_placed": "Tomorrow's Door was placed on {{who}}'s field",
   "tomorrows_door_tax": "Tomorrow's Door charges {{target}}'s {{money}} to {{who}}"

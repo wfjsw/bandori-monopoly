@@ -21,10 +21,9 @@ use game_core::engine::{Ask, CardRules, Cx, Dest, Flow, Trigger as CoreTrigger};
 use game_core::msg::Msg;
 
 use crate::host::{Call, HostRequest, Outcome, Prompt, PromptOption, RuleError, Ruleset};
-use crate::{PromptKind};
 use crate::world::{CardWorld, Trigger};
+use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
-
 
 /// One run of a card module against a copy of the match world.
 /// C# `PlayCtx.Dest` values the module returns.
@@ -52,6 +51,11 @@ struct Run {
     discard_log: Vec<(i32, String)>,
     /// Players whose deck this run shuffled -- `reshuffled` once it commits.
     reshuffle_log: Vec<i32>,
+    /// Fire spent during the run, raised as `fireSpent` once the run commits
+    /// (same shape as `paid_log`).
+    fire_spent_log: Vec<(i32, i32)>,
+    /// Houses added during the run, raised as `houseAdded` once it commits.
+    house_log: Vec<(i32, i32, i32)>,
     /// C# `PlayCtx.Doubled`: which of the card's numbers this play doubles, or
     /// -1. Set by the doubling band skill, which is not ported yet.
     doubled: i32,
@@ -59,12 +63,30 @@ struct Run {
 
 impl CardWorld for Run {
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
-        let mut sum = 0;
-        for _ in 0..count.max(0) {
-            sum += self.world.rng.d(sides.max(1));
-        }
-        self.world.log("dice", player_id, Msg::new("log.dice").player_id("who", player_id).i("count", count).i("sides", sides).i("sum", sum));
-        sum
+        self.world.roll(player_id, count, sides)
+    }
+
+    fn extreme(&self) -> i32 {
+        self.world.turn.extreme
+    }
+    fn set_extreme(&mut self, v: i32) {
+        self.world.turn.extreme = v.signum();
+    }
+    fn play_from_hand(&self) -> bool {
+        self.world.turn.play_from_hand
+    }
+    fn set_play_from_hand(&mut self, v: bool) {
+        self.world.turn.play_from_hand = v;
+    }
+    fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::Msg) -> i32 {
+        self.world.gain_fixed(player_id, amount, why)
+    }
+    fn set_card_face_down(&mut self, player_id: i32, card: &str, down: bool) -> bool {
+        self.world.set_card_face_down(player_id, card, down)
+    }
+
+    fn do_move_roll(&mut self, player_id: i32) -> i32 {
+        self.world.do_move_roll(player_id)
     }
 
     fn log(&mut self, player_id: i32, msg: Msg) {
@@ -103,7 +125,11 @@ impl CardWorld for Run {
         self.world.owned_tiles(player_id).len() as i32
     }
     fn owned_at(&self, player_id: i32, index: i32) -> i32 {
-        self.world.owned_tiles(player_id).get(index.max(0) as usize).copied().unwrap_or(-1)
+        self.world
+            .owned_tiles(player_id)
+            .get(index.max(0) as usize)
+            .copied()
+            .unwrap_or(-1)
     }
 
     // players -----------------------------------------------------------------
@@ -117,7 +143,11 @@ impl CardWorld for Run {
         self.world.others(player_id).len() as i32
     }
     fn others_at(&self, player_id: i32, index: i32) -> i32 {
-        self.world.others(player_id).get(index.max(0) as usize).copied().unwrap_or(-1)
+        self.world
+            .others(player_id)
+            .get(index.max(0) as usize)
+            .copied()
+            .unwrap_or(-1)
     }
     fn money(&self, player_id: i32) -> i32 {
         self.world.player_money(player_id)
@@ -141,7 +171,9 @@ impl CardWorld for Run {
         self.world.add_to_hand(player_id, card);
     }
     fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
-        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else { return false };
+        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
+            return false;
+        };
         let list = match pile {
             CardPile::Hand => &mut h.hand,
             CardPile::Discard => &mut h.discard,
@@ -157,7 +189,9 @@ impl CardWorld for Run {
         }
     }
     fn cards_in(&self, player_id: i32, pile: CardPile) -> Vec<String> {
-        let Some(h) = self.world.hidden.get(player_id.max(0) as usize) else { return Vec::new() };
+        let Some(h) = self.world.hidden.get(player_id.max(0) as usize) else {
+            return Vec::new();
+        };
         match pile {
             CardPile::Hand => h.hand.clone(),
             CardPile::Discard => h.discard.clone(),
@@ -172,7 +206,9 @@ impl CardWorld for Run {
     fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32) {
         // C# `H.AddToDeck(seat, card, where)`: "top" = draw.Add (the end of the
         // vec is the top), "bottom" = Insert(0), anything else = add + shuffle.
-        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else { return };
+        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
+            return;
+        };
         match pos {
             1 => h.draw.insert(0, card.to_string()),
             2 => {
@@ -188,6 +224,17 @@ impl CardWorld for Run {
     }
 
     // field cards -----------------------------------------------------------
+    fn can_build_on(&self, player_id: i32, tile: i32) -> bool {
+        self.world
+            .why_not_build_on(&self.data, player_id, tile)
+            .is_none()
+    }
+    fn card_face_down(&self, player_id: i32, card: &str) -> bool {
+        self.world.card_face_down(player_id, card)
+    }
+    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) {
+        self.world.place_card_on(player_id, tile, card, note);
+    }
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg) {
         self.world.place_card(player_id, card, note);
     }
@@ -203,24 +250,44 @@ impl CardWorld for Run {
     fn teleport_to(&mut self, player_id: i32, tile: i32) {
         self.world.teleport_to(player_id, tile);
     }
+    fn unplace_card_named(&mut self, player_id: i32, card: &str) -> bool {
+        self.world.unplace_card(player_id, card).is_some()
+    }
     fn unplace_card(&mut self, player_id: i32) -> bool {
         let id = self.current_card.clone();
         self.world.unplace_card(player_id, &id).is_some()
     }
+    fn placed_cards(&self, player_id: i32) -> Vec<String> {
+        self.world.placed_cards(player_id)
+    }
+    fn card_text_mentions(&self, card: &str, needle: &str) -> bool {
+        self.data
+            .card(card)
+            .is_some_and(|c| c.text.contains(needle))
+    }
+    fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
+        self.world.card_crystals(player_id, card)
+    }
+    fn add_card_crystals(&mut self, player_id: i32, card: &str, n: i32, max: i32) -> i32 {
+        self.world.add_card_crystals(player_id, card, n, max)
+    }
     fn is_placed(&self, player_id: i32) -> i32 {
-        self.world.placed_cards(player_id).contains(&self.current_card) as i32
+        self.world
+            .placed_cards(player_id)
+            .contains(&self.current_card) as i32
     }
     fn crystals(&self, player_id: i32) -> i32 {
         self.world.card_crystals(player_id, &self.current_card)
     }
     fn set_crystals(&mut self, player_id: i32, n: i32) -> i32 {
-        self.world.set_card_crystals(player_id, &self.current_card, n);
+        self.world
+            .set_card_crystals(player_id, &self.current_card, n);
         self.world.card_crystals(player_id, &self.current_card)
     }
     fn add_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
-        self.world.add_card_crystals(player_id, &self.current_card, n, max)
+        self.world
+            .add_card_crystals(player_id, &self.current_card, n, max)
     }
-
 
     // marks & tokens --------------------------------------------------------
     fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg) {
@@ -229,8 +296,23 @@ impl CardWorld for Run {
     fn count_marks(&self, tile: i32, kind: &str, owner: i32) -> i32 {
         self.world.count_marks(tile, kind, owner)
     }
+    fn set_card_immune(&mut self, player_id: i32, card: &str, on: bool) -> bool {
+        self.world.set_card_immune(player_id, card, on)
+    }
+    fn card_immune(&self, player_id: i32, card: &str) -> bool {
+        self.world.card_immune(player_id, card)
+    }
+    fn set_card_tile(&mut self, player_id: i32, card: &str, tile: i32) -> bool {
+        self.world.set_card_tile(player_id, card, tile)
+    }
+    fn bump_mark(&mut self, tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
+        self.world.bump_mark(tile, kind, owner, delta)
+    }
     fn remove_marks(&mut self, tile: i32, kind: &str, owner: i32) -> i32 {
         self.world.remove_marks(tile, kind, owner)
+    }
+    fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+        self.world.tok_names(player_id, prefix)
     }
     fn tok(&self, player_id: i32, name: &str) -> i32 {
         self.world.tok(player_id, name)
@@ -267,7 +349,12 @@ impl CardWorld for Run {
     fn state_set_bounds(&mut self, player_id: i32, key: &str, min: i32, max: i32) {
         self.world.state_set_bounds(player_id, key, min, max);
     }
-    fn state_set_expires(&mut self, player_id: i32, key: &str, expires: Option<game_core::state::Tick>) {
+    fn state_set_expires(
+        &mut self,
+        player_id: i32,
+        key: &str,
+        expires: Option<game_core::state::Tick>,
+    ) {
         self.world.state_set_expires(player_id, key, expires);
     }
     fn tick_state(&mut self, player_id: i32, when: game_core::state::Tick) -> Vec<(String, i32)> {
@@ -296,34 +383,135 @@ impl CardWorld for Run {
 
     // board extensions ------------------------------------------------------
     fn is_buyable(&self, tile: i32) -> i32 {
-        self.data.tiles.get(tile.max(0) as usize).is_some_and(|t| t.is_buyable()) as i32
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable()) as i32
     }
     fn is_shop(&self, tile: i32) -> i32 {
         // C# `H.IsShop`: buyable and colour group 10 (the 商店街 deeds).
-        self.data.tiles.get(tile.max(0) as usize).is_some_and(|t| t.is_buyable() && t.group == 10) as i32
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable() && t.group == 10) as i32
     }
     fn is_ring(&self, tile: i32) -> i32 {
-        self.data.tiles.get(tile.max(0) as usize).is_some_and(|t| t.kind == "ring") as i32
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "ring") as i32
     }
     fn is_circle(&self, tile: i32) -> i32 {
-        self.data.tiles.get(tile.max(0) as usize).is_some_and(|t| t.kind == "circle") as i32
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "circle") as i32
+    }
+    fn set_tile_color(&mut self, tile: i32, group: i32) {
+        self.world.set_tile_color(tile, group)
+    }
+    fn set_extra_color(&mut self, player_id: i32, tile: i32, group: i32) {
+        self.world.set_extra_color(player_id, tile, group)
+    }
+    fn is_color(&self, player_id: i32, tile: i32, group: i32) -> bool {
+        if let Some(g) = self.world.color_override(player_id, tile) {
+            return g == group || g == game_core::state::key::ALL_COLORS;
+        }
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.group == group)
+    }
+    fn set_buy_discount(&mut self, n: i32) {
+        self.world.turn.buy_discount = n.max(0);
+    }
+    fn paid_in_settle(&self) -> i32 {
+        self.world.turn.paid_in_settle
+    }
+    fn set_free_buy(&mut self, on: bool) {
+        self.world.turn.free_buy = on;
+    }
+    fn set_raze_on_buy(&mut self, on: bool) {
+        self.world.turn.raze_on_buy = on;
+    }
+    fn turn_start_pos(&self, player_id: i32) -> i32 {
+        self.world
+            .turn
+            .turn_start_pos
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(-1)
+    }
+    fn turn_rolls(&self) -> Vec<i32> {
+        self.world.turn.turn_rolls.clone()
+    }
+    fn set_build_discount(&mut self, n: i32, layers: i32) {
+        self.world.turn.build_discount = n.max(0);
+        self.world.turn.build_discount_layers = layers.max(0);
+    }
+    fn set_build_cost_pct(&mut self, pct: i32) {
+        self.world.turn.build_cost_pct = pct.clamp(0, 100);
+    }
+    fn turn_snap(&self, player_id: i32) -> (i32, i32, i32, i32) {
+        self.world
+            .turn
+            .turn_snap
+            .get(player_id.max(0) as usize)
+            .map(|s| (s.pos, s.stay, s.stun, s.exile))
+            .unwrap_or((-1, 0, 0, 0))
+    }
+    fn is_agent(&self, tile: i32) -> i32 {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "agent") as i32
     }
     fn is_live_house(&self, tile: i32) -> i32 {
-        // C# `H.IsLiveHouse` base check (ExtraColor is band-skill state).
-        self.data.tiles.get(tile.max(0) as usize).is_some_and(|t| t.is_buyable() && t.group == 6) as i32
+        // C# `H.IsLiveHouse` = `IsColor(t, 6) && IsBuyable(t)`. The `ExtraColor`
+        // side is a per-player override, so see `is_live_house_for`.
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable() && t.group == 6) as i32
+    }
+    fn is_live_house_for(&self, player_id: i32, tile: i32) -> i32 {
+        (self.is_color(player_id, tile, 6)
+            && self
+                .data
+                .tiles
+                .get(tile.max(0) as usize)
+                .is_some_and(|t| t.is_buyable())) as i32
     }
     fn tile_group(&self, tile: i32) -> i32 {
-        self.data.tiles.get(tile.max(0) as usize).map(|t| t.group).unwrap_or(-1)
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.group)
+            .unwrap_or(-1)
     }
     fn tile_price(&self, tile: i32) -> i32 {
         // `H._tiles[t].price` -- land alone (`buy_price` adds houses).
-        self.data.tiles.get(tile.max(0) as usize).map(|t| t.price).unwrap_or(0)
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.price)
+            .unwrap_or(0)
     }
     fn houses_of(&self, tile: i32) -> i32 {
-        self.world.st.houses.get(tile.max(0) as usize).copied().unwrap_or(0)
+        self.world
+            .st
+            .houses
+            .get(tile.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
     }
     fn set_houses(&mut self, tile: i32, n: i32) {
-        let cap = self.data.tiles.get(tile.max(0) as usize).map(|t| t.rent.len().saturating_sub(1)).unwrap_or(0) as i32;
+        let cap = self
+            .data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.rent.len().saturating_sub(1))
+            .unwrap_or(0) as i32;
         if let Some(h) = self.world.st.houses.get_mut(tile.max(0) as usize) {
             *h = n.clamp(0, cap);
         }
@@ -331,15 +519,38 @@ impl CardWorld for Run {
     fn add_house(&mut self, tile: i32, n: i32) -> i32 {
         // C# `AddHouse` caps at `rent.Length - 1` (the board's house max; RiNG
         // deeds have no rent table and never hold houses).
-        let cap = self.data.tiles.get(tile.max(0) as usize).map(|t| t.rent.len().saturating_sub(1)).unwrap_or(0) as i32;
+        let cap = self
+            .data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.rent.len().saturating_sub(1))
+            .unwrap_or(0) as i32;
         if let Some(h) = self.world.st.houses.get_mut(tile.max(0) as usize) {
             *h = (*h + n).clamp(0, cap);
-            return *h;
+            let now = *h;
+            if n > 0 {
+                let owner = self
+                    .world
+                    .st
+                    .owners
+                    .get(tile.max(0) as usize)
+                    .copied()
+                    .unwrap_or(-1);
+                if owner >= 0 {
+                    self.house_log.push((owner, tile, now));
+                }
+            }
+            return now;
         }
         0
     }
     fn mortgaged_of(&self, tile: i32) -> i32 {
-        self.world.st.mortgaged.get(tile.max(0) as usize).copied().unwrap_or(false) as i32
+        self.world
+            .st
+            .mortgaged
+            .get(tile.max(0) as usize)
+            .copied()
+            .unwrap_or(false) as i32
     }
     fn set_mortgaged(&mut self, tile: i32, v: i32) {
         if let Some(m) = self.world.st.mortgaged.get_mut(tile.max(0) as usize) {
@@ -387,12 +598,17 @@ impl CardWorld for Run {
         self.players_on_list(tile, except).len() as i32
     }
     fn players_on_at(&self, tile: i32, except: i32, index: i32) -> i32 {
-        self.players_on_list(tile, except).get(index.max(0) as usize).copied().unwrap_or(-1)
+        self.players_on_list(tile, except)
+            .get(index.max(0) as usize)
+            .copied()
+            .unwrap_or(-1)
     }
 
     // hand & deck extensions -----------------------------------------------
     fn hand_count(&self, player_id: i32, card: &str) -> i32 {
-        self.hands(player_id).map(|h| h.iter().filter(|c| c.as_str() == card).count() as i32).unwrap_or(0)
+        self.hands(player_id)
+            .map(|h| h.iter().filter(|c| c.as_str() == card).count() as i32)
+            .unwrap_or(0)
     }
     fn hand_size(&self, player_id: i32) -> i32 {
         self.hands(player_id).map(|h| h.len() as i32).unwrap_or(0)
@@ -405,15 +621,27 @@ impl CardWorld for Run {
             .unwrap_or(0)
     }
     fn deck_count(&self, player_id: i32) -> i32 {
-        self.world.hidden.get(player_id.max(0) as usize).map(|h| h.draw.len() as i32).unwrap_or(0)
+        self.world
+            .hidden
+            .get(player_id.max(0) as usize)
+            .map(|h| h.draw.len() as i32)
+            .unwrap_or(0)
     }
     fn discard_size(&self, player_id: i32) -> i32 {
-        self.world.hidden.get(player_id.max(0) as usize).map(|h| h.discard.len() as i32).unwrap_or(0)
+        self.world
+            .hidden
+            .get(player_id.max(0) as usize)
+            .map(|h| h.discard.len() as i32)
+            .unwrap_or(0)
     }
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32 {
         // C# `H.DiscardFromHand` -- one copy, hand -> discard pile.
-        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else { return 0 };
-        let Some(p) = h.hand.iter().position(|c| c == card) else { return 0 };
+        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
+            return 0;
+        };
+        let Some(p) = h.hand.iter().position(|c| c == card) else {
+            return 0;
+        };
         h.hand.remove(p);
         h.discard.push(card.to_string());
         self.discard_log.push((player_id, card.to_string()));
@@ -421,7 +649,9 @@ impl CardWorld for Run {
     }
     fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32 {
         // C# `H.ShuffleAllIntoDeck(seat, hand, discard)`.
-        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else { return 0 };
+        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
+            return 0;
+        };
         let mut moved: Vec<String> = Vec::new();
         if hand {
             moved.append(&mut h.hand);
@@ -436,10 +666,16 @@ impl CardWorld for Run {
         n
     }
     fn abnormal_count(&self, player_id: i32) -> i32 {
-        usize::try_from(player_id).ok().and_then(|s| self.world.turn.abnormal.get(s).copied()).unwrap_or(0)
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.world.turn.abnormal.get(s).copied())
+            .unwrap_or(0)
     }
     fn targeted_count(&self, player_id: i32) -> i32 {
-        usize::try_from(player_id).ok().and_then(|s| self.world.targeted.get(s).copied()).unwrap_or(0)
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.world.targeted.get(s).copied())
+            .unwrap_or(0)
     }
     fn placed_tile(&self, player_id: i32, id: &str) -> i32 {
         usize::try_from(player_id)
@@ -452,10 +688,16 @@ impl CardWorld for Run {
         self.doubled
     }
 
+    fn set_play_doubled(&mut self, n: i32) {
+        self.doubled = n;
+    }
+
     // status extensions -----------------------------------------------------
     fn can_pay(&self, player_id: i32) -> i32 {
         // C# `H.CanPay`: not out, not stunned, not exiled.
-        let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else { return 0 };
+        let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
+            return 0;
+        };
         (!s.out() && !s.stunned() && s.exile() == 0) as i32
     }
     fn cant_move(&self, player_id: i32) -> i32 {
@@ -477,7 +719,9 @@ impl CardWorld for Run {
         if n <= 0 {
             return 1;
         }
-        let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else { return 0 };
+        let Some(s) = self.world.st.players.get_mut(player_id.max(0) as usize) else {
+            return 0;
+        };
         // A consumer of the pots: all-or-nothing, and it logs the spend. It does
         // not consult any cap -- spending is not the capped direction.
         if s.fire() < n {
@@ -485,6 +729,7 @@ impl CardWorld for Run {
         }
         s.state_add(game_core::state::key::FIRE, -n);
         self.world.log("fire", player_id, why).value = -n;
+        self.fire_spent_log.push((player_id, n));
         1
     }
     fn turn_player(&self) -> i32 {
@@ -498,11 +743,17 @@ impl CardWorld for Run {
         self.world.st.round * 100 + self.world.st.turn + 1
     }
     fn character_is(&self, player_id: i32, name: &str) -> i32 {
-        self.world.st.players.get(player_id.max(0) as usize).is_some_and(|s| s.character == name) as i32
+        self.world
+            .st
+            .players
+            .get(player_id.max(0) as usize)
+            .is_some_and(|s| s.character == name) as i32
     }
     fn in_band(&self, player_id: i32, name: &str) -> i32 {
         // C# `H.BandOf(seat)` -- the character's band.
-        let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else { return 0 };
+        let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
+            return 0;
+        };
         self.data
             .characters
             .iter()
@@ -555,7 +806,13 @@ impl CardWorld for Run {
         } else {
             (now, false)
         };
-        self.world.scheduled.push(game_core::engine::Scheduled { card: self.current_card.clone(), owner: player_id, target, skip, early });
+        self.world.scheduled.push(game_core::engine::Scheduled {
+            card: self.current_card.clone(),
+            owner: player_id,
+            target,
+            skip,
+            early,
+        });
     }
     fn set_no_money_loss(&mut self, player_id: i32) {
         if let Ok(s) = usize::try_from(player_id) {
@@ -612,9 +869,6 @@ impl CardWorld for Run {
     fn set_no_buy(&mut self, v: bool) {
         self.world.set_no_buy(v);
     }
-    fn set_no_build(&mut self, v: bool) {
-        self.world.set_no_build(v);
-    }
     fn set_kind(&mut self, v: i32) {
         self.world.set_kind(v);
     }
@@ -639,8 +893,8 @@ impl CardWorld for Run {
     fn set_rent_factor(&mut self, v: i32) {
         self.world.set_rent_factor(v);
     }
-    fn set_build_anywhere(&mut self, v: bool) {
-        self.world.set_build_anywhere(v);
+    fn set_can_build(&mut self, v: bool) {
+        self.world.set_can_build(v);
     }
     fn set_settle_as_agent(&mut self, v: bool) {
         self.world.set_settle_as_agent(v);
@@ -657,6 +911,9 @@ impl CardWorld for Run {
     }
     fn set_start(&mut self, v: i32, why: &str) {
         self.world.set_start(v, why);
+    }
+    fn clear_dice(&mut self) {
+        self.world.clear_dice();
     }
     fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.world.set_base_dice(count, sides, why);
@@ -699,23 +956,31 @@ impl CardWorld for Run {
     }
 }
 
-
 impl Run {
     /// C# `H.Present(p)` -- in the game and not exiled.
     fn present(&self, s: i32) -> bool {
-        self.world.st.players.get(s.max(0) as usize).is_some_and(|x| !x.out() && x.exile() == 0)
+        self.world
+            .st
+            .players
+            .get(s.max(0) as usize)
+            .is_some_and(|x| !x.out() && x.exile() == 0)
     }
 
     /// C# `H.SeatsOn(tile, except)` -- present players standing on the tile.
     fn players_on_list(&self, tile: i32, except: i32) -> Vec<i32> {
         (0..self.world.st.players.len() as i32)
-            .filter(|&p| p != except && self.present(p) && self.world.st.players[p as usize].pos == tile)
+            .filter(|&p| {
+                p != except && self.present(p) && self.world.st.players[p as usize].pos == tile
+            })
             .collect()
     }
 
     /// The player's hand (C# `_hidden[s].hand`).
     fn hands(&self, player_id: i32) -> Option<&Vec<String>> {
-        self.world.hidden.get(player_id.max(0) as usize).map(|h| &h.hand)
+        self.world
+            .hidden
+            .get(player_id.max(0) as usize)
+            .map(|h| &h.hand)
     }
 }
 
@@ -735,13 +1000,24 @@ impl WasmRules {
     /// to no card effects.
     pub fn load_dir(data: Arc<GameData>, dir: &std::path::Path) -> Result<Option<Self>, RuleError> {
         let index = dir.join("index.json");
-        let Ok(text) = std::fs::read_to_string(&index) else { return Ok(None) };
-        let v: serde_json::Value = serde_json::from_str(&text).map_err(|e| RuleError::Load(format!("bad index: {e}")))?;
+        let Ok(text) = std::fs::read_to_string(&index) else {
+            return Ok(None);
+        };
+        let v: serde_json::Value =
+            serde_json::from_str(&text).map_err(|e| RuleError::Load(format!("bad index: {e}")))?;
         let mut builder = Ruleset::builder();
         let mut any = false;
-        for m in v["modules"].as_array().map(|a| a.iter()).into_iter().flatten() {
-            let file = m["file"].as_str().ok_or_else(|| RuleError::Load("module entry has no file".into()))?;
-            let bytes = std::fs::read(dir.join(file)).map_err(|e| RuleError::Load(format!("{file}: {e}")))?;
+        for m in v["modules"]
+            .as_array()
+            .map(|a| a.iter())
+            .into_iter()
+            .flatten()
+        {
+            let file = m["file"]
+                .as_str()
+                .ok_or_else(|| RuleError::Load("module entry has no file".into()))?;
+            let bytes = std::fs::read(dir.join(file))
+                .map_err(|e| RuleError::Load(format!("{file}: {e}")))?;
             builder.add(&bytes)?;
             any = true;
         }
@@ -771,6 +1047,8 @@ impl WasmRules {
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
+                fire_spent_log: vec![],
+                house_log: vec![],
                 doubled: -1,
             };
             match self.ruleset.run(&run, call, &answers) {
@@ -797,6 +1075,15 @@ impl WasmRules {
                     for player_id in after.reshuffle_log {
                         self.raise_core(cx, "reshuffled", player_id, |_| {})?;
                     }
+                    for (player_id, n) in after.fire_spent_log {
+                        self.raise_core(cx, "fireSpent", player_id, |t| t.value = n)?;
+                    }
+                    for (player_id, tile, nth) in after.house_log {
+                        self.raise_core(cx, "houseAdded", player_id, |t| {
+                            t.tile = tile;
+                            t.value = nth;
+                        })?;
+                    }
                     return Ok(dest);
                 }
                 Ok(Outcome::NeedInput(p)) => {
@@ -805,7 +1092,13 @@ impl WasmRules {
                     let reply = cx.ask(ask)?;
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
-                    let v = reply.a.answers.first().copied().filter(|&x| x >= 0).unwrap_or(reply.fallback);
+                    let v = reply
+                        .a
+                        .answers
+                        .first()
+                        .copied()
+                        .filter(|&x| x >= 0)
+                        .unwrap_or(reply.fallback);
                     answers.push(v);
                     let _ = player_id;
                 }
@@ -817,7 +1110,11 @@ impl WasmRules {
                     let allowed = self.abnormal_gate(cx, player_id, kind, call.player_id())?;
                     answers.push(allowed as i32);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Target { player_id, tile, single })) => {
+                Ok(Outcome::NeedHost(HostRequest::Target {
+                    player_id,
+                    tile,
+                    single,
+                })) => {
                     let got = if tile >= 0 {
                         self.target_tile(cx, tile, call.player_id(), card_id)?
                     } else {
@@ -837,7 +1134,41 @@ impl WasmRules {
                     cx.agent_landing(player_id.max(0) as usize, agent.max(0) as usize)?;
                     answers.push(1);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Pay { from, to, amount: asked })) => {
+                // The rest of the routine family -- see `HostRequest`.
+                Ok(Outcome::NeedHost(HostRequest::SettleAt {
+                    player_id,
+                    tile,
+                    main,
+                })) => {
+                    cx.card_settle_at(player_id.max(0) as usize, tile.max(0) as usize, main)?;
+                    answers.push(1);
+                }
+                Ok(Outcome::NeedHost(HostRequest::Buy { player_id, tile })) => {
+                    cx.card_buy(player_id.max(0) as usize, tile.max(0) as usize)?;
+                    answers.push(1);
+                }
+                Ok(Outcome::NeedHost(HostRequest::Build { player_id, tile })) => {
+                    cx.card_build(player_id.max(0) as usize, tile.max(0) as usize)?;
+                    answers.push(1);
+                }
+                Ok(Outcome::NeedHost(HostRequest::OfferBuild { player_id, tiles })) => {
+                    let tiles: Vec<usize> = tiles
+                        .into_iter()
+                        .filter(|&t| t >= 0)
+                        .map(|t| t as usize)
+                        .collect();
+                    cx.card_offer_build(player_id.max(0) as usize, &tiles, card_id)?;
+                    answers.push(1);
+                }
+                Ok(Outcome::NeedHost(HostRequest::Mortgage { player_id, tile })) => {
+                    cx.card_mortgage(player_id.max(0) as usize, tile.max(0) as usize)?;
+                    answers.push(1);
+                }
+                Ok(Outcome::NeedHost(HostRequest::Pay {
+                    from,
+                    to,
+                    amount: asked,
+                })) => {
                     let req = (from, to, asked);
                     let by = Some(call.player_id());
                     let (from, to, mut amount) = req;
@@ -846,7 +1177,10 @@ impl WasmRules {
                     // the payment simply does not happen.
                     let mut immune = false;
                     for x in [from, to] {
-                        if x >= 0 && x != call.player_id() && self.immune(cx, x, call.player_id())? {
+                        if x >= 0
+                            && x != call.player_id()
+                            && self.immune(cx, x, call.player_id())?
+                        {
                             immune = true;
                             break;
                         }
@@ -878,15 +1212,72 @@ impl WasmRules {
                 Err(e) => {
                     // A trapping module must not take the match down with it.
                     let detail = match &e {
-                        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => m.clone(),
+                        RuleError::Trap(m) | RuleError::Load(m) | RuleError::DuplicateCard(m) => {
+                            m.clone()
+                        }
                         RuleError::NoSuchCard(i) => format!("no such card {i}"),
                         RuleError::GuardPrompted => "guard prompted".into(),
                     };
                     let player_id = call.player_id();
-                    cx.log(player_id, Msg::new("log.card_trap").card("card", card_id).text("detail", detail));
+                    cx.log(
+                        player_id,
+                        Msg::new("log.card_trap")
+                            .card("card", card_id)
+                            .text("detail", detail),
+                    );
                     return Ok(DEST_GRAVEYARD);
                 }
             }
+        }
+    }
+
+    /// The pure guard on an `On::Hook` entry -- and, with it, the **activation**
+    /// gate. A `false` means the card is not activated at all: its body does not
+    /// run and nothing about it reaches the UI. A `true` is the card firing, so
+    /// it is announced and `drive` runs the body. An entry with no guard
+    /// (`On::Gate` -- a question the card answers, not an activation) runs
+    /// unannounced, exactly as it did before.
+    ///
+    /// Runs on a throwaway world copy (same contract as `can_react`); a trap or
+    /// a prompting guard fails closed.
+    fn hook_guard(
+        &self,
+        cx: &mut Cx,
+        trigger: &Trigger,
+        idx: i32,
+        player_id: i32,
+        card_id: &str,
+    ) -> bool {
+        let run = Run {
+            world: cx.world_copy(),
+            data: self.data.clone(),
+            trigger: trigger.clone(),
+            current_card: card_id.to_string(),
+            dest: DEST_GRAVEYARD,
+            paid_log: vec![],
+            discard_log: vec![],
+            reshuffle_log: vec![],
+            fire_spent_log: vec![],
+            house_log: vec![],
+            doubled: -1,
+        };
+        match self.ruleset.can_hook(&run, idx, player_id) {
+            // No guard to ask (`On::Gate`): run it, and do not announce -- it is
+            // answering a question, not activating.
+            Ok(None) => true,
+            Ok(Some(false)) => false,
+            Ok(Some(true)) => {
+                // Activated: this is the one moment the card shows itself.
+                cx.log(
+                    player_id,
+                    Msg::new("log.hook_fire")
+                        .player_id("who", player_id)
+                        .card("card", card_id.to_string()),
+                );
+                true
+            }
+            // A trap or a prompting guard: fail closed, the card does not fire.
+            Err(_) => false,
         }
     }
 
@@ -895,9 +1286,30 @@ impl WasmRules {
     /// (`abnormalGuard`, block with `set_cancelled`); then, if another player
     /// caused it, the `abnormal` [反击] window (C# `ReactAbnormal`). What gets
     /// through bumps `player_id`'s abnormal counter for this turn.
-    fn abnormal_gate(&self, cx: &mut Cx, player_id: i32, kind: crate::AbKind, by: i32) -> Flow<bool> {
-        let Ok(s) = usize::try_from(player_id) else { return Ok(false) };
+    fn abnormal_gate(
+        &self,
+        cx: &mut Cx,
+        player_id: i32,
+        kind: crate::AbKind,
+        by: i32,
+    ) -> Flow<bool> {
+        let Ok(s) = usize::try_from(player_id) else {
+            return Ok(false);
+        };
         if s >= cx.state().players.len() || cx.world_copy().out(s) {
+            return Ok(false);
+        }
+        // `unstoppable` (「不可阻挡」) is a blanket bypass for the *movement*
+        // abnormals -- the ones that put the player somewhere they did not
+        // choose. Status (stay/stun/exile) still lands.
+        let movement = matches!(
+            kind,
+            crate::AbKind::Teleport
+                | crate::AbKind::Forced
+                | crate::AbKind::Stop
+                | crate::AbKind::Reverse
+        );
+        if movement && cx.state().players[s].unstoppable() > 0 {
             return Ok(false);
         }
         let on = |t: &mut CoreTrigger| {
@@ -951,7 +1363,10 @@ impl WasmRules {
     fn immune(&self, cx: &mut Cx, player_id: i32, by: i32) -> Flow<bool> {
         let t = self.raise_core(cx, "immuneAll", player_id, |t| t.by_card = Some(by))?;
         if t.is_cancelled() {
-            cx.log(player_id, Msg::new("log.immune_all").player_id("who", player_id));
+            cx.log(
+                player_id,
+                Msg::new("log.immune_all").player_id("who", player_id),
+            );
         }
         Ok(t.is_cancelled())
     }
@@ -961,7 +1376,9 @@ impl WasmRules {
     /// single-target hit), or -1. Not ported: the per-play `immune<p>` tags
     /// (C# `c.Tags`) and the `PendingReact` / `TargetsChosen` pass.
     fn target_player(&self, cx: &mut Cx, p: i32, by: i32, card: &str, single: bool) -> Flow<i32> {
-        let Ok(s) = usize::try_from(p) else { return Ok(-1) };
+        let Ok(s) = usize::try_from(p) else {
+            return Ok(-1);
+        };
         if s >= cx.state().players.len() || cx.world_copy().out(s) {
             return Ok(-1);
         }
@@ -974,7 +1391,10 @@ impl WasmRules {
         // ---- declaration ----------------------------------------------
         // `Untargetable` governs who may be *named*. Block here and the effect
         // cannot name `p` at all, so no chain forms against them.
-        if self.raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?.is_cancelled() {
+        if self
+            .raise_core(cx, "untargetable", p, |t| t.by_card = Some(by))?
+            .is_cancelled()
+        {
             cx.log(p, Msg::new("log.untargetable").player_id("who", p));
             return Ok(-1);
         }
@@ -988,9 +1408,16 @@ impl WasmRules {
                 t.by_card = Some(by);
             })?;
             let to = r.target;
-            let live = usize::try_from(to).is_ok_and(|x| x < cx.state().players.len() && !cx.world_copy().out(x));
+            let live = usize::try_from(to)
+                .is_ok_and(|x| x < cx.state().players.len() && !cx.world_copy().out(x));
             if to != p && to != by && live {
-                cx.log(to, Msg::new("log.target_redirected").card("card", card).player_id("from", p).player_id("to", to));
+                cx.log(
+                    to,
+                    Msg::new("log.target_redirected")
+                        .card("card", card)
+                        .player_id("from", p)
+                        .player_id("to", to),
+                );
                 p = to;
             }
         }
@@ -1019,10 +1446,24 @@ impl WasmRules {
     }
 
     /// C# `H.TargetTile(c, tile)`: `by`'s card targets `tile`; another player's
-    /// tile targets its owner too. Answers the tile, or -1. Not ported: the
-    /// 「高贵的微蓝」 mark and the per-play `immune<p>` tags.
+    /// tile targets its owner too. Answers the tile, or -1.
+    ///
+    /// A tile marked [`card_sdk::abi::mark::NO_TARGET`] cannot be named at all --
+    /// that is 「有标记时此地块不能被指定」. Not ported: the per-play `immune<p>` tags.
     fn target_tile(&self, cx: &mut Cx, tile: i32, by: i32, card: &str) -> Flow<i32> {
-        let Some(&owner) = usize::try_from(tile).ok().and_then(|t| cx.state().owners.get(t)) else { return Ok(-1) };
+        if cx
+            .world_copy()
+            .count_marks(tile, card_sdk::abi::mark::NO_TARGET, -2)
+            > 0
+        {
+            return Ok(-1);
+        }
+        let Some(&owner) = usize::try_from(tile)
+            .ok()
+            .and_then(|t| cx.state().owners.get(t))
+        else {
+            return Ok(-1);
+        };
         let live = usize::try_from(owner).is_ok_and(|o| !cx.world_copy().out(o));
         if owner >= 0 && owner != by && live {
             // Chain first: the owner answers the declaration. Then resolution.
@@ -1079,7 +1520,13 @@ impl WasmRules {
     /// Raise an engine trigger from the bridge itself (what a committed card
     /// effect did), through the same dispatcher the engine's `raise!` reaches.
     /// `player_id` may be -1 (the bank's side of a payment).
-    fn raise_core(&self, cx: &mut Cx, kind: &'static str, player_id: i32, set: impl FnOnce(&mut CoreTrigger)) -> Flow<CoreTrigger> {
+    fn raise_core(
+        &self,
+        cx: &mut Cx,
+        kind: &'static str,
+        player_id: i32,
+        set: impl FnOnce(&mut CoreTrigger),
+    ) -> Flow<CoreTrigger> {
         let mut t = CoreTrigger::new(kind, player_id.max(0) as usize);
         t.player_id = player_id;
         t.step = cx.state().step;
@@ -1125,7 +1572,13 @@ impl WasmRules {
     ///   declared, and `set_cancelled` / `negate_effect` / `spare` land on it.
     /// * **One declaration per player per priority pass** -- a player with two
     ///   eligible cards must pick one.
-    fn hand_reactions(&self, cx: &mut Cx, t: &CoreTrigger, trigger: &mut Trigger, depth: u32) -> Flow<()> {
+    fn hand_reactions(
+        &self,
+        cx: &mut Cx,
+        t: &CoreTrigger,
+        trigger: &mut Trigger,
+        depth: u32,
+    ) -> Flow<()> {
         if depth >= MAX_REACT_DEPTH || !cx.playing() {
             return Ok(());
         }
@@ -1192,12 +1645,25 @@ impl WasmRules {
 
         // ---- resolve: flat LIFO -----------------------------------------
         for (s, idx, id, answered) in decls.into_iter().rev() {
-            cx.log(s as i32, Msg::new("log.play_react").player_id("who", s as i32).card("card", id.clone()));
+            cx.log(
+                s as i32,
+                Msg::new("log.play_react")
+                    .player_id("who", s as i32)
+                    .card("card", id.clone()),
+            );
             // The counter's body runs against the link it answers, so its
             // `set_cancelled` / `negate_effect` / `spare` land there -- and the
             // effect settles only after every counter has had its say.
             let mut on_link = chain[answered].clone();
-            let dest = self.drive(cx, Call::React { card: idx, player_id: s as i32 }, &id, &mut on_link)?;
+            let dest = self.drive(
+                cx,
+                Call::CounterAct {
+                    card: idx,
+                    player_id: s as i32,
+                },
+                &id,
+                &mut on_link,
+            )?;
             chain[answered] = on_link;
             let mut w = cx.world_copy();
             let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(s);
@@ -1241,8 +1707,10 @@ impl WasmRules {
                 continue;
             }
             seen.push(id.clone());
-            let Some(idx) = self.ruleset.card(&id) else { continue };
-            if !self.ruleset.cards()[idx as usize].reacts_to(top.kind) {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            if !self.ruleset.cards()[idx as usize].counter_acts_to(top.kind) {
                 continue;
             }
             let run = Run {
@@ -1254,6 +1722,8 @@ impl WasmRules {
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
+                fire_spent_log: vec![],
+                house_log: vec![],
                 doubled: -1,
             };
             if self.ruleset.can_react(&run, idx, s as i32).unwrap_or(false) {
@@ -1280,7 +1750,13 @@ impl WasmRules {
             12.0,
         );
         let reply = cx.ask(ask)?;
-        let pick = reply.a.answers.first().copied().filter(|&x| x >= 0).unwrap_or(reply.fallback) as usize;
+        let pick = reply
+            .a
+            .answers
+            .first()
+            .copied()
+            .filter(|&x| x >= 0)
+            .unwrap_or(reply.fallback) as usize;
         if pick >= options.len() {
             return Ok(None);
         }
@@ -1318,7 +1794,11 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         cards: t.cards.clone(),
         // Only a move trigger carries a roll; `paid`/`settle` carry value as an
         // amount, which must not read as a phantom move.
-        move_roll: matches!(trigger_kind(t.kind), TriggerKind::MoveRoll | TriggerKind::Roll).then_some(t.value),
+        move_roll: matches!(
+            trigger_kind(t.kind),
+            TriggerKind::MoveRoll | TriggerKind::Roll
+        )
+        .then_some(t.value),
         card: t.card.clone(),
     }
 }
@@ -1327,37 +1807,66 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
 /// the engine shows for its own questions).
 fn prompt_to_ask(p: Prompt) -> Ask {
     let players = vec![p.player_id as usize];
-    let Prompt { kind, player_id, title, text, options, answer_slot: _ } = p;
+    let Prompt {
+        kind,
+        player_id,
+        title,
+        text,
+        options,
+        answer_slot: _,
+    } = p;
     match kind {
-        PromptKind::YesNo => Ask::choice(players, title, text, vec![Msg::new("ask.yes"), Msg::new("ask.no")], 1, 12.0),
+        PromptKind::YesNo => Ask::choice(
+            players,
+            title,
+            text,
+            vec![Msg::new("ask.yes"), Msg::new("ask.no")],
+            1,
+            12.0,
+        ),
         PromptKind::Choice => {
-            let labels = options.into_iter().map(|o| match o {
-                PromptOption::Str(m) => m,
-                PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
-            }).collect();
+            let labels = options
+                .into_iter()
+                .map(|o| match o {
+                    PromptOption::Str(m) => m,
+                    PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                })
+                .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
         }
         PromptKind::Tile => {
-            let tiles: Vec<usize> = options.iter().map(|o| match o {
-                PromptOption::Int(i) => *i as usize,
-                PromptOption::Str(_) => 0,
-            }).collect();
-            let labels = tiles.iter().map(|&t| Msg::new("ask.tileOption").tile("tile", t as i32)).collect();
+            let tiles: Vec<usize> = options
+                .iter()
+                .map(|o| match o {
+                    PromptOption::Int(i) => *i as usize,
+                    PromptOption::Str(_) => 0,
+                })
+                .collect();
+            let labels = tiles
+                .iter()
+                .map(|&t| Msg::new("ask.tileOption").tile("tile", t as i32))
+                .collect();
             Ask::tile(player_id as usize, title, text, &tiles, labels)
         }
         PromptKind::Card => {
             // Pick one card out of a list; the options are ready-made labels.
-            let labels = options.into_iter().map(|o| match o {
-                PromptOption::Str(m) => m,
-                PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
-            }).collect();
+            let labels = options
+                .into_iter()
+                .map(|o| match o {
+                    PromptOption::Str(m) => m,
+                    PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                })
+                .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
         }
         PromptKind::Player => {
-            let labels = options.iter().map(|o| match o {
-                PromptOption::Int(s) => Msg::new("ask.player").player_id("who", *s),
-                PromptOption::Str(_) => Msg::new("ask.player").player_id("who", -1),
-            }).collect();
+            let labels = options
+                .iter()
+                .map(|o| match o {
+                    PromptOption::Int(s) => Msg::new("ask.player").player_id("who", *s),
+                    PromptOption::Str(_) => Msg::new("ask.player").player_id("who", -1),
+                })
+                .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
         }
     }
@@ -1369,11 +1878,17 @@ fn prompt_to_ask(p: Prompt) -> Ask {
 /// reaction. (The C# also checks `CannotPlay` and a one-turn mute; neither has
 /// an engine field yet.)
 fn can_react_now(cx: &Cx, s: usize) -> bool {
-    let Some(player_id) = cx.state().players.get(s) else { return false };
+    let Some(player_id) = cx.state().players.get(s) else {
+        return false;
+    };
     // C# `CanReactNow`: out / AI / exiled players never open a window, and
     // `CannotPlay` (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
     // `_noReactTurn` and Fx.CantPlayHand have no engine field yet (TODO).
-    !cx.world_copy().out(s) && !player_id.ai && player_id.exile() == 0 && !player_id.stunned() && player_id.no_hand() == 0
+    !cx.world_copy().out(s)
+        && !player_id.ai
+        && player_id.exile() == 0
+        && !player_id.stunned()
+        && player_id.no_hand() == 0
 }
 
 /// C# `_hidden[s].hand` -- the player's private hand (order preserved).
@@ -1420,13 +1935,21 @@ impl CardRules for WasmRules {
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],
+            fire_spent_log: vec![],
+            house_log: vec![],
             doubled: -1,
         };
-        self.ruleset.cant_play(&run, idx, player_id as i32).ok().flatten()
+        self.ruleset
+            .cant_play(&run, idx, player_id as i32)
+            .ok()
+            .flatten()
     }
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
         let Some(idx) = self.ruleset.card(card) else {
-            cx.log(player_id as i32, Msg::new("log.card_not_ported").card("card", card));
+            cx.log(
+                player_id as i32,
+                Msg::new("log.card_not_ported").card("card", card),
+            );
             return Ok(Dest::Graveyard);
         };
         let mut trigger = Trigger {
@@ -1455,13 +1978,24 @@ impl CardRules for WasmRules {
             move_roll: None,
             card: String::new(),
         };
-        let dest = self.drive(cx, Call::Play { card: idx, player_id: player_id as i32 }, card, &mut trigger)?;
+        let dest = self.drive(
+            cx,
+            Call::Play {
+                card: idx,
+                player_id: player_id as i32,
+            },
+            card,
+            &mut trigger,
+        )?;
         Ok(dest_from(dest))
     }
 
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool> {
         let Some(idx) = self.ruleset.card(id) else {
-            cx.log(player_id as i32, Msg::new("log.event_not_ported").event("event", id));
+            cx.log(
+                player_id as i32,
+                Msg::new("log.event_not_ported").event("event", id),
+            );
             return Ok(false);
         };
         let mut trigger = Trigger {
@@ -1490,7 +2024,15 @@ impl CardRules for WasmRules {
             move_roll: None,
             card: String::new(),
         };
-        let dest = self.drive(cx, Call::Play { card: idx, player_id: player_id as i32 }, id, &mut trigger)?;
+        let dest = self.drive(
+            cx,
+            Call::Play {
+                card: idx,
+                player_id: player_id as i32,
+            },
+            id,
+            &mut trigger,
+        )?;
         Ok(dest == DEST_FIELD)
     }
 
@@ -1520,8 +2062,20 @@ impl CardRules for WasmRules {
         let own = t.card.clone();
         let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
         if own_play && !own.is_empty() {
-            if let Some(idx) = self.ruleset.card(&own).filter(|&i| self.ruleset.cards()[i as usize].reacts_to(trigger.kind)) {
-                self.drive(cx, Call::React { card: idx, player_id: t.player_id }, &own, &mut trigger)?;
+            if let Some(idx) = self
+                .ruleset
+                .card(&own)
+                .filter(|&i| self.ruleset.cards()[i as usize].counter_acts_to(trigger.kind))
+            {
+                self.drive(
+                    cx,
+                    Call::CounterAct {
+                        card: idx,
+                        player_id: t.player_id,
+                    },
+                    &own,
+                    &mut trigger,
+                )?;
             }
         }
         // (2) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
@@ -1536,23 +2090,64 @@ impl CardRules for WasmRules {
                 // C# runs these on a fresh instance of the card named on
                 // `t.card` (`Drawn`, `OnDiscarded`, `DeckBeforeGame`,
                 // `DeckAtGameStart`) -- it is in a hand / pile, not placed.
-                if let Some(idx) = self.ruleset.card(&t.card).filter(|&i| self.ruleset.cards()[i as usize].hooks(kind)) {
-                    self.drive(cx, Call::Hook { card: idx, kind, player_id: t.player_id }, &t.card, &mut trigger)?;
+                if let Some(idx) = self
+                    .ruleset
+                    .card(&t.card)
+                    .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
+                {
+                    if self.hook_guard(cx, &trigger, idx, t.player_id, &t.card) {
+                        self.drive(
+                            cx,
+                            Call::Hook {
+                                card: idx,
+                                kind,
+                                player_id: t.player_id,
+                            },
+                            &t.card,
+                            &mut trigger,
+                        )?;
+                    }
                 }
             } else {
                 let world = cx.world_copy();
                 for player_id in 0..world.player_count() {
                     for id in world.placed_cards(player_id as i32) {
-                        let Some(idx) = self.ruleset.card(&id) else { continue };
-                        if self.ruleset.cards()[idx as usize].hooks(kind) {
-                            self.drive(cx, Call::Hook { card: idx, kind, player_id: player_id as i32 }, &id, &mut trigger)?;
+                        let Some(idx) = self.ruleset.card(&id) else {
+                            continue;
+                        };
+                        // 「场上所有背面朝上的卡无法产生效果」 -- a face-down
+                        // card on the field is inert, so its hooks must not run.
+                        if self.ruleset.cards()[idx as usize].hooks(kind)
+                            && !world.card_face_down(player_id as i32, &id)
+                            && self.hook_guard(cx, &trigger, idx, player_id as i32, &id)
+                        {
+                            self.drive(
+                                cx,
+                                Call::Hook {
+                                    card: idx,
+                                    kind,
+                                    player_id: player_id as i32,
+                                },
+                                &id,
+                                &mut trigger,
+                            )?;
                         }
                         // C# `RollMove`: `RollPlan` runs on every live Fx before
                         // the dice -- `On::RollPlan` shapes the move.
                         if kind == TriggerKind::RollPlan
-                            && self.ruleset.cards()[idx as usize].entry(card_sdk::abi::OnKind::RollPlan, None).is_some()
+                            && self.ruleset.cards()[idx as usize]
+                                .entry(card_sdk::abi::OnKind::RollPlan, None)
+                                .is_some()
                         {
-                            self.drive(cx, Call::RollPlan { card: idx, player_id: player_id as i32 }, &id, &mut trigger)?;
+                            self.drive(
+                                cx,
+                                Call::RollPlan {
+                                    card: idx,
+                                    player_id: player_id as i32,
+                                },
+                                &id,
+                                &mut trigger,
+                            )?;
                         }
                     }
                 }
@@ -1583,8 +2178,20 @@ impl CardRules for WasmRules {
                 });
                 cx.swap_world(w);
                 for (id, owner) in due {
-                    if let Some(idx) = self.ruleset.card(&id).filter(|&i| self.ruleset.cards()[i as usize].has_at_end()) {
-                        self.drive(cx, Call::AtEnd { card: idx, player_id: owner }, &id, &mut trigger)?;
+                    if let Some(idx) = self
+                        .ruleset
+                        .card(&id)
+                        .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
+                    {
+                        self.drive(
+                            cx,
+                            Call::AtEnd {
+                                card: idx,
+                                player_id: owner,
+                            },
+                            &id,
+                            &mut trigger,
+                        )?;
                     }
                 }
             }
@@ -1657,7 +2264,13 @@ fn is_hook_only(kind: &str) -> bool {
 /// Kinds C# runs on a fresh instance of one card (named on `t.card`) rather
 /// than on the cards in play.
 fn is_own_card_kind(kind: TriggerKind) -> bool {
-    matches!(kind, TriggerKind::Drawn | TriggerKind::Discarded | TriggerKind::DeckBeforeGame | TriggerKind::DeckAtGameStart)
+    matches!(
+        kind,
+        TriggerKind::Drawn
+            | TriggerKind::Discarded
+            | TriggerKind::DeckBeforeGame
+            | TriggerKind::DeckAtGameStart
+    )
 }
 
 fn dest_from(v: i32) -> Dest {
@@ -1682,25 +2295,69 @@ mod tests {
     fn every_engine_trigger_kind_maps() {
         for k in [
             // original single-fire kinds
-            "turnStart", "pass", "settleBefore", "settle", "mortgage",
-            "paid", "bankrupt", "card", "event", "moveRoll",
+            "turnStart",
+            "pass",
+            "settleBefore",
+            "settle",
+            "mortgage",
+            "paid",
+            "bankrupt",
+            "card",
+            "event",
+            "moveRoll",
             // reserved-but-declared kinds (engine does not raise all of these
             // yet, but `can_react` guards match on them so they must map)
-            "passPlayer", "pay", "roll", "reacted",
+            "passPlayer",
+            "pay",
+            "roll",
+            "reacted",
             // v10 pre/post halves + new action hooks
-            "turnStartBefore", "passBefore", "settleAfter",
-            "mortgageBefore", "bankruptBefore", "cardAfter", "eventAfter",
-            "buyBefore", "buyAfter", "buildBefore", "buildAfter",
-            "discardBefore", "discardAfter", "endTurnBefore", "endTurnAfter",
-            "leaveBefore", "leaveAfter",
+            "turnStartBefore",
+            "passBefore",
+            "settleAfter",
+            "mortgageBefore",
+            "bankruptBefore",
+            "cardAfter",
+            "eventAfter",
+            "buyBefore",
+            "buyAfter",
+            "buildBefore",
+            "buildAfter",
+            "discardBefore",
+            "discardAfter",
+            "endTurnBefore",
+            "endTurnAfter",
+            "leaveBefore",
+            "leaveAfter",
             // v17 field-card (Fx) hook points
-            "turnEnd", "drawn", "passTile", "payAfter", "rollAfter",
-            "cardPlayed", "targeted", "payChoose",
+            "turnEnd",
+            "drawn",
+            "passTile",
+            "payAfter",
+            "rollAfter",
+            "cardPlayed",
+            "targeted",
+            "payChoose",
             // v23 hook points
-            "turnEndBefore", "turnEndAfter", "payAdd", "payMul", "payAt",
-            "discarded", "deckBeforeGame", "deckAtGameStart", "drew",
-            "reshuffled", "bought", "settleInstead", "beforeOut", "teleported",
-            "rollPlan", "abnormalGuard", "immuneAll", "untargetable", "redirect",
+            "turnEndBefore",
+            "turnEndAfter",
+            "payAdd",
+            "payMul",
+            "payAt",
+            "discarded",
+            "deckBeforeGame",
+            "deckAtGameStart",
+            "drew",
+            "reshuffled",
+            "bought",
+            "settleInstead",
+            "beforeOut",
+            "teleported",
+            "rollPlan",
+            "abnormalGuard",
+            "immuneAll",
+            "untargetable",
+            "redirect",
         ] {
             assert!(
                 !matches!(trigger_kind(k), TriggerKind::None),

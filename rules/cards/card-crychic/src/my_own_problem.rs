@@ -15,7 +15,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new("CRYCHIC:是我自己的问题", &[
-    On::React(&[ChainKind::SettleBefore], can_react, react),
+    On::CounterAct(&[ChainKind::SettleBefore], can_react, react),
 ]);
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.

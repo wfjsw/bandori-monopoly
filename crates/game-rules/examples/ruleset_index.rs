@@ -50,7 +50,9 @@ fn main() {
     for path in &files {
         let bytes = std::fs::read(path).expect("read module");
         let one = Ruleset::load(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
-        let sha = builder.add(&bytes).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let sha = builder
+            .add(&bytes)
+            .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
         let file = format!("{sha}.wasm");
         std::fs::write(out.join(&file), &bytes).expect("write module");
         modules.push(ModuleEntry {
@@ -65,7 +67,11 @@ fn main() {
     let set = builder.build().unwrap_or_else(|e| panic!("{e}"));
     modules.sort_by(|a, b| a.cards[0].id.cmp(&b.cards[0].id));
 
-    let index = Index { abi: game_rules::ABI_VERSION, ruleset_sha256: set.sha256().to_string(), modules };
+    let index = Index {
+        abi: game_rules::ABI_VERSION,
+        ruleset_sha256: set.sha256().to_string(),
+        modules,
+    };
     // Atomic: readers load index.json to learn which modules exist, so it must
     // never appear half-written while a concurrent build publishes.
     let tmp = out.join("index.json.tmp");

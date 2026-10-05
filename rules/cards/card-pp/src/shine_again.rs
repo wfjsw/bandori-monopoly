@@ -23,9 +23,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const SHINE_AGAIN: CardDef = CardDef::new("PP:再次闪耀", &[
-    On::Play(shine_again),
-    On::Hook(&[HookKind::PayChoose], pay_choose),
-]);
+    On::Play(None, shine_again),
+    On::Hook(&[HookKind::PayChoose], |_| true, pay_choose)]);
 
 /// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the
 /// colour groups already recorded, kept on the owner's player while in play.
@@ -38,9 +37,9 @@ fn shine_again(player_id: i32) {
     // 规则书[持续]（1）: 「记录一个此卡未记录的颜色」 -- the recorded set starts
     // empty (C# `new HashSet<int>()` on the card).
     ctx::set_slot(player_id, SLOT_COLORS, 0);
-    // TODO(规则书): [特]「此卡不受除拥有此卡的玩家以外的玩家的效果影响」 -- needs the
-    // C# `Card.Immune` flag so other players' effects skip this field card
-    // (`public override bool Immune => true`).
+    // 规则书[特]: 「此卡不受除拥有此卡的玩家以外的玩家的效果影响」 -- C#
+    // `Card.Immune`. A flag on the card; the owner's own effects still reach it.
+    ctx::set_card_immune(player_id, "PP:再次闪耀", true);
 }
 
 /// Colour groups of buyable tiles the owner holds, minus the recorded set

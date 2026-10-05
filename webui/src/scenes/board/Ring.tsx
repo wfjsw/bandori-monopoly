@@ -103,6 +103,7 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
         )}
         {anim.phase && (
           <div key={anim.phase.id} className={s.phaseFlash}>
+            <i className={s.link} /><i className={s.link} /><i className={s.link} /><i className={s.link} />
             <span>{tr(anim.phase.key)}</span>
           </div>
         )}

@@ -3,6 +3,7 @@
   "centrifugal_end": "{{who}}'s Centrifugal effect ends",
   "centrifugal_log": "{{who}} is immune to other players' effects until their next turn (Centrifugal)",
   "centrifugal_note": "Until the owner's next turn: immune to other players' effects",
+  "courage_wings_agent": "landed on the dealer tile -- gain 1000",
   "courage_wings_none": "Rolled {{tile}}: no other owner, no effect",
   "courage_wings_why": "Courage, Take Flight",
   "hold_hands_again_note": "The next [consume] or [pay] is cancelled",
@@ -63,5 +64,14 @@
   "tsukushi_garden_why": "(Tsukushi) Garden of Bewilderment",
   "tsukushi_garden_will_settle": "Will settle on {{tile}}",
   "your_light_start": "{{who}}'s move starts at Girls' Academy of the Moon Forest (Your Light Will Shine Ahead)",
-  "your_light_why_not": "Can only be played within 20 tiles of Girls' Academy of the Moon Forest"
+  "your_light_why_not": "Can only be played within 20 tiles of Girls' Academy of the Moon Forest",
+  "nanami_effort_how_many": "Nanami, trying a little",
+  "nanami_effort_how_many_text": "Discard how many character tokens?",
+  "nanami_effort_pick_title": "Nanami, trying a little",
+  "nanami_effort_pick_text": "Which effect?",
+  "nanami_effort_effect_1": "Draw that many at turn end",
+  "nanami_effort_effect_2": "Gain 2,000 each",
+  "nanami_effort_effect_3": "Place this card with that many crystals",
+  "nanami_effort_money": "Gained {{n}}",
+  "nanami_effort_placed": "Placed with {{n}} crystals"
 }

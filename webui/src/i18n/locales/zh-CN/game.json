@@ -5,8 +5,10 @@
   "ask.agent.title": "地产商 · {{agent}}",
   "ask.auction.text": "地价 {{price}}{{extra}}。最低出价 100，每次至少加 100，出价最高的人 [消耗] 出价获得地契；有人出价后至少再等 6 秒，没人再加价就成交。",
   "ask.auction.title": "竞价：{{tile}}",
+  "ask.build.among": "{{who}} 可在 {{n}} 个格子之一加盖一栋房屋（{{why}}）",
   "ask.build.no": "不盖",
   "ask.build.text": "{{who}} 停在自己的 {{tile}}，要花 {{cost}} 加盖一栋房屋吗？",
+  "ask.build.tile": "{{tile}}　加盖第 {{nth}} 栋  {{cost}}",
   "ask.build.title": "加盖房屋",
   "ask.build.yes": "加盖",
   "ask.buy.text": "{{who}} 停在无主的 {{tile}}，要花 {{price}} 买下吗？{{extra}}",
@@ -58,7 +60,8 @@
   "err.build_full": "这块地已经盖满了",
   "err.build_mortgaged": "抵押中的地不能加盖房屋（先赎回）",
   "err.build_not_on_own": "只有停在自己的地上才能盖房",
-  "err.build_not_own": "只有自己的地才能盖房",
+"err.build_blocked": "你现在不能加盖房屋",
+    "err.build_not_own": "只有自己的地才能盖房",
   "err.build_only_settling": "只有停在自己的地上结算时才能盖房",
   "err.build_ring": "RiNG 不能加盖房屋",
   "err.built_already": "这次结算已经盖过房屋了（每次结算只能加盖一栋）",
@@ -192,6 +195,7 @@
   "log.forfeit": "{{who}} 离开了对局（弃权），和破产一样出局",
   "log.gain": "{{who}} 获得 {{amount}}{{src}}",
   "log.gain_fire": "获得 {{n}} 个 [火罐]（{{why}}，现在 {{fire}}/{{max}}）",
+  "log.hook_fire": "{{who}} 的「{{card}}」发动",
   "log.land": "{{who}} 停在 {{tile}}",
   "log.land_circle": "{{who}} 停在 CiRCLE，抽 1 张手牌",
   "log.land_draw": "{{who}} 停在 {{tile}}，抽 1 张手牌",
@@ -282,5 +286,8 @@
   "status.move_not_your_turn": "只能在自己的回合",
   "status.stunned": "[晕眩]",
   "vote.against": "{{who}} 反对",
-  "vote.timeout": "到时间还有人没投"
+  "vote.timeout": "到时间还有人没投",
+  "err.skill_not_now": "现在不能使用技能。",
+  "err.skill_unknown": "没有这个技能。",
+  "err.build_denied": "本次移动不能在这里盖房。"
 }

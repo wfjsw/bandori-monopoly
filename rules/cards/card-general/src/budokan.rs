@@ -9,8 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[
-    On::Play(budokan),
-]);
+    On::Play(None, budokan)]);
 
 fn budokan(player_id: i32) {
     // 规则书[手]: 「[使用者]以外的[存活]玩家」 (`ctx::others` drops out players)

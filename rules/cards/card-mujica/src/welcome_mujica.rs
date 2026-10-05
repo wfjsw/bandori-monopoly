@@ -12,21 +12,23 @@
 
 use card_sdk::abi::{TriggerKind, ChainKind};
 use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::state_key;
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const WELCOME_MUJICA: CardDef = CardDef::new("Mujica:欢迎来到ave mujica的世界", &[
-    On::Play(play),
-    On::React(&[ChainKind::State], can_react, react),
-]);
+    On::Play(None, play),
+    On::CounterAct(&[ChainKind::State], can_react, react)]);
 
 fn play(player_id: i32) {
     // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」
     // The C# only offers players with `H.HasStates(p)` (skillState > 0); without a
     // state query the whole player list is offered and the toggle folds below.
     let candidates = ctx::others(player_id);
-    // TODO(规则书)（1）: 「若指定了不存在状态2的玩家则无效果」 -- C# toggles
-    // `skillState` 2 -> 1 or (1|0) -> 2 via `H.SwitchState`; needs the
-    // skill-state query / switch hook in the ABI.
+    // TODO(规则书)（1）[judgement]: 「若指定了不存在状态2的玩家则无效果」 -- read
+    // one way this gates the switch on the target already being in state 2 (so
+    // the only transition is 2 -> 1); read another it rules out targets for whom
+    // state 2 is unreachable. The clause does not say which, so the toggle below
+    // follows 「转换任意一名玩家的状态」 and nothing else.
     if candidates.is_empty() {
         return;
     }
@@ -50,8 +52,12 @@ fn play(player_id: i32) {
         player_id,
         &Msg::new(key!("welcome_mujica_switched")).player_id("who", hit),
     );
-    // TODO(ABI): `H.SwitchState(hit, (skillState == 2) ? 1 : 2, ...)` -- the
-    // skill-state toggle has no ctx counterpart.
+    // 规则书（1）: 「转换任意一名玩家的状态」 -- a straight toggle of the keyed
+    // `skillState`, 2 -> 1 and anything else -> 2.
+    let cur = ctx::state::get(hit, state_key::SKILL_STATE);
+    let to = if cur == 2 { 1 } else { 2 };
+    ctx::state::set(hit, state_key::SKILL_STATE, to);
+    ctx::state::set(hit, "switchedRound", ctx::turn_key());
 }
 
 fn can_react(player_id: i32) -> bool {
@@ -82,6 +88,11 @@ fn react(player_id: i32) {
             &Msg::new(key!("welcome_mujica_switched")).player_id("who", *t),
         );
     }
-    // TODO(ABI): `H.SwitchState` for every target (which also writes the
-    // `switchedRound` slot -- C# `H.SetV(seat, "switchedRound", H.TurnKey)`).
+    // 规则书（2）: `H.SwitchState` on each -- the same skill-state toggle the
+    // play half runs, plus the `switchedRound` mark the filter above keys on.
+    for &t in &targets {
+        let cur = ctx::state::get(t, state_key::SKILL_STATE);
+        ctx::state::set(t, state_key::SKILL_STATE, if cur == 2 { 1 } else { 2 });
+        ctx::state::set(t, "switchedRound", key);
+    }
 }

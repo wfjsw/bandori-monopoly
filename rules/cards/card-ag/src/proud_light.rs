@@ -11,7 +11,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new("AG:刻入天穹傲岸的烈光", &[
-    On::React(&[ChainKind::PassPlayer], can_react, react),
+    On::CounterAct(&[ChainKind::PassPlayer], can_react, react),
 ]);
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).

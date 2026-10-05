@@ -13,22 +13,19 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new("MyGO:哪怕这旅程没有终点", &[
-    On::Play(endless_journey),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-    On::Hook(&[HookKind::SettleAfter], settle_after),
-]);
+    On::Play(None, endless_journey),
+    On::Hook(&[HookKind::TurnEnd], |_| true, turn_end),
+    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after)]);
 
 const ID: &str = "MyGO:哪怕这旅程没有终点";
 
 fn endless_journey(player_id: i32) {
-    // 规则书[手]: 「将此卡放置于当前格子上」 -- C# `H.PlaceFromPlay(c, c.Seat, pos, 4)`.
+    // 规则书[手]: 「将此卡放置于当前格子上」 -- bound to where the player is.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("endless_journey_note")));
-    // 规则书[手]: 「并为其放置4个奇迹水晶」 -- C# `PlaceFromPlay(..., crystals: 4)`.
+    ctx::place_card_on(player_id, ctx::player_pos(player_id), ID, &Msg::new(key!("endless_journey_note")));
+    // 规则书[手]: 「并为其放置4个奇迹水晶」 -- the placement's crystal charge.
     ctx::set_crystals(player_id, 4);
     ctx::log(player_id, &Msg::new(key!("endless_journey_placed")).player_id("who", player_id));
-    // TODO(规则书)[手]: 「将此卡放置于当前格子上」 -- the placement is bound to the
-    // player's current tile (`Card.Tile`); needs field-card tile placement.
 }
 
 /// C# `CardEndlessJourney.TurnEnd` -- when the owner's main move walked more

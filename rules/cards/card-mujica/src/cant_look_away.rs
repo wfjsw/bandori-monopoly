@@ -11,9 +11,8 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new("Mujica:无法将视线移开", &[
-    On::Play(play),
-    On::React(&[ChainKind::Reacted], can_react, react),
-]);
+    On::Play(None, play),
+    On::CounterAct(&[ChainKind::Reacted], can_react, react)]);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
@@ -34,7 +33,8 @@ fn react(player_id: i32) {
 fn run(player_id: i32) {
     // 规则书: 「使当前回合内对你打出过[反击]的所有玩家」 -- C#
     // `H._reactedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
-    // TODO(ABI): the reaction history (C# `H._reactedAgainst`); `ctx::turn_key()`
+    // TODO(规则书)[judgement](ABI): the reaction history (C# `H._reactedAgainst`); `ctx::turn_key()`
+    //   the clause under-specifies -- see the note above it
     // covers the `turn == H.TurnKey` half of the filter, but the list itself
     // cannot be built without the history. We still walk the ordinary player list
     // so the prompts below are exercised.
@@ -55,8 +55,7 @@ fn run(player_id: i32) {
             &Msg::new(key!("cant_look_away_dir_ask")),
             &[
                 Msg::new(key!("cant_look_away_forward")),
-                Msg::new(key!("cant_look_away_backward")),
-            ],
+                Msg::new(key!("cant_look_away_backward"))],
         ) == 0;
         // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
         // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds

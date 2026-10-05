@@ -12,10 +12,8 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 
 pub const KOKORO_CIRCLE: CardDef = CardDef::new("HHW:（kkr）前往笑容集结的地方！", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::SettleAfter], settle_after),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardKokoroCircle.WhyNot`: refuses without 10,000 money, or when a
@@ -38,19 +36,22 @@ fn play(player_id: i32) {
     // 规则书: 「支付10000资金（视为买地花费）」 -- C# `PayCtx { amount = 10000, kind = "buy" }`.
     let paid = ctx::pay(player_id, 10000, &Msg::new(key!("kokoro_circle_why")));
     if paid < 10000 {
-        // TODO(规则书): the C# sets `c.Effective = false` when the payment does not
-        // go through (the play is wasted, `H.ToDiscard(..., wasted: true)`); the ABI
-        // has no set_effective hook.
+// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
+        // side channel and is not being ported (a routine should *return* whether
+        // it took effect); but before that lands, what "not effective" changes has
+        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
+        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
+        // implies no)? And what counts a use that this would suppress?
         return;
     }
     // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H.PlaceFromPlay(c, i, 0)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("kokoro_circle_note")));
     ctx::log(player_id, &Msg::new(key!("kokoro_circle_placed")).player_id("who", player_id));
-    // TODO(规则书): 「并将此卡置于CiRCLE上」 -- the placement is bound to tile #0
-    // (CiRCLE) rather than the player's field; `place_card` does not take a tile
-    // (`f.tile` stays -1), so `placed_tile` reports `Some(-1)`. The settle hook
-    // below falls back to `tile_named("CiRCLE")` for the same reason.
+    // 规则书: 「并将此卡置于CiRCLE上」 -- bound to the CiRCLE tile, not to the
+    // player's field.
+    let circle = ctx::tile_named("CiRCLE");
+    ctx::place_card_on(player_id, circle, ID, &Msg::new(key!("kokoro_circle_note")));
 }
 
 /// 规则书: 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
@@ -75,7 +76,8 @@ fn settle_after(player_id: i32) {
     if mover == player_id || mover < 0 {
         return;
     }
-    // TODO(规则书): C# also skips when `H.CircleNormal(m, num)` (the move tag
+    // TODO(规则书)[judgement]: C# also skips when `H.CircleNormal(m, num)` (the move tag
+    //   the clause under-specifies -- see the note above it
     // `circleNormal` on a real CiRCLE settle -- the normal CiRCLE reward already
     // ran). That move-tag read is not on the trigger payload, so the 6,000 is
     // charged on every CiRCLE settle by another player until it lands.

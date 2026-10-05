@@ -15,8 +15,8 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "HHW:笑容大游行";
 
 pub const SMILE_PARADE: CardDef = CardDef::new("HHW:笑容大游行", &[
-    On::React(&[ChainKind::Pass], can_react, react),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
+    On::CounterAct(&[ChainKind::Pass], can_react, react),
+    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
 ]);
 
 /// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).
@@ -60,10 +60,13 @@ fn react(player_id: i32) {
 /// 将其放入弃牌堆」 -- C# `CardSmileParade.TurnEnd` (`turn == Player && Tile ==
 /// Group && Crystals > 0` -> `AddCrystals(-1)`; empty -> `H.Unplace(this,
 /// "discard")`). `ctx::decay` is that body once the crystal runs out.
+/// Pure guard for [`turn_end`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_end_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
 fn turn_end(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
-    }
     // C# `Tile == Group` -- the decay only runs while the card still sits on
     // 弦卷集团. Tile-bound placement is the held TODO below, so the card is
     // placed on the owner's field and this gate cannot be tested yet.

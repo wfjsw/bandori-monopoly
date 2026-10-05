@@ -7,7 +7,7 @@
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play(louder)]);
+pub const LOUDER: CardDef = CardDef::new("R:（ykn）louder", &[On::Play(None, louder)]);
 
 fn louder(player_id: i32) {
     let now = ctx::add_ring_bonus(5);

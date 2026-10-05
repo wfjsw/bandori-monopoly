@@ -1,13 +1,18 @@
-.area { position: absolute; left: 92px; top: 255px; width: 1416px; height: 430px; }
+/* Vertical is a flex column: a 40px breath under the 110px TopBar, the room
+   list taking the slack, the action row pinned above the bottom margin. The
+   old hard-coded 145px band under the TopBar was the reference's, not a
+   reasonable gap on its own terms. */
+.body { position: absolute; left: 92px; right: 92px; top: 150px; bottom: 88px; display: flex; flex-direction: column; gap: 24px; }
+.area { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
 .filters { display: flex; align-items: center; gap: 16px; margin-bottom: 26px; }
 .listLabel { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 22px 0 14px; border-radius: 19px; background: var(--pink); color: #fff; font-size: 17px; font-weight: 700; }
 .listLabel i { width: 22px; height: 22px; }
 .chips button { height: 34px; font-size: 15px; }
-.empty { margin: 0 auto; width: 734px; height: 250px; border-radius: 16px; background: rgba(255, 255, 255, 0.55); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
+.empty { margin: auto; width: 734px; height: 250px; border-radius: 16px; background: rgba(255, 255, 255, 0.55); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; }
 .empty img { width: 150px; filter: brightness(0) saturate(100%) invert(46%) sepia(60%) saturate(1800%) hue-rotate(318deg); opacity: 0.85; }
 .empty b { font-size: 26px; }
 .empty span { color: var(--sub); font-size: 17px; }
-.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; max-height: 360px; overflow: auto; padding: 4px; }
+.grid { flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; gap: 16px; padding: 4px; }
 .card { background: rgba(255, 255, 255, 0.92); border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; text-align: left; box-shadow: var(--shadow); border-left: 8px solid var(--teal); transition: transform 0.1s; }
 .card:hover { transform: translateY(-2px); }
 .ranked { border-left-color: var(--purple); }
@@ -21,7 +26,7 @@
 .cardFoot b { margin-left: auto; color: var(--text); font-size: 18px; }
 .state { color: var(--pink); font-weight: 700; }
 
-.foot { position: absolute; left: 142px; top: 712px; width: 1316px; height: 100px; }
+.foot { position: relative; flex: 0 0 100px; margin: 0 50px; }
 .joinPill { position: absolute; left: 0; top: 5px; width: 582px; height: 86px; border-radius: 43px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; padding: 0 22px 0 30px; font-size: 19px; font-weight: 700; }
 .joinInput { flex: 1; height: 52px; border-radius: 26px; }
 .joinBtn { width: 116px; height: 54px; }

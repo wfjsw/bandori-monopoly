@@ -12,23 +12,20 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANA_FUNNY: CardDef = CardDef::new("MyGO:（乐奈）有趣的女人", &[
-    On::Play(rana_funny),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-]);
+    On::Play(None, rana_funny),
+    On::Hook(&[HookKind::PassTile], |_| true, pass_tile)]);
 
 const ID: &str = "MyGO:（乐奈）有趣的女人";
 
 fn rana_funny(player_id: i32) {
     // 规则书: 「将此卡置于当前格子上」 -- C# `H.PlaceFromPlay(c, c.Seat, pos)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("rana_funny_note")));
-    // Remember the bound tile so the PassTile hook can filter (C# `Card.Tile`).
+    // 规则书: 「将此卡置于当前格子上」 -- bound to where the player is. The
+    // `PassTile` hook still filters on the slot below; a `card_tile()` read would
+    // let it use `Card.Tile` directly, which is the smaller follow-up.
+    ctx::place_card_on(player_id, ctx::player_pos(player_id), ID, &Msg::new(key!("rana_funny_note")));
     ctx::set_slot(player_id, "rana_funny_tile", ctx::player_pos(player_id));
     ctx::log(player_id, &Msg::new(key!("rana_funny_placed")).player_id("who", player_id));
-    // TODO(规则书): 「将此卡置于当前格子上」 -- the placement is bound to the
-    // player's current tile (`Card.Tile`); `place_card` only attaches the card to
-    // the player's field, so needs field-card tile placement (the hook below reads
-    // the bound tile from a slot instead).
 }
 
 /// C# `CardRanaFunny.PassTile` -- a passer who does not settle here grows a

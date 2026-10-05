@@ -11,7 +11,7 @@
 
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play(perfect)]);
+pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play(None, perfect)]);
 
 fn perfect(player_id: i32) {
     // 规则书[手]: 「1. [移除]此卡」

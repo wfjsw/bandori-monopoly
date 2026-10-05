@@ -16,13 +16,11 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
 
 pub const SAAYA_SKY: CardDef = CardDef::new("PPP:（沙绫）总有一天要给这片天空命名", &[
-    On::Play(play),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-    On::Hook(&[HookKind::TurnEndAfter], turn_end_after),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+    On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end_after)]);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
-const SLOT_TILE: &str = "saaya_sky_tile";
 /// C# `CardSaayaSky._passed` -- the user walked past the card this turn.
 const SLOT_PASSED: &str = "saaya_sky_passed";
 
@@ -31,23 +29,21 @@ fn play(player_id: i32) {
     // H.TileNamed("山吹面包房"))`.
     let tile = ctx::tile_named("山吹面包房");
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("saaya_sky_note")));
+    // 规则书（1）: 「将此卡放置在山吹面包房」 -- bound to that tile; the hop in
+    // (2) moves it with `set_card_tile`.
+    ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("saaya_sky_note")));
     ctx::log(player_id, &Msg::new(key!("saaya_sky_placed")).player_id("who", player_id));
-    // TODO(ABI)（1）: 「将此卡放置在山吹面包房」 -- the placement is bound to that
-    //   tile (C# `H.PlaceFromPlay(c, owner, tile)`), not the player's field; the ABI's
-    //   `place_card` only parks the card at a player. The tile is remembered in
-    //   `SLOT_TILE` so the hooks below can key on it (and move it on the hop).
-    if tile >= 0 {
-        ctx::set_slot(player_id, SLOT_TILE, tile);
-    }
 }
 
 /// 规则书（2）: 「[使用者][经过]此卡后」 -- C# `CardSaayaSky.PassTile` sets `_passed`.
+/// Pure guard for [`pass_tile`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_tile_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pass_tile(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
-    let tile = ctx::slot(player_id, SLOT_TILE);
+    let tile = ctx::placed_tile(player_id, ID).unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return;
     }
@@ -76,13 +72,9 @@ fn turn_end_after(player_id: i32) {
         return;
     }
     let to = (num - 1).rem_euclid(n);
-    ctx::set_slot(player_id, SLOT_TILE, to);
+    ctx::set_card_tile(player_id, ID, to);
     ctx::log(
         player_id,
         &Msg::new(key!("saaya_sky_hop")).player_id("who", player_id).tile("tile", to),
     );
-    // TODO(规则书)（2）: 「将此卡放置在投掷结果的格子上」 -- the hop is a tile-bound
-    //   re-placement (`card.Tile = (num - 1) % tiles`, C# `H.Touch()` for the
-    //   broadcast). `SLOT_TILE` records the new tile so the hooks keep keying on
-    //   it; the engine does not see the card move.
 }

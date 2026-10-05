@@ -16,10 +16,9 @@ const ID: &str = "Mor:夏日合宿";
 const SLOT_BLOCKED: &str = "summer_camp_blocked";
 
 pub const SUMMER_CAMP: CardDef = CardDef::new("Mor:夏日合宿", &[
-    On::Play(summer_camp),
+    On::Play(None, summer_camp),
     On::Gate(&[GateKind::Untargetable], untargetable),
-    On::Hook(&[HookKind::TurnStart], turn_start),
-]);
+    On::Hook(&[HookKind::TurnStart], |_| true, turn_start)]);
 
 fn summer_camp(player_id: i32) {
     // C# `AiPlay => false` -- bots never play this card; `CardDef` has no AiPlay

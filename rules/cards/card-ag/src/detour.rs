@@ -8,15 +8,15 @@
 //! > （2）效果），并将下一次的移动掷骰变更为1d6
 //!
 
+use card_sdk::ctx::plan;
 use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const DETOUR: CardDef = CardDef::new("AG:回家的路上绕个道", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::React(&[ChainKind::MoveRoll], can_react, react),
-]);
+    On::Play(Some(cant_play), play),
+    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
+    On::RollPlan(next_roll)]);
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -48,8 +48,7 @@ fn play(player_id: i32) {
             Msg::new(key!("detour_opt_reverse")),
             Msg::new(key!("detour_opt_tomoe")),
             Msg::new(key!("detour_opt_odd")),
-            Msg::new(key!("detour_opt_even")),
-        ],
+            Msg::new(key!("detour_opt_even"))],
     );
     // 规则书(2): the four plans mutate the turn's `MoveCtx`
     // (C# `H._turnCtx.Plan`: `Reverse` / `NoCircleReward` / `Start` / `Parity`).
@@ -88,7 +87,7 @@ fn play(player_id: i32) {
 }
 
 fn react(player_id: i32) {
-    let Some(_before) = trigger::move_roll() else { return };
+    let Some(_before) = trigger::move_roll() else { return; };
     // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the reaction path is the Ran
     // branch only: reverse the move and drop the CiRCLE reward (C#
     // `move.Reverse = !move.Reverse; move.NoCircleReward = true` on the
@@ -98,12 +97,23 @@ fn react(player_id: i32) {
     // trigger's move payload -- unmapped half: the walk has not started yet
     // (moveRoll runs before `walk`) but nothing flips those fields on the live
     // move.
-    // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `H.ExtraOf<NextRollFx>`
-    // replaces the next main roll's dice plan with 1d6 (its `RollPlan` runs
-    // `m.Base.Clear(); m.Base.Add(Dice)` on that move).
-    // TODO(规则书(2)): needs the `H.ExtraOf` / NextRollFx attachment (a persistent
-    // one-shot dice-plan override) -- unmapped half: `set_base_dice` shapes the
-    // plan being built, and this reaction runs on an in-flight roll (the plan's
-    // dice have already been consumed).
+    // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- armed here, consumed by the
+    // `RollPlan` hook below when the next plan is being built. One-shot: the hook
+    // clears it so it does not rewrite the roll after that.
+    ctx::state::set(player_id, NEXT_ROLL, 1);
     ctx::log(player_id, &Msg::new(key!("detour_react")).player_id("who", player_id));
+}
+
+/// Armed when the reaction fired; the next plan is the one it rewrites.
+const NEXT_ROLL: &str = "detour_next_roll";
+
+/// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `RollPlan` is the moment the dice
+/// plan is being built, so this is where the override belongs. `set_base_dice`
+/// replaces the table; 1d6 is the clause's.
+fn next_roll(player_id: i32) {
+    if ctx::state::get(player_id, NEXT_ROLL) == 0 {
+        return;
+    }
+    ctx::state::set(player_id, NEXT_ROLL, 0);
+    plan::set_base_dice(1, 6, "detour");
 }

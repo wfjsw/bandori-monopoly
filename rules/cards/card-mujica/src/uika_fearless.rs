@@ -9,8 +9,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new("Mujica:（初华）我，无畏悲伤", &[
-    On::Play(uika_fearless),
-]);
+    On::Play(None, uika_fearless)]);
 
 fn uika_fearless(player_id: i32) {
     // 规则书: 「若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]」 -- C#

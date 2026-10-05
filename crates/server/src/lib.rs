@@ -23,6 +23,7 @@
 pub mod api;
 pub mod auth;
 pub mod error;
+pub mod pool;
 pub mod room;
 pub mod sse;
 pub mod state;
@@ -43,10 +44,17 @@ pub use state::Server;
 /// Match ticks per second.
 pub const TICK_HZ: u64 = 20;
 
-pub fn router(server: Arc<Server>, data_dir: Option<PathBuf>, static_dir: Option<PathBuf>) -> Router {
+pub fn router(
+    server: Arc<Server>,
+    data_dir: Option<PathBuf>,
+    static_dir: Option<PathBuf>,
+) -> Router {
     let mut app = Router::new()
         .route("/api/health", get(api::health))
-        .route("/api/session", post(api::create_session).get(api::get_session))
+        .route(
+            "/api/session",
+            post(api::create_session).get(api::get_session),
+        )
         .route("/api/rooms", get(api::list_rooms).post(api::create_room))
         .route("/api/rooms/{id}/join", post(api::join_room))
         .route("/api/rooms/{id}/ready", post(api::ready))
@@ -75,27 +83,91 @@ pub fn router(server: Arc<Server>, data_dir: Option<PathBuf>, static_dir: Option
 /// `index.html` for client-side routes; a real 404 for missing files and API paths.
 async fn spa_index(State(index): State<PathBuf>, uri: Uri) -> Response {
     let path = uri.path();
-    let file_like = path.rsplit('/').next().is_some_and(|last| last.contains('.'));
+    let file_like = path
+        .rsplit('/')
+        .next()
+        .is_some_and(|last| last.contains('.'));
     if file_like || path.starts_with("/api/") || path.starts_with("/data/") {
         return StatusCode::NOT_FOUND.into_response();
     }
     match tokio::fs::read(&index).await {
-        Ok(html) => ([(header::CONTENT_TYPE, "text/html; charset=utf-8"), (header::CACHE_CONTROL, "no-cache")], html).into_response(),
+        Ok(html) => (
+            [
+                (header::CONTENT_TYPE, "text/html; charset=utf-8"),
+                (header::CACHE_CONTROL, "no-cache"),
+            ],
+            html,
+        )
+            .into_response(),
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
 /// Advance every room by `dt` and apply presence time-outs.
-pub fn tick_all(server: &Server, dt: f32) {
-    let rooms: Vec<(String, Arc<std::sync::Mutex<room::Room>>)> =
-        server.rooms.lock().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    let mut cleared = vec![];
+/// Advance every room. The match clock is a worker round-trip, so each room is
+/// checked out of its lock first and the round-trip runs with nothing held --
+/// then the rooms are fanned out over `spawn_blocking` and run in parallel.
+pub async fn tick_all(server: &Arc<Server>, dt: f32) {
+    let rooms: Vec<(String, Arc<std::sync::Mutex<room::Room>>)> = server
+        .rooms
+        .lock()
+        .unwrap()
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    let timeout = server.presence_timeout;
+    let mut cleared: Vec<String> = vec![];
     let mut dead = vec![];
+    let mut jobs = Vec::with_capacity(rooms.len());
     for (id, room) in rooms {
-        let mut r = room.lock().unwrap();
-        cleared.extend(r.tick(dt, server.presence_timeout));
-        if r.dissolved.is_some() {
-            dead.push(id);
+        jobs.push(tokio::task::spawn_blocking(move || {
+            // 1. presence and check-out -- the room lock is held only here.
+            let (m, playing, dropped, removed) = {
+                let mut r = room.lock().unwrap();
+                let m = r.match_handle();
+                let playing = r.info.playing;
+                let (dropped, removed) = r.tick_presence(timeout);
+                (m, playing, dropped, removed)
+            };
+            // 2. the round-trips, with no lock held.
+            let mut changed = false;
+            let mut ended = false;
+            if let Some(m) = &m {
+                for d in &dropped {
+                    if let Err(e) = m.member_left(*d, true) {
+                        eprintln!("room {id} member_left failed: {e}");
+                    }
+                    changed = true;
+                }
+                if playing {
+                    match m.tick(dt) {
+                        Ok(c) => changed |= c,
+                        Err(e) => eprintln!("room {id} tick failed: {e}"),
+                    }
+                    ended = m.ended().unwrap_or(false);
+                }
+            }
+            // 3. bookkeeping -- short lock again.
+            let mut r = room.lock().unwrap();
+            if ended {
+                r.info.playing = false;
+                changed = true;
+            }
+            if changed {
+                r.notify();
+            }
+            (id, removed, r.dissolved.is_some())
+        }));
+    }
+    for job in jobs {
+        match job.await {
+            Ok((id, removed, dissolved)) => {
+                cleared.extend(removed);
+                if dissolved {
+                    dead.push(id);
+                }
+            }
+            Err(e) => eprintln!("tick task failed: {e}"),
         }
     }
     for token in cleared {
@@ -109,7 +181,6 @@ pub fn tick_all(server: &Server, dt: f32) {
     }
 }
 
-/// Run [`tick_all`] at [`TICK_HZ`] forever.
 pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut iv = tokio::time::interval(Duration::from_millis(1000 / TICK_HZ));
@@ -120,7 +191,7 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
             let now = Instant::now();
             let dt = (now - last).as_secs_f32().min(0.5);
             last = now;
-            tick_all(&server, dt * server.time_scale);
+            tick_all(&server, dt * server.time_scale).await;
         }
     })
 }

@@ -18,9 +18,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const RANGER: CardDef = CardDef::new("PP:[衍生]魔法战队Pastel✽Ranger", &[
-    On::Play(ranger),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), ranger)]);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -48,10 +46,12 @@ fn placed_count(player_id: i32) -> i32 {
 
 fn ranger(player_id: i32) {
     // 规则书[手]: 「根据场上你拥有的卡数量」
-    let n = placed_count(player_id);
-    // TODO(规则书)[手]: 「如果[共鸣]则视为数量加1」 -- needs H.TryResonance (discard
-    // 「PP:[衍生]共鸣」 from hand) to treat the count as one higher.
-    // C# `H.Log("text", i, "场上的卡数：" + n)`.
+    let mut n = placed_count(player_id);
+    // 规则书[手]: 「如果[共鸣]则视为数量加1」 -- the cost is the discard, and it
+    // buys a fatter count rather than anything on its own.
+    if crate::resonance::try_resonance(player_id) {
+        n += 1;
+    }
     ctx::log(player_id, &Msg::new(key!("ranger_count")).i("n", n as i64));
     // 规则书[手]1: 「数量至少为1则[获得]500资金」
     if n >= 1 {
@@ -70,10 +70,10 @@ fn ranger(player_id: i32) {
     // 盖房后减少1层”」 -- the 2,000 loss is `H.LoseR(i, 2000, CardName)`.
     if n >= 5 {
         ctx::pay(player_id, 2000, &Msg::new(key!("ranger_why")).i("n", n as i64));
-        // TODO(规则书)[手]4: 「下次盖房时减免2000（可溢出），盖房后减少1层」 -- needs
-        // the H.ExtraOf BuildDiscountFx attachment (C# `H.ExtraOf<BuildDiscountFx>(i)
-        // .Add(2000, CardName)`: a layered `Fx.BuildCost` cut with overflow refund
-        // and one layer popped per `Fx.Built`).
+        // 规则书[手]4: 「下次盖房时减免2000（可溢出），盖房后减少1层」 -- a
+        // layered cut on the build cost; the engine refunds the 「可溢出」 half
+        // and pops one layer per build.
+        ctx::set_build_discount(2000, 1);
     }
     // 规则书[手]5: 「数量至少为6则抽1张卡」
     if n >= 6 {

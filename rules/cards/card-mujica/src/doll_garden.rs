@@ -10,9 +10,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const DOLL_GARDEN: CardDef = CardDef::new("Mujica:人偶的箱庭", &[
-    On::Play(doll_garden),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), doll_garden)]);
 
 /// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -41,8 +39,7 @@ fn doll_garden(player_id: i32) {
                     .i("x", x as i64),
                 &[
                     Msg::new(key!("doll_garden_move")),
-                    Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64),
-                ],
+                    Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64)],
             );
             if pick == 1 {
                 // 规则书: 「向你支付X*20资金」

@@ -7,34 +7,41 @@
 //!
 //! The rule text lives in `data/characters.json` (`skill` is the name, `text` /
 //! `simple` the wording); what is here is the behavior. A skill that mandates a
-//! [火罐] cap is the whole reason the keyed state carries bounds -- it writes
+//! fire-pot cap is the whole reason the keyed state carries bounds -- it writes
 //! `state::set_bounds(player_id, state_key::FIRE, 0, 1)` and every card reads it
 //! back with `state::max(player_id, state_key::FIRE)`. The engine holds the
 //! number and enforces nothing; see `game_core::state::StateVar`.
 //!
-//! # Activation -- the one open shape
+//! # Hooks: use the two that exist
 //!
-//! A skill is not a card you play and not a card placed on the board, so none
-//! of the existing `On` variants fit it:
+//! A skill is not a third category. Everything it does is either **started by
+//! the user** or **called by a field event**, and both already have a hook:
 //!
-//! - `On::Play` fires from hand; a skill is never in hand.
-//! - `On::Hook` fires for *placed* field cards (`wasm_rules` gates on
-//!   `t.card`, i.e. the mark on the board). A skill is never placed, and it
-//!   must not be removable the way a field card is.
-//! - `On::React` is a [反击] window; a skill is always on.
+//! - **Started by the user** -- a skill button (C# `SkillAction` on
+//!   `MatchPlayer.actions`). The player presses it, the effect runs. That is
+//!   [`On::Play`], gate and effect: `On::Play(Some(why_not), run)` where the
+//!   gate is the "can I press this right now?" query (C# `Card.WhyNot`) and
+//!   `run` is what the press does.
+//! - **Called by a field event** -- the skill is a field card on the player
+//!   (C# `Fx`, from `MatchPlayer.field`), which is why [`On::Hook`] reaches it.
+//!   It answers settlement points automatically, with no declaration and no
+//!   press. A fire cap that has to hold from the moment the character is taken
+//!   belongs here.
 //!
-//! What is needed is an always-active variant -- `On::Skill(&[TriggerKind],
-//! fn(player_id))` -- dispatched for every player whose character or band owns
-//! the skill, with no placement gate and no removal. That is a new `OnKind`, a
-//! manifest entry, and a dispatch arm; it is **not built yet**, so the table
-//! below is empty rather than holding rules that would silently never run.
+//! So there is no `On::Skill`. Inventing one would be a third axis for a
+//! question the two above already answer.
 //!
-//! The binding is the second half: a skill's [`CardDef`] id has to say which
-//! character or band it belongs to (the proposed shape is
-//! `skill:户山香澄:非凡之星` / `skill:Poppin' Party:星之鼓动`), and the engine
-//! resolves a player's two skills from the character they picked and their
-//! band. Both halves land together -- an id with no dispatcher is the
-//! `plan::set_bonus` trap all over again.
+//! # What is actually missing: binding, not hooks
+//!
+//! The rule needs to know whose it is. The id carries that --
+//! `skill:户山香澄:非凡之星` -- and the engine resolves a player's two skills
+//! from the character they picked and their band, the way it resolves a card
+//! from its id today. That resolution is the piece that is not built yet, which
+//! is why the table below is empty: a rule nothing dispatches to is worse than
+//! no rule (it is the `plan::set_bonus` trap -- a name with no caller).
+//!
+//! Adding a skill is one file here plus an entry in [`CARDS`]. The two halves
+//! land together: id resolution first, then the rules.
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
 
@@ -42,6 +49,178 @@ extern crate alloc;
 
 use card_sdk::CardDef;
 
-/// Every character skill. Empty until the `On::Skill` activation lands; see the
-/// module docs. Adding one is a file in this directory plus an entry here.
-pub const CARDS: &[CardDef] = &[];
+pub mod anon_restart;
+use anon_restart::ANON_RESTART;
+pub mod arisa_bonsai;
+use arisa_bonsai::ARISA_BONSAI;
+pub mod kaoru_prince;
+use kaoru_prince::KAORU_PRINCE;
+pub mod kiritani_zenith;
+pub mod lisa_goddess;
+use lisa_goddess::LISA_GODDESS;
+use kiritani_zenith::KIRITANI_ZENITH;
+pub mod misaki_other;
+use misaki_other::MISAKI_OTHER;
+pub mod moca_self;
+pub mod mutsumi_actor;
+use mutsumi_actor::MUTSUMI_ACTOR;
+pub mod mutsumi_crychic;
+pub mod nanami_ordinary;
+use nanami_ordinary::NANAMI_ORDINARY;
+use mutsumi_crychic::MUTSUMI_CRYCHIC;
+pub mod tukushi_try;
+use tukushi_try::TUKUSHI_TRY;
+use moca_self::MOCA_SELF;
+pub mod numazu_maid;
+pub mod tomoe_ramen;
+use tomoe_ramen::TOMOE_RAMEN;
+use numazu_maid::NUMAZU_MAID;
+pub mod rana_parking;
+use rana_parking::RANA_PARKING;
+pub mod rimi_resolve;
+use rimi_resolve::RIMI_RESOLVE;
+pub mod rinko_1cm;
+pub mod tae_police;
+use tae_police::TAE_POLICE;
+use rinko_1cm::RINKO_1CM;
+pub mod asahi_aim;
+use asahi_aim::ASAHI_AIM;
+pub mod diana_idol;
+use diana_idol::DIANA_IDOL;
+pub mod hagumi_homerun;
+use hagumi_homerun::HAGUMI_HOMERUN;
+pub mod hina_lottery;
+pub mod mana_donut;
+use mana_donut::MANA_DONUT;
+use hina_lottery::HINA_LOTTERY;
+pub mod himari_step;
+use himari_step::HIMARI_STEP;
+pub mod ran_red;
+use ran_red::RAN_RED;
+pub mod raise_effort;
+pub mod tsugumi_plain;
+pub mod tsugushi_monitor;
+use tsugushi_monitor::TSUGUSHI_MONITOR;
+pub mod yuri_crit;
+use yuri_crit::YURI_CRIT;
+use tsugumi_plain::TSUGUMI_PLAIN;
+use raise_effort::RAISE_EFFORT;
+pub mod sayo_thorns;
+use sayo_thorns::SAYO_THORNS;
+pub mod soyo_clear;
+pub mod soyo_crychic;
+use soyo_crychic::SOYO_CRYCHIC;
+pub mod tomori_crychic;
+use tomori_crychic::TOMORI_CRYCHIC;
+use soyo_clear::SOYO_CLEAR;
+pub mod sato_red;
+use sato_red::SATO_RED;
+pub mod taki_meeting;
+use taki_meeting::TAKI_MEETING;
+pub mod chisato_frank;
+pub mod diana_imprisoned;
+use diana_imprisoned::DIANA_IMPRISONED;
+use chisato_frank::CHISATO_FRANK;
+pub mod eve_unify;
+use eve_unify::EVE_UNIFY;
+pub mod extraordinary_star;
+pub mod maya_dawn;
+use maya_dawn::MAYA_DAWN;
+use extraordinary_star::EXTRAORDINARY_STAR;
+pub mod kurata_speed;
+use kurata_speed::KURATA_SPEED;
+pub mod tamade_producer;
+use tamade_producer::TAMADE_PRODUCER;
+pub mod tomori_poem;
+use tomori_poem::TOMORI_POEM;
+pub mod akao_cool;
+use akao_cool::AKAO_COOL;
+pub mod aya_with;
+use aya_with::AYA_WITH;
+pub mod kokoro_practice;
+use kokoro_practice::KOKORO_PRACTICE;
+pub mod kasumi_group;
+pub mod kanon_lost;
+use kanon_lost::KANON_LOST;
+pub mod saaya_sky;
+pub mod saki_crychic;
+use saki_crychic::SAKI_CRYCHIC;
+use saaya_sky::SAAYA_SKY;
+use kasumi_group::KASUMI_GROUP;
+pub mod marina_gifts;
+use marina_gifts::MARINA_GIFTS;
+pub mod kaede_support;
+use kaede_support::KAEDE_SUPPORT;
+pub mod mumei_streamer;
+use mumei_streamer::MUMEI_STREAMER;
+pub mod sakiko_life;
+use sakiko_life::SAKIKO_LIFE;
+pub mod taki_crychic;
+use taki_crychic::TAKI_CRYCHIC;
+
+// The 规则书 text for these is a Google Sheet (see `skill-rulebook-sheets` in
+// the project memory, or fetch `export?format=csv&gid=951422372` on the
+// `1xZ3avBsNBXbl3bQ74lmPs0YQFgZkPD0Sdzmx7ZGGEDY` document), column `技能`.
+// `data/characters.json` (`text`) is a faithful copy of it -- 54/54 rows match
+// modulo the sheet's literal backslash-n escapes -- so the JSON is safe to
+// code against, and the sheet is where to check a body against.
+//
+// All 54 character skills are written. What is left on each is its own
+// `TODO(规则书)` / `TODO(ABI)` note -- see the tally in the module docs.
+//
+pub const CARDS: &[CardDef] = &[
+    ANON_RESTART,
+    ARISA_BONSAI,
+    AKAO_COOL,
+    ASAHI_AIM,
+    AYA_WITH,
+    CHISATO_FRANK,
+    DIANA_IDOL,
+    DIANA_IMPRISONED,
+    EVE_UNIFY,
+    EXTRAORDINARY_STAR,
+    KASUMI_GROUP,
+    KAORU_PRINCE,
+    KANON_LOST,
+    KIRITANI_ZENITH,
+    KOKORO_PRACTICE,
+    HAGUMI_HOMERUN,
+    HINA_LOTTERY,
+    HIMARI_STEP,
+    KURATA_SPEED,
+    LISA_GODDESS,
+    MANA_DONUT,
+    MARINA_GIFTS,
+    MAYA_DAWN,
+    MISAKI_OTHER,
+    MOCA_SELF,
+    MUTSUMI_ACTOR,
+    MUTSUMI_CRYCHIC,
+    NANAMI_ORDINARY,
+    NUMAZU_MAID,
+    RANA_PARKING,
+    RAN_RED,
+    RAISE_EFFORT,
+    RIMI_RESOLVE,
+    RINKO_1CM,
+    SAAYA_SKY,
+    SAKI_CRYCHIC,
+    SATO_RED,
+    SAYO_THORNS,
+    SOYO_CLEAR,
+    SOYO_CRYCHIC,
+    TAKI_MEETING,
+    TAE_POLICE,
+    TAMADE_PRODUCER,
+    TOMOE_RAMEN,
+    TSUGUMI_PLAIN,
+    TSUGUSHI_MONITOR,
+    YURI_CRIT,
+    TUKUSHI_TRY,
+    TOMORI_CRYCHIC,
+    TOMORI_POEM,
+    TAKI_CRYCHIC,
+    SAKIKO_LIFE,
+    MUMEI_STREAMER,
+    KAEDE_SUPPORT,
+];

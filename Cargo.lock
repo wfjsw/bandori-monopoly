@@ -1256,6 +1256,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rules-worker"
+version = "0.1.0"
+dependencies = [
+ "game-core",
+ "game-rules",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1394,6 +1404,7 @@ dependencies = [
  "game-rules",
  "getrandom 0.4.3",
  "reqwest",
+ "rules-worker",
  "serde",
  "serde_json",
  "tokio",

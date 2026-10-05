@@ -9,11 +9,11 @@
 
 use alloc::vec::Vec;
 
+use card_sdk::abi::state_key;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[
-    On::Play(hitoshizuku),
-]);
+    On::Play(None, hitoshizuku)]);
 
 fn hitoshizuku(player_id: i32) {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
@@ -34,14 +34,16 @@ fn hitoshizuku(player_id: i32) {
             ctx::give_stay(j, keep - stay);
             n += 1;
         }
+        // 「[眩晕]」 is the `stun` counter **plus** a pending `stunStart` -- a stun
+        // applied this turn that only starts counting next turn. Clearing the
+        // effect clears both; a lone `stun` would leave the pending one behind.
         let stun = ctx::stun_of(j);
-        if stun > 0 {
+        let pending = ctx::state::get(j, state_key::STUN_START);
+        if stun > 0 || pending > 0 {
             ctx::give_stun(j, -stun);
+            ctx::state::set(j, state_key::STUN_START, 0);
             n += 1;
         }
-        // TODO(规则书): 「清除场上所有[停留]与[眩晕]效果」 -- C# also zeroes
-        // `matchPlayer.stunStart` alongside `stun`; the vocabulary reads only
-        // `stun_of` (the `stun` counter), so a pending `stunStart` survives.
         if n > 0 {
             cleared.push((j, n));
             // C# `H.Log("status", j, ...)` names the kinds when both went.

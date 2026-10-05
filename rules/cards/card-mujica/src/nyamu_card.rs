@@ -14,8 +14,7 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const NYAMU_CARD: CardDef = CardDef::new("Mujica:（喵梦）", &[
-    On::Play(nyamu_card),
-]);
+    On::Play(None, nyamu_card)]);
 
 fn nyamu_card(player_id: i32) {
     // 规则书（1）: 「将此卡放置于场上」 -- C# `H.PlaceFromPlay(c)`.

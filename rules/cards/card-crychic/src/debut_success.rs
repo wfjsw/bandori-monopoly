@@ -9,9 +9,8 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new("CRYCHIC:初演大成功", &[
-    On::Play(debut_success),
-    On::AtEnd(at_end),
-]);
+    On::Play(None, debut_success),
+    On::AtEnd(at_end)]);
 
 fn debut_success(player_id: i32) {
     // 规则书: 「打出此卡后，本回合内你的资金不会下降」 -- C# `H._turnCtx.NoMoneyLoss = true`.

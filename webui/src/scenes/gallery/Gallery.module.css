@@ -1,7 +1,7 @@
-.tabs { position: absolute; left: 67px; top: 165px; width: 1475px; display: flex; justify-content: space-between; align-items: center; }
+.tabs { position: absolute; left: 67px; right: 67px; top: 165px; display: flex; justify-content: space-between; align-items: center; }
 .count { height: 40px; line-height: 40px; padding: 0 54px; border-radius: 20px; background: rgba(255, 255, 255, 0.85); font-size: 16px; font-weight: 700; }
-.panel { position: absolute; left: 67px; top: 244px; width: 1466px; height: 600px; background: rgba(255, 255, 255, 0.55); border-radius: 18px; padding: 22px 20px 22px 25px; }
-.grid { height: 100%; overflow: auto; display: grid; grid-template-columns: repeat(8, 124px); justify-content: space-between; gap: 20px 0; align-content: start; padding: 2px 30px 4px 2px; }
+.panel { position: absolute; left: 67px; right: 67px; top: 244px; height: 600px; background: rgba(255, 255, 255, 0.55); border-radius: 18px; padding: 22px 20px 22px 25px; }
+.grid { height: 100%; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 124px); justify-content: space-between; gap: 20px 0; align-content: start; padding: 2px 30px 4px 2px; }
 
 .popup { width: 1280px; }
 .detail { display: flex; gap: 22px; height: 700px; }

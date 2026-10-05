@@ -12,7 +12,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const AKO_DARK: CardDef = CardDef::new("R:（亚子）黑暗大魔姬亚子", &[
-    On::React(&[ChainKind::Effect], can_react, react),
+    On::CounterAct(&[ChainKind::Effect], can_react, react),
 ]);
 
 /// 规则书（1）[反击]: 「[反击] 当你即将向其他玩家支付资金时可打出此卡」
@@ -41,8 +41,10 @@ fn react(player_id: i32) {
     if ctx::stun_of(player_id) > 0 {
         trigger::set_pay_amount(0);
     }
-    // 规则书（1）[反击]: 「若此卡从手牌以外的地方打出，你抽一张卡」
-    // TODO(ABI): 「若此卡从手牌以外的地方打出，你抽一张卡」 -- needs `PlayCtx.FromDeck`
-    //   (C# `if (c.FromDeck) H.DrawR(i, 1, ...)`); the reaction carries no origin
-    //   flag.
+    // 规则书（1）[反击]: 「若此卡从手牌以外的地方打出，你抽一张卡」 -- the
+    // play's origin: a card run through `ctx::play_card` did not come from a hand.
+    if !ctx::play_from_hand() {
+        ctx::draw(player_id, 1);
+        ctx::log(player_id, &Msg::new(key!("ako_dark_drawn")).player_id("who", player_id));
+    }
 }

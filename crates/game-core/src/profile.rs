@@ -10,7 +10,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::data::{CharacterData, GameData};
-use crate::progression::{self, MatchReward, FIRE_DAILY_MAX, FIRE_MAX_PER_GAME, MAX_LEVEL, STARS_PER_GAME};
+use crate::progression::{
+    self, MatchReward, FIRE_DAILY_MAX, FIRE_MAX_PER_GAME, MAX_LEVEL, STARS_PER_GAME,
+};
 use crate::MatchMode;
 
 pub const SAVE_VERSION: i32 = 3;
@@ -165,7 +167,11 @@ impl PlayerProfile {
         if self.save_version < 2 {
             // v1 only had the `ranked` flag.
             for r in &mut self.history {
-                r.mode = if r.ranked { MatchMode::Ranked } else { MatchMode::Casual };
+                r.mode = if r.ranked {
+                    MatchMode::Ranked
+                } else {
+                    MatchMode::Casual
+                };
             }
             self.save_version = 2;
         }
@@ -236,9 +242,21 @@ impl PlayerProfile {
 
     /// `ProfileService.ApplyMatch` -- spend fire, grant EXP/stars/coins, update
     /// counters and stats, and prepend to history (capped at 30).
-    pub fn apply_match(&mut self, mode: MatchMode, rank: i32, players: i32, character: &str, now: &str) -> MatchReward {
+    pub fn apply_match(
+        &mut self,
+        mode: MatchMode,
+        rank: i32,
+        players: i32,
+        character: &str,
+        now: &str,
+    ) -> MatchReward {
         let ranked = mode == MatchMode::Ranked;
-        let mut r = MatchReward { mode, rank, players, ..MatchReward::default() };
+        let mut r = MatchReward {
+            mode,
+            rank,
+            players,
+            ..MatchReward::default()
+        };
         r.level_before = self.level;
         r.progress_before = self.level_progress();
         r.base_exp = progression::base_exp(ranked, rank, players);
@@ -268,10 +286,17 @@ impl PlayerProfile {
             MatchMode::Solo => self.solo_games += 1,
         }
         if !character.is_empty() {
-            let i = match self.character_stats.iter().position(|s| s.name == character) {
+            let i = match self
+                .character_stats
+                .iter()
+                .position(|s| s.name == character)
+            {
                 Some(i) => i,
                 None => {
-                    self.character_stats.push(CharacterStat { name: character.into(), ..Default::default() });
+                    self.character_stats.push(CharacterStat {
+                        name: character.into(),
+                        ..Default::default()
+                    });
                     self.character_stats.len() - 1
                 }
             };
@@ -307,7 +332,10 @@ impl PlayerProfile {
 
     pub fn has_new(&self, data: &GameData, what: Seen) -> bool {
         match what {
-            Seen::Gallery => data.characters.iter().any(|c| !self.seen_characters.contains(&c.name)),
+            Seen::Gallery => data
+                .characters
+                .iter()
+                .any(|c| !self.seen_characters.contains(&c.name)),
             Seen::Deck => data.cards.iter().any(|c| !self.seen_cards.contains(&c.id)),
             Seen::Rules => data.rules_version > self.seen_rules_version,
             Seen::History => self.unread_result,
@@ -315,7 +343,9 @@ impl PlayerProfile {
     }
 
     pub fn has_any_new(&self, data: &GameData) -> bool {
-        [Seen::Gallery, Seen::Deck, Seen::Rules, Seen::History].into_iter().any(|s| self.has_new(data, s))
+        [Seen::Gallery, Seen::Deck, Seen::Rules, Seen::History]
+            .into_iter()
+            .any(|s| self.has_new(data, s))
     }
 
     pub fn is_new_character(&self, name: &str) -> bool {
@@ -364,7 +394,11 @@ impl PlayerProfile {
     /// `options`: ids valid for this character (`Live2DPortrait.OptionsFor(artId)`).
     pub fn live2d_for<'a>(&'a self, c: &'a CharacterData, options: &[&str]) -> &'a str {
         let prefix = format!("{}=", c.name);
-        match self.live2d_picks.iter().find_map(|p| p.strip_prefix(&prefix)) {
+        match self
+            .live2d_picks
+            .iter()
+            .find_map(|p| p.strip_prefix(&prefix))
+        {
             Some(id) if options.contains(&id) => id,
             _ => c.art_id(),
         }
@@ -398,7 +432,14 @@ pub struct SoundSettings {
 
 impl Default for SoundSettings {
     fn default() -> Self {
-        Self { bgm: 5, voice: 10, se: 7, skip_line: true, greet: true, idle_talk: true }
+        Self {
+            bgm: 5,
+            voice: 10,
+            se: 7,
+            skip_line: true,
+            greet: true,
+            idle_talk: true,
+        }
     }
 }
 

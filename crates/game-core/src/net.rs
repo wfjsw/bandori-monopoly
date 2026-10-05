@@ -37,7 +37,11 @@ pub mod reject {
 /// `NetProtocol.Describe(reason)` -- the message for a reject reason
 /// (`err.join.<reason>`; the client has one per reason code).
 pub fn describe(reason: &str) -> crate::msg::Msg {
-    crate::msg::Msg::new(if reason.is_empty() { "err.join.failed".to_string() } else { format!("err.join.{reason}") })
+    crate::msg::Msg::new(if reason.is_empty() {
+        "err.join.failed".to_string()
+    } else {
+        format!("err.join.{reason}")
+    })
 }
 
 /// `NetMessage.cs` as it survives the move to HTTP: one **match command**.
@@ -83,7 +87,10 @@ impl Default for NetMessage {
 impl NetMessage {
     /// An `act` message, the common case for match input.
     pub fn act(act: impl Into<String>) -> Self {
-        Self { act: act.into(), ..Self::default() }
+        Self {
+            act: act.into(),
+            ..Self::default()
+        }
     }
 }
 
@@ -102,7 +109,6 @@ pub struct RoomInfo {
     pub weights: ScoreWeights,
     pub members: Vec<RoomMember>,
 }
-
 
 impl RoomInfo {
     pub fn mode(&self) -> MatchMode {
@@ -148,14 +154,21 @@ pub struct RoomMember {
 
 /// `RoomService.Bot` -- the next bot name not already in `taken`: the data's bot
 /// name list in order, then again with a 2, 3, ... suffix.
-pub fn bot_name<'a, S: AsRef<str>>(names: &[S], taken: impl Iterator<Item = &'a str> + Clone) -> String {
+pub fn bot_name<'a, S: AsRef<str>>(
+    names: &[S],
+    taken: impl Iterator<Item = &'a str> + Clone,
+) -> String {
     if names.is_empty() {
         return String::new();
     }
     for round in 0.. {
         for base in names {
             let base = base.as_ref();
-            let name = if round == 0 { base.to_string() } else { format!("{base}{}", round + 1) };
+            let name = if round == 0 {
+                base.to_string()
+            } else {
+                format!("{base}{}", round + 1)
+            };
             if !taken.clone().any(|t| t == name) {
                 return name;
             }

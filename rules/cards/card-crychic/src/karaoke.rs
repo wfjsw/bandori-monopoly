@@ -11,9 +11,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const KARAOKE: CardDef = CardDef::new("CRYCHIC:去唱卡拉ok吧", &[
-    On::Play(karaoke),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), karaoke)]);
 
 /// C# `CardKaraoke.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

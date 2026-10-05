@@ -12,7 +12,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const MEET_AGAIN: CardDef = CardDef::new("MyGO:若能再次交汇", &[
-    On::React(&[ChainKind::MoveRoll], can_react, react),
+    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
 ]);
 
 /// Distance in the direction of travel to the nearest other player who can be
@@ -58,7 +58,7 @@ fn can_react(player_id: i32) -> bool {
 
 fn react(player_id: i32) {
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
-    let Some(mut roll) = trigger::move_roll() else { return };
+    let Some(mut roll) = trigger::move_roll() else { return; };
     let dist = next_dist(player_id, trigger::move_dir());
     if dist <= 0 {
         return;
@@ -67,9 +67,9 @@ fn react(player_id: i32) {
         if roll >= dist {
             break;
         }
-        // C# `H.DoMoveRoll(move)` re-rolls the move's dice; the move's base is
-        // 1d20 (C# `MoveCtx.Base`).
-        let n = ctx::roll(player_id, 1, 20).max(0);
+        // 规则书: `H.DoMoveRoll(move)` re-rolls the move's whole dice table
+        // (base + extra dice + flat bonuses).
+        let n = ctx::do_move_roll(player_id).max(0);
         roll += n;
         trigger::set_move_roll(roll);
         // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」 -- each re-roll is logged
@@ -82,7 +82,4 @@ fn react(player_id: i32) {
                 .i("dist", dist as i64),
         );
     }
-    // TODO(规则书): the C# re-roll is `H.DoMoveRoll(move)`, which also sums the
-    // move's extra dice (`MoveCtx.Dice`) and bonus; this port re-rolls the bare
-    // base 1d20. Needs an H.DoMoveRoll movement-dice routine.
 }

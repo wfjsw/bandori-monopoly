@@ -48,7 +48,11 @@ pub struct Roll {
 impl Roll {
     /// `count`d`sides` (or a flat `count` when `sides == 0`).
     pub fn new(count: i32, sides: i32, why: impl Into<String>) -> Self {
-        Self { count, sides, why: why.into() }
+        Self {
+            count,
+            sides,
+            why: why.into(),
+        }
     }
 
     /// The value this term contributes.
@@ -140,17 +144,17 @@ pub struct MoveCtx {
     pub rent_factor: f64,
     /// Settle on another player's behalf.
     pub settle_as_agent: bool,
-    /// May build away from the landing (not just on it). Distinct from
-    /// `no_build`, which denies building at all.
-    pub build_anywhere: bool,
+    /// Whether this move can build on the tile it lands on. `false` is the
+    /// "no build" case -- one flag, not two. Not "anywhere" either way: a build
+    /// is refused anywhere but where the move settled, and this speaks only to
+    /// the landing.
+    pub can_build: bool,
     /// A queued second walk, in steps (the C# `MoreSteps` follow-up phase).
     pub more_steps: i32,
     /// Passing CiRCLE pays nothing on this walk.
     pub no_circle_reward: bool,
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
     pub no_buy: bool,
-    /// The landing cannot be built on.
-    pub no_build: bool,
 
     // -- reactions ------------------------------------------------------------
     /// A reaction cancelled the movement.
@@ -175,7 +179,11 @@ impl Default for MoveCtx {
             kind: MoveKind::Walk,
             teleport_to: -1,
             resolve: true,
-            base: vec![Roll { count: 1, sides: 20, why: String::new() }],
+            base: vec![Roll {
+                count: 1,
+                sides: 20,
+                why: String::new(),
+            }],
             dice: Vec::new(),
             roll: 0,
             min_roll: 0,
@@ -198,11 +206,10 @@ impl Default for MoveCtx {
             pay_factor: 1.0,
             rent_factor: 1.0,
             settle_as_agent: false,
-            build_anywhere: false,
+            can_build: true,
             more_steps: 0,
             no_circle_reward: false,
             no_buy: false,
-            no_build: false,
             cancelled: false,
             tags: Vec::new(),
         }
@@ -212,7 +219,11 @@ impl Default for MoveCtx {
 impl MoveCtx {
     /// A fresh walk for `player_id` (C# `new MoveCtx { Player = player_id }`).
     pub fn new(player_id: usize) -> Self {
-        Self { player_id, roller: player_id, ..Default::default() }
+        Self {
+            player_id,
+            roller: player_id,
+            ..Default::default()
+        }
     }
 
     /// `SetSteps` -- fix the walk length, so the move walks exactly `n` steps
@@ -227,13 +238,21 @@ impl MoveCtx {
 
     /// `Dir` -- +1 forwards, -1 backwards.
     pub fn dir(&self) -> i32 {
-        if self.reverse { -1 } else { 1 }
+        if self.reverse {
+            -1
+        } else {
+            1
+        }
     }
 
     /// `WalkDir` -- the direction the current roll actually walks (a negative
     /// roll flips `Dir`).
     pub fn walk_dir(&self) -> i32 {
-        if self.roll >= 0 { self.dir() } else { -self.dir() }
+        if self.roll >= 0 {
+            self.dir()
+        } else {
+            -self.dir()
+        }
     }
 
     /// `SetTag` -- write card-owned per-move state.
@@ -246,7 +265,10 @@ impl MoveCtx {
 
     /// `Tag` -- read card-owned per-move state (0 when unset).
     pub fn tag(&self, key: &str) -> i32 {
-        self.tags.iter().find(|(k, _)| k == key).map_or(0, |(_, v)| *v)
+        self.tags
+            .iter()
+            .find(|(k, _)| k == key)
+            .map_or(0, |(_, v)| *v)
     }
 
     /// `MovePlan` -- the broadcast summary of this walk (`State.plan`).
@@ -260,10 +282,10 @@ impl MoveCtx {
             steps: (self.total - self.remaining).max(0),
             started: self.start >= 0,
             reach: self.path.clone(),
+            can_build: self.can_build,
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -271,7 +293,10 @@ mod tests {
 
     #[test]
     fn set_steps_keeps_the_sign_of_a_reverse_walk() {
-        let mut m = MoveCtx { roll: -6, ..Default::default() };
+        let mut m = MoveCtx {
+            roll: -6,
+            ..Default::default()
+        };
         m.set_steps(4);
         assert_eq!(m.roll, -4, "a reverse roll stays negative");
         m.roll = 6;
@@ -281,7 +306,10 @@ mod tests {
 
     #[test]
     fn walk_dir_flips_for_a_negative_roll() {
-        let m = MoveCtx { roll: -3, ..Default::default() };
+        let m = MoveCtx {
+            roll: -3,
+            ..Default::default()
+        };
         assert_eq!(m.dir(), 1);
         assert_eq!(m.walk_dir(), -1, "a negative roll walks backwards");
     }

@@ -14,11 +14,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const STUDIO_STORM: CardDef = CardDef::new("RAS:练习室里的风暴", &[
-    On::Play(play),
-    On::CantPlay(cant_play),
-    On::Hook(&[HookKind::PassTile], pass_tile),
-    On::Hook(&[HookKind::SettleAfter], settle_after),
-]);
+    On::Play(Some(cant_play), play),
+    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after)]);
 
 const ID: &str = "RAS:练习室里的风暴";
 
@@ -26,7 +24,6 @@ const ID: &str = "RAS:练习室里的风暴";
 const LIVEHOUSE_PROPS: [&str; 4] = ["DUB MUSIC EXPERIMENT", "武道馆", "Space", "Live House Galaxy"];
 
 /// The tile the card sits on (C# `Mem` on a tile-bound field card).
-const SLOT_TILE: &str = "studio_storm_tile";
 
 fn on_own_lh(player_id: i32) -> bool {
     let pos = ctx::player_pos(player_id);
@@ -53,25 +50,23 @@ fn play(player_id: i32) {
     }
     // 规则书（1）: 「将此卡放置在当前格子上」 -- C# `H.PlaceFromPlay(c, seat, pos)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("studio_storm_note")));
-    ctx::set_slot(player_id, SLOT_TILE, pos);
+    ctx::place_card_on(player_id, pos, ID, &Msg::new(key!("studio_storm_note")));
     ctx::log(
         player_id,
         &Msg::new(key!("studio_storm_placed")).player_id("who", player_id).tile("tile", pos),
     );
     // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
     // -- crystals start at 0 (the default) and cap at 3 via `add_crystals(.., 3)`.
-    // TODO(规则书): 「将此卡放置在当前格子上」 -- the placement is bound to `pos`
-    // rather than the player's field; needs field-card tile placement
-    // (`H.PlaceFromPlay(c, owner, tile)`). The tile is remembered in `SLOT_TILE`
-    // so the hooks below can key on it.
 }
 
 /// C# `CardStudioStorm.PassTile` -- the user passing a CiRCLE tile adds a crystal.
+/// Pure guard for [`pass_tile`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_tile_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn pass_tile(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `m.Seat != User || H.Tile(t)?.kind != "circle"`.
     if trigger::player_id() != player_id {
         return;
@@ -94,7 +89,7 @@ fn settle_after(player_id: i32) {
     if !ctx::is_placed(player_id) || trigger::player_id() == player_id {
         return;
     }
-    let tile = ctx::slot(player_id, SLOT_TILE);
+    let Some(tile) = ctx::placed_tile(player_id, ID) else { return; };
     if tile < 0 {
         return;
     }

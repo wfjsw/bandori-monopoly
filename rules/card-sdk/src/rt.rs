@@ -17,7 +17,10 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
             on: c
                 .on
                 .iter()
-                .map(|o| ManifestOn { kind: o.kind() as i32, triggers: o.triggers() })
+                .map(|o| ManifestOn {
+                    kind: o.kind() as i32,
+                    triggers: o.triggers(),
+                })
                 .collect(),
         })
         .collect();
@@ -45,19 +48,35 @@ fn card(bands: &'static [&'static [CardDef]], idx: i32) -> &'static CardDef {
 }
 
 /// `bandori_on` -- call one entry point. See [`export::ON`] for the encoding.
-pub fn on(bands: &'static [&'static [CardDef]], idx: i32, entry: i32, op: i32, player_id: i32) -> i64 {
-    let Some(o) = card(bands, idx).on.get(entry.max(0) as usize) else { panic!("bad entry {entry} on card {idx}") };
+pub fn on(
+    bands: &'static [&'static [CardDef]],
+    idx: i32,
+    entry: i32,
+    op: i32,
+    player_id: i32,
+) -> i64 {
+    let Some(o) = card(bands, idx).on.get(entry.max(0) as usize) else {
+        panic!("bad entry {entry} on card {idx}")
+    };
     match (*o, op) {
-        (On::React(_, guard, _), export::OP_GUARD) => guard(player_id) as i64,
-        (On::React(_, _, run), _) | (On::Play(run), _) | (On::Hook(_, run), _) | (On::Gate(_, run), _)
-        | (On::AtEnd(run), _) | (On::RollPlan(run), _) => {
+        (On::CounterAct(_, guard, _), export::OP_GUARD)
+        | (On::Hook(_, guard, _), export::OP_GUARD) => guard(player_id) as i64,
+        (On::Play(why, _), export::OP_GUARD) => match why {
+            Some(why) => match why(player_id) {
+                None => 0,
+                Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
+            },
+            None => 0,
+        },
+        (On::CounterAct(_, _, run), _)
+        | (On::Play(_, run), _)
+        | (On::Hook(_, _, run), _)
+        | (On::Gate(_, run), _)
+        | (On::AtEnd(run), _)
+        | (On::RollPlan(run), _) => {
             run(player_id);
             0
         }
-        (On::CantPlay(why), _) => match why(player_id) {
-            None => 0,
-            Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
-        },
     }
 }
 

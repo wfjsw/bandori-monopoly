@@ -99,6 +99,28 @@ pub trait CardWorld: Clone + 'static {
     // ---------------------------------------------------------- dice & log
     /// Sum of `count` d`sides` from the match RNG; also records a dice event.
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32;
+    /// C# `PlayCtx.Extreme` -- 1 = settle number ranges at their max, -1 = min.
+    fn extreme(&self) -> i32 {
+        0
+    }
+    fn set_extreme(&mut self, _v: i32) {}
+    /// Did the play being resolved come from the hand?
+    fn play_from_hand(&self) -> bool {
+        true
+    }
+    fn set_play_from_hand(&mut self, _v: bool) {}
+    /// A gain skills / crits may not bend (C# `fixedAmount`).
+    fn gain_fixed(&mut self, _player_id: i32, _amount: i32, _why: crate::Msg) -> i32 {
+        0
+    }
+    /// Flip a placed card face-down / face-up (C# `H.SwitchState`).
+    fn set_card_face_down(&mut self, _player_id: i32, _card: &str, _down: bool) -> bool {
+        false
+    }
+    /// `H.DoMoveRoll` -- sum the planned move's dice tables into one face.
+    fn do_move_roll(&mut self, _player_id: i32) -> i32 {
+        0
+    }
     /// Log line (a localizable message from the card).
     fn log(&mut self, player_id: i32, msg: Msg);
 
@@ -125,7 +147,49 @@ pub trait CardWorld: Clone + 'static {
     /// `TileData.kind == "circle"` -- the CiRCLE tile.
     fn is_circle(&self, tile: i32) -> i32;
     /// C# `H.IsLiveHouse` -- a Live House deed (buyable, colour group 6).
+    /// C# `_tileColors[t]` / `Fx.ExtraColor` -- re-colour a tile for everyone /
+    /// for one player. `-1` clears; `key::ALL_COLORS` = every colour.
+    fn set_tile_color(&mut self, _tile: i32, _group: i32) {}
+    fn set_extra_color(&mut self, _player_id: i32, _tile: i32, _group: i32) {}
+    /// C# `H.IsColor` -- does `tile` count as colour `group` for `player_id`?
+    fn is_color(&self, _player_id: i32, _tile: i32, _group: i32) -> bool {
+        false
+    }
+    /// The turn's buy discount (C# `TurnCtx.BuyDiscount`).
+    fn set_buy_discount(&mut self, _n: i32) {}
+    /// What this turn's [触发结算]s have cost the player so far.
+    fn paid_in_settle(&self) -> i32 {
+        0
+    }
+    /// 「本回合购买格子不[消耗]资金」 / 「如果购买则拆除那个格子上的所有房屋」.
+    fn set_free_buy(&mut self, _on: bool) {}
+    fn set_raze_on_buy(&mut self, _on: bool) {}
+    /// C# `_turnSnap[i].pos` -- where the player stood when the turn started.
+    fn turn_start_pos(&self, _player_id: i32) -> i32 {
+        -1
+    }
+    /// C# `_turnCtx.Rolls` -- every face rolled this turn.
+    fn turn_rolls(&self) -> Vec<i32> {
+        Vec::new()
+    }
+    /// 「下次盖房时减免N（可溢出），盖房后减少1层」.
+    fn set_build_discount(&mut self, _n: i32, _layers: i32) {}
+    /// 「加盖房屋时半价」 -- 100 = full, 50 = half, 0 = free.
+    fn set_build_cost_pct(&mut self, _pct: i32) {}
+    /// C# `_turnSnap[i]` -- the four status values a turn-end undo restores.
+    fn turn_snap(&self, _player_id: i32) -> (i32, i32, i32, i32) {
+        (-1, 0, 0, 0)
+    }
+    /// C# `H._tiles[t].kind == "agent"` -- the 地产商 tile.
+    fn is_agent(&self, _tile: i32) -> i32 {
+        0
+    }
     fn is_live_house(&self, tile: i32) -> i32;
+    /// `H.IsLiveHouse` for one player: the base check plus their `Fx.ExtraColor`
+    /// (「使其对你视为live house格子」).
+    fn is_live_house_for(&self, _player_id: i32, tile: i32) -> i32 {
+        self.is_live_house(tile)
+    }
     /// `TileData.group` -- colour group (-1 for no tile).
     fn tile_group(&self, tile: i32) -> i32;
     /// `H._tiles[t].price` -- the land price alone (cf. `buy_price`).
@@ -195,12 +259,43 @@ pub trait CardWorld: Clone + 'static {
 
     // -------------------------------------------------------- field cards
     /// `H.PlaceCard` -- a card (usually this one) stays in play at the player.
+    /// `WhyNotBuildOn` -- may this player build here? `true` = yes.
+    fn can_build_on(&self, _player_id: i32, _tile: i32) -> bool {
+        true
+    }
+    /// Is this placed card face-down? (`!p.FaceDown` in the C# field filters.)
+    fn card_face_down(&self, _player_id: i32, _card: &str) -> bool {
+        false
+    }
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg);
+    /// Place the card **on a tile** rather than with its owner (C#
+    /// `H.PlaceFromPlay(c, i, tile)`); `tile: -1` is [`Self::place_card`].
+    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg);
     /// `PlayCtx.Dest` -- where this card goes when its effect finishes.
     fn set_dest(&mut self, dest: i32);
     /// `H.Unplace` -- take the card out of play (`true` when it was there).
     fn unplace_card(&mut self, player_id: i32) -> bool;
+    /// Take a *named* card off the player's field (C# `H.Unplace(card, ...)`).
+    fn unplace_card_named(&mut self, _player_id: i32, _card: &str) -> bool {
+        false
+    }
     fn is_placed(&self, player_id: i32) -> i32;
+    /// Ids of the player's placed field cards, in placement order.
+    fn placed_cards(&self, _player_id: i32) -> Vec<String> {
+        Vec::new()
+    }
+    /// Does this card's rule text mention `needle`? 「所有效果包含[奇迹水晶]的卡」.
+    fn card_text_mentions(&self, _card: &str, _needle: &str) -> bool {
+        false
+    }
+    /// C# `Card.Crystals` on a named placed card.
+    fn card_crystals(&self, _player_id: i32, _card: &str) -> i32 {
+        0
+    }
+    /// C# `Card.AddCrystals` on a named placed card; `max` caps (0 = uncapped).
+    fn add_card_crystals(&mut self, _player_id: i32, _card: &str, _n: i32, _max: i32) -> i32 {
+        0
+    }
     /// Miracle crystals on the *current* card placed at `player_id` (C# `Card.Crystals`).
     fn crystals(&self, player_id: i32) -> i32;
     /// Set the current card's crystals at `player_id`; returns the new count.
@@ -213,7 +308,26 @@ pub trait CardWorld: Clone + 'static {
     /// `H.AddMark` -- a marker on a tile (`kind` names it, `note` explains it).
     fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg);
     fn count_marks(&self, tile: i32, kind: &str, owner: i32) -> i32;
+    /// C# `Card.Immune` -- 「此卡不受…效果影响」.
+    fn set_card_immune(&mut self, _player_id: i32, _card: &str, _on: bool) -> bool {
+        false
+    }
+    fn card_immune(&self, _player_id: i32, _card: &str) -> bool {
+        false
+    }
+    /// Move a placed field card to `tile` (`tile: -1` = back with its owner).
+    fn set_card_tile(&mut self, _player_id: i32, _card: &str, _tile: i32) -> bool {
+        false
+    }
+    /// Move one matching mark's `count` by `delta`, dropping it at 0.
+    fn bump_mark(&mut self, _tile: i32, _kind: &str, _owner: i32, _delta: i32) -> i32 {
+        0
+    }
     fn remove_marks(&mut self, tile: i32, kind: &str, owner: i32) -> i32;
+    /// Names of the counters whose name starts with `prefix` and is non-zero.
+    fn tok_names(&self, _player_id: i32, _prefix: &str) -> Vec<String> {
+        Vec::new()
+    }
     fn tok(&self, player_id: i32, name: &str) -> i32;
     fn set_tok(&mut self, player_id: i32, name: &str, value: i32);
     /// Returns how much the counter actually moved by.
@@ -238,7 +352,12 @@ pub trait CardWorld: Clone + 'static {
     /// Declare the bounds a consumer may enforce. Stored, not applied.
     fn state_set_bounds(&mut self, player_id: i32, key: &str, min: i32, max: i32);
     /// Declare when this counter wears off.
-    fn state_set_expires(&mut self, player_id: i32, key: &str, expires: Option<game_core::state::Tick>);
+    fn state_set_expires(
+        &mut self,
+        player_id: i32,
+        key: &str,
+        expires: Option<game_core::state::Tick>,
+    );
     /// Tick every timed counter whose expiry is due; `(key, left)` for each.
     fn tick_state(&mut self, player_id: i32, when: game_core::state::Tick) -> Vec<(String, i32)>;
 
@@ -383,6 +502,14 @@ pub trait CardWorld: Clone + 'static {
         -1
     }
 
+    /// Arm the doubling for the run in progress (`PlayCtx.Doubled = n`). A
+    /// third party -- CiRCLE's band skill -- sets this on the *playing* card's
+    /// context, which is why it is a setter on the shared world rather than a
+    /// field the card owns. Default no-op so test worlds need not implement it.
+    fn set_play_doubled(&mut self, n: i32) {
+        let _ = n;
+    }
+
     // ----------------------------------------- movement shaping (TurnCtx.plan)
     // Defaults are no-ops so test worlds need not implement them.
     //
@@ -401,7 +528,7 @@ pub trait CardWorld: Clone + 'static {
     //     payment step, which also runs outside a move.
     //   - `settle_tile` -- the settle target is where the walk stops, so
     //     `stop_at` already names it.
-    //   - `build_anywhere` -- the inverse of `no_build`; one flag is enough.
+    //   - `no_build` -- folded into `can_build = false`; one flag is enough.
     /// C# `SetSteps` -- the planned length; keeps the sign of a reverse walk.
     fn set_steps(&mut self, _v: i32) {}
     /// C# `Reverse` -- walk backwards.
@@ -431,11 +558,12 @@ pub trait CardWorld: Clone + 'static {
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
     fn set_no_buy(&mut self, _v: bool) {}
     /// The landing cannot be built on.
-    fn set_no_build(&mut self, _v: bool) {}
     /// Passing CiRCLE pays nothing on this walk.
     fn set_no_circle_reward(&mut self, _v: bool) {}
     /// Replace the starting dice (default 1d20). `sides == 0` is a flat `count`.
     fn set_base_dice(&mut self, _count: i32, _sides: i32, _why: &str) {}
+    /// Drop every extra die another effect added to the plan.
+    fn clear_dice(&mut self) {}
     /// Add one more die group to the starting dice.
     fn add_base_dice(&mut self, _count: i32, _sides: i32, _why: &str) {}
     /// Add an extra die group to the roll.
@@ -446,8 +574,8 @@ pub trait CardWorld: Clone + 'static {
     fn set_pay_factor(&mut self, _v: i32) {}
     /// C# `RentFactor` -- scale rent paid for this walk, same units.
     fn set_rent_factor(&mut self, _v: i32) {}
-    /// C# `BuildAnywhere` -- may build away from the landing.
-    fn set_build_anywhere(&mut self, _v: bool) {}
+    /// C# `CanBuild` -- may build away from the landing.
+    fn set_can_build(&mut self, _v: bool) {}
     /// C# `SettleAsAgent`.
     fn set_settle_as_agent(&mut self, _v: bool) {}
     /// C# `MoreSteps` -- a queued second walk, in steps.

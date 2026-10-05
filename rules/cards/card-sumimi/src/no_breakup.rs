@@ -11,9 +11,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const NO_BREAKUP: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[
-    On::Play(no_breakup),
-    On::CantPlay(cant_play),
-]);
+    On::Play(Some(cant_play), no_breakup)]);
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
 fn repeated_digits(money: i32) -> bool {
@@ -52,9 +50,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if repeated_digits(ctx::money(player_id)) {
         return Some(Msg::new(key!("no_breakup_repeated")));
     }
-    // TODO(规则书): 「当你本回合未进行过抵押/赎回操作」 -- the C# `WhyNot` also
-    // refuses when `H._turnCtx.Redeemed` / `H._turnCtx.Mortgaged`; that hook is
-    // still missing, so the gate cannot cover the mortgage/redeem half yet.
+    // 规则书: 「当你本回合未进行过抵押/赎回操作」 -- both actions record
+    // themselves and clear at the turn end, so the gate is just those records.
+    if ctx::state::get(player_id, "mortgaged") != 0 || ctx::state::get(player_id, "redeemed") != 0 {
+        return Some(Msg::new(key!("no_breakup_mortgaged")));
+    }
     // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
     // C# `H.MoveWhyNot` gate applies.
     ctx::cant_move(player_id)
@@ -108,7 +108,8 @@ fn no_breakup(player_id: i32) {
     // -- C# snapshots pos / stay / stun / exile / every player's money / owners /
     // houses / mortgaged before the move and restores them all when
     // `!RepeatedDigits(money) && !H.Out(i)` after the settle.
-    // TODO(规则书): the revert half -- a world-snapshot / restore (C#
+    // TODO(规则书)[judgement]: the revert half -- a world-snapshot / restore (C#
+    //   the clause under-specifies -- see the note above it
     // `CardNoBreakup.Play`); the teleport now settles and consumes the main
     // move, but nothing rolls the world back when the money still lacks a
     // repeated digit.

@@ -10,7 +10,7 @@
 // the canvas exactly as Live2DPortrait.Draw does.
 
 import { useEffect, useRef, useState } from "react";
-import { eyeLine } from "../live2d/deform";
+import { eyeLine, figureTop } from "../live2d/deform";
 import { Live2DModel, loadLive2D, type Live2DModelHandle } from "../live2d";
 import { charArt } from "../core/assets";
 import { cx } from "../core/cx";
@@ -36,6 +36,13 @@ export interface Live2DStandProps {
   headroom?: number;
   /** Window height fraction the eye line sits on (characters align here). */
   eyeFrac?: number;
+  /**
+   * Where the 3:4 portrait window sits inside the stand box. `center` matches
+   * Unity's AspectRatioFitter FitInParent; `top` pulls it up flush with the
+   * stand's top edge, buying the head the ~7% of the window height that
+   * vertical centring wastes below the top bar.
+   */
+  fit?: "center" | "top";
 }
 
 /** One `framing.json` entry (Live2DPortrait.Framing). */
@@ -72,8 +79,11 @@ function framingOf(id: string): Promise<Framing | undefined> {
  * When `eyeY` is known the figure is anchored by its **eyes**: every character
  * lands its eye line on `eyeFrac` of the window height, so casts of different
  * heights line up. Anchoring on the head top instead makes the eye line wander
- * with each model's height. `top`/`headroom` from framing.json remain a
- * fallback for models without eye params.
+ * with each model's height. The anchor is then clamped so the figure's top
+ * keeps `headroom` of the window below the window's top edge -- without that a
+ * tall hairdo (004 needs 21% of the window above its eyes) is sliced off by
+ * the portrait rect. `top`/`headroom` from framing.json remain a fallback for
+ * models without eye params.
  */
 function canvasBox(
   winW: number,
@@ -84,19 +94,24 @@ function canvasBox(
   headroom: number,
   eyeY: number | null,
   eyeFrac: number,
+  figTop: number | null,
 ): Box {
   const [cw, ch] = canvas;
   const z = zoom * (f && f.scale > 0 ? f.scale : 1);
   const num = Math.max(cw, ch * 0.75);
   const num2 = num / 0.75;
   const viewW = num / z;
+  const viewH = viewW / 0.75;
   const left = (cw - num) / 2 + (num - viewW) / 2;
   const k = winW / viewW; // canvas unit -> px
   let top: number;
   if (eyeY != null) {
-    // Put the eye line at `eyeFrac` of the window height (the window is 3:4,
-    // so its height in canvas units is viewW / 0.75).
-    top = eyeY - (eyeFrac * viewW) / 0.75;
+    // Put the eye line at `eyeFrac` of the window height, then drop the figure
+    // (shrink `top`) as far as needed to keep `headroom` clear above its head.
+    top = eyeY - eyeFrac * viewH;
+    if (figTop != null && headroom > 0) {
+      top = Math.min(top, figTop - headroom * viewH);
+    }
   } else {
     const focus = f && f.top >= 0 && headroom > 0 ? Math.min(focusTop, f.top - headroom / z) : focusTop;
     top = (ch - num2) / 2 + num2 * focus;
@@ -104,13 +119,14 @@ function canvasBox(
   return { left: -left * k, top: -top * k, width: cw * k, height: ch * k };
 }
 
-export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom = 1, focusTop = 0, headroom = 0.02, eyeFrac = 0.28 }: Live2DStandProps) {
+export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom = 1, focusTop = 0, headroom = 0.02, eyeFrac = 0.28, fit = "center" }: Live2DStandProps) {
   const box = useRef<HTMLDivElement>(null);
   const anim = useRef<HTMLDivElement>(null);
   const modelHandle = useRef<Live2DModelHandle>(null);
   const [canvas, setCanvas] = useState<[number, number] | null>(null);
   const [framing, setFraming] = useState<Framing | undefined>(undefined);
   const [eyeY, setEyeY] = useState<number | null>(null);
+  const [figTop, setFigTop] = useState<number | null>(null);
   const [win, setWin] = useState<Box | null>(null);
   const [model, setModel] = useState<Box | null>(null);
   const [shown, setShown] = useState(false);
@@ -124,6 +140,7 @@ export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom =
     setCanvas(null);
     setFraming(undefined);
     setEyeY(null);
+    setFigTop(null);
     setWin(null);
     setModel(null);
     setShown(false);
@@ -136,7 +153,7 @@ export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom =
         setCanvas(data.model.canvas);
         setFraming(f);
         setEyeY(eyeLine(data.model));
-        setEyeY(eyeLine(data.model));
+        setFigTop(figureTop(data.model));
       },
       () => {
         if (live) setFailed(true);
@@ -159,11 +176,12 @@ export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom =
         setModel(null);
         return;
       }
-      // the 3:4 portrait window, centred like AspectRatioFitter.FitInParent
+      // the 3:4 portrait window: FitInParent centres it, `fit="top"` pulls it
+      // up flush with the stand's top edge so the head has room to breathe
       const dw = Math.min(w, h * 0.75);
       const dh = dw / 0.75;
-      setWin({ left: (w - dw) / 2, top: (h - dh) / 2, width: dw, height: dh });
-      setModel(canvasBox(dw, canvas, framing, zoom, focusTop, headroom, eyeY, eyeFrac));
+      setWin({ left: (w - dw) / 2, top: fit === "top" ? 0 : (h - dh) / 2, width: dw, height: dh });
+      setModel(canvasBox(dw, canvas, framing, zoom, focusTop, headroom, eyeY, eyeFrac, figTop));
     };
     place();
     if (typeof ResizeObserver === "undefined") {
@@ -173,7 +191,7 @@ export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom =
     const ro = new ResizeObserver(place);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [canvas, framing, zoom, focusTop, headroom, eyeY, eyeFrac]);
+  }, [canvas, framing, zoom, focusTop, headroom, eyeY, eyeFrac, figTop, fit]);
 
   // The renderer draws on its first RAF after mount; fade the static art out
   // once the model has had a few frames to paint, then drop it entirely. The

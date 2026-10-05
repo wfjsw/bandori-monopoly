@@ -21,9 +21,8 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "HHW:（育美）";
 
 pub const HAGUMI_MARKS: CardDef = CardDef::new("HHW:（育美）", &[
-    On::Play(play),
-    On::Hook(&[HookKind::PassTile], hook),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::PassTile], hook_guard, hook)]);
 
 fn play(player_id: i32) {
     let n = ctx::tile_count();
@@ -69,10 +68,13 @@ fn play(player_id: i32) {
 }
 
 /// C# `HagumiMarkFx.PassTile` / `Stop` (MatchHost.cs:4314-4384).
+/// Pure guard for [`hook`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn hook_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn hook(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     if trigger::kind() != TriggerKind::PassTile {
         return;
     }
@@ -102,15 +104,16 @@ fn hook(player_id: i32) {
     ) {
         return;
     }
+    // 规则书（1）: 「[强制停下]」 -- behind `H.AbnormalGate`: a guarded or
+    // unstoppable mover is not stopped, and the mark is not spent.
+    if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
+        return;
+    }
     // C# `m.Remaining > 0 && !m.Teleport` -- force-stop only mid-walk.
     if trigger::move_remaining() > 0 {
         // C# `m.Stopped = true` -- the walk settles at the stop tile.
         ctx::plan::set_stop_at(t);
     }
-    // TODO(规则书)（1）: the `H.AbnormalGate` wrapper around the stop (C#
-    //   `HagumiMarkFx.Stop`) is not invoked by `set_stop_at` -- the
-    //   `abnormalGuard` hook path and the `_turnCtx.Unstoppable` play-context
-    //   flag are not reachable from here.
     // 规则书（1）: 「然后移除该标记」 -- C# decrements the mark count and drops
     // the mark when it reaches 0.
     ctx::remove_marks(t, key!("hagumi_marks_mark"), player_id);
@@ -127,7 +130,7 @@ fn hook(player_id: i32) {
         ctx::unplace_card(player_id);
         ctx::to_discard(player_id, ID);
     }
-    // TODO(规则书)（1）: C# `HagumiMarkFx.PassTile` also has a circle-tile case
+    // TODO(规则书)（1）[judgement]: C# `HagumiMarkFx.PassTile` also has a circle-tile case
     //   (`H.Tile(t)?.kind == "circle"` -> `All(n)`: remove every 育美标记 and
     //   gain 1,000 per mark 「经过起点」). Not in the rulebook text, so held.
 }

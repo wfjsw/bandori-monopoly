@@ -95,7 +95,11 @@ mod tests {
         assert_eq!(base_exp(false, 1, 4), 110);
         assert_eq!(base_exp(true, 1, 6), 200);
         assert_eq!(base_exp(true, 6, 6), 100);
-        assert_eq!(base_exp(false, 9, 4), 80, "rank past players clamps to 0 beaten");
+        assert_eq!(
+            base_exp(false, 9, 4),
+            80,
+            "rank past players clamps to 0 beaten"
+        );
         assert_eq!(exp_multiplier(3), 4);
         assert_eq!(exp_multiplier(-1), 1);
     }

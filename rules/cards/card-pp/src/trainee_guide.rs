@@ -18,14 +18,13 @@
 //! The crystal counter and the turn-end tick are live; the mark bookkeeping
 //! and the cash-in still need hooks the ABI lacks.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TRAINEE_GUIDE: CardDef = CardDef::new("PP:练习生解密指南", &[
-    On::Play(trainee_guide),
-    On::Hook(&[HookKind::TurnEnd], turn_end),
-]);
+    On::Play(None, trainee_guide),
+    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end)]);
 
 fn trainee_guide(player_id: i32) {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
@@ -43,19 +42,25 @@ fn trainee_guide(player_id: i32) {
     // and per-card Mem for the mono/dual marks (C# `Mem["mono"]` / `Mem["dual"]`,
     // kept in per-card Mem / player slots).
     // One distinct colour -> 1 mono mark; two or more -> 1 dual mark.
-    // TODO(规则书)[手]: 「如果[共鸣]则[消耗]500资金并添加任意2个标记」 -- needs
-    // H.TryResonance (discard 「PP:[衍生]共鸣」 from hand) plus a non-mandatory pay
-    // (`PayCtx { amount = 500, kind = "lose", must = false }`) and an AskPick loop
-    // that adds 2 more mono/dual marks to this card's Mem.
-    // TODO(规则书): [持续]（1）「手卡上限数量减1」 -- needs the Fx.HandLimitDelta hook
-    // (C# `Card.HandLimitDelta` returning -1 for the owner).
+    // 规则书[手]: 「如果[共鸣]则[消耗]500资金并添加任意2个标记」 -- the [共鸣]
+    // cost, then the 500 and the two extra marks. The marks themselves still
+    // need per-card storage (see the [持续]（3） TODO in `turn_end`).
+    if crate::resonance::try_resonance(player_id) {
+        ctx::pay(player_id, 500, &Msg::new(key!("trainee_guide_resonance_cost")));
+    }
+    // 规则书[持续]（1）: 「手卡上限数量减1」 -- the limit is keyed state, so the
+    // card just lowers it. It is restored when the card leaves play.
+    ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
 }
 
 /// C# `CardTraineeGuide.TurnEnd` -> `Tick`: +1 crystal, then the 5-crystal cash-in.
+/// Pure guard for [`turn_end`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn turn_end_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn turn_end(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- C# `AddCrystals(1, "回合结束")`.
     ctx::add_crystals(player_id, 1, 0);
     // TODO(规则书): [持续]（3）「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作

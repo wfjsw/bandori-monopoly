@@ -17,9 +17,9 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, On, Msg};
 
 pub const TOMORROWS_DOOR: CardDef = CardDef::new("PPP:Tomorrow's Door", &[
-    On::Play(play),
-    On::Hook(&[HookKind::SettleAfter], settle_after),
-]);
+    On::Play(None, play),
+    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+    On::Hook(&[HookKind::SettleAfter], settle_after_guard, settle_after)]);
 
 /// 规则书（1）: 「此卡指定的序列（从前往后）为…」 -- C# `CardTomorrowsDoor.Route`.
 const ROUTE: [&str; 10] = [
@@ -32,8 +32,7 @@ const ROUTE: [&str; 10] = [
     "RiNG 2",
     "RiNG 3",
     "RiNG 4",
-    "大阪中之岛公园",
-];
+    "大阪中之岛公园"];
 
 /// Where the route cursor is written down (C# `Mem["step"]`). `ROUTE.len()`
 /// means the route is finished and the card sits in the owner's play area
@@ -45,30 +44,57 @@ fn play(player_id: i32) {
     // 规则书（2）: 「将此卡放置在“流星堂”上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // H.TileNamed(Route[0]))`. The card stays in play.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PPP:Tomorrow's Door", &Msg::new(key!("tomorrows_door_note")));
-    // The route cursor starts at stop 0 (travelling; C# `Mem["step"] = 0`).
+    // 规则书（2）: 「将此卡放置在“流星堂”上」 -- bound to `ROUTE[0]`; the route
+    // cursor is the stand-in for the per-card `Mem["step"]`.
+    ctx::place_card_on(player_id, ctx::tile_named(ROUTE[0]), "PPP:Tomorrow's Door", &Msg::new(key!("tomorrows_door_note")));
     ctx::set_slot(player_id, SLOT_STEP, 0);
     ctx::log(player_id, &Msg::new(key!("tomorrows_door_placed")).player_id("who", player_id));
-    // TODO(ABI): 「将此卡放置在“流星堂”上」 -- the placement is bound to the 流星堂
-    //   tile (C# `H.PlaceFromPlay(c, owner, tile)` + per-card `Mem["step"]`), not the
-    //   player's field; the ABI's `place_card` only parks the card at a player. Keep the
-    //   route table above as the source of truth for `step` (`ROUTE[0]` is 流星堂).
-    // TODO(ABI)（2）: 「此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡（1）效果的
-    //   序列中的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」
-    //   -- needs the Fx.PassTile hook (C# `CardTomorrowsDoor.PassTile`), the per-card
-    //   `Mem["step"]` cursor, and tile re-placement (`card.Tile = H.TileNamed(...)` /
-    //   `Tile = -1` for the owner's field). When it lands it must advance
-    //   `SLOT_STEP`; at `ROUTE.len()` the card is in the play area and the tax
-    //   below wakes up.
+}
+
+/// 规则书（2）: 「此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡（1）效果的序列中
+/// 的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 -- the
+/// hop runs on the user's own pass over wherever the card currently sits.
+/// Pure guard for [`pass_tile`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn pass_tile_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id) && trigger::player_id() == player_id
+}
+
+fn pass_tile(player_id: i32) {
+    let step = ctx::slot(player_id, SLOT_STEP);
+    if step < 0 || step >= ROUTE.len() as i32 {
+        return;
+    }
+    let here = ctx::placed_tile(player_id, "PPP:Tomorrow's Door").unwrap_or(-1);
+    if here < 0 || trigger::tile() != here {
+        return;
+    }
+    let next = step + 1;
+    ctx::set_slot(player_id, SLOT_STEP, next);
+    // 「如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 --
+    // the last stop is 大阪中之岛公园; past it the card goes back to the owner
+    // (`tile = -1`), which is when the tax in `settle_after` wakes up.
+    if next >= ROUTE.len() as i32 {
+        ctx::set_card_tile(player_id, "PPP:Tomorrow's Door", -1);
+    } else {
+        ctx::set_card_tile(player_id, "PPP:Tomorrow's Door", ctx::tile_named(ROUTE[next as usize]));
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomorrows_door_hop")).player_id("who", player_id).i("n", next as i64),
+    );
 }
 
 /// `Fx.SettleAfter` (C# `CardTomorrowsDoor.SettleAfter`) -- once the card sits
 /// in the owner's play area, another player settling on the owner's land or on
 /// 梦开始的地方 pays `houses(星之鼓动山丘) × 100` to the owner.
+/// Pure guard for [`settle_after`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn settle_after_guard(player_id: i32) -> bool {
+    ctx::is_placed(player_id)
+}
+
 fn settle_after(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
-    }
     // C# `Tile >= 0` -- still travelling along the route: no tax. The cursor is
     // the stand-in for `Tile`; it only reaches `ROUTE.len()` once (2) lands.
     if ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
