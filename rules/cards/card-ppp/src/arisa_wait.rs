@@ -10,31 +10,41 @@
 //! >
 //! > （2）事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。
 //! >
-//! [手] only places the card on the field; the [持续] clauses are the
-//! `IEventDefer` / crystal hooks the ABI does not carry yet (TODO in source).
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::abi::TriggerKind;
+use card_sdk::ctx;
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const ARISA_WAIT: CardDef = CardDef {
-    id: "PPP:（有咲）等等等一下",
-    play: Some(arisa_wait),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+const ID: &str = "PPP:（有咲）等等等一下";
 
-fn arisa_wait(seat: i32) {
+pub const ARISA_WAIT: CardDef = CardDef::new("PPP:（有咲）等等等一下", &[
+    On::Play(arisa_wait),
+    On::Hook(&[TriggerKind::EventAfter], event_after),
+]);
+
+fn arisa_wait(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]。」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "PPP:（有咲）等等等一下", &Msg::new(key!("arisa_wait_note")));
-    ctx::log(seat, &Msg::new(key!("arisa_wait_placed")).seat("who", seat));
-    // TODO(规则书)[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
-    //   -- needs the Fx.Resolved persistent hook and a per-field-card crystal
-    //   counter (C# `Card.Crystals` / `card_crystals`; the ABI only has
-    //   `band_crystals` and seat tokens, not per-card crystals).
+    ctx::place_card(player_id, ID, &Msg::new(key!("arisa_wait_note")));
+    ctx::log(player_id, &Msg::new(key!("arisa_wait_placed")).player_id("who", player_id));
     // TODO(规则书)[持续]（2）: 「事件触发时如果此卡拥有至少3个[奇迹水晶]则移除此卡3个[奇迹水晶]，
     //   那个事件在[拥有者]回合开始时结算，此后额外抽取一个视为其他玩家在“流星堂”抽取的事件。」
     //   -- needs the `IEventDefer` interface (C# `Defer` / `Resolved`), the
     //   Fx.TurnStart hook, and the H.ResolveEvent / H.DrawEvent event routines
     //   (plus `Card.Detach` to retire deferred events when this card leaves).
+    //   When Defer lands, the `by != Title` filter of (1) must be restored so
+    //   this card's own deferred releases do not bank a crystal.
+}
+
+/// `IEventDefer.Resolved` (C# `CardArisaWait.Resolved`) -- any event that
+/// settles banks a crystal on this card.
+fn event_after(player_id: i32) {
+    if !ctx::is_placed(player_id) {
+        return;
+    }
+    // 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
+    // C# `by != Title` filters out this card's own deferred releases; while
+    // Defer (2) is held there are none, so every `eventAfter` is foreign.
+    ctx::add_crystals(player_id, 1, 0);
+    ctx::log(player_id, &Msg::new(key!("arisa_wait_crystal")).player_id("who", player_id).i("n", ctx::crystals(player_id) as i64));
 }

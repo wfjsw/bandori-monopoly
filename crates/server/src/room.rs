@@ -25,7 +25,7 @@ struct Presence {
     streams: u32,
     /// When the last stream closed (or the member joined).
     since: Instant,
-    /// The AI has taken over the seat.
+    /// The AI has taken over the player.
     away: bool,
 }
 

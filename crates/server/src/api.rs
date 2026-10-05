@@ -267,13 +267,13 @@ pub struct MatchView {
     pub hand: Vec<String>,
     pub hand_notes: Vec<game_core::msg::Msg>,
     pub you: i32,
-    pub seat: i32,
+    pub player_id: i32,
 }
 
 pub fn match_view(g: &Match, member: i32) -> MatchView {
     let state = g.state();
-    let seat = state.seat_of(member);
-    MatchView { hand: g.hand_of(member), hand_notes: g.hand_notes_of(member), state, you: member, seat }
+    let player_id = state.player_of(member);
+    MatchView { hand: g.hand_of(member), hand_notes: g.hand_notes_of(member), state, you: member, player_id }
 }
 
 #[derive(Debug, Serialize)]

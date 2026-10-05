@@ -7,38 +7,29 @@
 //! >  然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const DOLL_GARDEN: CardDef = CardDef {
-    id: "Mujica:人偶的箱庭",
-    play: Some(doll_garden),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const DOLL_GARDEN: CardDef = CardDef::new("Mujica:人偶的箱庭", &[
+    On::Play(doll_garden),
+    On::CantPlay(cant_play),
+]);
 
 /// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「视为你本回合的主要移动」 -- the forced walk is the main move, so
-    // the C# `H.MoveWhyNot` gate applies: own turn first (`只能在自己的回合`).
-    if ctx::turn_seat() != seat {
-        return Some(Msg::new(key!("x_not_your_turn")));
-    }
-    // TODO(规则书): the rest of C# `H.MoveWhyNot` -- refuses after this turn's
-    // main move (`_turnCtx.MainMoved` -> 「这回合已经移动过了」) and when the
-    // turn's move is skipped (`State.skipMove` -> 「本回合不能移动」); needs
-    // `H.MoveWhyNot` in the ABI.
-    None // playable
+    // the C# `H.MoveWhyNot` gate applies (own turn, main move still available,
+    // turn's move not skipped).
+    ctx::cant_move(player_id)
 }
 
-fn doll_garden(seat: i32) {
+fn doll_garden(player_id: i32) {
     let mut sum = 0;
-    for p in ctx::others(seat) {
+    for p in ctx::others(player_id) {
         // 规则书: 「X为该玩家正常移动到你所在格子所需的移动数」 -- C#
         // `H.Forward(p.pos, i.pos)`.
-        let x = ctx::tile_forward(ctx::seat_pos(p), ctx::seat_pos(seat));
+        let x = ctx::tile_forward(ctx::player_pos(p), ctx::player_pos(player_id));
         // 规则书: 「无法移动的玩家只能选择向你支付」 -- C# gates on
-        // `stay <= 0 && !Stunned` (`MatchSeat.Stunned` = `stun + stunStart > 0`;
+        // `stay <= 0 && !Stunned` (`MatchPlayer::stunned()` = `stun + stunStart > 0`;
         // `stun_of` is the `stun` field alone).
         let can_move = ctx::stay_of(p) <= 0 && ctx::stun_of(p) <= 0;
         if can_move {
@@ -46,7 +37,7 @@ fn doll_garden(seat: i32) {
                 p,
                 &Msg::new(key!("doll_garden_ask_title")),
                 &Msg::new(key!("doll_garden_ask_text"))
-                    .seat("user", seat)
+                    .player_id("user", player_id)
                     .i("x", x as i64),
                 &[
                     Msg::new(key!("doll_garden_move")),
@@ -55,41 +46,56 @@ fn doll_garden(seat: i32) {
             );
             if pick == 1 {
                 // 规则书: 「向你支付X*20资金」
-                ctx::transfer(p, seat, x * 20, &Msg::new(key!("doll_garden_why")));
+                ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")));
                 continue;
             }
         } else {
             // 规则书: 「无法移动的玩家只能选择向你支付」 -- no prompt, straight to
             // the payment (C# leaves `num2 = 1` and pays).
-            ctx::transfer(p, seat, x * 20, &Msg::new(key!("doll_garden_why")));
+            ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")));
             continue;
         }
         // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
         let r = ctx::roll(p, 1, 20);
         sum += r;
-        // C# `H.Walk(p, r, resolve: false, ...)` -- walk without settling.
-        // `teleport_to` jumps without settling but ignores the walk length.
-        // TODO(ABI): `H.Walk(p, r, resolve: false, ...)`.
+        // C# `H.Walk(p, r, resolve: false, ...)` builds `MoveCtx { Steps = r,
+        // Resolve = false }` -- a walk without settling. The MoveCtx shape
+        // maps onto `ctx::plan::*`; `teleport_to` stands in for the landing.
+        ctx::plan::set_steps(r);
+        ctx::plan::set_resolve(false);
+        // TODO(ABI): run the shaped walk now -- C# `H.Walk(p, r, resolve:
+        // false, ...)`. The MoveCtx fields above are written; the walk routine
+        // itself is not in the vocabulary yet, so `teleport_to` jumps to the
+        // landing tile without walking the path.
         ctx::teleport_to(p, ctx::tile_steps_ahead(p, r));
         ctx::log(
-            seat,
-            &Msg::new(key!("doll_garden_walked")).seat("who", p).i("n", r as i64),
+            player_id,
+            &Msg::new(key!("doll_garden_walked")).player_id("who", p).i("n", r as i64),
         );
     }
     if sum <= 0 {
         // C# `H.Log("text", i, "没有人移动：... 不移动（人偶的箱庭）")`.
-        ctx::log(seat, &Msg::new(key!("doll_garden_no_move")).seat("who", seat));
+        ctx::log(player_id, &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id));
         return;
     }
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。」
     ctx::log(
-        seat,
-        &Msg::new(key!("doll_garden_sum")).seat("who", seat).i("n", sum as i64),
+        player_id,
+        &Msg::new(key!("doll_garden_sum")).player_id("who", player_id).i("n", sum as i64),
     );
-    // TODO(ABI): `H.CardMove(c, Steps = sum, Forced = true)` -- the forced walk
-    // with settle is not in the vocabulary; `teleport_to` does not settle.
-    let to = ctx::tile_steps_ahead(seat, sum);
-    ctx::teleport_to(seat, to);
-    // TODO(规则书): 「视为你本回合的主要移动」 -- needs the main-move
-    // bookkeeping (C# `H.MoveWhyNot` / `_turnCtx.MainMoved`).
+    // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- C#
+    // `H.CardMove(c, new MoveCtx { Steps = sum, Forced = true })` builds
+    // `MoveCtx { Steps = sum, Resolve = true, Forced = true }`. The MoveCtx
+    // shape maps onto `ctx::plan::*`.
+    ctx::plan::set_steps(sum);
+    ctx::plan::set_resolve(true);
+    // TODO(ABI): run the shaped walk now -- C# `H.CardMove(c, Steps = sum,
+    // Forced = true)`. The MoveCtx fields above are written; `ctx::card_move`
+    // is not in the vocabulary yet, so `teleport_to` jumps without settling.
+    let to = ctx::tile_steps_ahead(player_id, sum);
+    ctx::teleport_to(player_id, to);
+    // TODO(规则书): 「视为你本回合的主要移动」 -- this forced walk must count as
+    // the turn's main move (C# `H.CardMove(Forced = true)` sets
+    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
+    // `ctx::card_move`.
 }

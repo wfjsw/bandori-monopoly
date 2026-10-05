@@ -14,7 +14,8 @@ use game_core::engine::Match;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
-use game_rules::WasmRules;
+use game_core::msg::Arg;
+use game_rules::{Ruleset, WasmRules};
 
 fn data() -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
@@ -28,6 +29,21 @@ fn rules() -> WasmRules {
         .expect("dist/cards must exist -- run tools/build-ruleset.sh")
 }
 
+/// The shipped cards plus the test-only fixture cards (`TEST:*`), one ruleset.
+fn rules_with_fixtures() -> WasmRules {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../dist");
+    let mut b = Ruleset::builder();
+    for sub in ["cards", "fixtures"] {
+        let dir = root.join(sub);
+        let index: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("index.json")).expect("run tools/build-ruleset.mjs")).unwrap();
+        for m in index["modules"].as_array().unwrap() {
+            b.add(&std::fs::read(dir.join(m["file"].as_str().unwrap())).unwrap()).unwrap();
+        }
+    }
+    WasmRules::new(b.build().unwrap(), data())
+}
+
 fn member(id: i32, bot: bool) -> RoomMember {
     RoomMember { id, player: format!("P{id}"), bot, ..Default::default() }
 }
@@ -36,15 +52,19 @@ fn play(card: &str) -> NetMessage {
     NetMessage { card: card.to_string(), ..NetMessage::act("play") }
 }
 
-/// A two-seat match where seat 1 is human and holds `card` on its own turn.
+/// A two-player match where player 1 is human and holds `card` on its own turn.
 fn match_with(card: &str) -> Match {
+    match_with_rules(card, rules())
+}
+
+fn match_with_rules(card: &str, rules: WasmRules) -> Match {
     let members = vec![member(1, false), member(2, true)];
-    let mut m = Match::new(data(), Arc::new(rules()), &members, 20261004, MatchMode::Casual, ScoreWeights::default());
+    let mut m = Match::new(data(), Arc::new(rules), &members, 20261004, MatchMode::Casual, ScoreWeights::default());
     m.quick_start();
     // Let the bots take their turns until the human is in the operations phase.
     for _ in 0..2000 {
         let st = m.state();
-        let mine = st.phase == "play" && st.turn >= 0 && st.seats.get(st.turn as usize).is_some_and(|s| s.member == 1);
+        let mine = st.phase == "play" && st.turn >= 0 && st.players.get(st.turn as usize).is_some_and(|s| s.member == 1);
         if mine && st.step == 1 {
             break;
         }
@@ -52,7 +72,7 @@ fn match_with(card: &str) -> Match {
     }
     let st = m.state();
     assert_eq!(st.phase, "play", "match should reach play");
-    assert!(st.seats.get(st.turn as usize).is_some_and(|s| s.member == 1), "should be the human's turn");
+    assert!(st.players.get(st.turn as usize).is_some_and(|s| s.member == 1), "should be the human's turn");
     m.give_cards(1, &[card]);
     m
 }
@@ -105,17 +125,132 @@ fn an_unported_card_falls_back_gracefully() {
 fn ported_official_cards_run_in_a_match() {
     // R:[衍生] 压 -- straight gain, no prompt.
     let mut m = match_with("R:[衍生] 压");
-    let before = m.state().seats[1].money;
+    let before = m.state().players[1].money;
     m.act(1, &play("R:[衍生] 压")).expect("play");
     let st = m.state();
-    assert!(st.seats[1].money >= before + 1000, "the card paid: {} -> {}", before, st.seats[1].money);
+    assert!(st.players[1].money >= before + 1000, "the card paid: {} -> {}", before, st.players[1].money);
     assert!(st.events.iter().any(|e| format!("{:?}", e.msg).contains("press_why")), "its reason was logged");
 
     // R:（ykn）louder -- nudge the RiNG multiplier, no prompt. It is 凑友希那's
-    // exclusive card, so the seat must be her to play it.
+    // exclusive card, so the player must be her to play it.
     let mut m = match_with("R:（ykn）louder");
     m.set_character(1, "凑友希那");
     m.act(1, &play("R:（ykn）louder")).expect("play");
     let st = m.state();
     assert!(st.events.iter().any(|e| format!("{:?}", e.msg).contains("louder")), "logged: {:?}", st.events.iter().map(|e| e.msg.key()).collect::<Vec<_>>());
+}
+
+/// Logged events with this fixture key, newest last.
+fn fixture_events<'a>(st: &'a game_core::state::MatchState, key: &str) -> Vec<&'a game_core::msg::Msg> {
+    let full = format!("cards:fixture-test-cards.{key}");
+    st.events.iter().filter(|e| e.msg.key() == full).map(|e| &e.msg).collect()
+}
+
+fn int_arg(msg: &game_core::msg::Msg, name: &str) -> i64 {
+    match msg.a.get(name) {
+        Some(Arg::I(v)) | Some(Arg::N(v)) => *v,
+        other => panic!("{name} is not an integer arg: {other:?}"),
+    }
+}
+
+#[test]
+fn a_played_cards_own_react_runs_once() {
+    // `cardAfter` / `cardPlayed` also name the card on `t.card`; only the play
+    // itself may run the card's own follow-up.
+    let mut m = match_with_rules("TEST:echo", rules_with_fixtures());
+    m.act(1, &play("TEST:echo")).expect("play");
+    let st = m.state();
+    assert_eq!(fixture_events(&st, "echo_play").len(), 1, "play ran once");
+    assert_eq!(fixture_events(&st, "echo_react").len(), 1, "own react ran exactly once");
+}
+
+#[test]
+fn cards_in_lists_the_hand_and_take_card_moves_one() {
+    let mut m = match_with_rules("TEST:lister", rules_with_fixtures());
+    // The played card has left the hand before its effect runs.
+    let expected = m.hand_of(1).len() as i64 - 1;
+    m.act(1, &play("TEST:lister")).expect("play");
+    let st = m.state();
+    let counted = fixture_events(&st, "lister_count");
+    assert_eq!(counted.len(), 1);
+    assert_eq!(int_arg(counted[0], "n"), expected, "cards_in(Hand) length");
+    assert_eq!(int_arg(counted[0], "size"), expected, "hand_size agrees");
+    let moved = fixture_events(&st, "lister_moved");
+    assert_eq!(moved.len(), 1, "a hand card was moved");
+    assert_eq!(int_arg(moved[0], "found"), 1, "it shows up in cards_in(Discard)");
+    assert_eq!(m.hand_of(1).len() as i64, expected - 1, "and left the hand");
+}
+
+/// The other player of the two-player test match.
+fn other_player(m: &Match) -> usize {
+    m.state().players.iter().position(|s| s.member != 1).expect("a second player")
+}
+
+#[test]
+fn a_card_stun_passes_the_abnormal_gate() {
+    let mut m = match_with_rules("TEST:stunner", rules_with_fixtures());
+    let other = other_player(&m);
+    let before = m.state().players[other].stun();
+    m.act(1, &play("TEST:stunner")).expect("play");
+    let st = m.state();
+    assert_eq!(st.players[other].stun(), before + 1, "the stun went through the gate");
+    let done = fixture_events(&st, "stunner_done");
+    assert_eq!(done.len(), 1, "the effect resumed after the gate");
+    assert_eq!(int_arg(done[0], "count"), 1, "it counts as an abnormal effect this turn");
+}
+
+#[test]
+fn a_card_can_shape_a_move_and_run_it_now() {
+    let mut m = match_with_rules("TEST:mover", rules_with_fixtures());
+    let before = m.state().players[1].pos;
+    m.act(1, &play("TEST:mover")).expect("play the mover");
+    let st = m.state();
+    assert!(fixture_events(&st, "mover_planned").len() == 1, "planned");
+    let done = fixture_events(&st, "mover_done");
+    assert_eq!(done.len(), 1, "the effect resumed after the move: {:?}", fixture_events(&st, "mover_done"));
+    assert_eq!(int_arg(done[0], "pos"), st.players[1].pos as i64, "the log reports where it landed");
+    assert_ne!(st.players[1].pos, before, "the player actually moved 3 tiles");
+}
+
+#[test]
+fn a_card_targets_another_player_and_counts_it() {
+    let mut m = match_with_rules("TEST:aimer", rules_with_fixtures());
+    let other = other_player(&m);
+    m.act(1, &play("TEST:aimer")).expect("play the aimer");
+    let st = m.state();
+    let done = fixture_events(&st, "aimer_done");
+    assert_eq!(done.len(), 1);
+    assert_eq!(int_arg(done[0], "got"), other as i64, "the target went through");
+    assert_eq!(int_arg(done[0], "count"), 1, "the _targeted counter moved");
+}
+
+#[test]
+fn an_immune_player_cannot_be_targeted_stunned_or_counted() {
+    let mut m = match_with_rules("TEST:shield", rules_with_fixtures());
+    m.give_cards(1, &["TEST:aimer", "TEST:stunner"]);
+    let other = other_player(&m);
+    m.act(1, &play("TEST:shield")).expect("place the shield");
+    let before = m.state().players[other].stun();
+    m.act(1, &play("TEST:aimer")).expect("play the aimer");
+    m.act(1, &play("TEST:stunner")).expect("play the stun");
+    let st = m.state();
+    let done = fixture_events(&st, "aimer_done");
+    assert_eq!(int_arg(done[0], "got"), -1, "ImmuneAll fails the targeting");
+    assert_eq!(int_arg(done[0], "count"), 0, "an immune player is not counted as targeted");
+    assert_eq!(st.players[other].stun(), before, "ImmuneAll blocks the abnormal effect");
+    assert_eq!(fixture_events(&st, "shield_held").len(), 2, "asked once for the target, once for the stun");
+}
+
+#[test]
+fn a_field_guard_blocks_an_abnormal_effect() {
+    let mut m = match_with_rules("TEST:guard", rules_with_fixtures());
+    m.give_cards(1, &["TEST:stunner"]);
+    let other = other_player(&m);
+    m.act(1, &play("TEST:guard")).expect("place the guard");
+    let before = m.state().players[other].stun();
+    m.act(1, &play("TEST:stunner")).expect("play the stun");
+    let st = m.state();
+    assert_eq!(st.players[other].stun(), before, "the guard blocked the stun");
+    assert_eq!(fixture_events(&st, "guard_blocked").len(), 1, "the guard's hook ran once");
+    assert_eq!(int_arg(fixture_events(&st, "stunner_done")[0], "count"), 0, "a blocked effect does not count");
 }

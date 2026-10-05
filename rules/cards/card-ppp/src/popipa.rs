@@ -7,14 +7,14 @@
 //!
 //! draw 1.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const POPIPA: CardDef = CardDef { id: "PPP:Popipa", play: Some(popipa), can_react: None, react: None, why_not: None };
+pub const POPIPA: CardDef = CardDef::new("PPP:Popipa", &[On::Play(popipa)]);
 
-fn popipa(seat: i32) {
+fn popipa(player_id: i32) {
     ctx::set_dest(ctx::Dest::Banished);
-    ctx::gain(seat, 1000, &Msg::new(key!("popipa_why")));
-    ctx::add_to_deck(seat, "PPP:[衍生]Pipopa", true);
-    ctx::log(seat, &Msg::new(key!("popipa_added")).seat("who", seat));
-    ctx::draw(seat, 1);
+    ctx::gain(player_id, 1000, &Msg::new(key!("popipa_why")));
+    ctx::add_to_deck(player_id, "PPP:[衍生]Pipopa", true);
+    ctx::log(player_id, &Msg::new(key!("popipa_added")).player_id("who", player_id));
+    ctx::draw(player_id, 1);
 }

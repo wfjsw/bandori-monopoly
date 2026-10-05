@@ -30,7 +30,7 @@
 | `setup.rs` | turn order, ban (Ranked), pick, deck |
 | `rules.rs` | `CardRules` — where card/event content plugs in; `StubRules` = no effects |
 
-Routines: `Opening`, `NextTurn`, `Ai(seat)`, `Act(seat, command)`, `Leftovers(deeds)`.
+Routines: `Opening`, `NextTurn`, `Ai(player_id)`, `Act(player_id, command)`, `Leftovers(deeds)`.
 
 ### Why host events are deferred
 
@@ -46,7 +46,7 @@ commits.
 |---|---|---|
 | Card, skill, band and `Fx` hooks (`PayAdd`, `CircleRewardChoice`, `SkipTile`, `BuyPrice`...) | nested classes | card rules (WASM) |
 | Active events (`EvOn(...)`: 协助CiRCLE重建, Forbidden Moca, ...) | `EventEffect` | card rules |
-| Per-seat card variables (`V(i, ...)`), marks, embers, field cards | `V`/`AddMark`/... | with card content |
+| Per-player card variables (`V(i, ...)`), marks, embers, field cards | `V`/`AddMark`/... | with card content |
 | Character skills (`skill` command) | `DoSkill` | card rules; currently rejected with a message |
 | Debug commands (`debug`) | `DebugAct` | P7 (dev panel) |
 | Speed multiplier | `Speed` | P7 |

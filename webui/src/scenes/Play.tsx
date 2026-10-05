@@ -1,6 +1,6 @@
 // /play/solo and /play/<roomId>: the match screen. Shows character select
 // or the board depending on the phase; resumes after a refresh (solo from the
-// saved snapshot, online by re-attaching to the seat).
+// saved snapshot, online by re-attaching to the player).
 
 import { useEffect, useState } from "react";
 import { navigate } from "../app/router";

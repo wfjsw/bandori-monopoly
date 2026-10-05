@@ -9,79 +9,78 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const MISAKI_CARD: CardDef = CardDef {
-    id: "HHW:（美咲）",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const MISAKI_CARD: CardDef = CardDef::new("HHW:（美咲）", &[
+    On::React(&[TriggerKind::MoveRoll], can_react, react),
+]);
 
-/// C# `CardMisakiCard.Between` -- the other seats standing in the move's span.
-/// Direction (`t.Move.Dir`) is missing from the trigger, so this is the forward
-/// span only (see the TODO in [`can_react`]).
-fn between(seat: i32) -> Vec<i32> {
+/// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
+/// in the direction the move actually travels (`t.Move.Dir`).
+fn between(player_id: i32) -> Vec<i32> {
     let Some(roll) = trigger::move_roll() else {
         return Vec::new();
     };
     let roll = roll.abs();
-    let start = ctx::seat_pos(seat);
-    // 规则书: `H.Forward(start, pos)` -- forward distance around the ring.
-    ctx::others(seat)
+    let start = ctx::player_pos(player_id);
+    let n = ctx::tile_count();
+    let backward = trigger::move_dir() < 0;
+    ctx::others(player_id)
         .into_iter()
         .filter(|&p| {
-            let d = ctx::tile_forward(start, ctx::seat_pos(p));
+            // 规则书: `H.Forward(start, pos)` -- forward distance around the ring.
+            let fwd = ctx::tile_forward(start, ctx::player_pos(p));
+            let d = if backward { (n - fwd) % n } else { fwd };
             (1..=roll).contains(&d)
         })
         .collect()
 }
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「使用火罐进行移动掷骰后，触发结算前可打出此卡」 -- C#
     // `CanReact`: `t.Kind == "moveRoll" && t.Seat == seat && t.Move != null &&
     // t.Move.FireRoll && Between(t.Move).Count > 0`.
-    if trigger::kind() != TriggerKind::MoveRoll || trigger::seat() != seat {
+    if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
         return false;
     }
-    // TODO(ABI): `t.Move.FireRoll` (the move used a fire pot) -- the trigger
-    // carries no move flags, so every move roll of yours matches. Never faked.
-    // TODO(ABI): `t.Move.Dir` -- `Between` uses forward distance only; a
-    // backward move's span is not representable.
-    !between(seat).is_empty()
+    // The [火罐] roll is card-owned state: the card that armed one tagged the
+    // move (see `ctx::plan::set_tag`).
+    if trigger::move_tag("fireRoll") == 0 {
+        return false;
+    }
+    !between(player_id).is_empty()
 }
 
-fn react(seat: i32) {
-    let list = between(seat);
+fn react(player_id: i32) {
+    let list = between(player_id);
     if list.is_empty() {
         return;
     }
     // 规则书[反击]: 「使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子」
     // -- C# `H.AskSeat(i, "另一个我", ..., list)`.
-    let who = ctx::ask_seat(
-        seat,
+    let who = ctx::ask_player(
+        player_id,
         &Msg::new(key!("misaki_card_title")),
         &Msg::new(key!("misaki_card_ask")),
         &list,
     );
     // 规则书[反击]: 「消耗所有火罐」 -- C# `H.SpendFire(i, H.Fire(i), "（美咲）")`.
-    let fire = ctx::fire(seat);
+    let fire = ctx::fire(player_id);
     if fire > 0 {
-        ctx::spend_fire(seat, fire, &Msg::new(key!("misaki_card_pay")));
+        ctx::spend_fire(player_id, fire, &Msg::new(key!("misaki_card_pay")));
     }
     // 规则书[反击]: 「传送至...玩家所在的格子并触发结算」 -- C# `H.TeleportMove`
     // (teleport + settle). `ctx::teleport_to` moves without settling.
-    let to = ctx::seat_pos(who);
-    ctx::teleport_to(seat, to);
-    ctx::log(seat, &Msg::new(key!("misaki_card_moved")).seat("who", seat).tile("tile", to));
+    let to = ctx::player_pos(who);
+    ctx::teleport_to(player_id, to);
+    ctx::log(player_id, &Msg::new(key!("misaki_card_moved")).player_id("who", player_id).tile("tile", to));
     // TODO(规则书): 「并触发结算」 -- needs a teleport-with-settle routine (C#
     // `H.TeleportMove(m2)`). `ctx::teleport_to` is `H.ForceTeleport(..., resolve:
     // false)`.
     // TODO(规则书): 「（视为你的主要移动）」 -- needs the H.CardMove / main-move
     // routine (C# `m2.Main = m.Main`) so this teleport consumes the turn's main
     // move.
-    if ctx::seat_out(seat) {
+    if ctx::player_out(player_id) {
         return;
     }
     // 规则书[反击]: 「随后那格及相邻2格上的所有其他玩家[支付]你500资金」 -- C#
@@ -93,8 +92,8 @@ fn react(seat: i32) {
     }
     for d in -2..=2 {
         let t = (to + d).rem_euclid(n);
-        for p in ctx::seats_on(t, seat) {
-            ctx::transfer(p, seat, 500, &Msg::new(key!("misaki_card_pay")));
+        for p in ctx::players_on(t, player_id) {
+            ctx::transfer(p, player_id, 500, &Msg::new(key!("misaki_card_pay")));
         }
     }
 }

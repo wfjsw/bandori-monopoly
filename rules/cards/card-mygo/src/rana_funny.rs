@@ -7,34 +7,99 @@
 //! > 将此卡置于当前格子上，每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶，当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个“抹茶芭菲”或强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。 由此卡效果导致[触发结算]时需支付资金减半
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::abi::TriggerKind;
+use card_sdk::abi::MoveKind;
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const RANA_FUNNY: CardDef = CardDef {
-    id: "MyGO:（乐奈）有趣的女人",
-    play: Some(rana_funny),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const RANA_FUNNY: CardDef = CardDef::new("MyGO:（乐奈）有趣的女人", &[
+    On::Play(rana_funny),
+    On::Hook(&[TriggerKind::PassTile], pass_tile),
+]);
 
-fn rana_funny(seat: i32) {
+const ID: &str = "MyGO:（乐奈）有趣的女人";
+
+fn rana_funny(player_id: i32) {
     // 规则书: 「将此卡置于当前格子上」 -- C# `H.PlaceFromPlay(c, c.Seat, pos)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "MyGO:（乐奈）有趣的女人", &Msg::new(key!("rana_funny_note")));
-    ctx::log(seat, &Msg::new(key!("rana_funny_placed")).seat("who", seat));
+    ctx::place_card(player_id, ID, &Msg::new(key!("rana_funny_note")));
+    // Remember the bound tile so the PassTile hook can filter (C# `Card.Tile`).
+    ctx::set_slot(player_id, "rana_funny_tile", ctx::player_pos(player_id));
+    ctx::log(player_id, &Msg::new(key!("rana_funny_placed")).player_id("who", player_id));
     // TODO(规则书): 「将此卡置于当前格子上」 -- the placement is bound to the
-    // seat's current tile (`Card.Tile`); `place_card` only attaches the card to
-    // the seat's field, so needs field-card tile placement.
-    // TODO(规则书): 「每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶」 -- needs
-    // the Fx.PassTile hook (C# `CardRanaFunny.PassTile`) and a per-card crystal
-    // counter (`AddCrystals(1, ...)`).
-    // TODO(规则书): 「当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个
-    // “抹茶芭菲”或强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。由此卡效果导致[触发结算]
-    // 时需支付资金减半」 -- the trap is the same Fx.PassTile path (C#
-    // `CardRanaFunny.Trap`): an `ask_yes` between `ctx::add_tok(who,
-    // "抹茶芭菲", -1, ...)` and a forced stop (`H.AbnormalGate` / `m.Stopped`
-    // / `m.Resolve = true` with `m.PayFactor *= 0.5`, then `H.Unplace(this,
-    // "discard", ...)`). The parfait token ops (`tok` / `add_tok`) are in the
-    // vocabulary once the pass hook can raise the prompt; the forced-stop
-    // gate and the pay factor are not.
+    // player's current tile (`Card.Tile`); `place_card` only attaches the card to
+    // the player's field, so needs field-card tile placement (the hook below reads
+    // the bound tile from a slot instead).
+}
+
+/// C# `CardRanaFunny.PassTile` -- a passer who does not settle here grows a
+/// miracle crystal on the card; at 5+ crystals a foreign passer is trapped.
+fn pass_tile(player_id: i32) {
+    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed(player_id) {
+        return;
+    }
+    let tile = ctx::slot(player_id, "rana_funny_tile");
+    if tile < 0 || trigger::tile() != tile {
+        return;
+    }
+    // C# `m.Teleport` never grows a crystal (`t.Move` flags).
+    if trigger::move_kind() == Some(MoveKind::Teleport) {
+        return;
+    }
+    // 规则书: 「未在其上[触发结算]」 -- C# grows a crystal only when
+    // `m.Remaining > 0` (the walker is passing through); the last tile of the
+    // walk (`m.Remaining <= 0`) is where they stop to settle, so it is not a
+    // pass.
+    if trigger::move_remaining() <= 0 {
+        return;
+    }
+    let who = trigger::player_id();
+    // 规则书: 「当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个"抹茶芭菲"
+    // 或强制停下并[触发结算]」 -- C# `Crystals >= 5 && m.Seat != User` branches
+    // into `Trap` instead of growing a crystal.
+    if ctx::crystals(player_id) >= 5 && who != player_id {
+        trap(player_id, who, tile);
+        return;
+    }
+    // 规则书: 「每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶」
+    ctx::add_crystals(player_id, 1, 0);
+    ctx::log(player_id, &Msg::new(key!("rana_funny_crystal")).player_id("who", who));
+}
+
+/// C# `CardRanaFunny.Trap` -- the 5+ crystal trap on a foreign passer: lose a
+/// 抹茶芭菲 or be forced to stop here and settle at half pay.
+fn trap(owner: i32, who: i32, tile: i32) {
+    // 规则书: 「选择失去一个"抹茶芭菲"或强制停下并[触发结算]」 -- C# `H.AskYes`
+    // only when the passer holds a 抹茶芭菲 (`aiYes` prefers losing it); with
+    // none in hand the forced stop is the only option.
+    if ctx::tok(who, "抹茶芭菲") > 0 {
+        let lose = ctx::ask_yes(
+            who,
+            &Msg::new(key!("rana_funny_trap_title")),
+            &Msg::new(key!("rana_funny_trap_ask")),
+        );
+        if lose {
+            // 规则书: 「失去一个"抹茶芭菲"」 -- C# `H.AddTok(who, "抹茶芭菲", -1)`
+            // (default `max = int.MaxValue`).
+            ctx::add_tok(who, "抹茶芭菲", -1, i32::MAX);
+            ctx::log(owner, &Msg::new(key!("rana_funny_parfait")).player_id("who", who));
+            return;
+        }
+    }
+    // 规则书: 「强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。由此卡效果导致[触发结算]
+    // 时需支付资金减半」 -- C# `m.Stopped = true; m.Resolve = true; m.PayFactor *= 0.5`
+    // then `H.Unplace(this, "discard", ...)`. `set_stop_at` is the forced stop
+    // (the walk loop turns `StopAt == pos` into `Stopped`); the pay factor is
+    // milli-units (500 = x0.5). The C# multiplies the in-flight factor; this
+    // sets the x0.5 value the walk starts from.
+    ctx::plan::set_stop_at(tile);
+    ctx::plan::set_resolve(true);
+    ctx::plan::set_pay_factor(500);
+    ctx::log(owner, &Msg::new(key!("rana_funny_stop")).player_id("who", who).tile("tile", tile));
+    ctx::unplace_card(owner);
+    ctx::to_discard(owner, ID);
+    // TODO(规则书): the C# wraps the forced stop in `H.WithCard(User,
+    // H.AbnormalGate(a))` -- an [abnormal] reaction window (so 「普通与理所当然」
+    // and friends can answer the forced stop). `AbnormalGate` is still held,
+    // so the stop lands uncountered.
 }

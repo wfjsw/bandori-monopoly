@@ -5,12 +5,12 @@ use super::cx::{Cx, Flow};
 impl Cx<'_> {
     /// `AiWantsBuy` -- keep at least 2,000 after buying.
     pub(crate) fn ai_wants_buy(&self, i: usize, t: usize) -> bool {
-        self.w.st.seats[i].money - self.buy_price(t) >= 2000
+        self.w.st.players[i].money - self.buy_price(t) >= 2000
     }
 
     /// `AiWantsBuild` -- keep at least 3,500 after building.
     pub(crate) fn ai_wants_build(&self, i: usize, t: usize) -> bool {
-        self.w.st.seats[i].money - self.build_cost(t) >= 3500
+        self.w.st.players[i].money - self.build_cost(t) >= 3500
     }
 
     /// `AiAgentChoice` -- first affordable purchase, else first build, else none.
@@ -28,7 +28,7 @@ impl Cx<'_> {
     fn ai_redeem_choice(&self, i: usize) -> Option<usize> {
         let mut deeds: Vec<usize> = (0..self.data.tiles.len()).filter(|&t| self.w.st.owners[t] == i as i32 && self.w.st.mortgaged[t]).collect();
         deeds.sort_by_key(|&t| std::cmp::Reverse(self.tile(t).price));
-        deeds.into_iter().find(|&t| self.w.st.seats[i].money - self.redeem_cost(t) >= 4000)
+        deeds.into_iter().find(|&t| self.w.st.players[i].money - self.redeem_cost(t) >= 4000)
     }
 
     /// `AiCardChoice` -- a random playable card the rules say a bot would play.
@@ -37,7 +37,7 @@ impl Cx<'_> {
         hand.dedup();
         let ok: Vec<String> = hand
             .into_iter()
-            .filter(|id| self.why_not_play(i, id, false).is_none() && self.rules.ai_play(self, i, id))
+            .filter(|id| self.cant_play(i, id, false).is_none() && self.rules.ai_play(self, i, id))
             .collect();
         if ok.is_empty() {
             None
@@ -47,9 +47,9 @@ impl Cx<'_> {
         }
     }
 
-    /// `AiStep` -- one decision for the seat whose turn it is.
+    /// `AiStep` -- one decision for the player whose turn it is.
     pub(crate) fn ai_step(&mut self, i: usize) -> Flow<()> {
-        let bot = self.w.st.seats[i].ai;
+        let bot = self.w.st.players[i].ai;
         if self.w.st.step == 1 {
             if bot {
                 if let Some(t) = self.ai_redeem_choice(i) {
@@ -71,7 +71,7 @@ impl Cx<'_> {
             let roller = if self.w.st.roller >= 0 { self.w.st.roller as usize } else { i };
             return self.main_move(i, roller);
         }
-        let pos = self.w.st.seats[i].pos as usize;
+        let pos = self.w.st.players[i].pos as usize;
         if bot && self.can_buy_here(i) && self.ai_wants_buy(i, pos) {
             self.w.st.bought = true;
             self.buy(i, pos)?;
@@ -83,7 +83,7 @@ impl Cx<'_> {
         } else if self.over_hand(i) {
             let k = self.w.rng.below(self.w.hidden[i].hand.len());
             let card = self.w.hidden[i].hand[k].clone();
-            self.discard(i, &card);
+            self.discard(i, &card)?;
             self.wait(0.4);
         } else {
             self.end_turn_cmd(i)?;

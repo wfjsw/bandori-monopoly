@@ -8,24 +8,20 @@
 //! refuses a grant in this engine, so "granted stay" and "gained stay" coincide
 //! and the fallback branch keys off the grants.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const HEART_RAIN: CardDef = CardDef {
-    id: "Mujica:心の雨",
-    play: Some(heart_rain),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[
+    On::Play(heart_rain),
+]);
 
-fn heart_rain(seat: i32) {
-    let me = ctx::seat_pos(seat);
+fn heart_rain(player_id: i32) {
+    let me = ctx::player_pos(player_id);
     let mut any_stay = false;
-    for p in ctx::others(seat) {
+    for p in ctx::others(player_id) {
         // 规则书: 「使你前方20格内的所有玩家」
-        // C# `H.Forward(pos, seats[p].pos) in 1..=20`; a same-tile seat is not
+        // C# `H.Forward(pos, seats[p].pos) in 1..=20`; a same-tile player is not
         // "ahead" (`H.Forward` returns 0 there).
-        let ahead = ctx::tile_forward(me, ctx::seat_pos(p));
+        let ahead = ctx::tile_forward(me, ctx::player_pos(p));
         if !(1..=20).contains(&ahead) {
             continue;
         }
@@ -46,8 +42,8 @@ fn heart_rain(seat: i32) {
     }
     // 规则书: 「若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金」
     if !any_stay {
-        ctx::log(seat, &Msg::new(key!("heart_rain_fallback")).seat("who", seat));
-        ctx::give_stun(seat, 1);
-        ctx::gain(seat, 1000, &Msg::new(key!("heart_rain_why")));
+        ctx::log(player_id, &Msg::new(key!("heart_rain_fallback")).player_id("who", player_id));
+        ctx::give_stun(player_id, 1);
+        ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")));
     }
 }

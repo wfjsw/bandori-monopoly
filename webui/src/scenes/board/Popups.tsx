@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle } from "../../core/data";
+import { D, cardTitle, skillText } from "../../core/data";
 import { isLight, n0, plain } from "../../core/format";
 import { useMatchView } from "../../core/hooks";
 import type { MatchState } from "../../core/types";
@@ -18,7 +18,7 @@ import { act, buyable, canBuildOn, type Model, model, mortgageValue, RING_MULTIP
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf } from "../../core/names";
+import { namesOf, stateOf, stateMax } from "../../core/names";
 
 function useModel(sess: GameSession): Model | null {
   const { view } = useMatchView(sess);
@@ -36,7 +36,7 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
     const ok = m.me.money >= price;
     return { label: tr("deed.buy", { n: n0(price), poor: ok ? "" : tr("deed.poor") }), cmd: { act: "buy", value: i }, enabled: ok };
   }
-  if (S.owners[i] !== m.seat) return null;
+  if (S.owners[i] !== m.playerId) return null;
   if (canBuildOn(m, i)) return { label: tr("deed.buildN", { n: (S.houses[i] ?? 0) + 1, cost: n0(t.house) }), cmd: { act: "build", value: i }, enabled: true };
   if (!S.mortgaged[i] && t.kind !== "ring" && m.myTurn) return { label: tr("deed.mortgage", { n: n0(mortgageValue(i)) }), cmd: { act: "mortgage", value: i }, enabled: true };
   if (S.mortgaged[i] && m.myTurn) return { label: tr("deed.redeem", { n: n0(redeemCost(i)) }), cmd: { act: "redeem", value: i }, enabled: true };
@@ -72,7 +72,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
   if (owner < 0 && houses > 0) notes.unshift(tr("deed.note.leftHouses", { n: houses, total: n0(t.price + houses * t.house) }));
   const names = namesOf(S);
   const marks = (S.marks ?? []).filter((x) => x.tile === i).map((x) => {
-    const who = x.owner >= 0 ? tr("deed.markOwner", { who: S.seats[x.owner].player }) : "";
+    const who = x.owner >= 0 ? tr("deed.markOwner", { who: S.players[x.owner].player }) : "";
     const note = x.note?.k ? fmtMsg(x.note, names) : "";
     return x.kind === "card"
       ? `${who}${tr("common.quotes", { x: cardTitle(x.card) })}${note ? tr("common.noteColon", { x: note }) : ""}`
@@ -93,7 +93,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
           <div><small>{tr("deed.price")}</small><b>{t.price ? n0(t.price) : "—"}</b></div>
           <div><small>{tr("deed.house")}</small><b>{t.kind === "ring" ? tr("deed.noBuild") : t.house ? tr("deed.perHouse", { n: n0(t.house) }) : "—"}</b></div>
           <div className={s.wide}><small>{tr("prompt.mortgage")}</small><b>{mortgaged ? tr("deed.mortgagedLine", { n: n0(redeemCost(i)) }) : t.price && t.kind !== "ring" ? tr("deed.mortgageLine", { mortgage: n0(t.price / 2), redeem: n0(redeemCost(i)) }) : tr("deed.noMortgage")}</b></div>
-          <div className={s.wide}><small>{tr("deed.owner")}</small><b>{owner >= 0 ? tr("deed.ownerLine", { who: S.seats[owner].player, chara: m.charOf(owner)?.display ?? "", mort: mortgaged ? tr("common.mortgagedTag") : "" }) : tr("deed.unowned")}</b></div>
+          <div className={s.wide}><small>{tr("deed.owner")}</small><b>{owner >= 0 ? tr("deed.ownerLine", { who: S.players[owner].player, chara: m.charOf(owner)?.display ?? "", mort: mortgaged ? tr("common.mortgagedTag") : "" }) : tr("deed.unowned")}</b></div>
         </div>
       )}
       {t.rent.length >= 4 && (
@@ -116,7 +116,7 @@ function DeedList({ sess, redeem, close }: { sess: GameSession; redeem: boolean;
   const m = useModel(sess);
   if (!m) return null;
   const S = m.S;
-  const mine = D.tiles.map((_, i) => i).filter((i) => S.owners[i] === m.seat && !!S.mortgaged[i] === redeem && (redeem || D.tiles[i].kind !== "ring"));
+  const mine = D.tiles.map((_, i) => i).filter((i) => S.owners[i] === m.playerId && !!S.mortgaged[i] === redeem && (redeem || D.tiles[i].kind !== "ring"));
   return (
     <div className={s.list}>
       <p className={s.hint}>
@@ -170,21 +170,21 @@ export function showSkills(sess: GameSession): void {
 
 export function showPlayerInfo(m: Model, i: number): void {
   const S = m.S;
-  const x = S.seats[i];
+  const x = S.players[i];
   const c = m.charOf(i);
   const deeds = D.tiles.map((_, k) => k).filter((k) => S.owners[k] === i);
   const lines = [
-    tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: x.fire, fireMax: x.fireMax }),
+    tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "fire"), fireMax: stateMax(x, "fire") }),
     tr("player.zones", { draw: x.draw, discard: x.discard.length }),
-    x.stay ? tr("player.stayN", { n: x.stay }) : "", x.stun + x.stunStart ? tr("player.stunned") : "", x.exile ? tr("player.exileN", { n: x.exile }) : "",
+    stateOf(x, "stay") ? tr("player.stayN", { n: stateOf(x, "stay") }) : "", stateOf(x, "stun") + stateOf(x, "stunStart") ? tr("player.stunned") : "", stateOf(x, "exile") ? tr("player.exileN", { n: stateOf(x, "exile") }) : "",
     x.skillNote?.k ? tr("player.skillNote", { note: fmtMsg(x.skillNote, namesOf(S)) }) : "",
     ...(x.tokens ?? []).map((tok) => `${tok.name} ×${tok.value}`),
   ].filter(Boolean);
-  openModal(`${x.player}${i === m.seat ? tr("common.youSuffix") : ""}`, (
+  openModal(`${x.player}${i === m.playerId ? tr("common.youSuffix") : ""}`, (
     <div className={s.info}>
       <div className={s.infoTop}>
         <Avatar c={c} size={92} />
-        <div><b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>{c && <p><span className={s.pink}>{c.skill}</span> {c.text}</p>}</div>
+        <div><b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>{c && <p><span className={s.pink}>{c.skill}</span> {skillText(c)}</p>}</div>
       </div>
       <div className={s.lines}>{lines.map((l) => <div key={l}>{l}</div>)}</div>
       {deeds.length ? (
@@ -216,7 +216,7 @@ export function showEventPile(S: MatchState): void {
 }
 
 export function showDiscards(m: Model): void {
-  const rows = m.S.seats.map((x, i) => [i, x.discard] as const).filter(([, d]) => d.length);
+  const rows = m.S.players.map((x, i) => [i, x.discard] as const).filter(([, d]) => d.length);
   openModal(tr("board.discardPile"), rows.length ? (
     <div className={s.discards}>
       {rows.map(([i, d]) => (

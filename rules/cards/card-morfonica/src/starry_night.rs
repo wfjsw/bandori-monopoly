@@ -11,39 +11,41 @@
 //!
 //! ×1000 to stock X crystals; each removal pays the owner 1,000.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::abi::TriggerKind;
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const STARRY_NIGHT: CardDef = CardDef {
-    id: "Mor:蝴蝶飞舞的星月夜",
-    play: Some(starry_night),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 
-fn why_not(seat: i32) -> Option<Msg> {
+pub const STARRY_NIGHT: CardDef = CardDef::new("Mor:蝴蝶飞舞的星月夜", &[
+    On::Play(starry_night),
+    On::CantPlay(cant_play),
+    On::Hook(&[TriggerKind::RollAfter, TriggerKind::PassTile], hook),
+]);
+
+fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardStarryNight.WhyNot` refuses the play with less than 1,000
     // (`资金不够 1,000`).
-    if ctx::money(seat) < 1000 {
+    if ctx::money(player_id) < 1000 {
         return Some(Msg::new(key!("starry_night_why_not")));
     }
     None
 }
 
-fn starry_night(seat: i32) {
+fn starry_night(player_id: i32) {
     // 规则书（1）: 「支付X次1000的的资金」 -- C# `H.AskNumber(..., 1, max)` with
     // `max = Math.Max(1, Math.Min(5, money / 1000))`.
-    let money = ctx::money(seat);
+    let money = ctx::money(player_id);
     let max = (money / 1000).clamp(1, 5);
     let x = ctx::ask_number(
-        seat,
+        player_id,
         &Msg::new(key!("starry_night_ask_title")),
         &Msg::new(key!("starry_night_ask_text")),
         1,
         max,
     );
     // 规则书（1）: 「支付X次1000的的资金」 -- C# `PayCtx { amount = 1000 * x, kind = "pay", must = false }`.
-    let paid = ctx::pay(seat, 1000 * x, &Msg::new(key!("starry_night_why")).i("n", x as i64));
+    let paid = ctx::pay(player_id, 1000 * x, &Msg::new(key!("starry_night_why")).i("n", x as i64));
     if paid < 1000 * x {
         // C# `c.Effective = false` when the payment does not go through.
         // TODO(ABI): `PlayCtx.Effective` is not writable; the card is spent anyway.
@@ -51,16 +53,96 @@ fn starry_night(seat: i32) {
     }
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "Mor:蝴蝶飞舞的星月夜", &Msg::new(key!("starry_night_note")).i("n", x as i64));
-    ctx::log(seat, &Msg::new(key!("starry_night_placed")).seat("who", seat).i("n", x as i64));
-    // TODO(规则书)（1）: 「并在此卡上放置X个[奇迹水晶]，此卡没有[奇迹水晶]时加入弃牌堆」 -- needs
-    //   the field-card crystal counter (`H.PlaceFromPlay(c, -1, -1, x)` / `H.AddCrystals`).
-    // TODO(规则书)（1）: 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」 -- needs
-    //   the Fx.RollAfter hook (C# `CardStarryNight.RollAfter` -> `Reroll`, `H.DoMoveRoll`).
-    // TODO(规则书)（2）: 「当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个
-    //   [奇迹水晶]」 -- needs the same Fx.RollAfter hook (C# `Attack`) plus the crystal counter.
-    // TODO(规则书)（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」 -- needs the Fx.PassTile
-    //   hook on the "circle"-kind tile (C# `CardStarryNight.PassTile`).
-    // TODO(规则书)（3）: 「此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金」 -- needs the
-    //   crystal-removal payout (C# `CardStarryNight.Remove` -> `H.GainR(Seat, 1000, ...)`).
+    ctx::place_card(player_id, ID, &Msg::new(key!("starry_night_note")).i("n", x as i64));
+    ctx::add_crystals(player_id, x, 0);
+    ctx::log(player_id, &Msg::new(key!("starry_night_placed")).player_id("who", player_id).i("n", x as i64));
+    // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」 and 规则书（2）/（3） -- the
+    // RollAfter / PassTile hooks below handle the reroll, the even-roll attack and
+    // the CiRCLE decay; `remove_crystal` pays out and discards at 0.
+}
+
+/// C# `CardStarryNight.Remove` -- burn one crystal, pay the owner 1,000, and
+/// discard the card when the crystals run out.
+fn remove_crystal(player_id: i32) {
+    let left = ctx::add_crystals(player_id, -1, 0);
+    // 规则书（3）: 「此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金」
+    ctx::gain(player_id, 1000, &Msg::new(key!("starry_night_remove")).player_id("who", player_id));
+    if left == 0 && ctx::is_placed(player_id) {
+        // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」
+        ctx::unplace_card(player_id);
+        ctx::to_discard(player_id, ID);
+        ctx::log(player_id, &Msg::new(key!("starry_night_empty")).player_id("who", player_id));
+    }
+}
+
+/// `Fx.RollAfter` / `Fx.PassTile` (C# `CardStarryNight.RollAfter` / `PassTile`).
+/// Runs through the Fx hook dispatch, so these are field effects, not [反击].
+fn hook(player_id: i32) {
+    if !ctx::is_placed(player_id) || ctx::crystals(player_id) <= 0 {
+        return;
+    }
+    match trigger::kind() {
+        TriggerKind::RollAfter => {
+            // C# `!m.Main || m.FixedRoll >= 0` -- only the main move's free roll.
+            if !trigger::move_is_main() || ctx::fixed_roll().is_some() {
+                return;
+            }
+            let roller = trigger::player_id();
+            let roll = trigger::move_roll().unwrap_or_else(trigger::value);
+            if roller == player_id {
+                reroll(player_id, roll);
+            } else if roll % 2 == 0 {
+                attack(player_id, roller, roll);
+            }
+        }
+        TriggerKind::PassTile => {
+            // 规则书（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」 -- C#
+            // `m.Seat == Seat && H.Tile(t)?.kind == "circle" && Crystals > 0`.
+            if trigger::player_id() == player_id && ctx::is_circle(trigger::tile()) {
+                ctx::log(player_id, &Msg::new(key!("starry_night_circle")).player_id("who", player_id));
+                remove_crystal(player_id);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// 规则书（1）: 「此卡在场时，你每次移动掷骰时可以放弃第一次的结果重骰一次」 -- C#
+/// `CardStarryNight.Reroll`: ask (default yes under 8), then `H.DoMoveRoll`.
+fn reroll(player_id: i32, roll: i32) {
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("starry_night_reroll_title")),
+        &Msg::new(key!("starry_night_reroll_ask")).i("roll", roll as i64),
+    ) {
+        return;
+    }
+    // TODO(规则书): the C# rerolls with `H.DoMoveRoll` (honours the move's dice
+    //   plan / bonuses); `ctx::roll(1d20)` is the default `MoveCtx.Base` shape.
+    let new_roll = ctx::roll(player_id, 1, 20);
+    trigger::set_move_roll(new_roll);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("starry_night_rerolled")).player_id("who", player_id).i("from", roll as i64).i("to", new_roll as i64),
+    );
+}
+
+/// 规则书（2）: 「当其他角色的移动掷骰结果是偶数时可消耗1000资金并移除此卡的一个
+/// [奇迹水晶]」 -- C# `CardStarryNight.Attack`: the *roller* is asked to pay 1,000.
+fn attack(player_id: i32, roller: i32, roll: i32) {
+    if ctx::player_out(roller) || !ctx::can_pay(roller) || ctx::money(roller) < 1000 {
+        return;
+    }
+    if !ctx::ask_yes(
+        roller,
+        &Msg::new(key!("starry_night_attack_title")),
+        &Msg::new(key!("starry_night_attack_ask")).player_id("who", player_id).i("roll", roll as i64),
+    ) {
+        return;
+    }
+    let paid = ctx::pay(roller, 1000, &Msg::new(key!("starry_night_attack_pay")).player_id("who", roller));
+    if paid >= 1000 {
+        remove_crystal(player_id);
+        ctx::log(player_id, &Msg::new(key!("starry_night_attack_done")).player_id("who", roller).player_id("owner", player_id));
+    }
 }

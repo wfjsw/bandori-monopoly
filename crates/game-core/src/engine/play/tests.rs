@@ -17,17 +17,17 @@ fn data() -> Arc<GameData> {
     Arc::new(GameData::load(|f| std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())).unwrap())
 }
 
-/// A world in the play phase, seat 0 to move, nobody owning anything.
-fn setup(seats: i32) -> (Arc<GameData>, World) {
+/// A world in the play phase, player 0 to move, nobody owning anything.
+fn setup(players: i32) -> (Arc<GameData>, World) {
     let d = data();
-    let members: Vec<RoomMember> = (1..=seats).map(|i| RoomMember { id: i, player: format!("P{i}"), bot: true, ..Default::default() }).collect();
+    let members: Vec<RoomMember> = (1..=players).map(|i| RoomMember { id: i, player: format!("P{i}"), bot: true, ..Default::default() }).collect();
     let mut m = Match::new(d.clone(), Arc::new(StubRules), &members, 1, MatchMode::Casual, ScoreWeights::default());
     m.quick_start();
     let mut w = m.world.clone();
     w.st.turn = 0;
     w.st.step = 1;
     w.next_turn_pending = false;
-    for s in &mut w.st.seats {
+    for s in &mut w.st.players {
         s.money = 10_000;
         s.pos = 0;
     }
@@ -58,12 +58,12 @@ fn rent_follows_the_rent_table() {
     let t = first(&d, |x| x.kind == "property" && x.rent.len() >= 3);
     w.st.owners[t] = 1;
     w.st.houses[t] = 2;
-    w.st.seats[0].pos = t as i32;
+    w.st.players[0].pos = t as i32;
     let rent = d.tiles[t].rent[2];
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert!(p.is_none());
-    assert_eq!(w2.st.seats[0].money, 10_000 - rent);
-    assert_eq!(w2.st.seats[1].money, 10_000 + rent);
+    assert_eq!(w2.st.players[0].money, 10_000 - rent);
+    assert_eq!(w2.st.players[1].money, 10_000 + rent);
     let e = w2.recent.back().unwrap();
     assert_eq!((e.r#type.as_str(), e.value, e.other, e.to), ("rent", rent, 1, t as i32));
 }
@@ -75,11 +75,11 @@ fn ring_rent_is_rings_times_multiplier_times_d20() {
     assert_eq!(rings.len(), 4);
     w.st.owners[rings[0]] = 1;
     w.st.owners[rings[1]] = 1;
-    w.st.seats[0].pos = rings[0] as i32;
+    w.st.players[0].pos = rings[0] as i32;
     for seed in 0..20 {
         w.rng = crate::rng::Rng::new(seed);
         let (w2, _) = run(&d, &w, &[], |cx| cx.land(0, true));
-        let paid = 10_000 - w2.st.seats[0].money;
+        let paid = 10_000 - w2.st.players[0].money;
         assert!(paid % 20 == 0 && (20..=400).contains(&paid), "2 rings x 10 x 1d20, got {paid}");
     }
 }
@@ -94,11 +94,11 @@ fn agent_charges_half_rent_when_the_whole_group_belongs_to_others() {
     for &t in &group {
         w.st.owners[t] = 1;
     }
-    w.st.seats[0].pos = agent as i32;
+    w.st.players[0].pos = agent as i32;
     let expected: i32 = group.iter().map(|&t| ((d.tiles[t].rent[0] as f64 / 2.0 / 10.0).ceil() as i32) * 10).sum();
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert!(p.is_none());
-    assert_eq!(10_000 - w2.st.seats[0].money, expected);
+    assert_eq!(10_000 - w2.st.players[0].money, expected);
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn agent_offers_purchases_in_its_group() {
     let (d, mut w) = setup(2);
     let agent = first(&d, |x| x.kind == "agent");
     let g = d.tiles[agent].group;
-    w.st.seats[0].pos = agent as i32;
+    w.st.players[0].pos = agent as i32;
     let (_, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     let p = p.expect("tile prompt");
     assert_eq!(p.kind, "tile");
@@ -117,7 +117,7 @@ fn agent_offers_purchases_in_its_group() {
     let (w2, p) = run(&d, &w, &[pick(0)], |cx| cx.land(0, true));
     assert!(p.is_none());
     assert_eq!(w2.st.owners[t], 0);
-    assert_eq!(w2.st.seats[0].money, 10_000 - d.tiles[t].price);
+    assert_eq!(w2.st.players[0].money, 10_000 - d.tiles[t].price);
 
     // Any answer outside the option list means "choose nothing".
     let (w3, _) = run(&d, &w, &[pick(99)], |cx| cx.land(0, true));
@@ -131,8 +131,8 @@ fn short_of_cash_mortgages_then_pays() {
     let rent = d.tiles[t].rent[2];
     w.st.owners[t] = 1;
     w.st.houses[t] = 2;
-    w.st.seats[0].pos = t as i32;
-    w.st.seats[0].money = 100;
+    w.st.players[0].pos = t as i32;
+    w.st.players[0].money = 100;
     let deeds: Vec<usize> = (0..d.tiles.len()).filter(|&x| d.tiles[x].kind == "property" && x != t).take(4).collect();
     for &x in &deeds {
         w.st.owners[x] = 0;
@@ -149,9 +149,9 @@ fn short_of_cash_mortgages_then_pays() {
     assert!(p2.is_none());
     let raised: i32 = deeds.iter().map(|&x| d.tiles[x].price / 2).sum();
     assert!(deeds.iter().all(|&x| w2.st.mortgaged[x]));
-    assert_eq!(w2.st.seats[0].money, 100 + raised - rent);
-    assert!(!w2.st.seats[0].bankrupt);
-    assert_eq!(w2.st.seats[1].money, 10_000 + rent);
+    assert_eq!(w2.st.players[0].money, 100 + raised - rent);
+    assert!(!w2.st.players[0].bankrupt);
+    assert_eq!(w2.st.players[1].money, 10_000 + rent);
 }
 
 #[test]
@@ -160,15 +160,15 @@ fn bankruptcy_pays_the_creditor_and_can_end_the_game() {
     let t = first(&d, |x| x.kind == "property" && x.rent.len() >= 3);
     w.st.owners[t] = 1;
     w.st.houses[t] = 3;
-    w.st.seats[0].pos = t as i32;
-    w.st.seats[0].money = 7;
+    w.st.players[0].pos = t as i32;
+    w.st.players[0].money = 7;
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert!(p.is_none());
-    assert!(w2.st.seats[0].bankrupt && w2.st.seats[0].out_order == 1);
-    assert_eq!(w2.st.seats[1].money, 10_007, "creditor receives everything");
+    assert!(w2.st.players[0].bankrupt && w2.st.players[0].out_order == 1);
+    assert_eq!(w2.st.players[1].money, 10_007, "creditor receives everything");
     assert_eq!(w2.st.phase, "ended");
     assert_eq!((w2.st.end_reason.as_str(), w2.st.winner), ("last", 1));
-    assert_eq!((w2.st.seats[1].rank, w2.st.seats[0].rank), (1, 2));
+    assert_eq!((w2.st.players[1].rank, w2.st.players[0].rank), (1, 2));
 }
 
 #[test]
@@ -180,20 +180,20 @@ fn bankrupt_land_is_freed_and_auctioned() {
     w.st.houses[t] = 3;
     w.st.owners[mine] = 0;
     w.st.mortgaged[mine] = true; // nothing left to mortgage -> straight to bankruptcy
-    w.st.seats[0].pos = t as i32;
-    w.st.seats[0].money = 0;
+    w.st.players[0].pos = t as i32;
+    w.st.players[0].money = 0;
     let (w2, p) = run(&d, &w, &[], |cx| cx.land(0, true));
-    assert!(w2.st.seats[0].bankrupt);
+    assert!(w2.st.players[0].bankrupt);
     assert_eq!(w2.st.owners[mine], -1, "deed returned to the bank");
     assert!(!w2.st.mortgaged[mine]);
     let p = p.expect("auction prompt");
     assert_eq!((p.kind.as_str(), p.tile), ("auction", mine as i32));
-    assert_eq!(p.seats, vec![1, 2], "remaining players bid");
+    assert_eq!(p.players, vec![1, 2], "remaining players bid");
 
     let won = Answered { answers: vec![1, -1], bid: 300, bidder: 2, ..Default::default() };
     let (w3, _) = run(&d, &w, &[won], |cx| cx.land(0, true));
     assert_eq!(w3.st.owners[mine], 2);
-    assert_eq!(w3.st.seats[2].money, 10_000 - 300);
+    assert_eq!(w3.st.players[2].money, 10_000 - 300);
 }
 
 #[test]
@@ -203,18 +203,18 @@ fn mortgaged_land_can_be_force_bought_at_double() {
     w.st.owners[t] = 1;
     w.st.houses[t] = 1;
     w.st.mortgaged[t] = true;
-    w.st.seats[0].pos = t as i32;
+    w.st.players[0].pos = t as i32;
     let price = 2 * (d.tiles[t].price + d.tiles[t].house);
 
     let (w1, p) = run(&d, &w, &[], |cx| cx.land(0, true));
     assert_eq!(p.expect("prompt").title.key(), "ask.force_buy.title");
-    assert_eq!(w1.st.seats[0].money, 10_000, "mortgaged land charges no rent");
+    assert_eq!(w1.st.players[0].money, 10_000, "mortgaged land charges no rent");
 
     let (w2, _) = run(&d, &w, &[pick(0)], |cx| cx.land(0, true));
     assert_eq!(w2.st.owners[t], 0);
     assert!(w2.st.mortgaged[t], "stays mortgaged");
-    assert_eq!(w2.st.seats[0].money, 10_000 - price);
-    assert_eq!(w2.st.seats[1].money, 10_000 + price);
+    assert_eq!(w2.st.players[0].money, 10_000 - price);
+    assert_eq!(w2.st.players[1].money, 10_000 + price);
 
     let (w3, _) = run(&d, &w, &[pick(1)], |cx| cx.land(0, true));
     assert_eq!(w3.st.owners[t], 1, "declined");
@@ -225,7 +225,7 @@ fn passing_circle_offers_money_or_a_card() {
     let (d, mut w) = setup(2);
     let n = d.tiles.len() as i32;
     assert_eq!(d.tiles[0].kind, "circle");
-    w.st.seats[0].pos = n - 2;
+    w.st.players[0].pos = n - 2;
     let walk = |cx: &mut Cx| {
         let mut m = Move::new(0);
         m.roll = 5;
@@ -237,12 +237,12 @@ fn passing_circle_offers_money_or_a_card() {
     assert_eq!((p.title.key(), p.options.len()), ("ask.circle.title", 2));
 
     let (money, _) = run(&d, &w, &[pick(0)], walk);
-    assert_eq!(money.st.seats[0].money, 10_000 + CIRCLE_MONEY);
-    assert_eq!(money.st.seats[0].pos, 3);
+    assert_eq!(money.st.players[0].money, 10_000 + CIRCLE_MONEY);
+    assert_eq!(money.st.players[0].pos, 3);
 
     let hand = w.hidden[0].hand.len();
     let (card, _) = run(&d, &w, &[pick(1)], walk);
-    assert_eq!(card.st.seats[0].money, 10_000);
+    assert_eq!(card.st.players[0].money, 10_000);
     assert_eq!(card.hidden[0].hand.len(), hand + 1);
 }
 
@@ -253,7 +253,7 @@ fn replays_are_exact() {
     for seed in 0..30 {
         let mut w = w.clone();
         w.rng = crate::rng::Rng::new(seed);
-        w.st.seats[0].pos = d.tiles.len() as i32 - 3;
+        w.st.players[0].pos = d.tiles.len() as i32 - 3;
         let (a, pa) = run(&d, &w, &[], |cx| cx.main_move(0, 0));
         let (b, pb) = run(&d, &w, &[], |cx| cx.main_move(0, 0));
         assert_eq!(a, b, "seed {seed}");
@@ -271,16 +271,16 @@ fn replays_are_exact() {
 fn final_score_and_ranking() {
     let (d, mut w) = setup(4);
     let props: Vec<usize> = (0..d.tiles.len()).filter(|&t| d.tiles[t].kind == "property").collect();
-    w.st.seats[0].money = 5_000;
+    w.st.players[0].money = 5_000;
     w.st.owners[props[0]] = 0;
     w.st.houses[props[0]] = 2;
-    w.st.seats[1].money = 6_000;
+    w.st.players[1].money = 6_000;
     w.st.owners[props[1]] = 1;
     w.st.mortgaged[props[1]] = true;
-    w.st.seats[2].bankrupt = true;
-    w.st.seats[2].out_order = 1;
-    w.st.seats[3].left = true;
-    w.st.seats[3].out_order = 2;
+    w.st.players[2].bankrupt = true;
+    w.st.players[2].out_order = 1;
+    w.st.players[3].left = true;
+    w.st.players[3].out_order = 2;
     w.st.score_money = 1.0;
     w.st.score_property = 2.0;
     w.st.score_houses = 0.5;
@@ -288,7 +288,7 @@ fn final_score_and_ranking() {
         cx.finish("settle", None);
         Ok(())
     });
-    let s = &w2.st.seats;
+    let s = &w2.st.players;
     let p0 = &d.tiles[props[0]];
     let p1 = &d.tiles[props[1]];
     assert_eq!(s[0].assets, 5_000 + p0.price + 2 * p0.house);
@@ -298,3 +298,4 @@ fn final_score_and_ranking() {
     let (r0, r1) = if s[0].score >= s[1].score { (1, 2) } else { (2, 1) };
     assert_eq!(order, vec![r0, r1, 4, 3], "later elimination ranks higher");
 }
+

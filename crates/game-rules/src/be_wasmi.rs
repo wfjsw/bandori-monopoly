@@ -66,3 +66,13 @@ pub fn read_guest<W>(caller: &mut Caller<'_, W>, ptr: i32, len: i32) -> Result<V
     let bytes = mem.data(&*caller).get(ptr..ptr + len).ok_or_else(|| err("guest read out of bounds"))?;
     Ok(bytes.to_vec())
 }
+
+/// Write `bytes` at `ptr` into a guest-owned buffer (the guest allocates; the
+/// host never allocates inside guest memory).
+pub fn write_guest<W>(caller: &mut Caller<'_, W>, ptr: i32, bytes: &[u8]) -> Result<(), Error> {
+    let mem = caller.get_export(card_sdk::abi::export::MEMORY).and_then(Extern::into_memory).ok_or_else(|| err("guest has no memory export"))?;
+    let ptr = ptr as u32 as usize;
+    let dst = mem.data_mut(&mut *caller).get_mut(ptr..ptr + bytes.len()).ok_or_else(|| err("guest write out of bounds"))?;
+    dst.copy_from_slice(bytes);
+    Ok(())
+}

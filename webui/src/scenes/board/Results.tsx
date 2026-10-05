@@ -18,16 +18,16 @@ const reasonText = (end: string) => ({ last: tr("results.reasonLast"), vote: tr(
 
 function Results({ m, reward, exit }: { m: Model; reward: MatchReward | null; exit: () => void }) {
   const S = m.S;
-  const mine = S.seats[m.seat];
+  const mine = S.players[m.playerId];
   const reason = reasonText(S.endReason);
-  const ranked = S.seats.map((x, i) => [x, i] as const).sort((a, b) => a[0].rank - b[0].rank);
+  const ranked = S.players.map((x, i) => [x, i] as const).sort((a, b) => a[0].rank - b[0].rank);
   return (
     <div className={s.result}>
       <div className={s.me}>
         <div className={s.title}>{tr("results.yours")}</div>
         {mine?.rank === 1 && <img className={s.medal} src={sceneImg("icon_medal")} alt="" />}
         <div className={s.big}>{mine?.rank ?? "—"}<small>{tr("results.rankUnit")}</small></div>
-        <div className={s.sub}>{tr("results.players", { n: S.seats.length, mode: modeName(S.mode), reason: reason ? ` · ${reason}` : "" })}</div>
+        <div className={s.sub}>{tr("results.players", { n: S.players.length, mode: modeName(S.mode), reason: reason ? ` · ${reason}` : "" })}</div>
         {reward ? (
           <div className={s.rewards}>
             <div><small>{tr("common.exp")}</small><b>+{n0(reward.exp)}</b>{reward.fireUsed > 0 && <small>{tr("results.fireUsed", { n: reward.fireUsed, mult: reward.multiplier })}</small>}</div>
@@ -39,10 +39,10 @@ function Results({ m, reward, exit }: { m: Model; reward: MatchReward | null; ex
       </div>
       <div className={s.list}>
         {ranked.map(([x, i]) => (
-          <div key={i} className={cx(s.row, i === m.seat && s.mine)}>
+          <div key={i} className={cx(s.row, i === m.playerId && s.mine)}>
             <div className={cx(s.rank, x.rank <= 3 && s[`r${x.rank}`])}>{x.rank}</div>
             <Avatar c={m.charOf(i)} size={52} />
-            <div className={s.who}><b>{x.player}{i === m.seat && <span className={s.you}>{tr("common.you")}</span>}</b><small>{m.charOf(i)?.display ?? ""}</small></div>
+            <div className={s.who}><b>{x.player}{i === m.playerId && <span className={s.you}>{tr("common.you")}</span>}</b><small>{m.charOf(i)?.display ?? ""}</small></div>
             <div className={s.num}><small>{x.bankrupt ? tr("board.bankrupt") : x.left ? tr("board.forfeit") : tr("common.score")}</small><b>{n0(x.score)}</b></div>
             <div className={s.num}><small>{tr("common.assets")}</small><b>{n0(x.assets)}</b></div>
           </div>
@@ -54,10 +54,10 @@ function Results({ m, reward, exit }: { m: Model; reward: MatchReward | null; ex
 }
 
 export function showResults(sess: GameSession, m: Model, exit: () => void): void {
-  const mine = m.S.seats[m.seat];
+  const mine = m.S.players[m.playerId];
   let reward: MatchReward | null = null;
   if (!sess.recorded && mine && hasProfile()) {
-    reward = applyMatch(m.S.mode, mine.rank, m.S.seats.length, mine.character);
+    reward = applyMatch(m.S.mode, mine.rank, m.S.players.length, mine.character);
     if (sess instanceof SoloSession) sess.markRecorded();
     else sess.recorded = true;
   }

@@ -10,7 +10,7 @@
 //! they are namespaced by crate (`cards:<crate>.<key>`):
 //!
 //! ```ignore
-//! ctx::log(seat, &Msg::new(key!("placed")).tile("tile", t));
+//! ctx::log(player, &Msg::new(key!("placed")).tile("tile", t));
 //! ```
 
 #[cfg(target_arch = "wasm32")]
@@ -24,14 +24,14 @@ use serde::Deserialize;
 
 /// One typed argument, as the engine's `Msg.a` values.
 ///
-/// The tag names are the wire form (`{"seat": 1}`); they must match the engine's
+/// The tag names are the wire form (`{"player_id": 1}`); they must match the engine's
 /// `Arg` enum in `game-core/src/msg.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(not(target_arch = "wasm32"), derive(Deserialize))]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "camelCase")]
 pub enum Arg {
-    /// A seat -> that player's name.
-    Seat(i32),
+    /// A player -> that player's name.
+    PlayerId(i32),
     /// A board tile -> its name.
     Tile(i32),
     /// A card id -> its title.
@@ -76,9 +76,9 @@ impl Msg {
         self
     }
 
-    /// A seat -> that player's name.
-    pub fn seat(self, name: &str, seat: i32) -> Self {
-        self.with(name, Arg::Seat(seat))
+    /// A player -> that player's name.
+    pub fn player_id(self, name: &str, player_id: i32) -> Self {
+        self.with(name, Arg::PlayerId(player_id))
     }
 
     /// A board tile -> its name.
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn round_trips_the_host_wire_form() {
-        let m = Msg::new(crate::key!("placed")).tile("tile", 3).seat("who", 1).msg("why", &Msg::new("x\"y"));
+        let m = Msg::new(crate::key!("placed")).tile("tile", 3).player_id("who", 1).msg("why", &Msg::new("x\"y"));
         assert_eq!(roundtrip(&m), m);
         assert_eq!(roundtrip(&Msg::new("k")), Msg::new("k"));
     }
@@ -152,14 +152,14 @@ mod tests {
         // postcard keys enums by variant order; the engine's `Arg` (game-core) must
         // list these kinds under the same names. The engine wire is JSON with these
         // tags -- keep them in lockstep with game-core/src/msg.rs.
-        assert_eq!(serde_json_tag(&Arg::Seat(1)), "seat");
+        assert_eq!(serde_json_tag(&Arg::PlayerId(1)), "playerId");
         assert_eq!(serde_json_tag(&Arg::N(1)), "n");
         assert_eq!(serde_json_tag(&Arg::Msg(Box::new(Msg::new("x")))), "msg");
     }
 
     fn serde_json_tag(a: &Arg) -> &'static str {
         match a {
-            Arg::Seat(_) => "seat",
+            Arg::PlayerId(_) => "playerId",
             Arg::Tile(_) => "tile",
             Arg::Card(_) => "card",
             Arg::Char(_) => "char",

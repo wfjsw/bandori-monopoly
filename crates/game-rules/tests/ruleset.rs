@@ -54,29 +54,58 @@ impl TestWorld {
 }
 
 impl CardWorld for TestWorld {
-    fn roll(&mut self, seat: i32, count: i32, sides: i32) -> i32 {
+    // keyed state: the stub holds nothing, so every column reads 0 and writes
+    // go nowhere. The real storage lives on `MatchPlayer::state`.
+    fn state_var(&self, _: i32, _: &str) -> game_core::state::StateVar {
+        game_core::state::StateVar::default()
+    }
+    fn state_get(&self, _: i32, _: &str) -> i32 {
+        0
+    }
+    fn state_min(&self, _: i32, _: &str) -> i32 {
+        0
+    }
+    fn state_max(&self, _: i32, _: &str) -> i32 {
+        0
+    }
+    fn state_expires(&self, _: i32, _: &str) -> Option<game_core::state::Tick> {
+        None
+    }
+    fn state_set(&mut self, _: i32, _: &str, value: i32) -> i32 {
+        value
+    }
+    fn state_add(&mut self, _: i32, _: &str, delta: i32) -> i32 {
+        delta
+    }
+    fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
+    fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
+    fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {
+        Vec::new()
+    }
+
+    fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
         let t = (0..count).map(|_| self.d(sides)).sum();
-        self.events.push(format!("dice seat={seat} {count}d{sides}={t}"));
+        self.events.push(format!("dice player_id={player_id} {count}d{sides}={t}"));
         t
     }
-    fn log(&mut self, seat: i32, msg: Msg) {
-        self.events.push(format!("log seat={seat} {msg}"));
+    fn log(&mut self, player_id: i32, msg: Msg) {
+        self.events.push(format!("log player_id={player_id} {msg}"));
     }
     fn tile_count(&self) -> i32 {
         60
     }
-    fn add_mark(&mut self, tile: i32, seat: i32, _kind: &str, note: Msg) {
-        self.marks.push((tile, seat, note));
+    fn add_mark(&mut self, tile: i32, player_id: i32, _kind: &str, note: Msg) {
+        self.marks.push((tile, player_id, note));
     }
-    fn money(&self, seat: i32) -> i32 {
-        self.money[seat as usize]
+    fn money(&self, player_id: i32) -> i32 {
+        self.money[player_id as usize]
     }
-    fn gain(&mut self, seat: i32, amount: i32, _: Msg) -> i32 {
-        self.money[seat as usize] += amount;
+    fn gain(&mut self, player_id: i32, amount: i32, _: Msg) -> i32 {
+        self.money[player_id as usize] += amount;
         amount
     }
-    fn pay(&mut self, seat: i32, amount: i32, _: Msg) -> i32 {
-        self.money[seat as usize] -= amount;
+    fn pay(&mut self, player_id: i32, amount: i32, _: Msg) -> i32 {
+        self.money[player_id as usize] -= amount;
         amount
     }
     fn tile_named(&self, _: &str) -> i32 {
@@ -85,7 +114,7 @@ impl CardWorld for TestWorld {
     fn tile_owner(&self, _: i32) -> i32 {
         -1
     }
-    fn seat_pos(&self, _: i32) -> i32 {
+    fn player_pos(&self, _: i32) -> i32 {
         -1
     }
     fn tile_steps_ahead(&self, _: i32, _: i32) -> i32 {
@@ -109,17 +138,17 @@ impl CardWorld for TestWorld {
     fn owned_at(&self, _: i32, _: i32) -> i32 {
         -1
     }
-    fn seat_count(&self) -> i32 {
+    fn player_count(&self) -> i32 {
         4
     }
-    fn seat_out(&self, _: i32) -> i32 {
+    fn player_out(&self, _: i32) -> i32 {
         0
     }
     fn others_count(&self, _: i32) -> i32 {
         3
     }
-    fn others_at(&self, seat: i32, index: i32) -> i32 {
-        [0, 1, 2, 3].into_iter().filter(|&i| i != seat).nth(index.max(0) as usize).unwrap_or(-1)
+    fn others_at(&self, player_id: i32, index: i32) -> i32 {
+        [0, 1, 2, 3].into_iter().filter(|&i| i != player_id).nth(index.max(0) as usize).unwrap_or(-1)
     }
     fn draw(&mut self, _: i32, _: i32) -> i32 {
         0
@@ -188,6 +217,30 @@ impl CardWorld for TestWorld {
     fn set_trigger_move_roll(&mut self, roll: i32) {
         self.trigger.move_roll = Some(roll);
     }
+    fn set_trigger_value(&mut self, value: i32) {
+        self.trigger.value = value;
+    }
+    fn crystals(&self, _: i32) -> i32 {
+        0
+    }
+    fn set_crystals(&mut self, _: i32, _: i32) -> i32 {
+        0
+    }
+    fn add_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+        0
+    }
+    fn take_card(&mut self, _: i32, _: game_rules::CardPile, _: &str) -> bool {
+        false
+    }
+    fn cards_in(&self, _: i32, _: game_rules::CardPile) -> Vec<String> {
+        Vec::new()
+    }
+    fn set_trigger_target(&mut self, to: i32) {
+        self.trigger.target = to;
+    }
+    fn set_trigger_cancelled(&mut self) {
+        self.trigger.cancelled = true;
+    }
     fn trig_card_is(&self, id: &str) -> i32 {
         (self.trigger.card == id) as i32
     }
@@ -197,6 +250,15 @@ impl CardWorld for TestWorld {
         0
     }
     fn is_shop(&self, _: i32) -> i32 {
+        0
+    }
+    fn is_ring(&self, _: i32) -> i32 {
+        0
+    }
+    fn is_circle(&self, _: i32) -> i32 {
+        0
+    }
+    fn is_live_house(&self, _: i32) -> i32 {
         0
     }
     fn tile_group(&self, _: i32) -> i32 {
@@ -226,13 +288,16 @@ impl CardWorld for TestWorld {
     fn neighbor(&self, _: i32, _: i32) -> i32 {
         -1
     }
-    fn seats_on_count(&self, _: i32, _: i32) -> i32 {
+    fn players_on_count(&self, _: i32, _: i32) -> i32 {
         0
     }
-    fn seats_on_at(&self, _: i32, _: i32, _: i32) -> i32 {
+    fn players_on_at(&self, _: i32, _: i32, _: i32) -> i32 {
         -1
     }
     fn hand_count(&self, _: i32, _: &str) -> i32 {
+        0
+    }
+    fn hand_size(&self, _: i32) -> i32 {
         0
     }
     fn discard_count(&self, _: i32, _: &str) -> i32 {
@@ -247,11 +312,14 @@ impl CardWorld for TestWorld {
     fn discard_from_hand(&mut self, _: i32, _: &str) -> i32 {
         0
     }
-    fn sweep_to_deck(&mut self, _: i32) -> i32 {
+    fn shuffle_into_deck(&mut self, _: i32, _: bool, _: bool) -> i32 {
         0
     }
     fn can_pay(&self, _: i32) -> i32 {
         1
+    }
+    fn cant_move(&self, _: i32) -> i32 {
+        0
     }
     fn spend_fire(&mut self, _: i32, _: i32, _: Msg) -> i32 {
         0
@@ -262,7 +330,7 @@ impl CardWorld for TestWorld {
     fn stun_of(&self, _: i32) -> i32 {
         0
     }
-    fn turn_seat(&self) -> i32 {
+    fn turn_player(&self) -> i32 {
         0
     }
     fn round_no(&self) -> i32 {
@@ -289,8 +357,8 @@ fn loads_and_validates() {
     let yolo = r.card("AG:Y.O.L.O").expect("yolo in manifest");
     let hagumi = r.card("HHW:（育美）").expect("hagumi in manifest");
     assert!(r.card("R:[衍生] 压").is_some(), "official cards ship in family modules");
-    assert!(r.cards()[yolo as usize].react && !r.cards()[yolo as usize].play);
-    assert!(r.cards()[hagumi as usize].play);
+    assert!(r.cards()[yolo as usize].reacts_to(TriggerKind::MoveRoll) && !r.cards()[yolo as usize].has_play());
+    assert!(r.cards()[hagumi as usize].has_play());
     assert!(r.card("nope").is_none());
 }
 
@@ -299,12 +367,12 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let r = ruleset();
     let card = r.card("HHW:（育美）").unwrap();
     let world = TestWorld::new(20261003);
-    let call = Call::Play { card, seat: 1 };
+    let call = Call::Play { card, player_id: 1 };
 
     // Pass 1: no answers -> blocked on the tile prompt, nothing committed.
     let Outcome::NeedInput(p) = r.run(&world, call, &[]).unwrap() else { panic!("expected a prompt") };
     assert_eq!(p.kind, PromptKind::Tile);
-    assert_eq!(p.seat, 1);
+    assert_eq!(p.player_id, 1);
     assert_eq!(p.answer_slot, 0);
     assert_eq!(p.title.key(), "cards:card-hhw.hagumi_marks_ask_title");
     assert!(!p.options.is_empty() && p.options.len() <= 2);
@@ -319,7 +387,7 @@ fn hagumi_marks_replays_through_a_dice_dependent_prompt() {
     let Outcome::Done(after) = r.run(&world, call, &[pick]).unwrap() else { panic!("expected Done") };
     assert_eq!(after.marks, vec![(expected_tile, 1, Msg::new("cards:card-hhw.hagumi_marks_mark_note").n("money", 2000))]);
     assert_eq!(after.events.iter().filter(|e| e.starts_with("dice")).count(), 2);
-    assert_eq!(after.events.last().unwrap(), &format!("log seat=1 cards:card-hhw.hagumi_marks_placed{{tile=tile:{expected_tile}}}"));
+    assert_eq!(after.events.last().unwrap(), &format!("log player_id=1 cards:card-hhw.hagumi_marks_placed{{tile=tile:{expected_tile}}}"));
 
     // Determinism: replaying the full answer log gives an identical world.
     let Outcome::Done(after2) = r.run(&world, call, &[pick]).unwrap() else { panic!() };
@@ -334,14 +402,14 @@ fn yolo_reacts_only_to_rolls_and_adds_1d4() {
 
     assert!(!r.can_react(&world, card, 0).unwrap(), "no trigger -> cannot react");
 
-    world.trigger = Trigger { kind: TriggerKind::MoveRoll, seat: 2, move_roll: Some(12), ..Default::default() };
+    world.trigger = Trigger { kind: TriggerKind::MoveRoll, player_id: 2, move_roll: Some(12), ..Default::default() };
     assert!(r.can_react(&world, card, 0).unwrap());
 
-    let Outcome::Done(after) = r.run(&world, Call::React { card, seat: 0 }, &[]).unwrap() else { panic!() };
+    let Outcome::Done(after) = r.run(&world, Call::React { card, player_id: 0 }, &[]).unwrap() else { panic!() };
     let roll = after.trigger.move_roll.unwrap();
     assert!((13..=16).contains(&roll), "12 + 1d4, got {roll}");
-    let boost = Msg::new("cards:card-ag.yolo_boost").seat("who", 2).i("n", (roll - 12) as i64).i("total", roll as i64);
-    assert_eq!(after.events.last().unwrap(), &format!("log seat=0 {boost}"));
+    let boost = Msg::new("cards:card-ag.yolo_boost").player_id("who", 2).i("n", (roll - 12) as i64).i("total", roll as i64);
+    assert_eq!(after.events.last().unwrap(), &format!("log player_id=0 {boost}"));
     assert_eq!(world.trigger.move_roll, Some(12), "input world is never modified");
 }
 
@@ -349,7 +417,7 @@ fn yolo_reacts_only_to_rolls_and_adds_1d4() {
 fn runaway_effect_is_stopped_by_fuel() {
     let r = ruleset().with_fuel(200);
     let card = r.card("HHW:（育美）").unwrap();
-    let err = r.run(&TestWorld::new(1), Call::Play { card, seat: 0 }, &[]).unwrap_err();
+    let err = r.run(&TestWorld::new(1), Call::Play { card, player_id: 0 }, &[]).unwrap_err();
     assert!(matches!(err, RuleError::Trap(ref m) if m.contains("fuel")), "{err}");
 }
 
@@ -358,7 +426,7 @@ fn bad_handle_is_rejected() {
     let r = ruleset();
     // Derived from the loaded set: a fixed handle goes stale as cards are ported.
     let bad = r.cards().len() as i32 + 7;
-    assert!(matches!(r.run(&TestWorld::new(1), Call::Play { card: bad, seat: 0 }, &[]), Err(RuleError::NoSuchCard(_))));
+    assert!(matches!(r.run(&TestWorld::new(1), Call::Play { card: bad, player_id: 0 }, &[]), Err(RuleError::NoSuchCard(_))));
 }
 
 #[test]
@@ -386,11 +454,11 @@ fn cross_module_play_card_replays_the_inner_prompt() {
     let relay = r.card("TEST:relay").unwrap();
     assert_ne!(r.module_sha256(relay), r.module_sha256(r.card("HHW:（育美）").unwrap()), "different modules");
     let world = TestWorld::new(42);
-    let call = Call::Play { card: relay, seat: 2 };
+    let call = Call::Play { card: relay, player_id: 2 };
 
     // The prompt raised inside the *nested* card aborts the whole outer run.
     let Outcome::NeedInput(p) = r.run(&world, call, &[]).unwrap() else { panic!("expected a prompt") };
-    assert_eq!((p.kind, p.seat, p.answer_slot), (PromptKind::Tile, 2, 0));
+    assert_eq!((p.kind, p.player_id, p.answer_slot), (PromptKind::Tile, 2, 0));
 
     // Replay with the answer: outer and inner effects both complete, in order.
     let Outcome::Done(after) = r.run(&world, call, &[0]).unwrap() else { panic!("expected Done") };
@@ -409,6 +477,102 @@ fn cross_module_play_card_replays_the_inner_prompt() {
 fn runaway_nesting_is_stopped() {
     let r = load(&["cards", "fixtures"]);
     let card = r.card("TEST:recurse").unwrap();
-    let err = r.run(&TestWorld::new(1), Call::Play { card, seat: 0 }, &[]).unwrap_err();
+    let err = r.run(&TestWorld::new(1), Call::Play { card, player_id: 0 }, &[]).unwrap_err();
     assert!(matches!(err, RuleError::Trap(ref m) if m.contains("nested deeper")), "{err}");
+}
+
+/// How long the rules submodule takes to fire up for a small check: build
+/// (compile + validate + manifest) and then one `run` (store + linker +
+/// instantiate + entry). Prints the breakdown; the assertion is only a
+/// "not catastrophically slow" tripwire.
+#[test]
+fn fire_up_cost() {
+    use std::time::Instant;
+    let wasm = modules("cards");
+    let kb: usize = wasm.iter().map(|w| w.len()).sum::<usize>() / 1024;
+
+    let t = Instant::now();
+    let mut b = Ruleset::builder();
+    for m in &wasm {
+        b.add(m).unwrap();
+    }
+    let r = b.build().unwrap();
+    let build = t.elapsed();
+
+    // A real entry point (Play), so the run reaches instantiate + call.
+    let card = r.card("R:[衍生] 压").or_else(|| r.card("AG:Y.O.L.O")).unwrap();
+    let world = TestWorld::new(1);
+    let call = Call::Play { card, player_id: 0 };
+    // One cold run to pay first-time costs, and to prove the entry really runs.
+    assert!(matches!(r.run(&world, call, &[]), Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_))));
+
+    let n = 100;
+    let t = Instant::now();
+    for _ in 0..n {
+        let _ = r.run(&world, call, &[]);
+    }
+    let each = t.elapsed() / n;
+
+    println!("fire_up: {} modules, {kb} KiB", wasm.len());
+    println!("fire_up: build (compile+inspect+manifest) {build:?}");
+    println!("fire_up: one real run (store+linker+instantiate+entry) {each:?} x{n}");
+    assert!(each.as_millis() < 50, "a small check should fire up in single-digit ms, got {each:?}");
+}
+
+/// Where a single fire-up's ~2ms goes: the linker is rebuilt per call
+/// (`linker()` walks 159 `func_wrap` registrations), then the module is
+/// instantiated into a fresh store.
+#[test]
+fn fire_up_breakdown() {
+    use std::time::Instant;
+    let wasm = modules("cards");
+    let mut b = Ruleset::builder();
+    for m in &wasm {
+        b.add(m).unwrap();
+    }
+    let r = b.build().unwrap();
+    let card = r.card("R:[衍生] 压").unwrap();
+    let world = TestWorld::new(1);
+    let call = Call::Play { card, player_id: 0 };
+    let _ = r.run(&world, call, &[]);
+    let n = 200;
+
+    let t = Instant::now();
+    for _ in 0..n {
+        let _ = r.run(&world, call, &[]);
+    }
+    println!("breakdown: full run {:?}/call", t.elapsed() / n);
+}
+
+/// The "boot all rules to ask one small question" cost: loading the same
+/// ruleset twice in one process. The engine is process-wide and caches
+/// compilations, so the second load is the honest per-check boot.
+#[test]
+fn fire_up_reboot() {
+    use std::time::Instant;
+    let wasm = modules("cards");
+    let boot = |label: &str| {
+        let t = Instant::now();
+        let mut b = Ruleset::builder();
+        for m in &wasm {
+            b.add(m).unwrap();
+        }
+        let r = b.build().unwrap();
+        println!("  {label}: {:?}", t.elapsed());
+        r
+    };
+    let r1 = boot("boot #1 (cold: compile)");
+    let r2 = boot("boot #2 (warm: engine cache)");
+    assert_eq!(r1.sha256(), r2.sha256());
+    // And one small check on the warm ruleset.
+    let card = r2.card("R:[衍生] 压").unwrap();
+    let world = TestWorld::new(1);
+    let call = Call::Play { card, player_id: 0 };
+    let _ = r2.run(&world, call, &[]);
+    let n = 500;
+    let t = Instant::now();
+    for _ in 0..n {
+        let _ = r2.run(&world, call, &[]);
+    }
+    println!("  small check on warm ruleset: {:?}/call", t.elapsed() / n);
 }

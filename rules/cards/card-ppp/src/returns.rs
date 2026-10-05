@@ -20,29 +20,156 @@
 //! >
 //! > （4）[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。
 //!
-//! A pure [特] card (C# has no `Play`): deck setup, game-start placement, band-card
-//! copying and the four [持续] clauses all sit on hooks the ABI does not carry
-//! yet (TODO below).
+//! A pure [特] card (C# has no `Play`): deck setup and game-start placement sit on
+//! the `DeckBeforeGame` / `DeckAtGameStart` hooks. The band-card copying and the
+//! four [持续] clauses still need machinery the ABI does not carry (TODO below).
 
-use card_sdk::CardDef;
+use alloc::string::String;
+use alloc::vec::Vec;
 
-pub const RETURNS: CardDef = CardDef {
-    id: "PPP:Returns",
-    play: None,
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+use card_sdk::abi::{CardPile, TriggerKind};
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, Msg, On};
 
-// TODO(ABI)（1）: 「如果此卡被加入初始卡组则卡组卡数添加8。」
-//   -- needs the `DeckBeforeGame` hook (C# `CardReturns.DeckBeforeGame` -> `AddEight`):
-//   eight ids from `DeckRules.Pool` go into the draw pile (prompted pick or random,
-//   C# `H.AskCard` / `H.AskYes`), then the pile is shuffled.
-// TODO(ABI)（2）: 「游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个
-//   其他存活玩家的团卡。」 -- needs the `DeckAtGameStart` hook (C#
-//   `CardReturns.DeckAtGameStart` -> `Setup`, `H.PlaceCard`) and the band-copy
-//   machinery (`H.BandOf` / `H.MakeBand(..., extra: true)` / `BandBase.Attach`,
-//   C# `CardReturns.Choose`).
+const ID: &str = "PPP:Returns";
+
+pub const RETURNS: CardDef = CardDef::new("PPP:Returns", &[
+    On::Hook(&[TriggerKind::DeckBeforeGame], deck_before_game),
+    On::Hook(&[TriggerKind::DeckAtGameStart], deck_at_game_start),
+]);
+
+/// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
+/// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is
+/// a Poppin' Party band card so only that band's pool can hold it. The exclusive
+/// entry is the player's own character card (`exclusive_of`).
+const BAND_POOL: [&str; 10] = [
+    "PPP:Popipa",
+    "PPP:Returns",
+    "PPP:Tomorrow's Door",
+    "PPP:Bang Dream!",
+    "PPP:STAR BEAT!",
+    "PPP:抓到了",
+    "PPP:迷宫般的仓库",
+    "PPP:献给远方的你",
+    "PPP:仓库里的Random Star",
+    "PPP:向着未来的路标",
+];
+const GENERAL_POOL: [&str; 10] = [
+    "通用:@Tsugu ycm",
+    "通用:登上武道馆",
+    "通用:GREAT",
+    "通用:10次招募（1回限定）",
+    "通用:该清CP了",
+    "通用:雨啊，快点来吧",
+    "通用:网络链接异常",
+    "通用:尽力后的收获",
+    "通用:CiRCLE THANKS PARTY!",
+    "通用:安可",
+];
+
+/// C# `DeckRules.Pool`'s exclusive front (the player's own character card).
+fn exclusive_of(player_id: i32) -> Option<&'static str> {
+    if ctx::character_is(player_id, "户山香澄") {
+        Some("PPP:（香澄）大家我都喜欢哦")
+    } else if ctx::character_is(player_id, "花园多惠") {
+        Some("PPP:（多惠）寻找更好的声音")
+    } else if ctx::character_is(player_id, "牛込里美") {
+        Some("PPP:（里美）我的心就像巧克力螺")
+    } else if ctx::character_is(player_id, "山吹沙绫") {
+        Some("PPP:（沙绫）总有一天要给这片天空命名")
+    } else if ctx::character_is(player_id, "市谷有咲") {
+        Some("PPP:（有咲）等等等一下")
+    } else {
+        None
+    }
+}
+
+/// C# `DeckRules.Pool(c)` ids minus anything already in the draw pile or hand.
+fn pool_for(player_id: i32) -> Vec<String> {
+    let mut have: Vec<String> = ctx::cards_in(player_id, CardPile::Deck);
+    have.extend(ctx::cards_in(player_id, CardPile::Hand));
+    let mut out: Vec<String> = Vec::new();
+    let push = |id: &'static str, out: &mut Vec<String>| {
+        if !have.iter().any(|h| h == id) && !out.iter().any(|o| o == id) {
+            out.push(String::from(id));
+        }
+    };
+    if let Some(ex) = exclusive_of(player_id) {
+        push(ex, &mut out);
+    }
+    for id in BAND_POOL {
+        push(id, &mut out);
+    }
+    for id in GENERAL_POOL {
+        push(id, &mut out);
+    }
+    out
+}
+
+// 规则书[特]（1）: 「如果此卡被加入初始卡组则卡组卡数添加8。」
+/// C# `CardReturns.DeckBeforeGame` -> `AddEight`: eight ids from `DeckRules.Pool`
+/// go into the draw pile (prompted pick or random), then the pile is shuffled.
+fn deck_before_game(player_id: i32) {
+    let mut pool = pool_for(player_id);
+    if pool.is_empty() {
+        return;
+    }
+    // C# `H.AskYes(..., "卡组里有「Returns」：卡组的卡数 +8。要自己从卡池里选 8 张
+    // 加入抽卡区吗？（不选就随机）")`.
+    let pick = ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("returns_add_eight_title")),
+        &Msg::new(key!("returns_add_eight_ask")),
+    );
+    let mut added = 0;
+    while added < 8 && !pool.is_empty() {
+        let index = if pick {
+            // C# `H.AskCard(seat, ..., "选一张加入抽卡区（n/8）", pool, ...)`.
+            let refs: Vec<&str> = pool.iter().map(|s| s.as_str()).collect();
+            let i = ctx::ask_card(
+                player_id,
+                &Msg::new(key!("returns_add_eight_title")),
+                &Msg::new(key!("returns_add_eight_pick")).i("n", added as i64 + 1),
+                &refs,
+            );
+            i.min(pool.len() - 1)
+        } else {
+            // C# `H._rng.Next(pool.Count)` -- a silent host rng; the only host-side
+            // draw here is `ctx::roll`, which also logs the face.
+            (ctx::roll(player_id, 1, pool.len() as i32) - 1).max(0) as usize % pool.len()
+        };
+        let id = pool.remove(index);
+        // C# `h.draw.Add(pool[index])` then `H.Shuffle(h.draw)` at the end; each
+        // insert here shuffles, which leaves the same shuffled pile.
+        ctx::add_to_deck(player_id, &id, true);
+        added += 1;
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("returns_added")).player_id("who", player_id).i("n", added as i64),
+    );
+}
+
+// 规则书[特]（2）: 「游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个
+// 其他存活玩家的团卡。」
+/// C# `CardReturns.DeckAtGameStart` -> `Setup`: pull the id out of the draw pile
+/// (or hand) and place it on the owner's field.
+fn deck_at_game_start(player_id: i32) {
+    if trigger::kind() != TriggerKind::DeckAtGameStart || !trigger::card_is(ID) {
+        return;
+    }
+    // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
+    if !ctx::take_card(player_id, CardPile::Deck, ID) && !ctx::take_card(player_id, CardPile::Hand, ID) {
+        return;
+    }
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, ID, &Msg::new(key!("returns_note")));
+    ctx::log(player_id, &Msg::new(key!("returns_placed")).player_id("who", player_id));
+    // TODO(ABI)（2）: 「并获得一个其他存活玩家的团卡」 -- needs the band-copy
+    //   machinery (C# `CardReturns.Choose`: `H.BandOf` / `H.MakeBand(..., extra:
+    //   true)` / `BandBase.Attach`).
+}
+
 // TODO(ABI)[持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果。」
 //   -- needs the band-card build gate (C# `BandPPP.NoBuildRule`, flipped off in
 //   `CardReturns.Attach` / back on in `Detach`): while Returns is in play the PPP
@@ -57,4 +184,4 @@ pub const RETURNS: CardDef = CardDef {
 //   copied band's actives run; `H.AddTok(seat, "星星贴纸", -1)`).
 // TODO(ABI)[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。」
 //   -- needs the Fx.CardPlayed hook (C# `CardReturns.CardPlayed`, `c.Effective` and
-//   `H.Db.Card(c.Id)?.band == "通用"`) to `ctx::add_tok(seat, "星星贴纸", 1, i32::MAX)`.
+//   `H.Db.Card(c.Id)?.band == "通用"`) to `ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)`.

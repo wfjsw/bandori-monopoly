@@ -141,7 +141,7 @@ The same engine runs on the server (native) and in the browser (inside our wasm3
   std's allocator/panic machinery. A `no_std` SDK would likely shrink it (not measured).
 * Cross-card coupling: 63/184 cards create, copy or play other cards; 24 use shared
   `*Fx` helpers; 8 share `DecayCard`. Cross-card calls go through the host import
-  `play_card(id, seat)` (ABI v2), which runs the other module nested in the same run:
+  `play_card(id, player_id)` (ABI v2), which runs the other module nested in the same run:
   same world copy, same answer log, shared fuel, nesting limit 8.
 * The ABI allows 1..N cards per module, so per-band or single-module packaging remains
   a build choice; the host loads any set of modules.

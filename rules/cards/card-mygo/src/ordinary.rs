@@ -9,38 +9,32 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const ORDINARY: CardDef = CardDef {
-    id: "MyGO:普通与理所当然",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const ORDINARY: CardDef = CardDef::new("MyGO:普通与理所当然", &[
+    On::React(&[TriggerKind::Abnormal], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「受到异常移动效果影响后可打出」 -- C# `t.Kind == "abnormal"
-    // && t.Target == seat`.
-    if trigger::kind() != TriggerKind::Abnormal || trigger::target() != seat {
+    // && t.Target == player`.
+    if trigger::kind() != TriggerKind::Abnormal || trigger::target() != player_id {
         return false;
     }
     // C# also requires `H.V(seat, "lastWalk") > 0` -- there must be a previous
-    // non-teleport main move whose length can be copied.
-    // TODO(ABI): the engine never writes the `lastWalk` slot (C# `NoteWalk`:
-    // `SetV(m.Seat, "lastWalk", m.Total + 1)` after each non-teleport main walk),
-    // so this guard stays false until it does.
-    ctx::slot(seat, "lastWalk") > 0
+    // non-teleport main move whose length can be copied. The engine writes the
+    // slot (`NoteWalk`: `SetV(player_id, "lastWalk", steps + 1)` after each
+    // non-teleport main walk; 0 means "none").
+    ctx::slot(player_id, "lastWalk") > 0
 }
 
-fn react(seat: i32) {
-    // 规则书[反击]: 「使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的移动格数」
-    // C# `NoteWalk` stores `lastWalk = m.Total + 1`; the C# `React` reads back
-    // `H.V(seat, "lastWalk") - 1` as the step count.
-    let steps = ctx::slot(seat, "lastWalk") - 1;
-    ctx::log(seat, &Msg::new(key!("ordinary_log")).i("n", steps as i64));
-    // TODO(规则书): 「使你下一次主要移动的格数变为...」 -- needs the NextStepsFx
-    // movement override (C# `H.ExtraOf<NextStepsFx>(c.Seat).Steps = steps` over
-    // `MoveBefore`) so the next main move uses `steps`; the vocabulary has no
-    // move-plan attachment.
+fn react(player_id: i32) {
+    // 规则书[反击]: 「使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的
+    // 移动格数」 -- C# `React` reads `H.V(seat, "lastWalk") - 1` (the `NoteWalk`
+    // count) and installs it as `H.ExtraOf<NextStepsFx>(c.Seat).Steps = steps`,
+    // which `MoveBefore` applies to the next main move. `ctx::set_next_steps` is
+    // that NextStepsFx: the engine takes the stored count when planning the move.
+    let steps = ctx::slot(player_id, "lastWalk") - 1;
+    ctx::set_next_steps(player_id, steps);
+    ctx::log(player_id, &Msg::new(key!("ordinary_log")).i("n", steps as i64));
 }

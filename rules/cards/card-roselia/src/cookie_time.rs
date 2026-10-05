@@ -7,41 +7,41 @@
 //! whole discard pile back into the deck and gain 500 per returned card.
 
 use card_sdk::ctx;
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const COOKIE_TIME: CardDef = CardDef {
-    id: "R:曲奇时间",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
 /// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 -- nothing to return when the
-    // discard pile is empty (C# `H._hidden[seat].discard.Count != 0`).
-    if ctx::discard_size(seat) == 0 {
+    // discard pile is empty (C# `H._hidden[player_id].discard.Count != 0`).
+    if ctx::discard_size(player_id) == 0 {
         return Some(Msg::new(key!("cookie_time_no_discard")));
     }
     None
 }
 
-fn play(seat: i32) {
+fn play(player_id: i32) {
     // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 -- C#
     // `H.ShuffleAllIntoDeck(i, hand: false, discard: true)`.
     // 规则书: 「获得500*X资金，X为返回卡的总数」 -- X is `hidden.discard.Count`
     // before the shuffle (C# `CardCookieTime.Play`).
-    let x = ctx::discard_size(seat);
+    let x = ctx::discard_size(player_id);
     // The hook sweeps hand + discard (there is no `hand: false` flag on
     // `sweep_to_deck`); X stays the discard size the rule names.
-    ctx::sweep_to_deck(seat);
+    ctx::sweep_to_deck(player_id);
     ctx::log(
-        seat,
-        &Msg::new(key!("cookie_time_shuffle")).seat("who", seat).i("n", x as i64),
+        player_id,
+        &Msg::new(key!("cookie_time_shuffle")).player_id("who", player_id).i("n", x as i64),
     );
     // 规则书: 「获得500*X资金，X为返回卡的总数」
-    ctx::gain(seat, 500 * x, &Msg::new(key!("cookie_time_why")));
-    // TODO(规则书): the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the
-    //   seat -- needs the persistent Fx.Reshuffled hook.
+    ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")));
+    // 规则书: the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the player.
+    // v25: `sweep_to_deck` now raises `reshuffled` from the host (the C# card
+    // body calls `H.Each(Reshuffled)` itself; the host folds that into the
+    // sweep's commit). Listener cards declare `On::Hook(&[TriggerKind::Reshuffled], ...)`
+    // and get the notification without any card-side raise.
 }

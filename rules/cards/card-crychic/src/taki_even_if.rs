@@ -8,24 +8,20 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const TAKI_EVEN_IF: CardDef = CardDef {
-    id: "CRYCHIC:（立希）即便比不上...",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const TAKI_EVEN_IF: CardDef = CardDef::new("CRYCHIC:（立希）即便比不上...", &[
+    On::React(&[TriggerKind::MoveRoll], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「进入移动阶段后，触发结算前可打出」
     trigger::kind() == TriggerKind::MoveRoll
-        && trigger::seat() == seat
+        && trigger::player_id() == player_id
         && trigger::move_roll().is_some()
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     let Some(before) = trigger::move_roll() else { return };
     // 规则书[反击]: 「进行一次重骰」
     // TODO: C# rerolls with H.DoMoveRoll (honours the move's dice plan / bonuses).
@@ -33,15 +29,15 @@ fn react(seat: i32) {
     // TODO(规则书)[反击]: 「与本回合内你骰出过的所有骰点都不同」-- the C# seeds
     //   `seen` from H._turnCtx.Rolls (every die this turn). The ABI has no
     //   turn-roll history; only this card's own rerolls are compared.
-    let mut x = ctx::roll(seat, 1, 20);
-    ctx::log(seat, &Msg::new(key!("taki_reroll")).seat("who", seat).i("n", x as i64));
+    let mut x = ctx::roll(player_id, 1, 20);
+    ctx::log(player_id, &Msg::new(key!("taki_reroll")).player_id("who", player_id).i("n", x as i64));
     for _ in 0..10 {
         // 规则书[反击]: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」
         if !seen.contains(&x.abs()) {
             break;
         }
         let again = ctx::ask_yes(
-            seat,
+            player_id,
             &Msg::new(key!("taki_again_title")),
             &Msg::new(key!("taki_again_text")).i("n", x as i64),
         );
@@ -49,8 +45,8 @@ fn react(seat: i32) {
             break;
         }
         seen.push(x.abs());
-        x = ctx::roll(seat, 1, 20);
-        ctx::log(seat, &Msg::new(key!("taki_reroll")).seat("who", seat).i("n", x as i64));
+        x = ctx::roll(player_id, 1, 20);
+        ctx::log(player_id, &Msg::new(key!("taki_reroll")).player_id("who", player_id).i("n", x as i64));
     }
     trigger::set_move_roll(x); // 规则书[反击]: 「进行一次重骰」-- the move uses the new face
 }

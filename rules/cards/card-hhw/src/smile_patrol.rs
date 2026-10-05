@@ -6,28 +6,25 @@
 //! >  付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const SMILE_PATROL: CardDef = CardDef {
-    id: "HHW:微笑巡逻队",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const SMILE_PATROL: CardDef = CardDef::new("HHW:微笑巡逻队", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSmilePatrol.WhyNot`: refuses without a tile you can afford to
     // build on (`H.WhyNotBuildOn(seat, t) == null && money >= BuildCostFor`).
     // TODO(规则书): the C# `H.WhyNotBuildOn` also checks the ring/rent-tier cap,
     // the turn's NoBuild flag and live Fx blockers; those hooks are still
     // missing, so the gate covers only the expressible checks (buyable, owned,
     // unmortgaged, can-pay, affordable).
-    let money = ctx::money(seat);
-    for t in ctx::owned_tiles(seat) {
+    let money = ctx::money(player_id);
+    for t in ctx::owned_tiles(player_id) {
         if ctx::is_buyable(t)
             && !ctx::mortgaged_of(t)
-            && ctx::can_pay(seat)
+            && ctx::can_pay(player_id)
             && money >= ctx::build_cost(t)
         {
             return None;
@@ -36,7 +33,7 @@ fn why_not(seat: i32) -> Option<Msg> {
     Some(Msg::new(key!("x_no_buildable")))
 }
 
-fn play(seat: i32) {
+fn play(player_id: i32) {
     // 规则书: 「付款并在任意自己的格子加盖一层房屋」 -- C#
     // `H.OfferBuildAmong(i, H.OwnedBy(i), CardName)` pays the tile's build cost
     // and raises one house. TODO(规则书): the paid-build routine (`H.BuildRoutine`
@@ -47,11 +44,11 @@ fn play(seat: i32) {
     if n <= 0 {
         return;
     }
-    let r = ctx::roll(seat, 3, 20);
+    let r = ctx::roll(player_id, 3, 20);
     let tile = (r - 1).rem_euclid(n);
     ctx::log(
-        seat,
-        &Msg::new(key!("smile_patrol_rolled")).seat("who", seat).tile("tile", tile).i("roll", r as i64),
+        player_id,
+        &Msg::new(key!("smile_patrol_rolled")).player_id("who", player_id).tile("tile", tile).i("roll", r as i64),
     );
     // 规则书: 「额外免费加盖一层房屋（若为可建造格子）」 -- C# checks `IsBuyable`,
     // kind != "ring", rent tiers, mortgage, house cap, then `H.AddHouse`.
@@ -62,8 +59,8 @@ fn play(seat: i32) {
     let can = ctx::is_buyable(tile) && !ctx::mortgaged_of(tile);
     let after = if can { ctx::add_house(tile, 1) } else { before };
     if after > before {
-        ctx::log(seat, &Msg::new(key!("smile_patrol_built")).tile("tile", tile).i("n", after as i64));
+        ctx::log(player_id, &Msg::new(key!("smile_patrol_built")).tile("tile", tile).i("n", after as i64));
     } else {
-        ctx::log(seat, &Msg::new(key!("smile_patrol_cannot_build")).tile("tile", tile));
+        ctx::log(player_id, &Msg::new(key!("smile_patrol_cannot_build")).tile("tile", tile));
     }
 }

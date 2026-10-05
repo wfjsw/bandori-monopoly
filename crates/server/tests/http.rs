@@ -218,26 +218,26 @@ async fn drive(c: &Client, id: &str, sse: &mut Sse, d: &GameData, done: impl Fn(
         if done(&f.data) {
             return all;
         }
-        let seat = f.data["seat"].as_i64().unwrap() as usize;
+        let player_id = f.data["playerId"].as_i64().unwrap() as usize;
         let key = (st["seq"].as_i64().unwrap() as i32, st["phase"].as_str().unwrap().to_string());
         if key == acted {
             continue;
         }
         let phase = st["phase"].as_str().unwrap();
-        let my_turn = st["turn"].as_i64() == Some(seat as i64);
+        let my_turn = st["turn"].as_i64() == Some(player_id as i64);
         let path = format!("/api/rooms/{id}/act");
         if phase == "pick" && my_turn {
-            let taken: Vec<&str> = st["seats"].as_array().unwrap().iter().filter_map(|s| s["character"].as_str()).collect();
+            let taken: Vec<&str> = st["players"].as_array().unwrap().iter().filter_map(|s| s["character"].as_str()).collect();
             let pick = d.characters.iter().find(|c| !c.cn_id.is_empty() && !taken.contains(&c.name.as_str())).unwrap();
             c.ok(&path, json!({ "act": "pick", "character": pick.name })).await;
             acted = key;
-        } else if phase == "deck" && !st["seats"][seat]["deckReady"].as_bool().unwrap() {
-            let ch = d.character(st["seats"][seat]["character"].as_str().unwrap()).unwrap();
+        } else if phase == "deck" && !st["players"][player_id]["deckReady"].as_bool().unwrap() {
+            let ch = d.character(st["players"][player_id]["character"].as_str().unwrap()).unwrap();
             c.ok(&path, json!({ "act": "deck", "cards": deck::preset(d, ch) })).await;
             acted = key;
         } else if st["prompt"]["id"].as_i64().unwrap() != 0 {
             let p = &st["prompt"];
-            let k = p["seats"].as_array().unwrap().iter().position(|s| s.as_i64() == Some(seat as i64));
+            let k = p["players"].as_array().unwrap().iter().position(|s| s.as_i64() == Some(player_id as i64));
             if k.is_some_and(|k| p["answers"][k].as_i64() == Some(-1)) {
                 let msg = match p["kind"].as_str().unwrap() {
                     "mortgage" => json!({ "act": "answer", "prompt": p["id"], "cards": p["items"] }),
@@ -269,7 +269,7 @@ async fn a_match_over_http_and_sse() {
     // Play until it's our move: phase play, our turn, step 1, nothing pending.
     let frames = drive(&a, &id, &mut sse, &d, |v| {
         let st = &v["state"];
-        st["phase"] == "play" && st["turn"] == v["seat"] && st["step"] == 1 && st["busy"] == false
+        st["phase"] == "play" && st["turn"] == v["playerId"] && st["step"] == 1 && st["busy"] == false
     })
     .await;
 
@@ -285,17 +285,17 @@ async fn a_match_over_http_and_sse() {
     assert!(ids.len() > 5);
     assert!(ids.windows(2).all(|w| w[0].0 == w[1].0 && w[1].1 == w[0].1 + 1), "{ids:?}");
 
-    // Our hand is in our frames, and matches our seat's public count.
+    // Our hand is in our frames, and matches our player's public count.
     let last = frames.iter().rev().find(|f| f.event == "match").unwrap();
-    let seat = last.data["seat"].as_u64().unwrap() as usize;
-    assert_eq!(last.data["hand"].as_array().unwrap().len() as i64, last.data["state"]["seats"][seat]["hand"].as_i64().unwrap());
+    let player_id = last.data["playerId"].as_u64().unwrap() as usize;
+    assert_eq!(last.data["hand"].as_array().unwrap().len() as i64, last.data["state"]["players"][player_id]["hand"].as_i64().unwrap());
 
     // Commands: rejection message, then a roll that shows up on the stream.
     let path = format!("/api/rooms/{id}/act");
     let (s, v) = a.post(&path, json!({ "act": "end" })).await;
     assert_eq!((s, v["error"]["k"].as_str()), (StatusCode::BAD_REQUEST, Some("err.roll_first")));
     a.ok(&path, json!({ "act": "roll" })).await;
-    sse.until(Duration::from_secs(10), |f| f.event == "event" && f.data["type"] == "roll" && f.data["seat"].as_u64() == Some(seat as u64)).await;
+    sse.until(Duration::from_secs(10), |f| f.event == "event" && f.data["type"] == "roll" && f.data["playerId"].as_u64() == Some(player_id as u64)).await;
 
     // Resume: a new stream with Last-Event-ID continues right after it.
     let last_id = ids.last().unwrap();
@@ -319,23 +319,23 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
     a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true })).await;
     drop(_keep_b);
 
-    // B has no stream now: after the time-out the AI takes the seat.
+    // B has no stream now: after the time-out the AI takes the player.
     let away = |f: &Frame| f.event == "room" && f.data["members"].as_array().unwrap().iter().any(|m| m["id"].as_i64() == Some(b_member) && m["away"] == true);
     sse_a.until(Duration::from_secs(10), away).await;
     {
         let room = server.room(&id).unwrap();
         let r = room.lock().unwrap();
-        assert!(r.game.as_ref().unwrap().seat_of_member(b_member as i32).unwrap().ai);
+        assert!(r.game.as_ref().unwrap().player_of_member(b_member as i32).unwrap().ai);
     }
 
-    // B reconnects: seat returned.
+    // B reconnects: player returned.
     let _b_again = b.stream(&id, None).await;
     let back = |f: &Frame| f.event == "room" && f.data["members"].as_array().unwrap().iter().any(|m| m["id"].as_i64() == Some(b_member) && m["away"] == false);
     sse_a.until(Duration::from_secs(10), back).await;
     tokio::time::sleep(Duration::from_millis(200)).await;
     let room = server.room(&id).unwrap();
     let r = room.lock().unwrap();
-    assert!(!r.game.as_ref().unwrap().seat_of_member(b_member as i32).unwrap().ai);
+    assert!(!r.game.as_ref().unwrap().player_of_member(b_member as i32).unwrap().ai);
 }
 
 #[tokio::test]

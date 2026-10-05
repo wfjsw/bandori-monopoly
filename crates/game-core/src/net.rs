@@ -1,14 +1,16 @@
 //! Wire types shared by server and client (`NetMessage.cs`, `RoomInfo.cs`,
 //! `RoomMember.cs`, `NetProtocol.cs`).
 //!
-//! The transport changed (TCP/Steam -> HTTP + SSE), but the payload vocabulary did
-//! not: `NetMessage` is still what `MatchEngine::act` consumes, and the golden-master
-//! oracle emits it, so the shape is kept flat and field-for-field.
+//! The transport changed (TCP/Steam -> HTTP + SSE): what the C# sent as one flat
+//! `NetMessage` bag over the socket is now a **match command** (`POST
+//! /api/rooms/{id}/act`), room listings (`RoomInfo`) and SSE state frames. So the
+//! command is exactly the seven fields the client sends (`webui/src/core/types.ts`
+//! `Command`) -- the 17 join/room/match fields of the C# union are gone rather
+//! than carried as dead weight.
 
 use serde::{Deserialize, Serialize};
 
 use crate::scoring::ScoreWeights;
-use crate::state::MatchState;
 use crate::MatchMode;
 
 /// `NetProtocol.Game`
@@ -18,7 +20,7 @@ pub const GAME: &str = "bandori-monopoly";
 pub const VERSION: &str = "9";
 /// `NetProtocol.MaxMessage` -- request body limit, bytes.
 pub const MAX_MESSAGE: usize = 1_048_576;
-/// `NetProtocol.RejoinWindow` -- seconds a dropped player keeps their seat.
+/// `NetProtocol.RejoinWindow` -- seconds a dropped player keeps their player.
 pub const REJOIN_WINDOW: f32 = 120.0;
 /// `NetProtocol.Timeout` -- seconds of silence before a client counts as dropped.
 pub const TIMEOUT: f32 = 20.0;
@@ -38,63 +40,42 @@ pub fn describe(reason: &str) -> crate::msg::Msg {
     crate::msg::Msg::new(if reason.is_empty() { "err.join.failed".to_string() } else { format!("err.join.{reason}") })
 }
 
-/// `NetMessage.cs` -- one flat bag; `t` says which fields matter.
+/// `NetMessage.cs` as it survives the move to HTTP: one **match command**.
+/// The client sends exactly these fields; `serde(default)` keeps partial
+/// commands (`{"act":"roll"}`) working and unknown fields from older clients
+/// are ignored rather than rejected.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct NetMessage {
-    pub t: String,
-    pub version: String,
-    pub player: String,
-    pub character: String,
-    pub cn_id: String,
-    pub password: String,
-    pub reason: String,
-    pub you: i32,
-    pub on: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub room: Option<RoomInfo>,
+    /// "roll" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" |
+    /// "end" | "ban" | "pick" | "deck" | "answer" | "vote" | "leave".
     pub act: String,
+    /// `ban` / `pick`: the character id.
+    pub character: String,
+    /// `play` / `discard`: the card id.
     pub card: String,
+    /// `deck` (the deck) / `answer` (the picked options).
     pub cards: Vec<String>,
-    pub notes: Vec<String>,
+    /// `buy`/`build`/`mortgage`/`redeem`: the tile; `roll`: the die total the
+    /// client is confirming; `answer`/`vote`: the number chosen.
     pub value: i32,
+    /// `answer`: the prompt id being answered.
     pub prompt: i32,
-    pub op: String,
+    /// `answer`: the target player (C# `NetMessage.target`; the engine does not
+    /// read it yet -- targeting is unported).
     pub target: i32,
-    pub arg: String,
-    #[serde(rename = "match", skip_serializing_if = "Option::is_none")]
-    pub r#match: Option<MatchState>,
-    pub token: String,
-    pub rejoin: i32,
-    pub seq: i32,
 }
 
 impl Default for NetMessage {
     fn default() -> Self {
         Self {
-            t: String::new(),
-            version: String::new(),
-            player: String::new(),
-            character: String::new(),
-            cn_id: String::new(),
-            password: String::new(),
-            reason: String::new(),
-            you: 0,
-            on: false,
-            room: None,
             act: String::new(),
+            character: String::new(),
             card: String::new(),
-            cards: vec![],
-            notes: vec![],
+            cards: Vec::new(),
             value: 0,
             prompt: 0,
-            op: String::new(),
             target: -1,
-            arg: String::new(),
-            r#match: None,
-            token: String::new(),
-            rejoin: 0,
-            seq: 0,
         }
     }
 }
@@ -102,7 +83,7 @@ impl Default for NetMessage {
 impl NetMessage {
     /// An `act` message, the common case for match input.
     pub fn act(act: impl Into<String>) -> Self {
-        Self { t: "act".into(), act: act.into(), ..Self::default() }
+        Self { act: act.into(), ..Self::default() }
     }
 }
 
@@ -168,11 +149,19 @@ pub struct RoomMember {
 /// `RoomService.Bot` -- the next bot name not already in `taken`: the data's bot
 /// name list in order, then again with a 2, 3, ... suffix.
 pub fn bot_name<'a, S: AsRef<str>>(names: &[S], taken: impl Iterator<Item = &'a str> + Clone) -> String {
-    for k in 0..names.len() * 3 {
-        let base = names[k % names.len()].as_ref();
-        let name = if k >= names.len() { format!("{base}{}", k / names.len() + 1) } else { base.to_string() };
-        if !taken.clone().any(|t| t == name) {
-            return name;
+    if names.is_empty() {
+        return String::new();
+    }
+    for round in 0.. {
+        for base in names {
+            let base = base.as_ref();
+            let name = if round == 0 { base.to_string() } else { format!("{base}{}", round + 1) };
+            if !taken.clone().any(|t| t == name) {
+                return name;
+            }
+        }
+        if round > 64 {
+            break; // every name in the list is taken 65 times over
         }
     }
     String::new()

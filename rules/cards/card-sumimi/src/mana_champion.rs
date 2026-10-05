@@ -8,30 +8,27 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const MANA_CHAMPION: CardDef = CardDef {
-    id: "Sumimi:（真奈）歌唱大赛5连冠",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const MANA_CHAMPION: CardDef = CardDef::new("Sumimi:（真奈）歌唱大赛5连冠", &[
+    On::React(&[TriggerKind::Pay, TriggerKind::Abnormal, TriggerKind::Target], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你的格子即将受到来自你以外的效果影响时打出此卡」
     // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
     // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
-    // TODO(ABI): `t.ByCard` (the card that caused the trigger) is not on the wire
-    // trigger, so 「来自你以外」 cannot be told apart from one's own card effects.
+    if !trigger::by_card().is_some_and(|by| by != player_id) {
+        return false;
+    }
     match trigger::kind() {
-        TriggerKind::Target | TriggerKind::Abnormal => trigger::target() == seat,
-        TriggerKind::Pay => trigger::seat() == seat,
+        TriggerKind::Target | TriggerKind::Abnormal => trigger::target() == player_id,
+        TriggerKind::Pay => trigger::player_id() == player_id,
         _ => false,
     }
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // 规则书[反击]: 「此时场上其他玩家可如同自身的对应目标被指定一般打出[反击]卡，且其反击卡中
     // 针对打出玩家自身的效果改为你。若以此种方式使你免于受到该影响，打出那张[反击]卡的玩家可抽一张卡。
     // 若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」
@@ -43,5 +40,5 @@ fn react(seat: i32) {
     // trigger-copy payload (`t.Play` / `t.Ab` / `t.ByCard` / `t.Cancelled` /
     // `t.Reacted`) are not in the vocabulary, so neither the shield nor the draw
     // rewards can be expressed. Until then this [反击] only logs.
-    ctx::log(seat, &Msg::new(key!("mana_champion_log")).seat("who", seat));
+    ctx::log(player_id, &Msg::new(key!("mana_champion_log")).player_id("who", player_id));
 }

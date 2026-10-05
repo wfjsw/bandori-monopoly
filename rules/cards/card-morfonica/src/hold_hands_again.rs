@@ -13,40 +13,57 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const HOLD_HANDS_AGAIN: CardDef = CardDef {
-    id: "Mor:再次牵起手来",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+const ID: &str = "Mor:再次牵起手来";
 
-fn can_react(seat: i32) -> bool {
+pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new("Mor:再次牵起手来", &[
+    On::React(&[TriggerKind::Paid], can_react, react),
+    On::Hook(&[TriggerKind::PayAt], pay_at),
+]);
+
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后」
     // C# `t.Kind == "paid" && t.Seat == H.Neighbor(seat, -1) && t.Seat != seat && t.Value > 0`.
     if trigger::kind() != TriggerKind::Paid {
         return false;
     }
-    let payer = trigger::seat();
-    // C# takes the seat-index neighbour (`H.Neighbor(seat, -1)`), not a true
+    let payer = trigger::player_id();
+    // C# takes the player-index neighbour (`H.Neighbor(seat, -1)`), not a true
     // action-order predecessor -- `ctx::neighbor` is that same hook.
-    payer != seat && payer == ctx::neighbor(seat, -1) && trigger::value() > 0
+    payer != player_id && payer == ctx::neighbor(player_id, -1) && trigger::value() > 0
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     let amount = trigger::value();
     // 规则书[反击]: 「并[消耗]等量资金」 -- C# `H.LoseR(i, c.Trigger.Value, CardName)`.
-    ctx::pay(seat, amount, &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64));
-    if ctx::seat_out(seat) {
+    ctx::pay(player_id, amount, &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64));
+    if ctx::player_out(player_id) {
         return;
     }
     // 规则书[反击]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "Mor:再次牵起手来", &Msg::new(key!("hold_hands_again_note")));
-    ctx::log(seat, &Msg::new(key!("hold_hands_again_placed")).seat("who", seat).n("money", amount as i64));
-    // TODO(规则书)[持续]: 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 -- needs
-    // the Fx.PayAt hook (C# `CardHoldHandsAgain.PayAt` cancels the next `PayCtx` with
-    // `p.from == Seat` and `H.Unplace(this, "discard", "用掉了")`).
+    ctx::place_card(player_id, ID, &Msg::new(key!("hold_hands_again_note")));
+    ctx::log(player_id, &Msg::new(key!("hold_hands_again_placed")).player_id("who", player_id).n("money", amount as i64));
+}
+
+/// 规则书[持续]: 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 -- C#
+/// `CardHoldHandsAgain.PayAt` cancels the next `PayCtx` with `p.from == Player` and
+/// `H.Unplace(this, "discard", "用掉了")`. Runs through the Fx hook dispatch at
+/// `payAt` (after `PayChoose`, before the `pay` [反击] window), so this is a
+/// field effect, not a [反击].
+fn pay_at(player_id: i32) {
+    if trigger::kind() != TriggerKind::PayAt
+        || trigger::player_id() != player_id
+        || !ctx::is_placed(player_id)
+        || trigger::value() <= 0
+    {
+        return;
+    }
+    // 规则书[持续]: 「取消此次资金变动」
+    trigger::set_pay_amount(0);
+    // 规则书[持续]: 「将此卡放置到弃卡区」
+    ctx::unplace_card(player_id);
+    ctx::to_discard(player_id, ID);
+    ctx::log(player_id, &Msg::new(key!("hold_hands_again_used")).player_id("who", player_id));
 }

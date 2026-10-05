@@ -24,6 +24,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import io
+import os
 import json
 import os
 import shutil
@@ -43,7 +44,9 @@ except ImportError:
 sys.path.insert(0, str(Path(__file__).parent))
 from unitydb import CHAR_SPRITES, Resolver, read_database  # noqa: E402
 
-BUILD = Path(r"D:/BanG Dream 大富翁/BandoriMonopoly_Data")
+# The game build to extract from; the upstream ships a dated folder
+# ("BanG Dream 大富翁10-04") alongside the old one -- override with GAME_DATA_DIR.
+BUILD = Path(os.environ.get("GAME_DATA_DIR", r"D:/BanG Dream 大富翁/BanG Dream 大富翁10-04/BandoriMonopoly_Data"))
 GAME_DATA = Path(r"D:/BanG Dream 大富翁/源码导出_SourceExport/game-data")
 WEB = Path(__file__).resolve().parents[2]
 OUT_DEFAULT = WEB / "webui" / "public" / "assets"
@@ -255,33 +258,38 @@ def run(args) -> int:
         if rel:
             p.manifest["resources"][path] = rel
 
-    # 2) BandoriDatabase -- semantic art
-    db_obj = next(o for o in env.objects if o.type.name == "MonoBehaviour"
-                  and len(o.get_raw_data()) > 2000 and _is_db(o))
-    _, db = read_database(db_obj.get_raw_data())
-    print(f"== BandoriDatabase: {len(db.character_art)} characters, {len(db.card_art)} cards")
+    # 2) BandoriDatabase -- semantic art (skipped by --only data, which needs none)
+    db_obj = None
+    if "img" in only:
+        db_obj = next((o for o in env.objects if o.type.name == "MonoBehaviour"
+                       and len(o.get_raw_data()) > 2000 and _is_db(o)), None)
+        if db_obj is None:
+            print("   img: no BandoriDatabase matched -- the build's db layout changed", file=sys.stderr)
+    if db_obj is not None:
+        _, db = read_database(db_obj.get_raw_data())
+        print(f"== BandoriDatabase: {len(db.character_art)} characters, {len(db.card_art)} cards")
 
-    def art(ptr, rel_dir):
-        o = res.resolve(db_obj, ptr)
-        if o is None:
-            return None
-        return p.image(o, f"{rel_dir}/{safe(o.read().m_Name)}.webp", "img:" + rel_dir.split("/")[1])
+        def art(ptr, rel_dir):
+            o = res.resolve(db_obj, ptr)
+            if o is None:
+                return None
+            return p.image(o, f"{rel_dir}/{safe(o.read().m_Name)}.webp", "img:" + rel_dir.split("/")[1])
 
-    for c in db.character_art:
-        entry = {k: art(c[k], "img/char") for k in CHAR_SPRITES}
-        p.manifest["characters"][c["id"]] = {k: v for k, v in entry.items() if v}
-    for b in db.band_art:
-        if (rel := art(b["logo"], "img/band")):
-            p.manifest["bands"][b["band"]] = rel
-    for i, r in enumerate(db.room_art):
-        if (rel := art(r["card"], "img/room")):
-            p.manifest["rooms"][r["band"] or f"default{i}"] = rel
-    for c in db.card_art:
-        if (rel := art(c["art"], "img/card")):
-            p.manifest["cards"][c["id"]] = rel
-    for k, ptr in db.fx.items():
-        if (rel := art(ptr, "img/fx")):
-            p.manifest["fx"][k] = rel
+        for c in db.character_art:
+            entry = {k: art(c[k], "img/char") for k in CHAR_SPRITES}
+            p.manifest["characters"][c["id"]] = {k: v for k, v in entry.items() if v}
+        for b in db.band_art:
+            if (rel := art(b["logo"], "img/band")):
+                p.manifest["bands"][b["band"]] = rel
+        for i, r in enumerate(db.room_art):
+            if (rel := art(r["card"], "img/room")):
+                p.manifest["rooms"][r["band"] or f"default{i}"] = rel
+        for c in db.card_art:
+            if (rel := art(c["art"], "img/card")):
+                p.manifest["cards"][c["id"]] = rel
+        for k, ptr in db.fx.items():
+            if (rel := art(ptr, "img/fx")):
+                p.manifest["fx"][k] = rel
 
     # 3) everything else the scenes reference
     print("== scene art + audio")
@@ -359,10 +367,38 @@ def run(args) -> int:
     # 6) game data for server / game-core
     if "data" in only:
         DATA_OUT.mkdir(parents=True, exist_ok=True)
+        # The source export is the base; web/data is extended by hand (bot
+        # names, presets, ...). Copy only files we do not have -- overwriting
+        # would silently drop those extensions.
         for f in GAME_DATA.iterdir():
-            if f.suffix in (".json", ".txt") and not f.name.startswith("LineBreaking"):
-                shutil.copy2(f, DATA_OUT / f.name)
-                p.stats.add("data", DATA_OUT / f.name)
+            if f.suffix not in (".json", ".txt") or f.name.startswith("LineBreaking"):
+                continue
+            dst = DATA_OUT / f.name
+            if dst.exists():
+                print(f"   data: keeping the extended {f.name} (the export is the base)")
+                continue
+            shutil.copy2(f, dst)
+            p.stats.add("data", dst)
+        # 6b) the build's `skill_simple` TextAsset (C# GameDataLoader.WithSimple):
+        # a simplified skill text per character / band, merged into the data JSONs
+        # as `simple` (the full `text` stays as-is).
+        simple = read_text_asset("skill_simple")
+        if simple:
+            for fname, key in (("characters.json", "characters"), ("bands.json", "bands")):
+                dst = DATA_OUT / fname
+                if not dst.exists():
+                    continue
+                doc = json.loads(dst.read_text(encoding="utf-8-sig"))
+                rows = doc.get(key) if isinstance(doc, dict) else doc
+                by_name = {e.get("name"): e.get("text") for e in simple.get(key, [])}
+                n = 0
+                for row in rows:
+                    text = by_name.get(row.get("name"))
+                    if text and row.get("simple") != text:
+                        row["simple"] = text
+                        n += 1
+                dst.write_text(json.dumps(doc, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+                print(f"   data: {fname} += simple skill text on {n} {key}")
 
     p.drain()
     p.pool.shutdown()
@@ -444,6 +480,23 @@ def probe(out: Path) -> int:
                 return 0
     print("  PROBE FAILED")
     return 1
+
+def read_text_asset(name: str):
+    """One named TextAsset from the build's resources (e.g. `skill_simple`)."""
+    try:
+        import UnityPy
+    except ImportError:
+        return None
+    env = UnityPy.load(str(BUILD / "resources.assets"))
+    for obj in env.objects:
+        if obj.type.name != "TextAsset":
+            continue
+        d = obj.read()
+        if getattr(d, "m_Name", "") != name:
+            continue
+        raw = d.m_Script.encode("utf-8") if isinstance(d.m_Script, str) else d.m_Script
+        return json.loads(raw)
+    return None
 
 
 def main() -> int:

@@ -9,36 +9,118 @@
 //!
 //! until the original tile is passed by someone else, then a settle-teleport and
 //! 2 fire each. The C# `AiPlay` always returns false (no `H.AiPlay` hook).
+//!
+//! C# arms `H.ExtraOf<DonutFx>(i)` (a player attachment, not a placed card). The
+//! hook surface only dispatches to *placed* cards, so the play body places this
+//! card as the `DonutFx` stand-in and files it to the discard pile when the
+//! effect finishes -- the same carrier pattern as the other `Fx` cards.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::abi::TriggerKind;
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const TWO_DONUTS: CardDef = CardDef {
-    id: "Sumimi:一人两个甜甜圈",
-    play: Some(two_donuts),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const TWO_DONUTS: CardDef = CardDef::new("Sumimi:一人两个甜甜圈", &[
+    On::Play(two_donuts),
+    On::Hook(&[TriggerKind::PassTile, TriggerKind::SettleAfter], fx),
+]);
 
-fn two_donuts(seat: i32) {
-    let pos = ctx::seat_pos(seat);
+const ID: &str = "Sumimi:一人两个甜甜圈";
+/// C# `DonutFx.Orig` -- the tile the exile waits on.
+const SLOT_ORIG: &str = "two_donuts_orig";
+/// C# `DonutFx._by` -- the passer whose settle opens the return window (-1 = none).
+const SLOT_BY: &str = "two_donuts_by";
+
+fn two_donuts(player_id: i32) {
+    let pos = ctx::player_pos(player_id);
     // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」
     // C# `H.GiveExile(i, 99, pos, i, CardName)` -- 99 layers so the per-turn
     // layer tick does not expire it; `DonutFx` clears the exile early.
-    ctx::give_exile(seat, 99, pos);
+    ctx::give_exile(player_id, 99, pos);
+    ctx::set_slot(player_id, SLOT_ORIG, pos);
+    ctx::set_slot(player_id, SLOT_BY, -1);
+    // C# `H.ExtraOf<DonutFx>(i).Orig = pos` -- place as the live-effect carrier
+    // so the `PassTile` / `SettleAfter` hooks below run (see the module doc).
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, ID, &Msg::new(key!("two_donuts_note")));
     ctx::log(
-        seat,
-        &Msg::new(key!("two_donuts_exile")).seat("who", seat).tile("tile", pos),
+        player_id,
+        &Msg::new(key!("two_donuts_exile")).player_id("who", player_id).tile("tile", pos),
     );
-    // TODO(规则书)（1）: 「直至你原本所在格子被其他玩家经过」 -- needs the
-    // Fx.PassTile hook (C# `DonutFx.PassTile` records the passer) to end the
-    // exile when another player steps on `pos`, instead of the 99-layer expiry.
-    // TODO(规则书)（2）: 「你原本所在格子被其他玩家经过时，可在那名玩家触发结算后选择传送至
-    // 你原本所在格子（不包括）与那名玩家本次移动终点间的任一格并触发结算，之后你们各获得2火罐
-    // （超出上限的每个火罐转化为500资金）」 -- needs Fx.PassTile + Fx.SettleAfter
-    // (C# `DonutFx.SettleAfter` / `Back`): after the passer's settle, `ask_tile`
-    // over the tiles from `pos` (exclusive) along the passer's direction to their
-    // end, `H.Teleport(..., resolve: true)`, then `H.GainFire` 2 each with the
-    // overflow converted to 500 money per missing fire.
     // C# `CardTwoDonuts.AiPlay` returns false -- CardDef has no H.AiPlay hook.
+}
+
+/// C# `DonutFx.PassTile` / `DonutFx.SettleAfter` -- run through the Fx hook
+/// dispatch while this card is placed.
+fn fx(player_id: i32) {
+    if !ctx::is_placed(player_id) {
+        return;
+    }
+    match trigger::kind() {
+        // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- C# `DonutFx.PassTile`
+        // records the first other player that steps on `Orig`.
+        TriggerKind::PassTile => {
+            if trigger::player_id() == player_id {
+                return;
+            }
+            if trigger::tile() != ctx::slot(player_id, SLOT_ORIG) {
+                return;
+            }
+            if ctx::slot(player_id, SLOT_BY) >= 0 {
+                return;
+            }
+            ctx::set_slot(player_id, SLOT_BY, trigger::player_id());
+        }
+        // 规则书（2）: 「你原本所在格子被其他玩家经过时，可在那名玩家触发结算后…」
+        // -- C# `DonutFx.SettleAfter` -> `Back(m)` when that passer lands.
+        TriggerKind::SettleAfter => {
+            let by = ctx::slot(player_id, SLOT_BY);
+            if by < 0 || trigger::player_id() != by {
+                return;
+            }
+            back(player_id, by, trigger::move_dir());
+        }
+        _ => {}
+    }
+}
+
+/// C# `DonutFx.Back` -- end the exile, return to `Orig`, hand out 2 fire each,
+/// drop the attachment. The in-between settle-teleport is held (below).
+fn back(player_id: i32, by: i32, _dir: i32) {
+    ctx::set_slot(player_id, SLOT_BY, -1);
+    let orig = ctx::slot(player_id, SLOT_ORIG);
+    // C# `me.exile = 0; me.exileTo = -1; me.pos = Orig`.
+    ctx::give_exile(player_id, -99, -1);
+    ctx::teleport_to(player_id, orig);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("two_donuts_ended")).player_id("who", player_id).player_id("by", by),
+    );
+    // 规则书（2）: 「可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家
+    // 本次移动终点间的任一格并触发结算」 -- C# `H.AskTileOf(..., allowNone: true)`
+    // over the tiles from `Orig` (exclusive) along the passer's direction to
+    // their end (`for i in 1..=n { t = (Orig + dir*i) mod n; ... break at their end }`),
+    // then `H.Teleport(Seat, r.index, resolve: true)`.
+    // TODO(规则书)（2）: 「选择传送至…并触发结算」 -- needs the teleport-with-settle
+    // routine (`H.Teleport(..., resolve: true)` / `H.CardMove`); `ctx::teleport_to`
+    // is the resolve:false form, so the in-between tile choice cannot settle and
+    // the prompt is skipped. The exile end / return to 原本所在格子 / fire below
+    // run at `SettleAfter` now. (`trigger::move_dir()` is the passer's `t.Move.Dir`.)
+    // 规则书（2）: 「之后你们各获得2火罐（超出上限的每个火罐转化为500资金）」
+    for who in [player_id, by] {
+        if ctx::player_out(who) {
+            continue;
+        }
+        let got = ctx::gain_fire(who, 2, &Msg::new(key!("two_donuts_fire")));
+        let missed = 2 - got;
+        if missed > 0 {
+            ctx::gain(
+                who,
+                missed * 500,
+                &Msg::new(key!("two_donuts_overflow")).i("n", missed as i64),
+            );
+        }
+    }
+    // C# `H.RemoveExtra(this)` -- the stand-in leaves the field for the discard.
+    ctx::unplace_card(player_id);
+    ctx::to_discard(player_id, ID);
 }

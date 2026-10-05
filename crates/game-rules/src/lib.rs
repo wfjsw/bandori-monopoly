@@ -22,8 +22,8 @@ mod host;
 mod wasm_rules;
 mod world;
 
-pub use card_sdk::abi::{PromptKind, TriggerKind, ABI_VERSION};
-pub use host::{CardInfo, Call, Outcome, Prompt, PromptOption, RuleError, Ruleset, RulesetBuilder, MAX_NESTING};
+pub use card_sdk::abi::{AbKind, CardPile, MoveKind, PromptKind, TriggerKind, ABI_VERSION};
+pub use host::{CardInfo, Call, Outcome, HostRequest, Prompt, PromptOption, RuleError, Ruleset, RulesetBuilder, MAX_NESTING};
 pub use game_core::msg::Msg;
 pub use wasm_rules::WasmRules;
 pub use world::{CardWorld, Trigger};

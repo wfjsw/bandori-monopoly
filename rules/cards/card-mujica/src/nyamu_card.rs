@@ -11,31 +11,27 @@
 //! > 2. 每当此卡将从背面翻至正面时此卡拥有者抽一张卡。
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const NYAMU_CARD: CardDef = CardDef {
-    id: "Mujica:（喵梦）",
-    play: Some(nyamu_card),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const NYAMU_CARD: CardDef = CardDef::new("Mujica:（喵梦）", &[
+    On::Play(nyamu_card),
+]);
 
-fn nyamu_card(seat: i32) {
+fn nyamu_card(player_id: i32) {
     // 规则书（1）: 「将此卡放置于场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "Mujica:（喵梦）", &Msg::new(key!("nyamu_note")));
-    ctx::log(seat, &Msg::new(key!("nyamu_placed")).seat("who", seat));
+    ctx::place_card(player_id, "Mujica:（喵梦）", &Msg::new(key!("nyamu_note")));
+    ctx::log(player_id, &Msg::new(key!("nyamu_placed")).player_id("who", player_id));
     // TODO(规则书)（2）1: 「每当此卡将从正面翻至背面时可选择失去2个火罐」
     // -- needs the Fx.Flipped hook (C# `CardNyamuCard.Flipped(down: true)` ->`
     // `H.AskYes` + `H.SpendFire(Seat, 2)`). The flip source itself (a tile or
     // card effect that turns placed cards face-down) is engine-side.
     // The discard body is expressible once the hook exists:
-    //   if ctx::fire(seat) >= 2 && ctx::ask_yes(...) {
+    //   if ctx::fire(player) >= 2 && ctx::ask_yes(...) {
     //       // C# `H.SpendFire(Seat, 2, ...)`.
-    //       ctx::spend_fire(seat, 2, &Msg::new(key!("nyamu_note")));
+    //       ctx::spend_fire(player, 2, &Msg::new(key!("nyamu_note")));
     //   }
     // TODO(规则书)（2）2: 「每当此卡将从背面翻至正面时此卡拥有者抽一张卡」
     // -- needs the same Fx.Flipped hook (C# `Flipped(down: false)` ->
-    // `H.DrawR(Seat, 1, ...)`), i.e. `ctx::draw(seat, 1)`.
+    // `H.DrawR(Seat, 1, ...)`), i.e. `ctx::draw(player_id, 1)`.
 }

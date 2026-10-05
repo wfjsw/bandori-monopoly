@@ -31,7 +31,7 @@ export class Animator {
   /** Master Duel-style stage transition: the i18n key of the phase sweeping in. */
   phase: { key: string; id: number } | null = null;
   reveal: { card: string; out: boolean; id: number } | null = null;
-  hop: { seat: number; id: number } | null = null;
+  hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
   private seq = 0;
@@ -62,7 +62,7 @@ export class Animator {
     this.log = [...this.log.slice(-199), { id: e.id, text: line, turn: e.type === "turn" }];
   }
 
-  /** Names for message arguments (seats/tiles/cards of the running match). */
+  /** Names for message arguments (players/tiles/cards of the running match). */
   private names(): Names {
     return namesOf(this.view()?.state);
   }
@@ -96,7 +96,7 @@ export class Animator {
   private async run(): Promise<void> {
     if (this.animating) return;
     this.animating = true;
-    this.pos = this.view()?.state.seats.map((x) => x.pos) ?? null;
+    this.pos = this.view()?.state.players.map((x) => x.pos) ?? null;
     this.bump();
     while (this.queue.length && !this.disposed) {
       const e = this.queue.shift()!;
@@ -112,13 +112,13 @@ export class Animator {
     this.bump();
   }
 
-  private name(seat: number): string {
+  private name(playerId: number): string {
     const v = this.view();
-    return seat === v?.seat ? tr("common.you") : v?.state.seats[seat]?.player ?? "";
+    return playerId === v?.playerId ? tr("common.you") : v?.state.players[playerId]?.player ?? "";
   }
 
-  private player(seat: number): string {
-    return this.view()?.state.seats[seat]?.player ?? "";
+  private player(playerId: number): string {
+    return this.view()?.state.players[playerId]?.player ?? "";
   }
 
   private async diceAnim(value: number): Promise<void> {
@@ -135,17 +135,17 @@ export class Animator {
     sfx("dice_result");
   }
 
-  private async walk(seat: number, from: number, steps: number, hop: number): Promise<void> {
+  private async walk(playerId: number, from: number, steps: number, hop: number): Promise<void> {
     if (!this.pos) return;
     const n = D.tiles.length;
     const dir = steps >= 0 ? 1 : -1;
     let p = from;
-    this.pos[seat] = from;
+    this.pos[playerId] = from;
     for (let k = 0; k < Math.abs(steps); k++) {
       p = (((p + dir) % n) + n) % n;
-      this.pos[seat] = p;
+      this.pos[playerId] = p;
       if (hop > 0) {
-        this.hop = { seat, id: ++this.seq };
+        this.hop = { playerId, id: ++this.seq };
         sfx("step");
         this.bump();
         await sleep(hop);
@@ -160,14 +160,14 @@ export class Animator {
     this.addLog(e);
     this.bump();
     const v = this.view();
-    const seat = e.seat;
-    const ok = seat >= 0 && !!v && seat < v.state.seats.length;
+    const playerId = e.playerId;
+    const ok = playerId >= 0 && !!v && playerId < v.state.players.length;
     const wait = (ms: number) => (fast ? Promise.resolve() : sleep(ms));
     switch (e.type) {
       case "turn":
         if (!ok) break;
-        this.showBanner(seat === v!.seat ? tr("anim.yourTurn") : tr("anim.turnOf", { who: this.player(seat) }), tr("anim.turnBanner"));
-        if (!fast) sfx(seat === v!.seat ? "my_turn" : "turn");
+        this.showBanner(playerId === v!.playerId ? tr("anim.yourTurn") : tr("anim.turnOf", { who: this.player(playerId) }), tr("anim.turnBanner"));
+        if (!fast) sfx(playerId === v!.playerId ? "my_turn" : "turn");
         await wait(300);
         break;
       case "roll": {
@@ -177,18 +177,18 @@ export class Animator {
         else this.dice = d;
         this.showBanner(tr("board.roll", { n: d }), body);
         await wait(450);
-        await this.walk(seat, e.from, e.value, fast ? 0 : 130);
+        await this.walk(playerId, e.from, e.value, fast ? 0 : 130);
         break;
       }
       case "move":
         if (!ok) break;
-        this.showBanner(this.player(seat), body);
-        await this.walk(seat, e.from, e.value, fast ? 0 : 90);
+        this.showBanner(this.player(playerId), body);
+        await this.walk(playerId, e.from, e.value, fast ? 0 : 90);
         break;
       case "teleport":
         if (!ok || !this.pos) break;
         if (!fast) sfx("teleport");
-        this.pos[seat] = e.to;
+        this.pos[playerId] = e.to;
         this.bump();
         await wait(350);
         break;
@@ -207,7 +207,7 @@ export class Animator {
       case "forcebuy": this.showBanner(tr("anim.forceBuy"), body); if (!fast) sfx("buy"); await wait(800); break;
       case "bankrupt": case "left":
         if (!ok) break;
-        this.showBanner(e.type === "bankrupt" ? (seat === v!.seat ? tr("anim.youBankrupt") : tr("anim.bankruptOf", { who: this.player(seat) })) : tr("anim.leftOf", { who: this.player(seat) }), body);
+        this.showBanner(e.type === "bankrupt" ? (playerId === v!.playerId ? tr("anim.youBankrupt") : tr("anim.bankruptOf", { who: this.player(playerId) })) : tr("anim.leftOf", { who: this.player(playerId) }), body);
         if (!fast) sfx(e.type === "bankrupt" ? "bankrupt" : "place");
         await wait(1400);
         break;
@@ -221,7 +221,7 @@ export class Animator {
       case "play":
         if (!e.card) break;
         this.lastDiscard = e.card;
-        this.showBanner(ok ? tr("anim.playedBy", { who: this.name(seat) }) : tr("board.play"), body);
+        this.showBanner(ok ? tr("anim.playedBy", { who: this.name(playerId) }) : tr("board.play"), body);
         if (fast) break;
         sfx("card_play");
         this.reveal = { card: e.card, out: false, id: ++this.seq };
@@ -235,8 +235,8 @@ export class Animator {
         break;
       case "event": if (!fast) sfx("event_card"); this.showBanner(tr("anim.event"), body); await wait(900); break;
       case "eventend": this.showBanner(tr("anim.eventEnd"), body); await wait(500); break;
-      case "status": this.showBanner(ok ? this.player(seat) : tr("anim.status"), body); await wait(500); break;
-      case "skill": this.showBanner(ok ? tr("anim.skillOf", { who: this.player(seat) }) : tr("anim.skill"), body); if (!fast) sfx("place"); await wait(500); break;
+      case "status": this.showBanner(ok ? this.player(playerId) : tr("anim.status"), body); await wait(500); break;
+      case "skill": this.showBanner(ok ? tr("anim.skillOf", { who: this.player(playerId) }) : tr("anim.skill"), body); if (!fast) sfx("place"); await wait(500); break;
       case "place": case "unplace": this.showBanner(e.type === "place" ? tr("anim.place") : tr("anim.unplace"), body); if (!fast) sfx("place"); await wait(450); break;
       case "pass": case "gain": case "lose": if (!fast) sfx(EVENT_SFX[e.type]); await wait(250); break;
       default: await wait(120);
@@ -260,8 +260,16 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
     const a = animRef.current!;
     const off = sess.subscribe(
       (v) => {
+        const prev = viewRef.current?.state;
         viewRef.current = v;
         set({ view: v, at: performance.now() });
+        // Stage transition (Master Duel): every turn-stage change sweeps the
+        // phase name across the board. Stages mirror Yu-Gi-Oh's turn phases:
+        // step 1 = Main Phase 1 (运营), 2 = Battle Phase (移动), 3 = Main Phase 2.
+        const now = v.state;
+        if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
+          a.showPhase(now.step >= 3 ? "board.phase.main2" : now.step === 2 ? "board.phase.battle" : "board.phase.main1");
+        }
       },
       (e) => a.push(e),
     );

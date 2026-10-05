@@ -2,11 +2,11 @@
 // popups.
 
 import { D } from "../../core/data";
-import type { CharacterData, Command, MatchSeat, MatchState, MatchView } from "../../core/types";
+import type { CharacterData, Command, MatchPlayer, MatchState, MatchView } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { toast } from "../../ui/Toast";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf } from "../../core/names";
+import { namesOf, stateOf } from "../../core/names";
 import { t as tr } from "../../i18n/t";
 
 const FALLBACK_COLORS = ["#ED4E76", "#6BBAF1", "#F6B21E", "#4CC38A", "#C97DFC", "#EE5E4A", "#3EC1C9", "#E05CCF", "#8BBF2A", "#7C8796"];
@@ -16,8 +16,8 @@ export const RING_MULTIPLIER = 10;
 export interface Model {
   v: MatchView;
   S: MatchState;
-  seat: number;
-  me: MatchSeat;
+  playerId: number;
+  me: MatchPlayer;
   myTurn: boolean;
   asking: boolean;
   out: boolean;
@@ -30,20 +30,20 @@ export interface Model {
 
 export function model(v: MatchView): Model {
   const S = v.state;
-  const me = S.seats[v.seat];
-  const charOf = (i: number) => D.character(S.seats[i]?.character ?? "");
+  const me = S.players[v.playerId];
+  const charOf = (i: number) => D.character(S.players[i]?.character ?? "");
   return {
     v,
     S,
-    seat: v.seat,
+    playerId: v.playerId,
     me,
-    myTurn: S.phase === "play" && S.turn === v.seat,
+    myTurn: S.phase === "play" && S.turn === v.playerId,
     asking: S.prompt.id > 0,
     out: me.bankrupt || me.left,
     charOf,
     colorOf: (i) => charOf(i)?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length],
-    nameOf: (i) => (i === v.seat ? tr("common.you") : S.seats[i]?.player ?? ""),
-    overHand: v.hand.length > (me.handLimit || 5),
+    nameOf: (i) => (i === v.playerId ? tr("common.you") : S.players[i]?.player ?? ""),
+    overHand: v.hand.length > (stateOf(me, "handLimit") || 5),
   };
 }
 
@@ -63,7 +63,7 @@ export function buyable(m: Model, i: number): boolean {
 export function canBuildOn(m: Model, i: number): boolean {
   const S = m.S;
   const t = D.tiles[i];
-  return S.owners[i] === m.seat && t.kind === "property" && t.rent.length > 1 && !S.mortgaged[i] && S.houses[i] < t.rent.length - 1
+  return S.owners[i] === m.playerId && t.kind === "property" && t.rent.length > 1 && !S.mortgaged[i] && S.houses[i] < t.rent.length - 1
     && m.myTurn && S.step === 3 && S.landed === i && !S.bought && !S.built;
 }
 

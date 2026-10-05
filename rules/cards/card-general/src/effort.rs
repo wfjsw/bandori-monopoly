@@ -7,32 +7,27 @@
 //! > 立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const EFFORT: CardDef = CardDef {
-    id: "通用:尽力后的收获",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
-/// C# `CardEffort.WhyNot`: refuses the card after the main move
+/// C# `CardEffort.WhyNot` defers to `H.MoveWhyNot`: refuses after the main move
 /// (`这回合已经移动过了`) and while `H.State.skipMove` (`本回合不能移动`).
-fn why_not(_seat: i32) -> Option<Msg> {
-    // TODO(规则书): `H.MoveWhyNot` -- the C# refuses 「这回合已经移动过了」
-    //   (`_turnCtx.MainMoved`) and 「本回合不能移动」 (`State.skipMove`); those
-    //   move-state reads are still engine holes (`H.MoveWhyNot` in the
-    //   still-missing list), so neither refusal can be expressed yet and the
-    //   gate is over-permissive on the move window.
-    None
+fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书[手]: 「本回合的[主要移动]改为移动1到6以内的任意整数」 -- the card
+    // replaces the main move, so the C# `H.MoveWhyNot` gate applies (own turn,
+    // main move still available, turn's move not skipped).
+    ctx::cant_move(player_id)
 }
 
-fn play(seat: i32) {
+fn play(player_id: i32) {
     // 规则书[手]: 「本回合的[主要移动]改为移动1到6以内的任意整数」 -- C#
     // `H.AskNumber(c.Seat, ..., 1, max=6, ...)` picks the step count.
     let steps = ctx::ask_number(
-        seat,
+        player_id,
         &Msg::new(key!("effort_title")),
         &Msg::new(key!("effort_ask")),
         1,
@@ -41,9 +36,9 @@ fn play(seat: i32) {
     // 规则书[手]: 「立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]」
     // -- C# `H.CardMove(c, new MoveCtx { Steps = Math.Max(1, r.value) })`.
     let steps = steps.max(1);
-    let to = ctx::tile_steps_ahead(seat, steps);
+    let to = ctx::tile_steps_ahead(player_id, steps);
     if to >= 0 {
-        ctx::teleport_to(seat, to);
+        ctx::teleport_to(player_id, to);
     }
     // TODO(规则书): 「立刻进入移动阶段…并[结算]」 -- needs the H.CardMove / main-move
     // routine (C# `H.CardMove(c, new MoveCtx { Steps = ... })`) so the walk is the

@@ -34,3 +34,4 @@
 .foot { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; }
 .sds { display: flex; gap: 6px; }
 .sds img { height: 110px; }
+.skillSwitch { position: absolute; right: 12px; top: 12px; }

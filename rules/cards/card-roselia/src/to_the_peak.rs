@@ -8,15 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const TO_THE_PEAK: CardDef = CardDef {
-    id: "R:向着顶点",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`).
 fn livehouses() -> Vec<i32> {
@@ -36,8 +33,8 @@ fn is_ring(t: i32) -> bool {
 }
 
 /// C# `H.WhyNotBuildOn(i, t)` -- the checks the vocabulary can see.
-fn why_not_build_on(seat: i32, t: i32) -> Option<&'static str> {
-    if ctx::tile_owner(t) != seat {
+fn why_not_build_on(player_id: i32, t: i32) -> Option<&'static str> {
+    if ctx::tile_owner(t) != player_id {
         return Some("only_own");
     }
     if is_ring(t) {
@@ -51,7 +48,7 @@ fn why_not_build_on(seat: i32, t: i32) -> Option<&'static str> {
     if ctx::houses_of(t) >= MAX_HOUSES {
         return Some("full");
     }
-    if !ctx::can_pay(seat) {
+    if !ctx::can_pay(player_id) {
         return Some("cannot_pay");
     }
     None
@@ -64,18 +61,18 @@ fn why_not_build_on(seat: i32, t: i32) -> Option<&'static str> {
 const MAX_HOUSES: i32 = 3;
 
 /// C# `CardToThePeak.WhyNot`.
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     let free: Vec<i32> = livehouses()
         .into_iter()
         .filter(|&t| ctx::tile_owner(t) < 0)
         .collect();
     if !free.is_empty() {
-        // C# `H.Moving(seat)` -- the walk branch needs a movable seat.
-        if ctx::stun_of(seat) > 0 {
+        // C# `H.Moving(seat)` -- the walk branch needs a movable player.
+        if ctx::stun_of(player_id) > 0 {
             return Some(Msg::new(key!("to_the_peak_stunned")));
         }
-        if ctx::stay_of(seat) > 0 {
-            // TODO(规则书): `H.Moving` lets a `[停留]` seat through when
+        if ctx::stay_of(player_id) > 0 {
+            // TODO(规则书): `H.Moving` lets a `[停留]` player through when
             //   `_turnCtx.Unstoppable` (「不可阻挡」) is up -- no hook for it.
             return Some(Msg::new(key!("to_the_peak_stuck")));
         }
@@ -84,15 +81,15 @@ fn why_not(seat: i32) -> Option<Msg> {
     // C# the build branch: `H.LiveHouses(i, t => owners[t] == i &&
     // H.WhyNotBuildOn(i, t) == null)` (no money check here -- that is in Play).
     if livehouses().into_iter().any(|t| {
-        ctx::tile_owner(t) == seat && why_not_build_on(seat, t).is_none()
+        ctx::tile_owner(t) == player_id && why_not_build_on(player_id, t).is_none()
     }) {
         return None;
     }
     Some(Msg::new(key!("to_the_peak_nothing")))
 }
 
-fn play(seat: i32) {
-    let pos = ctx::seat_pos(seat);
+fn play(player_id: i32) {
+    let pos = ctx::player_pos(player_id);
     // 规则书: 「移动到下一个可被购买的livehouse格子」 -- unowned Livehouses, nearest ahead.
     let free: Vec<i32> = livehouses()
         .into_iter()
@@ -108,44 +105,44 @@ fn play(seat: i32) {
             .unwrap_or(-1);
         // 规则书: 「移动到下一个可被购买的livehouse格子」 -- C# `H.Walk(i, Forward(pos, to),
         // resolve: true, null, "向着顶点")`.
-        ctx::log(seat, &Msg::new(key!("to_the_peak_walk")).seat("who", seat).tile("tile", to));
+        ctx::log(player_id, &Msg::new(key!("to_the_peak_walk")).player_id("who", player_id).tile("tile", to));
         // TODO(规则书): 「移动到」 -- needs the H.Walk movement routine (walk the ring
         // and settle at the destination, C# `H.Walk(..., resolve: true)`); the
-        // vocabulary has no movement routine, so the seat is not moved at all.
+        // vocabulary has no movement routine, so the player is not moved at all.
         return;
     }
     // 规则书: 「若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋」
     let mut mine: Vec<i32> = Vec::new();
     for t in livehouses() {
-        if why_not_build_on(seat, t).is_some() {
+        if why_not_build_on(player_id, t).is_some() {
             continue;
         }
-        if ctx::money(seat) >= ctx::build_cost(t) * 3 / 2 {
+        if ctx::money(player_id) >= ctx::build_cost(t) * 3 / 2 {
             mine.push(t);
         }
     }
     if mine.is_empty() {
-        ctx::log(seat, &Msg::new(key!("to_the_peak_no_money")));
+        ctx::log(player_id, &Msg::new(key!("to_the_peak_no_money")));
         return;
     }
     let title = Msg::new(key!("to_the_peak_ask_title"));
     let text = Msg::new(key!("to_the_peak_ask_text"));
     // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
-    if !ctx::ask_yes(seat, &title, &text) {
+    if !ctx::ask_yes(player_id, &title, &text) {
         return;
     }
-    let tile = ctx::ask_tile(seat, &title, &text, &mine);
+    let tile = ctx::ask_tile(player_id, &title, &text, &mine);
     // 规则书: 「花费1.5倍价格」 -- C# `CeilTo(H.BuildCostFor(i, r.index) * 1.5, 10)`.
     let amount = ceil_to(ctx::build_cost(tile) as i64 * 3 / 2, 10);
-    let paid = ctx::pay(seat, amount, &Msg::new(key!("to_the_peak_why")).tile("tile", tile));
+    let paid = ctx::pay(player_id, amount, &Msg::new(key!("to_the_peak_why")).tile("tile", tile));
     if paid < amount {
         return;
     }
     // 规则书: 「加盖一层房屋」 -- C# `H.BuildRoutine(i, r.index, free: true, "向着顶点")`:
     // the pay above covers the 1.5x cost and the raise is free (`H.AddHouse`).
-    if why_not_build_on(seat, tile).is_none() {
+    if why_not_build_on(player_id, tile).is_none() {
         ctx::add_house(tile, 1);
-        ctx::log(seat, &Msg::new(key!("to_the_peak_build")).seat("who", seat).tile("tile", tile));
+        ctx::log(player_id, &Msg::new(key!("to_the_peak_build")).player_id("who", player_id).tile("tile", tile));
     }
     // TODO(规则书): the C# `BuildRoutine` then fires `H.Each((Fx f) => f.Built(i, t,
     //   full))` / `f.HouseAdded(...)` -- needs those persistent Fx hooks (and the

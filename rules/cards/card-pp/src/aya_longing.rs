@@ -8,42 +8,91 @@
 //! > 将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。
 //! > [持续]：
 //! >
-//! > （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
+//! > （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]
+//! > 或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
 //! >
 //! > （2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。
 //!
-//! The discard pick needs discard enumeration; the [持续] payment shaves need
-//! the PayAdd / PayChoose hooks (below).
+//! The discard pick runs in `Play`; the [持续]（1） shave lives in the
+//! `PayChoose` hook.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use alloc::vec::Vec;
 
-pub const AYA_LONGING: CardDef = CardDef {
-    id: "PP:[丸山彩]憧憬的前方",
-    play: Some(aya_longing),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+use card_sdk::abi::TriggerKind;
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, Msg, On};
 
-fn aya_longing(seat: i32) {
+pub const AYA_LONGING: CardDef = CardDef::new("PP:[丸山彩]憧憬的前方", &[
+    On::Play(aya_longing),
+    On::Hook(&[TriggerKind::PayAdd], pay_add),
+]);
+
+/// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
+fn shave_x(player_id: i32) -> i32 {
+    let fans = ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)");
+    if fans < 10 {
+        100
+    } else {
+        200
+    }
+}
+
+/// C# `CardAyaLonging.Poorest` -- every alive player has at least as much money.
+fn poorest(player_id: i32) -> bool {
+    let me = ctx::money(player_id);
+    (0..ctx::player_count()).all(|p| p == player_id || ctx::player_out(p) || ctx::money(p) >= me)
+}
+
+fn aya_longing(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "PP:[丸山彩]憧憬的前方", &Msg::new(key!("aya_longing_note")));
-    // TODO(规则书)[手]: 「并将弃卡区中的一张卡加入手卡」 -- needs discard-pile
-    // enumeration (C# `H._hidden[i].discard.Distinct()` + `H.AskCard` +
-    // `H._hidden[i].discard.Remove` + `H.AddToHand`). `ctx::discard_count` /
-    // `ctx::discard_size` exist for counts, but the discard still cannot be
-    // listed (no `discard_at` / id enumeration), so `ask_card` has nothing to
-    // offer.
-    // TODO(规则书): [持续]（1）「如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]
-    // 或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100」
-    // -- needs the Fx.PayAdd hook (C# `Card.PayAdd(PayCtx)`, `p.amount = max(0,
-    // p.amount - X)` while `Poorest`). X is 100, or 200 when
-    // `tok("P✽P粉丝(正)") + tok("P✽P粉丝(反)") >= 10` (C# `CardAyaLonging.X`);
-    // Poorest is every alive seat's `money >= money(owner)`
-    // (C# `CardAyaLonging.Poorest`).
+    ctx::place_card(player_id, "PP:[丸山彩]憧憬的前方", &Msg::new(key!("aya_longing_note")));
+    // 规则书[手]: 「并将弃卡区中的一张卡加入手卡」
+    // C# `H._hidden[i].discard.Distinct()` + `H.AskCard` + `H._hidden[i].discard.Remove`
+    // + `H.AddToHand`.
+    let mut ids: Vec<alloc::string::String> = Vec::new();
+    for c in ctx::cards_in(player_id, ctx::CardPile::Discard) {
+        if !ids.contains(&c) {
+            ids.push(c);
+        }
+    }
+    if ids.is_empty() {
+        return;
+    }
+    let refs: Vec<&str> = ids.iter().map(|c| c.as_str()).collect();
+    let pick = ctx::ask_card(
+        player_id,
+        &Msg::new(key!("aya_longing_title")),
+        &Msg::new(key!("aya_longing_ask")),
+        &refs,
+    );
+    let id = ids.swap_remove(pick.min(ids.len() - 1));
+    if ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
+        ctx::add_to_hand(player_id, &id);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("aya_longing_back")).player_id("who", player_id).card("card", &id),
+        );
+    }
+}
+
+/// C# `CardAyaLonging.PayAdd` -- while the owner is
+/// the poorest alive player, every [消耗]/[支付] drops by X (floor 0).
+fn pay_add(player_id: i32) {
+    if trigger::kind() != TriggerKind::PayAdd
+        || trigger::player_id() != player_id
+        || trigger::value() <= 0
+        || !poorest(player_id)
+    {
+        return;
+    }
+    let x = shave_x(player_id);
+    let amount = trigger::value();
+    trigger::set_pay_amount((amount - x).max(0));
+    ctx::log(player_id, &Msg::new(key!("aya_longing_shave")).i("n", x as i64));
     // TODO(规则书): [持续]（2）「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」
-    // -- needs the Fx.PayChoose hook (C# `Card.PayChoose(PayCtx)`) and
-    // H.TryResonance (discard 「PP:[衍生]共鸣」 from hand) to offer the −1,500
-    // (`p.amount = max(0, p.amount - 1500)`).
+    // -- C# `CardAyaLonging.PayChoose` -> `Resonate`; needs H.TryResonance (discard
+    // 「PP:[衍生]共鸣」 from hand) to offer the optional −1,500 on top of the X shave
+    // above (`p.amount = max(0, p.amount - 1500)`). The PayChoose hook kind is
+    // landed; only TryResonance is still held.
 }

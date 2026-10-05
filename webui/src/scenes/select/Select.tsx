@@ -6,12 +6,13 @@ import { useEffect, useRef, useState } from "react";
 import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
-import { D } from "../../core/data";
+import { D, skillText } from "../../core/data";
 import { useMatchView, useTick } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { CharacterData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
+import { SkillTextToggle } from "../../ui/SkillTextToggle";
 import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
 import { Chips, PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -41,7 +42,7 @@ export function Select({ sess }: { sess: GameSession }) {
   };
 
   // Open tr("deckPick.title") once when the deck phase starts.
-  const me = view?.state.seats[view.seat];
+  const me = view?.state.players[view.playerId];
   useEffect(() => {
     if (!view || !me) return;
     if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.character && !isModalOpen("deck")) {
@@ -52,13 +53,13 @@ export function Select({ sess }: { sess: GameSession }) {
 
   if (!view || !me) return null;
   const st = view.state;
-  const myTurn = st.turn === view.seat;
+  const myTurn = st.turn === view.playerId;
   const chosen = me.character || picked || getProfile().homeCharacter || D.characters[0].name;
   const preview = D.character(chosen);
   const secs = Math.max(0, Math.ceil(st.timeLeft - (performance.now() - at) / 1000));
-  const takenBy = new Map(st.seats.map((x, seat) => [x.character, { name: x.player, seat }] as const).filter(([c]) => c));
+  const takenBy = new Map(st.players.map((x, playerId) => [x.character, { name: x.player, playerId }] as const).filter(([c]) => c));
   const free = (n: string) => !st.bans.includes(n) && !takenBy.has(n);
-  const cur = st.seats[st.turn]?.player ?? "";
+  const cur = st.players[st.turn]?.player ?? "";
   const leave = () => {
     endSession();
     navigate(sess.kind === "solo" ? { name: "menu" } : { name: "lobby" });
@@ -117,7 +118,7 @@ export function Select({ sess }: { sess: GameSession }) {
           {D.characters.filter((c) => inTab(c, tab)).map((c) => {
             const banned = st.bans.includes(c.name);
             const taken = takenBy.get(c.name);
-            const mine = taken?.seat === view.seat;
+            const mine = taken?.playerId === view.playerId;
             return (
               <CharCard
                 key={c.name}
@@ -140,18 +141,18 @@ export function Select({ sess }: { sess: GameSession }) {
       <div className={s.order}>
         <PanelTab className={s.orderTab}>{tr("select.order")}</PanelTab>
         <div className={s.strip}>
-          {st.seats.map((x, i) => {
+          {st.players.map((x, i) => {
             const c = D.character(x.character);
             const turn = (st.phase === "ban" || st.phase === "pick") && st.turn === i;
             return (
-              <div key={i} className={cx(s.seat, turn && s.turn)}>
+              <div key={i} className={cx(s.playerId, turn && s.turn)}>
                 <div className={s.av}>
                   <Avatar c={c} size={56} />
                   <span className={s.n}>{i + 1}</span>
                   {x.bot && <span className={s.bot}><Icon name="smart_toy" /></span>}
                   {st.phase === "deck" && x.deckReady && <span className={s.ok}><Icon name="check" /></span>}
                 </div>
-                <div className={s.name}>{i === view.seat ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
+                <div className={s.name}>{i === view.playerId ? tr("common.youName", { name: x.player }) : x.player}{st.phase === "order" && x.roll > 0 && <b> {x.roll}</b>}</div>
                 {st.mode === 2 && x.ban && <div className={s.ban}>{tr("select.banMark", { name: D.character(x.ban)?.display ?? "" })}</div>}
               </div>
             );
@@ -181,7 +182,7 @@ function Preview({ c }: { c: CharacterData }) {
           <b>{char ? c.skill || tr("select.skillTbd") : band?.skill || tr("select.bandSkillTbd")}</b>
           <span>{c.band}</span>
         </div>
-        <div className={s.skillText}>{char ? c.text : band?.text ?? ""}</div>
+        <div className={s.skillText}><SkillTextToggle className={s.skillSwitch} />{skillText(char ? c : band)}</div>
       </div>
     </>
   );

@@ -9,43 +9,40 @@
 //! `H.ForceTeleport(..., resolve: false)`). The optional build afterwards needs a
 //! build-house routine the ABI does not carry yet (TODO in source).
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const BANG_DREAM: CardDef = CardDef {
-    id: "PPP:Bang Dream!",
-    play: Some(bang_dream),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const BANG_DREAM: CardDef = CardDef::new("PPP:Bang Dream!", &[
+    On::Play(bang_dream),
+    On::CantPlay(cant_play),
+]);
 
-fn why_not(seat: i32) -> Option<Msg> {
-    // C# `CardBangDream.WhyNot`: refuses with 「你还没有地」 when the seat owns no tile.
-    if ctx::owned_count(seat) == 0 {
+fn cant_play(player_id: i32) -> Option<Msg> {
+    // C# `CardBangDream.WhyNot`: refuses with 「你还没有地」 when the player owns no tile.
+    if ctx::owned_count(player_id) == 0 {
         return Some(Msg::new(key!("bang_dream_no_land")));
     }
     None // playable
 }
 
-fn bang_dream(seat: i32) {
+fn bang_dream(player_id: i32) {
     // 规则书: 「为[使用者]的团卡添加一个[奇迹水晶]」
-    ctx::add_band_crystals(seat, 1, i32::MAX);
-    ctx::log(seat, &Msg::new(key!("bang_dream_crystal")).seat("who", seat));
+    ctx::add_band_crystals(player_id, 1, i32::MAX);
+    ctx::log(player_id, &Msg::new(key!("bang_dream_crystal")).player_id("who", player_id));
     // C# `Play` yields break when `H.OwnedBy` is empty (WhyNot refuses earlier).
-    let mine = ctx::owned_tiles(seat);
+    let mine = ctx::owned_tiles(player_id);
     if mine.is_empty() {
         return;
     }
     // 规则书: 「[传送]至任意[使用者]拥有的格子」
     let to = ctx::ask_tile(
-        seat,
+        player_id,
         &Msg::new(key!("bang_dream_title")),
         &Msg::new(key!("bang_dream_ask")),
         &mine,
     );
     // C# `H.ForceTeleport(i, to, resolve: false, ...)` -- no settle on arrival.
-    ctx::teleport_to(seat, to);
-    ctx::log(seat, &Msg::new(key!("bang_dream_moved")).seat("who", seat).tile("tile", to));
+    ctx::teleport_to(player_id, to);
+    ctx::log(player_id, &Msg::new(key!("bang_dream_moved")).player_id("who", player_id).tile("tile", to));
     // TODO(规则书): 「且可选择盖房」 -- needs a build-house routine (C#
     // `H.OfferBuildAmong(i, [to], ...)`): prompt to pay `build_cost` and raise one
     // house on `to`. The ctx vocabulary has `build_cost` (a query) but no build op.

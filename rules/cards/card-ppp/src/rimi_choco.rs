@@ -8,21 +8,21 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-// TODO(规则书): C# `CardRimiChoco.WhyNot` is just `H.MoveWhyNot(seat)` (main move
-//   already used / movement blocked) -- needs `H.MoveWhyNot`; `why_not` stays None.
-pub const RIMI_CHOCO: CardDef = CardDef {
-    id: "PPP:（里美）我的心就像巧克力螺",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const RIMI_CHOCO: CardDef = CardDef::new("PPP:（里美）我的心就像巧克力螺", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
-fn play(seat: i32) {
+/// C# `CardRimiChoco.WhyNot` = `H.MoveWhyNot(seat)`.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    ctx::cant_move(player_id)
+}
+
+fn play(player_id: i32) {
     let n = ctx::tile_count();
-    let pos = ctx::seat_pos(seat);
+    let pos = ctx::player_pos(player_id);
     if n <= 0 || pos < 0 {
         return;
     }
@@ -38,7 +38,7 @@ fn play(seat: i32) {
         return;
     }
     let to = ctx::ask_tile(
-        seat,
+        player_id,
         &Msg::new(key!("rimi_choco_title")),
         &Msg::new(key!("rimi_choco_ask")),
         &tiles,
@@ -50,14 +50,14 @@ fn play(seat: i32) {
     let reverse = steps > 4;
     let _len = if reverse { n - steps } else { steps };
     ctx::log(
-        seat,
+        player_id,
         &Msg::new(key!("rimi_choco_moved"))
-            .seat("who", seat)
+            .player_id("who", player_id)
             .tile("tile", to)
             .i("n", _len as i64),
     );
     // TODO(ABI): 「本回合的[主要移动]改为移动到…并[结算]，期间[不可阻挡]」 -- needs
     //   `H.CardMove` (so the walk settles on `to` and consumes the main move) and
     //   the `Unstoppable` turn flag (C# `H._turnCtx.Unstoppable`). Until then the
-    //   seat is not moved; only the destination choice runs.
+    //   player is not moved; only the destination choice runs.
 }

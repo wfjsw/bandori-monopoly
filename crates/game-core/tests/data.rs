@@ -3,7 +3,7 @@
 use game_core::data::GameData;
 use game_core::net::{clean_name, NetMessage};
 use game_core::profile::{PlayerProfile, Seen};
-use game_core::state::{MatchEvent, MatchSeat, MatchState};
+use game_core::state::{MatchEvent, MatchPlayer, MatchState};
 use game_core::{deck, MatchMode};
 
 fn data() -> GameData {
@@ -58,12 +58,12 @@ fn json_defaults_match_csharp_initializers() {
     assert_eq!((s.prompt.tile, s.prompt.bidder, s.vote.by), (-1, -1, -1));
     assert!(!s.active());
 
-    let seat: MatchSeat = serde_json::from_str(r#"{"bankrupt":true}"#).unwrap();
-    assert_eq!((seat.hand_limit, seat.exile_to), (5, -1));
-    assert!(seat.out());
+    let player_id: MatchPlayer = serde_json::from_str(r#"{"bankrupt":true}"#).unwrap();
+    assert_eq!((player_id.hand_limit(), player_id.exile_to()), (5, -1));
+    assert!(player_id.out());
 
     let e: MatchEvent = serde_json::from_str(r#"{"id":7,"type":"dice"}"#).unwrap();
-    assert_eq!((e.id, e.r#type.as_str(), e.seat, e.other), (7, "dice", -1, -1));
+    assert_eq!((e.id, e.r#type.as_str(), e.player_id, e.other), (7, "dice", -1, -1));
 
     let m: NetMessage = serde_json::from_str(r#"{"t":"act","act":"roll"}"#).unwrap();
     assert_eq!(m.target, -1);
@@ -74,16 +74,18 @@ fn json_defaults_match_csharp_initializers() {
 #[test]
 fn match_state_round_trips_with_camel_case_names() {
     let mut s = MatchState { phase: "play".into(), turn: 2, ..Default::default() };
-    s.seats.push(MatchSeat { member: 3, money: 15000, ..Default::default() });
+    s.players.push(MatchPlayer { member: 3, money: 15000, ..Default::default() });
     let v = serde_json::to_value(&s).unwrap();
     for key in ["matchId", "skipMove", "tileColors", "eventActive", "endReason", "scoreHouses"] {
         assert!(v.get(key).is_some(), "missing {key}");
     }
-    assert_eq!(v["seats"][0]["handLimit"], 5);
+    // Keyed state is one map of {value, min, max, expires} items.
+    assert_eq!(v["players"][0]["state"]["handLimit"]["value"], 5);
+    assert_eq!(v["players"][0]["state"]["exileTo"]["value"], -1);
     let back: MatchState = serde_json::from_value(v).unwrap();
     assert_eq!(back, s);
-    assert_eq!(back.seat_of(3), 0);
-    assert_eq!(back.current(), None, "turn 2 with one seat");
+    assert_eq!(back.player_of(3), 0);
+    assert_eq!(back.current(), None, "turn 2 with one player");
 }
 
 #[test]
@@ -109,13 +111,13 @@ fn deck_rules_reject_with_csharp_reasons() {
     let d = data();
     let kasumi = d.character("户山香澄").unwrap();
     let derived = d.cards.iter().find(|c| c.derived).unwrap();
-    assert_eq!(deck::why_not(&d, kasumi, derived).unwrap().key(), "err.deck_derived");
+    assert_eq!(deck::cant_play(&d, kasumi, derived).unwrap().key(), "err.deck_derived");
 
     let other_band = d.cards.iter().find(|c| !c.general() && !c.exclusive() && c.band != kasumi.band && !c.derived).unwrap();
-    assert_eq!(deck::why_not(&d, kasumi, other_band).unwrap().key(), "err.deck_band");
+    assert_eq!(deck::cant_play(&d, kasumi, other_band).unwrap().key(), "err.deck_band");
 
     let someone_elses = d.cards.iter().find(|c| c.exclusive() && c.owner != kasumi.name && !c.derived).unwrap();
-    assert_eq!(deck::why_not(&d, kasumi, someone_elses).unwrap().key(), "err.deck_exclusive");
+    assert_eq!(deck::cant_play(&d, kasumi, someone_elses).unwrap().key(), "err.deck_exclusive");
 
     // Sumimi members share exclusives (the original has exactly two members).
     let sumimi: Vec<_> = d.characters.iter().filter(|c| c.band == "Sumimi").collect();

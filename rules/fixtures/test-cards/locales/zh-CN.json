@@ -1,4 +1,16 @@
 {
   "relay_start": "relay 开始",
-  "relay_end": "relay 结束"
+  "relay_end": "relay 结束",
+  "echo_play": "回声：打出",
+  "echo_react": "回声：反应",
+  "lister_count": "手牌列出 {{n}} / {{size}}",
+  "lister_moved": "移入弃牌堆：{{found}}",
+  "stunner_done": "眩晕；异常计数 {{count}}",
+  "guard_note": "防御异常效果",
+  "guard_blocked": "守卫挡下了异常效果",
+  "aimer_done": "指定了 {{got}}；被指定次数 {{count}}",
+  "shield_note": "不受别人的效果影响",
+  "shield_held": "护盾生效",
+  "mover_planned": "规划 3 步移动",
+  "mover_done": "移动到 {{pos}}"
 }

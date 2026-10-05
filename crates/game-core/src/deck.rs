@@ -16,7 +16,7 @@ pub const SIZE: usize = 10;
 pub const SLOTS: i32 = 3;
 
 /// `DeckRules.WhyNot` -- `None` if `c` may put `card` in a starting deck.
-pub fn why_not(data: &GameData, c: &CharacterData, card: &CardData) -> Option<Msg> {
+pub fn cant_play(data: &GameData, c: &CharacterData, card: &CardData) -> Option<Msg> {
     if card.derived {
         return Some(Msg::new("err.deck_derived"));
     }
@@ -30,7 +30,7 @@ pub fn why_not(data: &GameData, c: &CharacterData, card: &CardData) -> Option<Ms
 }
 
 pub fn can_use(data: &GameData, c: &CharacterData, card: &CardData) -> bool {
-    why_not(data, c, card).is_none()
+    cant_play(data, c, card).is_none()
 }
 
 /// Sumimi members may use each other's exclusive cards.

@@ -12,52 +12,49 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const SECRET_RAINBOW: CardDef = CardDef {
-    id: "Mor:秘密与青春的虹彩",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const SECRET_RAINBOW: CardDef = CardDef::new("Mor:秘密与青春的虹彩", &[
+    On::React(&[TriggerKind::Pay], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「当你向学妹或同级生支付时」
     // 规则书[反击]（2）: 「当学姐或同级生向你支付的时候」
     // C# `t.Kind == "pay" && t.Pay.PayToOther && !t.Pay.cancel && t.Pay.amount > 0`,
-    // then `t.Pay.from == seat` + `GradeOf(t.Pay.to) <= GradeOf(seat)` or
-    // `t.Pay.to == seat` + `GradeOf(t.Pay.from) >= GradeOf(seat)`.
+    // then `t.Pay.from == seat` + `GradeOf(t.Pay.to) <= GradeOf(player_id)` or
+    // `t.Pay.to == seat` + `GradeOf(t.Pay.from) >= GradeOf(player_id)`.
     if trigger::kind() != TriggerKind::Pay || trigger::value() <= 0 {
         return false;
     }
-    let from = trigger::seat();
+    let from = trigger::player_id();
     let to = trigger::target();
     if to < 0 || from == to {
         return false;
     }
-    // TODO(ABI): `t.Pay.cancel` is not on the trigger payload, and there is no
-    //   grade query (`H.GradeOf`, `MatchHost.cs:18282`) so the 「学妹或同级生」 /
-    //   「学姐或同级生」 gates cannot be checked -- the window opens on every
-    //   seat-to-seat pay that involves `seat` (over-permissive).
-    from == seat || to == seat
+    // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0
+    // reads as `value() == 0`, so the >0 guard above covers it.
+    // TODO(ABI): 「学妹或同级生」/「学姐或同级生」 needs a grade query
+    //   (`H.GradeOf`, `MatchHost.cs:18282`), so the window opens on every
+    //   player-to-player pay that involves `player_id` (over-permissive).
+    from == player_id || to == player_id
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     let amount = trigger::value() as i64;
-    let from = trigger::seat();
+    let from = trigger::player_id();
     // 规则书[反击]（1）: 「此次支付金额减半」 -- C# `pay.amount = CeilTo(amount / 2.0, 10)`.
     // 规则书[反击]（2）: 「使此次支付资金变成1.5倍」 -- C# `pay.amount = CeilTo(amount * 1.5, 10)`.
-    // TODO(ABI): the pending `PayCtx.amount` cannot be written, so neither the
-    //   halving nor the ×1.5 takes effect (C# `CardSecretRainbow.React`). `CeilTo`
-    //   rounds up to a multiple of 10.
-    if from == seat {
+    // `CeilTo` rounds up to a multiple of 10.
+    if from == player_id {
         let half = (amount + 1) / 2;
         let half = ((half + 9) / 10) * 10;
-        ctx::log(seat, &Msg::new(key!("secret_rainbow_half")).n("money", amount).n("n", half));
+        trigger::set_pay_amount(half as i32);
+        ctx::log(player_id, &Msg::new(key!("secret_rainbow_half")).n("money", amount).n("n", half));
     } else {
         let boosted = (amount * 3 + 1) / 2;
         let boosted = ((boosted + 9) / 10) * 10;
-        ctx::log(seat, &Msg::new(key!("secret_rainbow_boost")).n("money", amount).n("n", boosted));
+        trigger::set_pay_amount(boosted as i32);
+        ctx::log(player_id, &Msg::new(key!("secret_rainbow_boost")).n("money", amount).n("n", boosted));
     }
 }

@@ -6,6 +6,7 @@ description = "Shared match state, data models, step machine and Ruleset boundar
 
 [dependencies]
 serde = { workspace = true }
+bitflags = { workspace = true }
 serde_json = { workspace = true }
 
 [dev-dependencies]

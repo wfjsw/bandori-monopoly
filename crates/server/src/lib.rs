@@ -13,7 +13,7 @@
 //! | POST | `/api/rooms/{id}/weights` | `ScoreWeights` | `RoomInfo` (host) |
 //! | POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host) |
 //! | POST | `/api/rooms/{id}/leave` | | `{ok}` |
-//! | GET  | `/api/rooms/{id}/state` | | `{room, you, match: {state, hand, handNotes, you, seat}}` |
+//! | GET  | `/api/rooms/{id}/state` | | `{room, you, match: {state, hand, handNotes, you, player_id}}` |
 //! | POST | `/api/rooms/{id}/act` | `NetMessage` (`act`, `card`, `cards`, `value`, `prompt`, ...) | `{ok}` or 400 `{error}` |
 //! | GET  | `/api/rooms/{id}/stream` | | SSE, see [`sse`] |
 //!

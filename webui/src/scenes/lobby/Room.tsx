@@ -1,5 +1,5 @@
 // Waiting room (RoomPanelView). Reached by /room/<id>; after a refresh it
-// re-attaches to the seat through the server session.
+// re-attaches to the player through the server session.
 
 import { useEffect, useState } from "react";
 import { navigate } from "../../app/router";

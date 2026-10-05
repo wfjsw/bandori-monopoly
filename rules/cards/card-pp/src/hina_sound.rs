@@ -12,15 +12,11 @@
 //! The stand-in runs the substitute's [手] via `play_card`; the RealId marking
 //! and the [共鸣] swap need hooks the ABI lacks (below).
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const HINA_SOUND: CardDef = CardDef {
-    id: "PP:[冰川日菜]会发出怎样的声音呢？",
-    play: Some(hina_sound),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const HINA_SOUND: CardDef = CardDef::new("PP:[冰川日菜]会发出怎样的声音呢？", &[
+    On::Play(hina_sound),
+]);
 
 /// C# `CardHinaSound.Subs` -- the exclusive cards this can stand in for when
 /// played from hand (each has a hand-play [手] and places itself).
@@ -34,14 +30,14 @@ const SUBS: [&str; 3] = [
     "PP:[若宫伊芙]属于我的武士道！",
 ];
 
-fn hina_sound(seat: i32) {
+fn hina_sound(player_id: i32) {
     // 规则书[特]（1）: 「此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡」
     // -- C# `WhyNot` offers the subs whose own `WhyNot` is clear
     // (`H.SubWhyNot(seat, id) == null`) and refuses when none are. `H.SubWhyNot`
     // is still missing, and all three subs' `WhyNot` are always clear (no
-    // overrides), so the gate never refuses -- `why_not: None` is faithful.
+    // overrides), so the gate never refuses -- `cant_play: None` is faithful.
     let i = ctx::ask_card(
-        seat,
+        player_id,
         &Msg::new(key!("hina_sound_title")),
         &Msg::new(key!("hina_sound_ask")),
         &SUBS,
@@ -49,13 +45,13 @@ fn hina_sound(seat: i32) {
     let sub = SUBS[i];
     // C# `H.Log("text", i, "「" + CardName + "」当作「" + H.CardTitle(sub) + "」打出")`.
     ctx::log(
-        seat,
+        player_id,
         &Msg::new(key!("hina_sound_as"))
             .card("card", "PP:[冰川日菜]会发出怎样的声音呢？")
             .card("sub", sub),
     );
     // 规则书[特]（1）: 「可替代……的专属卡」 -- run the chosen exclusive card's [手].
-    ctx::play_card(sub, seat);
+    ctx::play_card(sub, player_id);
     // C# when the substitute places itself (`inner.Dest == "placed"`) the stand-in
     // itself is "gone" (`c.Dest = "gone"`); all three subs above place themselves,
     // so this card leaves play rather than landing in the discard.

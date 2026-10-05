@@ -10,44 +10,78 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const CENTRIFUGAL: CardDef = CardDef {
-    id: "Mor:离心力，不为所动",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+const ID: &str = "Mor:离心力，不为所动";
 
-fn can_react(seat: i32) -> bool {
+pub const CENTRIFUGAL: CardDef = CardDef::new("Mor:离心力，不为所动", &[
+    On::React(&[TriggerKind::Target], can_react, react),
+    On::Hook(&[TriggerKind::AbnormalGuard], abnormal_guard),
+    On::Hook(&[TriggerKind::TurnStart], turn_start),
+]);
+
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「第二次成为其他角色技能或卡牌的目标时」
     // C# `t.Kind == "target" && t.Target == seat && t.ByCard >= 0 && t.ByCard != seat`
-    //   and `H._targeted[seat] >= 2` (the counter is bumped on every target raise
-    //   between the seat's turns, `MatchHost.cs:19138` / reset at `:25775`).
+    //   and `H._targeted[player_id] >= 2` (the counter is bumped on every target raise
+    //   between the player's turns, `MatchHost.cs:19138` / reset at `:25775`).
     if trigger::kind() != TriggerKind::Target {
         return false;
     }
     // `t.Target` is the one being aimed at (C# `t.Target == seat`).
-    if trigger::target() != seat {
+    if trigger::target() != player_id {
         return false;
     }
-    // TODO(ABI): `t.ByCard` (the targeting came from another player's card / skill)
-    //   is not on the trigger payload, and the between-turns target counter
-    //   (`H._targeted`) has no raise/reset hook -- so the 「第二次」 / 「其他角色」
-    //   gates cannot be checked. This window opens on every targeting of the seat
-    //   (over-permissive).
+    // 「其他角色」 -- the targeting must come from another player's card.
+    if !trigger::by_card().is_some_and(|by| by != player_id) {
+        return false;
+    }
+    // TODO(ABI): the between-turns target counter (`H._targeted`) has no
+    //   raise/reset hook -- so the 「第二次」 gate cannot be checked. This window
+    //   opens on every targeting of the player by another player's card
+    //   (over-permissive on the count, correct on the source).
     true
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // 规则书[反击]: 「你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果」
     // C# `c.Trigger.Cancelled = true` also voids the targeting that opened the window.
-    // TODO(ABI): `Trigger.Cancelled` is not writable through the ABI.
+    trigger::set_cancelled(); // void the targeting that opened this window
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "Mor:离心力，不为所动", &Msg::new(key!("centrifugal_note")));
-    ctx::log(seat, &Msg::new(key!("centrifugal_log")).seat("who", seat));
-    // TODO(规则书)[反击]: 「无效化你受到的所有效果」 until the owner's next turn
-    // start -- needs the Fx.ImmuneAll hook (C# `CardCentrifugal.ImmuneAll`) and
-    // Fx.TurnStart to unplace (C# `CardCentrifugal.TurnStart` -> `H.Unplace`).
+    ctx::place_card(player_id, ID, &Msg::new(key!("centrifugal_note")));
+    ctx::log(player_id, &Msg::new(key!("centrifugal_log")).player_id("who", player_id));
+    // TODO(规则书)[反击]: 「无效化你受到的所有效果」 also covers targeting (C#
+    //   `ImmuneAll` at `H.Target`) and money transfers (C# `ImmuneAll` in the
+    //   pay pipeline) -- only abnormal effects are guarded so far (v25
+    //   `AbnormalGuard`).
+}
+
+/// `Fx.ImmuneAll` (C# `CardCentrifugal.ImmuneAll`) via the v25 `abnormalGuard`
+/// hook: while placed, nullify abnormal effects aimed at the owner by another
+/// player (C# `a.By != a.Seat && AnyFx(a.Seat, f => f.ImmuneAll)`).
+fn abnormal_guard(player_id: i32) {
+    // The hook runs on every placed card across all players; only guard effects
+    // aimed at us (`t.target` = the victim).
+    if trigger::target() != player_id {
+        return;
+    }
+    // C# `ImmuneAll`: self-inflicted abnormals pass through.
+    if trigger::player_id() == player_id {
+        return;
+    }
+    trigger::set_cancelled();
+    ctx::log(player_id, &Msg::new(key!("centrifugal_blocked")).player_id("who", player_id));
+}
+
+/// `Fx.TurnStart` (C# `CardCentrifugal.TurnStart` -> `H.Unplace`): the immunity
+/// ends at the owner's next turn start.
+fn turn_start(player_id: i32) {
+    if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
+        return;
+    }
+    // 规则书[反击]: 「直到下个你的回合开始时」 -- C# `H.Unplace(this, "discard",
+    //   "效果结束了")`.
+    ctx::unplace_card(player_id);
+    ctx::to_discard(player_id, ID);
+    ctx::log(player_id, &Msg::new(key!("centrifugal_end")).player_id("who", player_id));
 }

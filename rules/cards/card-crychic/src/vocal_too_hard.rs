@@ -8,20 +8,16 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const VOCAL_TOO_HARD: CardDef = CardDef {
-    id: "CRYCHIC:主唱太拼命了",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const VOCAL_TOO_HARD: CardDef = CardDef::new("CRYCHIC:主唱太拼命了", &[
+    On::React(&[TriggerKind::Pay], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「一次性向其他玩家支付5000以上资金时」 -- C#
     // `t.Kind == "pay" && t.Pay.from == seat && t.Pay.PayToOther && t.Pay.amount >= 5000`.
-    if trigger::kind() != TriggerKind::Pay || trigger::seat() != seat {
+    if trigger::kind() != TriggerKind::Pay || trigger::player_id() != player_id {
         return false;
     }
     // 规则书[反击]: 「向其他玩家支付」 -- C# `t.Pay.PayToOther` (`Pay.from >= 0
@@ -31,15 +27,12 @@ fn can_react(seat: i32) -> bool {
     }
     // 规则书[反击]: 「5000以上」
     trigger::value() >= 5000
-    // C# `!t.Pay.cancel` -- the trigger payload carries no `cancel` flag yet, so
-    // an already-cancelled payment still looks reactable (TODO(ABI)).
+    // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0
+    // reads as `value() == 0`, so the ≥5000 guard covers it.
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // 规则书[反击]: 「免除此次支付」
-    ctx::log(seat, &Msg::new(key!("vocal_too_hard_note")).seat("who", seat));
-    // TODO(ABI): 「免除此次支付」 -- needs a pay-cancel op (C#
-    // `c.Trigger.Pay.cancel = true` / `PayCtx.cancel`, which makes `H.Money`
-    // skip the transfer). `ctx::pay` / `ctx::transfer` cannot un-pay a payment
-    // the host is in the middle of raising.
+    trigger::set_pay_amount(0);
+    ctx::log(player_id, &Msg::new(key!("vocal_too_hard_note")).player_id("who", player_id));
 }

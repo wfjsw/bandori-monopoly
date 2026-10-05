@@ -8,36 +8,50 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const SAME_SKY: CardDef = CardDef {
-    id: "AG:朝同一片天空迈进",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const SAME_SKY: CardDef = CardDef::new("AG:朝同一片天空迈进", &[
+    On::Hook(&[TriggerKind::Drawn], react),
+    On::Hook(&[TriggerKind::DeckAtGameStart], return_at_opening),
+]);
 
-fn can_react(seat: i32) -> bool {
-    // 规则书[反击]: 「抽出此卡时立刻打出」 -- C# `CardSameSky.Drawn` auto-plays it
-    // as a reaction; there is no window prompt.
-    // TODO(ABI): the Fx.Drawn hook (auto-play on draw) is not in the vocabulary.
-    // `TriggerKind::DrawOut` is the closest raise the engine might use; until the
-    // hook exists this reaction stays dormant.
-    trigger::kind() == TriggerKind::DrawOut && trigger::target() == seat
+const ID: &str = "AG:朝同一片天空迈进";
+
+/// 规则书[反击]: 「（开局时抽到此卡洗回）」 -- C# `ReturnAtOpening` /
+/// `FixOpeningHand`. The opening deal and mulligan raise no `Drawn` hooks, so
+/// the old `step() == 0` branch is unreachable; the brief maps this to
+/// `On::Hook(&[TriggerKind::DeckAtGameStart], ...)`, which fires on this card
+/// over draw + hand after the mulligan.
+fn return_at_opening(player_id: i32) {
+    // Pull every copy out of the opening hand and shuffle it back into the deck.
+    let mut returned = 0;
+    while ctx::take_from_hand(player_id, ID) {
+        ctx::add_to_deck(player_id, ID, true);
+        returned += 1;
+    }
+    if returned > 0 {
+        ctx::log(player_id, &Msg::new(key!("same_sky_returned")).player_id("who", player_id));
+    }
 }
 
-fn react(seat: i32) {
+/// 规则书[反击]: 「抽出此卡时立刻打出」 -- C# `CardSameSky.Drawn` auto-plays it
+/// the moment it is drawn; it never answers the [反击] window.
+fn react(player_id: i32) {
+    if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
+        return;
+    }
     // C# `Drawn` pulls the card out of hand first (`hand.Remove(Id)`).
-    // TODO(ABI): hand removal for a play (not `discard_from_hand`, which discards)
-    // is not in the vocabulary.
-    // TODO(规则书[反击]): 「如果你手牌数大于等于3，获得手牌数*600的资金」 -- needs
-    // the total hand size (C# `H._hidden[seat].hand.Count`); `ctx::hand_count` only
-    // counts copies of one card id.
-    // TODO(规则书[反击]): 「如果你的手牌数小于3，抽一张卡」 -- same total-hand-size
-    // query picks the branch.
-    ctx::log(seat, &Msg::new(key!("same_sky_pending")).seat("who", seat));
-    // TODO(规则书[反击]): 「（开局时抽到此卡洗回）」 -- needs the
-    // `Card.ReturnAtOpening` flag (C# `CardSameSky.ReturnAtOpening`) so an
-    // opening-draw shuffles it back instead of resolving.
+    if !ctx::take_from_hand(player_id, ID) {
+        return;
+    }
+    let n = ctx::hand_size(player_id);
+    if n >= 3 {
+        // 规则书[反击]: 「如果你手牌数大于等于3，获得手牌数*600的资金」
+        ctx::gain(player_id, n * 600, &Msg::new(key!("same_sky_why")).i("n", n as i64));
+    } else {
+        // 规则书[反击]: 「如果你的手牌数小于3，抽一张卡」
+        ctx::draw(player_id, 1);
+    }
+    // Played: it goes to the discard pile.
+    ctx::to_discard(player_id, ID);
 }

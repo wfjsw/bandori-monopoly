@@ -33,7 +33,7 @@ keys (`Msg`), the client renders them per player.
 
 Refresh recovery: a solo match is snapshotted to `localStorage` (`bm.solo`, the
 engine's `Match::save`) about once a second and on page hide, and resumed by
-`/play/solo`; an online seat is re-attached with the tab's session token
+`/play/solo`; an online player is re-attached with the tab's session token
 (`sessionStorage`) and `GET /api/rooms/{id}/state`, within the presence timeout.
 
 ## Auth
@@ -92,14 +92,14 @@ The body is the original `NetMessage` shape; only the fields the command uses ma
 | `hello` | | `{you, room}` |
 | `room` | | `RoomInfo`, whenever it changes |
 | `event` | `<matchId>:<eventId>` | `MatchEvent` (one per log line / animation step) |
-| `match` | | `{state, hand, handNotes, you, seat}`, whenever the state changes |
+| `match` | | `{state, hand, handNotes, you, player_id}`, whenever the state changes |
 | `dissolve` | | `{reason}` — the room is gone |
 
-* `hand` / `handNotes` are only ever your own; `state.seats[*].hand` is just a count.
+* `hand` / `handNotes` are only ever your own; `state.players[*].hand` is just a count.
 * Only `event` frames carry ids. On reconnect the browser sends the last one as
   `Last-Event-ID` and the stream resumes right after it. A new match (new `matchId`)
   starts from its first event.
-* `state.prompt` describes the prompt in progress (`id`, `kind`, `seats`, `answers`
+* `state.prompt` describes the prompt in progress (`id`, `kind`, `players`, `answers`
   with `-1` = still waiting, `timeLeft`, auction `bid` / `bidder`).
 * Keep-alive comments every 15 s.
 
@@ -107,7 +107,7 @@ The body is the original `NetMessage` shape; only the fields the command uses ma
 
 An open stream counts as connected. A player without a stream for 20 s:
 
-* in a match: the AI takes the seat (`members[].away = true`); reopening the stream
+* in a match: the AI takes the player (`members[].away = true`); reopening the stream
   hands it back;
 * in the lobby: removed from the room.
 

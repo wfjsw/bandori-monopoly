@@ -10,15 +10,11 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const PLEASE_CHOOSE: CardDef = CardDef {
-    id: "RAS:PLEASE CHOOSE",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const PLEASE_CHOOSE: CardDef = CardDef::new("RAS:PLEASE CHOOSE", &[
+    On::React(&[TriggerKind::Settle], can_react, react),
+]);
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
 /// buyable Live House (color group 6, `kind` property/ring). `Live House` the
@@ -35,9 +31,9 @@ const LIVEHOUSE_BUYABLE: [&str; 8] = [
 ];
 
 /// 规则书[反击]: 「当有玩家在livehouse格子上结算时」
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当有玩家在livehouse格子上结算时」 -- any settle, not ours.
-    if trigger::kind() != TriggerKind::Settle || trigger::seat() == seat {
+    if trigger::kind() != TriggerKind::Settle || trigger::player_id() == player_id {
         return false;
     }
     let t = trigger::tile();
@@ -52,40 +48,43 @@ fn can_react(seat: i32) -> bool {
     LIVEHOUSE_BUYABLE.iter().any(|&n| ctx::tile_named(n) == t) && ctx::is_buyable(t)
 }
 
-fn react(seat: i32) {
-    let other = trigger::seat();
+fn react(player_id: i32) {
+    let other = trigger::player_id();
     // 规则书[反击]: 「使对方选择以下效果之一执行」 -- C# `H.AskPick` of `other`.
     // TODO(规则书)[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
     // -- C# filters `other`'s hand for `Normal && Targeting && WhyNot == null`,
-    // `H.AskCard`, then `H.PlayCard` with `Tags["force"] = seat`. Needs hand
-    // listing, the targeting flags (`H.Target` / `Card.Targeting`), and a
-    // force-target play tag. Until then option (1) is offered but not executed.
-    let opt1 = Msg::new(key!("please_choose_opt1")).seat("who", seat);
+    // `H.AskCard`, then `H.PlayCard` with `Tags["force"] = player_id`. Hand listing
+    // (`ctx::cards_in`) and the replayable gate (`ctx::card_replayable`) are
+    // ready; the targeting flags (`H.Target` / `Card.Targeting`) and the
+    // force-target play tag are still missing, so option (1) is offered but
+    // not executed.
+    let opt1 = Msg::new(key!("please_choose_opt1")).player_id("who", player_id);
     // 规则书[反击]（2）: 「使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）」
-    let opt2 = Msg::new(key!("please_choose_opt2")).seat("who", seat);
+    let opt2 = Msg::new(key!("please_choose_opt2")).player_id("who", player_id);
     let pick = ctx::ask_pick(
         other,
         &Msg::new(key!("please_choose_title")),
-        &Msg::new(key!("please_choose_ask")).seat("who", seat),
+        &Msg::new(key!("please_choose_ask")).player_id("who", player_id),
         &[opt1, opt2],
     );
     if pick == 0 {
         // TODO(规则书)[反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
-        // -- see above; the forced play has no vocabulary yet.
+        // -- see above; the forced play needs `Card.Targeting` and a force-target
+        // tag. `ctx::cards_in(other, CardPile::Hand)` lists the hand now.
         ctx::log(
             other,
-            &Msg::new(key!("please_choose_opt1_todo")).seat("who", other).seat("reactor", seat),
+            &Msg::new(key!("please_choose_opt1_todo")).player_id("who", other).player_id("reactor", player_id),
         );
         return;
     }
     // 规则书[反击]（2）: 「使你立即传送至对方所在格子」 -- C# `H.ForceTeleport(i,
     // to, resolve: false, ...)`; `ctx::teleport_to` is the resolve:false teleport.
-    let to = ctx::seat_pos(other);
+    let to = ctx::player_pos(other);
     if to >= 0 {
-        ctx::teleport_to(seat, to);
+        ctx::teleport_to(player_id, to);
         ctx::log(
-            seat,
-            &Msg::new(key!("please_choose_moved")).seat("who", seat).tile("tile", to),
+            player_id,
+            &Msg::new(key!("please_choose_moved")).player_id("who", player_id).tile("tile", to),
         );
     }
     // TODO(规则书)[反击]（2）: 「（不触发结算但视为可触发乐队技能）」 -- the

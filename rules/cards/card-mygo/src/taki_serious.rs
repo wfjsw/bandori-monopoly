@@ -9,27 +9,24 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const TAKI_SERIOUS: CardDef = CardDef {
-    id: "MyGO:（立希）想认真去做",
-    play: Some(taki_serious),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const TAKI_SERIOUS: CardDef = CardDef::new("MyGO:（立希）想认真去做", &[
+    On::Play(taki_serious),
+    On::CantPlay(cant_play),
+]);
 
-/// C# `CardTakiSerious.Stayers` -- present seats holding [停留].
+/// C# `CardTakiSerious.Stayers` -- present players holding [停留].
 fn stayers() -> Vec<i32> {
     // C# `H.Present(p) && H.State.seats[p].stay > 0`. `Present` is "in the game
-    // and not exiled"; `seat_out` covers the out-of-game half (exile layers are
+    // and not exiled"; `player_out` covers the out-of-game half (exile layers are
     // not readable, so an exiled stayer may slip in).
-    (0..ctx::seat_count())
-        .filter(|&p| !ctx::seat_out(p) && ctx::stay_of(p) > 0)
+    (0..ctx::player_count())
+        .filter(|&p| !ctx::player_out(p) && ctx::stay_of(p) > 0)
         .collect()
 }
 
-fn why_not(_seat: i32) -> Option<Msg> {
+fn cant_play(_player: i32) -> Option<Msg> {
     // 规则书: 「使场上所有拥有[停留]的玩家...」 -- C# `CardTakiSerious.WhyNot`
     // refuses the play when nobody holds [停留].
     if stayers().is_empty() {
@@ -38,16 +35,16 @@ fn why_not(_seat: i32) -> Option<Msg> {
     None
 }
 
-fn taki_serious(_seat: i32) {
+fn taki_serious(_player: i32) {
     let n = ctx::tile_count();
     if n <= 0 {
         return;
     }
     for p in stayers() {
-        if ctx::seat_out(p) {
+        if ctx::player_out(p) {
             continue;
         }
-        let pos = ctx::seat_pos(p);
+        let pos = ctx::player_pos(p);
         // 规则书: 「所在格子前后2格内」 -- C# `Enumerable.Range(-2, 5)` over the
         // ring, distinct. Ready for the settle below.
         let mut tiles: Vec<i32> = Vec::new();

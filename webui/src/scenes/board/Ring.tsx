@@ -47,7 +47,7 @@ export interface RingProps {
 
 export function Ring({ m, anim, pickable, onTile }: RingProps) {
   const S = m.S;
-  const pos = anim.pos ?? S.seats.map((x) => x.pos);
+  const pos = anim.pos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
   return (
     <div className={s.wrap}>
@@ -74,16 +74,16 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
             : <SideTile key={i} t={t} side={Math.floor(i / SIDE)} cls={cls} style={style} onClick={() => onTile(i)}>{extras}</SideTile>;
         })}
         <div className={s.tokens}>
-          {S.seats.map((x, i) => {
+          {S.players.map((x, i) => {
             if (x.bankrupt || x.left) return null;
             const p = pos[i] ?? x.pos;
             const [r, c] = cell(p);
-            const same = S.seats.map((_, k) => k).filter((k) => !S.seats[k].bankrupt && !S.seats[k].left && (pos[k] ?? S.seats[k].pos) === p);
+            const same = S.players.map((_, k) => k).filter((k) => !S.players[k].bankrupt && !S.players[k].left && (pos[k] ?? S.players[k].pos) === p);
             const k = Math.max(0, same.indexOf(i));
             const n = same.length;
             const dx = n > 1 ? (k - (n - 1) / 2) * Math.min(14, 40 / (n - 1)) : 0;
             const ch = m.charOf(i);
-            const hop = anim.hop?.seat === i ? anim.hop.id : 0;
+            const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
             const top = center(r) + 16;
             return (
               <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: center(c) + dx, top, zIndex: Math.round(top) }} title={x.player}>
@@ -143,9 +143,9 @@ function SideTile({ t, side, cls, style, onClick, children }: TileProps & { side
 
 function Center({ m, anim }: { m: Model; anim: Animator }) {
   const S = m.S;
-  const rows = S.seats.map((x, i) => [i, x.field ?? []] as const).filter(([, f]) => f.length);
+  const rows = S.players.map((x, i) => [i, x.field ?? []] as const).filter(([, f]) => f.length);
   const fieldCount = rows.reduce((a, [, f]) => a + f.length, 0);
-  const discards = S.seats.reduce((a, x) => a + x.discard.length, 0);
+  const discards = S.players.reduce((a, x) => a + x.discard.length, 0);
   const lastPlayed = [...S.events].reverse().find((e) => (e.type === "play" || e.type === "discard") && e.card)?.card ?? "";
   const top = anim.lastDiscard || lastPlayed;
   return (

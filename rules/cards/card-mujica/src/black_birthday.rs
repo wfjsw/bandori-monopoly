@@ -7,33 +7,30 @@
 //! 800 when they have at most 1,000, otherwise 200 twice (the second only
 //! while they are still in).
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const BLACK_BIRTHDAY: CardDef = CardDef {
-    id: "Mujica:黑色生日",
-    play: Some(black_birthday),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const BLACK_BIRTHDAY: CardDef = CardDef::new("Mujica:黑色生日", &[
+    On::Play(black_birthday),
+    On::CantPlay(cant_play),
+]);
 
 /// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
-fn why_not(seat: i32) -> Option<Msg> {
-    if ctx::others(seat).is_empty() {
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_others")));
     }
     None // playable
 }
 
-fn black_birthday(seat: i32) {
+fn black_birthday(player_id: i32) {
     let why = Msg::new(key!("black_birthday_why"));
-    for p in ctx::others(seat) {
+    for p in ctx::others(player_id) {
         if ctx::money(p) <= 1000 {
-            ctx::transfer(p, seat, 800, &why);
+            ctx::transfer(p, player_id, 800, &why);
         } else {
-            ctx::transfer(p, seat, 200, &why);
-            if !ctx::seat_out(p) {
-                ctx::transfer(p, seat, 200, &why);
+            ctx::transfer(p, player_id, 200, &why);
+            if !ctx::player_out(p) {
+                ctx::transfer(p, player_id, 200, &why);
             }
         }
     }

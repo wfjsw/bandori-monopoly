@@ -8,15 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const NO_BREAKUP: CardDef = CardDef {
-    id: "Sumimi:Sumimi不会解散哦",
-    play: Some(no_breakup),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const NO_BREAKUP: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[
+    On::Play(no_breakup),
+    On::CantPlay(cant_play),
+]);
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
 fn repeated_digits(money: i32) -> bool {
@@ -38,10 +35,10 @@ fn repeated_digits(money: i32) -> bool {
 
 /// C# `CardNoBreakup.Predict` -- money after settling on `t` (rent if other-owned).
 /// C# `H.RentOf` pays nothing to an out-of-game or mortgaged owner.
-fn predict(seat: i32, t: i32) -> i32 {
-    let money = ctx::money(seat);
+fn predict(player_id: i32, t: i32) -> i32 {
+    let money = ctx::money(player_id);
     let owner = ctx::tile_owner(t);
-    if owner >= 0 && owner != seat && !ctx::seat_out(owner) && !ctx::mortgaged_of(t) {
+    if owner >= 0 && owner != player_id && !ctx::player_out(owner) && !ctx::mortgaged_of(t) {
         money - ctx::rent_of(t)
     } else {
         money
@@ -49,22 +46,23 @@ fn predict(seat: i32, t: i32) -> i32 {
 }
 
 /// C# `CardNoBreakup.WhyNot` -- playability gates.
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「资金不含有相同数字时可打出」 -- C# refuses with 「资金里有相同的数字」
-    // when `RepeatedDigits(H.State.seats[seat].money)`.
-    if repeated_digits(ctx::money(seat)) {
+    // when `RepeatedDigits(H.State.seats[player_id].money)`.
+    if repeated_digits(ctx::money(player_id)) {
         return Some(Msg::new(key!("no_breakup_repeated")));
     }
     // TODO(规则书): 「当你本回合未进行过抵押/赎回操作」 -- the C# `WhyNot` also
-    // refuses when `H._turnCtx.Redeemed` / `H._turnCtx.Mortgaged` (and defers to
-    // `H.MoveWhyNot` for 「视为你的主要移动」 timing); those hooks are still
-    // missing, so the gate currently only covers the repeated-digit check.
-    None // playable
+    // refuses when `H._turnCtx.Redeemed` / `H._turnCtx.Mortgaged`; that hook is
+    // still missing, so the gate cannot cover the mortgage/redeem half yet.
+    // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
+    // C# `H.MoveWhyNot` gate applies.
+    ctx::cant_move(player_id)
 }
 
-fn no_breakup(seat: i32) {
+fn no_breakup(player_id: i32) {
     let n = ctx::tile_count();
-    let pos = ctx::seat_pos(seat);
+    let pos = ctx::player_pos(player_id);
     if n <= 0 {
         return;
     }
@@ -78,7 +76,7 @@ fn no_breakup(seat: i32) {
             continue;
         }
         all.push(t);
-        if repeated_digits(predict(seat, t)) {
+        if repeated_digits(predict(player_id, t)) {
             good.push(t);
         }
     }
@@ -87,7 +85,7 @@ fn no_breakup(seat: i32) {
     }
     let picks: &[i32] = if good.is_empty() { &all } else { &good };
     let to = ctx::ask_tile(
-        seat,
+        player_id,
         &Msg::new(key!("no_breakup_title")),
         &Msg::new(key!("no_breakup_ask")),
         picks,
@@ -95,13 +93,13 @@ fn no_breakup(seat: i32) {
     // 规则书: 「进行一次…传送，视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
     // { TeleportTo = teleportTo })` (teleport with settle, consuming the main move).
     // `teleport_to` is the resolve:false form, used here as the best-effort stand-in.
-    ctx::teleport_to(seat, to);
+    ctx::teleport_to(player_id, to);
     ctx::log(
-        seat,
-        &Msg::new(key!("no_breakup_moved")).seat("who", seat).tile("tile", to),
+        player_id,
+        &Msg::new(key!("no_breakup_moved")).player_id("who", player_id).tile("tile", to),
     );
     // 规则书: 「若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果」
-    // -- C# snapshots pos / stay / stun / exile / every seat's money / owners /
+    // -- C# snapshots pos / stay / stun / exile / every player's money / owners /
     // houses / mortgaged before the move and restores them all when
     // `!RepeatedDigits(money) && !H.Out(i)` after the settle.
     // TODO(规则书): needs the H.CardMove teleport-with-settle routine plus a

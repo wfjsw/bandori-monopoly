@@ -10,34 +10,43 @@
 //! >
 //! > （2）[共鸣]其他玩家[分摊][支付][拥有者]1500资金。
 //!
-//! player split-pays you 2,000. The [持续] block is TODO below.
+//! player split-pays you 2,000. The reshuffle split runs on `Reshuffled`;
+//! the [共鸣] branch is TODO below.
 
-use card_sdk::{ctx, key, CardDef, Msg};
 use alloc::vec::Vec;
 
-pub const CHISATO_MASK: CardDef = CardDef {
-    id: "PP:[白鹭千圣]微笑的铁假面",
-    play: Some(chisato_mask),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+use card_sdk::abi::TriggerKind;
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, On, Msg};
 
-fn chisato_mask(seat: i32) {
+pub const CHISATO_MASK: CardDef = CardDef::new("PP:[白鹭千圣]微笑的铁假面", &[
+    On::Play(chisato_mask),
+    On::Hook(&[TriggerKind::Reshuffled], reshuffled),
+]);
+
+fn chisato_mask(player_id: i32) {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "PP:[白鹭千圣]微笑的铁假面", &Msg::new(key!("chisato_mask_note")));
+    ctx::place_card(player_id, "PP:[白鹭千圣]微笑的铁假面", &Msg::new(key!("chisato_mask_note")));
     // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」
-    split_pay(&ctx::others(seat), seat, 2000, &Msg::new(key!("chisato_mask_why")));
-    // TODO(规则书): [持续]（1）「[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金」
-    // -- needs the Fx.Reshuffled hook (C# `Card.Reshuffled`) to run `SplitPay` 500.
+    split_pay(&ctx::others(player_id), player_id, 2000, &Msg::new(key!("chisato_mask_why")));
     // TODO(规则书): [持续]（2）「[共鸣]其他玩家[分摊][支付][拥有者]1500资金」 -- needs
     // H.TryResonance (discard 「PP:[衍生]共鸣」 from hand) to offer the 1,500 split.
 }
 
+/// C# `CardChisatoMask.Reshuffled` -- when the owner's discard pile is shuffled
+/// back into the draw pile, the other players split-pay the owner 500.
+/// 规则书[持续]（1）: 「[拥有者]的弃卡区洗入抽卡区时其他玩家[分摊][支付][拥有者]500资金」
+fn reshuffled(player_id: i32) {
+    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
+        return;
+    }
+    split_pay(&ctx::others(player_id), player_id, 500, &Msg::new(key!("chisato_mask_why")));
+}
+
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) {
-    let list: Vec<i32> = payers.iter().copied().filter(|&p| p != to && !ctx::seat_out(p)).collect();
+    let list: Vec<i32> = payers.iter().copied().filter(|&p| p != to && !ctx::player_out(p)).collect();
     if list.is_empty() || total <= 0 {
         return;
     }

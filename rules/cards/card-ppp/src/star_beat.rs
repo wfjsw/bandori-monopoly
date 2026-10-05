@@ -8,21 +8,21 @@
 //! > 2. 本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算。
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-// TODO(规则书): C# `CardStarBeat.WhyNot` is just `H.MoveWhyNot(seat)` (main move
-//   already used / movement blocked) -- needs `H.MoveWhyNot`; `why_not` stays None.
-pub const STAR_BEAT: CardDef = CardDef {
-    id: "PPP:STAR BEAT!",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const STAR_BEAT: CardDef = CardDef::new("PPP:STAR BEAT!", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
+
+/// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    ctx::cant_move(player_id)
+}
 
 /// C# `H.MoneyHasDigit(seat, '5')` -- the decimal form of |money| contains 5.
-fn money_has_digit5(seat: i32) -> bool {
-    let mut x = ctx::money(seat).unsigned_abs();
+fn money_has_digit5(player_id: i32) -> bool {
+    let mut x = ctx::money(player_id).unsigned_abs();
     if x == 0 {
         return false;
     }
@@ -35,15 +35,15 @@ fn money_has_digit5(seat: i32) -> bool {
     false
 }
 
-fn play(seat: i32) {
+fn play(player_id: i32) {
     // TODO(ABI): 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的
     //   格子上进行一次盖房，随后减少1层”」 -- needs the H.ExtraOf attachment
     //   (C# `H.ExtraOf<StarBeatFx>(i).Layers++`) plus the after-settle build offer
     //   (C# `StarBeatFx.SettleAfter` -> `H.OfferBuildAmong` over owned tiles within
     //   absolute distance 5) and `H.OfferBuildAmong` itself.
     // 规则书: 「(45×“资金数包含5的玩家数量+1”) mod 60格」 / 「(2×“资金数包含5的玩家数量+1”)d10」
-    let n = (0..ctx::seat_count())
-        .filter(|&p| !ctx::seat_out(p) && money_has_digit5(p))
+    let n = (0..ctx::player_count())
+        .filter(|&p| !ctx::player_out(p) && money_has_digit5(p))
         .count() as i32;
     let tiles = ctx::tile_count();
     if tiles <= 0 {
@@ -54,7 +54,7 @@ fn play(seat: i32) {
     let dice = 2 * (n + 1);
     // 规则书: 「然后进入移动阶段并选择以下操作之一」 -- C# `H.AskPick`.
     let pick = ctx::ask_pick(
-        seat,
+        player_id,
         &Msg::new(key!("star_beat_title")),
         &Msg::new(key!("star_beat_ask")).i("n", n as i64),
         &[
@@ -64,18 +64,18 @@ fn play(seat: i32) {
     );
     if pick == 0 {
         // 规则书1: 「获得2个星星贴纸」 -- C# `H.AddTok(i, "星星贴纸", 2)`.
-        ctx::add_tok(seat, "星星贴纸", 2, i32::MAX);
+        ctx::add_tok(player_id, "星星贴纸", 2, i32::MAX);
         ctx::log(
-            seat,
-            &Msg::new(key!("star_beat_stickers")).seat("who", seat).i("n", 2),
+            player_id,
+            &Msg::new(key!("star_beat_stickers")).player_id("who", player_id).i("n", 2),
         );
         // 规则书1: 「本回合的主要移动改为[传送]到(45×…) mod 60格并结算」 -- C#
         // `H.CardMove(c, new MoveCtx { TeleportTo = tile })` (teleport *with* settle).
         if to >= 0 {
-            ctx::teleport_to(seat, to);
+            ctx::teleport_to(player_id, to);
             ctx::log(
-                seat,
-                &Msg::new(key!("star_beat_moved")).seat("who", seat).tile("tile", to),
+                player_id,
+                &Msg::new(key!("star_beat_moved")).player_id("who", player_id).tile("tile", to),
             );
         }
         // TODO(ABI): 「并结算」 / 「本回合的主要移动改为[传送]」 -- `ctx::teleport_to`
@@ -86,10 +86,10 @@ fn play(seat: i32) {
         // 规则书2: 「本回合的主要移动改为移动(2×…)d10格并结算」 -- C#
         // `H.CardMove(c, new MoveCtx { Base = { (dice, 10, ...) } })`. The dice are
         // rolled for the log; the walk itself still needs `H.CardMove` (TODO below).
-        let _sum = ctx::roll(seat, dice, 10);
+        let _sum = ctx::roll(player_id, dice, 10);
         // TODO(ABI): 「移动(2×“资金数包含5的玩家数量+1”)d10格并结算」 -- needs
         //   `H.CardMove` with a multi-die base (`MoveCtx.Base.Add((dice, 10, ...))`)
         //   so the walk passes tiles and settles on arrival. The bare `ctx::roll`
-        //   above only burns the dice; it does not move the seat.
+        //   above only burns the dice; it does not move the player.
     }
 }

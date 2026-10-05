@@ -8,65 +8,84 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-/// C# `H._noReactTurn` stand-in: the turn key of the seat that locked hand
-/// [反击]s this turn (C# clears it at that seat's turn end).
+/// C# `H._noReactTurn` stand-in: the turn key of the player that locked hand
+/// [反击]s this turn (C# clears it at that player's turn end).
 const NO_REACT: &str = "diceCastActive";
 
-pub const DICE_CAST: CardDef = CardDef {
-    id: "Mujica:骰子已经掷下",
-    play: Some(play),
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: Some(why_not),
-};
+const ID: &str = "Mujica:骰子已经掷下";
 
-fn can_react(seat: i32) -> bool {
+pub const DICE_CAST: CardDef = CardDef::new("Mujica:骰子已经掷下", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+    On::React(&[TriggerKind::Card], can_react, react),
+    // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
+    // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
+    On::Hook(&[TriggerKind::TurnEndAfter], turn_end),
+]);
+
+fn can_react(player_id: i32) -> bool {
     // 规则书: 「（此卡可以被反击）」 -- playable as a [反击] too (C#
-    // `CardDiceCast.CanReact`: any other seat's card play during your own turn,
+    // `CardDiceCast.CanReact`: any other player's card play during your own turn,
     // unless the lock is already yours).
-    if trigger::kind() != TriggerKind::Card || trigger::seat() == seat {
+    if trigger::kind() != TriggerKind::Card || trigger::player_id() == player_id {
         return false;
     }
     // C# `H.State.turn == seat` -- only during your own turn.
-    if ctx::turn_seat() != seat {
+    if ctx::turn_player() != player_id {
         return false;
     }
-    // C# `H._noReactTurn != seat` -- not already active; the `NO_REACT` turn-key
+    // C# `H._noReactTurn != player_id` -- not already active; the `NO_REACT` turn-key
     // latch is the stand-in (set in `cast`).
-    ctx::slot(seat, NO_REACT) != ctx::turn_key()
+    ctx::slot(player_id, NO_REACT) != ctx::turn_key()
 }
 
 /// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.
-fn why_not(seat: i32) -> Option<Msg> {
-    if ctx::slot(seat, NO_REACT) == ctx::turn_key() {
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if ctx::slot(player_id, NO_REACT) == ctx::turn_key() {
         return Some(Msg::new(key!("x_in_play")));
     }
     None // playable
 }
 
-fn play(seat: i32) {
-    cast(seat);
+fn play(player_id: i32) {
+    cast(player_id);
 }
 
-fn react(seat: i32) {
-    cast(seat);
+fn react(player_id: i32) {
+    cast(player_id);
 }
 
-fn cast(seat: i32) {
+fn cast(player_id: i32) {
     // 规则书: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(seat, "Mujica:骰子已经掷下", &Msg::new(key!("dice_cast_note")));
+    ctx::place_card(player_id, ID, &Msg::new(key!("dice_cast_note")));
     // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」 -- C#
-    // `H._noReactTurn = c.Seat` makes `H.CanReactNow` refuse every other seat.
+    // `H._noReactTurn = c.Seat` makes `H.CanReactNow` refuse every other player.
     // Latched to the turn key so it expires at the next turn (the C# clears it
     // in `TurnEndAfter`); the engine must honour it as the no-react gate.
-    ctx::set_slot(seat, NO_REACT, ctx::turn_key());
-    ctx::log(seat, &Msg::new(key!("dice_cast_log")).seat("who", seat));
-    // TODO(规则书): 「回合结束后放入弃牌堆」 -- needs the Fx.TurnEndAfter hook
-    // (C# `CardDiceCast.TurnEndAfter` -> `H.Unplace(this, "discard", "回合结束")`)
-    // plus clearing the `NO_REACT` latch.
+    ctx::set_slot(player_id, NO_REACT, ctx::turn_key());
+    ctx::log(player_id, &Msg::new(key!("dice_cast_log")).player_id("who", player_id));
+}
+
+/// C# `CardDiceCast.TurnEndAfter` (MatchHost.cs:5629-5645) -- clear the
+/// no-react latch and drop the card into the discard pile at the card's own
+/// turn end while it is in play. Runs through the Fx hook dispatch at
+/// `turnEndAfter` (ABI v23 `TriggerKind::TurnEndAfter`), so this is a field
+/// effect, not a [反击].
+fn turn_end(player_id: i32) {
+    if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
+        return;
+    }
+    // C# `if (H._noReactTurn == Player) H._noReactTurn = -1`.
+    if ctx::slot(player_id, NO_REACT) == ctx::turn_key() {
+        ctx::set_slot(player_id, NO_REACT, 0);
+    }
+    // 规则书: 「回合结束后放入弃牌堆」 -- C# `H.Unplace(this, "discard", "回合结束")`.
+    ctx::unplace_card(player_id);
+    ctx::to_discard(player_id, ID);
+    ctx::log(player_id, &Msg::new(key!("dice_cast_ended")).player_id("who", player_id));
     // TODO(规则书): 「（此卡可以被反击）」 -- the engine must still let other
     // [反击]s answer this card's own play window (C# reaction chain plays
     // declared reactions in reverse before `Cast` sets the lock).

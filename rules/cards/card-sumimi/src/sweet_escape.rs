@@ -8,15 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const SWEET_ESCAPE: CardDef = CardDef {
-    id: "Sumimi:Sweet Escape",
-    play: Some(sweet_escape),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const SWEET_ESCAPE: CardDef = CardDef::new("Sumimi:Sweet Escape", &[
+    On::Play(sweet_escape),
+    On::CantPlay(cant_play),
+]);
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
 /// tile-kind surface is `is_buyable` / `is_shop` / `tile_group`, and the RiNG
@@ -44,12 +41,12 @@ fn price_tag(t: i32) -> i32 {
 }
 
 /// C# `CardSweetEscape.Sum` -- price tags of the tiles 2 steps either side.
-fn nearby_sum(seat: i32) -> i32 {
+fn nearby_sum(player_id: i32) -> i32 {
     let n = ctx::tile_count();
     if n <= 0 {
         return 0;
     }
-    let pos = ctx::seat_pos(seat);
+    let pos = ctx::player_pos(player_id);
     let mut sum = 0;
     for d in [-2, -1, 1, 2] {
         let t = (pos + d).rem_euclid(n);
@@ -61,7 +58,7 @@ fn nearby_sum(seat: i32) -> i32 {
 
 /// C# `CardSweetEscape.Spots` -- buyable, not mine, not mortgaged, right colour.
 /// 规则书: 「传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子」
-fn spots(seat: i32) -> Vec<i32> {
+fn spots(player_id: i32) -> Vec<i32> {
     // C# `Agents.Select(H.TileNamed)` -> their `H._tiles[t].@group`; the agent
     // tiles themselves are `kind == "agent"` and not buyable, so 「除地产商以外」
     // falls out of `is_buyable`.
@@ -80,7 +77,7 @@ fn spots(seat: i32) -> Vec<i32> {
         if !groups.contains(&ctx::tile_group(t)) {
             continue;
         }
-        if ctx::tile_owner(t) == seat {
+        if ctx::tile_owner(t) == player_id {
             continue;
         }
         // 规则书: 「未抵押格子」 -- C# `!H.State.mortgaged[t]`.
@@ -93,52 +90,51 @@ fn spots(seat: i32) -> Vec<i32> {
 }
 
 /// C# `CardSweetEscape.WhyNot` -- turn-start, price-sum and destination gates.
-fn why_not(seat: i32) -> Option<Msg> {
-    // 规则书: 「回合开始时」 / 「可打出」 -- C# `H.State.turn == seat && !H._turnCtx.MainMoved`.
-    if ctx::turn_seat() != seat {
-        return Some(Msg::new(key!("sweet_escape_gate_start")));
+fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「回合开始时」 / 「可打出」 -- C# `H.State.turn == seat &&
+    // !H._turnCtx.MainMoved`, later `H.MoveWhyNot`; `ctx::cant_move` covers
+    // off-turn, already-moved and skip-move.
+    if let Some(why) = ctx::cant_move(player_id) {
+        return Some(why);
     }
     // 规则书: 「若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡」
-    let sum = nearby_sum(seat);
+    let sum = nearby_sum(player_id);
     if sum < 2000 {
         return Some(Msg::new(key!("sweet_escape_short")).i("n", sum as i64));
     }
     // C# `WhyNot`: 没有可以去的格子
-    if spots(seat).is_empty() {
+    if spots(player_id).is_empty() {
         return Some(Msg::new(key!("sweet_escape_none")));
     }
-    // TODO(规则书): the C# also refuses after this turn's main move
-    // (`!H._turnCtx.MainMoved`) and defers to `H.MoveWhyNot`; the gate currently
-    // only covers 「回合开始时」's own-turn half.
     None // playable
 }
 
-fn sweet_escape(seat: i32) {
-    let picks = spots(seat);
+fn sweet_escape(player_id: i32) {
+    let picks = spots(player_id);
     if picks.is_empty() {
         // C# `WhyNot`: 没有可以去的格子 (kept so a forced play cannot prompt empty).
-        ctx::log(seat, &Msg::new(key!("sweet_escape_none")));
+        ctx::log(player_id, &Msg::new(key!("sweet_escape_none")));
         return;
     }
     // 规则书: 「传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子」
     let to = ctx::ask_tile(
-        seat,
+        player_id,
         &Msg::new(key!("sweet_escape_title")),
         &Msg::new(key!("sweet_escape_ask")),
         &picks,
     );
     // 规则书: 「…并触发结算」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo = to })`.
     // `teleport_to` is the resolve:false form; used here as the best-effort stand-in.
-    ctx::teleport_to(seat, to);
+    ctx::teleport_to(player_id, to);
     ctx::log(
-        seat,
-        &Msg::new(key!("sweet_escape_moved")).seat("who", seat).tile("tile", to),
+        player_id,
+        &Msg::new(key!("sweet_escape_moved")).player_id("who", player_id).tile("tile", to),
     );
     // TODO(规则书): 「并触发结算」 -- needs the H.CardMove teleport-with-settle
     // routine (C# `H.CardMove(..., TeleportTo)` settles on arrival).
     // TODO(规则书): 「若为可购买格子则必须购买」 -- C# `H.BuyRoutine` when the tile is
     // unowned and `money >= H.BuyPriceFor`; needs a buy routine
-    // (`H.BuyRoutine` / buy-price-for-seat).
+    // (`H.BuyRoutine` / buy-price-for-player).
     // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move routine
     // so this teleport consumes the turn's main move.
 }

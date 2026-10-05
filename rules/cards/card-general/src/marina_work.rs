@@ -9,27 +9,23 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const MARINA_WORK: CardDef = CardDef {
-    id: "通用:[月岛麻里奈]今天也要加油工作喔",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const MARINA_WORK: CardDef = CardDef::new("通用:[月岛麻里奈]今天也要加油工作喔", &[
+    On::React(&[TriggerKind::CircleAffected], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「[使用者][经过]#1格子且#1格子受到其他效果影响时」
     // C# `CardMarinaWork.CanReact`: `t.Kind == "circleAffected" && t.Seat == seat`.
-    trigger::kind() == TriggerKind::CircleAffected && trigger::seat() == seat
+    trigger::kind() == TriggerKind::CircleAffected && trigger::player_id() == player_id
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // 规则书[反击]: 「[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果」
     // C# `c.Trigger.Move.Tags["circleNormal"] = 1` then
     // 「今天也要加油工作喔：这次 CiRCLE 的 [经过] / [结算] 正常进行，不受其上的额外效果影响」.
-    ctx::log(seat, &Msg::new(key!("marina_work_normal")).seat("who", seat));
+    ctx::log(player_id, &Msg::new(key!("marina_work_normal")).player_id("who", player_id));
     // TODO(ABI): 「正常进行而不受到其上的额外效果」 -- needs a move-tag hook
     // (C# `c.Trigger.Move.Tags["circleNormal"] = 1`) so the CiRCLE [经过]/[结算]
     // ignores the tile's extra effects; until then they still apply. The trigger

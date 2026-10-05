@@ -11,13 +11,8 @@
 
 use card_sdk::CardDef;
 
-pub const RESONANCE: CardDef = CardDef {
-    id: "PP:[衍生]共鸣",
-    play: None,
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[
+]);
 
 // TODO(规则书): [特]「拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]
 // 效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]」 -- this whole

@@ -6,42 +6,54 @@
 //! > [反击] 当你被其他人的卡效果影响时打出此卡，所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡。
 //!
 
-use card_sdk::abi::TriggerKind;
-use card_sdk::ctx::trigger;
-use card_sdk::CardDef;
+use alloc::vec::Vec;
 
-pub const RIOT: CardDef = CardDef {
-    id: "RAS:R. I. O. T.",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+use card_sdk::abi::TriggerKind;
+use card_sdk::ctx::{self, trigger, CardPile};
+use card_sdk::{CardDef, On};
+
+pub const RIOT: CardDef = CardDef::new("RAS:R. I. O. T.", &[
+    On::React(&[TriggerKind::Pay, TriggerKind::Abnormal, TriggerKind::Target], can_react, react),
+]);
 
 /// 规则书[反击]: 「当你被其他人的卡效果影响时打出此卡」 -- C# `H.HitByOtherCard`.
-fn can_react(seat: i32) -> bool {
-    // TODO(ABI): C# `H.HitByOtherCard` also requires `t.ByCard >= 0 && t.ByCard
-    // != seat` (the trigger is raised by a card that is not this seat's own);
-    // the Trigger payload carries no `ByCard`.
+fn can_react(player_id: i32) -> bool {
+    // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
+    // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
+    if !trigger::by_card().is_some_and(|by| by != player_id) {
+        return false;
+    }
     match trigger::kind() {
         // 规则书[反击]: 「被其他人的卡效果影响」 -- C# kinds "target"/"abnormal"
         // with `t.Target == seat`.
-        TriggerKind::Target | TriggerKind::Abnormal => {
-            trigger::target() == seat && trigger::seat() != seat
-        }
+        TriggerKind::Target | TriggerKind::Abnormal => trigger::target() == player_id,
         // 规则书[反击]: 「被其他人的卡效果影响」 -- C# kind "pay" with
-        // `t.Pay.from == seat` (this seat is the one paying).
-        TriggerKind::Pay => trigger::seat() == seat && trigger::target() != seat,
+        // `t.Pay.from == seat` (this player is the one paying).
+        TriggerKind::Pay => trigger::player_id() == player_id,
         _ => false,
     }
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // 规则书[反击]: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡」
     // -- C# `H.DiscardFromHand` over every hand, then `H.DrawR(p, count + (p ==
-    // seat ? 1 : 0))` for each seat still in the game.
-    // TODO(ABI): needs hand inspection (`H._hidden[p].hand` enumeration) so the
-    // "same count" redraw can match; `ctx::discard_from_hand` can discard a named
-    // card but not the whole hand, and there is no hand-size query.
-    let _ = seat;
+    // player ? 1 : 0))` for each player_id still in the game.
+    // Every hand goes to the discard first, then everyone redraws -- so nobody
+    // redraws a card another player just discarded mid-pass.
+    let mut redraw: Vec<(i32, i32)> = Vec::new();
+    for p in 0..ctx::player_count() {
+        if ctx::player_out(p) {
+            continue;
+        }
+        let hand = ctx::cards_in(p, CardPile::Hand);
+        for id in &hand {
+            ctx::discard_from_hand(p, id);
+        }
+        redraw.push((p, hand.len() as i32 + (p == player_id) as i32));
+    }
+    for (p, n) in redraw {
+        if n > 0 {
+            ctx::draw(p, n);
+        }
+    }
 }

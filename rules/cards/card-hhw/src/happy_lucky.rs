@@ -6,17 +6,19 @@
 //! >  投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子（例：在弦卷豪宅骰到4则传送到商店街），视为你的主要移动。
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const HAPPY_LUCKY: CardDef = CardDef {
-    id: "HHW:Happy, Lucky, Smile, Yeah！",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    // TODO(ABI): C# `CardHappyLucky.WhyNot` is `H.MoveWhyNot(seat)` (refuses
-    // after the main move); that hook is still missing.
-    why_not: None,
-};
+pub const HAPPY_LUCKY: CardDef = CardDef::new("HHW:Happy, Lucky, Smile, Yeah！", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
+
+/// C# `CardHappyLucky.WhyNot` = `H.MoveWhyNot(seat)`.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
+    // C# `H.MoveWhyNot` gate applies (off-turn / already-moved / skip-move refuse).
+    ctx::cant_move(player_id)
+}
 
 /// C# `MatchHost.Grid` -- the 60-tile board laid out on a 16x16 ring border:
 /// bottom row right-to-left (0..=15), left column bottom-to-top (15..=30),
@@ -46,20 +48,20 @@ fn from_grid(x: i32, y: i32) -> i32 {
     }
 }
 
-fn play(seat: i32) {
+fn play(player_id: i32) {
     // The C# grid below is the fixed 60-tile ring; bail out on any other board.
     if ctx::tile_count() != 60 {
         return;
     }
     // 规则书: 「投掷1d4mod4」 -- C# `H.CardRoll(c, 1, 4, CardName) % 4`.
-    let r = ctx::roll(seat, 1, 4);
+    let r = ctx::roll(player_id, 1, 4);
     let num = r.rem_euclid(4);
     // 规则书: 「对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子
     // （例：在弦卷豪宅骰到4则传送到商店街）」 -- C# `Grid`/`FromGrid`: the face
     // 1=上 (y=15), 2=下 (y=0), 3=左 (x=0), 4=右 (x=15, i.e. `num == 0`); the
     // destination is that axis's far border tile. Example: 弦卷豪宅 (#30,
     // index 29) is (0, 14); a 4 goes right to (15, 14) = index 46 = 商店街.
-    let (x, y) = grid(ctx::seat_pos(seat));
+    let (x, y) = grid(ctx::player_pos(player_id));
     let to = match num {
         1 => from_grid(x, 15), // 上
         2 => from_grid(x, 0),  // 下
@@ -68,13 +70,13 @@ fn play(seat: i32) {
     };
     // 规则书: 「传送至直线距离最远的格子」 -- C# `H.CardMove(c, new MoveCtx
     // { TeleportTo = num2 })`; `ctx::teleport_to` moves without settling.
-    ctx::teleport_to(seat, to);
+    ctx::teleport_to(player_id, to);
     ctx::log(
-        seat,
-        &Msg::new(key!("happy_lucky_moved")).seat("who", seat).i("roll", r as i64).tile("tile", to),
+        player_id,
+        &Msg::new(key!("happy_lucky_moved")).player_id("who", player_id).i("roll", r as i64).tile("tile", to),
     );
     // TODO(规则书): 「视为你的主要移动」 -- needs the H.CardMove / main-move
     // routine so this teleport consumes the turn's main move (C# `H.CardMove(c,
-    // new MoveCtx { TeleportTo = ... })`). Until then the seat still gets its
+    // new MoveCtx { TeleportTo = ... })`). Until then the player_id still gets its
     // normal main move after the teleport.
 }

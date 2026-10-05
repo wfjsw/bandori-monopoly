@@ -22,6 +22,7 @@ serde_json = "1"
 wasmi = "2"
 sha2 = "0.10"
 card-sdk = { path = "rules/card-sdk" }
+bitflags = { version = "2", default-features = false }
 
 [profile.release]
 opt-level = 3

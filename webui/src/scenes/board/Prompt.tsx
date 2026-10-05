@@ -21,9 +21,9 @@ import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 
-/** Is this prompt waiting on `seat`? */
-export function waitingOn(p: MatchPrompt, seat: number): boolean {
-  const k = p.seats.indexOf(seat);
+/** Is this prompt waiting on `playerId`? */
+export function waitingOn(p: MatchPrompt, playerId: number): boolean {
+  const k = p.players.indexOf(playerId);
   return p.id > 0 && k >= 0 && p.answers[k] < 0;
 }
 
@@ -31,7 +31,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   const { view, at } = useMatchView(sess);
   useTick(500);
   const p = view?.state.prompt;
-  const live = !!view && !!p && p.id === id && waitingOn(p, view.seat);
+  const live = !!view && !!p && p.id === id && waitingOn(p, view.playerId);
   useEffect(() => {
     if (!live) close();
   }, [live, close]);
@@ -61,7 +61,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} />}
           {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} />}
-          {p.kind === "auction" && <Auction p={p} seat={view.seat} bidderName={p.bidder >= 0 ? view.state.seats[p.bidder]?.player ?? "" : ""} answer={answer} />}
+          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? view.state.players[p.bidder]?.player ?? "" : ""} answer={answer} />}
           {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && p.options.map((o, i) => (
             <Btn key={i} kind={i === 0 ? "pink" : "white"} className={s.opt} onClick={() => void answer({ value: i })}>{fmtMsg(o, namesOf(view.state))}</Btn>
           ))}
@@ -116,14 +116,14 @@ function PickOptions({ p, answer }: { p: MatchPrompt; answer: Answer }) {
   );
 }
 
-function Auction({ p, seat, bidderName, answer }: { p: MatchPrompt; seat: number; bidderName: string; answer: Answer }) {
+function Auction({ p, playerId, bidderName, answer }: { p: MatchPrompt; playerId: number; bidderName: string; answer: Answer }) {
   const min = p.bid <= 0 ? 100 : p.bid + 100;
   const [bid, setBid] = useState(min);
   useEffect(() => setBid((b) => Math.max(b, min)), [min]);
   return (
     <div className={s.auction}>
       <div className={s.auctionTop}>{p.bidder >= 0 ? <>{tr("prompt.bidTop")}<b>{n0(p.bid)}</b>{tr("prompt.bidderOf", { who: bidderName })}</> : tr("prompt.noBids")}</div>
-      {p.bidder === seat ? <p className={s.sub}>{tr("prompt.topBidder")}</p> : (
+      {p.bidder === playerId ? <p className={s.sub}>{tr("prompt.topBidder")}</p> : (
         <div className={s.bidRow}>
           <TextInput type="number" min={min} step={100} value={bid} onChange={(e) => setBid(Number(e.target.value))} className={s.bidInput} />
           <Btn kind="pink" onClick={() => void answer({ value: bid })}>{tr("prompt.bid")}</Btn>

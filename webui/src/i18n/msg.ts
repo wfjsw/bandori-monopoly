@@ -1,12 +1,12 @@
 // Rendering engine messages: the wire `Msg` (see crates/game-core/src/msg.rs) is a
 // key plus typed arguments; this turns one into display text in the active language.
-// Arguments that name game objects (seats, tiles, cards, characters, events, bands)
+// Arguments that name game objects (players, tiles, cards, characters, events, bands)
 // are resolved against the match data here, so the Rust side never carries names.
 
 import i18n from "./index";
 
 export type MsgArg =
-  | { seat: number }
+  | { playerId: number }
   | { tile: number }
   | { card: string }
   | { char: string }
@@ -25,7 +25,7 @@ export interface Msg {
 
 /** How a message resolves game-object arguments to display names. */
 export interface Names {
-  seat(seat: number): string;
+  playerId(playerId: number): string;
   tile(tile: number): string;
   card(id: string): string;
   chara(name: string): string;
@@ -35,7 +35,7 @@ export interface Names {
 
 /** Names straight from the data files; use `namesOf` for a match state. */
 export const dataNames: Names = {
-  seat: (n) => `#${n + 1}`,
+  playerId: (n) => `#${n + 1}`,
   tile: (n) => `#${n}`,
   card: (id) => id,
   chara: (name) => name,
@@ -62,7 +62,7 @@ function fmtArg(arg: MsgArg, names: Names): string {
   if (arg === null || arg === undefined) return "";
   if (typeof arg === "number") return String(arg);
   if (typeof arg === "string") return arg;
-  if ("seat" in arg) return names.seat(arg.seat);
+  if ("playerId" in arg) return names.playerId(arg.playerId);
   if ("tile" in arg) return names.tile(arg.tile);
   if ("card" in arg) return names.card(arg.card);
   if ("char" in arg) return names.chara(arg.char);

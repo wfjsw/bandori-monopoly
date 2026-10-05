@@ -8,24 +8,20 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const YOLO: CardDef = CardDef {
-    id: "AG:Y.O.L.O",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const YOLO: CardDef = CardDef::new("AG:Y.O.L.O", &[
+    On::React(&[TriggerKind::Roll, TriggerKind::MoveRoll], can_react, react),
+]);
 
-fn can_react(_seat: i32) -> bool {
+fn can_react(_player: i32) -> bool {
     matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll) && trigger::move_roll().is_some()
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // TODO: C# uses H.CardRoll, which honours PlayCtx.Extreme (forced max/min dice).
     let Some(before) = trigger::move_roll() else { return };
-    let n = ctx::roll(seat, 1, 4);
+    let n = ctx::roll(player_id, 1, 4);
     trigger::set_move_roll(before + n);
-    ctx::log(seat, &Msg::new(key!("yolo_boost")).seat("who", trigger::seat()).i("n", n as i64).i("total", (before + n) as i64));
+    ctx::log(player_id, &Msg::new(key!("yolo_boost")).player_id("who", trigger::player_id()).i("n", n as i64).i("total", (before + n) as i64));
 }

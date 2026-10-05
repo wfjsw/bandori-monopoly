@@ -11,17 +11,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const BLUE_ROSE: CardDef = CardDef {
-    id: "R:蓝玫瑰的骄傲",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
-/// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(seat, t, 6)`, and
+/// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(player_id, t, 6)`, and
 /// `H.LiveHouses` also wants `IsBuyable`).
 fn livehouses() -> Vec<i32> {
     (0..ctx::tile_count())
@@ -33,15 +30,15 @@ fn livehouses() -> Vec<i32> {
 }
 
 /// C# `CardBlueRose.Rich` -- Livehouses at least half of your deeds (and you have one).
-fn is_rich(seat: i32) -> bool {
-    let live = live_deeds(seat).len() as i32;
-    let total = ctx::owned_count(seat);
+fn is_rich(player_id: i32) -> bool {
+    let live = live_deeds(player_id).len() as i32;
+    let total = ctx::owned_count(player_id);
     live > 0 && live * 2 >= total
 }
 
-fn live_deeds(seat: i32) -> Vec<i32> {
+fn live_deeds(player_id: i32) -> Vec<i32> {
     let ids = livehouses();
-    ctx::owned_tiles(seat)
+    ctx::owned_tiles(player_id)
         .into_iter()
         .filter(|t| ids.contains(t))
         .collect()
@@ -49,22 +46,20 @@ fn live_deeds(seat: i32) -> Vec<i32> {
 
 /// C# `CardBlueRose.WhyNot`: the 20% gain branch is always playable; the
 /// teleport branch runs `H.MoveWhyNot`.
-fn why_not(seat: i32) -> Option<Msg> {
-    if is_rich(seat) {
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if is_rich(player_id) {
         return None;
     }
-    // TODO(规则书): `H.MoveWhyNot` -- the teleport branch is "你的主要移动", so
-    //   the C# refuses 「这回合已经移动过了」 (`_turnCtx.MainMoved`) and
-    //   「本回合不能移动」 (`State.skipMove`); those move-state reads are still
-    //   engine holes (`H.MoveWhyNot` in the still-missing list). Off-turn
-    //   ("只能在自己的回合") is already refused by the engine's play phase.
-    None
+    // 规则书（2）: 「均视为你的主要移动」 -- the teleport branch is the main move,
+    // so the C# `H.MoveWhyNot` gate applies (own turn, main move still available,
+    // turn's move not skipped).
+    ctx::cant_move(player_id)
 }
 
-fn play(seat: i32) {
-    let pos = ctx::seat_pos(seat);
-    let live = live_deeds(seat);
-    let others = ctx::owned_count(seat) - live.len() as i32;
+fn play(player_id: i32) {
+    let pos = ctx::player_pos(player_id);
+    let live = live_deeds(player_id);
+    let others = ctx::owned_count(player_id) - live.len() as i32;
     // 规则书（1）: 「若你拥有的Livehouse格子多于或等于你拥有的其他格子」
     if !live.is_empty() && live.len() as i32 >= others {
         // 规则书（1）: 「获得相当于这些Livehouse格子地契价值20%的资金」 -- the land
@@ -72,7 +67,7 @@ fn play(seat: i32) {
         let sum: i64 = live.iter().map(|&t| ctx::tile_price(t) as i64).sum();
         // C# `CeilTo(sum * 0.2, 10)` -- 20% rounded up to a multiple of 10.
         let amount = (((sum + 49) / 50) * 10) as i32;
-        ctx::gain(seat, amount, &Msg::new(key!("blue_rose_gain")).i("n", sum));
+        ctx::gain(player_id, amount, &Msg::new(key!("blue_rose_gain")).i("n", sum));
         return;
     }
     // 规则书（2）: 「传送至下一个未被购买的Livehouse格子」 -- nearest unowned ahead (C#
@@ -102,13 +97,13 @@ fn play(seat: i32) {
         return;
     }
     // 规则书（2）: 「传送至」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo = to })`.
-    ctx::teleport_to(seat, to);
+    ctx::teleport_to(player_id, to);
     let why = if fallback {
-        Msg::new(key!("blue_rose_ring4")).seat("who", seat).tile("tile", to)
+        Msg::new(key!("blue_rose_ring4")).player_id("who", player_id).tile("tile", to)
     } else {
-        Msg::new(key!("blue_rose_teleport")).seat("who", seat).tile("tile", to)
+        Msg::new(key!("blue_rose_teleport")).player_id("who", player_id).tile("tile", to)
     };
-    ctx::log(seat, &why);
+    ctx::log(player_id, &why);
     // TODO(规则书)（2）: 「（不触发结算）」 applies only to the RiNG 4 fallback (C#
     //   `Resolve = false`); the free-Livehouse teleport settles on arrival. Needs the
     //   H.CardMove / main-move routine (C# `H.CardMove(c, new MoveCtx { TeleportTo })`)

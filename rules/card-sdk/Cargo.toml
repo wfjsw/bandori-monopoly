@@ -12,6 +12,8 @@ description = "Card authoring SDK + host/guest ABI for the BandoriMonopoly WASM 
 
 serde = { version = "1", default-features = false, features = ["derive", "alloc"] }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
+# no_std: flags type for the t.Move bitset (default features off).
+bitflags = { version = "2", default-features = false }
 
 [features]
 # Guest builds (no_std cdylibs): panic handler + bump allocator. Enable it in

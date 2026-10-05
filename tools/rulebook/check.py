@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 BOOK = json.load(open(ROOT / "docs" / "rulebook" / "cards.json", encoding="utf-8"))
-CARD_ID = re.compile(r'id: "([^"]+)"')
+CARD_ID = re.compile(r'(?:id: |CardDef::new\()"([^"]+)"')
 
 
 def norm(text: str) -> str:

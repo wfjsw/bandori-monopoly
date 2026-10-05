@@ -1,34 +1,17 @@
 //! Match routines: turns, movement, landing, money, property, cards, events, scoring.
 //!
 //! Ported from the non-content parts of `MatchHost.cs` (method names in comments).
-//! Card/skill/band hooks (`Fx`), active events and per-seat card variables are card
+//! Card/skill/band hooks (`Fx`), active events and per-player card variables are card
 //! content and enter through [`super::rules::CardRules`]; the C# branches that only
 //! exist for specific cards or events are left out here.
 
 use super::cx::{Ask, Cx, Flow, Halt};
-use super::rules::{Dest, Trigger};
+pub(crate) use super::move_ctx::MoveCtx as Move;
+use super::move_ctx::MoveKind;
+use super::rules::{raise, Dest, Trigger};
+use crate::state::{key, Tick};
 use super::world::{Signal, CIRCLE_MONEY, HAND_LIMIT, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
-
-/// One move (C# `MoveCtx`, the fields the shell uses).
-#[derive(Debug, Clone)]
-pub(crate) struct Move {
-    pub seat: usize,
-    pub roller: usize,
-    pub main: bool,
-    pub roll: i32,
-    /// Resolve (`[结算]`) the tile where the move ends.
-    pub resolve: bool,
-    pub dir: i32,
-    /// Why the move happened (a card / effect), shown in parentheses.
-    pub why: Option<Msg>,
-}
-
-impl Move {
-    fn new(seat: usize) -> Self {
-        Self { seat, roller: seat, main: false, roll: 0, resolve: true, dir: 1, why: None }
-    }
-}
 
 /// A payment (C# `PayCtx`, the fields the shell uses).
 #[derive(Debug, Clone)]
@@ -46,11 +29,26 @@ pub(crate) struct Pay {
     pub text: Option<Msg>,
     /// Key naming where the money came from (`src.*`), shown in parentheses.
     pub source: &'static str,
+    /// The player whose card caused this payment (C# `t.ByCard`), or `None` when
+    /// the payment is board-driven (rent, buy, build). Stamped onto the `pay` /
+    /// `paid` triggers so `H.HitByOtherCard` can tell the two apart.
+    pub by_card: Option<i32>,
 }
 
 impl Pay {
     pub fn new(amount: i32, kind: &'static str) -> Self {
-        Self { from: None, to: None, amount, kind, typ: None, tile: None, must: false, text: None, source: "" }
+        Self {
+            from: None,
+            to: None,
+            amount,
+            kind,
+            typ: None,
+            tile: None,
+            must: false,
+            text: None,
+            source: "",
+            by_card: None,
+        }
     }
 }
 
@@ -72,9 +70,9 @@ impl Cx<'_> {
         st.houses = vec![0; n];
         st.mortgaged = vec![false; n];
         st.embers = vec![0; n];
-        for i in 0..st.seats.len() {
-            st.seats[i].money = START_MONEY;
-            st.seats[i].pos = 0;
+        for i in 0..st.players.len() {
+            st.players[i].money = START_MONEY;
+            st.players[i].pos = 0;
             let mut draw = std::mem::take(&mut self.w.hidden[i].draw);
             self.w.rng.shuffle(&mut draw);
             self.w.hidden[i].draw = draw;
@@ -89,11 +87,33 @@ impl Cx<'_> {
 
     /// `Opening` -- deal opening hands, offer humans one mulligan.
     pub(crate) fn opening(&mut self) -> Flow<()> {
-        for i in 0..self.w.seat_count() {
-            self.draw(i, START_HAND, false);
+        // C# `CardsBeforeGame` (MatchHost.cs:20575, called at 27204): every
+        // distinct card id in each draw pile gets `deckBeforeGame` on that card
+        // alone, before the opening hands are drawn. Up to 5 passes, so cards a
+        // hook adds to the pile get their turn too.
+        for i in 0..self.w.player_count() {
+            let mut seen: Vec<String> = Vec::new();
+            for _ in 0..5 {
+                let mut fresh: Vec<String> = Vec::new();
+                for id in &self.w.hidden[i].draw {
+                    if !seen.contains(id) && !fresh.contains(id) {
+                        fresh.push(id.clone());
+                    }
+                }
+                if fresh.is_empty() {
+                    break;
+                }
+                for id in fresh {
+                    seen.push(id.clone());
+                    raise!(self, "deckBeforeGame", i, card = id)?;
+                }
+            }
+        }
+        for i in 0..self.w.player_count() {
+            self.draw(i, START_HAND, false)?;
         }
         self.wait(3.0);
-        let humans: Vec<usize> = (0..self.w.seat_count()).filter(|&p| !self.w.st.seats[p].ai).collect();
+        let humans: Vec<usize> = (0..self.w.player_count()).filter(|&p| !self.w.st.players[p].ai).collect();
         if !humans.is_empty() {
             self.w.log("text", -1, Msg::new("log.mulligan_offer").i("n", START_HAND as i64));
             let ask = Ask::choice(
@@ -108,34 +128,48 @@ impl Cx<'_> {
             let r = self.ask(ask)?;
             let redo: Vec<usize> = humans.into_iter().filter(|&p| r.of(p) == 1).collect();
             for &p in &redo {
-                self.mulligan(p);
+                self.mulligan(p)?;
             }
             if redo.is_empty() {
                 self.w.log("text", -1, Msg::new("log.mulligan_none"));
             }
             self.wait(0.8);
         }
+        // C# `CardsAtGameStart` (20604, called at 27237): every distinct id in
+        // each draw pile and hand gets `deckAtGameStart`, after the mulligan.
+        for i in 0..self.w.player_count() {
+            let mut ids: Vec<String> = Vec::new();
+            for id in self.w.hidden[i].draw.iter().chain(self.w.hidden[i].hand.iter()) {
+                if !ids.contains(id) {
+                    ids.push(id.clone());
+                }
+            }
+            for id in ids {
+                raise!(self, "deckAtGameStart", i, card = id)?;
+            }
+        }
         self.w.next_turn_pending = true;
         Ok(())
     }
 
     /// `Mulligan`
-    fn mulligan(&mut self, i: usize) {
+    fn mulligan(&mut self, i: usize) -> Flow<()> {
         let h = &mut self.w.hidden[i];
         let hand = std::mem::take(&mut h.hand);
         h.draw.extend(hand);
         let mut draw = std::mem::take(&mut self.w.hidden[i].draw);
         self.w.rng.shuffle(&mut draw);
         self.w.hidden[i].draw = draw;
-        self.w.st.seats[i].mulligan = true;
-        self.draw(i, START_HAND, false);
-        self.w.log("mulligan", i as i32, Msg::new("log.mulligan").seat("who", i).i("n", START_HAND as i64));
+        self.w.st.players[i].mulligan = true;
+        self.draw(i, START_HAND, false)?;
+        self.w.log("mulligan", i as i32, Msg::new("log.mulligan").player_id("who", i).i("n", START_HAND as i64));
+        Ok(())
     }
 
     /// `NextTurnRoutine` + `TurnStart`.
     pub(crate) fn next_turn(&mut self) -> Flow<()> {
         self.w.next_turn_pending = false;
-        let n = self.w.seat_count();
+        let n = self.w.player_count();
         let turn = self.w.st.turn;
         let mut next = turn;
         let extra = turn >= 0 && self.w.extra_turns.contains(&(turn as usize)) && !self.out(turn as usize);
@@ -166,9 +200,9 @@ impl Cx<'_> {
         st.skip_move = false;
         st.landed = -1;
         st.roller = next;
-        self.w.turn = super::world::TurnCtx { seat: i, extra, ..Default::default() };
+        self.w.turn = super::world::TurnCtx { player_id: i, extra, ..Default::default() };
         self.w.signals.push(Signal::TurnBegan);
-        let text = Msg::new(if extra { "log.turn_extra" } else { "log.turn" }).i("round", self.w.st.round).seat("who", i);
+        let text = Msg::new(if extra { "log.turn_extra" } else { "log.turn" }).i("round", self.w.st.round).player_id("who", i);
         self.w.log("turn", next, text);
         self.turn_start(i)
     }
@@ -178,44 +212,52 @@ impl Cx<'_> {
         if self.out(i) {
             return Ok(());
         }
-        if self.w.st.seats[i].exile > 0 {
-            self.w.st.seats[i].exile -= 1;
-            let left = self.w.st.seats[i].exile;
+        // C# `_targeted[i] = 0` -- the between-turns target counter.
+        if let Some(n) = self.w.targeted.get_mut(i) {
+            *n = 0;
+        }
+        // `turnStartBefore` -- before any exile/stun status ticks resolve, so a
+        // reaction sees the turn exactly as it was left last turn.
+        raise!(self, "turnStartBefore", i, tile = self.w.st.players[i].pos)?;
+        if self.out(i) {
+            return Ok(());
+        }
+        if self.w.st.players[i].exile() > 0 {
+            self.w.st.players[i].state_add(key::EXILE, -1);
+            let left = self.w.st.players[i].exile();
             if left > 0 {
-                self.w.log("status", i as i32, Msg::new("log.exiled_skip").seat("who", i).i("left", left));
+                self.w.log("status", i as i32, Msg::new("log.exiled_skip").player_id("who", i).i("left", left));
                 self.wait(1.0);
                 return self.end_turn(i);
             }
-            let to = self.w.st.seats[i].exile_to;
-            self.w.st.seats[i].exile_to = -1;
-            self.w.log("status", i as i32, Msg::new("log.exile_over").seat("who", i));
+            let to = self.w.st.players[i].exile_to();
+            self.w.st.players[i].state_set(key::EXILE_TO, -1);
+            self.w.log("status", i as i32, Msg::new("log.exile_over").player_id("who", i));
             if to >= 0 {
                 self.teleport(i, to as usize, false, None)?;
             }
         }
-        let s = &mut self.w.st.seats[i];
-        if s.stun_start > 0 {
-            s.stun_start -= 1;
+        let s = &mut self.w.st.players[i];
+        // Timed counters due now -- the item says so, not the engine naming
+        // `stunStart`.
+        s.tick_state(Tick::TurnStart);
+        if s.no_hand() == 2 {
+            s.state_set(key::NO_HAND, 1);
         }
-        if s.no_hand == 2 {
-            s.no_hand = 1;
-        }
-        let mut t = Trigger::new("turnStart", i);
-        t.tile = self.w.st.seats[i].pos;
-        self.react(&mut t)?;
+        raise!(self, "turnStart", i, tile = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
         }
         self.w.signals.push(Signal::StartTimer(i));
-        if self.w.st.seats[i].stunned() {
-            self.w.log("status", i as i32, Msg::new("log.stunned_skip").seat("who", i));
+        if self.w.st.players[i].stunned() {
+            self.w.log("status", i as i32, Msg::new("log.stunned_skip").player_id("who", i));
             self.w.st.step = 3;
             self.wait(1.2);
             return self.end_turn(i);
         }
-        if self.w.st.seats[i].stay > 0 {
+        if self.w.st.players[i].stay() > 0 {
             self.w.st.skip_move = true;
-            self.w.log("status", i as i32, Msg::new("log.stay_skip").seat("who", i));
+            self.w.log("status", i as i32, Msg::new("log.stay_skip").player_id("who", i));
         }
         self.w.st.roller = i as i32;
         self.wait(1.2);
@@ -224,36 +266,124 @@ impl Cx<'_> {
 
     /// `EndTurn` -- the player's "end turn" command.
     pub(crate) fn end_turn_cmd(&mut self, i: usize) -> Flow<()> {
-        self.w.log("text", i as i32, Msg::new("log.end_turn").seat("who", i));
+        // `endTurnBefore` -- the player chose to end the turn. (Auto-skips --
+        // stun, exile -- go straight to [`Self::end_turn`] and so raise only
+        // `endTurnAfter`, which is the "the turn ended" signal.)
+        raise!(self, "endTurnBefore", i)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        self.w.log("text", i as i32, Msg::new("log.end_turn").player_id("who", i));
         self.end_turn(i)
     }
 
     /// `EndTurnRoutine` -- status effects wear off, next turn queued.
     pub(crate) fn end_turn(&mut self, i: usize) -> Flow<()> {
         self.w.st.step = 3;
-        if !self.out(i) && self.playing() {
-            let s = &mut self.w.st.seats[i];
-            if s.stay > 0 {
-                s.stay -= 1;
-            }
-            if s.stun > 0 {
-                s.stun -= 1;
-            }
-            if s.no_hand == 1 {
-                s.no_hand = 0;
+        // C# `EndTurnRoutine` (27493): TurnEndBefore -> `AtEnd` callbacks ->
+        // status wear-off -> TurnEnd -> TurnEndAfter -> `AfterEnd` callbacks.
+        // `turnEndBefore` also runs the `before_turn_end` callbacks (`AtEnd`).
+        raise!(self, "turnEndBefore", i)?;
+        if self.out(i) || !self.playing() {
+            // C# 27541: an out player / ended match skips the rest.
+            self.w.next_turn_pending = true;
+            return Ok(());
+        }
+        {
+            let s = &mut self.w.st.players[i];
+            // Timed counters due now (C# decrements `stay`/`stun` here). The
+            // item carries its own expiry, so this names no keys.
+            s.tick_state(Tick::TurnEnd);
+            if s.no_hand() == 1 {
+                s.state_set(key::NO_HAND, 0);
             }
         }
         self.w.next_turn_pending = true;
+        // `turnEnd` (Fx hook point) -- every placed card decays/acts here.
+        raise!(self, "turnEnd", i)?;
+        // `turnEndAfter` (Fx) -- also runs the `at_turn_end` callbacks (C#
+        // `AfterEnd`), so a [停留] they grant survives this turn's wear-off.
+        raise!(self, "turnEndAfter", i)?;
+        // `endTurnAfter` -- the turn is over and the next one is queued. Raised
+        // for every turn end, including auto-skips.
+        raise!(self, "endTurnAfter", i)?;
         Ok(())
     }
 
     // =============================================================== movement
 
+    /// `H.CardMove(c, m)` -> `MainMoveAs` -- run a card-shaped movement **now**,
+    /// as the player's main move. This is the 「立刻进入移动阶段」/「视为你的主要移动」
+    /// case: the card has already shaped `plan` (via the `World` plan ops) and
+    /// this consumes the turn's main move and walks it immediately, with the
+    /// normal raise points.
+    ///
+    /// Returns `Ok(())` without moving when the turn's main move is already
+    /// spent (the C# logs 「这回合已经进行过 [主要移动]，这次移动无效」).
+    pub fn card_move(&mut self, player_id: usize, mut plan: Move) -> Flow<()> {
+        let i = player_id;
+        let is_turn = self.w.st.turn == i as i32;
+        if self.w.turn.main_moved && is_turn {
+            self.w.log("text", i as i32, Msg::new("log.main_move_used").player_id("who", i));
+            return Ok(());
+        }
+        if is_turn {
+            self.w.turn.main_moved = true;
+        }
+        plan.player_id = i;
+        plan.roller = i;
+        plan.main = is_turn;
+        self.w.st.step = 2;
+        if plan.teleport_to >= 0 {
+            let to = plan.teleport_to as usize;
+            let resolve = plan.resolve;
+            let why = plan.why.clone();
+            self.teleport(i, to, resolve, why)?;
+        } else {
+            if plan.steps < 0 {
+                // No fixed step count: roll it now, with the same raise points.
+                self.w.turn.plan = plan.clone();
+                raise!(self, "rollPlan", i, @m plan)?;
+                plan = self.w.turn.plan.clone();
+                plan.roll = match self.w.turn.fixed_roll {
+                    Some(n) => n,
+                    None => self.w.rng.d(20),
+                };
+                let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
+                plan.roll = t.value.max(0);
+                let t = raise!(self, "moveRoll", i, @m plan, value = plan.roll)?;
+                plan.roll = t.value.max(0);
+                if let Some(steps) = self.w.hidden[i].next_steps.take() {
+                    plan.roll = steps.max(0);
+                }
+                if !plan.signed {
+                    plan.roll = plan.roll.max(plan.min_roll);
+                }
+            }
+            if !plan.cancelled && !self.out(i) {
+                self.walk(&mut plan)?;
+            }
+        }
+        // `NoteWalk` / `LastMain` -- the C# writes `lastWalk` from `Total`.
+        if is_turn {
+            self.w.turn.main_steps = if plan.kind == MoveKind::Teleport { 0 } else { plan.total };
+        }
+        self.w.st.plan = plan.to_plan();
+        if plan.kind != MoveKind::Teleport {
+            self.w.set_slot(i as i32, "lastWalk", plan.total + 1);
+        }
+        if is_turn {
+            self.w.st.step = 3;
+        }
+        self.wait(1.2);
+        Ok(())
+    }
+
     /// `MainMove` -- the turn's main roll-and-move.
     pub(crate) fn main_move(&mut self, i: usize, roller: usize) -> Flow<()> {
         self.w.st.step = 2;
         if self.w.turn.main_moved {
-            self.w.log("text", i as i32, Msg::new("log.main_move_used").seat("who", i));
+            self.w.log("text", i as i32, Msg::new("log.main_move_used").player_id("who", i));
             self.w.st.step = 3;
             return Ok(());
         }
@@ -262,14 +392,65 @@ impl Cx<'_> {
         m.roller = roller;
         m.main = true;
         if !self.out(i) {
-            m.roll = self.w.rng.d(20); // MoveCtx.Base = 1d20
-            let mut t = Trigger::new("moveRoll", i);
-            t.value = m.roll;
-            self.react(&mut t)?;
+            // `roll` (pre) -- before the d20 is cast. `value = -1` is the
+            // sentinel meaning "no roll yet": the bridge would otherwise
+            // derive `move_roll` from `value` and let roll-reacting cards
+            // (which match `Roll | MoveRoll`) fire before any dice exist.
+            raise!(self, "roll", i, @m m, value = -1)?;
+            if self.out(i) || !self.playing() {
+                self.w.st.step = 3;
+                return Ok(());
+            }
+        }
+        if !self.out(i) {
+            // `rollPlan` -- C# `RollMove`: every placed card's `On::RollPlan`
+            // shapes the move before the dice (RollPlan -> roll -> RollAfter ->
+            // the moveRoll [反击] window).
+            //
+            // The card bodies shape `TurnCtx::plan` (that is what the `World`
+            // plan ops write), so the walk has to take the move back afterwards.
+            // Seed first so a body that only reads sees the fresh move.
+            self.w.turn.plan = m.clone();
+            raise!(self, "rollPlan", i, @m m)?;
+            m = self.w.turn.plan.clone();
+            if self.out(i) || !self.playing() {
+                self.w.st.step = 3;
+                return Ok(());
+            }
+            // C# `TurnCtx.Plan.FixedRoll` replaces the d20 when a card set it.
+            m.roll = match self.w.turn.fixed_roll {
+                Some(n) => n,
+                None => self.w.rng.d(20), // MoveCtx.Base = 1d20
+            };
+            // `rollAfter` (Fx) -- C# `Each(RollAfter)` runs on the fresh roll,
+            // *before* the moveRoll [反击] window; a field card may rewrite it
+            // (`set_move_roll`), which is how a stored boost lands.
+            let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
+            m.roll = t.value.max(0);
+            let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
             // A [反击] may have rerolled the dice (C# shares `t.Move` with the
             // reactions): the face the walk uses is the one left on the trigger.
             m.roll = t.value.max(0);
+            // C# `NextStepsFx.MoveBefore` -- a stored step count overrides the
+            // roll for this one main move.
+            if let Some(steps) = self.w.hidden[i].next_steps.take() {
+                m.roll = steps.max(0);
+            }
+            // C# `RollMove`: `if (!m.Signed) m.Roll = max(m.MinRoll, m.Roll)` --
+            // the clamp applies to the final face after the reactions, so a
+            // card that pushes the roll down still respects the floor.
+            if !m.signed {
+                m.roll = m.roll.max(m.min_roll);
+            }
             self.walk(&mut m)?;
+            // C# `TurnCtx.LastMain`, and `NoteWalk`: `SetV(player_id, "lastWalk",
+            // steps + 1)` after a non-teleport main walk (0 means "none").
+            self.w.turn.main_steps = m.total;
+            // `State.plan` -- the broadcast summary of this walk.
+            self.w.st.plan = m.to_plan();
+            if m.kind != MoveKind::Teleport {
+                self.w.set_slot(i as i32, "lastWalk", m.total + 1);
+            }
         }
         self.w.st.step = 3;
         self.wait(1.2);
@@ -278,22 +459,22 @@ impl Cx<'_> {
 
     /// `WalkMove` -- step tile by tile; passing CiRCLE pays the reward.
     fn walk(&mut self, m: &mut Move) -> Flow<()> {
-        let i = m.seat;
+        let i = m.player_id;
         let n = self.data.tiles.len() as i32;
         let steps = m.roll;
         let head = |still: bool| {
             let base = if m.main {
-                Msg::new("log.roll").opt("by", (m.roller != i).then(|| Msg::new("log.part.rolled_by").seat("who", m.roller)))
+                Msg::new("log.roll").opt("by", (m.roller != i).then(|| Msg::new("log.part.rolled_by").player_id("who", m.roller)))
             } else {
-                Msg::new(if m.dir < 0 { "log.move_back" } else { "log.move_forward" }).opt("why", m.why.clone().map(|w| Msg::new("log.part.why").msg("why", w)))
+                Msg::new(if m.dir() < 0 { "log.move_back" } else { "log.move_forward" }).opt("why", m.why.clone().map(|w| Msg::new("log.part.why").msg("why", w)))
             };
-            base.seat("who", i)
+            base.player_id("who", i)
                 .i("n", steps)
                 .opt("nores", (!m.resolve).then(|| Msg::new("log.part.no_resolve")))
                 .opt("still", still.then(|| Msg::new("log.part.no_move")))
         };
         let kind = if m.main { "roll" } else { "move" };
-        let pos = self.w.st.seats[i].pos;
+        let pos = self.w.st.players[i].pos;
         if steps <= 0 {
             let e = self.w.log(kind, i as i32, head(true));
             e.from = pos;
@@ -303,21 +484,42 @@ impl Cx<'_> {
             return self.after_walk(m);
         }
         let (mut seg_from, mut seg_steps, mut first) = (pos, 0, true);
-        for k in 0..steps {
-            let next = ((self.w.st.seats[i].pos + m.dir) % n + n) % n;
+        // C# `WalkMoveSteps` bounds the walk by `steps + m.ExtraSteps`, re-read
+        // each step: a card that adds steps mid-walk lengthens it. `MoreSteps`
+        // is a second walk phase (see the tail below).
+        let mut k = 0usize;
+        while k < (steps.max(0) as usize) + m.extra_steps.max(0) as usize {
+            let cur = self.w.st.players[i].pos;
+            let next = ((cur + m.dir()) % n + n) % n;
             seg_steps += 1;
-            self.w.st.seats[i].pos = next;
-            let remaining = steps - k - 1;
+            let remaining = (steps.max(0) as usize) + m.extra_steps.max(0) as usize - k - 1;
             let at = next as usize;
             let passes_circle = self.tile(at).kind == "circle";
             let last = remaining == 0;
             if passes_circle || last {
-                let text = if first { head(false) } else { Msg::new("log.move_on").seat("who", i) };
+                // `passBefore` -- same tiles `pass` fires at, but before the
+                // player's position updates to `next` (it has not arrived yet).
+                raise!(self, "passBefore", i, @m m, tile = next)?;
+                if self.out(i) || !self.playing() {
+                    return Ok(());
+                }
+                if self.w.st.players[i].pos != cur {
+                    break; // moved by a passBefore reaction
+                }
+            }
+            self.w.st.players[i].pos = next;
+            // `passTile` (Fx) -- the player has stepped onto this tile.
+            raise!(self, "passTile", i, @m m, tile = next)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            if passes_circle || last {
+                let text = if first { head(false) } else { Msg::new("log.move_on").player_id("who", i) };
                 let ek = if first && m.main { "roll" } else { "move" };
                 let e = self.w.log(ek, i as i32, text);
                 e.from = seg_from;
                 e.to = next;
-                e.value = seg_steps * m.dir;
+                e.value = seg_steps * m.dir();
                 e.dice = if first && m.main { m.roll } else { 0 };
                 let pace = if ek == "roll" { 1.5 } else { 0.3 };
                 self.wait(pace + seg_steps as f32 * 0.15);
@@ -327,29 +529,41 @@ impl Cx<'_> {
                 if passes_circle {
                     self.circle_reward(i, m.resolve && last)?;
                 }
-                let mut t = Trigger::new("pass", i);
-                t.tile = next;
-                self.react(&mut t)?;
+                raise!(self, "pass", i, @m m, tile = next)?;
                 if self.out(i) || !self.playing() {
                     return Ok(());
                 }
-                if self.w.st.seats[i].pos != next {
+                if self.w.st.players[i].pos != next {
                     break; // moved by an effect
                 }
             }
+            k += 1;
         }
         self.after_walk(m)
     }
 
     /// `TeleportMove` / `Teleport`.
+    ///
+    /// C# `TeleportMove`: the walk bookkeeping is `Path = [to]`, `Total = 1`,
+    /// and the pass handling runs **once at the destination** -- not per step,
+    /// and not at all for a teleport that lands where it started (the log says
+    /// 「原地，不算 [经过]」) unless the walk was a `TeleportWalk`.
     pub(crate) fn teleport(&mut self, i: usize, to: usize, resolve: bool, why: Option<Msg>) -> Flow<()> {
         if to >= self.data.tiles.len() || self.out(i) {
             return Ok(());
         }
-        let from = self.w.st.seats[i].pos;
-        self.w.st.seats[i].pos = to as i32;
+        let from = self.w.st.players[i].pos;
+        self.w.st.players[i].pos = to as i32;
+        let mut m = Move::new(i);
+        m.resolve = resolve;
+        m.kind = MoveKind::Teleport;
+        m.teleport_to = to as i32;
+        m.from = from;
+        m.path = vec![to as i32];
+        m.total = 1;
+        let same_tile = from == to as i32;
         let text = Msg::new("log.teleport")
-            .seat("who", i)
+            .player_id("who", i)
             .tile("to", to)
             .opt("why", why.map(|w| Msg::new("log.part.why").msg("why", w)))
             .opt("nores", (!resolve).then(|| Msg::new("log.part.no_resolve")));
@@ -358,60 +572,101 @@ impl Cx<'_> {
         e.to = to as i32;
         self.wait(0.5);
         if !resolve {
+            m.to = to as i32;
+            // C# 24371: a teleport that does not settle still raises Teleported.
+            if !self.out(i) && self.playing() {
+                raise!(self, "teleported", i, @m m, tile = to as i32)?;
+            }
             return Ok(());
+        }
+        // C#: `if (m.From != to || m.TeleportWalk)` -- the destination is a
+        // [经过] when the teleport actually moves the player. With `TeleportWalk`
+        // gone (「视为 [传送]（只触发终点）」 is just a teleport to the
+        // roll-derived destination), that is the whole rule.
+        if !same_tile {
+            raise!(self, "passTile", i, @m m, tile = to as i32)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            let players: Vec<usize> = (0..self.w.st.players.len())
+                .filter(|&s| s != i && self.w.st.players[s].pos == to as i32 && !self.out(s))
+                .collect();
+            for o in players {
+                m.passed_players.push(o as i32);
+                raise!(self, "passPlayer", i, @m m, tile = to as i32, target = o as i32)?;
+                if self.out(i) || !self.playing() {
+                    return Ok(());
+                }
+            }
         }
         if self.tile(to).kind == "circle" {
             self.circle_reward(i, true)?;
         }
-        let mut m = Move::new(i);
-        m.resolve = true;
-        self.after_walk(&mut m)
+        m.to = self.w.st.players[i].pos as i32;
+        self.after_walk(&mut m)?;
+        // C# 24390: `Teleported` after the settlement.
+        if !self.out(i) && self.playing() {
+            raise!(self, "teleported", i, @m m, tile = m.to)?;
+        }
+        Ok(())
     }
 
     /// `AfterWalk`
     fn after_walk(&mut self, m: &mut Move) -> Flow<()> {
-        let i = m.seat;
+        let i = m.player_id;
         if self.out(i) || !self.playing() || !m.resolve {
             return Ok(());
         }
-        let mut t = Trigger::new("settleBefore", i);
-        t.tile = self.w.st.seats[i].pos;
-        self.react(&mut t)?;
+        raise!(self, "settleBefore", i, @m m, tile = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
         }
-        self.settle(i, m.main)
+        self.settle(i, m)
     }
 
     /// `Settle` -> `Land`
-    fn settle(&mut self, i: usize, main: bool) -> Flow<()> {
-        let at = self.w.st.seats[i].pos as usize;
-        let mut t = Trigger::new("settle", i);
-        t.tile = at as i32;
-        t.target = self.w.st.owners.get(at).copied().unwrap_or(-1);
-        self.react(&mut t)?;
-        if self.out(i) {
+    fn settle(&mut self, i: usize, m: &Move) -> Flow<()> {
+        let at = self.w.st.players[i].pos as usize;
+        let owner = self.w.st.owners.get(at).copied().unwrap_or(-1);
+        let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
+        // C# 24448: a cancelled settle ends here -- no Land, no SettleAfter.
+        if self.out(i) || t.cancelled {
             return Ok(());
         }
-        self.land(i, main)
+        // `settleInstead` (Fx) -- C# `SettleInstead`: the first field card that
+        // replaces the tile's effect does its own thing and calls
+        // `trigger::set_cancelled()`; a later one should check `cancelled()`.
+        let si = raise!(self, "settleInstead", i, @m m, tile = at as i32, target = owner)?;
+        if !si.cancelled {
+            self.land(i, m.main)?;
+        }
+        // C# 24493: SettleAfter only while the player is in and the match plays.
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        // `settleAfter` -- the landed tile is fully resolved. (Not raised when
+        // `land` halts on an unanswered prompt; it fires on the successful
+        // replay instead, alongside the rest of the routine.)
+        raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
+        Ok(())
     }
 
     // =============================================================== tiles
 
     /// `CircleReward` -- 2,000 money or one card.
     fn circle_reward(&mut self, i: usize, landing: bool) -> Flow<()> {
-        if self.w.st.seats[i].exile > 0 {
+        if self.w.st.players[i].exile() > 0 {
             return Ok(());
         }
-        let pick = if self.w.st.seats[i].stunned() {
-            self.w.log("text", i as i32, Msg::new("log.circle_card_only").seat("who", i));
+        let pick = if self.w.st.players[i].stunned() {
+            self.w.log("text", i as i32, Msg::new("log.circle_card_only").player_id("who", i));
             1
         } else {
             let ask = if landing {
                 Ask::choice(
                     vec![i],
                     Msg::new("ask.circle.title"),
-                    Msg::new("ask.circle.text_landed").seat("who", i),
+                    Msg::new("ask.circle.text_landed").player_id("who", i),
                     vec![Msg::new("ask.circle.money_landed").n("money", CIRCLE_MONEY), Msg::new("ask.circle.card_landed")],
                     0,
                     10.0,
@@ -420,7 +675,7 @@ impl Cx<'_> {
                 Ask::choice(
                     vec![i],
                     Msg::new("ask.circle.title"),
-                    Msg::new("ask.circle.text").seat("who", i),
+                    Msg::new("ask.circle.text").player_id("who", i),
                     vec![Msg::new("ask.circle.money").n("money", CIRCLE_MONEY), Msg::new("ask.circle.card")],
                     0,
                     10.0,
@@ -429,24 +684,24 @@ impl Cx<'_> {
             self.ask(ask)?.of(i)
         };
         if pick == 1 {
-            self.w.log("text", i as i32, Msg::new("log.circle_card").seat("who", i));
+            self.w.log("text", i as i32, Msg::new("log.circle_card").player_id("who", i));
             self.draw_r(i, 1, "src.circle")?;
         } else {
             let mut p = Pay::new(CIRCLE_MONEY, "gain");
             p.to = Some(i);
             p.typ = Some("pass");
             p.source = "src.circle";
-            p.text = Some(Msg::new("log.circle_money").seat("who", i));
+            p.text = Some(Msg::new("log.circle_money").player_id("who", i));
             self.money(p)?;
         }
         self.wait(0.4);
         Ok(())
     }
 
-    /// `Land` -- resolve the tile a seat stopped on.
+    /// `Land` -- resolve the tile a player stopped on.
     fn land(&mut self, i: usize, main: bool) -> Flow<()> {
-        let at = self.w.st.seats[i].pos as usize;
-        if at >= self.data.tiles.len() || self.w.st.seats[i].exile > 0 || self.out(i) {
+        let at = self.w.st.players[i].pos as usize;
+        if at >= self.data.tiles.len() || self.w.st.players[i].exile() > 0 || self.out(i) {
             return Ok(());
         }
         let tile = self.tile(at);
@@ -459,7 +714,7 @@ impl Cx<'_> {
                 if main {
                     let houses = self.w.st.houses[at];
                     let extra = (houses > 0).then(|| Msg::new("log.part.with_houses").i("h", houses));
-                    self.w.log("text", i as i32, Msg::new("log.land_unowned").seat("who", i).tile("tile", at).n("price", self.buy_price(at)).opt("extra", extra));
+                    self.w.log("text", i as i32, Msg::new("log.land_unowned").player_id("who", i).tile("tile", at).n("price", self.buy_price(at)).opt("extra", extra));
                 } else {
                     self.offer_buy(i, at)?;
                 }
@@ -473,7 +728,7 @@ impl Cx<'_> {
                 } else {
                     None
                 };
-                self.w.log("text", i as i32, Msg::new("log.land_own").seat("who", i).tile("tile", at).opt("note", note));
+                self.w.log("text", i as i32, Msg::new("log.land_own").player_id("who", i).tile("tile", at).opt("note", note));
             } else {
                 self.offer_build(i, at)?;
             }
@@ -481,39 +736,39 @@ impl Cx<'_> {
         }
         match tile.kind.as_str() {
             "circle" => {
-                self.w.log("text", i as i32, Msg::new("log.land_circle").seat("who", i));
+                self.w.log("text", i as i32, Msg::new("log.land_circle").player_id("who", i));
                 self.draw_r(i, 1, "src.land_circle")?;
                 self.wait(0.4);
             }
             "edogawa" => {
-                self.w.log("text", i as i32, Msg::new("log.land_draw").seat("who", i).tile("tile", at));
+                self.w.log("text", i as i32, Msg::new("log.land_draw").player_id("who", i).tile("tile", at));
                 self.draw_r(i, 1, "src.land_edogawa")?;
                 self.wait(0.4);
             }
             "cafe" | "ryuseido" => {
-                self.w.log("text", i as i32, Msg::new("log.land_event").seat("who", i).tile("tile", at));
+                self.w.log("text", i as i32, Msg::new("log.land_event").player_id("who", i).tile("tile", at));
                 self.draw_r(i, 1, "src.land_event")?;
                 self.wait(0.6);
                 self.draw_event(i)?;
             }
             "agent" => self.agent_landing(i, at)?,
             _ => {
-                self.w.log("text", i as i32, Msg::new("log.land").seat("who", i).tile("tile", at));
+                self.w.log("text", i as i32, Msg::new("log.land").player_id("who", i).tile("tile", at));
             }
         }
         Ok(())
     }
 
     /// `AgentLanding` -- buy or build once in the agent's colour group.
-    fn agent_landing(&mut self, i: usize, agent: usize) -> Flow<()> {
+    pub fn agent_landing(&mut self, i: usize, agent: usize) -> Flow<()> {
         let g = self.tile(agent).group;
         let same: Vec<usize> = (0..self.data.tiles.len()).filter(|&t| self.tile(t).is_buyable() && self.tile(t).group == g).collect();
         if same.is_empty() {
-            self.w.log("text", i as i32, Msg::new("log.agent_none").seat("who", i).tile("agent", agent));
+            self.w.log("text", i as i32, Msg::new("log.agent_none").player_id("who", i).tile("agent", agent));
             return Ok(());
         }
         if same.iter().all(|&t| self.w.st.owners[t] >= 0 && self.w.st.owners[t] as usize != i) {
-            self.w.log("text", i as i32, Msg::new("log.agent_all_owned").seat("who", i).tile("agent", agent).i("n", same.len() as i64));
+            self.w.log("text", i as i32, Msg::new("log.agent_all_owned").player_id("who", i).tile("agent", agent).i("n", same.len() as i64));
             self.wait(0.6);
             for t in same {
                 if self.out(i) || !self.playing() {
@@ -523,7 +778,7 @@ impl Cx<'_> {
             }
             return Ok(());
         }
-        let money = self.w.st.seats[i].money;
+        let money = self.w.st.players[i].money;
         let mut options = vec![];
         let mut labels = vec![];
         for &t in &same {
@@ -544,28 +799,28 @@ impl Cx<'_> {
             }
         }
         if options.is_empty() {
-            self.w.log("text", i as i32, Msg::new("log.agent_nothing").seat("who", i).tile("agent", agent));
+            self.w.log("text", i as i32, Msg::new("log.agent_nothing").player_id("who", i).tile("agent", agent));
             return Ok(());
         }
         let ai = self.ai_agent_choice(i, &options);
         let ask = Ask::tile(
             i,
             Msg::new("ask.agent.title").tile("agent", agent),
-            Msg::new("ask.agent.text").seat("who", i),
+            Msg::new("ask.agent.text").player_id("who", i),
             &options,
             labels,
         )
         .with_ai(|_| ai);
         let pick = self.ask(ask)?.of(i);
         let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
-            self.w.log("text", i as i32, Msg::new("log.agent_skip").seat("who", i));
+            self.w.log("text", i as i32, Msg::new("log.agent_skip").player_id("who", i));
             return Ok(());
         };
         if self.w.st.owners[t] < 0 {
-            if self.can_pay(i) && self.w.st.seats[i].money >= self.buy_price(t) {
+            if self.can_pay(i) && self.w.st.players[i].money >= self.buy_price(t) {
                 self.buy(i, t)?;
             }
-        } else if self.w.st.owners[t] as usize == i && self.why_not_build_on(i, t).is_none() && self.w.st.seats[i].money >= self.build_cost(t) {
+        } else if self.w.st.owners[t] as usize == i && self.why_not_build_on(i, t).is_none() && self.w.st.players[i].money >= self.build_cost(t) {
             self.build(i, t)?;
         }
         self.wait(0.6);
@@ -612,7 +867,7 @@ impl Cx<'_> {
         p.tile = Some(t);
         p.must = true;
         p.source = "src.rent";
-        p.text = Some(Msg::new("log.rent").seat("who", i).tile("tile", t).seat("owner", owner).opt("note", note));
+        p.text = Some(Msg::new("log.rent").player_id("who", i).tile("tile", t).player_id("owner", owner).opt("note", note));
         self.money(p)?;
         self.wait(0.9);
         Ok(())
@@ -623,26 +878,26 @@ impl Cx<'_> {
     fn offer_force_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         let owner = self.w.st.owners[t] as usize;
         let price = self.force_buy_price(t);
-        if !self.can_pay(i) || self.w.st.seats[i].money < price {
-            self.w.log("text", i as i32, Msg::new("log.land_mortgaged").seat("who", i).seat("owner", owner).tile("tile", t).n("price", price));
+        if !self.can_pay(i) || self.w.st.players[i].money < price {
+            self.w.log("text", i as i32, Msg::new("log.land_mortgaged").player_id("who", i).player_id("owner", owner).tile("tile", t).n("price", price));
             return Ok(());
         }
-        let money = self.w.st.seats[i].money;
+        let money = self.w.st.players[i].money;
         let ask = Ask::choice(
             vec![i],
             Msg::new("ask.force_buy.title"),
-            Msg::new("ask.force_buy.text").seat("who", i).seat("owner", owner).tile("tile", t).n("price", price),
+            Msg::new("ask.force_buy.text").player_id("who", i).player_id("owner", owner).tile("tile", t).n("price", price),
             vec![Msg::new("ask.force_buy.yes").n("price", price), Msg::new("ask.no_buy")],
             1,
             15.0,
         )
         .with_ai(|_| if money - price < 4000 { 1 } else { 0 })
         .with_tile(t);
-        if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] == owner as i32 && !self.out(owner) && !self.out(i) && self.w.st.seats[i].money >= price {
-            self.w.st.seats[i].money -= price;
-            self.w.st.seats[owner].money += price;
+        if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] == owner as i32 && !self.out(owner) && !self.out(i) && self.w.st.players[i].money >= price {
+            self.w.st.players[i].money -= price;
+            self.w.st.players[owner].money += price;
             self.w.st.owners[t] = i as i32;
-            let text = Msg::new("log.force_buy").seat("who", i).seat("owner", owner).n("price", price).tile("tile", t);
+            let text = Msg::new("log.force_buy").player_id("who", i).player_id("owner", owner).n("price", price).tile("tile", t);
             let e = self.w.log("forcebuy", i as i32, text);
             e.other = owner as i32;
             e.value = price;
@@ -655,8 +910,8 @@ impl Cx<'_> {
     /// `OfferBuy` (when a non-main move lands on unowned land).
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         let price = self.buy_price(t);
-        if !self.can_pay(i) || self.w.st.seats[i].money < price {
-            self.w.log("text", i as i32, Msg::new("log.land_unowned_poor").seat("who", i).tile("tile", t));
+        if !self.can_pay(i) || self.w.st.players[i].money < price {
+            self.w.log("text", i as i32, Msg::new("log.land_unowned_poor").player_id("who", i).tile("tile", t));
             return Ok(());
         }
         let houses = self.w.st.houses[t];
@@ -665,7 +920,7 @@ impl Cx<'_> {
             vec![i],
             Msg::new("ask.buy.title"),
             Msg::new("ask.buy.text")
-                .seat("who", i)
+                .player_id("who", i)
                 .tile("tile", t)
                 .n("price", price)
                 .opt("extra", (houses > 0).then(|| Msg::new("ask.part.incl_tile_houses").i("h", houses))),
@@ -675,7 +930,7 @@ impl Cx<'_> {
         )
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
-        if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] < 0 && self.w.st.seats[i].money >= self.buy_price(t) && !self.out(i) {
+        if self.ask(ask)?.of(i) == 0 && self.w.st.owners[t] < 0 && self.w.st.players[i].money >= self.buy_price(t) && !self.out(i) {
             self.buy(i, t)?;
         }
         Ok(())
@@ -683,9 +938,9 @@ impl Cx<'_> {
 
     /// `OfferBuild` (when a non-main move lands on own land).
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
-        if self.why_not_build_on(i, t).is_some() || self.w.st.seats[i].money < self.build_cost(t) {
+        if self.why_not_build_on(i, t).is_some() || self.w.st.players[i].money < self.build_cost(t) {
             let note = self.w.st.mortgaged[t].then(|| Msg::new("log.part.mortgaged"));
-            self.w.log("text", i as i32, Msg::new("log.land_own").seat("who", i).tile("tile", t).opt("note", note));
+            self.w.log("text", i as i32, Msg::new("log.land_own").player_id("who", i).tile("tile", t).opt("note", note));
             return Ok(());
         }
         let cost = self.build_cost(t);
@@ -693,14 +948,14 @@ impl Cx<'_> {
         let ask = Ask::choice(
             vec![i],
             Msg::new("ask.build.title"),
-            Msg::new("ask.build.text").seat("who", i).tile("tile", t).n("cost", cost),
+            Msg::new("ask.build.text").player_id("who", i).tile("tile", t).n("cost", cost),
             vec![Msg::new("ask.build.yes"), Msg::new("ask.build.no")],
             1,
             15.0,
         )
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
-        if self.ask(ask)?.of(i) == 0 && self.why_not_build_on(i, t).is_none() && self.w.st.seats[i].money >= self.build_cost(t) {
+        if self.ask(ask)?.of(i) == 0 && self.why_not_build_on(i, t).is_none() && self.w.st.players[i].money >= self.build_cost(t) {
             self.build(i, t)?;
         }
         Ok(())
@@ -732,14 +987,14 @@ impl Cx<'_> {
         2 * (tile.price + self.w.st.houses[t] * tile.house)
     }
 
-    fn count_rings(&self, seat: usize) -> i32 {
-        (0..self.data.tiles.len()).filter(|&t| self.tile(t).kind == "ring" && self.w.st.owners[t] == seat as i32).count() as i32
+    fn count_rings(&self, player_id: usize) -> i32 {
+        (0..self.data.tiles.len()).filter(|&t| self.tile(t).kind == "ring" && self.w.st.owners[t] == player_id as i32).count() as i32
     }
 
-    /// Deeds a seat could mortgage (not RiNG, not already mortgaged).
-    pub(crate) fn mortgageable(&self, seat: usize) -> Vec<usize> {
+    /// Deeds a player could mortgage (not RiNG, not already mortgaged).
+    pub(crate) fn mortgageable(&self, player_id: usize) -> Vec<usize> {
         (0..self.data.tiles.len())
-            .filter(|&t| self.w.st.owners[t] == seat as i32 && self.tile(t).is_buyable() && self.tile(t).kind != "ring" && !self.w.st.mortgaged[t])
+            .filter(|&t| self.w.st.owners[t] == player_id as i32 && self.tile(t).is_buyable() && self.tile(t).kind != "ring" && !self.w.st.mortgaged[t])
             .collect()
     }
 
@@ -750,10 +1005,10 @@ impl Cx<'_> {
     }
 
     /// `AutoMortgage` -- the AI's (and the time-out) selection.
-    fn auto_mortgage(&self, seat: usize, need: i32) -> Vec<String> {
+    fn auto_mortgage(&self, player_id: usize, need: i32) -> Vec<String> {
         let mut got = 0;
         let mut out = vec![];
-        for t in self.mortgage_order(self.mortgageable(seat)) {
+        for t in self.mortgage_order(self.mortgageable(player_id)) {
             if got >= need {
                 break;
             }
@@ -766,7 +1021,7 @@ impl Cx<'_> {
     /// `BuyableHere` -- after a main move onto unowned land, before buying.
     pub(crate) fn buyable_here(&self, i: usize) -> bool {
         let st = &self.w.st;
-        let pos = st.seats[i].pos;
+        let pos = st.players[i].pos;
         st.step == 3
             && st.turn == i as i32
             && !st.bought
@@ -777,19 +1032,19 @@ impl Cx<'_> {
     }
 
     pub(crate) fn can_buy_here(&self, i: usize) -> bool {
-        self.buyable_here(i) && self.w.st.seats[i].money >= self.buy_price(self.w.st.seats[i].pos as usize)
+        self.buyable_here(i) && self.w.st.players[i].money >= self.buy_price(self.w.st.players[i].pos as usize)
     }
 
     pub(crate) fn can_build_here(&self, i: usize) -> bool {
         let st = &self.w.st;
-        let pos = st.seats[i].pos as usize;
+        let pos = st.players[i].pos as usize;
         st.step == 3
             && st.turn == i as i32
             && !st.built
             && !st.bought
             && st.landed == pos as i32
             && self.why_not_build(i, pos).is_none()
-            && st.seats[i].money >= self.build_cost(pos)
+            && st.players[i].money >= self.build_cost(pos)
     }
 
     /// `WhyNotBuild` -- building as part of resolving the main move.
@@ -828,7 +1083,13 @@ impl Cx<'_> {
 
     /// `BuyRoutine`
     pub(crate) fn buy(&mut self, i: usize, t: usize) -> Flow<()> {
-        if self.w.st.owners[t] >= 0 || self.out(i) {
+        // `buyBefore` -- before any guard, so it is a real pre-hook (fires even
+        // on the no-op/already-owned path).
+        raise!(self, "buyBefore", i, tile = t as i32)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        if self.w.st.owners[t] >= 0 {
             return Ok(());
         }
         let mut price = self.buy_price(t);
@@ -839,7 +1100,7 @@ impl Cx<'_> {
             p.typ = Some("lose");
             p.tile = Some(t);
             p.source = "src.buy";
-            p.text = Some(Msg::new("log.paid_for").seat("who", i).tile("tile", t));
+            p.text = Some(Msg::new("log.paid_for").player_id("who", i).tile("tile", t));
             let paid = self.money(p)?;
             if !paid.paid {
                 return Ok(());
@@ -849,19 +1110,25 @@ impl Cx<'_> {
         self.w.st.owners[t] = i as i32;
         self.w.st.mortgaged[t] = false;
         let text = Msg::new("log.buy")
-            .seat("who", i)
+            .player_id("who", i)
             .tile("tile", t)
             .n("price", price)
             .opt("extra", (houses > 0).then(|| Msg::new("log.part.incl_houses").i("h", houses)));
         let e = self.w.log("buy", i as i32, text);
         e.value = 0;
         e.to = t as i32;
+        // `bought` (Fx) -- C# `Each(Bought)`: the owner is set.
+        raise!(self, "bought", i, tile = t as i32)?;
+        // `buyAfter` -- the deed has changed hands.
+        raise!(self, "buyAfter", i, tile = t as i32)?;
         Ok(())
     }
 
     /// `BuildRoutine`
     pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<()> {
-        if self.out(i) {
+        // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
+        raise!(self, "buildBefore", i, tile = t as i32)?;
+        if self.out(i) || !self.playing() {
             return Ok(());
         }
         let mut cost = self.build_cost(t);
@@ -871,7 +1138,7 @@ impl Cx<'_> {
             p.typ = Some("lose");
             p.tile = Some(t);
             p.source = "src.build";
-            p.text = Some(Msg::new("log.paid_for_house").seat("who", i).tile("tile", t));
+            p.text = Some(Msg::new("log.paid_for_house").player_id("who", i).tile("tile", t));
             let paid = self.money(p)?;
             if !paid.paid {
                 return Ok(());
@@ -881,19 +1148,22 @@ impl Cx<'_> {
         let full = self.tile(t).rent.len().saturating_sub(1) as i32;
         if self.w.st.owners[t] != i as i32 || self.w.st.houses[t] >= full {
             if cost > 0 && !self.out(i) {
-                self.w.st.seats[i].money += cost;
+                self.w.st.players[i].money += cost;
                 let key = if self.w.st.owners[t] != i as i32 { "log.build_refund_not_owned" } else { "log.build_refund_full" };
-                self.w.log("text", i as i32, Msg::new(key).seat("who", i).tile("tile", t).n("cost", cost));
+                self.w.log("text", i as i32, Msg::new(key).player_id("who", i).tile("tile", t).n("cost", cost));
             }
             return Ok(());
         }
         self.w.st.houses[t] += 1;
         let h = self.w.st.houses[t];
-        let text = Msg::new("log.build").seat("who", i).tile("tile", t).i("nth", h).n("cost", cost);
+        let text = Msg::new("log.build").player_id("who", i).tile("tile", t).i("nth", h).n("cost", cost);
         let e = self.w.log("build", i as i32, text);
         e.value = 0;
         e.to = t as i32;
         e.other = h;
+        // `buildAfter` -- only after the house actually commits (not on the
+        // refund path above).
+        raise!(self, "buildAfter", i, tile = t as i32)?;
         Ok(())
     }
 
@@ -931,7 +1201,7 @@ impl Cx<'_> {
 
     /// `PendingPurchase` -- standing where a buy or build is still possible.
     fn pending_purchase(&self, i: usize) -> bool {
-        let pos = self.w.st.seats[i].pos;
+        let pos = self.w.st.players[i].pos;
         if self.w.st.landed != pos {
             return false;
         }
@@ -961,7 +1231,7 @@ impl Cx<'_> {
         if asking {
             return Some(Msg::new("err.busy"));
         }
-        if st.seats[i].money < self.redeem_cost(t) {
+        if st.players[i].money < self.redeem_cost(t) {
             return Some(Msg::new("err.redeem_poor").n("cost", self.redeem_cost(t)));
         }
         None
@@ -971,8 +1241,8 @@ impl Cx<'_> {
     fn do_mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) {
         let v = self.mortgage_value(t);
         self.w.st.mortgaged[t] = true;
-        self.w.st.seats[i].money += v;
-        let text = Msg::new("log.mortgage").seat("who", i).tile("tile", t).n("n", v).opt("why", why.map(|w| Msg::new("log.part.why").msg("why", w)));
+        self.w.st.players[i].money += v;
+        let text = Msg::new("log.mortgage").player_id("who", i).tile("tile", t).n("n", v).opt("why", why.map(|w| Msg::new("log.part.why").msg("why", w)));
         let e = self.w.log("mortgage", i as i32, text);
         e.value = v;
         e.to = t as i32;
@@ -980,11 +1250,16 @@ impl Cx<'_> {
 
     /// `MortgageRoutine`
     pub(crate) fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<()> {
+        // `mortgageBefore` -- fires before any guard, so it is a real pre-hook
+        // (a reaction can block the mortgage). The post half below only fires
+        // when the mortgage actually applied.
+        raise!(self, "mortgageBefore", i, tile = t as i32)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
         if self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
             self.do_mortgage(i, t, why);
-            let mut tr = Trigger::new("mortgage", i);
-            tr.tile = t as i32;
-            self.react(&mut tr)?;
+            raise!(self, "mortgage", i, tile = t as i32)?;
         }
         Ok(())
     }
@@ -993,8 +1268,8 @@ impl Cx<'_> {
     pub(crate) fn redeem(&mut self, i: usize, t: usize) {
         let cost = self.redeem_cost(t);
         self.w.st.mortgaged[t] = false;
-        self.w.st.seats[i].money -= cost;
-        let text = Msg::new("log.redeem").seat("who", i).n("cost", cost).tile("tile", t);
+        self.w.st.players[i].money -= cost;
+        let text = Msg::new("log.redeem").player_id("who", i).n("cost", cost).tile("tile", t);
         let e = self.w.log("redeem", i as i32, text);
         e.value = cost;
         e.to = t as i32;
@@ -1002,7 +1277,7 @@ impl Cx<'_> {
 
     // =============================================================== money
 
-    /// `Money` -- move money between seats and/or the bank. A mandatory payment
+    /// `Money` -- move money between players and/or the bank. A mandatory payment
     /// the payer can't cover triggers `RaiseFunds` (and possibly bankruptcy).
     pub(crate) fn money(&mut self, p: Pay) -> Flow<Paid> {
         if p.amount <= 0 || (p.from.is_some() && p.from == p.to) {
@@ -1011,42 +1286,78 @@ impl Cx<'_> {
         if p.from.is_some_and(|f| self.out(f)) || p.to.is_some_and(|t| self.out(t)) {
             return Ok(Paid::default());
         }
+        // C# `TurnCtx.NoMoneyLoss` -- the payer's money cannot drop this turn.
+        if let Some(f) = p.from.filter(|&f| self.w.money_locked(f as i32)) {
+            self.w.log("text", f as i32, Msg::new("log.money_locked").player_id("who", f).n("amount", p.amount));
+            return Ok(Paid::default());
+        }
         if p.kind != "forcebuy" {
             if let Some(x) = p.from.filter(|&f| !self.can_pay(f)).or(p.to.filter(|&t| !self.can_pay(t))) {
                 let text = Msg::new(if p.from.is_some() { "log.blocked_pay" } else { "log.blocked_gain" })
-                    .seat("who", x)
+                    .player_id("who", x)
                     .msg("status", Msg::new(self.blocked(x)))
                     .n("amount", p.amount);
                 self.w.log("text", x as i32, text);
                 return Ok(Paid::default());
             }
         }
-        let mut loss = if p.from.is_some() { p.amount } else { 0 };
-        let gain = if p.to.is_some() { p.amount } else { 0 };
+        // C# `Money` (25128-25234): the amount runs PayAdd -> PayMul -> PayChoose
+        // -> PayAt -> the `pay` [反击] window *before* any money moves or funds
+        // are raised. `player_id` is the payer and `target` the payee (-1 = the
+        // bank); any of them may rewrite the amount (`set_pay_amount`).
+        let payer = p.from.map_or(-1, |f| f as i32);
+        let side = p.from.or(p.to).expect("a payment has a side");
+        let rent = p.kind == "rent";
+        let mut amount = p.amount;
+        let mut to = p.to;
+        for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
+            if amount <= 0 {
+                break;
+            }
+            let t = raise!(self, kind, side, player_id = payer, target = to.map_or(-1, |t| t as i32), value = amount, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
+            amount = t.value.max(0);
+        }
+        // `pay` (pre) -- the [反击] window, on the payer. A reaction may rewrite
+        // the amount (0 cancels) and/or the payee (`set_pay_target`, -1 = bank).
+        if let Some(f) = p.from.filter(|_| amount > 0) {
+            let t = raise!(self, "pay", f, target = to.map_or(-1, |t| t as i32), value = amount, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
+            amount = t.value.max(0);
+            to = (t.target >= 0).then_some(t.target as usize);
+        }
+        // Cancelled: nothing moves and it is not paid (C# 25164 -- PayAfter
+        // still runs, with `p.paid == false`).
+        if amount <= 0 {
+            raise!(self, "payAfter", side, player_id = payer, target = to.map_or(-1, |t| t as i32), value = 0, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
+            return Ok(Paid::default());
+        }
+        let mut loss = if p.from.is_some() { amount } else { 0 };
         if let Some(f) = p.from {
-            if loss > 0 && self.w.st.seats[f].money < loss {
+            if self.w.st.players[f].money < loss {
                 if p.must {
-                    self.raise_funds(f, loss, p.to)?;
+                    self.raise_funds(f, loss, to)?;
                     if self.out(f) {
                         return Ok(Paid::default());
                     }
                 } else {
-                    loss = self.w.st.seats[f].money.max(0);
+                    loss = self.w.st.players[f].money.max(0);
                 }
             }
-            self.w.st.seats[f].money -= loss;
+            self.w.st.players[f].money -= loss;
         }
-        if let Some(t) = p.to {
+        // The payee is credited what the payer actually paid.
+        let gain = if p.from.is_some() { loss } else { amount };
+        if let Some(t) = to {
             if !self.out(t) {
-                self.w.st.seats[t].money += gain;
+                self.w.st.players[t].money += gain;
             }
         }
         self.log_money(&p, loss, gain);
+        // `payAfter` (Fx) -- every settled payment (C# 25232), then the `paid`
+        // [反击] window only when the payer lost money (25234).
+        let moved = if p.from.is_some() { loss } else { gain };
+        raise!(self, "payAfter", side, player_id = payer, target = to.map_or(-1, |t| t as i32), value = moved, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
         if let Some(f) = p.from.filter(|_| loss > 0) {
-            let mut tr = Trigger::new("paid", f);
-            tr.target = p.to.map_or(-1, |t| t as i32);
-            tr.value = loss;
-            self.react(&mut tr)?;
+            raise!(self, "paid", f, target = to.map_or(-1, |t| t as i32), value = loss, by_card = p.by_card, pay_is_rent = rent, tile = p.tile.map_or(-1, |t| t as i32))?;
         }
         Ok(Paid { paid: true, loss })
     }
@@ -1068,9 +1379,9 @@ impl Cx<'_> {
             None => {
                 let src = (!p.source.is_empty()).then(|| Msg::new("log.part.why").msg("why", Msg::new(p.source)));
                 let m = match (p.from, p.to) {
-                    (Some(f), Some(t)) => Msg::new("log.pay").seat("who", f).seat("to", t),
-                    (Some(f), None) => Msg::new("log.lose").seat("who", f),
-                    (None, Some(t)) => Msg::new("log.gain").seat("who", t),
+                    (Some(f), Some(t)) => Msg::new("log.pay").player_id("who", f).player_id("to", t),
+                    (Some(f), None) => Msg::new("log.lose").player_id("who", f),
+                    (None, Some(t)) => Msg::new("log.gain").player_id("who", t),
                     (None, None) => return,
                 };
                 m.n("amount", amount).opt("src", src)
@@ -1078,12 +1389,12 @@ impl Cx<'_> {
         };
         if let (Some(_), Some(t)) = (p.from, p.to) {
             if gain != loss {
-                text = Msg::new("log.with_received").msg("base", text).seat("who", t).n("gain", gain);
+                text = Msg::new("log.with_received").msg("base", text).player_id("who", t).n("gain", gain);
             }
         }
-        let seat = p.from.or(p.to).map_or(-1, |s| s as i32);
+        let player_id = p.from.or(p.to).map_or(-1, |s| s as i32);
         let other = if p.from.is_some() { p.to.map_or(-1, |t| t as i32) } else { -1 };
-        let e = self.w.log(typ, seat, text);
+        let e = self.w.log(typ, player_id, text);
         e.other = other;
         e.value = amount;
         if let Some(t) = p.tile {
@@ -1093,16 +1404,16 @@ impl Cx<'_> {
 
     /// `RaiseFunds` -- mortgage deeds to cover `amount`, else go bankrupt.
     fn raise_funds(&mut self, i: usize, amount: i32, creditor: Option<usize>) -> Flow<()> {
-        let need = amount - self.w.st.seats[i].money;
+        let need = amount - self.w.st.players[i].money;
         let deeds = self.mortgageable(i);
         if deeds.iter().map(|&t| self.mortgage_value(t)).sum::<i32>() < need {
             return self.bankrupt(i, creditor, amount);
         }
         let what = Msg::new("log.part.owe")
             .n("amount", amount)
-            .opt("to", creditor.map(|c| Msg::new("log.part.owe_to").seat("who", c)))
-            .n("money", self.w.st.seats[i].money);
-        self.w.log("text", i as i32, Msg::new("log.raise_funds").seat("who", i).msg("what", what.clone()));
+            .opt("to", creditor.map(|c| Msg::new("log.part.owe_to").player_id("who", c)))
+            .n("money", self.w.st.players[i].money);
+        self.w.log("text", i as i32, Msg::new("log.raise_funds").player_id("who", i).msg("what", what.clone()));
         let ai = self.auto_mortgage(i, need);
         let text = Msg::new("ask.mortgage.text").msg("what", what).n("need", need);
         let reply = self.ask(Ask::mortgage(i, need, text, &deeds, ai))?;
@@ -1113,12 +1424,12 @@ impl Cx<'_> {
                 }
             }
         }
-        while self.w.st.seats[i].money < amount {
+        while self.w.st.players[i].money < amount {
             let Some(&t) = self.mortgage_order(self.mortgageable(i)).first() else { break };
             self.do_mortgage(i, t, Some(Msg::new("src.raise_funds")));
         }
         self.wait(0.6);
-        if self.w.st.seats[i].money < amount && !self.out(i) {
+        if self.w.st.players[i].money < amount && !self.out(i) {
             return self.bankrupt(i, creditor, amount);
         }
         Ok(())
@@ -1126,33 +1437,40 @@ impl Cx<'_> {
 
     /// `Bankrupt` -- everything is cashed in and handed to the creditor.
     fn bankrupt(&mut self, i: usize, creditor: Option<usize>, amount: i32) -> Flow<()> {
+        // `bankruptBefore` -- before any asset cash-in; the post half below
+        // fires after cash-in but before `remove_from_game`.
+        raise!(self, "bankruptBefore", i, value = amount)?;
+        if self.out(i) {
+            return Ok(());
+        }
         let mut cashed = 0;
         for t in self.mortgageable(i) {
             self.w.st.mortgaged[t] = true;
             cashed += self.mortgage_value(t);
         }
-        self.w.st.seats[i].money += cashed;
-        let all = self.w.st.seats[i].money.max(0);
-        self.w.st.seats[i].money = 0;
+        self.w.st.players[i].money += cashed;
+        let all = self.w.st.players[i].money.max(0);
+        self.w.st.players[i].money = 0;
         let creditor = creditor.filter(|&c| !self.out(c));
         if let Some(c) = creditor {
-            self.w.st.seats[c].money += all;
+            self.w.st.players[c].money += all;
         }
-        self.w.st.seats[i].bankrupt = true;
+        self.w.st.players[i].bankrupt = true;
         self.w.out_count += 1;
-        self.w.st.seats[i].out_order = self.w.out_count;
+        self.w.st.players[i].out_order = self.w.out_count;
         let text = Msg::new("log.bankrupt")
-            .seat("who", i)
+            .player_id("who", i)
             .n("amount", amount)
             .opt("cashed", (cashed > 0).then(|| Msg::new("log.part.cashed").n("n", cashed)))
             .n("all", all)
-            .msg("to", creditor.map_or_else(|| Msg::new("log.part.consumed"), |c| Msg::new("log.part.paid_to").seat("who", c)));
+            .msg("to", creditor.map_or_else(|| Msg::new("log.part.consumed"), |c| Msg::new("log.part.paid_to").player_id("who", c)));
         let e = self.w.log("bankrupt", i as i32, text);
         e.other = creditor.map_or(-1, |c| c as i32);
         e.value = all;
         self.wait(1.6);
-        let mut t = Trigger::new("bankrupt", i);
-        self.react(&mut t)?;
+        raise!(self, "bankrupt", i)?;
+        // `beforeOut` (Fx) -- C# `BeforeOut`, before the player is cleared.
+        raise!(self, "beforeOut", i)?;
         let deeds = self.remove_from_game(i);
         if self.check_game_over() {
             return Err(Halt::ended());
@@ -1162,14 +1480,22 @@ impl Cx<'_> {
 
     /// `Forfeit` -- leaving mid-match counts as going out.
     pub(crate) fn forfeit(&mut self, i: usize) -> Flow<()> {
+        // `leaveBefore` -- at the very top, before any guard, so it is a real
+        // pre-hook for the leave action itself.
+        raise!(self, "leaveBefore", i)?;
         if self.out(i) || !self.playing() {
             return Ok(());
         }
-        self.w.st.seats[i].left = true;
+        self.w.st.players[i].left = true;
         self.w.out_count += 1;
-        self.w.st.seats[i].out_order = self.w.out_count;
-        self.w.log("left", i as i32, Msg::new("log.forfeit").seat("who", i));
+        self.w.st.players[i].out_order = self.w.out_count;
+        self.w.log("left", i as i32, Msg::new("log.forfeit").player_id("who", i));
+        // `beforeOut` (Fx) -- C# `BeforeOut`, before the player is cleared.
+        raise!(self, "beforeOut", i)?;
         let deeds = self.remove_from_game(i);
+        // `leaveAfter` -- after the player is cleared out, but before the
+        // game-over check so it still fires when leaving ends the match.
+        raise!(self, "leaveAfter", i)?;
         if self.check_game_over() {
             return Err(Halt::ended());
         }
@@ -1180,19 +1506,18 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// `RemoveFromGame` -- clear the seat; its land returns to the bank.
+    /// `RemoveFromGame` -- clear the player; its land returns to the bank.
     fn remove_from_game(&mut self, i: usize) -> Vec<usize> {
-        let s = &mut self.w.st.seats[i];
+        let s = &mut self.w.st.players[i];
         s.ai = true;
         s.money = 0;
-        s.stay = 0;
-        s.stun = 0;
-        s.stun_start = 0;
-        s.exile = 0;
-        s.no_hand = 0;
-        s.exile_to = -1;
-        s.fire = 0;
-        s.unstoppable = 0;
+        for k in [
+            key::STAY, key::STUN, key::STUN_START, key::EXILE,
+            key::NO_HAND, key::FIRE, key::UNSTOPPABLE,
+        ] {
+            s.state_set(k, 0);
+        }
+        s.state_set(key::EXILE_TO, -1);
         self.w.hidden[i].hand.clear();
         self.w.extra_turns.retain(|&x| x != i);
         let deeds: Vec<usize> = (0..self.data.tiles.len()).filter(|&t| self.w.st.owners[t] == i as i32).collect();
@@ -1203,7 +1528,7 @@ impl Cx<'_> {
         if !deeds.is_empty() {
             let houses = deeds.iter().any(|&t| self.w.st.houses[t] > 0);
             let key = if houses { "log.deeds_freed_houses" } else { "log.deeds_freed" };
-            self.w.log("text", -1, Msg::new(key).seat("who", i).i("n", deeds.len() as i64));
+            self.w.log("text", -1, Msg::new(key).player_id("who", i).i("n", deeds.len() as i64));
         }
         deeds
     }
@@ -1234,45 +1559,47 @@ impl Cx<'_> {
 
     /// `AuctionTile`
     fn auction_tile(&mut self, t: usize, from: usize) -> Flow<()> {
-        let seats: Vec<usize> = self.present_from(from).into_iter().filter(|&s| self.can_pay(s)).collect();
-        if seats.is_empty() {
+        let players: Vec<usize> = self.present_from(from).into_iter().filter(|&s| self.can_pay(s)).collect();
+        if players.is_empty() {
             self.w.log("text", -1, Msg::new("log.auction_nobody").tile("tile", t));
             return Ok(());
         }
         let base = self.buy_price(t);
-        let worth: Vec<i32> = seats
+        let worth: Vec<i32> = players
             .iter()
             .map(|&s| {
                 let v = ((base as f64 * (0.6 + self.w.rng.f64() * 0.7) / 100.0) as i32) * 100;
-                v.min(self.w.st.seats[s].money - 1000)
+                v.min(self.w.st.players[s].money - 1000)
             })
             .collect();
         let houses = self.w.st.houses[t];
         let text = Msg::new("ask.auction.text")
             .n("price", self.tile(t).price)
             .opt("extra", (houses > 0).then(|| Msg::new("ask.part.auction_houses").i("h", houses)));
-        let ask = Ask::auction(t, seats, Msg::new("ask.auction.title").tile("tile", t), text, worth);
+        let ask = Ask::auction(t, players, Msg::new("ask.auction.title").tile("tile", t), text, worth);
         let r = self.ask(ask)?;
         if r.a.bidder < 0 {
             self.w.log("text", -1, Msg::new("log.auction_no_bid").tile("tile", t));
             return Ok(());
         }
         let (b, bid) = (r.a.bidder as usize, r.a.bid);
-        if self.w.st.owners[t] >= 0 || !self.can_pay(b) || self.w.st.seats[b].money < bid {
-            self.w.log("text", b as i32, Msg::new("log.auction_void").seat("who", b));
+        if self.w.st.owners[t] >= 0 || !self.can_pay(b) || self.w.st.players[b].money < bid {
+            self.w.log("text", b as i32, Msg::new("log.auction_void").player_id("who", b));
             return Ok(());
         }
-        self.w.st.seats[b].money -= bid;
+        self.w.st.players[b].money -= bid;
         self.w.st.owners[t] = b as i32;
         self.w.st.mortgaged[t] = false;
         let text = Msg::new("log.auction_won")
-            .seat("who", b)
+            .player_id("who", b)
             .n("bid", bid)
             .tile("tile", t)
             .opt("extra", (houses > 0).then(|| Msg::new("ask.part.incl_houses").i("h", houses)));
         let e = self.w.log("buy", b as i32, text);
         e.value = bid;
         e.to = t as i32;
+        // `bought` (Fx) -- C# AuctionTile 23276.
+        raise!(self, "bought", b, tile = t as i32)?;
         self.wait(1.0);
         Ok(())
     }
@@ -1286,61 +1613,88 @@ impl Cx<'_> {
 
     /// `Draw` -- from the top of the pile; reshuffle the discard pile when empty.
     /// Bots discard down to the hand limit at random.
-    pub(crate) fn draw(&mut self, i: usize, n: usize, log: bool) {
+    pub(crate) fn draw(&mut self, i: usize, n: usize, log: bool) -> Flow<()> {
         if self.out(i) {
-            return;
+            return Ok(());
         }
         let mut got = 0;
+        let mut drew: Vec<String> = Vec::new();
+        let mut reshuffled = false;
         for _ in 0..n {
             if self.w.hidden[i].draw.is_empty() && !self.w.hidden[i].discard.is_empty() {
                 let mut pile = std::mem::take(&mut self.w.hidden[i].discard);
                 self.w.rng.shuffle(&mut pile);
                 self.w.hidden[i].draw = pile;
-                self.w.log("text", i as i32, Msg::new("log.reshuffle").seat("who", i));
+                self.w.log("text", i as i32, Msg::new("log.reshuffle").player_id("who", i));
+                reshuffled = true;
             }
             let Some(card) = self.w.hidden[i].draw.pop() else { break };
-            self.w.hidden[i].hand.push(card);
+            self.w.hidden[i].hand.push(card.clone());
+            drew.push(card);
             got += 1;
         }
         if log && got > 0 {
             let over = self.over_hand(i).then(|| Msg::new("log.part.over_hand").i("limit", HAND_LIMIT as i64));
-            self.w.log("draw", i as i32, Msg::new("log.draw").seat("who", i).i("n", got).opt("over", over)).value = got;
+            self.w.log("draw", i as i32, Msg::new("log.draw").player_id("who", i).i("n", got).opt("over", over)).value = got;
         }
-        if self.w.st.seats[i].ai && self.playing() {
+        if self.w.st.players[i].ai && self.playing() {
             while self.over_hand(i) {
                 let k = self.w.rng.below(self.w.hidden[i].hand.len());
                 let card = self.w.hidden[i].hand[k].clone();
-                self.discard(i, &card);
+                self.discard(i, &card)?;
             }
         }
+        if log {
+            if reshuffled {
+                // `reshuffled` (Fx) -- C# `Each(Reshuffled)` 19655.
+                raise!(self, "reshuffled", i)?;
+            }
+            // `drawn` -- one raise per card still in hand, named on `t.card`, so
+            // that card's own hook runs (C# AfterDraw 19660, a fresh instance).
+            for id in &drew {
+                if self.w.hidden[i].hand.contains(id) {
+                    raise!(self, "drawn", i, card = id.clone(), value = got)?;
+                }
+            }
+            // `drew` (Fx) -- C# `Each(Drew)` 19683: the player drew `got` cards.
+            raise!(self, "drew", i, value = got, cards = drew.clone())?;
+        }
+        Ok(())
     }
 
     /// `DrawR`
     pub(crate) fn draw_r(&mut self, i: usize, n: usize, _why: &str) -> Flow<()> {
         if !self.out(i) && n > 0 {
-            self.draw(i, n, true);
+            self.draw(i, n, true)?;
         }
         Ok(())
     }
 
     /// `Discard` -- over the hand limit.
-    pub(crate) fn discard(&mut self, i: usize, card: &str) {
+    pub(crate) fn discard(&mut self, i: usize, card: &str) -> Flow<()> {
+        // `discardBefore` -- before the card leaves the hand.
+        raise!(self, "discardBefore", i, card = card.to_string())?;
         let h = &mut self.w.hidden[i];
         if let Some(k) = h.hand.iter().position(|c| c == card) {
             h.hand.remove(k);
         }
         h.discard.push(card.to_string());
-        self.w.log("discard", i as i32, Msg::new("log.discard").seat("who", i).i("limit", HAND_LIMIT as i64).card("card", card)).card = card.to_string();
+        self.w.log("discard", i as i32, Msg::new("log.discard").player_id("who", i).i("limit", HAND_LIMIT as i64).card("card", card)).card = card.to_string();
+        // `discarded` (Fx) -- C# `OnDiscarded` on that card, now in the pile.
+        raise!(self, "discarded", i, card = card.to_string())?;
+        // `discardAfter` -- the card is in the discard pile.
+        raise!(self, "discardAfter", i, card = card.to_string())?;
+        Ok(())
     }
 
     /// `CannotPlay`
     fn cannot_play(&self, i: usize) -> Option<&'static str> {
-        let s = &self.w.st.seats[i];
-        if s.exile > 0 {
+        let s = &self.w.st.players[i];
+        if s.exile() > 0 {
             Some("err.play_exiled")
         } else if s.stunned() {
             Some("err.play_stunned")
-        } else if s.no_hand > 0 {
+        } else if s.no_hand() > 0 {
             Some("err.play_no_hand")
         } else {
             None
@@ -1348,7 +1702,7 @@ impl Cx<'_> {
     }
 
     /// `WhyNotPlayCard`
-    pub(crate) fn why_not_play(&self, i: usize, id: &str, asking: bool) -> Option<Msg> {
+    pub(crate) fn cant_play(&self, i: usize, id: &str, asking: bool) -> Option<Msg> {
         if !self.w.hidden[i].hand.iter().any(|c| c == id) {
             return Some(Msg::new("err.no_such_card"));
         }
@@ -1359,7 +1713,7 @@ impl Cx<'_> {
             return Some(Msg::new(why));
         }
         if let Some(card) = self.data.card(id) {
-            let character = &self.w.st.seats[i].character;
+            let character = &self.w.st.players[i].character;
             let base = self.data.base_character(character);
             let crychic = self.data.character(character).is_some_and(|c| c.band == "CRYCHIC");
             // CRYCHIC variants may not use the base character's exclusives.
@@ -1370,27 +1724,33 @@ impl Cx<'_> {
         if !self.rules.normal(id) {
             return Some(Msg::new("err.play_timing"));
         }
-        self.rules.why_not(self, i, id)
+        self.rules.cant_play(self, i, id)
     }
 
     /// `PlayFromHand` + `PlayCard`
     pub(crate) fn play_from_hand(&mut self, i: usize, id: &str) -> Flow<()> {
         let Some(k) = self.w.hidden[i].hand.iter().position(|c| c == id) else { return Ok(()) };
         self.w.hidden[i].hand.remove(k);
-        self.w.log("play", i as i32, Msg::new("log.play").seat("who", i).card("card", id)).card = id.to_string();
+        self.w.log("play", i as i32, Msg::new("log.play").player_id("who", i).card("card", id)).card = id.to_string();
         if self.w.st.turn == i as i32 {
             self.w.turn.played.push(id.to_string());
         }
         self.wait(0.9);
-        let mut t = Trigger::new("card", i);
-        t.card = id.to_string();
-        self.react(&mut t)?;
+        let t = raise!(self, "card", i, card = id.to_string(), by_card = Some(i as i32))?;
         let rules = self.rules;
-        let dest = rules.play(self, i, id)?;
+        // `Trigger.Cancelled` -- the play is negated; the card still goes to its
+        // Dest below but its effect body does not run.
+        let dest = if t.cancelled {
+            Dest::Graveyard
+        } else {
+            rules.play(self, i, id)?
+        };
         match dest {
             Dest::Graveyard => {
                 if !self.out(i) {
                     self.w.hidden[i].discard.push(id.to_string());
+                    // `discarded` -- C# PlayCard 19872: before CardPlayed.
+                    raise!(self, "discarded", i, card = id.to_string())?;
                 }
             }
             Dest::Hand => self.w.hidden[i].hand.push(id.to_string()),
@@ -1399,6 +1759,11 @@ impl Cx<'_> {
             }
             Dest::Field => {}
         }
+        // `cardAfter` -- the card's own effect is fully resolved and it has
+        // landed wherever its `Dest` sent it.
+        raise!(self, "cardAfter", i, card = id.to_string(), by_card = Some(i as i32))?;
+        // `cardPlayed` (Fx) -- a card's hand effect resolved (its `Dest` is final).
+        raise!(self, "cardPlayed", i, card = id.to_string(), by_card = Some(i as i32))?;
         Ok(())
     }
 
@@ -1426,40 +1791,59 @@ impl Cx<'_> {
             self.w.log("text", -1, Msg::new("log.events_reshuffled"));
         }
         let id = self.w.event_deck.pop().expect("deck refilled above");
-        self.w.log("event", i as i32, Msg::new("log.event").seat("who", i).event("event", id.clone())).card = id.clone();
+        self.w.log("event", i as i32, Msg::new("log.event").player_id("who", i).event("event", id.clone())).card = id.clone();
         self.wait(3.0);
-        let mut t = Trigger::new("event", i);
-        t.card = id.clone();
-        self.react(&mut t)?;
+        let t = raise!(self, "event", i, card = id.clone())?;
         let rules = self.rules;
-        let placed = rules.event(self, i, &id)?;
+        // `Trigger.Cancelled` -- the event's effect is negated; it is still
+        // filed away below but does not resolve.
+        let placed = if t.cancelled {
+            false
+        } else {
+            rules.event(self, i, &id)?
+        };
         if !placed {
             if self.data.event(&id).is_some_and(|e| e.derived) {
-                self.w.event_removed.push(id);
+                self.w.event_removed.push(id.clone());
             } else {
-                self.w.event_discard.push(id);
+                self.w.event_discard.push(id.clone());
             }
         }
+        // `eventAfter` -- the event is fully resolved and filed away.
+        raise!(self, "eventAfter", i, card = id)?;
         self.wait(0.4);
         Ok(())
     }
 
     /// Reaction window (C# `React`), delegated to the card rules.
+    ///
+    /// Every raise site funnels through here (via [`raise!`] / [`Self::raise`]),
+    /// so `step` is stamped centrally from the live turn step rather than at
+    /// each call site.
     fn react(&mut self, t: &mut Trigger) -> Flow<()> {
+        t.step = self.w.st.step;
         let rules = self.rules;
         rules.react(self, t)
+    }
+
+    /// Build-and-raise a [`Trigger`], returning it as [`Self::react`] left it so
+    /// a reaction's rewrite of a field (e.g. `moveRoll`'s reroll) can be read
+    /// back. Prefer the [`raise!`] macro over calling this directly.
+    fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
+        self.react(&mut t)?;
+        Ok(t)
     }
 
     // =============================================================== end
 
     /// `CheckGameOver` -- one survivor, or every human out.
     pub(crate) fn check_game_over(&mut self) -> bool {
-        let alive: Vec<usize> = (0..self.w.seat_count()).filter(|&p| !self.out(p)).collect();
+        let alive: Vec<usize> = (0..self.w.player_count()).filter(|&p| !self.out(p)).collect();
         if alive.len() <= 1 {
             self.finish("last", alive.first().copied());
             return true;
         }
-        let humans: Vec<_> = self.w.st.seats.iter().filter(|s| !s.bot).collect();
+        let humans: Vec<_> = self.w.st.players.iter().filter(|s| !s.bot).collect();
         if !humans.is_empty() && humans.iter().all(|s| s.out()) {
             self.finish("out", None);
             return true;
@@ -1478,7 +1862,7 @@ impl Cx<'_> {
             return;
         }
         let st = &mut self.w.st;
-        let n = st.seats.len();
+        let n = st.players.len();
         for i in 0..n {
             let (mut land, mut houses) = (0, 0);
             for (t, tile) in self.data.tiles.iter().enumerate() {
@@ -1487,17 +1871,17 @@ impl Cx<'_> {
                     houses += st.houses[t] * tile.house;
                 }
             }
-            let s = &mut st.seats[i];
+            let s = &mut st.players[i];
             s.assets = s.money + land + houses;
             s.score = (s.money as f32 * st.score_money + land as f32 * st.score_property + houses as f32 * st.score_houses).round() as i32;
         }
-        let mut alive: Vec<usize> = (0..n).filter(|&p| !st.seats[p].out()).collect();
-        alive.sort_by_key(|&p| (std::cmp::Reverse(Some(p) == champion), std::cmp::Reverse(st.seats[p].score), p));
-        let mut gone: Vec<usize> = (0..n).filter(|&p| st.seats[p].out()).collect();
-        gone.sort_by_key(|&p| std::cmp::Reverse(st.seats[p].out_order));
+        let mut alive: Vec<usize> = (0..n).filter(|&p| !st.players[p].out()).collect();
+        alive.sort_by_key(|&p| (std::cmp::Reverse(Some(p) == champion), std::cmp::Reverse(st.players[p].score), p));
+        let mut gone: Vec<usize> = (0..n).filter(|&p| st.players[p].out()).collect();
+        gone.sort_by_key(|&p| std::cmp::Reverse(st.players[p].out_order));
         let order: Vec<usize> = alive.into_iter().chain(gone).collect();
         for (r, &p) in order.iter().enumerate() {
-            st.seats[p].rank = r as i32 + 1;
+            st.players[p].rank = r as i32 + 1;
         }
         st.end_reason = reason.into();
         st.winner = order.first().map_or(-1, |&p| p as i32);
@@ -1513,10 +1897,10 @@ impl Cx<'_> {
             "out" if self.w.st.mode == crate::MatchMode::Solo as i32 => Msg::new("end.out_solo"),
             "out" => Msg::new("end.out"),
             "vote" => Msg::new("end.vote"),
-            "last" => Msg::new("end.last").seat("who", winner),
+            "last" => Msg::new("end.last").player_id("who", winner),
             _ => Msg::new("end.score"),
         };
-        self.w.log("text", -1, Msg::new("log.match_end").msg("why", why).seat("winner", winner));
+        self.w.log("text", -1, Msg::new("log.match_end").msg("why", why).player_id("winner", winner));
     }
 }
 

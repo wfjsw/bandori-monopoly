@@ -8,56 +8,49 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const CANT_LOOK_AWAY: CardDef = CardDef {
-    id: "Mujica:无法将视线移开",
-    play: Some(play),
-    can_react: Some(can_react),
-    react: Some(react),
-    // C# `CardCantLookAway.WhyNot` refuses without a reactor this turn
-    // (`Reactors(seat).Count != 0`) -- the same reaction history the effect
-    // body needs. TODO(规则书): the `why_not` gate once `H._reactedAgainst` is
-    // in the ABI (below).
-    why_not: None,
-};
+pub const CANT_LOOK_AWAY: CardDef = CardDef::new("Mujica:无法将视线移开", &[
+    On::Play(play),
+    On::React(&[TriggerKind::Reacted], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
     // `t.Kind == "reacted" && t.Target == seat && t.Seat != seat`.
     trigger::kind() == TriggerKind::Reacted
-        && trigger::target() == seat
-        && trigger::seat() != seat
+        && trigger::target() == player_id
+        && trigger::player_id() != player_id
 }
 
-fn play(seat: i32) {
-    run(seat);
+fn play(player_id: i32) {
+    run(player_id);
 }
 
-fn react(seat: i32) {
-    run(seat);
+fn react(player_id: i32) {
+    run(player_id);
 }
 
-fn run(seat: i32) {
+fn run(player_id: i32) {
     // 规则书: 「使当前回合内对你打出过[反击]的所有玩家」 -- C#
-    // `H._reactedAgainst` filtered by `target == seat && turn == H.TurnKey`.
+    // `H._reactedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
     // TODO(ABI): the reaction history (C# `H._reactedAgainst`); `ctx::turn_key()`
     // covers the `turn == H.TurnKey` half of the filter, but the list itself
-    // cannot be built without the history. We still walk the ordinary seat list
+    // cannot be built without the history. We still walk the ordinary player list
     // so the prompts below are exercised.
-    let reactors: alloc::vec::Vec<i32> = ctx::others(seat);
+    let reactors: alloc::vec::Vec<i32> = ctx::others(player_id);
     for p in reactors {
         // 规则书: 「向你选择的方向强制移动1~4以内的任意步数」
         // C# `H.AskNumber(i, ..., 1, 4, ...)` (an AskPick over the range).
         let n = ctx::ask_number(
-            seat,
+            player_id,
             &Msg::new(key!("cant_look_away_title")),
-            &Msg::new(key!("cant_look_away_steps")).seat("who", p),
+            &Msg::new(key!("cant_look_away_steps")).player_id("who", p),
             1,
             4,
         );
         let forward = ctx::ask_pick(
-            seat,
+            player_id,
             &Msg::new(key!("cant_look_away_dir_title")),
             &Msg::new(key!("cant_look_away_dir_ask")),
             &[
@@ -66,19 +59,25 @@ fn run(seat: i32) {
             ],
         ) == 0;
         // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk`
-        // (resolve: true). The movement routine is not in the vocabulary.
-        // TODO(ABI): `H.ForceWalk(p, forward ? n : -n, resolve: true, seat, ...)`.
-        let _ = (p, forward, n);
+        // (resolve: true) builds `MoveCtx { Steps = n, Reverse = !forward,
+        // Resolve = true, Forced = true }`. The MoveCtx shape maps onto
+        // `ctx::plan::*`.
+        ctx::plan::set_steps(n);
+        ctx::plan::set_reverse(!forward);
+        ctx::plan::set_resolve(true);
         ctx::log(
-            seat,
+            player_id,
             &Msg::new(key!("cant_look_away_ordered"))
-                .seat("who", p)
+                .player_id("who", p)
                 .i("n", n as i64),
         );
-        // 规则书: 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
-        // -- self-targeting counts as the main move (C# `H.ForceWalk` with
-        // `Forced = true` on your own turn); needs the main-move bookkeeping.
+        // TODO(ABI): run the shaped walk now -- C# `H.ForceWalk(p, forward ? n
+        // : -n, resolve: true, player, ...)`. The MoveCtx fields above are
+        // written; the walk routine itself (`ctx::card_move` / a force-walk)
+        // is not in the vocabulary yet, so the player does not actually move.
     }
     // TODO(规则书): 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
-    // -- needs `H.MoveWhyNot` / `_turnCtx.MainMoved` in the ABI.
+    // -- the self-target walk must consume the turn's main move (C#
+    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
+    // `ctx::card_move`.
 }

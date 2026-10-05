@@ -2,7 +2,7 @@
 // browser's wasm engine (solo). Scenes only talk to `session`.
 //
 // Refresh recovery: a solo match is saved to localStorage (engine snapshot) and
-// resumed on load; an online seat is re-attached through the server session
+// resumed on load; an online player is re-attached through the server session
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
 import { rules } from "../core/data";
@@ -276,7 +276,7 @@ export function startOnline(room: RoomInfo, you: number, view: MatchView | null 
 
 /**
  * Re-attach to room `id` after a refresh: the tab's server session still
- * holds the seat (the presence timeout hands it to the AI only after a while).
+ * holds the player (the presence timeout hands it to the AI only after a while).
  */
 export async function resumeOnline(id: string, player: string, character: string, cnId: string): Promise<OnlineSession | Msg> {
   if (session instanceof OnlineSession && session.id === id && !session.dissolved) return session;

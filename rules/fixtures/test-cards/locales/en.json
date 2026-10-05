@@ -1,4 +1,16 @@
 {
   "relay_start": "relay start",
-  "relay_end": "relay end"
+  "relay_end": "relay end",
+  "echo_play": "echo play",
+  "echo_react": "echo react",
+  "lister_count": "hand listed {{n}} of {{size}}",
+  "lister_moved": "moved to discard: {{found}}",
+  "stunner_done": "stunned; abnormal count {{count}}",
+  "guard_note": "guards against abnormal effects",
+  "guard_blocked": "guard blocked an abnormal effect",
+  "aimer_done": "targeted {{got}}; targeted count {{count}}",
+  "shield_note": "unaffected by other players' effects",
+  "shield_held": "shield held",
+  "mover_planned": "planning a 3-step move",
+  "mover_done": "moved to tile {{pos}}"
 }

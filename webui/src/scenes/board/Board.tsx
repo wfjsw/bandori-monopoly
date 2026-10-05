@@ -39,7 +39,7 @@ export function Board({ sess }: { sess: GameSession }) {
   useEffect(() => {
     if (!m || anim.animating) return;
     const S = m.S;
-    if (waitingOn(S.prompt, m.seat) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
+    if (waitingOn(S.prompt, m.playerId) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
       promptFor.current = S.prompt.id;
       sfx("prompt");
       openPrompt(sess, S.prompt);
@@ -59,7 +59,7 @@ export function Board({ sess }: { sess: GameSession }) {
 
   if (!m) return null;
   const S = m.S;
-  const tilePick = waitingOn(S.prompt, m.seat) && S.prompt.kind === "tile" && !anim.animating ? S.prompt.items.map(Number) : [];
+  const tilePick = waitingOn(S.prompt, m.playerId) && S.prompt.kind === "tile" && !anim.animating ? S.prompt.items.map(Number) : [];
   const onTile = (i: number) => {
     const k = tilePick.indexOf(i);
     if (k >= 0) return void act(sess, { act: "answer", prompt: S.prompt.id, value: k });
@@ -69,7 +69,7 @@ export function Board({ sess }: { sess: GameSession }) {
 
   return (
     <>
-      <TopBar compact help={false} section={tr("board.mode", { mode: modeName(S.mode), n: S.seats.length })} title={tr("board.round", { n: Math.max(1, S.round) })} onBack={leave} right={<></>} />
+      <TopBar compact help={false} section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })} title={tr("board.round", { n: Math.max(1, S.round) })} onBack={leave} right={<></>} />
       <Players m={m} />
       <Log lines={anim.log} />
       <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />

@@ -7,11 +7,11 @@
 //!
 //! the game.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const RESOLVE: CardDef = CardDef { id: "R:[衍生] 觉悟", play: Some(resolve), can_react: None, react: None, why_not: None };
+pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play(resolve)]);
 
-fn resolve(seat: i32) {
+fn resolve(player_id: i32) {
     ctx::set_dest(ctx::Dest::Banished);
-    ctx::gain(seat, 1000, &Msg::new(key!("resolve_why")));
+    ctx::gain(player_id, 1000, &Msg::new(key!("resolve_why")));
 }

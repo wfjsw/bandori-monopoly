@@ -37,27 +37,27 @@ impl Halt {
 pub type Flow<T> = Result<T, Halt>;
 
 /// A prompt plus everything the host needs to answer it without the routine:
-/// per-seat AI answers (computed when the prompt was raised) and auction valuations.
+/// per-player AI answers (computed when the prompt was raised) and auction valuations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Ask {
     pub view: MatchPrompt,
-    /// AI answer for each entry in `view.seats`.
+    /// AI answer for each entry in `view.players`.
     pub ai: Vec<i32>,
-    /// AI card/deed selection for `pick` / `mortgage` prompts, per seat.
+    /// AI card/deed selection for `pick` / `mortgage` prompts, per player.
     pub ai_picked: Vec<Vec<String>>,
-    /// Auction: most each seat's AI is willing to bid.
+    /// Auction: most each player's AI is willing to bid.
     pub worth: Vec<i32>,
 }
 
 impl Ask {
-    fn new(kind: &str, seats: Vec<usize>, title: Msg, text: Msg, time: f32) -> Self {
-        let n = seats.len();
+    fn new(kind: &str, players: Vec<usize>, title: Msg, text: Msg, time: f32) -> Self {
+        let n = players.len();
         Self {
             view: MatchPrompt {
                 kind: kind.into(),
                 title,
                 text,
-                seats: seats.iter().map(|&s| s as i32).collect(),
+                players: players.iter().map(|&s| s as i32).collect(),
                 answers: vec![-1; n],
                 time_left: time,
                 ..MatchPrompt::default()
@@ -69,17 +69,17 @@ impl Ask {
     }
 
     /// `Choice`: pick one of `options`.
-    pub fn choice(seats: Vec<usize>, title: Msg, text: Msg, options: Vec<Msg>, fallback: i32, time: f32) -> Self {
-        let mut a = Self::new("choice", seats, title, text, time);
+    pub fn choice(players: Vec<usize>, title: Msg, text: Msg, options: Vec<Msg>, fallback: i32, time: f32) -> Self {
+        let mut a = Self::new("choice", players, title, text, time);
         a.view.options = options;
         a.view.fallback = fallback;
-        a.ai = vec![fallback; a.view.seats.len()];
+        a.ai = vec![fallback; a.view.players.len()];
         a
     }
 
     /// `TileAsk`: pick one of `tiles` (answer == len means "none").
-    pub fn tile(seat: usize, title: Msg, text: Msg, tiles: &[usize], labels: Vec<Msg>) -> Self {
-        let mut a = Self::new("tile", vec![seat], title, text, 20.0);
+    pub fn tile(player_id: usize, title: Msg, text: Msg, tiles: &[usize], labels: Vec<Msg>) -> Self {
+        let mut a = Self::new("tile", vec![player_id], title, text, 20.0);
         a.view.items = tiles.iter().map(|t| t.to_string()).collect();
         a.view.options = labels;
         a.view.fallback = tiles.len() as i32;
@@ -88,8 +88,8 @@ impl Ask {
     }
 
     /// `MortgageAsk`: choose deeds worth at least `need`.
-    pub fn mortgage(seat: usize, need: i32, text: Msg, deeds: &[usize], ai_pick: Vec<String>) -> Self {
-        let mut a = Self::new("mortgage", vec![seat], Msg::new("ask.mortgage.title"), text, 25.0);
+    pub fn mortgage(player_id: usize, need: i32, text: Msg, deeds: &[usize], ai_pick: Vec<String>) -> Self {
+        let mut a = Self::new("mortgage", vec![player_id], Msg::new("ask.mortgage.title"), text, 25.0);
         a.view.items = deeds.iter().map(|t| t.to_string()).collect();
         a.view.bid = need;
         a.ai_picked = vec![ai_pick];
@@ -97,8 +97,8 @@ impl Ask {
     }
 
     /// `Auction`: open bidding on a tile.
-    pub fn auction(tile: usize, seats: Vec<usize>, title: Msg, text: Msg, worth: Vec<i32>) -> Self {
-        let mut a = Self::new("auction", seats, title, text, 10.0);
+    pub fn auction(tile: usize, players: Vec<usize>, title: Msg, text: Msg, worth: Vec<i32>) -> Self {
+        let mut a = Self::new("auction", players, title, text, 10.0);
         a.view.tile = tile as i32;
         a.view.bid = 0;
         a.view.bidder = -1;
@@ -107,7 +107,7 @@ impl Ask {
     }
 
     pub fn with_ai(mut self, ai: impl Fn(usize) -> i32) -> Self {
-        self.ai = self.view.seats.iter().map(|&s| ai(s as usize)).collect();
+        self.ai = self.view.players.iter().map(|&s| ai(s as usize)).collect();
         self
     }
 
@@ -125,7 +125,7 @@ impl Ask {
 /// A completed prompt, as stored in the answer log.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Answered {
-    /// Parallel to the prompt's seats; never negative once complete.
+    /// Parallel to the prompt's players; never negative once complete.
     pub answers: Vec<i32>,
     pub picked: Vec<String>,
     pub bid: i32,
@@ -135,15 +135,15 @@ pub struct Answered {
 /// What a routine gets back from [`Cx::ask`].
 #[derive(Debug, Clone)]
 pub struct Reply {
-    pub seats: Vec<i32>,
+    pub players: Vec<i32>,
     pub fallback: i32,
     pub a: Answered,
 }
 
 impl Reply {
     /// `Ask.Answer(seat)`.
-    pub fn of(&self, seat: usize) -> i32 {
-        match self.seats.iter().position(|&s| s == seat as i32) {
+    pub fn of(&self, player_id: usize) -> i32 {
+        match self.players.iter().position(|&s| s == player_id as i32) {
             Some(i) if self.a.answers.get(i).is_some_and(|&v| v >= 0) => self.a.answers[i],
             _ => self.fallback,
         }
@@ -196,7 +196,7 @@ impl<'a> Cx<'a> {
         if let Some(a) = self.answers.get(self.cursor) {
             self.cursor += 1;
             self.delay = 0.0;
-            return Ok(Reply { seats: ask.view.seats, fallback: ask.view.fallback, a: a.clone() });
+            return Ok(Reply { players: ask.view.players, fallback: ask.view.fallback, a: a.clone() });
         }
         self.w.st.prompt = ask.view.clone();
         Err(Halt(HaltKind::Ask(Box::new(ask))))
@@ -218,12 +218,12 @@ impl<'a> Cx<'a> {
     }
 
     /// Append a log line.
-    pub fn log(&mut self, seat: i32, msg: Msg) {
-        self.w.log("text", seat, msg);
+    pub fn log(&mut self, player_id: i32, msg: Msg) {
+        self.w.log("text", player_id, msg);
     }
 
     /// `H.Roll` -- `count` d`sides`, logged as a dice event.
-    pub fn roll(&mut self, seat: i32, count: i32, sides: i32, what: Option<Msg>) -> i32 {
+    pub fn roll(&mut self, player_id: i32, count: i32, sides: i32, what: Option<Msg>) -> i32 {
         let faces: Vec<i32> = (0..count).map(|_| self.w.rng.d(sides)).collect();
         let sum = faces.iter().sum();
         let detail = (count > 1).then(|| {
@@ -231,13 +231,13 @@ impl<'a> Cx<'a> {
             Msg::new("log.part.dice_faces").text("faces", joined)
         });
         let text = Msg::new("log.dice")
-            .seat("who", seat)
+            .player_id("who", player_id)
             .i("count", count)
             .i("sides", sides)
             .opt("what", what.map(|w| Msg::new("log.part.why").msg("why", w)))
             .i("sum", sum)
             .opt("detail", detail);
-        self.w.log("dice", seat, text).value = sum;
+        self.w.log("dice", player_id, text).value = sum;
         sum
     }
 
@@ -262,24 +262,24 @@ impl<'a> Cx<'a> {
 
     /// `CanPay`: not out, not stunned, not exiled.
     pub(crate) fn can_pay(&self, i: usize) -> bool {
-        let s = &self.w.st.seats[i];
-        !s.out() && !s.stunned() && s.exile == 0
+        let s = &self.w.st.players[i];
+        !s.out() && !s.stunned() && s.exile() == 0
     }
 
-    /// `Blocked(i)` -- why a seat can't move money.
+    /// `Blocked(i)` -- why a player can't move money.
     pub(crate) fn blocked(&self, i: usize) -> &'static str {
-        let s = &self.w.st.seats[i];
-        if s.exile > 0 {
+        let s = &self.w.st.players[i];
+        if s.exile() > 0 {
             "status.exiled"
         } else {
             "status.stunned"
         }
     }
 
-    /// Seats starting at `from`, wrapping, that are in the game and not exiled
+    /// Players starting at `from`, wrapping, that are in the game and not exiled
     /// (C# `From(from)` / `H.PresentFrom`).
     pub fn present_from(&self, from: usize) -> Vec<usize> {
-        let n = self.w.seat_count();
-        (0..n).map(|k| (from + k) % n).filter(|&i| !self.out(i) && self.w.st.seats[i].exile == 0).collect()
+        let n = self.w.player_count();
+        (0..n).map(|k| (from + k) % n).filter(|&i| !self.out(i) && self.w.st.players[i].exile() == 0).collect()
     }
 }

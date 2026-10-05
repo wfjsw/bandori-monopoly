@@ -7,60 +7,51 @@
 //!
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::ctx::{self, CardPile};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const SAKIKO_CUT: CardDef = CardDef {
-    id: "Mujica:（祥子）斩断留恋，忘却一切",
-    play: Some(sakiko_cut),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+
+pub const SAKIKO_CUT: CardDef = CardDef::new("Mujica:（祥子）斩断留恋，忘却一切", &[
+    On::Play(sakiko_cut),
+    On::CantPlay(cant_play),
+]);
 
 /// C# `H.Mortgageable(seat)`: owned ∧ `IsBuyable` ∧ `kind != "ring"` ∧ not
 /// mortgaged.
-fn mortgageable(seat: i32) -> alloc::vec::Vec<i32> {
-    // TODO(ABI): the C# also excludes RiNG deeds (`_tiles[t].kind != "ring"`);
-    // there is no tile-kind query, so a RiNG-only owner still counts as
-    // mortgageable here (permissive: never refuses what the C# allows).
-    ctx::owned_tiles(seat)
+fn mortgageable(player_id: i32) -> alloc::vec::Vec<i32> {
+    ctx::owned_tiles(player_id)
         .into_iter()
-        .filter(|&t| ctx::is_buyable(t) && !ctx::mortgaged_of(t))
+        .filter(|&t| ctx::is_buyable(t) && !ctx::is_ring(t) && !ctx::mortgaged_of(t))
         .collect()
 }
 
 /// C# `CardSakikoCut.WhyNot`: needs a mortgageable deed, then `H.MoveWhyNot`.
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「抵押一张你拥有且未抵押的最贵地契」 -- C# refuses with
     // 「没有没抵押的地契」 when `H.Mortgageable(seat)` is empty.
-    if mortgageable(seat).is_empty() {
+    if mortgageable(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_mortgageable")));
     }
     // 规则书: 「作为你的主要移动」 -- the teleport is the main move, so the C#
-    // `H.MoveWhyNot` gate applies: own turn first (`只能在自己的回合`).
-    if ctx::turn_seat() != seat {
-        return Some(Msg::new(key!("x_not_your_turn")));
-    }
-    // TODO(规则书): the rest of C# `H.MoveWhyNot` -- refuses after this turn's
-    // main move (`_turnCtx.MainMoved` -> 「这回合已经移动过了」) and when the
-    // turn's move is skipped (`State.skipMove` -> 「本回合不能移动」); needs
-    // `H.MoveWhyNot` in the ABI.
-    None // playable
+    // `H.MoveWhyNot` gate applies.
+    ctx::cant_move(player_id)
 }
 
-fn sakiko_cut(seat: i32) {
+fn sakiko_cut(player_id: i32) {
     // 规则书: 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」
     // C# `c.FromDeck` gates the three-way pick. No FromDeck flag in the
-    // vocabulary, so the skip-discard branch is always taken (the safer read).
-    let skip_discard = true;
-    // TODO(规则书): 「若直接从抽牌堆打出」 -- needs the `FromDeck` play-source
-    // flag (C# `PlayCtx.FromDeck`) so the 3-way prompt can appear.
+    // vocabulary, so the base case (always discard) is taken.
+    // TODO(规则书): 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」 -- needs
+    // the `FromDeck` play-source flag (C# `PlayCtx.FromDeck`) so the 3-way prompt
+    // (skip the discard / discard as usual / don't fire) can appear; without it
+    // the discard below always runs.
+    let skip_discard = false;
     // 规则书: 「抵押一张你拥有且未抵押的最贵地契」 -- C# `H.Mortgageable(i)`
     // ordered by `_tiles[num].price` descending, then `H.MortgageRoutine`.
-    let mine = mortgageable(seat);
-    if mine.is_empty() || ctx::turn_seat() != seat {
+    let mine = mortgageable(player_id);
+    if mine.is_empty() || ctx::cant_move(player_id).is_some() {
         // C# `c.Effective = false` when the list is empty or `H.MoveWhyNot(i)`
-        // refuses (the rest of `H.MoveWhyNot` is still TODO'd in `why_not`).
+        // refuses.
         return;
     }
     // 规则书: 「最贵地契」 -- C# `list.OrderByDescending((int num) =>
@@ -76,20 +67,38 @@ fn sakiko_cut(seat: i32) {
     }
     // 规则书: 「并弃置一张手牌（若无手牌则弃掉下一张抽到的牌）」
     if !skip_discard {
-        // 规则书: 「弃置一张手牌」 -- C# `H.AskCard` over `H._hidden[i].hand`
-        // then `H.DiscardFromHand`.
-        // TODO(规则书): 「弃置一张手牌」 -- `ctx::discard_from_hand` is available,
-        // but there is still no hand-list query (C# `H.HandOf` /
-        // `_hidden[i].hand`) to build the `ask_card` pool from.
-        // TODO(规则书): 「若无手牌则弃掉下一张抽到的牌」 -- C# `H.ExtraOf<DiscardNextFx>`
-        // attaches a one-shot `Drew` hook; needs the Fx.Drew / ExtraOf machinery.
+        // 规则书: 「若无手牌则弃掉下一张抽到的牌」 -- C# branches on
+        // `H._hidden[i].hand.Count == 0`; `ctx::hand_size(player_id)` is that count.
+        if ctx::hand_size(player_id) > 0 {
+            // 规则书: 「弃置一张手牌」 -- C# `H.AskCard` over `H._hidden[i].hand`
+            // then `H.DiscardFromHand`.
+            let hand = ctx::cards_in(player_id, CardPile::Hand);
+            let pool: alloc::vec::Vec<&str> = hand.iter().map(|s| s.as_str()).collect();
+            if !pool.is_empty() {
+                let pick = ctx::ask_card(
+                    player_id,
+                    &Msg::new(key!("sakiko_cut_title")),
+                    &Msg::new(key!("sakiko_cut_discard")),
+                    &pool,
+                );
+                ctx::discard_from_hand(player_id, pool[pick]);
+            }
+        } else {
+            // TODO(规则书): 「若无手牌则弃掉下一张抽到的牌」 -- C#
+            // `H.ExtraOf<DiscardNextFx>` attaches a one-shot `Drew` hook that
+            // discards the first card of the next draw batch (MatchHost.cs
+            // `DiscardNextFx.Drew`). The `Drew` hook kind is in the ABI (v23),
+            // but the temporary `H.ExtraOf` attachment that would outlive this
+            // play is still held, so no hook can be declared here.
+            ctx::log(player_id, &Msg::new(key!("sakiko_cut_no_hand")).player_id("who", player_id));
+        }
     }
     // 规则书: 「立刻传送至任意可购买或已拥有的格子并触发结算」 -- the destination
     // pool is buyable or self-owned tiles (C# `IsBuyable && (owners < 0 ||
     // owners == i)`).
     let mut pool = alloc::vec::Vec::new();
     for t in 0..ctx::tile_count() {
-        if ctx::is_buyable(t) && (ctx::tile_owner(t) < 0 || ctx::tile_owner(t) == seat) {
+        if ctx::is_buyable(t) && (ctx::tile_owner(t) < 0 || ctx::tile_owner(t) == player_id) {
             pool.push(t);
         }
     }
@@ -97,19 +106,28 @@ fn sakiko_cut(seat: i32) {
         return;
     }
     let to = ctx::ask_tile(
-        seat,
+        player_id,
         &Msg::new(key!("sakiko_cut_title")),
         &Msg::new(key!("sakiko_cut_ask")),
         &pool,
     );
-    // TODO(ABI): 「并触发结算，作为你的主要移动」 -- C# `H.CardMove` with
-    // `TeleportTo = to` (settle on arrival, counts as the main move). The
-    // vocabulary has `teleport_to` (no settle) and no main-move bookkeeping.
-    // The teleport below jumps without settling; the settle is TODO'd.
-    ctx::teleport_to(seat, to);
+    // 规则书: 「立刻传送至任意可购买或已拥有的格子并触发结算」 -- C# `H.CardMove`
+    // with `TeleportTo = to` (`MoveCtx { TeleportTo = to, Resolve = true }`).
+    // `ctx::plan::set_resolve(true)` is the settle half; there is no
+    // teleport-plan shape (`set_teleport_to`) in `ctx::plan` and the bare
+    // `teleport_to` never settles, so the settle stays TODO'd.
+    ctx::plan::set_resolve(true);
+    ctx::teleport_to(player_id, to);
     ctx::log(
-        seat,
-        &Msg::new(key!("sakiko_cut_moved")).seat("who", seat).tile("tile", to),
+        player_id,
+        &Msg::new(key!("sakiko_cut_moved")).player_id("who", player_id).tile("tile", to),
     );
-    // TODO(规则书): 「作为你的主要移动」 -- needs `H.MoveWhyNot` / `_turnCtx.MainMoved`.
+    // TODO(ABI): 「并触发结算」 -- teleport-with-settle (C# `H.CardMove` /
+    // `H.Teleport(..., resolve: true)`). `ctx::plan` has no teleport-to shape
+    // and `teleport_to` never settles; the walk routine is not in the
+    // vocabulary yet.
+    // TODO(规则书): 「作为你的主要移动」 -- this teleport must count as the
+    // turn's main move (C# `H.CardMove(Forced = true)` sets
+    // `_turnCtx.MainMoved`); main-move bookkeeping stays held with
+    // `ctx::card_move`.
 }

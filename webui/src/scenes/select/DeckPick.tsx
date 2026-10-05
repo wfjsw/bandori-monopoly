@@ -26,7 +26,7 @@ function DeckPick({ sess, character, act, close }: { sess: GameSession; characte
     return slotCards(n).length === 10 ? n : 0;
   });
   // Submitted (here, by the timer, or after a refresh elsewhere): close.
-  const ready = view?.state.seats[view.seat]?.deckReady || view?.state.phase !== "deck";
+  const ready = view?.state.players[view.playerId]?.deckReady || view?.state.phase !== "deck";
   useEffect(() => {
     if (ready) close();
   }, [ready, close]);

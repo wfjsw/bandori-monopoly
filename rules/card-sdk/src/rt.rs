@@ -1,10 +1,10 @@
 //! Export runtime used by [`bandori_ruleset!`](crate::bandori_ruleset).
 
-use crate::abi::{pack, ManifestEntry};
+use crate::abi::{export, pack, ManifestEntry, ManifestOn};
 #[cfg(target_arch = "wasm32")]
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::CardDef;
+use crate::{CardDef, On};
 
 /// The card manifest, `postcard`-encoded (ABI v5 -- the guest hand-writes no
 /// JSON at all: messages and manifests both travel as serde bytes).
@@ -14,11 +14,19 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
         .flat_map(|band| band.iter())
         .map(|c| ManifestEntry {
             id: String::from(c.id),
-            play: c.play.is_some(),
-            react: c.react.is_some(),
+            on: c
+                .on
+                .iter()
+                .map(|o| ManifestOn { kind: o.kind() as i32, triggers: o.triggers().iter().map(|k| *k as i32).collect() })
+                .collect(),
         })
         .collect();
-    let bytes = postcard::to_allocvec(&entries).unwrap_or_default();
+    leak(postcard::to_allocvec(&entries).unwrap_or_default())
+}
+
+/// Hand a buffer to the host as packed `(ptr << 32) | len`. The bytes live as
+/// long as the run (bump allocator; the module is re-instantiated per run).
+fn leak(bytes: Vec<u8>) -> i64 {
     let b: &'static [u8] = Box::leak(bytes.into_boxed_slice());
     pack(b.as_ptr() as u32, b.len() as u32)
 }
@@ -36,30 +44,21 @@ fn card(bands: &'static [&'static [CardDef]], idx: i32) -> &'static CardDef {
     panic!("bad card handle {idx}")
 }
 
-pub fn play(bands: &'static [&'static [CardDef]], idx: i32, seat: i32) {
-    if let Some(f) = card(bands, idx).play {
-        f(seat)
+/// `bandori_on` -- call one entry point. See [`export::ON`] for the encoding.
+pub fn on(bands: &'static [&'static [CardDef]], idx: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+    let Some(o) = card(bands, idx).on.get(entry.max(0) as usize) else { panic!("bad entry {entry} on card {idx}") };
+    match (*o, op) {
+        (On::React(_, guard, _), export::OP_GUARD) => guard(player_id) as i64,
+        (On::React(_, _, run), _) | (On::Play(run), _) | (On::Hook(_, run), _) | (On::AtEnd(run), _)
+        | (On::RollPlan(run), _) => {
+            run(player_id);
+            0
+        }
+        (On::CantPlay(why), _) => match why(player_id) {
+            None => 0,
+            Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
+        },
     }
-}
-
-pub fn can_react(bands: &'static [&'static [CardDef]], idx: i32, seat: i32) -> i32 {
-    card(bands, idx).can_react.map_or(0, |f| f(seat) as i32)
-}
-
-pub fn react(bands: &'static [&'static [CardDef]], idx: i32, seat: i32) {
-    if let Some(f) = card(bands, idx).react {
-        f(seat)
-    }
-}
-
-/// `Card.WhyNot` -- packed `(ptr << 32) | len` of a postcard `Msg` reason, or 0
-/// when the card is playable. The bytes live as long as the run (bump allocator).
-pub fn why_not(bands: &'static [&'static [CardDef]], idx: i32, seat: i32) -> i64 {
-    let Some(f) = card(bands, idx).why_not else { return 0 };
-    let Some(reason) = f(seat) else { return 0 };
-    let bytes = postcard::to_allocvec(&reason).unwrap_or_default();
-    let b: &'static [u8] = Box::leak(bytes.into_boxed_slice());
-    pack(b.as_ptr() as u32, b.len() as u32)
 }
 
 /// Generate the guest exports for a card table.
@@ -84,20 +83,8 @@ macro_rules! bandori_ruleset {
             $crate::rt::manifest(BAND_TABLE)
         }
         #[no_mangle]
-        pub extern "C" fn bandori_play(card: i32, seat: i32) {
-            $crate::rt::play(BAND_TABLE, card, seat)
-        }
-        #[no_mangle]
-        pub extern "C" fn bandori_can_react(card: i32, seat: i32) -> i32 {
-            $crate::rt::can_react(BAND_TABLE, card, seat)
-        }
-        #[no_mangle]
-        pub extern "C" fn bandori_react(card: i32, seat: i32) {
-            $crate::rt::react(BAND_TABLE, card, seat)
-        }
-        #[no_mangle]
-        pub extern "C" fn bandori_why_not(card: i32, seat: i32) -> i64 {
-            $crate::rt::why_not(BAND_TABLE, card, seat)
+        pub extern "C" fn bandori_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+            $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
         }
     };
 }
@@ -105,7 +92,7 @@ macro_rules! bandori_ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef { id: "AG:Y.O.L.O", .. };
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::React(&[TriggerKind::MoveRoll], can_react, react)]);
 /// card_sdk::bandori_card!(CARD);
 /// ```
 #[macro_export]

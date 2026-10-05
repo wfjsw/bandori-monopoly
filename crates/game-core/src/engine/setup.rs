@@ -12,33 +12,33 @@ pub const PICK_SECONDS: f32 = 25.0;
 pub const DECK_SECONDS: f32 = 45.0;
 
 impl Cx<'_> {
-    /// `RollOrder` -- 1d20 each, ties re-roll; seats are reordered high to low.
+    /// `RollOrder` -- 1d20 each, ties re-roll; players are reordered high to low.
     pub(crate) fn roll_order(&mut self) {
-        let n = self.w.seat_count();
+        let n = self.w.player_count();
         for i in 0..n {
-            self.w.st.seats[i].roll = self.w.rng.d(20);
+            self.w.st.players[i].roll = self.w.rng.d(20);
         }
         let mut rerolled = false;
         loop {
             let tied: Vec<usize> = (0..n)
-                .filter(|&i| (0..n).any(|j| j != i && self.w.st.seats[j].roll == self.w.st.seats[i].roll))
+                .filter(|&i| (0..n).any(|j| j != i && self.w.st.players[j].roll == self.w.st.players[i].roll))
                 .collect();
             if tied.is_empty() {
                 break;
             }
             rerolled = true;
             for i in tied {
-                self.w.st.seats[i].roll = self.w.rng.d(20);
+                self.w.st.players[i].roll = self.w.rng.d(20);
             }
         }
         let mut order: Vec<usize> = (0..n).collect();
-        order.sort_by_key(|&i| std::cmp::Reverse(self.w.st.seats[i].roll));
-        let seats = std::mem::take(&mut self.w.st.seats);
+        order.sort_by_key(|&i| std::cmp::Reverse(self.w.st.players[i].roll));
+        let players = std::mem::take(&mut self.w.st.players);
         let hidden = std::mem::take(&mut self.w.hidden);
-        self.w.st.seats = order.iter().map(|&i| seats[i].clone()).collect();
+        self.w.st.players = order.iter().map(|&i| players[i].clone()).collect();
         self.w.hidden = order.iter().map(|&i| hidden[i].clone()).collect();
-        let list = (0..self.w.st.seats.len())
-            .map(|p| Arg::Msg(Box::new(Msg::new("log.part.seat_roll").seat("who", p).i("n", self.w.st.seats[p].roll))))
+        let list = (0..self.w.st.players.len())
+            .map(|p| Arg::Msg(Box::new(Msg::new("log.part.player_roll").player_id("who", p).i("n", self.w.st.players[p].roll))))
             .collect();
         let key = if rerolled { "log.order_rerolled" } else { "log.order" };
         self.w.log("text", -1, Msg::new(key).list("rolls", list));
@@ -49,7 +49,7 @@ impl Cx<'_> {
     }
 
     pub(crate) fn pickable(&self, character: &str) -> bool {
-        self.bannable(character) && self.w.st.seats.iter().all(|s| s.character != character)
+        self.bannable(character) && self.w.st.players.iter().all(|s| s.character != character)
     }
 
     /// `RandomCharacter` -- prefers characters with their own art set (`cnId`).
@@ -73,7 +73,7 @@ impl Cx<'_> {
     /// `BeginBan` -- back to front.
     pub(crate) fn begin_ban(&mut self) {
         self.w.st.phase = "ban".into();
-        self.w.st.turn = self.w.seat_count() as i32 - 1;
+        self.w.st.turn = self.w.player_count() as i32 - 1;
         self.w.st.time_left = BAN_SECONDS;
         self.w.log("text", -1, Msg::new("log.ban_phase"));
     }
@@ -88,16 +88,16 @@ impl Cx<'_> {
 
     /// `DoBan`; empty `character` = no ban.
     pub(crate) fn do_ban(&mut self, i: usize, character: &str) {
-        let s = &mut self.w.st.seats[i];
+        let s = &mut self.w.st.players[i];
         s.ban_done = true;
         s.ban = character.into();
         if !character.is_empty() {
             self.w.st.bans.push(character.into());
         }
         let text = if character.is_empty() {
-            Msg::new("log.no_ban").seat("who", i)
+            Msg::new("log.no_ban").player_id("who", i)
         } else {
-            Msg::new("log.ban").seat("who", i).chara("chara", character)
+            Msg::new("log.ban").player_id("who", i).chara("chara", character)
         };
         self.w.log("ban", i as i32, text);
         self.w.st.turn -= 1;
@@ -110,15 +110,15 @@ impl Cx<'_> {
 
     /// `DoPick`. Bots submit their deck as soon as the deck phase opens.
     pub(crate) fn do_pick(&mut self, i: usize, character: &str) {
-        self.w.st.seats[i].character = character.into();
-        self.w.log("pick", i as i32, Msg::new("log.pick").seat("who", i).chara("chara", character));
+        self.w.st.players[i].character = character.into();
+        self.w.log("pick", i as i32, Msg::new("log.pick").player_id("who", i).chara("chara", character));
         self.w.st.turn += 1;
-        if self.w.st.turn as usize >= self.w.seat_count() {
+        if self.w.st.turn as usize >= self.w.player_count() {
             self.w.st.phase = "deck".into();
             self.w.st.turn = -1;
             self.w.log("text", -1, Msg::new("log.deck_phase").i("n", crate::deck::SIZE as i64));
-            for p in 0..self.w.seat_count() {
-                if self.w.st.seats[p].ai {
+            for p in 0..self.w.player_count() {
+                if self.w.st.players[p].ai {
                     self.submit_deck(p, None);
                 }
             }
@@ -130,7 +130,7 @@ impl Cx<'_> {
 
     /// `SubmitDeck` -- a complete legal deck, or the character's preset.
     pub(crate) fn submit_deck(&mut self, i: usize, cards: Option<&[String]>) {
-        let character = self.w.st.seats[i].character.clone();
+        let character = self.w.st.players[i].character.clone();
         let list = match self.data.character(&character) {
             Some(c) => match cards {
                 Some(ids) if deck::is_complete(self.data, c, ids) => deck::clean(self.data, c, ids),
@@ -139,9 +139,9 @@ impl Cx<'_> {
             None => vec![],
         };
         self.w.hidden[i].draw = list;
-        self.w.st.seats[i].deck_ready = true;
-        if !self.w.st.seats[i].ai {
-            self.w.log("deck", i as i32, Msg::new("log.deck_ready").seat("who", i));
+        self.w.st.players[i].deck_ready = true;
+        if !self.w.st.players[i].ai {
+            self.w.log("deck", i as i32, Msg::new("log.deck_ready").player_id("who", i));
         }
     }
 }

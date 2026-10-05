@@ -3,15 +3,101 @@
 //! refuses rulesets built against a different version.
 
 #[cfg(target_arch = "wasm32")]
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 /// Increment on any change to imports, exports, or their semantics.
 /// v2: `play_card` (cross-module card calls); one module per card.
 /// v6: full `TriggerKind` set + `trig_target` / `trig_tile` / `trig_value`.
 /// v7: board/hand/status query + op wave (is_buyable ... in_band, spend_fire,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
-/// v8: `bandori_why_not` export (`CardDef.why_not`) + `add_to_deck_at`.
-pub const ABI_VERSION: i32 = 8;
+/// v8: `bandori_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
+/// v9: `cant_move` (H.MoveWhyNot), `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
+/// v10: `trig_step` (`Trigger.step`) so a reaction can tell which turn step
+///      (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
+///      `mortgage` fires during both step 1 and step 3); paired
+///      `*Before`/`*After` kinds filling in the missing half of every
+///      trigger point, plus new hooks for buy/build/discard/end turn/leave.
+/// v11: `trig_by_card` (`Trigger.by_card`) -- the player whose card caused this
+///      trigger, or -1 when it was not card-caused. This is what `H.HitByOtherCard`
+///      keys on (`by_card >= 0 && by_card != player_id`).
+/// v12: `trig_set_pay_amount` -- a reaction to a `pay`/`paid` trigger may rewrite
+///      the pending amount (0 = cancel the payment, C# `t.Pay.cancel` / `PayCtx.amount`).
+///      Also: `set_move_roll` now actually reaches the engine (the write-back from
+///      the reaction's trigger to `Trigger.value` was missing).
+/// v13: `trig_pay_is_rent` (`t.Pay.IsRent`) -- is this `pay`/`paid` trigger rent,
+///      as opposed to a buy/build/forced loss. Card-driven payments are never rent.
+/// v14: `t.Move` context -- `trig_move_flags` (a [`MoveFlags`] bitset), plus
+///      `trig_move_main` and `trig_move_dir`. A move-caused trigger (moveRoll /
+///      pass / settle*) can now say what kind of move it was, and any number of
+///      orthogonal modifiers on it. Replaces the bespoke `trig_move_fire_roll`.
+/// v15: `trig_set_cancelled` / `trig_cancelled` (`Trigger.Cancelled`) -- a
+///      reaction may negate the trigger's effect outright (C# `trigger.Cancelled
+///      = true`): the engine then skips the effect body (land / event / play)
+///      but still runs the point's Before/After hooks.
+/// v16: `trig_set_pay_target` -- a reaction may also redirect the payee of a
+///      pending `pay` (C# `PayCtx.to`; -1 = the bank). The transfer amount
+///      follows `set_pay_amount`, so a reduced payment credits the payee less too.
+/// v17: field-card (`Fx`) hooks + per-card crystals. New `TriggerKind`s
+///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `RollAfter`, `CardPlayed`,
+///      `Targeted`, `PayChoose`) are **hook points**, not [反击] points: the
+///      engine runs every *placed* card's `react` against them automatically.
+///      `crystals` / `set_crystals` / `add_crystals` on the running field card.
+/// v18: `take_from_hand`; `drawn` self-dispatches to the card named on `t.card`
+///      (the one just drawn, still in hand).
+/// v19: `cards_in(player_id, pile, buf, cap)` -- list a player's [`CardPile`] as a
+///      postcard `Vec<String>` written into a guest-owned buffer (the first
+///      host->guest string return). `take_card(player_id, pile, id)` replaces
+///      `take_from_hand` and works on any pile.
+/// v20: turn plan + scheduling -- `schedule_turn_end` (a card asks for a
+///      `turnEnd` call at this turn's end or at the end of a player's next turn),
+///      `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
+///      `turn_main_steps`, `add_fire_max`, `card_replayable` (C# `H.CanReplay`).
+///      `play_card` now returns the inner card's `Dest`, and the inner card runs
+///      as itself (its own id and `Dest`, no longer the outer card's).
+/// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
+///      points (`Play`, `CantPlay`, `React(kinds, guard, effect)`,
+///      `Hook(kinds, effect)`, `AtEnd`). The manifest lists each entry with
+///      its trigger kinds, so the host dispatches only to cards that declared
+///      the kind at hand; one export `bandori_on(card, entry, op, player_id)`
+///      replaces `bandori_play` / `_can_react` / `_react` / `_cant_play`.
+/// v23: hook kinds from the C# call sites -- TurnEndBefore / TurnEndAfter,
+///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
+///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleInstead, BeforeOut,
+///      Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
+///      `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
+///      the player's next turn, bit 2 = before the wear-off, C# `AtEnd`).
+///      RollAfter now fires before the moveRoll [反击] window (C# order).
+///      `RollPlan` is the point `On::RollPlan` (v22) is dispatched at.
+/// v24: movement shaping -- `set_steps` / `set_reverse` / `set_signed` /
+///      `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
+///      `set_pay_factor` / `set_rent_factor` / `set_no_buy` / `set_no_build` /
+///      `set_build_anywhere` / `set_teleport_walk` / `set_min_roll` /
+///      `set_bonus` / `set_extra_steps` / `set_more_steps` / `set_fire_roll` /
+///      `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
+///      on the move being planned (guest: `ctx::plan::*`).
+/// v25: card-driven `give_stay` / `give_stun` / `give_exile` / `teleport_to`
+///      go through the C# `AbnormalGate`: the `abnormalGuard` hook (new kind),
+///      then the `abnormal` [反击] window when another player caused it; a blocked
+///      effect does not apply. `abnormal_count(player_id)` (C# `_abnormalTurn`),
+///      `placed_tile(player_id, id)`, `play_doubled()` (C# `PlayCtx.Doubled`) and
+///      `trig_cards` (the drawn cards on a `drew` trigger).
+/// v26: the C# targeting pipeline -- `target(player_id, tile, single)` pauses the
+///      run with a `Target` host request (`H.Target` / `H.TargetTile`): exile,
+///      the `immuneAll` / `untargetable` / `redirect` guard hooks (new kinds),
+///      the `_targeted` counter (`targeted_count`), then the `targeted` hooks
+///      and the `target` [反击] window. `immuneAll` also gates card-driven
+///      abnormal effects and payments (C# `ImmuneAll`). `sweep_to_deck`
+///      became `shuffle_into_deck(player_id, hand, discard)`.
+/// v27: the move model. `MoveFlags` is gone: a move is exactly one `MoveKind`
+///      (Walk | Teleport), and what it resolves is a separate category,
+///      `Settle` (ROUTE = the tiles it passes resolve [经过]; DEST = the landing
+///      resolves [结算]). C# `TeleportWalk` becomes a Teleport whose destination
+///      is computed from the roll; C# `Resolve = false` clears DEST. FIRE_ROLL
+///      is card-owned state now (`plan::set_tag` / `trigger::move_tag`), not an
+///      engine flag. Play context (`CardDef.targeting`, `trigger::play_*`,
+///      `set_immune`), `ctx::card_move` / `ctx::agent_landing`, `add_mark_flags`,
+///      and the plan's `set_start` / `set_teleport_to` / Base-Dice tables.
+pub const ABI_VERSION: i32 = 27;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -21,16 +107,44 @@ pub mod export {
     pub const ABI_VERSION: &str = "bandori_abi_version";
     /// `() -> i64` packed `(ptr << 32) | len` pointing at a UTF-8 JSON manifest.
     pub const MANIFEST: &str = "bandori_manifest";
-    /// `(card: i32, seat: i32)`
-    pub const PLAY: &str = "bandori_play";
-    /// `(card: i32, seat: i32) -> i32` (0/1)
-    pub const CAN_REACT: &str = "bandori_can_react";
-    /// `(card: i32, seat: i32)`
-    pub const REACT: &str = "bandori_react";
-    /// `(card: i32, seat: i32) -> i64` packed `(ptr << 32) | len` of a
-    /// postcard `Msg` reason, or 0 when the card is playable (`CardDef.why_not`).
-    pub const WHY_NOT: &str = "bandori_why_not";
+    /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
+    /// `entry` (an index into the card's manifest `on` list). `op` is
+    /// [`OP_RUN`] or, for a `React` entry, [`OP_GUARD`]. Returns 0, the guard's
+    /// 0/1, or (for `CantPlay`) a packed `(ptr << 32) | len` postcard `Msg`
+    /// reason with 0 meaning "playable".
+    pub const ON: &str = "bandori_on";
+    pub const OP_RUN: i32 = 0;
+    pub const OP_GUARD: i32 = 1;
     pub const MEMORY: &str = "memory";
+}
+
+/// The keys the engine's own game flow reads back (its turn rules and the
+/// status gates). Content is free to invent more -- a state key is just a
+/// string. Mirrors `game_core::state::key`.
+pub mod state_key {
+    /// `[停留]` -- layers that wear off at end of turn.
+    pub const STAY: &str = "stay";
+    /// `[晕眩]` -- layers that wear off at end of turn.
+    pub const STUN: &str = "stun";
+    /// `[晕眩]` applied this turn, which only starts counting next turn.
+    pub const STUN_START: &str = "stunStart";
+    /// `[移除]` -- turns spent off the board.
+    pub const EXILE: &str = "exile";
+    /// Tile the exile returns to, or -1 for none.
+    pub const EXILE_TO: &str = "exileTo";
+    /// Fire pots held. Its `max` is the mandated cap, written by the character
+    /// skill -- and that is the one number to show.
+    pub const FIRE: &str = "fire";
+    /// Band crystals for band skills.
+    pub const BAND_CRYSTALS: &str = "bandCrystals";
+    /// Layers of "may hold no hand cards".
+    pub const NO_HAND: &str = "noHand";
+    /// Layers of "cannot be stopped".
+    pub const UNSTOPPABLE: &str = "unstoppable";
+    /// Hand size limit.
+    pub const HAND_LIMIT: &str = "handLimit";
+    /// Skill-system scratch.
+    pub const SKILL_STATE: &str = "skillState";
 }
 
 /// `i32_exit` status the host uses to abort a run that reached an unanswered prompt.
@@ -41,14 +155,15 @@ pub const EXIT_NEED_INPUT: i32 = 0x0B_A0_D0;
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptKind {
-    /// Pick one of the pushed string options (`AskPick`).
-    Pick = 0,
-    /// Yes / no (`AskYes`); options are implicit.
-    Yes = 1,
+    /// One of the pushed options (`AskPick`).
+    Choice = 0,
+    /// A yes / no question (`AskYes`); the options are implicit.
+    YesNo = 1,
     /// Pick a tile index (`AskTileOf`).
     Tile = 2,
-    /// Pick a seat (`AskSeat`).
-    Seat = 3,
+    /// Pick a player. C# `H.AskSeat` has no kind of its own -- it is
+    /// `AskPick` over player-name options -- so this one is ours.
+    Player = 3,
     /// Pick a card id (`AskCard`).
     Card = 4,
 }
@@ -56,24 +171,143 @@ pub enum PromptKind {
 impl PromptKind {
     pub fn from_i32(v: i32) -> Option<Self> {
         Some(match v {
-            0 => Self::Pick,
-            1 => Self::Yes,
+            0 => Self::Choice,
+            1 => Self::YesNo,
             2 => Self::Tile,
-            3 => Self::Seat,
+            3 => Self::Player,
             4 => Self::Card,
             _ => return None,
         })
     }
 
-    /// The C# `MatchPrompt.kind` string.
+    /// The C# `MatchPrompt.kind` string (the C# names: `"pick"`, `"yes"`, ...).
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::Pick => "pick",
-            Self::Yes => "yes",
+            Self::Choice => "pick",
+            Self::YesNo => "yes",
             Self::Tile => "tile",
-            Self::Seat => "seat",
+            Self::Player => "player",
             Self::Card => "card",
         }
+    }
+}
+
+/// How the player gets there -- a move is exactly one of these (C# `MoveCtx.Teleport`
+/// vs the walk loop). Mirrors `game_core::engine::move_ctx::MoveKind`.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MoveKind {
+    /// The player steps along the board, tile by tile.
+    #[default]
+    Walk = 0,
+    /// The player jumps straight to the destination (C# `TeleportMove`). A C#
+    /// `TeleportWalk` (「视为 [传送]（只触发终点）」) is this kind with the
+    /// destination derived from the roll instead of named.
+    Teleport = 1,
+}
+
+impl MoveKind {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        match v {
+            0 => Some(Self::Walk),
+            1 => Some(Self::Teleport),
+            _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Walk => "walk",
+            Self::Teleport => "teleport",
+        }
+    }
+}
+
+bitflags::bitflags! {
+    /// What a move resolves as it goes -- the settle axis, its own category
+    /// beside [`MoveKind`] (C# `m.Resolve` / `m.TeleportWalk` decomposed).
+    /// An ordinary move settles both.
+    ///
+    /// The wire is a flat `i32`; [`Self::bits`] / [`Self::from_bits`] flatten it.
+    #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+    pub struct Settle: i32 {
+        /// The tiles the move goes through resolve their [经过] effects. A walk:
+        /// every tile it steps on. A teleport: the destination counts as passed
+        /// when the teleport actually moves the player (`From != to`), or when
+        /// this bit is forced (C# `TeleportWalk`, 「原地也算 [经过]」).
+        const ROUTE = 1;
+        /// The landing resolves (C# `m.Resolve`): `settleBefore` -> `settle` ->
+        /// `land` -> `settleAfter`. On a teleport this gates the destination's
+        /// [经过] too (C# 24371 returns before the pass block when `!m.Resolve`).
+        const DEST = 2;
+    }
+}
+
+/// An abnormal effect (C# `Abnormal.Kind`), carried on `abnormalGuard` /
+/// `abnormal` triggers. C# `AbName` gives their names: [停留] / [晕眩] / [除外] /
+/// [传送] / [强制移动] / [强制停下] / 反方向移动.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AbKind {
+    Stay = 1,
+    Stun = 2,
+    Exile = 3,
+    Teleport = 4,
+    Forced = 5,
+    Stop = 6,
+    Reverse = 7,
+}
+
+impl AbKind {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
+            1 => Self::Stay,
+            2 => Self::Stun,
+            3 => Self::Exile,
+            4 => Self::Teleport,
+            5 => Self::Forced,
+            6 => Self::Stop,
+            7 => Self::Reverse,
+            _ => return None,
+        })
+    }
+
+    /// The C# `Abnormal.Kind` string.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Stay => "stay",
+            Self::Stun => "stun",
+            Self::Exile => "exile",
+            Self::Teleport => "teleport",
+            Self::Forced => "forced",
+            Self::Stop => "stop",
+            Self::Reverse => "reverse",
+        }
+    }
+}
+
+/// One of a player's card piles (C# `_hidden[s].hand` / `.discard` / `.draw`,
+/// and the placed field cards).
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CardPile {
+    Hand = 0,
+    Discard = 1,
+    /// The draw pile, **top card first**.
+    Deck = 2,
+    /// Cards placed on the player's field, in placement order.
+    Field = 3,
+}
+
+impl CardPile {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
+            0 => Self::Hand,
+            1 => Self::Discard,
+            2 => Self::Deck,
+            3 => Self::Field,
+            _ => return None,
+        })
     }
 }
 
@@ -92,7 +326,7 @@ pub enum TriggerKind {
     MoveRoll = 2,
     TurnStart = 3,
     Pass = 4,
-    PassSeat = 5,
+    PassPlayer = 5,
     SettleBefore = 6,
     Settle = 7,
     Mortgage = 8,
@@ -115,6 +349,110 @@ pub enum TriggerKind {
     DrawOut = 25,
     CircleAffected = 26,
     TwoCards = 27,
+    /// v10: the missing pre-half of `TurnStart`.
+    TurnStartBefore = 28,
+    /// v10: the missing pre-half of `Pass`.
+    PassBefore = 29,
+    /// v10: the missing pre-half of `Mortgage`.
+    MortgageBefore = 30,
+    /// v10: the missing pre-half of `Bankrupt`.
+    BankruptBefore = 31,
+    /// v10: the missing post-half of `Card`.
+    CardAfter = 32,
+    /// v10: the missing post-half of `Event`.
+    EventAfter = 33,
+    /// v10: the missing post-half of `SettleBefore`/`Settle` (fires after
+    /// `land()` resolves).
+    SettleAfter = 34,
+    /// v10: new action hook -- before `Card.Buy` resolves.
+    BuyBefore = 35,
+    /// v10: new action hook -- after `Card.Buy` resolves.
+    BuyAfter = 36,
+    /// v10: new action hook -- before building a house resolves.
+    BuildBefore = 37,
+    /// v10: new action hook -- after building a house resolves.
+    BuildAfter = 38,
+    /// v10: new action hook -- before a hand discard resolves.
+    DiscardBefore = 39,
+    /// v10: new action hook -- after a hand discard resolves.
+    DiscardAfter = 40,
+    /// v10: new action hook -- before ending the turn.
+    EndTurnBefore = 41,
+    /// v10: new action hook -- after ending the turn.
+    EndTurnAfter = 42,
+    /// v10: new action hook -- before a player forfeits.
+    LeaveBefore = 43,
+    /// v10: new action hook -- after a player forfeits.
+    LeaveAfter = 44,
+
+    // v17: field-card (`Fx`) hook points. These are NOT [反击] points -- the
+    // engine runs every placed card's `react` against them automatically. They
+    // are distinct kinds from the reaction kinds above so a card can tell a
+    // field effect from a hand reaction by its kind alone.
+    /// `Fx.TurnEnd` -- a turn just ended (any player's).
+    TurnEnd = 45,
+    /// `Fx.Drawn` -- the player drew cards.
+    Drawn = 46,
+    /// `Fx.PassTile` -- the player passed/stopped on a tile during a move.
+    PassTile = 47,
+    /// `Fx.PayAfter` -- a payment settled.
+    PayAfter = 48,
+    /// `Fx.RollAfter` -- a move roll resolved.
+    RollAfter = 49,
+    /// `Fx.CardPlayed` -- a card's hand effect resolved.
+    CardPlayed = 50,
+    /// `Fx.Targeted` -- the player was targeted.
+    Targeted = 51,
+    /// `Fx.PayChoose` -- the player is about to pay (may modify/decline).
+    PayChoose = 52,
+    /// v23: C# `Fx.TurnEndBefore` -- first step of a turn end, before the `AtEnd` callbacks and the status wear-off.
+    TurnEndBefore = 53,
+    /// v23: C# `Fx.TurnEndAfter` -- after `TurnEnd`; the `AfterEnd` callbacks run here.
+    TurnEndAfter = 54,
+    /// v23: C# `Fx.PayAdd` -- a payment's amount, first modifier pass (before any money moves).
+    PayAdd = 55,
+    /// v23: C# `Fx.PayMul` -- second modifier pass, after `PayAdd`.
+    PayMul = 56,
+    /// v23: C# `Fx.PayAt` -- after `PayChoose`, before the `pay` [反击] window.
+    PayAt = 57,
+    /// v23: C# `Card.OnDiscarded` -- this card (named on `t.card`) just went to the discard pile.
+    Discarded = 58,
+    /// v23: C# `Card.DeckBeforeGame` -- this card is in a draw pile before the opening deal.
+    DeckBeforeGame = 59,
+    /// v23: C# `Card.DeckAtGameStart` -- this card is in a draw pile or hand after the mulligan.
+    DeckAtGameStart = 60,
+    /// v23: C# `Fx.Drew` -- a player drew `t.value` cards (after each card's own `Drawn`).
+    Drew = 61,
+    /// v23: C# `Fx.Reshuffled` -- a player's discard pile was shuffled back into its deck.
+    Reshuffled = 62,
+    /// v23: C# `Fx.Bought` -- a player became the owner of `t.tile` (buy or auction).
+    Bought = 63,
+    /// v23: C# `Fx.SettleInstead` -- a field card may replace the landed tile's effect: do it and call `trigger::set_cancelled()`.
+    SettleInstead = 64,
+    /// v23: C# `Fx.BeforeOut` -- a player is about to leave the game (bankrupt or forfeit).
+    BeforeOut = 65,
+    /// v23: C# `Teleported` -- a teleport finished (after its settlement, or at once if it does not settle).
+    Teleported = 66,
+    /// v23: C# `RollMove`'s `RollPlan` pass -- before the main move's dice are
+    /// rolled. The host runs every placed card's `On::RollPlan` here.
+    RollPlan = 67,
+    /// v25: C# `IAbnormalGuard.Guard` -- an abnormal effect is about to hit
+    /// `t.target` (`trigger::abnormal_kind()` says which). A field card blocks it
+    /// with `trigger::set_cancelled()`. Then, if someone else caused it, the
+    /// `abnormal` [反击] window opens.
+    AbnormalGuard = 68,
+    /// v26: C# `Fx.ImmuneAll` -- is `t.player_id` untouchable by `t.by_card`'s
+    /// effects? A field card claims it with `trigger::set_cancelled()`. Asked
+    /// before targeting `t.player_id`, before an abnormal effect, and before a
+    /// card-driven payment from/to `t.player_id`.
+    ImmuneAll = 69,
+    /// v26: C# `Fx.Untargetable(seat, by)` -- `t.by_card`'s card is about to
+    /// target `t.player_id` (after the `_targeted` counter). Block with
+    /// `trigger::set_cancelled()`.
+    Untargetable = 70,
+    /// v26: C# `IRedirect.Redirects` -- a single-target card is about to target
+    /// `t.target`; a field card takes the hit with `trigger::set_target(player_id)`.
+    Redirect = 71,
 }
 
 impl TriggerKind {
@@ -124,7 +462,7 @@ impl TriggerKind {
             2 => Self::MoveRoll,
             3 => Self::TurnStart,
             4 => Self::Pass,
-            5 => Self::PassSeat,
+            5 => Self::PassPlayer,
             6 => Self::SettleBefore,
             7 => Self::Settle,
             8 => Self::Mortgage,
@@ -147,6 +485,50 @@ impl TriggerKind {
             25 => Self::DrawOut,
             26 => Self::CircleAffected,
             27 => Self::TwoCards,
+            28 => Self::TurnStartBefore,
+            29 => Self::PassBefore,
+            30 => Self::MortgageBefore,
+            31 => Self::BankruptBefore,
+            32 => Self::CardAfter,
+            33 => Self::EventAfter,
+            34 => Self::SettleAfter,
+            35 => Self::BuyBefore,
+            36 => Self::BuyAfter,
+            37 => Self::BuildBefore,
+            38 => Self::BuildAfter,
+            39 => Self::DiscardBefore,
+            40 => Self::DiscardAfter,
+            41 => Self::EndTurnBefore,
+            42 => Self::EndTurnAfter,
+            43 => Self::LeaveBefore,
+            44 => Self::LeaveAfter,
+            45 => Self::TurnEnd,
+            46 => Self::Drawn,
+            47 => Self::PassTile,
+            48 => Self::PayAfter,
+            49 => Self::RollAfter,
+            50 => Self::CardPlayed,
+            51 => Self::Targeted,
+            52 => Self::PayChoose,
+            53 => Self::TurnEndBefore,
+            54 => Self::TurnEndAfter,
+            55 => Self::PayAdd,
+            56 => Self::PayMul,
+            57 => Self::PayAt,
+            58 => Self::Discarded,
+            59 => Self::DeckBeforeGame,
+            60 => Self::DeckAtGameStart,
+            61 => Self::Drew,
+            62 => Self::Reshuffled,
+            63 => Self::Bought,
+            64 => Self::SettleInstead,
+            65 => Self::BeforeOut,
+            66 => Self::Teleported,
+            67 => Self::RollPlan,
+            68 => Self::AbnormalGuard,
+            69 => Self::ImmuneAll,
+            70 => Self::Untargetable,
+            71 => Self::Redirect,
             _ => Self::None,
         }
     }
@@ -159,7 +541,7 @@ impl TriggerKind {
             Self::MoveRoll => "moveRoll",
             Self::TurnStart => "turnStart",
             Self::Pass => "pass",
-            Self::PassSeat => "passSeat",
+            Self::PassPlayer => "passPlayer",
             Self::SettleBefore => "settleBefore",
             Self::Settle => "settle",
             Self::Mortgage => "mortgage",
@@ -182,6 +564,50 @@ impl TriggerKind {
             Self::DrawOut => "drawOut",
             Self::CircleAffected => "circleAffected",
             Self::TwoCards => "twoCards",
+            Self::TurnStartBefore => "turnStartBefore",
+            Self::PassBefore => "passBefore",
+            Self::MortgageBefore => "mortgageBefore",
+            Self::BankruptBefore => "bankruptBefore",
+            Self::CardAfter => "cardAfter",
+            Self::EventAfter => "eventAfter",
+            Self::SettleAfter => "settleAfter",
+            Self::BuyBefore => "buyBefore",
+            Self::BuyAfter => "buyAfter",
+            Self::BuildBefore => "buildBefore",
+            Self::BuildAfter => "buildAfter",
+            Self::DiscardBefore => "discardBefore",
+            Self::DiscardAfter => "discardAfter",
+            Self::EndTurnBefore => "endTurnBefore",
+            Self::EndTurnAfter => "endTurnAfter",
+            Self::LeaveBefore => "leaveBefore",
+            Self::LeaveAfter => "leaveAfter",
+            Self::TurnEnd => "turnEnd",
+            Self::Drawn => "drawn",
+            Self::PassTile => "passTile",
+            Self::PayAfter => "payAfter",
+            Self::RollAfter => "rollAfter",
+            Self::CardPlayed => "cardPlayed",
+            Self::Targeted => "targeted",
+            Self::PayChoose => "payChoose",
+            Self::TurnEndBefore => "turnEndBefore",
+            Self::TurnEndAfter => "turnEndAfter",
+            Self::PayAdd => "payAdd",
+            Self::PayMul => "payMul",
+            Self::PayAt => "payAt",
+            Self::Discarded => "discarded",
+            Self::DeckBeforeGame => "deckBeforeGame",
+            Self::DeckAtGameStart => "deckAtGameStart",
+            Self::Drew => "drew",
+            Self::Reshuffled => "reshuffled",
+            Self::Bought => "bought",
+            Self::SettleInstead => "settleInstead",
+            Self::BeforeOut => "beforeOut",
+            Self::Teleported => "teleported",
+            Self::RollPlan => "rollPlan",
+            Self::AbnormalGuard => "abnormalGuard",
+            Self::ImmuneAll => "immuneAll",
+            Self::Untargetable => "untargetable",
+            Self::Redirect => "redirect",
         }
     }
 
@@ -192,7 +618,7 @@ impl TriggerKind {
             "moveRoll" => Self::MoveRoll,
             "turnStart" => Self::TurnStart,
             "pass" => Self::Pass,
-            "passSeat" => Self::PassSeat,
+            "passPlayer" => Self::PassPlayer,
             "settleBefore" => Self::SettleBefore,
             "settle" => Self::Settle,
             "mortgage" => Self::Mortgage,
@@ -215,6 +641,50 @@ impl TriggerKind {
             "drawOut" => Self::DrawOut,
             "circleAffected" => Self::CircleAffected,
             "twoCards" => Self::TwoCards,
+            "turnStartBefore" => Self::TurnStartBefore,
+            "passBefore" => Self::PassBefore,
+            "mortgageBefore" => Self::MortgageBefore,
+            "bankruptBefore" => Self::BankruptBefore,
+            "cardAfter" => Self::CardAfter,
+            "eventAfter" => Self::EventAfter,
+            "settleAfter" => Self::SettleAfter,
+            "buyBefore" => Self::BuyBefore,
+            "buyAfter" => Self::BuyAfter,
+            "buildBefore" => Self::BuildBefore,
+            "buildAfter" => Self::BuildAfter,
+            "discardBefore" => Self::DiscardBefore,
+            "discardAfter" => Self::DiscardAfter,
+            "endTurnBefore" => Self::EndTurnBefore,
+            "endTurnAfter" => Self::EndTurnAfter,
+            "leaveBefore" => Self::LeaveBefore,
+            "leaveAfter" => Self::LeaveAfter,
+            "turnEnd" => Self::TurnEnd,
+            "drawn" => Self::Drawn,
+            "passTile" => Self::PassTile,
+            "payAfter" => Self::PayAfter,
+            "rollAfter" => Self::RollAfter,
+            "cardPlayed" => Self::CardPlayed,
+            "targeted" => Self::Targeted,
+            "payChoose" => Self::PayChoose,
+            "turnEndBefore" => Self::TurnEndBefore,
+            "turnEndAfter" => Self::TurnEndAfter,
+            "payAdd" => Self::PayAdd,
+            "payMul" => Self::PayMul,
+            "payAt" => Self::PayAt,
+            "discarded" => Self::Discarded,
+            "deckBeforeGame" => Self::DeckBeforeGame,
+            "deckAtGameStart" => Self::DeckAtGameStart,
+            "drew" => Self::Drew,
+            "reshuffled" => Self::Reshuffled,
+            "bought" => Self::Bought,
+            "settleInstead" => Self::SettleInstead,
+            "beforeOut" => Self::BeforeOut,
+            "teleported" => Self::Teleported,
+            "rollPlan" => Self::RollPlan,
+            "abnormalGuard" => Self::AbnormalGuard,
+            "immuneAll" => Self::ImmuneAll,
+            "untargetable" => Self::Untargetable,
+            "redirect" => Self::Redirect,
             _ => Self::None,
         }
     }
@@ -235,6 +705,43 @@ pub fn unpack(v: i64) -> (u32, u32) {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ManifestEntry {
     pub id: String,
-    pub play: bool,
-    pub react: bool,
+    /// The card's entry points, in declaration order (the `entry` index the
+    /// host passes back to `bandori_on`).
+    pub on: Vec<ManifestOn>,
+}
+
+/// One entry point in the manifest: what it is and which trigger kinds it
+/// answers (empty for non-trigger entries).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ManifestOn {
+    /// An [`OnKind`] as `i32`.
+    pub kind: i32,
+    /// `TriggerKind`s as `i32`.
+    pub triggers: Vec<i32>,
+}
+
+/// What a card entry point is (`card_sdk::On`'s variants).
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OnKind {
+    Play = 0,
+    CantPlay = 1,
+    React = 2,
+    Hook = 3,
+    AtEnd = 4,
+    RollPlan = 5,
+}
+
+impl OnKind {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
+            0 => Self::Play,
+            1 => Self::CantPlay,
+            2 => Self::React,
+            3 => Self::Hook,
+            4 => Self::AtEnd,
+            5 => Self::RollPlan,
+            _ => return None,
+        })
+    }
 }

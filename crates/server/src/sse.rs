@@ -7,7 +7,7 @@
 //! | `hello`    |                     | `{you, room}` |
 //! | `room`     |                     | `RoomInfo` (when it changes) |
 //! | `event`    | `<matchId>:<eventId>` | `MatchEvent` |
-//! | `match`    |                     | `{state, hand, handNotes, you, seat}` (when it changes) |
+//! | `match`    |                     | `{state, hand, handNotes, you, player_id}` (when it changes) |
 //! | `dissolve` |                     | `{reason}` |
 //!
 //! Only `event` frames carry an id, so a browser's automatic reconnect sends the

@@ -90,7 +90,7 @@ pub fn deck_why_not(character_name: &str, card: &str) -> Result<Option<String>, 
     let d = data()?;
     let c = character(&d, character_name)?;
     let k = d.card(card).ok_or_else(|| JsError::new("unknown card"))?;
-    Ok(deck::why_not(&d, c, k).map(|m| json(&m)))
+    Ok(deck::cant_play(&d, c, k).map(|m| json(&m)))
 }
 
 #[wasm_bindgen]
@@ -301,16 +301,16 @@ impl SoloMatch {
         }
     }
 
-    /// `{state, hand, handNotes, you, seat}` -- the same shape as the server's `match` frame.
+    /// `{state, hand, handNotes, you, player_id}` -- the same shape as the server's `match` frame.
     pub fn view(&self, member: i32) -> String {
         let state = self.m.state();
-        let seat = state.seat_of(member);
+        let player_id = state.player_of(member);
         json(&serde_json::json!({
             "state": state,
             "hand": self.m.hand_of(member),
             "handNotes": self.m.hand_notes_of(member),
             "you": member,
-            "seat": seat,
+            "playerId": player_id,
         }))
     }
 

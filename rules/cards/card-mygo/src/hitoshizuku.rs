@@ -9,22 +9,18 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const HITOSHIZUKU: CardDef = CardDef {
-    id: "MyGO:壱雫空",
-    play: Some(hitoshizuku),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[
+    On::Play(hitoshizuku),
+]);
 
-fn hitoshizuku(seat: i32) {
-    // (seat, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
+fn hitoshizuku(player_id: i32) {
+    // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
     // `dictionary`, built while walking the table.
     let mut cleared: Vec<(i32, i32)> = Vec::new();
-    for j in 0..ctx::seat_count() {
-        if ctx::seat_out(j) {
+    for j in 0..ctx::player_count() {
+        if ctx::player_out(j) {
             continue;
         }
         let mut n = 0;
@@ -44,15 +40,15 @@ fn hitoshizuku(seat: i32) {
             n += 1;
         }
         // TODO(规则书): 「清除场上所有[停留]与[眩晕]效果」 -- C# also zeroes
-        // `matchSeat.stunStart` alongside `stun`; the vocabulary reads only
+        // `matchPlayer.stunStart` alongside `stun`; the vocabulary reads only
         // `stun_of` (the `stun` counter), so a pending `stunStart` survives.
         if n > 0 {
             cleared.push((j, n));
             // C# `H.Log("status", j, ...)` names the kinds when both went.
             if n == 2 {
-                ctx::log(j, &Msg::new(key!("hitoshizuku_cleared_both")).seat("who", j));
+                ctx::log(j, &Msg::new(key!("hitoshizuku_cleared_both")).player_id("who", j));
             } else {
-                ctx::log(j, &Msg::new(key!("hitoshizuku_cleared")).seat("who", j));
+                ctx::log(j, &Msg::new(key!("hitoshizuku_cleared")).player_id("who", j));
             }
         }
     }
@@ -60,17 +56,17 @@ fn hitoshizuku(seat: i32) {
     // drops to 0 (`H.State.skipMove = false`); needs a skip-move flag.
     for (j, n) in cleared {
         let amount = 1000 * n;
-        if j == seat {
+        if j == player_id {
             // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
             // -- C# `item.Key == i` branch -> `H.GainR(i, 1000 * n, ...)`.
-            ctx::gain(seat, amount, &Msg::new(key!("hitoshizuku_self_gain")));
+            ctx::gain(player_id, amount, &Msg::new(key!("hitoshizuku_self_gain")));
         } else {
             // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
-            // C# `H.PayR(j, i, 1000 * n, CardName, i)` (a seat-to-seat transfer).
-            ctx::transfer(j, seat, amount, &Msg::new(key!("hitoshizuku_pay")));
+            // C# `H.PayR(j, i, 1000 * n, CardName, i)` (a player-to-player transfer).
+            ctx::transfer(j, player_id, amount, &Msg::new(key!("hitoshizuku_pay")));
         }
     }
     // TODO(规则书): 「（此卡可在眩晕时打出）」 -- C# `CardHitoshizuku.PlayableStunned`;
-    // `CardDef` has no playable-stunned hook, so a stunned seat cannot declare
+    // `CardDef` has no playable-stunned hook, so a stunned player cannot declare
     // the card today.
 }

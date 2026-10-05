@@ -20,13 +20,14 @@ import { openDeed, showDeedList, showSettle, showSkills } from "./Popups";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf } from "../../core/names";
+import { namesOf, stateOf } from "../../core/names";
 
-const steps = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
+/** The stage names mirror Yu-Gi-Oh's turn phases (Master Duel's phase track). */
+const phases = () => [tr("board.phase.main1"), tr("board.phase.battle"), tr("board.phase.main2"), tr("board.phase.end")];
 
 function timerOf(m: Model, elapsed: number): { value: string; caption: string; frac: number; cls: string } {
   const S = m.S;
-  const cur = S.seats[S.turn];
+  const cur = S.players[S.turn];
   if (S.phase !== "play") return { value: "—", caption: "", frac: 0, cls: s.idle };
   if (S.turn < 0) return { value: "—", caption: tr("board.ready"), frac: 0, cls: s.idle };
   if (cur?.ai) return { value: "—", caption: cur.bot ? tr("solo.bot") : tr("board.afk"), frac: 0, cls: s.idle };
@@ -39,12 +40,12 @@ function timerOf(m: Model, elapsed: number): { value: string; caption: string; f
 
 export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; anim: Animator; elapsed: number }) {
   const S = m.S;
-  const cur = S.seats[S.turn];
+  const cur = S.players[S.turn];
   const c = S.turn >= 0 ? m.charOf(S.turn) : undefined;
   const t = timerOf(m, elapsed);
   const step = S.phase === "play" ? (anim.phase?.key === "board.phase.end" ? 3 : Math.min(2, Math.max(0, S.step - 1))) : -1;
   const animating = anim.animating;
-  const canRoll = S.phase === "play" && S.roller === m.seat && S.step === 1 && !S.skipMove && !S.busy && !m.asking && !animating;
+  const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 1 && !S.skipMove && !S.busy && !m.asking && !animating;
   const can = m.myTurn && !S.busy && !m.asking && !animating;
 
   let hint: string;
@@ -52,22 +53,22 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
   else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
   else if (S.busy || animating) hint = tr("board.settling");
-  else if (S.roller === m.seat && !m.myTurn && S.step === 1) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
+  else if (S.roller === m.playerId && !m.myTurn && S.step === 1) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
   else if (m.myTurn && S.step === 1 && S.skipMove) hint = tr("board.stayHint");
-  else if (m.myTurn && S.step === 1 && S.roller !== m.seat && S.roller >= 0) hint = tr("board.waitRoller", { who: S.seats[S.roller].player });
+  else if (m.myTurn && S.step === 1 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: S.players[S.roller].player });
   else if (m.myTurn) hint = S.step === 1 ? tr("board.clickRoll") : tr("board.moved");
   else hint = tr("board.waiting", { who: cur?.player ?? "", bot: cur?.bot ? tr("board.botSuffix") : "" });
 
   const buildFromButton = () => {
     if (!m.myTurn) return toast(tr("board.buildOwnOnly"));
     const p = m.me.pos;
-    if (!canBuildOn(m, p)) return toast(S.owners[p] === m.seat ? tr("board.buildOnlySettling") : tr("board.buildNotOnOwn"));
+    if (!canBuildOn(m, p)) return toast(S.owners[p] === m.playerId ? tr("board.buildOnlySettling") : tr("board.buildNotOnOwn"));
     openDeed(sess, p);
   };
   const hasSkill = m.me.actions?.some((a) => a.enabled);
   const weights = sess instanceof SoloSession ? sess.weights : sess.room?.weights ?? { money: 1, property: 1, houses: 1 };
   const vote = S.vote;
-  const k = vote.seats.indexOf(m.seat);
+  const k = vote.players.indexOf(m.playerId);
 
   return (
     <>
@@ -109,7 +110,7 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
       <div className={s.extra}>
         {vote.id ? (
           <div className={s.vote}>
-            <span>{tr("board.voteStatus", { n: vote.answers.filter((a) => a === 1).length, total: vote.seats.length })}</span>
+            <span>{tr("board.voteStatus", { n: vote.answers.filter((a) => a === 1).length, total: vote.players.length })}</span>
             {k >= 0 && vote.answers[k] < 0 && <Btn kind="pink" size="small" onClick={() => void act(sess, { act: "vote", value: 1 })}>{tr("board.voteFor")}</Btn>}
             {k >= 0 && vote.answers[k] < 0 && <Btn size="small" onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>}
           </div>
@@ -125,7 +126,7 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
 function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   const [hover, setHover] = useState<{ id: string; note: string } | null>(null);
   const S = m.S;
-  const limit = m.me.handLimit || 5;
+  const limit = stateOf(m.me, "handLimit") || 5;
   const canPlay = m.myTurn && S.step === 1 && !S.busy && !m.asking && !busy;
   const detail = (id: string, k: number) => {
     setHover(null);

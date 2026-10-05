@@ -7,12 +7,12 @@
 //!
 //! stays in play.
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const PIPOPA: CardDef = CardDef { id: "PPP:[衍生]Pipopa", play: Some(pipopa), can_react: None, react: None, why_not: None };
+pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play(pipopa)]);
 
-fn pipopa(seat: i32) {
+fn pipopa(player_id: i32) {
     ctx::set_dest(ctx::Dest::Banished);
-    ctx::gain(seat, 1000, &Msg::new(key!("pipopa_why")));
-    ctx::place_card(seat, "PPP:[衍生]Popipapapipopa", &Msg::new(key!("pipopa_note")));
+    ctx::gain(player_id, 1000, &Msg::new(key!("pipopa_why")));
+    ctx::place_card(player_id, "PPP:[衍生]Popipapapipopa", &Msg::new(key!("pipopa_note")));
 }

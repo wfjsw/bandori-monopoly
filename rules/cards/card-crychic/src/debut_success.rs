@@ -6,28 +6,25 @@
 //! >   打出此卡后，本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外），回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶。
 //!
 
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const DEBUT_SUCCESS: CardDef = CardDef {
-    id: "CRYCHIC:初演大成功",
-    play: Some(debut_success),
-    can_react: None,
-    react: None,
-    why_not: None,
-};
+pub const DEBUT_SUCCESS: CardDef = CardDef::new("CRYCHIC:初演大成功", &[
+    On::Play(debut_success),
+    On::AtEnd(at_end),
+]);
 
-fn debut_success(seat: i32) {
+fn debut_success(player_id: i32) {
     // 规则书: 「打出此卡后，本回合内你的资金不会下降」 -- C# `H._turnCtx.NoMoneyLoss = true`.
-    ctx::log(seat, &Msg::new(key!("debut_success_note")).seat("who", seat));
-    // TODO(ABI): 「本回合内你的资金不会下降（除拍卖与写明不受资金变动效果影响的情况外）」
-    //   -- needs the turn-scoped NoMoneyLoss flag (C# `H._turnCtx.NoMoneyLoss`,
-    //   honoured by `H.Money` except for auctions and effects marked immune to
-    //   money deltas). A `set_slot(seat, "debut_no_loss", 1)` stand-in has no
-    //   consumer until that hook exists.
-    // TODO(ABI): 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
-    //   -- needs the turn-end AfterEnd scheduler (C# `H._turnCtx.AfterEnd.Add(...)`
-    //   -> `CardDebutSuccess.After`). Once scheduled this is
-    //   `ctx::give_stun(seat, 1)` + `ctx::add_band_crystals(seat, 1, 0)`; applying
-    //   them at play time would stun the seat for the rest of this turn, which is
-    //   not the rule.
+    ctx::log(player_id, &Msg::new(key!("debut_success_note")).player_id("who", player_id));
+    ctx::set_no_money_loss(player_id);
+    // 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
+    //   -- C# `H._turnCtx.AfterEnd.Add(() => After(i))`.
+    ctx::at_turn_end(player_id);
+}
+
+/// C# `CardDebutSuccess.After` -- the scheduled turn-end body.
+fn at_end(player_id: i32) {
+    // 规则书: 「回合结束后获得一层眩晕并向乐队技能卡上添加一个奇迹水晶」
+    ctx::give_stun(player_id, 1);
+    ctx::add_band_crystals(player_id, 1, 0);
 }

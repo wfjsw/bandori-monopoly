@@ -8,47 +8,44 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, Msg};
+use card_sdk::{ctx, key, CardDef, On, Msg};
 
-pub const TO_YOU_FAR_AWAY: CardDef = CardDef {
-    id: "PPP:献给远方的你",
-    play: Some(play),
-    can_react: None,
-    react: None,
-    why_not: Some(why_not),
-};
+pub const TO_YOU_FAR_AWAY: CardDef = CardDef::new("PPP:献给远方的你", &[
+    On::Play(play),
+    On::CantPlay(cant_play),
+]);
 
-fn why_not(seat: i32) -> Option<Msg> {
+fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardToYouFarAway.WhyNot`: refuses with 「没有别的玩家」 when `H.Others` is
-    // empty (no other present seat at all).
-    if ctx::others(seat).is_empty() {
-        return Some(Msg::new(key!("to_you_far_away_none")).seat("who", seat));
+    // empty (no other present player at all).
+    if ctx::others(player_id).is_empty() {
+        return Some(Msg::new(key!("to_you_far_away_none")).player_id("who", player_id));
     }
     None // playable
 }
 
-fn play(seat: i32) {
+fn play(player_id: i32) {
     // 规则书: 「[传送]至任意与[使用者]绝对距离最远的玩家的格子」 -- C# `H.Farthest(i)`
-    // keeps every other seat sitting at the maximum absolute distance.
-    let pos = ctx::seat_pos(seat);
-    let others = ctx::others(seat);
+    // keeps every other player sitting at the maximum absolute distance.
+    let pos = ctx::player_pos(player_id);
+    let others = ctx::others(player_id);
     // C# `Play` yields break when `H.Farthest` is empty (WhyNot refuses earlier).
     if others.is_empty() {
         return;
     }
-    let best = others.iter().map(|&p| ctx::dist(pos, ctx::seat_pos(p))).max().unwrap_or(0);
+    let best = others.iter().map(|&p| ctx::dist(pos, ctx::player_pos(p))).max().unwrap_or(0);
     let mut far: Vec<i32> = others
         .into_iter()
-        .filter(|&p| ctx::dist(pos, ctx::seat_pos(p)) == best)
+        .filter(|&p| ctx::dist(pos, ctx::player_pos(p)) == best)
         .collect();
     if far.is_empty() {
         return;
     }
-    // C# `H.AskSeat` only when several seats share the maximum.
+    // C# `H.AskSeat` only when several players share the maximum.
     let who = if far.len() > 1 {
         far.sort();
-        ctx::ask_seat(
-            seat,
+        ctx::ask_player(
+            player_id,
             &Msg::new(key!("to_you_far_away_title")),
             &Msg::new(key!("to_you_far_away_ask")),
             &far,
@@ -56,27 +53,27 @@ fn play(seat: i32) {
     } else {
         far[0]
     };
-    let to = ctx::seat_pos(who);
+    let to = ctx::player_pos(who);
     // 规则书: 「[传送]至…玩家的格子」
-    ctx::teleport_to(seat, to);
+    ctx::teleport_to(player_id, to);
     ctx::log(
-        seat,
+        player_id,
         &Msg::new(key!("to_you_far_away_moved"))
-            .seat("who", seat)
-            .seat("target", who)
+            .player_id("who", player_id)
+            .player_id("target", who)
             .tile("tile", to),
     );
     // TODO(ABI): 「并[结算]」 -- `ctx::teleport_to` is `H.ForceTeleport(..., resolve:
     //   false)` (no settle). Needs `H.ForceTeleport(..., resolve: true)` (C#
     //   `CardToYouFarAway.Play`) so the landing settles.
-    if ctx::seat_out(seat) {
+    if ctx::player_out(player_id) {
         return;
     }
     // 规则书: 「然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖」
     // -- C# filters `H.OwnedBy` by `H.WhyNotBuildOn == null`, keeps those at the
     // maximum `H.Dist` from the new position, then `H.OfferBuildAmong`.
-    let at = ctx::seat_pos(seat);
-    let mine = ctx::owned_tiles(seat);
+    let at = ctx::player_pos(player_id);
+    let mine = ctx::owned_tiles(player_id);
     let best = mine.iter().map(|&t| ctx::dist(at, t)).max().unwrap_or(0);
     let far_tiles: Vec<i32> = mine.into_iter().filter(|&t| ctx::dist(at, t) == best).collect();
     // TODO(ABI): 「加盖」 -- needs `H.OfferBuildAmong` / `H.WhyNotBuildOn` (pay

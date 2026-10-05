@@ -1,6 +1,7 @@
 // Game data: fetched once from /data, handed to the wasm rules and kept typed here
 // for display.
 
+import { settings } from "./store";
 import init, * as glue from "../wasm/glue";
 import { t as tr } from "../i18n/t";
 import type { BandData, CardData, CharacterData, EventData, TileData, VoiceLine } from "./types";
@@ -71,4 +72,15 @@ export const GENERAL_BAND = "通用";
 
 export function cardTitle(id: string): string {
   return D.card(id)?.name || tr("common.unnamed");
+}
+
+/** C# `SkillText.Of(c)`: the simplified skill text when the setting is on. */
+export function skillText(entry: { text: string; simple?: string } | undefined): string {
+  if (!entry) return "";
+  return settings().skillTextSimple && entry.simple ? entry.simple : entry.text;
+}
+
+/** C# `SkillText.SwitchLabel`: the action the toggle performs. */
+export function skillTextSwitch(): string {
+  return settings().skillTextSimple ? "settings.skillFull" : "settings.skillSimple";
 }

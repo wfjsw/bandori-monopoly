@@ -6,7 +6,7 @@ import { navigate } from "../../app/router";
 import { sceneImg } from "../../core/assets";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
-import { D, cardTitle, rules } from "../../core/data";
+import { D, cardTitle, rules, skillText } from "../../core/data";
 import { useProfile } from "../../core/hooks";
 import { markSeen, profileJson, updateProfile } from "../../core/store";
 import type { CardData, CharacterData } from "../../core/types";
@@ -228,7 +228,7 @@ function showBandCards(c: CharacterData): void {
   openModal(tr("deck.bandCards"), (
     <div className={s.bandCards}>
       <div className={s.row}><BandMark band={c.band} /><b>{band?.skill ?? ""}</b></div>
-      <p>{band?.text ?? tr("select.bandSkillTbd")}</p>
+      <p>{skillText(band) || tr("select.bandSkillTbd")}</p>
       <div className={s.bandGrid}>
         {D.cards.filter((x) => x.band === c.band && !x.owner && !x.derived).map((x) => <CardFace key={x.id} id={x.id} onClick={() => showCard(x.id)} />)}
       </div>

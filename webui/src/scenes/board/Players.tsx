@@ -1,5 +1,6 @@
 // Left column: player panels (PlayerPanelView) and the match log.
 
+import { stateOf, stateMax } from "../../core/names";
 import { useEffect, useRef } from "react";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
@@ -15,15 +16,15 @@ import { t as tr } from "../../i18n/t";
 
 export function Players({ m }: { m: Model }) {
   const S = m.S;
-  const n = S.seats.length;
+  const n = S.players.length;
   const gap = n > 6 ? 6 : 10;
   const height = Math.min(82, Math.floor((548 - gap * (n - 1)) / n));
   return (
     <div className={s.players} style={{ gap }}>
-      {S.seats.map((x, i) => {
+      {S.players.map((x, i) => {
         const c = m.charOf(i);
         const out = x.bankrupt || x.left;
-        const status = [x.stay ? tr("board.stayN", { n: x.stay }) : "", x.stun + x.stunStart ? tr("board.stunned") : "", x.exile ? tr("board.exiled") : "", x.ai && !x.bot && !out ? tr("board.afk") : ""].filter(Boolean);
+        const status = [stateOf(x, "stay") ? tr("board.stayN", { n: stateOf(x, "stay") }) : "", stateOf(x, "stun") + stateOf(x, "stunStart") ? tr("board.stunned") : "", stateOf(x, "exile") ? tr("board.exiled") : "", x.ai && !x.bot && !out ? tr("board.afk") : ""].filter(Boolean);
         return (
           <button key={i} type="button" style={{ height }} className={cx(s.panel, i === S.turn && s.turn, out && s.out, height < 64 && s.compact)} onClick={() => showPlayerInfo(m, i)}>
             <span className={s.n}>{i + 1}</span>
@@ -33,13 +34,13 @@ export function Players({ m }: { m: Model }) {
             </div>
             <div className={s.who}>
               <b>{c?.display ?? "—"}</b>
-              <small>{i === m.seat ? tr("common.youName", { name: x.player }) : x.player}</small>
+              <small>{i === m.playerId ? tr("common.youName", { name: x.player }) : x.player}</small>
             </div>
             <div className={s.money}><img src={sceneImg("icon_coin")} alt="" /><b>{n0(x.money)}</b></div>
             <div className={s.sub}>
               {status.map((t) => <span key={t} className={s.status}>{t}</span>)}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
-              <span className={s.fire}><img src={sceneImg("icon_fire")} alt="" />{x.fire}/{x.fireMax}</span>
+              <span className={s.fire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
             </div>
             {out && <div className={s.outMark}>{x.bankrupt ? tr("board.bankrupt") : tr("board.forfeit")}</div>}
           </button>

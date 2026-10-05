@@ -9,28 +9,25 @@
 
 use card_sdk::abi::TriggerKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, Msg};
+use card_sdk::{key, CardDef, On, Msg};
 
-pub const ENCORE: CardDef = CardDef {
-    id: "通用:安可",
-    play: None,
-    can_react: Some(can_react),
-    react: Some(react),
-    why_not: None,
-};
+pub const ENCORE: CardDef = CardDef::new("通用:安可", &[
+    On::React(&[TriggerKind::Abnormal], can_react, react),
+]);
 
-fn can_react(seat: i32) -> bool {
+fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「[使用者]即将因任何原因受到[异常移动效果]影响时」
     // C# `CardEncore.CanReact`: `t.Kind == "abnormal" && t.Target == seat`.
-    trigger::kind() == TriggerKind::Abnormal && trigger::target() == seat
+    trigger::kind() == TriggerKind::Abnormal && trigger::target() == player_id
 }
 
-fn react(seat: i32) {
+fn react(player_id: i32) {
     // 规则书[反击]: 「无效此次[异常移动效果]和其导致的所有效果」
     // C# `c.Trigger.Cancelled = true` then 「安可：这次…无效」.
-    ctx::log(seat, &Msg::new(key!("encore_negate")).seat("who", seat));
-    // TODO(ABI): 「无效此次[异常移动效果]和其导致的所有效果」 -- needs a
-    // trigger-cancel hook (C# `c.Trigger.Cancelled = true`) so the abnormal and
-    // everything it leads to are dropped. The C# log also names the abnormal
-    // (`AbName(c.Trigger.Ab?.Kind)`); the trigger carries no `Ab`.
+    trigger::set_cancelled();
+    ctx::log(player_id, &Msg::new(key!("encore_negate")).player_id("who", player_id));
+    // Narrowed: the C# log names the abnormal (`AbName(c.Trigger.Ab?.Kind)`).
+    // `trigger::abnormal_kind()` now carries `t.Ab.Kind` (v25), but `Msg` has
+    // no localized AbKind-name argument, so the log keeps the rulebook's
+    // generic [异常移动效果] wording rather than hardcoding the C# display names.
 }
