@@ -144,7 +144,14 @@ function SideTile({ t, side, cls, style, onClick, children }: TileProps & { side
 
 function Center({ m, anim }: { m: Model; anim: Animator }) {
   const S = m.S;
-  const rows = S.players.map((x, i) => [i, x.field ?? []] as const).filter(([, f]) => f.length);
+  // Skill rules are placed on the field so `On::Hook` reaches them (engine
+  // `bind_skills`); they are not cards in play and carry no displayable state,
+  // and the skill button is where they are actually shown. `skill:` is the
+  // rule-id prefix `skill_id` builds -- without this every player opens the
+  // match with two （未命名） cards on their field.
+  const rows = S.players
+    .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
+    .filter(([, f]) => f.length);
   const fieldCount = rows.reduce((a, [, f]) => a + f.length, 0);
   const discards = S.players.reduce((a, x) => a + x.discard.length, 0);
   const lastPlayed = [...S.events].reverse().find((e) => (e.type === "play" || e.type === "discard") && e.card)?.card ?? "";

@@ -13,9 +13,16 @@ export interface CardData {
 }
 export interface CharacterData {
   name: string; display: string; band: string; color: string; skill: string; text: string;
+  /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
+  simple?: string;
   cnId: string; art: string; costume: string; exclusiveCards: string[]; preset: string[];
 }
-export interface BandData { name: string; shortName: string; color: string; skill: string; text: string; logo: string }
+export interface BandData {
+  name: string; shortName: string; color: string; skill: string; text: string;
+  /** Simplified skill body, from `skill_simple.json` (see {@link skillText}). */
+  simple?: string;
+  logo: string;
+}
 export interface EventData { id: string; name: string; derived: boolean; text: string; cell: string }
 export interface VoiceLine { text: string; voice: string; motion: string; from: string }
 

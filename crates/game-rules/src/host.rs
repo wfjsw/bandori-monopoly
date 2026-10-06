@@ -236,6 +236,16 @@ pub enum Outcome<W> {
     NeedHost(HostRequest),
 }
 
+/// One card's answer to a hook point, from [`Ruleset::run_hook`].
+pub struct HookRun<W> {
+    /// A guard existed and passed -- the one moment the card shows itself.
+    /// `false` for a card with no guard at this kind (a gate, or an entry that
+    /// simply runs), which runs without announcing.
+    pub announced: bool,
+    /// What the body did. The body ran on the same instantiation as the guard.
+    pub outcome: Outcome<W>,
+}
+
 struct LoadedModule {
     module: Module,
     sha256: String,
@@ -250,6 +260,10 @@ struct Slot {
 }
 
 struct Inner {
+    /// Unique across the process. Caches keyed on a set of modules must not
+    /// survive one `Inner` into another that lands at the same address, so they
+    /// key on this rather than on a pointer.
+    id: u64,
     engine: Engine,
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
@@ -314,6 +328,7 @@ impl RulesetBuilder {
         }
         Ok(Ruleset {
             inner: Arc::new(Inner {
+                id: next_inner_id(),
                 engine: self.engine,
                 modules: self.modules,
                 cards: self.cards,
@@ -424,37 +439,62 @@ impl Ruleset {
             export::OP_RUN,
             player_id,
         );
-        let state = store.into_data();
-        match res {
-            Ok(_) => {
-                // A prompt was published and the run kept going: the guest
-                // swallowed a `Prompt` (`card_sdk` marks it `#[must_use]`; this
-                // is the boundary check the lint cannot reach). Carrying on would
-                // run the effect on an answer nobody gave.
-                if state.asked.is_some() || state.host_request.is_some() {
-                    return Err(RuleError::Trap(
-                        "card published a prompt and kept going".into(),
-                    ));
-                }
-                Ok(Outcome::Done(
-                    state.world.expect("world is restored after nested calls"),
-                ))
+        finish(store, res)
+    }
+
+    /// Ask one card's hook guard and, when it passes, run its body -- on a
+    /// **single** instantiation, so a fired hook costs one fire-up and one world
+    /// copy rather than the two a separate guard query + [`Self::run`] cost.
+    ///
+    /// Returns `Ok(None)` when the card is not activated at all (its guard
+    /// refused, or it has no entry at this kind). [`HookRun::announced`] is the
+    /// "a guard existed and passed" moment -- the one time the card shows
+    /// itself; a gate, which has no guard, runs without announcing.
+    pub fn run_hook<W: CardWorld>(
+        &self,
+        world: &W,
+        call: Call,
+        answers: &[i32],
+    ) -> Result<Option<HookRun<W>>, RuleError> {
+        let (card, player_id) = (call.card(), call.player_id());
+        self.check(card)?;
+        let kind = world.trigger().kind;
+        let info = &self.inner.cards[card as usize];
+        let Some(entry) = info.hook_entry(kind) else {
+            return Ok(None);
+        };
+        let mut store = self.store(world.clone(), answers)?;
+        let mut announced = false;
+        // `On::Hook` entries carry a guard; `On::Gate` entries are questions and
+        // have none, so they run unasked.
+        if let Some(guard) = info.entry(OnKind::Hook, Some(kind)) {
+            match call_card(
+                &self.inner,
+                &mut store,
+                card,
+                guard,
+                export::OP_GUARD,
+                player_id,
+            ) {
+                Ok(0) => return Ok(None),
+                Ok(_) => announced = true,
+                // A trap or a prompting guard: fail closed, the card does not
+                // fire -- the contract `can_hook` + `hook_guard` had.
+                Err(_) => return Ok(None),
             }
-            Err(e) if is_need_input(&e) => {
-                if let Some(req) = state.host_request {
-                    Ok(Outcome::NeedHost(req))
-                } else if let Some(p) = state.asked {
-                    Ok(Outcome::NeedInput(p))
-                } else {
-                    // `Prompt` is a unit struct, so a card can fabricate one
-                    // without a host call having published a question. Refuse it
-                    // rather than pausing the match on a prompt that no client
-                    // can answer.
-                    Err(RuleError::Trap("need-input exit without a prompt".into()))
-                }
-            }
-            Err(e) => Err(trap(e)),
         }
+        let res = call_card(
+            &self.inner,
+            &mut store,
+            card,
+            entry,
+            export::OP_RUN,
+            player_id,
+        );
+        Ok(Some(HookRun {
+            announced,
+            outcome: finish(store, res)?,
+        }))
     }
 
     /// `Card.CanReact` against the current trigger. Runs on a throwaway copy, so it
@@ -482,45 +522,6 @@ impl Ruleset {
             player_id,
         ) {
             Ok(v) => Ok(v != 0),
-            Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
-            Err(e) => Err(trap(e)),
-        }
-    }
-
-    /// The pure guard on an `On::Hook` entry, against the current trigger.
-    ///
-    /// Answers `Some(passed)`: the guard is the **activation** gate, so `false`
-    /// means the card is not activated at all (no body, nothing on the UI) and
-    /// `true` means it fires and is shown. Answers `None` for an entry that has
-    /// no guard to ask -- `On::Gate` is a question the card *answers*, not an
-    /// activation -- and the caller runs it unconditionally, as before.
-    ///
-    /// Same throwaway-copy contract as [`Self::can_react`]: it cannot change the
-    /// world even if the card calls a mutating function by mistake, and a
-    /// prompting guard fails closed.
-    pub fn can_hook<W: CardWorld>(
-        &self,
-        world: &W,
-        card: i32,
-        player_id: i32,
-    ) -> Result<Option<bool>, RuleError> {
-        self.check(card)?;
-        let kind = world.trigger().kind;
-        let info = &self.inner.cards[card as usize];
-        let Some(entry) = info.entry(OnKind::Hook, Some(kind)) else {
-            // A gate (or nothing) at this kind: no guard exists.
-            return Ok(None);
-        };
-        let mut store = self.store(world.clone(), &[])?;
-        match call_card(
-            &self.inner,
-            &mut store,
-            card,
-            entry,
-            export::OP_GUARD,
-            player_id,
-        ) {
-            Ok(v) => Ok(Some(v != 0)),
             Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
             Err(e) => Err(trap(e)),
         }
@@ -570,6 +571,41 @@ impl Ruleset {
 
 fn trap(e: Error) -> RuleError {
     RuleError::Trap(be::error_text(&e))
+}
+
+/// Fold one guest call's result into an [`Outcome`] against the store it ran in.
+fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outcome<W>, RuleError> {
+    let state = store.into_data();
+    match res {
+        Ok(_) => {
+            // A prompt was published and the run kept going: the guest
+            // swallowed a `Prompt` (`card_sdk` marks it `#[must_use]`; this
+            // is the boundary check the lint cannot reach). Carrying on would
+            // run the effect on an answer nobody gave.
+            if state.asked.is_some() || state.host_request.is_some() {
+                return Err(RuleError::Trap(
+                    "card published a prompt and kept going".into(),
+                ));
+            }
+            Ok(Outcome::Done(
+                state.world.expect("world is restored after nested calls"),
+            ))
+        }
+        Err(e) if is_need_input(&e) => {
+            if let Some(req) = state.host_request {
+                Ok(Outcome::NeedHost(req))
+            } else if let Some(p) = state.asked {
+                Ok(Outcome::NeedInput(p))
+            } else {
+                // `Prompt` is a unit struct, so a card can fabricate one
+                // without a host call having published a question. Refuse it
+                // rather than pausing the match on a prompt that no client
+                // can answer.
+                Err(RuleError::Trap("need-input exit without a prompt".into()))
+            }
+        }
+        Err(e) => Err(trap(e)),
+    }
 }
 
 fn hex_sha256(bytes: &[u8]) -> String {
@@ -649,8 +685,7 @@ fn call_card<W: CardWorld>(
     player_id: i32,
 ) -> Result<i64, Error> {
     let slot = rules.slots[card as usize];
-    let linker = linker::<W>(rules)?;
-    let inst = instantiate(&linker, &mut *store, &rules.modules[slot.module].module)?;
+    let inst = instantiate_cached(rules, &mut *store, slot.module)?;
     inst.get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
         .call(&mut *store, (slot.local, entry, op, player_id))
         .and_then(fold_exit)
@@ -670,8 +705,7 @@ fn call_card_msg<W: CardWorld>(
     player_id: i32,
 ) -> Result<Option<crate::Msg>, Error> {
     let slot = rules.slots[card as usize];
-    let linker = linker::<W>(rules)?;
-    let inst = instantiate(&linker, &mut *store, &rules.modules[slot.module].module)?;
+    let inst = instantiate_cached(rules, &mut *store, slot.module)?;
     let packed = inst
         .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
         .call(&mut *store, (slot.local, entry, op, player_id))
@@ -814,6 +848,49 @@ fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
 thread_local! {
     static LINKERS: std::cell::RefCell<HashMap<(usize, std::any::TypeId), Box<dyn std::any::Any>>> =
         std::cell::RefCell::new(HashMap::new());
+}
+
+/// `Inner` ids, so the caches below cannot hit across two sets of modules that
+/// happen to share an address.
+fn next_inner_id() -> u64 {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(1);
+    NEXT.fetch_add(1, Ordering::Relaxed)
+}
+
+// Instantiation points, cached per (ruleset, world type, module). With the
+// linker cached, resolving a module's imports against it is the rest of a
+// fire-up; `Prepared` does that once and every call instantiates from it.
+// Same thread-local reasoning as [`LINKERS`].
+thread_local! {
+    static PREPARED: std::cell::RefCell<
+        HashMap<(u64, std::any::TypeId, usize), Box<dyn std::any::Any>>,
+    > = std::cell::RefCell::new(HashMap::new());
+}
+
+/// Instantiate `rules.modules[module_ix]` against its cached [`be::Prepared`],
+/// building it on the first call. Never clones the linker: the whole lookup,
+/// build and instantiate happens under one borrow.
+fn instantiate_cached<W: CardWorld + 'static>(
+    rules: &Inner,
+    store: &mut Store<HostState<W>>,
+    module_ix: usize,
+) -> Result<be::Instance, Error> {
+    let key = (rules.id, std::any::TypeId::of::<W>(), module_ix);
+    PREPARED.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some(hit) = c.get(&key) {
+            let p = hit
+                .downcast_ref::<be::Prepared<HostState<W>>>()
+                .expect("cache is keyed by TypeId");
+            return be::instantiate_prepared(p, store);
+        }
+        let linker = linker::<W>(rules)?;
+        let p = be::prepare(&linker, &rules.modules[module_ix].module)?;
+        let out = be::instantiate_prepared(&p, store);
+        c.insert(key, Box::new(p));
+        out
+    })
 }
 
 fn linker<W: CardWorld + 'static>(rules: &Inner) -> Result<Linker<HostState<W>>, Error> {

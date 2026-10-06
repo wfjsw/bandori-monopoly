@@ -86,6 +86,7 @@
   "board.stunned": "晕眩",
   "board.tapCard": "点卡牌查看效果",
   "board.turn": "当前回合",
+  "board.turnStart": "回合开始…",
   "board.useSkill": "使用技能",
   "board.voteAgainst": "反对",
   "board.voteAsk": "发起投票：所有还在场的玩家都同意，就按得分排名结束对局。",

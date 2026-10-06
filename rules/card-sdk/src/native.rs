@@ -8,9 +8,9 @@
 //! for out-buffers, writes) through [`read`] / [`write`].
 //!
 //! The worker is single-threaded per request, so a thread-local arena is enough;
-//! [`clear`] runs at the end of each card call and nothing outlives it. This
-//! also stops the old `mem::forget` leak: on native the bytes are copied here and
-//! dropped normally.
+//! [`crate::rt::on`] clears it at the start of each card call and nothing
+//! outlives one. This also stops the old `mem::forget` leak: on native the bytes
+//! are copied here and dropped normally.
 
 use std::vec::Vec;
 

@@ -86,6 +86,7 @@
   "board.stunned": "Stunned",
   "board.tapCard": "Click a card for details",
   "board.turn": "Current turn",
+  "board.turnStart": "Turn starting…",
   "board.useSkill": "Skills",
   "board.voteAgainst": "Against",
   "board.voteAsk": "Start a vote: if everyone still in agrees, the match ends and is ranked by score.",

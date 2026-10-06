@@ -289,7 +289,14 @@ impl Match {
             let l = &p.live;
             st.prompt = l.ask.view.clone();
             st.prompt.answers = l.answers.clone();
-            st.prompt.time_left = l.time_left.max(0.0);
+            // Solo has no answer deadline (see `tick_live`), so don't show a
+            // spent bar: report the ask's own allotment instead of the ticking
+            // bot-schedule counter underneath it.
+            st.prompt.time_left = if self.mode == MatchMode::Solo {
+                l.ask.view.time_left.max(l.time_left).max(0.0)
+            } else {
+                l.time_left.max(0.0)
+            };
             st.prompt.bid = l.bid;
             st.prompt.bidder = l.bidder;
         } else {
@@ -536,17 +543,36 @@ impl Match {
 
     /// `TickChoice` -- ban/pick/deck time-outs and bot choices.
     fn tick_choice(&mut self, dt: f32) {
-        self.world.st.time_left -= dt;
+        // A solo match never expires a choice: nobody is waiting on the local
+        // player, so there is nothing a timeout is protecting. Bots still act
+        // on their own `wait` schedule below.
+        let solo = self.mode == MatchMode::Solo;
+        if !solo {
+            self.world.st.time_left -= dt;
+        }
         if self.world.st.phase == "deck" {
-            if self.world.st.time_left <= 0.0 {
-                self.direct(|cx| {
-                    for i in 0..cx.w.player_count() {
-                        if !cx.w.st.players[i].deck_ready {
-                            cx.submit_deck(i, None);
+            if solo || self.world.st.time_left <= 0.0 {
+                let round_up = self
+                    .world
+                    .st
+                    .players
+                    .iter()
+                    .any(|p| !p.deck_ready && (!solo || p.ai));
+                if round_up {
+                    self.direct(|cx| {
+                        for i in 0..cx.w.player_count() {
+                            let p = &cx.w.st.players[i];
+                            // Only bots are rounded up in solo -- the human is
+                            // waited for, however long that takes.
+                            if !p.deck_ready && (!solo || p.ai) {
+                                cx.submit_deck(i, None);
+                            }
                         }
-                    }
-                });
-                self.begin_play();
+                    });
+                }
+                if !solo || self.world.st.players.iter().all(|s| s.deck_ready) {
+                    self.begin_play();
+                }
             }
             return;
         }
@@ -556,7 +582,7 @@ impl Match {
         let due = if cur.ai {
             self.wait <= 0.0
         } else {
-            self.world.st.time_left <= 0.0
+            !solo && self.world.st.time_left <= 0.0
         };
         if !due {
             return;
@@ -630,21 +656,30 @@ impl Match {
         } else {
             turn
         };
-        if !st.players[actor].ai && !self.timed_out {
-            if self.shield > 0.0 {
-                self.shield = (self.shield - dt).max(0.0);
-            } else {
-                self.bank[turn] = (self.bank[turn] - dt).max(0.0);
-            }
-            if self.shield + self.bank[turn] > 0.0 {
+        if !st.players[actor].ai {
+            // A solo match has nobody waiting on the local player: the turn
+            // clock exists to keep a *networked* table moving, so here it never
+            // expires and the AI never takes a human's turn over. Bots still
+            // fall through below and act for themselves.
+            if self.mode == MatchMode::Solo {
                 return;
             }
-            self.timed_out = true;
-            self.host_log(
-                "text",
-                turn as i32,
-                Msg::new("log.timeout").player_id("who", turn),
-            );
+            if !self.timed_out {
+                if self.shield > 0.0 {
+                    self.shield = (self.shield - dt).max(0.0);
+                } else {
+                    self.bank[turn] = (self.bank[turn] - dt).max(0.0);
+                }
+                if self.shield + self.bank[turn] > 0.0 {
+                    return;
+                }
+                self.timed_out = true;
+                self.host_log(
+                    "text",
+                    turn as i32,
+                    Msg::new("log.timeout").player_id("who", turn),
+                );
+            }
         }
         self.start(Routine::Ai(turn));
     }
@@ -683,6 +718,12 @@ impl Match {
         let l = &mut p.live;
         l.time_left -= dt;
         let before = (l.answers.clone(), l.bid);
+        // A solo match never forces a *local* player's answer -- nobody is
+        // waiting on them. The countdown still runs, because the bots above
+        // schedule their own answers against it. The mode is the predicate,
+        // not the human count: an online room with one human still owes its
+        // table an answer.
+        let hold = solo && (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
         let done = if l.kind() == "auction" {
             for k in 0..players.len() {
                 if l.answers[k] >= 0 || l.bidder == players[k] as i32 || !auto[k] {
@@ -707,7 +748,7 @@ impl Match {
             let open = (0..players.len())
                 .filter(|&k| l.answers[k] < 0 && l.bidder != players[k] as i32)
                 .count();
-            l.time_left <= 0.0 || open == 0
+            open == 0 || (l.time_left <= 0.0 && !hold)
         } else {
             let picks = matches!(l.kind(), "pick" | "mortgage");
             let fallback = l.ask.view.fallback;
@@ -737,7 +778,9 @@ impl Match {
             let humans_pending = (0..players.len()).any(|k| l.answers[k] < 0 && !auto[k]);
             if l.answers.iter().all(|&a| a >= 0) {
                 true
-            } else if l.time_left > 0.0 || (l.time_left > -REMOTE_GRACE && !solo && humans_pending)
+            } else if hold
+                || l.time_left > 0.0
+                || (l.time_left > -REMOTE_GRACE && !solo && humans_pending)
             {
                 false
             } else {
@@ -1033,7 +1076,12 @@ impl Match {
         if self.vote.id == 0 {
             return;
         }
-        self.vote.time_left -= dt;
+        // Solo never expires a vote -- see `tick_choice`. The mode is the
+        // predicate, not the human count: an online room with one human still
+        // owes its table an answer.
+        if self.mode != MatchMode::Solo {
+            self.vote.time_left -= dt;
+        }
         for k in 0..self.vote.players.len() {
             let s = self.vote.players[k] as usize;
             if self.vote.answers[k] < 0 && (self.world.out(s) || self.auto_player(s)) {
@@ -1041,7 +1089,7 @@ impl Match {
                 self.changed = true;
             }
         }
-        if self.vote.time_left <= 0.0 {
+        if self.mode != MatchMode::Solo && self.vote.time_left <= 0.0 {
             self.end_vote(false, Msg::new("vote.timeout"));
         } else {
             self.check_vote();

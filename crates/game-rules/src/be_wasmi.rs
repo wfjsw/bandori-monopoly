@@ -4,8 +4,8 @@
 //! embedded JIT is not available) and, with the `wasmi-native` feature, on the
 //! server too -- mainly to keep both paths covered by the same tests.
 
-pub use wasmi::{Caller, Engine, Linker, Module, Store};
-use wasmi::{Config, Extern, Instance, Memory};
+pub use wasmi::{Caller, Engine, Instance, Linker, Module, Store};
+use wasmi::{Config, Extern, Memory};
 
 /// Host errors and traps. wasmi carries an i32 exit status on traps.
 pub type Error = wasmi::Error;
@@ -57,6 +57,26 @@ pub fn instantiate<T>(
     module: &Module,
 ) -> Result<Instance, Error> {
     linker.instantiate_and_start(&mut *store, module)
+}
+
+/// wasmi has no pre-instantiation, so this just carries the [`Linker`] and
+/// [`Module`] to reuse -- it saves the per-call linker clone, which is the same
+/// cost the wasmtime side saves with [`crate`] `InstancePre` resolution. The
+/// host caches these per (engine, world type, module).
+pub struct Prepared<T> {
+    linker: Linker<T>,
+    module: Module,
+}
+
+pub fn prepare<T: 'static>(linker: &Linker<T>, module: &Module) -> Result<Prepared<T>, Error> {
+    Ok(Prepared {
+        linker: linker.clone(),
+        module: module.clone(),
+    })
+}
+
+pub fn instantiate_prepared<T>(p: &Prepared<T>, store: &mut Store<T>) -> Result<Instance, Error> {
+    p.linker.instantiate_and_start(&mut *store, &p.module)
 }
 
 pub fn has_func(inst: &Instance, store: &Store<impl Sized>, name: &str) -> bool {

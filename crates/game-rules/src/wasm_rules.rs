@@ -1202,6 +1202,34 @@ impl WasmRules {
     /// Returns the card's destination (`PlayCtx.Dest`). A reroll the module made
     /// (`set_move_roll`) is written back to `trigger` (C# shares `t.Move`).
     fn drive(&self, cx: &mut Cx, call: Call, card_id: &str, uid: i32, trigger: &mut Trigger) -> Flow<i32> {
+        self.drive_inner(cx, call, card_id, uid, trigger, false)
+    }
+
+    /// As [`drive`], but ask the hook's guard first and skip the body when it
+    /// refuses -- on the same instantiation, so a fired hook costs one fire-up
+    /// and one world copy rather than the two a `hook_guard` + `drive` pair
+    /// cost. The "a guard passed" announcement is made here, once, on the first
+    /// pass (a prompt re-runs the module).
+    fn drive_hook(
+        &self,
+        cx: &mut Cx,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        trigger: &mut Trigger,
+    ) -> Flow<i32> {
+        self.drive_inner(cx, call, card_id, uid, trigger, true)
+    }
+
+    fn drive_inner(
+        &self,
+        cx: &mut Cx,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        trigger: &mut Trigger,
+        guarded: bool,
+    ) -> Flow<i32> {
         let mut answers: Vec<i32> = Vec::new();
         loop {
             let run = Run {
@@ -1220,7 +1248,28 @@ impl WasmRules {
                 crystals_log: vec![],
                 doubled: -1,
             };
-            match self.ruleset.run(&run, call, &answers) {
+            let outcome: Result<Outcome<Run>, RuleError> = if guarded {
+                match self.ruleset.run_hook(&run, call, &answers) {
+                    Err(e) => Err(e),
+                    // Not activated -- the guard refused. Nothing ran, and
+                    // nothing about the card reaches the UI.
+                    Ok(None) => return Ok(DEST_UNSET),
+                    Ok(Some(hr)) => {
+                        if hr.announced && answers.is_empty() {
+                            cx.log(
+                                call.player_id(),
+                                Msg::new("log.hook_fire")
+                                    .player_id("who", call.player_id())
+                                    .card("card", card_id.to_string()),
+                            );
+                        }
+                        Ok(hr.outcome)
+                    }
+                }
+            } else {
+                self.ruleset.run(&run, call, &answers)
+            };
+            match outcome {
                 Ok(Outcome::Done(after)) => {
                     let dest = after.dest;
                     *trigger = after.trigger;
@@ -1420,60 +1469,6 @@ impl WasmRules {
                     return Ok(DEST_GRAVEYARD);
                 }
             }
-        }
-    }
-
-    /// The pure guard on an `On::Hook` entry -- and, with it, the **activation**
-    /// gate. A `false` means the card is not activated at all: its body does not
-    /// run and nothing about it reaches the UI. A `true` is the card firing, so
-    /// it is announced and `drive` runs the body. An entry with no guard
-    /// (`On::Gate` -- a question the card answers, not an activation) runs
-    /// unannounced, exactly as it did before.
-    ///
-    /// Runs on a throwaway world copy (same contract as `can_react`); a trap or
-    /// a prompting guard fails closed.
-    fn hook_guard(
-        &self,
-        cx: &mut Cx,
-        trigger: &Trigger,
-        idx: i32,
-        player_id: i32,
-        card_id: &str,
-        uid: i32,
-    ) -> bool {
-        let run = Run {
-            world: cx.world_copy(),
-            data: self.data.clone(),
-            trigger: trigger.clone(),
-            current_card: card_id.to_string(),
-            current_uid: uid,
-            dest: DEST_UNSET,
-            dest_to: None,
-            paid_log: vec![],
-            discard_log: vec![],
-            reshuffle_log: vec![],
-            fire_spent_log: vec![],
-            house_log: vec![],
-            crystals_log: vec![],
-            doubled: -1,
-        };
-        match self.ruleset.can_hook(&run, idx, player_id) {
-            // No guard to ask (`On::Gate`): run it, and do not announce -- it is
-            // answering a question, not activating.
-            Ok(None) => true,
-            Ok(Some(false)) => false,
-            Ok(Some(true)) => {
-                // Activated: this is the one moment the card shows itself.
-                cx.log(
-                    player_id,
-                    Msg::new("log.hook_fire")
-                        .player_id("who", player_id)
-                        .card("card", card_id.to_string()),
-                );
-                true
-            }
-            // A trap or a prompting guard: fail closed, the card does not fire.
-            Err(_) => false,
         }
     }
 
@@ -2333,19 +2328,17 @@ impl CardRules for WasmRules {
                     .card(&t.card)
                     .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
                 {
-                    if self.hook_guard(cx, &trigger, idx, t.player_id, &t.card, -1) {
-                        self.drive(
-                            cx,
-                            Call::Hook {
-                                card: idx,
-                                kind,
-                                player_id: t.player_id,
-                            },
-                            &t.card,
-                            -1,
-                            &mut trigger,
-                        )?;
-                    }
+                    self.drive_hook(
+                        cx,
+                        Call::Hook {
+                            card: idx,
+                            kind,
+                            player_id: t.player_id,
+                        },
+                        &t.card,
+                        -1,
+                        &mut trigger,
+                    )?;
                 }
             } else {
                 let world = cx.world_copy();
@@ -2358,9 +2351,8 @@ impl CardRules for WasmRules {
                         // card on the field is inert, so its hooks must not run.
                         if self.ruleset.cards()[idx as usize].hooks(kind)
                             && !world.card_face_down(player_id as i32, &id)
-                            && self.hook_guard(cx, &trigger, idx, player_id as i32, &id, uid)
                         {
-                            self.drive(
+                            self.drive_hook(
                                 cx,
                                 Call::Hook {
                                     card: idx,

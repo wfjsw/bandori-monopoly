@@ -47,6 +47,16 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   const bands: BandData[] = j("bands.json").bands;
   const events: EventData[] = j("events.json").events;
   const homeLines = j("home_lines.json").characters ?? [];
+  // `skill_simple.json` is the hand-written newcomer version of each skill body
+  // (`· ` bullets). It rides on the character/band record as `simple`, which is
+  // what `skillText` picks when the setting is on -- the originals in
+  // characters.json / bands.json stay the `text` fallback.
+  const simple = j("skill_simple.json") as {
+    characters: { name: string; text: string }[];
+    bands: { name: string; text: string }[];
+  };
+  for (const c of characters) c.simple = simple.characters.find((x) => x.name === c.name)?.text;
+  for (const b of bands) b.simple = simple.bands.find((x) => x.name === b.name)?.text;
   const byId = new Map(cards.map((c) => [c.id, c]));
   D = {
     tiles: j("board.json").tiles,

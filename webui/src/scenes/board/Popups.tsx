@@ -173,6 +173,7 @@ export function showPlayerInfo(m: Model, i: number): void {
   const S = m.S;
   const x = S.players[i];
   const c = m.charOf(i);
+  const band = c ? D.band(c.band) : undefined;
   const deeds = D.tiles.map((_, k) => k).filter((k) => S.owners[k] === i);
   const lines = [
     tr("player.handStats", { money: n0(x.money), hand: x.hand, fire: stateOf(x, "fire"), fireMax: stateMax(x, "fire") }),
@@ -185,7 +186,16 @@ export function showPlayerInfo(m: Model, i: number): void {
     <div className={s.info}>
       <div className={s.infoTop}>
         <Avatar c={c} size={92} />
-        <div><b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>{c && <SkillBody prefix={<span className={s.pink}>{c.skill}</span>} text={skillText(c)} />}</div>
+        <div>
+          <b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>
+          {/* The two skill stand-ins `bind_skills` puts on the field (the
+              character's own skill and its band's) belong here, not on the
+              board: name in pink, body under it. */}
+          <div className={s.skills}>
+            {c && <SkillBody prefix={<span className={s.pink}>{c.skill}</span>} text={skillText(c)} />}
+            {band && <SkillBody prefix={<span className={s.pink}>{band.skill}</span>} text={skillText(band)} />}
+          </div>
+        </div>
       </div>
       <div className={s.lines}>{lines.map((l) => <div key={l}>{l}</div>)}</div>
       {deeds.length ? (

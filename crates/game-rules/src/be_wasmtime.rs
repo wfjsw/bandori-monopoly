@@ -7,8 +7,8 @@
 
 use std::sync::OnceLock;
 
-pub use wasmtime::{Caller, Engine, Linker, Module, Store};
-use wasmtime::{Config, Instance};
+pub use wasmtime::{Caller, Engine, Instance, Linker, Module, Store};
+use wasmtime::{Config, InstancePre};
 
 /// Host errors and traps. The "a prompt is waiting" signal is a marker error the
 /// host raises instead of a plain message, so `is_need_input` can recognize it.
@@ -83,6 +83,20 @@ pub fn instantiate<T>(
     module: &Module,
 ) -> Result<Instance, Error> {
     linker.instantiate(&mut *store, module)
+}
+
+/// A module whose imports are resolved against a [`Linker`] **once**.
+/// Instantiating from it skips the per-call import walk, which is the bulk of
+/// what is left of a fire-up now that the linker itself is cached. The host
+/// caches these per (engine, world type, module).
+pub struct Prepared<T>(InstancePre<T>);
+
+pub fn prepare<T: 'static>(linker: &Linker<T>, module: &Module) -> Result<Prepared<T>, Error> {
+    Ok(Prepared(linker.instantiate_pre(module)?))
+}
+
+pub fn instantiate_prepared<T>(p: &Prepared<T>, store: &mut Store<T>) -> Result<Instance, Error> {
+    p.0.instantiate(&mut *store)
 }
 
 pub fn has_func(inst: &Instance, store: &mut Store<impl Sized>, name: &str) -> bool {

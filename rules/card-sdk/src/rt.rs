@@ -55,6 +55,12 @@ pub fn on(
     op: i32,
     player_id: i32,
 ) -> i64 {
+    // Call boundary: every guest buffer this entry hands the host is interned
+    // in the native arena and nothing outlives the call, so drop the previous
+    // call's first. At the *start* rather than the end so a trapping call still
+    // resets it.
+    #[cfg(not(target_arch = "wasm32"))]
+    crate::native::clear();
     let Some(o) = card(bands, idx).on.get(entry.max(0) as usize) else {
         panic!("bad entry {entry} on card {idx}")
     };

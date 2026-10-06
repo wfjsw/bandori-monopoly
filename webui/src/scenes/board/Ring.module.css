@@ -101,7 +101,9 @@
 @keyframes phaseSweep { to { transform: translateX(120%); } }
 .banner b { font-size: 26px; color: var(--pink); }
 .banner span { font-size: 15px; }
-.reveal { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 25; animation: reveal 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
+/* Below the status banner (top 290, ~85-100px tall): a played-card reveal
+   overlaps it at vertical centre and hides 掷出xx / 付地租. */
+.reveal { position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 25; animation: reveal 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
 .reveal > div { width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); }
 .revealOut { opacity: 0; transform: translate(-50%, -60%); }
 @keyframes reveal { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }

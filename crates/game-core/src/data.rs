@@ -291,7 +291,7 @@ pub struct GameData {
 }
 
 /// Data files, as named in `web/data/`.
-pub const DATA_FILES: [&str; 11] = [
+pub const DATA_FILES: [&str; 12] = [
     "board.json",
     "cards.json",
     "characters.json",
@@ -303,6 +303,10 @@ pub const DATA_FILES: [&str; 11] = [
     "voice_lines.json",
     "match_rules.json",
     "rules.txt",
+    // Hand-written simplified skill bodies, for the client's skill-text
+    // setting. Display-only: the engine reads the originals in `characters.json`
+    // / `bands.json`.
+    "skill_simple.json",
 ];
 
 fn parse<T: serde::de::DeserializeOwned>(file: &str, text: &str) -> Result<T, String> {

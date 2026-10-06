@@ -1,7 +1,7 @@
 // Right column: current turn card with the turn timer, phase steps, the d20,
 // action buttons, end turn, and the hand (with a full-size hover preview).
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
@@ -24,9 +24,6 @@ import { namesOf, stateOf } from "../../core/names";
 
 /** The turn stages, by the game's own names (开始 / 运营 / 移动 / 结束) -- the
  *  sweep effect that announces them is separate and unchanged. */
-/// How long a stage stays on the marker -- the length of the transition
-/// effect, so every stage is readable.
-const STAGE_HOLD = 1500;
 
 const phases = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
 
@@ -55,25 +52,13 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   // indexes the labels. Off by one here and 运营 -- the stage players spend
   // their turn in -- reads as 开始.
   //
-  // Master Duel lets every phase stay readable: the marker **lags** the game
-  // state so a stage is held for the length of its transition effect. Without
-  // this 开始 and 结束 flash past because nothing happens in them. `canRoll` &
-  // co. still read the real `S.step` -- only the display lags.
-  const [shown, setShown] = useState(step);
-  const shownAt = useRef(0);
-  useEffect(() => {
-    if (step < 0) {
-      setShown(step);
-      return;
-    }
-    if (step === shown) return;
-    const wait = Math.max(0, STAGE_HOLD - (performance.now() - shownAt.current));
-    const id = window.setTimeout(() => {
-      shownAt.current = performance.now();
-      setShown(step);
-    }, wait);
-    return () => window.clearTimeout(id);
-  }, [step, shown]);
+  // This marker is **not** allowed to lag the game state, even though the
+  // transition sweep holds each name for its own 1.5s: `canRoll` and everything
+  // else read the real `S.step`, so a marker one stage behind reads as "stuck in
+  // 开始" while the dice are already live, and then names 运营 over the move. The
+  // sweep is what makes a short stage readable -- this row just says where the
+  // game is now.
+  const shown = step;
   const animating = anim.animating;
   const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 2 && !S.skipMove && !S.busy && !m.asking && !animating;
   const can = m.myTurn && !S.busy && !m.asking && !animating;
@@ -86,7 +71,7 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
   else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
   else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: S.players[S.roller].player });
-  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : tr("board.moved");
+  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
   else hint = tr("board.waiting", { who: cur?.player ?? "", bot: cur?.bot ? tr("board.botSuffix") : "" });
 
   const buildFromButton = () => {
@@ -131,7 +116,11 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
         <Btn icon="redo" className={s.act} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
         <Btn icon="construction" className={s.act} onClick={buildFromButton}>{tr("board.build")}</Btn>
       </div>
-      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && (S.step === 4 || (S.step === 2 && S.skipMove)) && !m.overHand)} onClick={() => { anim.showPhase("board.stepEnd"); void act(sess, { act: "end" }); }}>
+      {/* Matches `why_not_act`'s "end": legal anywhere the player's turn is
+          theirs and quiet, except 运营 with a move still owed (roll first) and
+          移动 (the walk is still running). The old gate demanded 结束 outright,
+          which left the button dead through 开始 and through a [停留] 运营. */}
+      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && S.step !== 3 && (S.step !== 2 || S.skipMove) && !m.overHand)} onClick={() => { anim.showPhase("board.stepEnd"); void act(sess, { act: "end" }); }}>
         {m.myTurn && S.step === 2 && S.skipMove ? tr("board.endTurnSkip") : tr("board.endTurn")}
       </Btn>
 
