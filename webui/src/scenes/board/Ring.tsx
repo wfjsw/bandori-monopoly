@@ -104,7 +104,7 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
         {anim.phase && (
           <div key={anim.phase.id} className={s.phaseFlash}>
             <i className={s.link} /><i className={s.link} /><i className={s.link} /><i className={s.link} />
-            <span>{tr(anim.phase.key)}</span>
+            <span>{anim.phase.label ?? tr(anim.phase.key)}</span>
           </div>
         )}
         {anim.reveal && <div className={cx(s.reveal, anim.reveal.out && s.revealOut)}><CardFace id={anim.reveal.card} size="big" /></div>}
@@ -158,29 +158,38 @@ function Center({ m, anim }: { m: Model; anim: Animator }) {
   const top = anim.lastDiscard || lastPlayed;
   return (
     <div className={s.inner} style={{ backgroundImage: `url("${sceneImg("world_map")}")` }}>
-      <div className={s.field}>
-        <div className={s.fieldHead}><b>{tr("board.field")}</b><span>{tr("board.fieldHint")}</span><small>{tr("board.fieldCount", { n: fieldCount })}</small></div>
-        <div className={s.fieldRows}>
-          {rows.map(([i, f]) => (
-            <div key={i} className={s.fieldRow} style={{ borderLeftColor: m.colorOf(i) }}>
-              <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
-              <div className={s.fieldCards}>
-                {f.map((fc) => (
-                  <button key={fc.uid} type="button" className={s.fieldCard} onClick={() => showCard(fc.card, [], fmtMsg(fc.note, namesOf(S)))}>
-                    <img src={cardArt(fc.card)} alt="" />
-                    <div><b>{fc.faceDown ? tr("board.faceDown") : cardTitle(fc.card)}</b><small>{fc.note ? fmtMsg(fc.note, namesOf(S)) : fc.crystals ? tr("board.crystals", { n: fc.crystals }) : ""}</small></div>
-                  </button>
+      {/* Nothing on the field, nothing in play: the panel is an empty box with a
+          「0」 count, so it stays away until a card or a live event exists. The
+          event chips live in here too, so the panel opens for them on their own. */}
+      {(fieldCount > 0 || (S.eventActive?.length ?? 0) > 0) && (
+        <div className={s.field}>
+          {fieldCount > 0 && (
+            <>
+              <div className={s.fieldHead}><b>{tr("board.field")}</b><span>{tr("board.fieldHint")}</span><small>{tr("board.fieldCount", { n: fieldCount })}</small></div>
+              <div className={s.fieldRows}>
+                {rows.map(([i, f]) => (
+                  <div key={i} className={s.fieldRow} style={{ borderLeftColor: m.colorOf(i) }}>
+                    <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
+                    <div className={s.fieldCards}>
+                      {f.map((fc) => (
+                        <button key={fc.uid} type="button" className={s.fieldCard} onClick={() => showCard(fc.card, [], fmtMsg(fc.note, namesOf(S)))}>
+                          <img src={cardArt(fc.card)} alt="" />
+                          <div><b>{fc.faceDown ? tr("board.faceDown") : cardTitle(fc.card)}</b><small>{fc.note ? fmtMsg(fc.note, namesOf(S)) : fc.crystals ? tr("board.crystals", { n: fc.crystals }) : ""}</small></div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
+            </>
+          )}
+          {S.eventActive?.length > 0 && (
+            <div className={s.eventChips}>
+              {S.eventActive.slice(0, 4).map((e) => <button key={e.id} type="button" className={s.eventChip} onClick={() => showEvent(e.id, fmtMsg(e.note, namesOf(S)))}>{tr("events.label", { id: e.id })}{e.counter ? ` ×${e.counter}` : ""}</button>)}
             </div>
-          ))}
+          )}
         </div>
-        {S.eventActive?.length > 0 && (
-          <div className={s.eventChips}>
-            {S.eventActive.slice(0, 4).map((e) => <button key={e.id} type="button" className={s.eventChip} onClick={() => showEvent(e.id, fmtMsg(e.note, namesOf(S)))}>{tr("events.label", { id: e.id })}{e.counter ? ` ×${e.counter}` : ""}</button>)}
-          </div>
-        )}
-      </div>
+      )}
       <div className={s.piles}>
         <button type="button" className={s.pile} onClick={() => showEventPile(S)}>
           <div className={s.stack}><img src={sceneImg("card_back")} alt="" /></div>

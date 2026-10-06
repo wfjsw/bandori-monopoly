@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "rsbuild dev",
-    "prebuild": "node ../tools/live2d/build.mjs",
+    "prebuild": "node ../tools/live2d/build.mjs && node ../tools/build-glue.mjs",
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "preview": "rsbuild preview"

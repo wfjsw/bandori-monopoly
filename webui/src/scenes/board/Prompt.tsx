@@ -55,7 +55,12 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
     <div className={cx(s.prompt, side && s.withSide)}>
       {side}
       <div className={s.main}>
-        <div className={s.timer}><Icon name="timer" /><b>{left}</b>{tr("common.unitSec")}</div>
+        {/* Solo has no answer deadline, so no clock -- see `timerOf` in Side. */}
+        {sess.kind === "solo" ? (
+          <div className={s.timer}><Icon name="timer" /><b>{tr("common.unlimited")}</b></div>
+        ) : (
+          <div className={s.timer}><Icon name="timer" /><b>{left}</b>{tr("common.unitSec")}</div>
+        )}
         <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>
         <div className={s.options}>
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} />}

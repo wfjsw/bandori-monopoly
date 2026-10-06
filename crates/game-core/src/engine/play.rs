@@ -328,10 +328,11 @@ impl Cx<'_> {
             );
         }
         // 开始阶段 is over: status has ticked, `turnStart` has fired, and the
-        // stun/stay checks have run. 运营阶段 begins -- the player may play
-        // cards and roll. (A stunned player left above, so 眩晕 skips 运营 and
-        // 移动, as the rulebook says.)
-        self.w.st.step = stage::OPS;
+        // stun/stay checks have run. The stage *stays* 开始 for a beat first,
+        // though -- exactly as 结束 holds after the walk -- so the stage swap
+        // has time to read before 运营 opens. `tick_play` lifts the turn into
+        // 运营 once this delay expires. (A stunned player left above, so 眩晕
+        // skips 运营 and 移动, as the rulebook says.)
         self.w.st.roller = i as i32;
         self.wait(1.2);
         Ok(())

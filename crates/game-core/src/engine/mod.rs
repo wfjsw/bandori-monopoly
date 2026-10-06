@@ -650,6 +650,14 @@ impl Match {
         if self.wait > 0.0 {
             return;
         }
+        // 开始 holds for a beat before 运营 opens -- the stage swap needs the
+        // time to read, exactly as 结束 holds after the walk. `turn_start` parked
+        // the turn here; this lifts it into 运营 once that beat is over.
+        if self.world.st.step == stage::START {
+            self.world.st.step = stage::OPS;
+            self.wait = 1.2;
+            return;
+        }
         let st = &self.world.st;
         let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
             st.roller as usize

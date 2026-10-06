@@ -163,7 +163,7 @@ export function Select({ sess }: { sess: GameSession }) {
             </div>
           </div>
 
-          <div className={s.hint}>{hint}{secs > 0 && tr("select.secsSuffix", { n: secs })}</div>
+          <div className={s.hint}>{hint}{sess.kind !== "solo" && secs > 0 && tr("select.secsSuffix", { n: secs })}</div>
           <Btn kind="pink" className={s.go} disabled={!onGo} onClick={() => onGo?.()}>{label}</Btn>
         </div>
       </div>

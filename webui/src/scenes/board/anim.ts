@@ -27,19 +27,22 @@ const EVENT_SFX: Record<string, string> = {
 
 export interface LogLine { id: number; text: string; turn: boolean }
 
-/** How long the 「<player> 的回合」 banner holds before the next 开始 stage sweeps in. */
-const TURN_BANNER_HOLD = 1500;
-
 export class Animator {
   queue: MatchEvent[] = [];
   animating = false;
+  /** A walk is on screen. The engine reaches 结束 in the same call that walks,
+   *  so `S.step` already names 结束 while these steps are still playing -- the
+   *  stage marker follows this instead (Side.tsx). */
+  walking = false;
   /** Token positions while animating (null: use the state). */
   pos: number[] | null = null;
   dice = 0;
   rolling = false;
   banner: { title: string; body: string; id: number } | null = null;
-  /** Stage transition: the i18n key of the stage name sweeping in. */
-  phase: { key: string; id: number } | null = null;
+  /** Stage transition sweeping in. `key` names the stage (Side.tsx reads it to
+   *  preview 结束); `label` overrides the swept text -- 开始 sweeps whose turn it
+   *  is rather than the word 开始. */
+  phase: { key: string; label?: string; id: number } | null = null;
   reveal: { card: string; out: boolean; id: number } | null = null;
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
@@ -95,8 +98,8 @@ export class Animator {
   /** Chain/resolve the stage name across the board (Master Duel's phase change):
    *  chain links snap in across the banner, then it resolves. The effect runs
    *  for STAGE_HOLD ms -- the same length the marker holds each stage. */
-  showPhase(key: string): void {
-    this.phase = { key, id: ++this.seq };
+  showPhase(key: string, label?: string): void {
+    this.phase = { key, label, id: ++this.seq };
     clearTimeout(this.phaseTimer);
     this.phaseTimer = window.setTimeout(() => {
       this.phase = null;
@@ -153,18 +156,24 @@ export class Animator {
     const dir = steps >= 0 ? 1 : -1;
     let p = from;
     this.pos[playerId] = from;
-    for (let k = 0; k < Math.abs(steps); k++) {
-      p = (((p + dir) % n) + n) % n;
-      this.pos[playerId] = p;
-      if (hop > 0) {
-        this.hop = { playerId, id: ++this.seq };
-        sfx("step");
-        this.bump();
-        await sleep(hop);
-      }
-    }
-    this.hop = null;
+    this.walking = true;
     this.bump();
+    try {
+      for (let k = 0; k < Math.abs(steps); k++) {
+        p = (((p + dir) % n) + n) % n;
+        this.pos[playerId] = p;
+        if (hop > 0) {
+          this.hop = { playerId, id: ++this.seq };
+          sfx("step");
+          this.bump();
+          await sleep(hop);
+        }
+      }
+    } finally {
+      this.walking = false;
+      this.hop = null;
+      this.bump();
+    }
   }
 
   private async play(e: MatchEvent, fast: boolean): Promise<void> {
@@ -177,8 +186,9 @@ export class Animator {
     const wait = (ms: number) => (fast ? Promise.resolve() : sleep(ms));
     switch (e.type) {
       case "turn":
+        // The turn announcement rides the 开始 stage sweep (see `showPhase`) --
+        // there is no separate 「<player> 的回合」 card over the board.
         if (!ok) break;
-        this.showBanner(playerId === v!.playerId ? tr("anim.yourTurn") : tr("anim.turnOf", { who: this.player(playerId) }), tr("anim.turnBanner"));
         if (!fast) sfx(playerId === v!.playerId ? "my_turn" : "turn");
         await wait(300);
         break;
@@ -290,7 +300,6 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
   }
   useEffect(() => {
     const a = animRef.current!;
-    let turnHold = 0;
     const off = sess.subscribe(
       (v) => {
         const prev = viewRef.current?.state;
@@ -303,23 +312,24 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
         // label list (`Side.tsx`'s `phases()`).
         const now = v.state;
         if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
-          const label = now.step >= 4 ? "board.stepEnd" : now.step === 3 ? "board.stepMove" : now.step === 2 ? "board.stepOps" : "common.start";
-          // A turn change opens with 「<player> 的回合」 (2.2s, from the `turn`
-          // event below). The new player's 开始 stage must not sweep in over it:
-          // hold the stage name until the banner has read, so the order is the
-          // previous player's 结束 -> the turn banner -> this player's 开始.
-          clearTimeout(turnHold);
-          if (prev.turn !== now.turn && label === "common.start") {
-            turnHold = window.setTimeout(() => a.showPhase(label), TURN_BANNER_HOLD);
+          // A new turn starts from no roll -- don't leave the previous player's
+          // face sitting on the dice.
+          if (prev.turn !== now.turn) a.dice = 0;
+          const key = now.step >= 4 ? "board.stepEnd" : now.step === 3 ? "board.stepMove" : now.step === 2 ? "board.stepOps" : "common.start";
+          if (prev.turn !== now.turn && key === "common.start") {
+            // 开始 sweeps whose turn it is rather than the word 开始 -- the marker
+            // in Side already names the stage, and this replaces the separate
+            // 「<player> 的回合」 card that used to sit over the board.
+            const who = now.players[now.turn]?.player ?? "";
+            a.showPhase(key, now.turn === v.playerId ? tr("anim.yourTurn") : tr("anim.turnOf", { who }));
           } else {
-            a.showPhase(label);
+            a.showPhase(key);
           }
         }
       },
       (e) => a.push(e),
     );
     return () => {
-      clearTimeout(turnHold);
       off();
     };
   }, [sess]);

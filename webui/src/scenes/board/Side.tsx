@@ -27,8 +27,11 @@ import { namesOf, stateOf } from "../../core/names";
 
 const phases = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
 
-function timerOf(m: Model, elapsed: number): { value: string; caption: string; frac: number; cls: string } {
+function timerOf(m: Model, elapsed: number, solo: boolean): { value: string; caption: string; frac: number; cls: string } {
   const S = m.S;
+  // Solo has no deadlines at all (the engine never expires one), so a clock
+  // counting down to nothing would only read as "about to time out".
+  if (solo) return { value: tr("common.unlimited"), caption: "", frac: 0, cls: s.idle };
   const cur = S.players[S.turn];
   if (S.phase !== "play") return { value: "—", caption: "", frac: 0, cls: s.idle };
   if (S.turn < 0) return { value: "—", caption: tr("board.ready"), frac: 0, cls: s.idle };
@@ -44,8 +47,18 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   const S = m.S;
   const cur = S.players[S.turn];
   const c = S.turn >= 0 ? m.charOf(S.turn) : undefined;
-  const t = timerOf(m, elapsed);
-  const step = S.phase === "play" ? (anim.phase?.key === "board.stepEnd" ? 3 : Math.min(3, Math.max(0, S.step - 1))) : -1;
+  const t = timerOf(m, elapsed, sess.kind === "solo");
+  // 移动 while a walk is still on screen. `main_move` sets MOVE, walks and sets
+  // END in one call, so by the time the steps play out `S.step` already names
+  // 结束 -- the marker would call a moving token a finished turn.
+  const step =
+    S.phase !== "play"
+      ? -1
+      : anim.phase?.key === "board.stepEnd"
+        ? 3
+        : anim.walking
+          ? 2
+          : Math.min(3, Math.max(0, S.step - 1));
   // The rulebook's four stages are 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`)
   // and `phases()` lists them in that order. The engine's `step` carries the
   // rulebook's own stage number (0 before a turn, 1..4 after), so `step - 1`
