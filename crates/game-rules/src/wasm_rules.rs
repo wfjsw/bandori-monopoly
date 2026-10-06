@@ -1781,48 +1781,68 @@ impl WasmRules {
         Ok(())
     }
 
-    /// The [反击] hand window (C# `MatchHost.Counteract(Trigger)`): each player from the
-    /// chain's starter around the table may answer with a counteraction card from hand.
-    /// Declarations are collected first (hands shrink as they declare) and then
-    /// resolved in reverse declaration order (C# `declared[k]` from the end).
+    /// The [反击] hand window (C# `MatchHost.Counteract(Trigger)`): one **round
+    /// per timing**, per rulebook clauses 32 and 89.
     ///
-    /// # Ordering at one trigger (the standard)
+    /// **32:** 「[反击]：带有"[反击]X：Y"效果在X发生时打出并触发效果Y，且结算优先于X」.
+    /// **89:** 「如果有多名玩家可在同一时间发动[反击]效果则从行动顺序上在触发[反击]时点
+    /// 的玩家的**下一位**玩家开始依次决定是否使用[反击]效果。多个效果可[反击]同一个时点，
+    /// 所有玩家同意所有对一个时点的[反击]已发动后可对新的时点发动[反击]。」
     ///
-    /// When more than one card responds to the same trigger, they resolve as a
-    /// **LIFO stack**: declaration order is player order starting at the chain's
-    /// starter and wrapping around the table; resolution is the exact reverse of
-    /// declaration order. So the last card to answer the window is the first one
-    /// to resolve, and any counteraction it plays opens a nested counter-window before
-    /// the earlier declarations get their turn.
+    /// # Rulings (what the book leaves open)
     ///
-    /// Known cases where this LIFO rule does *not* apply (left as-is for now,
-    /// flagged for a later pass):
+    /// * **Resolution order:** counters to one timing resolve **newest first
+    ///   (LIFO)**, and every counter still settles before the timing (effect) it
+    ///   answers.
+    /// * **Per-player cap** (modelled on ileuxali/bangdream-monopoly's accepted
+    ///   round-robin): **one activation per responder visit**. A declaration
+    ///   advances priority to the **next** responder -- it does not reset to the
+    ///   starter. A player may declare again when the ring comes back to them.
+    ///   A round on a timing closes after **every responder has passed
+    ///   consecutively** with no activation in between.
+    ///
+    /// # Round on timing X
+    ///
+    /// `t` is **L1**, the effect declaration -- the card effect already aimed at
+    /// its named recipients. One round runs on it. The ring order starts at the
+    /// player after the one who triggered X (`chain_starter`'s seat + 1), goes
+    /// forward in turn order and includes the triggering player **last**. Out /
+    /// AI / exiled / stunned / no-hand players are skipped
+    /// (`can_counteract_now`). Each visit, the responder declares one eligible
+    /// hand card answering **X** -- so several players may counter the same
+    /// effect, each answering X rather than each other -- or passes. A
+    /// declaration advances to the next responder (one per visit); the round
+    /// ends after a full consecutive pass of the ring.
+    ///
+    /// # Counters to counters (「…后可对新的时点发动[反击]」)
+    ///
+    /// Once the round on X closes, the counters it collected are new timings.
+    /// **Design choice (ours):** they are taken **newest first**, each with its
+    /// own round (the ring starts after *that* counter's declarer), recursively;
+    /// answers become timings in turn. Newest first keeps answering consistent
+    /// with LIFO resolution -- the newest counter settles first, so it is the
+    /// one answered first. Termination is natural (a declaration removes a card
+    /// from a hand); `MAX_COUNTERACT_DEPTH` is the runaway guard.
+    ///
+    /// # Resolution
+    ///
+    /// LIFO over the resulting answer tree: a post-order walk that visits each
+    /// node's answers **newest first**. The newest counter to a timing (and its
+    /// whole subtree) settles first, then the next newest, ...; a counter's own
+    /// answers settle before the counter; the timing itself settles last of its
+    /// subtree. (This shape is ours -- the book only orders same-timing
+    /// counters, and the walk is the composition of the two ruling clauses.) A
+    /// counter's body runs against the link it answers, so `set_cancelled` /
+    /// `negate_effect` / `spare` land on that link and its guard read what that
+    /// link declared (`effect::` sees the list). A counter whose own link one of
+    /// its answers negated does not run its body; the declaration still stands
+    /// and the card is spent to its default fate (the discard). `Dest`
+    /// handling, the `discarded` raise and `log.play_counteract` are unchanged.
+    ///
+    /// Known cases outside this (left as-is, flagged for a later pass):
     ///
     /// * **The acting card's own follow-up** (`CardRules::counteract` step (1)) runs
     ///   before this window, outside the chain.
-    ///
-    /// The [反击] window is a Yu-Gi-Oh **chain**. `t` is **L1**, the effect
-    /// declaration -- the card effect already aimed at its named recipients.
-    /// Counters push onto it as L2, L3, ... and resolve **before** it, so a
-    /// counter can invalidate the effect before it settles.
-    ///
-    /// * **Build** is one loop per link, always from the chain's starter -- the
-    ///   player who activated the root effect (`chain_starter`), even when the
-    ///   trigger itself is someone else's (a payment's payer). The starter is
-    ///   asked first, then each player
-    ///   forward around the table, ending with the seat before the starter.
-    ///   A declaration adds a link and hands priority straight back to the
-    ///   starter for a fresh loop -- so the starter always answers the newest
-    ///   link first -- and a full loop with no declaration closes the chain.
-    ///   A counter war runs as far as it needs to; there is no link limit.
-    /// * **Resolution is flat** over the closed link list. There are no nested
-    ///   counter-windows: a response to a link is another link in *this* chain,
-    ///   and a response to a link that has already resolved is a *new* chain.
-    /// * Each counter answers the current top of the chain, and its guard reads
-    ///   that link (`Run.trigger`) -- so `effect::` sees the effects that link
-    ///   declared, and `set_cancelled` / `negate_effect` / `spare` land on it.
-    /// * **One declaration per player per priority pass** -- a player with two
-    ///   eligible cards must pick one.
     fn hand_counteractions(
         &self,
         cx: &mut Cx,
@@ -1838,25 +1858,56 @@ impl WasmRules {
             return Ok(());
         }
 
-        // The chain as it stands. Index 0 is L1, the effect declaration.
-        let mut chain: Vec<Trigger> = vec![trigger.clone()];
-        // (seat, card handle, card id, index into `chain` this counter answers)
-        let mut decls: Vec<(usize, i32, String, usize)> = Vec::new();
+        // The answer tree. Index 0 is L1, the effect declaration; every other
+        // node is one declared counter.
+        let mut chain = vec![ChainLink {
+            seat: chain_starter(t, cx.state().turn, n),
+            idx: -1,
+            id: t.card.clone(),
+            answered: 0,
+            link: trigger.clone(),
+            answers: Vec::new(),
+        }];
 
-        let start = chain_starter(t, cx.state().turn, n);
-
-        // ---- build: one loop from the chain's starter per link -------------
-        let mut priority = Priority::new(start, n);
-        // Hard bound: the chain is only as long as the hands involved, so this
-        // is a runaway guard, not a design limit. Every link costs at most one
-        // loop of asks, plus the closing loop.
+        // Hard bound: the tree is only as deep and as wide as the hands
+        // involved, so this is a runaway guard, not a design limit. Every round
+        // costs at most one lap of asks, plus the closing lap.
         let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 + 8;
-        while budget > 0 {
-            budget -= 1;
+        self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
+        self.resolve_rounds(cx, &mut chain, 0)?;
+
+        // L1's fate is whatever the counters did to it.
+        if let Some(root) = chain.into_iter().next() {
+            *trigger = root.link;
+        }
+        Ok(())
+    }
+
+    /// One round on `chain[timing]`, then -- newest first, the book's 「…后可对
+    /// 新的时点发动[反击]」 -- one round per counter it collected, recursively.
+    /// See [`Self::hand_counteractions`].
+    fn build_round(
+        &self,
+        cx: &mut Cx,
+        chain: &mut Vec<ChainLink>,
+        timing: usize,
+        depth: u32,
+        budget: &mut u32,
+    ) -> Flow<()> {
+        if depth >= MAX_COUNTERACT_DEPTH {
+            return Ok(());
+        }
+        let n = cx.state().players.len();
+        // The ring starts after the player the timing belongs to, so that
+        // player is asked last (clause 89).
+        let mut priority = Priority::new(chain[timing].seat, n);
+        // Counters this round collected, in declaration order.
+        let mut round: Vec<usize> = Vec::new();
+        while *budget > 0 {
+            *budget -= 1;
             let cursor = priority.seat();
-            let answered = chain.len() - 1;
             let declared = if can_counteract_now(cx, cursor) {
-                match self.declare_one(cx, cursor, &chain[answered], t)? {
+                match self.declare_one(cx, cursor, &chain[timing].link)? {
                     Some((id, idx)) => {
                         // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
                         let mut w = cx.world_copy();
@@ -1868,10 +1919,19 @@ impl WasmRules {
                         link.card = id.clone();
                         link.step = cx.state().step;
                         link.by_card = Some(cursor as i32);
-                        link.seq = (chain.len() + 1) as u32;
-                        link.answers = answered as u32;
-                        chain.push(bridge_trigger(&link));
-                        decls.push((cursor, idx, id, answered));
+                        let at = chain.len();
+                        link.seq = (at + 1) as u32;
+                        link.answers = timing as u32;
+                        round.push(at);
+                        chain[timing].answers.push(at);
+                        chain.push(ChainLink {
+                            seat: cursor,
+                            idx,
+                            id,
+                            answered: timing,
+                            link: bridge_trigger(&link),
+                            answers: Vec::new(),
+                        });
                         true
                     }
                     None => false,
@@ -1884,62 +1944,91 @@ impl WasmRules {
             }
         }
 
-        // ---- resolve: flat LIFO -----------------------------------------
-        for (s, idx, id, answered) in decls.into_iter().rev() {
-            cx.log(
-                s as i32,
-                Msg::new("log.play_counteract")
-                    .player_id("who", s as i32)
-                    .card("card", id.clone()),
-            );
+        // The counters just declared are themselves timings. Answer the newest
+        // first (LIFO), each with its own round starting after its declarer.
+        for &child in round.iter().rev() {
+            self.build_round(cx, chain, child, depth + 1, budget)?;
+        }
+        Ok(())
+    }
+
+    /// Resolve the answer tree LIFO: post-order, answers newest-first -- a
+    /// counter's own answers settle before it, and sibling counters settle
+    /// newest first. Each counter's body runs against the link it answers; one
+    /// whose own link an answer negated does not run.
+    fn resolve_rounds(&self, cx: &mut Cx, chain: &mut Vec<ChainLink>, idx: usize) -> Flow<()> {
+        let answers = chain[idx].answers.clone();
+        for &child in answers.iter().rev() {
+            self.resolve_rounds(cx, chain, child)?;
+        }
+        if idx == 0 {
+            // L1 settles in the engine; its link is already whatever the
+            // counters made of it.
+            return Ok(());
+        }
+        let seat = chain[idx].seat;
+        let card = chain[idx].idx;
+        let id = chain[idx].id.clone();
+        let answered = chain[idx].answered;
+        // What the counter's own answers did to its link: a negation there
+        // voids the counter's settlement (`set_cancelled` -- the activation
+        // never happened -- or `negate_effect`, which settles to nothing).
+        let negated = chain[idx].link.is_cancelled();
+        cx.log(
+            seat as i32,
+            Msg::new("log.play_counteract")
+                .player_id("who", seat as i32)
+                .card("card", id.clone()),
+        );
+        let dest = if negated {
+            // The body does not run, so the card has no fate of its own: it was
+            // played (it left the hand at declaration) and is spent.
+            DEST_UNSET
+        } else {
             // The counter's body runs against the link it answers, so its
             // `set_cancelled` / `negate_effect` / `spare` land there -- and the
             // effect settles only after every counter has had its say.
-            let mut on_link = chain[answered].clone();
+            let mut on_link = chain[answered].link.clone();
             let dest = self.drive(
                 cx,
                 Call::Counteract {
-                    card: idx,
-                    player_id: s as i32,
+                    card,
+                    player_id: seat as i32,
                 },
                 &id,
                 -1,
                 &mut on_link,
             )?;
-            chain[answered] = on_link;
-            let mut w = cx.world_copy();
-            let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(s);
-            match dest_from(dest) {
-                Dest::Graveyard => {
-                    if !w.out(s) {
-                        w.hidden[s].discard.push(id.clone());
-                    }
+            chain[answered].link = on_link;
+            dest
+        };
+        let mut w = cx.world_copy();
+        let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
+        match dest_from(dest) {
+            Dest::Graveyard => {
+                if !w.out(seat) {
+                    w.hidden[seat].discard.push(id.clone());
                 }
-                Dest::Hand => w.hidden[s].hand.push(id.clone()),
-                Dest::Banished => {}
-                Dest::Field => {}
             }
-            cx.swap_world(w);
-            if spent {
-                self.raise_core(cx, "discarded", s as i32, |t| t.card = id.clone())?;
-            }
+            Dest::Hand => w.hidden[seat].hand.push(id.clone()),
+            Dest::Banished => {}
+            Dest::Field => {}
         }
-
-        // L1's fate is whatever the counters did to it.
-        if let Some(root) = chain.into_iter().next() {
-            *trigger = root;
+        cx.swap_world(w);
+        if spent {
+            self.raise_core(cx, "discarded", seat as i32, |t| t.card = id.clone())?;
         }
         Ok(())
     }
 
     /// Offer one player a [反击] window answering `top`. Returns the card they
-    /// declared, if any. `t` is the chain root, for the prompt's description.
+    /// declared, if any. The prompt describes the **answered** link, so a
+    /// player answering a counter is told which counter they are answering.
     fn declare_one(
         &self,
         cx: &mut Cx,
         s: usize,
         top: &Trigger,
-        t: &CoreTrigger,
     ) -> Flow<Option<(String, i32)>> {
         // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
         let mut options: Vec<(String, i32)> = Vec::new();
@@ -1989,7 +2078,7 @@ impl WasmRules {
         let ask = Ask::choice(
             vec![s],
             Msg::new("ask.counteract.title"),
-            Msg::new("ask.counteract.text").msg("detail", describe_trigger(t)),
+            Msg::new("ask.counteract.text").msg("detail", describe_trigger(top)),
             labels,
             fallback,
             12.0,
@@ -2119,12 +2208,13 @@ fn prompt_to_ask(p: Prompt) -> Ask {
 
 /// The engine's string trigger kinds -> the module's small enum.
 
-/// The player who started a [反击] chain: whoever activated the effect at its
-/// root. That is `by_card` when a card caused the trigger -- **not** the
-/// trigger's own player, which for a payment is the payer: seat 2's card making
-/// seat 0 pay opens at seat 2, not seat 0. A board-driven trigger (rent, turn
-/// flow) has no activating card and opens at its player; one with neither
-/// opens at whoever's turn it is.
+/// The player a [反击] timing at the chain root belongs to: whoever activated
+/// the effect at its root. That is `by_card` when a card caused the trigger --
+/// **not** the trigger's own player, which for a payment is the payer: seat 2's
+/// card making seat 0 pay belongs to seat 2, not seat 0. A board-driven trigger
+/// (rent, turn flow) has no activating card and belongs to its player; one with
+/// neither belongs to whoever's turn it is. The round's ring starts at the seat
+/// after this one (clause 89), so this player is asked **last**.
 fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
     let seat = match t.by_card {
         Some(by) if by >= 0 => by,
@@ -2134,23 +2224,42 @@ fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
     seat as usize % n
 }
 
-/// Who is asked next while a [反击] chain builds (see `hand_counteractions`).
+/// One node of the [反击] answer tree (see `hand_counteractions`). Index 0 is
+/// the timing the chain answers (L1); every other node is one declared counter.
+struct ChainLink {
+    /// Who declared it. For L1, the player the timing belongs to
+    /// (`chain_starter`).
+    seat: usize,
+    /// The declared card's ruleset handle (-1 for L1).
+    idx: i32,
+    /// The declared card's id (L1: the trigger's own card).
+    id: String,
+    /// Node index of the timing this answers.
+    answered: usize,
+    /// This node's own link -- what its answers read and rewrite.
+    link: Trigger,
+    /// Nodes that answered this one, in declaration order.
+    answers: Vec<usize>,
+}
+
+/// Who is asked next during a round on one timing (see `hand_counteractions`).
 ///
-/// The player who started the chain has priority on every link: asking opens
-/// at `start` and runs forward once around the table, ending at the seat
-/// before it. A declaration adds a link and opens a fresh loop at `start`; a
-/// whole loop of passes closes the chain.
+/// Clause 89: the ring starts at the seat **after** the player the timing
+/// belongs to and runs forward in turn order, so that player is asked **last**.
+/// A declaration advances to the next responder -- it never resets -- and a
+/// player may declare again when the ring comes back to them. The round closes
+/// after a full lap of the ring with no declaration (「所有玩家同意…已发动后」).
 struct Priority {
-    start: usize,
     n: usize,
     cursor: usize,
-    /// Seats asked since the chain opened or last grew.
-    asked: usize,
+    /// Seats advanced since the last declaration.
+    quiet: usize,
 }
 
 impl Priority {
-    fn new(start: usize, n: usize) -> Self {
-        Self { start, n, cursor: start, asked: 0 }
+    /// A round on `declarer`'s timing: starts at the seat after `declarer`.
+    fn new(declarer: usize, n: usize) -> Self {
+        Self { n, cursor: (declarer + 1) % n, quiet: 0 }
     }
 
     /// The seat to ask now.
@@ -2158,17 +2267,16 @@ impl Priority {
         self.cursor
     }
 
-    /// The current seat answered -- `declared` if it added a link. Returns
-    /// whether the chain is still open.
+    /// The current seat answered -- `declared` if it added a counter. Returns
+    /// whether the round is still open.
     fn answered(&mut self, declared: bool) -> bool {
+        self.cursor = (self.cursor + 1) % self.n;
         if declared {
-            self.cursor = self.start;
-            self.asked = 0;
+            self.quiet = 0;
             return true;
         }
-        self.asked += 1;
-        self.cursor = (self.cursor + 1) % self.n;
-        self.asked < self.n
+        self.quiet += 1;
+        self.quiet < self.n
     }
 }
 
@@ -2197,8 +2305,9 @@ fn hand_of(cx: &Cx, s: usize) -> Vec<String> {
     }
 }
 
-/// The one-line trigger description the [反击] prompt shows (C# `DescribeTrigger`).
-fn describe_trigger(t: &CoreTrigger) -> Msg {
+/// The one-line description of the answered link the [反击] prompt shows (C#
+/// `DescribeTrigger`).
+fn describe_trigger(t: &Trigger) -> Msg {
     let mut m = Msg::new("ask.counteract.detail").player_id("who", t.player_id);
     if !t.card.is_empty() {
         m = m.card("card", &t.card);
@@ -2370,11 +2479,11 @@ impl CardRules for WasmRules {
         // which a counteraction may rewrite; the engine reads it back afterwards.
         let mut trigger = bridge_trigger(t);
         // Ordering at one trigger (the standard; see `hand_counteractions`):
-        // (1) the acting card's own follow-up resolves FIRST, outside the LIFO
-        //     stack -- a card answering its own play is not competing with the
-        //     counteractions to it, so it never loses its place to them;
-        // (2) then every declared counteraction resolves in LIFO order (reverse
-        //     declaration order), each free to open a nested counter-window.
+        // (1) the acting card's own follow-up resolves FIRST, outside the
+        //     answer tree -- a card answering its own play is not competing with
+        //     the counteractions to it, so it never loses its place to them;
+        // (2) then the [反击] round on the timing, and counters to counters,
+        //     settle LIFO -- newest first -- each before the link it answers.
         //
         // (1) The played card's own follow-up: the card named on the trigger runs
         // its `counteract` (C# `PlayCtx.AsCounteraction` for a card answering its own play).
@@ -2519,10 +2628,10 @@ impl CardRules for WasmRules {
                 }
             }
         }
-        // (3) The hand-counteraction window (C# `MatchHost.Counteract(Trigger)`): every player
-        // from the trigger's player around the table may answer with a [反击] card
-        // from hand; declarations resolve in reverse order. Not at hook-only
-        // points.
+        // (3) The hand-counteraction window (C# `MatchHost.Counteract(Trigger)`): one
+        // round per timing, from the seat after the timing's player around the
+        // table; counters settle newest-first before the timing they answer
+        // (see `hand_counteractions`). Not at hook-only points.
         if !is_hook_only(t.kind) {
             self.hand_counteractions(cx, t, &mut trigger, 0)?;
         }
@@ -2612,13 +2721,14 @@ mod tests {
     use crate::TriggerKind;
 
     #[test]
-    fn a_chain_opens_at_the_player_who_activated_the_effect() {
+    fn a_round_belongs_to_the_player_who_activated_the_effect() {
         // Seat 2's card makes seat 0 pay: the `effect` is the payer's (player 0),
-        // but seat 2 activated it, so seat 2 is asked first.
+        // but seat 2 activated it, so the round is seat 2's -- and the ring
+        // asks seat 2 last (clause 89).
         let mut pay = CoreTrigger::new("effect", 0);
         pay.by_card = Some(2);
         assert_eq!(chain_starter(&pay, 1, 4), 2);
-        // Rent has no activating card: the payer who landed starts it.
+        // Rent has no activating card: the payer who landed owns the timing.
         let rent = CoreTrigger::new("effect", 3);
         assert_eq!(chain_starter(&rent, 1, 4), 3);
         // Neither a card nor a player (the bank's side): whoever's turn it is.
@@ -2627,11 +2737,12 @@ mod tests {
         assert_eq!(chain_starter(&bank, 1, 4), 1);
     }
 
-    /// Drive a chain's asking order: `declares` lists the seats that add a
-    /// link, in order, each the first time it is asked after the previous one.
-    /// Returns every seat asked.
-    fn asked(start: usize, n: usize, declares: &[usize]) -> Vec<usize> {
-        let mut p = Priority::new(start, n);
+    /// Drive one round's asking order: `declares` lists the seats that declare a
+    /// counter, in order, each the first time it is asked after the previous
+    /// one. Returns every seat asked. `declarer` is the player the round's
+    /// timing belongs to; the ring starts at the seat after them (clause 89).
+    fn asked(declarer: usize, n: usize, declares: &[usize]) -> Vec<usize> {
+        let mut p = Priority::new(declarer, n);
         let mut left = declares.iter().copied().peekable();
         let mut out = vec![];
         loop {
@@ -2648,19 +2759,23 @@ mod tests {
     }
 
     #[test]
-    fn a_chain_nobody_answers_asks_each_seat_once_from_the_starter() {
-        assert_eq!(asked(2, 4, &[]), [2, 3, 0, 1]);
+    fn a_round_opens_at_the_seat_after_the_triggering_player() {
+        // Seat 2 triggered the timing: the ring asks 3, 0, 1 -- and 2 last.
+        assert_eq!(asked(2, 4, &[]), [3, 0, 1, 2]);
+        // A one-player ring asks that seat once.
+        assert_eq!(asked(0, 1, &[]), [0]);
     }
 
     #[test]
-    fn every_link_hands_priority_back_to_the_starter_for_one_loop() {
-        // Seat 0 counters seat 2's effect: asking reopens at 2 and runs a full
-        // loop again, seat 0 included.
-        assert_eq!(asked(2, 4, &[0]), [2, 3, 0, 2, 3, 0, 1]);
-        // A counter war: 3 answers, then 1 answers that, then a quiet loop.
-        assert_eq!(asked(2, 4, &[3, 1]), [2, 3, 2, 3, 0, 1, 2, 3, 0, 1]);
-        // The starter chaining onto its own link is asked again straight away.
-        assert_eq!(asked(1, 3, &[1]), [1, 1, 2, 0]);
+    fn a_declaration_advances_priority_and_the_ring_can_return() {
+        // Seat 0 declares: priority moves on to 1, not back to the starter (3,
+        // the seat before 0 in the ring), and the ring brings 0 back for a
+        // second declaration before a quiet lap closes the round.
+        assert_eq!(asked(2, 4, &[0]), [3, 0, 1, 2, 3, 0]);
+        assert_eq!(asked(2, 4, &[0, 0]), [3, 0, 1, 2, 3, 0, 1, 2, 3, 0]);
+        // Two seats answering the same timing, one each: the ring just runs on
+        // and closes on a quiet lap.
+        assert_eq!(asked(2, 4, &[3, 1]), [3, 0, 1, 2, 3, 0, 1]);
     }
 
     /// The engine raises these kinds; folding any of them to `None` would make

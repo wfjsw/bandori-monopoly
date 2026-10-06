@@ -17,5 +17,8 @@
   "crystal_empty": "out of Miracle Crystals; left the field",
   "crystal_none": "no Miracle Crystals; left the field",
   "dest_note": "dest test card in play",
-  "dest_now_left": "left at once; still placed = {{placed}}"
+  "dest_now_left": "left at once; still placed = {{placed}}",
+  "probe_fired": "probe fired by {{who}}; {{n}} already on link {{seq}}",
+  "probe_why": "probe cut",
+  "deny_fired": "deny fired by {{who}}"
 }

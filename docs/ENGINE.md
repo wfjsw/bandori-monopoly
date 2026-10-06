@@ -40,11 +40,17 @@ modifier has touched it -- that is the stable [反击] key for the rulebook's
 「被其他玩家的卡效果影响」. `Target` / `Abnormal` / `Pay` are settlement hooks:
 they fire as the effect settles and cannot be used to reconstruct that clause.
 
-Counters are Yu-Gi-Oh chains: the declaration is L1, a counter pushes onto it as
-L2 and resolves **before** it. `Negation::{Activation, Effect}` and `spare(seat)`
-replace the single `Cancelled` flag -- "the link never happened", "it happened
-and settled to nothing", and "everyone but this seat settles" are three different
-things. See `game-core/src/engine/rules.rs`.
+Counters answer one timing per round (rulebook 89): the ring starts at the seat
+after the player the timing belongs to and asks them last; every counter in the
+round answers the *same* link; the declared counters then become new timings,
+newest first, with their own rounds. Resolution is LIFO over the resulting
+answer tree -- a counter's own answers settle before it, sibling counters settle
+newest first, every counter before the timing it answers -- so a counter can
+invalidate the effect before it settles. `Negation::{Activation, Effect}` and
+`spare(seat)` replace the single `Cancelled` flag -- "the link never happened",
+"it happened and settled to nothing", and "everyone but this seat settles" are
+three different things. See `game-core/src/engine/rules.rs` and
+`game-rules/src/wasm_rules.rs` (`hand_counteractions`).
 
 ### Why host events are deferred
 

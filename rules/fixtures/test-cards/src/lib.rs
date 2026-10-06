@@ -59,6 +59,29 @@ const COUNTER: CardDef = CardDef::new(
     &[On::Counteract(&[ChainKind::Effect], counter_yes, counter)],
 );
 
+/// [反击] any effect declaration -- deliberately loose (any declarer, any
+/// recipient) so a chain test can line several responders up on one timing,
+/// the triggering player included (clause 89's ring ends with them).
+///
+/// The body marks the answered link's `value` with how many probes have already
+/// settled against it and pays the probe's player `100 * (that + 1)` from the
+/// answered link's player. LIFO resolution is then readable in the money (the
+/// newest probe settles first and takes the smallest cut) and shared-link
+/// settlement in the log (`n` keeps counting on one link, `seq` says which).
+const PROBE: CardDef = CardDef::new(
+    "TEST:probe",
+    &[On::Counteract(&[ChainKind::Effect], probe_yes, probe)],
+);
+
+/// [反击] a counter's own play -- the 「新的时点」 of clause 89. Answers a
+/// `card` link that is itself a counter (`trigger::seq() >= 2`), never a root
+/// play (`seq` 0), and negates that counter's activation so its body does not
+/// run.
+const DENY: CardDef = CardDef::new(
+    "TEST:deny",
+    &[On::Counteract(&[ChainKind::Card], deny_yes, deny)],
+);
+
 fn aimer(player_id: i32) -> card_sdk::Asked {
     let Some(&target) = ctx::others(player_id).first() else {
         return Ok(());
@@ -279,7 +302,57 @@ fn counter(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+fn probe_yes(_player_id: i32) -> bool {
+    // Any effect link at all: the entry's `ChainKind::Effect` already says
+    // which kind of timing this answers.
+    true
+}
+
+fn probe(player_id: i32) -> card_sdk::Asked {
+    // `trigger::` reads the **answered** link (the one this counter's body runs
+    // against). `n` counts the probes that have already settled against that
+    // same link; `seq` is 0 on an effect declaration and >= 2 on a counter, so
+    // it says whether this answered X or another counter.
+    //
+    // The one mutable field a counter body shares with its siblings is the
+    // answered link's `value` -- `trigger::set_pay_amount` is the host's
+    // `Trigger.value` setter. The probe uses it as a settlement counter, so
+    // LIFO order is readable in the money as well as the log: the newest probe
+    // settles first and takes the smallest cut.
+    let seen = trigger::value();
+    trigger::set_pay_amount(seen + 1);
+    let from = trigger::player_id();
+    if from >= 0 && from != player_id {
+        let why = Msg::new(key!("probe_why"));
+        ctx::transfer(from, player_id, 100 * (seen + 1), &why)?;
+    }
+    ctx::log(
+        player_id,
+        &Msg::new(key!("probe_fired"))
+            .player_id("who", player_id)
+            .i("n", seen as i64)
+            .i("seq", trigger::seq() as i64),
+    );
+    Ok(())
+}
+
+fn deny_yes(player_id: i32) -> bool {
+    // `trigger::` reads the **answered** link: a counter link (seq >= 2), not a
+    // root play (seq 0).
+    trigger::player_id() != player_id && trigger::seq() >= 2
+}
+
+fn deny(player_id: i32) -> card_sdk::Asked {
+    // Negate the countered counter's **activation**: its body will not run.
+    trigger::set_cancelled();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("deny_fired")).player_id("who", player_id),
+    );
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
-    RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, CRYSTAL, DEST_NOW,
-    DEST_TO
+    RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
+    CRYSTAL, DEST_NOW, DEST_TO
 ]);

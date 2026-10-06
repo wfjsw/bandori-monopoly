@@ -17,5 +17,8 @@
   "crystal_empty": "奇迹水晶用完，离场",
   "crystal_none": "没有奇迹水晶，离场",
   "dest_note": "去向测试卡在场",
-  "dest_now_left": "立刻离场；仍在场 = {{placed}}"
+  "dest_now_left": "立刻离场；仍在场 = {{placed}}",
+  "probe_fired": "试探由 {{who}} 结算；链 {{seq}} 上已有 {{n}}",
+  "probe_why": "试探扣款",
+  "deny_fired": "否决由 {{who}} 结算"
 }

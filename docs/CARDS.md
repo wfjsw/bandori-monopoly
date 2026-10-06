@@ -158,24 +158,28 @@ cannot ship with a raw key showing to players.
   card quotes its passage and cites it; `node tools/build-ruleset.mjs` ships
   them as one module (`dist/cards`, 184 cards).
 * [反击] cards fire through the hand-counteraction window (`WasmRules::hand_counteractions`):
-  every trigger opens it, declarations resolve in reverse order, and a counteraction
-  play opens a counter-window (depth-capped runaway guard at 16; the C# cuts at
-  4, which is tighter than the card pool needs).
-* **Ordering when several cards answer one trigger** is a LIFO stack, and the
-  case that matters is a [反击] counter-card answering someone else's card play
-  (the `card` → hand-counteraction window → `counteracted` chain). Declarations are
-  collected in player order starting at the trigger's player and wrapping the
-  table; resolution is the exact **reverse** of declaration order, so the last
-  card to answer the window resolves first, and any counteraction it plays opens a
-  nested counter-window before earlier declarations get their turn.
-  Where this LIFO rule does **not** apply (left as-is, flagged for a later pass):
+  every trigger opens one **round per timing** (rulebook 32 / 89), the counters
+  settle newest-first before the timing they answer, and a counter is itself a
+  new timing that may be answered (depth-capped runaway guard at 16; the C# cuts
+  at 4, which is tighter than the card pool needs).
+* **Ordering when several cards answer one trigger** (rulebook 89): the ring
+  starts at the seat after the player the timing belongs to and runs forward in
+  turn order, so that player is asked **last**; each visit a responder declares
+  one eligible hand card answering **that timing** or passes (several players may
+  counter the same effect, each answering X rather than each other); a
+  declaration advances priority to the next responder and the round closes after
+  a full consecutive pass. Once the round closes the declared counters become
+  new timings, taken **newest first**, each with its own round starting after its
+  declarer (clause 89's 「…后可对新的时点发动[反击]」). Resolution is LIFO over the
+  resulting answer tree: a counter's own answers settle before it, sibling
+  counters settle newest first, and every counter settles before the timing it
+  answers. Where this rule does **not** apply (left as-is, flagged for a later
+  pass):
   * the acting card's own follow-up (`t.card`'s `counteract`) resolves *before* the
-    window, outside the stack -- a card answering its own play is not competing
+    window, outside the tree -- a card answering its own play is not competing
     with counteractions to it;
-  * one declaration per player per window -- a player with two eligible cards picks
-    one and cannot stack both;
-  * nested counter-windows are separate stacks (LIFO within each, not across
-    the whole chain);
+  * one declaration per player per visit -- a player with two eligible cards picks
+    one and may declare the other when the ring comes back;
   * multi-player declaration order is fixed by player position, not chosen.
 * `trigger::step()` is the turn step (0/1/2/3) the trigger fired in. It is only
   informative for kinds that are not already step-specific -- `mortgage`, for
