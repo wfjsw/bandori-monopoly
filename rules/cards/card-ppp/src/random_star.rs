@@ -2,11 +2,11 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:仓库里的Random Star`）:
 //! > 仓库里的Random Star：
-//! >
+//!
 //! > （1）将此卡放置自身场上并将弃牌堆和手牌洗入卡组，然后将一张“拍卖撤下来了”放置在卡组底端
-//! >
+//!
 //! > （2）[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]
-//! >
+//!
 //! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 
 use card_sdk::abi::{HookKind, MoveKind};

@@ -1,11 +1,11 @@
 //! `通用:[月岛麻里奈]今天也要加油工作喔` -- C# `CardMarinaWork`
-//! (MatchHost.cs:2409-2429): [反击] let a CiRCLE [经过]/[结算] proceed normally.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[月岛麻里奈]今天也要加油工作喔`）:
 //! > [月岛麻里奈]今天也要加油工作喔：
 //! > [手]：
 //! > [反击][使用者][经过]#1格子且#1格子受到其他效果影响时：[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果。
 //!
+//! (MatchHost.cs:2409-2429): [反击] let a CiRCLE [经过]/[结算] proceed normally.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -13,20 +13,20 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
-    &[On::CounterAct(
+    &[On::Counteract(
         &[ChainKind::CircleAffected],
-        can_react,
-        react,
+        can_counteract,
+        counteract,
     )],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[使用者][经过]#1格子且#1格子受到其他效果影响时」
-    // C# `CardMarinaWork.CanReact`: `t.Kind == "circleAffected" && t.Seat == seat`.
+    // C# `CardMarinaWork.CanCounteract`: `t.Kind == "circleAffected" && t.Seat == seat`.
     trigger::kind() == TriggerKind::CircleAffected && trigger::player_id() == player_id
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果」
     // C# `c.Trigger.Move.Tags["circleNormal"] = 1` then
     // 「今天也要加油工作喔：这次 CiRCLE 的 [经过] / [结算] 正常进行，不受其上的额外效果影响」.

@@ -1,7 +1,7 @@
 //! `CRYCHIC:想要抓住...` -- C# `CardWantToGrab`: gain one [Stay]; the follow-up
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要抓住...`）:
-//! > 想要抓住...：
+//! > 想要抓住...： 
 //! >  
 //! > （1）获得一层[停留]。
 //!

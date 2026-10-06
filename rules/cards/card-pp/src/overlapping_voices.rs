@@ -1,5 +1,4 @@
 //! `PP:[衍生]重叠的声音` -- C# `CardOverlappingVoices` (MatchHost.cs:7290-7331):
-//! remove itself and 「初次演出事故」, teleport to Bandori车站 without settling.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]重叠的声音`）:
 //! > [衍生]重叠的声音：
@@ -11,6 +10,7 @@
 //! > 2. 进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”且不[结算]；
 //! > 3. 回合结束后获得1层[停留]和1个正面的[P✽P粉丝]，将1张“明天见”加入手卡。
 //!
+//! remove itself and 「初次演出事故」, teleport to Bandori车站 without settling.
 //! The teleport is the turn's main move (`ctx::plan::set_teleport_to` +
 //! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
 

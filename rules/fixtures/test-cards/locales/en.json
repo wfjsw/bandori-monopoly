@@ -2,7 +2,7 @@
   "relay_start": "relay start",
   "relay_end": "relay end",
   "echo_play": "echo play",
-  "echo_react": "echo react",
+  "echo_counteract": "echo counteract",
   "lister_count": "hand listed {{n}} of {{size}}",
   "lister_moved": "moved to discard: {{found}}",
   "stunner_done": "stunned; abnormal count {{count}}",

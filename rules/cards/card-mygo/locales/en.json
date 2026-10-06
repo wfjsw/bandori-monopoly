@@ -1,5 +1,6 @@
 {
   "anon_tokyo_ask": "[target] which adjacent buyable tile?",
+  "anon_tokyo_link_rent": "half the linked {{tile}}'s rent (+{{n}})",
   "anon_tokyo_linked": "a [miracle crystal] now links {{a}} and {{b}}: rent there also charges half of the other tile's rent ({{card}})",
   "anon_tokyo_mark": "Anon Tokyo link",
   "anon_tokyo_mark_note": "linked with {{tile}}",

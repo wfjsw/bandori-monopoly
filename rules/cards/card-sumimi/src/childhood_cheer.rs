@@ -1,10 +1,10 @@
 //! `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励` -- C# `CardChildhoodCheer`
-//! (MatchHost.cs:11481-11498): move starts from 小豆岛, +1 fire afterwards.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:(初华（Sumimi）)儿时玩伴的鼓励`）:
 //! > (初华（Sumimi）)儿时玩伴的鼓励：
 //! >  可在移动掷骰前打出此卡，使本次移动以“小豆岛”为起点并在移动后获得一个火罐。
 //!
+//! (MatchHost.cs:11481-11498): move starts from 小豆岛, +1 fire afterwards.
 //! C# arms `H.ExtraOf<AfterMoveFireFx>(seat)` (a player attachment, not a placed
 //! card). The hook surface only dispatches to *placed* cards, so the play body
 //! places this card as the `AfterMoveFireFx` stand-in and files it to the

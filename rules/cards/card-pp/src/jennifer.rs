@@ -1,5 +1,4 @@
 //! `PP:找回珍妮弗` -- C# `CardJennifer` (MatchHost.cs:7699-7765): place on
-//! another player's field; when the owner passes 偶像经纪公司 the user pays 400.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:找回珍妮弗`）:
 //! > 找回珍妮弗：
@@ -11,6 +10,7 @@
 //! > 2. [使用者]获得1个正面的[P✽P粉丝]，[拥有者]将一个[P✽P粉丝]变为正面；
 //! > 3. 此卡[移除]，然后将1张“魔法战队Pastel✽Ranger”加入[使用者]手卡。
 //!
+//! another player's field; when the owner passes 偶像经纪公司 the user pays 400.
 //! The [持续] runs in the `PassTile` hook; the user is kept in a player slot
 //! (stand-in for the C# per-card `Card.User`).
 

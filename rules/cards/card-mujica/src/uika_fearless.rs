@@ -1,10 +1,10 @@
 //! `Mujica:（初华）我，无畏悲伤` -- C# `CardUikaFearless` (MatchHost.cs:5711-5743):
-//! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（初华）我，无畏悲伤`）:
 //! > （初华）我，无畏悲伤：
 //! >  打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的投掷结果可定义为1-6以内的任何数字
 //!
+//! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

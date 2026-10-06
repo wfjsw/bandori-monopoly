@@ -1,10 +1,10 @@
 //! `CRYCHIC:去唱卡拉ok吧` -- C# `CardKaraoke` (MatchHost.cs:2734-2748): arm this
-//! turn's main move to roll up to 5 times and keep one face.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:去唱卡拉ok吧`）:
 //! > 去唱卡拉ok吧：
 //! >  进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。
 //!
+//! turn's main move to roll up to 5 times and keep one face.
 
 use alloc::vec::Vec;
 

@@ -1,10 +1,10 @@
 //! `Sumimi:Sumimi不会解散哦` -- C# `CardNoBreakup` (MatchHost.cs:11038-11118):
-//! settle-teleport that must leave money with a repeated digit, else fully revert.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sumimi不会解散哦`）:
 //! > Sumimi不会解散哦：
 //! >  当你本回合未进行过抵押/赎回操作且资金不含有相同数字时可打出，进行一次可使你的资金变动为拥有相同数字的传送，视为你的主要移动；若传送并触发结算后未能使资金变为拥有相同数字，回到原处并取消所有受到的效果
 //!
+//! settle-teleport that must leave money with a repeated digit, else fully revert.
 
 use alloc::vec::Vec;
 

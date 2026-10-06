@@ -1405,7 +1405,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
                 return Some(Msg::new("err.moving"));
             }
             if cx.over_hand(i) {
-                return Some(Msg::new("err.over_hand").i("limit", world::HAND_LIMIT as i64));
+                return Some(Msg::new("err.over_hand").i("limit", cx.w.st.players[i].hand_limit() as i64));
             }
             None
         }

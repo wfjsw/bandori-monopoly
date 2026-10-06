@@ -6,7 +6,7 @@
 //!
 //! hostile targeting between your turns cancels it and grants immunity.
 //!
-//! Reaction-only (`Normal => false`).
+//! Counteraction-only (`Normal => false`).
 
 use card_sdk::abi::{ChainKind, GateKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -17,13 +17,13 @@ const ID: &str = "Mor:离心力，不为所动";
 pub const CENTRIFUGAL: CardDef = CardDef::new(
     "Mor:离心力，不为所动",
     &[
-        On::CounterAct(&[ChainKind::Effect], can_react, react),
+        On::Counteract(&[ChainKind::Effect], can_counteract, counteract),
         On::Gate(&[GateKind::ImmuneAll], immune_all),
         On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
     ],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「第二次成为其他角色技能或卡牌的目标时」
     // C# `t.Kind == "target" && t.Target == seat && t.ByCard >= 0 && t.ByCard != seat`
     //   and `H._targeted[player_id] >= 2` (the counter is bumped on every target raise
@@ -44,7 +44,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::targeted_count(player_id) >= 2
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果」
     // C# `c.Trigger.Cancelled = true` also voids the targeting that opened the window.
     trigger::set_cancelled(); // void the targeting that opened this window

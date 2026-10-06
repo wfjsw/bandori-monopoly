@@ -1,14 +1,14 @@
 //! `MyGO:（灯）不再迷茫` -- C# `CardTomoriNoLonger` (MatchHost.cs:6308-6347):
-//! take two locked [停留] layers, place this card, bin the whole hand and load
-//! it with X+1 miracle crystals (X = cards discarded).
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（灯）不再迷茫`）:
-//! > （灯）不再迷茫：
-//! >
-//! > （1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数
-//! > （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗
+//! > （灯）不再迷茫：  
+//! >  
+//! > （1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数 
+//! > （2）你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗 
 //! > （3）此卡上的奇迹水晶耗尽后，[移除]此卡
 //!
+//! take two locked [停留] layers, place this card, bin the whole hand and load
+//! it with X+1 miracle crystals (X = cards discarded).
 
 use alloc::vec::Vec;
 

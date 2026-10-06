@@ -1,10 +1,10 @@
 //! `Mujica:祥，移动` -- C# `CardSakiMove` (MatchHost.cs:5497-5541): force a player
-//! 3 tiles in a chosen direction, settling at half price.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:祥，移动`）:
 //! > 祥，移动：
 //! >  强制一名玩家向你选择的方向移动3格并[触发结算]（可在掷骰前选择自己以代替主要移动），触发结算时进行的支付价格减半
 //!
+//! 3 tiles in a chosen direction, settling at half price.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

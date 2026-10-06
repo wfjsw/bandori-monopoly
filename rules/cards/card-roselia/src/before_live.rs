@@ -12,11 +12,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const BEFORE_LIVE: CardDef = CardDef::new(
     "R:live前的准备",
-    &[On::CounterAct(&[ChainKind::Pass], can_react, react)],
+    &[On::Counteract(&[ChainKind::Pass], can_counteract, counteract)],
 );
 
 /// 规则书[反击]: 「[反击] 经过江户川乐器店时可打出此卡」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「经过江户川乐器店时」 -- C# `t.Kind == "pass" && t.Seat == seat &&
     // H.Name(t.Tile) == "江户川乐器店"`.
     if trigger::kind() != TriggerKind::Pass || trigger::player_id() != player_id {
@@ -31,7 +31,7 @@ fn can_react(player_id: i32) -> bool {
     tile >= 0 && tile == shop
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「使自己在江户川乐器店强制停下并触发结算」
     ctx::log(
         player_id,
@@ -39,7 +39,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", ctx::tile_named("江户川乐器店")),
     );
-    // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.React`:
+    // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.Counteract`:
     // `m.Stopped = true; m.Resolve = true` behind `H.AbnormalGate`.
     if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
         return Ok(());

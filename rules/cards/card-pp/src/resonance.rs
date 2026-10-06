@@ -3,8 +3,7 @@
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]共鸣`）:
 //! > [衍生]共鸣：
 //! > [特]：
-//! > 拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果
-//! > 并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。
+//! > 拥有此卡的玩家的卡可发动[共鸣]时将此卡放入弃卡区，发动那张卡的[共鸣]效果并为拥有此卡的玩家的Pastel✽Palettes乐队卡添加2[奇迹水晶]。
 //!
 //! Not a hand play (no `Play`): the [特] is what every other card's [共鸣] branch
 //! calls, and it is [`try_resonance`] below. The clause is one sentence with

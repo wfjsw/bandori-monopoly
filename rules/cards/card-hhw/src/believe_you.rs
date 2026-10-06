@@ -1,10 +1,10 @@
 //! `HHW:因为我一直相信着你` -- C# `CardBelieveYou` (MatchHost.cs:3529-3596): pay
-//! 800, reveal hand + deck, a rival discards one hand card, then keep two from the deck.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:因为我一直相信着你`）:
 //! > 因为我一直相信着你：
 //! > 至少有另一张手牌时可发动，消耗800资金，公开你的卡组与手牌，选择一名玩家，使其从你的手牌中选择一张放入弃牌堆，然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆。
 //!
+//! 800, reveal hand + deck, a rival discards one hand card, then keep two from the deck.
 
 use alloc::vec::Vec;
 

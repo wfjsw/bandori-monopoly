@@ -1,11 +1,11 @@
 //! `MyGO:壱雫空` -- C# `CardHitoshizuku` (MatchHost.cs:6364-6415): clear every
-//! [停留] / [眩晕] on the table; each player pays the user 1,000 per effect
-//! type cleared (the user gains instead of paying for their own).
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:壱雫空`）:
 //! > 壱雫空：
 //! >  清除场上所有[停留]与[眩晕]效果，所有玩家因本效果每清除一种效果则支付此卡使用者1000资金，若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金。（此卡可在眩晕时打出）
 //!
+//! [停留] / [眩晕] on the table; each player pays the user 1,000 per effect
+//! type cleared (the user gains instead of paying for their own).
 
 use alloc::vec::Vec;
 

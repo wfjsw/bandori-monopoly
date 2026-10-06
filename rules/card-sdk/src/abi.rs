@@ -12,7 +12,7 @@ use alloc::{string::String, vec::Vec};
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `bandori_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
 /// v9: `cant_move` (H.MoveWhyNot), `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
-/// v10: `trig_step` (`Trigger.step`) so a reaction can tell which turn step
+/// v10: `trig_step` (`Trigger.step`) so a counteraction can tell which turn step
 ///      (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
 ///      `mortgage` fires during both step 1 and step 3); paired
 ///      `*Before`/`*After` kinds filling in the missing half of every
@@ -20,10 +20,10 @@ use alloc::{string::String, vec::Vec};
 /// v11: `trig_by_card` (`Trigger.by_card`) -- the player whose card caused this
 ///      trigger, or -1 when it was not card-caused. This is what `H.HitByOtherCard`
 ///      keys on (`by_card >= 0 && by_card != player_id`).
-/// v12: `trig_set_pay_amount` -- a reaction to a `pay`/`paid` trigger may rewrite
+/// v12: `trig_set_pay_amount` -- a counteraction to a `pay`/`paid` trigger may rewrite
 ///      the pending amount (0 = cancel the payment, C# `t.Pay.cancel` / `PayCtx.amount`).
 ///      Also: `set_move_roll` now actually reaches the engine (the write-back from
-///      the reaction's trigger to `Trigger.value` was missing).
+///      the counteraction's trigger to `Trigger.value` was missing).
 /// v13: `trig_pay_is_rent` (`t.Pay.IsRent`) -- is this `pay`/`paid` trigger rent,
 ///      as opposed to a buy/build/forced loss. Card-driven payments are never rent.
 /// v14: `t.Move` context -- `trig_move_flags` (a [`MoveFlags`] bitset), plus
@@ -31,16 +31,16 @@ use alloc::{string::String, vec::Vec};
 ///      pass / settle*) can now say what kind of move it was, and any number of
 ///      orthogonal modifiers on it. Replaces the bespoke `trig_move_fire_roll`.
 /// v15: `trig_set_cancelled` / `trig_cancelled` (`Trigger.Cancelled`) -- a
-///      reaction may negate the trigger's effect outright (C# `trigger.Cancelled
+///      counteraction may negate the trigger's effect outright (C# `trigger.Cancelled
 ///      = true`): the engine then skips the effect body (land / event / play)
 ///      but still runs the point's Before/After hooks.
-/// v16: `trig_set_pay_target` -- a reaction may also redirect the payee of a
+/// v16: `trig_set_pay_target` -- a counteraction may also redirect the payee of a
 ///      pending `pay` (C# `PayCtx.to`; -1 = the bank). The transfer amount
 ///      follows `set_pay_amount`, so a reduced payment credits the payee less too.
 /// v17: field-card (`Fx`) hooks + per-card crystals. New `TriggerKind`s
 ///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `RollAfter`, `CardPlayed`,
 ///      `Targeted`, `PayChoose`) are **hook points**, not [反击] points: the
-///      engine runs every *placed* card's `react` against them automatically.
+///      engine runs every *placed* card's `counteract` against them automatically.
 ///      `crystals` / `set_crystals` / `add_crystals` on the running field card.
 /// v18: `take_from_hand`; `drawn` self-dispatches to the card named on `t.card`
 ///      (the one just drawn, still in hand).
@@ -55,11 +55,12 @@ use alloc::{string::String, vec::Vec};
 ///      `play_card` now returns the inner card's `Dest`, and the inner card runs
 ///      as itself (its own id and `Dest`, no longer the outer card's).
 /// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
-///      points (`Play(gate, effect)`, `CounterAct(kinds, guard, effect)`,
+///      points (`Play(gate, effect)`, `Counteract(kinds, guard, effect)`,
 ///      `Hook(kinds, effect)`, `AtEnd`). The manifest lists each entry with
 ///      its trigger kinds, so the host dispatches only to cards that declared
 ///      the kind at hand; one export `bandori_on(card, entry, op, player_id)`
-///      replaces `bandori_play` / `_can_react` / `_react` / `_cant_play`.
+///      replaces `bandori_play` / `_can_react` / `_react` / `_cant_play` (the
+///      pre-v21 names, kept here as history).
 /// v23: hook kinds from the C# call sites -- TurnEndBefore / TurnEndAfter,
 ///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
 ///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleInstead, BeforeOut,
@@ -103,7 +104,13 @@ use alloc::{string::String, vec::Vec};
 ///      context (`CardDef.targeting`, `trigger::play_*`, `set_immune`,
 ///      `add_mark_flags(.., NO_TARGET)`) and `plan::set_stopped`. Targeting is
 ///      the `HostRequest::Target` gate; the rest is unported.
-pub const ABI_VERSION: i32 = 27;
+/// v28: the [反击] vocabulary is `counteract` throughout. `On::CounterAct` /
+///      `OnKind::CounterAct` / `Call::CounterAct` became `Counteract`, the
+///      trigger-kind wire string `reacted` became `counteracted`, and the
+///      guest entry points are `counteract` / `can_counteract` (formerly
+///      `react` / `can_react`). Only the `counteracted` string is on the wire;
+///      the rest is naming.
+pub const ABI_VERSION: i32 = 28;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -115,7 +122,7 @@ pub mod export {
     pub const MANIFEST: &str = "bandori_manifest";
     /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
     /// `entry` (an index into the card's manifest `on` list). `op` is
-    /// [`OP_RUN`] or, for a `CounterAct` entry, [`OP_GUARD`]. Returns 0, the guard's
+    /// [`OP_RUN`] or, for a `Counteract` entry, [`OP_GUARD`]. Returns 0, the guard's
     /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
     /// reason with 0 meaning "playable".
     pub const ON: &str = "bandori_on";
@@ -156,7 +163,7 @@ pub mod state_key {
 }
 
 /// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
-/// reacts to these two by name so a card can arm a gate without the engine
+/// responds to these two by name so a card can arm a gate without the engine
 /// hardcoding the card's own name (the C# checked `CountMarks(t, "高贵的微蓝")`).
 pub mod mark {
     /// Carrying tiles cannot be named as a target (`H.TargetTile` answers -1).
@@ -338,11 +345,11 @@ impl CardPile {
 pub const REWARD_MONEY: i32 = 0;
 pub const REWARD_CARD: i32 = 1;
 
-/// Trigger kinds a reaction can be checked against (C# `Trigger.Kind`).
+/// Trigger kinds a counteraction can be checked against (C# `Trigger.Kind`).
 ///
 /// The values are a wire enum: the host fills them at the same points the C#
 /// raises its `Trigger`s. Kinds the engine does not raise yet still exist here
-/// so a card's `can_react` can state its real condition; it simply never sees
+/// so a card's `can_counteract` can state its real condition; it simply never sees
 /// that kind until the engine raises it (TODO in `game-core`).
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -372,7 +379,7 @@ pub enum TriggerKind {
     Exile = 21,
     Forced = 22,
     State = 23,
-    Reacted = 24,
+    Counteracted = 24,
     DrawOut = 25,
     CircleAffected = 26,
     TwoCards = 27,
@@ -413,9 +420,9 @@ pub enum TriggerKind {
     LeaveAfter = 44,
 
     // v17: field-card (`Fx`) hook points. These are NOT [反击] points -- the
-    // engine runs every placed card's `react` against them automatically. They
-    // are distinct kinds from the reaction kinds above so a card can tell a
-    // field effect from a hand reaction by its kind alone.
+    // engine runs every placed card's `counteract` against them automatically. They
+    // are distinct kinds from the counteraction kinds above so a card can tell a
+    // field effect from a hand counteraction by its kind alone.
     /// `Fx.TurnEnd` -- a turn just ended (any player's).
     TurnEnd = 45,
     /// `Fx.Drawn` -- the player drew cards.
@@ -537,7 +544,7 @@ impl TriggerKind {
             21 => Self::Exile,
             22 => Self::Forced,
             23 => Self::State,
-            24 => Self::Reacted,
+            24 => Self::Counteracted,
             25 => Self::DrawOut,
             26 => Self::CircleAffected,
             27 => Self::TwoCards,
@@ -621,7 +628,7 @@ impl TriggerKind {
             Self::Exile => "exile",
             Self::Forced => "forced",
             Self::State => "state",
-            Self::Reacted => "reacted",
+            Self::Counteracted => "counteracted",
             Self::DrawOut => "drawOut",
             Self::CircleAffected => "circleAffected",
             Self::TwoCards => "twoCards",
@@ -703,7 +710,7 @@ impl TriggerKind {
             "exile" => Self::Exile,
             "forced" => Self::Forced,
             "state" => Self::State,
-            "reacted" => Self::Reacted,
+            "counteracted" => Self::Counteracted,
             "drawOut" => Self::DrawOut,
             "circleAffected" => Self::CircleAffected,
             "twoCards" => Self::TwoCards,
@@ -840,10 +847,10 @@ macro_rules! declare_kinds {
 declare_kinds! {
     /// What a chain link answers: the [反击] selectors.
     ///
-    /// A card declares these on `On::CounterAct`. These are the moments at which a
+    /// A card declares these on `On::Counteract`. These are the moments at which a
     /// counter may be played -- an effect being *declared*, not an outcome
     /// having settled. [`HookKind`] and [`GateKind`] values are deliberately
-    /// absent: a reaction cannot be offered at a settlement hook or at a gate.
+    /// absent: a counteraction cannot be offered at a settlement hook or at a gate.
     ChainKind {
         Roll = 1,
         MoveRoll = 2,
@@ -865,7 +872,7 @@ declare_kinds! {
         Exile = 21,
         Forced = 22,
         State = 23,
-        Reacted = 24,
+        Counteracted = 24,
         DrawOut = 25,
         CircleAffected = 26,
         TwoCards = 27,
@@ -902,8 +909,8 @@ declare_kinds! {
     ///
     /// This **overlaps** [`ChainKind`] on purpose. A kind may be both a [反击]
     /// point and a hook point -- `SettleBefore` is a moment at which a hand card
-    /// can be played *and* a field card can react -- and the two declarations
-    /// are distinct entries (`On::CounterAct` vs `On::Hook`). The engine's dispatch
+    /// can be played *and* a field card can counteract -- and the two declarations
+    /// are distinct entries (`On::Counteract` vs `On::Hook`). The engine's dispatch
     /// has always worked this way; the types now say so. Kinds that are *only*
     /// hooks (most of `Fx`) simply have no [`ChainKind`] counterpart.
     HookKind {
@@ -930,7 +937,7 @@ declare_kinds! {
         Exile = 21,
         Forced = 22,
         State = 23,
-        Reacted = 24,
+        Counteracted = 24,
         DrawOut = 25,
         CircleAffected = 26,
         TwoCards = 27,
@@ -1045,7 +1052,7 @@ pub struct ManifestOn {
 pub enum OnKind {
     Play = 0,
     // 1 was `CantPlay`, folded into `Play`'s gate.
-    CounterAct = 2,
+    Counteract = 2,
     Hook = 3,
     AtEnd = 4,
     RollPlan = 5,
@@ -1056,7 +1063,7 @@ impl OnKind {
     pub fn from_i32(v: i32) -> Option<Self> {
         Some(match v {
             0 => Self::Play,
-            2 => Self::CounterAct,
+            2 => Self::Counteract,
             3 => Self::Hook,
             4 => Self::AtEnd,
             5 => Self::RollPlan,

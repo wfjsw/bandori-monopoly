@@ -100,7 +100,7 @@ pub struct MoveCtx {
     pub base: Vec<Roll>,
     /// Extra dice added by effects (summed into the roll).
     pub dice: Vec<Roll>,
-    /// The face the walk uses, after the reactions have rewritten it.
+    /// The face the walk uses, after the counteractions have rewritten it.
     pub roll: i32,
     /// Floor applied to the final face (only when the roll is unsigned).
     pub min_roll: i32,
@@ -156,8 +156,8 @@ pub struct MoveCtx {
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
     pub no_buy: bool,
 
-    // -- reactions ------------------------------------------------------------
-    /// A reaction cancelled the movement.
+    // -- counteractions ------------------------------------------------------------
+    /// A counteraction cancelled the movement.
     pub cancelled: bool,
     /// Card-owned per-move state, keyed by name (C# held fire-roll counters on
     /// the engine; the cards track that themselves now). The engine never reads

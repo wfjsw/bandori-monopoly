@@ -60,6 +60,11 @@ pub struct CardData {
     pub tags: Vec<String>,
     pub text: String,
     pub cell: String,
+    /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`): stamped onto the
+    /// field instance while the card sits there, and gone with it. Derived from
+    /// the rulebook text at load.
+    #[serde(default)]
+    pub hand_limit_delta: i32,
 }
 
 impl CardData {
@@ -356,6 +361,14 @@ impl GameData {
         for (i, c) in d.cards.iter().enumerate() {
             if !c.id.is_empty() {
                 d.card_by_id.entry(c.id.clone()).or_insert(i);
+            }
+        }
+        // Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`): read off the
+        // rulebook text so a card that says it gets it, and one that does not
+        // does not. Absolute overrides (「手牌数没有上限」) stay keyed state.
+        for c in d.cards.iter_mut() {
+            if c.text.contains("手卡上限数量减1") {
+                c.hand_limit_delta = -1;
             }
         }
         Ok(d)

@@ -14,36 +14,49 @@
 //! *placed* cards, so the play body places this card as the `HagumiMarkFx`
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
+/// 「当前回合内你每获得过一次资金」 -- per-turn gain counter (see [`count_pay`]).
+const GAINS: &str = "hagumi_gains";
 
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
         On::Play(None, play),
         On::Hook(&[HookKind::PassTile], hook_guard, hook),
+        On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], hook_guard, count_pay),
+        On::Counteract(&[ChainKind::EndTurnAfter], can_counteract2, counteract2),
     ],
 );
 
 fn play(player_id: i32) -> card_sdk::Asked {
+    // 规则书（1）[手]: 「投掷2次4d20」
+    rolls(player_id, 2)
+}
+
+/// The shared (1) body: roll `times` lots of 4d20, place a mark on one of the
+/// distinct results. (2) calls this with a boosted 「投掷次数」.
+fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     if n <= 0 {
         return Ok(());
     }
-    // 规则书（1）[手]: 「投掷2次4d20」 -- C# `H.Roll(i, 4, 20, ...)`.
-    let a = ctx::roll(player_id, 4, 20);
-    let b = ctx::roll(player_id, 4, 20);
-    // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- the two rolls
-    // may land on the same tile; the C# `.Distinct()` keeps the first roll then.
-    let mut tiles = vec![(a - 1).rem_euclid(n)];
-    let mut rolls = vec![a];
-    let t2 = (b - 1).rem_euclid(n);
-    if t2 != tiles[0] {
-        tiles.push(t2);
-        rolls.push(b);
+    // 规则书（1）[手]: 「投掷2次4d20」 -- C# `H.Roll(i, 4, 20, ...)`. (2) adds
+    // 「此卡的投掷次数+1」 per gain, so `times` is the count of 4d20 rolls.
+    let mut tiles = alloc::vec::Vec::new();
+    let mut rolls = alloc::vec::Vec::new();
+    for _ in 0..times.max(1) {
+        let r = ctx::roll(player_id, 4, 20);
+        let t = (r - 1).rem_euclid(n);
+        // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- the rolls
+        // may land on the same tile; the C# `.Distinct()` keeps the first roll then.
+        if !tiles.contains(&t) {
+            tiles.push(t);
+            rolls.push(r);
+        }
     }
     let title = Msg::new(key!("hagumi_marks_ask_title"));
     let text = Msg::new(key!("hagumi_marks_ask_text"));
@@ -149,4 +162,46 @@ fn hook(player_id: i32) -> card_sdk::Asked {
 fn any_marks(player_id: i32) -> bool {
     let n = ctx::tile_count();
     (0..n).any(|t| ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) > 0)
+}
+
+/// 规则书（2）: 「当前回合内你每获得过一次资金」 -- latch per money-in event,
+/// cleared at each turn start. Runs on the field stand-in.
+/// TODO(ABI)（2）: `ctx::gain` (「获得」) raises no hook, so only payments landing
+///   in this player's favour are counted (C# `H.GainR` covers both). Also, the
+///   stand-in only exists after (1) has placed it, so a pure-hand (2) sees 0.
+fn count_pay(player_id: i32) -> card_sdk::Asked {
+    match trigger::kind() {
+        TriggerKind::TurnStart => {
+            ctx::set_slot(player_id, GAINS, 0);
+        }
+        TriggerKind::PayAfter => {
+            if trigger::target() == player_id && trigger::value() > 0 {
+                ctx::inc_slot(player_id, GAINS, 1);
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+/// 规则书（2）: 「此卡可在你回合外收到资金的回合结束时打出」.
+fn can_counteract2(player_id: i32) -> bool {
+    if trigger::kind() != TriggerKind::EndTurnAfter {
+        return false;
+    }
+    // 「你回合外」 -- someone else's turn end.
+    if trigger::player_id() == player_id {
+        return false;
+    }
+    // 「收到资金」 -- at least one observed gain this turn (see [`count_pay`]).
+    ctx::slot(player_id, GAINS) > 0
+}
+
+/// 规则书（2）: 「当前回合内你每获得过一次资金，此卡的投掷次数+1」 -- the (1)
+/// body with 2 + gains rolls of 4d20 instead of 2.
+fn counteract2(player_id: i32) -> card_sdk::Asked {
+    let gains = ctx::slot(player_id, GAINS);
+    ctx::set_slot(player_id, GAINS, 0);
+    // 规则书（2）: 「此卡的投掷次数+1」 per gain, on top of (1)'s 「投掷2次」.
+    rolls(player_id, 2 + gains)
 }

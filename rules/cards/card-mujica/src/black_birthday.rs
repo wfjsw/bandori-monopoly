@@ -1,7 +1,7 @@
 //! `Mujica:黑色生日` -- C# `CardBlackBirthday`: every other player pays you
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:黑色生日`）:
-//! > 黑色生日：
+//! > 黑色生日： 
 //! >  每名你以外的资金在1000以下的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。
 //!
 //! 800 when they have at most 1,000, otherwise 200 twice (the second only

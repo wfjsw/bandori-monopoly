@@ -1,5 +1,4 @@
 //! `AG:即使夕阳落山` -- C# `CardSunset` (MatchHost.cs:1014-1094):
-//! strip a house from four built deeds and make everyone else pay X.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:即使夕阳落山`）:
 //! > 即使夕阳落山：
@@ -10,6 +9,7 @@
 //! > 1. 删除所有被[指定]格子上的1栋房；
 //! > 2. 所有被[指定]的玩家[支付][使用者]X资金。
 //!
+//! strip a house from four built deeds and make everyone else pay X.
 
 use alloc::vec::Vec;
 

@@ -1,11 +1,11 @@
 //! `AG:（鸫）微小的『能做到』的事` -- C# `CardTsugumiCan` (MatchHost.cs:1818-1901):
-//! play as @Tsugu ycm, or react to force a range-card's dice to max/min.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（鸫）微小的『能做到』的事`）:
 //! > （鸫）微小的『能做到』的事：打出此卡时，选择其中一个效果发动：
 //! > （1）【反击】时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算，除@Tsugu ycm以外无法直接改变骰子点数（ex：可以对YOLO生效但无法对无论是何种颜色的夕阳生效）
 //! > （2）视为打出一张@Tsugu ycm
 //!
+//! play as @Tsugu ycm, or counteract to force a range-card's dice to max/min.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -15,7 +15,7 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
         On::Play(Some(cant_play), play),
-        On::CounterAct(&[ChainKind::Card], can_react, react),
+        On::Counteract(&[ChainKind::Card], can_counteract, counteract),
     ],
 );
 
@@ -26,9 +26,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书（1）【反击】: 「时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算」
-    // -- C# reacts while another `RangeCard` play is resolving
+    // -- C# counteracts while another `RangeCard` play is resolving
     // (`t.Kind == "card" && t.Play.Def.RangeCard && t.Play.Extreme == 0`).
     if trigger::kind() != TriggerKind::Card {
         return false;
@@ -58,7 +58,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）【反击】: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」
     // -- C# asks max/min and writes `target.Extreme = 1 / -1`.
     let pick = ctx::ask_pick(
@@ -71,7 +71,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
         ],
     )?;
     // 规则书（1）: 「以理论最大值或最小值结算」 -- C# `target.Extreme = 1 / -1`,
-    // so the play being reacted to settles its number ranges at the theoretical
+    // so the play being counteracted to settles its number ranges at the theoretical
     // extreme the picker named.
     ctx::set_extreme(if pick == 0 { 1 } else { -1 });
     ctx::log(

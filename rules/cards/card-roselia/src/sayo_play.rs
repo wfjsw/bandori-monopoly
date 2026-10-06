@@ -4,7 +4,7 @@
 //! > （纱夜）弹奏弹奏弹奏，继续弹奏：
 //! > [反击] 时机合适时打出，打出时视为使用一次此卡使用者的技能。
 //!
-//! Reaction on your own move roll. The C# realises 「视为使用一次此卡使用者的技能」
+//! Counteraction on your own move roll. The C# realises 「视为使用一次此卡使用者的技能」
 //! as H.AnnounceSkill plus SkillSayo's roll bump (+1 or +2, no fire cost); only
 //! the bump is expressible here (see the TODOs).
 
@@ -14,11 +14,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(
     "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
-    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
 );
 
-/// 规则书: 「[反击] 时机合适时打出」 -- reaction-only (C# `Normal => false`).
-fn can_react(player_id: i32) -> bool {
+/// 规则书: 「[反击] 时机合适时打出」 -- counteraction-only (C# `Normal => false`).
+fn can_counteract(player_id: i32) -> bool {
     // 规则书: 「[反击] 时机合适时打出」 -- C# window is the player's own move roll.
     if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
         return false;
@@ -31,7 +31,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::move_roll().is_some()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 「打出时视为使用一次此卡使用者的技能」 -- the user's bound skill is the
     // `skill:<character>:<name>` field card `bind_skills` placed, so `play_card`
     // runs its `On::Play` entry and the `skillUsed` trigger fires with it.

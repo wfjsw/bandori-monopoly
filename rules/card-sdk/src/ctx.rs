@@ -1118,7 +1118,9 @@ pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> R
 /// `H.AskCard` -- pick one of `cards` (ids); returns the index.
 pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
     for c in cards {
-        let (p, l) = s(c);
+        // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
+        // wrapped as `{{card}}` is the label.
+        let (p, l) = mj(&Msg::new("ask.cardOption").card("card", c));
         unsafe { sys::opt_str(p, l) }
     }
     let i = ask_raw(PromptKind::Card, player_id, title, text)?;
@@ -1240,7 +1242,7 @@ pub mod plan {
         unsafe { sys::set_kind(kind as i32) }
     }
 
-    /// C# `MinRoll` -- clamp the final face up to this, after the reactions.
+    /// C# `MinRoll` -- clamp the final face up to this, after the counteractions.
     pub fn set_min_roll(n: i32) {
         unsafe { sys::set_min_roll(n) }
     }
@@ -1489,7 +1491,7 @@ pub fn decay() -> i32 {
     add_crystals(-1, 0)
 }
 
-/// The trigger a reaction is being checked against (C# `Trigger`).
+/// The trigger a counteraction is being checked against (C# `Trigger`).
 pub mod trigger {
     use super::*;
 
@@ -1608,7 +1610,7 @@ pub mod trigger {
         unsafe { sys::trig_move_total() }
     }
 
-    /// `t.Move.Roll` -- the roll being reacted to, or -1.
+    /// `t.Move.Roll` -- the roll being counteracted to, or -1.
     pub fn move_roll() -> Option<i32> {
         let v = unsafe { sys::trig_move_roll() };
         (v >= 0).then_some(v)
@@ -1620,7 +1622,7 @@ pub mod trigger {
 
     /// Rewrite the amount of a pending `pay`/`paid` trigger (C# `PayCtx.amount`).
     /// `0` cancels the payment outright (C# `t.Pay.cancel = true`). The engine
-    /// honours whatever this leaves on the trigger once the reaction window
+    /// honours whatever this leaves on the trigger once the counteraction window
     /// resolves.
     pub fn set_pay_amount(v: i32) {
         unsafe { sys::trig_set_pay_amount(v) }
@@ -1661,7 +1663,7 @@ pub mod trigger {
         unsafe { sys::trig_set_spare(seat) }
     }
 
-    /// Has a reaction already cancelled this trigger (`Trigger.Cancelled`)?
+    /// Has a counteraction already cancelled this trigger (`Trigger.Cancelled`)?
     pub fn cancelled() -> bool {
         unsafe { sys::trig_cancelled() != 0 }
     }

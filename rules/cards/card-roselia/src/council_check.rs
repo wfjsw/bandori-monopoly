@@ -17,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",
     &[
-        On::CounterAct(&[ChainKind::SettleBefore], can_react, react),
+        On::Counteract(&[ChainKind::SettleBefore], can_counteract, counteract),
         On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
         On::Hook(&[HookKind::PayAfter], |_| true, pay_after),
         On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
@@ -34,12 +34,12 @@ fn near(player_id: i32) -> Vec<i32> {
 }
 
 /// 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[触发结算]前可打出」 -- C# `t.Kind == "settleBefore" && t.Seat == seat`.
     if trigger::kind() != TriggerKind::SettleBefore || trigger::player_id() != player_id {
         return false;
     }
-    // C# `CardCouncilCheck.CanReact` also wants `H.State.turn == seat`.
+    // C# `CardCouncilCheck.CanCounteract` also wants `H.State.turn == seat`.
     if ctx::turn_player() != player_id {
         return false;
     }
@@ -47,7 +47,7 @@ fn can_react(player_id: i32) -> bool {
     !near(player_id).is_empty()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「向抽牌堆中加入一张“压”」 -- C# `H.AddToDeck(i, "R:[衍生] 压")`.
     ctx::add_to_deck(player_id, "R:[衍生] 压", true);
     ctx::log(

@@ -1,7 +1,7 @@
 //! `R:（ykn）louder` -- C# `CardLouder`: the RiNG rent multiplier +5.
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:（ykn）louder`）:
-//! > （ykn）louder：
+//! > （ykn）louder： 
 //! >  每次打出此卡时使ring的价格基础乘数+5
 //!
 

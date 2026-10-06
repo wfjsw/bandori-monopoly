@@ -18,7 +18,7 @@
   "l12_search": "pick a Sumimi card from the discard / draw pile to add to hand (#L12)",
   "l12_taken": "{{card}} joined {{who}}'s hand (#L12)",
   "l12_title": "#L12",
-  "mana_champion_log": "\"Singing Contest 5-Peat\": the others may play [Reaction] cards for {{who}}",
+  "mana_champion_log": "\"Singing Contest 5-Peat\": the others may play [Counter] cards for {{who}}",
   "no_breakup_ask": "[Teleport] to which tile? (money must end up with a repeated digit after settling, or you return and every effect is cancelled)",
   "no_breakup_mortgaged": "You have already mortgaged or redeemed this turn.",
   "no_breakup_moved": "{{who}} [teleported] to {{tile}} (Sumimi Won't Break Up)",

@@ -60,7 +60,7 @@ fn a_counter_window_is_offered_to_a_human_holding_a_counter() {
     let mut t = Table::vanilla(2);
     t.give(1, &["AG:宣战布告"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("AG:宣战布告"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
     assert_eq!(t.asked(), vec![1]);
     t.decline();
     assert!(t.prompt().is_none(), "{}", t.dump_prompt());

@@ -1,10 +1,10 @@
 //! `HHW:爱心义演` -- C# `CardCharityShow` (MatchHost.cs:4164-4177): this turn,
-//! +2 steps the first time you pass each of your tiles, and half pay to others.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:爱心义演`）:
 //! > 爱心义演：
 //! > 打出此卡的回合内，你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2，本回合中向其他玩家支付时你的付款减半（向上取整10）（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）
 //!
+//! +2 steps the first time you pass each of your tiles, and half pay to others.
 //! C# arms `H._turnCtx.HalfPayToOthers` and `H.ExtraOf<CharityFx>(seat)` (a
 //! player attachment, not a placed card). The hook surface only dispatches to
 //! *placed* cards, so the play body places this card as the `CharityFx`

@@ -91,8 +91,9 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「若出目大于15，则额外抽一张卡」
         ctx::draw(player_id, 1);
     }
-    if r >= 20 {
-        // 规则书: 「大于20，则将此卡放置在自己场上」 -- the PayChoose hook below
+    if r > 20 {
+        // 规则书: 「大于20，则将此卡放置在自己场上」 -- strictly greater than 20
+        // (a plain d20 tops out at 20, so this never fires on one); the PayChoose hook below
         // offers 「在后续任何时刻可将其置入弃牌堆并抵消一次任意付款」.
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(

@@ -1,21 +1,21 @@
 //! `PP:梦在前方，结彩当下` -- C# `CardDreamAhead` (MatchHost.cs:7479-7609):
-//! placed before the game starts; crystals grow on draws and settle tax grows
-//! with X.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:梦在前方，结彩当下`）:
 //! > 梦在前方，结彩当下：
 //! > [特]：
 //! > 游戏开始前将此卡放置在[使用者]的[场地]且初始手牌减1。
 //! > [持续]：
-//! >
+//!
 //! > （1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每获得一个超出上限的[奇迹水晶]就为此卡的X加1（X初始0）。
-//! >
+//!
 //! > （2）[拥有者]不可盖房且手卡上限数量减1。
-//! >
+//!
 //! > （3）[拥有者]以外的玩家在[拥有者]拥有的格子[结算]时额外[支付][拥有者]“[拥有者]拥有的[P✽P粉丝]数量”×X+MIN(X×30, 300)。
-//! >
+//!
 //! > （4）[共鸣][反击][拥有者]回合结束时且在[拥有者]所在格子前后3格以内有无主的[可购买格子]：使用此卡上3个[奇迹水晶]，[拥有者]购买任意[拥有者]所在格子前后3格以内的无主的[可购买格子]。
 //!
+//! placed before the game starts; crystals grow on draws and settle tax grows
+//! with X.
 //! Not a hand play (C# `Normal => false`, no `Play` override): the card is
 //! placed by `DeckBeforeGame`. The settle tax is live in the `SettleAfter`
 //! hook; the crystal growth runs on the `Drew` hook.
@@ -68,6 +68,8 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[特]: 「初始手牌减1」 -- C# `H.IncV(seat, "startHandMinus")`.
     ctx::inc_slot(player_id, "startHandMinus", 1);
+    // 规则书[持续]（2）: 「[拥有者]不可盖房」 -- the noBuild flag.
+    no_build(player_id);
     Ok(())
 }
 
@@ -96,9 +98,9 @@ fn drew(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are
-/// keyed flags the engine already reads: `noBuild` gates `why_not_build_on`,
-/// `handLimit` is the limit itself.
+/// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- `noBuild` gates
+/// `why_not_build_on`; the hand-limit half is a continuous field-card delta
+/// (`CardData.hand_limit_delta`), stamped at placement and gone with the card.
 /// Pure guard for [`no_build`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn no_build_guard(player_id: i32) -> bool {
@@ -107,7 +109,6 @@ fn no_build_guard(player_id: i32) -> bool {
 
 fn no_build(player_id: i32) {
     ctx::state::add(player_id, state_key::NO_BUILD, 1);
-    ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
 }
 
 /// C# `CardDreamAhead.SettleAfter`: someone else settles on an owned deed --

@@ -79,9 +79,9 @@ fn l12(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .card("card", &id),
     );
-    // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the limit is keyed state,
-    // so the card lowers it; it is restored when the card leaves play.
-    ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
+    // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- a continuous field-card
+    // delta (`CardData.hand_limit_delta`), stamped at placement, gone with the
+    // card. No state write: that would double-count.
     // C# `NoteText` shows the crystal count / hand-limit note; CardDef has no
     // NoteText hook.
     Ok(())

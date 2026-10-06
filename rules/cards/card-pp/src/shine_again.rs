@@ -1,5 +1,4 @@
 //! `PP:再次闪耀` -- C# `CardShineAgain` (MatchHost.cs:7145-7243): stay in play;
-//! while short on cash the owner may record a colour and take a rescue.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:再次闪耀`）:
 //! > 再次闪耀：
@@ -8,11 +7,12 @@
 //! > [手]：
 //! > 将此卡放置在[使用者]的[场地]。
 //! > [持续]：
-//! >
+//!
 //! > （1）[反击][拥有者][消耗]或[支付]并当前资金不够时：记录一个此卡未记录且[拥有者]拥有同色地契的颜色，[拥有者][获得]“[拥有者]拥有的1个同色地契的购买价格”÷5的资金和1个正面[P✽P粉丝]。
-//! >
+//!
 //! > （2）[共鸣]记录一个此卡未记录的颜色，[拥有者]获得1个正面[P✽P粉丝]。
 //!
+//! while short on cash the owner may record a colour and take a rescue.
 //! The rescue runs in the `PayChoose` hook; the recorded colours live in a
 //! player slot (stand-in for the C# per-card `HashSet<int> _colors`).
 
@@ -25,9 +25,16 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SHINE_AGAIN: CardDef = CardDef::new(
     "PP:再次闪耀",
     &[
-        On::Play(Some(can_record), record),
+        // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
+        // [共鸣] branch (2) is offered from the `PayChoose` hook below, not as a
+        // second `Play` entry (its `is_placed` gate was blocking this play).
         On::Play(None, shine_again),
         On::Hook(&[HookKind::PayChoose], |_| true, pay_choose),
+        // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
+        // owner's turn start (the text gives no narrower timing).
+        // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
+        //   turn-start offer is a stand-in for the C# action window.
+        On::Hook(&[HookKind::TurnStart], |_| true, offer_resonance),
     ],
 );
 
@@ -142,6 +149,20 @@ fn can_record(player_id: i32) -> Option<Msg> {
         return Some(Msg::new(key!("shine_again_no_colour")));
     }
     None
+}
+
+/// Offer the [共鸣] record at the owner's turn start (see the TODO on the hook).
+fn offer_resonance(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::TurnStart
+        || trigger::player_id() != player_id
+        || !ctx::is_placed()
+    {
+        return Ok(());
+    }
+    if can_record(player_id).is_some() {
+        return Ok(());
+    }
+    record(player_id)
 }
 
 fn record(player_id: i32) -> card_sdk::Asked {

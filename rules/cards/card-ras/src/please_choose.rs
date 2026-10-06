@@ -1,5 +1,4 @@
 //! `RAS:PLEASE CHOOSE` -- C# `CardPleaseChoose` (MatchHost.cs:9565-9636):
-//! [反击] the settler picks a forced play at you, or you teleport onto them.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:PLEASE CHOOSE`）:
 //! > PLEASE CHOOSE：
@@ -7,6 +6,7 @@
 //! > （1）立即打出一张可将你指定为目标的牌并将你指定为目标（之一），
 //! > （2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）
 //!
+//! [反击] the settler picks a forced play at you, or you teleport onto them.
 
 use card_sdk::abi::{CardPile, ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::CounterAct(&[ChainKind::Settle], can_react, react)],
+    &[On::Counteract(&[ChainKind::Settle], can_counteract, counteract)],
 );
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
@@ -32,7 +32,7 @@ const LIVEHOUSE_BUYABLE: [&str; 8] = [
 ];
 
 /// 规则书[反击]: 「当有玩家在livehouse格子上结算时」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当有玩家在livehouse格子上结算时」 -- any settle, not ours.
     if trigger::kind() != TriggerKind::Settle || trigger::player_id() == player_id {
         return false;
@@ -47,7 +47,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::is_live_house_for(player_id, t)
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let other = trigger::player_id();
     // 规则书[反击]: 「使对方选择以下效果之一执行」 -- C# `H.AskPick` of `other`.
     // TODO(规则书)[judgement][反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
@@ -77,7 +77,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
             other,
             &Msg::new(key!("please_choose_opt1_todo"))
                 .player_id("who", other)
-                .player_id("reactor", player_id),
+                .player_id("counteractor", player_id),
         );
         return Ok(());
     }

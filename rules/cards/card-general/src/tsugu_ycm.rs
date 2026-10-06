@@ -1,5 +1,4 @@
 //! `通用:@Tsugu ycm` -- C# `CardTsuguYcm` (MatchHost.cs:1902-1974): roll 3d10
-//! and draw / discount / teleport to Bandori车站 / buy or gain by the total.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:@Tsugu ycm`）:
 //! > @Tsugu ycm：
@@ -10,6 +9,7 @@
 //! > 3. 结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）；
 //! > 4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。
 //!
+//! and draw / discount / teleport to Bandori车站 / buy or gain by the total.
 
 use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;

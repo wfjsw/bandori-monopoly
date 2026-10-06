@@ -12,7 +12,7 @@
 //! gets past the prompt this time. Only a run that finishes is committed.
 //!
 //! This covers every prompt shape in the original, including the 14 classes whose
-//! options depend on dice or loop state, and reactions (another player's reaction is
+//! options depend on dice or loop state, and counteractions (another player's counteraction is
 //! one more entry in the answer log). Cost: an effect with *k* prompts runs *k + 1*
 //! times; the original's maximum is 6 prompts in one effect.
 //!

@@ -1,10 +1,10 @@
 //! `MyGO:轮符雨` -- C# `CardRinneRain` (MatchHost.cs:6348-6363): gain one
-//! [停留] layer and book an extra [触发结算] at this turn's end.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:轮符雨`）:
-//! > 轮符雨：
+//! > 轮符雨： 
 //! >  使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]
 //!
+//! [停留] layer and book an extra [触发结算] at this turn's end.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

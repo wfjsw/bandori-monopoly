@@ -1,12 +1,12 @@
 //! `Mor:迷茫之蝶们的三全音` -- C# `CardTritone` (MatchHost.cs:4524-4583): loan the
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:迷茫之蝶们的三全音`）:
-//! > 迷茫之蝶们的三全音：
+//! > 迷茫之蝶们的三全音： 
 //! > [反击] 任意时刻当你将要失去或支付资金时打出此卡，立刻获得此次失去的资金金额，此卡放置在场上，三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金
 //!
 //! pay amount back in three turns (crystal decay).
 //!
-//! Reaction-only (`Normal => false`): the player is about to lose or pay money.
+//! Counteraction-only (`Normal => false`): the player is about to lose or pay money.
 
 use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -15,26 +15,28 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TRITONE: CardDef = CardDef::new(
     "Mor:迷茫之蝶们的三全音",
     &[
-        On::CounterAct(&[ChainKind::Effect], can_react, react),
-        On::Hook(&[HookKind::TurnEnd], |_| true, react),
+        On::Counteract(&[ChainKind::Effect], can_counteract, counteract),
+        On::Hook(&[HookKind::TurnEnd], |_| true, counteract),
     ],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.amount > 0 && !t.Pay.cancel`.
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
-    // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0
+    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
     // reads as `value() == 0`, so the >0 guard covers it.
     trigger::value() > 0
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」
-        TriggerKind::Pay => {
+        // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」 -- the payment's
+        // declaration raises the `effect` chain (kind `Effect`) with a `pay` entry,
+        // so the counter answers that link (C# folds this into `t.Kind == "pay"`).
+        TriggerKind::Effect => {
             let amount = trigger::value();
             // 规则书[反击]: 「立刻获得此次失去的资金金额」
             // C# `H.Money(new PayCtx { to = seat, amount, kind = "gain", fixedAmount = true })`

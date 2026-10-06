@@ -1,11 +1,11 @@
 //! `Sumimi:Sumimi是二人一体的` -- C# `CardTwoInOne` (MatchHost.cs:11249-11312):
-//! swap to the other Sumimi character (play or [反击] after own move roll).
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sumimi是二人一体的`）:
 //! > Sumimi是二人一体的：
 //! > （1）打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数
 //! > （2）此卡可在你的移动掷骰后作为[反击]使用。
 //!
+//! swap to the other Sumimi character (play or [反击] after own move roll).
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -15,7 +15,7 @@ pub const TWO_IN_ONE: CardDef = CardDef::new(
     "Sumimi:Sumimi是二人一体的",
     &[
         On::Play(None, play),
-        On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
+        On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract),
     ],
 );
 
@@ -25,7 +25,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书（2）: 「此卡可在你的移动掷骰后作为[反击]使用」 -- C#
     // `t.Kind == "moveRoll" && t.Seat == seat` (and the player's character is a
     // Sumimi one).
@@ -35,8 +35,8 @@ fn can_react(player_id: i32) -> bool {
         && (ctx::character_is(player_id, "三角初华（Sumimi）") || ctx::character_is(player_id, "纯田真奈"))
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
-    // 规则书（2）: the [反击] is the same swap as the play effect (C# `React` -> `Swap`).
+fn counteract(player_id: i32) -> card_sdk::Asked {
+    // 规则书（2）: the [反击] is the same swap as the play effect (C# `Counteract` -> `Swap`).
     swap(player_id);
     Ok(())
 }

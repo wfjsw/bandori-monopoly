@@ -28,7 +28,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
         On::Hook(&[HookKind::CircleAffected], mine, on_circle),
         On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::CounterAct(&[ChainKind::Card, ChainKind::SkillUsed], can_negate, negate),
+        On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], can_negate, negate),
     ],
 );
 

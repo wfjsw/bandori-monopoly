@@ -1,10 +1,10 @@
 //! `Sumimi:现在她是Sumimi的小初啦` -- C# `CardNowSumimi` (MatchHost.cs:11220-11248):
-//! [反击] on a pay, gain the tile's price tag.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:现在她是Sumimi的小初啦`）:
 //! > 现在她是Sumimi的小初啦：
 //! > [反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）
 //!
+//! [反击] on a pay, gain the tile's price tag.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -12,7 +12,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(
     "Sumimi:现在她是Sumimi的小初啦",
-    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
 );
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
@@ -42,7 +42,7 @@ fn price_tag(player_id: i32) -> i32 {
     ctx::rent_of(t)
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当…失去资金的总额即将超过你所在格子的[收费标价]时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.amount > 0 && !t.Pay.cancel`
     if trigger::kind() != ChainKind::Effect {
@@ -65,12 +65,12 @@ fn can_react(player_id: i32) -> bool {
     // feed a slot, and this [反击] card is in hand so it never sees that hook.
     // The guard here is the conservative subset `amount > Tag` (this payment
     // alone would exceed the tag).
-    // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0
+    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
     // reads as `value() == 0`, so the >Tag guard covers it.
     trigger::value() > tag
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「获得相当于你所在格子[收费标价]数额的资金」 -- C# `H.GainR(c.Seat, Tag(c.Seat), CardName)`.
     let tag = price_tag(player_id);
     if tag > 0 {

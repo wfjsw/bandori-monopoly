@@ -61,7 +61,7 @@
   "please_choose_ask": "{{who}} played PLEASE CHOOSE: pick one",
   "please_choose_moved": "{{who}} [teleported] to {{tile}} (PLEASE CHOOSE)",
   "please_choose_opt1": "Immediately play a card that can target {{who}} and target them",
-  "please_choose_opt1_todo": "“Immediately play a card that can target {{reactor}}” is not implemented yet (PLEASE CHOOSE)",
+  "please_choose_opt1_todo": "“Immediately play a card that can target {{counteractor}}” is not implemented yet (PLEASE CHOOSE)",
   "please_choose_opt2": "Let {{who}} [teleport] to your tile",
   "please_choose_title": "PLEASE CHOOSE",
   "repaint_cut": "{{who}} moves {{n}} fewer tile(s) this time (now {{roll}}) (Repaint)",

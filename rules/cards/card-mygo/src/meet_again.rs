@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:若能再次交汇`）:
 //! > 若能再次交汇：
-//! > [反击]移动掷骰后，且场上有可被经过的玩家时可打出，持续进行移动掷骰直至[经过]下一名玩家
+//! > [反击]移动掷骰后，且场上有可被经过的玩家时可打出，持续进行移动掷骰直至[经过]下一名玩家（最多掷骰至移动超过原本移动终点的20格以后）。
 //!
 //! move roll, keep re-rolling movement dice until the total passes the next
 //! player in the direction of travel.
@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
-    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
 );
 
 /// Distance in the direction of travel to the nearest other player who can be
@@ -48,7 +48,7 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
     }
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书: 「[反击]移动掷骰后」 -- C# `t.Kind == "moveRoll" && t.Seat == seat`.
     if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
         return false;
@@ -61,7 +61,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::move_roll().is_some() && next_dist(player_id, trigger::move_dir()) > 0
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
     let Some(mut roll) = trigger::move_roll() else {
         return Ok(());
@@ -70,8 +70,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     if dist <= 0 {
         return Ok(());
     }
+    // 规则书: 「（最多掷骰至移动超过原本移动终点的20格以后）」 -- the original
+    // endpoint is the roll this card answered; re-rolls may push at most 20 past it.
+    let origin_end = roll;
+    let cap = origin_end + 20;
     for _ in 0..30 {
-        if roll >= dist {
+        if roll >= dist || roll >= cap {
             break;
         }
         // 规则书: `H.DoMoveRoll(move)` re-rolls the move's whole dice table

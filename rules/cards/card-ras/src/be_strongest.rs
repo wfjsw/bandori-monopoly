@@ -1,10 +1,10 @@
 //! `RAS:成为最强` -- C# `CardBeStrongest` (MatchHost.cs:9532-9564): roll 1d10
-//! and teleport to the matching Live House tile.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:成为最强`）:
 //! > 成为最强：
 //! >  roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”），若你没有Livehouse格子，传送到“Live House”。视为你的主要移动。
 //!
+//! and teleport to the matching Live House tile.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

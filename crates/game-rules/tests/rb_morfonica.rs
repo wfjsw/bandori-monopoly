@@ -75,7 +75,7 @@ fn tritone_offered_when_about_to_pay() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     assert!(
-        t.react_offered("Mor:迷茫之蝶们的三全音"),
+        t.counteract_offered("Mor:迷茫之蝶们的三全音"),
         "{}",
         t.dump_prompt()
     );
@@ -87,7 +87,6 @@ fn tritone_offered_when_about_to_pay() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book gains the lost amount and places the card with 3 crystals; engine pays normally and discards the card (money 9860 not 10140/10000, field empty, no crystals)"]
 fn tritone_gains_amount_and_places_with_crystals() {
     // 规则书: 「立刻获得此次失去的资金金额，此卡放置在场上，三回合后（奇迹水晶3，每回合结束时移除1）」
     let mut t = Table::vanilla(2);
@@ -96,7 +95,7 @@ fn tritone_gains_amount_and_places_with_crystals() {
     t.give(0, &["Mor:迷茫之蝶们的三全音"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "Mor:迷茫之蝶们的三全音").unwrap();
+    t.counteract(0, "Mor:迷茫之蝶们的三全音").unwrap();
     // the 140 rent is the 「此次失去的资金金额」: gained back on the spot
     assert_eq!(t.money(0), 10_000, "gains the 140 it just lost");
     assert!(t.on_field(0, "Mor:迷茫之蝶们的三全音"), "{:?}", t.field_ids(0));
@@ -104,7 +103,7 @@ fn tritone_gains_amount_and_places_with_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: depends on the field placement above; engine never puts the card on the field"]
+#[ignore = "DISCREPANCY: the crystal countdown never ticks -- end_quiet re-rolls and errs (err.no_roll_now) after the counteract; harness gap in turn-end sequencing, not the card body"]
 fn tritone_countdown_discards_and_pays_back() {
     // 规则书: 「三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金」
     let mut t = Table::vanilla(2);
@@ -113,7 +112,7 @@ fn tritone_countdown_discards_and_pays_back() {
     t.give(0, &["Mor:迷茫之蝶们的三全音"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "Mor:迷茫之蝶们的三全音").unwrap();
+    t.counteract(0, "Mor:迷茫之蝶们的三全音").unwrap();
     assert_eq!(t.crystals(0, "Mor:迷茫之蝶们的三全音"), Some(3));
     // two turn-ends: 3 -> 2 -> 1, still on field
     end_quiet(&mut t, 0);
@@ -239,7 +238,6 @@ fn starry_no_crystals_removes_the_card() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book adds the empty card to the discard pile; engine removes it from the game (discard empty)"]
 fn starry_empty_goes_to_discard() {
     // 规则书: 「此卡没有[奇迹水晶]时加入弃牌堆」
     let mut t = Table::vanilla(2);
@@ -411,8 +409,8 @@ fn xiaobai_turns_pay_into_lose_and_target_loses_half() {
     t.give(0, &["Mor:（小白）"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("Mor:（小白）"), "{}", t.dump_prompt());
-    t.react(0, "Mor:（小白）").unwrap();
+    assert!(t.counteract_offered("Mor:（小白）"), "{}", t.dump_prompt());
+    t.counteract(0, "Mor:（小白）").unwrap();
     // payer loses 140 (not paid over); the target loses 140/2 = 70
     assert_eq!(t.money(0), 10_000 - 140);
     assert_eq!(t.money(1), 10_000 - 70);
@@ -428,7 +426,7 @@ fn xiaobai_offered_on_card_driven_payments_too() {
     t.begin_turn(0);
     t.give(0, &["通用:登上武道馆"]);
     t.play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("Mor:（小白）"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("Mor:（小白）"), "{}", t.dump_prompt());
 }
 
 // --------------------------------------------------- 离心力，不为所动
@@ -442,7 +440,7 @@ fn centrifuge_not_offered_on_the_first_targeting() {
     t.begin_turn(1);
     t.play(1, "通用:登上武道馆").unwrap();
     assert!(
-        !t.react_offered("Mor:离心力，不为所动"),
+        !t.counteract_offered("Mor:离心力，不为所动"),
         "1st targeting: {}",
         t.dump_prompt()
     );
@@ -460,11 +458,11 @@ fn centrifuge_offers_on_the_second_targeting() {
     decline_all(&mut t);
     t.play(1, "通用:登上武道馆").unwrap();
     assert!(
-        t.react_offered("Mor:离心力，不为所动"),
+        t.counteract_offered("Mor:离心力，不为所动"),
         "{}",
         t.dump_prompt()
     );
-    t.react(0, "Mor:离心力，不为所动").unwrap();
+    t.counteract(0, "Mor:离心力，不为所动").unwrap();
     // the shield is up (card on the field) until p0's next turn start
     assert!(t.on_field(0, "Mor:离心力，不为所动"), "{:?}", t.field_ids(0));
 }
@@ -523,9 +521,9 @@ fn again_hand_counter_places_on_field_and_loses_equal() {
     t.begin_turn(0);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("Mor:再次牵起手来"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("Mor:再次牵起手来"), "{}", t.dump_prompt());
     assert_eq!(t.asked(), vec![1]);
-    t.react(1, "Mor:再次牵起手来").unwrap();
+    t.counteract(1, "Mor:再次牵起手来").unwrap();
     // p0's 140 payment went through; p1 lost the same 140
     assert_eq!(t.money(0), 10_000 - 140);
     assert_eq!(t.money(1), 10_000 - 140);
@@ -542,7 +540,7 @@ fn again_persist_cancels_the_owners_next_payment() {
     t.begin_turn(0);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(1, "Mor:再次牵起手来").unwrap();
+    t.counteract(1, "Mor:再次牵起手来").unwrap();
     // p1 now lands on p2's tile: the rent is cancelled
     t.begin_turn(1);
     t.set_pos(1, 6);
@@ -555,7 +553,6 @@ fn again_persist_cancels_the_owners_next_payment() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book puts the spent [持续] card into the discard pile; engine removes it from the game (discard empty)"]
 fn again_spent_card_goes_to_discard() {
     // 规则书: 「取消此次资金变动并将此卡放置到弃卡区」
     let mut t = Table::vanilla(3);
@@ -565,7 +562,7 @@ fn again_spent_card_goes_to_discard() {
     t.begin_turn(0);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(1, "Mor:再次牵起手来").unwrap();
+    t.counteract(1, "Mor:再次牵起手来").unwrap();
     t.begin_turn(1);
     t.set_pos(1, 6);
     t.dice(&[1]);
@@ -617,8 +614,8 @@ fn rainbow_halves_a_payment_to_a_same_grade() {
     t.give(0, &["Mor:秘密与青春的虹彩"]);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
-    t.react(0, "Mor:秘密与青春的虹彩").unwrap();
+    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     assert_eq!(t.money(0), 10_000 - 70);
     assert_eq!(t.money(1), 10_000 + 70);
 }
@@ -635,8 +632,8 @@ fn rainbow_senior_pays_you_at_1_5x() {
     t.give(0, &["Mor:秘密与青春的虹彩"]); // the payee holds
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.react_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
-    t.react(0, "Mor:秘密与青春的虹彩").unwrap();
+    assert!(t.counteract_offered("Mor:秘密与青春的虹彩"), "{}", t.dump_prompt());
+    t.counteract(0, "Mor:秘密与青春的虹彩").unwrap();
     assert_eq!(t.money(0), 10_000 + 210);
     assert_eq!(t.money(1), 10_000 - 210);
 }
@@ -917,11 +914,11 @@ fn interaction_centrifuge_vs_toubudoukan() {
     t.give(1, &["通用:登上武道馆", "通用:登上武道馆"]);
     t.begin_turn(1);
     t.play(1, "通用:登上武道馆").unwrap();
-    assert!(!t.react_offered("Mor:离心力，不为所动"));
+    assert!(!t.counteract_offered("Mor:离心力，不为所动"));
     decline_all(&mut t);
     t.play(1, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("Mor:离心力，不为所动"), "{}", t.dump_prompt());
-    t.react(0, "Mor:离心力，不为所动").unwrap();
+    assert!(t.counteract_offered("Mor:离心力，不为所动"), "{}", t.dump_prompt());
+    t.counteract(0, "Mor:离心力，不为所动").unwrap();
     assert!(t.on_field(0, "Mor:离心力，不为所动"));
 }
 
@@ -934,8 +931,8 @@ fn interaction_net_error_negates_summer() {
     t.give(0, &["Mor:夏日合宿"]);
     t.give(1, &["通用:网络链接异常"]);
     t.play(0, "Mor:夏日合宿").unwrap();
-    assert!(t.react_offered("通用:网络链接异常"), "{}", t.dump_prompt());
-    t.react(1, "通用:网络链接异常").unwrap();
+    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    t.counteract(1, "通用:网络链接异常").unwrap();
     assert!(!t.on_field(0, "Mor:夏日合宿"), "{:?}", t.field_ids(0));
 }
 
@@ -982,10 +979,10 @@ fn interaction_xuanzhan_and_centrifuge_answer_the_same_targeting() {
     t.give(2, &["通用:登上武道馆", "通用:登上武道馆"]);
     t.begin_turn(2);
     t.play(2, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("AG:宣战布告"), "1st: {}", t.dump_prompt());
+    assert!(t.counteract_offered("AG:宣战布告"), "1st: {}", t.dump_prompt());
     t.decline();
     t.play(2, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("Mor:离心力，不为所动"), "2nd: {}", t.dump_prompt());
-    t.react(0, "Mor:离心力，不为所动").unwrap();
+    assert!(t.counteract_offered("Mor:离心力，不为所动"), "2nd: {}", t.dump_prompt());
+    t.counteract(0, "Mor:离心力，不为所动").unwrap();
     assert!(t.on_field(0, "Mor:离心力，不为所动"));
 }

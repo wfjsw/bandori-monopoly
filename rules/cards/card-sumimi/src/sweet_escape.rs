@@ -1,10 +1,10 @@
 //! `Sumimi:Sweet Escape` -- C# `CardSweetEscape` (MatchHost.cs:11407-11480):
-//! settle-teleport onto a free tile of the 周边精选 / 商店街 / 东京外 colour groups.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Sweet Escape`）:
 //! > Sweet Escape：
 //! >  回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡，传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子并触发结算，若为可购买格子则必须购买，视为你的主要移动。
 //!
+//! settle-teleport onto a free tile of the 周边精选 / 商店街 / 东京外 colour groups.
 
 use alloc::vec::Vec;
 

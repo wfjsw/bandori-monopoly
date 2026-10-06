@@ -366,8 +366,8 @@ fn interaction_generic_encore_vs_sumimi_card() {
     t.set_money(0, 1500);
     t.give(1, &["通用:安可"]);
     t.give_play(0, "Sumimi:兼顾偶像与乐队").unwrap();
-    if t.prompt().is_some() && t.react_offered("通用:安可") {
-        t.react(1, "通用:安可").ok();
+    if t.prompt().is_some() && t.counteract_offered("通用:安可") {
+        t.counteract(1, "通用:安可").ok();
         drain(&mut t);
     } else {
         drain(&mut t);
@@ -384,8 +384,8 @@ fn interaction_web_glitch_vs_l12_hand() {
     t.give(0, &["Sumimi:#L12"]);
     t.give(1, &["通用:网络链接异常"]);
     let r = t.play(0, "Sumimi:#L12");
-    if t.prompt().is_some() && t.react_offered("通用:网络链接异常") {
-        t.react(1, "通用:网络链接异常").ok();
+    if t.prompt().is_some() && t.counteract_offered("通用:网络链接异常") {
+        t.counteract(1, "通用:网络链接异常").ok();
         drain(&mut t);
     } else {
         drain(&mut t);
@@ -400,8 +400,8 @@ fn interaction_ag_counter_vs_two_donuts() {
     let mut t = Table::vanilla(2);
     t.give(1, &["AG:宣战布告"]);
     t.give_play(0, "Sumimi:一人两个甜甜圈").unwrap();
-    if t.prompt().is_some() && t.react_offered("AG:宣战布告") {
-        t.react(1, "AG:宣战布告").ok();
+    if t.prompt().is_some() && t.counteract_offered("AG:宣战布告") {
+        t.counteract(1, "AG:宣战布告").ok();
         drain(&mut t);
     } else {
         drain(&mut t);

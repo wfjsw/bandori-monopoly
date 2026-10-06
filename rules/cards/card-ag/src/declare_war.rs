@@ -1,11 +1,11 @@
 //! `AG:宣战布告` -- C# `CardDeclareWar` (MatchHost.cs:921-955):
-//! [反击] when another player's card affects you, they pay you 500 and you draw.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:宣战布告`）:
 //! > 宣战布告：
 //! > [手]：
 //! > [反击]当你或你拥有的格子被其他玩家的卡效果影响时：[指定]那名玩家。被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。
 //!
+//! [反击] when another player's card affects you, they pay you 500 and you draw.
 
 use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
@@ -13,10 +13,10 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
-    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」
     //
     // One condition on the *effect*, and it now reads as one: any effect another
@@ -46,7 +46,7 @@ fn can_react(player_id: i32) -> bool {
     })
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // C# `int byCard = c.Trigger.ByCard` -- the player whose card affected this
     // one, not `t.Seat`. On a `pay` trigger `trigger::player_id()` is the *payer*
     // (this player, `t.Pay.from`), so the 500 must come from `by_card`.

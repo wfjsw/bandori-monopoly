@@ -40,7 +40,6 @@ fn roll_then_end(t: &mut Table, who: usize) {
 // ----- HHW:因为我一直相信着你
 
 #[test]
-#[ignore = "DISCREPANCY: book says 我一直相信着你 「消耗800资金…选择一名玩家…」, engine's play run traps (log.card_trap) and nothing happens"]
 fn believe_in_you_costs_800_and_swaps_hand_cards() {
     // 规则书: 「至少有另一张手牌时可发动，消耗800资金…选择两名加入你的手牌，重洗你的抽牌堆。」
     let mut t = vanilla2();
@@ -196,7 +195,7 @@ fn charity_live_halves_payments_this_turn() {
 // ----- HHW:黑衣人的补给
 
 #[test]
-#[ignore = "DISCREPANCY: book says 黑衣人的补给 is a [反击] 「经过CiRCLE格子时可打出」, engine opens no react window (only the CiRCLE reward)"]
+#[ignore = "DISCREPANCY: book says 黑衣人的补给 is a [反击] 「经过CiRCLE格子时可打出」, engine opens no counteract window (only the CiRCLE reward)"]
 fn black_clothes_supply_is_a_counter_on_passing_circle() {
     // 规则书: 「[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶」
     let mut t = vanilla2();
@@ -204,8 +203,8 @@ fn black_clothes_supply_is_a_counter_on_passing_circle() {
     t.set_pos(0, 58);
     t.dice(&[3]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("HHW:黑衣人的补给"), "{}", t.dump_prompt());
-    t.react(0, "HHW:黑衣人的补给").unwrap();
+    assert!(t.counteract_offered("HHW:黑衣人的补给"), "{}", t.dump_prompt());
+    t.counteract(0, "HHW:黑衣人的补给").unwrap();
     drain(&mut t);
 }
 
@@ -224,7 +223,7 @@ fn dream_return_is_offered_when_another_player_is_charged() {
     t.set_pos(2, (blue + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(2).unwrap();
-    assert!(t.react_offered("HHW:梦幻的回礼"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("HHW:梦幻的回礼"), "{}", t.dump_prompt());
 }
 
 // ================================================================ character skills
@@ -266,7 +265,6 @@ fn kanon_skill_1_starts_on_the_mansion() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「每次经过“弦卷集团”（#29）格子后获得2火罐」, engine grants no fire pot"]
 fn misaki_skill_1_gains_fire_pots_after_passing_the_tsuzumi_group() {
     // 规则书: 「（1）每次经过“弦卷集团”（#29）格子后获得2火罐（初始0，上限2）」
     let mut t = Table::new(&["奥泽美咲", "户山香澄"]);

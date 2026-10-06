@@ -1,10 +1,10 @@
 //! `RAS:（chuchu）演奏我的音乐吧` -- C# `CardChuchuMusic` (MatchHost.cs:9905-10002):
-//! park on another player; their buys pay the user and pass the card along.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（chuchu）演奏我的音乐吧`）:
-//! > （chuchu）演奏我的音乐吧：
+//! > （chuchu）演奏我的音乐吧： 
 //! >  将此卡放置于你以外的一名玩家场上并为其添加3个奇迹水晶，那名玩家的每个回合结束时失去一个；场上存在此卡的玩家下次购买地契时，[使用者]获得100资金，将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个；此卡进入弃牌堆前每触发一次该效果，此卡获得资金时额外获得100（上限500）。此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡。
 //!
+//! park on another player; their buys pay the user and pass the card along.
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};

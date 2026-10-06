@@ -661,8 +661,8 @@ fn ix_ag_declaration_vs_caught() {
     t.give(0, &["PPP:抓到了"]);
     t.play(0, "PPP:抓到了").unwrap();
     t.answer(0, 0).unwrap(); // choose P1 as the target
-    if t.react_offered("AG:宣战布告") {
-        t.react(1, "AG:宣战布告").unwrap();
+    if t.counteract_offered("AG:宣战布告") {
+        t.counteract(1, "AG:宣战布告").unwrap();
     }
     skip_all(&mut t);
     // The declaration pays 500 and draws; P0 still moved unless negated.
@@ -683,8 +683,8 @@ fn ix_encore_vs_rimi_card_move() {
         t.answer(0, 4).unwrap();
     }
     // 安可 may or may not open (the move is not listed as [异常移动效果]).
-    if t.react_offered("通用:安可") {
-        t.react(1, "通用:安可").unwrap();
+    if t.counteract_offered("通用:安可") {
+        t.counteract(1, "通用:安可").unwrap();
     }
     skip_all(&mut t);
     eprintln!("pos={} stay={}", t.pos(0), t.state(0, "stay"));

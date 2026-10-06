@@ -1,10 +1,10 @@
 //! `PPP:抓到了` -- C# `CardCaught` (MatchHost.cs:8776-8813): walk to the next
-//! player ahead and treat the walk as the main move, build allowed.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:抓到了`）:
 //! > 抓到了：
 //! > 移动到你前方一名玩家的格子，视为本回合的主要移动且可选择盖房。
 //!
+//! player ahead and treat the walk as the main move, build allowed.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};

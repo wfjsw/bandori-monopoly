@@ -55,7 +55,10 @@ pub struct TurnSnap {
 }
 
 /// Per-turn bookkeeping (the parts of C# `TurnCtx` the shell uses).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+///
+/// The derived `Default` would zero `build_cost_pct` (only the serde default is
+/// 100), so a fresh turn would build for free; the manual impl keeps full price.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurnCtx {
     /// `C# TurnCtx.Plan` -- the movement being planned / walked. Runtime-only:
     /// it carries roll tables and closures, so it never reaches the wire (the
@@ -128,13 +131,41 @@ pub struct TurnCtx {
     pub build_cost_pct: i32,
 }
 
+impl Default for TurnCtx {
+    fn default() -> Self {
+        Self {
+            plan: Default::default(),
+            player_id: 0,
+            extra: false,
+            main_moved: false,
+            played: Vec::new(),
+            no_money_loss: Vec::new(),
+            fixed_roll: None,
+            main_steps: 0,
+            abnormal: Vec::new(),
+            extreme: 0,
+            play_from_hand: false,
+            buy_discount: 0,
+            paid_in_settle: 0,
+            free_buy: false,
+            raze_on_buy: false,
+            turn_start_pos: Vec::new(),
+            turn_snap: Vec::new(),
+            turn_rolls: Vec::new(),
+            build_discount: 0,
+            build_discount_layers: 0,
+            build_cost_pct: full_build_cost(),
+        }
+    }
+}
+
 /// A card that asked to be called at a turn end (C# `TurnCtx.AfterEnd` /
 /// `AtEnd`, and the "end of your next turn" effects). The host runs the card's
-/// `react` with kind `turnEnd` when `target`'s turn ends, then drops it.
+/// `counteract` with kind `turnEnd` when `target`'s turn ends, then drops it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Scheduled {
     pub card: String,
-    /// The player the card acts for (passed to its `react`).
+    /// The player the card acts for (passed to its `counteract`).
     pub owner: i32,
     /// Whose turn end fires it.
     pub target: usize,

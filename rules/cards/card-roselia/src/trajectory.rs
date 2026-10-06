@@ -15,11 +15,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAJECTORY: CardDef = CardDef::new(
     "R:轨迹",
-    &[On::CounterAct(&[ChainKind::Bankrupt], can_react, react)],
+    &[On::Counteract(&[ChainKind::Bankrupt], can_counteract, counteract)],
 );
 
 /// 规则书（1）[反击]: 「在场上有玩家破产时，展示此卡」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「在场上有玩家破产时」 -- C# `t.Kind == "bankrupt" && t.Target != seat`.
     if trigger::kind() != TriggerKind::Bankrupt {
         return false;
@@ -28,12 +28,12 @@ fn can_react(player_id: i32) -> bool {
     if who < 0 || who == player_id {
         return false;
     }
-    // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契」 -- only worth reacting when
+    // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契」 -- only worth counteracting when
     // they still have one (C# `H.OwnedBy(t.Target).Count > 0`).
     ctx::owned_count(who) > 0
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let who = trigger::target();
     if who < 0 {
         return Ok(());

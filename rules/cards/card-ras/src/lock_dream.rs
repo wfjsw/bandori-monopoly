@@ -1,19 +1,19 @@
 //! `RAS:（LOCK）追逐梦想的步伐` -- C# `CardLockDream` (MatchHost.cs:10003-10065):
-//! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（LOCK）追逐梦想的步伐`）:
 //! > （LOCK）追逐梦想的步伐：
-//! >
+//!
 //! > （1）抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上，游戏开始时[传送]到“东京外”获得3层[除外]
-//! >
+//!
 //! > （2）如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]
 //!
+//! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 
 use card_sdk::abi::{CardPile, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-/// C# `Normal => false` with no `Play`/`React`: the card is shown out of the
+/// C# `Normal => false` with no `Play`/`Counteract`: the card is shown out of the
 /// deck before the opening hands and lives on the field from there.
 pub const LOCK_DREAM: CardDef = CardDef::new(
     "RAS:（LOCK）追逐梦想的步伐",

@@ -61,7 +61,7 @@
   "please_choose_ask": "{{who}} 打出了「PLEASE CHOOSE」：选一个",
   "please_choose_moved": "{{who}} [传送] 到了 {{tile}}（PLEASE CHOOSE）",
   "please_choose_opt1": "立即打出一张能指定 {{who}} 的牌，并指定 Ta",
-  "please_choose_opt1_todo": "「立即打出一张可指定 {{reactor}} 的牌」还没有实装（PLEASE CHOOSE）",
+  "please_choose_opt1_todo": "「立即打出一张可指定 {{counteractor}} 的牌」还没有实装（PLEASE CHOOSE）",
   "please_choose_opt2": "让 {{who}} [传送] 到你这格",
   "please_choose_title": "PLEASE CHOOSE",
   "repaint_cut": "{{who}} 这次少走 {{n}} 格（现在 {{roll}}）（Repaint）",

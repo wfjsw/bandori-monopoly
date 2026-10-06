@@ -117,7 +117,7 @@ An analysis of all prompt sites in `MatchHost.cs` showed:
 | prompt sites whose options are known before the effect runs | 174 / 189 (92%) |
 | prompts that read state the same effect already mutated | 0 |
 | classes whose prompt options depend on mid-effect dice or loop state | 14 |
-| classes with `CanReact`/`React` (another player interrupts) | 48 |
+| classes with `CanCounteract`/`Counteract` (another player interrupts) | 48 |
 
 So "collect all inputs first" covers most but not all cards. **Replay** covers all of them:
 run the effect against a copy of the world; at an unanswered prompt, abort and discard

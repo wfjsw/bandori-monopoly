@@ -1,11 +1,11 @@
 //! `PPP:（里美）我的心就像巧克力螺` -- C# `CardRimiChoco` (MatchHost.cs:9241-9285):
-//! jump 1-4 tiles (either way) as the main move, unstoppable.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（里美）我的心就像巧克力螺`）:
 //! > （里美）我的心就像巧克力螺：
 //! > [手]：
 //! > 立刻进入移动阶段，本回合的[主要移动]改为移动到当前格子绝对距离1到4格或以内的任何格子并[结算]，期间[不可阻挡]。
 //!
+//! jump 1-4 tiles (either way) as the main move, unstoppable.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};

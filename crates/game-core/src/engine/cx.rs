@@ -213,6 +213,26 @@ impl<'a> Cx<'a> {
         std::mem::replace(&mut self.w, w)
     }
 
+    /// Adopt the turn-ctx **policy** another world set up (build/buy discounts,
+    /// free buy, fixed roll, ...) without taking its progress counters. A host
+    /// routine runs against the live world and is not replayed, so a card's
+    /// `set_build_discount` has to cross before `card_build` reads it; the
+    /// replay re-derives the progress counters from the drive's snapshot.
+    pub fn adopt_turn_policy(&mut self, from: &World) {
+        let f = &from.turn;
+        let t = &mut self.w.turn;
+        t.build_discount = f.build_discount;
+        t.build_discount_layers = f.build_discount_layers;
+        t.build_cost_pct = f.build_cost_pct;
+        t.buy_discount = f.buy_discount;
+        t.free_buy = f.free_buy;
+        t.raze_on_buy = f.raze_on_buy;
+        t.fixed_roll = f.fixed_roll;
+        t.extreme = f.extreme;
+        t.play_from_hand = f.play_from_hand;
+        t.no_money_loss = f.no_money_loss.clone();
+    }
+
     /// The shared game data (tile/card lookups).
     pub fn game_data(&self) -> &'a GameData {
         self.data

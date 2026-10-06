@@ -56,7 +56,7 @@ impl World {
     }
     /// `NoBuild` -- the walk cannot build where it lands.
 
-    /// `MinRoll` -- clamp the final face up to this after the reactions.
+    /// `MinRoll` -- clamp the final face up to this after the counteractions.
     pub fn set_min_roll(&mut self, n: i32) {
         self.turn.plan.min_roll = n;
     }
@@ -819,19 +819,29 @@ impl World {
 
     /// Place a field card on the player (`tile: -1` -- it sits with its owner).
     /// Returns the new instance's uid, which is what addresses it afterwards.
-    pub fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
-        self.place_card_on(player_id, -1, card, note)
+    pub fn place_card(&mut self, data: &GameData, player_id: i32, card: &str, note: Msg) -> i32 {
+        self.place_card_on(data, player_id, -1, card, note)
     }
 
     /// Place a field card **on a tile** (C# `H.PlaceFromPlay(c, i, tile)`) -- the
     /// mark sits on the board at `tile` rather than with its owner. `tile: -1`
     /// puts it with the owner, which is [`Self::place_card`].
-    pub fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
+    pub fn place_card_on(
+        &mut self,
+        data: &GameData,
+        player_id: i32,
+        tile: i32,
+        card: &str,
+        note: Msg,
+    ) -> i32 {
         if self.player_id(player_id).is_none() {
             return -1;
         }
         let uid = self.st.next_card_uid;
         self.st.next_card_uid += 1;
+        // Continuous 「手卡上限数量减1」 rides on the instance, so it is gone
+        // the moment the card leaves the field.
+        let hand_limit_delta = data.card(card).map_or(0, |c| c.hand_limit_delta);
         let Some(s) = self.player_mut(player_id) else {
             return -1;
         };
@@ -844,6 +854,7 @@ impl World {
             crystals: 0,
             face_down: false,
             immune: false,
+            hand_limit_delta,
             note,
         });
         uid
@@ -947,13 +958,14 @@ impl World {
         }
     }
 
-    /// Take the instance at `uid` off the field; returns the owner it left
-    /// (or -1 when there was no such instance).
+    /// Take the instance at `uid` off the field; returns the **player index**
+    /// it left (or -1 when there was no such instance). Dest routing
+    /// (`to_discard` and kin) keys on the player index, not the room member id.
     pub fn unplace_at(&mut self, uid: i32) -> i32 {
-        for s in self.st.players.iter_mut() {
+        for (pi, s) in self.st.players.iter_mut().enumerate() {
             if let Some(i) = s.field.iter().position(|f| f.uid == uid) {
                 s.field.remove(i);
-                return s.member;
+                return pi as i32;
             }
         }
         -1
@@ -970,7 +982,7 @@ impl World {
             .unwrap_or_default();
         for id in data.skill_rules_of(&character) {
             if !self.placed_cards(player_id).contains(&id) {
-                self.place_card(player_id, &id, Msg::default());
+                self.place_card(data, player_id, &id, Msg::default());
             }
         }
     }

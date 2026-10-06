@@ -12,17 +12,17 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     "CRYCHIC:（立希）即便比不上...",
-    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「进入移动阶段后，触发结算前可打出」
     trigger::kind() == TriggerKind::MoveRoll
         && trigger::player_id() == player_id
         && trigger::move_roll().is_some()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(before) = trigger::move_roll() else {
         return Ok(());
     };

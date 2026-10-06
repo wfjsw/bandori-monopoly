@@ -1,10 +1,10 @@
 //! `PPP:向着未来的路标` -- C# `CardSignpost` (MatchHost.cs:9018-9036): walk a full
-//! lap without settling, then pay 1,000 at end of turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:向着未来的路标`）:
 //! > 向着未来的路标：
 //! > 本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金
 //!
+//! lap without settling, then pay 1,000 at end of turn.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

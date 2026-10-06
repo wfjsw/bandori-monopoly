@@ -3,7 +3,7 @@
 //! 规则书（docs/rulebook/cards.json, id `AG:（绯玛丽）如果并非没问题`）:
 //! > （绯玛丽）如果并非没问题：【反击】当你的一次掷骰小于6时，你可以打出此卡使结果+1
 //!
-//! Reaction: when one of your own rolls is under 6, it goes up by 1.
+//! Counteraction: when one of your own rolls is under 6, it goes up by 1.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -11,15 +11,15 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     "AG:（绯玛丽）如果并非没问题",
-    &[On::CounterAct(
+    &[On::Counteract(
         &[ChainKind::Roll, ChainKind::MoveRoll],
-        can_react,
-        react,
+        can_counteract,
+        counteract,
     )],
 );
 
-/// 规则书: 「【反击】当你的一次掷骰小于6时，你可以打出此卡」 -- reaction-only.
-fn can_react(player_id: i32) -> bool {
+/// 规则书: 「【反击】当你的一次掷骰小于6时，你可以打出此卡」 -- counteraction-only.
+fn can_counteract(player_id: i32) -> bool {
     // 规则书: 「【反击】当你的一次掷骰」 -- a roll window, not a hand play.
     if !matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll) {
         return false;
@@ -32,7 +32,7 @@ fn can_react(player_id: i32) -> bool {
     matches!(trigger::move_roll(), Some(r) if r < 6)
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使结果+1」
     let Some(before) = trigger::move_roll() else {
         return Ok(());

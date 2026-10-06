@@ -11,14 +11,14 @@ const RELAY: CardDef = CardDef::new("TEST:relay", &[On::Play(None, relay)]);
 /// Plays itself forever; the host must stop it at the depth limit.
 const RECURSE: CardDef = CardDef::new("TEST:recurse", &[On::Play(None, recurse)]);
 
-/// Logs from both `play` and `react`, with no kind guard: the host must run its
-/// `react` exactly once per play (at its own `card` trigger), not again at
+/// Logs from both `play` and `counteract`, with no kind guard: the host must run its
+/// `counteract` exactly once per play (at its own `card` trigger), not again at
 /// `cardAfter` / `cardPlayed`.
 const ECHO: CardDef = CardDef::new(
     "TEST:echo",
     &[
         On::Play(None, echo_play),
-        On::CounterAct(&[ChainKind::Card], never, echo_react),
+        On::Counteract(&[ChainKind::Card], never, echo_counteract),
     ],
 );
 /// Lists its player's hand through `cards_in` (the host->guest list) and logs
@@ -56,7 +56,7 @@ const SHIELD: CardDef = CardDef::new(
 /// the activation" as against "negate the effect".
 const COUNTER: CardDef = CardDef::new(
     "TEST:counter",
-    &[On::CounterAct(&[ChainKind::Effect], counter_yes, counter)],
+    &[On::Counteract(&[ChainKind::Effect], counter_yes, counter)],
 );
 
 fn aimer(player_id: i32) -> card_sdk::Asked {
@@ -194,8 +194,8 @@ fn echo_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn echo_react(player_id: i32) -> card_sdk::Asked {
-    ctx::log(player_id, &Msg::new(key!("echo_react")));
+fn echo_counteract(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("echo_counteract")));
     Ok(())
 }
 

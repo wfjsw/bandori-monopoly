@@ -1,9 +1,9 @@
 //! `HHW:梦幻的回礼` -- C# `CardDreamReturn` (MatchHost.cs:4462-4523): [反击] an
-//! incoming rent, pay double rent at one rival tile to subsidise the payer.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:梦幻的回礼`）:
 //! > 梦幻的回礼：[反击] 在场上其他玩家即将被不属于你的格子收费时打出，向场上你以外的任意一名玩家的一个格子进行一次支付。若成功进行支付，则自动使用一次你的乐队技能进行双倍支付并为乐队技能卡上添加两个分别记录这两名玩家的奇迹水晶，并为将要进行支付的那名玩家减免相当于你支付金额的数额。
 //!
+//! incoming rent, pay double rent at one rival tile to subsidise the payer.
 
 use alloc::vec::Vec;
 
@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(
     "HHW:梦幻的回礼",
-    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
 );
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
@@ -36,9 +36,9 @@ fn targets(player_id: i32) -> Vec<i32> {
     v
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「在场上其他玩家即将被不属于你的格子收费时打出」 -- C#
-    // `CanReact`: `t.Kind == "pay" && t.Pay != null && t.Pay.IsRent &&
+    // `CanCounteract`: `t.Kind == "pay" && t.Pay != null && t.Pay.IsRent &&
     // t.Pay.from >= 0 && t.Pay.from != player && t.Pay.to != player &&
     // Targets(player).Count > 0 && H.CanPay(player)`.
     if trigger::kind() != ChainKind::Effect {
@@ -62,7 +62,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::can_pay(player_id)
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let mut list = targets(player_id);
     if list.is_empty() {
         return Ok(());

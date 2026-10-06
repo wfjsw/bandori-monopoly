@@ -33,7 +33,7 @@
   "detour_opt_reverse": "向后移动（美竹兰：经过 CiRCLE 不拿奖励）",
   "detour_opt_tomoe": "起点向银河拉面馆移动 10 格（宇田川巴）",
   "detour_planned": "{{who}} 这回合进行 Afterglow 式的移动，移动掷骰改为 1d6（回家的路上绕个道）",
-  "detour_react": "这次移动反向（羽泽鸫式），下一次移动掷骰改为 1d6（回家的路上绕个道）",
+  "detour_counteract": "这次移动反向（羽泽鸫式），下一次移动掷骰改为 1d6（回家的路上绕个道）",
   "detour_title": "回家的路上绕个道",
   "himari_plus_one": "{{who}} 的掷骰结果 +1（{{card}}），现在 {{total}}",
   "moca_half_decayed": "{{who}} 的「0.5倍速」奇迹水晶用完了，放入弃牌堆",

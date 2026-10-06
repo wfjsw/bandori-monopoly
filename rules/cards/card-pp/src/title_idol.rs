@@ -1,6 +1,4 @@
 //! `PP:TITLE IDOL` -- C# `CardTitleIdol` (MatchHost.cs:7610-7628): +2 band
-//! crystals, then +1 (or +2 with [共鸣]) on every field card whose text mentions
-//! 「奇迹水晶」.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:TITLE IDOL`）:
 //! > TITLE IDOL：
@@ -9,6 +7,8 @@
 //! > 1. 为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]；
 //! > 2. 为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。
 //!
+//! crystals, then +1 (or +2 with [共鸣]) on every field card whose text mentions
+//! 「奇迹水晶」.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

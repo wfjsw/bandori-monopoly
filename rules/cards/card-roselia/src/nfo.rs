@@ -19,7 +19,7 @@ pub const NFO: CardDef = CardDef::new(
     &[
         On::Hook(&[card_sdk::abi::HookKind::PayChoose], gain_guard, gain_bump),
         On::Play(None, play),
-        On::Hook(&[HookKind::PayAt], |_| true, react),
+        On::Hook(&[HookKind::PayAt], |_| true, counteract),
         On::AtEnd(at_end),
     ],
 );
@@ -137,7 +137,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                 player_id,
                 &Msg::new(key!("nfo_placed")).player_id("who", player_id),
             );
-            // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- see `react`.
+            // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- see `counteract`.
         }
         // 规则书: 「若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出」
         4 => {
@@ -238,7 +238,7 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
 /// by 1000, then the card is used up and goes to the discard pile. Runs through
 /// the Fx hook dispatch at `payAt` (after `PayChoose`, before the `pay` [反击]
 /// window), so this is a field effect, not a [反击].
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PayAt
         || trigger::player_id() != player_id
         || !ctx::is_placed()

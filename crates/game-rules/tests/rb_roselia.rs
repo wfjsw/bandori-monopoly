@@ -135,7 +135,6 @@ fn fire_bird_costs_1600_and_gains_chosen_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「每回合结束时失去400资金并移除1个奇迹水晶」, engine's turnEnd hook fires twice per end (log.hook_fire + log.lose x2) so the burn is 800 and two crystals"]
 fn fire_bird_turn_end_burns_400_and_a_crystal() {
     // 规则书: 「每回合结束时失去400资金并移除1个奇迹水晶…奇迹水晶耗尽时将此卡放入弃牌堆」
     let mut t = vanilla2();
@@ -288,7 +287,7 @@ fn sprechchor_pays_1000_plus_120_per_die_face() {
 // ----- R:live前的准备
 
 #[test]
-#[ignore = "DISCREPANCY: book says live前的准备 「经过江户川乐器店时可打出…强制停下并触发结算」, engine opens no react window"]
+#[ignore = "DISCREPANCY: book says live前的准备 「经过江户川乐器店时可打出…强制停下并触发结算」, engine opens no counteract window"]
 fn live_prep_stops_at_the_edogawa_store_when_passing() {
     // 规则书: 「[反击] 经过江户川乐器店时可打出此卡，使自己在江户川乐器店强制停下并触发结算」
     let mut t = vanilla2();
@@ -297,8 +296,8 @@ fn live_prep_stops_at_the_edogawa_store_when_passing() {
     t.set_pos(0, (store + 60 - 3) % 60);
     t.dice(&[5]); // path crosses the store
     t.roll(0).unwrap();
-    if t.react_offered("R:live前的准备") {
-        t.react(0, "R:live前的准备").unwrap();
+    if t.counteract_offered("R:live前的准备") {
+        t.counteract(0, "R:live前的准备").unwrap();
         drain(&mut t);
         assert_eq!(t.pos(0), store, "force-stopped on the store");
     } else {
@@ -317,8 +316,8 @@ fn choose_your_stage_answers_an_abnormal_move() {
     t.give(0, &["R:选择自己的舞台"]);
     t.give(0, &["PP:[衍生]重叠的声音"]);
     t.play(0, "PP:[衍生]重叠的声音").unwrap();
-    if t.react_offered("R:选择自己的舞台") {
-        t.react(0, "R:选择自己的舞台").unwrap();
+    if t.counteract_offered("R:选择自己的舞台") {
+        t.counteract(0, "R:选择自己的舞台").unwrap();
         drain(&mut t);
     } else {
         drain(&mut t);
@@ -378,8 +377,8 @@ fn ako_exclusive_stuns_you_to_dodge_a_payment() {
     t.set_pos(0, (blue + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("R:（亚子）黑暗大魔姬亚子"), "{}", t.dump_prompt());
-    t.react(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
+    assert!(t.counteract_offered("R:（亚子）黑暗大魔姬亚子"), "{}", t.dump_prompt());
+    t.counteract(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
     drain(&mut t);
     assert!(t.state(0, "stun") + t.state(0, "stunStart") >= 1, "gained [眩晕]");
 }
@@ -595,7 +594,7 @@ fn interaction_fire_bird_and_rent() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says live前的准备 is a [反击] 「经过江户川乐器店时可打出」, engine opens no react window on a walk past the store"]
+#[ignore = "DISCREPANCY: book says live前的准备 is a [反击] 「经过江户川乐器店时可打出」, engine opens no counteract window on a walk past the store"]
 fn interaction_live_prep_vs_a_walk_past_the_store() {
     // live前的准备 [反击] vs an ordinary walk; also a cross-group piece of
     // board geometry (the store is not a Roselia tile).
@@ -607,8 +606,8 @@ fn interaction_live_prep_vs_a_walk_past_the_store() {
     t.set_pos(1, (store + 60 - 3) % 60);
     t.dice(&[5]);
     t.roll(1).unwrap();
-    assert!(t.react_offered("R:live前的准备"), "{}", t.dump_prompt());
-    t.react(1, "R:live前的准备").unwrap();
+    assert!(t.counteract_offered("R:live前的准备"), "{}", t.dump_prompt());
+    t.counteract(1, "R:live前的准备").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(1), store);
 }
@@ -690,8 +689,8 @@ fn interaction_ako_counter_vs_a_rent_payment() {
     t.set_pos(0, (blue + 60 - 1) % 60);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("R:（亚子）黑暗大魔姬亚子"), "{}", t.dump_prompt());
-    t.react(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
+    assert!(t.counteract_offered("R:（亚子）黑暗大魔姬亚子"), "{}", t.dump_prompt());
+    t.counteract(0, "R:（亚子）黑暗大魔姬亚子").unwrap();
     drain(&mut t);
     assert!(t.state(0, "stun") + t.state(0, "stunStart") >= 1);
 }

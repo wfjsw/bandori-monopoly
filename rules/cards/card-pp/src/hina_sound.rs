@@ -1,14 +1,14 @@
 //! `PP:[冰川日菜]会发出怎样的声音呢？` -- C# `CardHinaSound`
-//! (MatchHost.cs:8169-8215): play as one of the Pastel✽Palettes exclusive cards.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[冰川日菜]会发出怎样的声音呢？`）:
 //! > [冰川日菜]会发出怎样的声音呢？：
 //! > [特]：
-//! >
+//!
 //! > （1）此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡。
-//! >
+//!
 //! > （2）[共鸣]本卡在[场地]时改变本卡代替的专属卡效果。
 //!
+//! (MatchHost.cs:8169-8215): play as one of the Pastel✽Palettes exclusive cards.
 //! The stand-in runs the substitute's [手] via `play_card`; the RealId marking
 //! and the [共鸣] swap need hooks the ABI lacks (below).
 

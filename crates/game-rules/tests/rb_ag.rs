@@ -35,8 +35,8 @@ fn declaration_pays_500_and_draws() {
     t.give(1, &["AG:宣战布告"]);
     t.give(0, &["通用:登上武道馆"]);
     t.play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("AG:宣战布告"), "{}", t.dump_prompt());
-    t.react(1, "AG:宣战布告").unwrap();
+    assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
+    t.counteract(1, "AG:宣战布告").unwrap();
     skip_all(&mut t);
     // 规则书: 「被[指定]的玩家[支付][使用者]500」 — P0 pays P1 500.
     // 规则书: 「[使用者]抽1张卡」 — P1 draws.
@@ -55,7 +55,7 @@ fn declaration_offered_against_targeting_card() {
     t.dice(&[1, 1]);
     t.play(0, "通用:雨啊，快点来吧").unwrap();
     t.answer(0, 0).unwrap(); // target P1
-    assert!(t.react_offered("AG:宣战布告"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
 }
 
 // =====================================================================
@@ -71,9 +71,9 @@ fn yolo_adds_1d4_to_the_roll() {
     // The card fires as a [反击] on the roll's settle; roll first.
     t.dice(&[5, 3]); // d20=5, +1d4=3 → 8
     t.roll(0).unwrap();
-    // A react window offering YOLO may open mid-roll.
-    if t.react_offered("AG:Y.O.L.O") {
-        t.react(0, "AG:Y.O.L.O").unwrap();
+    // A counteract window offering YOLO may open mid-roll.
+    if t.counteract_offered("AG:Y.O.L.O") {
+        t.counteract(0, "AG:Y.O.L.O").unwrap();
     } else {
         // Otherwise play it from hand before the move resolves.
         t.play(0, "AG:Y.O.L.O").ok();
@@ -186,7 +186,7 @@ fn soul_counter_reduces_a_payment() {
     t.set_pos(0, HILL - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    eprintln!("react? {}", t.dump_prompt());
+    eprintln!("counteract? {}", t.dump_prompt());
     if t.prompt().is_some() && t.dump_prompt().contains("crimson_soul") {
         t.answer(0, 0).unwrap(); // yes, spend the crystal
     }
@@ -212,7 +212,7 @@ fn soul_leaves_when_empty() {
     t.set_pos(0, HILL - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    eprintln!("react? {}", t.dump_prompt());
+    eprintln!("counteract? {}", t.dump_prompt());
     // The soul counter is a yes/no prompt (crimson_soul_pay_ask_to), not a
     // standard [反击] window.
     if t.prompt().is_some() && t.dump_prompt().contains("crimson_soul") {
@@ -334,8 +334,8 @@ fn detour_can_be_a_counter() {
     t.give(0, &["通用:登上武道馆"]);
     t.play(0, "通用:登上武道馆").unwrap();
     // A [反击] window may offer it.
-    if t.react_offered("AG:回家的路上绕个道") {
-        t.react(1, "AG:回家的路上绕个道").unwrap();
+    if t.counteract_offered("AG:回家的路上绕个道") {
+        t.counteract(1, "AG:回家的路上绕个道").unwrap();
     }
     skip_all(&mut t);
     eprintln!("money: {} {}", t.money(0), t.money(1));
@@ -353,8 +353,8 @@ fn glory_counter_on_passing_a_character() {
     t.set_pos(0, 18);
     t.dice(&[3]); // 18+3 = 21, passes 20 (P1)
     t.roll(0).unwrap();
-    if t.react_offered("AG:刻入天穹傲岸的烈光") {
-        t.react(0, "AG:刻入天穹傲岸的烈光").unwrap();
+    if t.counteract_offered("AG:刻入天穹傲岸的烈光") {
+        t.counteract(0, "AG:刻入天穹傲岸的烈光").unwrap();
     }
     skip_all(&mut t);
     eprintln!("money: {} {}", t.money(0), t.money(1));
@@ -385,8 +385,8 @@ fn himari_card_bumps_a_low_roll() {
     t.set_pos(0, 10);
     t.dice(&[3]);
     t.roll(0).unwrap();
-    if t.react_offered("AG:（绯玛丽）如果并非没问题") {
-        t.react(0, "AG:（绯玛丽）如果并非没问题").unwrap();
+    if t.counteract_offered("AG:（绯玛丽）如果并非没问题") {
+        t.counteract(0, "AG:（绯玛丽）如果并非没问题").unwrap();
     }
     skip_all(&mut t);
     eprintln!("pos={}", t.pos(0));
@@ -561,7 +561,7 @@ fn ix_declaration_vs_budokan() {
     t.give(1, &["AG:宣战布告"]);
     t.give(0, &["通用:登上武道馆"]);
     t.play(0, "通用:登上武道馆").unwrap();
-    t.react(1, "AG:宣战布告").unwrap();
+    t.counteract(1, "AG:宣战布告").unwrap();
     skip_all(&mut t);
     // Both the counter and the original card resolve.
     assert!(t.hand(1).contains(&"通用:GREAT".to_string()));
@@ -578,8 +578,8 @@ fn ix_declaration_vs_ppp_caught() {
     t.give(0, &["PPP:抓到了"]);
     t.play(0, "PPP:抓到了").unwrap();
     t.answer(0, 0).unwrap(); // target P1
-    if t.react_offered("AG:宣战布告") {
-        t.react(1, "AG:宣战布告").unwrap();
+    if t.counteract_offered("AG:宣战布告") {
+        t.counteract(1, "AG:宣战布告").unwrap();
     }
     skip_all(&mut t);
     eprintln!("pos0={} money: {} {}", t.pos(0), t.money(0), t.money(1));
@@ -596,8 +596,8 @@ fn ix_encore_and_moca_half_speed() {
     t.dice(&[1, 1]);
     t.give_play(1, "通用:雨啊，快点来吧").unwrap();
     t.answer(1, 0).unwrap();
-    if t.react_offered("通用:安可") {
-        t.react(0, "通用:安可").unwrap();
+    if t.counteract_offered("通用:安可") {
+        t.counteract(0, "通用:安可").unwrap();
     }
     skip_all(&mut t);
     eprintln!("stay={} pos={}", t.state(0, "stay"), t.pos(0));

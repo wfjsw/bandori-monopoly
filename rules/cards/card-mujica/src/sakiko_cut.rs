@@ -1,11 +1,10 @@
 //! `Mujica:（祥子）斩断留恋，忘却一切` -- C# `CardSakikoCut` (MatchHost.cs:5744-5814):
-//! mortgage your best deed, discard a hand card, teleport with settle as main move.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（祥子）斩断留恋，忘却一切`）:
-//! > （祥子）斩断留恋，忘却一切：
+//! > （祥子）斩断留恋，忘却一切： 
 //! >  抵押一张你拥有且未抵押的最贵地契并弃置一张手牌（若无手牌则弃掉下一张抽到的牌），立刻传送至任意可购买或已拥有的格子并触发结算，作为你的主要移动。若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡
 //!
-//!
+//! mortgage your best deed, discard a hand card, teleport with settle as main move.
 
 use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
@@ -48,14 +47,18 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     let skip_discard = false;
     // 规则书: 「抵押一张你拥有且未抵押的最贵地契」 -- C# `H.Mortgageable(i)`
     // ordered by `_tiles[num].price` descending, then `H.MortgageRoutine`.
+    //
+    // Replay note: `card_mortgage` is a host routine, so this body re-runs
+    // from the top after it commits -- and by then the best deed is already
+    // mortgaged and `mortgageable` is empty. The empty-list / `cant_move`
+    // pre-check that C# turns into `Effective = false` therefore cannot live
+    // in this body (it would fire on the replay and skip the rest); it is
+    // `cant_play`'s gate instead. Here the mortgage is attempted -- a no-op
+    // once it is done -- and the rest always runs.
     let mine = mortgageable(player_id);
-    if mine.is_empty() || ctx::cant_move(player_id).is_some() {
-        // C# `c.Effective = false` when the list is empty or `H.MoveWhyNot(i)`
-        // refuses.
-        return Ok(());
-    }
     // 规则书: 「最贵地契」 -- C# `list.OrderByDescending((int num) =>
-    // H._tiles[num].price).First()`.
+    // H._tiles[num].price).First()`. Re-derived each pass; after the mortgage
+    // commits it is empty and this is a no-op.
     let best = mine.into_iter().reduce(|a, b| {
         if ctx::tile_price(b) > ctx::tile_price(a) {
             b
@@ -69,6 +72,14 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
         ctx::card_mortgage(player_id, t);
     }
     // 规则书: 「并弃置一张手牌（若无手牌则弃掉下一张抽到的牌）」
+    //
+    // The pick is taken now, but the discard itself is deferred past the
+    // teleport's host call: a host routine re-runs this body from the top
+    // against a fresh copy, so anything written to the copy before it is
+    // dropped. Asking first (a prompt replays the same way) and discarding
+    // after the last host call is what makes the discard stick.
+    let mut discard_pick: Option<usize> = None;
+    let mut discard_names: alloc::vec::Vec<alloc::string::String> = alloc::vec::Vec::new();
     if !skip_discard {
         // 规则书: 「若无手牌则弃掉下一张抽到的牌」 -- C# branches on
         // `H._hidden[i].hand.Count == 0`; `ctx::hand_size(player_id)` is that count.
@@ -84,7 +95,8 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
                     &Msg::new(key!("sakiko_cut_discard")),
                     &pool,
                 )?;
-                ctx::discard_from_hand(player_id, pool[pick]);
+                discard_pick = Some(pick);
+                discard_names = hand.clone();
             }
         } else {
             // TODO(规则书): 「若无手牌则弃掉下一张抽到的牌」 -- C#
@@ -109,6 +121,11 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
         }
     }
     if pool.is_empty() {
+        if let Some(i) = discard_pick {
+            if let Some(card) = discard_names.get(i) {
+                ctx::discard_from_hand(player_id, card);
+            }
+        }
         return Ok(());
     }
     let to = ctx::ask_tile(
@@ -132,6 +149,13 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", to),
     );
+    // 规则书: 「弃置一张手牌」 -- deferred past `card_move` so it commits with
+    // this run (see the note above).
+    if let Some(i) = discard_pick {
+        if let Some(card) = discard_names.get(i) {
+            ctx::discard_from_hand(player_id, card);
+        }
+    }
     // 规则书: 「并触发结算」 -- the settle half is `set_resolve(true)` above
     // (the teleport runs `settleBefore` -> `settle` -> `land` -> `settleAfter`
     // on the destination).

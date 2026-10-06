@@ -1,9 +1,9 @@
 //! `AG:（巴）商店街的救世主` -- C# `CardTomoeSavior` (MatchHost.cs:1722-1791):
-//! [反击] on a shop-street mortgage: buy it cheap, or double your own mortgage.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（巴）商店街的救世主`）:
 //! > （巴）商店街的救世主：【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回
 //!
+//! [反击] on a shop-street mortgage: buy it cheap, or double your own mortgage.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     "AG:（巴）商店街的救世主",
-    &[On::CounterAct(&[ChainKind::Mortgage], can_react, react)],
+    &[On::Counteract(&[ChainKind::Mortgage], can_counteract, counteract)],
 );
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
@@ -19,7 +19,7 @@ fn is_shop(t: i32) -> bool {
     t >= 0 && ctx::is_shop(t)
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当其他玩家抵押商店街地契时」 / 「当你抵押商店街地契时」
     if trigger::kind() != TriggerKind::Mortgage {
         return false;
@@ -30,14 +30,14 @@ fn can_react(player_id: i32) -> bool {
     }
     if trigger::player_id() != player_id {
         // 规则书[反击]: 「立刻支付常规收购价一半的价格」 -- C# also requires
-        // `money >= H._tiles[t].price / 2` before the reaction is offered.
+        // `money >= H._tiles[t].price / 2` before the counteraction is offered.
         ctx::money_of(player_id) >= ctx::tile_price(t) / 2
     } else {
         true
     }
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let t = trigger::tile();
     let from = trigger::player_id();
     if from == player_id {
@@ -58,8 +58,8 @@ fn react(player_id: i32) -> card_sdk::Asked {
         // TODO(规则书)[judgement]: 「额外获得一份抵押收益」 does not say whether the
         // extra payout goes through the gain pipeline or lands raw. The C# added
         // it raw (`H.State.seats[i].money += num`, no `H.GainR`), so a [拥有者] /
-        // [支付] reaction cannot see it; this port routes it through `gain`, which
-        // means such a reaction can. Not a missing capability -- the clause just
+        // [支付] counteraction cannot see it; this port routes it through `gain`, which
+        // means such a counteraction can. Not a missing capability -- the clause just
         // does not decide. Flagging rather than guessing.
         return Ok(());
     }

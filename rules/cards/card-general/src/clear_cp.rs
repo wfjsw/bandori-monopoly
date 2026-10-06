@@ -1,16 +1,16 @@
 //! `通用:该清CP了` -- C# `CardCP` + `CPControl`: one [CP点] mark on an empty
-//! tile, 6 on you; the marks spread for 2 turn starts and pay out on settle.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:该清CP了`）:
 //! > 该清CP了：
 //! > [特]：
-//! >
+//!
 //! > （1）此卡的[手]效果只有在自己[场上]拥有的小等于2个[CP点]时才可发动。
-//! >
+//!
 //! > （2）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
 //! > [手]：
 //! > 在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。
 //!
+//! tile, 6 on you; the marks spread for 2 turn starts and pay out on settle.
 
 use alloc::vec::Vec;
 use card_sdk::abi::{HookKind, TriggerKind};
@@ -23,8 +23,8 @@ pub const CLEAR_CP: CardDef = CardDef::new(
         On::Play(Some(cant_play), clear_cp),
         On::Hook(
             &[HookKind::TurnStart, HookKind::SettleAfter],
-            react_guard,
-            react,
+            counteract_guard,
+            counteract,
         ),
     ],
 );
@@ -78,7 +78,7 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
             .tile("tile", tile)
             .player_id("who", player_id),
     );
-    // 规则书（2）[特] + 规则书[手]: the settle / spread bodies run in `react`,
+    // 规则书（2）[特] + 规则书[手]: the settle / spread bodies run in `counteract`,
     // which the Fx hook dispatch runs at `turnStart` / `settleAfter`. C#
     // carries them on a standalone `CPControl` in `H._fx[i].extra`; the port's
     // persistent-effect carrier is the placed card.
@@ -93,13 +93,13 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
 
 /// `CPControl.TurnStart` / `CPControl.SettleAfter` (C# `Fx` overrides).
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
-/// Pure guard for [`react`] -- the activation gate. `false`
+/// Pure guard for [`counteract`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn react_guard(player_id: i32) -> bool {
+fn counteract_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（2）[特]: 「[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]
         // 及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」 -- C#

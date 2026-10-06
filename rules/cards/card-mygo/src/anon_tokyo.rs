@@ -1,6 +1,4 @@
 //! `MyGO:[千早爱音]Anon Tokyo` -- C# `CardAnonTokyo` (MatchHost.cs:6567-6640):
-//! pick an adjacent buyable tile; if you own both tiles, pay half the dearer
-//! deed to link them with a miracle crystal, else step one tile over and settle.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:[千早爱音]Anon Tokyo`）:
 //! > [千早爱音]Anon Tokyo：
@@ -8,18 +6,30 @@
 //! > 自己所在的格子是[可购买格子]。
 //! > [手]：
 //! > [指定][使用者]所在当格的任一相邻的[可购买格子]，根据使用者所在格子和被[指定]格子的状态依次进行以下操作：
-//! > 1. [使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]，被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半；
+//! > 1. [使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的资金的一半并在上述的两个格子间放置1个[奇迹水晶]（上限1），被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半；
 //! > 2. [使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]改为向前或后移动1格到被[指定]格子且[结算]。
 //!
+//! pick an adjacent buyable tile; if you own both tiles, pay half the dearer
+//! deed to link them with a miracle crystal (cap 1), else step one tile over
+//! and settle. A linked tile charges half of its partner's rent on top.
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, Msg, On};
 
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
-    &[On::Play(Some(cant_play), anon_tokyo)],
+    &[
+        On::Play(Some(cant_play), anon_tokyo),
+        On::Hook(&[HookKind::PayAdd], link_guard, link_rent),
+    ],
 );
+
+/// Slot key prefix that maps a marked tile to its linked partner.
+const LINK: &str = "anon_tokyo_link_";
+const ID: &str = "MyGO:[千早爱音]Anon Tokyo";
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     let n = ctx::tile_count();
@@ -84,20 +94,23 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         if amount > 0 {
             ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
         }
-        // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]」 -- C#
-        // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles.
-        ctx::add_mark(
-            here,
-            player_id,
-            key!("anon_tokyo_mark"),
-            &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", t),
-        );
-        ctx::add_mark(
-            t,
-            player_id,
-            key!("anon_tokyo_mark"),
-            &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", here),
-        );
+        // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]（上限1）」 -- C#
+        // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles; the
+        // sheet's 「（上限1）」 means a tile that already carries the mark gets none.
+        for (tile, other) in [(here, t), (t, here)] {
+            if ctx::count_marks(tile, key!("anon_tokyo_mark"), player_id) > 0 {
+                continue;
+            }
+            ctx::add_mark(
+                tile,
+                player_id,
+                key!("anon_tokyo_mark"),
+                &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other),
+            );
+            // Remember the pairing so the `PayAdd` hook below can find the partner
+            // (mark notes are not readable across the ABI).
+            ctx::set_slot(player_id, &alloc::format!("{LINK}{tile}"), other);
+        }
         ctx::log(
             player_id,
             &Msg::new(key!("anon_tokyo_linked"))
@@ -105,14 +118,15 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
                 .tile("b", t)
                 .card("card", "MyGO:[千早爱音]Anon Tokyo"),
         );
-        // TODO(规则书)1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
-        // 一半」 -- the `Fx.PayAdd` hook kind is in (`On::Hook(&[HookKind::PayAdd], …)`),
-        // but the C# puts the body on `AnonLinkFx`, an `H.ExtraOf` attachment on
-        // the player that outlives this hand card (which goes to the graveyard
-        // after Play, so its own hooks never run). Still held on `H.ExtraOf`
-        // attachments: once one exists, the body is `p.IsRent && p.to == Seat &&
-        // p.amount > 0`, then per link add `ceil_to(RentOf(linked) / 2, 10)` when
-        // `p.tile` is either end and the other end is owned by Player.
+        // 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
+        // 一半」 -- rides the `PayAdd` hook on a field stand-in (the C# puts the body
+        // on `AnonLinkFx`, an `H.ExtraOf` attachment; the hook surface only dispatches
+        // to placed cards, so this placement stands in for it -- same pattern as
+        // `HHW:（育美）`'s `HagumiMarkFx`).
+        if !ctx::is_placed() {
+            ctx::set_dest(ctx::Dest::Field);
+            ctx::place_card(player_id, ID, &Msg::new(key!("anon_tokyo_linked")));
+        }
     } else if ctx::cant_move(player_id).is_none() {
         // 规则书[手]2: 「[使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]
         // 改为向前或后移动1格到被[指定]格子且[结算]」 -- C# gates this branch on
@@ -129,5 +143,52 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         );
         ctx::card_move(player_id);
     }
+    Ok(())
+}
+
+/// Pure guard for [`link_rent`] -- the activation gate. `false` means the card
+/// is not activated at all.
+fn link_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+}
+
+/// 规则书[手]1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半」
+/// -- C# `AnonLinkFx.PayAdd`: `p.IsRent && p.to == Seat && p.amount > 0`, then per
+/// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
+/// owned by Player.
+fn link_rent(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::PayAdd || !trigger::pay_is_rent() {
+        return Ok(());
+    }
+    // 「收费时」 -- the link owner is the one collecting the rent.
+    if trigger::target() != player_id || trigger::value() <= 0 {
+        return Ok(());
+    }
+    let tile = trigger::tile();
+    if tile < 0 {
+        return Ok(());
+    }
+    // The settled tile is one end of a link; the partner is the other end.
+    let key_name = alloc::format!("{LINK}{tile}");
+    let other = ctx::slot(player_id, &key_name);
+    if other < 0 {
+        return Ok(());
+    }
+    // C# `the other end is owned by Player`.
+    if ctx::tile_owner(other) != player_id {
+        return Ok(());
+    }
+    // 「被连接的其他格子收费的一半」 -- half of the linked tile's rent.
+    let bonus = ctx::rent_of(other) / 2;
+    if bonus <= 0 {
+        return Ok(());
+    }
+    trigger::set_pay_amount(trigger::value() + bonus);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("anon_tokyo_link_rent"))
+            .tile("tile", other)
+            .i("n", bonus as i64),
+    );
     Ok(())
 }

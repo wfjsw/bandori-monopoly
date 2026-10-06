@@ -1,12 +1,12 @@
 //! `CRYCHIC:是我自己的问题` -- C# `CardMyOwnProblem` (MatchHost.cs:2963-3017):
-//! [反击] before settle, step 1 tile away from the nearest player.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:是我自己的问题`）:
-//! > 是我自己的问题
+//! > 是我自己的问题 
 //! >  ：[反击]
 //! > （1）主要移动结束时，[触发结算]前打出此卡，使自己额外远离绝对距离最近的玩家一格（若距离最近的玩家在身前则向后移动，若与其他玩家重合则可选择任意方向）。
 //! > （2）若受到[异常移动效果]影响，此卡不生效
 //!
+//! [反击] before settle, step 1 tile away from the nearest player.
 
 use alloc::vec::Vec;
 
@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     "CRYCHIC:是我自己的问题",
-    &[On::CounterAct(&[ChainKind::SettleBefore], can_react, react)],
+    &[On::Counteract(&[ChainKind::SettleBefore], can_counteract, counteract)],
 );
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.
@@ -36,7 +36,7 @@ fn nearest(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「主要移动结束时，[触发结算]前打出此卡」 -- C#
     // `t.Kind == "settleBefore" && t.Seat == seat && t.Move != null && t.Move.Main`.
     if trigger::kind() != TriggerKind::SettleBefore || trigger::player_id() != player_id {
@@ -49,7 +49,7 @@ fn can_react(player_id: i32) -> bool {
     !ctx::others(player_id).is_empty()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（2）: 「若受到[异常移动效果]影响，此卡不生效」 -- C#
     // `H._abnormalTurn[i] > 0` -> `c.Effective = false` (the card is still
     // consumed; only its effect body is skipped).

@@ -1,11 +1,11 @@
 //! `通用:雨啊，快点来吧` -- C# `CardRain` (MatchHost.cs:2221-2256): 2d2 players
-//! gain a [停留] layer, the user among them.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:雨啊，快点来吧`）:
 //! > 雨啊，快点来吧：
 //! > [手]：
 //! > 投掷2d2并记录结果为X。[指定]X名玩家（其中必须包括[使用者]），被[指定]的玩家获得一层[停留]。
 //!
+//! gain a [停留] layer, the user among them.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};

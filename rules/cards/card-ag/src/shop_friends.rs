@@ -1,10 +1,10 @@
 //! `AG:商店街的青梅竹马` -- C# `CardShopFriends` (MatchHost.cs:988-1013):
-//! 1d6-th own shop-street tile from 商店街, else 商店街, as the main move.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:商店街的青梅竹马`）:
-//! > 商店街的青梅竹马：
+//! > 商店街的青梅竹马： 
 //! >  投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动
 //!
+//! 1d6-th own shop-street tile from 商店街, else 商店街, as the main move.
 
 use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;

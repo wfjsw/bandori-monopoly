@@ -1,10 +1,10 @@
 //! `HHW:黑衣人的补给` -- C# `CardBlackSuits` (MatchHost.cs:3966-3993): [反击] past
-//! CiRCLE, drop a crystal on 弦卷集团 so that tile borrows CiRCLE's effect.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:黑衣人的补给`）:
 //! > 黑衣人的补给：
 //! > [反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。
 //!
+//! CiRCLE, drop a crystal on 弦卷集团 so that tile borrows CiRCLE's effect.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -19,12 +19,12 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
             settle_after,
         ),
         On::Hook(&[card_sdk::abi::HookKind::PassTile], |_| true, pass_tile),
-        On::CounterAct(&[ChainKind::Pass], can_react, react),
+        On::Counteract(&[ChainKind::Pass], can_counteract, counteract),
     ],
 );
 
-fn can_react(player_id: i32) -> bool {
-    // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanReact`:
+fn can_counteract(player_id: i32) -> bool {
+    // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
     // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
     let circle = ctx::tile_named("CiRCLE");
     if circle < 0 {
@@ -35,7 +35,7 @@ fn can_react(player_id: i32) -> bool {
         && trigger::tile() == circle
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
     // 规则书[反击]: 「在“弦卷集团”（#29格）格子上放置一个奇迹水晶」 -- C#
     // `H.AddMark(tsurumakiAgent, "黑衣人的补给", c.Seat, 1, ...)`: a tile mark

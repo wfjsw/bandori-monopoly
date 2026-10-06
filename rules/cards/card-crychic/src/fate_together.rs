@@ -1,14 +1,14 @@
 //! `CRYCHIC:一起演奏音乐的命运共同体` -- C# `CardFateTogether` (MatchHost.cs:3050-3061):
-//! until your next turn start, hop to the next player's tile on every rent collection.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:一起演奏音乐的命运共同体`）:
-//! > 一起演奏音乐的命运共同体
-//! > ：
+//! > 一起演奏音乐的命运共同体 
+//! >  ：
 //! > （1）[手] 直到你的下回合开始，每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列后一名玩家的格子（不触发结算）。
 //! > （2）若此卡打出后
 //! > （1）效果未产生作用，将此卡返回手牌（不触发乐队技能的
 //! > （3）效果）。
 //!
+//! until your next turn start, hop to the next player's tile on every rent collection.
 
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -20,8 +20,8 @@ pub const FATE_TOGETHER: CardDef = CardDef::new(
         On::Play(None, fate_together),
         On::Hook(
             &[HookKind::PayAfter, HookKind::TurnStart],
-            react_guard,
-            react,
+            counteract_guard,
+            counteract,
         ),
     ],
 );
@@ -48,13 +48,13 @@ fn fate_together(player_id: i32) -> card_sdk::Asked {
 }
 
 /// C# `FateFx.PayAfter` / `FateFx.TurnStart`.
-/// Pure guard for [`react`] -- the activation gate. `false`
+/// Pure guard for [`counteract`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn react_guard(player_id: i32) -> bool {
+fn counteract_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）: 「每当场上任意格子发生一次收款时，你移动到你前方的下一个属于行动序列
         // 后一名玩家的格子（不触发结算）。」 -- C# `FateFx.PayAfter`:

@@ -34,9 +34,9 @@ const DEST_FIELD: i32 = 2;
 /// but a field effect with no opinion must leave its card where it is.
 const DEST_UNSET: i32 = -1;
 
-/// C# `MatchHost._reactDepth > 4` is a runaway net; a counter-war is bounded by
+/// C# `MatchHost._counteractDepth > 4` is a runaway net; a counter-war is bounded by
 /// hands shrinking as cards declare. 16 is plenty for a legal exchange.
-const MAX_REACT_DEPTH: u32 = 16;
+const MAX_COUNTERACT_DEPTH: u32 = 16;
 
 #[derive(Clone)]
 struct Run {
@@ -293,14 +293,14 @@ impl CardWorld for Run {
         self.world.card_face_down(player_id, card)
     }
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
-        let uid = self.world.place_card_on(player_id, tile, card, note);
+        let uid = self.world.place_card_on(&self.data, player_id, tile, card, note);
         if card == self.current_card {
             self.current_uid = uid;
         }
         uid
     }
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
-        let uid = self.world.place_card(player_id, card, note);
+        let uid = self.world.place_card(&self.data, player_id, card, note);
         if card == self.current_card {
             self.current_uid = uid;
         }
@@ -1354,15 +1354,22 @@ impl WasmRules {
                 // `money()` -- PayAdd -> PayMul -> PayChoose -> PayAt -> the
                 // `pay` [反击] window -- then replay the effect with the
                 // adjudicated amount (0 = cancelled, and PayAfter runs with 0).
-                Ok(Outcome::NeedHost(HostRequest::Gate { player_id, kind })) => {
+                Ok(Outcome::NeedHost(req, run)) => {
+                    // The host routine runs against the **live** world and is
+                    // not replayed, so the turn-ctx policy the card just set up
+                    // (build/buy discounts, free buy, ...) has to cross now.
+                    // Progress counters stay on the copy: the replay redoes them.
+                    cx.adopt_turn_policy(&run.world);
+                    match req {
+                HostRequest::Gate { player_id, kind } => {
                     let allowed = self.abnormal_gate(cx, player_id, kind, call.player_id())?;
                     answers.push(allowed as i32);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Target {
+                HostRequest::Target {
                     player_id,
                     tile,
                     single,
-                })) => {
+                } => {
                     let got = if tile >= 0 {
                         self.target_tile(cx, tile, call.player_id(), card_id)?
                     } else {
@@ -1373,33 +1380,33 @@ impl WasmRules {
                 // C# `H.CardMove(c, m)`: the card shaped the plan and asked for
                 // the move to run now. The engine runs it (it may prompt), then
                 // the effect replays past this call.
-                Ok(Outcome::NeedHost(HostRequest::Move { player_id, plan })) => {
+                HostRequest::Move { player_id, plan } => {
                     cx.card_move(player_id.max(0) as usize, plan)?;
                     answers.push(1);
                 }
                 // C# `H.AgentLanding`: the 「星光代理」 landing routine.
-                Ok(Outcome::NeedHost(HostRequest::AgentLanding { player_id, agent })) => {
+                HostRequest::AgentLanding { player_id, agent } => {
                     cx.agent_landing(player_id.max(0) as usize, agent.max(0) as usize)?;
                     answers.push(1);
                 }
                 // The rest of the routine family -- see `HostRequest`.
-                Ok(Outcome::NeedHost(HostRequest::SettleAt {
+                HostRequest::SettleAt {
                     player_id,
                     tile,
                     main,
-                })) => {
+                } => {
                     cx.card_settle_at(player_id.max(0) as usize, tile.max(0) as usize, main)?;
                     answers.push(1);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Buy { player_id, tile })) => {
+                HostRequest::Buy { player_id, tile } => {
                     cx.card_buy(player_id.max(0) as usize, tile.max(0) as usize)?;
                     answers.push(1);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Build { player_id, tile })) => {
+                HostRequest::Build { player_id, tile } => {
                     cx.card_build(player_id.max(0) as usize, tile.max(0) as usize)?;
                     answers.push(1);
                 }
-                Ok(Outcome::NeedHost(HostRequest::OfferBuild { player_id, tiles })) => {
+                HostRequest::OfferBuild { player_id, tiles } => {
                     let tiles: Vec<usize> = tiles
                         .into_iter()
                         .filter(|&t| t >= 0)
@@ -1408,15 +1415,15 @@ impl WasmRules {
                     cx.card_offer_build(player_id.max(0) as usize, &tiles, card_id)?;
                     answers.push(1);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Mortgage { player_id, tile })) => {
+                HostRequest::Mortgage { player_id, tile } => {
                     cx.card_mortgage(player_id.max(0) as usize, tile.max(0) as usize)?;
                     answers.push(1);
                 }
-                Ok(Outcome::NeedHost(HostRequest::Pay {
+                HostRequest::Pay {
                     from,
                     to,
                     amount: asked,
-                })) => {
+                } => {
                     let req = (from, to, asked);
                     let by = Some(call.player_id());
                     let (from, to, mut amount) = req;
@@ -1457,6 +1464,8 @@ impl WasmRules {
                     }
                     answers.push(amount);
                 }
+                    }
+                }
                 Err(e) => {
                     // A trapping module must not take the match down with it.
                     let detail = match &e {
@@ -1482,7 +1491,7 @@ impl WasmRules {
     /// C# `AbnormalGate`, for an effect a card run wants to apply to `player_id`
     /// (`by` = the card's player): an out player is never hit; field cards guard
     /// (`abnormalGuard`, block with `set_cancelled`); then, if another player
-    /// caused it, the `abnormal` [反击] window (C# `ReactAbnormal`). What gets
+    /// caused it, the `abnormal` [反击] window (C# `CounteractAbnormal`). What gets
     /// through bumps `player_id`'s abnormal counter for this turn.
     fn abnormal_gate(
         &self,
@@ -1572,7 +1581,7 @@ impl WasmRules {
     /// C# `H.Target(c, p)`: `by`'s card `card` tries to target player `p`.
     /// Answers the player actually targeted (a `redirect` hook may move a
     /// single-target hit), or -1. Not ported: the per-play `immune<p>` tags
-    /// (C# `c.Tags`) and the `PendingReact` / `TargetsChosen` pass.
+    /// (C# `c.Tags`) and the `PendingCounteract` / `TargetsChosen` pass.
     fn target_player(&self, cx: &mut Cx, p: i32, by: i32, card: &str, single: bool) -> Flow<i32> {
         let Ok(s) = usize::try_from(p) else {
             return Ok(-1);
@@ -1729,7 +1738,7 @@ impl WasmRules {
         t.player_id = player_id;
         t.step = cx.state().step;
         set(&mut t);
-        self.react(cx, &mut t)?;
+        self.counteract(cx, &mut t)?;
         Ok(t)
     }
 
@@ -1772,8 +1781,8 @@ impl WasmRules {
         Ok(())
     }
 
-    /// The [反击] hand window (C# `MatchHost.React(Trigger)`): each player from the
-    /// chain's starter around the table may answer with a reaction card from hand.
+    /// The [反击] hand window (C# `MatchHost.Counteract(Trigger)`): each player from the
+    /// chain's starter around the table may answer with a counteraction card from hand.
     /// Declarations are collected first (hands shrink as they declare) and then
     /// resolved in reverse declaration order (C# `declared[k]` from the end).
     ///
@@ -1783,13 +1792,13 @@ impl WasmRules {
     /// **LIFO stack**: declaration order is player order starting at the chain's
     /// starter and wrapping around the table; resolution is the exact reverse of
     /// declaration order. So the last card to answer the window is the first one
-    /// to resolve, and any reaction it plays opens a nested counter-window before
+    /// to resolve, and any counteraction it plays opens a nested counter-window before
     /// the earlier declarations get their turn.
     ///
     /// Known cases where this LIFO rule does *not* apply (left as-is for now,
     /// flagged for a later pass):
     ///
-    /// * **The acting card's own follow-up** (`CardRules::react` step (1)) runs
+    /// * **The acting card's own follow-up** (`CardRules::counteract` step (1)) runs
     ///   before this window, outside the chain.
     ///
     /// The [反击] window is a Yu-Gi-Oh **chain**. `t` is **L1**, the effect
@@ -1814,14 +1823,14 @@ impl WasmRules {
     ///   declared, and `set_cancelled` / `negate_effect` / `spare` land on it.
     /// * **One declaration per player per priority pass** -- a player with two
     ///   eligible cards must pick one.
-    fn hand_reactions(
+    fn hand_counteractions(
         &self,
         cx: &mut Cx,
         t: &CoreTrigger,
         trigger: &mut Trigger,
         depth: u32,
     ) -> Flow<()> {
-        if depth >= MAX_REACT_DEPTH || !cx.playing() {
+        if depth >= MAX_COUNTERACT_DEPTH || !cx.playing() {
             return Ok(());
         }
         let n = cx.state().players.len();
@@ -1841,12 +1850,12 @@ impl WasmRules {
         // Hard bound: the chain is only as long as the hands involved, so this
         // is a runaway guard, not a design limit. Every link costs at most one
         // loop of asks, plus the closing loop.
-        let mut budget = (MAX_REACT_DEPTH + 1) * n as u32 + 8;
+        let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 + 8;
         while budget > 0 {
             budget -= 1;
             let cursor = priority.seat();
             let answered = chain.len() - 1;
-            let declared = if can_react_now(cx, cursor) {
+            let declared = if can_counteract_now(cx, cursor) {
                 match self.declare_one(cx, cursor, &chain[answered], t)? {
                     Some((id, idx)) => {
                         // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
@@ -1879,7 +1888,7 @@ impl WasmRules {
         for (s, idx, id, answered) in decls.into_iter().rev() {
             cx.log(
                 s as i32,
-                Msg::new("log.play_react")
+                Msg::new("log.play_counteract")
                     .player_id("who", s as i32)
                     .card("card", id.clone()),
             );
@@ -1889,7 +1898,7 @@ impl WasmRules {
             let mut on_link = chain[answered].clone();
             let dest = self.drive(
                 cx,
-                Call::CounterAct {
+                Call::Counteract {
                     card: idx,
                     player_id: s as i32,
                 },
@@ -1943,7 +1952,7 @@ impl WasmRules {
             let Some(idx) = self.ruleset.card(&id) else {
                 continue;
             };
-            if !self.ruleset.cards()[idx as usize].counter_acts_to(top.kind) {
+            if !self.ruleset.cards()[idx as usize].counteracts_to(top.kind) {
                 continue;
             }
             let run = Run {
@@ -1962,25 +1971,25 @@ impl WasmRules {
                 crystals_log: vec![],
                 doubled: -1,
             };
-            if self.ruleset.can_react(&run, idx, s as i32).unwrap_or(false) {
+            if self.ruleset.can_counteract(&run, idx, s as i32).unwrap_or(false) {
                 options.push((id, idx));
             }
         }
         if options.is_empty() {
             return Ok(None);
         }
-        // C#: labels "打出「...」" + "不打"; the hint is the first ReactHint or
-        // the trigger's description. ReactHint is not in the ABI yet (TODO).
+        // C#: labels "打出「...」" + "不打"; the hint is the first CounteractHint or
+        // the trigger's description. CounteractHint is not in the ABI yet (TODO).
         let mut labels: Vec<Msg> = options
             .iter()
-            .map(|(id, _)| Msg::new("ask.react.play").card("card", id.clone()))
+            .map(|(id, _)| Msg::new("ask.counteract.play").card("card", id.clone()))
             .collect();
-        labels.push(Msg::new("ask.react.skip"));
+        labels.push(Msg::new("ask.counteract.skip"));
         let fallback = labels.len() as i32 - 1;
         let ask = Ask::choice(
             vec![s],
-            Msg::new("ask.react.title"),
-            Msg::new("ask.react.text").msg("detail", describe_trigger(t)),
+            Msg::new("ask.counteract.title"),
+            Msg::new("ask.counteract.text").msg("detail", describe_trigger(t)),
             labels,
             fallback,
             12.0,
@@ -2001,7 +2010,7 @@ impl WasmRules {
 }
 
 /// The module's view of an engine trigger (the bridge `Trigger`). `move_roll`
-/// is C# `t.Move.Roll`, which a reaction may rewrite; the engine reads it back.
+/// is C# `t.Move.Roll`, which a counteraction may rewrite; the engine reads it back.
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     Trigger {
         kind: trigger_kind(t.kind),
@@ -2125,7 +2134,7 @@ fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
     seat as usize % n
 }
 
-/// Who is asked next while a [反击] chain builds (see `hand_reactions`).
+/// Who is asked next while a [反击] chain builds (see `hand_counteractions`).
 ///
 /// The player who started the chain has priority on every link: asking opens
 /// at `start` and runs forward once around the table, ending at the seat
@@ -2163,16 +2172,16 @@ impl Priority {
     }
 }
 
-/// C# `MatchHost.CanReactNow(s, t)`: out / exiled players cannot declare a
-/// reaction. (The C# also checks `CannotPlay` and a one-turn mute; neither has
+/// C# `MatchHost.CanCounteractNow(s, t)`: out / exiled players cannot declare a
+/// counteraction. (The C# also checks `CannotPlay` and a one-turn mute; neither has
 /// an engine field yet.)
-fn can_react_now(cx: &Cx, s: usize) -> bool {
+fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     let Some(player_id) = cx.state().players.get(s) else {
         return false;
     };
-    // C# `CanReactNow`: out / AI / exiled players never open a window, and
+    // C# `CanCounteractNow`: out / AI / exiled players never open a window, and
     // `CannotPlay` (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
-    // `_noReactTurn` and Fx.CantPlayHand have no engine field yet (TODO).
+    // `_noCounteractTurn` and Fx.CantPlayHand have no engine field yet (TODO).
     !cx.world_copy().out(s)
         && !player_id.ai
         && player_id.exile() == 0
@@ -2190,7 +2199,7 @@ fn hand_of(cx: &Cx, s: usize) -> Vec<String> {
 
 /// The one-line trigger description the [反击] prompt shows (C# `DescribeTrigger`).
 fn describe_trigger(t: &CoreTrigger) -> Msg {
-    let mut m = Msg::new("ask.react.detail").player_id("who", t.player_id);
+    let mut m = Msg::new("ask.counteract.detail").player_id("who", t.player_id);
     if !t.card.is_empty() {
         m = m.card("card", &t.card);
     }
@@ -2204,7 +2213,7 @@ fn describe_trigger(t: &CoreTrigger) -> Msg {
 /// Every C# `Trigger.Kind` string the engine raises (turnStart / pass /
 /// settleBefore / settle / mortgage / pay / paid / bankrupt / card / event /
 /// abnormal / target / stop / teleport / ...) maps through the shared table.
-/// Folding unknown kinds to `None` would make `can_react` guards silently
+/// Folding unknown kinds to `None` would make `can_counteract` guards silently
 /// never match.
 fn trigger_kind(kind: &str) -> TriggerKind {
     TriggerKind::from_str(kind)
@@ -2215,12 +2224,21 @@ impl CardRules for WasmRules {
         // A pure query on a throwaway copy (C# `Card.WhyNot`): a guard that
         // prompts, or a module that fails, never blocks play.
         let idx = self.ruleset.card(card)?;
+        // Bind the instance when the card is already on the field (a skill
+        // press), so `is_placed` / `crystals` answer for it and not for a void
+        // `current_uid = -1`.
+        let uid = cx
+            .world_copy()
+            .field_instances(player_id as i32)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
         let run = Run {
             world: cx.world_copy(),
             data: self.data.clone(),
             trigger: Trigger::default(),
             current_card: card.to_string(),
-            current_uid: -1,
+            current_uid: uid,
             dest: DEST_UNSET,
             dest_to: None,
             paid_log: vec![],
@@ -2244,6 +2262,15 @@ impl CardRules for WasmRules {
             );
             return Ok(Dest::Graveyard);
         };
+        // A skill press (`use_skill`) runs a *placed* card's play entry: bind
+        // the instance so `is_placed` / `crystals` read it and not a void
+        // `current_uid = -1`. A hand play has no instance yet (uid -1).
+        let uid = cx
+            .world_copy()
+            .field_instances(player_id as i32)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
         let mut trigger = Trigger {
             kind: TriggerKind::None,
             player_id: player_id as i32,
@@ -2277,7 +2304,7 @@ impl CardRules for WasmRules {
                 player_id: player_id as i32,
             },
             card,
-            -1,
+            uid,
             &mut trigger,
         )?;
         Ok(dest_from(dest))
@@ -2330,7 +2357,7 @@ impl CardRules for WasmRules {
         Ok(dest == DEST_FIELD)
     }
 
-    fn react(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
+    fn counteract(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
         // Nothing in the set declares an entry at this kind, so no hook, no
         // gate and no [反击] can fire: skip building the bridge trigger at all.
         // This is most raises even with cards in play, and every raise for a
@@ -2340,17 +2367,17 @@ impl CardRules for WasmRules {
             return Ok(());
         }
         // The module's view of the trigger. `move_roll` is C# `t.Move.Roll`,
-        // which a reaction may rewrite; the engine reads it back afterwards.
+        // which a counteraction may rewrite; the engine reads it back afterwards.
         let mut trigger = bridge_trigger(t);
-        // Ordering at one trigger (the standard; see `hand_reactions`):
+        // Ordering at one trigger (the standard; see `hand_counteractions`):
         // (1) the acting card's own follow-up resolves FIRST, outside the LIFO
         //     stack -- a card answering its own play is not competing with the
-        //     reactions to it, so it never loses its place to them;
-        // (2) then every declared reaction resolves in LIFO order (reverse
+        //     counteractions to it, so it never loses its place to them;
+        // (2) then every declared counteraction resolves in LIFO order (reverse
         //     declaration order), each free to open a nested counter-window.
         //
         // (1) The played card's own follow-up: the card named on the trigger runs
-        // its `react` (C# `PlayCtx.AsReaction` for a card answering its own play).
+        // its `counteract` (C# `PlayCtx.AsCounteraction` for a card answering its own play).
         // Only at the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
         // `drawn` also name a card on `t.card`, and must not re-run it here.
         let own = t.card.clone();
@@ -2359,11 +2386,11 @@ impl CardRules for WasmRules {
             if let Some(idx) = self
                 .ruleset
                 .card(&own)
-                .filter(|&i| self.ruleset.cards()[i as usize].counter_acts_to(trigger.kind))
+                .filter(|&i| self.ruleset.cards()[i as usize].counteracts_to(trigger.kind))
             {
                 self.drive(
                     cx,
-                    Call::CounterAct {
+                    Call::Counteract {
                         card: idx,
                         player_id: t.player_id,
                     },
@@ -2374,7 +2401,7 @@ impl CardRules for WasmRules {
             }
         }
         // (2) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
-        // runs its `react` automatically, in placement order per player. No player
+        // runs its `counteract` automatically, in placement order per player. No player
         // declaration -- this is the persistent-effect path, as against the
         // [反击] window below.
         // Any trigger kind can carry a hook; the manifest says which cards
@@ -2492,17 +2519,17 @@ impl CardRules for WasmRules {
                 }
             }
         }
-        // (3) The hand-reaction window (C# `MatchHost.React(Trigger)`): every player
+        // (3) The hand-counteraction window (C# `MatchHost.Counteract(Trigger)`): every player
         // from the trigger's player around the table may answer with a [反击] card
         // from hand; declarations resolve in reverse order. Not at hook-only
         // points.
         if !is_hook_only(t.kind) {
-            self.hand_reactions(cx, t, &mut trigger, 0)?;
+            self.hand_counteractions(cx, t, &mut trigger, 0)?;
         }
-        // Write back whatever a reaction rewrote. `set_move_roll` lands in
-        // `trigger.move_roll` (C# shares `t.Move` with the reactions); the pay
+        // Write back whatever a counteraction rewrote. `set_move_roll` lands in
+        // `trigger.move_roll` (C# shares `t.Move` with the counteractions); the pay
         // amount is rewritten in `trigger.value`. The engine reads the result
-        // back off `t.value` after `react` returns.
+        // back off `t.value` after `counteract` returns.
         t.value = trigger.move_roll.unwrap_or(trigger.value);
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
@@ -2516,9 +2543,9 @@ impl CardRules for WasmRules {
 }
 
 /// Field-card (`Fx`) hook points (ABI v17). These are **not** [反击] points:
-/// the engine runs every *placed* card's `react` against them automatically,
+/// the engine runs every *placed* card's `counteract` against them automatically,
 /// with no player declaration. They are distinct `TriggerKind`s from the
-/// reaction kinds so a card can tell a field effect from a hand reaction by its
+/// counteraction kinds so a card can tell a field effect from a hand counteraction by its
 /// kind alone.
 /// Hook points that are *only* field-card points: no [反击] window opens at
 /// them. (`turnStart` / `settleAfter` are both, so they are not in here.)
@@ -2637,7 +2664,7 @@ mod tests {
     }
 
     /// The engine raises these kinds; folding any of them to `None` would make
-    /// `can_react` guards silently never match (34 cards depend on them).
+    /// `can_counteract` guards silently never match (34 cards depend on them).
     /// Includes both the original single-fire kinds and the v10 pre/post
     /// halves added to pair every trigger point.
     #[test]
@@ -2655,11 +2682,11 @@ mod tests {
             "event",
             "moveRoll",
             // reserved-but-declared kinds (engine does not raise all of these
-            // yet, but `can_react` guards match on them so they must map)
+            // yet, but `can_counteract` guards match on them so they must map)
             "passPlayer",
             "pay",
             "roll",
-            "reacted",
+            "counteracted",
             // v10 pre/post halves + new action hooks
             "turnStartBefore",
             "passBefore",

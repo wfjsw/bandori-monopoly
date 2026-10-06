@@ -1,6 +1,4 @@
 //! `PPP:[衍生]拍卖撤下来了` -- C# `CardAuctionPulled` (MatchHost.cs:8971-9017):
-//! auto-placed when drawn; eats a placed 仓库里的Random Star each turn start and
-//! raises the owner's fire-pot cap.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:[衍生]拍卖撤下来了`）:
 //! > [衍生]拍卖撤下来了：
@@ -8,6 +6,8 @@
 //! > 此卡加入手牌时将此卡放置在自身场上，每回合开始时将自身场上的“仓库里的Random Star”[移除]（如果有，然后失去540资金）
 //! > [持续]：此卡拥有者火罐上限加1且不受任何其他效果影响。
 //!
+//! auto-placed when drawn; eats a placed 仓库里的Random Star each turn start and
+//! raises the owner's fire-pot cap.
 //! A pure [特] card (C# has no `Play`, `Normal => false`, `Immune => true`).
 
 use card_sdk::abi::{CardPile, HookKind, TriggerKind};

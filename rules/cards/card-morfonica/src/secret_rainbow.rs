@@ -1,13 +1,13 @@
 //! `Mor:秘密与青春的虹彩` -- C# `CardSecretRainbow` (MatchHost.cs:5178-5220): halve a
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mor:秘密与青春的虹彩`）:
-//! > 秘密与青春的虹彩：[反击]
+//! > 秘密与青春的虹彩：[反击] 
 //! > （1）当你向学妹或同级生支付时，打出此卡，此次支付金额减半。
 //! > （2）当学姐或同级生向你支付的时候，打出此卡，使此次支付资金变成1.5倍。
 //!
 //! payment to a junior peer, or boost a senior peer's payment to you.
 //!
-//! Reaction-only (`Normal => false`). The C# grades are
+//! Counteraction-only (`Normal => false`). The C# grades are
 //! `MatchHost.cs:17294` (`Grades[character]`, bigger = older).
 
 use card_sdk::abi::{ChainKind, TriggerKind};
@@ -16,10 +16,10 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(
     "Mor:秘密与青春的虹彩",
-    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「当你向学妹或同级生支付时」
     // 规则书[反击]（2）: 「当学姐或同级生向你支付的时候」
     // C# `t.Kind == "pay" && t.Pay.PayToOther && !t.Pay.cancel && t.Pay.amount > 0`,
@@ -33,7 +33,7 @@ fn can_react(player_id: i32) -> bool {
     if to < 0 || from == to {
         return false;
     }
-    // C# `!t.Pay.cancel` -- a payment an earlier reaction already reduced to 0
+    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
     // reads as `value() == 0`, so the >0 guard above covers it.
     // TODO(规则书)[judgement](ABI): 「学妹或同级生」/「学姐或同级生」 needs a grade query
     //   the clause under-specifies -- see the note above it
@@ -42,7 +42,7 @@ fn can_react(player_id: i32) -> bool {
     from == player_id || to == player_id
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value() as i64;
     let from = trigger::player_id();
     // 规则书[反击]（1）: 「此次支付金额减半」 -- C# `pay.amount = CeilTo(amount / 2.0, 10)`.

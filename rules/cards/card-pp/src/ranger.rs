@@ -1,5 +1,4 @@
 //! `PP:[衍生]魔法战队Pastel✽Ranger` -- C# `CardRanger` (MatchHost.cs:7766-7814):
-//! a ladder of rewards keyed on how many field cards the user has.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[衍生]魔法战队Pastel✽Ranger`）:
 //! > [衍生]魔法战队Pastel✽Ranger：
@@ -13,6 +12,7 @@
 //! > 4. 数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），盖房后减少1层”；
 //! > 5.数量至少为6则抽1张卡。
 //!
+//! a ladder of rewards keyed on how many field cards the user has.
 //! The ladder body runs off `cards_in(Field)` for the placed-card count.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};

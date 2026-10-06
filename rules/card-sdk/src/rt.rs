@@ -65,7 +65,7 @@ pub fn on(
         panic!("bad entry {entry} on card {idx}")
     };
     match (*o, op) {
-        (On::CounterAct(_, guard, _), export::OP_GUARD)
+        (On::Counteract(_, guard, _), export::OP_GUARD)
         | (On::Hook(_, guard, _), export::OP_GUARD) => guard(player_id) as i64,
         (On::Play(why, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
@@ -74,7 +74,7 @@ pub fn on(
             },
             None => 0,
         },
-        (On::CounterAct(_, _, run), _)
+        (On::Counteract(_, _, run), _)
         | (On::Play(_, run), _)
         | (On::Hook(_, _, run), _)
         | (On::Gate(_, run), _)
@@ -119,7 +119,7 @@ macro_rules! bandori_ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::React(&[ChainKind::MoveRoll], can_react, react)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)]);
 /// card_sdk::bandori_card!(CARD);
 /// ```
 #[macro_export]

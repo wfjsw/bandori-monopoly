@@ -1,5 +1,4 @@
 //! `AG:回家的路上绕个道` -- C# `CardDetour` (MatchHost.cs:1286-1352):
-//! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:回家的路上绕个道`）:
 //! > 回家的路上绕个道：
@@ -7,6 +6,7 @@
 //! > (2)进行一次 “afterglow”式的移动（视为使用一次初始Afterglow角色的
 //! > （2）效果），并将下一次的移动掷骰变更为1d6
 //!
+//! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
 use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
 use card_sdk::ctx::plan;
@@ -17,7 +17,7 @@ pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
         On::Play(Some(cant_play), play),
-        On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
+        On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract),
         On::RollPlan(next_roll),
     ],
 );
@@ -30,8 +30,8 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn can_react(player_id: i32) -> bool {
-    // 规则书(1): 「此卡可作为反击使用」 -- C# reacts on the player's own non-teleport
+fn can_counteract(player_id: i32) -> bool {
+    // 规则书(1): 「此卡可作为反击使用」 -- C# counteracts on the player's own non-teleport
     // move roll (`t.Kind == "moveRoll" && t.Seat == seat && !t.Move.Teleport`).
     trigger::kind() == TriggerKind::MoveRoll
         && trigger::player_id() == player_id
@@ -90,7 +90,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- C# `plan.Base.Clear();
     // plan.Base.Add((1, 6, "（回家的路上绕个道）"))` (MatchHost.cs:1337-1338)
     // replaces this turn's move dice with 1d6 (`plan::set_base_dice` is that).
-    // The reaction path's `NextRollFx` half is separate (below).
+    // The counteraction path's `NextRollFx` half is separate (below).
     ctx::plan::set_base_dice(1, 6, "（回家的路上绕个道）");
     ctx::log(
         player_id,
@@ -99,11 +99,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
-    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the reaction path only reverses
+    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the counteraction path only reverses
     // the in-flight move and drops the CiRCLE reward (C#
     // `move.Reverse = !move.Reverse; move.NoCircleReward = true` on the
     // trigger's in-flight move). `moveRoll` runs before `walk`, so the plan is
@@ -120,12 +120,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, NEXT_ROLL, 1);
     ctx::log(
         player_id,
-        &Msg::new(key!("detour_react")).player_id("who", player_id),
+        &Msg::new(key!("detour_counteract")).player_id("who", player_id),
     );
     Ok(())
 }
 
-/// Armed when the reaction fired; the next plan is the one it rewrites.
+/// Armed when the counteraction fired; the next plan is the one it rewrites.
 const NEXT_ROLL: &str = "detour_next_roll";
 
 /// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `RollPlan` is the moment the dice

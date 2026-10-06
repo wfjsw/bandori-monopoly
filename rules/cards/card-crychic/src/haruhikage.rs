@@ -1,12 +1,12 @@
 //! `CRYCHIC:春日影` -- C# `CardHaruhikage` (MatchHost.cs:2584-2707): [反击] that
-//! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:春日影`）:
-//! > 春日影
-//! > ：
+//! > 春日影 
+//! >  ：
 //! > （1）[特] 若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。
 //! > （2）（此卡可作为[反击]打出）使用一次Crychic角色的技能
 //!
+//! runs a CRYCHIC character skill (reroll / step toward / cancel a rent).
 
 use alloc::vec::Vec;
 
@@ -18,14 +18,14 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
     &[
         On::Play(None, play),
-        On::CounterAct(
+        On::Counteract(
             &[
                 ChainKind::Effect,
                 ChainKind::MoveRoll,
                 ChainKind::SettleBefore,
             ],
-            can_react,
-            react,
+            can_counteract,
+            counteract,
         ),
         On::Hook(&[HookKind::Drawn], |_| true, on_drawn),
     ],
@@ -140,7 +140,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     match trigger::kind() {
         // 规则书（2）[反击]: 「使用一次Crychic角色的技能」 -- C# `t.Kind == "moveRoll"
         // && t.Seat == player` runs 椎名立希（CRYCHIC）'s skill.
@@ -171,7 +171,7 @@ fn can_react(player_id: i32) -> bool {
     }
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::MoveRoll => reroll_skill(player_id),
         TriggerKind::SettleBefore => step_toward_skill(player_id)?,
@@ -183,7 +183,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
 
 /// 椎名立希（CRYCHIC）的技能 -- one reroll of the move dice.
 fn reroll_skill(player_id: i32) {
-    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `React` "moveRoll" branch:
+    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "moveRoll" branch:
     // `int num = Math.Max(0, H.DoMoveRoll(move)); move.Roll = num;`.
     // C# rerolls with `H.DoMoveRoll`, which sums the move's whole dice table.
     let x = ctx::do_move_roll(player_id);
@@ -203,7 +203,7 @@ fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
     if near.is_empty() {
         return Ok(());
     }
-    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `React` "settleBefore" branch
+    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "settleBefore" branch
     // asks `终点向哪名玩家靠近 1 格？` over `H.Within(i, 5, includeSame: false)`.
     let who = ctx::ask_player(
         player_id,
@@ -239,7 +239,7 @@ fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
 
 /// 长崎素世（CRYCHIC）的技能 -- cancel the rent being paid to you.
 fn cancel_pay_skill(player_id: i32) {
-    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `React` "pay" branch:
+    // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "pay" branch:
     // `trigger.Pay.cancel = true` plus `H.ExtraOf<SoyoTeleportFx>(i)` (teleport to
     // the mortgaged tile on the next main move).
     ctx::log(

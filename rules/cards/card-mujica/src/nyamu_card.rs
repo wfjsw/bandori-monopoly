@@ -1,15 +1,15 @@
 //! `Mujica:（喵梦）` -- C# `CardNyamuCard` (MatchHost.cs:6080-6116): placed card
-//! whose flip face-down may cost 2 fire, flip face-up draws 1.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（喵梦）`）:
 //! > （喵梦）
-//! >
-//! > （1）将此卡放置于场上
-//! >
+//! >  
+//! > （1）将此卡放置于场上 
+//!
 //! > （2）
 //! > 1. 每当此卡将从正面翻至背面时可选择失去2个火罐。
 //! > 2. 每当此卡将从背面翻至正面时此卡拥有者抽一张卡。
 //!
+//! whose flip face-down may cost 2 fire, flip face-up draws 1.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

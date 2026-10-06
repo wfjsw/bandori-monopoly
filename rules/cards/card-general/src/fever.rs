@@ -5,9 +5,9 @@
 //! > [手]：
 //! > 将此卡放置在[使用者]的[场地]。
 //! > [持续]：
-//! >
+//!
 //! > （1）[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）。
-//! >
+//!
 //! > （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。
 //!
 
@@ -22,7 +22,7 @@ pub const FEVER: CardDef = CardDef::new(
     &[
         On::Play(None, fever),
         // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], react_guard, react),
+        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], counteract_guard, counteract),
     ],
 );
 
@@ -33,30 +33,28 @@ fn fever(player_id: i32) -> card_sdk::Asked {
     // C# `H.PlaceFromPlay(c).Mem["x"] = c.N(0, 600)` -- the printed 600 is the
     // card's number, read through `ctx::n` in `x_of` (the C# stores the played
     // value in `Mem["x"]`; equivalent while `PlayCtx.Doubled` is unported).
-    // 规则书（1）[持续] runs in `react` at `payAdd`; 规则书（2）[持续] at `turnStart`.
+    // 规则书（1）[持续] runs in `counteract` at `payAdd`; 规则书（2）[持续] at `turnStart`.
     Ok(())
 }
 
-/// C# `CardFever.X` -- 600 minus 200 per *other* **face-up** card on the owner's
-/// field (`H.PlacedOf(Seat).Count(p => p != this && !p.FaceDown)`), free to go
-/// below 0. A face-down card is not one of the ones the drop counts.
+/// 规则书（1）: 「X为600，[拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- 600
+/// minus 200 per **face-up** card on the owner's field, this card included
+/// (「每拥有一张卡」 counts every card the owner has in play), free to go below 0.
 fn x_of(player_id: i32) -> i32 {
-    let others = ctx::field_instances(player_id)
+    let n = ctx::field_instances(player_id)
         .into_iter()
-        .filter(|(uid, id)| id.as_str() != ID && !ctx::is_face_down_at(*uid))
+        .filter(|(uid, _)| !ctx::is_face_down_at(*uid))
         .count() as i32;
-    // 规则书（1）: 「X为600」 -- C# `c.N(0, 600)`; the 200-per-card drop is the
-    // C# `X` property body, not one of the card's declared numbers.
-    ctx::n(0, 600) - 200 * others
+    ctx::n(0, 600) - 200 * n
 }
 
-/// Pure guard for [`react`] -- the activation gate. `false`
+/// Pure guard for [`counteract`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn react_guard(player_id: i32) -> bool {
+fn counteract_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
         // [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PayAdd`

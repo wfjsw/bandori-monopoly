@@ -22,7 +22,7 @@ pub const J11: CardDef = CardDef::new(
         On::Hook(
             &[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted],
             |_| true,
-            react,
+            counteract,
         ),
         On::Hook(
             &[HookKind::CrystalsChanged],
@@ -65,7 +65,7 @@ fn fire(player_id: i32) {
 /// Field hooks: `DecayCard.TurnEnd` (the crystal tick), `CardJ11.PayChoose`,
 /// and `CardJ11.Targeted`. Runs through the Fx hook dispatch, so these are
 /// field effects, not [反击]s.
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
         return Ok(());
     }

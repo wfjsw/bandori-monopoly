@@ -1,13 +1,12 @@
 //! `Sumimi:Here the world` -- C# `CardHereTheWorld` (MatchHost.cs:11313-11406):
-//! [反击] onto the field of whoever played two cards this turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Sumimi:Here the world`）:
 //! > Here the world：
-//! >
+//! >  
 //! > （1）[反击] 当有人同一回合内打出两张卡时，将此卡放置于对方场上。
-//! >
 //! > （2）场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶，那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡加入手牌，并使此卡使用者抽一张卡。
 //!
+//! [反击] onto the field of whoever played two cards this turn.
 
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -18,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Sumimi:Here the world";
 
-/// C# `Card.User` stand-in: the player that played this reaction (1-based; 0 = unset).
+/// C# `Card.User` stand-in: the player that played this counteraction (1-based; 0 = unset).
 /// The card sits on another player's field; the draw-on-return goes to the user.
 const SLOT_USER: &str = "here_user";
 
@@ -84,7 +83,7 @@ fn clear_held(player_id: i32) {
 pub const HERE_THE_WORLD: CardDef = CardDef::new(
     "Sumimi:Here the world",
     &[
-        On::CounterAct(&[ChainKind::TwoCards], can_react, react),
+        On::Counteract(&[ChainKind::TwoCards], can_counteract, counteract),
         // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
         On::Hook(&[HookKind::Drew], |_| true, drew),
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
@@ -92,7 +91,7 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
     ],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「当有人同一回合内打出两张卡时」 -- C# `t.Kind == "twoCards" && t.Seat != seat`.
     if trigger::kind() != TriggerKind::TwoCards {
         return false;
@@ -101,12 +100,12 @@ fn can_react(player_id: i32) -> bool {
     them != player_id && !ctx::player_out(them)
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let them = trigger::player_id();
     // 规则书（1）[反击]: 「将此卡放置于对方场上」 -- C# `H.PlaceFromPlay(c, c.Trigger.Seat)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(them, ID, &Msg::new(key!("here_the_world_note")));
-    // C# `Card.User` = the reactor; the return draw goes to them.
+    // C# `Card.User` = the counteractor; the return draw goes to them.
     ctx::set_slot(them, SLOT_USER, player_id + 1);
     ctx::log(
         player_id,

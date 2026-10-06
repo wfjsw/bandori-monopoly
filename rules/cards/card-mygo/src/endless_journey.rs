@@ -1,12 +1,12 @@
 //! `MyGO:哪怕这旅程没有终点` -- C# `CardEndlessJourney` (MatchHost.cs:6971-7009):
-//! plant this card on the current tile with 4 miracle crystals; settles pay
-//! out 60 per tile walked, and a long main move burns a crystal.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:哪怕这旅程没有终点`）:
 //! > 哪怕这旅程没有终点：
 //! >  [手] 将此卡放置于当前格子上并为其放置4个奇迹水晶，每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹水晶数量为0时，将此卡置入弃牌堆。
 //! > （2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数
 //!
+//! plant this card on the current tile with 4 miracle crystals; settles pay
+//! out 60 per tile walked, and a long main move burns a crystal.
 
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};

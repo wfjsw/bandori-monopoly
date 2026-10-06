@@ -238,7 +238,7 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
 fn an_unported_card_falls_back_gracefully() {
     let mut m = match_with("AG:Y.O.L.O");
     let before = m.hand_of(1).len();
-    // Y.O.L.O is a reaction card with no Play effect; playing it is legal but
+    // Y.O.L.O is a counteraction card with no Play effect; playing it is legal but
     // does nothing beyond leaving the hand.
     m.act(1, &play("AG:Y.O.L.O")).expect("play");
     assert_eq!(
@@ -381,7 +381,7 @@ fn int_arg(msg: &game_core::msg::Msg, name: &str) -> i64 {
 }
 
 #[test]
-fn a_played_cards_own_react_runs_once() {
+fn a_played_cards_own_counteract_runs_once() {
     // `cardAfter` / `cardPlayed` also name the card on `t.card`; only the play
     // itself may run the card's own follow-up.
     let mut m = match_with_rules("TEST:echo", rules_with_fixtures());
@@ -389,9 +389,9 @@ fn a_played_cards_own_react_runs_once() {
     let st = m.state();
     assert_eq!(fixture_events(&st, "echo_play").len(), 1, "play ran once");
     assert_eq!(
-        fixture_events(&st, "echo_react").len(),
+        fixture_events(&st, "echo_counteract").len(),
         1,
-        "own react ran exactly once"
+        "own counteract ran exactly once"
     );
 }
 
@@ -561,7 +561,7 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
     m.give_cards(actor, &["TEST:aimer"]);
     m.give_cards(other, &["TEST:counter"]);
     m.act(actor, &play("TEST:aimer")).expect("play the aimer");
-    // The reaction window is offered to the named recipient; play the counter.
+    // The counteraction window is offered to the named recipient; play the counter.
     let st = m.state();
     assert_eq!(
         st.prompt.kind, "choice",

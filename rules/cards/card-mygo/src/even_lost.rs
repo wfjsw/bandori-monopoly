@@ -1,13 +1,13 @@
 //! `MyGO:即使迷茫着` -- C# `CardEvenLost` (MatchHost.cs:6259-6307): [反击] place
-//! this card in play when another player's card hits you; a placed action later
-//! discards it to move as many tiles as your hand size.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:即使迷茫着`）:
-//! > 即使迷茫着：
-//! >
+//! > 即使迷茫着： 
+//! >  
 //! > （1）[反击] 当你被其他人的卡的效果影响时，你将此卡放置在自己场上。
 //! > （2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。
 //!
+//! this card in play when another player's card hits you; a placed action later
+//! discards it to move as many tiles as your hand size.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -17,12 +17,12 @@ pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
         On::Play(Some(can_go), go),
-        On::CounterAct(&[ChainKind::Effect], can_react, react),
+        On::Counteract(&[ChainKind::Effect], can_counteract, counteract),
     ],
 );
 
 /// 规则书[反击]（1）: 「当你被其他人的卡的效果影响时」 -- C# `H.HitByOtherCard`.
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
     // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
     if !trigger::by_card().is_some_and(|by| by != player_id) {
@@ -37,7 +37,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::effect::hits(player_id)
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（1）: 「你将此卡放置在自己场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(

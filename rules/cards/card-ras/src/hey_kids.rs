@@ -1,10 +1,10 @@
 //! `RAS:狂乱Hey Kids!!` -- C# `CardHeyKids` (MatchHost.cs:9368-9440): [反击]
-//! replace the settle with a house transfer off the settled tile.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:狂乱Hey Kids!!`）:
 //! > 狂乱Hey Kids!!：
 //! > [反击] 在属于你的格子上结算时，打出此卡，将本次结算改为：将本格上的房屋转移到属于你的可建造格子上。转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋。转移时，消耗的房屋造价等于获得的房屋总造价，超出的部分作为现金获得；随后，你失去“转移后各格房屋造价总和－获得房屋数量×500”的资金。
 //!
+//! replace the settle with a house transfer off the settled tile.
 
 use alloc::vec::Vec;
 
@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const HEY_KIDS: CardDef = CardDef::new(
     "RAS:狂乱Hey Kids!!",
-    &[On::CounterAct(&[ChainKind::Settle], can_react, react)],
+    &[On::Counteract(&[ChainKind::Settle], can_counteract, counteract)],
 );
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
@@ -28,7 +28,7 @@ fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
 }
 
 /// 规则书[反击]: 「在属于你的格子上结算时，打出此卡」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != TriggerKind::Settle {
         return false;
     }
@@ -47,7 +47,7 @@ fn can_react(player_id: i32) -> bool {
     !buildable_targets(player_id, t).is_empty()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「将本次结算改为：将本格上的房屋转移到属于你的可建造格子上」
     // -- C# `c.Trigger.Cancelled = true` then `H.AskNumber` + `H.AskTileOf` +
     // `H.AddHouse` per target. Cancelling the settle is what makes the transfer

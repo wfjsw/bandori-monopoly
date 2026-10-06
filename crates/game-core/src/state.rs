@@ -510,8 +510,11 @@ impl MatchPlayer {
         self.state_get(key::UNSTOPPABLE)
     }
 
+    /// Hand size limit: the `handLimit` state (base 5, cards may cut or lift
+    /// it) plus every placed card's continuous delta (「手卡上限数量减1」).
     pub fn hand_limit(&self) -> i32 {
-        self.state_get(key::HAND_LIMIT)
+        let field: i32 = self.field.iter().map(|f| f.hand_limit_delta).sum();
+        self.state_get(key::HAND_LIMIT) + field
     }
 
     pub fn skill_state(&self) -> i32 {
@@ -700,6 +703,10 @@ pub struct FieldCard {
     /// C# `Card.Immune` -- 「此卡不受…效果影响」. A value on the card, not a
     /// subclass override: effects that would touch it read this and skip.
     pub immune: bool,
+    /// C# `Card.HandLimitDelta` -- continuous 「手卡上限数量减1」 while this
+    /// instance sits on the field (stamped at placement, gone with the card).
+    #[serde(default)]
+    pub hand_limit_delta: i32,
     pub note: Msg,
 }
 
@@ -714,6 +721,7 @@ impl Default for FieldCard {
             crystals: 0,
             face_down: false,
             immune: false,
+            hand_limit_delta: 0,
             note: Msg::default(),
         }
     }

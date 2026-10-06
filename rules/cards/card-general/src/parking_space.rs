@@ -1,17 +1,17 @@
 //! `通用:[都筑诗船]Parking Space` -- C# `CardParkingSpace` (MatchHost.cs:2430-2501):
-//! place on Space, hand its houses to your other tiles, settle becomes a
-//! turn-end [停留].
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:[都筑诗船]Parking Space`）:
 //! > [都筑诗船]Parking Space：
 //! > [手]：
 //! > 将此卡放置于“Space”格子上，将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）。
 //! > [持续]：
-//! >
+//!
 //! > （1）此卡所在格子的[结算]改为回合结束后获得一层[停留]。
-//! >
+//!
 //! > （2）位于此卡所在格子上的玩家无法使用角色及乐队技能。
 //!
+//! place on Space, hand its houses to your other tiles, settle becomes a
+//! turn-end [停留].
 
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -29,8 +29,8 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
         // C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` -- field hooks, not [反击].
         On::Hook(
             &[HookKind::SettleInstead, HookKind::TurnEndAfter],
-            react_guard,
-            react,
+            counteract_guard,
+            counteract,
         ),
     ],
 );
@@ -89,19 +89,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ctx::add_house(t, 1);
         num -= 1;
     }
-    // 规则书（1）[持续] runs in `react` at `settleInstead` / `turnEndAfter`.
+    // 规则书（1）[持续] runs in `counteract` at `settleInstead` / `turnEndAfter`.
     Ok(())
 }
 
 /// C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` (MatchHost.cs:2469-2495).
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击].
-/// Pure guard for [`react`] -- the activation gate. `false`
+/// Pure guard for [`counteract`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn react_guard(player_id: i32) -> bool {
+fn counteract_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」 -- C#
         // `CardParkingSpace.SettleInstead`: when the settle lands on the card's

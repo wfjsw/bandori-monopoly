@@ -1,10 +1,10 @@
 //! `HHW:微笑巡逻队` -- C# `CardSmilePatrol` (MatchHost.cs:3872-3899): pay to build
-//! on one of your tiles, then roll 3d20 and maybe build free on that tile.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:微笑巡逻队`）:
 //! > 微笑巡逻队：
 //! >  付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）
 //!
+//! on one of your tiles, then roll 3d20 and maybe build free on that tile.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

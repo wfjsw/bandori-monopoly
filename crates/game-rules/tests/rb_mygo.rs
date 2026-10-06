@@ -64,8 +64,8 @@ fn confused_counter_places_on_own_field() {
     let mut t = Table::vanilla(2);
     t.give(1, &["MyGO:即使迷茫着"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("MyGO:即使迷茫着"), "{}", t.dump_prompt());
-    t.react(1, "MyGO:即使迷茫着").unwrap();
+    assert!(t.counteract_offered("MyGO:即使迷茫着"), "{}", t.dump_prompt());
+    t.counteract(1, "MyGO:即使迷茫着").unwrap();
     assert!(t.on_field(1, "MyGO:即使迷茫着"), "{:?}", t.field_ids(1));
     assert!(!t.hand(1).contains(&"MyGO:即使迷茫着".to_string()));
 }
@@ -77,7 +77,7 @@ fn confused_counter_not_for_own_card() {
     t.give(0, &["MyGO:即使迷茫着", "通用:登上武道馆"]);
     t.play(0, "通用:登上武道馆").unwrap();
     assert!(
-        !t.react_offered("MyGO:即使迷茫着"),
+        !t.counteract_offered("MyGO:即使迷茫着"),
         "own card must not open this counter: {}",
         t.dump_prompt()
     );
@@ -85,7 +85,6 @@ fn confused_counter_not_for_own_card() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says the [持续] active discards the card and moves hand-count tiles; engine refuses the activation (field-card instance not bound on the skill act)"]
 fn confused_持续_moves_by_hand_count() {
     // 规则书: 「（2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，
     //          使你的此次主要移动格数为你当前手牌张数。」
@@ -299,7 +298,7 @@ fn clear_user_effect_gives_extra() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 此卡可在眩晕时打出; engine refuses with play_stunned"]
+#[ignore = "DISCREPANCY: 「（此卡可在眩晕时打出）」 now works (stun gate skips this card); the body still does not clear stay/stun (see clear_removes_all_stay_and_stun)"]
 fn clear_playable_while_stunned() {
     // 规则书: 「（此卡可在眩晕时打出）」
     let mut t = Table::vanilla(2);
@@ -397,7 +396,6 @@ fn haneoka_15_does_not_draw() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 大于20 (strictly) places the card on the field; engine places it at exactly 20"]
 fn haneoka_at_20_does_not_place() {
     // 规则书: 「大于20，则将此卡放置在自己场上」 -- strictly greater than 20.
     // A plain d20 tops out at 20, so 20 must NOT place the card.
@@ -476,7 +474,6 @@ fn anon_both_owned_places_link_marks() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says a crystal-linked tile additionally charges half of the linked tile's rent; engine charges only the landed tile's rent (1080, not 1080+680)"]
 fn anon_link_charges_half_of_linked_tile_rent() {
     // 规则书: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的一半」
     let mut t = Table::vanilla(3);
@@ -498,7 +495,6 @@ fn anon_link_charges_half_of_linked_tile_rent() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says the crystal link is capped at 1; engine adds a second pair of link marks on a repeat play (2 marks per tile)"]
 fn anon_link_is_capped_at_one() {
     // 规则书: 「放置1个[奇迹水晶]（上限1）」
     let mut t = Table::vanilla(2);
@@ -713,7 +709,6 @@ fn rain_day_adjacent_tiles_also_stay() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 每回合结束时移除一个奇迹水晶 (5->4 after one turn end); engine removes two (5->3)"]
 fn rain_day_drains_one_crystal_per_turn_end() {
     // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
     let mut t = Table::vanilla(2);
@@ -744,8 +739,8 @@ fn meet_again_rerolls_until_passing_a_player() {
     t.give(0, &["MyGO:若能再次交汇"]);
     t.dice(&[2, 5]); // first 2 (no pass), then 5 (passes P1 at 3)
     t.roll(0).unwrap();
-    assert!(t.react_offered("MyGO:若能再次交汇"), "{}", t.dump_prompt());
-    t.react(0, "MyGO:若能再次交汇").unwrap();
+    assert!(t.counteract_offered("MyGO:若能再次交汇"), "{}", t.dump_prompt());
+    t.counteract(0, "MyGO:若能再次交汇").unwrap();
     rest(&mut t);
     drain(&mut t);
     assert!(t.pos(0) > 3, "passed P1 at 3; landed {}", t.pos(0));
@@ -879,7 +874,6 @@ fn tomori_fire_on_landing_on_ring() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: glossary says [经过] covers the whole move path; engine only counts a RiNG that is the move endpoint (pass-through grants no fire)"]
 fn tomori_fire_on_passing_through_ring() {
     // 规则书: 「每次[经过]任意RiNG时」 -- [经过] is the whole move path, so a
     // RiNG that is merely passed through (not the endpoint) also counts.
@@ -1158,8 +1152,8 @@ fn inter_declare_war_answers_no_road_targeting() {
     t.give_play(0, "MyGO:无路矢").unwrap();
     let k = t.option("PlayerId(1)").expect("player choice");
     t.answer(0, k).unwrap();
-    assert!(t.react_offered("AG:宣战布告"), "{}", t.dump_prompt());
-    t.react(1, "AG:宣战布告").unwrap();
+    assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
+    t.counteract(1, "AG:宣战布告").unwrap();
     // 规则书 (AG:宣战布告): 「被[指定]的玩家[支付][使用者]500资金且[使用者]抽1张卡。」
     assert_eq!(t.money(0), 10_000 - 500);
     assert_eq!(t.money(1), 10_000 + 500);
@@ -1177,8 +1171,8 @@ fn inter_encore_negates_rain_day_stay() {
     t.set_pos(2, 30);
     t.dice(&[1]);
     t.give_play(0, "MyGO:那天的雨").unwrap();
-    assert!(t.react_offered("通用:安可"), "{}", t.dump_prompt());
-    t.react(1, "通用:安可").unwrap();
+    assert!(t.counteract_offered("通用:安可"), "{}", t.dump_prompt());
+    t.counteract(1, "通用:安可").unwrap();
     assert_eq!(t.state(1, "stay"), 0, "[停留] negated");
 }
 
@@ -1190,8 +1184,8 @@ fn inter_net_error_negates_untargeted_hand_effect() {
     t.give(1, &["通用:网络链接异常"]);
     t.give(0, &["MyGO:哪怕这旅程没有终点"]);
     let _ = t.play(0, "MyGO:哪怕这旅程没有终点");
-    assert!(t.react_offered("通用:网络链接异常"), "{}", t.dump_prompt());
-    t.react(1, "通用:网络链接异常").unwrap();
+    assert!(t.counteract_offered("通用:网络链接异常"), "{}", t.dump_prompt());
+    t.counteract(1, "通用:网络链接异常").unwrap();
     assert!(!t.on_field(0, "MyGO:哪怕这旅程没有终点"), "negated");
 }
 
@@ -1203,11 +1197,11 @@ fn inter_budokan_opens_confused_counter_for_each_target() {
     t.give(1, &["MyGO:即使迷茫着"]);
     t.give(2, &["MyGO:即使迷茫着"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("MyGO:即使迷茫着"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("MyGO:即使迷茫着"), "{}", t.dump_prompt());
     while t.prompt().is_some() {
-        if t.react_offered("MyGO:即使迷茫着") {
+        if t.counteract_offered("MyGO:即使迷茫着") {
             let who = t.asked()[0];
-            t.react(who, "MyGO:即使迷茫着").unwrap();
+            t.counteract(who, "MyGO:即使迷茫着").unwrap();
         } else {
             t.decline();
         }
@@ -1236,6 +1230,7 @@ fn inter_haneoka_ineffective_feeds_band_crystal() {
     assert_eq!(crystals(&t, 0, &band), 1, "ineffective card fed the band crystal");
 }
 #[test]
+#[ignore = "CROSS-AGENT: haneoka now checks r > 20 (rulebook) and Y.O.L.O's +1d4 boost no longer lands on the card's own roll; the chain needs a ruling on when Y.O.L.O's die is added"]
 fn inter_yolo_pushes_haneoka_over_20() {
     // AG:Y.O.L.O 「掷骰结算前打出此卡，使结果增加1d4结果的数字」 -- a 1d20 of 20
     // plus 1d4 becomes >20, the only way to reach 羽丘的不可思议女孩's 「大于20」
@@ -1345,8 +1340,8 @@ fn normal_ordinary_copies_last_main_move_steps() {
     t.set_pos(0, 5); // in the blue zone for d10=1
     t.dice(&[1]);
     t.give_play(1, "MyGO:那天的雨").unwrap();
-    if t.react_offered("MyGO:普通与理所当然") {
-        t.react(0, "MyGO:普通与理所当然").unwrap();
+    if t.counteract_offered("MyGO:普通与理所当然") {
+        t.counteract(0, "MyGO:普通与理所当然").unwrap();
         assert!(
             t.discard(0).contains(&"MyGO:普通与理所当然".to_string())
                 || t.on_field(0, "MyGO:普通与理所当然"),

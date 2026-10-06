@@ -1,5 +1,4 @@
 //! `CRYCHIC:（灯）内心的呐喊` -- C# `CardTomoriInnerShout` (MatchHost.cs:3217-3294):
-//! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（灯）内心的呐喊`）:
 //! > （灯）内心的呐喊：
@@ -10,6 +9,7 @@
 //! > （3）若你的乐队技能为“MyGO!!!!!”，打出此卡时将其放置于你最早拥有的格子上，你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯（MyGO!!!!!）的
 //! > （2）技能。
 //!
+//! re-declare 「想要成为人类」's X for money, then a MyGO placement + pull skill.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

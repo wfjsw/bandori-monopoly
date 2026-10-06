@@ -1,10 +1,10 @@
 //! `AG:无论是何种颜色的夕阳` -- C# `CardAnyColorSunset` (MatchHost.cs:1198-1285):
-//! 1d6 picks one of five effects (6 = pick three of them).
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:无论是何种颜色的夕阳`）:
 //! > 无论是何种颜色的夕阳：
 //! >  投掷1d6并根据结果获得对应效果: 若为1则立刻获得1500资金，若为2则从弃牌堆中选择一张牌放置到抽牌堆顶，若为3则抽一张牌，若为4则可选择补满火罐或者获得2000资金，若为5则从弃牌堆中选择一张牌加入手牌，若为6则选择1-5中的3个效果触发（若结果严格大于6，则从1开始重新计数）
 //!
+//! 1d6 picks one of five effects (6 = pick three of them).
 
 use alloc::string::String;
 use alloc::vec::Vec;

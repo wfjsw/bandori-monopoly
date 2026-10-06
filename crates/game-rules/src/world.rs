@@ -11,7 +11,7 @@
 
 use game_core::msg::Msg;
 
-/// The trigger a reaction is checked against (C# `Trigger`).
+/// The trigger a counteraction is checked against (C# `Trigger`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Trigger {
     pub kind: crate::TriggerKind,
@@ -58,7 +58,7 @@ pub struct Trigger {
     pub cards: Vec<String>,
     /// `t.Move.Roll`; `None` when there is no move or it was cancelled.
     pub move_roll: Option<i32>,
-    /// `t.Card` -- the card id on card/event/reacted triggers (`""` otherwise).
+    /// `t.Card` -- the card id on card/event/counteracted triggers (`""` otherwise).
     pub card: String,
 }
 
@@ -530,7 +530,7 @@ pub trait CardWorld: Clone + 'static {
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.
 
-    /// Call the running card's `react` (kind `turnEnd`) for `player_id` at a turn
+    /// Call the running card's `counteract` (kind `turnEnd`) for `player_id` at a turn
     /// end: this turn's end, or -- `next_of_player` -- the end of `player_id`'s next
     /// turn (C# `TurnCtx.AfterEnd` / "你的下回合结束时").
     fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool) {}
@@ -601,7 +601,7 @@ pub trait CardWorld: Clone + 'static {
     // What lives here is the move's own plan/geometry plus what a card shapes.
     // Deliberately *not* here, and why:
     //   - `by` / `forced` -- who imposed the move: a property of the trigger,
-    //     which the reaction already sees (`Trigger.by_card`).
+    //     which the counteraction already sees (`Trigger.by_card`).
     //   - `first_roll` -- history; the trigger's `value` at the `roll` point.
     //   - `roll_text` / `part_text` / `extra_text` -- presentation; the roll
     //     builds a `Msg` for its log line.

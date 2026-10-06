@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
-    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
 );
 
 /// `CardRepaint.OnPath` -- tiles of `me` on `them`'s planned path.
@@ -34,7 +34,7 @@ fn on_path(me: i32, them: i32, roll: i32) -> i32 {
 }
 
 /// 规则书: 「[反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书: 「当任意其他玩家进行移动掷骰」 -- a move-roll window by someone else.
     if !matches!(trigger::kind(), TriggerKind::MoveRoll) {
         return false;
@@ -56,7 +56,7 @@ fn can_react(player_id: i32) -> bool {
     }
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let Some(roll) = trigger::move_roll() else {
         return Ok(());
     };

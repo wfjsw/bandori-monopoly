@@ -1,5 +1,4 @@
 //! `HHW:笑容大游行` -- C# `CardSmileParade` (MatchHost.cs:3597-3717): [反击] onto
-//! 弦卷集团, the move settles as the agent tile; the card then swaps tiles around.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:笑容大游行`）:
 //! > 笑容大游行：
@@ -7,6 +6,7 @@
 //! > （2）[持续] [触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]格子上并移除其上全部奇迹水晶
 //! > （3）[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。
 //!
+//! 弦卷集团, the move settles as the agent tile; the card then swaps tiles around.
 
 use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -23,7 +23,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
             settle_instead,
         ),
         On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, move_after),
-        On::CounterAct(&[ChainKind::Pass], can_react, react),
+        On::Counteract(&[ChainKind::Pass], can_counteract, counteract),
         On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
         On::Hook(
             &[HookKind::CrystalsChanged],
@@ -38,7 +38,7 @@ fn group_tile() -> i32 {
     ctx::tile_named("弦卷集团")
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「经过“弦卷集团”（#29格）时可将此卡放置在其上」
     let group = group_tile();
     if group < 0 {
@@ -50,7 +50,7 @@ fn can_react(player_id: i32) -> bool {
         && trigger::move_kind().is_some()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let group = group_tile();
     // 规则书（1）[反击]: 「可将此卡放置在其上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // Group, 3)` places the card on the 弦卷集团 tile, charged with 3 crystals.

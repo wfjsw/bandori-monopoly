@@ -1,5 +1,4 @@
 //! `PPP:STAR BEAT!` -- C# `CardStarBeat` (MatchHost.cs:8693-8734): bank a build
-//! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:STAR BEAT!`）:
 //! > STAR BEAT!：
@@ -7,6 +6,7 @@
 //! > 1. 获得2个星星贴纸，本回合的主要移动改为[传送]到(45×“资金数包含5的玩家数量+1”) mod 60格并结算；
 //! > 2. 本回合的主要移动改为移动(2×“资金数包含5的玩家数量+1”)d10格并结算。
 //!
+//! layer, then either take 2 star stickers and teleport, or roll a pile of d10s.
 
 use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, Msg, On};

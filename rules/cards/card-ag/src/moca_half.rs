@@ -1,11 +1,11 @@
 //! `AG:（摩卡）0.5倍速` -- C# `CardMocaHalf` (MatchHost.cs:1161-1197):
-//! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:（摩卡）0.5倍速`）:
 //! > （摩卡）0.5倍速：
 //! > (1)  将此卡放置在场上并获得3个奇迹水晶，你的回合结束时移除一个奇迹水晶，奇迹水晶为0时此卡放入弃牌堆。
 //! > (2) 此卡在场时，你的移动掷骰的最终结算/2（向上取整）且你的所有资金支付与消耗减半。
 //!
+//! placed card, 3 crystals decaying each own turn end; halve rolls and payments.
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};

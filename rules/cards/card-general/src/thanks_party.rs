@@ -1,5 +1,4 @@
 //! `通用:CiRCLE THANKS PARTY!` -- C# `CardThanksParty`: others may chip in 500,
-//! then Xd20 > 35 pays out; alone, an extra turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:CiRCLE THANKS PARTY!`）:
 //! > CiRCLE THANKS PARTY!：
@@ -7,6 +6,7 @@
 //! > 1. X至少为2则[使用者]投掷Xd20，如果结果大于35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
 //! > 2. X等于1则[使用者]的本回合结束后获得一个额外回合。
 //!
+//! then Xd20 > 35 pays out; alone, an extra turn.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};

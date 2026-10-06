@@ -1,15 +1,15 @@
 //! `Mujica:（海铃）` -- C# `CardUmiriCard` (MatchHost.cs:6117-6258): a travelling
-//! placed card that walks one player per turn and takes band skill cards.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（海铃）`）:
 //! > （海铃）
-//! >
-//! > （1）将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。
-//! >
+//! >  
+//! > （1）将此卡放置于在此卡使用者下一名行动的玩家场上，轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。 
+//! >  
 //! > （2）使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。
-//! >
+//!
 //! > （3）当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。
 //!
+//! placed card that walks one player per turn and takes band skill cards.
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};

@@ -17,8 +17,8 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
         On::Play(None, play),
         On::Hook(
             &[HookKind::TurnEnd, HookKind::RollAfter],
-            react_guard,
-            react,
+            counteract_guard,
+            counteract,
         ),
         On::RollPlan(roll_plan),
         On::Hook(
@@ -45,19 +45,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("sports_talent_placed")).player_id("who", player_id),
     );
-    // (the turn-end decay and the dice-roll reward run in `react`, which the Fx
+    // (the turn-end decay and the dice-roll reward run in `counteract`, which the Fx
     // hook dispatch runs at `turnEnd` / `rollAfter`.)
     Ok(())
 }
 
 /// C# `CardSportsTalent : DecayCard` + `RollAfter`.
-/// Pure guard for [`react`] -- the activation gate. `false`
+/// Pure guard for [`counteract`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn react_guard(player_id: i32) -> bool {
+fn counteract_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书: 「每回合结束时失去一个」 -- C# `DecayCard.TurnEnd`
         // (`turn == DecayOn` = the owner's turn) -> `AddCrystals(-1)`. The
@@ -104,7 +104,7 @@ fn reward(player_id: i32) {
 }
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- C#
-/// `MoveCtx.MinRoll` clamps the final face up to 10 after the reactions
+/// `MoveCtx.MinRoll` clamps the final face up to 10 after the counteractions
 /// (`if (!m.Signed) m.Roll = max(m.MinRoll, m.Roll)`); `set_min_roll` is that
 /// plan field, shaped here before the dice (`On::RollPlan`). Same gate as the
 /// C# `RollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`).
@@ -125,7 +125,7 @@ fn roll_plan(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with
 /// `H.DoMoveRoll` until the face is at least 10 (at most 10 attempts, bailing
-/// out when the player is out). Called from the `RollAfter` branch of [`react`].
+/// out when the player is out). Called from the `RollAfter` branch of [`counteract`].
 fn reroll_to_ten(player_id: i32) {
     let mut x = trigger::move_roll().unwrap_or(trigger::value());
     for _ in 0..10 {

@@ -14,25 +14,25 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
     "R:必然的联系（莉莎）",
-    &[On::CounterAct(
+    &[On::Counteract(
         &[ChainKind::SkillTeleport],
-        can_react,
-        react,
+        can_counteract,
+        counteract,
     )],
 );
 
 /// 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你使用技能进行传送后」 -- C# `t.Kind == "skillTeleport" && t.Seat == seat`.
     if trigger::kind() != TriggerKind::SkillTeleport || trigger::player_id() != player_id {
         return false;
     }
-    // 规则书[反击]: 「指定一个和你在同一地块的角色」 -- only worth reacting with someone
+    // 规则书[反击]: 「指定一个和你在同一地块的角色」 -- only worth counteracting with someone
     // else on your tile (C# `H.SeatsOn(pos, seat).Count > 0`).
     !ctx::players_on(ctx::player_pos(player_id), player_id).is_empty()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let candidates: Vec<i32> = ctx::players_on(ctx::player_pos(player_id), player_id);
     if candidates.is_empty() {
         return Ok(());

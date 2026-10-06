@@ -1,10 +1,10 @@
 //! `Mujica:无法将视线移开` -- C# `CardCantLookAway` (MatchHost.cs:5654-5710):
-//! force-move everyone who [反击]'d you this turn 1-4 tiles with settle.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:无法将视线移开`）:
 //! > 无法将视线移开：
 //! >  使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算] （此卡可作为[反击]在有玩家对你使用[反击]后立即使用），若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动
 //!
+//! force-move everyone who [反击]'d you this turn 1-4 tiles with settle.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -14,14 +14,14 @@ pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
         On::Play(None, play),
-        On::CounterAct(&[ChainKind::Reacted], can_react, react),
+        On::Counteract(&[ChainKind::Counteracted], can_counteract, counteract),
     ],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
-    // `t.Kind == "reacted" && t.Target == seat && t.Seat != seat`.
-    trigger::kind() == TriggerKind::Reacted
+    // `t.Kind == "counteracted" && t.Target == seat && t.Seat != seat`.
+    trigger::kind() == TriggerKind::Counteracted
         && trigger::target() == player_id
         && trigger::player_id() != player_id
 }
@@ -31,21 +31,21 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     run(player_id);
     Ok(())
 }
 
 fn run(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使当前回合内对你打出过[反击]的所有玩家」 -- C#
-    // `H._reactedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
-    // TODO(规则书)[judgement](ABI): the reaction history (C# `H._reactedAgainst`); `ctx::turn_key()`
+    // `H._counteractedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
+    // TODO(规则书)[judgement](ABI): the counteraction history (C# `H._counteractedAgainst`); `ctx::turn_key()`
     //   the clause under-specifies -- see the note above it
     // covers the `turn == H.TurnKey` half of the filter, but the list itself
     // cannot be built without the history. We still walk the ordinary player list
     // so the prompts below are exercised.
-    let reactors: alloc::vec::Vec<i32> = ctx::others(player_id);
-    for p in reactors {
+    let counteractors: alloc::vec::Vec<i32> = ctx::others(player_id);
+    for p in counteractors {
         // 规则书: 「向你选择的方向强制移动1~4以内的任意步数」
         // C# `H.AskNumber(i, ..., 1, 4, ...)` (an AskPick over the range).
         let n = ctx::ask_number(
@@ -85,7 +85,7 @@ fn run(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若使用者在自身回合内选择了使用者自己进行强制移动，则视为其主要移动」
     // -- `card_move` runs `MainMoveAs` (MatchHost.cs:23102-23120), which sets
     // `_turnCtx.MainMoved` when the walked player is the turn player, so a
-    // self walk on one's own turn consumes the main move. (The C# `Reactors`
+    // self walk on one's own turn consumes the main move. (The C# `Counteractors`
     // list is others-only, so the clause is vacuous there; the bookkeeping is
     // right either way.)
     Ok(())

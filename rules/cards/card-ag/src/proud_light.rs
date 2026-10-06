@@ -1,10 +1,10 @@
 //! `AG:刻入天穹傲岸的烈光` -- C# `CardProudLight` (MatchHost.cs:1681-1721):
-//! swap half of each side's most expensive deed price when you pass a player.
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:刻入天穹傲岸的烈光`）:
 //! > 刻入天穹傲岸的烈光：
 //! > [反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。
 //!
+//! swap half of each side's most expensive deed price when you pass a player.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -12,7 +12,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new(
     "AG:刻入天穹傲岸的烈光",
-    &[On::CounterAct(&[ChainKind::PassPlayer], can_react, react)],
+    &[On::Counteract(&[ChainKind::PassPlayer], can_counteract, counteract)],
 );
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).
@@ -26,7 +26,7 @@ fn best_price(player_id: i32) -> i32 {
         .unwrap_or(0)
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你经过一名角色时，你可以打出此卡」
     if trigger::kind() != TriggerKind::PassPlayer {
         return false;
@@ -39,7 +39,7 @@ fn can_react(player_id: i32) -> bool {
     o >= 0 && !ctx::player_out(o)
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let o = trigger::target();
     if o < 0 {
         return Ok(());

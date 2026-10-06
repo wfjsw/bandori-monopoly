@@ -171,7 +171,6 @@ fn dice_cast_places_on_field() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: 「回合结束后放入弃牌堆」 -- card goes to the NEXT player's discard, not the owner's; also two copies appear"]
 fn dice_cast_goes_to_discard_at_turn_end() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "Mujica:骰子已经掷下").unwrap();
@@ -194,7 +193,7 @@ fn dice_cast_blocks_other_counters() {
     drain(&mut t);
     // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」
     // p1 holds AG:宣战布告 but cannot use it this turn.
-    // (We observe no react window opened; the card is on the field.)
+    // (We observe no counteract window opened; the card is on the field.)
     assert!(t.on_field(0, "Mujica:骰子已经掷下"));
 }
 
@@ -217,7 +216,6 @@ fn sparkler_places_with_two_crystals_and_grants_extra_turn() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: 「将此卡置入弃牌堆」 -- card goes to the NEXT player's discard (p1), not the owner's (p0)"]
 fn sparkler_last_crystal_goes_to_owner_discard() {
     let mut t = Table::vanilla(2);
     t.dice(&[3]);
@@ -397,10 +395,10 @@ fn eyes_locked_is_a_counter() {
     t.give(0, &["Mujica:无法将视线移开"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
     // AG:宣战布告 may counter; if so, 无法将视线移开 may be offered as a counter to the counter.
-    if t.prompt().is_some() && t.react_offered("AG:宣战布告") {
-        t.react(2, "AG:宣战布告").unwrap();
-        if t.react_offered("Mujica:无法将视线移开") {
-            t.react(0, "Mujica:无法将视线移开").unwrap();
+    if t.prompt().is_some() && t.counteract_offered("AG:宣战布告") {
+        t.counteract(2, "AG:宣战布告").unwrap();
+        if t.counteract_offered("Mujica:无法将视线移开") {
+            t.counteract(0, "Mujica:无法将视线移开").unwrap();
             drain(&mut t);
             // 规则书: 「使当前回合内对你打出过[反击]的所有玩家向你选择的方向强制移动1~4以内的任意步数并[触发结算]」
             // p2 should have been forced to move.
@@ -462,7 +460,6 @@ fn hina_fearless_sadness_after_memory_tile() {
 // -- Mujica:（祥子）斩断留恋，忘却一切 ---------------------------------
 
 #[test]
-#[ignore = "DISCREPANCY: 「抵押一张你拥有且未抵押的最贵地契」 -- card_mortgage always refuses with err.busy (engine passes asking=true to why_not_mortgage), so the card's effect traps and nothing happens"]
 fn saki_cut_ties_mortgages_and_teleports() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丰川祥子");
@@ -499,7 +496,6 @@ fn j11_places_with_two_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: 「每回合结束时移除1个，为0时置入弃牌堆」 -- after ONE turn end with 2 crystals the card is already removed (to the next player's discard), instead of decaying to 1"]
 fn j11_decays_one_crystal_per_turn() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "Mujica:#J11").unwrap();
@@ -750,8 +746,8 @@ fn interaction_ag_counter_vs_black_birthday() {
     t.set_money(1, 5000);
     t.give(1, &["AG:宣战布告"]);
     t.give_play(0, "Mujica:黑色生日").unwrap();
-    if t.prompt().is_some() && t.react_offered("AG:宣战布告") {
-        t.react(1, "AG:宣战布告").ok();
+    if t.prompt().is_some() && t.counteract_offered("AG:宣战布告") {
+        t.counteract(1, "AG:宣战布告").ok();
         drain(&mut t);
     } else {
         drain(&mut t);
@@ -849,14 +845,14 @@ fn interaction_generic_encore_vs_saki_move() {
     t.own(0, &[9]);
     t.give(1, &["通用:安可"]);
     t.give_play(0, "Mujica:祥，移动").unwrap();
-    // Handle prompts: react windows first, then player/direction selection.
+    // Handle prompts: counteract windows first, then player/direction selection.
     let mut countered = false;
     for _ in 0..20 {
         if t.prompt().is_none() {
             break;
         }
-        if t.react_offered("通用:安可") {
-            t.react(1, "通用:安可").ok();
+        if t.counteract_offered("通用:安可") {
+            t.counteract(1, "通用:安可").ok();
             countered = true;
             drain(&mut t);
             break;
@@ -885,8 +881,8 @@ fn interaction_web_glitch_vs_hand_effect() {
     let mut t = Table::vanilla(2);
     t.give(1, &["通用:网络链接异常"]);
     t.give_play(0, "Mujica:黑色生日").unwrap();
-    if t.prompt().is_some() && t.react_offered("通用:网络链接异常") {
-        t.react(1, "通用:网络链接异常").ok();
+    if t.prompt().is_some() && t.counteract_offered("通用:网络链接异常") {
+        t.counteract(1, "通用:网络链接异常").ok();
         drain(&mut t);
     } else {
         drain(&mut t);

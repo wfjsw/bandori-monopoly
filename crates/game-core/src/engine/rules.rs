@@ -70,14 +70,14 @@ pub struct Effect {
     pub value: i32,
 }
 
-/// One link in a chain (Yu-Gi-Oh's `ChainLink`), and the engine's reaction trigger.
+/// One link in a chain (Yu-Gi-Oh's `ChainLink`), and the engine's counteraction trigger.
 ///
 /// The kind name itself encodes pre/post (`"settleBefore"` vs `"settle"`,
 /// `"buyBefore"` vs `"buyAfter"`), so there is no separate `when` field.
 ///
 /// A link is either the **effect declaration** (L1, `seq == 1`, `answers == 0`)
 /// or a [反击] answering an earlier link (`answers` names it). Resolution is
-/// LIFO over the closed chain; see `game-rules`' `hand_reactions`.
+/// LIFO over the closed chain; see `game-rules`' `hand_counteractions`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Trigger {
     pub kind: &'static str,
@@ -87,7 +87,7 @@ pub struct Trigger {
     pub card: String,
     pub value: i32,
     /// The turn step (0/1/2/3) active when this trigger fired. Stamped by
-    /// `Cx::react`, not by the raise site. Only meaningful for kinds that
+    /// `Cx::counteract`, not by the raise site. Only meaningful for kinds that
     /// aren't step-specific (e.g. `mortgage` can fire during both step 1
     /// and step 3).
     pub step: i32,
@@ -209,7 +209,7 @@ impl Trigger {
     }
 }
 
-/// Raise a reaction trigger: build a [`Trigger`], apply the optional field
+/// Raise a counteraction trigger: build a [`Trigger`], apply the optional field
 /// overrides, and run it through `Cx::raise` (which stamps `step` centrally and
 /// delegates to the card rules). Every raise site should go through this so the
 /// shape of a trigger stays uniform.
@@ -217,7 +217,7 @@ impl Trigger {
 /// `mv = <move>` copies the move context (C# `t.Move`) on from a `Move`, and
 /// must come before any other field overrides.
 ///
-/// The result is the trigger as `raise` left it, so a reaction that rewrites a
+/// The result is the trigger as `raise` left it, so a counteraction that rewrites a
 /// field (e.g. `moveRoll`'s reroll) can read it back:
 ///
 /// ```ignore
@@ -259,12 +259,12 @@ pub trait CardRules: Send + Sync {
     /// (otherwise it is discarded).
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool>;
 
-    /// Reaction window at `t` (C# `React(trigger)` -- the counter-act window); may raise prompts.
+    /// Counteraction window at `t` (C# `Counteract(trigger)` -- the counteract window); may raise prompts.
     ///
-    /// `t` is mutable: a reaction may rewrite the move roll (`t.value` /
+    /// `t` is mutable: a counteraction may rewrite the move roll (`t.value` /
     /// `t.Move.Roll`) and the engine then uses the new face (C# shares the
-    /// `MoveCtx` with the reactions).
-    fn react(&self, _cx: &mut Cx, _t: &mut Trigger) -> Flow<()> {
+    /// `MoveCtx` with the counteractions).
+    fn counteract(&self, _cx: &mut Cx, _t: &mut Trigger) -> Flow<()> {
         Ok(())
     }
 

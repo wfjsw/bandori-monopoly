@@ -1,9 +1,9 @@
 //! `HHW:（美咲）` -- C# `CardMisakiCard` (MatchHost.cs:4387-4461): [反击] a fire-pot
-//! move roll, teleport to a rival standing between start and end, then collect 500.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:（美咲）`）:
 //! > （美咲）[反击] 使用火罐进行移动掷骰后，触发结算前可打出此卡，消耗所有火罐使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子并触发结算（视为你的主要移动），随后那格及相邻2格上的所有其他玩家[支付]你500资金。
 //!
+//! move roll, teleport to a rival standing between start and end, then collect 500.
 
 use alloc::vec::Vec;
 
@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MISAKI_CARD: CardDef = CardDef::new(
     "HHW:（美咲）",
-    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
 );
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
@@ -37,9 +37,9 @@ fn between(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「使用火罐进行移动掷骰后，触发结算前可打出此卡」 -- C#
-    // `CanReact`: `t.Kind == "moveRoll" && t.Seat == seat && t.Move != null &&
+    // `CanCounteract`: `t.Kind == "moveRoll" && t.Seat == seat && t.Move != null &&
     // t.Move.FireRoll && Between(t.Move).Count > 0`.
     if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
         return false;
@@ -52,7 +52,7 @@ fn can_react(player_id: i32) -> bool {
     !between(player_id).is_empty()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     let list = between(player_id);
     if list.is_empty() {
         return Ok(());

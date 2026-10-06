@@ -59,8 +59,8 @@ impl CardInfo {
     }
 
     /// Declares a [反击] at this trigger kind.
-    pub fn counter_acts_to(&self, trigger: crate::TriggerKind) -> bool {
-        self.entry(OnKind::CounterAct, Some(trigger)).is_some()
+    pub fn counteracts_to(&self, trigger: crate::TriggerKind) -> bool {
+        self.entry(OnKind::Counteract, Some(trigger)).is_some()
     }
 
     /// Declares a field-card hook at this trigger kind.
@@ -88,8 +88,8 @@ impl CardInfo {
 pub enum Call {
     /// `On::Play` -- the effect when played from hand.
     Play { card: i32, player_id: i32 },
-    /// `On::CounterAct` -- the reaction effect, for the world's current trigger kind.
-    CounterAct { card: i32, player_id: i32 },
+    /// `On::Counteract` -- the counteraction effect, for the world's current trigger kind.
+    Counteract { card: i32, player_id: i32 },
     /// `On::Hook` -- the field-card hook for `kind`.
     Hook {
         card: i32,
@@ -109,7 +109,7 @@ impl Call {
     pub fn player_id(&self) -> i32 {
         match *self {
             Call::Play { player_id, .. }
-            | Call::CounterAct { player_id, .. }
+            | Call::Counteract { player_id, .. }
             | Call::Hook { player_id, .. }
             | Call::AtEnd { player_id, .. }
             | Call::RollPlan { player_id, .. } => player_id,
@@ -119,7 +119,7 @@ impl Call {
     pub fn card(&self) -> i32 {
         match *self {
             Call::Play { card, .. }
-            | Call::CounterAct { card, .. }
+            | Call::Counteract { card, .. }
             | Call::Hook { card, .. }
             | Call::AtEnd { card, .. }
             | Call::RollPlan { card, .. } => card,
@@ -206,7 +206,7 @@ pub enum RuleError {
     NoSuchCard(i32),
     /// The effect trapped, panicked, ran out of fuel, or nested too deep.
     Trap(String),
-    /// A guard (`can_react`) tried to prompt. Guards must be pure queries.
+    /// A guard (`can_counteract`) tried to prompt. Guards must be pure queries.
     GuardPrompted,
 }
 
@@ -217,7 +217,7 @@ impl fmt::Display for RuleError {
             Self::DuplicateCard(id) => write!(f, "card {id:?} is declared by more than one module"),
             Self::NoSuchCard(c) => write!(f, "no card with handle {c}"),
             Self::Trap(m) => write!(f, "card effect failed: {m}"),
-            Self::GuardPrompted => write!(f, "can_react tried to prompt a player"),
+            Self::GuardPrompted => write!(f, "can_counteract tried to prompt a player"),
         }
     }
 }
@@ -231,9 +231,12 @@ pub enum Outcome<W> {
     Done(W),
     /// Blocked on a prompt with no answer yet. Nothing was committed.
     NeedInput(Prompt),
-    /// Blocked on a payment with no answer yet. Nothing was committed; the
-    /// engine raises a `pay` trigger for it and answers with the final amount.
-    NeedHost(HostRequest),
+    /// Blocked on a host routine (buy/build/mortgage/move/pay/...) with no
+    /// answer yet. The run's world rides along so the host can read the
+    /// turn-ctx policy the card set up (`build_discount`, `buy_discount`, ...)
+    /// before the routine runs against the live world -- the routine is not
+    /// replayed, so those writes have to cross now.
+    NeedHost(HostRequest, W),
 }
 
 /// One card's answer to a hook point, from [`Ruleset::run_hook`].
@@ -270,7 +273,7 @@ struct Inner {
     slots: Vec<Slot>,
     by_id: HashMap<String, i32>,
     sha256: String,
-    /// Bitset of every trigger kind any card declares, so `react` can skip the
+    /// Bitset of every trigger kind any card declares, so `counteract` can skip the
     /// whole bridge when nothing in the set listens. `TriggerKind` values fit in
     /// 0..128, so this is one word and costs no allocation.
     declared: u128,
@@ -393,7 +396,7 @@ impl Ruleset {
     }
 
     /// Does any card in the set declare an entry at this kind? The cheap
-    /// whole-set question that lets `react` skip building the bridge trigger at
+    /// whole-set question that lets `counteract` skip building the bridge trigger at
     /// all when the answer is no -- with `StubRules`, or at a kind nothing
     /// listens to, that is every raise.
     pub fn declares(&self, kind: crate::TriggerKind) -> bool {
@@ -422,7 +425,7 @@ impl Ruleset {
         let info = &self.inner.cards[card as usize];
         let entry = match call {
             Call::Play { .. } => info.entry(OnKind::Play, None),
-            Call::CounterAct { .. } => info.entry(OnKind::CounterAct, Some(world.trigger().kind)),
+            Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(world.trigger().kind)),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
             Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
@@ -497,9 +500,9 @@ impl Ruleset {
         }))
     }
 
-    /// `Card.CanReact` against the current trigger. Runs on a throwaway copy, so it
+    /// `Card.CanCounteract` against the current trigger. Runs on a throwaway copy, so it
     /// cannot change the world even if the card calls a mutating function.
-    pub fn can_react<W: CardWorld>(
+    pub fn can_counteract<W: CardWorld>(
         &self,
         world: &W,
         card: i32,
@@ -508,7 +511,7 @@ impl Ruleset {
         self.check(card)?;
         // Only a card that declared a [反击] at this kind is ever asked.
         let Some(entry) =
-            self.inner.cards[card as usize].entry(OnKind::CounterAct, Some(world.trigger().kind))
+            self.inner.cards[card as usize].entry(OnKind::Counteract, Some(world.trigger().kind))
         else {
             return Ok(false);
         };
@@ -600,7 +603,8 @@ fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outc
         }
         Err(e) if is_need_input(&e) => {
             if let Some(req) = state.host_request {
-                Ok(Outcome::NeedHost(req))
+                let world = state.world.expect("world is restored after nested calls");
+                Ok(Outcome::NeedHost(req, world))
             } else if let Some(p) = state.asked {
                 Ok(Outcome::NeedInput(p))
             } else {
@@ -681,7 +685,7 @@ fn fold_exit(v: i64) -> Result<i64, Error> {
 }
 
 /// Instantiate the card's module and call one of its entry points. Returns the
-/// i32 result for `can_react`, 0 otherwise. A guest that stops for a prompt comes
+/// i32 result for `can_counteract`, 0 otherwise. A guest that stops for a prompt comes
 /// back as [`need_input`], never as the raw sentinel.
 fn call_card<W: CardWorld>(
     rules: &Inner,

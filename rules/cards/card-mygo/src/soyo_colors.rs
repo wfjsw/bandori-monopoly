@@ -1,11 +1,11 @@
 //! `MyGO:（soyo）混合的颜色` -- C# `CardSoyoColors` (MatchHost.cs:6705-6748):
-//! place this card on one of your deeds; that tile gains every colour, and
-//! rent charged there under a foreign agent is halved again.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（soyo）混合的颜色`）:
 //! > （soyo）混合的颜色：
 //! >  将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。
 //!
+//! place this card on one of your deeds; that tile gains every colour, and
+//! rent charged there under a foreign agent is halved again.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

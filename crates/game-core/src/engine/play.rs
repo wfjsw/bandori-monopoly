@@ -9,7 +9,7 @@ use super::cx::{Ask, Cx, Flow, Halt};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, Trigger};
-use super::world::{Signal, CIRCLE_MONEY, HAND_LIMIT, START_HAND, START_MONEY};
+use super::world::{Signal, CIRCLE_MONEY, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
 
@@ -249,7 +249,7 @@ impl Cx<'_> {
             *n = 0;
         }
         // `turnStartBefore` -- before any exile/stun status ticks resolve, so a
-        // reaction sees the turn exactly as it was left last turn.
+        // counteraction sees the turn exactly as it was left last turn.
         raise!(self, "turnStartBefore", i, tile = self.w.st.players[i].pos)?;
         if self.out(i) {
             return Ok(());
@@ -392,7 +392,6 @@ impl Cx<'_> {
         self.w.next_turn_pending = true;
         // `turnEnd` (Fx hook point) -- every placed card decays/acts here.
         raise!(self, "turnEnd", i)?;
-        raise!(self, "turnEnd", i)?;
         // `turnEndAfter` (Fx) -- also runs the `at_turn_end` callbacks (C#
         // `AfterEnd`), so a [停留] they grant survives this turn's wear-off.
         raise!(self, "turnEndAfter", i)?;
@@ -429,7 +428,11 @@ impl Cx<'_> {
         plan.player_id = i;
         plan.roller = i;
         plan.main = is_turn;
-        self.w.st.step = stage::MOVE;
+        // Only the turn player's move drives the stage machine; a card moving
+        // somebody else must not leave `step` parked in MOVE.
+        if is_turn {
+            self.w.st.step = stage::MOVE;
+        }
         if plan.teleport_to >= 0 {
             let to = plan.teleport_to as usize;
             let resolve = plan.resolve;
@@ -595,12 +598,15 @@ impl Cx<'_> {
         self.build(player_id, t)
     }
 
-    /// `H.MortgageRoutine` -- mortgage one of the player's deeds.
+    /// `H.MortgageRoutine` -- mortgage one of the player's deeds, forced by a
+    /// card effect. This is not a user asking while a card is busy (`asking`),
+    /// so the "busy" refusal does not apply; the ownership/validity gates still
+    /// do.
     pub fn card_mortgage(&mut self, player_id: usize, tile: usize) -> Flow<()> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
         }
-        if let Some(why) = self.why_not_mortgage(player_id, tile as i32, true) {
+        if let Some(why) = self.why_not_mortgage(player_id, tile as i32, false) {
             self.w.log("text", player_id as i32, why);
             return Ok(());
         }
@@ -640,7 +646,7 @@ impl Cx<'_> {
         if !self.out(i) {
             // `roll` (pre) -- before the d20 is cast. `value = -1` is the
             // sentinel meaning "no roll yet": the bridge would otherwise
-            // derive `move_roll` from `value` and let roll-reacting cards
+            // derive `move_roll` from `value` and let roll-counteracting cards
             // (which match `Roll | MoveRoll`) fire before any dice exist.
             raise!(self, "roll", i, @m m, value = -1)?;
             if self.out(i) || !self.playing() {
@@ -677,7 +683,7 @@ impl Cx<'_> {
             m.roll = t.value.max(0);
             let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
             // A [反击] may have rerolled the dice (C# shares `t.Move` with the
-            // reactions): the face the walk uses is the one left on the trigger.
+            // counteractions): the face the walk uses is the one left on the trigger.
             m.roll = t.value.max(0);
             // C# `NextStepsFx.MoveBefore` -- a stored step count overrides the
             // roll for this one main move.
@@ -685,7 +691,7 @@ impl Cx<'_> {
                 m.roll = steps.max(0);
             }
             // C# `RollMove`: `if (!m.Signed) m.Roll = max(m.MinRoll, m.Roll)` --
-            // the clamp applies to the final face after the reactions, so a
+            // the clamp applies to the final face after the counteractions, so a
             // card that pushes the roll down still respects the floor.
             if !m.signed {
                 m.roll = m.roll.max(m.min_roll);
@@ -781,16 +787,14 @@ impl Cx<'_> {
             let at = next as usize;
             let passes_circle = self.tile(at).kind == "circle";
             let last = remaining == 0;
-            if passes_circle || last {
-                // `passBefore` -- same tiles `pass` fires at, but before the
-                // player's position updates to `next` (it has not arrived yet).
-                raise!(self, "passBefore", i, @m m, tile = next)?;
-                if self.out(i) || !self.playing() {
-                    return Ok(());
-                }
-                if self.w.st.players[i].pos != cur {
-                    break; // moved by a passBefore reaction
-                }
+            // `passBefore` -- the glossary's 「[经过]X」 is any tile on the move
+            // path, so this fires for every step (not just CiRCLE / the end).
+            raise!(self, "passBefore", i, @m m, tile = next)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            if self.w.st.players[i].pos != cur {
+                break; // moved by a passBefore counteraction
             }
             self.w.st.players[i].pos = next;
             // `passTile` (Fx) -- the player has stepped onto this tile.
@@ -818,13 +822,16 @@ impl Cx<'_> {
                 if passes_circle {
                     self.circle_reward(i, m.resolve && last)?;
                 }
-                raise!(self, "pass", i, @m m, tile = next)?;
-                if self.out(i) || !self.playing() {
-                    return Ok(());
-                }
-                if self.w.st.players[i].pos != next {
-                    break; // moved by an effect
-                }
+            }
+            // `pass` -- every traversed tile, like `passBefore` / `passTile`
+            // (glossary 「[经过]」). `passTile` is the Fx hook kind for the same
+            // walk; a card uses one or the other, never both.
+            raise!(self, "pass", i, @m m, tile = next)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            if self.w.st.players[i].pos != next {
+                break; // moved by an effect
             }
             k += 1;
         }
@@ -1824,7 +1831,7 @@ impl Cx<'_> {
     /// `MortgageRoutine`
     pub(crate) fn mortgage(&mut self, i: usize, t: usize, why: Option<Msg>) -> Flow<()> {
         // `mortgageBefore` -- fires before any guard, so it is a real pre-hook
-        // (a reaction can block the mortgage). The post half below only fires
+        // (a counteraction can block the mortgage). The post half below only fires
         // when the mortgage actually applied.
         raise!(self, "mortgageBefore", i, tile = t as i32)?;
         if self.out(i) || !self.playing() {
@@ -2384,9 +2391,11 @@ impl Cx<'_> {
 
     // =============================================================== cards
 
-    /// `HandLimitOf` / `OverHand`
+    /// `HandLimitOf` / `OverHand` -- the player's own `handLimit` state (cards
+    /// can raise or cut it), not the base constant.
     pub(crate) fn over_hand(&self, i: usize) -> bool {
-        self.w.hidden[i].hand.len() > HAND_LIMIT
+        let limit = self.w.st.players[i].hand_limit();
+        self.w.hidden[i].hand.len() as i32 > limit
     }
 
     /// `Draw` -- from the top of the pile; reshuffle the discard pile when empty.
@@ -2420,7 +2429,7 @@ impl Cx<'_> {
         if log && got > 0 {
             let over = self
                 .over_hand(i)
-                .then(|| Msg::new("log.part.over_hand").i("limit", HAND_LIMIT as i64));
+                .then(|| Msg::new("log.part.over_hand").i("limit", self.w.st.players[i].hand_limit() as i64));
             self.w
                 .log(
                     "draw",
@@ -2480,7 +2489,7 @@ impl Cx<'_> {
                 i as i32,
                 Msg::new("log.discard")
                     .player_id("who", i)
-                    .i("limit", HAND_LIMIT as i64)
+                    .i("limit", self.w.st.players[i].hand_limit() as i64)
                     .card("card", card),
             )
             .card = card.to_string();
@@ -2491,12 +2500,18 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// `CannotPlay`
-    fn cannot_play(&self, i: usize) -> Option<&'static str> {
+    /// `CannotPlay` -- the status gates. A card whose rulebook text says
+    /// 「可在眩晕时打出」 (C# `PlayableStunned`) skips the stun gate; the exile
+    /// and no-hand gates have no such exception in the pool.
+    fn cannot_play(&self, i: usize, id: &str) -> Option<&'static str> {
         let s = &self.w.st.players[i];
+        let stun_ok = self
+            .data
+            .card(id)
+            .is_some_and(|c| c.text.contains("可在眩晕时打出"));
         if s.exile() > 0 {
             Some("err.play_exiled")
-        } else if s.stunned() {
+        } else if s.stunned() && !stun_ok {
             Some("err.play_stunned")
         } else if s.no_hand() > 0 {
             Some("err.play_no_hand")
@@ -2514,7 +2529,7 @@ impl Cx<'_> {
         {
             return Some(Msg::new("err.play_phase"));
         }
-        if let Some(why) = self.cannot_play(i) {
+        if let Some(why) = self.cannot_play(i, id) {
             return Some(Msg::new(why));
         }
         if let Some(card) = self.data.card(id) {
@@ -2670,22 +2685,22 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// Reaction window (C# `React`), delegated to the card rules.
+    /// Counteraction window (C# `Counteract`), delegated to the card rules.
     ///
     /// Every raise site funnels through here (via [`raise!`] / [`Self::raise`]),
     /// so `step` is stamped centrally from the live turn step rather than at
     /// each call site.
-    fn react(&mut self, t: &mut Trigger) -> Flow<()> {
+    fn counteract(&mut self, t: &mut Trigger) -> Flow<()> {
         t.step = self.w.st.step;
         let rules = self.rules;
-        rules.react(self, t)
+        rules.counteract(self, t)
     }
 
-    /// Build-and-raise a [`Trigger`], returning it as [`Self::react`] left it so
-    /// a reaction's rewrite of a field (e.g. `moveRoll`'s reroll) can be read
+    /// Build-and-raise a [`Trigger`], returning it as [`Self::counteract`] left it so
+    /// a counteraction's rewrite of a field (e.g. `moveRoll`'s reroll) can be read
     /// back. Prefer the [`raise!`] macro over calling this directly.
     fn raise(&mut self, mut t: Trigger) -> Flow<Trigger> {
-        self.react(&mut t)?;
+        self.counteract(&mut t)?;
         Ok(t)
     }
 

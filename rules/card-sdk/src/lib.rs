@@ -19,7 +19,7 @@
 //! * no coroutines, no async, no callbacks -- write it top to bottom like the C#;
 //! * **all** randomness and world access must go through `ctx` (never keep your
 //!   own state in `static mut`; the module is re-instantiated for every run);
-//! * guards (`can_react`) run against a throwaway copy of the world, so they are
+//! * guards (`can_counteract`) run against a throwaway copy of the world, so they are
 //!   pure by construction even if they call a mutating function by mistake.
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
@@ -93,7 +93,7 @@ impl CardDef {
 }
 
 /// One entry point of a card (a C# `Card` override). The variant says what the
-/// entry is for, and its kind list is typed to match -- a reaction can only be
+/// entry is for, and its kind list is typed to match -- a counteraction can only be
 /// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
 /// at a [`abi::GateKind`]. An empty list is never dispatched.
 #[derive(Clone, Copy)]
@@ -110,13 +110,13 @@ pub enum On {
     /// A [反击] at these chain links: the guard decides whether the card is
     /// offered in the hand window, then the effect resolves. The guard is a
     /// pure query.
-    CounterAct(
+    Counteract(
         &'static [abi::ChainKind],
         fn(player_id: i32) -> bool,
         fn(player_id: i32) -> Asked,
     ),
     /// A field-card (`Fx`) hook at these settlement points: runs automatically
-    /// while the card is in play. Same shape as [`On::CounterAct`].
+    /// while the card is in play. Same shape as [`On::Counteract`].
     Hook(
         &'static [abi::HookKind],
         fn(player_id: i32) -> bool,
@@ -134,7 +134,7 @@ impl On {
     pub const fn kind(&self) -> abi::OnKind {
         match self {
             On::Play(..) => abi::OnKind::Play,
-            On::CounterAct(..) => abi::OnKind::CounterAct,
+            On::Counteract(..) => abi::OnKind::Counteract,
             On::Hook(..) => abi::OnKind::Hook,
             On::Gate(..) => abi::OnKind::Gate,
             On::AtEnd(..) => abi::OnKind::AtEnd,
@@ -147,7 +147,7 @@ impl On {
     /// what the manifest carries.
     pub fn triggers(&self) -> Vec<i32> {
         match self {
-            On::CounterAct(k, ..) => k.iter().map(|x| *x as i32).collect(),
+            On::Counteract(k, ..) => k.iter().map(|x| *x as i32).collect(),
             On::Hook(k, ..) => k.iter().map(|x| *x as i32).collect(),
             On::Gate(k, _) => k.iter().map(|x| *x as i32).collect(),
             _ => Vec::new(),

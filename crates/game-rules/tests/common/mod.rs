@@ -384,7 +384,7 @@ impl Table {
     }
 
     /// Index of the first option whose message (key or any argument) mentions
-    /// `needle` -- e.g. a card id in a [反击] window (`ask.react.play`).
+    /// `needle` -- e.g. a card id in a [反击] window (`ask.counteract.play`).
     pub fn option(&self, needle: &str) -> Option<i32> {
         let p = self.prompt()?;
         p.options
@@ -394,17 +394,17 @@ impl Table {
     }
 
     /// Is the open prompt a [反击] window offering `card`?
-    pub fn react_offered(&self, card: &str) -> bool {
+    pub fn counteract_offered(&self, card: &str) -> bool {
         self.prompt().is_some_and(|p| {
-            p.title.key() == "ask.react.title"
+            p.title.key() == "ask.counteract.title"
                 && p.options.iter().any(|o| {
-                    o.key() == "ask.react.play" && format!("{o:?}").contains(card)
+                    o.key() == "ask.counteract.play" && format!("{o:?}").contains(card)
                 })
         })
     }
 
     /// Declare `card` in the open [反击] window as `who`.
-    pub fn react(&mut self, who: usize, card: &str) -> Result<(), String> {
+    pub fn counteract(&mut self, who: usize, card: &str) -> Result<(), String> {
         let k = self
             .option(card)
             .unwrap_or_else(|| panic!("{card} not offered: {}", self.dump_prompt()));
@@ -557,9 +557,10 @@ impl Table {
     /// Put `card` on `who`'s field directly (no play, no hooks) -- for
     /// arranging an interaction. Returns the field uid.
     pub fn place_raw(&mut self, who: usize, card: &str) -> i32 {
+        let d = data();
         self.m
             .world_mut()
-            .place_card(who as i32, card, Msg::default())
+            .place_card(&d, who as i32, card, Msg::default())
     }
 
     // ------------------------------------------------------------ observe

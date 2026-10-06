@@ -1,10 +1,10 @@
 //! `HHW:出发！后台之旅！` -- C# `CardBackstageTour` (MatchHost.cs:3718-3779): look
-//! at the top two deck cards, keep 0-2 in order, discard the rest for 1,000 each.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:出发！后台之旅！`）:
 //! > 出发！后台之旅！：
 //! >  看牌堆顶2张牌，选择0~2张以任意顺序放回，剩余的翻入弃牌堆，每翻入一张获得1000资金
 //!
+//! at the top two deck cards, keep 0-2 in order, discard the rest for 1,000 each.
 
 use alloc::vec::Vec;
 

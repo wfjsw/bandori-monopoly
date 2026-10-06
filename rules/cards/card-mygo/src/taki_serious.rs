@@ -1,11 +1,11 @@
 //! `MyGO:（立希）想认真去做` -- C# `CardTakiSerious` (MatchHost.cs:6749-6791):
-//! every player holding [停留] settles immediately on a tile you pick within
-//! 2 of their position, all payments at a quarter price.
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:（立希）想认真去做`）:
 //! > （立希）想认真去做：
 //! >  使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为原价的四分之一
 //!
+//! every player holding [停留] settles immediately on a tile you pick within
+//! 2 of their position, all payments at a quarter price.
 
 use alloc::vec::Vec;
 

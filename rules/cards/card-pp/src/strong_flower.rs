@@ -1,5 +1,4 @@
 //! `PP:可爱又强壮的花朵` -- C# `CardStrongFlower` (MatchHost.cs:7629-7698):
-//! place on one of your deeds; the user stops there and settles when passing.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:可爱又强壮的花朵`）:
 //! > 可爱又强壮的花朵：
@@ -11,6 +10,7 @@
 //! > 2. 如果[共鸣]则获得1500资金；
 //! > 3. 此卡放入[使用者]弃卡区。
 //!
+//! place on one of your deeds; the user stops there and settles when passing.
 //! The tile is chosen here but `place_card` cannot bind a field card to a tile
 //! (see the TODO); the [持续] stop is expressible via `ctx::plan` once the
 //! tile binding lands.

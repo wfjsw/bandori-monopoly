@@ -6,7 +6,13 @@ from pathlib import Path
 
 CARDS = Path("rules/cards")
 BOOK = json.load(open("docs/rulebook/cards.json", encoding="utf-8"))
-ID_LINE = re.compile(r'id: "([^"]+)"')
+# the card id lives in `CardDef::new("BAND:Name", ...)`, sometimes also in a
+# `const ID: &str = "..."` or the older `id: "..."` form
+ID_LINES = [
+    re.compile(r'CardDef::new\(\s*"([^"]+)"'),
+    re.compile(r'const ID: &str = "([^"]+)"'),
+    re.compile(r'id: "([^"]+)"'),
+]
 QUOTE_HEAD = "//! 规则书（docs/rulebook/cards.json, id `"  # marker of a quote block
 
 
@@ -18,21 +24,31 @@ def quote_block(cid: str, text: str) -> list[str]:
     return out
 
 
+def drop_quote_block(lines: list[str]) -> list[str]:
+    """Remove one existing quote block (and its bare `//!` markers) so the run is
+    idempotent. Only the contiguous block is touched -- other bare `//!` lines in
+    the module doc stay put."""
+    start = next((i for i, l in enumerate(lines) if l.startswith(QUOTE_HEAD)), None)
+    if start is None:
+        return lines
+    b = start - 1 if start > 0 and lines[start - 1].strip() == "//!" else start
+    e = start + 1
+    while e < len(lines) and (lines[e].startswith("//! >") or lines[e].strip() == "//!"):
+        e += 1
+    return lines[:b] + lines[e:]
+
+
 def main() -> int:
     problems = []
     for src in sorted(CARDS.glob("card-*/src/*.rs")):
         if src.name == "lib.rs":
             continue
         lines = src.read_text(encoding="utf-8").split("\n")
-        m = next((ID_LINE.search(l) for l in lines if 'id: "' in l), None)
-        if not m:
+        text = "\n".join(lines)
+        cid = next((m.group(1) for pat in ID_LINES if (m := pat.search(text))), None)
+        if not cid:
             continue
-        cid = m.group(1)
-        # drop a previous quote block (quote lines + its markers) so the run is idempotent
-        keep = [
-            l for l in lines
-            if not l.startswith(QUOTE_HEAD) and not l.startswith("//! >") and l.strip() != "//!"
-        ]
+        keep = drop_quote_block(lines)
         book = BOOK.get(cid)
         if book is None:
             # the sheet is not exhaustive: a card it omits cites the C# instead

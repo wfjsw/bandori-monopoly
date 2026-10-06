@@ -1,10 +1,10 @@
 //! `HHW:Happy, Lucky, Smile, Yeah！` -- C# `CardHappyLucky` (MatchHost.cs:4093-4133):
-//! roll 1d4 mod 4 and teleport along that axis to the farthest tile.
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:Happy, Lucky, Smile, Yeah！`）:
 //! > Happy, Lucky, Smile, Yeah！：
 //! >  投掷1d4mod4，对应投掷结果1-4沿上，下，左，右其中之一的方向传送至直线距离最远的格子（例：在弦卷豪宅骰到4则传送到商店街），视为你的主要移动。
 //!
+//! roll 1d4 mod 4 and teleport along that axis to the farthest tile.
 
 use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, Msg, On};

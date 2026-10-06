@@ -1,18 +1,17 @@
 //! `PP:[丸山彩]憧憬的前方` -- C# `CardAyaLonging` (MatchHost.cs:7995-8063):
-//! stay in play, take a card back from the discard, and shave payments while
-//! poorest.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:[丸山彩]憧憬的前方`）:
 //! > [丸山彩]憧憬的前方：
 //! > [手]：
 //! > 将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。
 //! > [持续]：
-//! >
-//! > （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]
-//! > 或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
-//! >
+//!
+//! > （1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。
+//!
 //! > （2）[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）。
 //!
+//! stay in play, take a card back from the discard, and shave payments while
+//! poorest.
 //! The discard pick runs in `Play`; the [持续]（1） shave lives in the
 //! `PayChoose` hook.
 

@@ -1,10 +1,10 @@
 //! `CRYCHIC:（祥子）带领着大家` -- C# `CardSakikoLead` (MatchHost.cs:3332-3353):
-//! record the players sharing your tile; they follow your next main move.
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:（祥子）带领着大家`）:
 //! > （祥子）带领着大家：
 //! >  回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家，使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按行动顺序依次触发结算；触发结算时进行的支付价格减半。
 //!
+//! record the players sharing your tile; they follow your next main move.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

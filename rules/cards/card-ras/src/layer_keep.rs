@@ -1,10 +1,10 @@
 //! `RAS:（和奏瑞依）寄于指尖的执念` -- C# `CardLayerKeep` (MatchHost.cs:10118-10187):
-//! keep the unpicked fire-pot die and later spend fire to reuse it.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（和奏瑞依）寄于指尖的执念`）:
 //! > （和奏瑞依）寄于指尖的执念：
 //! > 当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。
 //!
+//! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
 use card_sdk::abi::HookKind;

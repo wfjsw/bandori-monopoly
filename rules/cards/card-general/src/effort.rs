@@ -1,11 +1,11 @@
 //! `通用:尽力后的收获` -- C# `CardEffort` (MatchHost.cs:2304-2332): this turn's
-//! main move becomes 1-6 steps and settles.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:尽力后的收获`）:
 //! > 尽力后的收获：
 //! > [手]：
 //! > 立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]。
 //!
+//! main move becomes 1-6 steps and settles.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 

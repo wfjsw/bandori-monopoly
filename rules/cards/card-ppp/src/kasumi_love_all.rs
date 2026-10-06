@@ -1,5 +1,4 @@
 //! `PPP:（香澄）大家我都喜欢哦` -- C# `CardKasumiLoveAll` (MatchHost.cs:9037-9084):
-//! park on 星之鼓动山丘; anyone who passes it is force-stopped there at half rent.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PPP:（香澄）大家我都喜欢哦`）:
 //! > （香澄）大家我都喜欢哦：
@@ -8,6 +7,7 @@
 //! > [持续]：
 //! > 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。
 //!
+//! park on 星之鼓动山丘; anyone who passes it is force-stopped there at half rent.
 
 use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};

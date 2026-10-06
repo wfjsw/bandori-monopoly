@@ -8,7 +8,7 @@
 //!
 //! （1） is the shared Afterglow rest counter (see [`super::ran_red`]).
 //!
-//! （2） is a reaction to *someone else's* act -- a skill press or a hand play --
+//! （2） is a counteraction to *someone else's* act -- a skill press or a hand play --
 //! and the teleport it buys is inert: 「不触发结算」 and 「不引发其他被动效果
 //! （如玩家重叠）」. Both are the plan's own flags (`resolve: false`) plus the
 //! fact that a plain position write raises nothing.

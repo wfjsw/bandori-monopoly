@@ -2,7 +2,7 @@
   "relay_start": "relay 开始",
   "relay_end": "relay 结束",
   "echo_play": "回声：打出",
-  "echo_react": "回声：反应",
+  "echo_counteract": "回声：反应",
   "lister_count": "手牌列出 {{n}} / {{size}}",
   "lister_moved": "移入弃牌堆：{{found}}",
   "stunner_done": "眩晕；异常计数 {{count}}",

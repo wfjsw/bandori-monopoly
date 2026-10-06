@@ -551,8 +551,8 @@ fn interaction_ag_counter_vs_want_to_grab() {
     let mut t = Table::vanilla(2);
     t.give(1, &["AG:宣战布告"]);
     t.give_play(0, "CRYCHIC:想要抓住...").unwrap();
-    if t.prompt().is_some() && t.react_offered("AG:宣战布告") {
-        t.react(1, "AG:宣战布告").ok();
+    if t.prompt().is_some() && t.counteract_offered("AG:宣战布告") {
+        t.counteract(1, "AG:宣战布告").ok();
         drain(&mut t);
     } else {
         drain(&mut t);
@@ -568,8 +568,8 @@ fn interaction_generic_encore_vs_karaoke() {
     t.give(1, &["通用:安可"]);
     t.dice(&[3, 5, 7, 1, 20]);
     t.give_play(0, "CRYCHIC:去唱卡拉ok吧").unwrap();
-    if t.prompt().is_some() && t.react_offered("通用:安可") {
-        t.react(1, "通用:安可").ok();
+    if t.prompt().is_some() && t.counteract_offered("通用:安可") {
+        t.counteract(1, "通用:安可").ok();
         drain(&mut t);
     } else {
         // Choose a roll result if prompted.
@@ -589,8 +589,8 @@ fn interaction_web_glitch_vs_destiny_hand() {
     t.give(1, &["通用:网络链接异常"]);
     t.give(0, &["CRYCHIC:一起演奏音乐的命运共同体"]);
     let r = t.play(0, "CRYCHIC:一起演奏音乐的命运共同体");
-    if t.prompt().is_some() && t.react_offered("通用:网络链接异常") {
-        t.react(1, "通用:网络链接异常").ok();
+    if t.prompt().is_some() && t.counteract_offered("通用:网络链接异常") {
+        t.counteract(1, "通用:网络链接异常").ok();
         drain(&mut t);
     } else {
         drain(&mut t);
@@ -610,8 +610,8 @@ fn interaction_vocalist_counter_vs_big_payment() {
     t.dice(&[3]);
     let r = t.roll(0);
     // The counter window should open (payment ≥ 5000).
-    if t.prompt().is_some() && t.react_offered("CRYCHIC:主唱太拼命了") {
-        t.react(1, "CRYCHIC:主唱太拼命了").ok();
+    if t.prompt().is_some() && t.counteract_offered("CRYCHIC:主唱太拼命了") {
+        t.counteract(1, "CRYCHIC:主唱太拼命了").ok();
         drain(&mut t);
         // Payment waived: p0's money unchanged.
         assert_eq!(t.money(0), 10_000, "payment waived");

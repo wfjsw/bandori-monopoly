@@ -1,5 +1,4 @@
 //! `通用:网络链接异常` -- C# `CardNetError` (MatchHost.cs:2258-2303): [反击]
-//! another player's [手] effect or an event before it lands.
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:网络链接异常`）:
 //! > 网络链接异常：
@@ -9,6 +8,7 @@
 //! > 2. 手卡的[手]效果且没有[指定]目标则抵消其所有的效果；
 //! > 3. 事件卡的效果手牌则则抵消其所有的效果。
 //!
+//! another player's [手] effect or an event before it lands.
 
 use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -16,16 +16,16 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const NET_ERROR: CardDef = CardDef::new(
     "通用:网络链接异常",
-    &[On::CounterAct(
+    &[On::Counteract(
         &[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
-        can_react,
-        react,
+        can_counteract,
+        counteract,
     )],
 );
 
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[反击]1张手卡的[手]效果或事件卡的效果生效前」
-    // C# `CardNetError.CanReact`: kind=="event", or kind=="card" with a live play
+    // C# `CardNetError.CanCounteract`: kind=="event", or kind=="card" with a live play
     // by someone else.
     match trigger::kind() {
         TriggerKind::Event => true,
@@ -34,7 +34,7 @@ fn can_react(player_id: i32) -> bool {
             trigger::player_id() != player_id
             // TODO(规则书)[judgement](ABI): the trigger carries no PlayCtx, so `t.Play == null` and
             //   the clause under-specifies -- see the note above it
-            // `t.Play.Cancelled` cannot be checked (C# `CardNetError.CanReact`).
+            // `t.Play.Cancelled` cannot be checked (C# `CardNetError.CanCounteract`).
         }
         // 规则书（1）的可表达半边: a player-designation of this player (C# `H.Target`,
         // not `H.TargetTile` -- the `immune<p>` tag only guards `H.Target`).
@@ -48,7 +48,7 @@ fn can_react(player_id: i32) -> bool {
     }
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::Event => {
             // 规则书（3）[反击]: 「事件卡的效果手牌则则抵消其所有的效果」

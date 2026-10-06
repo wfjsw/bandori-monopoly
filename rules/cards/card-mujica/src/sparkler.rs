@@ -1,10 +1,10 @@
 //! `Mujica:燃尽前的线香花火` -- C# `CardSparkler` (MatchHost.cs:5542-5580): place
-//! with 2 miracle crystals; each turn end burns one for an extra turn.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:燃尽前的线香花火`）:
 //! > 燃尽前的线香花火：
-//! > 将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。
+//! >  将此卡放置于场上并放置2个奇迹水晶（上限2），你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合，最后一个奇迹水晶移除后将此卡置入弃牌堆并立刻使你获得2层[眩晕]。
 //!
+//! with 2 miracle crystals; each turn end burns one for an extra turn.
 
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};

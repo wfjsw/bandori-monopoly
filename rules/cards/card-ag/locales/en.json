@@ -33,7 +33,7 @@
   "detour_opt_reverse": "Move backwards (Uematsu Ran: no CiRCLE reward when passing)",
   "detour_opt_tomoe": "Move 10 tiles from start toward Galaxy Ramen (Udagawa Tomoe)",
   "detour_planned": "{{who}} makes an Afterglow-style move this turn; the move roll becomes 1d6 (Detour on the Way Home)",
-  "detour_react": "This move reverses (Tsugumi-style); the next move roll becomes 1d6 (Detour on the Way Home)",
+  "detour_counteract": "This move reverses (Tsugumi-style); the next move roll becomes 1d6 (Detour on the Way Home)",
   "detour_title": "Detour on the Way Home",
   "himari_plus_one": "{{who}}'s roll +1 ({{card}}), now {{total}}",
   "moca_half_decayed": "{{who}}'s \"0.5x Speed\" ran out of Miracle Crystals and goes to the discard pile",

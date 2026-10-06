@@ -25,7 +25,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     On::Play(press),
     // On::CantPlay(cant_play),                       // C# `Card.WhyNot`
-    // On::React(&[TriggerKind::Pay], guard, react),  // [反击]: kinds + guard + effect
+    // On::Counteract(&[TriggerKind::Pay], guard, counteract),  // [反击]: kinds + guard + effect
     // On::Hook(&[TriggerKind::TurnEnd], decay),      // field hooks, auto-run in play
     // On::AtEnd(at_end),                             // scheduled turn-end body
     // On::RollPlan(roll_plan),                       // shapes the main move
@@ -36,7 +36,7 @@ fn press(player_id: i32) {
 ```
 
 Every handler is a `fn(player_id: i32)` (the player the card is placed at for hooks);
-`On::React` carries its [反击] trigger kinds + a pure `bool` guard + the effect,
+`On::Counteract` carries its [反击] trigger kinds + a pure `bool` guard + the effect,
 `On::Hook` the field-hook kinds (`passTile`, `payAdd`, `drawn`, `turnEnd`, ...
 -- the kind names ARE the C# `Fx.*` names). An empty kind list is never
 dispatched.
@@ -74,7 +74,7 @@ then bots take the prompt fallback.
 ## Trigger points (`trigger::kind()`)
 
 Every point the engine raises is a pair: a `*Before` half that fires before the
-thing happens (so a reaction can block or rewrite it) and a `*After` half that
+thing happens (so a counteraction can block or rewrite it) and a `*After` half that
 fires after it commits. A few legacy kinds from the original port kept their
 original names where the pairing is already implied (`settleBefore` →
 `settle` → `settleAfter`, `pay` → `paid`, `roll` → `moveRoll`).
@@ -82,7 +82,7 @@ original names where the pairing is already implied (`settleBefore` →
 | pair | when |
 |---|---|
 | `turnStartBefore` / `turnStart` | a turn begins -- before / after the exile & stun status ticks |
-| `roll` / `moveRoll` | the main roll -- before the d20 is cast / after it, before walking (a reaction may reroll via `set_move_roll`) |
+| `roll` / `moveRoll` | the main roll -- before the d20 is cast / after it, before walking (a counteraction may reroll via `set_move_roll`) |
 | `passBefore` / `pass` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives |
 | `settleBefore` / `settle` / `settleAfter` | landing -- before resolving the tile / before its effect / after it fully resolves |
 | `mortgageBefore` / `mortgage` | mortgaging a deed -- before any guard (can block) / after it applied |
@@ -96,7 +96,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |
 | `leaveBefore` / `leaveAfter` | forfeiting -- before any guard / after the player is cleared, before the game-over check |
 
-`roll` carries `value = -1` as a "no roll yet" sentinel so roll-reacting cards
+`roll` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
 (which match `Roll | MoveRoll`) stay dormant before the dice are cast.
 
 ## Every line cites the rule book
@@ -140,7 +140,7 @@ python tools/rulebook/check.py     # every card quotes its passage and cites it
 `cardmap.json` (extracted from `MatchHost.cs` line ~18500) maps every C# class to
 its data id: 184 cards over 176 classes. Porting a card:
 
-1. read its C# `Play` / `React` / `WhyNot` (MatchHost.cs);
+1. read its C# `Play` / `Counteract` / `WhyNot` (MatchHost.cs);
 2. write a `CardDef` + body against the vocabulary above;
 3. add the message keys to `locales/zh-CN.json` and `locales/en.json`;
 4. `node tools/build-ruleset.mjs && python tools/i18n/check.py && cargo test -p game-rules`.
@@ -157,21 +157,21 @@ cannot ship with a raw key showing to players.
   crate, one `.rs` per card). `python tools/rulebook/check.py` verifies every
   card quotes its passage and cites it; `node tools/build-ruleset.mjs` ships
   them as one module (`dist/cards`, 184 cards).
-* [反击] cards fire through the hand-reaction window (`WasmRules::hand_reactions`):
-  every trigger opens it, declarations resolve in reverse order, and a reaction
+* [反击] cards fire through the hand-counteraction window (`WasmRules::hand_counteractions`):
+  every trigger opens it, declarations resolve in reverse order, and a counteraction
   play opens a counter-window (depth-capped runaway guard at 16; the C# cuts at
   4, which is tighter than the card pool needs).
 * **Ordering when several cards answer one trigger** is a LIFO stack, and the
   case that matters is a [反击] counter-card answering someone else's card play
-  (the `card` → hand-reaction window → `reacted` chain). Declarations are
+  (the `card` → hand-counteraction window → `counteracted` chain). Declarations are
   collected in player order starting at the trigger's player and wrapping the
   table; resolution is the exact **reverse** of declaration order, so the last
-  card to answer the window resolves first, and any reaction it plays opens a
+  card to answer the window resolves first, and any counteraction it plays opens a
   nested counter-window before earlier declarations get their turn.
   Where this LIFO rule does **not** apply (left as-is, flagged for a later pass):
-  * the acting card's own follow-up (`t.card`'s `react`) resolves *before* the
+  * the acting card's own follow-up (`t.card`'s `counteract`) resolves *before* the
     window, outside the stack -- a card answering its own play is not competing
-    with reactions to it;
+    with counteractions to it;
   * one declaration per player per window -- a player with two eligible cards picks
     one and cannot stack both;
   * nested counter-windows are separate stacks (LIFO within each, not across
@@ -182,11 +182,11 @@ cannot ship with a raw key showing to players.
   example, can fire during both step 1 (awaiting roll) and step 3 (settling),
   and `step()` tells those apart.
 * **Field-card (`Fx`) hooks** are persistent effects on a placed card. They are
-  *not* [反击] points: the engine runs every placed card's `react` against them
+  *not* [反击] points: the engine runs every placed card's `counteract` against them
   **automatically**, in placement order per player, with no player declaration.
   They use their own `TriggerKind`s (`turnEnd`, `drawn`, `passTile`, `payAfter`,
   `rollAfter`, `cardPlayed`, `targeted`, `payChoose`) so a card can tell a field
-  effect from a hand reaction by its kind alone -- `match trigger::kind()` is the
+  effect from a hand counteraction by its kind alone -- `match trigger::kind()` is the
   dispatch. Every hook kind is raised except `targeted` (it waits on the
   targeting pipeline). `drawn` runs on the card just drawn (named on
   `t.card`, still in hand) rather than on placed cards. Hook-only kinds open no
@@ -194,16 +194,16 @@ cannot ship with a raw key showing to players.
   so a card there tells which by `is_placed(player_id)`.
   Per-card miracle crystals (`crystals` / `set_crystals` / `add_crystals`) are
   the decay counter `DecayCard.TurnEnd` uses.
-* A reaction can reshape the trigger it answered: `set_move_roll` rewrites a
+* A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a
   move roll, `set_pay_amount` reduces or cancels (0) a payment, `set_pay_target`
-  redirects its payee (-1 = the bank), and `set_cancelled` / `negate_effect` / `spare` shape what settles. The engine honours all four once the reaction window closes.
+  redirects its payee (-1 = the bank), and `set_cancelled` / `negate_effect` / `spare` shape what settles. The engine honours all four once the counteraction window closes.
 * **[反击] is keyed on the effect, not on an outcome.** `ChainKind::Effect` is
   raised when an effect's recipients are named, before settlement; `ctx::effect`
   lists what that link declared (`count` / `kind` / `target` / `from` / `tile` /
   `value`), so a guard can take the whole list (「被…效果影响」 -- `effect::hits`)
   or one entry (「一次性支付5000以上」 -- `effect::has(TriggerKind::Pay)`).
   `Target` / `Abnormal` / `Pay` are settlement hooks now and cannot reconstruct
-  that clause. A reaction is a chain link: it resolves **before** the effect and
+  that clause. A counteraction is a chain link: it resolves **before** the effect and
   may `set_cancelled()` (negate the activation -- the link never happened),
   `negate_effect()` (it happened, settles to nothing), or `spare(seat)` (everyone
   but that seat settles).
@@ -216,7 +216,7 @@ cannot ship with a raw key showing to players.
 * most cards are **partial**: what the vocabulary cannot express is marked
   `TODO(规则书)` / `TODO(ABI)` naming the missing hook (251 markers remain after
   the v22-v25 waves). What is **landed** since the first cut: the `On::` handler
-  form (Play / CantPlay / React / Hook / AtEnd / RollPlan), the field-hook kinds
+  form (Play / CantPlay / Counteract / Hook / AtEnd / RollPlan), the field-hook kinds
   (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter/Instead`,
   `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `RollAfter`, `Reshuffled`,
   `Bought`, `Discarded`, `DeckBeforeGame`/`DeckAtGameStart`, `BeforeOut`,
@@ -232,7 +232,7 @@ cannot ship with a raw key showing to players.
     this + the plan-readback wiring in `main_move`;
   * plan gaps: `set_start` (start-tile override), `set_teleport_to`
     (teleport-with-settle shaping), multi-die `MoveCtx.Base` tables, and
-    in-flight move writeback (reactions setting `m.Stopped`/`m.ExtraSteps`);
+    in-flight move writeback (counteractions setting `m.Stopped`/`m.ExtraSteps`);
   * **targeting** is landed in v26 (`target`/`target_all`/`target_tile`,
     `ImmuneAll`/`Untargetable`/`Redirect`, `targeted_count`); what remains is
     the per-play `immune<p>` tags, `PlayCtx` `Effective`/`Extreme`, `t.Pay.tile`,

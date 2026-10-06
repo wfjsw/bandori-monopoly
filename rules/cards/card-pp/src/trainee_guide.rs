@@ -1,20 +1,20 @@
 //! `PP:练习生解密指南` -- C# `CardTraineeGuide` (MatchHost.cs:7870-7994): stay
-//! in play with crystals and mono/dual marks; cash the marks in at 5 crystals.
 //!
 //! 规则书（docs/rulebook/cards.json, id `PP:练习生解密指南`）:
 //! > 练习生解密指南：
 //! > [手]：
 //! > 为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]并将此卡放置在[使用者]的[场地]，在此卡上放置“粉丝数量”÷3个[奇迹水晶]，然后公开[使用者]的抽卡区并根据公开卡中的颜色数量添加一个单色/双色标记，如果[共鸣]则[消耗]500资金并添加任意2个标记。
 //! > [持续]：
-//! >
+//!
 //! > （1）手卡上限数量减1。
-//! >
+//!
 //! > （2）回合结束时添加1个[奇迹水晶]。
-//! >
+//!
 //! > （3）此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作随后进入弃卡区：
 //! > 1. 每个单色效果为获得1层状态“下次盖房的价格减少1000（可溢出），盖房后减少1层”；
 //! > 2. 每个双色效果为将自己的所有反面[P✽P粉丝]变正。
 //!
+//! in play with crystals and mono/dual marks; cash the marks in at 5 crystals.
 //! The crystal counter and the turn-end tick are live; the mark bookkeeping
 //! and the cash-in still need hooks the ABI lacks.
 
@@ -77,9 +77,9 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("trainee_guide_resonance_cost")),
         )?;
     }
-    // 规则书[持续]（1）: 「手卡上限数量减1」 -- the limit is keyed state, so the
-    // card just lowers it. It is restored when the card leaves play.
-    ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
+    // 规则书[持续]（1）: 「手卡上限数量减1」 -- a continuous field-card delta
+    // (`CardData.hand_limit_delta`), stamped on the instance at placement and
+    // gone with it. No state write: that would double-count.
     Ok(())
 }
 

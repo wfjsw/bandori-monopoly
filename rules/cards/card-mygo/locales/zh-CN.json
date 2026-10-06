@@ -1,5 +1,6 @@
 {
   "anon_tokyo_ask": "[指定] 相邻的哪块可购买格子？",
+  "anon_tokyo_link_rent": "连接的 {{tile}} 收费的一半（+{{n}}）",
   "anon_tokyo_linked": "{{a}} 和 {{b}} 之间放了一个 [奇迹水晶]：收费时额外收取另一块收费的一半（{{card}}）",
   "anon_tokyo_mark": "Anon Tokyo 连接",
   "anon_tokyo_mark_note": "和 {{tile}} 连接",

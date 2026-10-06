@@ -1,10 +1,10 @@
 //! `Mujica:会被骗着买水晶的人` -- C# `CardCrystalSwap` (MatchHost.cs:5981-6049):
-//! move one miracle crystal from one card to another.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:会被骗着买水晶的人`）:
 //! > 会被骗着买水晶的人：
 //! >  将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上。
 //!
+//! move one miracle crystal from one card to another.
 
 use alloc::vec::Vec;
 

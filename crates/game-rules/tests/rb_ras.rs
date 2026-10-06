@@ -56,8 +56,8 @@ fn riot_counter_cycles_hands_and_draws_extra() {
     t.begin_turn(0);
     drain(&mut t);
     t.play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("RAS:R. I. O. T."), "{}", t.dump_prompt());
-    t.react(1, "RAS:R. I. O. T.").unwrap();
+    assert!(t.counteract_offered("RAS:R. I. O. T."), "{}", t.dump_prompt());
+    t.counteract(1, "RAS:R. I. O. T.").unwrap();
     drain(&mut t);
 
     // 规则书: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡」
@@ -83,7 +83,7 @@ fn riot_does_not_negate_the_countered_effect() {
     t.begin_turn(0);
     drain(&mut t);
     t.play(0, "通用:登上武道馆").unwrap();
-    t.react(1, "RAS:R. I. O. T.").unwrap();
+    t.counteract(1, "RAS:R. I. O. T.").unwrap();
     drain(&mut t);
     // 规则书: 登武道馆 still charges each other player 1000.
     assert_eq!(t.money(0), 22_000, "money {:?}", (0..3).map(|i| t.money(i)).collect::<Vec<_>>());
@@ -214,7 +214,6 @@ fn exist_no_extra_draw_when_it_redirected() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book flips EXIST into the owner's discard; engine puts it in the previous player's discard (p0's card ends in p1's discard)"]
 fn exist_flips_into_owner_discard() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "RAS:EXIST").unwrap();
@@ -251,7 +250,7 @@ fn hey_kids_window_on_own_tile_settle() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    assert!(t.react_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
 }
 
 #[test]
@@ -284,7 +283,7 @@ fn hey_kids_transfers_one_house() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "RAS:狂乱Hey Kids!!").unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     // How many houses to move, then which target tile(s).
     while t.prompt().is_some() {
         let p = t.expect_prompt();
@@ -313,7 +312,7 @@ fn hey_kids_two_houses_to_two_targets() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "RAS:狂乱Hey Kids!!").unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     // Pick count 2, then one house onto each of the two targets.
     let mut picked = vec![];
     while t.prompt().is_some() {
@@ -356,7 +355,7 @@ fn hey_kids_money_when_target_house_is_dearer() {
     t.set_pos(0, EDOGAWA_PARK - 1);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "RAS:狂乱Hey Kids!!").unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
         if p.kind == "tile" {
@@ -386,7 +385,7 @@ fn hey_kids_money_when_source_house_is_dearer() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "RAS:狂乱Hey Kids!!").unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
         if p.kind == "tile" {
@@ -412,7 +411,7 @@ fn hey_kids_money_two_houses_to_two_targets() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "RAS:狂乱Hey Kids!!").unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     let mut picked = vec![];
     while t.prompt().is_some() {
         let p = t.expect_prompt();
@@ -504,7 +503,6 @@ fn change_world_boosts_the_next_charge() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book puts Change the world into 「弃牌堆」 (naturally the owner's); engine puts it in the triggering payer's discard"]
 fn change_world_goes_to_owner_discard() {
     let mut t = Table::vanilla(3);
     t.own(0, &[BUDOKAN, SPACE]);
@@ -592,11 +590,11 @@ fn please_choose_window_on_livehouse_settle() {
     t.set_pos(1, SPACE - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.react_offered("RAS:PLEASE CHOOSE"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("RAS:PLEASE CHOOSE"), "{}", t.dump_prompt());
 }
 
 #[test]
-fn please_choose_opt2_teleports_reactor_without_settle() {
+fn please_choose_opt2_teleports_counteractor_without_settle() {
     // 规则书: 「（2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）」
     let mut t = Table::vanilla(3);
     t.own(2, &[SPACE]);
@@ -607,11 +605,11 @@ fn please_choose_opt2_teleports_reactor_without_settle() {
     t.set_pos(1, SPACE - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    t.react(0, "RAS:PLEASE CHOOSE").unwrap();
+    t.counteract(0, "RAS:PLEASE CHOOSE").unwrap();
     // The settler picks between the two options; pick opt2 (index 1).
     t.answer(1, 1).unwrap();
     drain(&mut t);
-    assert_eq!(t.pos(0), SPACE, "reactor teleports to the settler's tile");
+    assert_eq!(t.pos(0), SPACE, "counteractor teleports to the settler's tile");
     assert_eq!(t.pos(1), SPACE);
     assert!(t.discard(0).contains(&"RAS:PLEASE CHOOSE".to_string()));
 }
@@ -754,14 +752,14 @@ fn guerrilla_table() -> Table {
 fn guerrilla_counter_after_pass_and_charge() {
     // 规则书: 「[反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后」
     let t = guerrilla_table();
-    assert!(t.react_offered("RAS:游击演出"), "{}", t.dump_prompt());
+    assert!(t.counteract_offered("RAS:游击演出"), "{}", t.dump_prompt());
 }
 
 #[test]
 fn guerrilla_teleports_and_must_buy() {
     // 规则书: 「传送至任意无主可购买的格子并[结算]，且必须购买。」
     let mut t = guerrilla_table();
-    t.react(0, "RAS:游击演出").unwrap();
+    t.counteract(0, "RAS:游击演出").unwrap();
     t.answer_tile(0, EDOGAWA_PARK).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(EDOGAWA_PARK), Some(0), "must buy the chosen tile");
@@ -774,7 +772,7 @@ fn guerrilla_teleports_and_must_buy() {
 #[ignore = "DISCREPANCY: book teleports to the chosen tile (stop there); engine buys that tile but ends the player on the next tile (chosen+1)"]
 fn guerrilla_ends_on_the_chosen_tile() {
     let mut t = guerrilla_table();
-    t.react(0, "RAS:游击演出").unwrap();
+    t.counteract(0, "RAS:游击演出").unwrap();
     t.answer_tile(0, EDOGAWA_PARK).unwrap();
     drain(&mut t);
     assert_eq!(t.pos(0), EDOGAWA_PARK, "「传送至任意无主可购买的格子」");
@@ -837,8 +835,8 @@ fn repaint_reduces_the_move_by_owned_path_tiles() {
     drain(&mut t);
     t.dice(&[10]); // path 6..15 contains 7 and 11 -> X = 2
     t.roll(1).unwrap();
-    assert!(t.react_offered("RAS:Repaint"), "{}", t.dump_prompt());
-    t.react(0, "RAS:Repaint").unwrap();
+    assert!(t.counteract_offered("RAS:Repaint"), "{}", t.dump_prompt());
+    t.counteract(0, "RAS:Repaint").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(1), 5 + (10 - 2), "10 - 2 steps");
     assert!(t.discard(0).contains(&"RAS:Repaint".to_string()));
@@ -858,7 +856,7 @@ fn repaint_counts_only_the_original_path() {
     drain(&mut t);
     t.dice(&[6]); // path 6..11 contains 10 -> X = 1
     t.roll(1).unwrap();
-    t.react(0, "RAS:Repaint").unwrap();
+    t.counteract(0, "RAS:Repaint").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(1), TSUKIGAOKA, "6 - 1 steps lands on 10");
 }
@@ -877,7 +875,7 @@ fn repaint_halves_the_settle_payment() {
     drain(&mut t);
     t.dice(&[6]);
     t.roll(1).unwrap();
-    t.react(0, "RAS:Repaint").unwrap();
+    t.counteract(0, "RAS:Repaint").unwrap();
     drain(&mut t);
     assert_eq!(t.money(1), 19_500, "1000 / 2");
     assert_eq!(t.money(0), 20_500);
@@ -945,7 +943,6 @@ fn chuchu_buy_pays_user_and_passes_the_card_on() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book loses 1 crystal per holder turn end (3 -> 2 after one end); engine loses 2 (3 -> 1)"]
 fn chuchu_loses_one_crystal_per_turn_end() {
     let mut t = chuchu_table();
     t.give_play(0, "RAS:（chuchu）演奏我的音乐吧").unwrap();
@@ -1209,7 +1206,6 @@ fn masking_skill_gains_fire_on_named_tiles() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book grants the pot 「每次[经过]」 (any path position); engine only grants it when the named tile is the destination"]
 fn masking_skill_gains_fire_when_merely_passing() {
     let mut t = Table::new(&["佐藤益木", "和奏瑞依"]);
     t.clean();
@@ -1376,8 +1372,8 @@ fn interaction_riot_vs_budokan() {
     t.begin_turn(0);
     drain(&mut t);
     t.play(0, "通用:登上武道馆").unwrap();
-    assert!(t.react_offered("RAS:R. I. O. T."));
-    t.react(1, "RAS:R. I. O. T.").unwrap();
+    assert!(t.counteract_offered("RAS:R. I. O. T."));
+    t.counteract(1, "RAS:R. I. O. T.").unwrap();
     drain(&mut t);
     assert_eq!(t.money(0), 22_000, "charge still lands");
     assert_eq!(t.hand(2).len(), 1, "p2 redrew to its original hand size");
@@ -1415,12 +1411,12 @@ fn interaction_repaint_vs_yolo() {
     t.dice(&[6, 2]); // base 6, Y.O.L.O adds 1d4 -> clamped: 2 on a d4
     t.roll(1).unwrap();
     // Y.O.L.O is a [手] played before the roll settles -- see if a window opens.
-    if t.react_offered("AG:Y.O.L.O") {
-        t.react(1, "AG:Y.O.L.O").unwrap();
+    if t.counteract_offered("AG:Y.O.L.O") {
+        t.counteract(1, "AG:Y.O.L.O").unwrap();
         drain(&mut t);
     }
-    if t.react_offered("RAS:Repaint") {
-        t.react(0, "RAS:Repaint").unwrap();
+    if t.counteract_offered("RAS:Repaint") {
+        t.counteract(0, "RAS:Repaint").unwrap();
         drain(&mut t);
     }
     // Whatever the chain order, the move must be a real move and Repaint must
@@ -1441,8 +1437,8 @@ fn interaction_encore_vs_unstoppable_teleport() {
     let r = t.play(0, "RAS:UNSTOPPABLE");
     // Either the play is refused, or a [反击] window opens for 安可.
     if let Ok(()) = r {
-        if t.react_offered("通用:安可") {
-            t.react(0, "通用:安可").unwrap();
+        if t.counteract_offered("通用:安可") {
+            t.counteract(0, "通用:安可").unwrap();
             drain(&mut t);
             assert_eq!(t.pos(0), CIRCLE, "teleport negated");
         } else {
@@ -1454,8 +1450,8 @@ fn interaction_encore_vs_unstoppable_teleport() {
 
 #[test]
 fn interaction_please_choose_opt2_is_an_abnormal_move() {
-    // PLEASE CHOOSE opt2 [传送]s the reactor -- an 「异常移动效果」 that 通用:安可
-    // can negate when the reactor holds it.
+    // PLEASE CHOOSE opt2 [传送]s the counteractor -- an 「异常移动效果」 that 通用:安可
+    // can negate when the counteractor holds it.
     let mut t = Table::vanilla(3);
     t.own(2, &[SPACE]);
     t.set_houses(SPACE, 1);
@@ -1465,11 +1461,11 @@ fn interaction_please_choose_opt2_is_an_abnormal_move() {
     t.set_pos(1, SPACE - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    t.react(0, "RAS:PLEASE CHOOSE").unwrap();
+    t.counteract(0, "RAS:PLEASE CHOOSE").unwrap();
     t.answer(1, 1).unwrap(); // opt2: teleport p0 to p1
     // 安可 may now open against the teleport.
-    if t.react_offered("通用:安可") {
-        t.react(0, "通用:安可").unwrap();
+    if t.counteract_offered("通用:安可") {
+        t.counteract(0, "通用:安可").unwrap();
         drain(&mut t);
         assert_eq!(t.pos(0), CIRCLE, "teleport negated");
     } else {
@@ -1489,8 +1485,8 @@ fn interaction_network_error_vs_crush_hand_effect() {
     t.begin_turn(0);
     drain(&mut t);
     t.play(0, "RAS:（MASKING）CRUSH ON THE DRUM!!!").unwrap();
-    if t.react_offered("通用:网络链接异常") {
-        t.react(1, "通用:网络链接异常").unwrap();
+    if t.counteract_offered("通用:网络链接异常") {
+        t.counteract(1, "通用:网络链接异常").unwrap();
         drain(&mut t);
     }
     // CRUSH adds Xd20 only if its [手] resolved.
@@ -1513,7 +1509,7 @@ fn interaction_hey_kids_replaces_the_settle() {
     drain(&mut t);
     t.dice(&[1]);
     t.roll(0).unwrap();
-    t.react(0, "RAS:狂乱Hey Kids!!").unwrap();
+    t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
         if p.kind == "tile" {

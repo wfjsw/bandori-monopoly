@@ -1,5 +1,4 @@
 //! `RAS:游击演出` -- C# `CardGuerrilla` (MatchHost.cs:9710-9822): [反击] jump to
-//! an unowned deed and must buy it; a [特] that revives it as a fake Live House.
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:游击演出`）:
 //! > 游击演出：\[特]：
@@ -7,6 +6,7 @@
 //! > [手]：
 //! > [反击]当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后：传送至任意无主可购买的格子并[结算]，且必须购买。
 //!
+//! an unowned deed and must buy it; a [特] that revives it as a fake Live House.
 
 use alloc::vec::Vec;
 
@@ -17,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
     &[
-        On::CounterAct(&[ChainKind::Paid], can_react, react),
+        On::Counteract(&[ChainKind::Paid], can_counteract, counteract),
         On::AtEnd(check),
     ],
 );
@@ -47,7 +47,7 @@ fn lh_buildable(t: i32) -> bool {
 }
 
 /// 规则书[手][反击]: 「当你经过属于其他玩家的livehouse格子后，且当次[结算]时被其他玩家的格子收取资金后」
-fn can_react(player_id: i32) -> bool {
+fn can_counteract(player_id: i32) -> bool {
     // 规则书[手][反击]: 「当次[结算]时被其他玩家的格子收取资金后」 -- C# kind
     // "paid" with `t.Pay.IsRent && t.Pay.to != seat` (this player paid someone else).
     if trigger::kind() != TriggerKind::Paid || trigger::player_id() != player_id {
@@ -67,7 +67,7 @@ fn can_react(player_id: i32) -> bool {
     !free_tiles().is_empty()
 }
 
-fn react(player_id: i32) -> card_sdk::Asked {
+fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[手][反击]: 「传送至任意无主可购买的格子并[结算]，且必须购买」
     let free = free_tiles();
     if free.is_empty() {
@@ -117,7 +117,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
         );
     }
     // C# `OnDiscarded` schedules `Check` at turn end once per turn (the card
-    // lands in the discard after this reaction resolves).
+    // lands in the discard after this counteraction resolves).
     if ctx::turn_player() == player_id && ctx::slot(player_id, SLOT_ARMED) == 0 {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
         ctx::before_turn_end(player_id);

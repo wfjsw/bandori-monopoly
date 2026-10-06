@@ -1,11 +1,11 @@
 //! `Mujica:人偶的箱庭` -- C# `CardDollGarden` (MatchHost.cs:5929-5980): every other
-//! player either moves without settling or pays you X*20, then you move the sum.
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:人偶的箱庭`）:
-//! > 人偶的箱庭：
+//! > 人偶的箱庭： 
 //! >  使场上所有其他玩家选择其一执行：“进行一次移动掷骰并移动对应步数（不[触发结算]）”或“向你支付X*20资金，X为该玩家正常移动到你所在格子所需的移动数。”  无法移动的玩家只能选择向你支付。
 //! >  然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。
 //!
+//! player either moves without settling or pays you X*20, then you move the sum.
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
