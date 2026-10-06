@@ -284,6 +284,17 @@ pub trait CardWorld: Clone + 'static {
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32;
     /// `PlayCtx.Dest` -- where this card goes when its effect finishes.
     fn set_dest(&mut self, dest: i32);
+    /// [`Self::set_dest`] aimed at another player's pile: `to` is whose
+    /// discard/hand/deck it lands in, for 「将此卡放入[使用者]弃卡区」 when
+    /// [使用者] is not the one holding it.
+    fn set_transfer_to_dest(&mut self, to: i32, dest: i32);
+    /// Move the running instance to `dest` **now** rather than when its effect
+    /// finishes -- for a card that must be gone before the rest of the effect
+    /// runs (a move or a settle follows). Lands in its own owner's pile;
+    /// returns the owner it left, or `None` when it was not in play.
+    fn send_to_dest(&mut self, dest: i32) -> Option<i32>;
+    /// [`Self::send_to_dest`] aimed at another player's pile: `to` is whose.
+    fn transfer_to_dest(&mut self, to: i32, dest: i32) -> Option<i32>;
     /// `H.Unplace` -- take the card out of play (`true` when it was there).
     /// Take the *running* instance off the field; returns the owner it left
     /// (or -1). No locator: the instance is the one the run was dispatched for.
@@ -546,13 +557,15 @@ pub trait CardWorld: Clone + 'static {
     /// inherited -- otherwise the inner run would read the *outer* instance's
     /// crystals under its own name, which is not what "the inner card runs as
     /// itself" means. Returns what to hand back to [`Self::leave_card`]:
-    /// `(card, dest, uid)`.
-    fn enter_card(&mut self, _id: &str) -> (String, i32, i32) {
-        (String::new(), 0, -1)
+    /// `(card, dest, dest_to, uid)`.
+    fn enter_card(&mut self, _id: &str) -> (String, i32, Option<i32>, i32) {
+        (String::new(), 0, None, -1)
     }
     /// Restore the outer card after a nested `play_card`; returns the inner
-    /// card's `Dest`.
-    fn leave_card(&mut self, _saved: (String, i32, i32)) -> i32 {
+    /// card's `Dest`. (The inner card's transfer target is not carried out --
+    /// only the fate -- so a nested card that names another player's pile
+    /// should use [`Self::transfer_to_dest`] to land there itself.)
+    fn leave_card(&mut self, _saved: (String, i32, Option<i32>, i32)) -> i32 {
         0
     }
 

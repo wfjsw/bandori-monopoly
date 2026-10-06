@@ -96,7 +96,6 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     ctx::plan::set_resolve(true);
     ctx::plan::set_pay_factor(500);
     ctx::log(owner, &Msg::new(key!("rana_funny_stop")).player_id("who", who).tile("tile", tile));
-    ctx::unplace_self();
-    ctx::to_discard(owner, ID);
+    ctx::set_transfer_to_dest(owner, ctx::Dest::Graveyard);
     Ok(())
 }

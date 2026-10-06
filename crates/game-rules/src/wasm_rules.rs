@@ -52,6 +52,9 @@ struct Run {
     current_uid: i32,
     /// `PlayCtx.Dest`, set by the module (`set_dest`).
     dest: i32,
+    /// Whose pile the fate lands in, set by `set_transfer_to_dest`. `None` is
+    /// the owner the instance leaves -- what `set_dest` names.
+    dest_to: Option<i32>,
     /// Payments this run actually made, `(from, to, amount)` -- the engine
     /// raises `payAfter` / `paid` for each once the run commits.
     paid_log: Vec<(i32, i32, i32)>,
@@ -89,6 +92,28 @@ impl Run {
         };
         let (owner, card) = (f.owner, f.card.clone());
         self.crystals_log.push((owner, card, now - was));
+    }
+
+    /// Move the running instance to `dest` **now** -- `H.Unplace(this, "discard")`
+    /// and kin, applied mid-effect rather than at the run's commit, for a card
+    /// that must be gone before the rest of the effect runs. `to` is whose pile
+    /// it lands in; `None` is the owner it leaves. Returns that owner, or `None`
+    /// when it was not in play. Clears `current_uid`, so a later deferred fate
+    /// finds no instance to move.
+    fn move_now(&mut self, to: Option<i32>, dest: i32) -> Option<i32> {
+        let left = self.unplace_card();
+        if left < 0 {
+            return None;
+        }
+        let who = to.unwrap_or(left);
+        let card = self.current_card.clone();
+        if dest == DEST_GRAVEYARD {
+            self.to_discard(who, &card);
+        } else if dest == 1 {
+            self.add_to_hand(who, &card);
+        }
+        // Banished (「[移除]」) is just "gone" -- it left above and goes nowhere.
+        Some(left)
     }
 }
 
@@ -283,6 +308,17 @@ impl CardWorld for Run {
     }
     fn set_dest(&mut self, dest: i32) {
         self.dest = dest;
+        self.dest_to = None;
+    }
+    fn set_transfer_to_dest(&mut self, to: i32, dest: i32) {
+        self.dest = dest;
+        self.dest_to = Some(to);
+    }
+    fn send_to_dest(&mut self, dest: i32) -> Option<i32> {
+        self.move_now(None, dest)
+    }
+    fn transfer_to_dest(&mut self, to: i32, dest: i32) -> Option<i32> {
+        self.move_now(Some(to), dest)
     }
     fn ring_multiplier(&self) -> i32 {
         self.world.ring_multiplier(&self.data)
@@ -962,17 +998,19 @@ impl CardWorld for Run {
     fn add_fire_max(&mut self, player_id: i32, n: i32) -> i32 {
         self.world.add_fire_max(player_id, n)
     }
-    fn enter_card(&mut self, id: &str) -> (String, i32, i32) {
+    fn enter_card(&mut self, id: &str) -> (String, i32, Option<i32>, i32) {
         let card = std::mem::replace(&mut self.current_card, id.to_string());
         let dest = std::mem::replace(&mut self.dest, DEST_UNSET);
+        let dest_to = std::mem::replace(&mut self.dest_to, None);
         // Fresh instance (C# `NewCard`): the nested run is not the outer card's
         // field card, so it starts with no uid of its own until it places one.
         let uid = std::mem::replace(&mut self.current_uid, -1);
-        (card, dest, uid)
+        (card, dest, dest_to, uid)
     }
-    fn leave_card(&mut self, saved: (String, i32, i32)) -> i32 {
+    fn leave_card(&mut self, saved: (String, i32, Option<i32>, i32)) -> i32 {
         self.current_card = saved.0;
-        self.current_uid = saved.2;
+        self.current_uid = saved.3;
+        self.dest_to = saved.2;
         std::mem::replace(&mut self.dest, saved.1)
     }
     // movement shaping ---------------------------------------------------------
@@ -1173,6 +1211,7 @@ impl WasmRules {
                 current_card: card_id.to_string(),
                 current_uid: uid,
                 dest: DEST_UNSET,
+                dest_to: None,
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
@@ -1234,7 +1273,7 @@ impl WasmRules {
                     // `DEST_UNSET` is no opinion (a placed card stays put), and a
                     // run that already unplaced itself has no instance to move.
                     if after.current_uid >= 0 && dest >= 0 && dest != DEST_FIELD {
-                        self.apply_dest(cx, after.current_uid, card_id, dest)?;
+                        self.apply_dest(cx, after.current_uid, card_id, dest, after.dest_to)?;
                         return Ok(DEST_FIELD);
                     }
                     return Ok(dest);
@@ -1409,6 +1448,7 @@ impl WasmRules {
             current_card: card_id.to_string(),
             current_uid: uid,
             dest: DEST_UNSET,
+            dest_to: None,
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],
@@ -1693,30 +1733,30 @@ impl WasmRules {
 
     /// Apply a field effect's `Dest` to the instance its run was for -- C#
     /// `H.Unplace(this, "discard" / "hand" / "gone")`, the fate `set_dest` names.
-    /// A play's fate is the engine's instead (`play_from_hand` moves the hand
-    /// card); this is the same destination, pointed at a card that is already
-    /// in play.
-    fn apply_dest(&self, cx: &mut Cx, uid: i32, card: &str, dest: i32) -> Flow<()> {
+    /// `to` is whose pile it lands in; `None` is the owner it leaves, the target
+    /// `set_transfer_to_dest` names.
+    fn apply_dest(&self, cx: &mut Cx, uid: i32, card: &str, dest: i32, to: Option<i32>) -> Flow<()> {
         let mut w = cx.world_copy();
-        let owner = w.unplace_at(uid);
-        if owner < 0 {
+        let left = w.unplace_at(uid);
+        if left < 0 {
             // Not in play -- the run may have moved it already.
             cx.swap_world(w);
             return Ok(());
         }
+        let who = to.unwrap_or(left);
         if dest == DEST_GRAVEYARD {
-            w.to_discard(owner, card);
+            w.to_discard(who, card);
         } else if dest == 1 {
             // Back to the hand (手牌).
-            w.add_to_hand(owner, card);
+            w.add_to_hand(who, card);
         }
         // Banished (「[移除]」) is just "gone" -- it left above and goes nowhere.
         cx.swap_world(w);
         if dest == DEST_GRAVEYARD {
-            self.raise_core(cx, "discarded", owner, |t| t.card = card.to_string())?;
+            self.raise_core(cx, "discarded", who, |t| t.card = card.to_string())?;
         } else if dest != 1 {
             cx.log(
-                owner,
+                left,
                 Msg::new("log.card_removed").card("card", card.to_string()),
             );
         }
@@ -1909,6 +1949,7 @@ impl WasmRules {
                 current_card: id.clone(),
                 current_uid: -1,
                 dest: DEST_UNSET,
+                dest_to: None,
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
@@ -2124,6 +2165,7 @@ impl CardRules for WasmRules {
             current_card: card.to_string(),
             current_uid: -1,
             dest: DEST_UNSET,
+            dest_to: None,
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],

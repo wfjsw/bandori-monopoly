@@ -12,6 +12,7 @@ import { getProfile } from "../../core/store";
 import type { CharacterData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
+import { SkillBody } from "../../ui/SkillBody";
 import { SkillTextToggle } from "../../ui/SkillTextToggle";
 import { Avatar, BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
 import { Chips, PanelTab } from "../../ui/Chips";
@@ -190,7 +191,7 @@ function Preview({ c }: { c: CharacterData }) {
           <b>{char ? c.skill || tr("select.skillTbd") : band?.skill || tr("select.bandSkillTbd")}</b>
           <span>{c.band}</span>
         </div>
-        <div className={s.skillText}><SkillTextToggle className={s.skillSwitch} />{skillText(char ? c : band)}</div>
+        <div className={s.skillText}><SkillTextToggle className={s.skillSwitch} /><SkillBody text={skillText(char ? c : band)} /></div>
       </div>
     </div>
   );

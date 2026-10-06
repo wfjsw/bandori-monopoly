@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { navigate } from "../../app/router";
 import { charArt } from "../../core/assets";
 import { skillText } from "../../core/data";
+import { SkillBody } from "../../ui/SkillBody";
 import { SkillTextToggle } from "../../ui/SkillTextToggle";
 import { Live2DStand } from "../../ui/Live2DStand";
 import { playVoice } from "../../core/audio";
@@ -65,8 +66,8 @@ function Detail({ list, start }: { list: CharacterData[]; start: number }) {
       </div>
       <div className={s.right}>
         <div className={s.head}><b>{c.display}</b><span className={s.swatch} style={{ background: c.color }} /><span>{tr("gallery.homeColor", { color: c.color })}</span><span className={s.muted}>{c.band}</span></div>
-        <div className={s.skill}><span className={s.skillTag}>{tr("select.skillChar")}</span><SkillTextToggle className={s.skillSwitch} /><b>{c.skill || tr("select.skillTbd")}</b><p>{skillText(c)}</p></div>
-        <div className={cx(s.skill, s.bandSkill)}><span className={s.skillTag}>{tr("select.skillBand")}</span><b>{band?.skill || tr("select.bandSkillTbd")}</b><p>{skillText(band)}</p></div>
+        <div className={s.skill}><span className={s.skillTag}>{tr("select.skillChar")}</span><SkillTextToggle className={s.skillSwitch} /><b>{c.skill || tr("select.skillTbd")}</b><SkillBody text={skillText(c)} /></div>
+        <div className={cx(s.skill, s.bandSkill)}><span className={s.skillTag}>{tr("select.skillBand")}</span><b>{band?.skill || tr("select.bandSkillTbd")}</b><SkillBody text={skillText(band)} /></div>
         <div className={s.sub}>{tr("gallery.exclusives")}</div>
         {exclusive.length ? <div className={s.cards}>{exclusive.map((x) => <CardFace key={x.id} id={x.id} onClick={() => showCard(x.id)} />)}</div> : <p className={s.muted}>{tr("gallery.noExclusives")}</p>}
         {lines.length > 0 && <div className={s.sub}>{tr("gallery.voice")}</div>}

@@ -1683,6 +1683,24 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         c.data_mut().w().set_dest(dest);
         Ok(())
     })?;
+    l.func_wrap(
+        m,
+        "set_transfer_to_dest",
+        |mut c: C<W>, to: i32, dest: i32| {
+            c.data_mut().w().set_transfer_to_dest(to, dest);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(m, "send_to_dest", |mut c: C<W>, dest: i32| {
+        Ok(c.data_mut().w().send_to_dest(dest).unwrap_or(-1))
+    })?;
+    l.func_wrap(
+        m,
+        "transfer_to_dest",
+        |mut c: C<W>, to: i32, dest: i32| {
+            Ok(c.data_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
+        },
+    )?;
     l.func_wrap(m, "ring_multiplier", |c: C<W>| {
         c.data().wr().ring_multiplier()
     })?;
@@ -2524,6 +2542,13 @@ impl CardWorld for NullWorld {
     fn give_exile(&mut self, _: i32, _: i32, _: i32) {}
     fn give_extra_turn(&mut self, _: i32) {}
     fn set_dest(&mut self, _: i32) {}
+    fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
+    fn send_to_dest(&mut self, _: i32) -> Option<i32> {
+        None
+    }
+    fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
+        None
+    }
     fn ring_multiplier(&self) -> i32 {
         10
     }

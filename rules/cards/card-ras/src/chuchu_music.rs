@@ -84,8 +84,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡」
     // -- C# `Empty` -> `Done`: unplace, discard for the user, user draws 1.
     let user = ctx::slot(player_id, SLOT_USER);
-    ctx::unplace_self();
-    ctx::to_discard(if user >= 0 { user } else { player_id }, ID);
+    ctx::set_transfer_to_dest(if user >= 0 { user } else { player_id }, ctx::Dest::Graveyard);
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1);
     }

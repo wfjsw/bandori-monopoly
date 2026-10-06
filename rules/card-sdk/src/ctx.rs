@@ -81,6 +81,9 @@ mod sys {
         // field cards
         pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32;
         pub fn set_dest(dest: i32);
+        pub fn set_transfer_to_dest(to: i32, dest: i32);
+        pub fn send_to_dest(dest: i32) -> i32;
+        pub fn transfer_to_dest(to: i32, dest: i32) -> i32;
         pub fn ring_multiplier() -> i32;
         pub fn add_ring_bonus(n: i32) -> i32;
         pub fn teleport_to(player_id: i32, tile: i32);
@@ -672,6 +675,28 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
 /// play it is the hand card's fate; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
     unsafe { sys::set_dest(dest as i32) }
+}
+
+/// [`set_dest`] aimed at another player's pile -- 「将此卡放入[使用者]弃卡区」
+/// when [使用者] is not the one holding the card. `to` is whose discard / hand
+/// / deck it lands in.
+pub fn set_transfer_to_dest(to: i32, dest: Dest) {
+    unsafe { sys::set_transfer_to_dest(to, dest as i32) }
+}
+
+/// [`set_dest`] applied **now** rather than when this effect finishes: for a
+/// card that must be gone before the rest of the effect runs (a move or a
+/// settle follows). Lands in its own owner's pile. Returns the owner it left,
+/// or `None` when it was not in play.
+pub fn send_to_dest(dest: Dest) -> Option<i32> {
+    let v = unsafe { sys::send_to_dest(dest as i32) };
+    (v >= 0).then_some(v)
+}
+
+/// [`send_to_dest`] aimed at another player's pile: `to` is whose.
+pub fn transfer_to_dest(to: i32, dest: Dest) -> Option<i32> {
+    let v = unsafe { sys::transfer_to_dest(to, dest as i32) };
+    (v >= 0).then_some(v)
 }
 
 /// `H.RingMultiplier`.

@@ -186,6 +186,13 @@ impl CardWorld for TestWorld {
         -1
     }
     fn set_dest(&mut self, _: i32) {}
+    fn set_transfer_to_dest(&mut self, _: i32, _: i32) {}
+    fn send_to_dest(&mut self, _: i32) -> Option<i32> {
+        None
+    }
+    fn transfer_to_dest(&mut self, _: i32, _: i32) -> Option<i32> {
+        None
+    }
     fn ring_multiplier(&self) -> i32 {
         10
     }

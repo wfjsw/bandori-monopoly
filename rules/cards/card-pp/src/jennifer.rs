@@ -80,7 +80,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     }
     let user = ctx::slot(player_id, SLOT_USER);
     // 规则书[持续]3: 「此卡[移除]」 -- C# `H.Unplace(this, "gone", ...)`.
-    ctx::unplace_self();
+    ctx::send_to_dest(ctx::Dest::Banished);
     ctx::set_slot(player_id, SLOT_USER, -1);
     // 规则书[持续]1: 「[使用者][支付][拥有者]400资金」
     if user >= 0 && !ctx::player_out(user) {

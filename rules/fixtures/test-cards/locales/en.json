@@ -15,5 +15,7 @@
   "mover_done": "moved to tile {{pos}}",
   "crystal_note": "crystal test card in play",
   "crystal_empty": "out of Miracle Crystals; left the field",
-  "crystal_none": "no Miracle Crystals; left the field"
+  "crystal_none": "no Miracle Crystals; left the field",
+  "dest_note": "dest test card in play",
+  "dest_now_left": "left at once; still placed = {{placed}}"
 }

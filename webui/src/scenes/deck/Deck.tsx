@@ -17,6 +17,7 @@ import { Chips, PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
 import { Live2DStand } from "../../ui/Live2DStand";
 import { openModal } from "../../ui/Modal";
+import { SkillBody } from "../../ui/SkillBody";
 import { toast } from "../../ui/Toast";
 import { TopBar } from "../../ui/TopBar";
 import s from "./Deck.module.css";
@@ -234,7 +235,7 @@ function showBandCards(c: CharacterData): void {
   openModal(tr("deck.bandCards"), (
     <div className={s.bandCards}>
       <div className={s.row}><BandMark band={c.band} /><b>{band?.skill ?? ""}</b></div>
-      <p>{skillText(band) || tr("select.bandSkillTbd")}</p>
+      <SkillBody text={skillText(band) || tr("select.bandSkillTbd")} />
       <div className={s.bandGrid}>
         {D.cards.filter((x) => x.band === c.band && !x.owner && !x.derived).map((x) => <CardFace key={x.id} id={x.id} onClick={() => showCard(x.id)} />)}
       </div>

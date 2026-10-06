@@ -104,7 +104,7 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
         );
     }
     // 规则书（2）: 「然后此卡[移除]」 -- C# `H.Unplace(this, "removed")`.
-    ctx::unplace_self();
+    ctx::send_to_dest(ctx::Dest::Banished);
     ctx::log(player_id, &Msg::new(key!("lock_dream_removed")).player_id("who", player_id));
     Ok(())
 }

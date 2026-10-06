@@ -14,6 +14,7 @@ import { Btn } from "../../ui/Button";
 import { CardFace, showCard } from "../../ui/Card";
 import { Avatar } from "../../ui/Character";
 import { openModal } from "../../ui/Modal";
+import { SkillBody } from "../../ui/SkillBody";
 import { act, buyable, canBuildOn, type Model, model, mortgageValue, RING_MULTIPLIER, redeemCost } from "./model";
 import s from "./Popups.module.css";
 import { t as tr } from "../../i18n/t";
@@ -184,7 +185,7 @@ export function showPlayerInfo(m: Model, i: number): void {
     <div className={s.info}>
       <div className={s.infoTop}>
         <Avatar c={c} size={92} />
-        <div><b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>{c && <p><span className={s.pink}>{c.skill}</span> {skillText(c)}</p>}</div>
+        <div><b>{c?.display ?? "—"}</b><small>{c?.band ?? ""}</small>{c && <SkillBody prefix={<span className={s.pink}>{c.skill}</span>} text={skillText(c)} />}</div>
       </div>
       <div className={s.lines}>{lines.map((l) => <div key={l}>{l}</div>)}</div>
       {deeds.length ? (

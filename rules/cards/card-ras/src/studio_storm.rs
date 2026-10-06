@@ -104,8 +104,8 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书（2）: 「将此卡放入弃牌堆」 -- C# `Storm`: unplace to discard.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    // The [结算] below settles, so the card must be gone before it runs.
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
         &Msg::new(key!("studio_storm_fired")).player_id("who", trigger::player_id()).tile("tile", tile).i("x", x as i64),

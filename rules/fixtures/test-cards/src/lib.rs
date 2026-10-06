@@ -137,6 +137,32 @@ fn crystal_changed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Places itself and leaves **immediately** -- `send_to_dest` rather than
+/// `set_dest` -- so the rest of the effect runs against a card that is already
+/// gone. Logs `is_placed` right after, which is the whole distinction.
+const DEST_NOW: CardDef = CardDef::new("TEST:dest_now", &[On::Play(None, dest_now)]);
+
+fn dest_now(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:dest_now", &Msg::new(key!("dest_note")));
+    ctx::send_to_dest(ctx::Dest::Graveyard);
+    ctx::log(player_id, &Msg::new(key!("dest_now_left")).i("placed", ctx::is_placed() as i64));
+    Ok(())
+}
+
+/// Places itself and names **another** player's discard -- 「将此卡放入[使用者]
+/// 弃卡区」 when [使用者] is not the one holding it.
+const DEST_TO: CardDef = CardDef::new("TEST:dest_to", &[On::Play(None, dest_to)]);
+
+fn dest_to(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:dest_to", &Msg::new(key!("dest_note")));
+    if let Some(&user) = ctx::others(player_id).first() {
+        ctx::set_transfer_to_dest(user, ctx::Dest::Graveyard);
+    }
+    Ok(())
+}
+
 fn never(_player: i32) -> bool {
     false
 }
@@ -214,4 +240,4 @@ fn counter(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-card_sdk::bandori_ruleset!(&[RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, CRYSTAL]);
+card_sdk::bandori_ruleset!(&[RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, CRYSTAL, DEST_NOW, DEST_TO]);

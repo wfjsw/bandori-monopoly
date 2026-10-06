@@ -56,8 +56,8 @@ fn go(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
         return Ok(());
     }
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "MyGO:即使迷茫着");
+    // The move below settles, so the card must be gone before it runs.
+    ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::plan::set_steps(ctx::hand_size(player_id));
     ctx::plan::set_resolve(true);
     ctx::card_move(player_id);
