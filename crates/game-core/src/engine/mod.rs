@@ -374,6 +374,21 @@ impl Match {
             .unwrap_or_default()
     }
 
+    /// The member's remaining draw pile, **sorted by card id**.
+    ///
+    /// The pile's order is the shuffled one the engine draws from, so it never
+    /// leaves the engine -- what a caller gets is the *contents*, which is what
+    /// a deck list is. Sort the ids however you like for display; sorting here
+    /// is what keeps the wire from carrying the draw order.
+    pub fn draw_of(&self, member: i32) -> Vec<String> {
+        let mut v = self
+            .player_index(member)
+            .map(|i| self.world.hidden[i].draw.clone())
+            .unwrap_or_default();
+        v.sort();
+        v
+    }
+
     /// Per-card notes for the member's hand.
     pub fn hand_notes_of(&self, member: i32) -> Vec<Msg> {
         let Some(i) = self.player_index(member) else {
@@ -653,8 +668,12 @@ impl Match {
         // 开始 holds for a beat before 运营 opens -- the stage swap needs the
         // time to read, exactly as 结束 holds after the walk. `turn_start` parked
         // the turn here; this lifts it into 运营 once that beat is over.
+        //
+        // Through `direct`, not a bare write: `changed`/`seq` only move there
+        // and in `execute`, so a raw assignment leaves `take_changed()` false
+        // and the client keeps rendering 开始 for the whole turn.
         if self.world.st.step == stage::START {
-            self.world.st.step = stage::OPS;
+            self.direct(|cx| cx.w.st.step = stage::OPS);
             self.wait = 1.2;
             return;
         }

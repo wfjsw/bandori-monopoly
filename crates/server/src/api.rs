@@ -350,6 +350,9 @@ pub struct MatchView {
     pub state: MatchState,
     pub hand: Vec<String>,
     pub hand_notes: Vec<game_core::msg::Msg>,
+    /// The member's remaining draw pile, sorted by card id (see
+    /// [`game_core::engine::Match::draw_of`]).
+    pub draw: Vec<String>,
     pub you: i32,
     pub player_id: i32,
 }

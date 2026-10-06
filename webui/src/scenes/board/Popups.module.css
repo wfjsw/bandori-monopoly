@@ -43,10 +43,11 @@
 .pink { color: var(--pink); }
 .pre { white-space: pre-wrap; }
 
-.discards { display: flex; flex-direction: column; gap: 12px; }
-.dcRow { display: flex; gap: 12px; align-items: flex-start; }
+/* A card pile's contents: a graveyard, or your own draw pile. */
+.pile { display: flex; flex-direction: column; gap: 12px; }
+.pileRow { display: flex; gap: 12px; align-items: flex-start; }
 .who { display: flex; align-items: center; gap: 6px; width: 120px; flex: none; font-size: 14px; font-weight: 700; }
-.dcCards { display: flex; flex-wrap: wrap; gap: 8px; }
+.pileCards { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .confirm { display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
 .confirm p { white-space: pre-wrap; font-size: 18px; }

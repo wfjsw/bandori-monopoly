@@ -1773,15 +1773,15 @@ impl WasmRules {
     }
 
     /// The [反击] hand window (C# `MatchHost.React(Trigger)`): each player from the
-    /// trigger's player around the table may answer with a reaction card from hand.
+    /// chain's starter around the table may answer with a reaction card from hand.
     /// Declarations are collected first (hands shrink as they declare) and then
     /// resolved in reverse declaration order (C# `declared[k]` from the end).
     ///
     /// # Ordering at one trigger (the standard)
     ///
     /// When more than one card responds to the same trigger, they resolve as a
-    /// **LIFO stack**: declaration order is player order starting at the trigger's
-    /// player and wrapping around the table; resolution is the exact reverse of
+    /// **LIFO stack**: declaration order is player order starting at the chain's
+    /// starter and wrapping around the table; resolution is the exact reverse of
     /// declaration order. So the last card to answer the window is the first one
     /// to resolve, and any reaction it plays opens a nested counter-window before
     /// the earlier declarations get their turn.
@@ -1797,10 +1797,15 @@ impl WasmRules {
     /// Counters push onto it as L2, L3, ... and resolve **before** it, so a
     /// counter can invalidate the effect before it settles.
     ///
-    /// * **Build** is YGO priority: after every declaration priority circulates
-    ///   the table again, closing only when every player passes consecutively.
-    ///   A P1<->P0 counter war runs as far as it needs to; there is no
-    ///   single-pass limit and no seat-order asymmetry.
+    /// * **Build** is one loop per link, always from the chain's starter -- the
+    ///   player who activated the root effect (`chain_starter`), even when the
+    ///   trigger itself is someone else's (a payment's payer). The starter is
+    ///   asked first, then each player
+    ///   forward around the table, ending with the seat before the starter.
+    ///   A declaration adds a link and hands priority straight back to the
+    ///   starter for a fresh loop -- so the starter always answers the newest
+    ///   link first -- and a full loop with no declaration closes the chain.
+    ///   A counter war runs as far as it needs to; there is no link limit.
     /// * **Resolution is flat** over the closed link list. There are no nested
     ///   counter-windows: a response to a link is another link in *this* chain,
     ///   and a response to a link that has already resolved is a *new* chain.
@@ -1829,20 +1834,17 @@ impl WasmRules {
         // (seat, card handle, card id, index into `chain` this counter answers)
         let mut decls: Vec<(usize, i32, String, usize)> = Vec::new();
 
-        let start = if t.player_id >= 0 {
-            t.player_id as usize % n
-        } else {
-            cx.state().turn.max(0) as usize % n
-        };
+        let start = chain_starter(t, cx.state().turn, n);
 
-        // ---- build: YGO priority passes ---------------------------------
-        let mut passed = vec![false; n];
-        let mut cursor = start;
+        // ---- build: one loop from the chain's starter per link -------------
+        let mut priority = Priority::new(start, n);
         // Hard bound: the chain is only as long as the hands involved, so this
-        // is a runaway guard, not a design limit.
-        let mut budget = MAX_REACT_DEPTH * n as u32 + 8;
+        // is a runaway guard, not a design limit. Every link costs at most one
+        // loop of asks, plus the closing loop.
+        let mut budget = (MAX_REACT_DEPTH + 1) * n as u32 + 8;
         while budget > 0 {
             budget -= 1;
+            let cursor = priority.seat();
             let answered = chain.len() - 1;
             let declared = if can_react_now(cx, cursor) {
                 match self.declare_one(cx, cursor, &chain[answered], t)? {
@@ -1868,16 +1870,9 @@ impl WasmRules {
             } else {
                 false
             };
-            if declared {
-                // A declaration reopens priority for everyone.
-                passed.fill(false);
-            } else {
-                passed[cursor] = true;
-                if passed.iter().all(|&p| p) {
-                    break;
-                }
+            if !priority.answered(declared) {
+                break;
             }
-            cursor = (cursor + 1) % n;
         }
 
         // ---- resolve: flat LIFO -----------------------------------------
@@ -2114,6 +2109,59 @@ fn prompt_to_ask(p: Prompt) -> Ask {
 }
 
 /// The engine's string trigger kinds -> the module's small enum.
+
+/// The player who started a [反击] chain: whoever activated the effect at its
+/// root. That is `by_card` when a card caused the trigger -- **not** the
+/// trigger's own player, which for a payment is the payer: seat 2's card making
+/// seat 0 pay opens at seat 2, not seat 0. A board-driven trigger (rent, turn
+/// flow) has no activating card and opens at its player; one with neither
+/// opens at whoever's turn it is.
+fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
+    let seat = match t.by_card {
+        Some(by) if by >= 0 => by,
+        _ if t.player_id >= 0 => t.player_id,
+        _ => turn.max(0),
+    };
+    seat as usize % n
+}
+
+/// Who is asked next while a [反击] chain builds (see `hand_reactions`).
+///
+/// The player who started the chain has priority on every link: asking opens
+/// at `start` and runs forward once around the table, ending at the seat
+/// before it. A declaration adds a link and opens a fresh loop at `start`; a
+/// whole loop of passes closes the chain.
+struct Priority {
+    start: usize,
+    n: usize,
+    cursor: usize,
+    /// Seats asked since the chain opened or last grew.
+    asked: usize,
+}
+
+impl Priority {
+    fn new(start: usize, n: usize) -> Self {
+        Self { start, n, cursor: start, asked: 0 }
+    }
+
+    /// The seat to ask now.
+    fn seat(&self) -> usize {
+        self.cursor
+    }
+
+    /// The current seat answered -- `declared` if it added a link. Returns
+    /// whether the chain is still open.
+    fn answered(&mut self, declared: bool) -> bool {
+        if declared {
+            self.cursor = self.start;
+            self.asked = 0;
+            return true;
+        }
+        self.asked += 1;
+        self.cursor = (self.cursor + 1) % self.n;
+        self.asked < self.n
+    }
+}
 
 /// C# `MatchHost.CanReactNow(s, t)`: out / exiled players cannot declare a
 /// reaction. (The C# also checks `CannotPlay` and a one-turn mute; neither has
@@ -2533,8 +2581,60 @@ fn dest_from(v: i32) -> Dest {
 
 #[cfg(test)]
 mod tests {
-    use super::trigger_kind;
+    use super::{chain_starter, trigger_kind, CoreTrigger, Priority};
     use crate::TriggerKind;
+
+    #[test]
+    fn a_chain_opens_at_the_player_who_activated_the_effect() {
+        // Seat 2's card makes seat 0 pay: the `effect` is the payer's (player 0),
+        // but seat 2 activated it, so seat 2 is asked first.
+        let mut pay = CoreTrigger::new("effect", 0);
+        pay.by_card = Some(2);
+        assert_eq!(chain_starter(&pay, 1, 4), 2);
+        // Rent has no activating card: the payer who landed starts it.
+        let rent = CoreTrigger::new("effect", 3);
+        assert_eq!(chain_starter(&rent, 1, 4), 3);
+        // Neither a card nor a player (the bank's side): whoever's turn it is.
+        let mut bank = CoreTrigger::new("effect", 0);
+        bank.player_id = -1;
+        assert_eq!(chain_starter(&bank, 1, 4), 1);
+    }
+
+    /// Drive a chain's asking order: `declares` lists the seats that add a
+    /// link, in order, each the first time it is asked after the previous one.
+    /// Returns every seat asked.
+    fn asked(start: usize, n: usize, declares: &[usize]) -> Vec<usize> {
+        let mut p = Priority::new(start, n);
+        let mut left = declares.iter().copied().peekable();
+        let mut out = vec![];
+        loop {
+            let s = p.seat();
+            out.push(s);
+            let declared = left.peek() == Some(&s);
+            if declared {
+                left.next();
+            }
+            if !p.answered(declared) {
+                return out;
+            }
+        }
+    }
+
+    #[test]
+    fn a_chain_nobody_answers_asks_each_seat_once_from_the_starter() {
+        assert_eq!(asked(2, 4, &[]), [2, 3, 0, 1]);
+    }
+
+    #[test]
+    fn every_link_hands_priority_back_to_the_starter_for_one_loop() {
+        // Seat 0 counters seat 2's effect: asking reopens at 2 and runs a full
+        // loop again, seat 0 included.
+        assert_eq!(asked(2, 4, &[0]), [2, 3, 0, 2, 3, 0, 1]);
+        // A counter war: 3 answers, then 1 answers that, then a quiet loop.
+        assert_eq!(asked(2, 4, &[3, 1]), [2, 3, 2, 3, 0, 1, 2, 3, 0, 1]);
+        // The starter chaining onto its own link is asked again straight away.
+        assert_eq!(asked(1, 3, &[1]), [1, 1, 2, 0]);
+    }
 
     /// The engine raises these kinds; folding any of them to `None` would make
     /// `can_react` guards silently never match (34 cards depend on them).

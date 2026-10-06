@@ -28,7 +28,7 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
         On::Hook(&[HookKind::CircleAffected], mine, on_circle),
         On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::CounterAct(&[ChainKind::Effect], can_negate, negate),
+        On::CounterAct(&[ChainKind::Card, ChainKind::SkillUsed], can_negate, negate),
     ],
 );
 
@@ -77,12 +77,17 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） 「你可以使用4个[火罐]将其抵消」 -- only against someone else's effect.
+/// （2） 「你可以使用4个[火罐]将其抵消」 -- only against someone else's activation.
+/// The categories do the selecting (`card` = a hand play, `skillUsed` = a skill
+/// press); the guard states the rest of the clause.
 fn can_negate(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() != player_id
         && state::get(player_id, state_key::FIRE) >= 4
-        && trigger::value() != 0
+    // TODO(规则书)[judgement]: the clause names 「[主]效果」 and 「[手]效果」, not
+    //   every activation. `skillUsed` is a skill press (the 主 half), but
+    //   `card` admits any hand play -- a [反击] or [特] card included. There is
+    //   no tag query in the ABI to read the card's tags back off the trigger.
 }
 
 /// （2）「将其抵消，然后你获得500资金且被抵消的玩家获得2000资金」.

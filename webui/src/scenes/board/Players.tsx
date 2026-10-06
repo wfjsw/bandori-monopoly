@@ -11,7 +11,7 @@ import { Icon } from "../../ui/Icon";
 import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import s from "./Players.module.css";
-import { showPlayerInfo } from "./Popups";
+import { showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 
 export function Players({ m }: { m: Model }) {
@@ -41,6 +41,11 @@ export function Players({ m }: { m: Model }) {
               {status.map((t) => <span key={t} className={s.status}>{t}</span>)}
               <span className={s.hand}><Icon name="playing_cards" />{x.hand}</span>
               <span className={s.fire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
+              {/* Per-player graveyard, at the right of the module (it used to be
+                  one shared pile in the board centre). */}
+              <span className={s.grave} title={tr("board.graveyardPile")} onClick={(e) => { e.stopPropagation(); showGraveyard(m, i); }}>
+                <img src={sceneImg("card_back")} alt="" /><b>{x.discard.length}</b>
+              </span>
             </div>
             {out && <div className={s.outMark}>{x.bankrupt ? tr("board.bankrupt") : tr("board.forfeit")}</div>}
           </button>

@@ -1,6 +1,6 @@
 // The match board (BoardDemoController). Left: players + log. Center: the ring
-// with the field panel and card piles inside. Right: turn card, steps, d20,
-// actions, end turn and the hand.
+// with the field panel and the event deck inside. Right: turn card, steps, d20,
+// actions, end turn, and the hand with your draw pile.
 
 import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";

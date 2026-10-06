@@ -489,11 +489,18 @@ impl Cx<'_> {
     /// the same shape as every other turn action.
     pub fn use_skill(&mut self, player_id: usize, card: &str) -> Flow<()> {
         // `skillUsed` (Fx.SkillUsed) -- 「使用自己原有的技能（2）时」. Raised
-        // before the body so a listener sees the use, not its aftermath.
+        // before the body so a listener sees the use, not its aftermath -- and so
+        // a [反击] answering it can negate the press before anything happens.
         let mut t = super::rules::Trigger::new("skillUsed", player_id);
         t.card = card.to_string();
         t.by_card = Some(player_id as i32);
-        self.raise(t)?;
+        let t = self.raise(t)?;
+        // `Trigger.Cancelled` -- the press is negated (花园多惠（2）「将其抵消」);
+        // the body does not run, exactly as `play_from_hand` treats a cancelled
+        // `card` link above.
+        if t.is_cancelled() {
+            return Ok(());
+        }
         let rules = self.rules;
         rules.play(self, player_id, card)?;
         Ok(())

@@ -85,8 +85,16 @@ export interface MatchState {
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
   endReason: string; winner: number; scoreMoney: number; scoreProperty: number; scoreHouses: number;
 }
-/** What one player sees: the shared state plus their own hand. */
-export interface MatchView { state: MatchState; hand: string[]; handNotes: Msg[]; you: number; playerId: number }
+/** What one player sees: the shared state plus their own hand and deck. */
+export interface MatchView {
+  state: MatchState;
+  hand: string[];
+  handNotes: Msg[];
+  /** Remaining draw pile, sorted by card id -- the draw order never leaves the engine. */
+  draw: string[];
+  you: number;
+  playerId: number;
+}
 
 export interface ScoreWeights { money: number; property: number; houses: number }
 export interface RoomMember {

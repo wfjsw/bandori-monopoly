@@ -1,5 +1,6 @@
 // Right column: current turn card with the turn timer, phase steps, the d20,
-// action buttons, end turn, and the hand (with a full-size hover preview).
+// action buttons, end turn, and the hand (with a full-size hover preview) and
+// your draw pile.
 
 import { useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
@@ -12,11 +13,12 @@ import { Btn } from "../../ui/Button";
 import { type CardAction, CardFace, showCard, TagChip } from "../../ui/Card";
 import { Avatar, bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
+import { SkillBody } from "../../ui/SkillBody";
 import { showScoreWeights } from "../../ui/ScoreWeights";
 import { toast } from "../../ui/Toast";
 import type { Animator } from "./anim";
 import { act, canBuildOn, type Model } from "./model";
-import { openDeed, showDeedList, showSettle, showSkills } from "./Popups";
+import { byTitle, openDeed, showDeck, showDeedList, showSettle, showSkills } from "./Popups";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
@@ -27,11 +29,8 @@ import { namesOf, stateOf } from "../../core/names";
 
 const phases = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
 
-function timerOf(m: Model, elapsed: number, solo: boolean): { value: string; caption: string; frac: number; cls: string } {
+function timerOf(m: Model, elapsed: number): { value: string; caption: string; frac: number; cls: string } {
   const S = m.S;
-  // Solo has no deadlines at all (the engine never expires one), so a clock
-  // counting down to nothing would only read as "about to time out".
-  if (solo) return { value: tr("common.unlimited"), caption: "", frac: 0, cls: s.idle };
   const cur = S.players[S.turn];
   if (S.phase !== "play") return { value: "—", caption: "", frac: 0, cls: s.idle };
   if (S.turn < 0) return { value: "—", caption: tr("board.ready"), frac: 0, cls: s.idle };
@@ -47,31 +46,20 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   const S = m.S;
   const cur = S.players[S.turn];
   const c = S.turn >= 0 ? m.charOf(S.turn) : undefined;
-  const t = timerOf(m, elapsed, sess.kind === "solo");
-  // 移动 while a walk is still on screen. `main_move` sets MOVE, walks and sets
-  // END in one call, so by the time the steps play out `S.step` already names
-  // 结束 -- the marker would call a moving token a finished turn.
-  const step =
-    S.phase !== "play"
-      ? -1
-      : anim.phase?.key === "board.stepEnd"
-        ? 3
-        : anim.walking
-          ? 2
-          : Math.min(3, Math.max(0, S.step - 1));
+  const t = timerOf(m, elapsed);
   // The rulebook's four stages are 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`)
   // and `phases()` lists them in that order. The engine's `step` carries the
   // rulebook's own stage number (0 before a turn, 1..4 after), so `step - 1`
   // indexes the labels. Off by one here and 运营 -- the stage players spend
   // their turn in -- reads as 开始.
   //
-  // This marker is **not** allowed to lag the game state, even though the
-  // transition sweep holds each name for its own 1.5s: `canRoll` and everything
-  // else read the real `S.step`, so a marker one stage behind reads as "stuck in
-  // 开始" while the dice are already live, and then names 运营 over the move. The
-  // sweep is what makes a short stage readable -- this row just says where the
-  // game is now.
-  const shown = step;
+  // While events play, the marker follows the animation (`anim.stage`), not
+  // the state: one roll comes back as dice + walk + `step = 结束` together, and
+  // the state alone would name 结束 before the dice land. Once the queue drains
+  // it follows `S.step` again, with no lag of its own -- `canRoll` and
+  // everything else read the real step, so a marker held behind it reads as
+  // "stuck in 开始" while the dice are already live.
+  const shown = S.phase !== "play" ? -1 : Math.min(3, Math.max(0, (anim.stage ?? S.step) - 1));
   const animating = anim.animating;
   const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 2 && !S.skipMove && !S.busy && !m.asking && !animating;
   const can = m.myTurn && !S.busy && !m.asking && !animating;
@@ -107,7 +95,11 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
           <div className={s.tcName}>{cur ? c?.display ?? cur.player : "—"}</div>
           <div className={s.tcMoney}><img src={sceneImg("icon_coin")} alt="" />{cur ? n0(cur.money) : ""}</div>
         </div>
-        <div className={cx(s.timer, t.cls)} style={{ ["--frac" as string]: t.frac }}><b>{t.value}</b><small>{t.caption}</small></div>
+        {/* Solo has no deadlines at all (the engine never expires one), so the
+            clock is not shown rather than shown spent or frozen. */}
+        {sess.kind !== "solo" && (
+          <div className={cx(s.timer, t.cls)} style={{ ["--frac" as string]: t.frac }}><b>{t.value}</b><small>{t.caption}</small></div>
+        )}
       </div>
 
       <div className={s.steps}>
@@ -125,15 +117,15 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
 
       <div className={s.actions}>
         <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
+        <Btn icon="construction" className={s.act} onClick={buildFromButton}>{tr("board.build")}</Btn>
         <Btn icon="account_balance" className={s.act} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
         <Btn icon="redo" className={s.act} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
-        <Btn icon="construction" className={s.act} onClick={buildFromButton}>{tr("board.build")}</Btn>
       </div>
       {/* Matches `why_not_act`'s "end": legal anywhere the player's turn is
           theirs and quiet, except 运营 with a move still owed (roll first) and
           移动 (the walk is still running). The old gate demanded 结束 outright,
           which left the button dead through 开始 and through a [停留] 运营. */}
-      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && S.step !== 3 && (S.step !== 2 || S.skipMove) && !m.overHand)} onClick={() => { anim.showPhase("board.stepEnd"); void act(sess, { act: "end" }); }}>
+      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && S.step !== 3 && (S.step !== 2 || S.skipMove) && !m.overHand)} onClick={() => void act(sess, { act: "end" })}>
         {m.myTurn && S.step === 2 && S.skipMove ? tr("board.endTurnSkip") : tr("board.endTurn")}
       </Btn>
 
@@ -157,6 +149,7 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
 
 function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   const [hover, setHover] = useState<{ id: string; note: string } | null>(null);
+  const [peek, setPeek] = useState(false);
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy;
@@ -168,12 +161,18 @@ function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean })
     showCard(id, acts, fmtMsg(m.v.handNotes[k], namesOf(m.S)));
   };
   const hc = hover ? D.card(hover.id) : undefined;
+  const deck = byTitle(m.v.draw ?? []);
   return (
     <>
       <div className={s.hand}>
         <div className={s.handHead}>
           <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit })}</PanelTab>
           <span className={cx(s.handHint, m.overHand && s.warn)}>{m.overHand ? tr("board.overHand") : canPlay ? tr("board.canPlay") : tr("board.tapCard")}</span>
+          {/* Your draw pile, at the head of the hand it feeds (it used to sit in
+              the board centre). Hover lists what is left; click opens the cards. */}
+          <button type="button" className={s.deck} title={tr("board.drawPile")} onMouseEnter={() => setPeek(true)} onMouseLeave={() => setPeek(false)} onClick={() => { setPeek(false); showDeck(m); }}>
+            <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
+          </button>
         </div>
         <div className={s.cards}>
           {m.v.hand.map((id, k) => (
@@ -188,10 +187,17 @@ function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean })
             <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
             <div className={s.pTitle}>{cardTitle(hover.id)}</div>
             {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-            <div className={s.pText}>{hc?.text ?? ""}</div>
+            <div className={s.pText}><SkillBody text={hc?.text ?? ""} /></div>
             {hover.note && <div className={s.pNote}>{hover.note}</div>}
           </>
         )}
+      </div>
+      {/* The draw pile, alphabetical -- never in the order it will be drawn. */}
+      <div className={cx(s.peek, peek && s.peekOn)}>
+        <div className={s.peekHead}>{tr("board.drawPile")}<b>×{m.me.draw}</b></div>
+        {deck.length
+          ? deck.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArt(id)} alt="" /><span>{cardTitle(id)}</span></div>)
+          : <div className={s.peekEmpty}>{tr("board.drawPileEmpty")}</div>}
       </div>
     </>
   );

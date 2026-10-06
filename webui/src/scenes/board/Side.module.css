@@ -12,7 +12,7 @@
 .idle { background: var(--light-pill); color: var(--sub); }
 
 .steps { position: absolute; left: -10px; top: 158px; width: 316px; display: flex; gap: 6px; padding: 3px; box-sizing: border-box; }
-.step { flex: 1; min-width: 0; height: 37px; line-height: 37px; text-align: center; border-radius: 19px; background: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
+.step { flex: 1; min-width: 0; height: 37px; line-height: 37px; text-align: center; border-radius: 19px; background: #fff; font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
 .stepDone { background: var(--pink-pale); color: var(--pink); }
 .stepOn { background: var(--pink); color: #fff; box-shadow: 0 2px 8px rgba(229, 71, 118, 0.35); }
 
@@ -42,9 +42,16 @@
 .end { position: absolute; left: 0; right: 0; top: 602px; width: 300px; height: 56px; font-size: 22px; }
 
 .hand { position: absolute; left: 0; right: 0; top: 675px; width: 300px; height: 140px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 10px 8px; }
-.handHead { display: flex; align-items: center; gap: 10px; }
+.handHead { display: flex; align-items: center; gap: 8px; }
 .handHead > span:first-child { height: 28px; font-size: 15px; }
-.handHint { font-size: 12px; color: var(--sub); }
+/* Shares the row with the draw pile, so the longer hints (over the hand limit)
+   wrap to a second line inside the tab's 28px instead of pushing it out. */
+.handHint { flex: 1; min-width: 0; font-size: 12px; line-height: 1.15; color: var(--sub); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+/* Your draw pile: the same card-back-and-count chip as each player's graveyard. */
+.deck { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 2px; cursor: pointer; }
+.deck img { width: 18px; height: 24px; object-fit: cover; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.12s; }
+.deck:hover img { transform: translateY(-2px); }
+.deck b { font-size: 16px; }
 .warn { color: var(--tag-red); font-weight: 700; }
 .cards { display: flex; gap: 5px; margin-top: 8px; }
 
@@ -56,6 +63,18 @@
 .pTags { display: flex; gap: 4px; margin: 0 2px 4px; }
 .pText { font-size: 13px; line-height: 1.6; max-height: 190px; overflow: hidden; white-space: pre-wrap; }
 .pNote { font-size: 12px; color: var(--note); margin-top: 4px; }
+
+/* Draw-pile peek: beside the column like the card preview, but bottom-aligned
+   with the hand panel (top 675 + 140) so it grows upward from the pile. */
+.peek { position: absolute; right: 312px; top: 815px; width: 240px; max-height: 760px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translate(10px, -100%); transition: opacity 0.12s, transform 0.12s; }
+.peekOn { opacity: 1; transform: translate(0, -100%); }
+.peekHead { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; margin: 2px 4px 6px; }
+.peekHead b { color: var(--pink); }
+.peekRow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 13px; }
+.peekRow + .peekRow { border-top: 1px solid var(--light-pill); }
+.peekRow img { flex: none; width: 26px; height: 26px; object-fit: cover; border-radius: 3px; }
+.peekRow span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peekEmpty { font-size: 13px; color: var(--sub); padding: 4px; }
 
 .extra { position: absolute; left: 0; right: 0; top: 828px; width: 300px; display: flex; gap: 8px; }
 .extra > button { flex: 1; padding: 0 6px; font-size: 14px; }

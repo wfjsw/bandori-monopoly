@@ -44,6 +44,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // -- the C# asks which of the four starter-Afterglow movement plans to arm:
     // Ran (reverse + no CiRCLE reward), Tomoe (start 10 tiles toward 银河拉面馆),
     // Himari (odd / even steps only).
+    // TODO(规则书)[judgement]: the whole of 「"afterglow"式的移动」 resolves through
+    //   「初始Afterglow角色」, which the book never names. The four-way pick below is
+    //   the C# reading, not the text's -- see the judgement block at the foot of
+    //   this file.
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("detour_title")),
@@ -99,11 +103,15 @@ fn react(player_id: i32) -> card_sdk::Asked {
     let Some(_before) = trigger::move_roll() else {
         return Ok(());
     };
-    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the reaction path is the Ran
-    // branch only: reverse the move and drop the CiRCLE reward (C#
+    // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the reaction path only reverses
+    // the in-flight move and drops the CiRCLE reward (C#
     // `move.Reverse = !move.Reverse; move.NoCircleReward = true` on the
     // trigger's in-flight move). `moveRoll` runs before `walk`, so the plan is
     // still live and `ctx::plan::*` is the write.
+    // TODO(规则书)[judgement]: which 「afterglow」 plan the counter is. The C# logs
+    //   this one 「羽泽鸫式」 while implementing 美竹兰's reverse; 羽泽鸫's （2） also
+    //   grants 「你的下回合开始时，进行一次双倍掷骰的移动」, which neither does. See the
+    //   judgement block at the foot of this file.
     ctx::plan::set_reverse(true);
     ctx::plan::set_no_circle_reward(true);
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- armed here, consumed by the

@@ -360,7 +360,8 @@ impl SoloMatch {
         }
     }
 
-    /// `{state, hand, handNotes, you, player_id}` -- the same shape as the server's `match` frame.
+    /// `{state, hand, handNotes, draw, you, player_id}` -- the same shape as the
+    /// server's `match` frame.
     pub fn view(&self, member: i32) -> String {
         let state = self.m.state();
         let player_id = state.player_of(member);
@@ -368,6 +369,7 @@ impl SoloMatch {
             "state": state,
             "hand": self.m.hand_of(member),
             "handNotes": self.m.hand_notes_of(member),
+            "draw": self.m.draw_of(member),
             "you": member,
             "playerId": player_id,
         }))

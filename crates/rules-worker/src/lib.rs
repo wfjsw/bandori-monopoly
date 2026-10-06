@@ -165,6 +165,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     "state": state,
                     "hand": m.hand_of(member),
                     "handNotes": m.hand_notes_of(member),
+                    "draw": m.draw_of(member),
                     "you": member,
                     "playerId": player_id,
                 }

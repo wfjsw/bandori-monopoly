@@ -10,6 +10,7 @@ import { Btn } from "./Button";
 import s from "./Card.module.css";
 import { bandColor } from "./Character";
 import { openModal } from "./Modal";
+import { SkillBody } from "./SkillBody";
 import { t as tr } from "../i18n/t";
 
 /** Card category, as the deck editor labels it. Stable keys; labels are translated. */
@@ -86,7 +87,7 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
           {c?.band && <span>{c.owner ? `${c.band} · ${c.owner}` : c.band}</span>}
         </div>
         {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-        <div className={s.text}>{c?.text ?? ""}</div>
+        <div className={s.text}><SkillBody text={c?.text ?? ""} /></div>
         {note && <div className={s.note}>{note}</div>}
         {actions.length > 0 && (
           <div className={s.actions}>

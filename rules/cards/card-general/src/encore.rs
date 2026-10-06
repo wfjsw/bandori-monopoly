@@ -25,7 +25,7 @@ fn can_react(player_id: i32) -> bool {
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「无效此次[异常移动效果]和其导致的所有效果」
     // C# `c.Trigger.Cancelled = true` then 「安可：这次…无效」.
-    trigger::set_cancelled();
+    trigger::negate_effect();
     ctx::log(
         player_id,
         &Msg::new(key!("encore_negate")).player_id("who", player_id),

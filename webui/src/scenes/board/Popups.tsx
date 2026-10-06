@@ -235,18 +235,37 @@ export function showEventPile(S: MatchState): void {
   ), { size: "mid" });
 }
 
-export function showDiscards(m: Model): void {
-  const rows = m.S.players.map((x, i) => [i, x.discard] as const).filter(([, d]) => d.length);
-  openModal(tr("board.discardPile"), rows.length ? (
-    <div className={s.discards}>
-      {rows.map(([i, d]) => (
-        <div key={i} className={s.dcRow}>
-          <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
-          <div className={s.dcCards}>{d.map((id, k) => <CardFace key={k} id={id} onClick={() => showCard(id)} />)}</div>
-        </div>
-      ))}
+/** A pile's cards alphabetical by name -- how both the graveyard and the draw
+ *  pile are shown, so the draw pile's own order never leaks. */
+export const byTitle = (ids: readonly string[]): string[] => [...ids].sort((a, b) => cardTitle(a).localeCompare(cardTitle(b)));
+
+/** One player's graveyard, alphabetical by name -- the same treatment the draw
+ *  pile gets. `showGraveyard` used to open every player's at once from the
+ *  board centre; each player module now carries its own indicator. */
+export function showGraveyard(m: Model, playerId: number): void {
+  const cards = byTitle(m.S.players[playerId]?.discard ?? []);
+  openModal(tr("board.graveyardPile"), cards.length ? (
+    <div className={s.pile}>
+      <div className={s.pileRow}>
+        <div className={s.who}><Avatar c={m.charOf(playerId)} size={30} /><span>{m.nameOf(playerId)}</span></div>
+        <div className={s.pileCards}>{cards.map((id, k) => <CardFace key={k} id={id} onClick={() => showCard(id)} />)}</div>
+      </div>
     </div>
-  ) : <div className={s.empty}>{tr("discard.empty")}</div>, { size: "wide" });
+  ) : <div className={s.empty}>{tr("graveyard.empty")}</div>, { size: "wide" });
+}
+
+/** What is left in the player's own draw pile, alphabetical by name.
+ *  Mirrors {@link showGraveyard} -- the pile's own draw order is never shown. */
+export function showDeck(m: Model): void {
+  const cards = byTitle(m.v.draw ?? []);
+  openModal(tr("board.drawPile"), cards.length ? (
+    <div className={s.pile}>
+      <div className={s.pileRow}>
+        <div className={s.who}><Avatar c={m.charOf(m.playerId)} size={30} /><span>{m.nameOf(m.playerId)}</span></div>
+        <div className={s.pileCards}>{cards.map((id, k) => <CardFace key={k} id={id} onClick={() => showCard(id)} />)}</div>
+      </div>
+    </div>
+  ) : <div className={s.empty}>{tr("board.drawPileEmpty")}</div>, { size: "wide" });
 }
 
 export function showSettle(sess: GameSession): void {
