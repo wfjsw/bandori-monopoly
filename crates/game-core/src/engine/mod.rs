@@ -368,6 +368,25 @@ impl Match {
         }
     }
 
+    /// Test seam: the replayable world, for arranging a scenario (money,
+    /// positions, deeds, piles, loaded dice). Only valid with no routine
+    /// pending -- a pending routine re-runs from its own snapshot.
+    #[doc(hidden)]
+    pub fn world_mut(&mut self) -> &mut World {
+        assert!(
+            self.pending.is_none(),
+            "world_mut while a routine is pending"
+        );
+        self.changed = true;
+        self.seq += 1;
+        &mut self.world
+    }
+
+    #[doc(hidden)]
+    pub fn world(&self) -> &World {
+        &self.world
+    }
+
     pub fn hand_of(&self, member: i32) -> Vec<String> {
         self.player_index(member)
             .map(|i| self.world.hidden[i].hand.clone())

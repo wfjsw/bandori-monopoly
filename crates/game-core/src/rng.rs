@@ -7,11 +7,18 @@
 //!
 //! Algorithm: xoshiro256** seeded through SplitMix64.
 
+use std::collections::VecDeque;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rng {
     s: [u64; 4],
+    /// Loaded dice (test seam): faces [`Rng::d`] returns before it touches the
+    /// stream, oldest first. Lives in the RNG so a replayed routine re-reads
+    /// the same faces from its snapshot. Never set outside tests.
+    #[serde(default, skip_serializing_if = "VecDeque::is_empty")]
+    loaded: VecDeque<i32>,
 }
 
 fn splitmix64(x: &mut u64) -> u64 {
@@ -32,7 +39,21 @@ impl Rng {
                 splitmix64(&mut x),
                 splitmix64(&mut x),
             ],
+            loaded: VecDeque::new(),
         }
+    }
+
+    /// Test seam: the next [`Rng::d`] calls return these faces, in order
+    /// (each clamped to `1..=sides`), before the stream resumes.
+    #[doc(hidden)]
+    pub fn load_dice(&mut self, faces: &[i32]) {
+        self.loaded.extend(faces);
+    }
+
+    /// Loaded faces not yet rolled.
+    #[doc(hidden)]
+    pub fn loaded_dice(&self) -> usize {
+        self.loaded.len()
     }
 
     pub fn next_u64(&mut self) -> u64 {
@@ -65,6 +86,9 @@ impl Rng {
 
     /// One die: `1..=sides`.
     pub fn d(&mut self, sides: i32) -> i32 {
+        if let Some(face) = self.loaded.pop_front() {
+            return face.clamp(1, sides.max(1));
+        }
         self.below(sides.max(1) as usize) as i32 + 1
     }
 
