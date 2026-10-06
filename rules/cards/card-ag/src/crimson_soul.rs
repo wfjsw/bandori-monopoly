@@ -18,16 +18,24 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "AG:绯红之魂";
 
-pub const CRIMSON_SOUL: CardDef = CardDef::new("AG:绯红之魂", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
-    On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after),
-    On::Hook(&[HookKind::SkillUsed], skill_used_guard, skill_used),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const CRIMSON_SOUL: CardDef = CardDef::new(
+    "AG:绯红之魂",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
+        On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after),
+        On::Hook(&[HookKind::SkillUsed], skill_used_guard, skill_used),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 /// C# `CardCrimsonSoul.WhyNot`: refuses under 500.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -58,7 +66,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let num = if paid > 0 { n } else { 0 };
     ctx::place_card(player_id, ID, &Msg::new(key!("crimson_soul_note")));
     ctx::set_crystals(num);
-    ctx::log(player_id, &Msg::new(key!("crimson_soul_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("crimson_soul_placed")).player_id("who", player_id),
+    );
     // C# `if (num <= 0) H.Unplace(pc, "discard", "没有奇迹水晶")`. That is
     // 规则书[持续]（3） seeing its own count land on zero, so it lives in
     // [`on_crystals_changed`] -- `set_crystals` above is a write like any other.
@@ -82,7 +93,9 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     // C# `H.AskYes(Seat, CardName, "要付 …：移除 1 个 [奇迹水晶] 让这次 −1,000 吗？…", r, p.amount >= 800)`.
     let to = trigger::target();
     let ask = if to >= 0 && to != player_id {
-        Msg::new(key!("crimson_soul_pay_ask_to")).n("n", amount as i64).player_id("who", to)
+        Msg::new(key!("crimson_soul_pay_ask_to"))
+            .n("n", amount as i64)
+            .player_id("who", to)
     } else {
         Msg::new(key!("crimson_soul_pay_ask")).n("n", amount as i64)
     };
@@ -93,7 +106,12 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     ctx::add_crystals(-1, 0);
     // 规则书[持续]（1）: 「金额减少1000（最少为0）」 -- C# `p.amount = Math.Max(0, p.amount - 1000)`.
     trigger::set_pay_amount((amount - 1000).max(0));
-    ctx::log(player_id, &Msg::new(key!("crimson_soul_used")).player_id("who", player_id).n("n", amount as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("crimson_soul_used"))
+            .player_id("who", player_id)
+            .n("n", amount as i64),
+    );
     // 规则书[持续]（1）: 「若为[支付]则被[支付]玩家[获得]500资金」 -- C# tags the
     // `PayCtx` with "crimson" and `PayAfter` pays the 500. The tag rides a
     // per-player slot so `pay_after` below can see it; stored as `to + 1` so an
@@ -128,7 +146,11 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     if ctx::player_out(due) {
         return Ok(());
     }
-    ctx::gain(due, 500, &Msg::new(key!("crimson_soul_payee")).player_id("who", due));
+    ctx::gain(
+        due,
+        500,
+        &Msg::new(key!("crimson_soul_payee")).player_id("who", due),
+    );
     Ok(())
 }
 
@@ -142,7 +164,10 @@ fn skill_used_guard(player_id: i32) -> bool {
 
 fn skill_used(player_id: i32) -> card_sdk::Asked {
     ctx::add_crystals(-1, 0);
-    ctx::log(player_id, &Msg::new(key!("crimson_soul_skill")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("crimson_soul_skill")).player_id("who", player_id),
+    );
     // 规则书[持续]（3） follows the spend through [`on_crystals_changed`].
     Ok(())
 }

@@ -6,11 +6,19 @@
 //!
 //! tile, take 2 [exile] layers, and teleport there when the exile runs out.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const NO_ROAD: CardDef = CardDef::new("MyGO:无路矢", &[
-    On::Hook(&[card_sdk::abi::HookKind::PayAdd], |player_id| ctx::is_placed(), redirect),
-    On::Play(Some(cant_play), no_road)]);
+pub const NO_ROAD: CardDef = CardDef::new(
+    "MyGO:无路矢",
+    &[
+        On::Hook(
+            &[card_sdk::abi::HookKind::PayAdd],
+            |player_id| ctx::is_placed(),
+            redirect,
+        ),
+        On::Play(Some(cant_play), no_road),
+    ],
+);
 
 /// 规则书: 「指定场上自己以外的一位玩家所在格子」 -- C# `CardNoRoad.WhyNot`
 /// refuses the card with no other player alive ("没有别的玩家").
@@ -41,13 +49,13 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     let who = match ctx::target(picked) {
         Some(hit) => hit,
         None => {
-// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
-        // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
-        // side channel and is not being ported (a routine should *return* whether
-        // it took effect); but before that lands, what "not effective" changes has
-        // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
-        // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
-        // implies no)? And what counts a use that this would suppress?
+            // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+            // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
+            // side channel and is not being ported (a routine should *return* whether
+            // it took effect); but before that lands, what "not effective" changes has
+            // to be ruled: does the card get spent (haneoka 「放入弃牌堆且视为此卡未生效」
+            // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
+            // implies no)? And what counts a use that this would suppress?
             return Ok(());
         }
     };
@@ -89,7 +97,10 @@ fn redirect(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::trigger::set_pay_target(who);
-    ctx::log(player_id, &Msg::new(key!("no_road_redirect")).player_id("who", who));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("no_road_redirect")).player_id("who", who),
+    );
     Ok(())
 }
 

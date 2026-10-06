@@ -16,23 +16,35 @@
 //! for money. The duel runs in the `SettleBefore` hook; the crystal growth
 //! runs on the `Drew` hook.
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const EVE_BUSHIDO: CardDef = CardDef::new("PP:[若宫伊芙]属于我的武士道！", &[
-    On::Play(None, eve_bushido),
-    On::Hook(&[HookKind::Drew], drew_guard, drew),
-    On::Hook(&[HookKind::SettleBefore], |_| true, settle_before)]);
+pub const EVE_BUSHIDO: CardDef = CardDef::new(
+    "PP:[若宫伊芙]属于我的武士道！",
+    &[
+        On::Play(None, eve_bushido),
+        On::Hook(&[HookKind::Drew], drew_guard, drew),
+        On::Hook(&[HookKind::SettleBefore], |_| true, settle_before),
+    ],
+);
 
 fn eve_bushido(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]场上」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:[若宫伊芙]属于我的武士道！", &Msg::new(key!("eve_bushido_note")));
+    ctx::place_card(
+        player_id,
+        "PP:[若宫伊芙]属于我的武士道！",
+        &Msg::new(key!("eve_bushido_note")),
+    );
     // 规则书[手]: 「并投掷12d4，获得投掷结果*60的资金」
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
     let n = ctx::roll(player_id, 12, 4);
-    ctx::gain(player_id, n * 60, &Msg::new(key!("eve_bushido_why")).i("n", n as i64));
+    ctx::gain(
+        player_id,
+        n * 60,
+        &Msg::new(key!("eve_bushido_why")).i("n", n as i64),
+    );
     Ok(())
 }
 
@@ -88,7 +100,16 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
     if crate::resonance::try_resonance(player_id)? {
         amount = (a - b).abs() * 50;
     }
-    let (from, to) = if a < b { (owner, player_id) } else { (player_id, owner) };
-    ctx::transfer(from, to, amount, &Msg::new(key!("eve_bushido_why")).i("n", amount as i64))?;
+    let (from, to) = if a < b {
+        (owner, player_id)
+    } else {
+        (player_id, owner)
+    };
+    ctx::transfer(
+        from,
+        to,
+        amount,
+        &Msg::new(key!("eve_bushido_why")).i("n", amount as i64),
+    )?;
     Ok(())
 }

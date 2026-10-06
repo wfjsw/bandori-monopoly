@@ -2502,7 +2502,8 @@ impl Cx<'_> {
         if !self.w.hidden[i].hand.iter().any(|c| c == id) {
             return Some(Msg::new("err.no_such_card"));
         }
-        if !(self.playing() && self.w.st.turn == i as i32) || self.w.st.step != stage::OPS || asking {
+        if !(self.playing() && self.w.st.turn == i as i32) || self.w.st.step != stage::OPS || asking
+        {
             return Some(Msg::new("err.play_phase"));
         }
         if let Some(why) = self.cannot_play(i) {

@@ -31,10 +31,14 @@ const POOL: [&str; 4] = [
     "skill:大和麻弥:朝阳照耀的片刻",
 ];
 
-pub const HINA_LOTTERY: CardDef = CardDef::new("skill:冰川日菜:日菜抽中的大奖", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::TurnStartBefore], mine, roll),
-    On::Hook(&[HookKind::TurnStart], mine, expire)]);
+pub const HINA_LOTTERY: CardDef = CardDef::new(
+    "skill:冰川日菜:日菜抽中的大奖",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::TurnStartBefore], mine, roll),
+        On::Hook(&[HookKind::TurnStart], mine, expire),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -48,7 +52,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::place_card(p, "skill:冰川日菜:日菜抽中的大奖", &Msg::new(key!("hina_lottery_granted")));
+        ctx::place_card(
+            p,
+            "skill:冰川日菜:日菜抽中的大奖",
+            &Msg::new(key!("hina_lottery_granted")),
+        );
     }
     Ok(())
 }
@@ -59,10 +67,15 @@ fn roll(player_id: i32) -> card_sdk::Asked {
     // 「在下回合开始前」 -- last round's borrow comes off first.
     expire(player_id)?;
     let n = ctx::roll(player_id, 1, 4);
-    let Some(id) = POOL.get((n - 1).max(0) as usize) else { return Ok(()); };
+    let Some(id) = POOL.get((n - 1).max(0) as usize) else {
+        return Ok(());
+    };
     ctx::place_card(player_id, id, &Msg::new(key!("hina_lottery_note")));
     state::set(player_id, BORROWED, (n - 1) as i32);
-    ctx::log(player_id, &Msg::new(key!("hina_lottery_rolled")).i("n", n as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hina_lottery_rolled")).i("n", n as i64),
+    );
     Ok(())
 }
 

@@ -5,12 +5,12 @@
 //! >  投掷4次3d20并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动
 //!
 
-use card_sdk::abi::MoveKind;
-use card_sdk::{ctx, key, CardDef, On, Msg};
 use alloc::vec::Vec;
+use card_sdk::abi::MoveKind;
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BALLOON_SHOW: CardDef = CardDef::new("HHW:热气球演出", &[
-    On::Play(Some(cant_play), play)]);
+pub const BALLOON_SHOW: CardDef =
+    CardDef::new("HHW:热气球演出", &[On::Play(Some(cant_play), play)]);
 
 /// C# `CardBalloonShow.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -48,6 +48,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「视为你的主要移动」 -- C# `H.CardMove` (`MainMoveAs`) consumes the
     // turn's main move and runs the teleport immediately.
     ctx::card_move(player_id);
-    ctx::log(player_id, &Msg::new(key!("balloon_show_moved")).player_id("who", player_id).tile("tile", to));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("balloon_show_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
+    );
     Ok(())
 }

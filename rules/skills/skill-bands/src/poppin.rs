@@ -24,13 +24,17 @@ const SPOTS: [i32; 4] = [1, 16, 31, 46];
 /// 「使用此卡[奇迹水晶]的效果为1回合1次」.
 const USED: &str = "skill.poppin.used";
 
-pub const POPPIN: CardDef = CardDef::new("skill:Poppin' Party:星之鼓动", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::SettleBefore], any, before_settle),
-    On::Play(Some(can_crystal), to_crystal),
-    On::Play(Some(can_cash), cash),
-    On::Hook(&[HookKind::BuyBefore], any, lock_hill)]);
+pub const POPPIN: CardDef = CardDef::new(
+    "skill:Poppin' Party:星之鼓动",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::SettleBefore], any, before_settle),
+        On::Play(Some(can_crystal), to_crystal),
+        On::Play(Some(can_cash), cash),
+        On::Hook(&[HookKind::BuyBefore], any, lock_hill),
+    ],
+);
 
 /// （3）'s purchase lock.
 fn lock_hill(player_id: i32) -> card_sdk::Asked {
@@ -70,7 +74,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_tok(player_id, STICKER, 1, i32::MAX);
-    ctx::log(player_id, &Msg::new(key!("poppin_sticker")).tile("tile", ctx::trigger::tile()));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("poppin_sticker")).tile("tile", ctx::trigger::tile()),
+    );
     Ok(())
 }
 
@@ -116,7 +123,10 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     for p in payees {
         ctx::transfer(from, p, each, &Msg::new(key!("poppin_share")))?;
     }
-    ctx::log(player_id, &Msg::new(key!("poppin_shared")).i("n", each as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("poppin_shared")).i("n", each as i64),
+    );
     Ok(())
 }
 

@@ -23,12 +23,15 @@ const ON_TILE: &str = "可乐饼";
 /// A player's collected croquettes -- a counter, not a mark.
 const HELD: &str = "可乐饼";
 
-pub const HAGUMI_HOMERUN: CardDef = CardDef::new("skill:北泽育美:全垒打！", &[
-    On::Play(Some(can_cash), cash),
-    On::Hook(&[HookKind::TurnEnd], |_| true, spawn),
-    On::Hook(&[HookKind::Pass], |_| true, on_pass),
-    On::Hook(&[HookKind::RollPlan], any, on_plan),
-]);
+pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
+    "skill:北泽育美:全垒打！",
+    &[
+        On::Play(Some(can_cash), cash),
+        On::Hook(&[HookKind::TurnEnd], |_| true, spawn),
+        On::Hook(&[HookKind::Pass], |_| true, on_pass),
+        On::Hook(&[HookKind::RollPlan], any, on_plan),
+    ],
+);
 
 fn any(_player_id: i32) -> bool {
     true
@@ -64,7 +67,12 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
             return Ok(());
         }
         let x = ctx::tok(mover, HELD);
-        ctx::transfer(mover, player_id, 50 * x, &Msg::new(key!("hagumi_homerun_fee")))?;
+        ctx::transfer(
+            mover,
+            player_id,
+            50 * x,
+            &Msg::new(key!("hagumi_homerun_fee")),
+        )?;
     } else {
         // 「你经过…可以将其转移到自己场上（持有上限10）」
         if ctx::tok(player_id, HELD) >= 10 {
@@ -85,7 +93,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     // 「你将可乐饼转移至自己场上时可用其替换掉一个其他不位于[持续]卡上的标记」 --
     // offered when the collector is this player.
     if mine {
-        ctx::log(player_id, &Msg::new(key!("hagumi_homerun_got")).tile("tile", t));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("hagumi_homerun_got")).tile("tile", t),
+        );
     }
     Ok(())
 }

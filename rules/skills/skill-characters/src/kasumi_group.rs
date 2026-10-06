@@ -22,10 +22,13 @@ use card_sdk::{key, CardDef, Msg, On};
 /// own key, which is what the keyed map is for.
 const DONE: &str = "skill.kasumiGroup.start";
 
-pub const KASUMI_GROUP: CardDef = CardDef::new("skill:弦卷心:弦卷集团", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
-    On::Hook(&[HookKind::Pass], |_| true, on_pass),
-]);
+pub const KASUMI_GROUP: CardDef = CardDef::new(
+    "skill:弦卷心:弦卷集团",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
+        On::Hook(&[HookKind::Pass], |_| true, on_pass),
+    ],
+);
 
 /// （1）「开局时获得1000资金」.
 fn at_start(player_id: i32) -> card_sdk::Asked {

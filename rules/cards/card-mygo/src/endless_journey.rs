@@ -8,25 +8,41 @@
 //! > （2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const ENDLESS_JOURNEY: CardDef = CardDef::new("MyGO:哪怕这旅程没有终点", &[
-    On::Play(None, endless_journey),
-    On::Hook(&[HookKind::TurnEnd], |_| true, turn_end),
-    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
+    "MyGO:哪怕这旅程没有终点",
+    &[
+        On::Play(None, endless_journey),
+        On::Hook(&[HookKind::TurnEnd], |_| true, turn_end),
+        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 const ID: &str = "MyGO:哪怕这旅程没有终点";
 
 fn endless_journey(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置于当前格子上」 -- bound to where the player is.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card_on(player_id, ctx::player_pos(player_id), ID, &Msg::new(key!("endless_journey_note")));
+    ctx::place_card_on(
+        player_id,
+        ctx::player_pos(player_id),
+        ID,
+        &Msg::new(key!("endless_journey_note")),
+    );
     // 规则书[手]: 「并为其放置4个奇迹水晶」 -- the placement's crystal charge.
     ctx::set_crystals(4);
-    ctx::log(player_id, &Msg::new(key!("endless_journey_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("endless_journey_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -69,7 +85,10 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("endless_journey_decayed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("endless_journey_decayed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -94,7 +113,9 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     ctx::gain(
         player_id,
         x * 60,
-        &Msg::new(key!("endless_journey_gain")).card("card", ID).i("n", x as i64),
+        &Msg::new(key!("endless_journey_gain"))
+            .card("card", ID)
+            .i("n", x as i64),
     );
     Ok(())
 }

@@ -17,13 +17,17 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
+use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const TWO_DONUTS: CardDef = CardDef::new("Sumimi:一人两个甜甜圈", &[
-    On::Play(None, two_donuts),
-    On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], fx_guard, fx)]);
+pub const TWO_DONUTS: CardDef = CardDef::new(
+    "Sumimi:一人两个甜甜圈",
+    &[
+        On::Play(None, two_donuts),
+        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], fx_guard, fx),
+    ],
+);
 
 const ID: &str = "Sumimi:一人两个甜甜圈";
 /// C# `DonutFx.Orig` -- the tile the exile waits on.
@@ -45,7 +49,9 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(player_id, ID, &Msg::new(key!("two_donuts_note")));
     ctx::log(
         player_id,
-        &Msg::new(key!("two_donuts_exile")).player_id("who", player_id).tile("tile", pos),
+        &Msg::new(key!("two_donuts_exile"))
+            .player_id("who", player_id)
+            .tile("tile", pos),
     );
     // C# `CardTwoDonuts.AiPlay` returns false -- CardDef has no H.AiPlay hook.
     Ok(())
@@ -100,7 +106,9 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::teleport_to(player_id, orig);
     ctx::log(
         player_id,
-        &Msg::new(key!("two_donuts_ended")).player_id("who", player_id).player_id("by", by),
+        &Msg::new(key!("two_donuts_ended"))
+            .player_id("who", player_id)
+            .player_id("by", by),
     );
     // 规则书（2）: 「可在那名玩家触发结算后选择传送至你原本所在格子（不包括）与那名玩家
     // 本次移动终点间的任一格并触发结算」 -- C# `H.AskTileOf(..., allowNone: true)`
@@ -126,7 +134,12 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         let title = Msg::new(key!("two_donuts_title"));
         // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
         if ctx::ask_yes(player_id, &title, &Msg::new(key!("two_donuts_yes")))? {
-            let to = ctx::ask_tile(player_id, &title, &Msg::new(key!("two_donuts_ask")).player_id("by", by), &tiles)?;
+            let to = ctx::ask_tile(
+                player_id,
+                &title,
+                &Msg::new(key!("two_donuts_ask")).player_id("by", by),
+                &tiles,
+            )?;
             // C# `H.Teleport(Seat, r.index, resolve: true, ...)` (MatchHost.cs
             // DonutFx.Back) = `set_teleport_to(to)` + `set_resolve(true)` +
             // `card_move(player_id)`. C# calls `H.Teleport` (TeleportMove) rather
@@ -139,7 +152,9 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
             ctx::card_move(player_id);
             ctx::log(
                 player_id,
-                &Msg::new(key!("two_donuts_moved")).player_id("who", player_id).tile("tile", to),
+                &Msg::new(key!("two_donuts_moved"))
+                    .player_id("who", player_id)
+                    .tile("tile", to),
             );
         }
     }

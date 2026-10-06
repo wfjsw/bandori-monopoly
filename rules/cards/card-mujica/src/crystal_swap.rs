@@ -11,9 +11,8 @@ use alloc::vec::Vec;
 use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
-
-pub const CRYSTAL_SWAP: CardDef = CardDef::new("Mujica:会被骗着买水晶的人", &[
-    On::Play(None, crystal_swap)]);
+pub const CRYSTAL_SWAP: CardDef =
+    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play(None, crystal_swap)]);
 
 /// One pool entry (C# `CardCrystalSwap.Slots`'s `(label, get, add)` tuple).
 /// `Placed(player_id)` is a card in play at the player; `Band(player_id)` is the player's
@@ -30,7 +29,7 @@ impl Slot {
             Slot::Placed(player_id) => ctx::crystals(),
             Slot::Band(player_id) => ctx::band_crystals(player_id),
         }
-}
+    }
 
     /// C# `add` -- `Card.AddCrystals(n, ...)` / `band.AddCr(n, ...)`.
     fn add(&self, n: i32) {
@@ -44,7 +43,7 @@ impl Slot {
                 ctx::add_band_crystals(player_id, n, 0);
             }
         }
-}
+    }
 
     /// C# `label` -- `"{{who}}'s \"{{card}}\" ({{n}})"` / `"{{who}}'s band card ({{n}})"`.
     fn label(&self) -> Msg {
@@ -63,7 +62,7 @@ impl Slot {
                 .player_id("who", player_id)
                 .i("n", self.get() as i64),
         }
-}
+    }
 }
 
 /// C# `CardCrystalSwap.Slots` -- every placed card and every player's band card.
@@ -103,7 +102,10 @@ fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     let from: Vec<usize> = (0..all.len()).filter(|&i| all[i].get() > 0).collect();
     if from.is_empty() || all.len() < 2 {
         // C# `c.Effective = false` + a log line when no crystal can move.
-        ctx::log(player_id, &Msg::new(key!("crystal_swap_none")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("crystal_swap_none")).player_id("who", player_id),
+        );
         return Ok(());
     }
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动」 -- pick the source.

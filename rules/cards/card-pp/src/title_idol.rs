@@ -10,17 +10,20 @@
 //! > 2. 为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]，如果[共鸣]则改为添加2个。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[
-    On::Play(None, title_idol)]);
+pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play(None, title_idol)]);
 
 fn title_idol(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]1: 「为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」
     ctx::add_band_crystals(player_id, 2, i32::MAX);
     // 规则书[手]2: 「如果[共鸣]则改为添加2个」 -- paying the [共鸣] cost upgrades
     // the count from 1 to 2.
-    let n = if crate::resonance::try_resonance(player_id)? { 2 } else { 1 };
+    let n = if crate::resonance::try_resonance(player_id)? {
+        2
+    } else {
+        1
+    };
     // 规则书[手]2: 「为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]」 -- the
     // Pastel✽Palettes band card's text contains 「奇迹水晶」 (C# adds `n` to the band
     // card for exactly that reason: 「团卡的效果也包含奇迹水晶」); the other matching
@@ -38,6 +41,11 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
         }
         ctx::add_crystals_at(uid, n, 0);
     }
-    ctx::log(player_id, &Msg::new(key!("title_idol_crystals")).player_id("who", player_id).i("n", n as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("title_idol_crystals"))
+            .player_id("who", player_id)
+            .i("n", n as i64),
+    );
     Ok(())
 }

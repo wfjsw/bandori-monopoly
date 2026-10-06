@@ -12,8 +12,10 @@ use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const CIRCLE_STAFF: CardDef = CardDef::new("skill:CiRCLE:后勤人员的努力", &[
-    On::Hook(&[HookKind::CardPlayed], mine, on_played)]);
+pub const CIRCLE_STAFF: CardDef = CardDef::new(
+    "skill:CiRCLE:后勤人员的努力",
+    &[On::Hook(&[HookKind::CardPlayed], mine, on_played)],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -56,7 +58,12 @@ fn on_played(player_id: i32) -> card_sdk::Asked {
         9,
     )?;
     ctx::set_play_doubled(k);
-    ctx::log(player_id, &Msg::new(key!("circle_staff_doubled")).card("card", &id).card("dump", &dump));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("circle_staff_doubled"))
+            .card("card", &id)
+            .card("dump", &dump),
+    );
     Ok(())
 }
 

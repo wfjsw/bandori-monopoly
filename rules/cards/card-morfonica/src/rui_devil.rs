@@ -5,7 +5,7 @@
 //!
 //! then take 300 from each; when the crit fires, X becomes 5.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play(None, rui_devil)]);
 
@@ -25,7 +25,10 @@ fn rui_devil(player_id: i32) -> card_sdk::Asked {
     }
     if ctx::slot(player_id, "ruiHit") > 0 {
         ctx::set_slot(player_id, "ruiX", 5);
-        ctx::log(player_id, &Msg::new(key!("rui_devil_crit")).card("card", "Mor:（Rui）正论恶魔"));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("rui_devil_crit")).card("card", "Mor:（Rui）正论恶魔"),
+        );
     }
     Ok(())
 }

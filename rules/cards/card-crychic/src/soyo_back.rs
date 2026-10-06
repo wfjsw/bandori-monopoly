@@ -4,17 +4,21 @@
 //! > （soyo）回到曾经：
 //! > （1）[特] 抽到此卡时立刻从抽牌堆打出并执行以下操作之一 ：
 //! > 1. 将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，为你的一个格子付费加盖一间房屋，然后[移除]此卡；
-//! > 2. 获得1000资金并将此卡加入手牌 
+//! > 2. 获得1000资金并将此卡加入手牌
 //! > （2）[手] 获得500资金
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const SOYO_BACK: CardDef = CardDef::new("CRYCHIC:（soyo）回到曾经", &[
-    On::Play(None, soyo_back),
-    On::Hook(&[HookKind::Drawn], |_| true, on_drawn)]);
+pub const SOYO_BACK: CardDef = CardDef::new(
+    "CRYCHIC:（soyo）回到曾经",
+    &[
+        On::Play(None, soyo_back),
+        On::Hook(&[HookKind::Drawn], |_| true, on_drawn),
+    ],
+);
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";
 
@@ -31,10 +35,14 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // The card was just drawn, so it is in hand (C# `hand.Contains(Id)`).
-    ctx::log(player_id, &Msg::new(key!("soyo_back_special")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_back_special")).player_id("who", player_id),
+    );
     let options = [
         Msg::new(key!("soyo_back_opt1")),
-        Msg::new(key!("soyo_back_opt2"))];
+        Msg::new(key!("soyo_back_opt2")),
+    ];
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("soyo_back_title")),
@@ -66,7 +74,11 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
     // discarded, not the whole pile).
     let n = hand.len() as i32;
     if n > 0 {
-        ctx::gain(player_id, 500 * n, &Msg::new(key!("soyo_back_discard_why")).i("n", n as i64));
+        ctx::gain(
+            player_id,
+            500 * n,
+            &Msg::new(key!("soyo_back_discard_why")).i("n", n as i64),
+        );
     }
     // 规则书（1）1: 「抽1张卡」
     ctx::draw(player_id, 1);
@@ -83,15 +95,26 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
         )?;
         if t >= 0 {
             let cost = ctx::build_cost(t);
-            if ctx::pay(player_id, cost, &Msg::new(key!("soyo_back_build_why")).tile("tile", t))? > 0 {
+            if ctx::pay(
+                player_id,
+                cost,
+                &Msg::new(key!("soyo_back_build_why")).tile("tile", t),
+            )? > 0
+            {
                 ctx::add_house(t, 1);
-                ctx::log(player_id, &Msg::new(key!("soyo_back_built")).tile("tile", t));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("soyo_back_built")).tile("tile", t),
+                );
             }
         }
     }
     // 规则书（1）1: 「然后[移除]此卡」 -- already taken out of hand above and never
     // put back anywhere (C# just logs 「回到曾经」被 [移除]）。
-    ctx::log(player_id, &Msg::new(key!("soyo_back_removed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_back_removed")).player_id("who", player_id),
+    );
     Ok(())
 }
 

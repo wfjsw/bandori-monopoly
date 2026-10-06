@@ -1,7 +1,7 @@
 //! `CRYCHIC:想要抓住...` -- C# `CardWantToGrab`: gain one [Stay]; the follow-up
 //!
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要抓住...`）:
-//! > 想要抓住...： 
+//! > 想要抓住...：
 //! >  
 //! > （1）获得一层[停留]。
 //!
@@ -16,21 +16,28 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{plan, trigger};
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 /// The passer this card is waiting for, or -1. A slot rather than a `GrabFx`
 /// attachment: it is a value the card stores under its own key.
 const PASSER: &str = "want_to_grab_passer";
 
-pub const WANT_TO_GRAB: CardDef = CardDef::new("CRYCHIC:想要抓住...", &[
-    On::Play(None, want_to_grab),
-    On::Hook(&[HookKind::PassPlayer], |_| true, on_pass),
-    On::Hook(&[HookKind::SettleBefore], |_| true, grab)]);
+pub const WANT_TO_GRAB: CardDef = CardDef::new(
+    "CRYCHIC:想要抓住...",
+    &[
+        On::Play(None, want_to_grab),
+        On::Hook(&[HookKind::PassPlayer], |_| true, on_pass),
+        On::Hook(&[HookKind::SettleBefore], |_| true, grab),
+    ],
+);
 
 fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得一层[停留]。」
     ctx::give_stay(player_id, 1);
-    ctx::log(player_id, &Msg::new(key!("want_to_grab_note")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("want_to_grab_note")).player_id("who", player_id),
+    );
     // 规则书（2）: 「当第一位其他玩家经过你」 -- arm the grab; the first passer
     // is the one it fires on.
     ctx::state::set(player_id, PASSER, -1);
@@ -66,7 +73,7 @@ fn grab(player_id: i32) -> card_sdk::Asked {
 }
 
 // TODO(规则书)（3）: 「[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动。」
-    //   -- `TriggerKind::TurnStart` and `ctx::ask_tile` exist now; still missing
-    //   the board grid geometry (C# `Grid` / `FromGrid` ray-nearest search over
-    //   the four axis directions) and `plan::set_teleport_to` (the
-    //   teleport-with-settle shape for `H.MainMoveAs`).
+//   -- `TriggerKind::TurnStart` and `ctx::ask_tile` exist now; still missing
+//   the board grid geometry (C# `Grid` / `FromGrid` ray-nearest search over
+//   the four axis directions) and `plan::set_teleport_to` (the
+//   teleport-with-settle shape for `H.MainMoveAs`).

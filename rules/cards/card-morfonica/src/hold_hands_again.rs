@@ -11,16 +11,19 @@
 //!
 //! Reaction-only (`Normal => false`).
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:再次牵起手来";
 
-pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new("Mor:再次牵起手来", &[
-    On::CounterAct(&[ChainKind::Paid], can_react, react),
-    On::Hook(&[HookKind::PayAt], |_| true, pay_at),
-]);
+pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
+    "Mor:再次牵起手来",
+    &[
+        On::CounterAct(&[ChainKind::Paid], can_react, react),
+        On::Hook(&[HookKind::PayAt], |_| true, pay_at),
+    ],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后」
@@ -37,14 +40,23 @@ fn can_react(player_id: i32) -> bool {
 fn react(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     // 规则书[反击]: 「并[消耗]等量资金」 -- C# `H.LoseR(i, c.Trigger.Value, CardName)`.
-    ctx::pay(player_id, amount, &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64))?;
+    ctx::pay(
+        player_id,
+        amount,
+        &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64),
+    )?;
     if ctx::player_out(player_id) {
         return Ok(());
     }
     // 规则书[反击]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("hold_hands_again_note")));
-    ctx::log(player_id, &Msg::new(key!("hold_hands_again_placed")).player_id("who", player_id).n("money", amount as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hold_hands_again_placed"))
+            .player_id("who", player_id)
+            .n("money", amount as i64),
+    );
     Ok(())
 }
 
@@ -65,6 +77,9 @@ fn pay_at(player_id: i32) -> card_sdk::Asked {
     trigger::set_pay_amount(0);
     // 规则书[持续]: 「将此卡放置到弃卡区」
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("hold_hands_again_used")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hold_hands_again_used")).player_id("who", player_id),
+    );
     Ok(())
 }

@@ -5,13 +5,14 @@
 //! > [反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡，使目标玩家的此次移动数-X，X为对方原本预计路径上你拥有的格子数，对方此次结算的支付减半。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
+use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const REPAINT: CardDef = CardDef::new("RAS:Repaint", &[
-    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
-]);
+pub const REPAINT: CardDef = CardDef::new(
+    "RAS:Repaint",
+    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+);
 
 /// `CardRepaint.OnPath` -- tiles of `me` on `them`'s planned path.
 ///
@@ -56,7 +57,9 @@ fn can_react(player_id: i32) -> bool {
 }
 
 fn react(player_id: i32) -> card_sdk::Asked {
-    let Some(roll) = trigger::move_roll() else { return Ok(()); };
+    let Some(roll) = trigger::move_roll() else {
+        return Ok(());
+    };
     let them = trigger::player_id();
     // 规则书: 「X为对方原本预计路径上你拥有的格子数」
     let x = on_path(player_id, them, roll);
@@ -78,7 +81,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
     trigger::set_move_roll(now);
     ctx::log(
         player_id,
-        &Msg::new(key!("repaint_cut")).player_id("who", them).i("n", x as i64).i("roll", now as i64),
+        &Msg::new(key!("repaint_cut"))
+            .player_id("who", them)
+            .i("n", x as i64)
+            .i("roll", now as i64),
     );
     // 规则书: 「对方此次结算的支付减半」 -- C# `m.PayFactor *= 0.5`
     // (milli-units: 500 = x0.5); the settle of this move pays half.

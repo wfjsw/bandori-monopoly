@@ -21,10 +21,14 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Turns since the last hand play. A play resets it.
 const QUIET: &str = "skill.mutsumiActor.quiet";
 
-pub const MUTSUMI_ACTOR: CardDef = CardDef::new("skill:若叶睦:天生的演员", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::CardPlayed], mine, on_play),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end)]);
+pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
+    "skill:若叶睦:天生的演员",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::CardPlayed], mine, on_play),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

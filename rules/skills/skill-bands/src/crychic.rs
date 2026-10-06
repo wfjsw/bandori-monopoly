@@ -21,13 +21,17 @@ const ID: &str = "skill:CRYCHIC:美好的往日幻影";
 /// Hand size last seen, so （3） can see a 4→5 crossing.
 const SEEN: &str = "skill.crychic.seen";
 
-pub const CRYCHIC: CardDef = CardDef::new("skill:CRYCHIC:美好的往日幻影", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::Drawn], mine, on_drawn),
-    On::Hook(&[HookKind::TurnEndBefore], mine, at_turn_end),
-    On::Hook(&[HookKind::PayChoose], in_lock, lock_pay),
-    On::Hook(&[HookKind::CircleAffected], in_lock, force_card),
-    On::Play(Some(can_transform), transform_now)]);
+pub const CRYCHIC: CardDef = CardDef::new(
+    "skill:CRYCHIC:美好的往日幻影",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::Drawn], mine, on_drawn),
+        On::Hook(&[HookKind::TurnEndBefore], mine, at_turn_end),
+        On::Hook(&[HookKind::PayChoose], in_lock, lock_pay),
+        On::Hook(&[HookKind::CircleAffected], in_lock, force_card),
+        On::Play(Some(can_transform), transform_now),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -73,7 +77,11 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // 「当此卡移除时，你获得X*500资金」
     let x = ctx::crystals();
     if x > 0 {
-        ctx::gain(player_id, x * 500, &Msg::new(key!("crychic_cash_out")).i("n", (x * 500) as i64));
+        ctx::gain(
+            player_id,
+            x * 500,
+            &Msg::new(key!("crychic_cash_out")).i("n", (x * 500) as i64),
+        );
         ctx::add_crystals(-x, 10);
     }
     // 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.

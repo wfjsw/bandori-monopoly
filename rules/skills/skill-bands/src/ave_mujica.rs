@@ -26,12 +26,15 @@ const IN_TWO: &str = "skill.aveMujica.inTwo";
 /// `skillState` as of the last check, so 「进入状态2」 can be seen as a transition.
 const WAS: &str = "skill.aveMujica.was";
 
-pub const AVE_MUJICA: CardDef = CardDef::new("skill:Ave Mujica:假面之下的真实", &[
-    On::Play(Some(can_halve), halve),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, at_turn_start),
-    On::Hook(&[HookKind::PayMul], in_two, bend),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-]);
+pub const AVE_MUJICA: CardDef = CardDef::new(
+    "skill:Ave Mujica:假面之下的真实",
+    &[
+        On::Play(Some(can_halve), halve),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_turn_start),
+        On::Hook(&[HookKind::PayMul], in_two, bend),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

@@ -6,13 +6,14 @@
 //!
 //! on passing 江户川乐器店: force yourself to stop there and settle.
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const BEFORE_LIVE: CardDef = CardDef::new("R:live前的准备", &[
-    On::CounterAct(&[ChainKind::Pass], can_react, react),
-]);
+pub const BEFORE_LIVE: CardDef = CardDef::new(
+    "R:live前的准备",
+    &[On::CounterAct(&[ChainKind::Pass], can_react, react)],
+);
 
 /// 规则书[反击]: 「[反击] 经过江户川乐器店时可打出此卡」
 fn can_react(player_id: i32) -> bool {

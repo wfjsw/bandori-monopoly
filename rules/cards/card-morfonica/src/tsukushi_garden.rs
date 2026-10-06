@@ -5,10 +5,12 @@
 //!
 //! 1d6 to pick a player and move to the tile in front of them.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TSUKUSHI_GARDEN: CardDef = CardDef::new("Mor:（筑紫）迷茫的庭园", &[
-    On::Play(Some(cant_play), tsukushi_garden)]);
+pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
+    "Mor:（筑紫）迷茫的庭园",
+    &[On::Play(Some(cant_play), tsukushi_garden)],
+);
 
 /// C# `CardTsukushiGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -48,12 +50,20 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     }
     if who == player_id {
         // 规则书: 「选中自己则前进一格」
-        ctx::log(player_id, &Msg::new(key!("tsukushi_garden_self")).player_id("who", player_id).tile("tile", to));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tsukushi_garden_self"))
+                .player_id("who", player_id)
+                .tile("tile", to),
+        );
     } else {
         // 规则书: 「传送到行动条上对应玩家前一格」
         ctx::log(
             player_id,
-            &Msg::new(key!("tsukushi_garden_other")).player_id("who", who).tile("tile", to).i("roll", r as i64),
+            &Msg::new(key!("tsukushi_garden_other"))
+                .player_id("who", who)
+                .tile("tile", to)
+                .i("roll", r as i64),
         );
     }
     // 规则书: 「可以选择是否触发结算」 -- C# `H.AskYes(..., "这次移动要 [结算] 吗？",
@@ -65,7 +75,10 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     )?;
     // 规则书: 「并视为主要移动」 -- C# `H.CardMove(c, new MoveCtx { ... })`.
     if settle {
-        ctx::log(player_id, &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to)); // 规则书: 「可以选择是否触发结算」
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to),
+        ); // 规则书: 「可以选择是否触发结算」
     }
     if who == player_id {
         // 规则书: 「选中自己则前进一格」 -- C# `new MoveCtx { Steps = 1,
@@ -90,7 +103,14 @@ fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // exactly that gate, and `expires: TurnStart` is the 「直到下个你的回合
     // 开始时」 half (it wears off at the top of the next turn).
     ctx::state::add(player_id, card_sdk::abi::state_key::UNSTOPPABLE, 1);
-    ctx::state::set_expires(player_id, card_sdk::abi::state_key::UNSTOPPABLE, card_sdk::ctx::state::TURN_START);
-    ctx::log(player_id, &Msg::new(key!("tsukushi_garden_guard")).player_id("who", player_id));
+    ctx::state::set_expires(
+        player_id,
+        card_sdk::abi::state_key::UNSTOPPABLE,
+        card_sdk::ctx::state::TURN_START,
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tsukushi_garden_guard")).player_id("who", player_id),
+    );
     Ok(())
 }

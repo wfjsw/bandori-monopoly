@@ -8,10 +8,9 @@
 //! refuses a grant in this engine, so "granted stay" and "gained stay" coincide
 //! and the fallback branch keys off the grants.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[
-    On::Play(None, heart_rain)]);
+pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play(None, heart_rain)]);
 
 fn heart_rain(player_id: i32) -> card_sdk::Asked {
     let me = ctx::player_pos(player_id);
@@ -41,7 +40,10 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金」
     if !any_stay {
-        ctx::log(player_id, &Msg::new(key!("heart_rain_fallback")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("heart_rain_fallback")).player_id("who", player_id),
+        );
         ctx::give_stun(player_id, 1);
         ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")));
     }

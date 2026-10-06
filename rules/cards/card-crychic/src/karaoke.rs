@@ -8,10 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const KARAOKE: CardDef = CardDef::new("CRYCHIC:去唱卡拉ok吧", &[
-    On::Play(Some(cant_play), karaoke)]);
+pub const KARAOKE: CardDef = CardDef::new(
+    "CRYCHIC:去唱卡拉ok吧",
+    &[On::Play(Some(cant_play), karaoke)],
+);
 
 /// C# `CardKaraoke.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -27,13 +29,18 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
     // (`KaraokeFx.RollAfter` -> `Sing`). Shaping this turn's main move is the
     // plan-flags path: roll the faces here and pin the chosen one with
     // `set_fixed_roll`, so the walk then runs as a normal dice move.
-    ctx::log(player_id, &Msg::new(key!("karaoke_note")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("karaoke_note")).player_id("who", player_id),
+    );
     let mut results: Vec<i32> = Vec::new();
     // The first face is this turn's natural d20 (C# `m.Roll` before `Sing`).
     results.push(ctx::roll(player_id, 1, 20).max(0));
     ctx::log(
         player_id,
-        &Msg::new(key!("karaoke_face")).player_id("who", player_id).i("n", results[0] as i64),
+        &Msg::new(key!("karaoke_face"))
+            .player_id("who", player_id)
+            .i("n", results[0] as i64),
     );
     // 规则书: 「进行至多5次掷骰」 -- C# `while (results.Count < 5) H.AskYes(... re-roll?)`.
     while results.len() < 5 {
@@ -49,7 +56,9 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
         results.push(x);
         ctx::log(
             player_id,
-            &Msg::new(key!("karaoke_face")).player_id("who", player_id).i("n", x as i64),
+            &Msg::new(key!("karaoke_face"))
+                .player_id("who", player_id)
+                .i("n", x as i64),
         );
     }
     // 规则书: 「并选择其中一个结果作为你本回合的移动掷骰数」 -- C# `H.AskPick` over the
@@ -75,7 +84,9 @@ fn karaoke(player_id: i32) -> card_sdk::Asked {
     ctx::set_fixed_roll(chosen);
     ctx::log(
         player_id,
-        &Msg::new(key!("karaoke_chosen")).player_id("who", player_id).i("n", chosen as i64),
+        &Msg::new(key!("karaoke_chosen"))
+            .player_id("who", player_id)
+            .i("n", chosen as i64),
     );
     Ok(())
 }

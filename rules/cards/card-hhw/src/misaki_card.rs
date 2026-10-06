@@ -7,13 +7,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
+use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const MISAKI_CARD: CardDef = CardDef::new("HHW:（美咲）", &[
-    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
-]);
+pub const MISAKI_CARD: CardDef = CardDef::new(
+    "HHW:（美咲）",
+    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+);
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
 /// in the direction the move actually travels (`t.Move.Dir`).
@@ -81,7 +82,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「（视为你的主要移动）」 -- C# `m2.Main = m.Main`; `card_move`
     // (`MainMoveAs`) runs the teleport now.
     ctx::card_move(player_id);
-    ctx::log(player_id, &Msg::new(key!("misaki_card_moved")).player_id("who", player_id).tile("tile", to));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("misaki_card_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
+    );
     if ctx::player_out(player_id) {
         return Ok(());
     }

@@ -10,19 +10,28 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const CHANGE_WORLD: CardDef = CardDef::new("RAS:Change the world", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
-    On::Hook(&[HookKind::PayAdd], |_| true, pay_choose),
-    On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after)]);
+pub const CHANGE_WORLD: CardDef = CardDef::new(
+    "RAS:Change the world",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Hook(&[HookKind::PayAdd], |_| true, pay_choose),
+        On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after),
+    ],
+);
 
 const ID: &str = "RAS:Change the world";
 
 /// C# `H.IsLiveHouse` (color group 6) tiles that can hold houses (board.json
 /// `rent` non-empty). `ExtraColor` tiles (e.g. 「游击演出」's deed) are missing.
-const LIVEHOUSE_PROPS: [&str; 4] = ["DUB MUSIC EXPERIMENT", "武道馆", "Space", "Live House Galaxy"];
+const LIVEHOUSE_PROPS: [&str; 4] = [
+    "DUB MUSIC EXPERIMENT",
+    "武道馆",
+    "Space",
+    "Live House Galaxy",
+];
 
 /// C# `Spots(player_id)` = owned Live Houses with `houses[t] > 0`.
 fn spots(player_id: i32) -> Vec<i32> {
@@ -68,7 +77,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("change_world_note")));
     ctx::log(
         player_id,
-        &Msg::new(key!("change_world_placed")).player_id("who", player_id).tile("tile", tile),
+        &Msg::new(key!("change_world_placed"))
+            .player_id("who", player_id)
+            .tile("tile", tile),
     );
     // C# `Mem["turn"] = H.TurnKey` and the tile the card sits on; the player slot
     // stands in for the per-field-card `Mem` map.
@@ -76,7 +87,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「你的本次移动掷骰变为3d20」 -- C# `H._turnCtx.Plan.Base.Clear()` +
     // `Add((3, 20, "（Change the world）"))`.
     ctx::plan::set_base_dice(3, 20, "（Change the world）");
-    ctx::log(player_id, &Msg::new(key!("change_world_dice")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("change_world_dice")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -105,7 +119,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::add_crystals(1, 0);
     ctx::log(
         player_id,
-        &Msg::new(key!("change_world_crystal")).player_id("who", player_id).tile("tile", t),
+        &Msg::new(key!("change_world_crystal"))
+            .player_id("who", player_id)
+            .tile("tile", t),
     );
     Ok(())
 }
@@ -136,7 +152,9 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     trigger::set_pay_amount(trigger::value() + bonus);
     ctx::log(
         player_id,
-        &Msg::new(key!("change_world_bonus")).player_id("who", player_id).i("n", bonus as i64),
+        &Msg::new(key!("change_world_bonus"))
+            .player_id("who", player_id)
+            .i("n", bonus as i64),
     );
     Ok(())
 }
@@ -161,6 +179,9 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("change_world_discarded")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("change_world_discarded")).player_id("who", player_id),
+    );
     Ok(())
 }

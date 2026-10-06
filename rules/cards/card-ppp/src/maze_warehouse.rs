@@ -6,10 +6,10 @@
 //! > 位于“流星堂”前后5格内时，可打出此卡，投掷1d10，从“流星堂”开始移动直到[经过]投掷结果对应数量的无主可购买地，视为你的主要移动且本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋。如果[经过]“流星堂”则[强制停下]且[消耗]6000资金
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const MAZE_WAREHOUSE: CardDef = CardDef::new("PPP:迷宫般的仓库", &[
-    On::Play(Some(cant_play), play)]);
+pub const MAZE_WAREHOUSE: CardDef =
+    CardDef::new("PPP:迷宫般的仓库", &[On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「位于“流星堂”前后5格内时，可打出此卡」 -- C# `CardMazeWarehouse.WhyNot`
@@ -62,7 +62,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // -- C# `H._turnCtx.FreeBuy = true; H._turnCtx.RazeOnBuy = true`.
     ctx::log(
         player_id,
-        &Msg::new(key!("maze_warehouse_free_buy")).player_id("who", player_id).i("n", want as i64),
+        &Msg::new(key!("maze_warehouse_free_buy"))
+            .player_id("who", player_id)
+            .i("n", want as i64),
     );
     // 规则书: 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」
     // -- C# `H._turnCtx.FreeBuy = true; H._turnCtx.RazeOnBuy = true`.
@@ -92,7 +94,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if looped && !ctx::player_out(player_id) {
         // 规则书: 「[消耗]6000资金」 -- C# `H.LoseR(i, 6000, "迷宫般的仓库")`
         // (MatchHost.cs:8866-8869) after the forced stop.
-        ctx::log(player_id, &Msg::new(key!("maze_warehouse_loop")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("maze_warehouse_loop")).player_id("who", player_id),
+        );
         ctx::pay(player_id, 6000, &Msg::new(key!("maze_warehouse_lose")))?;
     }
     Ok(())

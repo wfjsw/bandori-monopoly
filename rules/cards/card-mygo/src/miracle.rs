@@ -11,15 +11,19 @@
 //! > （3）若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const MIRACLE: CardDef = CardDef::new("MyGO:难以复刻的奇迹", &[
-    On::Play(None, miracle),
-    On::Hook(&[HookKind::BuildBefore], mine, before_build),
-    On::Hook(&[HookKind::BuildAfter], mine, after_build),
-    On::Hook(&[HookKind::PassPlayer], |_| true, pass_player)]);
+pub const MIRACLE: CardDef = CardDef::new(
+    "MyGO:难以复刻的奇迹",
+    &[
+        On::Play(None, miracle),
+        On::Hook(&[HookKind::BuildBefore], mine, before_build),
+        On::Hook(&[HookKind::BuildAfter], mine, after_build),
+        On::Hook(&[HookKind::PassPlayer], |_| true, pass_player),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     trigger::player_id() == player_id && ctx::is_placed()
@@ -40,9 +44,14 @@ fn miracle(player_id: i32) -> card_sdk::Asked {
     ctx::set_crystals(n);
     ctx::log(
         player_id,
-        &Msg::new(key!("miracle_crystals_moved")).player_id("who", player_id).i("n", n as i64),
+        &Msg::new(key!("miracle_crystals_moved"))
+            .player_id("who", player_id)
+            .i("n", n as i64),
     );
-    ctx::log(player_id, &Msg::new(key!("miracle_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("miracle_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -116,10 +125,18 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
     let purse = ctx::money_of(best).abs() % 1000;
     ctx::log(
         player_id,
-        &Msg::new(key!("miracle_reward")).player_id("who", best).n("money", purse as i64),
+        &Msg::new(key!("miracle_reward"))
+            .player_id("who", best)
+            .n("money", purse as i64),
     );
     if purse > 0 {
-        ctx::gain(player_id, purse, &Msg::new(key!("miracle_reward")).player_id("who", best).n("money", purse as i64));
+        ctx::gain(
+            player_id,
+            purse,
+            &Msg::new(key!("miracle_reward"))
+                .player_id("who", best)
+                .n("money", purse as i64),
+        );
     }
     let left = ctx::crystals() > 0;
     // C# `H.Unplace(this, "discard", left ? "上面还有奇迹水晶：视为没有生效" : "完成了")`.
@@ -129,7 +146,10 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
         //   the clause under-specifies -- see the note above it
         // PlayCtx.Effective / `H.CardWasted` (C# `H.CardWasted(Seat, Id)` when the
         // card is discarded with crystals left).
-        ctx::log(player_id, &Msg::new(key!("miracle_wasted")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("miracle_wasted")).player_id("who", player_id),
+        );
     }
     Ok(())
 }

@@ -11,16 +11,24 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（薰）怪盗hello happy";
 
-pub const KAORU_THIEF: CardDef = CardDef::new("HHW:（薰）怪盗hello happy", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-    On::Hook(&[HookKind::PassPlayer], pass_player_guard, pass_player),
-    On::RollPlan(roll_plan),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const KAORU_THIEF: CardDef = CardDef::new(
+    "HHW:（薰）怪盗hello happy",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+        On::Hook(&[HookKind::PassPlayer], pass_player_guard, pass_player),
+        On::RollPlan(roll_plan),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardKaoruThief.WhyNot`: refuses the play with no other player alive.
@@ -59,7 +67,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // PassPlayer force-stop only works on the turn the mark was placed.
         ctx::set_slot(player_id, "kaoru_thief_marked", who);
         ctx::set_slot(player_id, "kaoru_thief_turn", ctx::turn_key());
-        ctx::log(player_id, &Msg::new(key!("kaoru_thief_marked")).player_id("who", who));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("kaoru_thief_marked")).player_id("who", who),
+        );
     }
     Ok(())
 }
@@ -148,7 +159,10 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("kaoru_thief_decayed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kaoru_thief_decayed")).player_id("who", player_id),
+    );
     Ok(())
 }
 

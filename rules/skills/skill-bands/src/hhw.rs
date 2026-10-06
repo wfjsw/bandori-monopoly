@@ -21,10 +21,14 @@ const WHO2: &str = "skill.hhw.who2";
 /// 「记录该次收款的价格（可累加）」.
 const SAVED: &str = "skill.hhw.saved";
 
-pub const HHW: CardDef = CardDef::new("skill:Hello, Happy World!:传播笑容", &[
-    On::Hook(&[HookKind::PayChoose], mine, on_pay_choose),
-    On::Hook(&[HookKind::PayAfter], mine, after_pay),
-    On::Hook(&[HookKind::BuildBefore], mine, before_build)]);
+pub const HHW: CardDef = CardDef::new(
+    "skill:Hello, Happy World!:传播笑容",
+    &[
+        On::Hook(&[HookKind::PayChoose], mine, on_pay_choose),
+        On::Hook(&[HookKind::PayAfter], mine, after_pay),
+        On::Hook(&[HookKind::BuildBefore], mine, before_build),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -51,7 +55,10 @@ fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     // 「记录该玩家并使此卡获得一个奇迹水晶」
     state::set(player_id, WHO, to);
     ctx::add_crystals(1, i32::MAX);
-    ctx::log(player_id, &Msg::new(key!("hhw_recorded")).player_id("who", to));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hhw_recorded")).player_id("who", to),
+    );
     Ok(())
 }
 

@@ -6,10 +6,12 @@
 //!
 //! money to 3,000.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const IDOL_AND_BAND: CardDef = CardDef::new("Sumimi:兼顾偶像与乐队", &[
-    On::Play(Some(cant_play), idol_and_band)]);
+pub const IDOL_AND_BAND: CardDef = CardDef::new(
+    "Sumimi:兼顾偶像与乐队",
+    &[On::Play(Some(cant_play), idol_and_band)],
+);
 
 /// 规则书: 「当你本回合未进行过赎回操作时可打出」 -- the redeem step records
 /// itself and clears at the turn end, so this is just asking that record.

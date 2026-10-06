@@ -25,9 +25,13 @@ use card_sdk::{key, CardDef, Msg, On};
 const FANS_UP: &str = "P✽P粉丝(正)";
 const FANS_DOWN: &str = "P✽P粉丝(反)";
 
-pub const MAYA_DAWN: CardDef = CardDef::new("skill:大和麻弥:朝阳照耀的片刻", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::Drew], mine, on_draw)]);
+pub const MAYA_DAWN: CardDef = CardDef::new(
+    "skill:大和麻弥:朝阳照耀的片刻",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::Drew], mine, on_draw),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -41,7 +45,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::place_card(p, "skill:大和麻弥:朝阳照耀的片刻", &Msg::new(key!("maya_dawn_granted")));
+        ctx::place_card(
+            p,
+            "skill:大和麻弥:朝阳照耀的片刻",
+            &Msg::new(key!("maya_dawn_granted")),
+        );
     }
     Ok(())
 }
@@ -83,7 +91,9 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
             .collect::<alloc::vec::Vec<_>>(),
     )?;
     // 「选择一张牌（不公开）加入手牌（此次加手视为抽卡动作）」
-    let Some(keep) = look.get(pick).cloned() else { return Ok(()); };
+    let Some(keep) = look.get(pick).cloned() else {
+        return Ok(());
+    };
     if ctx::take_card(player_id, CardPile::Deck, &keep) {
         ctx::add_to_hand(player_id, &keep);
     }
@@ -119,6 +129,9 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    ctx::log(player_id, &Msg::new(key!("maya_dawn_done")).i("n", y as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("maya_dawn_done")).i("n", y as i64),
+    );
     Ok(())
 }

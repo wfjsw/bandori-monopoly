@@ -28,12 +28,22 @@ impl Store {
     /// Connect to `url` (e.g. `redis://127.0.0.1:6379`).
     pub fn connect(url: &str) -> Result<Self, StoreError> {
         let client = redis::Client::open(url).map_err(|e| StoreError::Backend(e.to_string()))?;
-        let conn = client.get_connection().map_err(|e| StoreError::Backend(e.to_string()))?;
-        Ok(Self { conn: Mutex::new(conn) })
+        let conn = client
+            .get_connection()
+            .map_err(|e| StoreError::Backend(e.to_string()))?;
+        Ok(Self {
+            conn: Mutex::new(conn),
+        })
     }
 
-    fn call<T>(&self, f: impl FnOnce(&mut redis::Connection) -> redis::RedisResult<T>) -> Result<T, StoreError> {
-        let mut c = self.conn.lock().map_err(|_| StoreError::Backend("redis lock poisoned".into()))?;
+    fn call<T>(
+        &self,
+        f: impl FnOnce(&mut redis::Connection) -> redis::RedisResult<T>,
+    ) -> Result<T, StoreError> {
+        let mut c = self
+            .conn
+            .lock()
+            .map_err(|_| StoreError::Backend("redis lock poisoned".into()))?;
         f(&mut c).map_err(|e| StoreError::Backend(e.to_string()))
     }
 
@@ -77,7 +87,8 @@ impl CrossState for Store {
     }
 
     fn session_del(&self, token: &str) -> Result<(), StoreError> {
-        self.call(|c| c.del::<_, ()>(format!("{NS_SESSION}{token}"))).map(|_| ())
+        self.call(|c| c.del::<_, ()>(format!("{NS_SESSION}{token}")))
+            .map(|_| ())
     }
 
     fn session_all(&self) -> Result<Vec<Session>, StoreError> {
@@ -106,7 +117,8 @@ impl CrossState for Store {
     }
 
     fn room_del(&self, id: &str) -> Result<(), StoreError> {
-        self.call(|c| c.del::<_, ()>(format!("{NS_ROOM}{id}"))).map(|_| ())
+        self.call(|c| c.del::<_, ()>(format!("{NS_ROOM}{id}")))
+            .map(|_| ())
     }
 
     fn room_all(&self) -> Result<Vec<RoomRecord>, StoreError> {
@@ -130,6 +142,7 @@ impl CrossState for Store {
     }
 
     fn match_del(&self, room: &str) -> Result<(), StoreError> {
-        self.call(|c| c.del::<_, ()>(format!("{NS_MATCH}{room}"))).map(|_| ())
+        self.call(|c| c.del::<_, ()>(format!("{NS_MATCH}{room}")))
+            .map(|_| ())
     }
 }

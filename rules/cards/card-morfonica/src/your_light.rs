@@ -6,10 +6,12 @@
 //!
 //! move at 月之森女子学院 (without triggering its tile).
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const YOUR_LIGHT: CardDef = CardDef::new("Mor:你的光芒将照亮前路", &[
-    On::Play(Some(cant_play), your_light)]);
+pub const YOUR_LIGHT: CardDef = CardDef::new(
+    "Mor:你的光芒将照亮前路",
+    &[On::Play(Some(cant_play), your_light)],
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡」
@@ -39,6 +41,9 @@ fn your_light(player_id: i32) -> card_sdk::Asked {
     if school >= 0 {
         ctx::plan::set_start(school, "你的光芒将照亮前路");
     }
-    ctx::log(player_id, &Msg::new(key!("your_light_start")).player_id("who", player_id)); // 规则书: 「此次移动以…为起点」
+    ctx::log(
+        player_id,
+        &Msg::new(key!("your_light_start")).player_id("who", player_id),
+    ); // 规则书: 「此次移动以…为起点」
     Ok(())
 }

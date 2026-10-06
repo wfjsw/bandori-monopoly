@@ -32,13 +32,17 @@ pub const MEMO_DIRTY: &str = "memory.dirty";
 /// 1d6 bonuses taken in 状态2 this move. Cap 4.
 const BONUS: &str = "skill.dianaImprisoned.bonus";
 
-pub const DIANA_IMPRISONED: CardDef = CardDef::new("skill:三角初华:Imprisoned XII", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::RollPlan], in_one, on_plan),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::Settle], any, on_settle),
-    On::Hook(&[HookKind::PassPlayer], in_two, on_pass_player),
-    On::Hook(&[HookKind::SettleBefore], in_two, before_settle)]);
+pub const DIANA_IMPRISONED: CardDef = CardDef::new(
+    "skill:三角初华:Imprisoned XII",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::RollPlan], in_one, on_plan),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::Settle], any, on_settle),
+        On::Hook(&[HookKind::PassPlayer], in_two, on_pass_player),
+        On::Hook(&[HookKind::SettleBefore], in_two, before_settle),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -122,8 +126,16 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if other == player_id {
         return Ok(());
     }
-    ctx::transfer(other, player_id, 200, &Msg::new(key!("diana_imprisoned_fee")))?;
-    ctx::log(player_id, &Msg::new(key!("diana_imprisoned_charged")).player_id("who", other));
+    ctx::transfer(
+        other,
+        player_id,
+        200,
+        &Msg::new(key!("diana_imprisoned_fee")),
+    )?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("diana_imprisoned_charged")).player_id("who", other),
+    );
     Ok(())
 }
 
@@ -142,6 +154,9 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     let d = ctx::roll(player_id, 1, 6).max(0);
     state::set(player_id, BONUS, state::get(player_id, BONUS) + 1);
     ctx::plan::set_extra_steps(d);
-    ctx::log(player_id, &Msg::new(key!("diana_imprisoned_moved")).i("n", d as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("diana_imprisoned_moved")).i("n", d as i64),
+    );
     Ok(())
 }

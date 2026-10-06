@@ -8,19 +8,30 @@
 //! > （3）[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:笑容大游行";
 
-pub const SMILE_PARADE: CardDef = CardDef::new("HHW:笑容大游行", &[
-    On::Hook(&[card_sdk::abi::HookKind::SettleInstead], mine, settle_instead),
-    On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, move_after),
-    On::CounterAct(&[ChainKind::Pass], can_react, react),
-    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed),
-]);
+pub const SMILE_PARADE: CardDef = CardDef::new(
+    "HHW:笑容大游行",
+    &[
+        On::Hook(
+            &[card_sdk::abi::HookKind::SettleInstead],
+            mine,
+            settle_instead,
+        ),
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, move_after),
+        On::CounterAct(&[ChainKind::Pass], can_react, react),
+        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 /// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).
 fn group_tile() -> i32 {
@@ -48,7 +59,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「为此卡添加3个[奇迹水晶]」 -- the placement's crystal charge
     // (C# `H.PlaceFromPlay(c, ..., 3)`).
     ctx::set_crystals(3);
-    ctx::log(player_id, &Msg::new(key!("smile_parade_placed")).player_id("who", player_id).tile("tile", group));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("smile_parade_placed"))
+            .player_id("who", player_id)
+            .tile("tile", group),
+    );
     // 规则书（1）: 「当次移动的移动终点视为“弦卷集团”地产商」 -- the
     // `Fx.SettleInstead` hook kind is in (declare it and `trigger::set_cancelled()`
     // to replace the tile's effect); C# `CardSmileParade.SettleInstead` ->
@@ -109,7 +125,10 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("smile_parade_decayed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("smile_parade_decayed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -125,7 +144,10 @@ fn settle_instead(player_id: i32) -> card_sdk::Asked {
     ctx::trigger::set_cancelled();
     ctx::plan::set_settle_as_agent(true);
     ctx::card_settle_at(player_id, group, true);
-    ctx::log(player_id, &Msg::new(key!("smile_parade_agent")).tile("tile", group));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("smile_parade_agent")).tile("tile", group),
+    );
     Ok(())
 }
 
@@ -156,7 +178,10 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
     if n > 0 {
         ctx::add_crystals(-n, i32::MAX);
     }
-    ctx::log(player_id, &Msg::new(key!("smile_parade_moved")).tile("tile", to));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("smile_parade_moved")).tile("tile", to),
+    );
     Ok(())
 }
 

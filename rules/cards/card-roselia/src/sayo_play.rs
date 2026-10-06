@@ -8,13 +8,14 @@
 //! as H.AnnounceSkill plus SkillSayo's roll bump (+1 or +2, no fire cost); only
 //! the bump is expressible here (see the TODOs).
 
-use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
+use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const SAYO_PLAY: CardDef = CardDef::new("R:（纱夜）弹奏弹奏弹奏，继续弹奏", &[
-    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
-]);
+pub const SAYO_PLAY: CardDef = CardDef::new(
+    "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
+    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+);
 
 /// 规则书: 「[反击] 时机合适时打出」 -- reaction-only (C# `Normal => false`).
 fn can_react(player_id: i32) -> bool {
@@ -34,16 +35,27 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // 「打出时视为使用一次此卡使用者的技能」 -- the user's bound skill is the
     // `skill:<character>:<name>` field card `bind_skills` placed, so `play_card`
     // runs its `On::Play` entry and the `skillUsed` trigger fires with it.
-    if let Some(skill) = ctx::placed_cards(player_id).into_iter().find(|c| c.starts_with("skill:")) {
-        ctx::log(player_id, &Msg::new(key!("sayo_play_skill")).card("card", &skill));
+    if let Some(skill) = ctx::placed_cards(player_id)
+        .into_iter()
+        .find(|c| c.starts_with("skill:"))
+    {
+        ctx::log(
+            player_id,
+            &Msg::new(key!("sayo_play_skill")).card("card", &skill),
+        );
         ctx::play_card(&skill, player_id)?;
     }
-    let Some(before) = trigger::move_roll() else { return Ok(()); };
+    let Some(before) = trigger::move_roll() else {
+        return Ok(());
+    };
     let n = match ctx::ask_pick(
         player_id,
         &Msg::new(key!("sayo_play_ask_title")).card("card", "R:（纱夜）弹奏弹奏弹奏，继续弹奏"),
         &Msg::new(key!("sayo_play_ask_text")),
-        &[Msg::new(key!("sayo_play_plus_one")), Msg::new(key!("sayo_play_plus_two"))],
+        &[
+            Msg::new(key!("sayo_play_plus_one")),
+            Msg::new(key!("sayo_play_plus_two")),
+        ],
     )? {
         0 => 1,
         _ => 2,

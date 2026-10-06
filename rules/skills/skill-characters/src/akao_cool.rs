@@ -21,8 +21,10 @@ use card_sdk::abi::{CardPile, HookKind};
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const AKAO_COOL: CardDef = CardDef::new("skill:宇田川亚子:对帅气的憧憬", &[
-    On::Hook(&[HookKind::CircleAffected], mine, on_circle)]);
+pub const AKAO_COOL: CardDef = CardDef::new(
+    "skill:宇田川亚子:对帅气的憧憬",
+    &[On::Hook(&[HookKind::CircleAffected], mine, on_circle)],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -46,7 +48,10 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         for (uid, c) in down {
             ctx::unplace_at(uid);
             ctx::add_to_hand(player_id, &c);
-            ctx::log(player_id, &Msg::new(key!("akao_cool_taken")).card("card", &c));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("akao_cool_taken")).card("card", &c),
+            );
         }
         return Ok(());
     }
@@ -67,7 +72,9 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
             .map(|c| Msg::new(key!("akao_cool_option")).card("card", &c))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(keep) = look.get(pick).cloned() else { return Ok(()); };
+    let Some(keep) = look.get(pick).cloned() else {
+        return Ok(());
+    };
     if !ctx::take_card(player_id, CardPile::Deck, &keep) {
         return Ok(());
     }
@@ -86,7 +93,10 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
             // copy of that id is first on the field.
             let uid = ctx::place_card(player_id, c, &Msg::new(key!("akao_cool_note")));
             ctx::set_face_down_at(uid, true);
-            ctx::log(player_id, &Msg::new(key!("akao_cool_placed")).card("card", &c));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("akao_cool_placed")).card("card", &c),
+            );
         } else {
             ctx::take_card(player_id, CardPile::Deck, c);
             ctx::to_discard(player_id, c);

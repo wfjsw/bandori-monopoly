@@ -7,10 +7,9 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[
-    On::Play(Some(cant_play), play)]);
+pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardCaught.WhyNot`: `H.MoveWhyNot` first (main move still available),
@@ -20,7 +19,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         return Some(why);
     }
     let pos = ctx::player_pos(player_id);
-    if ctx::others(player_id).iter().all(|&p| ctx::player_pos(p) == pos) {
+    if ctx::others(player_id)
+        .iter()
+        .all(|&p| ctx::player_pos(p) == pos)
+    {
         return Some(Msg::new(key!("caught_none")).player_id("who", player_id));
     }
     None // playable
@@ -52,7 +54,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_steps(steps);
     ctx::log(
         player_id,
-        &Msg::new(key!("caught_target")).player_id("who", player_id).player_id("target", who).i("n", steps as i64),
+        &Msg::new(key!("caught_target"))
+            .player_id("who", player_id)
+            .player_id("target", who)
+            .i("n", steps as i64),
     );
     ctx::card_move(player_id);
     // 规则书: 「且可选择盖房」 -- C# arms `H._turnCtx.BuildOk` and lets the engine

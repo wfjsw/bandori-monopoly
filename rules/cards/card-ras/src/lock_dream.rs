@@ -9,18 +9,25 @@
 //! > （2）如果此卡拥有者的主要移动[经过]了“Bandori车站”则在触发结算前将行动终点改为“旭汤澡堂”，然后此卡[移除]
 //!
 
-use card_sdk::abi::{HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `Normal => false` with no `Play`/`React`: the card is shown out of the
 /// deck before the opening hands and lives on the field from there.
-pub const LOCK_DREAM: CardDef = CardDef::new("RAS:（LOCK）追逐梦想的步伐", &[
-    On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
-    On::Hook(&[HookKind::DeckAtGameStart], deck_at_game_start_guard, deck_at_game_start),
-    On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
-    On::Hook(&[HookKind::SettleBefore], |_| true, settle_before),
-]);
+pub const LOCK_DREAM: CardDef = CardDef::new(
+    "RAS:（LOCK）追逐梦想的步伐",
+    &[
+        On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            deck_at_game_start_guard,
+            deck_at_game_start,
+        ),
+        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+        On::Hook(&[HookKind::SettleBefore], |_| true, settle_before),
+    ],
+);
 
 /// C# `m.Tags["lockStation"]` -- the owner's main move passed Bandori车站.
 const SLOT_TAG: &str = "lock_dream_tag";
@@ -36,7 +43,11 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "RAS:（LOCK）追逐梦想的步伐", &Msg::new(key!("lock_dream_note")));
+    ctx::place_card(
+        player_id,
+        "RAS:（LOCK）追逐梦想的步伐",
+        &Msg::new(key!("lock_dream_note")),
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("lock_dream_revealed")).player_id("who", player_id),
@@ -64,7 +75,9 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     ctx::give_exile(player_id, 3, to);
     ctx::log(
         player_id,
-        &Msg::new(key!("lock_dream_exiled")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("lock_dream_exiled"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     Ok(())
 }
@@ -100,11 +113,16 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
         ctx::teleport_to(player_id, to);
         ctx::log(
             player_id,
-            &Msg::new(key!("lock_dream_moved")).player_id("who", player_id).tile("tile", to),
+            &Msg::new(key!("lock_dream_moved"))
+                .player_id("who", player_id)
+                .tile("tile", to),
         );
     }
     // 规则书（2）: 「然后此卡[移除]」 -- C# `H.Unplace(this, "removed")`.
     ctx::send_to_dest(ctx::Dest::Banished);
-    ctx::log(player_id, &Msg::new(key!("lock_dream_removed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("lock_dream_removed")).player_id("who", player_id),
+    );
     Ok(())
 }

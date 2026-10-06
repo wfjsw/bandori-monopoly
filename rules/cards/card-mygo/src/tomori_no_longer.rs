@@ -12,14 +12,18 @@
 
 use alloc::vec::Vec;
 
+use alloc::string::String;
 use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
-use alloc::string::String;
 
-pub const TOMORI_NO_LONGER: CardDef = CardDef::new("MyGO:（灯）不再迷茫", &[
-    On::Play(None, tomori_no_longer),
-    On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep),
-    On::Hook(&[card_sdk::abi::HookKind::FireSpent], mine, cover)]);
+pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
+    "MyGO:（灯）不再迷茫",
+    &[
+        On::Play(None, tomori_no_longer),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep),
+        On::Hook(&[card_sdk::abi::HookKind::FireSpent], mine, cover),
+    ],
+);
 
 /// （2）'s substitution.
 fn cover(player_id: i32) -> card_sdk::Asked {
@@ -39,7 +43,10 @@ fn cover(player_id: i32) -> card_sdk::Asked {
     }
     ctx::add_crystals(-1, i32::MAX);
     ctx::gain_fire(player_id, spent, &Msg::new(key!("tomori_no_longer_refund")));
-    ctx::log(player_id, &Msg::new(key!("tomori_no_longer_covered")).i("n", spent as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_no_longer_covered")).i("n", spent as i64),
+    );
     Ok(())
 }
 
@@ -75,7 +82,10 @@ fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
             .i("n", discarded as i64)
             .i("crystals", (discarded + 1) as i64),
     );
-    ctx::log(player_id, &Msg::new(key!("tomori_no_longer_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_no_longer_placed")).player_id("who", player_id),
+    );
     // （2）「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」
     // -- `fireSpent` is raised after the spend commits, so the substitution is a
     // crystal taken here and the fire handed back.

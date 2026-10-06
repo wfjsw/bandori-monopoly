@@ -13,19 +13,27 @@
 //! > （2）位于此卡所在格子上的玩家无法使用角色及乐队技能。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "通用:[都筑诗船]Parking Space";
 
 /// Where the deferred [停留] layers are written down (C# `H.IncV(who, "parkingStay")`).
 const SLOT_STAY: &str = "parking_space_stay";
 
-pub const PARKING_SPACE: CardDef = CardDef::new("通用:[都筑诗船]Parking Space", &[
-    On::Play(Some(cant_play), play),
-    // C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` -- field hooks, not [反击].
-    On::Hook(&[HookKind::SettleInstead, HookKind::TurnEndAfter], react_guard, react)]);
+pub const PARKING_SPACE: CardDef = CardDef::new(
+    "通用:[都筑诗船]Parking Space",
+    &[
+        On::Play(Some(cant_play), play),
+        // C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` -- field hooks, not [反击].
+        On::Hook(
+            &[HookKind::SettleInstead, HookKind::TurnEndAfter],
+            react_guard,
+            react,
+        ),
+    ],
+);
 
 /// C# `CardParkingSpace.WhyNot`: refuses when the board has no "Space" tile
 /// (`没有 Space`).
@@ -47,7 +55,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // （2）[持续]「位于此卡所在格子上的玩家无法使用角色及乐队技能」 -- the
     // `skillBlock` mark is what the shared skill-press gate reads.
     if space >= 0 {
-        ctx::add_mark(space, player_id, "skillBlock", &Msg::new(key!("parking_space_note")));
+        ctx::add_mark(
+            space,
+            player_id,
+            "skillBlock",
+            &Msg::new(key!("parking_space_note")),
+        );
     }
     // 规则书[手]: 「将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）」
     // -- C# takes `H.State.houses[s]` houses off the Space tile (only when the
@@ -108,7 +121,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
             // the host raises the trigger with the landing tile; the plan's
             // `set_settle_tile` override is not read back yet (engine-side).
             // C# `H.Log("text", who, ... 在「Parking Space」所在的格子结算：回合结束后获得 1 层 [停留])`.
-            ctx::log(who, &Msg::new(key!("parking_space_park")).player_id("who", who));
+            ctx::log(
+                who,
+                &Msg::new(key!("parking_space_park")).player_id("who", who),
+            );
             ctx::inc_slot(who, SLOT_STAY, 1);
             // C# returns a non-null enumerator, which the engine takes as
             // "the tile's own effect is replaced"; the ABI signals that by
@@ -131,7 +147,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
             ctx::give_stay(turn, layers);
             ctx::log(
                 turn,
-                &Msg::new(key!("parking_space_stay")).player_id("who", turn).i("n", layers as i64),
+                &Msg::new(key!("parking_space_stay"))
+                    .player_id("who", turn)
+                    .i("n", layers as i64),
             );
         }
         _ => {}

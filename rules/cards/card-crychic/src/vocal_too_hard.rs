@@ -6,13 +6,14 @@
 //! > [反击] 一次性向其他玩家支付5000以上资金时，免除此次支付。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const VOCAL_TOO_HARD: CardDef = CardDef::new("CRYCHIC:主唱太拼命了", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
+    "CRYCHIC:主唱太拼命了",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「一次性向其他玩家支付5000以上资金时」 -- C#
@@ -34,6 +35,9 @@ fn can_react(player_id: i32) -> bool {
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「免除此次支付」
     trigger::set_pay_amount(0);
-    ctx::log(player_id, &Msg::new(key!("vocal_too_hard_note")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("vocal_too_hard_note")).player_id("who", player_id),
+    );
     Ok(())
 }

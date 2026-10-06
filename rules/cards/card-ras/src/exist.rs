@@ -5,14 +5,18 @@
 //! > 将此卡放置于自己场上，直到自己的下一回合开始，场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你，你的下回合开始时将其翻入弃牌堆，若在此期间此卡没有造成影响，抽1张卡
 //!
 
-use card_sdk::abi::{HookKind, GateKind};
+use card_sdk::abi::{GateKind, HookKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const EXIST: CardDef = CardDef::new("RAS:EXIST", &[
-    On::Play(None, exist),
-    On::Gate(&[GateKind::Redirect], redirect),
-    On::Hook(&[HookKind::TurnStart], turn_start_guard, turn_start)]);
+pub const EXIST: CardDef = CardDef::new(
+    "RAS:EXIST",
+    &[
+        On::Play(None, exist),
+        On::Gate(&[GateKind::Redirect], redirect),
+        On::Hook(&[HookKind::TurnStart], turn_start_guard, turn_start),
+    ],
+);
 
 const ID: &str = "RAS:EXIST";
 
@@ -24,7 +28,10 @@ fn exist(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
     ctx::set_slot(player_id, SLOT_USED, 0);
-    ctx::log(player_id, &Msg::new(key!("exist_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("exist_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -74,6 +81,9 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     if used == 0 {
         ctx::draw(player_id, 1);
     }
-    ctx::log(player_id, &Msg::new(key!("exist_ended")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("exist_ended")).player_id("who", player_id),
+    );
     Ok(())
 }

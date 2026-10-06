@@ -26,10 +26,14 @@ const ARMED: &str = "skill.takiCrychic.armed";
 /// 「若你本回合未使用技能」.
 const USED: &str = "skill.takiCrychic.used";
 
-pub const TAKI_CRYCHIC: CardDef = CardDef::new("skill:椎名立希（CRYCHIC）:克服劣等感", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::RollAfter], |_| true, on_roll),
-    On::Hook(&[HookKind::SkillUsed], mine, on_skill_used)]);
+pub const TAKI_CRYCHIC: CardDef = CardDef::new(
+    "skill:椎名立希（CRYCHIC）:克服劣等感",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::RollAfter], |_| true, on_roll),
+        On::Hook(&[HookKind::SkillUsed], mine, on_skill_used),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -78,7 +82,10 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, ARMED, 1);
-    ctx::log(player_id, &Msg::new(key!("taki_crychic_armed")).i("n", other as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("taki_crychic_armed")).i("n", other as i64),
+    );
     Ok(())
 }
 
@@ -96,10 +103,15 @@ fn offer_reroll(player_id: i32, first: i32) -> card_sdk::Asked {
     let keep = ctx::ask_yes(
         player_id,
         &Msg::new(key!("taki_crychic_title")),
-        &Msg::new(key!("taki_crychic_pick")).i("a", first as i64).i("b", second as i64),
+        &Msg::new(key!("taki_crychic_pick"))
+            .i("a", first as i64)
+            .i("b", second as i64),
     )?;
     let chosen = if keep { first } else { second };
     ctx::trigger::set_move_roll(chosen);
-    ctx::log(player_id, &Msg::new(key!("taki_crychic_kept")).i("n", chosen as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("taki_crychic_kept")).i("n", chosen as i64),
+    );
     Ok(())
 }

@@ -10,14 +10,26 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const HARUHIKAGE: CardDef = CardDef::new("CRYCHIC:春日影", &[
-    On::Play(None, play),
-    On::CounterAct(&[ChainKind::Effect, ChainKind::MoveRoll, ChainKind::SettleBefore], can_react, react),
-    On::Hook(&[HookKind::Drawn], |_| true, on_drawn)]);
+pub const HARUHIKAGE: CardDef = CardDef::new(
+    "CRYCHIC:春日影",
+    &[
+        On::Play(None, play),
+        On::CounterAct(
+            &[
+                ChainKind::Effect,
+                ChainKind::MoveRoll,
+                ChainKind::SettleBefore,
+            ],
+            can_react,
+            react,
+        ),
+        On::Hook(&[HookKind::Drawn], |_| true, on_drawn),
+    ],
+);
 
 const ID: &str = "CRYCHIC:春日影";
 
@@ -51,7 +63,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- from hand the C# offers the
     // borrowed CRYCHIC skills (`H.CrychicChars` x `H.BorrowedActions`, then
     // `H.RunBorrowed`).
-    ctx::log(player_id, &Msg::new(key!("haruhikage_play")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("haruhikage_play")).player_id("who", player_id),
+    );
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- pick one of the five CRYCHIC
     // skills and run its `On::Play` entry. `ctx::play_card` is that run: the
     // skill is a card rule and this invokes it under its own id.
@@ -102,7 +117,12 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     if !ctx::take_from_hand(player_id, ID) {
         return Ok(());
     }
-    ctx::log(player_id, &Msg::new(key!("haruhikage_special_play")).player_id("who", player_id).card("card", ID));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("haruhikage_special_play"))
+            .player_id("who", player_id)
+            .card("card", ID),
+    );
     // 规则书（1）: 「依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
     // breaks when the hand did not grow (`hand.Count <= before`) or the player is out.
     for _ in 0..10 {
@@ -124,11 +144,15 @@ fn can_react(player_id: i32) -> bool {
     match trigger::kind() {
         // 规则书（2）[反击]: 「使用一次Crychic角色的技能」 -- C# `t.Kind == "moveRoll"
         // && t.Seat == player` runs 椎名立希（CRYCHIC）'s skill.
-        TriggerKind::MoveRoll => trigger::player_id() == player_id && trigger::move_roll().is_some(),
+        TriggerKind::MoveRoll => {
+            trigger::player_id() == player_id && trigger::move_roll().is_some()
+        }
         // 规则书（2）[反击]: same, C# `t.Kind == "settleBefore" && t.Seat == seat &&
         // H.Within(player, 5, includeSame: false).Count > 0` runs 丰川祥子（CRYCHIC）'s
         // skill (needs a player to step toward).
-        TriggerKind::SettleBefore => trigger::player_id() == player_id && !within5(player_id).is_empty(),
+        TriggerKind::SettleBefore => {
+            trigger::player_id() == player_id && !within5(player_id).is_empty()
+        }
         // 规则书（2）[反击]: same, C# `t.Kind == "pay" && t.Pay.IsRent && t.Pay.to ==
         // player && t.Pay.from != player && t.Pay.tile >= 0 && !t.Pay.cancel` runs
         // 长崎素世（CRYCHIC）'s skill (cancels the rent).
@@ -167,7 +191,9 @@ fn reroll_skill(player_id: i32) {
     trigger::set_move_roll(x);
     ctx::log(
         player_id,
-        &Msg::new(key!("haruhikage_reroll")).player_id("who", player_id).i("n", x as i64),
+        &Msg::new(key!("haruhikage_reroll"))
+            .player_id("who", player_id)
+            .i("n", x as i64),
     );
 }
 
@@ -204,7 +230,9 @@ fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
     ctx::teleport_to(player_id, to);
     ctx::log(
         player_id,
-        &Msg::new(key!("haruhikage_step")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("haruhikage_step"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     Ok(())
 }
@@ -214,7 +242,10 @@ fn cancel_pay_skill(player_id: i32) {
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `React` "pay" branch:
     // `trigger.Pay.cancel = true` plus `H.ExtraOf<SoyoTeleportFx>(i)` (teleport to
     // the mortgaged tile on the next main move).
-    ctx::log(player_id, &Msg::new(key!("haruhikage_pay_note")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("haruhikage_pay_note")).player_id("who", player_id),
+    );
     // 规则书（2）: cancel the rent being paid to you.
     trigger::set_pay_amount(0);
     // TODO(规则书)[judgement](ABI): `H.ExtraOf<SoyoTeleportFx>` (C# `SoyoTeleportFx.MoveBefore`:

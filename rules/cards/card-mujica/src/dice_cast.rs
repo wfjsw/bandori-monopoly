@@ -6,9 +6,9 @@
 //! >  将此卡放置于自身场上，本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆（此卡可以被反击）
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `H._noReactTurn` stand-in: the turn key of the player that locked hand
 /// [反击]s this turn (C# clears it at that player's turn end).
@@ -16,12 +16,16 @@ const NO_REACT: &str = "diceCastActive";
 
 const ID: &str = "Mujica:骰子已经掷下";
 
-pub const DICE_CAST: CardDef = CardDef::new("Mujica:骰子已经掷下", &[
-    On::Play(Some(cant_play), play),
-    On::CounterAct(&[ChainKind::Card], can_react, react),
-    // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
-    // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-    On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end)]);
+pub const DICE_CAST: CardDef = CardDef::new(
+    "Mujica:骰子已经掷下",
+    &[
+        On::Play(Some(cant_play), play),
+        On::CounterAct(&[ChainKind::Card], can_react, react),
+        // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
+        // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
+        On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end),
+    ],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书: 「（此卡可以被反击）」 -- playable as a [反击] too (C#
@@ -66,7 +70,10 @@ fn cast(player_id: i32) {
     // Latched to the turn key so it expires at the next turn (the C# clears it
     // in `TurnEndAfter`); the engine must honour it as the no-react gate.
     ctx::set_slot(player_id, NO_REACT, ctx::turn_key());
-    ctx::log(player_id, &Msg::new(key!("dice_cast_log")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("dice_cast_log")).player_id("who", player_id),
+    );
 }
 
 /// C# `CardDiceCast.TurnEndAfter` (MatchHost.cs:5629-5645) -- clear the
@@ -84,7 +91,10 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「回合结束后放入弃牌堆」 -- C# `H.Unplace(this, "discard", "回合结束")`.
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("dice_cast_ended")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("dice_cast_ended")).player_id("who", player_id),
+    );
     // TODO(规则书)[judgement]: 「（此卡可以被反击）」 -- the engine must still let other
     //   the clause under-specifies -- see the note above it
     // [反击]s answer this card's own play window (C# reaction chain plays

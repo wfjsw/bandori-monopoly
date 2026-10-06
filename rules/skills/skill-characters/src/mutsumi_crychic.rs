@@ -24,12 +24,15 @@ const OTHER: &str = "skill.mutsumiCrychic.other";
 /// Their last move face, latched at their `RollAfter`.
 const THEIRS: &str = "skill.mutsumiCrychic.theirs";
 
-pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new("skill:若叶睦（CRYCHIC）:精致的人偶", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::RollAfter], other, latch),
-]);
+pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
+    "skill:若叶睦（CRYCHIC）:精致的人偶",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::RollAfter], other, latch),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -62,7 +65,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     )?;
     if let Some(&who) = others.get(pick) {
         state::set(player_id, OTHER, who);
-        ctx::log(player_id, &Msg::new(key!("mutsumi_crychic_named")).player_id("who", who));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("mutsumi_crychic_named")).player_id("who", who),
+        );
     }
     Ok(())
 }
@@ -107,7 +113,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::set_fixed_roll(face);
-    ctx::log(player_id, &Msg::new(key!("mutsumi_crychic_fixed")).i("n", face as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mutsumi_crychic_fixed")).i("n", face as i64),
+    );
     Ok(())
 }
 

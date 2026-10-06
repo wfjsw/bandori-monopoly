@@ -6,10 +6,10 @@
 //! >  roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”），若你没有Livehouse格子，传送到“Live House”。视为你的主要移动。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BE_STRONGEST: CardDef = CardDef::new("RAS:成为最强", &[
-    On::Play(Some(cant_play), be_strongest)]);
+pub const BE_STRONGEST: CardDef =
+    CardDef::new("RAS:成为最强", &[On::Play(Some(cant_play), be_strongest)]);
 
 /// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.
@@ -28,17 +28,23 @@ const LIVEHOUSES: [&str; 9] = [
     "武道馆",
     "Space",
     "Live House Galaxy",
-    "RiNG 4"];
+    "RiNG 4",
+];
 
 fn be_strongest(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若你没有Livehouse格子，传送到“Live House”」
     // -- C# `H.OwnedBy(i).Any((int t) => H.IsLiveHouse(i, t))`, which also
     // counts an `Fx.ExtraColor` deed (e.g. 「游击演出」's designated one).
-    let owns_livehouse = ctx::owned_tiles(player_id).into_iter().any(|t| ctx::is_live_house_for(player_id, t));
+    let owns_livehouse = ctx::owned_tiles(player_id)
+        .into_iter()
+        .any(|t| ctx::is_live_house_for(player_id, t));
     let live_house = ctx::tile_named("Live House");
     let to = if !owns_livehouse {
         // 规则书: 「若你没有Livehouse格子，传送到“Live House”」
-        ctx::log(player_id, &Msg::new(key!("be_strongest_none")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("be_strongest_none")).player_id("who", player_id),
+        );
         live_house
     } else {
         // 规则书: 「roll 1d10，传送到livehouse对应的格子（按格子编号排序，若为10或以上传送到“Live House”）」
@@ -52,7 +58,12 @@ fn be_strongest(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    ctx::log(player_id, &Msg::new(key!("be_strongest_to")).player_id("who", player_id).tile("tile", to));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("be_strongest_to"))
+            .player_id("who", player_id)
+            .tile("tile", to),
+    );
     // 规则书: 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo
     // = teleportTo })`: a teleport to the chosen tile that consumes the turn's
     // main move and settles where it lands (Resolve defaults to true).

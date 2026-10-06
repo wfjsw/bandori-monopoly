@@ -39,7 +39,12 @@ pub struct MatchHandle {
 }
 
 impl MatchHandle {
-    pub fn new(id: String, store: Arc<dyn CrossState>, engine: Arc<Pool>, blob: String) -> Result<Self, String> {
+    pub fn new(
+        id: String,
+        store: Arc<dyn CrossState>,
+        engine: Arc<Pool>,
+        blob: String,
+    ) -> Result<Self, String> {
         store.match_put(&id, &blob).map_err(|e| e.to_string())?;
         Ok(Self {
             id,
@@ -67,7 +72,9 @@ impl MatchHandle {
         let before = self.snapshot()?;
         let (after, out) = f(&before, &self.engine)?;
         if let Some(a) = after {
-            self.store.match_put(&self.id, &a).map_err(|e| e.to_string())?;
+            self.store
+                .match_put(&self.id, &a)
+                .map_err(|e| e.to_string())?;
         }
         Ok(out)
     }
@@ -267,7 +274,12 @@ impl Room {
             }
         };
         if let Some(blob) = blob {
-            match MatchHandle::new(self.info.id.clone(), self.store.clone(), self.engine.clone(), blob) {
+            match MatchHandle::new(
+                self.info.id.clone(),
+                self.store.clone(),
+                self.engine.clone(),
+                blob,
+            ) {
                 Ok(m) => self.game = Some(Arc::new(m)),
                 Err(e) => eprintln!("room {} match restore failed: {e}", self.info.id),
             }
@@ -493,8 +505,13 @@ impl Room {
             .engine
             .new_match(&self.info.members, seed, mode as i32, &self.info.weights)
             .map_err(|e| ApiError::bad(e.as_str()))?;
-        let m = MatchHandle::new(self.info.id.clone(), self.store.clone(), self.engine.clone(), blob)
-            .map_err(|e| ApiError::bad(e.as_str()))?;
+        let m = MatchHandle::new(
+            self.info.id.clone(),
+            self.store.clone(),
+            self.engine.clone(),
+            blob,
+        )
+        .map_err(|e| ApiError::bad(e.as_str()))?;
         self.game = Some(Arc::new(m));
         self.info.playing = true;
         self.persist();

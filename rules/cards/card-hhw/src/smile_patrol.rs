@@ -6,10 +6,10 @@
 //! >  付款并在任意自己的格子加盖一层房屋，投掷3d20并在投掷结果数字对应的格子额外免费加盖一层房屋（若为可建造格子）
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SMILE_PATROL: CardDef = CardDef::new("HHW:微笑巡逻队", &[
-    On::Play(Some(cant_play), play)]);
+pub const SMILE_PATROL: CardDef =
+    CardDef::new("HHW:微笑巡逻队", &[On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSmilePatrol.WhyNot`: refuses without a tile you can afford to
@@ -42,7 +42,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let tile = (r - 1).rem_euclid(n);
     ctx::log(
         player_id,
-        &Msg::new(key!("smile_patrol_rolled")).player_id("who", player_id).tile("tile", tile).i("roll", r as i64),
+        &Msg::new(key!("smile_patrol_rolled"))
+            .player_id("who", player_id)
+            .tile("tile", tile)
+            .i("roll", r as i64),
     );
     // 规则书: 「额外免费加盖一层房屋（若为可建造格子）」 -- C# checks `IsBuyable`,
     // kind != "ring", rent tiers, mortgage, house cap, then `H.AddHouse`.
@@ -53,9 +56,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let can = ctx::is_buyable(tile) && !ctx::mortgaged_of(tile);
     let after = if can { ctx::add_house(tile, 1) } else { before };
     if after > before {
-        ctx::log(player_id, &Msg::new(key!("smile_patrol_built")).tile("tile", tile).i("n", after as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("smile_patrol_built"))
+                .tile("tile", tile)
+                .i("n", after as i64),
+        );
     } else {
-        ctx::log(player_id, &Msg::new(key!("smile_patrol_cannot_build")).tile("tile", tile));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("smile_patrol_cannot_build")).tile("tile", tile),
+        );
     }
     Ok(())
 }

@@ -21,12 +21,15 @@ use card_sdk::{key, CardDef, Msg, On};
 /// 「你的回合中[经过]」 -- latched on the pass, paid at turn end.
 const PASSED: &str = "skill.rimiResolve.passed";
 
-pub const RIMI_RESOLVE: CardDef = CardDef::new("skill:牛込里美:里美的决心", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-]);
+pub const RIMI_RESOLVE: CardDef = CardDef::new(
+    "skill:牛込里美:里美的决心",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -95,12 +98,13 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("rimi_resolve_title")),
         &Msg::new(key!("rimi_resolve_ask")),
-        &far
-            .iter()
+        &far.iter()
             .map(|&t| Msg::new(key!("rimi_resolve_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&to) = far.get(pick) else { return Ok(()); };
+    let Some(&to) = far.get(pick) else {
+        return Ok(());
+    };
     if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rimi_resolve_spend"))) {
         return Ok(());
     }

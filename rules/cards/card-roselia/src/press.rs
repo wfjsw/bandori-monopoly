@@ -1,6 +1,6 @@
 //! `R:[衍生] 压` -- C# `CardPress`: gain 1,000.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[On::Play(None, press)]);
 

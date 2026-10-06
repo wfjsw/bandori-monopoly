@@ -13,13 +13,21 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const CLEAR_CP: CardDef = CardDef::new("通用:该清CP了", &[
-    On::Play(Some(cant_play), clear_cp),
-    On::Hook(&[HookKind::TurnStart, HookKind::SettleAfter], react_guard, react)]);
+pub const CLEAR_CP: CardDef = CardDef::new(
+    "通用:该清CP了",
+    &[
+        On::Play(Some(cant_play), clear_cp),
+        On::Hook(
+            &[HookKind::TurnStart, HookKind::SettleAfter],
+            react_guard,
+            react,
+        ),
+    ],
+);
 
 /// Where the spread countdown is written down (C# `CPControl.Spread`).
 const SLOT_SPREAD: &str = "clear_cp_spread";
@@ -56,10 +64,20 @@ fn clear_cp(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("clear_cp_ask_text")),
         &free,
     )?;
-    ctx::add_mark(tile, player_id, key!("clear_cp_mark"), &Msg::new(key!("clear_cp_mark_note")));
+    ctx::add_mark(
+        tile,
+        player_id,
+        key!("clear_cp_mark"),
+        &Msg::new(key!("clear_cp_mark_note")),
+    );
     // 规则书[手]: 「并在自己[场上]添加6个[CP点]」
     ctx::add_tok(player_id, key!("clear_cp_tok"), 6, i32::MAX);
-    ctx::log(player_id, &Msg::new(key!("clear_cp_placed")).tile("tile", tile).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("clear_cp_placed"))
+            .tile("tile", tile)
+            .player_id("who", player_id),
+    );
     // 规则书（2）[特] + 规则书[手]: the settle / spread bodies run in `react`,
     // which the Fx hook dispatch runs at `turnStart` / `settleAfter`. C#
     // carries them on a standalone `CPControl` in `H._fx[i].extra`; the port's
@@ -106,14 +124,22 @@ fn react(player_id: i32) -> card_sdk::Asked {
             for &t in &marked {
                 for &adj in &[(t + 1) % n, (t - 1 + n) % n] {
                     if ctx::count_marks(adj, key!("clear_cp_mark"), -2) == 0 {
-                        ctx::add_mark(adj, player_id, key!("clear_cp_mark"), &Msg::new(key!("clear_cp_mark_note")));
+                        ctx::add_mark(
+                            adj,
+                            player_id,
+                            key!("clear_cp_mark"),
+                            &Msg::new(key!("clear_cp_mark_note")),
+                        );
                         added += 1;
                         break;
                     }
                 }
             }
             if added > 0 {
-                ctx::log(player_id, &Msg::new(key!("clear_cp_spread")).i("n", added as i64));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("clear_cp_spread")).i("n", added as i64),
+                );
             }
         }
         // 规则书[手]: 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]

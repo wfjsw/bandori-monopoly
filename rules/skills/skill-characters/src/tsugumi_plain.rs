@@ -24,12 +24,15 @@ use super::ran_red::REST_TURNS;
 /// 「下回合开始时，进行一次双倍掷骰的移动」 is armed here.
 const OWED: &str = "skill.tsugumiPlain.owed";
 
-pub const TSUGUMI_PLAIN: CardDef = CardDef::new("skill:羽泽鸫:伟大的平凡", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::TurnEnd], afterglow, tick),
-    On::Hook(&[HookKind::RollPlan], mine, on_plan),
-]);
+pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
+    "skill:羽泽鸫:伟大的平凡",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
+        On::Hook(&[HookKind::RollPlan], mine, on_plan),
+    ],
+);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")

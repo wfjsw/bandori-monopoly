@@ -11,14 +11,18 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:（沙绫）总有一天要给这片天空命名";
 
-pub const SAAYA_SKY: CardDef = CardDef::new("PPP:（沙绫）总有一天要给这片天空命名", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
-    On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end_after)]);
+pub const SAAYA_SKY: CardDef = CardDef::new(
+    "PPP:（沙绫）总有一天要给这片天空命名",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Hook(&[HookKind::TurnEndAfter], |_| true, turn_end_after),
+    ],
+);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 /// C# `CardSaayaSky._passed` -- the user walked past the card this turn.
@@ -32,7 +36,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置在山吹面包房」 -- bound to that tile; the hop in
     // (2) moves it with `set_card_tile`.
     ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("saaya_sky_note")));
-    ctx::log(player_id, &Msg::new(key!("saaya_sky_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("saaya_sky_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -77,7 +84,9 @@ fn turn_end_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_self_tile(to);
     ctx::log(
         player_id,
-        &Msg::new(key!("saaya_sky_hop")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("saaya_sky_hop"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     Ok(())
 }

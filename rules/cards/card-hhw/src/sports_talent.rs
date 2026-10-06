@@ -5,17 +5,29 @@
 //! >  将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果为10以上为止。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:运动的天赋";
 
-pub const SPORTS_TALENT: CardDef = CardDef::new("HHW:运动的天赋", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], react_guard, react),
-    On::RollPlan(roll_plan),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const SPORTS_TALENT: CardDef = CardDef::new(
+    "HHW:运动的天赋",
+    &[
+        On::Play(None, play),
+        On::Hook(
+            &[HookKind::TurnEnd, HookKind::RollAfter],
+            react_guard,
+            react,
+        ),
+        On::RollPlan(roll_plan),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 /// C# `CardSportsTalent.Next` / `Mem["next"]` -- the next dice-roll reward
 /// (starts at 700, drops by 100, floors at 100). The player slot stands in for
@@ -29,7 +41,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并放置3个奇迹水晶」 -- the placement's crystal charge (C#
     // `H.PlaceFromPlay(c, -1, -1, 3)`).
     ctx::set_crystals(3);
-    ctx::log(player_id, &Msg::new(key!("sports_talent_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("sports_talent_placed")).player_id("who", player_id),
+    );
     // (the turn-end decay and the dice-roll reward run in `react`, which the Fx
     // hook dispatch runs at `turnEnd` / `rollAfter`.)
     Ok(())
@@ -81,7 +96,11 @@ fn reward(player_id: i32) {
         next = 700;
     }
     ctx::set_slot(player_id, SLOT_NEXT, (next - 100).max(100));
-    ctx::gain(player_id, next, &Msg::new(key!("sports_talent_reward")).n("money", next as i64));
+    ctx::gain(
+        player_id,
+        next,
+        &Msg::new(key!("sports_talent_reward")).n("money", next as i64),
+    );
 }
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- C#
@@ -116,7 +135,12 @@ fn reroll_to_ten(player_id: i32) {
         x = ctx::do_move_roll(player_id).max(0);
         trigger::set_move_roll(x);
     }
-    ctx::log(player_id, &Msg::new(key!("sports_talent_reroll")).player_id("who", player_id).i("n", x as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("sports_talent_reroll"))
+            .player_id("who", player_id)
+            .i("n", x as i64),
+    );
 }
 
 /// 规则书: 「为0时置入弃牌堆」 -- C# `Empty()` / `H.Unplace(this, "discard")`.
@@ -138,6 +162,9 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("sports_talent_decayed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("sports_talent_decayed")).player_id("who", player_id),
+    );
     Ok(())
 }

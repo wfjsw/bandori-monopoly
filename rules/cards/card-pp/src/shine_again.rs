@@ -18,14 +18,18 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const SHINE_AGAIN: CardDef = CardDef::new("PP:再次闪耀", &[
-    On::Play(Some(can_record), record),
-    On::Play(None, shine_again),
-    On::Hook(&[HookKind::PayChoose], |_| true, pay_choose)]);
+pub const SHINE_AGAIN: CardDef = CardDef::new(
+    "PP:再次闪耀",
+    &[
+        On::Play(Some(can_record), record),
+        On::Play(None, shine_again),
+        On::Hook(&[HookKind::PayChoose], |_| true, pay_choose),
+    ],
+);
 
 /// Stand-in for C# `CardShineAgain._colors` (per-card Mem): a bitset of the
 /// colour groups already recorded, kept on the owner's player while in play.
@@ -34,7 +38,11 @@ const SLOT_COLORS: &str = "shine_again_colors";
 fn shine_again(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:再次闪耀", &Msg::new(key!("shine_again_note")));
+    ctx::place_card(
+        player_id,
+        "PP:再次闪耀",
+        &Msg::new(key!("shine_again_note")),
+    );
     // 规则书[持续]（1）: 「记录一个此卡未记录的颜色」 -- the recorded set starts
     // empty (C# `new HashSet<int>()` on the card).
     ctx::set_slot(player_id, SLOT_COLORS, 0);
@@ -94,7 +102,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         &options,
     )?;
     let g = colors[pick.min(colors.len() - 1)];
-    ctx::set_slot(player_id, SLOT_COLORS, ctx::slot(player_id, SLOT_COLORS) | (1 << g));
+    ctx::set_slot(
+        player_id,
+        SLOT_COLORS,
+        ctx::slot(player_id, SLOT_COLORS) | (1 << g),
+    );
     // 规则书[持续]（1）: 「[拥有者]拥有的1个同色地契的购买价格」÷5 -- C# `Max(price)`
     // over the owner's deeds in that colour (`H._tiles[t].price`).
     let mut best = 0;
@@ -111,7 +123,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX);
     let money = best / 5;
     if money > 0 {
-        ctx::gain(player_id, money, &Msg::new(key!("shine_again_why")).i("n", money as i64));
+        ctx::gain(
+            player_id,
+            money,
+            &Msg::new(key!("shine_again_why")).i("n", money as i64),
+        );
     }
     Ok(())
 }
@@ -149,9 +165,18 @@ fn record(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("shine_again_which")),
         &opts,
     )?;
-    let Some(&g) = pool.get(pick) else { return Ok(()) };
-    ctx::set_slot(player_id, SLOT_COLORS, ctx::slot(player_id, SLOT_COLORS) | (1 << g));
+    let Some(&g) = pool.get(pick) else {
+        return Ok(());
+    };
+    ctx::set_slot(
+        player_id,
+        SLOT_COLORS,
+        ctx::slot(player_id, SLOT_COLORS) | (1 << g),
+    );
     ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX);
-    ctx::log(player_id, &Msg::new(key!("shine_again_recorded")).i("n", g as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("shine_again_recorded")).i("n", g as i64),
+    );
     Ok(())
 }

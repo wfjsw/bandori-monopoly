@@ -29,11 +29,14 @@ fn shop() -> i32 {
     ctx::tile_named("银河拉面馆")
 }
 
-pub const TOMOE_RAMEN: CardDef = CardDef::new("skill:宇田川巴:豚骨酱油拉面大姐", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::TurnEnd], afterglow, tick),
-]);
+pub const TOMOE_RAMEN: CardDef = CardDef::new(
+    "skill:宇田川巴:豚骨酱油拉面大姐",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
+    ],
+);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")
@@ -83,7 +86,11 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「向绝对距离…更近的方向」 -- whichever way shortens `dist`.
     let fwd = ctx::tile_steps_ahead(player_id, 10);
     let back = ctx::tile_steps_ahead(player_id, -10);
-    let toward = if ctx::dist(fwd, shop) <= ctx::dist(back, shop) { fwd } else { back };
+    let toward = if ctx::dist(fwd, shop) <= ctx::dist(back, shop) {
+        fwd
+    } else {
+        back
+    };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_spend"))) {
         return Ok(());
     }
@@ -97,6 +104,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if after > before {
         ctx::gain_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_refund")));
     }
-    ctx::log(player_id, &Msg::new(key!("tomoe_ramen_moved")).tile("tile", toward));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomoe_ramen_moved")).tile("tile", toward),
+    );
     Ok(())
 }

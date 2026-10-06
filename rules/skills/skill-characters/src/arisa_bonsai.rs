@@ -18,11 +18,15 @@ fn station() -> i32 {
     ctx::tile_named("流星堂")
 }
 
-pub const ARISA_BONSAI: CardDef = CardDef::new("skill:市谷有咲:盆栽爱好者", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Event], other, on_event),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-    On::Hook(&[HookKind::Pass], mine, on_pass)]);
+pub const ARISA_BONSAI: CardDef = CardDef::new(
+    "skill:市谷有咲:盆栽爱好者",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Event], other, on_event),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

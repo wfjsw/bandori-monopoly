@@ -6,10 +6,9 @@
 //! >  使自己获得一层[停留]并在回合结束时额外进行一次[触发结算]
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RINNE_RAIN: CardDef = CardDef::new("MyGO:轮符雨", &[
-    On::Play(None, rinne_rain)]);
+pub const RINNE_RAIN: CardDef = CardDef::new("MyGO:轮符雨", &[On::Play(None, rinne_rain)]);
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使自己获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, CardName)`.

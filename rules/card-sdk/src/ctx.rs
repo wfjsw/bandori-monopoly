@@ -242,7 +242,14 @@ mod sys {
         pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
         pub fn is_agent(tile: i32) -> i32;
         pub fn paid_in_settle() -> i32;
-        pub fn place_card_on(player_id: i32, tile: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32;
+        pub fn place_card_on(
+            player_id: i32,
+            tile: i32,
+            cp: i32,
+            cl: i32,
+            ptr: i32,
+            len: i32,
+        ) -> i32;
         pub fn play_from_hand() -> i32;
         pub fn set_build_discount(n: i32, layers: i32);
         pub fn set_buy_discount(n: i32);
@@ -1121,7 +1128,13 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
 /// `H.AskNumber` -- a number in `min..=max`. The C# builds this as an `AskPick`
 /// over the range, so the option list is the faithful shape (ranges in the card
 /// pool are small; for a wide range, narrow the candidates yourself first).
-pub fn ask_number(player_id: i32, title: &Msg, text: &Msg, min: i32, max: i32) -> Result<i32, Prompt> {
+pub fn ask_number(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    min: i32,
+    max: i32,
+) -> Result<i32, Prompt> {
     let min = min.min(max);
     let max = max.max(min);
     let mut options: Vec<Msg> = Vec::new();
@@ -1341,7 +1354,6 @@ pub mod plan {
     pub fn set_can_build(on: bool) {
         unsafe { sys::set_can_build(on as i32) }
     }
-
 }
 
 /// C# `H.Target(c, seat)` for a single-target card -- try to target `player_id`.

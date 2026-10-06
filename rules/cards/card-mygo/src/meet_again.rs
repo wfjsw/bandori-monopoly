@@ -7,13 +7,14 @@
 //! move roll, keep re-rolling movement dice until the total passes the next
 //! player in the direction of travel.
 
-use card_sdk::abi::{TriggerKind, ChainKind, MoveKind};
+use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const MEET_AGAIN: CardDef = CardDef::new("MyGO:若能再次交汇", &[
-    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
-]);
+pub const MEET_AGAIN: CardDef = CardDef::new(
+    "MyGO:若能再次交汇",
+    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+);
 
 /// Distance in the direction of travel to the nearest other player who can be
 /// passed (C# `CardMeetAgain.Next` over `H.Forward`, picked by `MoveCtx.Dir`).
@@ -40,7 +41,11 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
             best = d;
         }
     }
-    if best == i32::MAX { -1 } else { best }
+    if best == i32::MAX {
+        -1
+    } else {
+        best
+    }
 }
 
 fn can_react(player_id: i32) -> bool {
@@ -58,7 +63,9 @@ fn can_react(player_id: i32) -> bool {
 
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
-    let Some(mut roll) = trigger::move_roll() else { return Ok(()); };
+    let Some(mut roll) = trigger::move_roll() else {
+        return Ok(());
+    };
     let dist = next_dist(player_id, trigger::move_dir());
     if dist <= 0 {
         return Ok(());

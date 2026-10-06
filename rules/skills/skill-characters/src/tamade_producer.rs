@@ -20,10 +20,14 @@ const BUILT_LAST: &str = "skill.tamade.builtLast";
 /// Did one commit this turn? Latched at `houseAdded`.
 const BUILT_THIS: &str = "skill.tamade.builtThis";
 
-pub const TAMADE_PRODUCER: CardDef = CardDef::new("skill:珠手知由:天才制作人", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::HouseAdded], mine, on_built),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end)]);
+pub const TAMADE_PRODUCER: CardDef = CardDef::new(
+    "skill:珠手知由:天才制作人",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::HouseAdded], mine, on_built),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+    ],
+);
 
 /// Only this player's own business -- the skill is theirs, not the table's.
 fn mine(player_id: i32) -> bool {

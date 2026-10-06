@@ -9,12 +9,12 @@
 use alloc::vec::Vec;
 
 use card_sdk::ctx::{self, CardPile, DeckPos};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:因为我一直相信着你";
 
-pub const BELIEVE_YOU: CardDef = CardDef::new("HHW:因为我一直相信着你", &[
-    On::Play(Some(cant_play), play)]);
+pub const BELIEVE_YOU: CardDef =
+    CardDef::new("HHW:因为我一直相信着你", &[On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBelieveYou.WhyNot`: refuses without another hand card / 800 money
@@ -78,7 +78,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
         )?;
         let id = ids[pick.min(ids.len() - 1)];
         ctx::discard_from_hand(player_id, id);
-        ctx::log(player_id, &Msg::new(key!("believe_you_discarded")).player_id("who", who).card("card", id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("believe_you_discarded"))
+                .player_id("who", who)
+                .card("card", id),
+        );
     }
     // 规则书: 「然后从你的卡组中选择两张加入你的手牌」 -- C# loops twice:
     // `H.AskCard(i, ..., h.draw.ToList())` then `h.draw.Remove` + `H.AddToHand`.
@@ -97,7 +102,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let id = ids[pick.min(ids.len() - 1)];
         if ctx::take_card(player_id, CardPile::Deck, id) {
             ctx::add_to_hand(player_id, id);
-            ctx::log(player_id, &Msg::new(key!("believe_you_kept")).card("card", id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("believe_you_kept")).card("card", id),
+            );
         }
     }
     // 规则书: 「重洗你的抽牌堆」 -- C# `H.Shuffle(h.draw)`. There is no in-place
@@ -108,6 +116,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ctx::take_card(player_id, CardPile::Deck, &id);
         ctx::add_to_deck_at(player_id, &id, DeckPos::Random);
     }
-    ctx::log(player_id, &Msg::new(key!("believe_you_shuffled")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("believe_you_shuffled")).player_id("who", player_id),
+    );
     Ok(())
 }

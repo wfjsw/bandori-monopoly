@@ -8,13 +8,14 @@
 //! > （2）使你立即传送至对方所在格子（不触发结算但视为可触发乐队技能）
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind, CardPile};
+use card_sdk::abi::{CardPile, ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const PLEASE_CHOOSE: CardDef = CardDef::new("RAS:PLEASE CHOOSE", &[
-    On::CounterAct(&[ChainKind::Settle], can_react, react),
-]);
+pub const PLEASE_CHOOSE: CardDef = CardDef::new(
+    "RAS:PLEASE CHOOSE",
+    &[On::CounterAct(&[ChainKind::Settle], can_react, react)],
+);
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a
 /// buyable Live House (color group 6, `kind` property/ring). `Live House` the
@@ -74,7 +75,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
         // CardPile::Hand)` lists the hand now.
         ctx::log(
             other,
-            &Msg::new(key!("please_choose_opt1_todo")).player_id("who", other).player_id("reactor", player_id),
+            &Msg::new(key!("please_choose_opt1_todo"))
+                .player_id("who", other)
+                .player_id("reactor", player_id),
         );
         return Ok(());
     }
@@ -85,7 +88,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
         ctx::teleport_to(player_id, to);
         ctx::log(
             player_id,
-            &Msg::new(key!("please_choose_moved")).player_id("who", player_id).tile("tile", to),
+            &Msg::new(key!("please_choose_moved"))
+                .player_id("who", player_id)
+                .tile("tile", to),
         );
     }
     // TODO(规则书)[judgement][反击]（2）: 「（不触发结算但视为可触发乐队技能）」 -- the

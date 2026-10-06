@@ -6,13 +6,14 @@
 //!
 //! until the face is new this turn.
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const TAKI_EVEN_IF: CardDef = CardDef::new("CRYCHIC:（立希）即便比不上...", &[
-    On::CounterAct(&[ChainKind::MoveRoll], can_react, react),
-]);
+pub const TAKI_EVEN_IF: CardDef = CardDef::new(
+    "CRYCHIC:（立希）即便比不上...",
+    &[On::CounterAct(&[ChainKind::MoveRoll], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「进入移动阶段后，触发结算前可打出」
@@ -22,7 +23,9 @@ fn can_react(player_id: i32) -> bool {
 }
 
 fn react(player_id: i32) -> card_sdk::Asked {
-    let Some(before) = trigger::move_roll() else { return Ok(()); };
+    let Some(before) = trigger::move_roll() else {
+        return Ok(());
+    };
     // 规则书[反击]: 「进行一次重骰」 -- `H.DoMoveRoll`, which sums the move's
     // whole dice table.
     // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- `H._turnCtx.Rolls`,
@@ -30,7 +33,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     let mut seen: alloc::vec::Vec<i32> = ctx::turn_rolls().into_iter().map(|r| r.abs()).collect();
     seen.push(before.abs());
     let mut x = ctx::do_move_roll(player_id);
-    ctx::log(player_id, &Msg::new(key!("taki_reroll")).player_id("who", player_id).i("n", x as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("taki_reroll"))
+            .player_id("who", player_id)
+            .i("n", x as i64),
+    );
     for _ in 0..10 {
         // 规则书[反击]: 「你可重骰至掷骰结果与本回合内你骰出过的所有骰点都不同为止」
         if !seen.contains(&x.abs()) {
@@ -46,7 +54,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
         }
         seen.push(x.abs());
         x = ctx::roll(player_id, 1, 20);
-        ctx::log(player_id, &Msg::new(key!("taki_reroll")).player_id("who", player_id).i("n", x as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("taki_reroll"))
+                .player_id("who", player_id)
+                .i("n", x as i64),
+        );
     }
     trigger::set_move_roll(x); // 规则书[反击]: 「进行一次重骰」-- the move uses the new face
     Ok(())

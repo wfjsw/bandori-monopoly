@@ -18,10 +18,14 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const SAKI_CRYCHIC: CardDef = CardDef::new("skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::SettleBefore], any, before_settle)]);
+pub const SAKI_CRYCHIC: CardDef = CardDef::new(
+    "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::SettleBefore], any, before_settle),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -103,10 +107,17 @@ fn nudge(who: i32, goal: i32) {
     }
     let fwd = (landing + 1) % n;
     let back = (landing - 1).rem_euclid(n);
-    let toward = if ctx::dist(fwd, goal) <= ctx::dist(back, goal) { fwd } else { back };
+    let toward = if ctx::dist(fwd, goal) <= ctx::dist(back, goal) {
+        fwd
+    } else {
+        back
+    };
     ctx::plan::set_teleport_to(toward);
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
-    ctx::log(who, &Msg::new(key!("saki_crychic_nudged")).tile("tile", toward));
+    ctx::log(
+        who,
+        &Msg::new(key!("saki_crychic_nudged")).tile("tile", toward),
+    );
 }
 
 // （4）「若你的乐队技能为"Ave Mujica"，你距离其他玩家5格以内时处于状态2，但只有

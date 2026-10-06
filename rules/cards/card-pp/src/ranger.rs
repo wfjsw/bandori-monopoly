@@ -15,10 +15,12 @@
 //!
 //! The ladder body runs off `cards_in(Field)` for the placed-card count.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RANGER: CardDef = CardDef::new("PP:[衍生]魔法战队Pastel✽Ranger", &[
-    On::Play(Some(cant_play), ranger)]);
+pub const RANGER: CardDef = CardDef::new(
+    "PP:[衍生]魔法战队Pastel✽Ranger",
+    &[On::Play(Some(cant_play), ranger)],
+);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -55,7 +57,11 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("ranger_count")).i("n", n as i64));
     // 规则书[手]1: 「数量至少为1则[获得]500资金」
     if n >= 1 {
-        ctx::gain(player_id, 500, &Msg::new(key!("ranger_why")).i("n", n as i64));
+        ctx::gain(
+            player_id,
+            500,
+            &Msg::new(key!("ranger_why")).i("n", n as i64),
+        );
     }
     // 规则书[手]2: 「数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     if n >= 3 {
@@ -69,7 +75,11 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]4: 「数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），
     // 盖房后减少1层”」 -- the 2,000 loss is `H.LoseR(i, 2000, CardName)`.
     if n >= 5 {
-        ctx::pay(player_id, 2000, &Msg::new(key!("ranger_why")).i("n", n as i64))?;
+        ctx::pay(
+            player_id,
+            2000,
+            &Msg::new(key!("ranger_why")).i("n", n as i64),
+        )?;
         // 规则书[手]4: 「下次盖房时减免2000（可溢出），盖房后减少1层」 -- a
         // layered cut on the build cost; the engine refunds the 「可溢出」 half
         // and pops one layer per build.

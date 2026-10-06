@@ -9,7 +9,7 @@
 //! > 3. [获得]3000资金。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const PERFECT: CardDef = CardDef::new("通用:[衍生]PERFECT", &[On::Play(None, perfect)]);
 
@@ -18,7 +18,10 @@ fn perfect(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);
     // 规则书[手]: 「2. 将一张“FEVER!“加入弃卡区」
     ctx::to_discard(player_id, "通用:[衍生]FEVER!");
-    ctx::log(player_id, &Msg::new(key!("perfect_added")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("perfect_added")).player_id("who", player_id),
+    );
     // 规则书[手]: 「3. [获得]3000资金」
     ctx::gain(player_id, 3000, &Msg::new(key!("perfect_why")));
     Ok(())

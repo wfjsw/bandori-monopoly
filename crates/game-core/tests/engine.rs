@@ -2,11 +2,11 @@
 
 use std::sync::Arc;
 
-use game_core::state::stage;
 use game_core::data::GameData;
 use game_core::engine::{Match, StubRules};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
+use game_core::state::stage;
 use game_core::state::MatchState;
 use game_core::MatchMode;
 

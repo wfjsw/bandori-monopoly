@@ -15,11 +15,15 @@
 //! `ctx::card_move`); the turn-end body is scheduled with `at_turn_end`.
 
 use card_sdk::ctx;
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const OVERLAPPING_VOICES: CardDef = CardDef::new("PP:[衍生]重叠的声音", &[
-    On::Play(Some(cant_play), overlapping_voices),
-    On::AtEnd(at_end)]);
+pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
+    "PP:[衍生]重叠的声音",
+    &[
+        On::Play(Some(cant_play), overlapping_voices),
+        On::AtEnd(at_end),
+    ],
+);
 
 /// C# `CardOverlappingVoices.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -61,7 +65,10 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX);
     // 规则书[手]3: 「将1张“明天见”加入手卡」
     ctx::add_to_hand(player_id, "PP:[衍生]明天见");
-    ctx::log(player_id, &Msg::new(key!("overlapping_voices_after")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("overlapping_voices_after")).player_id("who", player_id),
+    );
     Ok(())
 }
 // 规则书[特]: 「此卡进入拥有此卡的玩家的弃卡区时[移除]拥有此卡的玩家的[场地]上

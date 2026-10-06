@@ -11,16 +11,24 @@
 //!
 //! ×1000 to stock X crystals; each removal pays the owner 1,000.
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 
-pub const STARRY_NIGHT: CardDef = CardDef::new("Mor:蝴蝶飞舞的星月夜", &[
-    On::Play(Some(cant_play), starry_night),
-    On::Hook(&[HookKind::RollAfter, HookKind::PassTile], |_| true, hook),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const STARRY_NIGHT: CardDef = CardDef::new(
+    "Mor:蝴蝶飞舞的星月夜",
+    &[
+        On::Play(Some(cant_play), starry_night),
+        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], |_| true, hook),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardStarryNight.WhyNot` refuses the play with less than 1,000
@@ -44,10 +52,14 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
         max,
     )?;
     // 规则书（1）: 「支付X次1000的的资金」 -- C# `PayCtx { amount = 1000 * x, kind = "pay", must = false }`.
-    let paid = ctx::pay(player_id, 1000 * x, &Msg::new(key!("starry_night_why")).i("n", x as i64))?;
+    let paid = ctx::pay(
+        player_id,
+        1000 * x,
+        &Msg::new(key!("starry_night_why")).i("n", x as i64),
+    )?;
     if paid < 1000 * x {
         // C# `c.Effective = false` when the payment does not go through.
-// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
         // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
         // side channel and is not being ported (a routine should *return* whether
         // it took effect); but before that lands, what "not effective" changes has
@@ -58,9 +70,18 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（1）: 「将此卡放置在场地中央并在此卡上放置X个[奇迹水晶]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("starry_night_note")).i("n", x as i64));
+    ctx::place_card(
+        player_id,
+        ID,
+        &Msg::new(key!("starry_night_note")).i("n", x as i64),
+    );
     ctx::add_crystals(x, 0);
-    ctx::log(player_id, &Msg::new(key!("starry_night_placed")).player_id("who", player_id).i("n", x as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("starry_night_placed"))
+            .player_id("who", player_id)
+            .i("n", x as i64),
+    );
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」 and 规则书（2）/（3） -- the
     // RollAfter / PassTile hooks below handle the reroll, the even-roll attack and
     // the CiRCLE decay; [`on_crystals_changed`] pays out each removal and
@@ -101,7 +122,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
     if ctx::crystals() == 0 && trigger::value() <= 0 {
         ctx::set_dest(ctx::Dest::Graveyard);
-        ctx::log(player_id, &Msg::new(key!("starry_night_empty")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("starry_night_empty")).player_id("who", player_id),
+        );
     }
     Ok(())
 }
@@ -130,7 +154,10 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             // 规则书（2）: 「此卡拥有者经过CiRCLE时此卡移除一个[奇迹水晶]」 -- C#
             // `m.Seat == Seat && H.Tile(t)?.kind == "circle" && Crystals > 0`.
             if trigger::player_id() == player_id && ctx::is_circle(trigger::tile()) {
-                ctx::log(player_id, &Msg::new(key!("starry_night_circle")).player_id("who", player_id));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("starry_night_circle")).player_id("who", player_id),
+                );
                 remove_crystal(player_id);
             }
         }
@@ -155,7 +182,10 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
     trigger::set_move_roll(new_roll);
     ctx::log(
         player_id,
-        &Msg::new(key!("starry_night_rerolled")).player_id("who", player_id).i("from", roll as i64).i("to", new_roll as i64),
+        &Msg::new(key!("starry_night_rerolled"))
+            .player_id("who", player_id)
+            .i("from", roll as i64)
+            .i("to", new_roll as i64),
     );
     Ok(())
 }
@@ -169,14 +199,25 @@ fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         roller,
         &Msg::new(key!("starry_night_attack_title")),
-        &Msg::new(key!("starry_night_attack_ask")).player_id("who", player_id).i("roll", roll as i64),
+        &Msg::new(key!("starry_night_attack_ask"))
+            .player_id("who", player_id)
+            .i("roll", roll as i64),
     )? {
         return Ok(());
     }
-    let paid = ctx::pay(roller, 1000, &Msg::new(key!("starry_night_attack_pay")).player_id("who", roller))?;
+    let paid = ctx::pay(
+        roller,
+        1000,
+        &Msg::new(key!("starry_night_attack_pay")).player_id("who", roller),
+    )?;
     if paid >= 1000 {
         remove_crystal(player_id);
-        ctx::log(player_id, &Msg::new(key!("starry_night_attack_done")).player_id("who", roller).player_id("owner", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("starry_night_attack_done"))
+                .player_id("who", roller)
+                .player_id("owner", player_id),
+        );
     }
     Ok(())
 }

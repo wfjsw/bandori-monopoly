@@ -15,16 +15,20 @@
 //! (see the TODO); the [持续] stop is expressible via `ctx::plan` once the
 //! tile binding lands.
 
+use alloc::vec::Vec;
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{plan, trigger};
-use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 const ID: &str = "PP:可爱又强壮的花朵";
 
-pub const STRONG_FLOWER: CardDef = CardDef::new("PP:可爱又强壮的花朵", &[
-    On::Play(Some(cant_play), strong_flower),
-    On::Hook(&[HookKind::PassTile], |_| true, pass_tile)]);
+pub const STRONG_FLOWER: CardDef = CardDef::new(
+    "PP:可爱又强壮的花朵",
+    &[
+        On::Play(Some(cant_play), strong_flower),
+        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+    ],
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[手]: 「[指定][使用者]拥有的一个格子」 -- nothing to point at without
@@ -58,7 +62,12 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
         );
     }
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card_on(player_id, tile, "PP:可爱又强壮的花朵", &Msg::new(key!("strong_flower_note")));
+    ctx::place_card_on(
+        player_id,
+        tile,
+        "PP:可爱又强壮的花朵",
+        &Msg::new(key!("strong_flower_note")),
+    );
     // 规则书[手]: 「并为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」
     ctx::add_band_crystals(player_id, 2, i32::MAX);
     Ok(())
@@ -72,7 +81,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PassTile || trigger::player_id() != player_id {
         return Ok(());
     }
-    let Some(tile) = ctx::self_tile() else { return Ok(()); };
+    let Some(tile) = ctx::self_tile() else {
+        return Ok(());
+    };
     if trigger::tile() != tile {
         return Ok(());
     }

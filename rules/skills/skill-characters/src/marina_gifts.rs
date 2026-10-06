@@ -20,9 +20,10 @@ use card_sdk::abi::HookKind;
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const MARINA_GIFTS: CardDef = CardDef::new("skill:月岛麻里奈:礼物还有好多好多哟", &[
-    On::Hook(&[HookKind::Pass], |_| true, on_pass),
-]);
+pub const MARINA_GIFTS: CardDef = CardDef::new(
+    "skill:月岛麻里奈:礼物还有好多好多哟",
+    &[On::Hook(&[HookKind::Pass], |_| true, on_pass)],
+);
 
 /// The cost of the offer, named in the clause.
 const COST: i32 = 500;
@@ -42,19 +43,31 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     let offered = ctx::ask_yes(
         passer,
         &Msg::new(key!("marina_gifts_offer_title")),
-        &Msg::new(key!("marina_gifts_offer_text")).player_id("who", player_id).n("amount", COST as i64),
+        &Msg::new(key!("marina_gifts_offer_text"))
+            .player_id("who", player_id)
+            .n("amount", COST as i64),
     )?;
     if !offered {
         return Ok(());
     }
     // Paying is all-or-nothing; a passer who cannot pay simply does not play.
-    if ctx::transfer(passer, player_id, COST, &Msg::new(key!("marina_gifts_paid")))? == 0 {
+    if ctx::transfer(
+        passer,
+        player_id,
+        COST,
+        &Msg::new(key!("marina_gifts_paid")),
+    )? == 0
+    {
         return Ok(());
     }
     // 「你投掷一次1d10，如果投掷结果至少为6，那名玩家获得1200资金」
     let face = ctx::roll(player_id, 1, 10);
     if face >= 6 {
-        ctx::gain(passer, PAYOUT, &Msg::new(key!("marina_gifts_win")).i("n", face as i64));
+        ctx::gain(
+            passer,
+            PAYOUT,
+            &Msg::new(key!("marina_gifts_win")).i("n", face as i64),
+        );
     }
     Ok(())
 }

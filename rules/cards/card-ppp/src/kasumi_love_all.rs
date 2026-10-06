@@ -9,13 +9,17 @@
 //! > 其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子[强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
+use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const KASUMI_LOVE_ALL: CardDef = CardDef::new("PPP:（香澄）大家我都喜欢哦", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::PassTile], |_| true, pass_tile)]);
+pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
+    "PPP:（香澄）大家我都喜欢哦",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+    ],
+);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 

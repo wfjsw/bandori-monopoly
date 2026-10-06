@@ -15,11 +15,14 @@ use card_sdk::{key, CardDef, Msg, On};
 
 use super::ran_red::REST_TURNS;
 
-pub const HIMARI_STEP: CardDef = CardDef::new("skill:上原绯玛丽:大家一起迈出新的一步", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::TurnEnd], afterglow, tick),
-]);
+pub const HIMARI_STEP: CardDef = CardDef::new(
+    "skill:上原绯玛丽:大家一起迈出新的一步",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
+    ],
+);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")

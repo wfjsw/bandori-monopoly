@@ -6,19 +6,24 @@
 //! > [反击] 当你经过一名角色时，你可以打出此卡，你从对方处获得等于对方最贵格子基础购买价格一半数额的资金，之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const PROUD_LIGHT: CardDef = CardDef::new("AG:刻入天穹傲岸的烈光", &[
-    On::CounterAct(&[ChainKind::PassPlayer], can_react, react),
-]);
+pub const PROUD_LIGHT: CardDef = CardDef::new(
+    "AG:刻入天穹傲岸的烈光",
+    &[On::CounterAct(&[ChainKind::PassPlayer], can_react, react)],
+);
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).
 fn best_price(player_id: i32) -> i32 {
     // 规则书[反击]: 「对方最贵格子基础购买价格」-- max of `H._tiles[t].price`
     // (`ctx::tile_price`, the land price alone).
-    ctx::owned_tiles(player_id).into_iter().map(ctx::tile_price).max().unwrap_or(0)
+    ctx::owned_tiles(player_id)
+        .into_iter()
+        .map(ctx::tile_price)
+        .max()
+        .unwrap_or(0)
 }
 
 fn can_react(player_id: i32) -> bool {

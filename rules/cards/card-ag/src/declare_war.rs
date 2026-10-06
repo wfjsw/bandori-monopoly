@@ -9,11 +9,12 @@
 
 use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const DECLARE_WAR: CardDef = CardDef::new("AG:宣战布告", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const DECLARE_WAR: CardDef = CardDef::new(
+    "AG:宣战布告",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你拥有的格子被其他玩家的卡效果影响时」

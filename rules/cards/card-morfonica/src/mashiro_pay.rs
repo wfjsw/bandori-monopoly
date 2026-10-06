@@ -8,13 +8,14 @@
 //!
 //! Reaction-only (`Normal => false`).
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const MASHIRO_PAY: CardDef = CardDef::new("Mor:（小白）", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const MASHIRO_PAY: CardDef = CardDef::new(
+    "Mor:（小白）",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当你将要向其他玩家支付时打出此卡」
@@ -47,7 +48,13 @@ fn react(player_id: i32) -> card_sdk::Asked {
             .n("half", (amount / 2) as i64),
     );
     if to >= 0 {
-        ctx::pay(to, amount / 2, &Msg::new(key!("mashiro_pay_half")).player_id("who", to).n("n", (amount / 2) as i64))?;
+        ctx::pay(
+            to,
+            amount / 2,
+            &Msg::new(key!("mashiro_pay_half"))
+                .player_id("who", to)
+                .n("n", (amount / 2) as i64),
+        )?;
     }
     Ok(())
 }

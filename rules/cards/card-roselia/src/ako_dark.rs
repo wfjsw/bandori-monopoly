@@ -7,13 +7,14 @@
 //!
 //! just before you pay another player: take a [眩晕] layer instead of paying.
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const AKO_DARK: CardDef = CardDef::new("R:（亚子）黑暗大魔姬亚子", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const AKO_DARK: CardDef = CardDef::new(
+    "R:（亚子）黑暗大魔姬亚子",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 /// 规则书（1）[反击]: 「[反击] 当你即将向其他玩家支付资金时可打出此卡」
 fn can_react(player_id: i32) -> bool {
@@ -35,7 +36,10 @@ fn can_react(player_id: i32) -> bool {
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[反击]: 「使自己获得一层[眩晕]」 -- C# `H.GiveStun(i, 1, i, "黑暗大魔姬亚子")`.
     ctx::give_stun(player_id, 1);
-    ctx::log(player_id, &Msg::new(key!("ako_dark_stun")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("ako_dark_stun")).player_id("who", player_id),
+    );
     // 规则书（1）[反击]: the pay is waived once the player is stunned (C# ReactHint:
     // 「这笔就不用付了」) -- C# `c.Trigger.Pay.cancel = true` when `H.State.seats[i].Stunned`.
     if ctx::stun_of(player_id) > 0 {
@@ -45,7 +49,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // play's origin: a card run through `ctx::play_card` did not come from a hand.
     if !ctx::play_from_hand() {
         ctx::draw(player_id, 1);
-        ctx::log(player_id, &Msg::new(key!("ako_dark_drawn")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("ako_dark_drawn")).player_id("who", player_id),
+        );
     }
     Ok(())
 }

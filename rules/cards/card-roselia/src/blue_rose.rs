@@ -11,10 +11,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[
-    On::Play(Some(cant_play), play)]);
+pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play(Some(cant_play), play)]);
 
 /// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(player_id, t, 6)`, and
 /// `H.LiveHouses` also wants `IsBuyable`).
@@ -64,7 +63,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         let sum: i64 = live.iter().map(|&t| ctx::tile_price(t) as i64).sum();
         // C# `CeilTo(sum * 0.2, 10)` -- 20% rounded up to a multiple of 10.
         let amount = (((sum + 49) / 50) * 10) as i32;
-        ctx::gain(player_id, amount, &Msg::new(key!("blue_rose_gain")).i("n", sum));
+        ctx::gain(
+            player_id,
+            amount,
+            &Msg::new(key!("blue_rose_gain")).i("n", sum),
+        );
         return Ok(());
     }
     // 规则书（2）: 「传送至下一个未被购买的Livehouse格子」 -- nearest unowned ahead (C#
@@ -103,9 +106,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // teleport immediately.
     ctx::card_move(player_id);
     let why = if fallback {
-        Msg::new(key!("blue_rose_ring4")).player_id("who", player_id).tile("tile", to)
+        Msg::new(key!("blue_rose_ring4"))
+            .player_id("who", player_id)
+            .tile("tile", to)
     } else {
-        Msg::new(key!("blue_rose_teleport")).player_id("who", player_id).tile("tile", to)
+        Msg::new(key!("blue_rose_teleport"))
+            .player_id("who", player_id)
+            .tile("tile", to)
     };
     ctx::log(player_id, &why);
     Ok(())

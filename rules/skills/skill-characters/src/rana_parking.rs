@@ -22,13 +22,16 @@ const ON_TILE: &str = "抹茶芭菲";
 /// A player's held parfaits -- a counter.
 const HELD: &str = "抹茶芭菲";
 
-pub const RANA_PARKING: CardDef = CardDef::new("skill:要乐奈:投币式停车场的猫", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::SettleBefore], any, before_settle),
-    On::Hook(&[HookKind::PassPlayer], mine, on_overlap),
-]);
+pub const RANA_PARKING: CardDef = CardDef::new(
+    "skill:要乐奈:投币式停车场的猫",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::SettleBefore], any, before_settle),
+        On::Hook(&[HookKind::PassPlayer], mine, on_overlap),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -90,7 +93,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     plan::set_resolve(true);
     // 「该次传送不可进行地契购买」 -- the plan's no-buy flag.
     plan::set_no_buy(true);
-    ctx::log(player_id, &Msg::new(key!("rana_parking_moved")).tile("tile", space));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rana_parking_moved")).tile("tile", space),
+    );
     Ok(())
 }
 
@@ -127,7 +133,10 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     }
     ctx::trigger::set_pay_amount(0);
     ctx::add_mark(t, player_id, ON_TILE, &Msg::new(key!("rana_parking_note")));
-    ctx::log(player_id, &Msg::new(key!("rana_parking_placed")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rana_parking_placed")).tile("tile", t),
+    );
     Ok(())
 }
 
@@ -137,8 +146,16 @@ fn on_overlap(player_id: i32) -> card_sdk::Asked {
     if other == player_id {
         return Ok(());
     }
-    ctx::transfer(other, player_id, 800, &Msg::new(key!("rana_parking_overlap")))?;
+    ctx::transfer(
+        other,
+        player_id,
+        800,
+        &Msg::new(key!("rana_parking_overlap")),
+    )?;
     ctx::add_tok(other, HELD, 1, i32::MAX);
-    ctx::log(player_id, &Msg::new(key!("rana_parking_gave")).player_id("who", other));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rana_parking_gave")).player_id("who", other),
+    );
     Ok(())
 }

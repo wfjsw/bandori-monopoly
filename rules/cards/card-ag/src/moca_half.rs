@@ -9,16 +9,24 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "AG:（摩卡）0.5倍速";
 
-pub const MOCA_HALF: CardDef = CardDef::new("AG:（摩卡）0.5倍速", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-    On::Hook(&[HookKind::RollAfter], |_| true, roll_after),
-    On::Hook(&[HookKind::PayMul], |_| true, pay_mul),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const MOCA_HALF: CardDef = CardDef::new(
+    "AG:（摩卡）0.5倍速",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+        On::Hook(&[HookKind::RollAfter], |_| true, roll_after),
+        On::Hook(&[HookKind::PayMul], |_| true, pay_mul),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(1): 「将此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
@@ -27,7 +35,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书(1): 「并获得3个奇迹水晶」 -- the placement's crystal charge (C#
     // `H.PlaceFromPlay(c, -1, -1, 3)`).
     ctx::set_crystals(3);
-    ctx::log(player_id, &Msg::new(key!("moca_half_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("moca_half_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -65,7 +76,10 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("moca_half_decayed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("moca_half_decayed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -81,7 +95,10 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
     trigger::set_move_roll(halved);
     ctx::log(
         player_id,
-        &Msg::new(key!("moca_half_roll")).player_id("who", player_id).i("from", roll as i64).i("to", halved as i64),
+        &Msg::new(key!("moca_half_roll"))
+            .player_id("who", player_id)
+            .i("from", roll as i64)
+            .i("to", halved as i64),
     );
     Ok(())
 }
@@ -105,7 +122,10 @@ fn pay_mul(player_id: i32) -> card_sdk::Asked {
     trigger::set_pay_amount(half);
     ctx::log(
         player_id,
-        &Msg::new(key!("moca_half_pay")).player_id("who", player_id).n("from", amount as i64).n("to", half as i64),
+        &Msg::new(key!("moca_half_pay"))
+            .player_id("who", player_id)
+            .n("from", amount as i64)
+            .n("to", half as i64),
     );
     Ok(())
 }

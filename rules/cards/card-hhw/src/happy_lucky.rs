@@ -7,10 +7,12 @@
 //!
 
 use card_sdk::abi::MoveKind;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HAPPY_LUCKY: CardDef = CardDef::new("HHW:Happy, Lucky, Smile, Yeah！", &[
-    On::Play(Some(cant_play), play)]);
+pub const HAPPY_LUCKY: CardDef = CardDef::new(
+    "HHW:Happy, Lucky, Smile, Yeah！",
+    &[On::Play(Some(cant_play), play)],
+);
 
 /// C# `CardHappyLucky.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -77,7 +79,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     ctx::log(
         player_id,
-        &Msg::new(key!("happy_lucky_moved")).player_id("who", player_id).i("roll", r as i64).tile("tile", to),
+        &Msg::new(key!("happy_lucky_moved"))
+            .player_id("who", player_id)
+            .i("roll", r as i64)
+            .tile("tile", to),
     );
     Ok(())
 }

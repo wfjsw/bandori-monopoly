@@ -8,11 +8,12 @@
 //!
 
 use card_sdk::ctx::{self, CardPile};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-
-pub const SAKIKO_CUT: CardDef = CardDef::new("Mujica:（祥子）斩断留恋，忘却一切", &[
-    On::Play(Some(cant_play), sakiko_cut)]);
+pub const SAKIKO_CUT: CardDef = CardDef::new(
+    "Mujica:（祥子）斩断留恋，忘却一切",
+    &[On::Play(Some(cant_play), sakiko_cut)],
+);
 
 /// C# `H.Mortgageable(seat)`: owned ∧ `IsBuyable` ∧ `kind != "ring"` ∧ not
 /// mortgaged.
@@ -55,9 +56,13 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「最贵地契」 -- C# `list.OrderByDescending((int num) =>
     // H._tiles[num].price).First()`.
-    let best = mine
-        .into_iter()
-        .reduce(|a, b| if ctx::tile_price(b) > ctx::tile_price(a) { b } else { a });
+    let best = mine.into_iter().reduce(|a, b| {
+        if ctx::tile_price(b) > ctx::tile_price(a) {
+            b
+        } else {
+            a
+        }
+    });
     if let Some(t) = best {
         // 规则书: 「抵押」 -- C# `H.MortgageRoutine(i, t, ...)`. The engine refuses
         // (and logs its own reason) when the deed cannot be mortgaged.
@@ -88,7 +93,10 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
             // `DiscardNextFx.Drew`). The `Drew` hook kind is in the ABI (v23),
             // but the temporary `H.ExtraOf` attachment that would outlive this
             // play is still held, so no hook can be declared here.
-            ctx::log(player_id, &Msg::new(key!("sakiko_cut_no_hand")).player_id("who", player_id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("sakiko_cut_no_hand")).player_id("who", player_id),
+            );
         }
     }
     // 规则书: 「立刻传送至任意可购买或已拥有的格子并触发结算」 -- the destination
@@ -120,7 +128,9 @@ fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     ctx::log(
         player_id,
-        &Msg::new(key!("sakiko_cut_moved")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("sakiko_cut_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     // 规则书: 「并触发结算」 -- the settle half is `set_resolve(true)` above
     // (the teleport runs `settleBefore` -> `settle` -> `land` -> `settleAfter`

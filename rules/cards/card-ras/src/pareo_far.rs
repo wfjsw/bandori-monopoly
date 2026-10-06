@@ -8,14 +8,21 @@
 //! (TODO in source).
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PAREO_FAR: CardDef = CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play(None, pareo_far)]);
+pub const PAREO_FAR: CardDef =
+    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play(None, pareo_far)]);
 
 fn pareo_far(player_id: i32) -> card_sdk::Asked {
     let got = ctx::add_tok(player_id, key!("pareo_far_tok"), 2, 3);
     let total = ctx::tok(player_id, key!("pareo_far_tok"));
-    ctx::log(player_id, &Msg::new(key!("pareo_far_got")).player_id("who", player_id).i("got", got as i64).i("total", total as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pareo_far_got"))
+            .player_id("who", player_id)
+            .i("got", got as i64)
+            .i("total", total as i64),
+    );
     // TODO(ABI): H._fx[i].skill is SkillPareo -> Offer() -- needs the skill hook
     // and SplitPay; `ctx::houses_of` is ready for the house-count part.
     // 规则书: 「可选择移除任意你拥有的格子上的一层房屋」 -- optional, any tile
@@ -41,7 +48,10 @@ fn pareo_far(player_id: i32) -> card_sdk::Asked {
             )?;
             if t >= 0 {
                 ctx::add_house(t, -1);
-                ctx::log(player_id, &Msg::new(key!("pareo_far_removed")).tile("tile", t));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("pareo_far_removed")).tile("tile", t),
+                );
             }
         }
     }

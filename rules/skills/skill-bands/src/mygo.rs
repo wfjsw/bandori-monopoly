@@ -18,12 +18,16 @@ const ID: &str = "skill:MyGO!!!!!:迷途之星";
 /// 「可超出上限的[奇迹水晶]（最多超出2个）」 -- overflow allowance.
 const OVER: &str = "skill.mygo.over";
 
-pub const MYGO: CardDef = CardDef::new("skill:MyGO!!!!!:迷途之星", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::RollAfter], mine, after_roll),
-    On::Hook(&[HookKind::Discarded], mine, on_discarded),
-    On::Play(Some(can_step), step_one),
-    On::Play(Some(can_draw), draw_two)]);
+pub const MYGO: CardDef = CardDef::new(
+    "skill:MyGO!!!!!:迷途之星",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::RollAfter], mine, after_roll),
+        On::Hook(&[HookKind::Discarded], mine, on_discarded),
+        On::Play(Some(can_step), step_one),
+        On::Play(Some(can_draw), draw_two),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -35,7 +39,12 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     let start = (roll % ctx::tile_count().max(1) + ctx::tile_count()) % ctx::tile_count().max(1);
     state::set(player_id, "skill.mygo.start", start);
     ctx::teleport_to(player_id, start);
-    ctx::log(player_id, &Msg::new(key!("mygo_start")).i("n", roll as i64).tile("tile", start));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mygo_start"))
+            .i("n", roll as i64)
+            .tile("tile", start),
+    );
     Ok(())
 }
 

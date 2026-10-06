@@ -10,14 +10,17 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind, CardPile};
+use card_sdk::abi::{CardPile, ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const GUERRILLA: CardDef = CardDef::new("RAS:游击演出", &[
-    On::CounterAct(&[ChainKind::Paid], can_react, react),
-    On::AtEnd(check),
-]);
+pub const GUERRILLA: CardDef = CardDef::new(
+    "RAS:游击演出",
+    &[
+        On::CounterAct(&[ChainKind::Paid], can_react, react),
+        On::AtEnd(check),
+    ],
+);
 
 const ID: &str = "RAS:游击演出";
 
@@ -32,7 +35,12 @@ fn free_tiles() -> Vec<i32> {
 }
 
 /// C# `lhBuildable` -- a buildable Live House (group 6, not a RiNG agent).
-const LIVEHOUSE_PROPS: [&str; 4] = ["DUB MUSIC EXPERIMENT", "武道馆", "Space", "Live House Galaxy"];
+const LIVEHOUSE_PROPS: [&str; 4] = [
+    "DUB MUSIC EXPERIMENT",
+    "武道馆",
+    "Space",
+    "Live House Galaxy",
+];
 
 fn lh_buildable(t: i32) -> bool {
     LIVEHOUSE_PROPS.iter().any(|&n| ctx::tile_named(n) == t) && ctx::is_buyable(t)
@@ -72,7 +80,11 @@ fn react(player_id: i32) -> card_sdk::Asked {
         .copied()
         .filter(|&t| ctx::money_of(player_id) >= ctx::buy_price(t))
         .collect();
-    let pool = if affordable.is_empty() { &free } else { &affordable };
+    let pool = if affordable.is_empty() {
+        &free
+    } else {
+        &affordable
+    };
     let to = ctx::ask_tile(
         player_id,
         &Msg::new(key!("guerrilla_title")),
@@ -91,13 +103,17 @@ fn react(player_id: i32) -> card_sdk::Asked {
     if ctx::money_of(player_id) < ctx::buy_price(to) {
         ctx::log(
             player_id,
-            &Msg::new(key!("guerrilla_broke")).player_id("who", player_id).tile("tile", to),
+            &Msg::new(key!("guerrilla_broke"))
+                .player_id("who", player_id)
+                .tile("tile", to),
         );
     } else {
         ctx::card_buy(player_id, to);
         ctx::log(
             player_id,
-            &Msg::new(key!("guerrilla_moved")).player_id("who", player_id).tile("tile", to),
+            &Msg::new(key!("guerrilla_moved"))
+                .player_id("who", player_id)
+                .tile("tile", to),
         );
     }
     // C# `OnDiscarded` schedules `Check` at turn end once per turn (the card
@@ -133,7 +149,11 @@ fn check(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子」
-    if !ctx::ask_yes(player_id, &Msg::new(key!("guerrilla_title")), &Msg::new(key!("guerrilla_revive")))? {
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("guerrilla_title")),
+        &Msg::new(key!("guerrilla_revive")),
+    )? {
         return Ok(());
     }
     if !ctx::take_card(player_id, ctx::CardPile::Discard, ID) {
@@ -149,7 +169,9 @@ fn check(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "guerrilla_tile", best);
     ctx::log(
         player_id,
-        &Msg::new(key!("guerrilla_revived")).player_id("who", player_id).tile("tile", best),
+        &Msg::new(key!("guerrilla_revived"))
+            .player_id("who", player_id)
+            .tile("tile", best),
     );
     // 规则书[特]: 「使其对你视为live house格子」 -- C# `CardGuerrilla.ExtraColor`:
     // the deed counts as a Live House for this player only.

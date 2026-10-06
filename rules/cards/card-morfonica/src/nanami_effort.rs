@@ -16,16 +16,20 @@
 //! x character tokens for one of three effects.
 
 use card_sdk::ctx::{self, CardPile};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:（NNM）稍微努力了一下";
 /// The counter names 「角色标记:*」.
 const TOKEN_PREFIX: &str = "角色标记:";
 
-pub const NANAMI_EFFORT: CardDef = CardDef::new("Mor:（NNM）稍微努力了一下", &[
-    On::Play(Some(can_use_skill), use_skill),
-    On::Play(None, nanami_effort),
-    On::AtEnd(discard_down_to_five)]);
+pub const NANAMI_EFFORT: CardDef = CardDef::new(
+    "Mor:（NNM）稍微努力了一下",
+    &[
+        On::Play(Some(can_use_skill), use_skill),
+        On::Play(None, nanami_effort),
+        On::AtEnd(discard_down_to_five),
+    ],
+);
 
 fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」 -- the tokens are the
@@ -34,7 +38,10 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     let names = ctx::tok_names(player_id, TOKEN_PREFIX);
     let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
     if total <= 0 {
-        ctx::log(player_id, &Msg::new(key!("nanami_effort_no_tok")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("nanami_effort_no_tok")).player_id("who", player_id),
+        );
         return Ok(());
     }
     let x = ctx::ask_number(
@@ -73,7 +80,11 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         // (2) 「获得x*2000资金」
         1 => {
             let got = x * 2000;
-            ctx::gain(player_id, got, &Msg::new(key!("nanami_effort_money")).i("n", got as i64));
+            ctx::gain(
+                player_id,
+                got,
+                &Msg::new(key!("nanami_effort_money")).i("n", got as i64),
+            );
         }
         // (3) 「将此卡放置在场上并为其放置x个奇迹水晶」 -- placed with x crystals
         // on it; (4) is its exhaustion.
@@ -81,7 +92,10 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
             ctx::add_crystals(x, 0);
-            ctx::log(player_id, &Msg::new(key!("nanami_effort_placed")).i("n", x as i64));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("nanami_effort_placed")).i("n", x as i64),
+            );
         }
         _ => {}
     }
@@ -137,7 +151,10 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     if extra < 0 {
         return Ok(());
     }
-    ctx::log(player_id, &Msg::new(key!("nanami_effort_discard_down")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nanami_effort_discard_down")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -165,11 +182,16 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() < 1 {
         return Ok(());
     }
-    let Some(id) = owner_skill(player_id) else { return Ok(()) };
+    let Some(id) = owner_skill(player_id) else {
+        return Ok(());
+    };
     ctx::add_crystals(-1, 0);
     // 「此次技能不受数量或轮数限制」 -- the press is a plain `play_card`, so the
     // skill's own gate is what runs; nothing here counts a use.
-    ctx::log(player_id, &Msg::new(key!("nanami_effort_skill")).card("card", &id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nanami_effort_skill")).card("card", &id),
+    );
     ctx::play_card(&id, player_id)?;
     Ok(())
 }

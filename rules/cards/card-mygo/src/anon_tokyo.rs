@@ -14,10 +14,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const ANON_TOKYO: CardDef = CardDef::new("MyGO:[千早爱音]Anon Tokyo", &[
-    On::Play(Some(cant_play), anon_tokyo)]);
+pub const ANON_TOKYO: CardDef = CardDef::new(
+    "MyGO:[千早爱音]Anon Tokyo",
+    &[On::Play(Some(cant_play), anon_tokyo)],
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     let n = ctx::tile_count();
@@ -84,11 +86,24 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         }
         // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]」 -- C#
         // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles.
-        ctx::add_mark(here, player_id, key!("anon_tokyo_mark"), &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", t));
-        ctx::add_mark(t, player_id, key!("anon_tokyo_mark"), &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", here));
+        ctx::add_mark(
+            here,
+            player_id,
+            key!("anon_tokyo_mark"),
+            &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", t),
+        );
+        ctx::add_mark(
+            t,
+            player_id,
+            key!("anon_tokyo_mark"),
+            &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", here),
+        );
         ctx::log(
             player_id,
-            &Msg::new(key!("anon_tokyo_linked")).tile("a", here).tile("b", t).card("card", "MyGO:[千早爱音]Anon Tokyo"),
+            &Msg::new(key!("anon_tokyo_linked"))
+                .tile("a", here)
+                .tile("b", t)
+                .card("card", "MyGO:[千早爱音]Anon Tokyo"),
         );
         // TODO(规则书)1: 「被[奇迹水晶]连接的格子收费时，会额外收取被连接的其他格子收费的
         // 一半」 -- the `Fx.PayAdd` hook kind is in (`On::Hook(&[HookKind::PayAdd], …)`),
@@ -108,7 +123,10 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         ctx::plan::set_steps(1);
         // Forward(here, t) != 1 means the chosen tile is the step behind.
         ctx::plan::set_reverse(ctx::tile_forward(here, t) != 1);
-        ctx::log(player_id, &Msg::new(key!("anon_tokyo_step")).tile("tile", t));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("anon_tokyo_step")).tile("tile", t),
+        );
         ctx::card_move(player_id);
     }
     Ok(())

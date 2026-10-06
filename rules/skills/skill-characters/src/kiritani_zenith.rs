@@ -21,12 +21,15 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Latch for 「一回合一次」.
 const USED: &str = "skill.kiritani.used";
 
-pub const KIRITANI_ZENITH: CardDef = CardDef::new("skill:桐谷透子:天上天下，唯我独尊", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::TurnStartBefore], mine, reset),
-]);
+pub const KIRITANI_ZENITH: CardDef = CardDef::new(
+    "skill:桐谷透子:天上天下，唯我独尊",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], mine, reset),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -86,7 +89,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             .map(|&t| Msg::new(key!("kiritani_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&tile) = mine.get(pick) else { return Ok(()); };
+    let Some(&tile) = mine.get(pick) else {
+        return Ok(());
+    };
     // 「指定前后各一格范围内（不包括该格子本身）」 -- the two neighbours.
     let mut targets: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
     for t in neighbours(tile) {
@@ -97,7 +102,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         }
     }
     if targets.is_empty() {
-        ctx::log(player_id, &Msg::new(key!("kiritani_nobody")).tile("tile", tile));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("kiritani_nobody")).tile("tile", tile),
+        );
         return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kiritani_spend"))) {
@@ -108,7 +116,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let half = ctx::rent_of(tile) / 2;
     let x = ceil_hundred(half / targets.len() as i32);
     for p in targets {
-        ctx::transfer(p, player_id, x, &Msg::new(key!("kiritani_why")).tile("tile", tile).n("n", x as i64))?;
+        ctx::transfer(
+            p,
+            player_id,
+            x,
+            &Msg::new(key!("kiritani_why"))
+                .tile("tile", tile)
+                .n("n", x as i64),
+        )?;
     }
     Ok(())
 }
@@ -119,10 +134,7 @@ fn neighbours(tile: i32) -> alloc::vec::Vec<i32> {
     if n <= 0 {
         return alloc::vec::Vec::new();
     }
-    alloc::vec![
-        (tile - 1).rem_euclid(n),
-        (tile + 1).rem_euclid(n),
-    ]
+    alloc::vec![(tile - 1).rem_euclid(n), (tile + 1).rem_euclid(n),]
 }
 
 /// 「向上取整百」 -- round up to a multiple of 100.

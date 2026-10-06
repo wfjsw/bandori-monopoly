@@ -11,17 +11,26 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const STUDIO_STORM: CardDef = CardDef::new("RAS:练习室里的风暴", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
-    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after)]);
+pub const STUDIO_STORM: CardDef = CardDef::new(
+    "RAS:练习室里的风暴",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+    ],
+);
 
 const ID: &str = "RAS:练习室里的风暴";
 
 /// C# `H.IsLiveHouse` (color group 6) tiles that can hold houses.
-const LIVEHOUSE_PROPS: [&str; 4] = ["DUB MUSIC EXPERIMENT", "武道馆", "Space", "Live House Galaxy"];
+const LIVEHOUSE_PROPS: [&str; 4] = [
+    "DUB MUSIC EXPERIMENT",
+    "武道馆",
+    "Space",
+    "Live House Galaxy",
+];
 
 /// The tile the card sits on (C# `Mem` on a tile-bound field card).
 
@@ -53,7 +62,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::place_card_on(player_id, pos, ID, &Msg::new(key!("studio_storm_note")));
     ctx::log(
         player_id,
-        &Msg::new(key!("studio_storm_placed")).player_id("who", player_id).tile("tile", pos),
+        &Msg::new(key!("studio_storm_placed"))
+            .player_id("who", player_id)
+            .tile("tile", pos),
     );
     // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
     // -- crystals start at 0 (the default) and cap at 3 via `add_crystals(.., 3)`.
@@ -80,7 +91,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::add_crystals(1, 3);
     ctx::log(
         player_id,
-        &Msg::new(key!("studio_storm_crystal")).player_id("who", player_id).tile("tile", t),
+        &Msg::new(key!("studio_storm_crystal"))
+            .player_id("who", player_id)
+            .tile("tile", t),
     );
     Ok(())
 }
@@ -91,12 +104,18 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() || trigger::player_id() == player_id {
         return Ok(());
     }
-    let Some(tile) = ctx::self_tile() else { return Ok(()); };
+    let Some(tile) = ctx::self_tile() else {
+        return Ok(());
+    };
     if tile < 0 {
         return Ok(());
     }
     let a = trigger::tile();
-    let a = if a >= 0 { a } else { ctx::player_pos(trigger::player_id()) };
+    let a = if a >= 0 {
+        a
+    } else {
+        ctx::player_pos(trigger::player_id())
+    };
     // 规则书（2）: 「此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动」
     let x = ctx::dist(a, tile);
     let crystals = ctx::crystals();
@@ -108,7 +127,10 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,
-        &Msg::new(key!("studio_storm_fired")).player_id("who", trigger::player_id()).tile("tile", tile).i("x", x as i64),
+        &Msg::new(key!("studio_storm_fired"))
+            .player_id("who", trigger::player_id())
+            .tile("tile", tile)
+            .i("x", x as i64),
     );
     // 「且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的
     // (4-X)/4倍」 -- the mover settles here at that rent factor (milli-units).

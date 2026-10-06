@@ -14,12 +14,16 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const TOMORROWS_DOOR: CardDef = CardDef::new("PPP:Tomorrow's Door", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
-    On::Hook(&[HookKind::SettleAfter], settle_after_guard, settle_after)]);
+pub const TOMORROWS_DOOR: CardDef = CardDef::new(
+    "PPP:Tomorrow's Door",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Hook(&[HookKind::SettleAfter], settle_after_guard, settle_after),
+    ],
+);
 
 /// 规则书（1）: 「此卡指定的序列（从前往后）为…」 -- C# `CardTomorrowsDoor.Route`.
 const ROUTE: [&str; 10] = [
@@ -32,7 +36,8 @@ const ROUTE: [&str; 10] = [
     "RiNG 2",
     "RiNG 3",
     "RiNG 4",
-    "大阪中之岛公园"];
+    "大阪中之岛公园",
+];
 
 /// Where the route cursor is written down (C# `Mem["step"]`). `ROUTE.len()`
 /// means the route is finished and the card sits in the owner's play area
@@ -46,9 +51,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     // 规则书（2）: 「将此卡放置在“流星堂”上」 -- bound to `ROUTE[0]`; the route
     // cursor is the stand-in for the per-card `Mem["step"]`.
-    ctx::place_card_on(player_id, ctx::tile_named(ROUTE[0]), "PPP:Tomorrow's Door", &Msg::new(key!("tomorrows_door_note")));
+    ctx::place_card_on(
+        player_id,
+        ctx::tile_named(ROUTE[0]),
+        "PPP:Tomorrow's Door",
+        &Msg::new(key!("tomorrows_door_note")),
+    );
     ctx::set_slot(player_id, SLOT_STEP, 0);
-    ctx::log(player_id, &Msg::new(key!("tomorrows_door_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomorrows_door_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -82,7 +95,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     }
     ctx::log(
         player_id,
-        &Msg::new(key!("tomorrows_door_hop")).player_id("who", player_id).i("n", next as i64),
+        &Msg::new(key!("tomorrows_door_hop"))
+            .player_id("who", player_id)
+            .i("n", next as i64),
     );
     Ok(())
 }
@@ -123,6 +138,14 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     if due <= 0 {
         return Ok(());
     }
-    ctx::transfer(payer, player_id, due, &Msg::new(key!("tomorrows_door_tax")).player_id("who", player_id).player_id("target", payer).n("money", due as i64))?;
+    ctx::transfer(
+        payer,
+        player_id,
+        due,
+        &Msg::new(key!("tomorrows_door_tax"))
+            .player_id("who", player_id)
+            .player_id("target", payer)
+            .n("money", due as i64),
+    )?;
     Ok(())
 }

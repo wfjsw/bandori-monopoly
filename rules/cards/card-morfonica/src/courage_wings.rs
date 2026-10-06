@@ -5,10 +5,10 @@
 //! >  掷骰3d20，结果对应序号格子的所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半，若为地产商地块，获得1000资金
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const COURAGE_WINGS: CardDef = CardDef::new("Mor:勇气展翅高飞之时", &[
-    On::Play(None, courage_wings)]);
+pub const COURAGE_WINGS: CardDef =
+    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play(None, courage_wings)]);
 
 fn courage_wings(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「掷骰3d20，结果对应序号格子」 -- `ctx::roll` honours a forced
@@ -28,12 +28,20 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
     let owner = ctx::tile_owner(tile);
     if owner < 0 || owner == player_id || ctx::player_out(owner) {
         // C#: 掷到了 …：没有别的主人，没有效果
-        ctx::log(player_id, &Msg::new(key!("courage_wings_none")).tile("tile", tile));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("courage_wings_none")).tile("tile", tile),
+        );
         return Ok(());
     }
     // 「购买价格+地块已有房子的建造价格总额」 is `buy_price` (land + houses);
     // 「…的一半」 is the C# `(price + houses * house) / 2`.
     let amount = ctx::buy_price(tile) / 2;
-    ctx::transfer(owner, player_id, amount, &Msg::new(key!("courage_wings_why")))?;
+    ctx::transfer(
+        owner,
+        player_id,
+        amount,
+        &Msg::new(key!("courage_wings_why")),
+    )?;
     Ok(())
 }

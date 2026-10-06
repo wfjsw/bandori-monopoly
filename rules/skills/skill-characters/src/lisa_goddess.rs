@@ -26,11 +26,14 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const LISA_GODDESS: CardDef = CardDef::new("skill:今井莉莎:慈爱女神", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-]);
+pub const LISA_GODDESS: CardDef = CardDef::new(
+    "skill:今井莉莎:慈爱女神",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -88,7 +91,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(to);
     plan::set_resolve(true);
-    ctx::log(player_id, &Msg::new(key!("lisa_goddess_moved")).tile("tile", to));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("lisa_goddess_moved")).tile("tile", to),
+    );
     // 「本次传送触发结算前，你可以额外消耗一个火罐或使与你在同一个格子上的另一个
     // 角色获得一个可超过上限的临时火罐，若你这样做，此次传送不触发任何结算」 --
     // offered here, before the move runs.
@@ -121,6 +127,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     //   需要支付你600资金」 -- the clause under-specifies -- the spend path has to
     //   know a pot's *provenance* to charge the provider, and 「被冲榜类效果被动
     //   消耗无需支付」 carves out a class of spends the engine does not tag.
-    ctx::log(player_id, &Msg::new(key!("lisa_goddess_temp")).player_id("who", who));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("lisa_goddess_temp")).player_id("who", who),
+    );
     Ok(())
 }

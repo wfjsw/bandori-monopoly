@@ -6,14 +6,17 @@
 //! >  ：[反击] 当你在回合外受到抽卡效果时打出，你的下回合结束时抽一张卡。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const ELEGANT_SHOUT: CardDef = CardDef::new("CRYCHIC:优雅的呐喊", &[
-    On::CounterAct(&[ChainKind::DrawOut], can_react, react),
-    On::AtEnd(at_end),
-]);
+pub const ELEGANT_SHOUT: CardDef = CardDef::new(
+    "CRYCHIC:优雅的呐喊",
+    &[
+        On::CounterAct(&[ChainKind::DrawOut], can_react, react),
+        On::AtEnd(at_end),
+    ],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当你在回合外受到抽卡效果时打出」 -- C#
@@ -25,7 +28,10 @@ fn can_react(player_id: i32) -> bool {
 
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」
-    ctx::log(player_id, &Msg::new(key!("elegant_shout_note")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("elegant_shout_note")).player_id("who", player_id),
+    );
     // C# `H.ExtraOf<ElegantFx>(c.Seat).Count++` -- each reaction stacks one
     // draw; scheduling one `AtEnd` per reaction stacks the same way.
     ctx::at_next_turn_end(player_id);

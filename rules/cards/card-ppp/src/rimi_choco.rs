@@ -8,10 +8,12 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RIMI_CHOCO: CardDef = CardDef::new("PPP:（里美）我的心就像巧克力螺", &[
-    On::Play(Some(cant_play), play)]);
+pub const RIMI_CHOCO: CardDef = CardDef::new(
+    "PPP:（里美）我的心就像巧克力螺",
+    &[On::Play(Some(cant_play), play)],
+);
 
 /// C# `CardRimiChoco.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

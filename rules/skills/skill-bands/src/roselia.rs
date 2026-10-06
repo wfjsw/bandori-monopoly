@@ -18,10 +18,14 @@ const DONE: &str = "skill.roselia.first";
 /// The Live House tile group.
 const LIVE: i32 = 6;
 
-pub const ROSELIA: CardDef = CardDef::new("skill:Roselia:对音乐的纯粹", &[
-    On::Hook(&[HookKind::BuyBefore], mine, before_buy),
-    On::Hook(&[HookKind::Bought], mine, on_bought),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start)]);
+pub const ROSELIA: CardDef = CardDef::new(
+    "skill:Roselia:对音乐的纯粹",
+    &[
+        On::Hook(&[HookKind::BuyBefore], mine, before_buy),
+        On::Hook(&[HookKind::Bought], mine, on_bought),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -65,7 +69,10 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, DONE) == 0 {
         return Ok(());
     }
-    if ctx::owned_tiles(player_id).into_iter().any(|t| ctx::tile_group(t) == LIVE) {
+    if ctx::owned_tiles(player_id)
+        .into_iter()
+        .any(|t| ctx::tile_group(t) == LIVE)
+    {
         return Ok(());
     }
     // The recoloured tile is the one this skill half-priced; find it by the

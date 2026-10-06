@@ -17,11 +17,15 @@ use card_sdk::{key, CardDef, Msg, On};
 /// The mark kind 「火罐」 this skill parks on a tile.
 const POT: &str = "skill.dianaIdol.pot";
 
-pub const DIANA_IDOL: CardDef = CardDef::new("skill:三角初华（Sumimi）:成为偶像", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::PassTile], any, on_pass_tile)]);
+pub const DIANA_IDOL: CardDef = CardDef::new(
+    "skill:三角初华（Sumimi）:成为偶像",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::PassTile], any, on_pass_tile),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -79,12 +83,17 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
             .map(|&t| Msg::new(key!("diana_idol_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&tile) = pool.get(pick) else { return Ok(()); };
+    let Some(&tile) = pool.get(pick) else {
+        return Ok(());
+    };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("diana_idol_spend"))) {
         return Ok(());
     }
     ctx::add_mark(tile, player_id, POT, &Msg::new(key!("diana_idol_note")));
-    ctx::log(player_id, &Msg::new(key!("diana_idol_placed")).tile("tile", tile));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("diana_idol_placed")).tile("tile", tile),
+    );
     Ok(())
 }
 
@@ -106,7 +115,17 @@ fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
     }
     ctx::bump_mark(t, POT, -2, -1);
     let due = x * 30;
-    ctx::transfer(mover, player_id, due, &Msg::new(key!("diana_idol_why")).i("n", due as i64))?;
-    ctx::log(player_id, &Msg::new(key!("diana_idol_paid")).player_id("who", mover).i("n", due as i64));
+    ctx::transfer(
+        mover,
+        player_id,
+        due,
+        &Msg::new(key!("diana_idol_why")).i("n", due as i64),
+    )?;
+    ctx::log(
+        player_id,
+        &Msg::new(key!("diana_idol_paid"))
+            .player_id("who", mover)
+            .i("n", due as i64),
+    );
     Ok(())
 }

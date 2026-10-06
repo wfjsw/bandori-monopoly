@@ -10,7 +10,7 @@
 //!
 //! then flip every face-down fan back up.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play(None, same_dream)]);
 
@@ -26,8 +26,17 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
     if up > 0 {
         ctx::add_tok(player_id, FANS_UP, -up, i32::MAX);
         ctx::add_tok(player_id, FANS_DOWN, up, i32::MAX);
-        ctx::log(player_id, &Msg::new(key!("same_dream_down")).player_id("who", player_id).i("n", up as i64));
-        ctx::gain(player_id, up * 100, &Msg::new(key!("same_dream_why")).i("n", up as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("same_dream_down"))
+                .player_id("who", player_id)
+                .i("n", up as i64),
+        );
+        ctx::gain(
+            player_id,
+            up * 100,
+            &Msg::new(key!("same_dream_why")).i("n", up as i64),
+        );
     }
     // 规则书[手]3: 「将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有
     // Pastel✽Palettes角色生效」 -- the resonance half widens the target from this
@@ -41,7 +50,12 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
         if down > 0 {
             ctx::add_tok(p, FANS_DOWN, -down, i32::MAX);
             ctx::add_tok(p, FANS_UP, down, i32::MAX);
-            ctx::log(p, &Msg::new(key!("same_dream_up")).player_id("who", p).i("n", down as i64));
+            ctx::log(
+                p,
+                &Msg::new(key!("same_dream_up"))
+                    .player_id("who", p)
+                    .i("n", down as i64),
+            );
         }
     }
     Ok(())

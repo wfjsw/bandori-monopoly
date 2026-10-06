@@ -9,11 +9,15 @@
 //!
 
 use card_sdk::abi::MoveKind;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const STAR_BEAT: CardDef = CardDef::new("PPP:STAR BEAT!", &[
-    On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, after_settle),
-    On::Play(Some(cant_play), play)]);
+pub const STAR_BEAT: CardDef = CardDef::new(
+    "PPP:STAR BEAT!",
+    &[
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, after_settle),
+        On::Play(Some(cant_play), play),
+    ],
+);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -58,14 +62,17 @@ fn play(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("star_beat_ask")).i("n", n as i64),
         &[
             Msg::new(key!("star_beat_opt_teleport")).tile("tile", to),
-            Msg::new(key!("star_beat_opt_move")).i("n", dice as i64)],
+            Msg::new(key!("star_beat_opt_move")).i("n", dice as i64),
+        ],
     )?;
     if pick == 0 {
         // 规则书1: 「获得2个星星贴纸」 -- C# `H.AddTok(i, "星星贴纸", 2)`.
         ctx::add_tok(player_id, "星星贴纸", 2, i32::MAX);
         ctx::log(
             player_id,
-            &Msg::new(key!("star_beat_stickers")).player_id("who", player_id).i("n", 2),
+            &Msg::new(key!("star_beat_stickers"))
+                .player_id("who", player_id)
+                .i("n", 2),
         );
         // 规则书1: 「本回合的主要移动改为[传送]到(45×…) mod 60格并结算」 -- C#
         // `H.CardMove(c, new MoveCtx { TeleportTo = tile })` (MatchHost.cs:8717;
@@ -78,7 +85,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
             ctx::plan::set_resolve(true);
             ctx::log(
                 player_id,
-                &Msg::new(key!("star_beat_moved")).player_id("who", player_id).tile("tile", to),
+                &Msg::new(key!("star_beat_moved"))
+                    .player_id("who", player_id)
+                    .tile("tile", to),
             );
             ctx::card_move(player_id);
         }
@@ -129,10 +138,15 @@ fn after_settle(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("star_beat_which")),
         &opts,
     )?;
-    let Some(&t) = pool.get(pick) else { return Ok(()) };
+    let Some(&t) = pool.get(pick) else {
+        return Ok(());
+    };
     ctx::card_offer_build(player_id, &[t]);
     ctx::inc_slot(player_id, "star_beat.layers", -1);
-    ctx::log(player_id, &Msg::new(key!("star_beat_built")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("star_beat_built")).tile("tile", t),
+    );
     Ok(())
 }
 

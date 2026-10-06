@@ -17,9 +17,13 @@ use card_sdk::{key, CardDef, Msg, On};
 /// The tile this skill wants to teleport back to, or -1.
 const OWED: &str = "skill.soyoCrychic.owed";
 
-pub const SOYO_CRYCHIC: CardDef = CardDef::new("skill:长崎素世（CRYCHIC）:雨中祈晴", &[
-    On::Hook(&[HookKind::PayChoose], mine, on_pay),
-    On::Hook(&[HookKind::RollPlan], mine, on_plan)]);
+pub const SOYO_CRYCHIC: CardDef = CardDef::new(
+    "skill:长崎素世（CRYCHIC）:雨中祈晴",
+    &[
+        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+        On::Hook(&[HookKind::RollPlan], mine, on_plan),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -50,7 +54,10 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     ctx::trigger::set_pay_amount(0);
     // 「使你下回合的主要移动变为传送至触发此技能的那格」
     state::set(player_id, OWED, t);
-    ctx::log(player_id, &Msg::new(key!("soyo_crychic_cancelled")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_crychic_cancelled")).tile("tile", t),
+    );
     Ok(())
 }
 
@@ -64,6 +71,9 @@ fn on_plan(player_id: i32) -> card_sdk::Asked {
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(t);
     plan::set_resolve(true);
-    ctx::log(player_id, &Msg::new(key!("soyo_crychic_moved")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_crychic_moved")).tile("tile", t),
+    );
     Ok(())
 }

@@ -17,9 +17,13 @@ use card_sdk::{key, CardDef, Msg, On};
 
 const PAREO: &str = "PAREO标记";
 
-pub const NUMAZU_MAID: CardDef = CardDef::new("skill:鳰原令王那:梦幻可爱♪女仆", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::HouseAdded], mine, on_built)]);
+pub const NUMAZU_MAID: CardDef = CardDef::new(
+    "skill:鳰原令王那:梦幻可爱♪女仆",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::HouseAdded], mine, on_built),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -79,6 +83,9 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
     for p in others {
         ctx::transfer(p, player_id, share, &Msg::new(key!("numazu_maid_why")))?;
     }
-    ctx::log(player_id, &Msg::new(key!("numazu_maid_done")).i("n", share as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("numazu_maid_done")).i("n", share as i64),
+    );
     Ok(())
 }

@@ -24,12 +24,16 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Settle this player owes at their own next turn end, from （2）.
 const DUE: &str = "skill.tomoriPoem.due";
 
-pub const TOMORI_POEM: CardDef = CardDef::new("skill:高松灯:诗超绊", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::SettleBefore], |_| true, before_settle),
-    On::Hook(&[HookKind::PayMul], half, on_pay),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end)]);
+pub const TOMORI_POEM: CardDef = CardDef::new(
+    "skill:高松灯:诗超绊",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::SettleBefore], |_| true, before_settle),
+        On::Hook(&[HookKind::PayMul], half, on_pay),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -98,7 +102,12 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::teleport_to(mover, theirs);
-    ctx::log(player_id, &Msg::new(key!("tomori_poem_moved")).player_id("who", mover).tile("tile", theirs));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_poem_moved"))
+            .player_id("who", mover)
+            .tile("tile", theirs),
+    );
     if cost == 4 {
         // （2）「然后使其投掷1d20，若出目小于等于6则获得一层[停留]并在自己的
         // 下回合结束时[触发结算]；在此技能影响下的支付价格变为原本的一半」.
@@ -106,7 +115,10 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         if n <= 6 {
             ctx::give_stay(mover, 1);
             state::set(player_id, DUE, 1);
-            ctx::log(player_id, &Msg::new(key!("tomori_poem_stay")).i("n", n as i64));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("tomori_poem_stay")).i("n", n as i64),
+            );
         }
     }
     Ok(())

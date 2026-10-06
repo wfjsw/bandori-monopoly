@@ -8,11 +8,11 @@
 //! > 2. X等于1则[使用者]的本回合结束后获得一个额外回合。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
 use alloc::vec::Vec;
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const THANKS_PARTY: CardDef = CardDef::new("通用:CiRCLE THANKS PARTY!", &[
-    On::Play(None, thanks_party)]);
+pub const THANKS_PARTY: CardDef =
+    CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play(None, thanks_party)]);
 
 fn thanks_party(player_id: i32) -> card_sdk::Asked {
     let why = Msg::new(key!("thanks_party_why"));
@@ -25,7 +25,9 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         let title = Msg::new(key!("thanks_party_join_title"));
-        let text = Msg::new(key!("thanks_party_join_text")).player_id("who", player_id).n("prize", 1500);
+        let text = Msg::new(key!("thanks_party_join_text"))
+            .player_id("who", player_id)
+            .n("prize", 1500);
         if ctx::ask_yes(p, &title, &text)? {
             // 规则书[手]: 「[消耗]500资金」
             if ctx::pay(p, 500, &why)? > 0 {
@@ -41,13 +43,19 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
     if x == 1 {
         // 规则书[手]: 「2. X等于1则[使用者]的本回合结束后获得一个额外回合」
         ctx::give_extra_turn(player_id);
-        ctx::log(player_id, &Msg::new(key!("thanks_party_extra")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("thanks_party_extra")).player_id("who", player_id),
+        );
         return Ok(());
     }
     // 规则书[手]: 「1. X至少为2则[使用者]投掷Xd20」
     let r = ctx::roll(player_id, x, 20);
     if r <= 35 {
-        ctx::log(player_id, &Msg::new(key!("thanks_party_miss")).i("roll", r as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("thanks_party_miss")).i("roll", r as i64),
+        );
         return Ok(());
     }
     // 规则书[手]: 「如果结果大于35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」

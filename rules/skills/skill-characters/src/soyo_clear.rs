@@ -26,11 +26,15 @@ const ARMED: &str = "skill.soyoClear.armed";
 /// 「下次经过CiRCLE时不获得火罐」 -- the penalty latch.
 const PENALTY: &str = "skill.soyoClear.penalty";
 
-pub const SOYO_CLEAR: CardDef = CardDef::new("skill:长崎素世:通透的颜色", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::RollAfter], mine, offer),
-    On::Hook(&[HookKind::Settle], mine, on_settle)]);
+pub const SOYO_CLEAR: CardDef = CardDef::new(
+    "skill:长崎素世:通透的颜色",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::RollAfter], mine, offer),
+        On::Hook(&[HookKind::Settle], mine, on_settle),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -97,7 +101,10 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::set_extra_color(player_id, t, g);
-    ctx::log(player_id, &Msg::new(key!("soyo_clear_coloured")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_clear_coloured")).tile("tile", t),
+    );
     // TODO(规则书)[judgement]: 「若以此法单次免除了至少1500资金的[支付]，则你下次经过CiRCLE时
     //   不获得火罐」 -- the clause under-specifies -- the engine does not attribute
     //   a payment's reduction to one skill, so 「以此法免除」 has no reading that

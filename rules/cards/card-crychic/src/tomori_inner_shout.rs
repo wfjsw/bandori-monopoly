@@ -11,14 +11,22 @@
 //! > （2）技能。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 use crate::want_human::SLOT_X;
 
-pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new("CRYCHIC:（灯）内心的呐喊", &[
-    On::Hook(&[card_sdk::abi::HookKind::SettleBefore], mine, pull),
-    On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], empty_piles, shuffle_in),
-    On::Play(None, tomori_inner_shout)]);
+pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
+    "CRYCHIC:（灯）内心的呐喊",
+    &[
+        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], mine, pull),
+        On::Hook(
+            &[card_sdk::abi::HookKind::TurnEndBefore],
+            empty_piles,
+            shuffle_in,
+        ),
+        On::Play(None, tomori_inner_shout),
+    ],
+);
 
 fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，你可重置一次“想要成为人类”所声明的X（不影响水晶）并获得
@@ -41,7 +49,9 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         ctx::set_slot(player_id, SLOT_X, x);
         ctx::log(
             player_id,
-            &Msg::new(key!("tomori_inner_shout_changed")).player_id("who", player_id).i("n", x as i64),
+            &Msg::new(key!("tomori_inner_shout_changed"))
+                .player_id("who", player_id)
+                .i("n", x as i64),
         );
         // 规则书（1）: 「并获得两个X差值*120的资金」 -- C# `H.GainR(i, |new-old| * 120, ...)`.
         let diff = (x - old).abs();
@@ -62,10 +72,24 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         let owned = ctx::owned_tiles(player_id);
         if let Some(&first) = owned.iter().min() {
             let remembered = ctx::slot(player_id, "firstTile") - 1;
-            let tile = if owned.contains(&remembered) { remembered } else { first };
+            let tile = if owned.contains(&remembered) {
+                remembered
+            } else {
+                first
+            };
             ctx::set_dest(ctx::Dest::Field);
-            ctx::place_card_on(player_id, tile, "CRYCHIC:（灯）内心的呐喊", &Msg::new(key!("tomori_inner_shout_note")));
-            ctx::log(player_id, &Msg::new(key!("tomori_inner_shout_placed")).player_id("who", player_id).tile("tile", tile));
+            ctx::place_card_on(
+                player_id,
+                tile,
+                "CRYCHIC:（灯）内心的呐喊",
+                &Msg::new(key!("tomori_inner_shout_note")),
+            );
+            ctx::log(
+                player_id,
+                &Msg::new(key!("tomori_inner_shout_placed"))
+                    .player_id("who", player_id)
+                    .tile("tile", tile),
+            );
         }
     }
     // （3）「你位于此卡前后5格内时可在时机合适时消耗1火罐使用一次高松灯
@@ -105,7 +129,12 @@ fn pull(player_id: i32) -> card_sdk::Asked {
     // `H.ForceTeleport(other, tile, resolve: false)` -- a plain position write,
     // so nothing settles on the way in.
     ctx::teleport_to(mover, card_tile);
-    ctx::log(player_id, &Msg::new(key!("tomori_inner_shout_pulled")).player_id("who", mover).tile("tile", card_tile));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_inner_shout_pulled"))
+            .player_id("who", mover)
+            .tile("tile", card_tile),
+    );
     // TODO(规则书)（3）: the second half -- a 1d20 (<=6: `H.TomoriBind` +
     //   `TomoriLaterFx` delayed settles at half pay). The bind and the
     //   delayed-settle queue have no vocabulary: nothing schedules "this player
@@ -122,7 +151,10 @@ fn empty_piles(player_id: i32) -> bool {
 }
 
 fn shuffle_in(player_id: i32) -> card_sdk::Asked {
-    ctx::log(player_id, &Msg::new(key!("tomori_inner_shout_shown")).card("card", "CRYCHIC:（灯）内心的呐喊"));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_inner_shout_shown")).card("card", "CRYCHIC:（灯）内心的呐喊"),
+    );
     ctx::shuffle_into_deck(player_id, true, true);
     Ok(())
 }

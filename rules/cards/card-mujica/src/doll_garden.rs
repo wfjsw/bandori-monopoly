@@ -7,10 +7,12 @@
 //! >  然后，你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const DOLL_GARDEN: CardDef = CardDef::new("Mujica:人偶的箱庭", &[
-    On::Play(Some(cant_play), doll_garden)]);
+pub const DOLL_GARDEN: CardDef = CardDef::new(
+    "Mujica:人偶的箱庭",
+    &[On::Play(Some(cant_play), doll_garden)],
+);
 
 /// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -39,7 +41,8 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
                     .i("x", x as i64),
                 &[
                     Msg::new(key!("doll_garden_move")),
-                    Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64)],
+                    Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64),
+                ],
             )?;
             if pick == 1 {
                 // 规则书: 「向你支付X*20资金」
@@ -66,18 +69,25 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
         ctx::card_move(p);
         ctx::log(
             player_id,
-            &Msg::new(key!("doll_garden_walked")).player_id("who", p).i("n", r as i64),
+            &Msg::new(key!("doll_garden_walked"))
+                .player_id("who", p)
+                .i("n", r as i64),
         );
     }
     if sum <= 0 {
         // C# `H.Log("text", i, "没有人移动：... 不移动（人偶的箱庭）")`.
-        ctx::log(player_id, &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id),
+        );
         return Ok(());
     }
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。」
     ctx::log(
         player_id,
-        &Msg::new(key!("doll_garden_sum")).player_id("who", player_id).i("n", sum as i64),
+        &Msg::new(key!("doll_garden_sum"))
+            .player_id("who", player_id)
+            .i("n", sum as i64),
     );
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和」 -- C# `H.CardMove(c, new
     // MoveCtx { Steps = sum, Forced = true })` (MatchHost.cs:5973-5977) builds

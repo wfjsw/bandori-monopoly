@@ -18,10 +18,14 @@ const ID: &str = "skill:Sumimi:人气偶像组合";
 /// 「若你在一回合内从其他玩家处获得过资金」.
 const GOT: &str = "skill.sumimi.got";
 
-pub const SUMIMI: CardDef = CardDef::new("skill:Sumimi:人气偶像组合", &[
-    On::Hook(&[HookKind::PayAfter], mine, after_pay),
-    On::Hook(&[HookKind::PayMul], mine, bend),
-    On::Hook(&[HookKind::TurnEndBefore], mine, at_turn_end)]);
+pub const SUMIMI: CardDef = CardDef::new(
+    "skill:Sumimi:人气偶像组合",
+    &[
+        On::Hook(&[HookKind::PayAfter], mine, after_pay),
+        On::Hook(&[HookKind::PayMul], mine, bend),
+        On::Hook(&[HookKind::TurnEndBefore], mine, at_turn_end),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

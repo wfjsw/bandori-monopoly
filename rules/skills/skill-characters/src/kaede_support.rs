@@ -34,13 +34,17 @@ const COOLDOWN: &str = "skill.kaedeSupport.cooldown.";
 /// Tiles named in 状态2, as `"<tile>:<owner>"` markers this skill splits income on.
 const SPLIT: &str = "skill.kaedeSupport.split.";
 
-pub const KAEDE_SUPPORT: CardDef = CardDef::new("skill:八幡海铃:熟练的支援贝斯手", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::TurnStartBefore], other_turn, offer_support),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-    On::Play(Some(can_enter_two), enter_two),
-    On::Hook(&[HookKind::PayMul], splitting, split_rent)]);
+pub const KAEDE_SUPPORT: CardDef = CardDef::new(
+    "skill:八幡海铃:熟练的支援贝斯手",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::TurnStartBefore], other_turn, offer_support),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Play(Some(can_enter_two), enter_two),
+        On::Hook(&[HookKind::PayMul], splitting, split_rent),
+    ],
+);
 
 /// 「直到状态2结束为止」 -- only while this player is in 状态2.
 fn splitting(player_id: i32) -> bool {
@@ -64,7 +68,11 @@ fn split_rent(player_id: i32) -> card_sdk::Asked {
     // 「均分」 -- the payer's outlay is unchanged; the owner's take is halved and
     // the other half lands here.
     ctx::trigger::set_pay_amount(amount - half);
-    ctx::gain(player_id, half, &Msg::new(key!("kaede_support_split")).i("n", half as i64));
+    ctx::gain(
+        player_id,
+        half,
+        &Msg::new(key!("kaede_support_split")).i("n", half as i64),
+    );
     Ok(())
 }
 
@@ -96,7 +104,9 @@ fn offer_support(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         other,
         &Msg::new(key!("kaede_support_title")),
-        &Msg::new(key!("kaede_support_offer")).player_id("who", player_id).i("n", 400),
+        &Msg::new(key!("kaede_support_offer"))
+            .player_id("who", player_id)
+            .i("n", 400),
     )? {
         return Ok(());
     }
@@ -149,7 +159,12 @@ fn offer_support(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, &format!("{}{}", COOLDOWN, who), until);
     // A press resets the rest counter.
     state::set(player_id, REST, 0);
-    ctx::log(player_id, &Msg::new(key!("kaede_support_done")).tile("tile", tile).player_id("who", who));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kaede_support_done"))
+            .tile("tile", tile)
+            .player_id("who", who),
+    );
     Ok(())
 }
 
@@ -218,7 +233,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
         if theirs.is_empty() {
             break;
         }
-            let t = ctx::ask_tile(
+        let t = ctx::ask_tile(
             player_id,
             &Msg::new(key!("kaede_support_title")),
             &Msg::new(key!("kaede_support_deed")),
@@ -230,7 +245,12 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
         }
         // 「每张地契向对应玩家支付100+n*100资金（n为对应格子上的房屋数）」
         let n = ctx::houses_of(t);
-        ctx::transfer(player_id, owner, 100 + n * 100, &Msg::new(key!("kaede_support_buy_in")))?;
+        ctx::transfer(
+            player_id,
+            owner,
+            100 + n * 100,
+            &Msg::new(key!("kaede_support_buy_in")),
+        )?;
         // 「直到状态2结束为止，你与对方均分那些地契收取的资金」
         state::set(player_id, &format!("{}{}", SPLIT, t), owner);
     }
@@ -238,7 +258,10 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     let draws = x / 4;
     if draws > 0 {
         ctx::draw(player_id, draws);
-        ctx::log(player_id, &Msg::new(key!("kaede_support_drew")).i("n", draws as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("kaede_support_drew")).i("n", draws as i64),
+        );
     }
     Ok(())
 }

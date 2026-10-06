@@ -18,9 +18,13 @@ use card_sdk::{key, CardDef, Msg, On};
 const FANS_UP: &str = "P✽P粉丝(正)";
 const FANS_DOWN: &str = "P✽P粉丝(反)";
 
-pub const CHISATO_FRANK: CardDef = CardDef::new("skill:白鹭千圣:保持坦率的你", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::PayChoose], mine, on_gain)]);
+pub const CHISATO_FRANK: CardDef = CardDef::new(
+    "skill:白鹭千圣:保持坦率的你",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::PayChoose], mine, on_gain),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
@@ -37,7 +41,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::place_card(p, "skill:白鹭千圣:保持坦率的你", &Msg::new(key!("chisato_frank_granted")));
+        ctx::place_card(
+            p,
+            "skill:白鹭千圣:保持坦率的你",
+            &Msg::new(key!("chisato_frank_granted")),
+        );
     }
     Ok(())
 }
@@ -93,6 +101,9 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    ctx::log(player_id, &Msg::new(key!("chisato_frank_done")).i("n", y as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("chisato_frank_done")).i("n", y as i64),
+    );
     Ok(())
 }

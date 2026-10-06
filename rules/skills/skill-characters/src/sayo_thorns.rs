@@ -19,12 +19,15 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const SAYO_THORNS: CardDef = CardDef::new("skill:冰川纱夜:踏上荆棘之路的觉悟", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::PassPlayer], mine, on_passed),
-]);
+pub const SAYO_THORNS: CardDef = CardDef::new(
+    "skill:冰川纱夜:踏上荆棘之路的觉悟",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::PassPlayer], mine, on_passed),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -53,7 +56,11 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, circle_gain(), &Msg::new(key!("sayo_thorns_gain")));
+    ctx::gain_fire(
+        player_id,
+        circle_gain(),
+        &Msg::new(key!("sayo_thorns_gain")),
+    );
     Ok(())
 }
 
@@ -96,6 +103,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     plan::add_extra_dice(n, 0, "踏上荆棘之路的觉悟");
-    ctx::log(player_id, &Msg::new(key!("sayo_thorns_added")).i("n", n as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("sayo_thorns_added")).i("n", n as i64),
+    );
     Ok(())
 }

@@ -6,16 +6,20 @@
 //! > 当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。
 //!
 
-use card_sdk::abi::HookKind;
 use alloc::vec::Vec;
+use card_sdk::abi::HookKind;
 
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const LAYER_KEEP: CardDef = CardDef::new("RAS:（和奏瑞依）寄于指尖的执念", &[
-    On::Play(None, play),
-    On::Play(Some(can_use), use_die),
-    On::Hook(&[HookKind::RollAfter], roll_after_guard, roll_after)]);
+pub const LAYER_KEEP: CardDef = CardDef::new(
+    "RAS:（和奏瑞依）寄于指尖的执念",
+    &[
+        On::Play(None, play),
+        On::Play(Some(can_use), use_die),
+        On::Hook(&[HookKind::RollAfter], roll_after_guard, roll_after),
+    ],
+);
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
@@ -25,15 +29,25 @@ const SLOT_UNUSED: &str = "layerUnused";
 const SLOT_COUNT: &str = "layer_keep_count";
 /// Kept-die slots (C# `_kept` list); 8 is the practical cap.
 const SLOT_DICE: [&str; 8] = [
-    "layer_keep_0", "layer_keep_1", "layer_keep_2", "layer_keep_3",
-    "layer_keep_4", "layer_keep_5", "layer_keep_6", "layer_keep_7"];
+    "layer_keep_0",
+    "layer_keep_1",
+    "layer_keep_2",
+    "layer_keep_3",
+    "layer_keep_4",
+    "layer_keep_5",
+    "layer_keep_6",
+    "layer_keep_7",
+];
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点」
     // -- the card itself just stays in play (C# `H.PlaceFromPlay(c)`)?.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
-    ctx::log(player_id, &Msg::new(key!("layer_keep_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("layer_keep_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -62,7 +76,9 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_COUNT, n + 1);
     ctx::log(
         player_id,
-        &Msg::new(key!("layer_keep_kept")).player_id("who", player_id).i("n", die as i64),
+        &Msg::new(key!("layer_keep_kept"))
+            .player_id("who", player_id)
+            .i("n", die as i64),
     );
     Ok(())
 }
@@ -106,7 +122,9 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("layer_keep_which")),
         &opts,
     )?;
-    let Some(&die) = vals.get(pick) else { return Ok(()) };
+    let Some(&die) = vals.get(pick) else {
+        return Ok(());
+    };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("layer_keep_spend"))) {
         return Ok(());
     }
@@ -126,6 +144,9 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     }
     ctx::set_slot(player_id, SLOT_COUNT, kept.len() as i32);
     ctx::set_fixed_roll(die);
-    ctx::log(player_id, &Msg::new(key!("layer_keep_used")).i("n", die as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("layer_keep_used")).i("n", die as i64),
+    );
     Ok(())
 }

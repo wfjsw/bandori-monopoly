@@ -10,16 +10,19 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind, MoveKind};
+use card_sdk::abi::{ChainKind, HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const COUNCIL_CHECK: CardDef = CardDef::new("R:学生会的检查", &[
-    On::CounterAct(&[ChainKind::SettleBefore], can_react, react),
-    On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
-    On::Hook(&[HookKind::PayAfter], |_| true, pay_after),
-    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
-]);
+pub const COUNCIL_CHECK: CardDef = CardDef::new(
+    "R:学生会的检查",
+    &[
+        On::CounterAct(&[ChainKind::SettleBefore], can_react, react),
+        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+        On::Hook(&[HookKind::PayAfter], |_| true, pay_after),
+        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+    ],
+);
 
 /// C# `CardCouncilCheck.Near` -- own deeds within 3 tiles either way (`H.Dist`).
 fn near(player_id: i32) -> Vec<i32> {
@@ -76,7 +79,11 @@ fn react(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::ask_tile(player_id, &title, &text, &spots)?;
     // 规则书[反击]: 「支付那格一层房屋的建造价格一半」 -- C# `H._tiles[r.index].house / 2`.
     let amount = ctx::build_cost(tile) / 2;
-    let paid = ctx::pay(player_id, amount, &Msg::new(key!("council_check_why")).tile("tile", tile))?;
+    let paid = ctx::pay(
+        player_id,
+        amount,
+        &Msg::new(key!("council_check_why")).tile("tile", tile),
+    )?;
     if paid < amount {
         return Ok(());
     }
@@ -88,7 +95,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
         "R:学生会的检查",
         &Msg::new(key!("council_check_note")).tile("tile", tile),
     );
-    ctx::log(player_id, &Msg::new(key!("council_check_placed")).player_id("who", player_id).tile("tile", tile));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("council_check_placed"))
+            .player_id("who", player_id)
+            .tile("tile", tile),
+    );
     // The C# also stores the paid amount in the card's `Mem["paid"]` -- a slot
     // stands in for that per-card map.
     ctx::set_slot(player_id, SLOT_PAID, amount);
@@ -206,7 +218,9 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     } else {
         ctx::log(
             player_id,
-            &Msg::new(key!("council_check_done")).player_id("who", player_id).tile("tile", tile),
+            &Msg::new(key!("council_check_done"))
+                .player_id("who", player_id)
+                .tile("tile", tile),
         );
     }
     Ok(())

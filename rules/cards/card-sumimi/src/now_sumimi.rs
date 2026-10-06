@@ -6,13 +6,14 @@
 //! > [反击] 当你在你的本回合开始后到下回合开始前之间失去资金的总额即将超过你所在格子的[收费标价]时打出此卡，获得相当于你所在格子[收费标价]数额的资金（RiNG则为其基础乘数）
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const NOW_SUMIMI: CardDef = CardDef::new("Sumimi:现在她是Sumimi的小初啦", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const NOW_SUMIMI: CardDef = CardDef::new(
+    "Sumimi:现在她是Sumimi的小初啦",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
 /// tile-kind surface is `is_buyable` / `is_shop` / `tile_group`, and the RiNG
@@ -73,7 +74,11 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「获得相当于你所在格子[收费标价]数额的资金」 -- C# `H.GainR(c.Seat, Tag(c.Seat), CardName)`.
     let tag = price_tag(player_id);
     if tag > 0 {
-        ctx::gain(player_id, tag, &Msg::new(key!("now_sumimi_why")).n("n", tag as i64));
+        ctx::gain(
+            player_id,
+            tag,
+            &Msg::new(key!("now_sumimi_why")).n("n", tag as i64),
+        );
     }
     Ok(())
 }

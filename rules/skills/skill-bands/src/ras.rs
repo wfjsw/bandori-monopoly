@@ -20,10 +20,14 @@ const TAKEN: &str = "skill.ras.taken";
 /// The livehouse tile the settle latched.
 const ON_HOUSE: &str = "skill.ras.onHouse";
 
-pub const RAS: CardDef = CardDef::new("skill:RAISE A SUILEN:UNSTOPPABLE", &[
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::Abnormal], mine, on_abnormal),
-    On::Hook(&[HookKind::Settle], mine, on_settle)]);
+pub const RAS: CardDef = CardDef::new(
+    "skill:RAISE A SUILEN:UNSTOPPABLE",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::Abnormal], mine, on_abnormal),
+        On::Hook(&[HookKind::Settle], mine, on_settle),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -49,7 +53,9 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         .into_iter()
         .filter(|&u| ctx::is_live_house_for(player_id, u))
         .collect();
-    let Some(&to) = houses.first() else { return Ok(()) };
+    let Some(&to) = houses.first() else {
+        return Ok(());
+    };
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(to);
     plan::set_resolve(true);

@@ -6,14 +6,17 @@
 //! > [反击]抽出此卡时立刻打出，如果你手牌数大于等于3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const SAME_SKY: CardDef = CardDef::new("AG:朝同一片天空迈进", &[
-    On::Hook(&[HookKind::Drawn], |_| true, react),
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, return_at_opening),
-]);
+pub const SAME_SKY: CardDef = CardDef::new(
+    "AG:朝同一片天空迈进",
+    &[
+        On::Hook(&[HookKind::Drawn], |_| true, react),
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, return_at_opening),
+    ],
+);
 
 const ID: &str = "AG:朝同一片天空迈进";
 
@@ -30,7 +33,10 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
         returned += 1;
     }
     if returned > 0 {
-        ctx::log(player_id, &Msg::new(key!("same_sky_returned")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("same_sky_returned")).player_id("who", player_id),
+        );
     }
     Ok(())
 }
@@ -48,7 +54,11 @@ fn react(player_id: i32) -> card_sdk::Asked {
     let n = ctx::hand_size(player_id);
     if n >= 3 {
         // 规则书[反击]: 「如果你手牌数大于等于3，获得手牌数*600的资金」
-        ctx::gain(player_id, n * 600, &Msg::new(key!("same_sky_why")).i("n", n as i64));
+        ctx::gain(
+            player_id,
+            n * 600,
+            &Msg::new(key!("same_sky_why")).i("n", n as i64),
+        );
     } else {
         // 规则书[反击]: 「如果你的手牌数小于3，抽一张卡」
         ctx::draw(player_id, 1);

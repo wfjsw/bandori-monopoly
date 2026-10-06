@@ -9,12 +9,12 @@
 use std::path::Path;
 use std::sync::Arc;
 
-use game_core::state::stage;
 use game_core::data::GameData;
 use game_core::engine::Match;
 use game_core::msg::Arg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
+use game_core::state::stage;
 use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
 
@@ -132,7 +132,11 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
     // binding, it is the binding *after* Returns has had its say.
     {
         let st = m.state();
-        let ids: Vec<&str> = st.players[1].field.iter().map(|f| f.card.as_str()).collect();
+        let ids: Vec<&str> = st.players[1]
+            .field
+            .iter()
+            .map(|f| f.card.as_str())
+            .collect();
         assert!(
             ids.contains(&"skill:户山香澄:非凡之星"),
             "character skill bound: {ids:?}"

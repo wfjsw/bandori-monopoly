@@ -7,13 +7,14 @@
 //! >  [反击] 受到异常移动效果影响后可打出，使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的移动格数。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const ORDINARY: CardDef = CardDef::new("MyGO:普通与理所当然", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const ORDINARY: CardDef = CardDef::new(
+    "MyGO:普通与理所当然",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「受到异常移动效果影响后可打出」 -- C# `t.Kind == "abnormal"
@@ -36,6 +37,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // that NextStepsFx: the engine takes the stored count when planning the move.
     let steps = ctx::slot(player_id, "lastWalk") - 1;
     ctx::set_next_steps(player_id, steps);
-    ctx::log(player_id, &Msg::new(key!("ordinary_log")).i("n", steps as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("ordinary_log")).i("n", steps as i64),
+    );
     Ok(())
 }

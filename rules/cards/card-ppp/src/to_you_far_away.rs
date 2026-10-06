@@ -9,10 +9,10 @@
 
 use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TO_YOU_FAR_AWAY: CardDef = CardDef::new("PPP:献给远方的你", &[
-    On::Play(Some(cant_play), play)]);
+pub const TO_YOU_FAR_AWAY: CardDef =
+    CardDef::new("PPP:献给远方的你", &[On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardToYouFarAway.WhyNot`: refuses with 「没有别的玩家」 when `H.Others` is
@@ -32,7 +32,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
-    let best = others.iter().map(|&p| ctx::dist(pos, ctx::player_pos(p))).max().unwrap_or(0);
+    let best = others
+        .iter()
+        .map(|&p| ctx::dist(pos, ctx::player_pos(p)))
+        .max()
+        .unwrap_or(0);
     let mut far: Vec<i32> = others
         .into_iter()
         .filter(|&p| ctx::dist(pos, ctx::player_pos(p)) == best)
@@ -81,7 +85,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     let mine = ctx::owned_tiles(player_id);
     let best = mine.iter().map(|&t| ctx::dist(at, t)).max().unwrap_or(0);
-    let far_tiles: Vec<i32> = mine.into_iter().filter(|&t| ctx::dist(at, t) == best).collect();
+    let far_tiles: Vec<i32> = mine
+        .into_iter()
+        .filter(|&t| ctx::dist(at, t) == best)
+        .collect();
     // 规则书: 「加盖」 -- `H.OfferBuildAmong` over those: prompt to pay
     // `build_cost` and raise one house. Skips silently when none can take one.
     ctx::card_offer_build(player_id, &far_tiles);

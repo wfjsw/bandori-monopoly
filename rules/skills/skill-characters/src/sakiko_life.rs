@@ -23,11 +23,19 @@ use card_sdk::{key, CardDef, Msg, On};
 /// 「每获得一层停留，眩晕，你获得1500资金」.
 const BOUNTY: i32 = 1500;
 
-pub const SAKIKO_LIFE: CardDef = CardDef::new("skill:丰川祥子:请把你们的人生交给我", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::PassPlayer], in_one, on_pass_player),
-    On::Hook(&[HookKind::Stay, HookKind::Stun, HookKind::Exile], in_one, on_abnormal)]);
+pub const SAKIKO_LIFE: CardDef = CardDef::new(
+    "skill:丰川祥子:请把你们的人生交给我",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::PassPlayer], in_one, on_pass_player),
+        On::Hook(
+            &[HookKind::Stay, HookKind::Stun, HookKind::Exile],
+            in_one,
+            on_abnormal,
+        ),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -91,7 +99,9 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("sakiko_life_title")),
-        &Msg::new(key!("sakiko_life_take")).player_id("who", other).i("n", (stay + stun) as i64),
+        &Msg::new(key!("sakiko_life_take"))
+            .player_id("who", other)
+            .i("n", (stay + stun) as i64),
     )? {
         return Ok(());
     }
@@ -104,8 +114,17 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
         ctx::give_stun(player_id, stun);
     }
     // 「每获得一层停留，眩晕，你获得1500资金」
-    ctx::gain(player_id, BOUNTY * (stay + stun), &Msg::new(key!("sakiko_life_bounty")));
-    ctx::log(player_id, &Msg::new(key!("sakiko_life_moved")).player_id("who", other).i("n", (stay + stun) as i64));
+    ctx::gain(
+        player_id,
+        BOUNTY * (stay + stun),
+        &Msg::new(key!("sakiko_life_bounty")),
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("sakiko_life_moved"))
+            .player_id("who", other)
+            .i("n", (stay + stun) as i64),
+    );
     Ok(())
 }
 
@@ -121,7 +140,10 @@ fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     let Some(top) = deck.into_iter().next() else {
         return Ok(());
     };
-    ctx::log(player_id, &Msg::new(key!("sakiko_life_auto")).card("card", &top));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("sakiko_life_auto")).card("card", &top),
+    );
     ctx::play_card(&top, player_id)?;
     Ok(())
 }

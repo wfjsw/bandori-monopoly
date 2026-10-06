@@ -8,13 +8,21 @@
 //! > （2）[自动]若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部奇迹水晶并使你下次的移动掷骰结果额外增加20-X；若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const WANT_HUMAN: CardDef = CardDef::new("CRYCHIC:想要成为人类", &[
-    On::Play(None, want_human),
-    On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], react_guard, react)]);
+pub const WANT_HUMAN: CardDef = CardDef::new(
+    "CRYCHIC:想要成为人类",
+    &[
+        On::Play(None, want_human),
+        On::Hook(
+            &[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd],
+            react_guard,
+            react,
+        ),
+    ],
+);
 
 /// Where the declared X is written down (C# `CardWantHuman.Mem["x"]`).
 /// A per-player slot stands in for the per-field-card `Mem` map; 0 means
@@ -24,7 +32,11 @@ pub(crate) const SLOT_X: &str = "want_human_x";
 fn want_human(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡置于场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "CRYCHIC:想要成为人类", &Msg::new(key!("want_human_note")));
+    ctx::place_card(
+        player_id,
+        "CRYCHIC:想要成为人类",
+        &Msg::new(key!("want_human_note")),
+    );
     // 规则书（1）: 「从1-20间选择并声明X，将其写下」 -- C# `H.AskNumber(..., 1, 20, ...)`.
     let x = ctx::ask_number(
         player_id,
@@ -38,7 +50,12 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
     // Fresh placement: no boost snapshot from a previous instance (C# `Mem` is
     // per-card-instance; the player slot persists across re-places).
     ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
-    ctx::log(player_id, &Msg::new(key!("want_human_declared")).player_id("who", player_id).i("n", x as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("want_human_declared"))
+            .player_id("who", player_id)
+            .i("n", x as i64),
+    );
     // (1) and (2)'s boost are handled in `react`, which the Fx hook dispatch
     // runs at `rollAfter` / `turnStart` / `turnEnd`.
     Ok(())
@@ -71,7 +88,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
             let x = ctx::slot(player_id, SLOT_X);
             if x > 0 && roll < x {
                 ctx::add_crystals(1, 0);
-                ctx::log(player_id, &Msg::new(key!("want_human_crystal")).player_id("who", player_id).i("n", roll as i64));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("want_human_crystal"))
+                        .player_id("who", player_id)
+                        .i("n", roll as i64),
+                );
             }
             // 规则书（2）: the boost armed last turn start lands on this roll.
             let boost = ctx::slot(player_id, SLOT_BOOST);
@@ -79,9 +101,18 @@ fn react(player_id: i32) -> card_sdk::Asked {
                 ctx::set_slot(player_id, SLOT_BOOST, 0);
                 // 规则书（2）: snapshot the abnormal counter so 「若该次移动过程中受到
                 // 异常移动效果影响」 can be checked at turn end (C# `Mem["abBefore"]`).
-                ctx::set_slot(player_id, SLOT_AB_BEFORE, ctx::abnormal_count(player_id) + 1);
+                ctx::set_slot(
+                    player_id,
+                    SLOT_AB_BEFORE,
+                    ctx::abnormal_count(player_id) + 1,
+                );
                 trigger::set_move_roll(roll + boost);
-                ctx::log(player_id, &Msg::new(key!("want_human_boost")).player_id("who", player_id).i("n", boost as i64));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("want_human_boost"))
+                        .player_id("who", player_id)
+                        .i("n", boost as i64),
+                );
             }
         }
         // 规则书（2）: 「若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部
@@ -96,7 +127,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
             let x = ctx::slot(player_id, SLOT_X);
             ctx::set_crystals(0);
             ctx::set_slot(player_id, SLOT_BOOST, (20 - x).max(0));
-            ctx::log(player_id, &Msg::new(key!("want_human_drained")).player_id("who", player_id).i("n", (20 - x).max(0) as i64));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("want_human_drained"))
+                    .player_id("who", player_id)
+                    .i("n", (20 - x).max(0) as i64),
+            );
         }
         // 规则书（2）: 「若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹
         // 水晶。」 -- C# `TurnEnd`: `H._abnormalTurn[Player] > Mem["abBefore"]` when
@@ -112,7 +148,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
             ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
             if ctx::abnormal_count(player_id) > ab_before - 1 {
                 ctx::add_crystals(2, 0);
-                ctx::log(player_id, &Msg::new(key!("want_human_abnormal")).player_id("who", player_id));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("want_human_abnormal")).player_id("who", player_id),
+                );
             }
         }
         _ => {}

@@ -19,12 +19,15 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Latch for 「每回合限一次」.
 const USED: &str = "skill.takiMeeting.used";
 
-pub const TAKI_MEETING: CardDef = CardDef::new("skill:椎名立希:决定练习日的会议", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Abnormal], |_| true, on_abnormal),
-    On::Hook(&[HookKind::TurnStartBefore], mine, reset),
-]);
+pub const TAKI_MEETING: CardDef = CardDef::new(
+    "skill:椎名立希:决定练习日的会议",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Abnormal], |_| true, on_abnormal),
+        On::Hook(&[HookKind::TurnStartBefore], mine, reset),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -84,12 +87,17 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             .map(|(_, c)| Msg::new(key!("taki_meeting_option")).card("card", c))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&(uid, ref card)) = field.get(pick) else { return Ok(()); };
+    let Some(&(uid, ref card)) = field.get(pick) else {
+        return Ok(());
+    };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("taki_meeting_spend"))) {
         return Ok(());
     }
     state::set(player_id, USED, 1);
     ctx::add_crystals_at(uid, 1, 0);
-    ctx::log(player_id, &Msg::new(key!("taki_meeting_added")).card("card", card));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("taki_meeting_added")).card("card", card),
+    );
     Ok(())
 }

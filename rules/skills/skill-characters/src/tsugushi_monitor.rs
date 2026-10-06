@@ -32,12 +32,15 @@ fn rec_key(p: i32) -> alloc::string::String {
 /// 「每次发动（3）技能时单个标记的收益减200，最低单标记收益200」.
 const RATE: &str = "skill.tsugushi.rate";
 
-pub const TSUGUSHI_MONITOR: CardDef = CardDef::new("skill:二叶筑紫:交给班长吧", &[
-    On::Play(Some(can_cash), cash),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare),
-    On::Hook(&[HookKind::PayChoose], mine, on_gain),
-    On::Hook(&[HookKind::PayChoose], other, on_theirs),
-]);
+pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
+    "skill:二叶筑紫:交给班长吧",
+    &[
+        On::Play(Some(can_cash), cash),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare),
+        On::Hook(&[HookKind::PayChoose], mine, on_gain),
+        On::Hook(&[HookKind::PayChoose], other, on_theirs),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -85,14 +88,25 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
             .map(|&p| Msg::new(key!("tsugushi_option")).player_id("who", p))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&who) = others.get(pick) else { return Ok(()); };
+    let Some(&who) = others.get(pick) else {
+        return Ok(());
+    };
     // 「可以改为指定…一个角色进行一次该动作」 -- the figure moves to them.
     ctx::trigger::set_pay_amount(0);
-    ctx::gain(who, amount, &Msg::new(key!("tsugushi_forwarded")).i("n", amount as i64));
+    ctx::gain(
+        who,
+        amount,
+        &Msg::new(key!("tsugushi_forwarded")).i("n", amount as i64),
+    );
     // 「发送给对方一个X（占位）标记并记录…数量」
     ctx::add_tok(who, UP, 1, i32::MAX);
     state::set(player_id, &rec_key(who), amount);
-    ctx::log(player_id, &Msg::new(key!("tsugushi_sent")).player_id("who", who).i("n", amount as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tsugushi_sent"))
+            .player_id("who", who)
+            .i("n", amount as i64),
+    );
     Ok(())
 }
 
@@ -129,9 +143,17 @@ fn on_theirs(player_id: i32) -> card_sdk::Asked {
     let mine = amount.min(cap);
     let theirs = amount - mine;
     ctx::trigger::set_pay_amount(0);
-    ctx::gain(player_id, mine, &Msg::new(key!("tsugushi_taken")).i("n", mine as i64));
+    ctx::gain(
+        player_id,
+        mine,
+        &Msg::new(key!("tsugushi_taken")).i("n", mine as i64),
+    );
     if theirs > 0 {
-        ctx::gain(src, theirs, &Msg::new(key!("tsugushi_excess")).i("n", theirs as i64));
+        ctx::gain(
+            src,
+            theirs,
+            &Msg::new(key!("tsugushi_excess")).i("n", theirs as i64),
+        );
     }
     Ok(())
 }
@@ -141,7 +163,9 @@ fn can_cash(player_id: i32) -> Option<Msg> {
     if card_sdk::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    let all = (0..ctx::player_count()).filter(|&p| p != player_id && !ctx::player_out(p)).all(|p| ctx::tok(p, DOWN) >= 1);
+    let all = (0..ctx::player_count())
+        .filter(|&p| p != player_id && !ctx::player_out(p))
+        .all(|p| ctx::tok(p, DOWN) >= 1);
     if !all {
         return Some(Msg::new(key!("tsugushi_not_ready")));
     }
@@ -161,7 +185,11 @@ fn cash(player_id: i32) -> card_sdk::Asked {
         }
     }
     let rate = state::get(player_id, RATE).max(200);
-    ctx::gain(player_id, n * rate, &Msg::new(key!("tsugushi_cash")).i("n", (n * rate) as i64));
+    ctx::gain(
+        player_id,
+        n * rate,
+        &Msg::new(key!("tsugushi_cash")).i("n", (n * rate) as i64),
+    );
     // 「每次发动（3）技能时单个标记的收益减200，最低单标记收益200」
     state::set(player_id, RATE, (rate - 200).max(200));
     ctx::log(player_id, &Msg::new(key!("tsugushi_done")));

@@ -705,7 +705,10 @@ async fn a_restart_restores_the_room_and_its_match() {
 
     // The match blob is reachable through the handle again.
     let m = r.match_handle().expect("match restored");
-    assert!(m.snapshot().unwrap().contains("version"), "blob came from the store");
+    assert!(
+        m.snapshot().unwrap().contains("version"),
+        "blob came from the store"
+    );
 
     // And a session that names the room still resolves.
     assert_eq!(server.session("tok-A").unwrap().player, "A");

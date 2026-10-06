@@ -11,14 +11,26 @@
 //! discard pile when the effect finishes (or at turn end, C#
 //! `AfterMoveFireFx.TurnEndAfter`).
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const CHILDHOOD_CHEER: CardDef = CardDef::new("Sumimi:(初华（Sumimi）)儿时玩伴的鼓励", &[
-    On::Play(Some(cant_play), childhood_cheer),
-    On::Hook(&[HookKind::SettleBefore, HookKind::SettleAfter, HookKind::Teleported], after_move_guard, after_move),
-    On::AtEnd(at_end)]);
+pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
+    "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
+    &[
+        On::Play(Some(cant_play), childhood_cheer),
+        On::Hook(
+            &[
+                HookKind::SettleBefore,
+                HookKind::SettleAfter,
+                HookKind::Teleported,
+            ],
+            after_move_guard,
+            after_move,
+        ),
+        On::AtEnd(at_end),
+    ],
+);
 
 const ID: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
 
@@ -37,7 +49,12 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
     let start = ctx::tile_named("小豆岛");
     if start >= 0 {
         ctx::plan::set_start(start, ID);
-        ctx::log(player_id, &Msg::new(key!("childhood_cheer_start")).player_id("who", player_id).tile("tile", start));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("childhood_cheer_start"))
+                .player_id("who", player_id)
+                .tile("tile", start),
+        );
     }
     // 规则书: 「并在移动后获得一个火罐」 -- C# `H.ExtraOf<AfterMoveFireFx>(seat)`.
     ctx::set_dest(ctx::Dest::Field);

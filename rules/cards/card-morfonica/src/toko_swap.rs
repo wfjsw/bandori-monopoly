@@ -8,10 +8,10 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TOKO_SWAP: CardDef = CardDef::new("Mor:（toko）", &[
-    On::Play(Some(cant_play), toko_swap)]);
+pub const TOKO_SWAP: CardDef =
+    CardDef::new("Mor:（toko）", &[On::Play(Some(cant_play), toko_swap)]);
 
 /// One swappable pair: `(mine, theirs)` -- both mortgaged, same colour group,
 /// `theirs` owned by another still-in player (C# `CardTokoSwap.Pairs`).
@@ -56,7 +56,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn toko_swap(player_id: i32) -> card_sdk::Asked {
     let ps = pairs(player_id);
     if ps.is_empty() {
-        ctx::log(player_id, &Msg::new(key!("toko_swap_no_pair")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("toko_swap_no_pair")).player_id("who", player_id),
+        );
         return Ok(());
     }
     // 规则书: 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换」

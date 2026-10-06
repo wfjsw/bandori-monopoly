@@ -15,10 +15,14 @@ use card_sdk::abi::{state_key, AbKind, HookKind};
 use card_sdk::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const ANON_RESTART: CardDef = CardDef::new("skill:千早爱音:重新开始", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::Abnormal], mine, on_abnormal)]);
+pub const ANON_RESTART: CardDef = CardDef::new(
+    "skill:千早爱音:重新开始",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::Abnormal], mine, on_abnormal),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

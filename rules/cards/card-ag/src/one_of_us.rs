@@ -10,11 +10,15 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const ONE_OF_US: CardDef = CardDef::new("AG:ONE OF US", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::BeforeOut], |_| true, before_out)]);
+pub const ONE_OF_US: CardDef = CardDef::new(
+    "AG:ONE OF US",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::BeforeOut], |_| true, before_out),
+    ],
+);
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.
@@ -99,7 +103,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(
         player_id,
         "AG:ONE OF US",
-        &Msg::new(key!("one_of_us_note")).player_id("who", partner).tile("a", a).tile("b", b),
+        &Msg::new(key!("one_of_us_note"))
+            .player_id("who", partner)
+            .tile("a", a)
+            .tile("b", b),
     );
     ctx::log(
         player_id,

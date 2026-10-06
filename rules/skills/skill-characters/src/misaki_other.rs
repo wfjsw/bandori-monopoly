@@ -26,12 +26,15 @@ use card_sdk::{key, CardDef, Msg, On};
 
 const GROUP: &str = "skill.misakiOther.group";
 
-pub const MISAKI_OTHER: CardDef = CardDef::new("skill:奥泽美咲:另一个我", &[
-    On::Play(Some(can_use_exile), use_exile),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-]);
+pub const MISAKI_OTHER: CardDef = CardDef::new(
+    "skill:奥泽美咲:另一个我",
+    &[
+        On::Play(Some(can_use_exile), use_exile),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

@@ -7,13 +7,17 @@
 //! > （2）视为打出一张@Tsugu ycm
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const TSUGUMI_CAN: CardDef = CardDef::new("AG:（鸫）微小的『能做到』的事", &[
-    On::Play(Some(cant_play), play),
-    On::CounterAct(&[ChainKind::Card], can_react, react)]);
+pub const TSUGUMI_CAN: CardDef = CardDef::new(
+    "AG:（鸫）微小的『能做到』的事",
+    &[
+        On::Play(Some(cant_play), play),
+        On::CounterAct(&[ChainKind::Card], can_react, react),
+    ],
+);
 
 /// 规则书（1）: the gate is 「这回合已经移动过了」 -- the same main-move latch the
 /// movement rules use (`H.MoveWhyNot`), so the card is refused once the turn's
@@ -46,7 +50,10 @@ fn can_react(player_id: i32) -> bool {
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「视为打出一张@Tsugu ycm」 -- C# `Ycm.Play(c)` on a shared
     // `CardTsuguYcm` instance (id `通用:@Tsugu ycm`).
-    ctx::log(player_id, &Msg::new(key!("tsugumi_can_ycm")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tsugumi_can_ycm")).player_id("who", player_id),
+    );
     ctx::play_card("通用:@Tsugu ycm", player_id)?;
     Ok(())
 }
@@ -60,12 +67,16 @@ fn react(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("tsugumi_can_ask")),
         &[
             Msg::new(key!("tsugumi_can_max")),
-            Msg::new(key!("tsugumi_can_min"))],
+            Msg::new(key!("tsugumi_can_min")),
+        ],
     )?;
     // 规则书（1）: 「以理论最大值或最小值结算」 -- C# `target.Extreme = 1 / -1`,
     // so the play being reacted to settles its number ranges at the theoretical
     // extreme the picker named.
     ctx::set_extreme(if pick == 0 { 1 } else { -1 });
-    ctx::log(player_id, &Msg::new(key!("tsugumi_can_forced")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tsugumi_can_forced")).player_id("who", player_id),
+    );
     Ok(())
 }

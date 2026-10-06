@@ -35,7 +35,8 @@ impl Default for Store {
 }
 
 fn lock<T>(m: &Mutex<T>) -> Result<std::sync::MutexGuard<'_, T>, StoreError> {
-    m.lock().map_err(|_| StoreError::Backend("store lock poisoned".into()))
+    m.lock()
+        .map_err(|_| StoreError::Backend("store lock poisoned".into()))
 }
 
 impl CrossState for Store {
@@ -54,7 +55,11 @@ impl CrossState for Store {
     }
 
     fn session_all(&self) -> Result<Vec<Session>, StoreError> {
-        Ok(lock(&self.sessions)?.values().cloned().map(Into::into).collect())
+        Ok(lock(&self.sessions)?
+            .values()
+            .cloned()
+            .map(Into::into)
+            .collect())
     }
 
     fn room_get(&self, id: &str) -> Result<Option<RoomRecord>, StoreError> {

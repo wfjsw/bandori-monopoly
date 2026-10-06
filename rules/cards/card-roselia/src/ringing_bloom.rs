@@ -12,13 +12,17 @@
 //! place this card on your field; it then fakes your house counts up to your
 //! best tile and pays out when one of your non-RiNG tiles collects rent.
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const RINGING_BLOOM: CardDef = CardDef::new("R:（燐子）Ringing Bloom", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after)]);
+pub const RINGING_BLOOM: CardDef = CardDef::new(
+    "R:（燐子）Ringing Bloom",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after),
+    ],
+);
 
 const ID: &str = "R:（燐子）Ringing Bloom";
 
@@ -26,7 +30,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("ringing_bloom_note")));
-    ctx::log(player_id, &Msg::new(key!("ringing_bloom_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("ringing_bloom_placed")).player_id("who", player_id),
+    );
     // 规则书（2）: 「你的所有格子上的房屋数视为与你房屋数最多的格子等同，但受此效果影响获得额外房屋数的格子收费减半」
     // TODO(规则书)（2）: the house-count override and its half-rent live in the rent
     //   routine (C# `H.RentHouses` + `boosted`): while this card is in play every
@@ -64,13 +71,21 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     let x = ctx::houses_of(tile);
     // 规则书（3）: 「此卡置入弃牌堆」 -- C# `H.Unplace(this, "discard", "自己的格子收了费")`.
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("ringing_bloom_done")).player_id("who", player_id).tile("tile", tile));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("ringing_bloom_done"))
+            .player_id("who", player_id)
+            .tile("tile", tile),
+    );
     // 规则书（3）: 「然后你获得500*X资金」 -- C# `H.GainR(Seat, 500 * x, ...)`.
     if x > 0 {
         ctx::gain(
             player_id,
             500 * x,
-            &Msg::new(key!("ringing_bloom_pay")).player_id("who", player_id).tile("tile", tile).i("n", x as i64),
+            &Msg::new(key!("ringing_bloom_pay"))
+                .player_id("who", player_id)
+                .tile("tile", tile)
+                .i("n", x as i64),
         );
     }
     Ok(())

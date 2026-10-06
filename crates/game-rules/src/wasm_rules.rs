@@ -1201,7 +1201,14 @@ impl WasmRules {
     /// Run one effect to completion, prompting through the engine as needed.
     /// Returns the card's destination (`PlayCtx.Dest`). A reroll the module made
     /// (`set_move_roll`) is written back to `trigger` (C# shares `t.Move`).
-    fn drive(&self, cx: &mut Cx, call: Call, card_id: &str, uid: i32, trigger: &mut Trigger) -> Flow<i32> {
+    fn drive(
+        &self,
+        cx: &mut Cx,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        trigger: &mut Trigger,
+    ) -> Flow<i32> {
         self.drive_inner(cx, call, card_id, uid, trigger, false)
     }
 
@@ -1730,7 +1737,14 @@ impl WasmRules {
     /// `H.Unplace(this, "discard" / "hand" / "gone")`, the fate `set_dest` names.
     /// `to` is whose pile it lands in; `None` is the owner it leaves, the target
     /// `set_transfer_to_dest` names.
-    fn apply_dest(&self, cx: &mut Cx, uid: i32, card: &str, dest: i32, to: Option<i32>) -> Flow<()> {
+    fn apply_dest(
+        &self,
+        cx: &mut Cx,
+        uid: i32,
+        card: &str,
+        dest: i32,
+        to: Option<i32>,
+    ) -> Flow<()> {
         let mut w = cx.world_copy();
         let left = w.unplace_at(uid);
         if left < 0 {

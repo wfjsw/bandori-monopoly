@@ -11,13 +11,12 @@
 //! > 4. 结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]。
 //!
 
+use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;
 use card_sdk::ctx::plan;
-use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TSUGU_YCM: CardDef = CardDef::new("通用:@Tsugu ycm", &[
-    On::Play(Some(cant_play), play)]);
+pub const TSUGU_YCM: CardDef = CardDef::new("通用:@Tsugu ycm", &[On::Play(Some(cant_play), play)]);
 
 /// C# `H.TileNamed("Bandori车站")` -- the rulebook spells it “bandori车站”.
 const STATION: &str = "Bandori车站";
@@ -59,7 +58,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // (`ctx::is_buyable` is `TileData.IsBuyable`, a deed tile).
         let mut free: Vec<i32> = Vec::new();
         for t in 0..ctx::tile_count() {
-            if ctx::is_buyable(t) && ctx::tile_owner(t) < 0 && ctx::money_of(player_id) >= ctx::buy_price(t) {
+            if ctx::is_buyable(t)
+                && ctx::tile_owner(t) < 0
+                && ctx::money_of(player_id) >= ctx::buy_price(t)
+            {
                 free.push(t);
             }
         }
@@ -89,7 +91,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // 规则书（3）: 「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- C#
         // `H._turnCtx.BuyDiscount = 1500`.
         ctx::set_buy_discount(1500);
-        ctx::log(player_id, &Msg::new(key!("tsugu_discount")).player_id("who", player_id).n("n", 1500));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tsugu_discount"))
+                .player_id("who", player_id)
+                .n("n", 1500),
+        );
     }
 
     // 规则书（4）[手]: 「结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]
@@ -101,7 +108,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("tsugu_pick")).i("roll", r as i64),
             &[
                 Msg::new(key!("tsugu_pick_gain")).n("n", 1000),
-                Msg::new(key!("tsugu_pick_move"))],
+                Msg::new(key!("tsugu_pick_move")),
+            ],
         )?;
         if pick == 1 {
             // C# `rr.index == 1 && !H._turnCtx.MainMoved` -- the teleport is a

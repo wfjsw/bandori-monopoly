@@ -15,9 +15,13 @@ use card_sdk::{key, CardDef, Msg, On};
 /// 「选择[获得]资金次数」 -- how many times the money option has been taken.
 const TAKEN: &str = "skill.morfonica.moneyTaken";
 
-pub const MORFONICA: CardDef = CardDef::new("skill:Morfonica:振翅高飞的练习曲", &[
-    On::Hook(&[HookKind::PayAfter], mine, after_pay),
-    On::Hook(&[HookKind::CircleAffected], mine, on_circle)]);
+pub const MORFONICA: CardDef = CardDef::new(
+    "skill:Morfonica:振翅高飞的练习曲",
+    &[
+        On::Hook(&[HookKind::PayAfter], mine, after_pay),
+        On::Hook(&[HookKind::CircleAffected], mine, on_circle),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -33,7 +37,10 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::draw(player_id, 1);
-    ctx::log(player_id, &Msg::new(key!("morfonica_draw")).i("n", ctx::trigger::value() as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("morfonica_draw")).i("n", ctx::trigger::value() as i64),
+    );
     Ok(())
 }
 
@@ -50,7 +57,11 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         1 => 1500,
         _ => 2000,
     };
-    ctx::gain(player_id, amount, &Msg::new(key!("morfonica_circle")).i("n", amount as i64));
+    ctx::gain(
+        player_id,
+        amount,
+        &Msg::new(key!("morfonica_circle")).i("n", amount as i64),
+    );
     // The reward is replaced by the fixed sum.
     ctx::trigger::set_cancelled();
     Ok(())

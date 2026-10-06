@@ -10,14 +10,18 @@
 //! > （2）[反击] 当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
-use card_sdk::ctx::{self, trigger};
 use card_sdk::abi::state_key;
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const WELCOME_MUJICA: CardDef = CardDef::new("Mujica:欢迎来到ave mujica的世界", &[
-    On::Play(None, play),
-    On::CounterAct(&[ChainKind::State], can_react, react)]);
+pub const WELCOME_MUJICA: CardDef = CardDef::new(
+    "Mujica:欢迎来到ave mujica的世界",
+    &[
+        On::Play(None, play),
+        On::CounterAct(&[ChainKind::State], can_react, react),
+    ],
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」

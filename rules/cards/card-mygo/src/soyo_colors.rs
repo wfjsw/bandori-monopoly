@@ -7,11 +7,15 @@
 //! >  将此卡放置于你拥有地契的一个格子，该格获得所有颜色（该格本身不可因自有以外的颜色的地产商盖房），因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的减半收费基础上额外减半。
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SOYO_COLORS: CardDef = CardDef::new("MyGO:（soyo）混合的颜色", &[
-    On::Play(Some(cant_play), soyo_colors),
-    On::Hook(&[card_sdk::abi::HookKind::PayMul], on_rent, half_again)]);
+pub const SOYO_COLORS: CardDef = CardDef::new(
+    "MyGO:（soyo）混合的颜色",
+    &[
+        On::Play(Some(cant_play), soyo_colors),
+        On::Hook(&[card_sdk::abi::HookKind::PayMul], on_rent, half_again),
+    ],
+);
 
 /// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent on an agent
 /// tile whose colour differs from this card's.
@@ -45,7 +49,10 @@ fn half_again(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::trigger::set_pay_amount((v + 1) / 2);
-    ctx::log(player_id, &Msg::new(key!("soyo_colors_half")).i("n", v as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_colors_half")).i("n", v as i64),
+    );
     Ok(())
 }
 
@@ -73,8 +80,18 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
     )?;
     ctx::set_dest(ctx::Dest::Field);
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- bound to the chosen tile.
-    ctx::place_card_on(player_id, tile, "MyGO:（soyo）混合的颜色", &Msg::new(key!("soyo_colors_note")).tile("tile", tile));
-    ctx::log(player_id, &Msg::new(key!("soyo_colors_placed")).tile("tile", tile).player_id("who", player_id));
+    ctx::place_card_on(
+        player_id,
+        tile,
+        "MyGO:（soyo）混合的颜色",
+        &Msg::new(key!("soyo_colors_note")).tile("tile", tile),
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("soyo_colors_placed"))
+            .tile("tile", tile)
+            .player_id("who", player_id),
+    );
     // 规则书: 「该格获得所有颜色」 -- `ALL_COLORS` is exactly that: `is_color`
     // answers true for every group. (The parenthetical -- the tile itself may
     // only be built through a matching-colour agent -- is `why_not_build_on`,

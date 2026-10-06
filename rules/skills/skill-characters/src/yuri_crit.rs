@@ -25,9 +25,13 @@ use card_sdk::{key, CardDef, Msg, On};
 /// The counter X. 「X初始为0」.
 const X: &str = "skill.yuriCrit.x";
 
-pub const YURI_CRIT: CardDef = CardDef::new("skill:八潮瑠唯:正论暴击", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare),
-    On::Hook(&[HookKind::PayChoose], mine, on_pay)]);
+pub const YURI_CRIT: CardDef = CardDef::new(
+    "skill:八潮瑠唯:正论暴击",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare),
+        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -54,13 +58,33 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, X, 0);
         let after = if amount > 0 { amount * 2 } else { 0 };
         ctx::trigger::set_pay_amount(after);
-        ctx::effect(player_id, &Msg::new(key!("yuri_crit_hit")).i("n", n as i64).i("x", x as i64));
-        ctx::log(player_id, &Msg::new(key!("yuri_crit_hit")).i("n", n as i64).i("x", x as i64));
+        ctx::effect(
+            player_id,
+            &Msg::new(key!("yuri_crit_hit"))
+                .i("n", n as i64)
+                .i("x", x as i64),
+        );
+        ctx::log(
+            player_id,
+            &Msg::new(key!("yuri_crit_hit"))
+                .i("n", n as i64)
+                .i("x", x as i64),
+        );
     } else {
         // 「若结果大于X，X+1」
         state::set(player_id, X, x + 1);
-        ctx::effect(player_id, &Msg::new(key!("yuri_crit_miss")).i("n", n as i64).i("x", (x + 1) as i64));
-        ctx::log(player_id, &Msg::new(key!("yuri_crit_miss")).i("n", n as i64).i("x", (x + 1) as i64));
+        ctx::effect(
+            player_id,
+            &Msg::new(key!("yuri_crit_miss"))
+                .i("n", n as i64)
+                .i("x", (x + 1) as i64),
+        );
+        ctx::log(
+            player_id,
+            &Msg::new(key!("yuri_crit_miss"))
+                .i("n", n as i64)
+                .i("x", (x + 1) as i64),
+        );
     }
     Ok(())
 }

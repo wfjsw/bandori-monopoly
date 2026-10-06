@@ -11,24 +11,38 @@
 
 use card_sdk::abi::{HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const RANDOM_STAR: CardDef = CardDef::new("PPP:仓库里的Random Star", &[
-    On::Play(None, random_star),
-    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile)]);
+pub const RANDOM_STAR: CardDef = CardDef::new(
+    "PPP:仓库里的Random Star",
+    &[
+        On::Play(None, random_star),
+        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+    ],
+);
 
 fn random_star(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置自身场上」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PPP:仓库里的Random Star", &Msg::new(key!("random_star_note")));
-    ctx::log(player_id, &Msg::new(key!("random_star_placed")).player_id("who", player_id));
+    ctx::place_card(
+        player_id,
+        "PPP:仓库里的Random Star",
+        &Msg::new(key!("random_star_note")),
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("random_star_placed")).player_id("who", player_id),
+    );
     // 规则书（1）: 「并将弃牌堆和手牌洗入卡组」 -- C# `H.ShuffleAllIntoDeck(seat, hand:
     // true, discard: true)`.
     ctx::sweep_to_deck(player_id);
     // 规则书（1）: 「然后将一张“拍卖撤下来了”放置在卡组底端」 -- C#
     // `H.AddToDeck(seat, "PPP:[衍生]拍卖撤下来了", "bottom")`.
     ctx::add_to_deck_at(player_id, "PPP:[衍生]拍卖撤下来了", ctx::DeckPos::Bottom);
-    ctx::log(player_id, &Msg::new(key!("random_star_swept")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("random_star_swept")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -80,7 +94,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, "星星贴纸", -2, i32::MAX);
     ctx::log(
         player_id,
-        &Msg::new(key!("random_star_stop")).player_id("who", player_id).tile("tile", ryuseido),
+        &Msg::new(key!("random_star_stop"))
+            .player_id("who", player_id)
+            .tile("tile", ryuseido),
     );
     Ok(())
 }

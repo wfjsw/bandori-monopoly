@@ -11,12 +11,16 @@
 
 use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const RAN_AS_USUAL: CardDef = CardDef::new("AG:(兰) 像往常一样", &[
-    On::Play(None, play),
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-    On::AtEnd(at_end)]);
+pub const RAN_AS_USUAL: CardDef = CardDef::new(
+    "AG:(兰) 像往常一样",
+    &[
+        On::Play(None, play),
+        On::CounterAct(&[ChainKind::Effect], can_react, react),
+        On::AtEnd(at_end),
+    ],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书（1）: 「此卡可以当反击使用」 -- C# reacts on an `abnormal` trigger
@@ -47,7 +51,10 @@ fn arm(player_id: i32) {
     ctx::set_slot(player_id, "asUsualTurn", ctx::turn_key());
     // 规则书（2）: 「受到异常移动效果（包括你的技能）的回合结束前，回到起始地点并取消所有受到的效果（不进行任何结算）」
     // -- the C# `Arm` logs and queues `Undo` on `H._turnCtx.AtEnd`.
-    ctx::log(player_id, &Msg::new(key!("ran_as_usual_armed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("ran_as_usual_armed")).player_id("who", player_id),
+    );
     // C# `H._turnCtx.AtEnd.Add(() => Undo(i))` -- the turn-end queue hook
     // (`ctx::before_turn_end` + `On::AtEnd`). The card need not be in play.
     ctx::before_turn_end(player_id);
@@ -78,6 +85,11 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     ctx::state::set(player_id, card_sdk::abi::state_key::STAY, stay);
     ctx::state::set(player_id, card_sdk::abi::state_key::STUN, stun);
     ctx::state::set(player_id, card_sdk::abi::state_key::EXILE, exile);
-    ctx::log(player_id, &Msg::new(key!("ran_as_usual_undo")).player_id("who", player_id).tile("tile", pos));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("ran_as_usual_undo"))
+            .player_id("who", player_id)
+            .tile("tile", pos),
+    );
     Ok(())
 }

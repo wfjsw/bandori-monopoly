@@ -6,9 +6,12 @@
 //! > 本回合的主要移动设为移动60格子并不触发结算，回合结束时[失去]1000资金
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SIGNPOST: CardDef = CardDef::new("PPP:向着未来的路标", &[On::Play(Some(cant_play), play), On::AtEnd(at_end)]);
+pub const SIGNPOST: CardDef = CardDef::new(
+    "PPP:向着未来的路标",
+    &[On::Play(Some(cant_play), play), On::AtEnd(at_end)],
+);
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -22,12 +25,22 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并不触发结算」 -- C# `MoveCtx.Resolve = false` on the same move:
     // the 60-step walk passes every tile without landing on one.
     ctx::plan::set_resolve(false);
-    ctx::log(player_id, &Msg::new(key!("signpost_move")).player_id("who", player_id).i("n", 60));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("signpost_move"))
+            .player_id("who", player_id)
+            .i("n", 60),
+    );
     ctx::card_move(player_id);
     // 规则书: 「回合结束时[失去]1000资金」 -- C# `H._turnCtx.AtEnd.Add(() =>
     // H.LoseR(i, 1000, ...))`, scheduled onto `On::AtEnd`.
     ctx::before_turn_end(player_id);
-    ctx::log(player_id, &Msg::new(key!("signpost_pending")).player_id("who", player_id).n("n", 1000));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("signpost_pending"))
+            .player_id("who", player_id)
+            .n("n", 1000),
+    );
     Ok(())
 }
 

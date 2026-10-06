@@ -11,9 +11,9 @@
 //! stand-in and files it to the discard pile at the owner's turn end (C#
 //! `CharityFx.TurnEndAfter` -> `H.RemoveExtra(this)`).
 
-use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
+use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:爱心义演";
 /// C# `CardKokoroCircle` -- the card that makes CiRCLE count as yours (rule:
@@ -24,9 +24,17 @@ const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 /// half-pay is armed for (expires with the turn).
 const SLOT_TURN: &str = "charity_show_turn";
 
-pub const CHARITY_SHOW: CardDef = CardDef::new("HHW:爱心义演", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], hook_guard, hook)]);
+pub const CHARITY_SHOW: CardDef = CardDef::new(
+    "HHW:爱心义演",
+    &[
+        On::Play(None, play),
+        On::Hook(
+            &[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile],
+            hook_guard,
+            hook,
+        ),
+    ],
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
@@ -40,7 +48,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // `TurnEndAfter` hook below files it away at the owner's turn end.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("charity_show_note")));
-    ctx::log(player_id, &Msg::new(key!("charity_show_played")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("charity_show_played")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -141,7 +152,9 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             ctx::set_slot(player_id, &key, ctx::turn_key());
             ctx::log(
                 player_id,
-                &Msg::new(key!("charity_show_pass")).player_id("who", player_id).tile("tile", t),
+                &Msg::new(key!("charity_show_pass"))
+                    .player_id("who", player_id)
+                    .tile("tile", t),
             );
             // 规则书: 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk.
             // The walk loop bound is `steps + m.ExtraSteps`, re-read each

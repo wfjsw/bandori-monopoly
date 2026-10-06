@@ -9,15 +9,23 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const THAT_DAY_RAIN: CardDef = CardDef::new("MyGO:那天的雨", &[
-    On::Play(None, that_day_rain),
-    // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-    On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook_guard, hook),
-    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
+pub const THAT_DAY_RAIN: CardDef = CardDef::new(
+    "MyGO:那天的雨",
+    &[
+        On::Play(None, that_day_rain),
+        // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
+        On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook_guard, hook),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            crystals_changed_guard,
+            on_crystals_changed,
+        ),
+    ],
+);
 
 const ID: &str = "MyGO:那天的雨";
 
@@ -25,19 +33,67 @@ const ID: &str = "MyGO:那天的雨";
 /// 东京外 excluded, each paired with the buyable tiles of its colour group
 /// (C# `H._tiles[t].kind == "agent"` / `.group` / `IsBuyable`).
 const AGENTS: &[(&str, &[&str])] = &[
-    ("主要街道", &["购物中心", "偶像经纪公司", "星空齿科", "江户川公园"]),
-    ("中心学区", &["花咲川女子学院", "羽丘女子学院", "月之森女子学院"]),
-    ("周边学区", &["白雪学园", "艺术学院高中", "瑟罗希亚国际学校", "加茂川中央中学"]),
+    (
+        "主要街道",
+        &["购物中心", "偶像经纪公司", "星空齿科", "江户川公园"],
+    ),
+    (
+        "中心学区",
+        &["花咲川女子学院", "羽丘女子学院", "月之森女子学院"],
+    ),
+    (
+        "周边学区",
+        &[
+            "白雪学园",
+            "艺术学院高中",
+            "瑟罗希亚国际学校",
+            "加茂川中央中学",
+        ],
+    ),
     ("弦卷集团", &["微笑号", "米歇尔公园", "弦卷豪宅"]),
     (
         "Live House",
-        &["RiNG 1", "RiNG 2", "RiNG 3", "RiNG 4", "DUB MUSIC EXPERIMENT", "武道馆", "Space", "Live House Galaxy"],
+        &[
+            "RiNG 1",
+            "RiNG 2",
+            "RiNG 3",
+            "RiNG 4",
+            "DUB MUSIC EXPERIMENT",
+            "武道馆",
+            "Space",
+            "Live House Galaxy",
+        ],
     ),
-    ("周边精选", &["天文馆", "水族馆", "富士见坂", "成为人类桥", "便利店", "快餐店", "Bandori车站", "飞鸟山公园"]),
+    (
+        "周边精选",
+        &[
+            "天文馆",
+            "水族馆",
+            "富士见坂",
+            "成为人类桥",
+            "便利店",
+            "快餐店",
+            "Bandori车站",
+            "飞鸟山公园",
+        ],
+    ),
     ("大学路", &["庆鹏女子大学", "四叶女子大学"]),
     ("梦开始的地方", &["星星小巷", "星之鼓动山丘"]),
-    ("商店街", &["羽泽咖啡厅", "山吹面包房", "银河拉面馆", "北泽精肉店", "旭汤澡堂"]),
-    ("高级住宅区", &["六本木大厦", "CHUCHU的公寓", "旧古河庭园", "广町家画室"])];
+    (
+        "商店街",
+        &[
+            "羽泽咖啡厅",
+            "山吹面包房",
+            "银河拉面馆",
+            "北泽精肉店",
+            "旭汤澡堂",
+        ],
+    ),
+    (
+        "高级住宅区",
+        &["六本木大厦", "CHUCHU的公寓", "旧古河庭园", "广町家画室"],
+    ),
+];
 
 /// C# `CardThatDayRain.TurnStart` (own turns -> `Rain`) and `DecayCard.TurnEnd`.
 /// Pure guard for [`hook`] -- the activation gate. `false`
@@ -89,7 +145,10 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("that_day_rain_decayed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("that_day_rain_decayed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -100,7 +159,10 @@ fn that_day_rain(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(player_id, ID, &Msg::new(key!("that_day_rain_note")));
     // 规则书: 「并为其放置5个奇迹水晶」 -- C# `PlaceFromPlay(..., crystals: 5)`.
     ctx::set_crystals(5);
-    ctx::log(player_id, &Msg::new(key!("that_day_rain_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("that_day_rain_placed")).player_id("who", player_id),
+    );
     // 规则书: 「打出此卡时...投掷1d10并按地产商格子顺序使（除“东京外”的）第n个地产商
     // 对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]」
     rain(player_id);

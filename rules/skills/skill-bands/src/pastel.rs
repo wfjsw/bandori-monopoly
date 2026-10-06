@@ -19,11 +19,15 @@ const ID: &str = "skill:Pastel✽Palettes:与偶像一起";
 /// 「反面[P✽P粉丝]」 -- a face-down fan counter.
 const FAN: &str = "P✽P粉丝(反面)";
 
-pub const PASTEL: CardDef = CardDef::new("skill:Pastel✽Palettes:与偶像一起", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Play(Some(can_flip), flip)]);
+pub const PASTEL: CardDef = CardDef::new(
+    "skill:Pastel✽Palettes:与偶像一起",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Play(Some(can_flip), flip),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -101,7 +105,10 @@ fn flip(player_id: i32) -> card_sdk::Asked {
     let over = (want - have).max(0);
     if over > 0 {
         ctx::add_crystals(over, 10);
-        ctx::log(player_id, &Msg::new(key!("pastel_over")).i("n", over as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("pastel_over")).i("n", over as i64),
+        );
     }
     Ok(())
 }

@@ -8,17 +8,20 @@
 //!
 //! Reaction-only (`Normal => false`).
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind, GateKind};
+use card_sdk::abi::{ChainKind, GateKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mor:离心力，不为所动";
 
-pub const CENTRIFUGAL: CardDef = CardDef::new("Mor:离心力，不为所动", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-    On::Gate(&[GateKind::ImmuneAll], immune_all),
-    On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
-]);
+pub const CENTRIFUGAL: CardDef = CardDef::new(
+    "Mor:离心力，不为所动",
+    &[
+        On::CounterAct(&[ChainKind::Effect], can_react, react),
+        On::Gate(&[GateKind::ImmuneAll], immune_all),
+        On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
+    ],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「第二次成为其他角色技能或卡牌的目标时」
@@ -47,7 +50,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
     trigger::set_cancelled(); // void the targeting that opened this window
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("centrifugal_note")));
-    ctx::log(player_id, &Msg::new(key!("centrifugal_log")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("centrifugal_log")).player_id("who", player_id),
+    );
     // 规则书[反击]: 「无效化你受到的所有效果」 -- the ImmuneAll hook below covers
     //   targeting (`H.Target`), money transfers (the pay pipeline), and abnormal
     //   effects (the gate checks ImmuneAll first).
@@ -65,7 +71,10 @@ fn immune_all(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     trigger::set_cancelled();
-    ctx::log(player_id, &Msg::new(key!("centrifugal_blocked")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("centrifugal_blocked")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -78,6 +87,9 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「直到下个你的回合开始时」 -- C# `H.Unplace(this, "discard",
     //   "效果结束了")`.
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("centrifugal_end")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("centrifugal_end")).player_id("who", player_id),
+    );
     Ok(())
 }

@@ -10,8 +10,10 @@ use card_sdk::abi::HookKind;
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const AFTERGLOW: CardDef = CardDef::new("skill:Afterglow:商店街的宠儿", &[
-    On::Hook(&[HookKind::Bought], mine, on_bought)]);
+pub const AFTERGLOW: CardDef = CardDef::new(
+    "skill:Afterglow:商店街的宠儿",
+    &[On::Hook(&[HookKind::Bought], mine, on_bought)],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -29,7 +31,10 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
     // 「自动免费」 -- the cost is waived, so the build goes through regardless.
     ctx::set_build_discount(ctx::build_cost(t), 1);
     if ctx::card_build(player_id, t) {
-        ctx::log(player_id, &Msg::new(key!("afterglow_free_house")).tile("tile", t));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("afterglow_free_house")).tile("tile", t),
+        );
     }
     Ok(())
 }

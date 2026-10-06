@@ -8,13 +8,18 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const LISA_BOND: CardDef = CardDef::new("R:必然的联系（莉莎）", &[
-    On::CounterAct(&[ChainKind::SkillTeleport], can_react, react),
-]);
+pub const LISA_BOND: CardDef = CardDef::new(
+    "R:必然的联系（莉莎）",
+    &[On::CounterAct(
+        &[ChainKind::SkillTeleport],
+        can_react,
+        react,
+    )],
+);
 
 /// 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」
 fn can_react(player_id: i32) -> bool {
@@ -50,10 +55,16 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // let the designation through.
     if let Some(who) = hit {
         ctx::set_dest(ctx::Dest::Field);
-        ctx::place_card_at(who, "R:必然的联系（莉莎）", &Msg::new(key!("lisa_bond_note")).player_id("who", player_id));
+        ctx::place_card_at(
+            who,
+            "R:必然的联系（莉莎）",
+            &Msg::new(key!("lisa_bond_note")).player_id("who", player_id),
+        );
         ctx::log(
             player_id,
-            &Msg::new(key!("lisa_bond_placed")).player_id("who", player_id).player_id("them", who),
+            &Msg::new(key!("lisa_bond_placed"))
+                .player_id("who", player_id)
+                .player_id("them", who),
         );
     }
     // TODO(规则书)[反击]: 「你对对方使用技能将可以无视【距离最近】这一限制。当你发动该效果后，此卡进入弃牌堆」

@@ -8,12 +8,16 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const CHUCHU_MUSIC: CardDef = CardDef::new("RAS:（chuchu）演奏我的音乐吧", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-    On::Hook(&[HookKind::BuyAfter], buy_after_guard, buy_after)]);
+pub const CHUCHU_MUSIC: CardDef = CardDef::new(
+    "RAS:（chuchu）演奏我的音乐吧",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+        On::Hook(&[HookKind::BuyAfter], buy_after_guard, buy_after),
+    ],
+);
 
 const ID: &str = "RAS:（chuchu）演奏我的音乐吧";
 
@@ -62,7 +66,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(hit, SLOT_HITS, 0);
     ctx::log(
         player_id,
-        &Msg::new(key!("chuchu_music_placed")).player_id("who", player_id).player_id("target", hit),
+        &Msg::new(key!("chuchu_music_placed"))
+            .player_id("who", player_id)
+            .player_id("target", hit),
     );
     Ok(())
 }
@@ -84,11 +90,17 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡」
     // -- C# `Empty` -> `Done`: unplace, discard for the user, user draws 1.
     let user = ctx::slot(player_id, SLOT_USER);
-    ctx::set_transfer_to_dest(if user >= 0 { user } else { player_id }, ctx::Dest::Graveyard);
+    ctx::set_transfer_to_dest(
+        if user >= 0 { user } else { player_id },
+        ctx::Dest::Graveyard,
+    );
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1);
     }
-    ctx::log(player_id, &Msg::new(key!("chuchu_music_empty")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("chuchu_music_empty")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -111,7 +123,11 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
     let hits = ctx::slot(player_id, SLOT_HITS);
     let pay = (100 + 100 * hits).min(500);
     ctx::set_slot(player_id, SLOT_HITS, hits + 1);
-    ctx::gain(user, pay, &Msg::new(key!("chuchu_music_gain")).i("n", pay as i64));
+    ctx::gain(
+        user,
+        pay,
+        &Msg::new(key!("chuchu_music_gain")).i("n", pay as i64),
+    );
     // 规则书: 「将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个」
     // -- C# `Move()`: next player in action order skipping the user and outed players.
     let n = ctx::player_count();
@@ -135,7 +151,9 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_crystals(3);
     ctx::log(
         user,
-        &Msg::new(key!("chuchu_music_moved")).player_id("who", to).i("n", pay as i64),
+        &Msg::new(key!("chuchu_music_moved"))
+            .player_id("who", to)
+            .i("n", pay as i64),
     );
     Ok(())
 }

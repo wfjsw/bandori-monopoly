@@ -20,9 +20,13 @@ use card_sdk::{key, CardDef, Msg, On};
 const FANS_UP: &str = "P✽P粉丝(正)";
 const FANS_DOWN: &str = "P✽P粉丝(反)";
 
-pub const EVE_UNIFY: CardDef = CardDef::new("skill:若宫伊芙:天下统一", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::RollAfter], mine, on_roll)]);
+pub const EVE_UNIFY: CardDef = CardDef::new(
+    "skill:若宫伊芙:天下统一",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
@@ -39,7 +43,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::place_card(p, "skill:若宫伊芙:天下统一", &Msg::new(key!("eve_unify_granted")));
+        ctx::place_card(
+            p,
+            "skill:若宫伊芙:天下统一",
+            &Msg::new(key!("eve_unify_granted")),
+        );
     }
     Ok(())
 }
@@ -96,6 +104,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    ctx::log(player_id, &Msg::new(key!("eve_unify_done")).i("n", add as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("eve_unify_done")).i("n", add as i64),
+    );
     Ok(())
 }

@@ -7,13 +7,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const DREAM_RETURN: CardDef = CardDef::new("HHW:梦幻的回礼", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const DREAM_RETURN: CardDef = CardDef::new(
+    "HHW:梦幻的回礼",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
 /// player, unmortgaged, and with a positive rent.
@@ -83,7 +84,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // pays `H.RentOf(num) * 2` to the tile owner, source
     // 「（传播笑容：双倍）」 (the band skill 「传播笑容」 auto-doubles).
     let amount = ctx::rent_of(to_tile) * 2;
-    let paid = ctx::transfer(player_id, owner, amount, &Msg::new(key!("dream_return_pay")))?;
+    let paid = ctx::transfer(
+        player_id,
+        owner,
+        amount,
+        &Msg::new(key!("dream_return_pay")),
+    )?;
     // C# `if (p.paid)` runs the bookkeeping after `H.Money`.
     if paid <= 0 {
         return Ok(());
@@ -103,7 +109,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
     trigger::set_pay_amount(left);
     ctx::log(
         player_id,
-        &Msg::new(key!("dream_return_relief")).player_id("who", trigger::player_id()).n("money", relief as i64),
+        &Msg::new(key!("dream_return_relief"))
+            .player_id("who", trigger::player_id())
+            .n("money", relief as i64),
     );
     Ok(())
 }

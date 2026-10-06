@@ -15,11 +15,14 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const SATO_RED: CardDef = CardDef::new("skill:佐藤益木:与燃烧的红色一起驰骋", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-]);
+pub const SATO_RED: CardDef = CardDef::new(
+    "skill:佐藤益木:与燃烧的红色一起驰骋",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

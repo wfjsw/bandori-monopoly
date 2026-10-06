@@ -25,9 +25,13 @@ use card_sdk::{key, CardDef, Msg, On};
 const FANS_UP: &str = "P✽P粉丝(正)";
 const FANS_DOWN: &str = "P✽P粉丝(反)";
 
-pub const AYA_WITH: CardDef = CardDef::new("skill:丸山彩:With~", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::PayChoose], mine, on_pay)]);
+pub const AYA_WITH: CardDef = CardDef::new(
+    "skill:丸山彩:With~",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {

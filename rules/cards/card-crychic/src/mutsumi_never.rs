@@ -16,10 +16,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const MUTSUMI_NEVER: CardDef = CardDef::new("CRYCHIC:（睦）从没有觉得...", &[
-    On::Play(None, mutsumi_never)]);
+pub const MUTSUMI_NEVER: CardDef = CardDef::new(
+    "CRYCHIC:（睦）从没有觉得...",
+    &[On::Play(None, mutsumi_never)],
+);
 
 fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，使用者可以选择（2）或（3）效果之一发动。」 -- C#
@@ -52,7 +54,12 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
     if n > 0 {
         ctx::add_band_crystals(player_id, -n, 0);
     }
-    ctx::log(player_id, &Msg::new(key!("mutsumi_never_crystals")).player_id("who", player_id).i("n", n as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mutsumi_never_crystals"))
+            .player_id("who", player_id)
+            .i("n", n as i64),
+    );
     // TODO(ABI): （2） 「立即执行乐队技能的（2）效果」 -- needs the band-skill
     //   attachment surface (C# `BandCrychic.TransformNow()`, the CRYCHIC band
     //   skill (2) that swaps in a new band).
@@ -82,7 +89,10 @@ fn branch_shuffle(player_id: i32) {
     // `H.AddToDeck(i, "Mujica:（睦/mortis）表演的本能")`.
     ctx::add_to_deck(player_id, "Mujica:（睦/mortis）表演的本能", true);
     ctx::sweep_to_deck(player_id); // 规则书（3）: 「将手牌与弃牌堆全部放入抽牌堆并洗切」
-    ctx::log(player_id, &Msg::new(key!("mutsumi_never_added")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mutsumi_never_added")).player_id("who", player_id),
+    );
     // 规则书（3）: 「然后抽2张卡」
     ctx::draw(player_id, 2);
     // 规则书: （3） 「你本回合的移动以“CiRCLE”为起点（不触发起点地块效果）」

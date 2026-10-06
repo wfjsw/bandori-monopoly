@@ -7,7 +7,7 @@
 //!
 //! the game.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const RESOLVE: CardDef = CardDef::new("R:[衍生] 觉悟", &[On::Play(None, resolve)]);
 

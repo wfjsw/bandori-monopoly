@@ -8,14 +8,22 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::ctx::{self, trigger, CardPile};
-use card_sdk::abi::state_key;
-use card_sdk::{key, CardDef, On, Msg};
 use alloc::string::String;
+use card_sdk::abi::state_key;
+use card_sdk::ctx::{self, trigger, CardPile};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const L12: CardDef = CardDef::new("Sumimi:#L12", &[
-    On::Play(None, l12),
-    On::Hook(&[card_sdk::abi::HookKind::FireSpent], fire_spent_guard, fire_spent)]);
+pub const L12: CardDef = CardDef::new(
+    "Sumimi:#L12",
+    &[
+        On::Play(None, l12),
+        On::Hook(
+            &[card_sdk::abi::HookKind::FireSpent],
+            fire_spent_guard,
+            fire_spent,
+        ),
+    ],
+);
 
 const ID: &str = "Sumimi:#L12";
 
@@ -38,7 +46,10 @@ fn l12(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("l12_note")));
-    ctx::log(player_id, &Msg::new(key!("l12_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("l12_placed")).player_id("who", player_id),
+    );
     // 规则书[手]: 「从弃牌堆或抽牌堆选择一张“Sumimi”卡加入手牌」 -- C# `CardL12.Pool`
     // lists `hidden.discard.Concat(hidden.draw)` ids with `band == "Sumimi"` (minus
     // this card) and `H.AskCard` picks one to `H.AddToHand`.
@@ -62,7 +73,12 @@ fn l12(player_id: i32) -> card_sdk::Asked {
         ctx::take_card(player_id, CardPile::Deck, &id);
     }
     ctx::add_to_hand(player_id, &id);
-    ctx::log(player_id, &Msg::new(key!("l12_taken")).player_id("who", player_id).card("card", &id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("l12_taken"))
+            .player_id("who", player_id)
+            .card("card", &id),
+    );
     // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the limit is keyed state,
     // so the card lowers it; it is restored when the card leaves play.
     ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
@@ -86,11 +102,19 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_crystals(n, 0);
-    ctx::log(player_id, &Msg::new(key!("l12_fire_spent")).player_id("who", player_id).i("n", n as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("l12_fire_spent"))
+            .player_id("who", player_id)
+            .i("n", n as i64),
+    );
     // 规则书[持续]（3）: 「当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。」
     if ctx::crystals() >= 6 {
         ctx::set_dest(ctx::Dest::Hand);
-        ctx::log(player_id, &Msg::new(key!("l12_back")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("l12_back")).player_id("who", player_id),
+        );
     }
     Ok(())
 }

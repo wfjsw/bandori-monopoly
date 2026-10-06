@@ -8,10 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const NO_BREAKUP: CardDef = CardDef::new("Sumimi:Sumimi不会解散哦", &[
-    On::Play(Some(cant_play), no_breakup)]);
+pub const NO_BREAKUP: CardDef = CardDef::new(
+    "Sumimi:Sumimi不会解散哦",
+    &[On::Play(Some(cant_play), no_breakup)],
+);
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
 fn repeated_digits(money: i32) -> bool {
@@ -99,7 +101,9 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     ctx::log(
         player_id,
-        &Msg::new(key!("no_breakup_moved")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("no_breakup_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     // 规则书: 「视为你的主要移动」 -- `card_move` runs `MainMoveAs`
     // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn

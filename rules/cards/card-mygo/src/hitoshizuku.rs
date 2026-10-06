@@ -10,10 +10,9 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::state_key;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[
-    On::Play(None, hitoshizuku)]);
+pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play(None, hitoshizuku)]);
 
 fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
@@ -48,9 +47,15 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
             cleared.push((j, n));
             // C# `H.Log("status", j, ...)` names the kinds when both went.
             if n == 2 {
-                ctx::log(j, &Msg::new(key!("hitoshizuku_cleared_both")).player_id("who", j));
+                ctx::log(
+                    j,
+                    &Msg::new(key!("hitoshizuku_cleared_both")).player_id("who", j),
+                );
             } else {
-                ctx::log(j, &Msg::new(key!("hitoshizuku_cleared")).player_id("who", j));
+                ctx::log(
+                    j,
+                    &Msg::new(key!("hitoshizuku_cleared")).player_id("who", j),
+                );
             }
         }
     }

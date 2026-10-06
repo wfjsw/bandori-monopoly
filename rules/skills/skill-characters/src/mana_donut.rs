@@ -21,11 +21,15 @@ const SHOPS: [&str; 5] = ["购物中心", "便利店", "快餐店", "羽泽咖�
 /// 「你的资金消耗减半」 -- armed until the next turn end.
 const HALF: &str = "skill.manaDonut.half";
 
-pub const MANA_DONUT: CardDef = CardDef::new("skill:纯田真奈:甜甜圈爱好者", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::PayChoose], half, on_pay),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end)]);
+pub const MANA_DONUT: CardDef = CardDef::new(
+    "skill:纯田真奈:甜甜圈爱好者",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::PayChoose], half, on_pay),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -61,7 +65,9 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("mana_donut_title")),
-        &Msg::new(key!("mana_donut_ask")).tile("tile", t).i("n", price as i64),
+        &Msg::new(key!("mana_donut_ask"))
+            .tile("tile", t)
+            .i("n", price as i64),
     )? {
         return Ok(());
     }

@@ -10,22 +10,30 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const MY_OWN_PROBLEM: CardDef = CardDef::new("CRYCHIC:是我自己的问题", &[
-    On::CounterAct(&[ChainKind::SettleBefore], can_react, react),
-]);
+pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
+    "CRYCHIC:是我自己的问题",
+    &[On::CounterAct(&[ChainKind::SettleBefore], can_react, react)],
+);
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.
 fn nearest(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
     let others = ctx::others(player_id);
-    let Some(best) = others.iter().map(|&p| ctx::dist(pos, ctx::player_pos(p))).min() else {
+    let Some(best) = others
+        .iter()
+        .map(|&p| ctx::dist(pos, ctx::player_pos(p)))
+        .min()
+    else {
         return Vec::new();
     };
-    others.into_iter().filter(|&p| ctx::dist(pos, ctx::player_pos(p)) == best).collect()
+    others
+        .into_iter()
+        .filter(|&p| ctx::dist(pos, ctx::player_pos(p)) == best)
+        .collect()
 }
 
 fn can_react(player_id: i32) -> bool {
@@ -93,7 +101,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
     ctx::teleport_to(player_id, to);
     ctx::log(
         player_id,
-        &Msg::new(key!("my_own_problem_moved")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("my_own_problem_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     Ok(())
 }

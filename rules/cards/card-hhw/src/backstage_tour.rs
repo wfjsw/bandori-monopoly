@@ -8,12 +8,12 @@
 
 use alloc::vec::Vec;
 
+use alloc::string::String;
 use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
-use alloc::string::String;
 
-pub const BACKSTAGE_TOUR: CardDef = CardDef::new("HHW:出发！后台之旅！", &[
-    On::Play(Some(cant_play), play)]);
+pub const BACKSTAGE_TOUR: CardDef =
+    CardDef::new("HHW:出发！后台之旅！", &[On::Play(Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBackstageTour.WhyNot` refuses the play when the draw pile and the
@@ -34,13 +34,19 @@ fn play(player_id: i32) -> card_sdk::Asked {
             ctx::take_card(player_id, CardPile::Discard, id);
             ctx::add_to_deck_at(player_id, id, ctx::DeckPos::Bottom);
         }
-        ctx::log(player_id, &Msg::new(key!("backstage_tour_reshuffled")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("backstage_tour_reshuffled")).player_id("who", player_id),
+        );
         // C# also fires `H.Each((Fx f) => f.Reshuffled(i))` -- that persistent
         // Fx hook is still missing (same as `card-roselia`'s 曲奇时间).
     }
     // 规则书: 「看牌堆顶2张牌」 -- C# `h.draw.Skip(Count - 2).Reverse()` = the top
     // two of the draw pile, top card first (`cards_in(Deck)` is top-first).
-    let top: Vec<String> = ctx::cards_in(player_id, CardPile::Deck).into_iter().take(2).collect();
+    let top: Vec<String> = ctx::cards_in(player_id, CardPile::Deck)
+        .into_iter()
+        .take(2)
+        .collect();
     if top.is_empty() {
         return Ok(());
     }
@@ -65,7 +71,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「剩余的翻入弃牌堆，每翻入一张获得1000资金」 -- C#
         // `H.ToDiscard(i, id)` + `H.GainR(i, 1000, CardName)`.
         ctx::to_discard(player_id, id);
-        ctx::gain(player_id, 1000, &Msg::new(key!("backstage_tour_flip")).card("card", id));
+        ctx::gain(
+            player_id,
+            1000,
+            &Msg::new(key!("backstage_tour_flip")).card("card", id),
+        );
     }
     // 规则书: 「以任意顺序放回」 -- when both are kept, C# `H.AskCard(..., "哪一张
     // 放在最上面？")` picks which one is the new top (`h.draw.Add(under);

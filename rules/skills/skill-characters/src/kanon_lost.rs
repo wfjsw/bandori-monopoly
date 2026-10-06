@@ -22,12 +22,16 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Turns since the last CiRCLE reward. Cleared on the reward.
 const SILENT: &str = "skill.kanonLost.silent";
 
-pub const KANON_LOST: CardDef = CardDef::new("skill:松原花音:真正的迷子", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::RollAfter], mine, on_roll),
-    On::Hook(&[HookKind::CircleAffected], mine, on_circle),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-    On::Hook(&[HookKind::RollPlan], mine, on_plan)]);
+pub const KANON_LOST: CardDef = CardDef::new(
+    "skill:松原花音:真正的迷子",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+        On::Hook(&[HookKind::CircleAffected], mine, on_circle),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Hook(&[HookKind::RollPlan], mine, on_plan),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -38,7 +42,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     let t = ctx::tile_named("弦卷豪宅");
     if t >= 0 {
         ctx::teleport_to(player_id, t);
-        ctx::log(player_id, &Msg::new(key!("kanon_lost_start")).tile("tile", t));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("kanon_lost_start")).tile("tile", t),
+        );
     }
     Ok(())
 }
@@ -52,7 +59,13 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     let b = ctx::do_move_roll(player_id).max(0);
     let face = (a - b).abs();
     ctx::trigger::set_move_roll(face);
-    ctx::log(player_id, &Msg::new(key!("kanon_lost_sub")).i("a", a as i64).i("b", b as i64).i("n", face as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kanon_lost_sub"))
+            .i("a", a as i64)
+            .i("b", b as i64)
+            .i("n", face as i64),
+    );
     Ok(())
 }
 

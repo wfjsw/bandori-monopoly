@@ -24,14 +24,17 @@ const LEFT: &str = "skill.tukushiTry.left";
 /// 「在此技能效果影响下触发结算时…」 -- the pay bend / build kickback latch.
 const SPELL: &str = "skill.tukushiTry.spell";
 
-pub const TUKUSHI_TRY: CardDef = CardDef::new("skill:都筑诗船:尽力了吗", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::RollAfter], paired, on_roll),
-    On::Hook(&[HookKind::PayChoose], paired, on_pay),
-    On::Hook(&[HookKind::HouseAdded], partner, on_built),
-]);
+pub const TUKUSHI_TRY: CardDef = CardDef::new(
+    "skill:都筑诗船:尽力了吗",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::RollAfter], paired, on_roll),
+        On::Hook(&[HookKind::PayChoose], paired, on_pay),
+        On::Hook(&[HookKind::HouseAdded], partner, on_built),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -40,7 +43,8 @@ fn mine(player_id: i32) -> bool {
 /// Either half of the pair is under the spell.
 fn paired(player_id: i32) -> bool {
     let p = state::get(player_id, PARTNER);
-    state::get(player_id, SPELL) > 0 && (ctx::trigger::player_id() == player_id || ctx::trigger::player_id() == p)
+    state::get(player_id, SPELL) > 0
+        && (ctx::trigger::player_id() == player_id || ctx::trigger::player_id() == p)
 }
 
 /// 「若其他玩家在此技能效果影响下触发结算时加盖了房屋」 -- the *partner* built.
@@ -54,7 +58,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     let t = ctx::tile_named("Space");
     if t >= 0 && ctx::tile_owner(t) < 0 {
         ctx::set_owner(t, player_id);
-        ctx::log(player_id, &Msg::new(key!("tukushi_try_space")).tile("tile", t));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tukushi_try_space")).tile("tile", t),
+        );
     }
     Ok(())
 }
@@ -96,7 +103,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             .map(|&p| Msg::new(key!("tukushi_try_option")).player_id("who", p))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&who) = others.get(pick) else { return Ok(()); };
+    let Some(&who) = others.get(pick) else {
+        return Ok(());
+    };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tukushi_try_spend"))) {
         return Ok(());
     }
@@ -104,7 +113,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, LEFT, 2);
     state::set(player_id, SPELL, 1);
     state::set_expires(player_id, SPELL, card_sdk::ctx::state::TURN_END);
-    ctx::log(player_id, &Msg::new(key!("tukushi_try_paired")).player_id("who", who));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tukushi_try_paired")).player_id("who", who),
+    );
     Ok(())
 }
 
@@ -154,7 +166,11 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::trigger::tile();
     let cost = ctx::build_cost(tile);
     if cost > 0 {
-        ctx::gain(player_id, cost, &Msg::new(key!("tukushi_try_kickback")).i("n", cost as i64));
+        ctx::gain(
+            player_id,
+            cost,
+            &Msg::new(key!("tukushi_try_kickback")).i("n", cost as i64),
+        );
     }
     Ok(())
 }

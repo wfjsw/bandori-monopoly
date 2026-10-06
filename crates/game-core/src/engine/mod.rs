@@ -34,11 +34,11 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::data::GameData;
-use crate::state::stage;
 use crate::msg::Msg;
 use crate::net::{NetMessage, RoomMember};
 use crate::rng::Rng;
 use crate::scoring::ScoreWeights;
+use crate::state::stage;
 use crate::state::{MatchEvent, MatchPlayer, MatchState, MatchVote};
 use crate::MatchMode;
 

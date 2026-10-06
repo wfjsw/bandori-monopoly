@@ -13,10 +13,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[
-    On::Play(Some(cant_play), play)]);
+pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play(Some(cant_play), play)]);
 
 /// Owned tiles with at least one house (C# `CardSunset.Built`).
 fn built(player_id: i32) -> Vec<i32> {
@@ -105,7 +104,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     for &t in &picked {
         if ctx::houses_of(t) > 0 {
             let left = ctx::add_house(t, -1);
-            ctx::log(player_id, &Msg::new(key!("sunset_demolish")).tile("tile", t).i("left", left as i64));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("sunset_demolish"))
+                    .tile("tile", t)
+                    .i("left", left as i64),
+            );
         }
     }
     // 规则书[手] 2.: 「所有被[指定]的玩家[支付][使用者]X资金」 -- only the players

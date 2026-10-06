@@ -26,13 +26,16 @@ fn cd_key(id: &str) -> alloc::string::String {
     alloc::format!("skill.nanamiOrdinary.cd:{id}")
 }
 
-pub const NANAMI_ORDINARY: CardDef = CardDef::new("skill:广町七深:这是很普通的事吧？", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::SkillUsed], any, on_skill),
-    On::Hook(&[HookKind::TurnEnd], mine, tick),
-]);
+pub const NANAMI_ORDINARY: CardDef = CardDef::new(
+    "skill:广町七深:这是很普通的事吧？",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::SkillUsed], any, on_skill),
+        On::Hook(&[HookKind::TurnEnd], mine, tick),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -63,7 +66,9 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     if src == player_id {
         return Ok(());
     }
-    let Some(id) = ctx::trigger::cards().into_iter().next() else { return Ok(()); };
+    let Some(id) = ctx::trigger::cards().into_iter().next() else {
+        return Ok(());
+    };
     if id.is_empty() {
         return Ok(());
     }
@@ -76,7 +81,9 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「当场上存活玩家数量大于等于3时：每种角色标记上限1」
-    let alive = (0..ctx::player_count()).filter(|&p| !ctx::player_out(p)).count() as i32;
+    let alive = (0..ctx::player_count())
+        .filter(|&p| !ctx::player_out(p))
+        .count() as i32;
     if alive >= 3 && ctx::tok(player_id, &id) >= 1 {
         return Ok(());
     }
@@ -92,7 +99,10 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     }
     ctx::add_tok(player_id, &id, 1, i32::MAX);
     state::set(player_id, &cd, 3);
-    ctx::log(player_id, &Msg::new(key!("nanami_ordinary_mark")).card("card", &id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nanami_ordinary_mark")).card("card", &id),
+    );
     Ok(())
 }
 
@@ -133,9 +143,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             .map(|m| Msg::new(key!("nanami_ordinary_option")).card("card", m))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(id) = marks.get(pick).cloned() else { return Ok(()); };
+    let Some(id) = marks.get(pick).cloned() else {
+        return Ok(());
+    };
     ctx::add_tok(player_id, &id, -1, i32::MAX);
     ctx::play_card(&id, player_id)?;
-    ctx::log(player_id, &Msg::new(key!("nanami_ordinary_used")).card("card", &id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nanami_ordinary_used")).card("card", &id),
+    );
     Ok(())
 }

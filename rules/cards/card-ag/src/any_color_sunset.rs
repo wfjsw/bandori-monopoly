@@ -9,10 +9,10 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const ANY_COLOR_SUNSET: CardDef = CardDef::new("AG:无论是何种颜色的夕阳", &[
-    On::Play(None, play)]);
+pub const ANY_COLOR_SUNSET: CardDef =
+    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play(None, play)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」
@@ -83,7 +83,8 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         // 规则书: 「若为4则可选择补满火罐或者获得2000资金」
         4 => {
             // C# offers 「补满火罐」 only when `H.HasFireSkill(i) && H.Fire(i) < H.FireMax(i)`.
-            let can_fire = ctx::fire_max(player_id) > 0 && ctx::fire(player_id) < ctx::fire_max(player_id);
+            let can_fire =
+                ctx::fire_max(player_id) > 0 && ctx::fire(player_id) < ctx::fire_max(player_id);
             let mut take_money = true;
             if can_fire {
                 let pick = ctx::ask_pick(
@@ -92,7 +93,8 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                     &Msg::new(key!("any_color_sunset_fire_ask")),
                     &[
                         Msg::new(key!("any_color_sunset_fire_fill")),
-                        Msg::new(key!("any_color_sunset_fire_money"))],
+                        Msg::new(key!("any_color_sunset_fire_money")),
+                    ],
                 )?;
                 take_money = pick != 0;
             }
@@ -120,7 +122,10 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
 /// C# `h.discard.Distinct()` -> `H.AskCard` -> `h.discard.Remove(text)`: the
 /// player picks one card out of their discard pile, which is taken out of it.
 /// `None` (and a log line) when the discard is empty.
-fn pick_from_discard(player_id: i32, ask: &'static str) -> Result<Option<String>, card_sdk::Prompt> {
+fn pick_from_discard(
+    player_id: i32,
+    ask: &'static str,
+) -> Result<Option<String>, card_sdk::Prompt> {
     let mut ids: Vec<String> = Vec::new();
     for c in ctx::cards_in(player_id, ctx::CardPile::Discard) {
         if !ids.contains(&c) {
@@ -132,7 +137,12 @@ fn pick_from_discard(player_id: i32, ask: &'static str) -> Result<Option<String>
         return Ok(None);
     }
     let refs: Vec<&str> = ids.iter().map(|c| c.as_str()).collect();
-    let pick = ctx::ask_card(player_id, &Msg::new(key!("any_color_sunset_title")), &Msg::new(ask), &refs)?;
+    let pick = ctx::ask_card(
+        player_id,
+        &Msg::new(key!("any_color_sunset_title")),
+        &Msg::new(ask),
+        &refs,
+    )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
     Ok(ctx::take_card(player_id, ctx::CardPile::Discard, &id).then_some(id))
 }

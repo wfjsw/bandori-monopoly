@@ -10,13 +10,21 @@
 //! > （3）效果）。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const FATE_TOGETHER: CardDef = CardDef::new("CRYCHIC:一起演奏音乐的命运共同体", &[
-    On::Play(None, fate_together),
-    On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], react_guard, react)]);
+pub const FATE_TOGETHER: CardDef = CardDef::new(
+    "CRYCHIC:一起演奏音乐的命运共同体",
+    &[
+        On::Play(None, fate_together),
+        On::Hook(
+            &[HookKind::PayAfter, HookKind::TurnStart],
+            react_guard,
+            react,
+        ),
+    ],
+);
 
 const ID: &str = "CRYCHIC:一起演奏音乐的命运共同体";
 
@@ -30,7 +38,11 @@ fn fate_together(player_id: i32) -> card_sdk::Asked {
     // `FateFx` maps to this card in play: the `PayAfter` / `TurnStart` hooks below
     // fire while it is placed.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, ID, &Msg::new(key!("fate_together_note")).player_id("who", player_id));
+    ctx::place_card(
+        player_id,
+        ID,
+        &Msg::new(key!("fate_together_note")).player_id("who", player_id),
+    );
     ctx::set_slot(player_id, SLOT_HIT, 0);
     Ok(())
 }
@@ -77,7 +89,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
                     ctx::set_slot(player_id, SLOT_HIT, 1);
                     ctx::log(
                         player_id,
-                        &Msg::new(key!("fate_together_moved")).player_id("who", player_id).tile("tile", tile),
+                        &Msg::new(key!("fate_together_moved"))
+                            .player_id("who", player_id)
+                            .tile("tile", tile),
                     );
                     return Ok(());
                 }
@@ -93,7 +107,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
             }
             if ctx::slot(player_id, SLOT_HIT) == 0 {
                 ctx::set_dest(ctx::Dest::Hand);
-                ctx::log(player_id, &Msg::new(key!("fate_together_returned")).player_id("who", player_id));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("fate_together_returned")).player_id("who", player_id),
+                );
             } else {
                 ctx::set_dest(ctx::Dest::Graveyard);
             }

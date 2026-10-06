@@ -13,7 +13,7 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Mujica:（海铃）";
 
@@ -22,13 +22,17 @@ const ID: &str = "Mujica:（海铃）";
 /// "unset".
 const USER_KEY: &str = "umiri_user";
 
-pub const UMIRI_CARD: CardDef = CardDef::new("Mujica:（海铃）", &[
-    On::Play(Some(cant_play), umiri_card),
-    // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-    On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
-    // 规则书（3）: the discard + draw when the card is back at the user's field
-    // (C# `CardUmiriCard.TurnEnd` -> `End`).
-    On::Hook(&[HookKind::TurnEnd], |_| true, turn_end)]);
+pub const UMIRI_CARD: CardDef = CardDef::new(
+    "Mujica:（海铃）",
+    &[
+        On::Play(Some(cant_play), umiri_card),
+        // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
+        On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
+        // 规则书（3）: the discard + draw when the card is back at the user's field
+        // (C# `CardUmiriCard.TurnEnd` -> `End`).
+        On::Hook(&[HookKind::TurnEnd], |_| true, turn_end),
+    ],
+);
 
 /// C# `CardUmiriCard.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -96,7 +100,9 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
         // C# `H.Log("place", num, "「（海铃）」移到了 ... 的场上")`.
         ctx::log(
             dest,
-            &Msg::new(key!("umiri_moved")).player_id("who", dest).player_id("user", user),
+            &Msg::new(key!("umiri_moved"))
+                .player_id("who", dest)
+                .player_id("user", user),
         );
         // 规则书（2）: `Take()` -- the band-skill take on the new holder. Held
         // (no `H._fx[player_id].bands` / `H.MakeBand` in the ABI); see `umiri_card`.

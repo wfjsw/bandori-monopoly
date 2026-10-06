@@ -6,10 +6,9 @@
 //! >  强制一名玩家向你选择的方向移动3格并[触发结算]（可在掷骰前选择自己以代替主要移动），触发结算时进行的支付价格减半
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[
-    On::Play(None, saki_move)]);
+pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play(None, saki_move)]);
 
 fn saki_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「强制一名玩家向你选择的方向移动3格」 -- pick the target.
@@ -42,7 +41,8 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("saki_move_dir_ask")),
         &[
             Msg::new(key!("saki_move_forward")),
-            Msg::new(key!("saki_move_backward"))],
+            Msg::new(key!("saki_move_backward")),
+        ],
     )? == 0;
     // 规则书: 「移动3格并[触发结算]」 -- C# `H.CardMove` (self,
     // MatchHost.cs:5526-5532) / `H.ForceWalk(hit, forward ? 3 : -3,

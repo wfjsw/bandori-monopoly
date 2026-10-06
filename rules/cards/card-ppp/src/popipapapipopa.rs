@@ -17,13 +17,22 @@ use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const POPIPAPAPIPOPA: CardDef = CardDef::new("PPP:[衍生]Popipapapipopa", &[
-    On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
-    On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
-]);
+pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
+    "PPP:[衍生]Popipapapipopa",
+    &[
+        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
+    ],
+);
 
 /// C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal.
-const SPOTS: [&str; 5] = ["东京外", "江户川乐器店", "山吹面包房", "星之鼓动山丘", "流星堂"];
+const SPOTS: [&str; 5] = [
+    "东京外",
+    "江户川乐器店",
+    "山吹面包房",
+    "星之鼓动山丘",
+    "流星堂",
+];
 
 /// C# `MaxCrystals = 10`.
 const MAX_CRYSTALS: i32 = 10;
@@ -61,7 +70,10 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if after > before {
         ctx::log(
             player_id,
-            &Msg::new(key!("popipapapipopa_crystal")).player_id("who", player_id).tile("tile", t).i("n", after as i64),
+            &Msg::new(key!("popipapapipopa_crystal"))
+                .player_id("who", player_id)
+                .tile("tile", t)
+                .i("n", after as i64),
         );
     }
     Ok(())
@@ -95,7 +107,9 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let n = ctx::ask_number(
         player_id,
         &Msg::new(key!("popipapapipopa_title")),
-        &Msg::new(key!("popipapapipopa_ask")).n("money", amount as i64).i("n", have as i64),
+        &Msg::new(key!("popipapapipopa_ask"))
+            .n("money", amount as i64)
+            .i("n", have as i64),
         0,
         max,
     )?;
@@ -108,7 +122,10 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     trigger::set_pay_amount((amount - cut).max(0));
     ctx::log(
         player_id,
-        &Msg::new(key!("popipapapipopa_used")).player_id("who", player_id).i("n", n as i64).n("money", cut as i64),
+        &Msg::new(key!("popipapapipopa_used"))
+            .player_id("who", player_id)
+            .i("n", n as i64)
+            .n("money", cut as i64),
     );
     Ok(())
 }

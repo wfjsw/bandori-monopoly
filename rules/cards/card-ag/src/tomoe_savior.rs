@@ -5,13 +5,14 @@
 //! > （巴）商店街的救世主：【反击】当其他玩家抵押商店街地契时，你可以打出此卡，立刻支付常规收购价一半的价格从该玩家处收购该地契。当你抵押商店街地契时，你可以打出此卡，额外获得一份抵押收益并将地契翻回
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const TOMOE_SAVIOR: CardDef = CardDef::new("AG:（巴）商店街的救世主", &[
-    On::CounterAct(&[ChainKind::Mortgage], can_react, react),
-]);
+pub const TOMOE_SAVIOR: CardDef = CardDef::new(
+    "AG:（巴）商店街的救世主",
+    &[On::CounterAct(&[ChainKind::Mortgage], can_react, react)],
+);
 
 /// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
 fn is_shop(t: i32) -> bool {
@@ -78,7 +79,13 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // (`H.Money` marks a positive-amount run paid even when `must: false` clamps
     // the loss to what the player has).
     ctx::set_owner(t, player_id);
-    ctx::log(player_id, &Msg::new(key!("tomoe_savior_bought")).tile("tile", t).player_id("from", from).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomoe_savior_bought"))
+            .tile("tile", t)
+            .player_id("from", from)
+            .player_id("who", player_id),
+    );
     // TODO(ABI)[反击]: the C# also runs `f.Bought(i, t)` over the Fx chain after
     //   the hand-over. `TriggerKind::Bought` is raised by `buy()` / auction, but a
     //   forced hand-over off an owned tile is not a buy (`card_buy` -> `buy`

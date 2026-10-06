@@ -8,13 +8,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const HEY_KIDS: CardDef = CardDef::new("RAS:狂乱Hey Kids!!", &[
-    On::CounterAct(&[ChainKind::Settle], can_react, react),
-]);
+pub const HEY_KIDS: CardDef = CardDef::new(
+    "RAS:狂乱Hey Kids!!",
+    &[On::CounterAct(&[ChainKind::Settle], can_react, react)],
+);
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
 /// would allow. 「属于你的可建造格子」 -- the same gate the build step uses, so a
@@ -91,7 +92,9 @@ fn react(player_id: i32) -> card_sdk::Asked {
         let t = ctx::ask_tile(
             player_id,
             &Msg::new(key!("hey_kids_title")),
-            &Msg::new(key!("hey_kids_ask_target")).i("n", (n + 1) as i64).i("k", k as i64),
+            &Msg::new(key!("hey_kids_ask_target"))
+                .i("n", (n + 1) as i64)
+                .i("k", k as i64),
             &left,
         )?;
         picked.push(t);
@@ -117,13 +120,19 @@ fn react(player_id: i32) -> card_sdk::Asked {
     }
     ctx::log(
         player_id,
-        &Msg::new(key!("hey_kids_moved")).tile("tile", from).i("count", moved as i64),
+        &Msg::new(key!("hey_kids_moved"))
+            .tile("tile", from)
+            .i("count", moved as i64),
     );
     // 规则书[反击]: 「转移时，消耗的房屋造价等于获得的房屋总造价，超出的部分作为现金获得」
     // -- C# `H.GainR(i, num - gained, ...)` when the consumed house build cost
     // exceeds the total build cost of the houses placed on the targets.
     if cost_out > cost_in {
-        ctx::gain(player_id, cost_out - cost_in, &Msg::new(key!("hey_kids_gain_diff")));
+        ctx::gain(
+            player_id,
+            cost_out - cost_in,
+            &Msg::new(key!("hey_kids_gain_diff")),
+        );
     }
     // 规则书[反击]: 「随后，你失去"转移后各格房屋造价总和－获得房屋数量×500"的资金」
     // -- C# `H.LoseR(i, gained - picked.Count * 500, ...)` when positive.

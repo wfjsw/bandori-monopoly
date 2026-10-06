@@ -6,14 +6,14 @@
 //! >  投掷1d6并[传送]到商店街自己拥有的对应的格子（从商店街格子开始数），如果投掷结果大于自己拥有的商店街格子数量则[传送]到商店街，视为你的主要移动
 //!
 
+use alloc::vec::Vec;
 use card_sdk::abi::MoveKind;
 use card_sdk::ctx::{self, plan};
-use alloc::vec::Vec;
 
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const SHOP_FRIENDS: CardDef = CardDef::new("AG:商店街的青梅竹马", &[
-    On::Play(Some(cant_play), play)]);
+pub const SHOP_FRIENDS: CardDef =
+    CardDef::new("AG:商店街的青梅竹马", &[On::Play(Some(cant_play), play)]);
 
 /// C# `CardShopFriends.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -49,9 +49,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let why = if (1..=list.len() as i32).contains(&roll) {
-        Msg::new(key!("shop_friends_to_own")).tile("tile", to).i("roll", roll as i64)
+        Msg::new(key!("shop_friends_to_own"))
+            .tile("tile", to)
+            .i("roll", roll as i64)
     } else {
-        Msg::new(key!("shop_friends_to_street")).i("roll", roll as i64).i("count", list.len() as i64)
+        Msg::new(key!("shop_friends_to_street"))
+            .i("roll", roll as i64)
+            .i("count", list.len() as i64)
     };
     ctx::log(player_id, &why);
     // 规则书: 「[传送]」 + 「视为你的主要移动」 -- one move, not a bare hop: it is

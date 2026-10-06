@@ -8,10 +8,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SWEET_ESCAPE: CardDef = CardDef::new("Sumimi:Sweet Escape", &[
-    On::Play(Some(cant_play), sweet_escape)]);
+pub const SWEET_ESCAPE: CardDef = CardDef::new(
+    "Sumimi:Sweet Escape",
+    &[On::Play(Some(cant_play), sweet_escape)],
+);
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
 /// tile-kind surface is `is_buyable` / `is_shop` / `tile_group`, and the RiNG
@@ -130,7 +132,9 @@ fn sweet_escape(player_id: i32) -> card_sdk::Asked {
     ctx::card_move(player_id);
     ctx::log(
         player_id,
-        &Msg::new(key!("sweet_escape_moved")).player_id("who", player_id).tile("tile", to),
+        &Msg::new(key!("sweet_escape_moved"))
+            .player_id("who", player_id)
+            .tile("tile", to),
     );
     // 规则书: 「视为你的主要移动」 -- `card_move` runs `MainMoveAs`
     // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
@@ -138,7 +142,10 @@ fn sweet_escape(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若为可购买格子则必须购买」 -- C# `H.BuyRoutine` when the tile is
     // unowned and `money >= H.BuyPriceFor`. The settle already ran on arrival
     // (`set_resolve(true)`); this is the must-buy that follows it.
-    if ctx::is_buyable(to) && ctx::tile_owner(to) < 0 && ctx::money_of(player_id) >= ctx::buy_price(to) {
+    if ctx::is_buyable(to)
+        && ctx::tile_owner(to) < 0
+        && ctx::money_of(player_id) >= ctx::buy_price(to)
+    {
         ctx::card_buy(player_id, to);
     }
     Ok(())

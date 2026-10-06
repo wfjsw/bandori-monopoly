@@ -10,16 +10,18 @@
 //! > 3. 事件卡的效果手牌则则抵消其所有的效果。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const NET_ERROR: CardDef = CardDef::new("通用:网络链接异常", &[
-    On::CounterAct(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
+pub const NET_ERROR: CardDef = CardDef::new(
+    "通用:网络链接异常",
+    &[On::CounterAct(
+        &[ChainKind::Effect, ChainKind::Card, ChainKind::Event],
         can_react,
         react,
-    ),
-]);
+    )],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「[反击]1张手卡的[手]效果或事件卡的效果生效前」
@@ -53,7 +55,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
             // C# `trigger.Cancelled = true` then
             // 「网络链接异常：事件「…」的效果被抵消」.
             trigger::set_cancelled();
-            ctx::log(player_id, &Msg::new(key!("net_error_event")).player_id("who", player_id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("net_error_event")).player_id("who", player_id),
+            );
             // TODO(规则书)[judgement](ABI): the C# log also names the event (`H.EventTitle(t.Card)`);
             //   the clause under-specifies -- see the note above it
             // reading the trigger's card id back needs a host->guest string.
@@ -76,11 +81,17 @@ fn react(player_id: i32) -> card_sdk::Asked {
                 // the `target` window below. The C# instead pre-tags the play with
                 // `play.Tags["immune"+seat]` so `H.Target` never reaches its window;
                 // that per-play tag has no op, so this half is the `target` branch.
-                ctx::log(player_id, &Msg::new(key!("net_error_card")).player_id("who", player_id));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("net_error_card")).player_id("who", player_id),
+                );
             } else {
                 // （2）「没有[指定]目标则抵消其所有的效果」
                 trigger::set_cancelled();
-                ctx::log(player_id, &Msg::new(key!("net_error_card")).player_id("who", player_id));
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("net_error_card")).player_id("who", player_id),
+                );
             }
         }
         TriggerKind::Target => {
@@ -90,7 +101,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
             // play at the `card` window so `H.Target` never reaches its window
             // for this player -- that per-play `immune<p>` tag stays TODO'd above.
             trigger::set_cancelled();
-            ctx::log(player_id, &Msg::new(key!("net_error_target")).player_id("who", player_id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("net_error_target")).player_id("who", player_id),
+            );
         }
         _ => {}
     }

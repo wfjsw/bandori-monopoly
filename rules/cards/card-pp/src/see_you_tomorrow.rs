@@ -13,10 +13,12 @@
 //!
 //! `P✽P粉丝` face-up (up to the fan count). The [特] gate lives in `cant_play`.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SEE_YOU_TOMORROW: CardDef = CardDef::new("PP:[衍生]明天见", &[
-    On::Play(Some(cant_play), see_you_tomorrow)]);
+pub const SEE_YOU_TOMORROW: CardDef = CardDef::new(
+    "PP:[衍生]明天见",
+    &[On::Play(Some(cant_play), see_you_tomorrow)],
+);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -50,7 +52,12 @@ fn see_you_tomorrow(player_id: i32) -> card_sdk::Asked {
     if flip > 0 {
         ctx::add_tok(player_id, FANS_DOWN, -flip, i32::MAX);
         ctx::add_tok(player_id, FANS_UP, flip, i32::MAX);
-        ctx::log(player_id, &Msg::new(key!("see_you_tomorrow_up")).player_id("who", player_id).i("n", flip as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("see_you_tomorrow_up"))
+                .player_id("who", player_id)
+                .i("n", flip as i64),
+        );
     }
     Ok(())
 }

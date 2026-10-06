@@ -14,15 +14,19 @@
 //! *placed* cards, so the play body places this card as the `HagumiMarkFx`
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::abi::{TriggerKind, HookKind, MoveKind};
+use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
 
-pub const HAGUMI_MARKS: CardDef = CardDef::new("HHW:（育美）", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::PassTile], hook_guard, hook)]);
+pub const HAGUMI_MARKS: CardDef = CardDef::new(
+    "HHW:（育美）",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::PassTile], hook_guard, hook),
+    ],
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
@@ -55,7 +59,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」
     let note = Msg::new(key!("hagumi_marks_mark_note")).n("money", 2000);
     ctx::add_mark(tile, player_id, key!("hagumi_marks_mark"), &note);
-    ctx::log(player_id, &Msg::new(key!("hagumi_marks_placed")).tile("tile", tile));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("hagumi_marks_placed")).tile("tile", tile),
+    );
     // 规则书（1）: 「你经过育美标记时可在那格强制停下并获得2000资金，然后移除该标记」
     // -- C# `HagumiMarkFx.PassTile` / `Stop` (an `H.ExtraOf` attachment). The
     // hook surface only dispatches to placed cards, so this placement stands in
@@ -122,7 +129,9 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")));
     ctx::log(
         player_id,
-        &Msg::new(key!("hagumi_marks_stop_done")).player_id("who", player_id).tile("tile", t),
+        &Msg::new(key!("hagumi_marks_stop_done"))
+            .player_id("who", player_id)
+            .tile("tile", t),
     );
     // Stand-in cleanup: when the owner has no marks left the attachment is
     // spent (C# `HagumiMarkFx` just goes quiet; the field-card stand-in files

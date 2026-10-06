@@ -24,19 +24,22 @@ use card_sdk::{key, CardDef, Msg, On};
 /// Cards this skill flipped, so it can flip them back on exit.
 const FLIPPED: &str = "skill.mumei.flipped";
 
-pub const MUMEI_STREAMER: CardDef = CardDef::new("skill:祐天寺若麦:大主播喵梦亲", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::PayAdd], in_one, on_pay_add),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-    On::Hook(&[HookKind::TurnEnd], mine, at_turn_end_exit)]);
+pub const MUMEI_STREAMER: CardDef = CardDef::new(
+    "skill:祐天寺若麦:大主播喵梦亲",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::PayAdd], in_one, on_pay_add),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end_exit),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
 fn in_one(player_id: i32) -> bool {
-    ctx::trigger::target() == player_id
-        && state::get(player_id, state_key::SKILL_STATE) != 2
+    ctx::trigger::target() == player_id && state::get(player_id, state_key::SKILL_STATE) != 2
 }
 
 /// 「初始0，上限5」.
@@ -58,7 +61,10 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
     let x = state::get(player_id, state_key::FIRE);
     let amount = ctx::trigger::value();
     ctx::trigger::set_pay_amount(amount + x * 100);
-    ctx::log(player_id, &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mumei_bump")).i("n", (x * 100) as i64),
+    );
     // （2）「任何时刻当你的火罐数到达上限时，你立即进入状态2」
     if x >= state::max(player_id, state_key::FIRE) {
         enter_two(player_id);

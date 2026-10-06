@@ -19,11 +19,15 @@ use card_sdk::{key, CardDef, Msg, On};
 
 const MARK: &str = "saaya标记";
 
-pub const SAAYA_SKY: CardDef = CardDef::new("skill:山吹沙绫:焕然一新的天空中", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::PayAfter], other, on_pay_after),
-    On::Hook(&[HookKind::RollAfter], mine, on_roll),
-    On::Hook(&[HookKind::PayChoose], mine, on_pay)]);
+pub const SAAYA_SKY: CardDef = CardDef::new(
+    "skill:山吹沙绫:焕然一新的天空中",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::PayAfter], other, on_pay_after),
+        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -96,11 +100,19 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
             ctx::trigger::set_move_roll(0);
         }
-        ctx::log(player_id, &Msg::new(key!("saaya_sky_floor")).tile("tile", to));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("saaya_sky_floor")).tile("tile", to),
+        );
         return Ok(());
     }
     ctx::trigger::set_move_roll(after);
-    ctx::log(player_id, &Msg::new(key!("saaya_sky_cut")).i("n", cut as i64).i("total", after as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("saaya_sky_cut"))
+            .i("n", cut as i64)
+            .i("total", after as i64),
+    );
     Ok(())
 }
 

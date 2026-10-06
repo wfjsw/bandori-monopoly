@@ -7,13 +7,17 @@
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 
-pub const KOKORO_CIRCLE: CardDef = CardDef::new("HHW:（kkr）前往笑容集结的地方！", &[
-    On::Play(Some(cant_play), play),
-    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after)]);
+pub const KOKORO_CIRCLE: CardDef = CardDef::new(
+    "HHW:（kkr）前往笑容集结的地方！",
+    &[
+        On::Play(Some(cant_play), play),
+        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+    ],
+);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardKokoroCircle.WhyNot`: refuses without 10,000 money, or when a
@@ -36,7 +40,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「支付10000资金（视为买地花费）」 -- C# `PayCtx { amount = 10000, kind = "buy" }`.
     let paid = ctx::pay(player_id, 10000, &Msg::new(key!("kokoro_circle_why")))?;
     if paid < 10000 {
-// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
         // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
         // side channel and is not being ported (a routine should *return* whether
         // it took effect); but before that lands, what "not effective" changes has
@@ -47,7 +51,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H.PlaceFromPlay(c, i, 0)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::log(player_id, &Msg::new(key!("kokoro_circle_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kokoro_circle_placed")).player_id("who", player_id),
+    );
     // 规则书: 「并将此卡置于CiRCLE上」 -- bound to the CiRCLE tile, not to the
     // player's field.
     let circle = ctx::tile_named("CiRCLE");
@@ -68,7 +75,11 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     };
     // C# `num != Tile` -- the settle is on the card's tile. When the card is
     // not tile-bound (`Some(-1)`) fall back to CiRCLE, the tile the play names.
-    let target = if tile >= 0 { tile } else { ctx::tile_named("CiRCLE") };
+    let target = if tile >= 0 {
+        tile
+    } else {
+        ctx::tile_named("CiRCLE")
+    };
     if target < 0 || trigger::tile() != target {
         return Ok(());
     }
@@ -83,10 +94,17 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     // ran). That move-tag read is not on the trigger payload, so the 6,000 is
     // charged on every CiRCLE settle by another player until it lands.
     // 规则书: 「向所有者支付6000资金，视为格子的收款」
-    ctx::transfer(mover, player_id, 6000, &Msg::new(key!("kokoro_circle_rent")))?;
+    ctx::transfer(
+        mover,
+        player_id,
+        6000,
+        &Msg::new(key!("kokoro_circle_rent")),
+    )?;
     ctx::log(
         player_id,
-        &Msg::new(key!("kokoro_circle_settled")).player_id("who", mover).tile("tile", target),
+        &Msg::new(key!("kokoro_circle_settled"))
+            .player_id("who", mover)
+            .tile("tile", target),
     );
     Ok(())
 }

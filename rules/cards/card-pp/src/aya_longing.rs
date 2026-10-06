@@ -18,13 +18,17 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const AYA_LONGING: CardDef = CardDef::new("PP:[丸山彩]憧憬的前方", &[
-    On::Play(None, aya_longing),
-    On::Hook(&[HookKind::PayAdd], |_| true, pay_add)]);
+pub const AYA_LONGING: CardDef = CardDef::new(
+    "PP:[丸山彩]憧憬的前方",
+    &[
+        On::Play(None, aya_longing),
+        On::Hook(&[HookKind::PayAdd], |_| true, pay_add),
+    ],
+);
 
 /// C# `CardAyaLonging.X` -- 100, or 200 once the owner holds 10+ [P✽P粉丝].
 fn shave_x(player_id: i32) -> i32 {
@@ -45,7 +49,11 @@ fn poorest(player_id: i32) -> bool {
 fn aya_longing(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:[丸山彩]憧憬的前方", &Msg::new(key!("aya_longing_note")));
+    ctx::place_card(
+        player_id,
+        "PP:[丸山彩]憧憬的前方",
+        &Msg::new(key!("aya_longing_note")),
+    );
     // 规则书[手]: 「并将弃卡区中的一张卡加入手卡」
     // C# `H._hidden[i].discard.Distinct()` + `H.AskCard` + `H._hidden[i].discard.Remove`
     // + `H.AddToHand`.
@@ -70,7 +78,9 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
         ctx::add_to_hand(player_id, &id);
         ctx::log(
             player_id,
-            &Msg::new(key!("aya_longing_back")).player_id("who", player_id).card("card", &id),
+            &Msg::new(key!("aya_longing_back"))
+                .player_id("who", player_id)
+                .card("card", &id),
         );
     }
     Ok(())
@@ -89,7 +99,10 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
     let x = shave_x(player_id);
     let amount = trigger::value();
     trigger::set_pay_amount((amount - x).max(0));
-    ctx::log(player_id, &Msg::new(key!("aya_longing_shave")).i("n", x as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("aya_longing_shave")).i("n", x as i64),
+    );
     // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
     // on top of the X shave above, floored at 0.
     if crate::resonance::try_resonance(player_id)? {

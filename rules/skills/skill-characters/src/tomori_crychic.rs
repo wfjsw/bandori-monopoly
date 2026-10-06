@@ -16,12 +16,15 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const TOMORI_CRYCHIC: CardDef = CardDef::new("skill:高松灯（CRYCHIC）:跌跌撞撞...", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::RollAfter], mine, on_roll),
-]);
+pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
+    "skill:高松灯（CRYCHIC）:跌跌撞撞...",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -51,7 +54,10 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     ctx::give_stay(player_id, 1);
     // 「并在回合结束时触发结算」 -- the engine's `settleAtEnd` counter.
     ctx::inc_slot(player_id, "settleAtEnd", 1);
-    ctx::log(player_id, &Msg::new(key!("tomori_crychic_stay")).i("n", face as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomori_crychic_stay")).i("n", face as i64),
+    );
     Ok(())
 }
 

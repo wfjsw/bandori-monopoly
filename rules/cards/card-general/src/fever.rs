@@ -11,16 +11,20 @@
 //! > （2）[拥有者]回合开始时将此卡放入[使用者]弃卡区。
 //!
 
-use card_sdk::abi::{TriggerKind, HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "通用:[衍生]FEVER!";
 
-pub const FEVER: CardDef = CardDef::new("通用:[衍生]FEVER!", &[
-    On::Play(None, fever),
-    // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-    On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], react_guard, react)]);
+pub const FEVER: CardDef = CardDef::new(
+    "通用:[衍生]FEVER!",
+    &[
+        On::Play(None, fever),
+        // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
+        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], react_guard, react),
+    ],
+);
 
 fn fever(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
@@ -75,7 +79,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             ctx::set_dest(ctx::Dest::Graveyard);
-            ctx::log(player_id, &Msg::new(key!("fever_unplaced")).player_id("who", player_id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("fever_unplaced")).player_id("who", player_id),
+            );
         }
         _ => {}
     }

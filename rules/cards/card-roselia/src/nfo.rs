@@ -10,15 +10,19 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const NFO: CardDef = CardDef::new("R:NFO", &[
-    On::Hook(&[card_sdk::abi::HookKind::PayChoose], gain_guard, gain_bump),
-    On::Play(None, play),
-    On::Hook(&[HookKind::PayAt], |_| true, react),
-    On::AtEnd(at_end)]);
+pub const NFO: CardDef = CardDef::new(
+    "R:NFO",
+    &[
+        On::Hook(&[card_sdk::abi::HookKind::PayChoose], gain_guard, gain_bump),
+        On::Play(None, play),
+        On::Hook(&[HookKind::PayAt], |_| true, react),
+        On::AtEnd(at_end),
+    ],
+);
 
 const ID: &str = "R:NFO";
 
@@ -72,7 +76,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, "NFO")`.
     ctx::give_stay(player_id, 1);
-    ctx::log(player_id, &Msg::new(key!("nfo_stay")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nfo_stay")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -111,7 +118,9 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
             if to >= 0 {
                 ctx::log(
                     player_id,
-                    &Msg::new(key!("nfo_move")).player_id("who", player_id).tile("tile", to),
+                    &Msg::new(key!("nfo_move"))
+                        .player_id("who", player_id)
+                        .tile("tile", to),
                 );
             }
             // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- C# `H.SplitPay(payers, i,
@@ -124,7 +133,10 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         3 => {
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nfo_note")));
-            ctx::log(player_id, &Msg::new(key!("nfo_placed")).player_id("who", player_id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("nfo_placed")).player_id("who", player_id),
+            );
             // 「你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」 -- see `react`.
         }
         // 规则书: 「若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出」
@@ -134,7 +146,10 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         // 规则书: 「若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」
         5 => {
             ctx::add_tok(player_id, key!("nfo_crystals"), 6, i32::MAX);
-            ctx::log(player_id, &Msg::new(key!("nfo_crystals_added")).player_id("who", player_id));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("nfo_crystals_added")).player_id("who", player_id),
+            );
             // 「为自己的角色卡添加6个奇迹水晶」 -- held as a player counter
             // (`nfo_crystals`), the stand-in for the C# `H.ExtraOf<NfoCrystalsFx>`
             // attachment; the gain half is `gain_bump` below.
@@ -175,7 +190,12 @@ fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     if !ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
         return Ok(());
     }
-    ctx::log(player_id, &Msg::new("log.play").player_id("who", player_id).card("card", &id));
+    ctx::log(
+        player_id,
+        &Msg::new("log.play")
+            .player_id("who", player_id)
+            .card("card", &id),
+    );
     // C# `H.PlayCard(...)` runs the effect and then applies that card's `Dest`.
     let dest = ctx::play_card(&id, player_id)?;
     apply_dest(player_id, &id, dest);
@@ -219,7 +239,10 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
 /// the Fx hook dispatch at `payAt` (after `PayChoose`, before the `pay` [反击]
 /// window), so this is a field effect, not a [反击].
 fn react(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayAt || trigger::player_id() != player_id || !ctx::is_placed() {
+    if trigger::kind() != TriggerKind::PayAt
+        || trigger::player_id() != player_id
+        || !ctx::is_placed()
+    {
         return Ok(());
     }
     let amount = trigger::value();
@@ -228,7 +251,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     }
     trigger::set_pay_amount((amount - 1000).max(0));
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("nfo_used")).player_id("who", player_id).n("money", (amount.min(1000)) as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("nfo_used"))
+            .player_id("who", player_id)
+            .n("money", (amount.min(1000)) as i64),
+    );
     Ok(())
 }
 

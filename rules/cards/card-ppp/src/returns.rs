@@ -27,18 +27,25 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:Returns";
 
-pub const RETURNS: CardDef = CardDef::new("PPP:Returns", &[
-    On::Hook(&[card_sdk::abi::HookKind::CardPlayed], mine, on_played),
-    On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], mine, choose_band),
-    On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, deck_at_game_start),
-]);
+pub const RETURNS: CardDef = CardDef::new(
+    "PPP:Returns",
+    &[
+        On::Hook(&[card_sdk::abi::HookKind::CardPlayed], mine, on_played),
+        On::Hook(
+            &[card_sdk::abi::HookKind::TurnStartBefore],
+            mine,
+            choose_band,
+        ),
+        On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, deck_at_game_start),
+    ],
+);
 
 /// C# `DeckRules.Pool` for a Poppin' Party character, in pool order (exclusive
 /// first, then band, then general) -- a snapshot of `data/cards.json`; Returns is
@@ -148,7 +155,9 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     }
     ctx::log(
         player_id,
-        &Msg::new(key!("returns_added")).player_id("who", player_id).i("n", added as i64),
+        &Msg::new(key!("returns_added"))
+            .player_id("who", player_id)
+            .i("n", added as i64),
     );
     Ok(())
 }
@@ -162,12 +171,17 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
-    if !ctx::take_card(player_id, CardPile::Deck, ID) && !ctx::take_card(player_id, CardPile::Hand, ID) {
+    if !ctx::take_card(player_id, CardPile::Deck, ID)
+        && !ctx::take_card(player_id, CardPile::Hand, ID)
+    {
         return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("returns_note")));
-    ctx::log(player_id, &Msg::new(key!("returns_placed")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("returns_placed")).player_id("who", player_id),
+    );
     // TODO(ABI)（2）: 「并获得一个其他存活玩家的团卡」 -- needs the band-copy
     //   machinery (C# `CardReturns.Choose`: `H.BandOf` / `H.MakeBand(..., extra:
     //   true)` / `BandBase.Attach`).
@@ -316,6 +330,9 @@ fn choose_band(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
     ctx::set_slot(player_id, "returns.band", idx);
     ctx::set_tok(player_id, "returns.copied", 1);
-    ctx::log(player_id, &Msg::new(key!("returns_got_band")).card("card", want));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("returns_got_band")).card("card", want),
+    );
     Ok(())
 }

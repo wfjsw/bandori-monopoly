@@ -6,10 +6,12 @@
 //! >  打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的投掷结果可定义为1-6以内的任何数字
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const UIKA_FEARLESS: CardDef = CardDef::new("Mujica:（初华）我，无畏悲伤", &[
-    On::Play(None, uika_fearless)]);
+pub const UIKA_FEARLESS: CardDef = CardDef::new(
+    "Mujica:（初华）我，无畏悲伤",
+    &[On::Play(None, uika_fearless)],
+);
 
 fn uika_fearless(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]」 -- C#
@@ -21,7 +23,10 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
     let memory = ctx::state::get(player_id, "memory.dirty");
     if memory <= 0 {
         // C# `c.Effective = false` + a log line; no set_effective hook yet.
-        ctx::log(player_id, &Msg::new(key!("uika_fearless_no_memory")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("uika_fearless_no_memory")).player_id("who", player_id),
+        );
         return Ok(());
     }
     // 规则书: 「你可选择抽1张卡或使你本回合的投掷结果可定义为1-6以内的任何数字」
@@ -55,12 +60,17 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
         ctx::set_fixed_roll(n);
         ctx::log(
             player_id,
-            &Msg::new(key!("uika_fearless_fixed")).player_id("who", player_id).i("n", n as i64),
+            &Msg::new(key!("uika_fearless_fixed"))
+                .player_id("who", player_id)
+                .i("n", n as i64),
         );
     } else {
         // 规则书: 「抽1张卡」
         ctx::draw(player_id, 1);
-        ctx::log(player_id, &Msg::new(key!("uika_fearless_drew")).player_id("who", player_id));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("uika_fearless_drew")).player_id("who", player_id),
+        );
     }
     Ok(())
 }

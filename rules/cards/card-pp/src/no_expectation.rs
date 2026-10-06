@@ -15,14 +15,18 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const NO_EXPECTATION: CardDef = CardDef::new("PP:不要背负期待", &[
-    On::Play(None, no_expectation),
-    On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], hook_guard, hook),
-    On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled)]);
+pub const NO_EXPECTATION: CardDef = CardDef::new(
+    "PP:不要背负期待",
+    &[
+        On::Play(None, no_expectation),
+        On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], hook_guard, hook),
+        On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled),
+    ],
+);
 
 /// C# `Mem["stacks"]` -- how many times the pay bend is stacked (2 on place,
 /// +2 per reshuffle).
@@ -35,7 +39,11 @@ fn stacks(player_id: i32) -> i32 {
 fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:不要背负期待", &Msg::new(key!("no_expectation_note")));
+    ctx::place_card(
+        player_id,
+        "PP:不要背负期待",
+        &Msg::new(key!("no_expectation_note")),
+    );
     // 规则书[持续]（2）: 「此卡放入[场地]……对[拥有者]生效2次」 -- C#
     // `H.PlaceFromPlay(c).Mem["stacks"] = 2`.
     ctx::set_slot(player_id, SLOT_STACKS, 2);
@@ -43,7 +51,9 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
     ctx::add_to_deck(player_id, "PP:[衍生]共鸣", true);
     ctx::log(
         player_id,
-        &Msg::new(key!("no_expectation_added")).player_id("who", player_id).card("card", "PP:[衍生]共鸣"),
+        &Msg::new(key!("no_expectation_added"))
+            .player_id("who", player_id)
+            .card("card", "PP:[衍生]共鸣"),
     );
     // 规则书[手]: 「然后抽1张牌」
     ctx::draw(player_id, 1);

@@ -6,13 +6,14 @@
 //!
 //! [反击] that lets the other players react as if they were the target.
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const MANA_CHAMPION: CardDef = CardDef::new("Sumimi:（真奈）歌唱大赛5连冠", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const MANA_CHAMPION: CardDef = CardDef::new(
+    "Sumimi:（真奈）歌唱大赛5连冠",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你的格子即将受到来自你以外的效果影响时打出此卡」
@@ -39,7 +40,10 @@ fn react(player_id: i32) -> card_sdk::Asked {
     // C# `CardManaChampion.React` (MatchHost.cs:11543-11590) walks `H.Others(i)`
     // offering each a nested `H.React(copy, p)` with `Target = p`; `anyone` is
     // set only when a nested reaction lands, and `if (!anyone)` draws 1.
-    ctx::log(player_id, &Msg::new(key!("mana_champion_log")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mana_champion_log")).player_id("who", player_id),
+    );
     // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」 --
     // C# `H.DrawR(i, 1, ...)` on `!anyone` (MatchHost.cs:11586-11589).
     ctx::draw(player_id, 1);

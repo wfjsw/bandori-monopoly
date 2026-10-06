@@ -24,9 +24,13 @@ fn is_bathhouse(t: i32) -> bool {
     t >= 0 && t == ctx::tile_named("旭汤澡堂")
 }
 
-pub const ASAHI_AIM: CardDef = CardDef::new("skill:朝日六花:瞄准目标", &[
-    On::Hook(&[HookKind::Bought], mine, on_bought),
-    On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start)]);
+pub const ASAHI_AIM: CardDef = CardDef::new(
+    "skill:朝日六花:瞄准目标",
+    &[
+        On::Hook(&[HookKind::Bought], mine, on_bought),
+        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -43,7 +47,10 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
     }
     state::set(player_id, DONE, 1);
     ctx::set_extra_color(player_id, t, 6);
-    ctx::log(player_id, &Msg::new(key!("asahi_aim_first")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("asahi_aim_first")).tile("tile", t),
+    );
     Ok(())
 }
 
@@ -54,7 +61,10 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if bath < 0 || ctx::tile_owner(bath) != player_id {
         return Ok(());
     }
-    if !ctx::owned_tiles(player_id).into_iter().any(|t| is_initial_livehouse(t)) {
+    if !ctx::owned_tiles(player_id)
+        .into_iter()
+        .any(|t| is_initial_livehouse(t))
+    {
         return Ok(());
     }
     ctx::set_extra_color(player_id, bath, 6);

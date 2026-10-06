@@ -10,13 +10,14 @@
 //! Reaction-only (`Normal => false`). The C# grades are
 //! `MatchHost.cs:17294` (`Grades[character]`, bigger = older).
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const SECRET_RAINBOW: CardDef = CardDef::new("Mor:秘密与青春的虹彩", &[
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const SECRET_RAINBOW: CardDef = CardDef::new(
+    "Mor:秘密与青春的虹彩",
+    &[On::CounterAct(&[ChainKind::Effect], can_react, react)],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「当你向学妹或同级生支付时」
@@ -51,12 +52,22 @@ fn react(player_id: i32) -> card_sdk::Asked {
         let half = (amount + 1) / 2;
         let half = ((half + 9) / 10) * 10;
         trigger::set_pay_amount(half as i32);
-        ctx::log(player_id, &Msg::new(key!("secret_rainbow_half")).n("money", amount).n("n", half));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("secret_rainbow_half"))
+                .n("money", amount)
+                .n("n", half),
+        );
     } else {
         let boosted = (amount * 3 + 1) / 2;
         let boosted = ((boosted + 9) / 10) * 10;
         trigger::set_pay_amount(boosted as i32);
-        ctx::log(player_id, &Msg::new(key!("secret_rainbow_boost")).n("money", amount).n("n", boosted));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("secret_rainbow_boost"))
+                .n("money", amount)
+                .n("n", boosted),
+        );
     }
     Ok(())
 }

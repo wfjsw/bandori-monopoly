@@ -25,12 +25,15 @@ use card_sdk::{key, CardDef, Msg, On};
 /// The mark kind 「[怪盗标记]」.
 const THIEF: &str = "怪盗标记";
 
-pub const KAORU_PRINCE: CardDef = CardDef::new("skill:濑田薰:梦幻的王子殿下", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], |_| true, on_pass),
-    On::Hook(&[HookKind::PassPlayer], |_| true, on_passed),
-]);
+pub const KAORU_PRINCE: CardDef = CardDef::new(
+    "skill:濑田薰:梦幻的王子殿下",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], |_| true, on_pass),
+        On::Hook(&[HookKind::PassPlayer], |_| true, on_passed),
+    ],
+);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
@@ -60,7 +63,10 @@ fn settle(player_id: i32) {
         if ctx::count_marks(t, THIEF, -2) > 0 {
             // 「移除场上的一个[怪盗标记]」 -- one tick off a single mark.
             ctx::bump_mark(t, THIEF, -2, -1);
-            ctx::log(player_id, &Msg::new(key!("kaoru_prince_removed")).tile("tile", t));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("kaoru_prince_removed")).tile("tile", t),
+            );
             return;
         }
     }
@@ -109,13 +115,17 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             .map(|&p| Msg::new(key!("kaoru_prince_option")).player_id("who", p))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    let Some(&who) = near.get(pick) else { return Ok(()); };
+    let Some(&who) = near.get(pick) else {
+        return Ok(());
+    };
     if !ctx::spend_fire(player_id, 7, &Msg::new(key!("kaoru_prince_spend"))) {
         return Ok(());
     }
     // 「在…玩家场上放置3个[怪盗标记]」 -- on one of that player's tiles.
     let theirs = ctx::owned_tiles(who);
-    let Some(&tile) = theirs.first() else { return Ok(()); };
+    let Some(&tile) = theirs.first() else {
+        return Ok(());
+    };
     for _ in 0..3 {
         ctx::add_mark(tile, player_id, THIEF, &Msg::new(key!("kaoru_prince_note")));
     }
@@ -124,6 +134,11 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if ship >= 0 {
         ctx::plan::set_start(ship, "梦幻的王子殿下");
     }
-    ctx::log(player_id, &Msg::new(key!("kaoru_prince_done")).player_id("who", who).tile("tile", tile));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kaoru_prince_done"))
+            .player_id("who", who)
+            .tile("tile", tile),
+    );
     Ok(())
 }

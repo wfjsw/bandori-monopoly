@@ -7,10 +7,12 @@
 //! 800 when they have at most 1,000, otherwise 200 twice (the second only
 //! while they are still in).
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BLACK_BIRTHDAY: CardDef = CardDef::new("Mujica:黑色生日", &[
-    On::Play(Some(cant_play), black_birthday)]);
+pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
+    "Mujica:黑色生日",
+    &[On::Play(Some(cant_play), black_birthday)],
+);
 
 /// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.
 fn cant_play(player_id: i32) -> Option<Msg> {

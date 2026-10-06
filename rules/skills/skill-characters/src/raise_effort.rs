@@ -17,10 +17,14 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const RAISE_EFFORT: CardDef = CardDef::new("skill:和奏瑞依:一次又一次竭尽全力", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::RollAfter], mine, on_roll)]);
+pub const RAISE_EFFORT: CardDef = CardDef::new(
+    "skill:和奏瑞依:一次又一次竭尽全力",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -73,6 +77,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     )?;
     let face = if keep == 1 { again } else { before };
     ctx::trigger::set_move_roll(face);
-    ctx::log(player_id, &Msg::new(key!("raise_effort_kept")).i("n", face as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("raise_effort_kept")).i("n", face as i64),
+    );
     Ok(())
 }

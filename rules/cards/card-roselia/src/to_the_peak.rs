@@ -8,10 +8,9 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[
-    On::Play(Some(cant_play), play)]);
+pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play(Some(cant_play), play)]);
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
 /// where `IsColor` sees both the global `_tileColors` re-colour and this
@@ -78,9 +77,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     }
     // C# the build branch: `H.LiveHouses(i, t => owners[t] == i &&
     // H.WhyNotBuildOn(i, t) == null)` (no money check here -- that is in Play).
-    if livehouses(player_id).into_iter().any(|t| {
-        ctx::tile_owner(t) == player_id && why_not_build_on(player_id, t).is_none()
-    }) {
+    if livehouses(player_id)
+        .into_iter()
+        .any(|t| ctx::tile_owner(t) == player_id && why_not_build_on(player_id, t).is_none())
+    {
         return None;
     }
     Some(Msg::new(key!("to_the_peak_nothing")))
@@ -98,7 +98,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .into_iter()
             .min_by_key(|&t| {
                 let d = ctx::tile_forward(pos, t);
-                if d == 0 { ctx::tile_count() } else { d }
+                if d == 0 {
+                    ctx::tile_count()
+                } else {
+                    d
+                }
             })
             .unwrap_or(-1);
         // 规则书: 「移动到下一个可被购买的livehouse格子」 -- C# `H.Walk(i, Forward(pos, to),
@@ -109,7 +113,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ctx::plan::set_steps(num);
         ctx::plan::set_resolve(true);
         ctx::card_move(player_id);
-        ctx::log(player_id, &Msg::new(key!("to_the_peak_walk")).player_id("who", player_id).tile("tile", to));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("to_the_peak_walk"))
+                .player_id("who", player_id)
+                .tile("tile", to),
+        );
         return Ok(());
     }
     // 规则书: 「若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋」
@@ -135,7 +144,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::ask_tile(player_id, &title, &text, &mine)?;
     // 规则书: 「花费1.5倍价格」 -- C# `CeilTo(H.BuildCostFor(i, r.index) * 1.5, 10)`.
     let amount = ceil_to(ctx::build_cost(tile) as i64 * 3 / 2, 10);
-    let paid = ctx::pay(player_id, amount, &Msg::new(key!("to_the_peak_why")).tile("tile", tile))?;
+    let paid = ctx::pay(
+        player_id,
+        amount,
+        &Msg::new(key!("to_the_peak_why")).tile("tile", tile),
+    )?;
     if paid < amount {
         return Ok(());
     }
@@ -143,7 +156,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // the pay above covers the 1.5x cost and the raise is free (`H.AddHouse`).
     if why_not_build_on(player_id, tile).is_none() {
         ctx::add_house(tile, 1);
-        ctx::log(player_id, &Msg::new(key!("to_the_peak_build")).player_id("who", player_id).tile("tile", tile));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("to_the_peak_build"))
+                .player_id("who", player_id)
+                .tile("tile", tile),
+        );
     }
     // The raise above goes out as `houseAdded` once the run commits, so a
     // persistent Fx listening for 「加盖」 sees this build too.

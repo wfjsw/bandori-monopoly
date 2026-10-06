@@ -9,10 +9,12 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TAKI_SERIOUS: CardDef = CardDef::new("MyGO:（立希）想认真去做", &[
-    On::Play(Some(cant_play), taki_serious)]);
+pub const TAKI_SERIOUS: CardDef = CardDef::new(
+    "MyGO:（立希）想认真去做",
+    &[On::Play(Some(cant_play), taki_serious)],
+);
 
 /// C# `CardTakiSerious.Stayers` -- present players holding [停留].
 fn stayers() -> Vec<i32> {
@@ -65,7 +67,12 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
         // 原价的四分之一」 -- the stayer settles there at a quarter price.
         ctx::plan::set_pay_factor(25);
         ctx::card_settle_at(p, pick, true);
-        ctx::log(player_id, &Msg::new(key!("taki_serious_settled")).tile("tile", pick).player_id("who", p));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("taki_serious_settled"))
+                .tile("tile", pick)
+                .player_id("who", p),
+        );
     }
     Ok(())
 }

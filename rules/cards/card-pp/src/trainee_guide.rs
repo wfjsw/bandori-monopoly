@@ -20,20 +20,28 @@
 
 use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx;
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const TRAINEE_GUIDE: CardDef = CardDef::new("PP:练习生解密指南", &[
-    On::Hook(&[card_sdk::abi::HookKind::BuildBefore], mine, before_build),
-    On::Hook(&[card_sdk::abi::HookKind::BuildAfter], mine, after_build),
-    On::Play(None, trainee_guide),
-    On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end)]);
+pub const TRAINEE_GUIDE: CardDef = CardDef::new(
+    "PP:练习生解密指南",
+    &[
+        On::Hook(&[card_sdk::abi::HookKind::BuildBefore], mine, before_build),
+        On::Hook(&[card_sdk::abi::HookKind::BuildAfter], mine, after_build),
+        On::Play(None, trainee_guide),
+        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+    ],
+);
 
 fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     ctx::add_band_crystals(player_id, 3, i32::MAX);
     // 规则书[手]: 「并将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:练习生解密指南", &Msg::new(key!("trainee_guide_note")));
+    ctx::place_card(
+        player_id,
+        "PP:练习生解密指南",
+        &Msg::new(key!("trainee_guide_note")),
+    );
     // 规则书[手]: 「在此卡上放置“粉丝数量”÷3个[奇迹水晶]」 -- C#
     // `H.PlaceFromPlay(c, -1, -1, H.Fans(i) / 3)`.
     let fans = ctx::tok(player_id, "P✽P粉丝(正)") + ctx::tok(player_id, "P✽P粉丝(反)");
@@ -50,7 +58,10 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
             seen.push(band);
         }
     }
-    ctx::log(player_id, &Msg::new(key!("trainee_guide_revealed")).i("n", seen.len() as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("trainee_guide_revealed")).i("n", seen.len() as i64),
+    );
     if seen.len() == 1 {
         ctx::inc_slot(player_id, "trainee_guide.mono", 1);
     } else if seen.len() >= 2 {
@@ -60,7 +71,11 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // cost, then the 500 and the two extra marks. The marks themselves still
     // need per-card storage (see the [持续]（3） TODO in `turn_end`).
     if crate::resonance::try_resonance(player_id)? {
-        ctx::pay(player_id, 500, &Msg::new(key!("trainee_guide_resonance_cost")))?;
+        ctx::pay(
+            player_id,
+            500,
+            &Msg::new(key!("trainee_guide_resonance_cost")),
+        )?;
     }
     // 规则书[持续]（1）: 「手卡上限数量减1」 -- the limit is keyed state, so the
     // card just lowers it. It is restored when the card leaves play.
@@ -92,13 +107,19 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
         if down > 0 {
             ctx::add_tok(player_id, "P✨P粉丝(反)", -down, i32::MAX);
             ctx::add_tok(player_id, "P✨P粉丝(正)", down, i32::MAX);
-            ctx::log(player_id, &Msg::new(key!("trainee_guide_flipped")).i("n", down as i64));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("trainee_guide_flipped")).i("n", down as i64),
+            );
         }
     }
     // 1. 「每个单色效果为获得1层状态"下次盖房的价格减少1000（可溢出），盖房后减少1层"」
     if mono > 0 {
         ctx::state::add(player_id, "trainee_guide.buildOff", mono);
-        ctx::log(player_id, &Msg::new(key!("trainee_guide_build_off")).i("n", mono as i64));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("trainee_guide_build_off")).i("n", mono as i64),
+        );
     }
     // 「随后进入弃卡区」
     ctx::set_dest(ctx::Dest::Graveyard);

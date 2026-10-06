@@ -49,7 +49,12 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(data: Arc<GameData>, rules: Arc<dyn CardRules>, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Arc<Self> {
+    pub fn new(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        engine: Arc<Pool>,
+        store: Arc<dyn CrossState>,
+    ) -> Arc<Self> {
         Arc::new(Self {
             data,
             rules,
@@ -69,7 +74,9 @@ impl Server {
 
     /// Record (or clear) a session's room. The store is the only copy.
     pub fn set_room(&self, token: &str, room: Option<(String, i32)>) {
-        let Some(mut s) = self.session(token) else { return };
+        let Some(mut s) = self.session(token) else {
+            return;
+        };
         s.room = room;
         let _ = self.store.session_put(&s);
     }
@@ -99,7 +106,10 @@ impl Server {
             let id = rec.info.id.clone();
             let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
             r.restore_game();
-            eprintln!("restored room {id} (match: {})", if r.game.is_some() { "live" } else { "none" });
+            eprintln!(
+                "restored room {id} (match: {})",
+                if r.game.is_some() { "live" } else { "none" }
+            );
             rooms.insert(id, Arc::new(Mutex::new(r)));
         }
     }

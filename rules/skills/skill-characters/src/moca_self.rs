@@ -27,11 +27,15 @@ fn used_key(src: i32) -> alloc::string::String {
     alloc::format!("skill.mocaSelf.used:{src}")
 }
 
-pub const MOCA_SELF: CardDef = CardDef::new("skill:青叶摩卡:我行我素", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::TurnEnd], afterglow, tick),
-    On::Hook(&[HookKind::CardPlayed], other, on_card),
-    On::Hook(&[HookKind::SkillUsed], other, on_skill)]);
+pub const MOCA_SELF: CardDef = CardDef::new(
+    "skill:青叶摩卡:我行我素",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
+        On::Hook(&[HookKind::CardPlayed], other, on_card),
+        On::Hook(&[HookKind::SkillUsed], other, on_skill),
+    ],
+);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")
@@ -100,7 +104,10 @@ fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     let to = ctx::player_pos(src);
     if to >= 0 {
         ctx::teleport_to(player_id, to);
-        ctx::log(player_id, &Msg::new(key!("moca_self_moved")).tile("tile", to));
+        ctx::log(
+            player_id,
+            &Msg::new(key!("moca_self_moved")).tile("tile", to),
+        );
     }
     Ok(())
 }

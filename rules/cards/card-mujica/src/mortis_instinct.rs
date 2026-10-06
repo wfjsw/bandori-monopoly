@@ -7,11 +7,12 @@
 //!
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const MORTIS_INSTINCT: CardDef = CardDef::new("Mujica:（睦/mortis）表演的本能", &[
-    On::Play(None, play),
-    On::CounterAct(&[], can_react, react)]);
+pub const MORTIS_INSTINCT: CardDef = CardDef::new(
+    "Mujica:（睦/mortis）表演的本能",
+    &[On::Play(None, play), On::CounterAct(&[], can_react, react)],
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     run(player_id);
@@ -40,5 +41,8 @@ fn run(player_id: i32) {
     // `Extrene`/`Doubled`/`Tags` forwarding). The ABI has no play-history query
     // and no cross-card `PlayCtx` nesting (`ctx::play_card` runs a card's `play`
     // without the copied card's identity / reaction mode).
-    ctx::log(player_id, &Msg::new(key!("mortis_instinct_nothing")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("mortis_instinct_nothing")).player_id("who", player_id),
+    );
 }

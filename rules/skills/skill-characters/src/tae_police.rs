@@ -22,11 +22,15 @@ use card_sdk::{key, CardDef, Msg, On};
 /// The mark kind 「[多惠兔子]」.
 const RABBIT: &str = "多惠兔子";
 
-pub const TAE_POLICE: CardDef = CardDef::new("skill:花园多惠:花园警察，出警！", &[
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::CircleAffected], mine, on_circle),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::CounterAct(&[ChainKind::Effect], can_negate, negate)]);
+pub const TAE_POLICE: CardDef = CardDef::new(
+    "skill:花园多惠:花园警察，出警！",
+    &[
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::CircleAffected], mine, on_circle),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::CounterAct(&[ChainKind::Effect], can_negate, negate),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -51,7 +55,12 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_mark(t, player_id, RABBIT, &Msg::new(key!("tae_police_note")));
-    ctx::log(player_id, &Msg::new(key!("tae_police_placed")).tile("tile", t).i("n", n as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tae_police_placed"))
+            .tile("tile", t)
+            .i("n", n as i64),
+    );
     Ok(())
 }
 

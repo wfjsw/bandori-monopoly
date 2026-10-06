@@ -5,13 +5,18 @@
 //!
 //! Reaction: when one of your own rolls is under 6, it goes up by 1.
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const HIMARI_PLUS_ONE: CardDef = CardDef::new("AG:（绯玛丽）如果并非没问题", &[
-    On::CounterAct(&[ChainKind::Roll, ChainKind::MoveRoll], can_react, react),
-]);
+pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
+    "AG:（绯玛丽）如果并非没问题",
+    &[On::CounterAct(
+        &[ChainKind::Roll, ChainKind::MoveRoll],
+        can_react,
+        react,
+    )],
+);
 
 /// 规则书: 「【反击】当你的一次掷骰小于6时，你可以打出此卡」 -- reaction-only.
 fn can_react(player_id: i32) -> bool {
@@ -29,7 +34,9 @@ fn can_react(player_id: i32) -> bool {
 
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使结果+1」
-    let Some(before) = trigger::move_roll() else { return Ok(()); };
+    let Some(before) = trigger::move_roll() else {
+        return Ok(());
+    };
     trigger::set_move_roll(before + 1);
     ctx::log(
         player_id,

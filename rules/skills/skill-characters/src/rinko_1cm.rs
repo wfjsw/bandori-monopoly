@@ -21,11 +21,14 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const RINKO_1CM: CardDef = CardDef::new("skill:白金燐子:即使1cm也要前进", &[
-    On::Play(Some(can_use), use_skill),
-    On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-]);
+pub const RINKO_1CM: CardDef = CardDef::new(
+    "skill:白金燐子:即使1cm也要前进",
+    &[
+        On::Play(Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -82,6 +85,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「本次移动不受异常移动效果影响」 -- `unstoppable` is exactly that gate.
     state::add(player_id, state_key::UNSTOPPABLE, 1);
     state::set_expires(player_id, state_key::UNSTOPPABLE, ctx::state::TURN_END);
-    ctx::log(player_id, &Msg::new(key!("rinko_1cm_fixed")).i("n", (x * 6) as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("rinko_1cm_fixed")).i("n", (x * 6) as i64),
+    );
     Ok(())
 }

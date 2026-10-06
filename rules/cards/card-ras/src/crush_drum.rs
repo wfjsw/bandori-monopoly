@@ -9,10 +9,12 @@
 //! > 移动阶段前打出此卡，本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数
 //!
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const CRUSH_DRUM: CardDef = CardDef::new("RAS:（MASKING）CRUSH ON THE DRUM!!!", &[
-    On::Play(Some(cant_play), play)]);
+pub const CRUSH_DRUM: CardDef = CardDef::new(
+    "RAS:（MASKING）CRUSH ON THE DRUM!!!",
+    &[On::Play(Some(cant_play), play)],
+);
 
 /// C# `CardCrushDrum.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

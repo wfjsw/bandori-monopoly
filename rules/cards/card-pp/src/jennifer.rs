@@ -14,13 +14,17 @@
 //! The [持续] runs in the `PassTile` hook; the user is kept in a player slot
 //! (stand-in for the C# per-card `Card.User`).
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const JENNIFER: CardDef = CardDef::new("PP:找回珍妮弗", &[
-    On::Play(Some(cant_play), jennifer),
-    On::Hook(&[HookKind::PassTile], |_| true, pass_tile)]);
+pub const JENNIFER: CardDef = CardDef::new(
+    "PP:找回珍妮弗",
+    &[
+        On::Play(Some(cant_play), jennifer),
+        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+    ],
+);
 
 /// Stand-in for C# `Card.User` (per-card Mem): the player who played the card,
 /// stored on the owner's player while it is in play.
@@ -59,7 +63,11 @@ fn jennifer(player_id: i32) -> card_sdk::Asked {
         None => return Ok(()),
     };
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(hit, "PP:找回珍妮弗", &Msg::new(key!("jennifer_note")).player_id("who", player_id));
+    ctx::place_card(
+        hit,
+        "PP:找回珍妮弗",
+        &Msg::new(key!("jennifer_note")).player_id("who", player_id),
+    );
     // C# `Card.User` -- the player who played it, for the [持续] below.
     ctx::set_slot(hit, SLOT_USER, player_id);
     Ok(())

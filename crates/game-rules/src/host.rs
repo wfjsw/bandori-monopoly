@@ -543,7 +543,14 @@ impl Ruleset {
             return Ok(None);
         };
         let mut store = self.store(world.clone(), &[])?;
-        match call_card_msg(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id) {
+        match call_card_msg(
+            &self.inner,
+            &mut store,
+            card,
+            entry,
+            export::OP_GUARD,
+            player_id,
+        ) {
             Ok(v) => Ok(v),
             Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
             Err(e) => Err(trap(e)),
@@ -1127,9 +1134,11 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "crystals_at", |c: C<W>, uid: i32| {
         c.data().wr().crystals_at(uid)
     })?;
-    l.func_wrap(m, "add_crystals_at", |mut c: C<W>, uid: i32, n: i32, max: i32| {
-        c.data_mut().w().add_crystals_at(uid, n, max)
-    })?;
+    l.func_wrap(
+        m,
+        "add_crystals_at",
+        |mut c: C<W>, uid: i32, n: i32, max: i32| c.data_mut().w().add_crystals_at(uid, n, max),
+    )?;
     l.func_wrap(m, "unplace_at", |mut c: C<W>, uid: i32| {
         c.data_mut().w().unplace_at(uid)
     })?;
@@ -1345,7 +1354,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 .shuffle_into_deck(player_id, hand != 0, discard != 0)
         },
     )?;
-    l.func_wrap(m, "unplace_card", |mut c: C<W>| c.data_mut().w().unplace_card())?;
+    l.func_wrap(m, "unplace_card", |mut c: C<W>| {
+        c.data_mut().w().unplace_card()
+    })?;
     l.func_wrap(
         m,
         "placed_cards",
@@ -1389,11 +1400,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "set_self_tile", |mut c: C<W>, tile: i32| {
         c.data_mut().w().set_self_tile(tile) as i32
     })?;
-    l.func_wrap(m, "self_face_down", |c: C<W>| c.data().wr().self_face_down() as i32)?;
+    l.func_wrap(m, "self_face_down", |c: C<W>| {
+        c.data().wr().self_face_down() as i32
+    })?;
     l.func_wrap(m, "set_self_face_down", |mut c: C<W>, on: i32| {
         c.data_mut().w().set_self_face_down(on != 0) as i32
     })?;
-    l.func_wrap(m, "self_immune", |c: C<W>| c.data().wr().self_immune() as i32)?;
+    l.func_wrap(m, "self_immune", |c: C<W>| {
+        c.data().wr().self_immune() as i32
+    })?;
     l.func_wrap(m, "set_self_immune", |mut c: C<W>, on: i32| {
         c.data_mut().w().set_self_immune(on != 0) as i32
     })?;
@@ -1771,13 +1786,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "send_to_dest", |mut c: C<W>, dest: i32| {
         Ok(c.data_mut().w().send_to_dest(dest).unwrap_or(-1))
     })?;
-    l.func_wrap(
-        m,
-        "transfer_to_dest",
-        |mut c: C<W>, to: i32, dest: i32| {
-            Ok(c.data_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
-        },
-    )?;
+    l.func_wrap(m, "transfer_to_dest", |mut c: C<W>, to: i32, dest: i32| {
+        Ok(c.data_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
+    })?;
     l.func_wrap(m, "ring_multiplier", |c: C<W>| {
         c.data().wr().ring_multiplier()
     })?;
@@ -1951,10 +1962,14 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         },
     )?;
     l.func_wrap(m, "play_doubled", |c: C<W>| c.data().wr().play_doubled())?;
-    l.func_wrap(m, "set_play_doubled", |mut c: C<W>, n: i32| -> Result<(), Error> {
-        c.data_mut().w().set_play_doubled(n);
-        Ok(())
-    })?;
+    l.func_wrap(
+        m,
+        "set_play_doubled",
+        |mut c: C<W>, n: i32| -> Result<(), Error> {
+            c.data_mut().w().set_play_doubled(n);
+            Ok(())
+        },
+    )?;
     l.func_wrap(
         m,
         "trig_cards",
@@ -2452,7 +2467,13 @@ impl HostState<NullWorld> {
 struct NullWorld;
 
 impl CardWorld for NullWorld {
-    fn place_card_on(&mut self, _player_id: i32, _tile: i32, _card: &str, _note: crate::Msg) -> i32 {
+    fn place_card_on(
+        &mut self,
+        _player_id: i32,
+        _tile: i32,
+        _card: &str,
+        _note: crate::Msg,
+    ) -> i32 {
         -1
     }
     // keyed state: storage the null world does not have

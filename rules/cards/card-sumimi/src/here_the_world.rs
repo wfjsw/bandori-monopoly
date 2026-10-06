@@ -12,9 +12,9 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{TriggerKind, ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "Sumimi:Here the world";
 
@@ -81,13 +81,16 @@ fn clear_held(player_id: i32) {
     }
 }
 
-pub const HERE_THE_WORLD: CardDef = CardDef::new("Sumimi:Here the world", &[
-    On::CounterAct(&[ChainKind::TwoCards], can_react, react),
-    // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-    On::Hook(&[HookKind::Drew], |_| true, drew),
-    // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-    On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
-]);
+pub const HERE_THE_WORLD: CardDef = CardDef::new(
+    "Sumimi:Here the world",
+    &[
+        On::CounterAct(&[ChainKind::TwoCards], can_react, react),
+        // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
+        On::Hook(&[HookKind::Drew], |_| true, drew),
+        // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
+        On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
+    ],
+);
 
 fn can_react(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「当有人同一回合内打出两张卡时」 -- C# `t.Kind == "twoCards" && t.Seat != seat`.
@@ -105,7 +108,12 @@ fn react(player_id: i32) -> card_sdk::Asked {
     ctx::place_card(them, ID, &Msg::new(key!("here_the_world_note")));
     // C# `Card.User` = the reactor; the return draw goes to them.
     ctx::set_slot(them, SLOT_USER, player_id + 1);
-    ctx::log(player_id, &Msg::new(key!("here_the_world_placed")).player_id("who", them).player_id("by", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("here_the_world_placed"))
+            .player_id("who", them)
+            .player_id("by", player_id),
+    );
     Ok(())
 }
 
@@ -142,7 +150,10 @@ fn drew(player_id: i32) -> card_sdk::Asked {
     store_held(player_id, &id);
     // 规则书（2）: 「并为其放置3个奇迹水晶」
     ctx::set_crystals(3);
-    ctx::log(player_id, &Msg::new(key!("here_the_world_held")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("here_the_world_held")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -172,7 +183,10 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
         ctx::add_to_hand(player_id, &id);
     }
     clear_held(player_id);
-    ctx::log(player_id, &Msg::new(key!("here_the_world_returned")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("here_the_world_returned")).player_id("who", player_id),
+    );
     // C# `H.Unplace(this, "discard", "结束了")`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_slot(player_id, SLOT_USER, 0);

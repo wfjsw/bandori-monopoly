@@ -29,11 +29,15 @@ fn is_ring(t: i32) -> bool {
     t >= 0 && ctx::is_ring(t)
 }
 
-pub const KOKORO_PRACTICE: CardDef = CardDef::new("skill:凑友希那:来练习吧", &[
-    On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Hook(&[HookKind::PassPlayer], mine, on_passed),
-    On::Hook(&[HookKind::SettleAfter], mine, on_settle)]);
+pub const KOKORO_PRACTICE: CardDef = CardDef::new(
+    "skill:凑友希那:来练习吧",
+    &[
+        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::PassPlayer], mine, on_passed),
+        On::Hook(&[HookKind::SettleAfter], mine, on_settle),
+    ],
+);
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -49,7 +53,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_owner(t, player_id);
     ctx::teleport_to(player_id, t);
     state::set(player_id, WAIVED, 0);
-    ctx::log(player_id, &Msg::new(key!("kokoro_practice_start")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kokoro_practice_start")).tile("tile", t),
+    );
     Ok(())
 }
 
@@ -73,7 +80,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("kokoro_practice_stop_ask")).tile("tile", t),
         )? {
             ctx::plan::set_stop_at(t);
-            ctx::log(player_id, &Msg::new(key!("kokoro_practice_stopped")).tile("tile", t));
+            ctx::log(
+                player_id,
+                &Msg::new(key!("kokoro_practice_stopped")).tile("tile", t),
+            );
         }
     }
     // （3） 「任何时刻当你不位于RiNG时，失去所有的火罐」.

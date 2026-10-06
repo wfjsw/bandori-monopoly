@@ -7,22 +7,33 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::{HookKind, MoveKind};
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（花音）Wacha Mocha 啪嗒进行曲";
 /// 「水母标记」.
 const JELLY: &str = "水母标记";
 
-pub const KANON_MARCH: CardDef = CardDef::new("HHW:（花音）Wacha Mocha 啪嗒进行曲", &[
-    On::Play(None, play),
-    On::Hook(&[HookKind::Pass], mine, on_pass),
-    On::Play(Some(can_jump), jump)]);
+pub const KANON_MARCH: CardDef = CardDef::new(
+    "HHW:（花音）Wacha Mocha 啪嗒进行曲",
+    &[
+        On::Play(None, play),
+        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Play(Some(can_jump), jump),
+    ],
+);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「[场]」 -- a field card; C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "HHW:（花音）Wacha Mocha 啪嗒进行曲", &Msg::new(key!("kanon_march_note")));
-    ctx::log(player_id, &Msg::new(key!("kanon_march_placed")).player_id("who", player_id));
+    ctx::place_card(
+        player_id,
+        "HHW:（花音）Wacha Mocha 啪嗒进行曲",
+        &Msg::new(key!("kanon_march_note")),
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kanon_march_placed")).player_id("who", player_id),
+    );
     ctx::add_tok(player_id, JELLY, 0, 9);
     Ok(())
 }
@@ -41,7 +52,10 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_tok(player_id, JELLY, 1, 9);
-    ctx::log(player_id, &Msg::new(key!("kanon_march_mark")).i("n", ctx::tok(player_id, JELLY) as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kanon_march_mark")).i("n", ctx::tok(player_id, JELLY) as i64),
+    );
     Ok(())
 }
 
@@ -61,8 +75,12 @@ fn jump(player_id: i32) -> card_sdk::Asked {
     let a = ctx::tile_named("水族馆");
     let b = ctx::tile_named("弦卷豪宅");
     let mut pool: Vec<i32> = Vec::new();
-    if a >= 0 { pool.push(a); }
-    if b >= 0 { pool.push(b); }
+    if a >= 0 {
+        pool.push(a);
+    }
+    if b >= 0 {
+        pool.push(b);
+    }
     if pool.is_empty() {
         return Ok(());
     }
@@ -78,6 +96,9 @@ fn jump(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_teleport_to(pick);
     ctx::plan::set_resolve(true);
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("kanon_march_jump")).tile("tile", pick));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("kanon_march_jump")).tile("tile", pick),
+    );
     Ok(())
 }

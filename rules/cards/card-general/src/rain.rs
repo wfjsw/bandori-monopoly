@@ -8,10 +8,9 @@
 //!
 
 use alloc::vec::Vec;
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[
-    On::Play(None, rain)]);
+pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play(None, rain)]);
 
 fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「投掷2d2并记录结果为X」
@@ -29,7 +28,9 @@ fn rain(player_id: i32) -> card_sdk::Asked {
         let who = ctx::ask_player(
             player_id,
             &Msg::new(key!("rain_title")),
-            &Msg::new(key!("rain_ask")).i("n", targets.len() as i64 + 1).i("x", x as i64),
+            &Msg::new(key!("rain_ask"))
+                .i("n", targets.len() as i64 + 1)
+                .i("x", x as i64),
             &pool,
         )?;
         // 规则书[手]: 「[指定]X名玩家」 -- the gate (out / exile / ImmuneAll /

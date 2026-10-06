@@ -7,14 +7,18 @@
 //! on your own tile: 11+ builds a free house, 16+ draws, 20 keeps the card in
 //! play so it can cancel a payment later.
 
-use card_sdk::abi::{TriggerKind, HookKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const HANEOKA: CardDef = CardDef::new("MyGO:羽丘的不可思议女孩", &[
-    On::Play(Some(cant_play), haneoka),
-    // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-    On::Hook(&[HookKind::PayChoose], |_| true, pay_choose)]);
+pub const HANEOKA: CardDef = CardDef::new(
+    "MyGO:羽丘的不可思议女孩",
+    &[
+        On::Play(Some(cant_play), haneoka),
+        // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
+        On::Hook(&[HookKind::PayChoose], |_| true, pay_choose),
+    ],
+);
 
 const ID: &str = "MyGO:羽丘的不可思议女孩";
 
@@ -45,7 +49,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
                 .card("card", ID)
                 .i("roll", r as i64),
         );
-// TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
+        // TODO(规则书)[judgement]: 「视为此卡未生效」 -- the clause names a state without
         // saying what observes it. `PlayCtx.Effective = false` is the C#'s mutable
         // side channel and is not being ported (a routine should *return* whether
         // it took effect); but before that lands, what "not effective" changes has
@@ -130,6 +134,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     }
     trigger::set_pay_amount(0);
     ctx::set_dest(ctx::Dest::Graveyard);
-    ctx::log(player_id, &Msg::new(key!("haneoka_cancelled")).card("card", ID).n("money", amount as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("haneoka_cancelled"))
+            .card("card", ID)
+            .n("money", amount as i64),
+    );
     Ok(())
 }

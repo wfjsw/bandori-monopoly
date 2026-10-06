@@ -7,10 +7,9 @@
 //! whole discard pile back into the deck and gain 500 per returned card.
 
 use card_sdk::ctx;
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[
-    On::Play(Some(cant_play), play)]);
+pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play(Some(cant_play), play)]);
 
 /// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -33,7 +32,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::sweep_to_deck(player_id);
     ctx::log(
         player_id,
-        &Msg::new(key!("cookie_time_shuffle")).player_id("who", player_id).i("n", x as i64),
+        &Msg::new(key!("cookie_time_shuffle"))
+            .player_id("who", player_id)
+            .i("n", x as i64),
     );
     // 规则书: 「获得500*X资金，X为返回卡的总数」
     ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")));

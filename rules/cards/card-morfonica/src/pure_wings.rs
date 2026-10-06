@@ -5,10 +5,9 @@
 //!
 //! ahead (no settle), then take the main move roll right away.
 
-use card_sdk::{ctx, key, CardDef, On, Msg};
+use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[
-    On::Play(None, pure_wings)]);
+pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play(None, pure_wings)]);
 
 fn pure_wings(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
@@ -41,6 +40,9 @@ fn pure_wings(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Walk);
     ctx::plan::set_steps(-1);
     ctx::card_move(player_id);
-    ctx::log(player_id, &Msg::new(key!("pure_wings_roll")).player_id("who", player_id));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pure_wings_roll")).player_id("who", player_id),
+    );
     Ok(())
 }

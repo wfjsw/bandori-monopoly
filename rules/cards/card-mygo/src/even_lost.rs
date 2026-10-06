@@ -9,14 +9,17 @@
 //! > （2）[持续] 主要阶段中，你可将此卡置入弃牌堆并进入移动阶段，使你的此次主要移动格数为你当前手牌张数。
 //!
 
-use card_sdk::abi::{TriggerKind, ChainKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const EVEN_LOST: CardDef = CardDef::new("MyGO:即使迷茫着", &[
-    On::Play(Some(can_go), go),
-    On::CounterAct(&[ChainKind::Effect], can_react, react),
-]);
+pub const EVEN_LOST: CardDef = CardDef::new(
+    "MyGO:即使迷茫着",
+    &[
+        On::Play(Some(can_go), go),
+        On::CounterAct(&[ChainKind::Effect], can_react, react),
+    ],
+);
 
 /// 规则书[反击]（1）: 「当你被其他人的卡的效果影响时」 -- C# `H.HitByOtherCard`.
 fn can_react(player_id: i32) -> bool {
@@ -37,8 +40,15 @@ fn can_react(player_id: i32) -> bool {
 fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（1）: 「你将此卡放置在自己场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "MyGO:即使迷茫着", &Msg::new(key!("even_lost_note")));
-    ctx::log(player_id, &Msg::new(key!("even_lost_placed")).player_id("who", player_id));
+    ctx::place_card(
+        player_id,
+        "MyGO:即使迷茫着",
+        &Msg::new(key!("even_lost_note")),
+    );
+    ctx::log(
+        player_id,
+        &Msg::new(key!("even_lost_placed")).player_id("who", player_id),
+    );
     Ok(())
 }
 
@@ -61,6 +71,9 @@ fn go(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_steps(ctx::hand_size(player_id));
     ctx::plan::set_resolve(true);
     ctx::card_move(player_id);
-    ctx::log(player_id, &Msg::new(key!("even_lost_go")).i("n", ctx::hand_size(player_id) as i64));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("even_lost_go")).i("n", ctx::hand_size(player_id) as i64),
+    );
     Ok(())
 }

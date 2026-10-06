@@ -23,16 +23,19 @@
 use alloc::vec::Vec;
 
 use card_sdk::abi::state_key;
-use card_sdk::abi::{TriggerKind, HookKind, CardPile};
+use card_sdk::abi::{CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const DREAM_AHEAD: CardDef = CardDef::new("PP:梦在前方，结彩当下", &[
-    On::Play(Some(can_buy), buy_one),
-    On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
-    On::Hook(&[HookKind::Drew], drew_guard, drew),
-    On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
-]);
+pub const DREAM_AHEAD: CardDef = CardDef::new(
+    "PP:梦在前方，结彩当下",
+    &[
+        On::Play(Some(can_buy), buy_one),
+        On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
+        On::Hook(&[HookKind::Drew], drew_guard, drew),
+        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+    ],
+);
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).
 const SLOT_X: &str = "dream_ahead_x";
@@ -58,7 +61,11 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[特]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:梦在前方，结彩当下", &Msg::new(key!("dream_ahead_place")));
+    ctx::place_card(
+        player_id,
+        "PP:梦在前方，结彩当下",
+        &Msg::new(key!("dream_ahead_place")),
+    );
     // 规则书[特]: 「初始手牌减1」 -- C# `H.IncV(seat, "startHandMinus")`.
     ctx::inc_slot(player_id, "startHandMinus", 1);
     Ok(())
@@ -126,7 +133,12 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     if amount <= 0 {
         return Ok(());
     }
-    ctx::transfer(mover, player_id, amount, &Msg::new(key!("dream_ahead_tax")).i("n", amount as i64))?;
+    ctx::transfer(
+        mover,
+        player_id,
+        amount,
+        &Msg::new(key!("dream_ahead_tax")).i("n", amount as i64),
+    )?;
     Ok(())
 }
 
@@ -152,9 +164,7 @@ fn can_buy(player_id: i32) -> Option<Msg> {
 fn free_near(player_id: i32) -> Vec<i32> {
     let pos = ctx::player_pos(player_id);
     (0..ctx::tile_count())
-        .filter(|&t| {
-            ctx::is_buyable(t) && ctx::tile_owner(t) < 0 && ctx::dist(pos, t) <= 3
-        })
+        .filter(|&t| ctx::is_buyable(t) && ctx::tile_owner(t) < 0 && ctx::dist(pos, t) <= 3)
         .collect()
 }
 
@@ -179,11 +189,16 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("dream_ahead_which")),
         &opts,
     )?;
-    let Some(&t) = pool.get(pick) else { return Ok(()) };
+    let Some(&t) = pool.get(pick) else {
+        return Ok(());
+    };
     if !ctx::card_buy(player_id, t) {
         return Ok(());
     }
     ctx::add_crystals(-3, 0);
-    ctx::log(player_id, &Msg::new(key!("dream_ahead_bought")).tile("tile", t));
+    ctx::log(
+        player_id,
+        &Msg::new(key!("dream_ahead_bought")).tile("tile", t),
+    );
     Ok(())
 }

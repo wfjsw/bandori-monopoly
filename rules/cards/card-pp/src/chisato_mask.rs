@@ -17,21 +17,39 @@ use alloc::vec::Vec;
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
-use card_sdk::{key, CardDef, On, Msg};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const CHISATO_MASK: CardDef = CardDef::new("PP:[白鹭千圣]微笑的铁假面", &[
-    On::Play(None, chisato_mask),
-    On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled)]);
+pub const CHISATO_MASK: CardDef = CardDef::new(
+    "PP:[白鹭千圣]微笑的铁假面",
+    &[
+        On::Play(None, chisato_mask),
+        On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled),
+    ],
+);
 
 fn chisato_mask(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(player_id, "PP:[白鹭千圣]微笑的铁假面", &Msg::new(key!("chisato_mask_note")));
+    ctx::place_card(
+        player_id,
+        "PP:[白鹭千圣]微笑的铁假面",
+        &Msg::new(key!("chisato_mask_note")),
+    );
     // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」
-    split_pay(&ctx::others(player_id), player_id, 2000, &Msg::new(key!("chisato_mask_why")));
+    split_pay(
+        &ctx::others(player_id),
+        player_id,
+        2000,
+        &Msg::new(key!("chisato_mask_why")),
+    );
     // 规则书[持续]（2）: 「[共鸣]其他玩家[分摊][支付][拥有者]1500资金」
     if crate::resonance::try_resonance(player_id)? {
-        split_pay(&ctx::others(player_id), player_id, 1500, &Msg::new(key!("chisato_mask_resonance")));
+        split_pay(
+            &ctx::others(player_id),
+            player_id,
+            1500,
+            &Msg::new(key!("chisato_mask_resonance")),
+        );
     }
     Ok(())
 }
@@ -46,13 +64,22 @@ fn reshuffled_guard(player_id: i32) -> bool {
 }
 
 fn reshuffled(player_id: i32) -> card_sdk::Asked {
-    split_pay(&ctx::others(player_id), player_id, 500, &Msg::new(key!("chisato_mask_why")));
+    split_pay(
+        &ctx::others(player_id),
+        player_id,
+        500,
+        &Msg::new(key!("chisato_mask_why")),
+    );
     Ok(())
 }
 
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
-    let list: Vec<i32> = payers.iter().copied().filter(|&p| p != to && !ctx::player_out(p)).collect();
+    let list: Vec<i32> = payers
+        .iter()
+        .copied()
+        .filter(|&p| p != to && !ctx::player_out(p))
+        .collect();
     if list.is_empty() || total <= 0 {
         return Ok(());
     }
