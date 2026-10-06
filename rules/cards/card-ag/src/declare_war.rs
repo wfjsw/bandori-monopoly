@@ -25,29 +25,35 @@ fn can_react(player_id: i32) -> bool {
     // `effect::hits` covers both because a payment touches its payer *and* its
     // payee.
     //
-    // TODO(规则书): 「或你拥有的格子」 -- the declaration names the owner when a
-    // tile-affecting effect aims at a tile, so the [指定] half lands here;
-    // effects that touch a tile without naming its owner (house removal and
-    // friends) declare nothing aimed at the owner and stay out of reach -- the
-    // same gap the C# has.
+    // 「或你拥有的格子」 -- the declaration names the owner when a tile-affecting
+    // effect aims at a tile, so the [指定] half lands here; effects that touch a
+    // tile without naming its owner (house removal and friends) declare nothing
+    // aimed at the owner and stay out of reach -- the same gap the C# has.
     let Some(by) = trigger::by_card().filter(|&by| by != player_id) else {
         return false;
     };
     if ctx::player_out(by) {
         return false;
     }
-    ctx::effect::hits(player_id)
+    if ctx::effect::hits(player_id) {
+        return true;
+    }
+    // 「或你拥有的格子」 -- an effect aimed at a tile this player owns.
+    (0..ctx::effect::count()).any(|i| {
+        let t = ctx::effect::tile(i);
+        t >= 0 && ctx::tile_owner(t) == player_id
+    })
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // C# `int byCard = c.Trigger.ByCard` -- the player whose card affected this
     // one, not `t.Seat`. On a `pay` trigger `trigger::player_id()` is the *payer*
     // (this player, `t.Pay.from`), so the 500 must come from `by_card`.
     let Some(by) = trigger::by_card() else {
-        return;
+        return Ok(());
     };
     if by == player_id {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「[指定]那名玩家」 -- the designation is the card's player.
     // C# `H.Target(c, byCard, r)`: the full targeting gate (out / exile /
@@ -55,12 +61,13 @@ fn react(player_id: i32) {
     // `r.yes` gates everything below. `Some(hit)` is the player actually hit --
     // a `Redirect` hook may have moved it (`r.index` in the C#).
     let Some(hit) = ctx::target(by) else {
-        return;
+        return Ok(());
     };
     // 规则书[反击]: 「被[指定]的玩家[支付][使用者]500资金」 -- C#
     // `H.PayR(r.index, c.Seat, 500, ...)`: from the player actually targeted.
     let why = Msg::new(key!("declare_war_why")).card("card", "AG:宣战布告");
-    ctx::transfer(hit, player_id, 500, &why);
+    ctx::transfer(hit, player_id, 500, &why)?;
     // 规则书[反击]: 「且[使用者]抽1张卡」
     ctx::draw(player_id, 1);
+    Ok(())
 }

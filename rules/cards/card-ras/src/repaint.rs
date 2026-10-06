@@ -55,23 +55,23 @@ fn can_react(player_id: i32) -> bool {
     }
 }
 
-fn react(player_id: i32) {
-    let Some(roll) = trigger::move_roll() else { return; };
+fn react(player_id: i32) -> card_sdk::Asked {
+    let Some(roll) = trigger::move_roll() else { return Ok(()); };
     let them = trigger::player_id();
     // 规则书: 「X为对方原本预计路径上你拥有的格子数」
     let x = on_path(player_id, them, roll);
     if x <= 0 {
-        return;
+        return Ok(());
     }
     // C# `H.Target(c, m.Seat, r)` then `if (r.yes && r.index == m.Seat)` -- the
     // mover must still be the hit (EXIST's redirect can move it) and the
     // `target` [反击] window must not have cancelled it.
     let hit = match ctx::target(them) {
         Some(h) => h,
-        None => return,
+        None => return Ok(()),
     };
     if hit != them {
-        return;
+        return Ok(());
     }
     // 规则书: 「使目标玩家的此次移动数-X」
     let now = (roll - x).max(0);
@@ -83,4 +83,5 @@ fn react(player_id: i32) {
     // 规则书: 「对方此次结算的支付减半」 -- C# `m.PayFactor *= 0.5`
     // (milli-units: 500 = x0.5); the settle of this move pays half.
     ctx::plan::set_pay_factor(500);
+    Ok(())
 }

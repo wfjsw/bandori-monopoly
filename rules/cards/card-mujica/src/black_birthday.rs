@@ -20,16 +20,17 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn black_birthday(player_id: i32) {
+fn black_birthday(player_id: i32) -> card_sdk::Asked {
     let why = Msg::new(key!("black_birthday_why"));
     for p in ctx::others(player_id) {
-        if ctx::money(p) <= 1000 {
-            ctx::transfer(p, player_id, 800, &why);
+        if ctx::money_of(p) <= 1000 {
+            ctx::transfer(p, player_id, 800, &why)?;
         } else {
-            ctx::transfer(p, player_id, 200, &why);
+            ctx::transfer(p, player_id, 200, &why)?;
             if !ctx::player_out(p) {
-                ctx::transfer(p, player_id, 200, &why);
+                ctx::transfer(p, player_id, 200, &why)?;
             }
         }
     }
+    Ok(())
 }

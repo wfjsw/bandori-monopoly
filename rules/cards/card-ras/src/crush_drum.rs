@@ -20,7 +20,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「本回合主要移动掷骰额外添加Xd20，X为你弃牌堆的卡数」
     // -- C# `H._turnCtx.Plan.Dice.Add((discard.Count, 20, ...))`.
     let count = ctx::discard_size(player_id);
@@ -44,4 +44,5 @@ fn play(player_id: i32) {
     // `{ Kind: Card, Player, Card, Play }` -- it does not expose `Play.Def.AddsDice`,
     // `t.ByCard`, or `t.Play.Def`, so a card-side guard cannot read "this is a
     // dice-adding card" either.
+    Ok(())
 }

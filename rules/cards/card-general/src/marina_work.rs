@@ -21,7 +21,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::kind() == TriggerKind::CircleAffected && trigger::player_id() == player_id
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「[使用者]本次对#1格子的[经过]或[结算]正常进行而不受到其上的额外效果」
     // C# `c.Trigger.Move.Tags["circleNormal"] = 1` then
     // 「今天也要加油工作喔：这次 CiRCLE 的 [经过] / [结算] 正常进行，不受其上的额外效果影响」.
@@ -31,4 +31,5 @@ fn react(player_id: i32) {
     // (C# `c.Trigger.Move.Tags["circleNormal"] = 1`) so the CiRCLE [经过]/[结算]
     // ignores the tile's extra effects; until then they still apply. The trigger
     // also carries no tile id for the log line (#1格子).
+    Ok(())
 }

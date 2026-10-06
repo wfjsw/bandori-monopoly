@@ -32,14 +32,14 @@ fn can_react(player_id: i32) -> bool {
     ctx::owned_count(who) > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let who = trigger::target();
     if who < 0 {
-        return;
+        return Ok(());
     }
     let deeds: Vec<i32> = ctx::owned_tiles(who);
     if deeds.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契」 -- C# `H.AskTileOf` over `deeds`
     // (the C# AI default is the most expensive deed).
@@ -48,7 +48,7 @@ fn react(player_id: i32) {
         &Msg::new(key!("trajectory_ask_title")),
         &Msg::new(key!("trajectory_ask_text")).player_id("who", who),
         &deeds,
-    );
+    )?;
     // 规则书（1）[反击]: 「你获得那名玩家的任意一张地契（自动免费赎回），并拆除那个对应格子的所有房屋」
     //   -- C# `H.State.owners[num] = i; H.State.mortgaged[num] = false;
     //   H.State.houses[num] = 0`.
@@ -64,4 +64,5 @@ fn react(player_id: i32) {
             .player_id("them", who)
             .tile("tile", tile),
     );
+    Ok(())
 }

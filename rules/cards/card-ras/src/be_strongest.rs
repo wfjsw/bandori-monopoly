@@ -30,7 +30,7 @@ const LIVEHOUSES: [&str; 9] = [
     "Live House Galaxy",
     "RiNG 4"];
 
-fn be_strongest(player_id: i32) {
+fn be_strongest(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若你没有Livehouse格子，传送到“Live House”」
     // -- C# `H.OwnedBy(i).Any((int t) => H.IsLiveHouse(i, t))`, which also
     // counts an `Fx.ExtraColor` deed (e.g. 「游击演出」's designated one).
@@ -50,7 +50,7 @@ fn be_strongest(player_id: i32) {
         }
     };
     if to < 0 {
-        return;
+        return Ok(());
     }
     ctx::log(player_id, &Msg::new(key!("be_strongest_to")).player_id("who", player_id).tile("tile", to));
     // 规则书: 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo
@@ -58,4 +58,5 @@ fn be_strongest(player_id: i32) {
     // main move and settles where it lands (Resolve defaults to true).
     ctx::plan::set_teleport_to(to);
     ctx::card_move(player_id);
+    Ok(())
 }

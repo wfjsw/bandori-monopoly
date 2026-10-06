@@ -38,27 +38,28 @@ fn in_one(player_id: i32) -> bool {
 }
 
 /// 「初始0，上限3」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    Ok(())
 }
 
 /// 状态1's pass clause, and 状态2's entry offer.
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         // 状态2: 「每回合开始时自动打出一张抽牌堆顶端的牌」
         play_deck_top(player_id);
-        return;
+        return Ok(());
     }
     // 「火罐数达到上限时可在回合开始时选择进入状态2」
     if state::get(player_id, state_key::FIRE) < state::max(player_id, state_key::FIRE) {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("sakiko_life_title")),
         &Msg::new(key!("sakiko_life_enter")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     state::set(player_id, state_key::SKILL_STATE, 2);
     ctx::log(player_id, &Msg::new(key!("sakiko_life_two")));
@@ -69,29 +70,30 @@ fn at_turn_start(player_id: i32) {
         ctx::discard_from_hand(player_id, &c);
     }
     play_deck_top(player_id);
+    Ok(())
 }
 
 /// 「经过其他玩家时，可将其所有层数的停留，眩晕转移至自己身上（仍正常完成本次
 /// 移动），若如此做，每获得一层停留，眩晕，你获得1500资金」.
-fn on_pass_player(player_id: i32) {
+fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if !ctx::trigger::move_is_main() {
-        return;
+        return Ok(());
     }
     let other = ctx::trigger::player_id();
     if other == player_id {
-        return;
+        return Ok(());
     }
     let stay = ctx::stay_of(other);
     let stun = ctx::stun_of(other);
     if stay + stun <= 0 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("sakiko_life_title")),
         &Msg::new(key!("sakiko_life_take")).player_id("who", other).i("n", (stay + stun) as i64),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // 「转移至自己身上（仍正常完成本次移动）」 -- the layers move; the walk
     // is untouched.
@@ -104,19 +106,22 @@ fn on_pass_player(player_id: i32) {
     // 「每获得一层停留，眩晕，你获得1500资金」
     ctx::gain(player_id, BOUNTY * (stay + stun), &Msg::new(key!("sakiko_life_bounty")));
     ctx::log(player_id, &Msg::new(key!("sakiko_life_moved")).player_id("who", other).i("n", (stay + stun) as i64));
+    Ok(())
 }
 
 /// 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」.
-fn on_abnormal(player_id: i32) {
+fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     ctx::gain_fire(player_id, 1, &Msg::new(key!("sakiko_life_gain")));
+    Ok(())
 }
 
 /// 状态2's 「每回合开始时自动打出一张抽牌堆顶端的牌」.
-fn play_deck_top(player_id: i32) {
+fn play_deck_top(player_id: i32) -> card_sdk::Asked {
     let deck = ctx::cards_in(player_id, CardPile::Deck);
     let Some(top) = deck.into_iter().next() else {
-        return;
+        return Ok(());
     };
     ctx::log(player_id, &Msg::new(key!("sakiko_life_auto")).card("card", &top));
-    ctx::play_card(&top, player_id);
+    ctx::play_card(&top, player_id)?;
+    Ok(())
 }

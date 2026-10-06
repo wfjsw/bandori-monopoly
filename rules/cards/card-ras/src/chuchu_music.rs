@@ -30,12 +30,12 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let others = ctx::others(player_id);
     // C# `WhyNot` refuses the play with no other player alive; the gate is now
     // `cant_play` above.
     if others.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书: 「将此卡放置于你以外的一名玩家场上」 -- C# `H.PickTarget` over
     // `H.Others(seat)` then `H.PlaceFromPlay(c, r.index, -1, 3)`.
@@ -47,16 +47,16 @@ fn play(player_id: i32) {
         &Msg::new(key!("chuchu_music_title")),
         &Msg::new(key!("chuchu_music_ask")),
         &others,
-    );
+    )?;
     let hit = match ctx::target(who) {
         Some(h) => h,
-        None => return,
+        None => return Ok(()),
     };
     // 规则书: 「将此卡放置于你以外的一名玩家场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(hit, ID, &Msg::new(key!("chuchu_music_note")));
     // 规则书: 「并为其添加3个奇迹水晶」 -- C# `H.PlaceFromPlay(c, r.index, -1, 3)`.
-    ctx::set_crystals(hit, 3);
+    ctx::set_crystals(3);
     // C# `User` is the player who played the card; `Mem["hits"]` starts at 0.
     ctx::set_slot(hit, SLOT_USER, player_id);
     ctx::set_slot(hit, SLOT_HITS, 0);
@@ -64,6 +64,7 @@ fn play(player_id: i32) {
         player_id,
         &Msg::new(key!("chuchu_music_placed")).player_id("who", player_id).player_id("target", hit),
     );
+    Ok(())
 }
 
 /// `DecayCard.TurnEnd` (C# `CardChuchuMusic : DecayCard`) -- burn one miracle
@@ -72,23 +73,24 @@ fn play(player_id: i32) {
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn turn_end(player_id: i32) {
+fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
-    if ctx::add_crystals(player_id, -1, 0) > 0 {
-        return;
+    if ctx::add_crystals(-1, 0) > 0 {
+        return Ok(());
     }
     // 规则书: 「此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡」
     // -- C# `Empty` -> `Done`: unplace, discard for the user, user draws 1.
     let user = ctx::slot(player_id, SLOT_USER);
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(if user >= 0 { user } else { player_id }, ID);
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1);
     }
     ctx::log(player_id, &Msg::new(key!("chuchu_music_empty")).player_id("who", player_id));
+    Ok(())
 }
 
 /// C# `CardChuchuMusic.Bought` / `Move` -- when the holder buys a tile, the user
@@ -97,13 +99,13 @@ fn turn_end(player_id: i32) {
 /// Pure guard for [`buy_after`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn buy_after_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn buy_after(player_id: i32) {
+fn buy_after(player_id: i32) -> card_sdk::Asked {
     let user = ctx::slot(player_id, SLOT_USER);
     if user < 0 || ctx::player_out(user) {
-        return;
+        return Ok(());
     }
     // 规则书: 「场上存在此卡的玩家下次购买地契时，[使用者]获得100资金」
     // -- C# `Pay = Math.Min(500, 100 + 100 * Hits)`; each trigger bumps Hits.
@@ -123,17 +125,18 @@ fn buy_after(player_id: i32) {
         }
     }
     if to < 0 {
-        return;
+        return Ok(());
     }
     // Carry the user/hits slots across the hop.
     ctx::set_slot(to, SLOT_USER, user);
     ctx::set_slot(to, SLOT_HITS, hits + 1);
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::place_card(to, ID, &Msg::new(key!("chuchu_music_note")));
     // 规则书: 「并将奇迹水晶补充至3个」 -- C# `Crystals = 3`.
-    ctx::set_crystals(to, 3);
+    ctx::set_crystals(3);
     ctx::log(
         user,
         &Msg::new(key!("chuchu_music_moved")).player_id("who", to).i("n", pay as i64),
     );
+    Ok(())
 }

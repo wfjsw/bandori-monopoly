@@ -34,7 +34,7 @@ fn repeated_digits(money: i32) -> bool {
 /// C# `CardNoBreakup.Predict` -- money after settling on `t` (rent if other-owned).
 /// C# `H.RentOf` pays nothing to an out-of-game or mortgaged owner.
 fn predict(player_id: i32, t: i32) -> i32 {
-    let money = ctx::money(player_id);
+    let money = ctx::money_of(player_id);
     let owner = ctx::tile_owner(t);
     if owner >= 0 && owner != player_id && !ctx::player_out(owner) && !ctx::mortgaged_of(t) {
         money - ctx::rent_of(t)
@@ -47,7 +47,7 @@ fn predict(player_id: i32, t: i32) -> i32 {
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「资金不含有相同数字时可打出」 -- C# refuses with 「资金里有相同的数字」
     // when `RepeatedDigits(H.State.seats[player_id].money)`.
-    if repeated_digits(ctx::money(player_id)) {
+    if repeated_digits(ctx::money_of(player_id)) {
         return Some(Msg::new(key!("no_breakup_repeated")));
     }
     // 规则书: 「当你本回合未进行过抵押/赎回操作」 -- both actions record
@@ -60,11 +60,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn no_breakup(player_id: i32) {
+fn no_breakup(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);
     if n <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「进行一次可使你的资金变动为拥有相同数字的传送」 -- C# prefers the
     // tiles whose predicted post-settle money has a repeated digit, else all tiles
@@ -81,7 +81,7 @@ fn no_breakup(player_id: i32) {
         }
     }
     if all.is_empty() {
-        return;
+        return Ok(());
     }
     let picks: &[i32] = if good.is_empty() { &all } else { &good };
     let to = ctx::ask_tile(
@@ -89,7 +89,7 @@ fn no_breakup(player_id: i32) {
         &Msg::new(key!("no_breakup_title")),
         &Msg::new(key!("no_breakup_ask")),
         picks,
-    );
+    )?;
     // 规则书: 「进行一次…传送，视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
     // { TeleportTo = teleportTo })` (`Resolve` defaults to true) =
     // `set_teleport_to(to)` + `set_resolve(true)` + `card_move(player_id)`.
@@ -113,4 +113,5 @@ fn no_breakup(player_id: i32) {
     // `CardNoBreakup.Play`); the teleport now settles and consumes the main
     // move, but nothing rolls the world back when the money still lacks a
     // repeated digit.
+    Ok(())
 }

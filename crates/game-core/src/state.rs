@@ -38,6 +38,23 @@ impl MovePlan {
     }
 }
 
+/// Turn stages -- the rulebook's four, in order (`docs/rulebook/rulebook.txt:2957`):
+/// 开始阶段, 运营阶段, 移动阶段, 结束阶段. [`MatchState::step`] holds one of
+/// these, or [`stage::NONE`] before a turn starts. They are numbered to match
+/// the rulebook so a client can show 「阶段 N」 without translating.
+pub mod stage {
+    /// No turn in progress: the match has not started, or is between turns.
+    pub const NONE: i32 = 0;
+    /// 开始阶段 -- the turn starts: status ticks, `turnStart`, the stun/stay checks.
+    pub const START: i32 = 1;
+    /// 运营阶段 -- play cards, roll the dice, buy / redeem / mortgage.
+    pub const OPS: i32 = 2;
+    /// 移动阶段 -- the main move.
+    pub const MOVE: i32 = 3;
+    /// 结束阶段 -- the move has resolved; buy and build happen here.
+    pub const END: i32 = 4;
+}
+
 /// `MatchState.cs`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -69,6 +86,13 @@ pub struct MatchState {
     pub bank: f32,
     pub bought: bool,
     pub built: bool,
+    /// Next uid to hand out for a card instance. **Global** across the match, not
+    /// per player: every card in the game has one id, so an instance is addressed
+    /// by `uid` alone and one player may hold several copies of the same card in
+    /// play at once. `#[serde(default)]` so a state saved before this existed
+    /// still loads (it re-numbers from 0 on the next placement).
+    #[serde(default)]
+    pub next_card_uid: i32,
     pub players: Vec<MatchPlayer>,
     pub bans: Vec<String>,
     pub owners: Vec<i32>,
@@ -116,6 +140,7 @@ impl Default for MatchState {
             bank: 0.0,
             bought: false,
             built: false,
+            next_card_uid: 1,
             players: vec![],
             bans: vec![],
             owners: vec![],

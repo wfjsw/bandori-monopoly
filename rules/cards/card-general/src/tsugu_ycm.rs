@@ -31,7 +31,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「投掷3d10并根据结果依次进行以下操作」 -- C# `H.CardRoll(c, 3, 10, ...)`.
     let r = ctx::roll(player_id, 3, 10);
     let station = ctx::tile_named(STATION);
@@ -59,7 +59,7 @@ fn play(player_id: i32) {
         // (`ctx::is_buyable` is `TileData.IsBuyable`, a deed tile).
         let mut free: Vec<i32> = Vec::new();
         for t in 0..ctx::tile_count() {
-            if ctx::is_buyable(t) && ctx::tile_owner(t) < 0 && ctx::money(player_id) >= ctx::buy_price(t) {
+            if ctx::is_buyable(t) && ctx::tile_owner(t) < 0 && ctx::money_of(player_id) >= ctx::buy_price(t) {
                 free.push(t);
             }
         }
@@ -67,8 +67,8 @@ fn play(player_id: i32) {
             // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
             let title = Msg::new(key!("tsugu_buy_title"));
             let text = Msg::new(key!("tsugu_buy_ask"));
-            if ctx::ask_yes(player_id, &title, &text) {
-                let tile = ctx::ask_tile(player_id, &title, &text, &free);
+            if ctx::ask_yes(player_id, &title, &text)? {
+                let tile = ctx::ask_tile(player_id, &title, &text, &free)?;
                 // 规则书（2）: 「购买」 -- C# `H.BuyRoutine(i, rt.index)`.
                 // C# also defaults the prompt to the most expensive free tile
                 // (`free.OrderByDescending(price).First()`).
@@ -102,7 +102,7 @@ fn play(player_id: i32) {
             &[
                 Msg::new(key!("tsugu_pick_gain")).n("n", 1000),
                 Msg::new(key!("tsugu_pick_move"))],
-        );
+        )?;
         if pick == 1 {
             // C# `rr.index == 1 && !H._turnCtx.MainMoved` -- the teleport is a
             // main-move option, so it is only taken while `H.MoveWhyNot` still
@@ -124,4 +124,5 @@ fn play(player_id: i32) {
             ctx::gain(player_id, 1000, &Msg::new(key!("tsugu_why")));
         }
     }
+    Ok(())
 }

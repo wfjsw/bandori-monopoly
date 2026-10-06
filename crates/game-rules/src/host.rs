@@ -426,15 +426,30 @@ impl Ruleset {
         );
         let state = store.into_data();
         match res {
-            Ok(_) => Ok(Outcome::Done(
-                state.world.expect("world is restored after nested calls"),
-            )),
+            Ok(_) => {
+                // A prompt was published and the run kept going: the guest
+                // swallowed a `Prompt` (`card_sdk` marks it `#[must_use]`; this
+                // is the boundary check the lint cannot reach). Carrying on would
+                // run the effect on an answer nobody gave.
+                if state.asked.is_some() || state.host_request.is_some() {
+                    return Err(RuleError::Trap(
+                        "card published a prompt and kept going".into(),
+                    ));
+                }
+                Ok(Outcome::Done(
+                    state.world.expect("world is restored after nested calls"),
+                ))
+            }
             Err(e) if is_need_input(&e) => {
                 if let Some(req) = state.host_request {
                     Ok(Outcome::NeedHost(req))
                 } else if let Some(p) = state.asked {
                     Ok(Outcome::NeedInput(p))
                 } else {
+                    // `Prompt` is a unit struct, so a card can fabricate one
+                    // without a host call having published a question. Refuse it
+                    // rather than pausing the match on a prompt that no client
+                    // can answer.
                     Err(RuleError::Trap("need-input exit without a prompt".into()))
                 }
             }
@@ -513,7 +528,9 @@ impl Ruleset {
 
     /// `Card.WhyNot` -- the reason the card cannot be played now, or `None` when
     /// it can. Also a pure query on a throwaway copy (a prompting guard reports
-    /// [`RuleError::GuardPrompted`]).
+    /// [`RuleError::GuardPrompted`]). This is the `Play` **gate**
+    /// (`Option<fn(i32) -> Option<Msg>>`), so it runs under
+    /// [`export::OP_GUARD`] -- the effect body does not run here.
     pub fn cant_play<W: CardWorld>(
         &self,
         world: &W,
@@ -525,7 +542,7 @@ impl Ruleset {
             return Ok(None);
         };
         let mut store = self.store(world.clone(), &[])?;
-        match call_card_msg(&self.inner, &mut store, card, entry, player_id) {
+        match call_card_msg(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id) {
             Ok(v) => Ok(v),
             Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
             Err(e) => Err(trap(e)),
@@ -602,8 +619,27 @@ impl<W> HostState<W> {
     }
 }
 
+/// A card stops for a prompt by **returning** [`abi::EXIT_NEED_INPUT`] from
+/// `bandori_on` -- `rt::on` turns the run's `Err(card_sdk::Prompt)` into that
+/// value. Fold it back into the host's own [`need_input`] marker so every
+/// caller's `is_need_input` check (`Outcome::NeedInput` / `Outcome::NeedHost` /
+/// [`RuleError::GuardPrompted`]) keeps working unchanged.
+///
+/// The two are one signal at different layers: the sentinel is the guest <-> host
+/// wire form, the marker is this module's error. Nothing raises the marker *into*
+/// the guest any more for the imports a card reads as `Result` -- see the note on
+/// [`need_input`] for which ones still trap and why.
+fn fold_exit(v: i64) -> Result<i64, Error> {
+    if v == abi::EXIT_NEED_INPUT as i64 {
+        Err(need_input())
+    } else {
+        Ok(v)
+    }
+}
+
 /// Instantiate the card's module and call one of its entry points. Returns the
-/// i32 result for `can_react`, 0 otherwise.
+/// i32 result for `can_react`, 0 otherwise. A guest that stops for a prompt comes
+/// back as [`need_input`], never as the raw sentinel.
 fn call_card<W: CardWorld>(
     rules: &Inner,
     store: &mut Store<HostState<W>>,
@@ -617,15 +653,20 @@ fn call_card<W: CardWorld>(
     let inst = instantiate(&linker, &mut *store, &rules.modules[slot.module].module)?;
     inst.get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
         .call(&mut *store, (slot.local, entry, op, player_id))
+        .and_then(fold_exit)
 }
 
 /// Like [`call_card`] for a `Play` gate, which answers with a packed `Msg`
-/// buffer: the buffer is read back before the instance drops.
+/// buffer: the buffer is read back before the instance drops. `op` is
+/// [`export::OP_GUARD`] for the gate; a run that stops for a prompt never gets
+/// this far (the sentinel is folded first, so it cannot be misread as a `Msg`
+/// pointer).
 fn call_card_msg<W: CardWorld>(
     rules: &Inner,
     store: &mut Store<HostState<W>>,
     card: i32,
     entry: i32,
+    op: i32,
     player_id: i32,
 ) -> Result<Option<crate::Msg>, Error> {
     let slot = rules.slots[card as usize];
@@ -633,7 +674,8 @@ fn call_card_msg<W: CardWorld>(
     let inst = instantiate(&linker, &mut *store, &rules.modules[slot.module].module)?;
     let packed = inst
         .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
-        .call(&mut *store, (slot.local, entry, export::OP_RUN, player_id))?;
+        .call(&mut *store, (slot.local, entry, op, player_id))
+        .and_then(fold_exit)?;
     if packed == 0 {
         return Ok(None);
     }
@@ -699,6 +741,12 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
 /// The C# `AbnormalGate` from inside a card run: on replay the logged answer
 /// says whether the effect went through; otherwise the run is paused with a
 /// `Gate` request and the engine adjudicates it.
+///
+/// Pauses by **trapping** with [`need_input`], unlike `ask`/`pay`/`play_card`.
+/// `ctx::gate` reads this as a plain `bool`, so a sentinel here would read as
+/// `true` ("gate passed") and the effect would run on an unevaluated gate. Same
+/// for `target`, `card_move` and the buy/build routines below -- see
+/// [`need_input`] for the whole split.
 fn gate<W: CardWorld>(
     c: &mut Caller<'_, HostState<W>>,
     player_id: i32,
@@ -812,6 +860,18 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             Ok(())
         },
     )?;
+    // `H.Effect` -- announce which effect a card just applied, the line the
+    // client's effect popup is built from. Same wire shape as `log` (a `Msg`);
+    // the world decides how it differs from a plain log line.
+    l.func_wrap(
+        m,
+        "effect",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
+            let msg = guest_msg(&mut c, p, n)?;
+            c.data_mut().w().effect(player_id, msg);
+            Ok(())
+        },
+    )?;
     l.func_wrap(m, "tile_count", |c: C<W>| c.data().wr().tile_count())?;
     l.func_wrap(
         m,
@@ -850,6 +910,11 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             // A card-driven payment is paused so the engine can raise a `pay`
             // trigger (and the [反击] window) before the money moves. The answer is
             // the final amount to move -- 0 cancels the payment outright.
+            //
+            // The pause is the sentinel **as the return value**, not a trap:
+            // `ctx::pay` reads it through `asked()` and hands the card
+            // `Err(Prompt)`. Trapping here would tear the stack before the card
+            // ever saw a `Result`.
             if let Some(&final_amount) = st.answers.get(st.next_answer) {
                 st.next_answer += 1;
                 return Ok(st.w().pay(player_id, final_amount, src));
@@ -859,7 +924,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 to: -1,
                 amount,
             });
-            Err(need_input())
+            Ok(abi::EXIT_NEED_INPUT)
         },
     )?;
     l.func_wrap(m, "player_count", |c: C<W>| c.data().wr().player_count())?;
@@ -969,6 +1034,44 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             Ok(bytes.len() as i32)
         },
     )?;
+    l.func_wrap(
+        m,
+        "field_instances",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let inst = c.data().wr().field_instances(player_id);
+            let bytes = postcard::to_allocvec(&inst)
+                .map_err(|e| err(format!("field_instances encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(m, "crystals_at", |c: C<W>, uid: i32| {
+        c.data().wr().crystals_at(uid)
+    })?;
+    l.func_wrap(m, "add_crystals_at", |mut c: C<W>, uid: i32, n: i32, max: i32| {
+        c.data_mut().w().add_crystals_at(uid, n, max)
+    })?;
+    l.func_wrap(m, "unplace_at", |mut c: C<W>, uid: i32| {
+        c.data_mut().w().unplace_at(uid)
+    })?;
+    l.func_wrap(m, "tile_at", |c: C<W>, uid: i32| c.data().wr().tile_at(uid))?;
+    l.func_wrap(m, "set_tile_at", |mut c: C<W>, uid: i32, tile: i32| {
+        c.data_mut().w().set_tile_at(uid, tile) as i32
+    })?;
+    l.func_wrap(m, "is_face_down_at", |c: C<W>, uid: i32| {
+        c.data().wr().is_face_down_at(uid) as i32
+    })?;
+    l.func_wrap(m, "set_face_down_at", |mut c: C<W>, uid: i32, on: i32| {
+        c.data_mut().w().set_face_down_at(uid, on != 0) as i32
+    })?;
+    l.func_wrap(m, "is_immune_at", |c: C<W>, uid: i32| {
+        c.data().wr().is_immune_at(uid) as i32
+    })?;
+    l.func_wrap(m, "set_immune_at", |mut c: C<W>, uid: i32, on: i32| {
+        c.data_mut().w().set_immune_at(uid, on != 0) as i32
+    })?;
     l.func_wrap(
         m,
         "set_build_discount",
@@ -1165,9 +1268,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 .shuffle_into_deck(player_id, hand != 0, discard != 0)
         },
     )?;
-    l.func_wrap(m, "unplace_card", |mut c: C<W>, player_id: i32| {
-        c.data_mut().w().unplace_card(player_id) as i32
-    })?;
+    l.func_wrap(m, "unplace_card", |mut c: C<W>| c.data_mut().w().unplace_card())?;
     l.func_wrap(
         m,
         "placed_cards",
@@ -1206,22 +1307,26 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             Ok(c.data_mut().w().add_card_crystals(player_id, &card, n, max))
         },
     )?;
-    l.func_wrap(m, "is_placed", |c: C<W>, player_id: i32| {
-        c.data().wr().is_placed(player_id)
+    l.func_wrap(m, "is_placed", |c: C<W>| c.data().wr().is_placed())?;
+    l.func_wrap(m, "self_tile", |c: C<W>| c.data().wr().self_tile())?;
+    l.func_wrap(m, "set_self_tile", |mut c: C<W>, tile: i32| {
+        c.data_mut().w().set_self_tile(tile) as i32
     })?;
-    l.func_wrap(m, "crystals", |c: C<W>, player_id: i32| {
-        c.data().wr().crystals(player_id)
+    l.func_wrap(m, "self_face_down", |c: C<W>| c.data().wr().self_face_down() as i32)?;
+    l.func_wrap(m, "set_self_face_down", |mut c: C<W>, on: i32| {
+        c.data_mut().w().set_self_face_down(on != 0) as i32
     })?;
-    l.func_wrap(m, "set_crystals", |mut c: C<W>, player_id: i32, n: i32| {
-        c.data_mut().w().set_crystals(player_id, n)
+    l.func_wrap(m, "self_immune", |c: C<W>| c.data().wr().self_immune() as i32)?;
+    l.func_wrap(m, "set_self_immune", |mut c: C<W>, on: i32| {
+        c.data_mut().w().set_self_immune(on != 0) as i32
     })?;
-    l.func_wrap(
-        m,
-        "add_crystals",
-        |mut c: C<W>, player_id: i32, n: i32, max: i32| {
-            c.data_mut().w().add_crystals(player_id, n, max)
-        },
-    )?;
+    l.func_wrap(m, "crystals", |c: C<W>| c.data().wr().crystals())?;
+    l.func_wrap(m, "set_crystals", |mut c: C<W>, n: i32| {
+        c.data_mut().w().set_crystals(n)
+    })?;
+    l.func_wrap(m, "add_crystals", |mut c: C<W>, n: i32, max: i32| {
+        c.data_mut().w().add_crystals(n, max)
+    })?;
     l.func_wrap(
         m,
         "count_marks",
@@ -1559,21 +1664,19 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
          cl: i32,
          p: i32,
          n: i32|
-         -> Result<(), Error> {
+         -> Result<i32, Error> {
             let card = guest_str(&mut c, cp, cl)?;
             let note = guest_msg(&mut c, p, n)?;
-            c.data_mut().w().place_card_on(player_id, tile, &card, note);
-            Ok(())
+            Ok(c.data_mut().w().place_card_on(player_id, tile, &card, note))
         },
     )?;
     l.func_wrap(
         m,
         "place_card_at",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<(), Error> {
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
             let card = guest_str(&mut c, cp, cl)?;
             let note = guest_msg(&mut c, p, n)?;
-            c.data_mut().w().place_card(player_id, &card, note);
-            Ok(())
+            Ok(c.data_mut().w().place_card(player_id, &card, note))
         },
     )?;
     l.func_wrap(m, "set_dest", |mut c: C<W>, dest: i32| {
@@ -1668,6 +1771,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     // The rest of the routine family, same shape as `card_move`: the card asks,
     // the run pauses, the engine runs the real routine, the effect replays past.
+    // These pause by trapping (see `gate` above) -- their guest wrappers return
+    // `bool`, so a sentinel would read as "it worked".
     l.func_wrap(
         m,
         "card_settle_at",
@@ -1812,7 +1917,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 options,
                 answer_slot: st.next_answer,
             });
-            Err(need_input())
+            // Like `pay`: the pause is the sentinel as the return value, so
+            // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
+            Ok(abi::EXIT_NEED_INPUT)
         },
     )?;
     l.func_wrap(m, "trig_kind", |c: C<W>| {
@@ -2013,7 +2120,19 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             }
             let dest = st.w().leave_card(saved);
             c.set_fuel(left)?;
-            res.map(|()| dest)
+            // A nested card that stopped for a prompt hands the pause to the
+            // *outer* card as the sentinel, so `ctx::play_card` returns
+            // `Err(Prompt)` and the outer run can `?` it. The nested question
+            // (`inner.asked` / `inner.host_request`) is already merged into the
+            // outer state above -- that is what the outer `call_card` reads once
+            // it folds this sentinel back. `dest` is a `Dest` discriminant
+            // (small), so it cannot collide with the sentinel; the guest checks
+            // the sentinel before `Dest::from_i32` too.
+            match res {
+                Ok(()) => Ok(dest),
+                Err(e) if is_need_input(&e) => Ok(abi::EXIT_NEED_INPUT),
+                Err(e) => Err(e),
+            }
         },
     )?;
 
@@ -2048,7 +2167,10 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 HostState::new(rules.clone(), world, vec![], depth),
             );
             store.set_fuel(fuel)?;
-            let res = call_card_msg(&rules, &mut store, card, entry, player_id);
+            // The `Play` gate again, on a throwaway copy: `OP_GUARD`, not the
+            // effect. A gate that prompts or traps lands in `res` as an `Err`
+            // and counts as "no", which is what this query wants.
+            let res = call_card_msg(&rules, &mut store, card, entry, export::OP_GUARD, player_id);
             let left = store.get_fuel().unwrap_or(0);
             c.set_fuel(left)?;
             Ok(matches!(res, Ok(None)) as i32)
@@ -2235,7 +2357,9 @@ impl HostState<NullWorld> {
 struct NullWorld;
 
 impl CardWorld for NullWorld {
-    fn place_card_on(&mut self, _player_id: i32, _tile: i32, _card: &str, _note: crate::Msg) {}
+    fn place_card_on(&mut self, _player_id: i32, _tile: i32, _card: &str, _note: crate::Msg) -> i32 {
+        -1
+    }
     // keyed state: storage the null world does not have
     fn state_var(&self, _player_id: i32, _key: &str) -> game_core::state::StateVar {
         game_core::state::StateVar::default()
@@ -2341,20 +2465,22 @@ impl CardWorld for NullWorld {
     fn add_to_deck(&mut self, _: i32, _: &str, _: bool) {}
     fn add_to_deck_at(&mut self, _: i32, _: &str, _: i32) {}
     fn to_discard(&mut self, _: i32, _: &str) {}
-    fn place_card(&mut self, _: i32, _: &str, _: crate::Msg) {}
-    fn unplace_card(&mut self, _: i32) -> bool {
-        false
+    fn place_card(&mut self, _: i32, _: &str, _: crate::Msg) -> i32 {
+        -1
     }
-    fn is_placed(&self, _: i32) -> i32 {
+    fn unplace_card(&mut self) -> i32 {
+        -1
+    }
+    fn is_placed(&self) -> i32 {
         0
     }
-    fn crystals(&self, _: i32) -> i32 {
+    fn crystals(&self) -> i32 {
         0
     }
-    fn set_crystals(&mut self, _: i32, _: i32) -> i32 {
+    fn set_crystals(&mut self, _: i32) -> i32 {
         0
     }
-    fn add_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_crystals(&mut self, _: i32, _: i32) -> i32 {
         0
     }
     fn add_mark(&mut self, _: i32, _: i32, _: &str, _: crate::Msg) {}

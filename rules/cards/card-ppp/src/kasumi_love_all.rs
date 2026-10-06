@@ -19,7 +19,7 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new("PPP:（香澄）大家我都�
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在“星之鼓动山丘”上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // H.TileNamed("星之鼓动山丘"))`.
     let tile = ctx::tile_named("星之鼓动山丘");
@@ -36,32 +36,33 @@ fn play(player_id: i32) {
         player_id,
         &Msg::new(key!("kasumi_love_all_placed")).player_id("who", player_id),
     );
+    Ok(())
 }
 
 /// 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时那名玩家在此卡所在格子
 /// [强制停下]并将此卡放入[使用者]弃卡区且为[使用者]的团卡添加一个[奇迹水晶]，那名玩家
 /// 此次[结算]如果[支付]地租则地租只算作原本的一半。」
 /// -- C# `CardKasumiLoveAll.PassTile` -> `Stop`.
-fn pass_tile(player_id: i32) {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed(player_id) {
-        return;
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
+        return Ok(());
     }
-    let tile = ctx::placed_tile(player_id, "PPP:（香澄）大家我都喜欢哦").unwrap_or(-1);
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return;
+        return Ok(());
     }
     // C# `m.Seat == User` -- the card's own placer is not stopped by it.
     if trigger::player_id() == player_id {
-        return;
+        return Ok(());
     }
     // C# `m.Remaining <= 0` -- 「[移动终点]不为此卡所在格子」: only a still-walking
     // pass is intercepted (the walk would otherwise end here).
     if trigger::move_remaining() <= 0 {
-        return;
+        return Ok(());
     }
     // C# `m.Teleport` -- a teleport does not walk past the tile.
     if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return;
+        return Ok(());
     }
     // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`
     // (MatchHost.cs:9063-9078, behind `H.WithCard(User, H.AbnormalGate(a))`).
@@ -81,10 +82,11 @@ fn pass_tile(player_id: i32) {
     );
     // 规则书[持续]: 「将此卡放入[使用者]弃卡区」 -- C# `H.Unplace(this, "discard",
     // "有人在这里停下了")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, "PPP:（香澄）大家我都喜欢哦");
     // 规则书[持续]: 「为[使用者]的团卡添加一个[奇迹水晶]」 -- C# `H.AddBandCrystals(user, 1, ...)`.
     if !ctx::player_out(player_id) {
         ctx::add_band_crystals(player_id, 1, i32::MAX);
     }
+    Ok(())
 }

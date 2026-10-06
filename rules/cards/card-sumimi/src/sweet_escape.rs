@@ -107,12 +107,12 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn sweet_escape(player_id: i32) {
+fn sweet_escape(player_id: i32) -> card_sdk::Asked {
     let picks = spots(player_id);
     if picks.is_empty() {
         // C# `WhyNot`: 没有可以去的格子 (kept so a forced play cannot prompt empty).
         ctx::log(player_id, &Msg::new(key!("sweet_escape_none")));
-        return;
+        return Ok(());
     }
     // 规则书: 「传送至“周边精选”，“商店街”或“东京外”对应颜色的除地产商以外任一不属于你的未抵押格子」
     let to = ctx::ask_tile(
@@ -120,7 +120,7 @@ fn sweet_escape(player_id: i32) {
         &Msg::new(key!("sweet_escape_title")),
         &Msg::new(key!("sweet_escape_ask")),
         &picks,
-    );
+    )?;
     // 规则书: 「…并触发结算」 / 「视为你的主要移动」 -- C# `H.CardMove(c, new MoveCtx
     // { TeleportTo = to })` (`Resolve` defaults to true) = `set_teleport_to(to)`
     // + `set_resolve(true)` + `card_move(player_id)`.
@@ -138,7 +138,8 @@ fn sweet_escape(player_id: i32) {
     // 规则书: 「若为可购买格子则必须购买」 -- C# `H.BuyRoutine` when the tile is
     // unowned and `money >= H.BuyPriceFor`. The settle already ran on arrival
     // (`set_resolve(true)`); this is the must-buy that follows it.
-    if ctx::is_buyable(to) && ctx::tile_owner(to) < 0 && ctx::money(player_id) >= ctx::buy_price(to) {
+    if ctx::is_buyable(to) && ctx::tile_owner(to) < 0 && ctx::money_of(player_id) >= ctx::buy_price(to) {
         ctx::card_buy(player_id, to);
     }
+    Ok(())
 }

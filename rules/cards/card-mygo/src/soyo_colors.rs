@@ -10,7 +10,44 @@
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const SOYO_COLORS: CardDef = CardDef::new("MyGO:（soyo）混合的颜色", &[
-    On::Play(Some(cant_play), soyo_colors)]);
+    On::Play(Some(cant_play), soyo_colors),
+    On::Hook(&[card_sdk::abi::HookKind::PayMul], on_rent, half_again)]);
+
+/// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent on an agent
+/// tile whose colour differs from this card's.
+fn on_rent(player_id: i32) -> bool {
+    if !ctx::is_placed() {
+        return false;
+    }
+    if !ctx::trigger::pay_is_rent() {
+        return false;
+    }
+    if ctx::trigger::target() != player_id {
+        return false;
+    }
+    let t = ctx::trigger::tile();
+    if t < 0 || !ctx::is_agent(t) {
+        return false;
+    }
+    let Some(mine) = ctx::self_tile() else {
+        return false;
+    };
+    if mine < 0 {
+        return false;
+    }
+    ctx::tile_group(t) != ctx::tile_group(mine)
+}
+
+/// 「收费在地产商的减半收费基础上额外减半」.
+fn half_again(player_id: i32) -> card_sdk::Asked {
+    let v = ctx::trigger::value();
+    if v <= 0 {
+        return Ok(());
+    }
+    ctx::trigger::set_pay_amount((v + 1) / 2);
+    ctx::log(player_id, &Msg::new(key!("soyo_colors_half")).i("n", v as i64));
+    Ok(())
+}
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- C# `CardSoyoColors.WhyNot`
@@ -21,10 +58,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn soyo_colors(player_id: i32) {
+fn soyo_colors(player_id: i32) -> card_sdk::Asked {
     let mine = ctx::owned_tiles(player_id);
     if mine.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- C# `H.AskTileOf` over
     // `H.OwnedBy(i)`, then `H.PlaceFromPlay(c, i, tile)`.
@@ -33,7 +70,7 @@ fn soyo_colors(player_id: i32) {
         &Msg::new(key!("soyo_colors_title")),
         &Msg::new(key!("soyo_colors_ask")),
         &mine,
-    );
+    )?;
     ctx::set_dest(ctx::Dest::Field);
     // 规则书: 「将此卡放置于你拥有地契的一个格子」 -- bound to the chosen tile.
     ctx::place_card_on(player_id, tile, "MyGO:（soyo）混合的颜色", &Msg::new(key!("soyo_colors_note")).tile("tile", tile));
@@ -43,13 +80,8 @@ fn soyo_colors(player_id: i32) {
     // only be built through a matching-colour agent -- is `why_not_build_on`,
     // which reads the tile's *own* group and so already refuses.)
     ctx::set_tile_color(tile, ctx::ALL_COLORS);
-    // TODO(规则书): 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
-    // 减半收费基础上额外减半」 -- the `Fx.PayMul` hook kind is in
-    // (`On::Hook(&[HookKind::PayMul], …)`), but the C# guard keys on
-    // `H._agentGroup` (the colour group of the 地产商 tile being settled, set
-    // only inside `AgentLanding`'s half-price pass) and that has no ctx read,
-    // so the body cannot tell an agent-landing charge from ordinary rent.
-    // Once it is readable the body is `p.IsRent && p.tile == Tile && p.to ==
-    // Player && agent_group >= 0 && agent_group != tile_group(Tile)` ->
-    // `set_pay_amount(ceil_to(value / 2, 10))`.
+    // 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
+    // 减半收费基础上额外减半」 -- the agent group is the group of the tile being
+    // settled; 「其他颜色」 is that group differing from this tile's.
+    Ok(())
 }

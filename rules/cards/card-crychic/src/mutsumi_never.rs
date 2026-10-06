@@ -21,7 +21,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const MUTSUMI_NEVER: CardDef = CardDef::new("CRYCHIC:（睦）从没有觉得...", &[
     On::Play(None, mutsumi_never)]);
 
-fn mutsumi_never(player_id: i32) {
+fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，使用者可以选择（2）或（3）效果之一发动。」 -- C#
     // `H.AskPick` between the two effects (default the last option).
     // C# only offers (2) when a real (non-Extra) `BandCrychic` skill is attached
@@ -36,16 +36,17 @@ fn mutsumi_never(player_id: i32) {
         &Msg::new(key!("mutsumi_never_title")),
         &Msg::new(key!("mutsumi_never_ask")),
         &options,
-    );
+    )?;
     if pick == 0 {
-        branch_crystals(player_id);
+        branch_crystals(player_id)?;
     } else {
         branch_shuffle(player_id);
     }
+    Ok(())
 }
 
 /// 规则书（2） -- spend up to 3 band crystals, run the band skill, discard a card.
-fn branch_crystals(player_id: i32) {
+fn branch_crystals(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「消耗乐队技能卡上的3个奇迹水晶（不足3个则改为全部消耗）」
     let n = ctx::band_crystals(player_id).min(3);
     if n > 0 {
@@ -64,12 +65,13 @@ fn branch_crystals(player_id: i32) {
             &Msg::new(key!("mutsumi_never_discard_title")),
             &Msg::new(key!("mutsumi_never_discard_ask")),
             &ids,
-        );
+        )?;
         ctx::discard_from_hand(player_id, ids[pick.min(ids.len() - 1)]);
     }
     // C# `c.Dest = "gone"` -- the card is consumed without the [移除] log; the
     // nearest `ctx::Dest` is `Removed` (same out-of-game destination).
     ctx::set_dest(ctx::Dest::Banished);
+    Ok(())
 }
 
 /// 规则书（3） -- remove this card, shuffle everything back, draw 2 from CiRCLE.

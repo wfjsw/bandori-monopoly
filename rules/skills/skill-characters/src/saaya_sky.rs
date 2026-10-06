@@ -34,43 +34,45 @@ fn other(player_id: i32) -> bool {
 }
 
 /// 「初始3，上限5」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 5);
+    Ok(())
 }
 
 /// （1）「其他玩家一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时可让那名
 /// 玩家获得200资金且自己获得1个saaya标记和1个[火罐]」.
-fn on_pay_after(player_id: i32) {
+fn on_pay_after(player_id: i32) -> card_sdk::Asked {
     if ctx::tok(player_id, MARK) > 0 {
-        return;
+        return Ok(());
     }
     let amount = ctx::trigger::value();
     if amount < 1000 {
-        return;
+        return Ok(());
     }
     let payer = ctx::trigger::player_id();
     if payer < 0 || payer == player_id {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("saaya_sky_title")),
         &Msg::new(key!("saaya_sky_ask")).player_id("who", payer),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     ctx::add_tok(player_id, MARK, 1, 1);
     ctx::gain_fire(player_id, 1, &Msg::new(key!("saaya_sky_gain")));
     if !ctx::player_out(payer) {
         ctx::gain(payer, 200, &Msg::new(key!("saaya_sky_payee")));
     }
+    Ok(())
 }
 
 /// （1）「拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷结果减1d10
 /// （计算后小等于0则移动到下一个可购买格子）」.
-fn on_roll(player_id: i32) {
+fn on_roll(player_id: i32) -> card_sdk::Asked {
     if ctx::tok(player_id, MARK) < 1 {
-        return;
+        return Ok(());
     }
     ctx::add_tok(player_id, MARK, -1, 1);
     let cut = ctx::roll(player_id, 1, 10).max(0);
@@ -95,26 +97,28 @@ fn on_roll(player_id: i32) {
             ctx::trigger::set_move_roll(0);
         }
         ctx::log(player_id, &Msg::new(key!("saaya_sky_floor")).tile("tile", to));
-        return;
+        return Ok(());
     }
     ctx::trigger::set_move_roll(after);
     ctx::log(player_id, &Msg::new(key!("saaya_sky_cut")).i("n", cut as i64).i("total", after as i64));
+    Ok(())
 }
 
 /// （2）「[消耗]或[支付]资金时可使用5个[火罐]，此次资金变动减少5000（最少0）」.
-fn on_pay(player_id: i32) {
+fn on_pay(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount <= 0 || state::get(player_id, state_key::FIRE) < 5 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("saaya_sky_cut_title")),
         &Msg::new(key!("saaya_sky_cut_ask")).i("n", amount as i64),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     if ctx::spend_fire(player_id, 5, &Msg::new(key!("saaya_sky_spend"))) {
         ctx::trigger::set_pay_amount((amount - 5000).max(0));
     }
+    Ok(())
 }

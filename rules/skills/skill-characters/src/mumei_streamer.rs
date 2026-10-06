@@ -40,16 +40,17 @@ fn in_one(player_id: i32) -> bool {
 }
 
 /// 「初始0，上限5」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 5);
+    Ok(())
 }
 
 /// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐…并使那次支付的金额
 /// 提高X*100」.
-fn on_pay_add(player_id: i32) {
+fn on_pay_add(player_id: i32) -> card_sdk::Asked {
     let from = ctx::trigger::player_id();
     if from == player_id {
-        return;
+        return Ok(());
     }
     // 「你立即获得1火罐」 first, so X counts it.
     ctx::gain_fire(player_id, 1, &Msg::new(key!("mumei_gain")));
@@ -62,16 +63,18 @@ fn on_pay_add(player_id: i32) {
     if x >= state::max(player_id, state_key::FIRE) {
         enter_two(player_id);
     }
+    Ok(())
 }
 
 /// The turn-end tick also catches a pot that filled outside a payment.
-fn at_turn_end(player_id: i32) {
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return;
+        return Ok(());
     }
     if state::get(player_id, state_key::FIRE) >= state::max(player_id, state_key::FIRE) {
         enter_two(player_id);
     }
+    Ok(())
 }
 
 /// 状态2's entry: flip every face-up placed card face-down.
@@ -79,13 +82,13 @@ fn enter_two(player_id: i32) {
     state::set(player_id, state_key::SKILL_STATE, 2);
     ctx::log(player_id, &Msg::new(key!("mumei_two")));
     let mut n = 0;
-    for c in ctx::placed_cards(player_id) {
-        if ctx::card_face_down(player_id, &c) {
+    for (uid, _c) in ctx::field_instances(player_id) {
+        if ctx::is_face_down_at(uid) {
             continue;
         }
-        ctx::set_card_face_down(player_id, &c, true);
+        ctx::set_face_down_at(uid, true);
         // 「不受任何效果影响」
-        ctx::set_card_immune(player_id, &c, true);
+        ctx::set_immune_at(uid, true);
         n += 1;
     }
     state::set(player_id, FLIPPED, n);
@@ -98,21 +101,22 @@ fn enter_two(player_id: i32) {
 /// 「你退出状态2后，被你翻面的卡自动翻回」 -- whatever clears `skillState`
 /// (the band skill's fire-pot drain) leaves 状态2 at a turn end, so the sweep
 /// runs here and catches it.
-fn at_turn_end_exit(player_id: i32) {
+fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return;
+        return Ok(());
     }
     if state::get(player_id, FLIPPED) <= 0 {
-        return;
+        return Ok(());
     }
-    for c in ctx::placed_cards(player_id) {
-        if ctx::card_immune(player_id, &c) {
-            ctx::set_card_face_down(player_id, &c, false);
-            ctx::set_card_immune(player_id, &c, false);
+    for (uid, _c) in ctx::field_instances(player_id) {
+        if ctx::is_immune_at(uid) {
+            ctx::set_face_down_at(uid, false);
+            ctx::set_immune_at(uid, false);
         }
     }
     state::set(player_id, FLIPPED, 0);
     ctx::log(player_id, &Msg::new(key!("mumei_back")));
+    Ok(())
 }
 
 // TODO(规则书)[judgement]: 状态2's exit -- the sheet gives no exit condition for

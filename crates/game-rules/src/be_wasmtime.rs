@@ -3,14 +3,14 @@
 //! The server runs card modules here -- a card effect is replayed once per
 //! prompt, so the engine speed matters. Same modules as the browser (which
 //! runs the wasmi interpreter), same behaviour: fuel bounds runaway effects,
-//! and a host call that published a prompt traps with [`need_input`].
+//! and a host call that published a prompt stops the run.
 
 use std::sync::OnceLock;
 
 pub use wasmtime::{Caller, Engine, Linker, Module, Store};
 use wasmtime::{Config, Instance};
 
-/// Host errors and traps. The "a prompt is waiting" trap is a marker error the
+/// Host errors and traps. The "a prompt is waiting" signal is a marker error the
 /// host raises instead of a plain message, so `is_need_input` can recognize it.
 pub type Error = wasmtime::Error;
 
@@ -25,6 +25,17 @@ impl std::fmt::Display for NeedInputTrap {
 
 impl std::error::Error for NeedInputTrap {}
 
+/// The host-side "a prompt is waiting" marker.
+///
+/// This is **not** raised into the guest for the imports a card reads as
+/// `Result` -- those return `card_sdk::abi::EXIT_NEED_INPUT` as their value, and
+/// `host::fold_exit` turns that sentinel back into this marker at the
+/// `bandori_on` boundary. It is still raised by the imports whose guest wrappers
+/// read a plain `bool`/`Option` (`gate`, `target`, `card_move`, the buy/build
+/// routines): those have nowhere to carry a sentinel without it reading as
+/// `true`/`Some(..)`, so the trap -- which tears the stack and therefore cannot
+/// be swallowed -- is the correct shape for them until their wrappers are
+/// `Result`-shaped too.
 pub fn need_input() -> Error {
     Error::new(NeedInputTrap)
 }

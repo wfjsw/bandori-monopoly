@@ -33,24 +33,30 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
-fn reset(player_id: i32) {
+fn reset(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 0);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("kiritani_gain")));
+    Ok(())
 }
 
 /// （2） 「一回合一次」 + 「消耗一个火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, USED) != 0 {
         return Some(Msg::new(key!("kiritani_used")));
     }
@@ -66,10 +72,10 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「指定你的一个地块，指定前后各一格范围内（不包括该格子本身）的所有
 /// 其他玩家支付你X」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let mine = ctx::owned_tiles(player_id);
     if mine.is_empty() {
-        return;
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
@@ -79,8 +85,8 @@ fn use_skill(player_id: i32) {
             .iter()
             .map(|&t| Msg::new(key!("kiritani_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
-    );
-    let Some(&tile) = mine.get(pick) else { return; };
+    )?;
+    let Some(&tile) = mine.get(pick) else { return Ok(()); };
     // 「指定前后各一格范围内（不包括该格子本身）」 -- the two neighbours.
     let mut targets: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
     for t in neighbours(tile) {
@@ -92,18 +98,19 @@ fn use_skill(player_id: i32) {
     }
     if targets.is_empty() {
         ctx::log(player_id, &Msg::new(key!("kiritani_nobody")).tile("tile", tile));
-        return;
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kiritani_spend"))) {
-        return;
+        return Ok(());
     }
     state::set(player_id, USED, 1);
     // X = 「此地的地租的一半/指定玩家数（向上取整百）」.
     let half = ctx::rent_of(tile) / 2;
     let x = ceil_hundred(half / targets.len() as i32);
     for p in targets {
-        ctx::transfer(p, player_id, x, &Msg::new(key!("kiritani_why")).tile("tile", tile).n("n", x as i64));
+        ctx::transfer(p, player_id, x, &Msg::new(key!("kiritani_why")).tile("tile", tile).n("n", x as i64))?;
     }
+    Ok(())
 }
 
 /// The two tiles either side of `tile`, wrapping.

@@ -61,10 +61,10 @@ fn can_react(player_id: i32) -> bool {
     ctx::can_pay(player_id)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let mut list = targets(player_id);
     if list.is_empty() {
-        return;
+        return Ok(());
     }
     // C# `H.AskTileOf` defaults to the cheapest rent among the targets.
     list.sort_by_key(|&t| ctx::rent_of(t));
@@ -74,27 +74,27 @@ fn react(player_id: i32) {
         &Msg::new(key!("dream_return_title")),
         &Msg::new(key!("dream_return_ask")),
         &list,
-    );
+    )?;
     let owner = ctx::tile_owner(to_tile);
     if owner < 0 || owner == player_id {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「若成功进行支付，则自动使用一次你的乐队技能进行双倍支付」 -- C#
     // pays `H.RentOf(num) * 2` to the tile owner, source
     // 「（传播笑容：双倍）」 (the band skill 「传播笑容」 auto-doubles).
     let amount = ctx::rent_of(to_tile) * 2;
-    let paid = ctx::transfer(player_id, owner, amount, &Msg::new(key!("dream_return_pay")));
+    let paid = ctx::transfer(player_id, owner, amount, &Msg::new(key!("dream_return_pay")))?;
     // C# `if (p.paid)` runs the bookkeeping after `H.Money`.
     if paid <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「并为乐队技能卡上添加两个...奇迹水晶」 -- C#
     // `H.AddBandCrystals(i, 2, CardName + "：记录 ...")`.
     ctx::add_band_crystals(player_id, 2, i32::MAX);
-    // TODO(规则书): 「分别记录这两名玩家」 -- needs the band-skill recorded-player
-    // set (C# `BandHHW.Record(owner)` + `Record(pay.from)`). `add_band_crystals`
-    // only raises the crystal count, and the record's payoff (`BandHHW.PayAfter`
-    // / `BuildCost`) is itself an Fx hook.
+    // 「分别记录这两名玩家」 -- the band skill 「传播笑容」 keeps the record in
+    // `skill.hhw.who` / `skill.hhw.who2`; this writes both.
+    ctx::state::set(player_id, "skill.hhw.who", owner);
+    ctx::state::set(player_id, "skill.hhw.who2", trigger::player_id());
     // 规则书[反击]: 「并为将要进行支付的那名玩家减免相当于你支付金额的数额」 -- C#
     // `pay.amount = Math.Max(0, pay.amount - p.finalLoss)` on the in-flight pay
     // (`trigger::set_pay_amount` is that write).
@@ -105,4 +105,5 @@ fn react(player_id: i32) {
         player_id,
         &Msg::new(key!("dream_return_relief")).player_id("who", trigger::player_id()).n("money", relief as i64),
     );
+    Ok(())
 }

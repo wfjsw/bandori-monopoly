@@ -26,6 +26,9 @@ use card_sdk::{key, CardDef, Msg, On};
 const MEMORY: [&str; 3] = ["小豆岛", "武道馆", "旧古河庭园"];
 /// Settled on a memory tile since the last CiRCLE pass.
 const DIRTY: &str = "skill.dianaImprisoned.dirty";
+/// The same latch under a neutral name, so a *card* that asks the same question
+/// (`Mujica:（初华）我，无畏悲伤`) can read it without knowing this skill.
+pub const MEMO_DIRTY: &str = "memory.dirty";
 /// 1d6 bonuses taken in 状态2 this move. Cap 4.
 const BONUS: &str = "skill.dianaImprisoned.bonus";
 
@@ -54,84 +57,91 @@ fn in_two(player_id: i32) -> bool {
 }
 
 /// 状态1's entry offer, and 状态2's cap.
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         // 「（火罐上限3）」
         state::set_bounds(player_id, state_key::FIRE, 0, 3);
         // 「获得[不可阻挡]」
         state::set(player_id, state_key::UNSTOPPABLE, 1);
-        return;
+        return Ok(());
     }
     // 「可在你的下回合开始时进入状态2」 -- offered only when the memory tiles
     // stayed clear since the last CiRCLE pass.
     if state::get(player_id, DIRTY) != 0 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("diana_imprisoned_title")),
         &Msg::new(key!("diana_imprisoned_enter")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     state::set(player_id, state_key::SKILL_STATE, 2);
     ctx::log(player_id, &Msg::new(key!("diana_imprisoned_two")));
+    Ok(())
 }
 
 /// 状态1: 「移动改为10+1d10」.
-fn on_plan(player_id: i32) {
+fn on_plan(player_id: i32) -> card_sdk::Asked {
     plan::set_base_dice(1, 10, "Imprisoned XII");
     plan::add_base_dice(1, 10, "Imprisoned XII");
     plan::set_steps(10);
+    Ok(())
 }
 
 /// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     state::set(player_id, DIRTY, 0);
+    Ok(())
 }
 
 /// 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- settling on one
 /// sets the latch.
-fn on_settle(player_id: i32) {
+fn on_settle(player_id: i32) -> card_sdk::Asked {
     if !mine(player_id) {
-        return;
+        return Ok(());
     }
     let t = ctx::trigger::tile();
     if t >= 0 && MEMORY.iter().any(|&n| t == ctx::tile_named(n)) {
         state::set(player_id, DIRTY, 1);
+        state::set(player_id, MEMO_DIRTY, 1);
     }
+    Ok(())
 }
 
 /// 状态2: 「主动移动经过任何玩家都将向其收取200资金」.
-fn on_pass_player(player_id: i32) {
+fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if !ctx::trigger::move_is_main() {
-        return;
+        return Ok(());
     }
     let other = ctx::trigger::player_id();
     if other == player_id {
-        return;
+        return Ok(());
     }
-    ctx::transfer(other, player_id, 200, &Msg::new(key!("diana_imprisoned_fee")));
+    ctx::transfer(other, player_id, 200, &Msg::new(key!("diana_imprisoned_fee")))?;
     ctx::log(player_id, &Msg::new(key!("diana_imprisoned_charged")).player_id("who", other));
+    Ok(())
 }
 
 /// 状态2: 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」.
-fn before_settle(player_id: i32) {
+fn before_settle(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, BONUS) >= 4 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("diana_imprisoned_title")),
         &Msg::new(key!("diana_imprisoned_extra")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     let d = ctx::roll(player_id, 1, 6).max(0);
     state::set(player_id, BONUS, state::get(player_id, BONUS) + 1);
     ctx::plan::set_extra_steps(d);
     ctx::log(player_id, &Msg::new(key!("diana_imprisoned_moved")).i("n", d as i64));
+    Ok(())
 }

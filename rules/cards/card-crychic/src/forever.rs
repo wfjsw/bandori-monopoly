@@ -20,7 +20,7 @@ pub const FOREVER: CardDef = CardDef::new("CRYCHIC:如果能一直持续下去..
 
 const ID: &str = "CRYCHIC:如果能一直持续下去...";
 
-fn forever(player_id: i32) {
+fn forever(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「移除你乐队技能卡上的奇迹水晶，获得2000+500*X资金，X为移除的奇迹水晶数量。」
     let x = ctx::band_crystals(player_id);
     if x > 0 {
@@ -32,24 +32,26 @@ fn forever(player_id: i32) {
     // (`on_drew` below).
     ctx::set_dest(ctx::Dest::Field); // 规则书（2）[持续]: the card lives in play
     ctx::place_card(player_id, ID, &Msg::new(key!("forever_note")));
+    Ok(())
 }
 
 /// 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- C#
 /// `CardForever.Drew` (the `Fx.Drew` placed-card walk, once per draw batch):
 /// when the owner draws and the hand is 7+, the card goes straight to the
 /// discard pile.
-fn on_drew(player_id: i32) {
+fn on_drew(player_id: i32) -> card_sdk::Asked {
     // The hook fires on the placed card; only the owner's own draws count
     // (C# `player_id != Player`).
-    if !ctx::is_placed(player_id) || trigger::player_id() != player_id {
-        return;
+    if !ctx::is_placed() || trigger::player_id() != player_id {
+        return Ok(());
     }
     // 规则书（2）[持续]: 「若你的手牌大于等于7」 -- C# `H._hidden[Player].hand.Count < 7`.
     if ctx::hand_size(player_id) < 7 {
-        return;
+        return Ok(());
     }
     // 规则书（2）[持续]: 「此卡立即置入弃牌堆」 -- C# `H.Unplace(this, "discard", "手牌有 7 张以上")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("forever_discard")).player_id("who", player_id));
+    Ok(())
 }

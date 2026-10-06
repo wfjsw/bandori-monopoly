@@ -42,7 +42,7 @@ fn setup(players: i32) -> (Arc<GameData>, World) {
     m.quick_start();
     let mut w = m.world.clone();
     w.st.turn = 0;
-    w.st.step = 1;
+    w.st.step = stage::OPS;
     w.next_turn_pending = false;
     for s in &mut w.st.players {
         s.money = 10_000;

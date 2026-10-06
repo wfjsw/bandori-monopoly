@@ -33,10 +33,10 @@ fn cant_play(_player: i32) -> Option<Msg> {
     None
 }
 
-fn taki_serious(_player: i32) {
+fn taki_serious(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     for p in stayers() {
         if ctx::player_out(p) {
@@ -52,11 +52,20 @@ fn taki_serious(_player: i32) {
                 tiles.push(t);
             }
         }
-        let _ = &tiles;
-        // TODO(规则书): 「...你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为
-        // 原价的四分之一」 -- needs `H.SettleAt(p, t, CardName, 0.25)` (settle on
-        // the chosen tile with a pay factor of 1/4). The ±2 window above is
-        // computed; the C# `H.AskTileOf` over `tiles` and the settle itself wait
-        // on that hook (a prompt with nothing to settle would dead-end).
+        if tiles.is_empty() {
+            return Ok(());
+        }
+        let pick = ctx::ask_tile(
+            player_id,
+            &Msg::new(key!("taki_serious_title")),
+            &Msg::new(key!("taki_serious_where")).player_id("who", p),
+            &tiles,
+        )?;
+        // 「...你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为
+        // 原价的四分之一」 -- the stayer settles there at a quarter price.
+        ctx::plan::set_pay_factor(25);
+        ctx::card_settle_at(p, pick, true);
+        ctx::log(player_id, &Msg::new(key!("taki_serious_settled")).tile("tile", pick).player_id("who", p));
     }
+    Ok(())
 }

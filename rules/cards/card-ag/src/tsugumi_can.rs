@@ -43,14 +43,15 @@ fn can_react(player_id: i32) -> bool {
     true
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「视为打出一张@Tsugu ycm」 -- C# `Ycm.Play(c)` on a shared
     // `CardTsuguYcm` instance (id `通用:@Tsugu ycm`).
     ctx::log(player_id, &Msg::new(key!("tsugumi_can_ycm")).player_id("who", player_id));
-    ctx::play_card("通用:@Tsugu ycm", player_id);
+    ctx::play_card("通用:@Tsugu ycm", player_id)?;
+    Ok(())
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）【反击】: 「使任意结果只有数字区间的效果以理论最大值或最小值结算」
     // -- C# asks max/min and writes `target.Extreme = 1 / -1`.
     let pick = ctx::ask_pick(
@@ -60,10 +61,11 @@ fn react(player_id: i32) {
         &[
             Msg::new(key!("tsugumi_can_max")),
             Msg::new(key!("tsugumi_can_min"))],
-    );
+    )?;
     // 规则书（1）: 「以理论最大值或最小值结算」 -- C# `target.Extreme = 1 / -1`,
     // so the play being reacted to settles its number ranges at the theoretical
     // extreme the picker named.
     ctx::set_extreme(if pick == 0 { 1 } else { -1 });
     ctx::log(player_id, &Msg::new(key!("tsugumi_can_forced")).player_id("who", player_id));
+    Ok(())
 }

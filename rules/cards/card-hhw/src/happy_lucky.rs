@@ -47,10 +47,10 @@ fn from_grid(x: i32, y: i32) -> i32 {
     }
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // The C# grid below is the fixed 60-tile ring; bail out on any other board.
     if ctx::tile_count() != 60 {
-        return;
+        return Ok(());
     }
     // 规则书: 「投掷1d4mod4」 -- C# `H.CardRoll(c, 1, 4, CardName) % 4`.
     let r = ctx::roll(player_id, 1, 4);
@@ -79,4 +79,5 @@ fn play(player_id: i32) {
         player_id,
         &Msg::new(key!("happy_lucky_moved")).player_id("who", player_id).i("roll", r as i64).tile("tile", to),
     );
+    Ok(())
 }

@@ -40,16 +40,16 @@ fn other(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」 + （2）「开局时指定一名其他玩家」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
     if state::get(player_id, OTHER) >= 0 {
-        return;
+        return Ok(());
     }
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
         .filter(|&p| p != player_id && !ctx::player_out(p))
         .collect();
     if others.is_empty() {
-        return;
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
@@ -59,29 +59,35 @@ fn at_start(player_id: i32) {
             .iter()
             .map(|&p| Msg::new(key!("mutsumi_crychic_option")).player_id("who", p))
             .collect::<alloc::vec::Vec<_>>(),
-    );
+    )?;
     if let Some(&who) = others.get(pick) {
         state::set(player_id, OTHER, who);
         ctx::log(player_id, &Msg::new(key!("mutsumi_crychic_named")).player_id("who", who));
     }
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")));
+    Ok(())
 }
 
 /// 「那名玩家上一次的移动掷骰结果」 -- latched as they roll.
-fn latch(player_id: i32) {
+fn latch(player_id: i32) -> card_sdk::Asked {
     let face = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     state::set(player_id, THEIRS, face);
+    Ok(())
 }
 
 /// （2） 「你的移动阶段开始时，可消耗1火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("mutsumi_crychic_no_fire")));
     }
@@ -92,16 +98,17 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「使本次的移动掷骰结果为那名玩家上一次的移动掷骰结果」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let face = state::get(player_id, THEIRS);
     if face < 0 {
-        return;
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend"))) {
-        return;
+        return Ok(());
     }
     ctx::set_fixed_roll(face);
     ctx::log(player_id, &Msg::new(key!("mutsumi_crychic_fixed")).i("n", face as i64));
+    Ok(())
 }
 
 // （3）「乐队技能为Ave Mujica时，任意时刻手牌大于等于3时进入状态2，严格小于3时

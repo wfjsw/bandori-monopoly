@@ -20,8 +20,9 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("sprechchor_why_not")))
 }
 
-fn sprechchor(player_id: i32) {
+fn sprechchor(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
     let n = ctx::roll(player_id, 1, 20);
     ctx::gain(player_id, 1000 + n * 120, &Msg::new(key!("sprechchor_why")));
+    Ok(())
 }

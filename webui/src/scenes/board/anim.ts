@@ -9,6 +9,13 @@ import { namesOf } from "../../core/names";
 import { D } from "../../core/data";
 import { fmtMsg, type Names } from "../../i18n/msg";
 import type { MatchEvent, MatchView } from "../../core/types";
+import { showEffect } from "./Popups";
+
+/** How long the dice face rolls before it lands. */
+const DICE_ROLL_MS = 10 * 55;
+/** How long the effect popup stays up: just longer than the dice roll it
+ *  follows, but never under 1.5s -- long enough to read which branch landed. */
+const EFFECT_HOLD_MS = Math.max(DICE_ROLL_MS + 300, 1500);
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
 
@@ -19,6 +26,9 @@ const EVENT_SFX: Record<string, string> = {
 };
 
 export interface LogLine { id: number; text: string; turn: boolean }
+
+/** How long the 「<player> 的回合」 banner holds before the next 开始 stage sweeps in. */
+const TURN_BANNER_HOLD = 1500;
 
 export class Animator {
   queue: MatchEvent[] = [];
@@ -126,7 +136,7 @@ export class Animator {
   private async diceAnim(value: number): Promise<void> {
     this.rolling = true;
     sfx("dice_roll");
-    for (let k = 0; k < 10; k++) {
+    for (let k = 0; k < DICE_ROLL_MS / 55; k++) {
       this.dice = 1 + Math.floor(Math.random() * 20);
       this.bump();
       await sleep(55);
@@ -180,6 +190,26 @@ export class Animator {
         this.showBanner(tr("board.roll", { n: d }), body);
         await wait(450);
         await this.walk(playerId, e.from, e.value, fast ? 0 : 130);
+        break;
+      }
+      case "dice": {
+        // A card's own roll (`ctx::roll`): same dice visual and pacing as the
+        // main move roll, so a card's 「roll 1d10」 reads as a roll and settles
+        // before the effect it decides is applied.
+        if (!ok) break;
+        const d = Math.abs(e.dice || e.value);
+        if (!fast) await this.diceAnim(d);
+        else this.dice = d;
+        this.showBanner(tr("board.roll", { n: d }), body);
+        await wait(450);
+        break;
+      }
+      case "effect": {
+        // Which effect a card just applied. Additive to the log line the same
+        // message already produced -- this is the popup window on top of it.
+        if (!fast) sfx("place");
+        showEffect(body, EFFECT_HOLD_MS);
+        await wait(EFFECT_HOLD_MS);
         break;
       }
       case "move":
@@ -260,24 +290,36 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
   }
   useEffect(() => {
     const a = animRef.current!;
+    let turnHold = 0;
     const off = sess.subscribe(
       (v) => {
         const prev = viewRef.current?.state;
         viewRef.current = v;
         set({ view: v, at: performance.now() });
         // Stage transition: every turn-stage change sweeps the
-        // stage name across the board. Stages are the game's own:
-        // step 1 = Main Phase 1 (运营), 2 = Battle Phase (移动), 3 = Main Phase 2.
+        // stage name across the board. The rulebook's four stages are
+        // 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`) and the engine's `step`
+        // is 0 before a turn and 1..4 for those, so `step - 1` indexes the
+        // label list (`Side.tsx`'s `phases()`).
         const now = v.state;
         if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
-          // The four stages are [start, ops, move, end]; `step` 1/2/3 maps to the
-        // first three, and `end` is swept only by the end-turn button.
-        a.showPhase(now.step >= 3 ? "board.stepMove" : now.step === 2 ? "board.stepOps" : "common.start");
+          const label = now.step >= 4 ? "board.stepEnd" : now.step === 3 ? "board.stepMove" : now.step === 2 ? "board.stepOps" : "common.start";
+          // A turn change opens with 「<player> 的回合」 (2.2s, from the `turn`
+          // event below). The new player's 开始 stage must not sweep in over it:
+          // hold the stage name until the banner has read, so the order is the
+          // previous player's 结束 -> the turn banner -> this player's 开始.
+          clearTimeout(turnHold);
+          if (prev.turn !== now.turn && label === "common.start") {
+            turnHold = window.setTimeout(() => a.showPhase(label), TURN_BANNER_HOLD);
+          } else {
+            a.showPhase(label);
+          }
         }
       },
       (e) => a.push(e),
     );
     return () => {
+      clearTimeout(turnHold);
       off();
     };
   }, [sess]);

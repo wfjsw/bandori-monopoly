@@ -46,7 +46,7 @@ fn can_react(player_id: i32) -> bool {
     }
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::Event => {
             // 规则书（3）[反击]: 「事件卡的效果手牌则则抵消其所有的效果」
@@ -67,12 +67,21 @@ fn react(player_id: i32) {
             // 规则书（2）[反击]: 「手卡的[手]效果且没有[指定]目标则抵消其所有的效果」
             // C# branches on `t.Play.Def.Targeting`: the `immune<p>` tag above vs
             // `play.Cancelled = true`.
-            ctx::log(player_id, &Msg::new(key!("net_error_card")).player_id("who", player_id));
-            // TODO(ABI): the two branches need the played card's `Targeting` flag
-            // on the trigger (and the `play.Tags["immune"+seat]` op for (1)).
-            // Rule (2)'s 「抵消其所有的效果」 is `trigger::set_cancelled()` on this
-            // `card` trigger -- ready, but it must not fire while the branch is
-            // undecidable or it would over-cancel targeting plays.
+            // The two branches are decided by whether the play *names* anyone:
+            // `H.Db.Card(id).Targeting` is the effect list's own recipients, which
+            // is `ctx::effect::count()` / `effect::target(i)`.
+            let targeting = (0..ctx::effect::count()).any(|i| ctx::effect::target(i) >= 0);
+            if targeting {
+                // （1）「取消其对目标之一的[指定]」 -- per-designation, handled at
+                // the `target` window below. The C# instead pre-tags the play with
+                // `play.Tags["immune"+seat]` so `H.Target` never reaches its window;
+                // that per-play tag has no op, so this half is the `target` branch.
+                ctx::log(player_id, &Msg::new(key!("net_error_card")).player_id("who", player_id));
+            } else {
+                // （2）「没有[指定]目标则抵消其所有的效果」
+                trigger::set_cancelled();
+                ctx::log(player_id, &Msg::new(key!("net_error_card")).player_id("who", player_id));
+            }
         }
         TriggerKind::Target => {
             // 规则书（1）[反击]: 「取消其对目标之一的[指定]」 -- the expressible half:
@@ -85,4 +94,5 @@ fn react(player_id: i32) {
         }
         _ => {}
     }
+    Ok(())
 }

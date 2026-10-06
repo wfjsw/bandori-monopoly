@@ -25,39 +25,42 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始2，上限3」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("anon_restart_gain")));
+    Ok(())
 }
 
 /// （2）「在受到[停留][传送]效果影响并结算该效果后，可以消耗2个火罐，抽一张卡」.
-fn on_abnormal(player_id: i32) {
+fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     let kind = match trigger::abnormal_kind() {
         Some(k) => k,
-        None => return,
+        None => return Ok(()),
     };
     if !matches!(kind, AbKind::Stay | AbKind::Teleport) {
-        return;
+        return Ok(());
     }
     if state::get(player_id, state_key::FIRE) < 2 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("anon_restart_title")),
         &Msg::new(key!("anon_restart_ask")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 2, &Msg::new(key!("anon_restart_spend"))) {
-        return;
+        return Ok(());
     }
     ctx::draw(player_id, 1);
+    Ok(())
 }

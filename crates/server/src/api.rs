@@ -66,10 +66,7 @@ pub async fn create_session(
     };
     let body = view(&session);
     let cookie = format!("{COOKIE}={}; HttpOnly; SameSite=Lax; Path=/", session.token);
-    s.sessions
-        .lock()
-        .unwrap()
-        .insert(session.token.clone(), session);
+    let _ = s.store.session_put(&session);
     Ok(([(header::SET_COOKIE, cookie)], Json(body)))
 }
 
@@ -180,6 +177,7 @@ pub async fn create_room(
         &req.password,
         weights,
         s.engine.clone(),
+        s.store.clone(),
     );
     let who = NewMember {
         token: &sess.token,

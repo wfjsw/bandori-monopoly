@@ -1,6 +1,7 @@
 //! Bot decisions (`AiStep` and friends). Also drives humans who ran out of time.
 
 use super::cx::{Cx, Flow};
+use crate::state::stage;
 
 impl Cx<'_> {
     /// `AiWantsBuy` -- keep at least 2,000 after buying.
@@ -60,7 +61,7 @@ impl Cx<'_> {
     /// `AiStep` -- one decision for the player whose turn it is.
     pub(crate) fn ai_step(&mut self, i: usize) -> Flow<()> {
         let bot = self.w.st.players[i].ai;
-        if self.w.st.step == 1 {
+        if self.w.st.step == stage::OPS {
             if bot {
                 if let Some(t) = self.ai_redeem_choice(i) {
                     self.redeem(i, t);

@@ -12,6 +12,7 @@ use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, On, Msg};
 
 pub const STAR_BEAT: CardDef = CardDef::new("PPP:STAR BEAT!", &[
+    On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, after_settle),
     On::Play(Some(cant_play), play)]);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
@@ -21,7 +22,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 /// C# `H.MoneyHasDigit(seat, '5')` -- the decimal form of |money| contains 5.
 fn money_has_digit5(player_id: i32) -> bool {
-    let mut x = ctx::money(player_id).unsigned_abs();
+    let mut x = ctx::money_of(player_id).unsigned_abs();
     if x == 0 {
         return false;
     }
@@ -34,19 +35,18 @@ fn money_has_digit5(player_id: i32) -> bool {
     false
 }
 
-fn play(player_id: i32) {
-    // TODO(ABI): 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的
-    //   格子上进行一次盖房，随后减少1层”」 -- needs the H.ExtraOf attachment
-    //   (C# `H.ExtraOf<StarBeatFx>(i).Layers++`) plus the after-settle build offer
-    //   (C# `StarBeatFx.SettleAfter` -> `H.OfferBuildAmong` over owned tiles within
-    //   absolute distance 5) and `H.OfferBuildAmong` itself.
+fn play(player_id: i32) -> card_sdk::Asked {
+    ctx::inc_slot(player_id, "star_beat.layers", 1);
+    // 「[使用者]获得1层状态“下次结算后可选择在绝对距离5格以内自己拥有的格子上进行
+    // 一次盖房，随后减少1层”」 -- the layer is a slot (the stand-in for C#
+    // `H.ExtraOf<StarBeatFx>(i).Layers`); `after_settle` is the offer.
     // 规则书: 「(45×“资金数包含5的玩家数量+1”) mod 60格」 / 「(2×“资金数包含5的玩家数量+1”)d10」
     let n = (0..ctx::player_count())
         .filter(|&p| !ctx::player_out(p) && money_has_digit5(p))
         .count() as i32;
     let tiles = ctx::tile_count();
     if tiles <= 0 {
-        return;
+        return Ok(());
     }
     // C# `45 * (num + 1) % H._tiles.Length`.
     let to = (45 * (n + 1)).rem_euclid(tiles);
@@ -59,7 +59,7 @@ fn play(player_id: i32) {
         &[
             Msg::new(key!("star_beat_opt_teleport")).tile("tile", to),
             Msg::new(key!("star_beat_opt_move")).i("n", dice as i64)],
-    );
+    )?;
     if pick == 0 {
         // 规则书1: 「获得2个星星贴纸」 -- C# `H.AddTok(i, "星星贴纸", 2)`.
         ctx::add_tok(player_id, "星星贴纸", 2, i32::MAX);
@@ -93,4 +93,49 @@ fn play(player_id: i32) {
         ctx::plan::set_resolve(true);
         ctx::card_move(player_id);
     }
+    Ok(())
+}
+
+/// 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
+fn after_settle(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::player_id() != player_id {
+        return Ok(());
+    }
+    if ctx::slot(player_id, "star_beat.layers") <= 0 {
+        return Ok(());
+    }
+    let pos = ctx::player_pos(player_id);
+    let pool: alloc::vec::Vec<i32> = ctx::owned_tiles(player_id)
+        .into_iter()
+        .filter(|&t| ctx::dist(pos, t) <= 5 && ctx::can_build_on(player_id, t))
+        .collect();
+    if pool.is_empty() {
+        return Ok(());
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("star_beat_title")),
+        &Msg::new(key!("star_beat_build")),
+    )? {
+        return Ok(());
+    }
+    let opts: alloc::vec::Vec<Msg> = pool
+        .iter()
+        .map(|&t| Msg::new(key!("star_beat_tile")).tile("tile", t))
+        .collect();
+    let pick = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("star_beat_title")),
+        &Msg::new(key!("star_beat_which")),
+        &opts,
+    )?;
+    let Some(&t) = pool.get(pick) else { return Ok(()) };
+    ctx::card_offer_build(player_id, &[t]);
+    ctx::inc_slot(player_id, "star_beat.layers", -1);
+    ctx::log(player_id, &Msg::new(key!("star_beat_built")).tile("tile", t));
+    Ok(())
+}
+
+fn mine(player_id: i32) -> bool {
+    ctx::trigger::player_id() == player_id
 }

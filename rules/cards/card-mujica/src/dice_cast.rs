@@ -47,12 +47,14 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     cast(player_id);
+    Ok(())
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     cast(player_id);
+    Ok(())
 }
 
 fn cast(player_id: i32) {
@@ -72,20 +74,21 @@ fn cast(player_id: i32) {
 /// turn end while it is in play. Runs through the Fx hook dispatch at
 /// `turnEndAfter` (ABI v23 `TriggerKind::TurnEndAfter`), so this is a field
 /// effect, not a [反击].
-fn turn_end(player_id: i32) {
-    if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
-        return;
+fn turn_end(player_id: i32) -> card_sdk::Asked {
+    if trigger::player_id() != player_id || !ctx::is_placed() {
+        return Ok(());
     }
     // C# `if (H._noReactTurn == Player) H._noReactTurn = -1`.
     if ctx::slot(player_id, NO_REACT) == ctx::turn_key() {
         ctx::set_slot(player_id, NO_REACT, 0);
     }
     // 规则书: 「回合结束后放入弃牌堆」 -- C# `H.Unplace(this, "discard", "回合结束")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("dice_cast_ended")).player_id("who", player_id));
     // TODO(规则书)[judgement]: 「（此卡可以被反击）」 -- the engine must still let other
     //   the clause under-specifies -- see the note above it
     // [反击]s answer this card's own play window (C# reaction chain plays
     // declared reactions in reverse before `Cast` sets the lock).
+    Ok(())
 }

@@ -28,7 +28,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::slot(player_id, "lastWalk") > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「使你下一次主要移动的格数变为移动你最近一次非传送的主要移动的
     // 移动格数」 -- C# `React` reads `H.V(seat, "lastWalk") - 1` (the `NoteWalk`
     // count) and installs it as `H.ExtraOf<NextStepsFx>(c.Seat).Steps = steps`,
@@ -37,4 +37,5 @@ fn react(player_id: i32) {
     let steps = ctx::slot(player_id, "lastWalk") - 1;
     ctx::set_next_steps(player_id, steps);
     ctx::log(player_id, &Msg::new(key!("ordinary_log")).i("n", steps as i64));
+    Ok(())
 }

@@ -59,18 +59,18 @@ fn can_react(player_id: i32) -> bool {
     !free_tiles().is_empty()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[手][反击]: 「传送至任意无主可购买的格子并[结算]，且必须购买」
     let free = free_tiles();
     if free.is_empty() {
-        return;
+        return Ok(());
     }
     // C# prefers tiles the player can afford, falling back to all free ones;
     // `H.AskTileOf`'s AI default is the most expensive.
     let affordable: Vec<i32> = free
         .iter()
         .copied()
-        .filter(|&t| ctx::money(player_id) >= ctx::buy_price(t))
+        .filter(|&t| ctx::money_of(player_id) >= ctx::buy_price(t))
         .collect();
     let pool = if affordable.is_empty() { &free } else { &affordable };
     let to = ctx::ask_tile(
@@ -78,7 +78,7 @@ fn react(player_id: i32) {
         &Msg::new(key!("guerrilla_title")),
         &Msg::new(key!("guerrilla_ask")),
         pool,
-    );
+    )?;
     // 规则书[手][反击]: 「传送至任意无主可购买的格子」 -- C# `H.ForceTeleport(i,
     // to, resolve: false, ...)`; the settle is the clause's own separate half.
     ctx::teleport_to(player_id, to);
@@ -88,7 +88,7 @@ fn react(player_id: i32) {
     ctx::card_settle_at(player_id, to, true);
     // 规则书[手][反击]: 「且必须购买」 -- C# `H.BuyRoutine(i, to, free: false,
     // ...)`, or the "资金不够，买不下" log when the player cannot pay.
-    if ctx::money(player_id) < ctx::buy_price(to) {
+    if ctx::money_of(player_id) < ctx::buy_price(to) {
         ctx::log(
             player_id,
             &Msg::new(key!("guerrilla_broke")).player_id("who", player_id).tile("tile", to),
@@ -106,37 +106,38 @@ fn react(player_id: i32) {
         ctx::set_slot(player_id, SLOT_ARMED, 1);
         ctx::before_turn_end(player_id);
     }
+    Ok(())
 }
 
 /// C# `CardGuerrilla.Check` -- at turn end, offer to revive the card from the
 /// discard as a fake Live House over the player's most expensive deed.
-fn check(player_id: i32) {
+fn check(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_ARMED, 0);
     // 规则书[特]: 「此卡进入弃卡区的回合结束时，如果本回合的[结算]向其他玩家支付了至少1000资金
     // 且你不拥有任何可盖房的live house格子且场上已不存在可购买的此类格子」
     // 规则书[特]: 「本回合的[结算]向其他玩家支付了至少1000资金」 -- C#
     // `H._turnCtx.PaidInSettle`, the turn's running settle-to-others total.
     if ctx::paid_in_settle() < 1000 {
-        return;
+        return Ok(());
     }
     // 「你不拥有任何可盖房的live house格子」 -- owns no buildable Live House.
     if ctx::owned_tiles(player_id).into_iter().any(lh_buildable) {
-        return;
+        return Ok(());
     }
     // 「且场上已不存在可购买的此类格子」 -- no unowned buildable Live House.
     if (0..ctx::tile_count()).any(|t| lh_buildable(t) && ctx::tile_owner(t) < 0) {
-        return;
+        return Ok(());
     }
     let mine = ctx::owned_tiles(player_id);
     if mine.is_empty() || ctx::discard_count(player_id, ID) <= 0 {
-        return;
+        return Ok(());
     }
     // 「则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子」
-    if !ctx::ask_yes(player_id, &Msg::new(key!("guerrilla_title")), &Msg::new(key!("guerrilla_revive"))) {
-        return;
+    if !ctx::ask_yes(player_id, &Msg::new(key!("guerrilla_title")), &Msg::new(key!("guerrilla_revive")))? {
+        return Ok(());
     }
     if !ctx::take_card(player_id, ctx::CardPile::Discard, ID) {
-        return;
+        return Ok(());
     }
     // C# picks the most expensive owned deed (`Mem["tile"] = num + 1`).
     let best = mine
@@ -155,4 +156,5 @@ fn check(player_id: i32) {
     if best >= 0 {
         ctx::set_extra_color(player_id, best, 6);
     }
+    Ok(())
 }

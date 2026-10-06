@@ -34,19 +34,20 @@ fn can_react(player_id: i32) -> bool {
     o >= 0 && !ctx::player_out(o)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let o = trigger::target();
     if o < 0 {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「你从对方处获得等于对方最贵格子基础购买价格一半数额的资金」
     let from_them = best_price(o) / 2;
     if from_them > 0 {
-        ctx::transfer(o, player_id, from_them, &Msg::new(key!("proud_light_why")));
+        ctx::transfer(o, player_id, from_them, &Msg::new(key!("proud_light_why")))?;
     }
     // 规则书[反击]: 「之后对方从你处获得等于你最贵格子基础购买价格一半数额的资金」
     let from_us = best_price(player_id) / 2;
     if from_us > 0 && !ctx::player_out(o) {
-        ctx::transfer(player_id, o, from_us, &Msg::new(key!("proud_light_why")));
+        ctx::transfer(player_id, o, from_us, &Msg::new(key!("proud_light_why")))?;
     }
+    Ok(())
 }

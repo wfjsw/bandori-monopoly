@@ -14,6 +14,7 @@ use alloc::{string::String, vec::Vec};
 pub use crate::abi::{AbKind, CardPile};
 use crate::abi::{MoveKind, PromptKind, TriggerKind};
 use crate::msg::Msg;
+use crate::Prompt;
 
 mod sys {
     // The link attribute is wasm-only; on other targets the imports stay
@@ -23,6 +24,7 @@ mod sys {
         // dice & log
         pub fn roll(player_id: i32, count: i32, sides: i32) -> i32;
         pub fn log(player_id: i32, ptr: i32, len: i32);
+        pub fn effect(player_id: i32, ptr: i32, len: i32);
         // board
         pub fn tile_count() -> i32;
         pub fn tile_named(ptr: i32, len: i32) -> i32;
@@ -77,16 +79,22 @@ mod sys {
         pub fn discard_from_hand(player_id: i32, ptr: i32, len: i32) -> i32;
         pub fn shuffle_into_deck(player_id: i32, hand: i32, discard: i32) -> i32;
         // field cards
-        pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32);
+        pub fn place_card_at(player_id: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32;
         pub fn set_dest(dest: i32);
         pub fn ring_multiplier() -> i32;
         pub fn add_ring_bonus(n: i32) -> i32;
         pub fn teleport_to(player_id: i32, tile: i32);
-        pub fn unplace_card(player_id: i32) -> i32;
-        pub fn is_placed(player_id: i32) -> i32;
-        pub fn crystals(player_id: i32) -> i32;
-        pub fn set_crystals(player_id: i32, n: i32) -> i32;
-        pub fn add_crystals(player_id: i32, n: i32, max: i32) -> i32;
+        pub fn unplace_card() -> i32;
+        pub fn self_tile() -> i32;
+        pub fn set_self_tile(tile: i32) -> i32;
+        pub fn self_face_down() -> i32;
+        pub fn set_self_face_down(on: i32) -> i32;
+        pub fn self_immune() -> i32;
+        pub fn set_self_immune(on: i32) -> i32;
+        pub fn is_placed() -> i32;
+        pub fn crystals() -> i32;
+        pub fn set_crystals(n: i32) -> i32;
+        pub fn add_crystals(n: i32, max: i32) -> i32;
         // marks & tokens
         pub fn add_mark(tile: i32, player_id: i32, kp: i32, kl: i32, np: i32, nl: i32);
         pub fn count_marks(tile: i32, kp: i32, kl: i32, owner: i32) -> i32;
@@ -231,7 +239,7 @@ mod sys {
         pub fn gain_fixed(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
         pub fn is_agent(tile: i32) -> i32;
         pub fn paid_in_settle() -> i32;
-        pub fn place_card_on(player_id: i32, tile: i32, cp: i32, cl: i32, ptr: i32, len: i32);
+        pub fn place_card_on(player_id: i32, tile: i32, cp: i32, cl: i32, ptr: i32, len: i32) -> i32;
         pub fn play_from_hand() -> i32;
         pub fn set_build_discount(n: i32, layers: i32);
         pub fn set_buy_discount(n: i32);
@@ -254,6 +262,16 @@ mod sys {
         pub fn do_move_roll(player_id: i32) -> i32;
         pub fn is_live_house_for(player_id: i32, tile: i32) -> i32;
         pub fn placed_cards(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn field_instances(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn crystals_at(uid: i32) -> i32;
+        pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32;
+        pub fn unplace_at(uid: i32) -> i32;
+        pub fn tile_at(uid: i32) -> i32;
+        pub fn set_tile_at(uid: i32, tile: i32) -> i32;
+        pub fn is_face_down_at(uid: i32) -> i32;
+        pub fn set_face_down_at(uid: i32, on: i32) -> i32;
+        pub fn is_immune_at(uid: i32) -> i32;
+        pub fn set_immune_at(uid: i32, on: i32) -> i32;
         pub fn set_build_cost_pct(pct: i32);
         pub fn set_card_face_down(player_id: i32, cp: i32, cl: i32, down: i32) -> i32;
         pub fn set_extra_color(player_id: i32, tile: i32, group: i32);
@@ -299,6 +317,15 @@ pub fn roll(player_id: i32, count: i32, sides: i32) -> i32 {
 pub fn log(player_id: i32, msg: &Msg) {
     let (p, l) = mj(msg);
     unsafe { sys::log(player_id, p, l) }
+}
+
+/// `H.Effect` -- announce which effect was applied. Reaches the player as a
+/// popup as well as a log line; use this where the card has just picked a
+/// branch (e.g. a 1d10 that names the branch taken) and the player should see
+/// which. Additive with [`log`], not a replacement for it.
+pub fn effect(player_id: i32, msg: &Msg) {
+    let (p, l) = mj(msg);
+    unsafe { sys::effect(player_id, p, l) }
 }
 
 // ------------------------------------------------------------------ board
@@ -481,7 +508,8 @@ pub fn others(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
-pub fn money(player_id: i32) -> i32 {
+/// The player's current cash (C# `H.Money`).
+pub fn money_of(player_id: i32) -> i32 {
     unsafe { sys::money(player_id) }
 }
 
@@ -492,17 +520,17 @@ pub fn gain(player_id: i32, amount: i32, src: &Msg) -> i32 {
 }
 
 /// `H.PayR` -- money out (what the player could pay), logged.
-pub fn pay(player_id: i32, amount: i32, src: &Msg) -> i32 {
+pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(src);
-    unsafe { sys::pay(player_id, amount, p, l) }
+    asked(unsafe { sys::pay(player_id, amount, p, l) })
 }
 
 /// Player-to-player money: the receiver gets exactly what the payer could pay.
 /// The usual shape of `H.PayR` + `H.GainR` in a transfer.
-pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> i32 {
-    let got = pay(from, amount, src);
+pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
+    let got = pay(from, amount, src)?;
     gain(to, got, src);
-    got
+    Ok(got)
 }
 
 // ------------------------------------------------------------- hand / deck
@@ -626,12 +654,15 @@ pub fn shuffle_into_deck(player_id: i32, hand: bool, discard: bool) -> i32 {
 // ------------------------------------------------------------ field cards
 
 /// `H.PlaceFromPlay` -- this card stays in play at the player.
-pub fn place_card(player_id: i32, card: &str, note: &Msg) {
+pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
     place_card_at(player_id, card, note)
 }
 
 /// `H.PlaceCard` -- put a specific card (a derived one) into play at a player.
-pub fn place_card_at(player_id: i32, card: &str, note: &Msg) {
+/// Returns the new instance's uid, which is what addresses it afterwards: the
+/// *name* is not an identity, so a rule meaning "the copy I just placed" has to
+/// hold this rather than re-resolving by name.
+pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
     let (cp, cl) = s(card);
     let (p, l) = mj(note);
     unsafe { sys::place_card_at(player_id, cp, cl, p, l) }
@@ -658,31 +689,36 @@ pub fn teleport_to(player_id: i32, tile: i32) {
 }
 
 /// `H.Unplace` -- take this card out of play. True when it was there.
-pub fn unplace_card(player_id: i32) -> bool {
-    unsafe { sys::unplace_card(player_id) != 0 }
+/// Take **this instance** off the field; returns the owner it left (or -1).
+/// [`unplace_card_named`] is the form for some *other* card.
+pub fn unplace_self() -> i32 {
+    unsafe { sys::unplace_card() }
 }
 
 /// Is this card in play at the player?
-pub fn is_placed(player_id: i32) -> bool {
-    unsafe { sys::is_placed(player_id) != 0 }
+pub fn is_placed() -> bool {
+    unsafe { sys::is_placed() != 0 }
 }
 
-/// Miracle crystals on this card while it is in play at the player
-/// (C# `Card.Crystals`).
-pub fn crystals(player_id: i32) -> i32 {
-    unsafe { sys::crystals(player_id) }
+/// Miracle crystals on **this card instance** (C# `Card.Crystals`). The
+/// instance is the one running -- its placement is not a parameter, because the
+/// host knows it from the dispatch and the same card id can sit on several
+/// players' fields at once. [`card_crystals`] is the form for a *named* other
+/// card, which does need to say whose field to look on.
+pub fn crystals() -> i32 {
+    unsafe { sys::crystals() }
 }
 
-/// Set this card's crystals at the player (C# `Card.Crystals = n`); returns the
-/// new count.
-pub fn set_crystals(player_id: i32, n: i32) -> i32 {
-    unsafe { sys::set_crystals(player_id, n) }
+/// Set this card instance's crystals (C# `Card.Crystals = n`); returns the new
+/// count.
+pub fn set_crystals(n: i32) -> i32 {
+    unsafe { sys::set_crystals(n) }
 }
 
-/// `H.AddCrystals` -- adjust this card's crystals at the player by `n`, clamped
-/// at 0 and at `max` (`0` = uncapped); returns the new count.
-pub fn add_crystals(player_id: i32, n: i32, max: i32) -> i32 {
-    unsafe { sys::add_crystals(player_id, n, max) }
+/// `H.AddCrystals` -- adjust this card instance's crystals by `n`, clamped at 0
+/// and at `max` (`0` = uncapped); returns the new count.
+pub fn add_crystals(n: i32, max: i32) -> i32 {
+    unsafe { sys::add_crystals(n, max) }
 }
 
 // --------------------------------------------------------- marks & tokens
@@ -987,60 +1023,72 @@ impl Dest {
 
 // ------------------------------------------------------------- prompts
 
-fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> i32 {
+/// The host answers `EXIT_NEED_INPUT` when it has published a question and wants
+/// the run to stop so it can be replayed with the answer. Every prompt-shaped
+/// call funnels through here so the sentinel becomes `Err(Prompt)` once and the
+/// card body just `?`s it.
+fn asked(i: i32) -> Result<i32, Prompt> {
+    if i == crate::abi::EXIT_NEED_INPUT {
+        Err(Prompt)
+    } else {
+        Ok(i)
+    }
+}
+
+fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<i32, Prompt> {
     let (tp, tl) = mj(title);
     let (xp, xl) = mj(text);
-    unsafe { sys::ask(kind as i32, player_id, tp, tl, xp, xl) }
+    asked(unsafe { sys::ask(kind as i32, player_id, tp, tl, xp, xl) })
 }
 
 /// `H.AskTileOf` -- returns the chosen **tile**, not the index.
 /// Falls back to the first option if the answer is out of range.
-pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> i32 {
+pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
     for &t in tiles {
         unsafe { sys::opt_int(t) }
     }
-    let i = ask_raw(PromptKind::Tile, player_id, title, text);
-    tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))]
+    let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
+    Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
 }
 
 /// `H.AskPick` -- returns the chosen option index.
-pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> usize {
+pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Result<usize, Prompt> {
     for o in options {
         let (p, l) = mj(o);
         unsafe { sys::opt_str(p, l) }
     }
-    let i = ask_raw(PromptKind::Choice, player_id, title, text);
-    (i.max(0) as usize).min(options.len().saturating_sub(1))
+    let i = ask_raw(PromptKind::Choice, player_id, title, text)?;
+    Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
 }
 
 /// `H.AskYes`.
-pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> bool {
-    ask_raw(PromptKind::YesNo, player_id, title, text) == 0
+pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> {
+    Ok(ask_raw(PromptKind::YesNo, player_id, title, text)? == 0)
 }
 
 /// `H.AskSeat` -- returns the chosen player.
-pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> i32 {
+pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> Result<i32, Prompt> {
     for &x in players {
         unsafe { sys::opt_int(x) }
     }
-    let i = ask_raw(PromptKind::Player, player_id, title, text);
-    players[(i.max(0) as usize).min(players.len().saturating_sub(1))]
+    let i = ask_raw(PromptKind::Player, player_id, title, text)?;
+    Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
 }
 
 /// `H.AskCard` -- pick one of `cards` (ids); returns the index.
-pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> usize {
+pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
     for c in cards {
         let (p, l) = s(c);
         unsafe { sys::opt_str(p, l) }
     }
-    let i = ask_raw(PromptKind::Card, player_id, title, text);
-    (i.max(0) as usize).min(cards.len().saturating_sub(1))
+    let i = ask_raw(PromptKind::Card, player_id, title, text)?;
+    Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
 }
 
 /// `H.AskNumber` -- a number in `min..=max`. The C# builds this as an `AskPick`
 /// over the range, so the option list is the faithful shape (ranges in the card
 /// pool are small; for a wide range, narrow the candidates yourself first).
-pub fn ask_number(player_id: i32, title: &Msg, text: &Msg, min: i32, max: i32) -> i32 {
+pub fn ask_number(player_id: i32, title: &Msg, text: &Msg, min: i32, max: i32) -> Result<i32, Prompt> {
     let min = min.min(max);
     let max = max.max(min);
     let mut options: Vec<Msg> = Vec::new();
@@ -1048,19 +1096,20 @@ pub fn ask_number(player_id: i32, title: &Msg, text: &Msg, min: i32, max: i32) -
         options.push(Msg::new("ask.intOption").i("n", n as i64));
     }
     if options.is_empty() {
-        return min;
+        return Ok(min);
     }
-    let i = ask_pick(player_id, title, text, &options);
-    min + i as i32
+    let i = ask_pick(player_id, title, text, &options)?;
+    Ok(min + i as i32)
 }
 
 /// Run another card's `play` effect right now (C# `NewCard` + `Play`).
 /// `H.PlayCard` -- run another card's `play` inside this run, as that card.
 /// Returns where it says it goes (its `Dest`); moving it there is the caller's
 /// job, since only the caller knows where the card came from.
-pub fn play_card(id: &str, player_id: i32) -> Dest {
+pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     let (p, l) = s(id);
-    Dest::from_i32(unsafe { sys::play_card(p, l, player_id) })
+    let v = asked(unsafe { sys::play_card(p, l, player_id) })?;
+    Ok(Dest::from_i32(v))
 }
 
 /// `H.CanReplay` -- could `player_id` play `id` right now (it has a `play` effect and
@@ -1384,16 +1433,15 @@ pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
     unsafe { sys::add_fire_max(player_id, n) }
 }
 
-/// C# `DecayCard` tick -- burn one of this card's crystals at `player_id`; at 0 the
-/// card leaves the field for its owner's discard pile (`H.Unplace(this,
-/// "discard")`). Returns the crystals left (0 = it just decayed away).
-pub fn decay(player_id: i32, id: &str) -> i32 {
-    let left = add_crystals(player_id, -1, 0);
-    if left == 0 {
-        unplace_card(player_id);
-        to_discard(player_id, id);
-    }
-    left
+/// C# `DecayCard` tick -- burn one of this card's crystals. Returns the count
+/// left.
+///
+/// The 「…为0时放入弃牌堆」 half of a decay clause is **not** here: it is the
+/// card's `HookKind::CrystalsChanged` handler, so a count emptied by *any*
+/// write (another card's `add_card_crystals`, say) leaves the field too. This
+/// used to unplace-and-discard at 0, which only covered the tick.
+pub fn decay() -> i32 {
+    add_crystals(-1, 0)
 }
 
 /// The trigger a reaction is being checked against (C# `Trigger`).
@@ -1424,7 +1472,7 @@ pub mod trigger {
         unsafe { sys::trig_value() }
     }
 
-    /// `t.Step` -- the turn step (0/1/2/3) active when this trigger fired.
+    /// `t.Step` -- the turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
     /// Only meaningful for kinds that aren't step-specific (e.g. `mortgage`
     /// can fire during both step 1 and step 3).
     pub fn step() -> i32 {
@@ -1821,7 +1869,9 @@ pub fn paid_in_settle() -> i32 {
     unsafe { sys::paid_in_settle() }
 }
 
-pub fn place_card_on(player_id: i32, tile: i32, card: &str, note: &Msg) {
+/// Place a field card **on a tile** (the mark sits on the board at `tile`
+/// rather than with its owner). Returns the new instance's uid.
+pub fn place_card_on(player_id: i32, tile: i32, card: &str, note: &Msg) -> i32 {
     let (cp, cl) = s(card);
     let (p, l) = mj(note);
     unsafe { sys::place_card_on(player_id, tile, cp, cl, p, l) }
@@ -1949,4 +1999,127 @@ pub fn card_crystals(player_id: i32, card: &str) -> i32 {
 /// `H.BuildRoutine` -- pay `tile`'s build cost and raise one house.
 pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
+}
+
+/// 「位于此卡所在格子上的玩家无法使用角色及乐队技能」 / 「不可使用任何<BAND>
+/// 角色的（2）技能」 -- the shared skill-press gate. `skillBlock` on the player
+/// suppresses every skill; `skillBlock:<band>` suppresses one band's. A
+/// `skillBlock` mark on the tile the player stands on suppresses everyone there.
+/// `band` is the skill's own band, or `""` when it does not have one.
+pub fn skill_blocked(player_id: i32, band: &str) -> bool {
+    if tok(player_id, "skillBlock") > 0 {
+        return true;
+    }
+    if !band.is_empty() {
+        let key = alloc::format!("skillBlock:{}", band);
+        if tok(player_id, &key) > 0 {
+            return true;
+        }
+    }
+    let t = player_pos(player_id);
+    t >= 0 && count_marks(t, "skillBlock", -2) > 0
+}
+
+/// Where **this instance** sits, or -1 for "with its owner" / gone
+/// (C# `Card.Tile`). [`placed_tile`] is the form for some *other* card.
+pub fn self_tile() -> Option<i32> {
+    let v = unsafe { sys::self_tile() };
+    (v >= -1).then_some(v)
+}
+
+/// Move **this instance** to `tile` (-1 = back with its owner).
+pub fn set_self_tile(tile: i32) -> bool {
+    unsafe { sys::set_self_tile(tile) != 0 }
+}
+
+/// Is **this instance** face-down?
+pub fn self_face_down() -> bool {
+    unsafe { sys::self_face_down() != 0 }
+}
+
+/// Flip **this instance**; returns whether it is on the field.
+pub fn set_self_face_down(on: bool) -> bool {
+    unsafe { sys::set_self_face_down(on as i32) != 0 }
+}
+
+/// Is **this instance** marked 「不受任何效果影响」?
+pub fn self_immune() -> bool {
+    unsafe { sys::self_immune() != 0 }
+}
+
+/// Mark **this instance** 「不受任何效果影响」; returns whether it is on the field.
+pub fn set_self_immune(on: bool) -> bool {
+    unsafe { sys::set_self_immune(on as i32) != 0 }
+}
+
+/// Every card instance on `player_id`'s field, as `(uid, id)` in placement
+/// order. Walk this rather than [`placed_cards`] whenever the next step
+/// addresses the instance -- the *name* is not an identity, so a name-keyed
+/// op would hit the first copy twice when one player holds two.
+pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
+    let cap = 8192;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::field_instances(player_id, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// The instance at `uid`, wherever it sits. [`crystals`] / [`self_tile`] are
+/// the forms for the running instance; these address some *other* one.
+pub fn crystals_at(uid: i32) -> i32 {
+    unsafe { sys::crystals_at(uid) }
+}
+
+/// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
+pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
+    unsafe { sys::add_crystals_at(uid, n, max) }
+}
+
+/// Take the instance at `uid` off the field; returns the owner it left.
+pub fn unplace_at(uid: i32) -> i32 {
+    unsafe { sys::unplace_at(uid) }
+}
+
+/// Where the instance at `uid` sits (`Some(-1)` = with its owner, `None` = gone).
+pub fn tile_at(uid: i32) -> Option<i32> {
+    let v = unsafe { sys::tile_at(uid) };
+    (v >= -1).then_some(v)
+}
+
+/// Move the instance at `uid` to `tile` (-1 = back with its owner).
+pub fn set_tile_at(uid: i32, tile: i32) -> bool {
+    unsafe { sys::set_tile_at(uid, tile) != 0 }
+}
+
+/// Is the instance at `uid` face-down?
+pub fn is_face_down_at(uid: i32) -> bool {
+    unsafe { sys::is_face_down_at(uid) != 0 }
+}
+
+/// Flip the instance at `uid`; returns whether it exists.
+pub fn set_face_down_at(uid: i32, on: bool) -> bool {
+    unsafe { sys::set_face_down_at(uid, on as i32) != 0 }
+}
+
+/// Is the instance at `uid` marked 「不受任何效果影响」?
+pub fn is_immune_at(uid: i32) -> bool {
+    unsafe { sys::is_immune_at(uid) != 0 }
+}
+
+/// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.
+pub fn set_immune_at(uid: i32, on: bool) -> bool {
+    unsafe { sys::set_immune_at(uid, on as i32) != 0 }
+}
+
+/// The uid of the instance named `name` on `player_id`'s field, or `None`.
+/// A *resolver*, not an identity: with several copies in play it answers the
+/// first, so a rule that means "a specific copy" has to hold the uid from
+/// [`place_card`] instead of asking by name.
+pub fn find_card(player_id: i32, name: &str) -> Option<i32> {
+    field_instances(player_id)
+        .into_iter()
+        .find(|(_, id)| id == name)
+        .map(|(uid, _)| uid)
 }

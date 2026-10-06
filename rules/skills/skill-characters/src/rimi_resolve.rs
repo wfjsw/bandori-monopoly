@@ -33,31 +33,37 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限3」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    Ok(())
 }
 
 /// （1）「你的回合中[经过]任意Live House颜色格子」 -- latch only.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_live_house_for(player_id, ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     if ctx::turn_player() == player_id {
         state::set(player_id, PASSED, 1);
     }
+    Ok(())
 }
 
 /// （1）「后在回合结束时获得1个[火罐]」.
-fn at_turn_end(player_id: i32) {
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, PASSED) == 0 {
-        return;
+        return Ok(());
     }
     state::set(player_id, PASSED, 0);
     ctx::gain_fire(player_id, 1, &Msg::new(key!("rimi_resolve_gain")));
+    Ok(())
 }
 
 /// （2） 「可选择使用3个[火罐]」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 3 {
         return Some(Msg::new(key!("rimi_resolve_no_fire")));
     }
@@ -65,7 +71,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     let mut best = 0;
     let mut far: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
@@ -83,7 +89,7 @@ fn use_skill(player_id: i32) {
         }
     }
     if far.is_empty() {
-        return;
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
@@ -93,10 +99,10 @@ fn use_skill(player_id: i32) {
             .iter()
             .map(|&t| Msg::new(key!("rimi_resolve_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
-    );
-    let Some(&to) = far.get(pick) else { return; };
+    )?;
+    let Some(&to) = far.get(pick) else { return Ok(()); };
     if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rimi_resolve_spend"))) {
-        return;
+        return Ok(());
     }
     // 「[传送]…并[结算]」 -- a teleport that settles.
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -105,4 +111,5 @@ fn use_skill(player_id: i32) {
     ctx::card_move(player_id);
     // 「且可选择盖房」.
     ctx::card_offer_build(player_id, &[to]);
+    Ok(())
 }

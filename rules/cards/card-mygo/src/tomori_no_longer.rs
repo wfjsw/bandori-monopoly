@@ -18,11 +18,34 @@ use alloc::string::String;
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new("MyGO:（灯）不再迷茫", &[
     On::Play(None, tomori_no_longer),
-    On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep)]);
+    On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep),
+    On::Hook(&[card_sdk::abi::HookKind::FireSpent], mine, cover)]);
+
+/// （2）'s substitution.
+fn cover(player_id: i32) -> card_sdk::Asked {
+    if ctx::crystals() < 1 {
+        return Ok(());
+    }
+    let spent = ctx::trigger::value();
+    if spent <= 0 {
+        return Ok(());
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("tomori_no_longer_title")),
+        &Msg::new(key!("tomori_no_longer_cover")).i("n", spent as i64),
+    )? {
+        return Ok(());
+    }
+    ctx::add_crystals(-1, i32::MAX);
+    ctx::gain_fire(player_id, spent, &Msg::new(key!("tomori_no_longer_refund")));
+    ctx::log(player_id, &Msg::new(key!("tomori_no_longer_covered")).i("n", spent as i64));
+    Ok(())
+}
 
 const ID: &str = "MyGO:（灯）不再迷茫";
 
-fn tomori_no_longer(player_id: i32) {
+fn tomori_no_longer(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得两层仅能被自然流失效果移除的[停留]」 -- C#
     // `H.GiveStay(i, 2, i, CardName)`.
     ctx::give_stay(player_id, 2);
@@ -44,7 +67,7 @@ fn tomori_no_longer(player_id: i32) {
     }
     // 规则书（1）: 「在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数」 -- C#
     // `PlaceFromPlay(..., crystals: list.Count + 1)`.
-    ctx::set_crystals(player_id, discarded + 1);
+    ctx::set_crystals(discarded + 1);
     ctx::log(
         player_id,
         &Msg::new(key!("tomori_no_longer_discarded"))
@@ -53,11 +76,12 @@ fn tomori_no_longer(player_id: i32) {
             .i("crystals", (discarded + 1) as i64),
     );
     ctx::log(player_id, &Msg::new(key!("tomori_no_longer_placed")).player_id("who", player_id));
-    // TODO(规则书)（2）: 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐
-    // 消耗」 -- needs the skill-use attachment hook (C# `CardTomoriNoLonger.Use`
-    // via `H.ExtraOf`) to spend one crystal instead of the skill's fire cost.
+    // （2）「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」
+    // -- `fireSpent` is raised after the spend commits, so the substitution is a
+    // crystal taken here and the fire handed back.
     // （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」 -- swept at the turn end rather
     // than inside the spend, so it also catches a spend from another card.
+    Ok(())
 }
 
 fn mine(player_id: i32) -> bool {
@@ -65,13 +89,14 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」.
-fn sweep(player_id: i32) {
-    if ctx::card_crystals(player_id, "MyGO:（灯）不再迷茫") > 0 {
-        return;
+fn sweep(player_id: i32) -> card_sdk::Asked {
+    if ctx::crystals() > 0 {
+        return Ok(());
     }
-    if !ctx::is_placed(player_id) {
-        return;
+    if !ctx::is_placed() {
+        return Ok(());
     }
-    ctx::unplace_card_named(player_id, "MyGO:（灯）不再迷茫");
+    ctx::unplace_self();
     ctx::to_discard(player_id, "MyGO:（灯）不再迷茫");
+    Ok(())
 }

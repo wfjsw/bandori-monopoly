@@ -51,10 +51,10 @@ fn can_react(player_id: i32) -> bool {
     !between(player_id).is_empty()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let list = between(player_id);
     if list.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子」
     // -- C# `H.AskSeat(i, "另一个我", ..., list)`.
@@ -63,7 +63,7 @@ fn react(player_id: i32) {
         &Msg::new(key!("misaki_card_title")),
         &Msg::new(key!("misaki_card_ask")),
         &list,
-    );
+    )?;
     // 规则书[反击]: 「消耗所有火罐」 -- C# `H.SpendFire(i, H.Fire(i), "（美咲）")`.
     let fire = ctx::fire(player_id);
     if fire > 0 {
@@ -83,19 +83,20 @@ fn react(player_id: i32) {
     ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("misaki_card_moved")).player_id("who", player_id).tile("tile", to));
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「随后那格及相邻2格上的所有其他玩家[支付]你500资金」 -- C#
     // `H.PayR(item, i, 500, "（美咲）", i)` for every `H.Others(i)` on tiles
     // `to-2 ..= to+2` of the 60-tile ring.
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     for d in -2..=2 {
         let t = (to + d).rem_euclid(n);
         for p in ctx::players_on(t, player_id) {
-            ctx::transfer(p, player_id, 500, &Msg::new(key!("misaki_card_pay")));
+            ctx::transfer(p, player_id, 500, &Msg::new(key!("misaki_card_pay")))?;
         }
     }
+    Ok(())
 }

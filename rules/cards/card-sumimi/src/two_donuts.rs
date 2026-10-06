@@ -31,7 +31,7 @@ const SLOT_ORIG: &str = "two_donuts_orig";
 /// C# `DonutFx._by` -- the passer whose settle opens the return window (-1 = none).
 const SLOT_BY: &str = "two_donuts_by";
 
-fn two_donuts(player_id: i32) {
+fn two_donuts(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」
     // C# `H.GiveExile(i, 99, pos, i, CardName)` -- 99 layers so the per-turn
@@ -48,6 +48,7 @@ fn two_donuts(player_id: i32) {
         &Msg::new(key!("two_donuts_exile")).player_id("who", player_id).tile("tile", pos),
     );
     // C# `CardTwoDonuts.AiPlay` returns false -- CardDef has no H.AiPlay hook.
+    Ok(())
 }
 
 /// C# `DonutFx.PassTile` / `DonutFx.SettleAfter` -- run through the Fx hook
@@ -55,22 +56,22 @@ fn two_donuts(player_id: i32) {
 /// Pure guard for [`fx`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn fx_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn fx(player_id: i32) {
+fn fx(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- C# `DonutFx.PassTile`
         // records the first other player that steps on `Orig`.
         TriggerKind::PassTile => {
             if trigger::player_id() == player_id {
-                return;
+                return Ok(());
             }
             if trigger::tile() != ctx::slot(player_id, SLOT_ORIG) {
-                return;
+                return Ok(());
             }
             if ctx::slot(player_id, SLOT_BY) >= 0 {
-                return;
+                return Ok(());
             }
             ctx::set_slot(player_id, SLOT_BY, trigger::player_id());
         }
@@ -79,17 +80,18 @@ fn fx(player_id: i32) {
         TriggerKind::SettleAfter => {
             let by = ctx::slot(player_id, SLOT_BY);
             if by < 0 || trigger::player_id() != by {
-                return;
+                return Ok(());
             }
             back(player_id, by, trigger::move_dir());
         }
         _ => {}
     }
+    Ok(())
 }
 
 /// C# `DonutFx.Back` -- end the exile, return to `Orig`, offer the in-between
 /// settle-teleport, hand out 2 fire each, drop the attachment.
-fn back(player_id: i32, by: i32, dir: i32) {
+fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_BY, -1);
     let orig = ctx::slot(player_id, SLOT_ORIG);
     // C# `me.exile = 0; me.exileTo = -1; me.pos = Orig` -- a plain position set,
@@ -123,8 +125,8 @@ fn back(player_id: i32, by: i32, dir: i32) {
     if !tiles.is_empty() {
         let title = Msg::new(key!("two_donuts_title"));
         // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
-        if ctx::ask_yes(player_id, &title, &Msg::new(key!("two_donuts_yes"))) {
-            let to = ctx::ask_tile(player_id, &title, &Msg::new(key!("two_donuts_ask")).player_id("by", by), &tiles);
+        if ctx::ask_yes(player_id, &title, &Msg::new(key!("two_donuts_yes")))? {
+            let to = ctx::ask_tile(player_id, &title, &Msg::new(key!("two_donuts_ask")).player_id("by", by), &tiles)?;
             // C# `H.Teleport(Seat, r.index, resolve: true, ...)` (MatchHost.cs
             // DonutFx.Back) = `set_teleport_to(to)` + `set_resolve(true)` +
             // `card_move(player_id)`. C# calls `H.Teleport` (TeleportMove) rather
@@ -157,6 +159,7 @@ fn back(player_id: i32, by: i32, dir: i32) {
         }
     }
     // C# `H.RemoveExtra(this)` -- the stand-in leaves the field for the discard.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
+    Ok(())
 }

@@ -68,9 +68,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
         if ctx::stun_of(player_id) > 0 {
             return Some(Msg::new(key!("to_the_peak_stunned")));
         }
-        if ctx::stay_of(player_id) > 0 {
-            // TODO(规则书): `H.Moving` lets a `[停留]` player through when
-            //   `_turnCtx.Unstoppable` (「不可阻挡」) is up -- no hook for it.
+        if ctx::stay_of(player_id) > 0
+            && card_sdk::ctx::state::get(player_id, card_sdk::abi::state_key::UNSTOPPABLE) <= 0
+        {
+            // `H.Moving` lets a `[停留]` player through when 「不可阻挡」 is up.
             return Some(Msg::new(key!("to_the_peak_stuck")));
         }
         return None;
@@ -85,7 +86,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("to_the_peak_nothing")))
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     // 规则书: 「移动到下一个可被购买的livehouse格子」 -- unowned Livehouses, nearest ahead.
     let free: Vec<i32> = livehouses(player_id)
@@ -109,7 +110,7 @@ fn play(player_id: i32) {
         ctx::plan::set_resolve(true);
         ctx::card_move(player_id);
         ctx::log(player_id, &Msg::new(key!("to_the_peak_walk")).player_id("who", player_id).tile("tile", to));
-        return;
+        return Ok(());
     }
     // 规则书: 「若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋」
     let mut mine: Vec<i32> = Vec::new();
@@ -117,26 +118,26 @@ fn play(player_id: i32) {
         if why_not_build_on(player_id, t).is_some() {
             continue;
         }
-        if ctx::money(player_id) >= ctx::build_cost(t) * 3 / 2 {
+        if ctx::money_of(player_id) >= ctx::build_cost(t) * 3 / 2 {
             mine.push(t);
         }
     }
     if mine.is_empty() {
         ctx::log(player_id, &Msg::new(key!("to_the_peak_no_money")));
-        return;
+        return Ok(());
     }
     let title = Msg::new(key!("to_the_peak_ask_title"));
     let text = Msg::new(key!("to_the_peak_ask_text"));
     // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
-    if !ctx::ask_yes(player_id, &title, &text) {
-        return;
+    if !ctx::ask_yes(player_id, &title, &text)? {
+        return Ok(());
     }
-    let tile = ctx::ask_tile(player_id, &title, &text, &mine);
+    let tile = ctx::ask_tile(player_id, &title, &text, &mine)?;
     // 规则书: 「花费1.5倍价格」 -- C# `CeilTo(H.BuildCostFor(i, r.index) * 1.5, 10)`.
     let amount = ceil_to(ctx::build_cost(tile) as i64 * 3 / 2, 10);
-    let paid = ctx::pay(player_id, amount, &Msg::new(key!("to_the_peak_why")).tile("tile", tile));
+    let paid = ctx::pay(player_id, amount, &Msg::new(key!("to_the_peak_why")).tile("tile", tile))?;
     if paid < amount {
-        return;
+        return Ok(());
     }
     // 规则书: 「加盖一层房屋」 -- C# `H.BuildRoutine(i, r.index, free: true, "向着顶点")`:
     // the pay above covers the 1.5x cost and the raise is free (`H.AddHouse`).
@@ -146,6 +147,7 @@ fn play(player_id: i32) {
     }
     // The raise above goes out as `houseAdded` once the run commits, so a
     // persistent Fx listening for 「加盖」 sees this build too.
+    Ok(())
 }
 
 /// C# `CeilTo(x, unit)` -- round up to a multiple of `unit`.

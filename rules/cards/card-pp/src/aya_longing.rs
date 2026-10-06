@@ -38,11 +38,11 @@ fn shave_x(player_id: i32) -> i32 {
 
 /// C# `CardAyaLonging.Poorest` -- every alive player has at least as much money.
 fn poorest(player_id: i32) -> bool {
-    let me = ctx::money(player_id);
-    (0..ctx::player_count()).all(|p| p == player_id || ctx::player_out(p) || ctx::money(p) >= me)
+    let me = ctx::money_of(player_id);
+    (0..ctx::player_count()).all(|p| p == player_id || ctx::player_out(p) || ctx::money_of(p) >= me)
 }
 
-fn aya_longing(player_id: i32) {
+fn aya_longing(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "PP:[丸山彩]憧憬的前方", &Msg::new(key!("aya_longing_note")));
@@ -56,7 +56,7 @@ fn aya_longing(player_id: i32) {
         }
     }
     if ids.is_empty() {
-        return;
+        return Ok(());
     }
     let refs: Vec<&str> = ids.iter().map(|c| c.as_str()).collect();
     let pick = ctx::ask_card(
@@ -64,7 +64,7 @@ fn aya_longing(player_id: i32) {
         &Msg::new(key!("aya_longing_title")),
         &Msg::new(key!("aya_longing_ask")),
         &refs,
-    );
+    )?;
     let id = ids.swap_remove(pick.min(ids.len() - 1));
     if ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
         ctx::add_to_hand(player_id, &id);
@@ -73,17 +73,18 @@ fn aya_longing(player_id: i32) {
             &Msg::new(key!("aya_longing_back")).player_id("who", player_id).card("card", &id),
         );
     }
+    Ok(())
 }
 
 /// C# `CardAyaLonging.PayAdd` -- while the owner is
 /// the poorest alive player, every [消耗]/[支付] drops by X (floor 0).
-fn pay_add(player_id: i32) {
+fn pay_add(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PayAdd
         || trigger::player_id() != player_id
         || trigger::value() <= 0
         || !poorest(player_id)
     {
-        return;
+        return Ok(());
     }
     let x = shave_x(player_id);
     let amount = trigger::value();
@@ -91,7 +92,8 @@ fn pay_add(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("aya_longing_shave")).i("n", x as i64));
     // 规则书[持续]（2）: 「[共鸣][反击][消耗]或[支付]时将金额降低1500（最低0）」 --
     // on top of the X shave above, floored at 0.
-    if crate::resonance::try_resonance(player_id) {
+    if crate::resonance::try_resonance(player_id)? {
         trigger::set_pay_amount((trigger::value() - 1500).max(0));
     }
+    Ok(())
 }

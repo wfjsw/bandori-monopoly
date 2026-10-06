@@ -56,12 +56,12 @@ fn can_react(player_id: i32) -> bool {
     trigger::move_roll().is_some() && next_dist(player_id, trigger::move_dir()) > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
-    let Some(mut roll) = trigger::move_roll() else { return; };
+    let Some(mut roll) = trigger::move_roll() else { return Ok(()); };
     let dist = next_dist(player_id, trigger::move_dir());
     if dist <= 0 {
-        return;
+        return Ok(());
     }
     for _ in 0..30 {
         if roll >= dist {
@@ -82,4 +82,5 @@ fn react(player_id: i32) {
                 .i("dist", dist as i64),
         );
     }
+    Ok(())
 }

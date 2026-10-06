@@ -18,10 +18,11 @@ fn can_react(_player: i32) -> bool {
     matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll) && trigger::move_roll().is_some()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
-    let Some(before) = trigger::move_roll() else { return; };
+    let Some(before) = trigger::move_roll() else { return Ok(()); };
     let n = ctx::roll(player_id, 1, 4);
     trigger::set_move_roll(before + n);
     ctx::log(player_id, &Msg::new(key!("yolo_boost")).player_id("who", trigger::player_id()).i("n", n as i64).i("total", (before + n) as i64));
+    Ok(())
 }

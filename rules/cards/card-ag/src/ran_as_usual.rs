@@ -31,13 +31,15 @@ fn can_react(player_id: i32) -> bool {
     ctx::slot(player_id, "asUsualTurn") != ctx::turn_key()
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「此卡可以当反击使用」 -- the C# also plays it from hand (`Play`).
     arm(player_id);
+    Ok(())
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     arm(player_id);
+    Ok(())
 }
 
 fn arm(player_id: i32) {
@@ -53,14 +55,14 @@ fn arm(player_id: i32) {
 
 /// C# `CardRanAsUsual.Undo`, queued on `H._turnCtx.AtEnd`. The scheduling half
 /// is live; the restore body is held (see the TODO in `arm`).
-fn at_end(player_id: i32) {
+fn at_end(player_id: i32) -> card_sdk::Asked {
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     // `ctx::abnormal_count(player_id)` (C# `H._abnormalTurn[i]`) is the no-op
     // gate: nothing abnormal landed, nothing to undo.
     if ctx::abnormal_count(player_id) <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「回到起始地点并取消所有受到的效果（不进行任何结算）」 --
     // restore the four things the turn-start snapshot recorded (C#
@@ -77,4 +79,5 @@ fn at_end(player_id: i32) {
     ctx::state::set(player_id, card_sdk::abi::state_key::STUN, stun);
     ctx::state::set(player_id, card_sdk::abi::state_key::EXILE, exile);
     ctx::log(player_id, &Msg::new(key!("ran_as_usual_undo")).player_id("who", player_id).tile("tile", pos));
+    Ok(())
 }

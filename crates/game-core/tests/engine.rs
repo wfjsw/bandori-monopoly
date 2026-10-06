@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use game_core::state::stage;
 use game_core::data::GameData;
 use game_core::engine::{Match, StubRules};
 use game_core::net::{NetMessage, RoomMember};
@@ -238,7 +239,7 @@ fn a_human_plays_a_turn_with_commands() {
         .position(|s| s.member == 1)
         .unwrap() as i32;
     let mut guard = 0;
-    while !(m.state().turn == me && m.state().step == 1 && !m.state().busy) {
+    while !(m.state().turn == me && m.state().step == stage::OPS && !m.state().busy) {
         m.tick(0.25);
         answer_first(&mut m, 1);
         guard += 1;
@@ -259,7 +260,7 @@ fn a_human_plays_a_turn_with_commands() {
         m.tick(0.1);
     }
     let st = m.state();
-    assert_eq!(st.step, 3);
+    assert_eq!(st.step, stage::END);
     assert_ne!(
         st.players[me as usize].pos, before,
         "the roll moved the token"

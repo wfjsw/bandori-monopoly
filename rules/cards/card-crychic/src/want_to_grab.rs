@@ -27,39 +27,42 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new("CRYCHIC:想要抓住...", &[
     On::Hook(&[HookKind::PassPlayer], |_| true, on_pass),
     On::Hook(&[HookKind::SettleBefore], |_| true, grab)]);
 
-fn want_to_grab(player_id: i32) {
+fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得一层[停留]。」
     ctx::give_stay(player_id, 1);
     ctx::log(player_id, &Msg::new(key!("want_to_grab_note")).player_id("who", player_id));
     // 规则书（2）: 「当第一位其他玩家经过你」 -- arm the grab; the first passer
     // is the one it fires on.
     ctx::state::set(player_id, PASSER, -1);
+    Ok(())
 }
 
 /// 「当第一位其他玩家经过你」 -- remember the *first* passer only.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     let passer = ctx::trigger::player_id();
     if passer == player_id || passer < 0 {
-        return;
+        return Ok(());
     }
     if ctx::state::get(player_id, PASSER) >= 0 {
-        return;
+        return Ok(());
     }
     ctx::state::set(player_id, PASSER, passer);
+    Ok(())
 }
 
 /// 「在那名玩家[触发结算]前，你立刻向前移动一格并[触发结算]」 -- the grab runs
 /// before the remembered passer settles.
-fn grab(player_id: i32) {
+fn grab(player_id: i32) -> card_sdk::Asked {
     let passer = ctx::state::get(player_id, PASSER);
     if passer < 0 || ctx::trigger::player_id() != passer {
-        return;
+        return Ok(());
     }
     ctx::state::set(player_id, PASSER, -1);
     // 「你立刻向前移动一格并[触发结算]」 -- a one-step walk that settles.
     plan::set_steps(1);
     plan::set_resolve(true);
     ctx::card_move(player_id);
+    Ok(())
 }
 
 // TODO(规则书)（3）: 「[传送]至一个与自身所在格正上，正下，正左，正右直线距离最近的格子…并[触发结算]，视为你的主要移动。」

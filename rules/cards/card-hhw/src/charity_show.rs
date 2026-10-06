@@ -28,7 +28,7 @@ pub const CHARITY_SHOW: CardDef = CardDef::new("HHW:爱心义演", &[
     On::Play(None, play),
     On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], hook_guard, hook)]);
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
     // 规则书: 「打出此卡的回合内」 -- C# `H._turnCtx.HalfPayToOthers = true` and
     // `CharityFx.Turn = H.TurnKey` live on the turn, not on the card.
@@ -41,6 +41,7 @@ fn play(player_id: i32) {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("charity_show_note")));
     ctx::log(player_id, &Msg::new(key!("charity_show_played")).player_id("who", player_id));
+    Ok(())
 }
 
 /// C# `CharityFx.Mine` (MatchHost.cs:4200-4210) -- is tile `t` "yours" for the
@@ -59,7 +60,7 @@ fn mine(player_id: i32, t: i32) -> bool {
     // tile". `place_card` does not bind a tile yet (`Some(-1)`), so accept that
     // as "on CiRCLE" -- the only circle tile the rule names.
     if ctx::is_circle(t) {
-        return match ctx::placed_tile(player_id, KOKORO_ID) {
+        return match ctx::find_card(player_id, KOKORO_ID).and_then(ctx::tile_at) {
             Some(pt) => pt == t || pt < 0,
             None => false,
         };
@@ -72,10 +73,10 @@ fn mine(player_id: i32, t: i32) -> bool {
 /// Pure guard for [`hook`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn hook(player_id: i32) {
+fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
         // `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)` for any
@@ -83,17 +84,17 @@ fn hook(player_id: i32) {
         // before `PayChoose`) rewrites the amount via `set_pay_amount`.
         TriggerKind::PayMul => {
             if ctx::slot(player_id, SLOT_TURN) != ctx::turn_key() {
-                return;
+                return Ok(());
             }
             // C# `HalfPayToOthers` only halves payments *to other players*
             // (`p.to >= 0 && p.to != Player`); a bank payment is untouched.
             let to = trigger::target();
             if to < 0 || to == player_id || trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             let amount = trigger::value();
             if amount <= 0 {
-                return;
+                return Ok(());
             }
             // `CeilTo(amount / 2.0, 10)` -- half, rounded up to a multiple of 10.
             let half = (amount as i64 + 1) / 2;
@@ -112,30 +113,30 @@ fn hook(player_id: i32) {
         // -- C# `CharityFx.PassTile` (MatchHost.cs:4211-4222).
         TriggerKind::PassTile => {
             if ctx::slot(player_id, SLOT_TURN) != ctx::turn_key() {
-                return;
+                return Ok(());
             }
             // C# `m.Seat != Seat` -- only the owner's own walk.
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             // C# `m.Teleport || m.TeleportWalk` -- not a teleport.
             if trigger::move_kind() == Some(MoveKind::Teleport) {
-                return;
+                return Ok(());
             }
             // C# `m.Steps >= 0` (not a dice move) -- the rule scopes this to
             // 「掷骰移动」. `move_is_main()` is the turn's main roll-and-move.
             if !trigger::move_is_main() {
-                return;
+                return Ok(());
             }
             let t = trigger::tile();
             if t < 0 || !mine(player_id, t) {
-                return;
+                return Ok(());
             }
             // C# `Seen.Add(t)` -- only the first pass of each tile counts
             // (the slot holds the turn key that first saw it).
             let key = format!("charity_seen_{t}");
             if ctx::slot(player_id, &key) == ctx::turn_key() {
-                return;
+                return Ok(());
             }
             ctx::set_slot(player_id, &key, ctx::turn_key());
             ctx::log(
@@ -164,12 +165,13 @@ fn hook(player_id: i32) {
         // Player` -> `H.RemoveExtra(this)`): both effects end with the turn.
         TriggerKind::TurnEndAfter => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             ctx::set_slot(player_id, SLOT_TURN, 0);
-            ctx::unplace_card(player_id);
+            ctx::unplace_self();
             ctx::to_discard(player_id, ID);
         }
         _ => {}
     }
+    Ok(())
 }

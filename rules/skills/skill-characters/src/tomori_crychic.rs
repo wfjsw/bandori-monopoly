@@ -28,32 +28,38 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_crychic_gain")));
+    Ok(())
 }
 
 /// （3）「当你的移动掷骰小于等于6时，立刻获得一层[停留]并在回合结束时触发结算」.
-fn on_roll(player_id: i32) {
+fn on_roll(player_id: i32) -> card_sdk::Asked {
     let face = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if face > 6 {
-        return;
+        return Ok(());
     }
     ctx::give_stay(player_id, 1);
     // 「并在回合结束时触发结算」 -- the engine's `settleAtEnd` counter.
     ctx::inc_slot(player_id, "settleAtEnd", 1);
     ctx::log(player_id, &Msg::new(key!("tomori_crychic_stay")).i("n", face as i64));
+    Ok(())
 }
 
 /// （2） 「可消耗1火罐清除自身一层[停留]」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("tomori_crychic_no_fire")));
     }
@@ -64,10 +70,11 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「消耗1火罐清除自身一层[停留]」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomori_crychic_spend"))) {
-        return;
+        return Ok(());
     }
     ctx::state::add(player_id, state_key::STAY, -1);
     ctx::log(player_id, &Msg::new(key!("tomori_crychic_cleared")));
+    Ok(())
 }

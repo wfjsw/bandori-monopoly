@@ -27,11 +27,11 @@ fn buyable_unowned(t: i32) -> bool {
     ctx::tile_owner(t) < 0 && ctx::is_buyable(t)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let ryuseido = ctx::tile_named("流星堂");
     let n = ctx::tile_count();
     if ryuseido < 0 || n <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「投掷1d10」
     let want = ctx::roll(player_id, 1, 10);
@@ -93,6 +93,7 @@ fn play(player_id: i32) {
         // 规则书: 「[消耗]6000资金」 -- C# `H.LoseR(i, 6000, "迷宫般的仓库")`
         // (MatchHost.cs:8866-8869) after the forced stop.
         ctx::log(player_id, &Msg::new(key!("maze_warehouse_loop")).player_id("who", player_id));
-        ctx::pay(player_id, 6000, &Msg::new(key!("maze_warehouse_lose")));
+        ctx::pay(player_id, 6000, &Msg::new(key!("maze_warehouse_lose")))?;
     }
+    Ok(())
 }

@@ -19,7 +19,8 @@ pub const KAORU_THIEF: CardDef = CardDef::new("HHW:（薰）怪盗hello happy", 
     On::Play(Some(cant_play), play),
     On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
     On::Hook(&[HookKind::PassPlayer], pass_player_guard, pass_player),
-    On::RollPlan(roll_plan)]);
+    On::RollPlan(roll_plan),
+    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardKaoruThief.WhyNot`: refuses the play with no other player alive.
@@ -29,7 +30,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let others = ctx::others(player_id);
     // 规则书: 「向一名玩家场上放置一个怪盗标记」 -- C# `H.PickTarget` over `H.Others`:
     // `H.AskSeat` then the `H.Target` gate (`SingleTarget`).
@@ -38,7 +39,7 @@ fn play(player_id: i32) {
         &Msg::new(key!("kaoru_thief_ask_title")),
         &Msg::new(key!("kaoru_thief_ask_text")),
         &others,
-    );
+    )?;
     // C# `H.Target(c, r.index, t)` -> `res.index = t.yes ? t.index : -1`: out /
     // exile / `ImmuneAll` / `Untargetable` / the `target` [反击] window all fail
     // the designation, and a `redirect` hook may move the hit.
@@ -49,7 +50,7 @@ fn play(player_id: i32) {
     ctx::place_card(player_id, ID, &Msg::new(key!("kaoru_thief_note")));
     // 规则书: 「（充能3，衰减1）」 -- the placement's crystal charge (C#
     // `H.PlaceFromPlay(c, -1, -1, 3)`).
-    ctx::set_crystals(player_id, 3);
+    ctx::set_crystals(3);
     // 规则书: 「向一名玩家场上放置一个怪盗标记」 -- C# `if (r.index >= 0)` gates the
     // mark on the gate's answer (the player actually hit, after any redirect).
     if let Some(who) = hit {
@@ -60,6 +61,7 @@ fn play(player_id: i32) {
         ctx::set_slot(player_id, "kaoru_thief_turn", ctx::turn_key());
         ctx::log(player_id, &Msg::new(key!("kaoru_thief_marked")).player_id("who", who));
     }
+    Ok(())
 }
 
 /// 规则书: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
@@ -67,26 +69,26 @@ fn play(player_id: i32) {
 /// Pure guard for [`pass_player`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_player_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pass_player(player_id: i32) {
+fn pass_player(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != Seat` -- only the owner's own walk.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     // C# `other != Marked` -- only when passing the marked player.
     let marked = ctx::slot(player_id, "kaoru_thief_marked");
     if marked < 0 || trigger::target() != marked {
-        return;
+        return Ok(());
     }
     // C# `m.Remaining <= 0` -- only mid-move.
     if trigger::move_remaining() <= 0 {
-        return;
+        return Ok(());
     }
     // C# `Mem["turn"] != H.TurnKey` -- only the turn the mark was placed.
     if ctx::slot(player_id, "kaoru_thief_turn") != ctx::turn_key() {
-        return;
+        return Ok(());
     }
     // 规则书: 「可以选择在经过该玩家时使自己强制停下并触发结算」 -- C#
     // `H.AskYes(..., aiYes: false)` then `m.Stopped = true; m.Resolve = true`.
@@ -95,55 +97,80 @@ fn pass_player(player_id: i32) {
         player_id,
         &Msg::new(key!("kaoru_thief_stop_title")),
         &Msg::new(key!("kaoru_thief_stop_ask")).player_id("who", who),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // C# `m.Stopped = true; m.Resolve = true` -- stop at the marked player's
     // tile and settle (`plan::set_stop_at` + `set_resolve`).
     // 规则书: 「[强制停下]」 -- behind `H.AbnormalGate`.
     if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
-        return;
+        return Ok(());
     }
     let tile = trigger::tile();
     if tile >= 0 {
         ctx::plan::set_stop_at(tile);
         ctx::plan::set_resolve(true);
     }
+    Ok(())
 }
 
 /// 规则书: 「（充能3，衰减1）」 -- C# `DecayCard.TurnEnd` (`turn == DecayOn` =
-/// the owner's turn) -> `AddCrystals(-1)`; empty -> `Empty()` /
-/// `H.Unplace(this, "discard")`. `ctx::decay` is that body.
+/// the owner's turn) -> `AddCrystals(-1)`.
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn turn_end(player_id: i32) {
-    if ctx::decay(player_id, ID) == 0 {
-        ctx::log(player_id, &Msg::new(key!("kaoru_thief_decayed")).player_id("who", player_id));
-    }
+fn turn_end(_player_id: i32) -> card_sdk::Asked {
+    ctx::decay();
+    Ok(())
+}
+
+/// 「充能/衰减」 runs out -- C# `Empty()` / `H.Unplace(this, "discard")`.
+///
+/// TODO(规则书): 「（充能3，衰减1）」 names the charge and the decay but never
+/// says what happens at 0, while every other crystal card spells out 「为0时
+/// 置入弃牌堆」. This keeps the C# behaviour (it decays out) -- the book may
+/// intend something else, e.g. leaving a spent card on the field.
+///
+/// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn crystals_changed_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::card_is(ID)
+        && ctx::crystals() == 0
+        // Only a write that did not raise the count speaks for the empty
+        // state; see AG:绯红之魂 (3).
+        && trigger::value() <= 0
+}
+
+fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
+    ctx::unplace_self();
+    ctx::to_discard(player_id, ID);
+    ctx::log(player_id, &Msg::new(key!("kaoru_thief_decayed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// 规则书: 「此卡在场上时所有在薰所在格子的人如果可以移动，则主要移动改为投掷1d2（前后）
 /// 和1d10（距离）进行结算」 -- C# `CardKaoruThief.RollPlan`: when anyone but the
 /// owner starts a main move standing on the card's tile (and the plan has no
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
-fn roll_plan(player_id: i32) {
-    if !ctx::is_placed(player_id) {
-        return;
+fn roll_plan(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() {
+        return Ok(());
     }
     let mover = ctx::turn_player();
     // C# `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos && m.FixedRoll < 0`.
     if mover == player_id || mover < 0 {
-        return;
+        return Ok(());
     }
     if ctx::player_pos(mover) != ctx::player_pos(player_id) {
-        return;
+        return Ok(());
     }
     if ctx::fixed_roll().is_some() {
-        return;
+        return Ok(());
     }
     // 规则书: 「投掷1d2（前后）」 -- C# `H.Roll(m.Seat, 1, 2, ...)` sets
     // `m.Reverse = num == 2`.
@@ -162,4 +189,5 @@ fn roll_plan(player_id: i32) {
             .player_id("who", mover)
             .i("dir", dir as i64),
     );
+    Ok(())
 }

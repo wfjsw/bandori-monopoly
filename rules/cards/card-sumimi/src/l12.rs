@@ -34,7 +34,7 @@ fn pool(player_id: i32) -> Vec<String> {
     out
 }
 
-fn l12(player_id: i32) {
+fn l12(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("l12_note")));
@@ -44,7 +44,7 @@ fn l12(player_id: i32) {
     // this card) and `H.AskCard` picks one to `H.AddToHand`.
     let pool = pool(player_id);
     if pool.is_empty() {
-        return;
+        return Ok(());
     }
     let picks: Vec<&str> = pool.iter().map(|s| s.as_str()).collect();
     let i = ctx::ask_card(
@@ -52,7 +52,7 @@ fn l12(player_id: i32) {
         &Msg::new(key!("l12_title")),
         &Msg::new(key!("l12_search")),
         &picks,
-    );
+    )?;
     let id = pool[i].clone();
     // C# `hidden.discard.Remove(text)`, else `hidden.draw.Remove(text)` +
     // `H.Shuffle(hidden.draw)`. `take_card` pulls one copy out of the pile
@@ -68,6 +68,7 @@ fn l12(player_id: i32) {
     ctx::state::add(player_id, state_key::HAND_LIMIT, -1);
     // C# `NoteText` shows the crystal count / hand-limit note; CardDef has no
     // NoteText hook.
+    Ok(())
 }
 
 /// 规则书[持续]（2）: 「每当你消耗火罐时，为此卡添加一个[奇迹水晶]」 -- C#
@@ -75,21 +76,22 @@ fn l12(player_id: i32) {
 /// Pure guard for [`fire_spent`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn fire_spent_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn fire_spent(player_id: i32) {
+fn fire_spent(player_id: i32) -> card_sdk::Asked {
     // One crystal per fire spent (`t.value` is how many pots went).
     let n = trigger::value().max(0);
     if n == 0 {
-        return;
+        return Ok(());
     }
-    ctx::add_crystals(player_id, n, 0);
+    ctx::add_crystals(n, 0);
     ctx::log(player_id, &Msg::new(key!("l12_fire_spent")).player_id("who", player_id).i("n", n as i64));
     // 规则书[持续]（3）: 「当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。」
-    if ctx::crystals(player_id) >= 6 {
-        ctx::unplace_card(player_id);
+    if ctx::crystals() >= 6 {
+        ctx::unplace_self();
         ctx::add_to_hand(player_id, ID);
         ctx::log(player_id, &Msg::new(key!("l12_back")).player_id("who", player_id));
     }
+    Ok(())
 }

@@ -26,21 +26,26 @@ fn afterglow(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
-fn tick(player_id: i32) {
+fn tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
         ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
     }
+    Ok(())
 }
 
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("himari_step_no_fire")));
     }
@@ -48,7 +53,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「指定你的此次移动仅在单/双数格上进行」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let odd = ctx::ask_pick(
         player_id,
         &Msg::new(key!("himari_step_title")),
@@ -57,12 +62,13 @@ fn use_skill(player_id: i32) {
             Msg::new(key!("himari_step_odd")),
             Msg::new(key!("himari_step_even")),
         ],
-    );
+    )?;
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("himari_step_spend"))) {
-        return;
+        return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
     // 1 = odd, 2 = even (the plan's parity field).
     plan::set_parity(if odd == 1 { 1 } else { 2 });
     ctx::log(player_id, &Msg::new(key!("himari_step_set")));
+    Ok(())
 }

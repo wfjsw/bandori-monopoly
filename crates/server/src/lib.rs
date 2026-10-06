@@ -27,6 +27,7 @@ pub mod pool;
 pub mod room;
 pub mod sse;
 pub mod state;
+pub mod store;
 
 use std::path::PathBuf;
 use std::sync::Arc;

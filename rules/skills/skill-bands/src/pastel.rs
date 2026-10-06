@@ -31,53 +31,60 @@ fn mine(player_id: i32) -> bool {
 
 /// （1）「游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]（如有场上有多张
 /// Pastel✽Palettes乐队卡时此效果不重复发动）」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     if ctx::in_band(player_id, "Pastel✽Palettes") {
-        return;
+        return Ok(());
     }
     // 「如有场上有多张…乐队卡时此效果不重复发动」 -- only the first copy deals.
     for p in 0..player_id {
         if ctx::placed_cards(p).iter().any(|c| c == ID) {
-            return;
+            return Ok(());
         }
     }
     ctx::add_tok(player_id, FAN, 1, i32::MAX);
+    Ok(())
 }
 
 /// （4）「回合开始时此卡添加1个[奇迹水晶]，然后可选择移除此卡5个[奇迹水晶]并抽1张卡」.
-fn at_turn_start(player_id: i32) {
-    ctx::add_card_crystals(player_id, ID, 1, i32::MAX);
-    if ctx::card_crystals(player_id, ID) < 5 {
-        return;
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
+    ctx::add_crystals(1, i32::MAX);
+    if ctx::crystals() < 5 {
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("pastel_title")),
         &Msg::new(key!("pastel_draw")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
-    ctx::add_card_crystals(player_id, ID, -5, i32::MAX);
+    ctx::add_crystals(-5, i32::MAX);
     ctx::draw(player_id, 1);
+    Ok(())
 }
 
 /// （3）「[经过]CiRCLE时不获得[CiRCLE奖励]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if ctx::is_circle(ctx::trigger::tile()) {
         plan::set_no_circle_reward(true);
     }
+    Ok(())
 }
 
 /// （2）「将X个反面[P✽P粉丝]变正…X大于拥有的反面的[P✽P粉丝]时可为此卡添加
 /// 等量溢出的[奇迹水晶]（最多10个）」 -- the press is the flip.
 fn can_flip(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if ctx::tok(player_id, FAN) < 1 {
         return Some(Msg::new(key!("pastel_no_fan")));
     }
     None
 }
 
-fn flip(player_id: i32) {
+fn flip(player_id: i32) -> card_sdk::Asked {
+    crate::spend_copy_sticker(player_id);
     let have = ctx::tok(player_id, FAN);
     let want = ctx::ask_number(
         player_id,
@@ -85,15 +92,16 @@ fn flip(player_id: i32) {
         &Msg::new(key!("pastel_how_many")),
         1,
         have.max(1),
-    );
+    )?;
     if want <= 0 {
-        return;
+        return Ok(());
     }
     ctx::add_tok(player_id, FAN, -want, i32::MAX);
     // 「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」
     let over = (want - have).max(0);
     if over > 0 {
-        ctx::add_card_crystals(player_id, ID, over, 10);
+        ctx::add_crystals(over, 10);
         ctx::log(player_id, &Msg::new(key!("pastel_over")).i("n", over as i64));
     }
+    Ok(())
 }

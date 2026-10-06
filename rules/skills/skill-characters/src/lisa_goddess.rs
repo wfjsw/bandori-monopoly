@@ -37,20 +37,25 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始2，上限2」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得1个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("lisa_goddess_gain")));
+    Ok(())
 }
 
 /// （2） 「你可以消耗一个火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("lisa_goddess_no_fire")));
     }
@@ -58,7 +63,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「将此次移动变为传送到距离你正向距离最近的角色所在的格子，触发结算」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     // 「距离你正向距离最近的角色」 -- the nearest character ahead.
     let at = ctx::player_pos(player_id);
     let n = ctx::tile_count();
@@ -75,10 +80,10 @@ fn use_skill(player_id: i32) {
         }
     }
     if to < 0 {
-        return;
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend"))) {
-        return;
+        return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(to);
@@ -88,23 +93,23 @@ fn use_skill(player_id: i32) {
     // 角色获得一个可超过上限的临时火罐，若你这样做，此次传送不触发任何结算」 --
     // offered here, before the move runs.
     if state::get(player_id, state_key::FIRE) < 1 {
-        return;
+        return Ok(());
     }
     let here: alloc::vec::Vec<i32> = (0..ctx::player_count())
         .filter(|&p| p != player_id && !ctx::player_out(p) && ctx::player_pos(p) == to)
         .collect();
     if here.is_empty() {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("lisa_goddess_cancel_title")),
         &Msg::new(key!("lisa_goddess_cancel_ask")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend"))) {
-        return;
+        return Ok(());
     }
     // 「若你这样做，此次传送不触发任何结算」
     plan::set_resolve(false);
@@ -112,9 +117,10 @@ fn use_skill(player_id: i32) {
     let who = here[0];
     state::add(who, "tempFire", 1);
     state::set_max(who, "tempFire", i32::MAX);
-    // TODO(规则书): （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
+    // TODO(规则书)[judgement]: （3）「你提供的临时火罐将会在两回合后失去，使用你提供的临时火罐
     //   需要支付你600资金」 -- the clause under-specifies -- the spend path has to
     //   know a pot's *provenance* to charge the provider, and 「被冲榜类效果被动
     //   消耗无需支付」 carves out a class of spends the engine does not tag.
     ctx::log(player_id, &Msg::new(key!("lisa_goddess_temp")).player_id("who", who));
+    Ok(())
 }

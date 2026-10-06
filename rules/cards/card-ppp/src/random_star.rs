@@ -17,7 +17,7 @@ pub const RANDOM_STAR: CardDef = CardDef::new("PPP:仓库里的Random Star", &[
     On::Play(None, random_star),
     On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile)]);
 
-fn random_star(player_id: i32) {
+fn random_star(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置自身场上」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "PPP:仓库里的Random Star", &Msg::new(key!("random_star_note")));
@@ -29,6 +29,7 @@ fn random_star(player_id: i32) {
     // `H.AddToDeck(seat, "PPP:[衍生]拍卖撤下来了", "bottom")`.
     ctx::add_to_deck_at(player_id, "PPP:[衍生]拍卖撤下来了", ctx::DeckPos::Bottom);
     ctx::log(player_id, &Msg::new(key!("random_star_swept")).player_id("who", player_id));
+    Ok(())
 }
 
 /// 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]」
@@ -36,29 +37,29 @@ fn random_star(player_id: i32) {
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pass_tile(player_id: i32) {
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != Seat || t != Ryuseido || m.Remaining <= 0 || m.Teleport ||
     // H.Tok(Player, "星星贴纸") < 2`.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     let ryuseido = ctx::tile_named("流星堂");
     if ryuseido < 0 || trigger::tile() != ryuseido {
-        return;
+        return Ok(());
     }
     // C# `m.Remaining <= 0` -- only a still-walking pass can be intercepted.
     if trigger::move_remaining() <= 0 {
-        return;
+        return Ok(());
     }
     // C# `m.Teleport` -- a teleport does not walk past the tile.
     if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return;
+        return Ok(());
     }
     if ctx::tok(player_id, "星星贴纸") < 2 {
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「可使用2星星贴纸」 -- C# `H.AskYes(..., "经过流星堂：要用 2 个
     // 星星贴纸在这里 [强制停下] 并结算吗？")`.
@@ -66,8 +67,8 @@ fn pass_tile(player_id: i32) {
         player_id,
         &Msg::new(key!("random_star_stop_title")),
         &Msg::new(key!("random_star_stop_ask")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // 规则书（2）: 「在“流星堂”强制停下并[结算]」 -- C# `m.Stopped = true; m.Resolve = true`
     // (MatchHost.cs:8955-8963, behind `H.AbnormalGate`). `set_stop_at` is the
@@ -81,4 +82,5 @@ fn pass_tile(player_id: i32) {
         player_id,
         &Msg::new(key!("random_star_stop")).player_id("who", player_id).tile("tile", ryuseido),
     );
+    Ok(())
 }

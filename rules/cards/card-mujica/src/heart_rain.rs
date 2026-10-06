@@ -13,7 +13,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[
     On::Play(None, heart_rain)]);
 
-fn heart_rain(player_id: i32) {
+fn heart_rain(player_id: i32) -> card_sdk::Asked {
     let me = ctx::player_pos(player_id);
     let mut any_stay = false;
     for p in ctx::others(player_id) {
@@ -45,4 +45,5 @@ fn heart_rain(player_id: i32) {
         ctx::give_stun(player_id, 1);
         ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")));
     }
+    Ok(())
 }

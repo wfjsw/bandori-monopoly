@@ -28,7 +28,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if others_in_hand < 1 {
         return Some(Msg::new(key!("believe_you_no_hand")));
     }
-    if ctx::money(player_id) < 800 {
+    if ctx::money_of(player_id) < 800 {
         return Some(Msg::new(key!("x_no_money_800")));
     }
     if ctx::others(player_id).is_empty() {
@@ -37,14 +37,14 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「消耗800资金」 -- C# `PayCtx { amount = 800, kind = "lose", must = false }`.
-    let paid = ctx::pay(player_id, 800, &Msg::new(key!("believe_you_pay")));
+    let paid = ctx::pay(player_id, 800, &Msg::new(key!("believe_you_pay")))?;
     if paid < 800 {
         // C# `c.Effective = false` when the payment does not go through (the play
         // is wasted, `H.ToDiscard(..., wasted: true)`); the ABI has no
         // set_effective hook.
-        return;
+        return Ok(());
     }
     // 规则书: 「公开你的卡组与手牌」 -- C# `H.Log` of both piles + `H.RevealSeen`
     // (the public peek itself is not in the vocabulary; the log names the sizes
@@ -66,7 +66,7 @@ fn play(player_id: i32) {
         &Msg::new(key!("believe_you_title")),
         &Msg::new(key!("believe_you_ask_who")),
         &ctx::others(player_id),
-    );
+    )?;
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     if !hand.is_empty() {
         let ids: Vec<&str> = hand.iter().map(|c| c.as_str()).collect();
@@ -75,7 +75,7 @@ fn play(player_id: i32) {
             &Msg::new(key!("believe_you_title")),
             &Msg::new(key!("believe_you_ask_discard")).player_id("who", player_id),
             &ids,
-        );
+        )?;
         let id = ids[pick.min(ids.len() - 1)];
         ctx::discard_from_hand(player_id, id);
         ctx::log(player_id, &Msg::new(key!("believe_you_discarded")).player_id("who", who).card("card", id));
@@ -93,7 +93,7 @@ fn play(player_id: i32) {
             &Msg::new(key!("believe_you_title")),
             &Msg::new(key!("believe_you_ask_deck")).i("n", k as i64 + 1),
             &ids,
-        );
+        )?;
         let id = ids[pick.min(ids.len() - 1)];
         if ctx::take_card(player_id, CardPile::Deck, id) {
             ctx::add_to_hand(player_id, id);
@@ -109,4 +109,5 @@ fn play(player_id: i32) {
         ctx::add_to_deck_at(player_id, &id, DeckPos::Random);
     }
     ctx::log(player_id, &Msg::new(key!("believe_you_shuffled")).player_id("who", player_id));
+    Ok(())
 }

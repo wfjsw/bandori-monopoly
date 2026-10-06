@@ -21,7 +21,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn karaoke(player_id: i32) {
+fn karaoke(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「进行至多5次掷骰，并选择其中一个结果作为你本回合的移动掷骰数，视为正常掷骰移动。」
     // -- C# arms `KaraokeFx` and the rolls happen when the main move rolls
     // (`KaraokeFx.RollAfter` -> `Sing`). Shaping this turn's main move is the
@@ -41,7 +41,7 @@ fn karaoke(player_id: i32) {
             player_id,
             &Msg::new(key!("karaoke_title")),
             &Msg::new(key!("karaoke_again")).i("n", results.len() as i64),
-        );
+        )?;
         if !again {
             break;
         }
@@ -67,7 +67,7 @@ fn karaoke(player_id: i32) {
             &Msg::new(key!("karaoke_title")),
             &Msg::new(key!("karaoke_pick")),
             &options,
-        );
+        )?;
         results[pick.min(results.len() - 1)]
     };
     // 规则书: 「视为正常掷骰移动」 -- `H._turnCtx.Plan.FixedRoll`; the main move then
@@ -77,4 +77,5 @@ fn karaoke(player_id: i32) {
         player_id,
         &Msg::new(key!("karaoke_chosen")).player_id("who", player_id).i("n", chosen as i64),
     );
+    Ok(())
 }

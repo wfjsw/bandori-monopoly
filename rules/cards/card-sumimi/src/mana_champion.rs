@@ -34,7 +34,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::effect::hits(player_id)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」
     // C# `CardManaChampion.React` (MatchHost.cs:11543-11590) walks `H.Others(i)`
     // offering each a nested `H.React(copy, p)` with `Target = p`; `anyone` is
@@ -52,4 +52,5 @@ fn react(player_id: i32) {
     // `t.Reacted`) and the nested reaction run are not in the vocabulary, so
     // the shield and the reactor's draw cannot be expressed; the fallback draw
     // above is what fires while that half is held.
+    Ok(())
 }

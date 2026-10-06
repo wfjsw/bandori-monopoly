@@ -46,31 +46,31 @@ fn adjacent(here: i32, n: i32) -> Vec<i32> {
     adj
 }
 
-fn anon_tokyo(player_id: i32) {
+fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     let here = ctx::player_pos(player_id);
     // 规则书[限]: 「自己所在的格子是[可购买格子]」 -- C# `H._tiles[pos].IsBuyable`
     // (kind "property" | "ring").
     if here < 0 || n <= 0 || !ctx::is_buyable(here) {
-        return;
+        return Ok(());
     }
     // 规则书[手]: 「[指定][使用者]所在当格的任一相邻的[可购买格子]」 -- C#
     // `CardAnonTokyo.Adjacent` over `(pos ± 1) % n` filtered by `IsBuyable`.
     let adj = adjacent(here, n);
     if adj.is_empty() {
-        return;
+        return Ok(());
     }
     let t = ctx::ask_tile(
         player_id,
         &Msg::new(key!("anon_tokyo_title")),
         &Msg::new(key!("anon_tokyo_ask")),
         &adj,
-    );
+    )?;
     // 规则书[手]: 「[指定]…可购买格子」 -- C# `H.TargetTile(c, t, tt)` after the
     // tile prompt: another player's tile also targets its owner (ImmuneAll +
     // the targeted/target [反击] window). Fail = the card does nothing more.
     if !ctx::target_tile(t) {
-        return;
+        return Ok(());
     }
     if ctx::tile_owner(here) == player_id && ctx::tile_owner(t) == player_id {
         // 规则书[手]1: 「[使用者]同时拥有上述的两个格子则[消耗]其中地契购买价格中更高者的
@@ -80,7 +80,7 @@ fn anon_tokyo(player_id: i32) {
         // price (houses are extra; cf. `buy_price`).
         let amount = ctx::tile_price(here).max(ctx::tile_price(t)) / 2;
         if amount > 0 {
-            ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")));
+            ctx::pay(player_id, amount, &Msg::new(key!("anon_tokyo_pay")))?;
         }
         // 规则书[手]1: 「并在上述的两个格子间放置1个[奇迹水晶]」 -- C#
         // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles.
@@ -111,4 +111,5 @@ fn anon_tokyo(player_id: i32) {
         ctx::log(player_id, &Msg::new(key!("anon_tokyo_step")).tile("tile", t));
         ctx::card_move(player_id);
     }
+    Ok(())
 }

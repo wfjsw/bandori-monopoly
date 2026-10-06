@@ -32,44 +32,46 @@ fn any(_player_id: i32) -> bool {
 }
 
 /// 「初始1，上限2」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("saki_crychic_gain")));
+    Ok(())
 }
 
 /// （2） / （3） -- the landing is within five tiles of the other party.
-fn before_settle(player_id: i32) {
+fn before_settle(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
     let landing = ctx::trigger::tile();
     if landing < 0 || !ctx::trigger::move_is_main() {
-        return;
+        return Ok(());
     }
     let at = ctx::player_pos(player_id);
     if ctx::dist(landing, at) > 5 {
-        return;
+        return Ok(());
     }
     if mover == player_id {
         // （3） 「你可消耗1火罐，选择其中一名玩家并使自己的移动终点沿最短路径
         // 向其靠近1格」.
         if state::get(player_id, state_key::FIRE) < 1 {
-            return;
+            return Ok(());
         }
         if !ctx::ask_yes(
             player_id,
             &Msg::new(key!("saki_crychic_title")),
             &Msg::new(key!("saki_crychic_ask_self")),
-        ) {
-            return;
+        )? {
+            return Ok(());
         }
         if !ctx::spend_fire(player_id, 1, &Msg::new(key!("saki_crychic_spend"))) {
-            return;
+            return Ok(());
         }
         nudge(player_id, at);
     } else {
@@ -78,14 +80,15 @@ fn before_settle(player_id: i32) {
             mover,
             &Msg::new(key!("saki_crychic_title")),
             &Msg::new(key!("saki_crychic_ask_other")).player_id("who", player_id),
-        ) {
-            return;
+        )? {
+            return Ok(());
         }
-        if ctx::transfer(mover, player_id, 300, &Msg::new(key!("saki_crychic_pay"))) <= 0 {
-            return;
+        if ctx::transfer(mover, player_id, 300, &Msg::new(key!("saki_crychic_pay")))? <= 0 {
+            return Ok(());
         }
         nudge(mover, at);
     }
+    Ok(())
 }
 
 /// 「使自己的移动终点沿最短路径向…靠近1格」 -- one step toward `goal`.

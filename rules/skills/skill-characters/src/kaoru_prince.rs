@@ -33,21 +33,24 @@ pub const KAORU_PRINCE: CardDef = CardDef::new("skill:濑田薰:梦幻的王子�
 ]);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 7);
+    Ok(())
 }
 
 /// （1） 「每次[经过]…时」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     settle(player_id);
+    Ok(())
 }
 
 /// （1） 「…或被[经过]时」 -- someone passed this player.
-fn on_passed(player_id: i32) {
+fn on_passed(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
-        return;
+        return Ok(());
     }
     settle(player_id);
+    Ok(())
 }
 
 /// （1） 「若场上不存在[怪盗标记]，获得1火罐；若场上存在[怪盗标记]，则移除场上的
@@ -66,6 +69,9 @@ fn settle(player_id: i32) {
 
 /// （2） 「主要阶段可消耗7火罐」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 7 {
         return Some(Msg::new(key!("kaoru_prince_no_fire")));
     }
@@ -74,7 +80,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「在绝对距离最近的一名玩家场上放置3个[怪盗标记]，并使你的本次移动以微笑号
 /// 为起点」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
     let mut best = i32::MAX;
     let mut near: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
@@ -92,7 +98,7 @@ fn use_skill(player_id: i32) {
         }
     }
     if near.is_empty() {
-        return;
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
@@ -102,14 +108,14 @@ fn use_skill(player_id: i32) {
             .iter()
             .map(|&p| Msg::new(key!("kaoru_prince_option")).player_id("who", p))
             .collect::<alloc::vec::Vec<_>>(),
-    );
-    let Some(&who) = near.get(pick) else { return; };
+    )?;
+    let Some(&who) = near.get(pick) else { return Ok(()); };
     if !ctx::spend_fire(player_id, 7, &Msg::new(key!("kaoru_prince_spend"))) {
-        return;
+        return Ok(());
     }
     // 「在…玩家场上放置3个[怪盗标记]」 -- on one of that player's tiles.
     let theirs = ctx::owned_tiles(who);
-    let Some(&tile) = theirs.first() else { return; };
+    let Some(&tile) = theirs.first() else { return Ok(()); };
     for _ in 0..3 {
         ctx::add_mark(tile, player_id, THIEF, &Msg::new(key!("kaoru_prince_note")));
     }
@@ -119,4 +125,5 @@ fn use_skill(player_id: i32) {
         ctx::plan::set_start(ship, "梦幻的王子殿下");
     }
     ctx::log(player_id, &Msg::new(key!("kaoru_prince_done")).player_id("who", who).tile("tile", tile));
+    Ok(())
 }

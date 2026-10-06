@@ -42,52 +42,56 @@ fn other(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
-fn tick(player_id: i32) {
+fn tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
         ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
     }
+    Ok(())
 }
 
 /// （2） 「当他人…打出手牌时」.
-fn on_card(player_id: i32) {
+fn on_card(player_id: i32) -> card_sdk::Asked {
     offer(player_id, ctx::trigger::player_id());
+    Ok(())
 }
 
 /// （2） 「当他人使用角色技能时」.
-fn on_skill(player_id: i32) {
+fn on_skill(player_id: i32) -> card_sdk::Asked {
     offer(player_id, ctx::trigger::player_id());
+    Ok(())
 }
 
 /// （2） 「你可以消耗一个[火罐]传送到其所在格子」.
-fn offer(player_id: i32, src: i32) {
+fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     if src < 0 || src == player_id {
-        return;
+        return Ok(());
     }
     // 「该效果对每个玩家的被动技能和卡存在2次使用cd」
     let key = used_key(src);
     if state::get(player_id, &key) >= 2 {
-        return;
+        return Ok(());
     }
     if state::get(player_id, state_key::FIRE) < 1 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("moca_self_title")),
         &Msg::new(key!("moca_self_ask")).player_id("who", src),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("moca_self_spend"))) {
-        return;
+        return Ok(());
     }
     state::set(player_id, &key, state::get(player_id, &key) + 1);
     state::set(player_id, REST_TURNS, 0);
@@ -98,4 +102,5 @@ fn offer(player_id: i32, src: i32) {
         ctx::teleport_to(player_id, to);
         ctx::log(player_id, &Msg::new(key!("moca_self_moved")).tile("tile", to));
     }
+    Ok(())
 }

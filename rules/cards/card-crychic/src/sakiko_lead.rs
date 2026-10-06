@@ -24,7 +24,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn sakiko_lead(player_id: i32) {
+fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「回合开始时若你与其他玩家重合，可打出此卡并记录那些玩家」 -- C#
     // `H.SeatsOn(H.State.seats[seat].pos, seat)` (other players still in the game on
     // this tile).
@@ -47,4 +47,5 @@ fn sakiko_lead(player_id: i32) {
     //   player the same way with `H.ForceWalk(..., settle, payFactor: 0.5)` /
     //   `H.ForceTeleport` + `H.SettleAt` (the held `H.ForceWalk` / `H.SettleAt`
     //   family), plus a place to keep the recorded player list (`LeadFx.Who`).
+    Ok(())
 }

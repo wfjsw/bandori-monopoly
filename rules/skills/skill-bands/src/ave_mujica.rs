@@ -39,22 +39,22 @@ fn mine(player_id: i32) -> bool {
 
 /// 「你在状态2时…」 -- the bends only apply in 状态2.
 fn in_two(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && state::get(player_id, state_key::SKILL_STATE) == 2
+    ctx::is_placed() && state::get(player_id, state_key::SKILL_STATE) == 2
 }
 
 /// 「处于状态2的第三回合开始时为此卡添加一个奇迹水晶」, and the pot refill on
 /// entering 状态2.
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // 「初始处于状态1」 -- restated so a fresh match starts in 1.
     if state::get(player_id, state_key::SKILL_STATE) == 0 {
         state::set(player_id, state_key::SKILL_STATE, 1);
         state::set(player_id, IN_TWO, 0);
         state::set(player_id, WAS, 1);
-        return;
+        return Ok(());
     }
     on_state(player_id);
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
-        return;
+        return Ok(());
     }
     let n = state::get(player_id, IN_TWO) + 1;
     state::set(player_id, IN_TWO, n);
@@ -63,6 +63,7 @@ fn at_turn_start(player_id: i32) {
         ctx::add_band_crystals(player_id, 1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("ave_mujica_crystal")));
     }
+    Ok(())
 }
 
 /// 「进入状态2时将火罐补充至上限」 -- the character skills drive the entry, so
@@ -87,10 +88,10 @@ fn on_state(player_id: i32) {
 
 /// 「你在状态2时从[收取]与[支付]的资金改为1.5倍（只对自己结算）」 -- the figure
 /// seen from this player's side.
-fn bend(player_id: i32) {
+fn bend(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     // 「只对自己结算，对应的其他玩家收支不变」 -- only the side that is this
     // player moves.
@@ -98,14 +99,18 @@ fn bend(player_id: i32) {
     let to = ctx::trigger::target();
     let mine = from == player_id || to == player_id;
     if !mine {
-        return;
+        return Ok(());
     }
     ctx::trigger::set_pay_amount((amount * 3 + 1) / 2);
+    Ok(())
 }
 
 /// 「处于状态2时可消耗一个奇迹水晶使你的一次[支付]金额减半」 -- the press is the
 /// halve, so it rides the pay window rather than standing alone.
 fn can_halve(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
@@ -115,25 +120,37 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn halve(player_id: i32) {
-    if ctx::band_crystals(player_id) < 1 {
-        return;
+fn halve(player_id: i32) -> card_sdk::Asked {
+    crate::spend_copy_sticker(player_id);
+    let mut n = 1;
+    // 「每当乐队技能需要移除[奇迹水晶]时，可移除「#L11」上的一个[奇迹水晶]代替」
+    if let Some(uid) = ctx::find_card(player_id, "Sumimi:#L11") {
+        while n > 0 && ctx::crystals_at(uid) > 0 {
+            ctx::add_crystals_at(uid, -1, i32::MAX);
+            n -= 1;
+        }
     }
-    ctx::add_band_crystals(player_id, -1, i32::MAX);
+    if n > 0 {
+        if ctx::band_crystals(player_id) < n {
+            return Ok(());
+        }
+        ctx::add_band_crystals(player_id, -n, i32::MAX);
+    }
     ctx::log(player_id, &Msg::new(key!("ave_mujica_halved")));
+    Ok(())
 }
 
 /// 「每回合结束时失去1火罐，回合结束后若火罐为0则退出状态2；退出状态2时，失去
 /// 所有剩余火罐」.
-fn at_turn_end(player_id: i32) {
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     on_state(player_id);
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
-        return;
+        return Ok(());
     }
     // 「每回合结束时失去1火罐」 -- only when the character skill grants pots.
     let cap = state::max(player_id, state_key::FIRE);
     if cap <= 0 {
-        return;
+        return Ok(());
     }
     let have = state::get(player_id, state_key::FIRE);
     if have > 0 {
@@ -149,4 +166,5 @@ fn at_turn_end(player_id: i32) {
         }
         ctx::log(player_id, &Msg::new(key!("ave_mujica_left")));
     }
+    Ok(())
 }

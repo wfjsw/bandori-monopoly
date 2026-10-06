@@ -21,14 +21,14 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn bang_dream(player_id: i32) {
+fn bang_dream(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「为[使用者]的团卡添加一个[奇迹水晶]」
     ctx::add_band_crystals(player_id, 1, i32::MAX);
     ctx::log(player_id, &Msg::new(key!("bang_dream_crystal")).player_id("who", player_id));
     // C# `Play` yields break when `H.OwnedBy` is empty (WhyNot refuses earlier).
     let mine = ctx::owned_tiles(player_id);
     if mine.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书: 「[传送]至任意[使用者]拥有的格子」
     let to = ctx::ask_tile(
@@ -36,7 +36,7 @@ fn bang_dream(player_id: i32) {
         &Msg::new(key!("bang_dream_title")),
         &Msg::new(key!("bang_dream_ask")),
         &mine,
-    );
+    )?;
     // C# `H.ForceTeleport(i, to, resolve: false, ...)` -- no settle on arrival.
     ctx::teleport_to(player_id, to);
     ctx::log(player_id, &Msg::new(key!("bang_dream_moved")).player_id("who", player_id).tile("tile", to));
@@ -44,4 +44,5 @@ fn bang_dream(player_id: i32) {
     // pay `build_cost` and raise one house on `to`. Skips silently when `to`
     // cannot take one.
     ctx::card_offer_build(player_id, &[to]);
+    Ok(())
 }

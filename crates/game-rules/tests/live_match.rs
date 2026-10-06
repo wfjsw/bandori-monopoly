@@ -9,6 +9,7 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use game_core::state::stage;
 use game_core::data::GameData;
 use game_core::engine::Match;
 use game_core::msg::Arg;
@@ -91,7 +92,7 @@ fn match_with_rules(card: &str, rules: WasmRules) -> Match {
                 .players
                 .get(st.turn as usize)
                 .is_some_and(|s| s.member == 1);
-        if mine && st.step == 1 {
+        if mine && st.step == stage::OPS {
             break;
         }
         m.tick(0.25);
@@ -124,6 +125,23 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
     );
     m.set_character(1, "户山香澄");
     m.quick_start();
+    // The binding is observable the moment the match starts. Assert it *here*:
+    // `PPP:Returns` is in a Poppin' Party deck pool and its `DeckAtGameStart`
+    // hook places it, after which its (2) legitimately swaps the band skill for
+    // another player's -- so the field at the first turn is no longer the
+    // binding, it is the binding *after* Returns has had its say.
+    {
+        let st = m.state();
+        let ids: Vec<&str> = st.players[1].field.iter().map(|f| f.card.as_str()).collect();
+        assert!(
+            ids.contains(&"skill:户山香澄:非凡之星"),
+            "character skill bound: {ids:?}"
+        );
+        assert!(
+            ids.iter().any(|id| id.starts_with("skill:Poppin' Party:")),
+            "band skill follows from the character's band: {ids:?}"
+        );
+    }
     // Let the bots run so a `TurnStartBefore` has fired for the human.
     for _ in 0..2000 {
         let st = m.state();
@@ -133,7 +151,7 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
                 .players
                 .get(st.turn as usize)
                 .is_some_and(|s| s.member == 1);
-        if mine && st.step == 1 {
+        if mine && st.step == stage::OPS {
             break;
         }
         m.tick(0.25);
@@ -144,13 +162,11 @@ fn a_characters_skill_binds_to_whoever_picked_them() {
         .iter()
         .map(|f| f.card.as_str())
         .collect();
+    // The character skill survives whatever else the deck did; the band skill
+    // may have been swapped by `PPP:Returns`' (2), which is that card's rule.
     assert!(
         ids.contains(&"skill:户山香澄:非凡之星"),
-        "character skill bound: {ids:?}"
-    );
-    assert!(
-        ids.iter().any(|id| id.starts_with("skill:Poppin' Party:")),
-        "band skill follows from the character's band: {ids:?}"
+        "character skill stays bound: {ids:?}"
     );
     // 「初始0，上限1」 -- the skill card is what assigns fire.max.
     let fire = st.players[1].state.get("fire").copied().unwrap_or_default();
@@ -226,6 +242,42 @@ fn an_unported_card_falls_back_gracefully() {
         before - 1,
         "the card left the hand: {:?}",
         m.hand_of(1)
+    );
+}
+
+#[test]
+fn a_card_whose_crystals_run_out_leaves_the_field() {
+    // TEST:crystal places itself with one crystal and spends it in the same
+    // effect. The 「no crystals -> discard」 check is its `crystalsChanged`
+    // handler, not a re-check at the spend site.
+    let mut m = match_with_rules("TEST:crystal", rules_with_fixtures());
+    m.act(1, &play("TEST:crystal")).expect("play should run");
+    let st = m.state();
+    let me = st
+        .players
+        .iter()
+        .find(|p| p.member == 1)
+        .expect("the human player");
+    assert!(
+        me.field.iter().all(|f| f.card != "TEST:crystal"),
+        "the card left the field: {:?}",
+        me.field
+    );
+    assert!(
+        me.discard.iter().any(|c| c == "TEST:crystal"),
+        "it went to the discard pile: {:?}",
+        me.discard
+    );
+    // The spend emptied it, so the removal spoke -- not the earlier write that
+    // took the count up, which the guard must let pass.
+    assert_eq!(
+        fixture_events(&st, "crystal_empty").len(),
+        1,
+        "the spend that emptied the card spoke"
+    );
+    assert!(
+        fixture_events(&st, "crystal_none").is_empty(),
+        "the earlier write must not speak for the count the run ended on"
     );
 }
 #[test]
@@ -450,7 +502,7 @@ fn a_counter_negates_the_effect_declaration_before_it_settles() {
         let st = m.state();
         if st.phase == "play"
             && st.turn >= 0
-            && st.step == 1
+            && st.step == stage::OPS
             && st
                 .players
                 .get(st.turn as usize)

@@ -29,7 +29,7 @@ fn can_react(player_id: i32) -> bool {
     to >= 0 && to != player_id && trigger::value() > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     let to = trigger::target();
     // 规则书[反击]: 「此次支付改为失去同等的资金并令此次支付的对象失去此次金额一半的资金」
@@ -47,6 +47,7 @@ fn react(player_id: i32) {
             .n("half", (amount / 2) as i64),
     );
     if to >= 0 {
-        ctx::pay(to, amount / 2, &Msg::new(key!("mashiro_pay_half")).player_id("who", to).n("n", (amount / 2) as i64));
+        ctx::pay(to, amount / 2, &Msg::new(key!("mashiro_pay_half")).player_id("who", to).n("n", (amount / 2) as i64))?;
     }
+    Ok(())
 }

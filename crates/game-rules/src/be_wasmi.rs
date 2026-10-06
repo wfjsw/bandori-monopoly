@@ -10,8 +10,16 @@ use wasmi::{Config, Extern, Instance, Memory};
 /// Host errors and traps. wasmi carries an i32 exit status on traps.
 pub type Error = wasmi::Error;
 
-/// The exit status a host function raises when it published a prompt and the
-/// run must be replayed with the answer (see `EXIT_NEED_INPUT`).
+/// The host-side "a prompt is waiting" marker.
+///
+/// Same signal as `card_sdk::abi::EXIT_NEED_INPUT`, at a different layer: the
+/// sentinel is the guest <-> host wire form (an import *returns* it, and
+/// `host::fold_exit` turns the `bandori_on` return back into this marker), while
+/// this is the trap raised by the imports whose guest wrappers still read a
+/// plain `bool`/`Option` -- `gate`, `target`, `card_move`, the buy/build
+/// routines. Those have nowhere to carry a sentinel without it reading as
+/// `true`/`Some(..)`, and a trap cannot be swallowed, so it stays correct there
+/// until their wrappers are `Result`-shaped too.
 pub fn need_input() -> Error {
     wasmi::Error::i32_exit(card_sdk::abi::EXIT_NEED_INPUT)
 }

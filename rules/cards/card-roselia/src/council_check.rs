@@ -44,7 +44,7 @@ fn can_react(player_id: i32) -> bool {
     !near(player_id).is_empty()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「向抽牌堆中加入一张“压”」 -- C# `H.AddToDeck(i, "R:[衍生] 压")`.
     ctx::add_to_deck(player_id, "R:[衍生] 压", true);
     ctx::log(
@@ -65,20 +65,20 @@ fn react(player_id: i32) {
         .filter(|&t| ctx::build_cost(t) > 0)
         .collect();
     if spots.is_empty() {
-        return;
+        return Ok(());
     }
     let title = Msg::new(key!("council_check_ask_title"));
     let text = Msg::new(key!("council_check_ask_text"));
     // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
-    if !ctx::ask_yes(player_id, &title, &text) {
-        return;
+    if !ctx::ask_yes(player_id, &title, &text)? {
+        return Ok(());
     }
-    let tile = ctx::ask_tile(player_id, &title, &text, &spots);
+    let tile = ctx::ask_tile(player_id, &title, &text, &spots)?;
     // 规则书[反击]: 「支付那格一层房屋的建造价格一半」 -- C# `H._tiles[r.index].house / 2`.
     let amount = ctx::build_cost(tile) / 2;
-    let paid = ctx::pay(player_id, amount, &Msg::new(key!("council_check_why")).tile("tile", tile));
+    let paid = ctx::pay(player_id, amount, &Msg::new(key!("council_check_why")).tile("tile", tile))?;
     if paid < amount {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「将此卡放于那个格子上」 -- C# `H.PlaceFromPlay(c, i, r.index)`.
     ctx::set_dest(ctx::Dest::Field);
@@ -97,6 +97,7 @@ fn react(player_id: i32) {
     // 规则书[反击]: 「使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算」 /
     // 「因此卡强制停下的玩家的结算地租价格为原价格一半」 / 「若此卡进入弃牌堆时…」 --
     // see `pass_tile` / `pay_after` / `settle_after`.
+    Ok(())
 }
 
 const SLOT_PAID: &str = "council_paid";
@@ -107,31 +108,31 @@ const SLOT_STOP: &str = "council_stop";
 /// tile mid-move (remaining steps > 0, not a teleport) and is not the card's
 /// owner, force a stop + settle at half rent. The `H.AbnormalGate` stop guard is
 /// still held; the move-shaping itself is written below.
-fn pass_tile(player_id: i32) {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed(player_id) {
-        return;
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
+        return Ok(());
     }
-    let tile = ctx::placed_tile(player_id, "R:学生会的检查").unwrap_or(-1);
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return;
+        return Ok(());
     }
     // C# `m.Seat == Seat` -- the card's own owner is not stopped by it.
     if trigger::player_id() == player_id {
-        return;
+        return Ok(());
     }
     // C# `m.Remaining <= 0` -- only a still-walking pass is intercepted.
     if trigger::move_remaining() <= 0 {
-        return;
+        return Ok(());
     }
     // C# `m.Teleport` -- a teleport does not walk past the tile.
     if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: the stop runs behind `H.AbnormalGate` (C#
     // `H.WithCard(Seat, H.AbnormalGate(a))`); a guarded or unstoppable mover
     // simply is not stopped.
     if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
-        return;
+        return Ok(());
     }
     // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`.
     ctx::plan::set_stop_at(tile);
@@ -144,44 +145,46 @@ fn pass_tile(player_id: i32) {
             .player_id("who", trigger::player_id())
             .tile("tile", tile),
     );
+    Ok(())
 }
 
 /// C# `CardCouncilCheck.PayAfter`: track the rent the forced settle actually
 /// collected (`_got += p.finalGain`), keyed on the council stop flag.
-fn pay_after(player_id: i32) {
-    if trigger::kind() != TriggerKind::PayAfter || !ctx::is_placed(player_id) {
-        return;
+fn pay_after(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::PayAfter || !ctx::is_placed() {
+        return Ok(());
     }
     if !trigger::pay_is_rent() || trigger::target() != player_id {
-        return;
+        return Ok(());
     }
-    let tile = ctx::placed_tile(player_id, "R:学生会的检查").unwrap_or(-1);
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return;
+        return Ok(());
     }
     if ctx::slot(player_id, SLOT_STOP) == 0 {
-        return;
+        return Ok(());
     }
     let got = ctx::slot(player_id, SLOT_GOT).saturating_add(trigger::value());
     ctx::set_slot(player_id, SLOT_GOT, got);
+    Ok(())
 }
 
 /// C# `CardCouncilCheck.SettleAfter` -> `Done`: once the forced stop has settled,
 /// unplace to discard and refund the placement cost when the halved rent fell
 /// short of what the tile should have paid.
-fn settle_after(player_id: i32) {
-    if trigger::kind() != TriggerKind::SettleAfter || !ctx::is_placed(player_id) {
-        return;
+fn settle_after(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::SettleAfter || !ctx::is_placed() {
+        return Ok(());
     }
     if ctx::slot(player_id, SLOT_STOP) == 0 {
-        return;
+        return Ok(());
     }
     ctx::set_slot(player_id, SLOT_STOP, 0);
-    let tile = ctx::placed_tile(player_id, "R:学生会的检查").unwrap_or(-1);
+    let tile = ctx::self_tile().unwrap_or(-1);
     let paid = ctx::slot(player_id, SLOT_PAID);
     let got = ctx::slot(player_id, SLOT_GOT);
     // 规则书[反击]: 「此卡置入弃牌堆」 -- C# `H.Unplace(this, "discard", ...)`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, "R:学生会的检查");
     // C# `CeilTo((double)H.RentOf(Tile) / 2.0, 10)` -- the expected halved rent.
     let expect = if tile >= 0 {
@@ -207,4 +210,5 @@ fn settle_after(player_id: i32) {
             &Msg::new(key!("council_check_done")).player_id("who", player_id).tile("tile", tile),
         );
     }
+    Ok(())
 }

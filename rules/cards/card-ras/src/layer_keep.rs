@@ -28,27 +28,28 @@ const SLOT_DICE: [&str; 8] = [
     "layer_keep_0", "layer_keep_1", "layer_keep_2", "layer_keep_3",
     "layer_keep_4", "layer_keep_5", "layer_keep_6", "layer_keep_7"];
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点」
-    // -- the card itself just stays in play (C# `H.PlaceFromPlay(c)`).
+    // -- the card itself just stays in play (C# `H.PlaceFromPlay(c)`)?.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(player_id, &Msg::new(key!("layer_keep_placed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// C# `CardLayerKeep.RollAfter` -- after a fire-pot roll, keep the unchosen die.
 /// Pure guard for [`roll_after`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn roll_after_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn roll_after(player_id: i32) {
+fn roll_after(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点」
     // -- C# reads `H.V(Seat, "layerUnused")`, keeps `value - 1`, clears the slot.
     let unused = ctx::slot(player_id, SLOT_UNUSED);
     if unused <= 0 {
-        return;
+        return Ok(());
     }
     ctx::set_slot(player_id, SLOT_UNUSED, 0);
     let die = unused - 1;
@@ -63,11 +64,12 @@ fn roll_after(player_id: i32) {
         player_id,
         &Msg::new(key!("layer_keep_kept")).player_id("who", player_id).i("n", die as i64),
     );
+    Ok(())
 }
 
 /// 「在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰」 -- a press.
 fn can_use(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed(player_id) {
+    if !ctx::is_placed() {
         return Some(Msg::new(key!("layer_keep_not_placed")));
     }
     if ctx::slot(player_id, SLOT_COUNT) < 1 {
@@ -80,10 +82,10 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// 「随后删去该骰点。可保留多个骰点。」
-fn use_die(player_id: i32) {
+fn use_die(player_id: i32) -> card_sdk::Asked {
     let n = ctx::slot(player_id, SLOT_COUNT);
     if n < 1 {
-        return;
+        return Ok(());
     }
     let mut opts: Vec<Msg> = Vec::new();
     let mut vals: Vec<i32> = Vec::new();
@@ -96,17 +98,17 @@ fn use_die(player_id: i32) {
         opts.push(Msg::new(key!("layer_keep_option")).i("n", v as i64));
     }
     if vals.is_empty() {
-        return;
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("layer_keep_title")),
         &Msg::new(key!("layer_keep_which")),
         &opts,
-    );
-    let Some(&die) = vals.get(pick) else { return };
+    )?;
+    let Some(&die) = vals.get(pick) else { return Ok(()) };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("layer_keep_spend"))) {
-        return;
+        return Ok(());
     }
     // 「删去该骰点」 -- compact the slot list.
     let mut kept: Vec<i32> = Vec::new();
@@ -125,4 +127,5 @@ fn use_die(player_id: i32) {
     ctx::set_slot(player_id, SLOT_COUNT, kept.len() as i32);
     ctx::set_fixed_roll(die);
     ctx::log(player_id, &Msg::new(key!("layer_keep_used")).i("n", die as i64));
+    Ok(())
 }

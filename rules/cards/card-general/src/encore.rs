@@ -21,7 +21,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::kind() == ChainKind::Effect && trigger::target() == player_id
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「无效此次[异常移动效果]和其导致的所有效果」
     // C# `c.Trigger.Cancelled = true` then 「安可：这次…无效」.
     trigger::set_cancelled();
@@ -30,4 +30,5 @@ fn react(player_id: i32) {
     // `trigger::abnormal_kind()` now carries `t.Ab.Kind` (v25), but `Msg` has
     // no localized AbKind-name argument, so the log keeps the rulebook's
     // generic [异常移动效果] wording rather than hardcoding the C# display names.
+    Ok(())
 }

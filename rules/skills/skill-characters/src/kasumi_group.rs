@@ -28,22 +28,24 @@ pub const KASUMI_GROUP: CardDef = CardDef::new("skill:弦卷心:弦卷集团", &
 ]);
 
 /// （1）「开局时获得1000资金」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, DONE) != 0 {
-        return;
+        return Ok(());
     }
     state::set(player_id, DONE, 1);
     ctx::gain(player_id, 1000, &Msg::new(key!("kasumi_group_start")));
+    Ok(())
 }
 
 /// （2）「[经过]CiRCLE时额外获得1500资金」 -- this player's own pass, onto a
 /// CiRCLE tile.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain(player_id, 1500, &Msg::new(key!("kasumi_group_pass")));
+    Ok(())
 }

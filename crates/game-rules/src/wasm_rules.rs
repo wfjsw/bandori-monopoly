@@ -41,6 +41,11 @@ struct Run {
     trigger: Trigger,
     /// The card whose effect is running (`PlaceFromPlay(c)` / `Unplace(this)`).
     current_card: String,
+    /// The **instance** this run is for. A card's name is not an identity --
+    /// one player may hold several copies of the same card in play -- so the
+    /// uid is. It is the one the dispatch named, and it follows the card if
+    /// this run re-places it (C# `PlaceFromPlay(c)` moves the same object).
+    current_uid: i32,
     /// `PlayCtx.Dest`, set by the module (`set_dest`).
     dest: i32,
     /// Payments this run actually made, `(from, to, amount)` -- the engine
@@ -56,14 +61,40 @@ struct Run {
     fire_spent_log: Vec<(i32, i32)>,
     /// Houses added during the run, raised as `houseAdded` once it commits.
     house_log: Vec<(i32, i32, i32)>,
+    /// Miracle-crystal writes this run made, `(owner, card, change)` -- the
+    /// engine raises `crystalsChanged` for each once the run commits. `change`
+    /// is the signed delta the write applied (0 = a write that landed on the
+    /// same count, e.g. a card placed with none); the count it left is the
+    /// instance's own `crystals()`.
+    crystals_log: Vec<(i32, String, i32)>,
     /// C# `PlayCtx.Doubled`: which of the card's numbers this play doubles, or
     /// -1. Set by the doubling band skill, which is not ported yet.
     doubled: i32,
 }
 
+impl Run {
+    /// Record a crystal write on the instance at `uid` so the commit point can
+    /// raise `crystalsChanged` (the same shape as `fire_spent_log` /
+    /// `house_log`). `was` and `now` bracket the write; only the delta rides
+    /// the trigger, so a write that lands on the same count still raises --
+    /// a card placed with no crystals has to hear about its own count. A write
+    /// to an instance that is not on a field raises nothing.
+    fn note_crystals(&mut self, uid: i32, was: i32, now: i32) {
+        let Some(f) = self.world.field_by_uid(uid) else {
+            return;
+        };
+        let (owner, card) = (f.owner, f.card.clone());
+        self.crystals_log.push((owner, card, now - was));
+    }
+}
+
 impl CardWorld for Run {
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
         self.world.roll(player_id, count, sides)
+    }
+
+    fn effect(&mut self, player_id: i32, msg: Msg) {
+        self.world.log("effect", player_id, msg);
     }
 
     fn extreme(&self) -> i32 {
@@ -232,11 +263,19 @@ impl CardWorld for Run {
     fn card_face_down(&self, player_id: i32, card: &str) -> bool {
         self.world.card_face_down(player_id, card)
     }
-    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) {
-        self.world.place_card_on(player_id, tile, card, note);
+    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
+        let uid = self.world.place_card_on(player_id, tile, card, note);
+        if card == self.current_card {
+            self.current_uid = uid;
+        }
+        uid
     }
-    fn place_card(&mut self, player_id: i32, card: &str, note: Msg) {
-        self.world.place_card(player_id, card, note);
+    fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
+        let uid = self.world.place_card(player_id, card, note);
+        if card == self.current_card {
+            self.current_uid = uid;
+        }
+        uid
     }
     fn set_dest(&mut self, dest: i32) {
         self.dest = dest;
@@ -253,9 +292,33 @@ impl CardWorld for Run {
     fn unplace_card_named(&mut self, player_id: i32, card: &str) -> bool {
         self.world.unplace_card(player_id, card).is_some()
     }
-    fn unplace_card(&mut self, player_id: i32) -> bool {
-        let id = self.current_card.clone();
-        self.world.unplace_card(player_id, &id).is_some()
+    fn unplace_card(&mut self) -> i32 {
+        let owner = self.world.unplace_at(self.current_uid);
+        if owner >= 0 {
+            self.current_uid = -1;
+        }
+        owner
+    }
+    fn self_tile(&self) -> i32 {
+        if self.current_uid < 0 {
+            return -2;
+        }
+        self.world.tile_at(self.current_uid)
+    }
+    fn set_self_tile(&mut self, tile: i32) -> bool {
+        self.world.set_tile_at(self.current_uid, tile)
+    }
+    fn self_face_down(&self) -> bool {
+        self.world.is_face_down_at(self.current_uid)
+    }
+    fn set_self_face_down(&mut self, on: bool) -> bool {
+        self.world.set_face_down_at(self.current_uid, on)
+    }
+    fn self_immune(&self) -> bool {
+        self.world.is_immune_at(self.current_uid)
+    }
+    fn set_self_immune(&mut self, on: bool) -> bool {
+        self.world.set_immune_at(self.current_uid, on)
     }
     fn placed_cards(&self, player_id: i32) -> Vec<String> {
         self.world.placed_cards(player_id)
@@ -269,24 +332,75 @@ impl CardWorld for Run {
         self.world.card_crystals(player_id, card)
     }
     fn add_card_crystals(&mut self, player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-        self.world.add_card_crystals(player_id, card, n, max)
+        let was = self.world.card_crystals(player_id, card);
+        // Which instance the name resolves to, so the raise names the right one.
+        let uid = self
+            .world
+            .field_instances(player_id)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
+        let now = self.world.add_card_crystals(player_id, card, n, max);
+        self.note_crystals(uid, was, now);
+        now
     }
-    fn is_placed(&self, player_id: i32) -> i32 {
-        self.world
-            .placed_cards(player_id)
-            .contains(&self.current_card) as i32
+    /// Is the running **instance** in play?
+    ///
+    /// This used to ask whether *some* card with the running card's name sat at
+    /// `player_id`, which under the uid model answers the wrong question: with
+    /// two copies of a card on one field, the copy that is not running would
+    /// still pass the gate. It is the instance now, so it takes no locator --
+    /// the run already knows which instance it is.
+    fn is_placed(&self) -> i32 {
+        (self.current_uid >= 0 && self.world.field_by_uid(self.current_uid).is_some()) as i32
     }
-    fn crystals(&self, player_id: i32) -> i32 {
-        self.world.card_crystals(player_id, &self.current_card)
+    fn crystals(&self) -> i32 {
+        self.world.crystals_at(self.current_uid)
     }
-    fn set_crystals(&mut self, player_id: i32, n: i32) -> i32 {
-        self.world
-            .set_card_crystals(player_id, &self.current_card, n);
-        self.world.card_crystals(player_id, &self.current_card)
+    fn set_crystals(&mut self, n: i32) -> i32 {
+        let was = self.world.crystals_at(self.current_uid);
+        let now = self.world.set_crystals_at(self.current_uid, n);
+        self.note_crystals(self.current_uid, was, now);
+        now
     }
-    fn add_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
-        self.world
-            .add_card_crystals(player_id, &self.current_card, n, max)
+    fn add_crystals(&mut self, n: i32, max: i32) -> i32 {
+        let was = self.world.crystals_at(self.current_uid);
+        let now = self.world.add_crystals_at(self.current_uid, n, max);
+        self.note_crystals(self.current_uid, was, now);
+        now
+    }
+    fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
+        self.world.field_instances(player_id)
+    }
+    fn crystals_at(&self, uid: i32) -> i32 {
+        self.world.crystals_at(uid)
+    }
+    fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
+        let was = self.world.crystals_at(uid);
+        let now = self.world.add_crystals_at(uid, n, max);
+        self.note_crystals(uid, was, now);
+        now
+    }
+    fn unplace_at(&mut self, uid: i32) -> i32 {
+        self.world.unplace_at(uid)
+    }
+    fn tile_at(&self, uid: i32) -> i32 {
+        self.world.tile_at(uid)
+    }
+    fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        self.world.set_tile_at(uid, tile)
+    }
+    fn is_face_down_at(&self, uid: i32) -> bool {
+        self.world.is_face_down_at(uid)
+    }
+    fn set_face_down_at(&mut self, uid: i32, on: bool) -> bool {
+        self.world.set_face_down_at(uid, on)
+    }
+    fn is_immune_at(&self, uid: i32) -> bool {
+        self.world.is_immune_at(uid)
+    }
+    fn set_immune_at(&mut self, uid: i32, on: bool) -> bool {
+        self.world.set_immune_at(uid, on)
     }
 
     // marks & tokens --------------------------------------------------------
@@ -812,6 +926,12 @@ impl CardWorld for Run {
             target,
             skip,
             early,
+            // The instance asking for the callback, captured now -- the C#
+            // `AtEnd.Add(() => ...)` closure captures that card object, so the
+            // identity belongs to the entry rather than being resolved from the
+            // field at fire time (which copy would it be?). `-1` when the card
+            // is not in play: `On::AtEnd` may run for a card in a hand or pile.
+            uid: self.current_uid,
         });
     }
     fn set_no_money_loss(&mut self, player_id: i32) {
@@ -838,13 +958,17 @@ impl CardWorld for Run {
     fn add_fire_max(&mut self, player_id: i32, n: i32) -> i32 {
         self.world.add_fire_max(player_id, n)
     }
-    fn enter_card(&mut self, id: &str) -> (String, i32) {
+    fn enter_card(&mut self, id: &str) -> (String, i32, i32) {
         let card = std::mem::replace(&mut self.current_card, id.to_string());
         let dest = std::mem::replace(&mut self.dest, DEST_GRAVEYARD);
-        (card, dest)
+        // Fresh instance (C# `NewCard`): the nested run is not the outer card's
+        // field card, so it starts with no uid of its own until it places one.
+        let uid = std::mem::replace(&mut self.current_uid, -1);
+        (card, dest, uid)
     }
-    fn leave_card(&mut self, saved: (String, i32)) -> i32 {
+    fn leave_card(&mut self, saved: (String, i32, i32)) -> i32 {
         self.current_card = saved.0;
+        self.current_uid = saved.2;
         std::mem::replace(&mut self.dest, saved.1)
     }
     // movement shaping ---------------------------------------------------------
@@ -1035,7 +1159,7 @@ impl WasmRules {
     /// Run one effect to completion, prompting through the engine as needed.
     /// Returns the card's destination (`PlayCtx.Dest`). A reroll the module made
     /// (`set_move_roll`) is written back to `trigger` (C# shares `t.Move`).
-    fn drive(&self, cx: &mut Cx, call: Call, card_id: &str, trigger: &mut Trigger) -> Flow<i32> {
+    fn drive(&self, cx: &mut Cx, call: Call, card_id: &str, uid: i32, trigger: &mut Trigger) -> Flow<i32> {
         let mut answers: Vec<i32> = Vec::new();
         loop {
             let run = Run {
@@ -1043,12 +1167,14 @@ impl WasmRules {
                 data: self.data.clone(),
                 trigger: trigger.clone(),
                 current_card: card_id.to_string(),
+                current_uid: uid,
                 dest: DEST_GRAVEYARD,
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
                 fire_spent_log: vec![],
                 house_log: vec![],
+                crystals_log: vec![],
                 doubled: -1,
             };
             match self.ruleset.run(&run, call, &answers) {
@@ -1082,6 +1208,16 @@ impl WasmRules {
                         self.raise_core(cx, "houseAdded", player_id, |t| {
                             t.tile = tile;
                             t.value = nth;
+                        })?;
+                    }
+                    // `crystalsChanged` -- 「此卡上不再拥有[奇迹水晶]时」 (AG:绯红之魂
+                    // (3) and kin) live here rather than at each spend site, so a
+                    // count emptied by *any* path still leaves the field.
+                    for (owner, card, change) in after.crystals_log {
+                        self.raise_core(cx, "crystalsChanged", owner, |t| {
+                            t.card = card;
+                            t.value = change;
+                            t.by_card = by;
                         })?;
                     }
                     return Ok(dest);
@@ -1247,18 +1383,21 @@ impl WasmRules {
         idx: i32,
         player_id: i32,
         card_id: &str,
+        uid: i32,
     ) -> bool {
         let run = Run {
             world: cx.world_copy(),
             data: self.data.clone(),
             trigger: trigger.clone(),
             current_card: card_id.to_string(),
+            current_uid: uid,
             dest: DEST_GRAVEYARD,
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],
             fire_spent_log: vec![],
             house_log: vec![],
+            crystals_log: vec![],
             doubled: -1,
         };
         match self.ruleset.can_hook(&run, idx, player_id) {
@@ -1662,6 +1801,7 @@ impl WasmRules {
                     player_id: s as i32,
                 },
                 &id,
+                -1,
                 &mut on_link,
             )?;
             chain[answered] = on_link;
@@ -1718,12 +1858,14 @@ impl WasmRules {
                 data: self.data.clone(),
                 trigger: top.clone(),
                 current_card: id.clone(),
+                current_uid: -1,
                 dest: DEST_GRAVEYARD,
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
                 fire_spent_log: vec![],
                 house_log: vec![],
+                crystals_log: vec![],
                 doubled: -1,
             };
             if self.ruleset.can_react(&run, idx, s as i32).unwrap_or(false) {
@@ -1931,12 +2073,14 @@ impl CardRules for WasmRules {
             data: self.data.clone(),
             trigger: Trigger::default(),
             current_card: card.to_string(),
+            current_uid: -1,
             dest: DEST_GRAVEYARD,
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],
             fire_spent_log: vec![],
             house_log: vec![],
+            crystals_log: vec![],
             doubled: -1,
         };
         self.ruleset
@@ -1985,6 +2129,7 @@ impl CardRules for WasmRules {
                 player_id: player_id as i32,
             },
             card,
+            -1,
             &mut trigger,
         )?;
         Ok(dest_from(dest))
@@ -2031,6 +2176,7 @@ impl CardRules for WasmRules {
                 player_id: player_id as i32,
             },
             id,
+            -1,
             &mut trigger,
         )?;
         Ok(dest == DEST_FIELD)
@@ -2074,6 +2220,7 @@ impl CardRules for WasmRules {
                         player_id: t.player_id,
                     },
                     &own,
+                    -1,
                     &mut trigger,
                 )?;
             }
@@ -2095,7 +2242,7 @@ impl CardRules for WasmRules {
                     .card(&t.card)
                     .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
                 {
-                    if self.hook_guard(cx, &trigger, idx, t.player_id, &t.card) {
+                    if self.hook_guard(cx, &trigger, idx, t.player_id, &t.card, -1) {
                         self.drive(
                             cx,
                             Call::Hook {
@@ -2104,6 +2251,7 @@ impl CardRules for WasmRules {
                                 player_id: t.player_id,
                             },
                             &t.card,
+                            -1,
                             &mut trigger,
                         )?;
                     }
@@ -2111,7 +2259,7 @@ impl CardRules for WasmRules {
             } else {
                 let world = cx.world_copy();
                 for player_id in 0..world.player_count() {
-                    for id in world.placed_cards(player_id as i32) {
+                    for (uid, id) in world.field_instances(player_id as i32) {
                         let Some(idx) = self.ruleset.card(&id) else {
                             continue;
                         };
@@ -2119,7 +2267,7 @@ impl CardRules for WasmRules {
                         // card on the field is inert, so its hooks must not run.
                         if self.ruleset.cards()[idx as usize].hooks(kind)
                             && !world.card_face_down(player_id as i32, &id)
-                            && self.hook_guard(cx, &trigger, idx, player_id as i32, &id)
+                            && self.hook_guard(cx, &trigger, idx, player_id as i32, &id, uid)
                         {
                             self.drive(
                                 cx,
@@ -2129,6 +2277,7 @@ impl CardRules for WasmRules {
                                     player_id: player_id as i32,
                                 },
                                 &id,
+                                uid,
                                 &mut trigger,
                             )?;
                         }
@@ -2146,6 +2295,7 @@ impl CardRules for WasmRules {
                                     player_id: player_id as i32,
                                 },
                                 &id,
+                                uid,
                                 &mut trigger,
                             )?;
                         }
@@ -2173,11 +2323,11 @@ impl CardRules for WasmRules {
                         s.skip = false;
                         return true;
                     }
-                    due.push((s.card.clone(), s.owner));
+                    due.push((s.card.clone(), s.owner, s.uid));
                     false
                 });
                 cx.swap_world(w);
-                for (id, owner) in due {
+                for (id, owner, uid) in due {
                     if let Some(idx) = self
                         .ruleset
                         .card(&id)
@@ -2190,6 +2340,7 @@ impl CardRules for WasmRules {
                                 player_id: owner,
                             },
                             &id,
+                            uid,
                             &mut trigger,
                         )?;
                     }
@@ -2258,6 +2409,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::ImmuneAll
             | TriggerKind::Untargetable
             | TriggerKind::Redirect
+            | TriggerKind::CrystalsChanged
     )
 }
 
@@ -2350,6 +2502,7 @@ mod tests {
             "drew",
             "reshuffled",
             "bought",
+            "circleAffected",
             "settleInstead",
             "beforeOut",
             "teleported",
@@ -2358,6 +2511,12 @@ mod tests {
             "immuneAll",
             "untargetable",
             "redirect",
+            // v28 post-commit points (what a committed effect did)
+            "fireSpent",
+            "skillUsed",
+            "houseAdded",
+            // v29: crystal writes
+            "crystalsChanged",
         ] {
             assert!(
                 !matches!(trigger_kind(k), TriggerKind::None),

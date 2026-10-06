@@ -30,9 +30,9 @@ fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return;
+        return Ok(());
     }
     // 「你的每6回合不打出任何手牌，在回合开始前抽1张牌」
     if state::get(player_id, QUIET) >= 6 {
@@ -46,28 +46,31 @@ fn at_turn_start(player_id: i32) {
             player_id,
             &Msg::new(key!("mutsumi_actor_title")),
             &Msg::new(key!("mutsumi_actor_enter")),
-        ) {
+        )? {
             state::set(player_id, state_key::SKILL_STATE, 2);
             ctx::log(player_id, &Msg::new(key!("mutsumi_actor_two")));
         }
     }
+    Ok(())
 }
 
 /// 「不打出任何手牌」 -- a play resets the silence.
-fn on_play(player_id: i32) {
+fn on_play(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, QUIET, 0);
+    Ok(())
 }
 
 /// 「若回合结束时你的手牌小于等于1，退出状态2」, and the silence counting up.
-fn at_turn_end(player_id: i32) {
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         if ctx::hand_size(player_id) <= 1 {
             state::set(player_id, state_key::SKILL_STATE, 1);
             ctx::log(player_id, &Msg::new(key!("mutsumi_actor_left")));
         }
-        return;
+        return Ok(());
     }
     state::set(player_id, QUIET, state::get(player_id, QUIET) + 1);
+    Ok(())
 }
 
 // 状态2's 「从角色卡堆拿取一张上一位打出过手牌的玩家的角色卡将其覆盖于自己角色卡上

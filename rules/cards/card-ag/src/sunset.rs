@@ -48,14 +48,14 @@ fn ceil10(num: i64, den: i64) -> i64 {
     q * 10
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「[指定][使用者]拥有的四个有房子的格子」 -- C# picks 4 of
     // `Built(i)` (owned tiles with `houses[t] > 0`) one `H.AskTileOf` at a time,
     // or takes them all when fewer than 4 remain.
     let mut picked: Vec<i32> = Vec::new();
     let mut pool: Vec<i32> = built(player_id);
     if pool.is_empty() {
-        return;
+        return Ok(());
     }
     while picked.len() < 4 && !pool.is_empty() {
         if pool.len() + picked.len() <= 4 {
@@ -67,14 +67,14 @@ fn play(player_id: i32) {
             &Msg::new(key!("sunset_title")),
             &Msg::new(key!("sunset_pick")).i("n", picked.len() as i64 + 1),
             &pool,
-        );
+        )?;
         picked.push(t);
         pool.retain(|&x| x != t);
     }
     // 规则书[手]: 「[使用者]以外的所有玩家」 (`ctx::others` drops out players).
     let targets = ctx::others(player_id);
     if targets.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书[手]: 「将X设为“被[指定]格子的地契价格和建造已有房屋的造价之和”÷“[使用者]以外的[存活]玩家数量”向上取整10」
     // -- C# `picked.Sum(t => H._tiles[t].price + H.State.houses[t] * H._tiles[t].house)`:
@@ -112,6 +112,7 @@ fn play(player_id: i32) {
     // `H.TargetAll` actually landed on (`got`).
     let why = Msg::new(key!("sunset_why")).n("x", x as i64);
     for t in got {
-        ctx::transfer(t, player_id, x, &why);
+        ctx::transfer(t, player_id, x, &why)?;
     }
+    Ok(())
 }

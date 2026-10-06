@@ -40,28 +40,33 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new("skill:户山香澄:非凡�
 
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「其他玩家"星之鼓动山丘"上[结算]时获得一个[火罐]」 -- a field event, so
 /// an [`On::Hook`] at `Settle`. The settler is the trigger's player and the tile
 /// is the trigger's tile; the clause says *another* player, so this player's own
 /// landing does not pay out.
-fn on_settle(player_id: i32) {
+fn on_settle(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::player_id() == player_id {
-        return;
+        return Ok(());
     }
     if ctx::trigger::tile() != hill() {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("extraordinary_star.gain")));
+    Ok(())
 }
 
 /// （2）「运营阶段可使用1个[火罐]」 -- the gate on the press. The engine already
 /// refuses an action outside the operations phase, as it does for every `act`,
 /// so this only has to check the cost.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("extraordinary_star.no_fire")));
     }
@@ -72,13 +77,13 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// 且可选择盖房」 -- a press, so an [`On::Play`]. Spending the pot is the cost and
 /// is all-or-nothing; the destination is a choice among the tiles this player
 /// owns; 「可选择盖房」 is the move being allowed to build where it lands.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("extraordinary_star.spend"))) {
-        return;
+        return Ok(());
     }
     let owned = ctx::owned_tiles(player_id);
     if owned.is_empty() {
-        return;
+        return Ok(());
     }
     let options: Vec<Msg> = owned
         .iter()
@@ -89,7 +94,7 @@ fn use_skill(player_id: i32) {
         &Msg::new(key!("extraordinary_star_pick_title")),
         &Msg::new(key!("extraordinary_star_pick_text")),
         &options,
-    );
+    )?;
     let to = *owned.get(k).unwrap_or(&owned[0]);
 
     // 「本回合的[主要移动]改为[传送]」 -- the walk is replaced, not added to.
@@ -98,4 +103,5 @@ fn use_skill(player_id: i32) {
     plan::set_kind(MoveKind::Teleport);
     plan::set_teleport_to(to);
     ctx::card_move(player_id);
+    Ok(())
 }

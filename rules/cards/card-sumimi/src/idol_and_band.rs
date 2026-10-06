@@ -20,14 +20,15 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn idol_and_band(player_id: i32) {
-    let have = ctx::money(player_id);
+fn idol_and_band(player_id: i32) -> card_sdk::Asked {
+    let have = ctx::money_of(player_id);
     if have >= 3000 {
         // 规则书: 「若你的资金为3000以上则无效果」
         ctx::log(player_id, &Msg::new(key!("idol_and_band_no_effect")));
-        return;
+        return Ok(());
     }
     // 规则书: 「将你的资金重设为3000」
     // C# H.Money(..., fixedAmount: true) -- the host's gain carries no such flag yet.
     ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")));
+    Ok(())
 }

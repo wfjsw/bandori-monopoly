@@ -46,7 +46,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::is_live_house_for(player_id, t)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let other = trigger::player_id();
     // 规则书[反击]: 「使对方选择以下效果之一执行」 -- C# `H.AskPick` of `other`.
     // TODO(规则书)[judgement][反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
@@ -65,7 +65,7 @@ fn react(player_id: i32) {
         &Msg::new(key!("please_choose_title")),
         &Msg::new(key!("please_choose_ask")).player_id("who", player_id),
         &[opt1, opt2],
-    );
+    )?;
     if pick == 0 {
         // TODO(规则书)[judgement][反击]（1）: 「立即打出一张可将你指定为目标的牌并将你指定为目标（之一）」
         //   the clause under-specifies -- see the note above it
@@ -76,7 +76,7 @@ fn react(player_id: i32) {
             other,
             &Msg::new(key!("please_choose_opt1_todo")).player_id("who", other).player_id("reactor", player_id),
         );
-        return;
+        return Ok(());
     }
     // 规则书[反击]（2）: 「使你立即传送至对方所在格子」 -- C# `H.ForceTeleport(i,
     // to, resolve: false, ...)`; `ctx::teleport_to` is the resolve:false teleport.
@@ -92,4 +92,5 @@ fn react(player_id: i32) {
     //   the clause under-specifies -- see the note above it
     // no-settle half is `ctx::teleport_to`; the band-skill half needs the
     // `BandBase.PassTile` fan-out (C# `H.EachOf(i, f => f.PassTile(m, to))`).
+    Ok(())
 }

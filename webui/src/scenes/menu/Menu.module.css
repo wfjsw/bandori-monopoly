@@ -5,8 +5,22 @@
    at the row's end and `space-between` spreads the foot tiles. Sizes are design
    units (the stage scales them); `em` is used inside controls so their chrome
    tracks their own type size. */
-.stand { position: absolute; left: 150px; top: 112px; height: 860px; cursor: pointer; filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.12)); }
-.dialog { position: absolute; left: 200px; top: 678px; width: 503px; }
+/* Character + dialogue are one column on one horizontal axis. The stand art is
+   582 x 910 (Live2DStand's aspect-ratio, so its height follows its width) and
+   the dialogue sits over the art's lower half rather than under it.
+
+   The shared centre is the original's: on the 1600 x 900 reference
+   (docs/ui-ref/01-menu.png) the dialogue box measures x 201..701 -- centre 451
+   -- and the character stands on that axis. A 550px stand centred there starts
+   at 176. */
+.left { position: absolute; left: 176px; top: 112px; width: 550px; display: flex; flex-direction: column; align-items: center; }
+.stand { width: 100%; cursor: pointer; filter: drop-shadow(0 10px 30px rgba(0, 0, 0, 0.12)); }
+/* Pulled back up onto the art: the stand is ~860 tall and the dialogue starts
+   566 down it, so this opens the overlap instead of stacking below.
+   `z-index` because `.stand` is a stacking context of its own -- `filter` makes
+   it one -- so painting order is not just source order here. 1 sits the
+   dialogue over the art and still under TopBar's 5. */
+.dialog { width: 503px; margin-top: -294px; z-index: 1; }
 .tag { position: relative; width: 290px; height: 40px; background: var(--pink); color: #fff; border-radius: 12px 12px 0 0; font-size: 22px; font-weight: 700; padding: 3px 22px; }
 .tag img { position: absolute; right: -6px; top: -2px; height: 44px; }
 .box { min-height: 120px; background: rgba(255, 255, 255, 0.95); border-radius: 0 12px 12px 12px; box-shadow: var(--shadow); padding: 22px 36px; display: flex; align-items: center; font-size: 22px; line-height: 1.6; }

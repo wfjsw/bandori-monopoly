@@ -27,7 +27,7 @@ impl Slot {
     /// C# `get` -- the crystal count on this card.
     fn get(&self) -> i32 {
         match *self {
-            Slot::Placed(player_id) => ctx::crystals(player_id),
+            Slot::Placed(player_id) => ctx::crystals(),
             Slot::Band(player_id) => ctx::band_crystals(player_id),
         }
 }
@@ -38,7 +38,7 @@ impl Slot {
             // `max = 0` = uncapped; the C# clamps at the card's own
             // `MaxCrystals`, which the ABI does not expose.
             Slot::Placed(player_id) => {
-                ctx::add_crystals(player_id, n, 0);
+                ctx::add_crystals(n, 0);
             }
             Slot::Band(player_id) => {
                 ctx::add_band_crystals(player_id, n, 0);
@@ -74,8 +74,8 @@ fn slots() -> Vec<Slot> {
             continue;
         }
         // C# `H._placed.Where(p => p.Live && !p.Immune && text.Contains("奇迹水晶"))`.
-        for c in ctx::placed_cards(s) {
-            if ctx::card_face_down(s, &c) || ctx::card_immune(s, &c) {
+        for (uid, c) in ctx::field_instances(s) {
+            if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
                 continue;
             }
             if ctx::card_text_mentions(&c, "奇迹水晶") {
@@ -91,7 +91,7 @@ fn slots() -> Vec<Slot> {
     v
 }
 
-fn crystal_swap(player_id: i32) {
+fn crystal_swap(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上」
     // C# `CardCrystalSwap.Slots` enumerates every placed card whose text
     // mentions 奇迹水晶 (plus each player's band card). The per-card crystal
@@ -104,7 +104,7 @@ fn crystal_swap(player_id: i32) {
     if from.is_empty() || all.len() < 2 {
         // C# `c.Effective = false` + a log line when no crystal can move.
         ctx::log(player_id, &Msg::new(key!("crystal_swap_none")).player_id("who", player_id));
-        return;
+        return Ok(());
     }
     // 规则书: 「将场上一张卡上的一个奇迹水晶移动」 -- pick the source.
     let from_labels: Vec<Msg> = from.iter().map(|&i| all[i].label()).collect();
@@ -113,7 +113,7 @@ fn crystal_swap(player_id: i32) {
         &Msg::new(key!("crystal_swap_title")),
         &Msg::new(key!("crystal_swap_from")),
         &from_labels,
-    );
+    )?;
     let src = from[src_i];
     // 规则书: 「到另一张可以放置奇迹水晶的卡上」 -- pick the destination
     // (C# `slots.Where(x => x.label != src.label)`).
@@ -124,7 +124,7 @@ fn crystal_swap(player_id: i32) {
         &Msg::new(key!("crystal_swap_title")),
         &Msg::new(key!("crystal_swap_to")),
         &to_labels,
-    );
+    )?;
     let dst = to[dst_i];
     // 规则书: the move itself (C# `src.AddCrystals(-1)` + `dst.AddCrystals(1)`).
     all[src].add(-1);
@@ -135,6 +135,7 @@ fn crystal_swap(player_id: i32) {
             .player_id("src", slot_player(&all[src]))
             .player_id("dst", slot_player(&all[dst])),
     );
+    Ok(())
 }
 
 fn slot_player(s: &Slot) -> i32 {

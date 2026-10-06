@@ -15,8 +15,10 @@
   "crychic_cash_out": "结算了{{n}}资金",
   "crychic_crystal": "手牌从4增至5：+1[奇迹水晶]",
   "crychic_empty": "抽牌堆与弃牌堆都没有卡：美好的往日散去",
+  "crychic_forced_draw": "手牌达到6张：CiRCLE奖励改为抽一张卡",
   "crychic_gained": "获得了乐队技能卡",
   "crychic_locked": "手牌达到6张：无法获得或失去资金",
+  "crychic_not_empty": "抽牌堆与弃牌堆尚未同时为空。",
   "crychic_title": "美好的往日幻影",
   "crychic_which": "加入\"MyGO\"卡（是）还是\"Ave Mujica\"卡（否）？",
   "hhw_built": "盖房减免{{n}}",
@@ -40,6 +42,7 @@
   "pastel_title": "与偶像一起",
   "poppin_cash": "星之鼓动：获得2000资金",
   "poppin_crystal": "消耗2个星星贴纸：+1[奇迹水晶]",
+  "poppin_locked": "仍有Poppin' Party角色在游戏中，星之鼓动山丘不可易主",
   "poppin_no_crystal": "团卡上需要2个[奇迹水晶]。",
   "poppin_no_sticker": "你需要2个星星贴纸。",
   "poppin_once": "该效果1回合1次。",
@@ -52,6 +55,8 @@
   "ras_teleport": "你仍在{{tile}}。要传送至你拥有的一个livehouse格子吗？",
   "ras_title": "UNSTOPPABLE",
   "roselia_first": "首个非Live House购买：{{tile}}半价",
+  "skill_band_no_sticker": "使用复制的团卡的主动效果需要支付1个星星贴纸。",
+  "skill_blocked": "此处无法使用技能。",
   "sumimi_cleared": "本回合未获得资金：清空团卡",
   "sumimi_crystal": "本回合获得过资金：+1[奇迹水晶]"
 }

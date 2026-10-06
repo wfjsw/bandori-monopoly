@@ -15,7 +15,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[
     On::Play(None, hitoshizuku)]);
 
-fn hitoshizuku(player_id: i32) {
+fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
     // `dictionary`, built while walking the table.
     let mut cleared: Vec<(i32, i32)> = Vec::new();
@@ -54,7 +54,7 @@ fn hitoshizuku(player_id: i32) {
             }
         }
     }
-    // TODO(规则书): the C# also un-skips the turn's move when the user's stay
+    // TODO(ABI): the C# also un-skips the turn's move when the user's stay
     // drops to 0 (`H.State.skipMove = false`); needs a skip-move flag.
     for (j, n) in cleared {
         let amount = 1000 * n;
@@ -65,10 +65,11 @@ fn hitoshizuku(player_id: i32) {
         } else {
             // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
             // C# `H.PayR(j, i, 1000 * n, CardName, i)` (a player-to-player transfer).
-            ctx::transfer(j, player_id, amount, &Msg::new(key!("hitoshizuku_pay")));
+            ctx::transfer(j, player_id, amount, &Msg::new(key!("hitoshizuku_pay")))?;
         }
     }
-    // TODO(规则书): 「（此卡可在眩晕时打出）」 -- C# `CardHitoshizuku.PlayableStunned`;
+    // TODO(ABI): 「（此卡可在眩晕时打出）」 -- C# `CardHitoshizuku.PlayableStunned`;
     // `CardDef` has no playable-stunned hook, so a stunned player cannot declare
     // the card today.
+    Ok(())
 }

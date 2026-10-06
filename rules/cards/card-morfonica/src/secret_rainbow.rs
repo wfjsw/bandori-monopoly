@@ -41,7 +41,7 @@ fn can_react(player_id: i32) -> bool {
     from == player_id || to == player_id
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value() as i64;
     let from = trigger::player_id();
     // 规则书[反击]（1）: 「此次支付金额减半」 -- C# `pay.amount = CeilTo(amount / 2.0, 10)`.
@@ -58,4 +58,5 @@ fn react(player_id: i32) {
         trigger::set_pay_amount(boosted as i32);
         ctx::log(player_id, &Msg::new(key!("secret_rainbow_boost")).n("money", amount).n("n", boosted));
     }
+    Ok(())
 }

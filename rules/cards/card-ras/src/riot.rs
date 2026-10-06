@@ -32,7 +32,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::effect::hits(player_id)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡」
     // -- C# `H.DiscardFromHand` over every hand, then `H.DrawR(p, count + (p ==
     // player ? 1 : 0))` for each player_id still in the game.
@@ -54,4 +54,5 @@ fn react(player_id: i32) {
             ctx::draw(p, n);
         }
     }
+    Ok(())
 }

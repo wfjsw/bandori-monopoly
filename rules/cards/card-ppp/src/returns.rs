@@ -34,6 +34,8 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "PPP:Returns";
 
 pub const RETURNS: CardDef = CardDef::new("PPP:Returns", &[
+    On::Hook(&[card_sdk::abi::HookKind::CardPlayed], mine, on_played),
+    On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], mine, choose_band),
     On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
     On::Hook(&[HookKind::DeckAtGameStart], |_| true, deck_at_game_start),
 ]);
@@ -109,10 +111,10 @@ fn pool_for(player_id: i32) -> Vec<String> {
 // 规则书[特]（1）: 「如果此卡被加入初始卡组则卡组卡数添加8。」
 /// C# `CardReturns.DeckBeforeGame` -> `AddEight`: eight ids from `DeckRules.Pool`
 /// go into the draw pile (prompted pick or random), then the pile is shuffled.
-fn deck_before_game(player_id: i32) {
+fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     let mut pool = pool_for(player_id);
     if pool.is_empty() {
-        return;
+        return Ok(());
     }
     // C# `H.AskYes(..., "卡组里有「Returns」：卡组的卡数 +8。要自己从卡池里选 8 张
     // 加入抽卡区吗？（不选就随机）")`.
@@ -120,7 +122,7 @@ fn deck_before_game(player_id: i32) {
         player_id,
         &Msg::new(key!("returns_add_eight_title")),
         &Msg::new(key!("returns_add_eight_ask")),
-    );
+    )?;
     let mut added = 0;
     while added < 8 && !pool.is_empty() {
         let index = if pick {
@@ -131,7 +133,7 @@ fn deck_before_game(player_id: i32) {
                 &Msg::new(key!("returns_add_eight_title")),
                 &Msg::new(key!("returns_add_eight_pick")).i("n", added as i64 + 1),
                 &refs,
-            );
+            )?;
             i.min(pool.len() - 1)
         } else {
             // C# `H._rng.Next(pool.Count)` -- a silent host rng; the only host-side
@@ -148,19 +150,20 @@ fn deck_before_game(player_id: i32) {
         player_id,
         &Msg::new(key!("returns_added")).player_id("who", player_id).i("n", added as i64),
     );
+    Ok(())
 }
 
 // 规则书[特]（2）: 「游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个
 // 其他存活玩家的团卡。」
 /// C# `CardReturns.DeckAtGameStart` -> `Setup`: pull the id out of the draw pile
 /// (or hand) and place it on the owner's field.
-fn deck_at_game_start(player_id: i32) {
+fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::DeckAtGameStart || !trigger::card_is(ID) {
-        return;
+        return Ok(());
     }
     // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
     if !ctx::take_card(player_id, CardPile::Deck, ID) && !ctx::take_card(player_id, CardPile::Hand, ID) {
-        return;
+        return Ok(());
     }
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("returns_note")));
@@ -168,6 +171,7 @@ fn deck_at_game_start(player_id: i32) {
     // TODO(ABI)（2）: 「并获得一个其他存活玩家的团卡」 -- needs the band-copy
     //   machinery (C# `CardReturns.Choose`: `H.BandOf` / `H.MakeBand(..., extra:
     //   true)` / `BandBase.Attach`).
+    Ok(())
 }
 
 // TODO(ABI)[持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果。」
@@ -175,13 +179,143 @@ fn deck_at_game_start(player_id: i32) {
 //   `CardReturns.Attach` / back on in `Detach`): while Returns is in play the PPP
 //   band card's main-settle build restriction is lifted. No ABI surface for band
 //   skill modifiers.
-// TODO(ABI)[持续]（2）: 「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前
-//   因此卡获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。」
-//   -- needs the Fx.TurnStart hook (C# `CardReturns.TurnStart` -> `Choose(first: false)`)
-//   plus `Drop` (detach the copied band, wipe `BandBase.OwnCrystals`).
-// TODO(ABI)[持续]（3）: 「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸。」
-//   -- needs the band active-effect cost gate (C# pays the `星星贴纸` token before a
-//   copied band's actives run; `H.AddTok(seat, "星星贴纸", -1)`).
-// TODO(ABI)[持续]（4）: 「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸。」
-//   -- needs the Fx.CardPlayed hook (C# `CardReturns.CardPlayed`, `c.Effective` and
-//   `H.Db.Card(c.Id)?.band == "通用"`) to `ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)`.
+// [持续]（2）「[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡
+// 获得的团卡不一样则替换并移除上面的所有[奇迹水晶]」 -- a `turnStart` press. The
+// copied band is a placed band-skill card, so `unplace` + `place_card` is the
+// swap and `add_band_crystals(-n)` is the wipe.
+// [持续]（3）「使用因此卡获得的团卡的主动效果时需要支付1星星贴纸」 -- the copy
+// is marked with `returns.copied`, and `skill_bands::skill_ok` charges the
+// sticker before a press (this card unplaces every other `skill:` card, so the
+// only band skill on the field is the copy).
+// [持续]（4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」 -- the
+// `cardPlayed` hook is in; a card's band is the prefix of its id (`通用:`, `G:`),
+// which is what `H.Db.Card(c.Id)?.band == "通用"` reads.
+
+/// （4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
+fn on_played(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::player_id() != player_id {
+        return Ok(());
+    }
+    let Some(id) = ctx::trigger::cards().into_iter().next() else {
+        return Ok(());
+    };
+    if !id.starts_with("通用") && !id.starts_with("G:") {
+        return Ok(());
+    }
+    ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX);
+    ctx::log(player_id, &Msg::new(key!("returns_sticker")));
+    Ok(())
+}
+
+fn mine(player_id: i32) -> bool {
+    ctx::trigger::player_id() == player_id
+}
+
+const BANDS: [&str; 12] = [
+    "Poppin' Party",
+    "Afterglow",
+    "Pastel✽Palettes",
+    "Roselia",
+    "Hello, Happy World!",
+    "Morfonica",
+    "RAISE A SUILEN",
+    "MyGO!!!!!",
+    "Ave Mujica",
+    "Sumimi",
+    "CRYCHIC",
+    "CiRCLE",
+];
+const SKILLS: [&str; 12] = [
+    "skill:Poppin' Party:星之鼓动",
+    "skill:Afterglow:商店街的宠儿",
+    "skill:Pastel✽Palettes:与偶像一起",
+    "skill:Roselia:对音乐的纯粹",
+    "skill:Hello, Happy World!:传播笑容",
+    "skill:Morfonica:振翅高飞的练习曲",
+    "skill:RAISE A SUILEN:UNSTOPPABLE",
+    "skill:MyGO!!!!!:迷途之星",
+    "skill:Ave Mujica:假面之下的真实",
+    "skill:Sumimi:人气偶像组合",
+    "skill:CRYCHIC:美好的往日幻影",
+    "skill:CiRCLE:后勤人员的努力",
+];
+
+/// Which of the twelve bands `p` is in, or `""`.
+fn band_of(p: i32) -> &'static str {
+    for b in [
+        "Poppin' Party",
+        "Afterglow",
+        "Pastel✽Palettes",
+        "Roselia",
+        "Hello, Happy World!",
+        "Morfonica",
+        "RAISE A SUILEN",
+        "MyGO!!!!!",
+        "Ave Mujica",
+        "Sumimi",
+        "CRYCHIC",
+        "CiRCLE",
+    ] {
+        if ctx::in_band(p, b) {
+            return b;
+        }
+    }
+    ""
+}
+
+/// （2）「每回合开始时选择一个其他存活玩家的团卡…替换并移除上面的所有[奇迹水晶]」.
+fn choose_band(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() {
+        return Ok(());
+    }
+    let pool: alloc::vec::Vec<i32> = ctx::others(player_id)
+        .into_iter()
+        .filter(|&p| !ctx::player_out(p) && !band_of(p).is_empty())
+        .collect();
+    if pool.is_empty() {
+        return Ok(());
+    }
+    let who = ctx::ask_player(
+        player_id,
+        &Msg::new(key!("returns_title")),
+        &Msg::new(key!("returns_which_band")),
+        &pool,
+    )?;
+    if who < 0 {
+        return Ok(());
+    }
+    let band = band_of(who);
+    let mut want = "";
+    let mut idx = -1;
+    for (i, b) in BANDS.iter().enumerate() {
+        if *b == band {
+            idx = i as i32;
+            want = SKILLS[i];
+        }
+    }
+    if idx < 0 {
+        return Ok(());
+    }
+    // 「如果和当前因此卡获得的团卡不一样则替换」
+    if ctx::slot(player_id, "returns.band") == idx {
+        return Ok(());
+    }
+    // Only the *band* skill is replaced -- the character skill stays. Band-skill
+    // ids are the twelve `skill:<band>:<name>` entries; a character skill is
+    // `skill:<character>:<name>` and must not be swept with them.
+    for (uid, c) in ctx::field_instances(player_id) {
+        if SKILLS.contains(&c.as_str()) {
+            ctx::unplace_at(uid);
+        }
+    }
+    // 「并移除上面的所有[奇迹水晶]」
+    let n = ctx::band_crystals(player_id);
+    if n > 0 {
+        ctx::add_band_crystals(player_id, -n, i32::MAX);
+    }
+    ctx::place_card(player_id, want, &Msg::new(key!("returns_band")));
+    ctx::set_slot(player_id, "returns.band", idx);
+    ctx::set_tok(player_id, "returns.copied", 1);
+    ctx::log(player_id, &Msg::new(key!("returns_got_band")).card("card", want));
+    Ok(())
+}

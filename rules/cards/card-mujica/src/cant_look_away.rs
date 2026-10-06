@@ -22,15 +22,17 @@ fn can_react(player_id: i32) -> bool {
         && trigger::player_id() != player_id
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     run(player_id);
+    Ok(())
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     run(player_id);
+    Ok(())
 }
 
-fn run(player_id: i32) {
+fn run(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使当前回合内对你打出过[反击]的所有玩家」 -- C#
     // `H._reactedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
     // TODO(规则书)[judgement](ABI): the reaction history (C# `H._reactedAgainst`); `ctx::turn_key()`
@@ -48,7 +50,7 @@ fn run(player_id: i32) {
             &Msg::new(key!("cant_look_away_steps")).player_id("who", p),
             1,
             4,
-        );
+        )?;
         let forward = ctx::ask_pick(
             player_id,
             &Msg::new(key!("cant_look_away_dir_title")),
@@ -56,7 +58,7 @@ fn run(player_id: i32) {
             &[
                 Msg::new(key!("cant_look_away_forward")),
                 Msg::new(key!("cant_look_away_backward"))],
-        ) == 0;
+        )? == 0;
         // 规则书: 「强制移动1~4以内的任意步数并[触发结算]」 -- C# `H.ForceWalk(p,
         // forward ? n : -n, resolve: true, ...)` (MatchHost.cs:5708) builds
         // `MoveCtx { Steps = n, Reverse = !forward, Resolve = true,
@@ -81,4 +83,5 @@ fn run(player_id: i32) {
     // self walk on one's own turn consumes the main move. (The C# `Reactors`
     // list is others-only, so the clause is vacuous there; the bookkeeping is
     // right either way.)
+    Ok(())
 }

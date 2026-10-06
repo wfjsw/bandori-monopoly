@@ -18,16 +18,17 @@ pub const SOYO_BACK: CardDef = CardDef::new("CRYCHIC:（soyo）回到曾经", &[
 
 const ID: &str = "CRYCHIC:（soyo）回到曾经";
 
-fn soyo_back(player_id: i32) {
+fn soyo_back(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）[手]: 「获得500资金」
     ctx::gain(player_id, 500, &Msg::new(key!("soyo_back_why")));
+    Ok(())
 }
 
 /// 规则书（1）[特]: 「抽到此卡时立刻从抽牌堆打出并执行以下操作之一」 -- C#
 /// `CardSoyoBack.Drawn` -> `Special`.
-fn on_drawn(player_id: i32) {
+fn on_drawn(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
-        return;
+        return Ok(());
     }
     // The card was just drawn, so it is in hand (C# `hand.Contains(Id)`).
     ctx::log(player_id, &Msg::new(key!("soyo_back_special")).player_id("who", player_id));
@@ -39,20 +40,21 @@ fn on_drawn(player_id: i32) {
         &Msg::new(key!("soyo_back_title")),
         &Msg::new(key!("soyo_back_ask")),
         &options,
-    );
+    )?;
     if pick == 0 {
-        branch_discard(player_id);
+        branch_discard(player_id)?;
     } else {
         branch_keep(player_id);
     }
+    Ok(())
 }
 
 /// 规则书（1）1: 「将你的所有手牌放入弃牌堆，然后获得弃牌数*500的资金，抽1张卡，
 /// 为你的一个格子付费加盖一间房屋，然后[移除]此卡」
-fn branch_discard(player_id: i32) {
+fn branch_discard(player_id: i32) -> card_sdk::Asked {
     // C# `hand.Remove(Id)` first so this card is not among the discarded.
     if !ctx::take_from_hand(player_id, ID) {
-        return;
+        return Ok(());
     }
     // 规则书（1）1: 「将你的所有手牌放入弃牌堆」 -- the hand is listable now
     // (`ctx::cards_in`).
@@ -78,10 +80,10 @@ fn branch_discard(player_id: i32) {
             &Msg::new(key!("soyo_back_build_title")),
             &Msg::new(key!("soyo_back_build_text")),
             &owned,
-        );
+        )?;
         if t >= 0 {
             let cost = ctx::build_cost(t);
-            if ctx::pay(player_id, cost, &Msg::new(key!("soyo_back_build_why")).tile("tile", t)) > 0 {
+            if ctx::pay(player_id, cost, &Msg::new(key!("soyo_back_build_why")).tile("tile", t))? > 0 {
                 ctx::add_house(t, 1);
                 ctx::log(player_id, &Msg::new(key!("soyo_back_built")).tile("tile", t));
             }
@@ -90,6 +92,7 @@ fn branch_discard(player_id: i32) {
     // 规则书（1）1: 「然后[移除]此卡」 -- already taken out of hand above and never
     // put back anywhere (C# just logs 「回到曾经」被 [移除]）。
     ctx::log(player_id, &Msg::new(key!("soyo_back_removed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// 规则书（1）2: 「获得1000资金并将此卡加入手牌」

@@ -36,7 +36,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn jennifer(player_id: i32) {
+fn jennifer(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在除[使用者]以外的一名玩家的[场地]」 -- C#
     // `H.PickTarget(c, H.Others(seat), ...)` then `H.PlaceFromPlay(c, r.index)`
     // (owner = the target, user = the player).
@@ -46,44 +46,45 @@ fn jennifer(player_id: i32) {
     // (EXIST) may move the hit, and the card lands on that seat instead.
     let targets = ctx::others(player_id);
     if targets.is_empty() {
-        return;
+        return Ok(());
     }
     let target = ctx::ask_player(
         player_id,
         &Msg::new(key!("jennifer_title")),
         &Msg::new(key!("jennifer_ask")),
         &targets,
-    );
+    )?;
     let hit = match ctx::target(target) {
         Some(h) => h,
-        None => return,
+        None => return Ok(()),
     };
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(hit, "PP:找回珍妮弗", &Msg::new(key!("jennifer_note")).player_id("who", player_id));
     // C# `Card.User` -- the player who played it, for the [持续] below.
     ctx::set_slot(hit, SLOT_USER, player_id);
+    Ok(())
 }
 
 /// C# `CardJennifer.PassTile` -- the owner walks past 「偶像经纪公司」.
-fn pass_tile(player_id: i32) {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed(player_id) {
-        return;
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
+        return Ok(());
     }
     // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     let agency = ctx::tile_named("偶像经纪公司");
     if agency < 0 || trigger::tile() != agency {
-        return;
+        return Ok(());
     }
     let user = ctx::slot(player_id, SLOT_USER);
     // 规则书[持续]3: 「此卡[移除]」 -- C# `H.Unplace(this, "gone", ...)`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::set_slot(player_id, SLOT_USER, -1);
     // 规则书[持续]1: 「[使用者][支付][拥有者]400资金」
     if user >= 0 && !ctx::player_out(user) {
-        ctx::transfer(user, player_id, 400, &Msg::new(key!("jennifer_pay")));
+        ctx::transfer(user, player_id, 400, &Msg::new(key!("jennifer_pay")))?;
     }
     // 规则书[持续]2: 「[使用者]获得1个正面的[P✽P粉丝]」 -- C# `H.GainFans(user, 1, up: true)`.
     if user >= 0 && !ctx::player_out(user) {
@@ -108,6 +109,7 @@ fn pass_tile(player_id: i32) {
             &Msg::new(key!("jennifer_ranger")).player_id("who", user),
         );
     }
+    Ok(())
 }
 // C# `Targeting => true; SingleTarget => true` -- `SingleTarget` is expressed
 // by routing the pick through `ctx::target` (single-target, so a `redirect`

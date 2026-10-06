@@ -21,10 +21,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn noble_blue(player_id: i32) {
+fn noble_blue(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     if pos < 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「如果此地块属于你」
     if ctx::tile_owner(pos) != player_id {
@@ -37,7 +37,7 @@ fn noble_blue(player_id: i32) {
         // says yes) or not (noble_blue / starry_night's "the card is spent anyway"
         // implies no)? And what counts a use that this would suppress?
         ctx::log(player_id, &Msg::new(key!("noble_blue_not_yours")).tile("tile", pos));
-        return;
+        return Ok(());
     }
     // 规则书1: 「立刻进行一次触发结算」 -- C# `H.SettleAt(seat, pos, CardName)`.
     // The player does not move; the tile they are on resolves again.
@@ -46,4 +46,5 @@ fn noble_blue(player_id: i32) {
     // is the gate: `target_tile` refuses any tile carrying `noTarget`.
     ctx::add_mark(pos, player_id, card_sdk::abi::mark::NO_TARGET, &Msg::new(key!("noble_blue_mark_note")));
     ctx::log(player_id, &Msg::new(key!("noble_blue_placed")).tile("tile", pos).player_id("who", player_id));
+    Ok(())
 }

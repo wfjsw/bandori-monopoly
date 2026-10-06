@@ -41,18 +41,18 @@ fn can_react(player_id: i32) -> bool {
     !ctx::others(player_id).is_empty()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]（2）: 「若受到[异常移动效果]影响，此卡不生效」 -- C#
     // `H._abnormalTurn[i] > 0` -> `c.Effective = false` (the card is still
     // consumed; only its effect body is skipped).
     if ctx::abnormal_count(player_id) > 0 {
         ctx::log(player_id, &Msg::new(key!("my_own_problem_ineffective")));
-        return;
+        return Ok(());
     }
     let pos = ctx::player_pos(player_id);
     let near = nearest(player_id);
     if near.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书[反击]（1）: 「远离绝对距离最近的玩家一格」 -- pick the tile one step
     // away from `near[0]`. C# writes `H.State.seats[i].pos` directly; the host's
@@ -60,7 +60,7 @@ fn react(player_id: i32) {
     let theirs = ctx::player_pos(near[0]);
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     let dir: i32 = if theirs == pos {
         // 规则书[反击]（1）: 「若与其他玩家重合则可选择任意方向」 -- C# `H.AskPick`
@@ -73,7 +73,7 @@ fn react(player_id: i32) {
                 Msg::new(key!("my_own_problem_forward")),
                 Msg::new(key!("my_own_problem_backward")),
             ],
-        );
+        )?;
         if pick == 1 {
             -1
         } else {
@@ -95,4 +95,5 @@ fn react(player_id: i32) {
         player_id,
         &Msg::new(key!("my_own_problem_moved")).player_id("who", player_id).tile("tile", to),
     );
+    Ok(())
 }

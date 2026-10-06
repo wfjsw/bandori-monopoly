@@ -23,6 +23,7 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 futures-util = "0.3"
 tower-http = { version = "0.7", features = ["fs"] }
 getrandom = "0.4"
+redis = { version = "1.7.1", default-features = false, features = ["tokio-comp"] }
 
 [dev-dependencies]
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }

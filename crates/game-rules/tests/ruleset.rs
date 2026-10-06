@@ -71,7 +71,9 @@ impl TestWorld {
 }
 
 impl CardWorld for TestWorld {
-    fn place_card_on(&mut self, _: i32, _: i32, _: &str, _: Msg) {}
+    fn place_card_on(&mut self, _: i32, _: i32, _: &str, _: Msg) -> i32 {
+        -1
+    }
     // keyed state: the stub holds nothing, so every column reads 0 and writes
     // go nowhere. The real storage lives on `MatchPlayer::state`.
     fn state_var(&self, _: i32, _: &str) -> game_core::state::StateVar {
@@ -180,7 +182,9 @@ impl CardWorld for TestWorld {
     fn add_to_deck(&mut self, _: i32, _: &str, _: bool) {}
     fn add_to_deck_at(&mut self, _: i32, _: &str, _: i32) {}
     fn to_discard(&mut self, _: i32, _: &str) {}
-    fn place_card(&mut self, _: i32, _: &str, _: game_core::msg::Msg) {}
+    fn place_card(&mut self, _: i32, _: &str, _: game_core::msg::Msg) -> i32 {
+        -1
+    }
     fn set_dest(&mut self, _: i32) {}
     fn ring_multiplier(&self) -> i32 {
         10
@@ -189,10 +193,10 @@ impl CardWorld for TestWorld {
         0
     }
     fn teleport_to(&mut self, _: i32, _: i32) {}
-    fn unplace_card(&mut self, _: i32) -> bool {
-        false
+    fn unplace_card(&mut self) -> i32 {
+        0
     }
-    fn is_placed(&self, _: i32) -> i32 {
+    fn is_placed(&self) -> i32 {
         0
     }
     fn count_marks(&self, _: i32, _: &str, _: i32) -> i32 {
@@ -243,13 +247,13 @@ impl CardWorld for TestWorld {
     fn set_trigger_value(&mut self, value: i32) {
         self.trigger.value = value;
     }
-    fn crystals(&self, _: i32) -> i32 {
+    fn crystals(&self) -> i32 {
         0
     }
-    fn set_crystals(&mut self, _: i32, _: i32) -> i32 {
+    fn set_crystals(&mut self, _: i32) -> i32 {
         0
     }
-    fn add_crystals(&mut self, _: i32, _: i32, _: i32) -> i32 {
+    fn add_crystals(&mut self, _: i32, _: i32) -> i32 {
         0
     }
     fn take_card(&mut self, _: i32, _: game_rules::CardPile, _: &str) -> bool {

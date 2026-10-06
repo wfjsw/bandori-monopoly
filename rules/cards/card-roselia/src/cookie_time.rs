@@ -22,7 +22,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 -- C#
     // `H.ShuffleAllIntoDeck(i, hand: false, discard: true)`.
     // 规则书: 「获得500*X资金，X为返回卡的总数」 -- X is `hidden.discard.Count`
@@ -42,4 +42,5 @@ fn play(player_id: i32) {
     // body calls `H.Each(Reshuffled)` itself; the host folds that into the
     // sweep's commit). Listener cards declare `On::Hook(&[HookKind::Reshuffled], ...)`
     // and get the notification without any card-side raise.
+    Ok(())
 }

@@ -35,6 +35,7 @@
   "j11_placed": "{{who}} 将「#J11」放置在场上",
   "j11_title": "#J11",
   "mortis_instinct_nothing": "{{who}} 打出了「表演的本能」，但没有可复制的卡",
+  "nyamu_flipped_up": "翻回正面：抽1张卡",
   "nyamu_note": "翻到背面时可以失去 2 个火罐；翻回正面时抽 1 张卡",
   "nyamu_placed": "{{who}} 将「（喵梦）」放置在场上",
   "saki_move_ask": "让谁移动 3 格并结算？（选自己 = 代替这回合的主要移动）",

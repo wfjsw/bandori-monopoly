@@ -25,7 +25,7 @@ const SPOTS: [&str; 6] = [
     "旭汤澡堂",
     "CHUCHU的公寓"];
 
-fn unstoppable(player_id: i32) {
+fn unstoppable(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓」
     let r = ctx::roll(player_id, 1, 6);
     let spot = SPOTS[(r.clamp(1, 6) - 1) as usize];
@@ -44,4 +44,5 @@ fn unstoppable(player_id: i32) {
         let money = if r <= 3 { 2000 } else { 1000 };
         ctx::gain(player_id, money, &Msg::new(key!("unstoppable_why")).i("roll", r as i64));
     }
+    Ok(())
 }

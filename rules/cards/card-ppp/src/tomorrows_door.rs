@@ -40,7 +40,7 @@ const ROUTE: [&str; 10] = [
 /// below `ROUTE.len()` the card is still travelling and the tax is dormant.
 const SLOT_STEP: &str = "tomorrows_door_step";
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「将此卡放置在“流星堂”上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // H.TileNamed(Route[0]))`. The card stays in play.
     ctx::set_dest(ctx::Dest::Field);
@@ -49,6 +49,7 @@ fn play(player_id: i32) {
     ctx::place_card_on(player_id, ctx::tile_named(ROUTE[0]), "PPP:Tomorrow's Door", &Msg::new(key!("tomorrows_door_note")));
     ctx::set_slot(player_id, SLOT_STEP, 0);
     ctx::log(player_id, &Msg::new(key!("tomorrows_door_placed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// 规则书（2）: 「此卡使用者每次[经过]此卡所在的格子时把此卡放置到此卡（1）效果的序列中
@@ -57,17 +58,17 @@ fn play(player_id: i32) {
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn pass_tile(player_id: i32) {
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
     let step = ctx::slot(player_id, SLOT_STEP);
     if step < 0 || step >= ROUTE.len() as i32 {
-        return;
+        return Ok(());
     }
-    let here = ctx::placed_tile(player_id, "PPP:Tomorrow's Door").unwrap_or(-1);
+    let here = ctx::self_tile().unwrap_or(-1);
     if here < 0 || trigger::tile() != here {
-        return;
+        return Ok(());
     }
     let next = step + 1;
     ctx::set_slot(player_id, SLOT_STEP, next);
@@ -75,14 +76,15 @@ fn pass_tile(player_id: i32) {
     // the last stop is 大阪中之岛公园; past it the card goes back to the owner
     // (`tile = -1`), which is when the tax in `settle_after` wakes up.
     if next >= ROUTE.len() as i32 {
-        ctx::set_card_tile(player_id, "PPP:Tomorrow's Door", -1);
+        ctx::set_self_tile(-1);
     } else {
-        ctx::set_card_tile(player_id, "PPP:Tomorrow's Door", ctx::tile_named(ROUTE[next as usize]));
+        ctx::set_self_tile(ctx::tile_named(ROUTE[next as usize]));
     }
     ctx::log(
         player_id,
         &Msg::new(key!("tomorrows_door_hop")).player_id("who", player_id).i("n", next as i64),
     );
+    Ok(())
 }
 
 /// `Fx.SettleAfter` (C# `CardTomorrowsDoor.SettleAfter`) -- once the card sits
@@ -91,35 +93,36 @@ fn pass_tile(player_id: i32) {
 /// Pure guard for [`settle_after`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn settle_after_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn settle_after(player_id: i32) {
+fn settle_after(player_id: i32) -> card_sdk::Asked {
     // C# `Tile >= 0` -- still travelling along the route: no tax. The cursor is
     // the stand-in for `Tile`; it only reaches `ROUTE.len()` once (2) lands.
     if ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
-        return;
+        return Ok(());
     }
     // C# `m.Seat == Seat` -- the owner's own settle is not taxed.
     let payer = trigger::player_id();
     if payer == player_id || ctx::player_out(payer) {
-        return;
+        return Ok(());
     }
     // 规则书（3）: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时
     //   额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。」
     let at = trigger::tile();
     if at < 0 {
-        return;
+        return Ok(());
     }
     let dream = ctx::tile_named("梦开始的地方");
     let hill = ctx::tile_named("星之鼓动山丘");
     if ctx::tile_owner(at) != player_id && !(dream >= 0 && at == dream) {
-        return;
+        return Ok(());
     }
     let houses = if hill >= 0 { ctx::houses_of(hill) } else { 0 };
     let due = houses * 100;
     if due <= 0 {
-        return;
+        return Ok(());
     }
-    ctx::transfer(payer, player_id, due, &Msg::new(key!("tomorrows_door_tax")).player_id("who", player_id).player_id("target", payer).n("money", due as i64));
+    ctx::transfer(payer, player_id, due, &Msg::new(key!("tomorrows_door_tax")).player_id("who", player_id).player_id("target", payer).n("money", due as i64))?;
+    Ok(())
 }

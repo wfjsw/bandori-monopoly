@@ -24,20 +24,25 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// （1）「当你一次性失去2000以上资金时，抽一张卡」.
-fn after_pay(player_id: i32) {
+fn after_pay(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::value() < 2000 {
-        return;
+        return Ok(());
     }
     // Only a *loss* counts -- `payAfter` on a payment out of this player.
     if ctx::trigger::target() == player_id {
-        return;
+        return Ok(());
     }
     ctx::draw(player_id, 1);
     ctx::log(player_id, &Msg::new(key!("morfonica_draw")).i("n", ctx::trigger::value() as i64));
+    Ok(())
 }
 
-/// （2）「[CiRCLE奖励]选择[获得]资金时…设资金量为1000，1500，2000的循环」.
-fn on_circle(player_id: i32) {
+/// （2）「[CiRCLE奖励]选择[获得]资金时…设资金量为1000，1500，2000的循环」 --
+/// `t.value == 0` is the money option.
+fn on_circle(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::value() != card_sdk::abi::REWARD_MONEY {
+        return Ok(());
+    }
     let n = state::get(player_id, TAKEN) % 3;
     state::set(player_id, TAKEN, state::get(player_id, TAKEN) + 1);
     let amount = match n {
@@ -48,9 +53,9 @@ fn on_circle(player_id: i32) {
     ctx::gain(player_id, amount, &Msg::new(key!("morfonica_circle")).i("n", amount as i64));
     // The reward is replaced by the fixed sum.
     ctx::trigger::set_cancelled();
+    Ok(())
 }
 
-// TODO(规则书): （2）「[CiRCLE奖励]选择[获得]资金时」 -- the clause names the
-//   *money* option of the CiRCLE reward specifically. `circleAffected` fires for
-//   every reward (the draw option too), and the trigger carries no "which option"
-//   field, so this body replaces the whole reward rather than only its money half.
+// （2）「[CiRCLE奖励]选择[获得]资金时」 -- `circleAffected` now fires between the
+// pick and the payout, with `t.value` = 0 (money) / 1 (card). The guard keys on
+// the money half only, so the draw option is left alone.

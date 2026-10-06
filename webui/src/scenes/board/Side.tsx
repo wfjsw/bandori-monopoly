@@ -48,11 +48,17 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   const cur = S.players[S.turn];
   const c = S.turn >= 0 ? m.charOf(S.turn) : undefined;
   const t = timerOf(m, elapsed);
-  const step = S.phase === "play" ? (anim.phase?.key === "board.stepEnd" ? 3 : Math.min(2, Math.max(0, S.step - 1))) : -1;
+  const step = S.phase === "play" ? (anim.phase?.key === "board.stepEnd" ? 3 : Math.min(3, Math.max(0, S.step - 1))) : -1;
+  // The rulebook's four stages are 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`)
+  // and `phases()` lists them in that order. The engine's `step` carries the
+  // rulebook's own stage number (0 before a turn, 1..4 after), so `step - 1`
+  // indexes the labels. Off by one here and 运营 -- the stage players spend
+  // their turn in -- reads as 开始.
+  //
   // Master Duel lets every phase stay readable: the marker **lags** the game
   // state so a stage is held for the length of its transition effect. Without
-  // this stage 1 (roll) and stage 4 (end) flash past because nothing happens in
-  // them. `canRoll` & co. still read the real `S.step` -- only the display lags.
+  // this 开始 and 结束 flash past because nothing happens in them. `canRoll` &
+  // co. still read the real `S.step` -- only the display lags.
   const [shown, setShown] = useState(step);
   const shownAt = useRef(0);
   useEffect(() => {
@@ -69,7 +75,7 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
     return () => window.clearTimeout(id);
   }, [step, shown]);
   const animating = anim.animating;
-  const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 1 && !S.skipMove && !S.busy && !m.asking && !animating;
+  const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 2 && !S.skipMove && !S.busy && !m.asking && !animating;
   const can = m.myTurn && !S.busy && !m.asking && !animating;
 
   let hint: string;
@@ -77,10 +83,10 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
   else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
   else if (S.busy || animating) hint = tr("board.settling");
-  else if (S.roller === m.playerId && !m.myTurn && S.step === 1) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
-  else if (m.myTurn && S.step === 1 && S.skipMove) hint = tr("board.stayHint");
-  else if (m.myTurn && S.step === 1 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: S.players[S.roller].player });
-  else if (m.myTurn) hint = S.step === 1 ? tr("board.clickRoll") : tr("board.moved");
+  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
+  else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
+  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: S.players[S.roller].player });
+  else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : tr("board.moved");
   else hint = tr("board.waiting", { who: cur?.player ?? "", bot: cur?.bot ? tr("board.botSuffix") : "" });
 
   const buildFromButton = () => {
@@ -125,8 +131,8 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
         <Btn icon="redo" className={s.act} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
         <Btn icon="construction" className={s.act} onClick={buildFromButton}>{tr("board.build")}</Btn>
       </div>
-      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && (S.step === 3 || (S.step === 1 && S.skipMove)) && !m.overHand)} onClick={() => { anim.showPhase("board.stepEnd"); void act(sess, { act: "end" }); }}>
-        {m.myTurn && S.step === 1 && S.skipMove ? tr("board.endTurnSkip") : tr("board.endTurn")}
+      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && (S.step === 4 || (S.step === 2 && S.skipMove)) && !m.overHand)} onClick={() => { anim.showPhase("board.stepEnd"); void act(sess, { act: "end" }); }}>
+        {m.myTurn && S.step === 2 && S.skipMove ? tr("board.endTurnSkip") : tr("board.endTurn")}
       </Btn>
 
       <Hand m={m} sess={sess} busy={animating} />
@@ -151,7 +157,7 @@ function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean })
   const [hover, setHover] = useState<{ id: string; note: string } | null>(null);
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
-  const canPlay = m.myTurn && S.step === 1 && !S.busy && !m.asking && !busy;
+  const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy;
   const detail = (id: string, k: number) => {
     setHover(null);
     const acts: CardAction[] = [];

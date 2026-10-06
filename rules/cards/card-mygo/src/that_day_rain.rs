@@ -16,7 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const THAT_DAY_RAIN: CardDef = CardDef::new("MyGO:那天的雨", &[
     On::Play(None, that_day_rain),
     // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-    On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook_guard, hook)]);
+    On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], hook_guard, hook),
+    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed)]);
 
 const ID: &str = "MyGO:那天的雨";
 
@@ -42,10 +43,10 @@ const AGENTS: &[(&str, &[&str])] = &[
 /// Pure guard for [`hook`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn hook(player_id: i32) {
+fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书: 「及你的每回合开始时投掷1d10并...」 -- C# `TurnStart(int turn)`
         // refuses other players' turns (`turn != Player`).
@@ -55,31 +56,56 @@ fn hook(player_id: i32) {
             }
         }
         // 规则书: 「每回合结束时移除一个奇迹水晶，移除所有奇迹水晶后将其放入弃牌堆」
-        // -- C# `DecayCard.TurnEnd` / `Decay` (`AddCrystals(-1)`; empty ->
-        // `H.Unplace(this, "discard", ...)`), on the owner's turn end.
+        // -- C# `DecayCard.TurnEnd` / `Decay` (`AddCrystals(-1)`), on the
+        // owner's turn end. The 「移除所有奇迹水晶后将其放入弃牌堆」 half is
+        // [`on_crystals_changed`].
         TriggerKind::TurnEnd => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
-            if ctx::decay(player_id, ID) == 0 {
-                ctx::log(player_id, &Msg::new(key!("that_day_rain_decayed")).player_id("who", player_id));
-            }
+            ctx::decay();
         }
         _ => {}
     }
+    Ok(())
 }
 
-fn that_day_rain(player_id: i32) {
+/// 规则书: 「移除所有奇迹水晶后将其放入弃牌堆」 -- C# `H.Unplace(this, "discard", ...)`.
+///
+/// Listens to this card's own [`HookKind::CrystalsChanged`] rather than being
+/// re-checked at the decay tick, so a count emptied by *any* write leaves the
+/// field just the same.
+/// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn crystals_changed_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::card_is(ID)
+        && ctx::crystals() == 0
+        // Only a write that did not raise the count speaks for the empty
+        // state; see AG:绯红之魂 (3).
+        && trigger::value() <= 0
+}
+
+fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
+    ctx::unplace_self();
+    ctx::to_discard(player_id, ID);
+    ctx::log(player_id, &Msg::new(key!("that_day_rain_decayed")).player_id("who", player_id));
+    Ok(())
+}
+
+fn that_day_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上并为其放置5个奇迹水晶」 -- C#
     // `H.PlaceFromPlay(c, -1, -1, 5)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("that_day_rain_note")));
     // 规则书: 「并为其放置5个奇迹水晶」 -- C# `PlaceFromPlay(..., crystals: 5)`.
-    ctx::set_crystals(player_id, 5);
+    ctx::set_crystals(5);
     ctx::log(player_id, &Msg::new(key!("that_day_rain_placed")).player_id("who", player_id));
     // 规则书: 「打出此卡时...投掷1d10并按地产商格子顺序使（除“东京外”的）第n个地产商
     // 对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]」
     rain(player_id);
+    Ok(())
 }
 
 /// C# `CardThatDayRain.Rain` -- the 1d10 -> agent -> colour-and-neighbours stay.

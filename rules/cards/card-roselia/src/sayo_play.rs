@@ -30,17 +30,21 @@ fn can_react(player_id: i32) -> bool {
     trigger::move_roll().is_some()
 }
 
-fn react(player_id: i32) {
-    // TODO(规则书): 「打出时视为使用一次此卡使用者的技能」-- needs H.AnnounceSkill
-    //   (ReactSkill + Fx.SkillUsed) so the use is announced and cancellable; what
-    //   follows is only the C# body after `use.cancelled` (the skill's roll bump).
-    let Some(before) = trigger::move_roll() else { return; };
+fn react(player_id: i32) -> card_sdk::Asked {
+    // 「打出时视为使用一次此卡使用者的技能」 -- the user's bound skill is the
+    // `skill:<character>:<name>` field card `bind_skills` placed, so `play_card`
+    // runs its `On::Play` entry and the `skillUsed` trigger fires with it.
+    if let Some(skill) = ctx::placed_cards(player_id).into_iter().find(|c| c.starts_with("skill:")) {
+        ctx::log(player_id, &Msg::new(key!("sayo_play_skill")).card("card", &skill));
+        ctx::play_card(&skill, player_id)?;
+    }
+    let Some(before) = trigger::move_roll() else { return Ok(()); };
     let n = match ctx::ask_pick(
         player_id,
         &Msg::new(key!("sayo_play_ask_title")).card("card", "R:（纱夜）弹奏弹奏弹奏，继续弹奏"),
         &Msg::new(key!("sayo_play_ask_text")),
         &[Msg::new(key!("sayo_play_plus_one")), Msg::new(key!("sayo_play_plus_two"))],
-    ) {
+    )? {
         0 => 1,
         _ => 2,
     };
@@ -54,4 +58,5 @@ fn react(player_id: i32) {
             .i("n", n as i64)
             .i("total", (before + n) as i64),
     );
+    Ok(())
 }

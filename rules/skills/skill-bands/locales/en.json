@@ -15,8 +15,10 @@
   "crychic_cash_out": "Cashed out {{n}}",
   "crychic_crystal": "Hand went 4 → 5: +1 [Miracle Crystal]",
   "crychic_empty": "Deck and discard are empty: the past dissolves",
+  "crychic_forced_draw": "Hand is full: the CiRCLE reward becomes a draw",
   "crychic_gained": "Gained the band skill",
   "crychic_locked": "Hand is full: money cannot move",
+  "crychic_not_empty": "The deck and discard are not both empty.",
   "crychic_title": "Beautiful Days, Illusory",
   "crychic_which": "Add a MyGO card (yes) or an Ave Mujica card (no)?",
   "hhw_built": "Build discounted by {{n}}",
@@ -40,6 +42,7 @@
   "pastel_title": "Together With the Idol",
   "poppin_cash": "Heartbeat of the Stars: +2000",
   "poppin_crystal": "Spent 2 star stickers: +1 [Miracle Crystal]",
+  "poppin_locked": "The hill cannot change hands while a Poppin' Party member is still in the game",
   "poppin_no_crystal": "You need 2 [Miracle Crystal] on the band card.",
   "poppin_no_sticker": "You need 2 star stickers.",
   "poppin_once": "This effect is once per turn.",
@@ -52,6 +55,8 @@
   "ras_teleport": "You are still on {{tile}}. Teleport to a Live House you own?",
   "ras_title": "UNSTOPPABLE",
   "roselia_first": "The first non-Live-House buy: {{tile}} at half price",
+  "skill_band_no_sticker": "Using a copied band's active costs 1 star sticker.",
+  "skill_blocked": "Skills are blocked here.",
   "sumimi_cleared": "No money gained this turn: cleared the band card",
   "sumimi_crystal": "Gained money this turn: +1 [Miracle Crystal]"
 }

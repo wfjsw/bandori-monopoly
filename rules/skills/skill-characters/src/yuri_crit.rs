@@ -34,16 +34,17 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「X初始为0」 -- restated so a fresh match starts from zero.
-fn declare(player_id: i32) {
+fn declare(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 0);
     state::set(player_id, X, 0);
+    Ok(())
 }
 
 /// 「当你即将获得或失去资金（在所有其他资金量改动效果生效后并结果不等于0）时」.
-fn on_pay(player_id: i32) {
+fn on_pay(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount == 0 {
-        return;
+        return Ok(());
     }
     let x = state::get(player_id, X);
     let n = ctx::roll(player_id, 1, 20);
@@ -53,12 +54,15 @@ fn on_pay(player_id: i32) {
         state::set(player_id, X, 0);
         let after = if amount > 0 { amount * 2 } else { 0 };
         ctx::trigger::set_pay_amount(after);
+        ctx::effect(player_id, &Msg::new(key!("yuri_crit_hit")).i("n", n as i64).i("x", x as i64));
         ctx::log(player_id, &Msg::new(key!("yuri_crit_hit")).i("n", n as i64).i("x", x as i64));
     } else {
         // 「若结果大于X，X+1」
         state::set(player_id, X, x + 1);
+        ctx::effect(player_id, &Msg::new(key!("yuri_crit_miss")).i("n", n as i64).i("x", (x + 1) as i64));
         ctx::log(player_id, &Msg::new(key!("yuri_crit_miss")).i("n", n as i64).i("x", (x + 1) as i64));
     }
+    Ok(())
 }
 
 // TODO(规则书)[judgement]: （1）「如果你的（2）技能或角色卡被复制，当复制者使x

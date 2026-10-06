@@ -57,14 +57,14 @@ export async function act(sess: GameSession, cmd: Command): Promise<boolean> {
 export function buyable(m: Model, i: number): boolean {
   const t = D.tiles[i];
   const S = m.S;
-  return m.myTurn && S.step === 3 && !S.busy && !S.bought && (t.kind === "property" || t.kind === "ring") && S.landed === i && m.me.pos === i && S.owners[i] < 0;
+  return m.myTurn && S.step === 4 && !S.busy && !S.bought && (t.kind === "property" || t.kind === "ring") && S.landed === i && m.me.pos === i && S.owners[i] < 0;
 }
 
 export function canBuildOn(m: Model, i: number): boolean {
   const S = m.S;
   const t = D.tiles[i];
   return S.owners[i] === m.playerId && t.kind === "property" && t.rent.length > 1 && !S.mortgaged[i] && S.houses[i] < t.rent.length - 1
-    && m.myTurn && S.step === 3 && S.landed === i && !S.bought && !S.built;
+    && m.myTurn && S.step === 4 && S.landed === i && !S.bought && !S.built;
 }
 
 export const mortgageValue = (i: number) => Math.floor(D.tiles[i].price / 2);

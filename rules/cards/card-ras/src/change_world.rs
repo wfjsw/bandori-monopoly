@@ -48,20 +48,20 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 /// The turn the card was played (C# `Mem["turn"] = H.TurnKey`).
 const SLOT_TURN: &str = "change_world_turn";
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于你的一个有房屋的livehouse格子上」
     // -- C# `Spots(player_id)` = owned Live Houses with `houses[t] > 0`, then
     // `H.AskTileOf`. The gate is now `cant_play` above.
     let spots = spots(player_id);
     if spots.is_empty() {
-        return;
+        return Ok(());
     }
     let tile = ctx::ask_tile(
         player_id,
         &Msg::new(key!("change_world_title")),
         &Msg::new(key!("change_world_ask")),
         &spots,
-    );
+    )?;
     // 规则书: 「将此卡放置于你的一个有房屋的livehouse格子上」
     // -- C# `H.PlaceFromPlay(c, i, tile)` binds the card to that tile.
     ctx::set_dest(ctx::Dest::Field);
@@ -77,6 +77,7 @@ fn play(player_id: i32) {
     // `Add((3, 20, "（Change the world）"))`.
     ctx::plan::set_base_dice(3, 20, "（Change the world）");
     ctx::log(player_id, &Msg::new(key!("change_world_dice")).player_id("who", player_id));
+    Ok(())
 }
 
 /// C# `CardChangeWorld.PassTile` -- while the card is placed, its owner's main
@@ -84,58 +85,60 @@ fn play(player_id: i32) {
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pass_tile(player_id: i32) {
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != Seat || !m.Main || Mem["turn"] != H.TurnKey`.
     if trigger::player_id() != player_id || !trigger::move_is_main() {
-        return;
+        return Ok(());
     }
     if ctx::slot(player_id, SLOT_TURN) != ctx::turn_key() {
-        return;
+        return Ok(());
     }
     let t = trigger::tile();
     // 规则书: 「期间每经过一个不属于你的livehouse格子，此卡获得一个奇迹水晶」
     // -- C# `H.IsLiveHouse(Seat, t) && H._tiles[t].IsBuyable && owners[t] == Seat`.
     if t < 0 || !ctx::is_live_house(t) || !ctx::is_buyable(t) || ctx::tile_owner(t) == player_id {
-        return;
+        return Ok(());
     }
-    ctx::add_crystals(player_id, 1, 0);
+    ctx::add_crystals(1, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("change_world_crystal")).player_id("who", player_id).tile("tile", t),
     );
+    Ok(())
 }
 
 /// C# `CardChangeWorld.PayAdd` -- when rent on the card's tile is paid to the
 /// card's owner, the rent grows by `50 * (Crystals + 1) * houses[Tile]`.
-fn pay_choose(player_id: i32) {
-    if !ctx::is_placed(player_id) || !trigger::pay_is_rent() {
-        return;
+fn pay_choose(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() || !trigger::pay_is_rent() {
+        return Ok(());
     }
     if trigger::target() != player_id {
-        return;
+        return Ok(());
     }
-    let tile = ctx::placed_tile(player_id, ID).unwrap_or(-1);
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return;
+        return Ok(());
     }
     let houses = ctx::houses_of(tile);
     if houses <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数」
     // -- C# `Bonus() = 50 * (Crystals + 1) * houses[Tile]`, added to `p.amount`.
-    let bonus = 50 * (ctx::crystals(player_id) + 1) * houses;
+    let bonus = 50 * (ctx::crystals() + 1) * houses;
     if bonus <= 0 {
-        return;
+        return Ok(());
     }
     trigger::set_pay_amount(trigger::value() + bonus);
     ctx::log(
         player_id,
         &Msg::new(key!("change_world_bonus")).player_id("who", player_id).i("n", bonus as i64),
     );
+    Ok(())
 }
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the
@@ -143,21 +146,22 @@ fn pay_choose(player_id: i32) {
 /// Pure guard for [`pay_after`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pay_after_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pay_after(player_id: i32) {
+fn pay_after(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「触发后将该卡放入弃牌堆」 -- C# `PayAfter` fires when the pay
     // carried the `changeWorld` tag (i.e. `PayAdd` ran). Re-check the same
     // conditions: rent on the card's tile to the card's owner with a nonzero bonus.
     if !trigger::pay_is_rent() || trigger::target() != player_id {
-        return;
+        return Ok(());
     }
-    let tile = ctx::placed_tile(player_id, ID).unwrap_or(-1);
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile || ctx::houses_of(tile) <= 0 {
-        return;
+        return Ok(());
     }
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("change_world_discarded")).player_id("who", player_id));
+    Ok(())
 }

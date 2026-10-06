@@ -33,17 +33,17 @@ const MAX_CRYSTALS: i32 = 10;
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pass_tile(player_id: i32) {
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != Seat` -- only the owner's own move feeds this card.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     let t = trigger::tile();
     if t < 0 {
-        return;
+        return Ok(());
     }
     // 规则书[持续]（1）: 「每次[经过]…时为此卡添加1个[奇迹水晶]（上限10个）。」
     let mut hit = false;
@@ -54,16 +54,17 @@ fn pass_tile(player_id: i32) {
         }
     }
     if !hit {
-        return;
+        return Ok(());
     }
-    let before = ctx::crystals(player_id);
-    let after = ctx::add_crystals(player_id, 1, MAX_CRYSTALS);
+    let before = ctx::crystals();
+    let after = ctx::add_crystals(1, MAX_CRYSTALS);
     if after > before {
         ctx::log(
             player_id,
             &Msg::new(key!("popipapapipopa_crystal")).player_id("who", player_id).tile("tile", t).i("n", after as i64),
         );
     }
+    Ok(())
 }
 
 /// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
@@ -71,21 +72,21 @@ fn pass_tile(player_id: i32) {
 /// Pure guard for [`pay_choose`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pay_choose_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pay_choose(player_id: i32) {
+fn pay_choose(player_id: i32) -> card_sdk::Asked {
     // C# `p.from != Player` -- only the owner's own payment.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     let amount = trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
-    let have = ctx::crystals(player_id);
+    let have = ctx::crystals();
     if have <= 0 {
-        return;
+        return Ok(());
     }
     // C# `max = Math.Min(Crystals, (p.amount + 149) / 150)` -- never ask for
     // more than can actually cut the payment to zero.
@@ -97,11 +98,11 @@ fn pay_choose(player_id: i32) {
         &Msg::new(key!("popipapapipopa_ask")).n("money", amount as i64).i("n", have as i64),
         0,
         max,
-    );
+    )?;
     if n <= 0 {
-        return;
+        return Ok(());
     }
-    ctx::add_crystals(player_id, -n, 0);
+    ctx::add_crystals(-n, 0);
     let cut = 150 * n;
     // C# `p.amount = Math.Max(0, p.amount - 150 * r.value)`.
     trigger::set_pay_amount((amount - cut).max(0));
@@ -109,4 +110,5 @@ fn pay_choose(player_id: i32) {
         player_id,
         &Msg::new(key!("popipapapipopa_used")).player_id("who", player_id).i("n", n as i64).n("money", cut as i64),
     );
+    Ok(())
 }

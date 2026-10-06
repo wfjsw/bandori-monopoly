@@ -98,7 +98,7 @@ fn can_react(player_id: i32) -> bool {
     them != player_id && !ctx::player_out(them)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let them = trigger::player_id();
     // 规则书（1）[反击]: 「将此卡放置于对方场上」 -- C# `H.PlaceFromPlay(c, c.Trigger.Seat)`.
     ctx::set_dest(ctx::Dest::Field);
@@ -106,62 +106,64 @@ fn react(player_id: i32) {
     // C# `Card.User` = the reactor; the return draw goes to them.
     ctx::set_slot(them, SLOT_USER, player_id + 1);
     ctx::log(player_id, &Msg::new(key!("here_the_world_placed")).player_id("who", them).player_id("by", player_id));
+    Ok(())
 }
 
 /// 规则书（2）: 「场上有此卡的玩家下次抽卡时，将那张卡背面朝上放置于此卡上并为其放置3个奇迹水晶」
 /// -- C# `CardHereTheWorld.Drew` (MatchHost.cs:11358-11373): the placed card
 /// watches the owner's draw batch (`Fx.Drew`, `t.value` = count) and holds the
 /// first card face-down with 3 miracle crystals.
-fn drew(player_id: i32) {
+fn drew(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::Drew {
-        return;
+        return Ok(());
     }
     // C# `if (player_id != Player || ...)` -- only the owner's own draws.
-    if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
-        return;
+    if trigger::player_id() != player_id || !ctx::is_placed() {
+        return Ok(());
     }
     // C# `if (... || Mem.ContainsKey("held"))` -- already holding one.
     if ctx::slot(player_id, SLOT_HELD_LEN) > 0 {
-        return;
+        return Ok(());
     }
     let got = trigger::value();
     if got <= 0 {
-        return;
+        return Ok(());
     }
     // C# `Drew(player_id, cards)` takes `cards[0]` -- the first card of the batch
     // (`trigger::cards()` = the drawn cards in draw order, C# `t.cards`).
     let cards = trigger::cards();
     let Some(id) = cards.first().cloned() else {
-        return;
+        return Ok(());
     };
     // C# `H._hidden[Player].hand.Remove(id)` -- hold it face-down (out of hand).
     if !ctx::take_from_hand(player_id, &id) {
-        return;
+        return Ok(());
     }
     store_held(player_id, &id);
     // 规则书（2）: 「并为其放置3个奇迹水晶」
-    ctx::set_crystals(player_id, 3);
+    ctx::set_crystals(3);
     ctx::log(player_id, &Msg::new(key!("here_the_world_held")).player_id("who", player_id));
+    Ok(())
 }
 
 /// 规则书（2）: 「那名玩家的每个回合开始时移除一个，当奇迹水晶数为0时，那名玩家将那张卡
 /// 加入手牌，并使此卡使用者抽一张卡。」 -- C# `CardHereTheWorld.TurnStart` -> `Tick`
 /// (MatchHost.cs:11375-11406).
-fn turn_start(player_id: i32) {
+fn turn_start(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::TurnStart {
-        return;
+        return Ok(());
     }
     // C# `if (turn != Player || !Mem.ContainsKey("held") || !H._placed.Contains(this))`.
-    if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
-        return;
+    if trigger::player_id() != player_id || !ctx::is_placed() {
+        return Ok(());
     }
     if ctx::slot(player_id, SLOT_HELD_LEN) <= 0 {
-        return;
+        return Ok(());
     }
     // C# `AddCrystals(-1, "回合开始")`.
-    let left = ctx::add_crystals(player_id, -1, 0);
+    let left = ctx::add_crystals(-1, 0);
     if left > 0 {
-        return;
+        return Ok(());
     }
     // C# `Tick` at 0: return the held card, unplace this one, draw for the user.
     let user = ctx::slot(player_id, SLOT_USER) - 1;
@@ -172,11 +174,12 @@ fn turn_start(player_id: i32) {
     clear_held(player_id);
     ctx::log(player_id, &Msg::new(key!("here_the_world_returned")).player_id("who", player_id));
     // C# `H.Unplace(this, "discard", "结束了")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::set_slot(player_id, SLOT_USER, 0);
     // C# `if (!H.Out(user)) yield return H.DrawR(user, 1, CardName)`.
     if user >= 0 && !ctx::player_out(user) {
         ctx::draw(user, 1);
     }
+    Ok(())
 }

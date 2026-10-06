@@ -43,68 +43,75 @@ fn any(_player_id: i32) -> bool {
 }
 
 /// 「初始2，上限2」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")));
+    Ok(())
 }
 
 /// （2）「当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记」.
-fn on_skill(player_id: i32) {
+fn on_skill(player_id: i32) -> card_sdk::Asked {
     let src = ctx::trigger::player_id();
     if src == player_id {
-        return;
+        return Ok(());
     }
-    let Some(id) = ctx::trigger::cards().into_iter().next() else { return; };
+    let Some(id) = ctx::trigger::cards().into_iter().next() else { return Ok(()); };
     if id.is_empty() {
-        return;
+        return Ok(());
     }
     let cd = cd_key(&id);
     // 「该技能对被动技能存在3回合CD」 -- a per-kind cooldown.
     if state::get(player_id, &cd) > 0 {
-        return;
+        return Ok(());
     }
     if state::get(player_id, state_key::FIRE) < 1 {
-        return;
+        return Ok(());
     }
     // 「当场上存活玩家数量大于等于3时：每种角色标记上限1」
     let alive = (0..ctx::player_count()).filter(|&p| !ctx::player_out(p)).count() as i32;
     if alive >= 3 && ctx::tok(player_id, &id) >= 1 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("nanami_ordinary_title")),
         &Msg::new(key!("nanami_ordinary_ask")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_spend"))) {
-        return;
+        return Ok(());
     }
     ctx::add_tok(player_id, &id, 1, i32::MAX);
     state::set(player_id, &cd, 3);
     ctx::log(player_id, &Msg::new(key!("nanami_ordinary_mark")).card("card", &id));
+    Ok(())
 }
 
 /// 「3回合CD」 counts down.
-fn tick(player_id: i32) {
+fn tick(player_id: i32) -> card_sdk::Asked {
     for id in ctx::tok_names(player_id, "skill:") {
         let cd = cd_key(&id);
         if state::get(player_id, &cd) > 0 {
             state::set(player_id, &cd, state::get(player_id, &cd) - 1);
         }
     }
+    Ok(())
 }
 
 /// （3） 「你可以使用手中的角色标记，视为使用该角色的技能」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if ctx::tok_names(player_id, "skill:").is_empty() {
         return Some(Msg::new(key!("nanami_ordinary_no_mark")));
     }
@@ -112,10 +119,10 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （3）「视为使用该角色的技能」 -- `ctx::play_card` runs that skill's `On::Play`.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let marks = ctx::tok_names(player_id, "skill:");
     if marks.is_empty() {
-        return;
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
@@ -125,9 +132,10 @@ fn use_skill(player_id: i32) {
             .iter()
             .map(|m| Msg::new(key!("nanami_ordinary_option")).card("card", m))
             .collect::<alloc::vec::Vec<_>>(),
-    );
-    let Some(id) = marks.get(pick).cloned() else { return; };
+    )?;
+    let Some(id) = marks.get(pick).cloned() else { return Ok(()); };
     ctx::add_tok(player_id, &id, -1, i32::MAX);
-    ctx::play_card(&id, player_id);
+    ctx::play_card(&id, player_id)?;
     ctx::log(player_id, &Msg::new(key!("nanami_ordinary_used")).card("card", &id));
+    Ok(())
 }

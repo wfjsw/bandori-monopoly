@@ -29,31 +29,32 @@ const COST: i32 = 500;
 /// 「获得1200资金」 when the roll lands.
 const PAYOUT: i32 = 1200;
 
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     // 「其他玩家经过CiRCLE时」
     let passer = ctx::trigger::player_id();
     if passer == player_id || passer < 0 {
-        return;
+        return Ok(());
     }
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     // 「可向你支付一次500资金」 -- the passer's call.
     let offered = ctx::ask_yes(
         passer,
         &Msg::new(key!("marina_gifts_offer_title")),
         &Msg::new(key!("marina_gifts_offer_text")).player_id("who", player_id).n("amount", COST as i64),
-    );
+    )?;
     if !offered {
-        return;
+        return Ok(());
     }
     // Paying is all-or-nothing; a passer who cannot pay simply does not play.
-    if ctx::transfer(passer, player_id, COST, &Msg::new(key!("marina_gifts_paid"))) == 0 {
-        return;
+    if ctx::transfer(passer, player_id, COST, &Msg::new(key!("marina_gifts_paid")))? == 0 {
+        return Ok(());
     }
     // 「你投掷一次1d10，如果投掷结果至少为6，那名玩家获得1200资金」
     let face = ctx::roll(player_id, 1, 10);
     if face >= 6 {
         ctx::gain(passer, PAYOUT, &Msg::new(key!("marina_gifts_win")).i("n", face as i64));
     }
+    Ok(())
 }

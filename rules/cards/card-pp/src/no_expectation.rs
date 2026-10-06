@@ -32,7 +32,7 @@ fn stacks(player_id: i32) -> i32 {
     ctx::slot(player_id, SLOT_STACKS)
 }
 
-fn no_expectation(player_id: i32) {
+fn no_expectation(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "PP:不要背负期待", &Msg::new(key!("no_expectation_note")));
@@ -49,7 +49,8 @@ fn no_expectation(player_id: i32) {
     ctx::draw(player_id, 1);
     // 规则书[特]: 「此卡不受任何其他效果影响」 -- C# `Card.Immune`. A flag on the
     // card: effects that would touch it read `card_immune` and skip.
-    ctx::set_card_immune(player_id, "PP:不要背负期待", true);
+    ctx::set_self_immune(true);
+    Ok(())
 }
 
 /// C# `CardNoExpectation.RollAfter` / `PayAdd` -- both [持续] halves that the
@@ -57,10 +58,10 @@ fn no_expectation(player_id: i32) {
 /// Pure guard for [`hook`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn hook(player_id: i32) {
+fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
         // `CardNoExpectation.RollAfter` (`m.Roll = max(0, m.Roll - 2)`).
@@ -68,11 +69,11 @@ fn hook(player_id: i32) {
         // write-back the engine lands on `m.Roll`.
         TriggerKind::RollAfter => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             let roll = trigger::move_roll().unwrap_or(trigger::value());
             if roll <= 0 {
-                return;
+                return Ok(());
             }
             let cut = (roll - 2).max(0);
             trigger::set_move_roll(cut);
@@ -96,13 +97,13 @@ fn hook(player_id: i32) {
         TriggerKind::PayAdd => {
             let n = stacks(player_id);
             if n <= 0 {
-                return;
+                return Ok(());
             }
             let from = trigger::player_id();
             let to = trigger::target();
             let amount = trigger::value();
             if amount <= 0 {
-                return;
+                return Ok(());
             }
             let bump = 100 * n;
             if from == player_id && to >= 0 && to != player_id {
@@ -115,6 +116,7 @@ fn hook(player_id: i32) {
         }
         _ => {}
     }
+    Ok(())
 }
 
 /// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
@@ -123,9 +125,10 @@ fn hook(player_id: i32) {
 /// Pure guard for [`reshuffled`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn reshuffled_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn reshuffled(player_id: i32) {
+fn reshuffled(player_id: i32) -> card_sdk::Asked {
     ctx::inc_slot(player_id, SLOT_STACKS, 2);
+    Ok(())
 }

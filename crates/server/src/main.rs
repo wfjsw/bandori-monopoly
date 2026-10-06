@@ -1,6 +1,6 @@
-//! `server [--port 8080] [--data data] [--static webui/dist] [--workers N]`
+//! `server [--port 8080] [--data data] [--static webui/dist] [--workers N] [--redis URL]`
 //!
-//! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`.
+//! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`, `BM_REDIS`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -73,7 +73,19 @@ async fn main() {
         data_dir.clone(),
         rules_dir.clone(),
     );
-    let server = server::Server::new(data, rules, engine);
+    // Cross-endpoint state: Redis to share/retain it across processes, the
+    // in-memory store otherwise (one process, lost on restart).
+    let redis_url = arg("--redis", "BM_REDIS", "");
+    let store: Arc<dyn server::store::CrossState> = if redis_url.is_empty() {
+        eprintln!("cross-endpoint state: in-memory (pass --redis URL to share or retain it)");
+        Arc::new(server::store::dummy::Store::new())
+    } else {
+        eprintln!("cross-endpoint state: redis at {redis_url}");
+        Arc::new(server::store::redis::Store::connect(&redis_url).expect("redis store"))
+    };
+    let server = server::Server::new(data, rules, engine, store);
+    // Bring back anything the store still knows about, so a restart is silent.
+    server.restore_rooms();
     server::spawn_ticker(server.clone());
     let statics = static_dir.is_dir().then_some(static_dir);
     let app = server::router(server, Some(data_dir), statics);

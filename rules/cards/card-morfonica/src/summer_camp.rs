@@ -20,7 +20,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new("Mor:夏日合宿", &[
     On::Gate(&[GateKind::Untargetable], untargetable),
     On::Hook(&[HookKind::TurnStart], |_| true, turn_start)]);
 
-fn summer_camp(player_id: i32) {
+fn summer_camp(player_id: i32) -> card_sdk::Asked {
     // C# `AiPlay => false` -- bots never play this card; `CardDef` has no AiPlay
     // hook yet, so a bot prompt will still offer it.
     // 规则书: 「打出此卡，直到下个自己的回合开始前」 -- C# `H.PlaceFromPlay(c)`.
@@ -30,38 +30,40 @@ fn summer_camp(player_id: i32) {
     // 规则书: 「你只会被自己发动的效果指定」 -- the Untargetable hook below refuses
     //   any `by != player_id` and counts negations in `SLOT_BLOCKED`.
     // The Fx.TurnStart hook below ends the effect on the owner's next turn.
+    Ok(())
 }
 
 /// `Fx.Untargetable` (C# `CardSummerCamp.Untargetable`): while placed, only the
 /// owner's own effects may target them. Counts negations for the draw gate.
-fn untargetable(player_id: i32) {
+fn untargetable(player_id: i32) -> card_sdk::Asked {
     // The hook runs on every placed card across all players; only guard our own
     // seat (`t.player` = the target).
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     // 规则书: 「只会被自己发动的效果指定」 -- C# `if (seat != Seat || by == Seat)
     //   return false;` self-targeting passes (the engine already allows it).
     let by = trigger::by_card();
     if by.is_none_or(|b| b == player_id) {
-        return;
+        return Ok(());
     }
     // C# `Mem["blocked"] = Blocked + 1; return true;`.
     ctx::inc_slot(player_id, SLOT_BLOCKED, 1);
     trigger::set_cancelled();
+    Ok(())
 }
 
 /// `Fx.TurnStart` (C# `CardSummerCamp.TurnStart` -> `End`): the effect ends at
 /// the owner's next turn start; draw 1 when nothing was negated.
-fn turn_start(player_id: i32) {
+fn turn_start(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::TurnStart
         || trigger::player_id() != player_id
-        || !ctx::is_placed(player_id)
+        || !ctx::is_placed()
     {
-        return;
+        return Ok(());
     }
     // 规则书: 「当此卡效果结束」 -- C# `H.Unplace(this, "discard", "效果结束了")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("summer_camp_end")).player_id("who", player_id));
     // 规则书: 「你没有因为此卡效果无效化任何影响则抽一张牌」 -- C# `End`:
@@ -72,4 +74,5 @@ fn turn_start(player_id: i32) {
         ctx::draw(player_id, 1);
         ctx::log(player_id, &Msg::new(key!("summer_camp_draw")).player_id("who", player_id));
     }
+    Ok(())
 }

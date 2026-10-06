@@ -45,7 +45,7 @@ export function Board({ sess }: { sess: GameSession }) {
       sfx("prompt");
       openPrompt(sess, S.prompt);
     }
-    if (m.myTurn && S.step === 3 && !S.busy && !m.asking && S.landed >= 0) {
+    if (m.myTurn && S.step === 4 && !S.busy && !m.asking && S.landed >= 0) {
       const key = S.round * 100 + S.turn;
       if (autoDeed.current !== key && !isModalOpen("deed") && (buyable(m, S.landed) || canBuildOn(m, S.landed))) {
         autoDeed.current = key;

@@ -28,7 +28,7 @@ const SUBS: [&str; 3] = [
     "PP:[白鹭千圣]微笑的铁假面",
     "PP:[若宫伊芙]属于我的武士道！"];
 
-fn hina_sound(player_id: i32) {
+fn hina_sound(player_id: i32) -> card_sdk::Asked {
     // 规则书[特]（1）: 「此卡在符合使用条件时可替代丸山彩，大和麻弥，白鹭千圣，或若宫伊芙的专属卡」
     // -- C# `WhyNot` offers the subs whose own `WhyNot` is clear
     // (`H.SubWhyNot(seat, id) == null`) and refuses when none are. `H.SubWhyNot`
@@ -39,7 +39,7 @@ fn hina_sound(player_id: i32) {
         &Msg::new(key!("hina_sound_title")),
         &Msg::new(key!("hina_sound_ask")),
         &SUBS,
-    );
+    )?;
     let sub = SUBS[i];
     // C# `H.Log("text", i, "「" + CardName + "」当作「" + H.CardTitle(sub) + "」打出")`.
     ctx::log(
@@ -49,7 +49,7 @@ fn hina_sound(player_id: i32) {
             .card("sub", sub),
     );
     // 规则书[特]（1）: 「可替代……的专属卡」 -- run the chosen exclusive card's [手].
-    ctx::play_card(sub, player_id);
+    ctx::play_card(sub, player_id)?;
     // C# when the substitute places itself (`inner.Dest == "placed"`) the stand-in
     // itself is "gone" (`c.Dest = "gone"`); all three subs above place themselves,
     // so this card leaves play rather than landing in the discard.
@@ -64,4 +64,5 @@ fn hina_sound(player_id: i32) {
     // substituted exclusive card among
     // 「[丸山彩]憧憬的前方」/「[大和麻弥]可能性为∞」/「[白鹭千圣]微笑的铁假面」/「[若宫伊芙]属于我的武士道！」
     // while keeping its crystals (`H.Unplace` + `H.PlaceCard(..., crystals, ...)`).
+    Ok(())
 }

@@ -53,11 +53,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn toko_swap(player_id: i32) {
+fn toko_swap(player_id: i32) -> card_sdk::Asked {
     let ps = pairs(player_id);
     if ps.is_empty() {
         ctx::log(player_id, &Msg::new(key!("toko_swap_no_pair")).player_id("who", player_id));
-        return;
+        return Ok(());
     }
     // 规则书: 「选择一个自己被抵押的地契和任意玩家颜色相同的被抵押地契交换」
     // C# `H.AskPick` over the pairs (`MatchHost.cs:4966`).
@@ -75,16 +75,16 @@ fn toko_swap(player_id: i32) {
         &Msg::new(key!("toko_swap_title")),
         &Msg::new(key!("toko_swap_ask")),
         &options,
-    );
+    )?;
     let (mine, theirs) = ps[(pick.max(0) as usize).min(ps.len() - 1)];
     let other = ctx::tile_owner(theirs);
     if other < 0 || other == player_id || ctx::player_out(other) {
-        return;
+        return Ok(());
     }
     // 规则书: the C# confirms the picked tile with `H.TargetTile` before the
     //   swap (`MatchHost.cs:4973`); false when the tile cannot be targeted.
     if !ctx::target_tile(theirs) {
-        return;
+        return Ok(());
     }
     let num = value(mine);
     let num2 = value(theirs);
@@ -105,8 +105,9 @@ fn toko_swap(player_id: i32) {
     // C# `H.PayR` of `Value(theirs) - Value(mine)` from the lower to the higher.
     let why = &Msg::new(key!("toko_swap_diff"));
     if num < num2 {
-        ctx::transfer(player_id, other, num2 - num, why);
+        ctx::transfer(player_id, other, num2 - num, why)?;
     } else if num2 < num {
-        ctx::transfer(other, player_id, num - num2, why);
+        ctx::transfer(other, player_id, num - num2, why)?;
     }
+    Ok(())
 }

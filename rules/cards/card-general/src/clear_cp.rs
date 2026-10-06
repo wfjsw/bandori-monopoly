@@ -35,7 +35,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("clear_cp_too_many")))
 }
 
-fn clear_cp(player_id: i32) {
+fn clear_cp(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「在任意一个没有角色和[CP点]的格子上」
     let n = ctx::tile_count();
     let players = ctx::player_count();
@@ -47,7 +47,7 @@ fn clear_cp(player_id: i32) {
         }
     }
     if free.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书[手]: 「添加1个[CP点]」
     let tile = ctx::ask_tile(
@@ -55,7 +55,7 @@ fn clear_cp(player_id: i32) {
         &Msg::new(key!("clear_cp_ask_title")),
         &Msg::new(key!("clear_cp_ask_text")),
         &free,
-    );
+    )?;
     ctx::add_mark(tile, player_id, key!("clear_cp_mark"), &Msg::new(key!("clear_cp_mark_note")));
     // 规则书[手]: 「并在自己[场上]添加6个[CP点]」
     ctx::add_tok(player_id, key!("clear_cp_tok"), 6, i32::MAX);
@@ -64,12 +64,13 @@ fn clear_cp(player_id: i32) {
     // which the Fx hook dispatch runs at `turnStart` / `settleAfter`. C#
     // carries them on a standalone `CPControl` in `H._fx[i].extra`; the port's
     // persistent-effect carrier is the placed card.
-    if !ctx::is_placed(player_id) {
+    if !ctx::is_placed() {
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, "通用:该清CP了", &Msg::new(key!("clear_cp_note")));
     }
     // C# `cPControl.Spread = 2` -- reset the countdown on every play.
     ctx::set_slot(player_id, SLOT_SPREAD, 2);
+    Ok(())
 }
 
 /// `CPControl.TurnStart` / `CPControl.SettleAfter` (C# `Fx` overrides).
@@ -77,21 +78,21 @@ fn clear_cp(player_id: i32) {
 /// Pure guard for [`react`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn react_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（2）[特]: 「[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]
         // 及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」 -- C#
         // `CPControl.TurnStart` (Spread = 2).
         TriggerKind::TurnStart => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             let spread = ctx::slot(player_id, SLOT_SPREAD);
             if spread <= 0 {
-                return;
+                return Ok(());
             }
             ctx::set_slot(player_id, SLOT_SPREAD, spread - 1);
             let n = ctx::tile_count();
@@ -119,17 +120,17 @@ fn react(player_id: i32) {
         // 1个[CP点]，[获得]800资金」 -- C# `CPControl.SettleAfter` -> `Clean`.
         TriggerKind::SettleAfter => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             let tile = trigger::tile();
             if tile < 0 {
-                return;
+                return Ok(());
             }
             if ctx::count_marks(tile, key!("clear_cp_mark"), -2) <= 0 {
-                return;
+                return Ok(());
             }
             if ctx::tok(player_id, key!("clear_cp_tok")) <= 0 {
-                return;
+                return Ok(());
             }
             // C# `tileMark.count--` (at most one [CP点] per tile) then `AddTok(-1)`.
             ctx::remove_marks(tile, key!("clear_cp_mark"), -2);
@@ -142,4 +143,5 @@ fn react(player_id: i32) {
         }
         _ => {}
     }
+    Ok(())
 }

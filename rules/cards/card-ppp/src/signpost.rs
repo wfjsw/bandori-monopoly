@@ -15,7 +15,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「本回合的主要移动设为移动60格子」 -- C# `H.CardMove(c, new MoveCtx
     // { Steps = 60, Resolve = false })`: the walk runs now and is the main move.
     ctx::plan::set_steps(60);
@@ -28,13 +28,15 @@ fn play(player_id: i32) {
     // H.LoseR(i, 1000, ...))`, scheduled onto `On::AtEnd`.
     ctx::before_turn_end(player_id);
     ctx::log(player_id, &Msg::new(key!("signpost_pending")).player_id("who", player_id).n("n", 1000));
+    Ok(())
 }
 
 /// `On::AtEnd` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
 /// `ctx::before_turn_end` in `play`; runs once when the turn ends.
-fn at_end(player_id: i32) {
+fn at_end(player_id: i32) -> card_sdk::Asked {
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
-    ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")));
+    ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")))?;
+    Ok(())
 }

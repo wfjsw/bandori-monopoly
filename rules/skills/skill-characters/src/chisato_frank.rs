@@ -23,12 +23,15 @@ pub const CHISATO_FRANK: CardDef = CardDef::new("skill:白鹭千圣:保持坦率
     On::Hook(&[HookKind::PayChoose], mine, on_gain)]);
 
 fn mine(player_id: i32) -> bool {
+    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+        return false;
+    }
     ctx::trigger::player_id() == player_id
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得白鹭千圣的
 /// （2）技能」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -36,18 +39,19 @@ fn at_start(player_id: i32) {
         }
         ctx::place_card(p, "skill:白鹭千圣:保持坦率的你", &Msg::new(key!("chisato_frank_granted")));
     }
+    Ok(())
 }
 
 /// （2）「自己每次收取资金时可选择将自己Y个正面[P✽P粉丝]变反，此次获得的分摊前
 /// 数量增加Y×100」 -- the gain is `to == me` and the figure is the amount.
-fn on_gain(player_id: i32) {
+fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount <= 0 || ctx::trigger::target() != player_id {
-        return;
+        return Ok(());
     }
     let up = ctx::tok(player_id, FANS_UP);
     if up < 1 {
-        return;
+        return Ok(());
     }
     let mut y = ctx::ask_number(
         player_id,
@@ -55,9 +59,9 @@ fn on_gain(player_id: i32) {
         &Msg::new(key!("chisato_frank_ask")).i("n", amount as i64),
         0,
         up,
-    );
+    )?;
     if y < 1 {
-        return;
+        return Ok(());
     }
     ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
     ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX);
@@ -90,4 +94,5 @@ fn on_gain(player_id: i32) {
         }
     }
     ctx::log(player_id, &Msg::new(key!("chisato_frank_done")).i("n", y as i64));
+    Ok(())
 }

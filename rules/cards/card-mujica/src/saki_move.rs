@@ -11,7 +11,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[
     On::Play(None, saki_move)]);
 
-fn saki_move(player_id: i32) {
+fn saki_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「强制一名玩家向你选择的方向移动3格」 -- pick the target.
     // C# `H.MoveWhyNot(i) == null` gates the self-option (you may choose
     // yourself only before your main move).
@@ -21,19 +21,19 @@ fn saki_move(player_id: i32) {
         candidates.insert(0, player_id);
     }
     if candidates.is_empty() {
-        return;
+        return Ok(());
     }
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("saki_move_title")),
         &Msg::new(key!("saki_move_ask")),
         &candidates,
-    );
+    )?;
     // C# `H.PickTarget` (MatchHost.cs:18036-18057) = `AskSeat` + `H.Target`:
     // the pick runs the targeting pipeline and lands on the player actually
     // hit (redirect may move it). None = designation failed, the play folds.
     let Some(hit) = ctx::target(who) else {
-        return;
+        return Ok(());
     };
     // 规则书: 「向你选择的方向」
     let forward = ctx::ask_pick(
@@ -43,7 +43,7 @@ fn saki_move(player_id: i32) {
         &[
             Msg::new(key!("saki_move_forward")),
             Msg::new(key!("saki_move_backward"))],
-    ) == 0;
+    )? == 0;
     // 规则书: 「移动3格并[触发结算]」 -- C# `H.CardMove` (self,
     // MatchHost.cs:5526-5532) / `H.ForceWalk(hit, forward ? 3 : -3,
     // resolve: true, ...)` (others, MatchHost.cs:5533-5536) build
@@ -69,4 +69,5 @@ fn saki_move(player_id: i32) {
     // `_turnCtx.MainMoved` when the walked player is the turn player; that is
     // exactly `card_move`'s bookkeeping, so choosing self replaces the main
     // move and choosing another player does not.
+    Ok(())
 }

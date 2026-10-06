@@ -33,22 +33,27 @@ fn afterglow(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
-fn tick(player_id: i32) {
+fn tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
         ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
     }
+    Ok(())
 }
 
 /// （2） 「可使用一个[火罐]」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("ran_red_no_fire")));
     }
@@ -56,13 +61,14 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「选择本次移动向后，并且向后移动[经过]CiRCLE时不获得CiRCLE奖励」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("ran_red_spend"))) {
-        return;
+        return Ok(());
     }
     // A press of any Afterglow (2) resets the band's rest counter.
     state::set(player_id, REST_TURNS, 0);
     plan::set_reverse(true);
     plan::set_no_circle_reward(true);
     ctx::log(player_id, &Msg::new(key!("ran_red_reverse")));
+    Ok(())
 }

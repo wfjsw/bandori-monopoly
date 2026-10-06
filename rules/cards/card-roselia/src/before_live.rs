@@ -30,7 +30,7 @@ fn can_react(player_id: i32) -> bool {
     tile >= 0 && tile == shop
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「使自己在江户川乐器店强制停下并触发结算」
     ctx::log(
         player_id,
@@ -41,11 +41,12 @@ fn react(player_id: i32) {
     // 规则书[反击]: 「强制停下并触发结算」 -- C# `CardBeforeLive.React`:
     // `m.Stopped = true; m.Resolve = true` behind `H.AbnormalGate`.
     if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
-        return;
+        return Ok(());
     }
     let shop = ctx::tile_named("江户川乐器店");
     if shop >= 0 {
         ctx::plan::set_stop_at(shop);
         ctx::plan::set_resolve(true);
     }
+    Ok(())
 }

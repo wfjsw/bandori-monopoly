@@ -10,10 +10,10 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[
     On::Play(None, pure_wings)]);
 
-fn pure_wings(player_id: i32) {
+fn pure_wings(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「传送到移动方向20格后」 -- C# `num2 = Plan.Reverse ? -1 : 1`,
     // `to = ((pos + 20 * num2) % n + n) % n`.
@@ -22,7 +22,7 @@ fn pure_wings(player_id: i32) {
     let dir = ctx::plan::dir();
     let to = ctx::tile_steps_ahead(player_id, 20 * dir);
     if to < 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「（不触发结算）」 -- C# `H.ForceTeleport(i, to, resolve: false, ...)`
     //   = `set_kind(Teleport)` + `set_teleport_to(to)` + `set_resolve(false)` +
@@ -32,7 +32,7 @@ fn pure_wings(player_id: i32) {
     ctx::plan::set_resolve(false);
     ctx::card_move(player_id);
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     // 规则书: 「立刻进行移动掷骰」 -- C# `H.MainMove(i, ...)` when `!MainMoved`.
     // A `card_move` with no fixed step count rolls the plan's dice and walks
@@ -42,4 +42,5 @@ fn pure_wings(player_id: i32) {
     ctx::plan::set_steps(-1);
     ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("pure_wings_roll")).player_id("who", player_id));
+    Ok(())
 }

@@ -24,7 +24,7 @@ pub const SAAYA_SKY: CardDef = CardDef::new("PPP:（沙绫）总有一天要给�
 /// C# `CardSaayaSky._passed` -- the user walked past the card this turn.
 const SLOT_PASSED: &str = "saaya_sky_passed";
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置在山吹面包房」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // H.TileNamed("山吹面包房"))`.
     let tile = ctx::tile_named("山吹面包房");
@@ -33,32 +33,34 @@ fn play(player_id: i32) {
     // (2) moves it with `set_card_tile`.
     ctx::place_card_on(player_id, tile, ID, &Msg::new(key!("saaya_sky_note")));
     ctx::log(player_id, &Msg::new(key!("saaya_sky_placed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// 规则书（2）: 「[使用者][经过]此卡后」 -- C# `CardSaayaSky.PassTile` sets `_passed`.
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pass_tile(player_id: i32) {
-    let tile = ctx::placed_tile(player_id, ID).unwrap_or(-1);
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return;
+        return Ok(());
     }
     // C# `m.Seat == User` -- only the placer's own pass counts.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     ctx::set_slot(player_id, SLOT_PASSED, 1);
+    Ok(())
 }
 
 /// 规则书（2）: 「在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上」
 /// -- C# `CardSaayaSky.TurnEndAfter`.
-fn turn_end_after(player_id: i32) {
-    if !ctx::is_placed(player_id) || ctx::slot(player_id, SLOT_PASSED) == 0 {
-        return;
+fn turn_end_after(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() || ctx::slot(player_id, SLOT_PASSED) == 0 {
+        return Ok(());
     }
     ctx::set_slot(player_id, SLOT_PASSED, 0);
     // 规则书（2）: 「获得1个[火罐]」 -- C# `H.GainFire(User, 1, CardName)`.
@@ -69,12 +71,13 @@ fn turn_end_after(player_id: i32) {
     // H._tiles.Length` (the roll face minus one is the *tile index*, not a hop).
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     let to = (num - 1).rem_euclid(n);
-    ctx::set_card_tile(player_id, ID, to);
+    ctx::set_self_tile(to);
     ctx::log(
         player_id,
         &Msg::new(key!("saaya_sky_hop")).player_id("who", player_id).tile("tile", to),
     );
+    Ok(())
 }

@@ -31,7 +31,7 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「加盖房屋时半价」, or 「本回合加盖房屋变为免费」 when last turn built.
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, BUILT_LAST) != 0 {
         // The free turn supersedes the half.
         ctx::set_build_cost_pct(0);
@@ -41,14 +41,17 @@ fn at_turn_start(player_id: i32) {
         ctx::set_build_cost_pct(50);
     }
     state::set(player_id, BUILT_THIS, 0);
+    Ok(())
 }
 
-fn on_built(player_id: i32) {
+fn on_built(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, BUILT_THIS, 1);
+    Ok(())
 }
 
 /// Carry this turn's latch forward into 「上回合」.
-fn at_turn_end(player_id: i32) {
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, BUILT_LAST, state::get(player_id, BUILT_THIS));
     state::set(player_id, BUILT_THIS, 0);
+    Ok(())
 }

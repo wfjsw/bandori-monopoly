@@ -17,7 +17,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: the destination must be one the player could build on -- the same
     // `WhyNotBuildOn` gate the build step uses (ring / rent-tier cap / house cap
     // / ownership / mortgage / can-pay included).
-    let money = ctx::money(player_id);
+    let money = ctx::money_of(player_id);
     for t in ctx::owned_tiles(player_id) {
         if ctx::can_build_on(player_id, t) && money >= ctx::build_cost(t) {
             return None;
@@ -26,7 +26,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("x_no_buildable")))
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「付款并在任意自己的格子加盖一层房屋」 -- C#
     // `H.OfferBuildAmong(i, H.OwnedBy(i), CardName)` pays the tile's build cost
     // and raises one house. Then the free build below is the second, separate
@@ -36,7 +36,7 @@ fn play(player_id: i32) {
     // -- C# `H.Roll(i, 3, 20, CardName)`; the tile is `(roll - 1) % tiles.Length`.
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     let r = ctx::roll(player_id, 3, 20);
     let tile = (r - 1).rem_euclid(n);
@@ -57,4 +57,5 @@ fn play(player_id: i32) {
     } else {
         ctx::log(player_id, &Msg::new(key!("smile_patrol_cannot_build")).tile("tile", tile));
     }
+    Ok(())
 }

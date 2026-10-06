@@ -35,7 +35,7 @@ fn within5(player_id: i32) -> Vec<i32> {
 
 /// C# `H.AssetsOf` -- money + land (mortgaged at half) + houses.
 fn assets_of(player_id: i32) -> i32 {
-    let mut n = ctx::money(player_id);
+    let mut n = ctx::money_of(player_id);
     for t in ctx::owned_tiles(player_id) {
         n += if ctx::mortgaged_of(t) {
             ctx::tile_price(t) / 2
@@ -47,7 +47,7 @@ fn assets_of(player_id: i32) -> i32 {
     n
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- from hand the C# offers the
     // borrowed CRYCHIC skills (`H.CrychicChars` x `H.BorrowedActions`, then
     // `H.RunBorrowed`).
@@ -71,35 +71,36 @@ fn play(player_id: i32) {
         &Msg::new(key!("haruhikage_title")),
         &Msg::new(key!("haruhikage_ask")),
         &options,
-    );
+    )?;
     if let Some(&id) = CRYCHIC.get(k) {
-        ctx::play_card(id, player_id);
+        ctx::play_card(id, player_id)?;
     }
+    Ok(())
 }
 
 /// 规则书（1）[特]: 「若抽到此卡时你的总资产大于等于20000，可选择使其直接从抽牌堆打出，
 /// 依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
 /// `CardHaruhikage.Drawn` -> `Special`.
-fn on_drawn(player_id: i32) {
+fn on_drawn(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
-        return;
+        return Ok(());
     }
     // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000」 -- C# `H.AssetsOf(seat) < 20000`.
     if assets_of(player_id) < 20000 {
-        return;
+        return Ok(());
     }
     // 规则书（1）: 「可选择使其直接从抽牌堆打出」 -- C# `H.AskYes(..., aiYes: true)`.
     let yes = ctx::ask_yes(
         player_id,
         &Msg::new(key!("haruhikage_title")),
         &Msg::new(key!("haruhikage_special_ask")),
-    );
+    )?;
     if !yes {
-        return;
+        return Ok(());
     }
     // The card was just drawn, so it is in hand (C# `hand.Remove(Id)`).
     if !ctx::take_from_hand(player_id, ID) {
-        return;
+        return Ok(());
     }
     ctx::log(player_id, &Msg::new(key!("haruhikage_special_play")).player_id("who", player_id).card("card", ID));
     // 规则书（1）: 「依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
@@ -116,6 +117,7 @@ fn on_drawn(player_id: i32) {
     }
     // 规则书（1）: the [特] body finishes with the card in the discard pile.
     ctx::to_discard(player_id, ID);
+    Ok(())
 }
 
 fn can_react(player_id: i32) -> bool {
@@ -145,13 +147,14 @@ fn can_react(player_id: i32) -> bool {
     }
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::MoveRoll => reroll_skill(player_id),
-        TriggerKind::SettleBefore => step_toward_skill(player_id),
+        TriggerKind::SettleBefore => step_toward_skill(player_id)?,
         TriggerKind::Pay => cancel_pay_skill(player_id),
         _ => {}
     }
+    Ok(())
 }
 
 /// 椎名立希（CRYCHIC）的技能 -- one reroll of the move dice.
@@ -169,10 +172,10 @@ fn reroll_skill(player_id: i32) {
 }
 
 /// 丰川祥子（CRYCHIC）的技能 -- the endpoint steps 1 tile toward a player within 5.
-fn step_toward_skill(player_id: i32) {
+fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
     let near = within5(player_id);
     if near.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `React` "settleBefore" branch
     // asks `终点向哪名玩家靠近 1 格？` over `H.Within(i, 5, includeSame: false)`.
@@ -181,7 +184,7 @@ fn step_toward_skill(player_id: i32) {
         &Msg::new(key!("haruhikage_toward_title")),
         &Msg::new(key!("haruhikage_toward_ask")),
         &near,
-    );
+    )?;
     // `H.StepToward(seat, target, why)` is a raw one-tile step toward the target
     // (it writes `State.players[i].pos`, no settle); the host's `teleport_to` is
     // that same raw write.
@@ -189,11 +192,11 @@ fn step_toward_skill(player_id: i32) {
     let target = ctx::player_pos(who);
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     let fwd = (target - pos).rem_euclid(n);
     if fwd == 0 {
-        return;
+        return Ok(());
     }
     let dir = if fwd <= n - fwd { 1 } else { -1 };
     let to = (pos + dir).rem_euclid(n);
@@ -203,6 +206,7 @@ fn step_toward_skill(player_id: i32) {
         player_id,
         &Msg::new(key!("haruhikage_step")).player_id("who", player_id).tile("tile", to),
     );
+    Ok(())
 }
 
 /// 长崎素世（CRYCHIC）的技能 -- cancel the rent being paid to you.

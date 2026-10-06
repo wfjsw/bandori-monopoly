@@ -21,8 +21,8 @@ fn can_react(player_id: i32) -> bool {
         && trigger::move_roll().is_some()
 }
 
-fn react(player_id: i32) {
-    let Some(before) = trigger::move_roll() else { return; };
+fn react(player_id: i32) -> card_sdk::Asked {
+    let Some(before) = trigger::move_roll() else { return Ok(()); };
     // 规则书[反击]: 「进行一次重骰」 -- `H.DoMoveRoll`, which sums the move's
     // whole dice table.
     // 规则书[反击]: 「与本回合内你骰出过的所有骰点都不同」 -- `H._turnCtx.Rolls`,
@@ -40,7 +40,7 @@ fn react(player_id: i32) {
             player_id,
             &Msg::new(key!("taki_again_title")),
             &Msg::new(key!("taki_again_text")).i("n", x as i64),
-        );
+        )?;
         if !again {
             break;
         }
@@ -49,4 +49,5 @@ fn react(player_id: i32) {
         ctx::log(player_id, &Msg::new(key!("taki_reroll")).player_id("who", player_id).i("n", x as i64));
     }
     trigger::set_move_roll(x); // 规则书[反击]: 「进行一次重骰」-- the move uses the new face
+    Ok(())
 }

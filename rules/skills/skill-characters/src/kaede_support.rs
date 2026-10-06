@@ -39,7 +39,34 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new("skill:八幡海铃:熟练的支
     On::Hook(&[HookKind::TurnStartBefore], other_turn, offer_support),
     On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
     On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-    On::Play(Some(can_enter_two), enter_two)]);
+    On::Play(Some(can_enter_two), enter_two),
+    On::Hook(&[HookKind::PayMul], splitting, split_rent)]);
+
+/// 「直到状态2结束为止」 -- only while this player is in 状态2.
+fn splitting(player_id: i32) -> bool {
+    state::get(player_id, state_key::SKILL_STATE) == 2
+        && ctx::trigger::pay_is_rent()
+        && ctx::trigger::value() > 0
+}
+
+/// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
+fn split_rent(player_id: i32) -> card_sdk::Asked {
+    let t = ctx::trigger::tile();
+    if t < 0 || state::get(player_id, &format!("{}{}", SPLIT, t)) < 0 {
+        // the marker is keyed on the tile; a named deed is the one that was bought in
+        return Ok(());
+    }
+    let amount = ctx::trigger::value();
+    let half = amount / 2;
+    if half <= 0 {
+        return Ok(());
+    }
+    // 「均分」 -- the payer's outlay is unchanged; the owner's take is halved and
+    // the other half lands here.
+    ctx::trigger::set_pay_amount(amount - half);
+    ctx::gain(player_id, half, &Msg::new(key!("kaede_support_split")).i("n", half as i64));
+    Ok(())
+}
 
 fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -50,42 +77,43 @@ fn other_turn(player_id: i32) -> bool {
 }
 
 /// 「初始0，上限4」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 4);
+    Ok(())
 }
 
 /// 状态1's offer, on the *other* player's turn start.
-fn offer_support(player_id: i32) {
+fn offer_support(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return;
+        return Ok(());
     }
     let other = ctx::trigger::player_id();
     // 「他们不会被该效果再次收款」 -- a latch the previous use set.
     let key = format!("{}{}", COOLDOWN, other);
     if state::get(player_id, &key) > ctx::turn_key() {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         other,
         &Msg::new(key!("kaede_support_title")),
         &Msg::new(key!("kaede_support_offer")).player_id("who", player_id).i("n", 400),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
-    if ctx::transfer(other, player_id, 400, &Msg::new(key!("kaede_support_paid"))) == 0 {
-        return;
+    if ctx::transfer(other, player_id, 400, &Msg::new(key!("kaede_support_paid")))? == 0 {
+        return Ok(());
     }
     // 「指定一个属于你的格子」
     let mine_tiles = ctx::owned_tiles(player_id);
     if mine_tiles.is_empty() {
-        return;
+        return Ok(());
     }
     let tile = ctx::ask_tile(
         other,
         &Msg::new(key!("kaede_support_title")),
         &Msg::new(key!("kaede_support_which")),
         &mine_tiles,
-    );
+    )?;
     // 「使其立即对前后一格内的一名玩家进行一次半价[结算]」
     let mut near: Vec<i32> = Vec::new();
     for t in [tile, tile - 1, tile + 1] {
@@ -99,19 +127,19 @@ fn offer_support(player_id: i32) {
         }
     }
     if near.is_empty() {
-        return;
+        return Ok(());
     }
     let who = ctx::ask_player(
         other,
         &Msg::new(key!("kaede_support_title")),
         &Msg::new(key!("kaede_support_who")),
         &near,
-    );
-    let before = ctx::money(player_id);
+    )?;
+    let before = ctx::money_of(player_id);
     plan::set_pay_factor(50);
     ctx::card_settle_at(who, tile, true);
     // 「并获得相当于你获取数额的资金」
-    let got = (ctx::money(player_id) - before).max(0);
+    let got = (ctx::money_of(player_id) - before).max(0);
     if got > 0 {
         ctx::gain(player_id, got, &Msg::new(key!("kaede_support_gain")));
     }
@@ -122,13 +150,14 @@ fn offer_support(player_id: i32) {
     // A press resets the rest counter.
     state::set(player_id, REST, 0);
     ctx::log(player_id, &Msg::new(key!("kaede_support_done")).tile("tile", tile).player_id("who", who));
+    Ok(())
 }
 
 /// 「每两个回合没有玩家发动该技能，你在回合开始时获得1火罐…若达到上限，可在你的
 /// 回合开始时选择进入状态2」.
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return;
+        return Ok(());
     }
     let n = state::get(player_id, REST) + 1;
     state::set(player_id, REST, n);
@@ -137,22 +166,28 @@ fn at_turn_start(player_id: i32) {
         ctx::gain_fire(player_id, 1, &Msg::new(key!("kaede_support_gain_fire")));
     }
     if state::get(player_id, state_key::FIRE) < state::max(player_id, state_key::FIRE) {
-        return;
+        return Ok(());
     }
     if ctx::ask_yes(
         player_id,
         &Msg::new(key!("kaede_support_title")),
         &Msg::new(key!("kaede_support_enter")),
-    ) {
+    )? {
         state::set(player_id, state_key::SKILL_STATE, 2);
         ctx::log(player_id, &Msg::new(key!("kaede_support_two")));
     }
+    Ok(())
 }
 
-fn at_turn_end(_player_id: i32) {}
+fn at_turn_end(_player_id: i32) -> card_sdk::Asked {
+    Ok(())
+}
 
 /// 状态2（2）: 「进入状态2时你可消耗X个火罐，指定其他人的X个地契」.
 fn can_enter_two(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("kaede_support_not_two")));
     }
@@ -162,7 +197,7 @@ fn can_enter_two(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn enter_two(player_id: i32) {
+fn enter_two(player_id: i32) -> card_sdk::Asked {
     // 「你可消耗X个火罐，指定其他人的X个地契」 -- X is however many pots the
     // player spends, one deed each.
     let x = ctx::ask_number(
@@ -171,12 +206,12 @@ fn enter_two(player_id: i32) {
         &Msg::new(key!("kaede_support_how_many")),
         1,
         state::get(player_id, state_key::FIRE),
-    );
+    )?;
     if x <= 0 {
-        return;
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, x, &Msg::new(key!("kaede_support_spend"))) {
-        return;
+        return Ok(());
     }
     for _ in 0..x {
         let theirs = other_deeds(player_id);
@@ -188,14 +223,14 @@ fn enter_two(player_id: i32) {
             &Msg::new(key!("kaede_support_title")),
             &Msg::new(key!("kaede_support_deed")),
             &theirs,
-        );
+        )?;
         let owner = ctx::tile_owner(t);
         if owner < 0 {
             continue;
         }
         // 「每张地契向对应玩家支付100+n*100资金（n为对应格子上的房屋数）」
         let n = ctx::houses_of(t);
-        ctx::transfer(player_id, owner, 100 + n * 100, &Msg::new(key!("kaede_support_buy_in")));
+        ctx::transfer(player_id, owner, 100 + n * 100, &Msg::new(key!("kaede_support_buy_in")))?;
         // 「直到状态2结束为止，你与对方均分那些地契收取的资金」
         state::set(player_id, &format!("{}{}", SPLIT, t), owner);
     }
@@ -205,6 +240,7 @@ fn enter_two(player_id: i32) {
         ctx::draw(player_id, draws);
         ctx::log(player_id, &Msg::new(key!("kaede_support_drew")).i("n", draws as i64));
     }
+    Ok(())
 }
 
 fn other_deeds(player_id: i32) -> Vec<i32> {
@@ -216,13 +252,13 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 }
 
 // 「你与对方均分那些地契收取的资金」 -- the split is a bend on the rent a named
-// deed collects, which is the `payMul` window with `t.Pay.IsRent`.
-// TODO(规则书): 「直到状态2结束为止，你与对方均分那些地契收取的资金」 -- the
-//   clause under-specifies what 「均分」 divides: the rent figure before or after
-//   any other bend, and what happens on an odd amount. Taken to be a clean split
-//   of the settled rent with the remainder to the deed's owner. The split window
-//   itself (`PayMul` on rent from a named tile) is written once 状态2's exit is
-//   decided -- see the note below.
+// deed collects, which is the `payMul` window with `t.Pay.IsRent`. 状态2's exit
+// is the band skill's fire-pot drain (`skill_bands::ave_mujica`), so the split
+// runs only while `skillState == 2`.
+// TODO(规则书)[judgement]: 「均分」 -- the clause does not say whether it divides
+//   the rent figure before or after any other bend, nor what happens on an odd
+//   amount. Read here as a clean split of the settled rent with the remainder to
+//   the deed's owner.
 //
 // TODO(规则书)[judgement]: 状态2's exit -- the sheet gives none (「直到状态2结束
 //   为止」 with no clause that ends it). Contrast 三角初华's fire-pot cap and

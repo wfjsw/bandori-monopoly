@@ -38,7 +38,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn umiri_card(player_id: i32) {
+fn umiri_card(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡放置于在此卡使用者下一名行动的玩家场上」 -- C#
     // `H.PlaceFromPlay(c, NextOf(seat))` puts the card on the next live player's
     // field. `place_card` always places at the given player; the "next actor" is
@@ -47,7 +47,7 @@ fn umiri_card(player_id: i32) {
     let next = next_of(player_id);
     if next == player_id {
         // C# `if (num != player_id)` -- nothing to do with no other live player.
-        return;
+        return Ok(());
     }
     // 规则书（1）: 「将此卡放置于在此卡使用者下一名行动的玩家场上」
     ctx::set_dest(ctx::Dest::Field);
@@ -66,22 +66,23 @@ fn umiri_card(player_id: i32) {
     // `band_crystals` / `add_band_crystals` for the crystal counter).
     // TODO(ABI): `H._fx[player_id].bands` enumeration + `H.MakeBand(band, user, extra)`
     // so the take / drop bookkeeping (C# `_taken`) can run.
+    Ok(())
 }
 
 /// C# `CardUmiriCard.TurnStart` (MatchHost.cs:6189-6214) -- at the user's turn
 /// start, hop the card to the next live player after its holder (or back to the
 /// user). Runs through the Fx hook dispatch at `turnStart`, so this is a field
 /// effect, not a [反击].
-fn turn_start(player_id: i32) {
+fn turn_start(player_id: i32) -> card_sdk::Asked {
     // C# `if (turn != User || !H._placed.Contains(this) || Player == User) return null;`
     let user = ctx::slot(player_id, USER_KEY) - 1;
-    if trigger::player_id() != user || player_id == user || !ctx::is_placed(player_id) {
-        return;
+    if trigger::player_id() != user || player_id == user || !ctx::is_placed() {
+        return Ok(());
     }
     // 规则书（1）: 「轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。」
     // C# `int num = NextOf(Player); if (num == User) Player = User; else Player = num`.
     let dest = next_of(player_id);
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::set_slot(player_id, USER_KEY, 0);
     ctx::place_card(dest, ID, &Msg::new(key!("umiri_note")));
     ctx::set_slot(dest, USER_KEY, user + 1);
@@ -100,27 +101,29 @@ fn turn_start(player_id: i32) {
         // 规则书（2）: `Take()` -- the band-skill take on the new holder. Held
         // (no `H._fx[player_id].bands` / `H.MakeBand` in the ABI); see `umiri_card`.
     }
+    Ok(())
 }
 
 /// C# `CardUmiriCard.TurnEnd` -> `End` (MatchHost.cs:6238-6252) -- when the
 /// card is back on the user's field at the user's turn end, discard it and
 /// draw 1. Runs through the Fx hook dispatch at `turnEnd`, so this is a field
 /// effect, not a [反击].
-fn turn_end(player_id: i32) {
+fn turn_end(player_id: i32) -> card_sdk::Asked {
     // C# `if (turn != User || Player != User || !H._placed.Contains(this)) return null;`
     let user = ctx::slot(player_id, USER_KEY) - 1;
-    if trigger::player_id() != user || player_id != user || !ctx::is_placed(player_id) {
-        return;
+    if trigger::player_id() != user || player_id != user || !ctx::is_placed() {
+        return Ok(());
     }
     // 规则书（3）: 「当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。」
     // C# `End`: `H.Unplace(this, "discard", "回到了使用者的场上")` +
     // `H.DrawR(User, 1, ...)`. The `Detach` -> `Drop` of the taken band cards
     // is the held half (no band inventory in the ABI).
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::set_slot(player_id, USER_KEY, 0);
     ctx::draw(user, 1);
     ctx::log(user, &Msg::new(key!("umiri_ended")).player_id("who", user));
+    Ok(())
 }
 
 /// C# `CardUmiriCard.NextOf` -- the next live player after `holder` in turn order

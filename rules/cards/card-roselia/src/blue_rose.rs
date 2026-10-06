@@ -53,7 +53,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     let live = live_deeds(player_id);
     let others = ctx::owned_count(player_id) - live.len() as i32;
@@ -65,7 +65,7 @@ fn play(player_id: i32) {
         // C# `CeilTo(sum * 0.2, 10)` -- 20% rounded up to a multiple of 10.
         let amount = (((sum + 49) / 50) * 10) as i32;
         ctx::gain(player_id, amount, &Msg::new(key!("blue_rose_gain")).i("n", sum));
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「传送至下一个未被购买的Livehouse格子」 -- nearest unowned ahead (C#
     //   `H.LiveHouses(i, t => owners[t] < 0)` ordered by `H.Forward`).
@@ -91,7 +91,7 @@ fn play(player_id: i32) {
         ctx::tile_named("RiNG 4")
     };
     if to < 0 {
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「传送至」 -- C# `H.CardMove(c, new MoveCtx { TeleportTo = to })`.
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -108,4 +108,5 @@ fn play(player_id: i32) {
         Msg::new(key!("blue_rose_teleport")).player_id("who", player_id).tile("tile", to)
     };
     ctx::log(player_id, &why);
+    Ok(())
 }

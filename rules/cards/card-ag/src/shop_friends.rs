@@ -23,7 +23,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「从商店街格子开始数」 -- C# walks `(street + d) % n` for d in 1..n,
     // keeping `H.IsShop(t) && H.State.owners[t] == i`.
     let street = ctx::tile_named("商店街");
@@ -46,7 +46,7 @@ fn play(player_id: i32) {
         street
     };
     if to < 0 {
-        return;
+        return Ok(());
     }
     let why = if (1..=list.len() as i32).contains(&roll) {
         Msg::new(key!("shop_friends_to_own")).tile("tile", to).i("roll", roll as i64)
@@ -59,4 +59,5 @@ fn play(player_id: i32) {
     plan::set_kind(MoveKind::Teleport);
     plan::set_teleport_to(to);
     ctx::card_move(player_id);
+    Ok(())
 }

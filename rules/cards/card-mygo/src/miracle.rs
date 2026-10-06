@@ -22,12 +22,12 @@ pub const MIRACLE: CardDef = CardDef::new("MyGO:难以复刻的奇迹", &[
     On::Hook(&[HookKind::PassPlayer], |_| true, pass_player)]);
 
 fn mine(player_id: i32) -> bool {
-    trigger::player_id() == player_id && ctx::is_placed(player_id)
+    trigger::player_id() == player_id && ctx::is_placed()
 }
 
 const ID: &str = "MyGO:难以复刻的奇迹";
 
-fn miracle(player_id: i32) {
+fn miracle(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「将此卡置于场上」 -- C# `H.PlaceFromPlay(c, -1, -1, num)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("miracle_note")));
@@ -37,82 +37,83 @@ fn miracle(player_id: i32) {
     if n > 0 {
         ctx::add_band_crystals(player_id, -n, 0);
     }
-    ctx::set_crystals(player_id, n);
+    ctx::set_crystals(n);
     ctx::log(
         player_id,
         &Msg::new(key!("miracle_crystals_moved")).player_id("who", player_id).i("n", n as i64),
     );
     ctx::log(player_id, &Msg::new(key!("miracle_placed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// （1）「当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费」 -- C#
 /// `CardMiracle.BuildCost` returns 0 while a crystal remains.
-fn before_build(player_id: i32) {
-    if ctx::card_crystals(player_id, ID) < 1 {
-        return;
+fn before_build(player_id: i32) -> card_sdk::Asked {
+    if ctx::crystals() < 1 {
+        return Ok(());
     }
     let t = trigger::tile();
     if t < 0 {
-        return;
+        return Ok(());
     }
     ctx::set_build_discount(ctx::build_cost(t), 1);
+    Ok(())
 }
 
 /// （1）'s 「移除此卡上的一个奇迹水晶」 -- C# `CardMiracle.Built` spends one.
-fn after_build(player_id: i32) {
-    if ctx::card_crystals(player_id, ID) < 1 {
-        return;
+fn after_build(player_id: i32) -> card_sdk::Asked {
+    if ctx::crystals() < 1 {
+        return Ok(());
     }
-    ctx::add_card_crystals(player_id, ID, -1, i32::MAX);
+    ctx::add_crystals(-1, i32::MAX);
     ctx::log(player_id, &Msg::new(key!("miracle_built")));
+    Ok(())
 }
 
 /// C# `CardMiracle.PassSeat` -- remember each player [经过], and when every
 /// other player has been passed once, collect the closest rival's purse.
-fn pass_player(player_id: i32) {
+fn pass_player(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PassPlayer
         || trigger::player_id() != player_id
-        || !ctx::is_placed(player_id)
+        || !ctx::is_placed()
     {
-        return;
+        return Ok(());
     }
     let other = trigger::target();
     if other < 0 {
-        return;
+        return Ok(());
     }
     // C# `HashSet<int> _passed` over `H.Others(Seat)`; a slot bitset stands in.
     let key = "miracle_passed";
     let mask = ctx::slot(player_id, key);
     let bit = 1i32 << other;
     if mask & bit != 0 {
-        return;
+        return Ok(());
     }
     ctx::set_slot(player_id, key, mask | bit);
     let others = ctx::others(player_id);
     let all = others.iter().fold(0i32, |m, &o| m | (1i32 << o));
     if all == 0 || ctx::slot(player_id, key) & all != all {
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「获得相当于场上奇迹水晶数与你最相近的玩家资金后三位的资金，然后此卡
     // 进入弃牌堆。」 -- C# `Reward()`: `mine = PlacedOf(Player).Sum(Crystals) +
     // BandCrystals(Player)`, pick the rival whose total is closest to `mine`, and
     // gain `abs(money(rival)) % 1000`.
-    let mine = ctx::crystals(player_id) + ctx::band_crystals(player_id);
+    let mine = field_crystals(player_id) + ctx::band_crystals(player_id);
     let mut best = -1;
     let mut best_d = i32::MAX;
     for o in others {
-        // Best effort: only the rival's band crystals are readable (see the
-        // TODO below on per-card crystal sums).
-        let d = (ctx::band_crystals(o) - mine).abs();
+        let d = (field_crystals(o) + ctx::band_crystals(o) - mine).abs();
         if d < best_d {
             best_d = d;
             best = o;
         }
     }
     if best < 0 {
-        return;
+        return Ok(());
     }
-    let purse = ctx::money(best).abs() % 1000;
+    let purse = ctx::money_of(best).abs() % 1000;
     ctx::log(
         player_id,
         &Msg::new(key!("miracle_reward")).player_id("who", best).n("money", purse as i64),
@@ -120,9 +121,9 @@ fn pass_player(player_id: i32) {
     if purse > 0 {
         ctx::gain(player_id, purse, &Msg::new(key!("miracle_reward")).player_id("who", best).n("money", purse as i64));
     }
-    let left = ctx::crystals(player_id) > 0;
+    let left = ctx::crystals() > 0;
     // C# `H.Unplace(this, "discard", left ? "上面还有奇迹水晶：视为没有生效" : "完成了")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     if left {
         // TODO(规则书)[judgement]（3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- needs
@@ -131,11 +132,14 @@ fn pass_player(player_id: i32) {
         // card is discarded with crystals left).
         ctx::log(player_id, &Msg::new(key!("miracle_wasted")).player_id("who", player_id));
     }
+    Ok(())
 }
 
-// TODO(规则书)（2）: 「获得相当于场上奇迹水晶数与你最相近的玩家资金后三位的资金」 -- the
-// `PassPlayer` timing maps to `TriggerKind::PassPlayer`, but two halves stay
-// unmapped: the engine must still raise `passPlayer` (it only raises `pass` today),
-// and the closest-rival pick needs per-card crystal sums over *every* placed
-// card (`H.PlacedOf(p).Sum(x => x.Crystals)`), which `ctx::crystals` cannot see
-// (it reads only the running card's own counter).
+/// 「场上奇迹水晶数」 -- `H.PlacedOf(p).Sum(x => x.Crystals)`: the crystals on
+/// every card that player has placed, not the player's own running counter.
+fn field_crystals(p: i32) -> i32 {
+    ctx::field_instances(p)
+        .into_iter()
+        .map(|(uid, _)| ctx::crystals_at(uid))
+        .sum()
+}

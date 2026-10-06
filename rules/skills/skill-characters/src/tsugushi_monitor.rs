@@ -48,32 +48,33 @@ fn other(player_id: i32) -> bool {
 }
 
 /// The per-lap rate starts at 800 and drops by 200 per (3), floored at 200.
-fn declare(player_id: i32) {
+fn declare(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, RATE) == 0 {
         state::set(player_id, RATE, 800);
     }
     let _ = state_key::SKILL_STATE;
+    Ok(())
 }
 
 /// （1）「当你获得资金或者抽卡时，可以改为指定场上除你以外的一个角色进行一次该动作，
 /// 发送给对方一个X（占位）标记并记录…数量」.
-fn on_gain(player_id: i32) {
+fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
         .filter(|&p| p != player_id && !ctx::player_out(p))
         .collect();
     if others.is_empty() {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tsugushi_title")),
         &Msg::new(key!("tsugushi_ask")),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
@@ -83,8 +84,8 @@ fn on_gain(player_id: i32) {
             .iter()
             .map(|&p| Msg::new(key!("tsugushi_option")).player_id("who", p))
             .collect::<alloc::vec::Vec<_>>(),
-    );
-    let Some(&who) = others.get(pick) else { return; };
+    )?;
+    let Some(&who) = others.get(pick) else { return Ok(()); };
     // 「可以改为指定…一个角色进行一次该动作」 -- the figure moves to them.
     ctx::trigger::set_pay_amount(0);
     ctx::gain(who, amount, &Msg::new(key!("tsugushi_forwarded")).i("n", amount as i64));
@@ -92,32 +93,33 @@ fn on_gain(player_id: i32) {
     ctx::add_tok(who, UP, 1, i32::MAX);
     state::set(player_id, &rec_key(who), amount);
     ctx::log(player_id, &Msg::new(key!("tsugushi_sent")).player_id("who", who).i("n", amount as i64));
+    Ok(())
 }
 
 /// （2）「当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作」.
-fn on_theirs(player_id: i32) {
+fn on_theirs(player_id: i32) -> card_sdk::Asked {
     let src = ctx::trigger::player_id();
     if src < 0 || src == player_id {
-        return;
+        return Ok(());
     }
     if ctx::tok(src, UP) < 1 {
-        return;
+        return Ok(());
     }
     let recorded = state::get(player_id, &rec_key(src));
     let amount = ctx::trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     // 「此效果对"抽牌"动作发动时必须翻面记录数字为2200及以上的标记」
     if recorded < 2200 && ctx::slot(player_id, "skill.tsugushi.isDraw") != 0 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tsugushi_title")),
         &Msg::new(key!("tsugushi_take")).player_id("who", src),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // 「将对方的X标记翻面」
     ctx::add_tok(src, UP, -1, i32::MAX);
@@ -131,10 +133,14 @@ fn on_theirs(player_id: i32) {
     if theirs > 0 {
         ctx::gain(src, theirs, &Msg::new(key!("tsugushi_excess")).i("n", theirs as i64));
     }
+    Ok(())
 }
 
 /// （3） 「当场上除你之外的玩家都拥有一枚翻面后的X标记时」.
 fn can_cash(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     let all = (0..ctx::player_count()).filter(|&p| p != player_id && !ctx::player_out(p)).all(|p| ctx::tok(p, DOWN) >= 1);
     if !all {
         return Some(Msg::new(key!("tsugushi_not_ready")));
@@ -144,7 +150,7 @@ fn can_cash(player_id: i32) -> Option<Msg> {
 
 /// （3）「移除所有X标记，你获得移除标记数量*800的资金（每次发动（3）技能时单个标记
 /// 的收益减200，最低单标记收益200）」.
-fn cash(player_id: i32) {
+fn cash(player_id: i32) -> card_sdk::Asked {
     let mut n = 0;
     for p in 0..ctx::player_count() {
         let both = ctx::tok(p, UP) + ctx::tok(p, DOWN);
@@ -159,4 +165,5 @@ fn cash(player_id: i32) {
     // 「每次发动（3）技能时单个标记的收益减200，最低单标记收益200」
     state::set(player_id, RATE, (rate - 200).max(200));
     ctx::log(player_id, &Msg::new(key!("tsugushi_done")));
+    Ok(())
 }

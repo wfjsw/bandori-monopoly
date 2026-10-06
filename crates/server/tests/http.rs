@@ -28,6 +28,7 @@ async fn spawn(presence_timeout: Duration) -> (String, Arc<Server>) {
         d.clone(),
         rules.clone(),
         server::pool::Pool::in_process(d, rules),
+        Arc::new(server::store::dummy::Store::new()),
     );
     {
         let s = Arc::get_mut(&mut server).expect("fresh");
@@ -434,12 +435,12 @@ async fn a_match_over_http_and_sse() {
 
     a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
-    // Play until it's our move: phase play, our turn, step 1, nothing pending.
+    // Play until it's our move: phase play, our turn, 运营 stage (step 2), nothing pending.
     let frames = drive(&a, &id, &mut sse, &d, |v| {
         let st = &v["state"];
         st["phase"] == "play"
             && st["turn"] == v["playerId"]
-            && st["step"] == 1
+            && st["step"] == 2
             && st["busy"] == false
     })
     .await;
@@ -606,6 +607,7 @@ async fn client_routes_fall_back_to_index_html() {
         d.clone(),
         rules.clone(),
         server::pool::Pool::in_process(d, rules),
+        Arc::new(server::store::dummy::Store::new()),
     );
     let app = server::router(server, None, Some(dir.clone()));
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -634,4 +636,77 @@ async fn client_routes_fall_back_to_index_html() {
         StatusCode::NOT_FOUND
     );
     let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A restart must not interrupt a game: the roster and the match blob come back
+/// from the store, so the client's SSE reconnects into the same match. This is
+/// the restore path (`Server::restore_rooms`) against a shared store -- which is
+/// exactly what the process does at startup, without needing to kill one.
+#[tokio::test]
+async fn a_restart_restores_the_room_and_its_match() {
+    use game_core::net::{RoomInfo, RoomMember};
+    use server::store::{CrossState, RoomRecord};
+
+    let d = data();
+    let rules: Arc<dyn game_core::engine::CardRules> = Arc::new(StubRules);
+    let store = Arc::new(server::store::dummy::Store::new());
+    let engine = server::pool::Pool::in_process(d.clone(), rules.clone());
+
+    // A room with one member and a match blob, as a restart would find them.
+    let member = RoomMember {
+        id: 1,
+        player: "A".into(),
+        character: "".into(),
+        cn_id: "".into(),
+        ready: true,
+        host: true,
+        bot: false,
+        away: false,
+    };
+    let rec = RoomRecord {
+        info: RoomInfo {
+            id: "RESTORE".into(),
+            name: "restore me".into(),
+            ranked: false,
+            max_players: 6,
+            locked: true,
+            playing: true,
+            theme: String::new(),
+            weights: Default::default(),
+            members: vec![member],
+        },
+        password: "pw".into(),
+        next_member: 2,
+        tokens: vec![(1, "tok-A".into())],
+    };
+    store.room_put(&rec).unwrap();
+    store.match_put("RESTORE", "{\"version\":1}").unwrap();
+    // The session is its own bucket: the room record maps member -> token, the
+    // session maps token -> player.
+    store
+        .session_put(&server::state::Session {
+            token: "tok-A".into(),
+            player: "A".into(),
+            character: "".into(),
+            cn_id: "".into(),
+            room: Some(("RESTORE".into(), 1)),
+        })
+        .unwrap();
+
+    // A fresh Server over the same store = the process coming back up.
+    let server = Server::new(d.clone(), rules, engine, store);
+    server.restore_rooms();
+
+    let room = server.room("RESTORE").expect("room came back");
+    let r = room.lock().unwrap();
+    assert_eq!(r.info.name, "restore me");
+    assert_eq!(r.info.members.len(), 1, "roster restored");
+    assert!(r.info.playing, "still mid-match");
+
+    // The match blob is reachable through the handle again.
+    let m = r.match_handle().expect("match restored");
+    assert!(m.snapshot().unwrap().contains("version"), "blob came from the store");
+
+    // And a session that names the room still resolves.
+    assert_eq!(server.session("tok-A").unwrap().player, "A");
 }

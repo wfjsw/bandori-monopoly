@@ -21,28 +21,28 @@ fn mine(player_id: i32) -> bool {
 
 /// （2）「在你打出的"通用"卡生效时，可额外弃一张牌，将打出的那张卡[手]效果中的
 /// 一个数字变为两倍」.
-fn on_played(player_id: i32) {
+fn on_played(player_id: i32) -> card_sdk::Asked {
     let Some(id) = ctx::trigger::cards().into_iter().next() else {
-        return;
+        return Ok(());
     };
     // 「"通用"卡」 -- the general pool, by the card's own prefix.
     if !id.starts_with("G:") && !id.starts_with("通用") {
-        return;
+        return Ok(());
     }
     if ctx::hand_size(player_id) < 1 {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("circle_staff_title")),
         &Msg::new(key!("circle_staff_ask")).card("card", &id),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // 「可额外弃一张牌」
     let hand = ctx::cards_in(player_id, CardPile::Hand);
     let Some(dump) = hand.into_iter().next() else {
-        return;
+        return Ok(());
     };
     ctx::discard_from_hand(player_id, &dump);
     // 「将打出的那张卡[手]效果中的一个数字变为两倍」 -- `ctx::n(k, value)` reads
@@ -54,9 +54,10 @@ fn on_played(player_id: i32) {
         &Msg::new(key!("circle_staff_which")),
         1,
         9,
-    );
+    )?;
     ctx::set_play_doubled(k);
     ctx::log(player_id, &Msg::new(key!("circle_staff_doubled")).card("card", &id).card("dump", &dump));
+    Ok(())
 }
 
 // （1）「只能在卡组中加入"通用"卡」 -- a deck-building restriction. There is no

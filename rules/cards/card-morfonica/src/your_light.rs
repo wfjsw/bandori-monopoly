@@ -29,7 +29,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn your_light(player_id: i32) {
+fn your_light(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」
     // C# `H._turnCtx.Plan.Start = School; Plan.StartWhy = CardName`.
     // 规则书: 「此次移动以“月之森女子学院”为起点（不触发起点地块效果）」
@@ -40,4 +40,5 @@ fn your_light(player_id: i32) {
         ctx::plan::set_start(school, "你的光芒将照亮前路");
     }
     ctx::log(player_id, &Msg::new(key!("your_light_start")).player_id("who", player_id)); // 规则书: 「此次移动以…为起点」
+    Ok(())
 }

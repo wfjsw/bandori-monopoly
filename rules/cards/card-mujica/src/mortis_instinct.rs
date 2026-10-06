@@ -13,8 +13,9 @@ pub const MORTIS_INSTINCT: CardDef = CardDef::new("Mujica:（睦/mortis）表演
     On::Play(None, play),
     On::CounterAct(&[], can_react, react)]);
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     run(player_id);
+    Ok(())
 }
 
 fn can_react(_player: i32) -> bool {
@@ -26,8 +27,9 @@ fn can_react(_player: i32) -> bool {
     false
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     run(player_id);
+    Ok(())
 }
 
 fn run(player_id: i32) {

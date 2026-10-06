@@ -19,10 +19,10 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「投掷4次3d20并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four times.
     let mut tiles: Vec<i32> = Vec::new();
@@ -34,12 +34,12 @@ fn play(player_id: i32) {
         }
     }
     if tiles.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书: 「选择其中之一」 -- C# `H.AskTileOf` over the distinct rolled tiles.
     let title = Msg::new(key!("balloon_show_ask_title"));
     let text = Msg::new(key!("balloon_show_ask_text"));
-    let to = ctx::ask_tile(player_id, &title, &text, &tiles);
+    let to = ctx::ask_tile(player_id, &title, &text, &tiles)?;
     // 规则书: 「传送至结果对应序号的格子」 -- C# `H.CardMove(c, new MoveCtx
     // { TeleportTo = to })` (`Resolve` defaults to true, so it settles).
     ctx::plan::set_kind(MoveKind::Teleport);
@@ -49,4 +49,5 @@ fn play(player_id: i32) {
     // turn's main move and runs the teleport immediately.
     ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("balloon_show_moved")).player_id("who", player_id).tile("tile", to));
+    Ok(())
 }

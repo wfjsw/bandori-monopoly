@@ -69,10 +69,11 @@ fn can_react(player_id: i32) -> bool {
     trigger::value() > tag
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「获得相当于你所在格子[收费标价]数额的资金」 -- C# `H.GainR(c.Seat, Tag(c.Seat), CardName)`.
     let tag = price_tag(player_id);
     if tag > 0 {
         ctx::gain(player_id, tag, &Msg::new(key!("now_sumimi_why")).n("n", tag as i64));
     }
+    Ok(())
 }

@@ -34,17 +34,18 @@ fn can_react(player_id: i32) -> bool {
     payer != player_id && payer == ctx::neighbor(player_id, -1) && trigger::value() > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let amount = trigger::value();
     // 规则书[反击]: 「并[消耗]等量资金」 -- C# `H.LoseR(i, c.Trigger.Value, CardName)`.
-    ctx::pay(player_id, amount, &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64));
+    ctx::pay(player_id, amount, &Msg::new(key!("hold_hands_again_why")).n("money", amount as i64))?;
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「将此卡放置在[使用者]的[场地]」
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("hold_hands_again_note")));
     ctx::log(player_id, &Msg::new(key!("hold_hands_again_placed")).player_id("who", player_id).n("money", amount as i64));
+    Ok(())
 }
 
 /// 规则书[持续]: 「[消耗]或[支付]时取消此次资金变动并将此卡放置到弃卡区」 -- C#
@@ -52,18 +53,19 @@ fn react(player_id: i32) {
 /// `H.Unplace(this, "discard", "用掉了")`. Runs through the Fx hook dispatch at
 /// `payAt` (after `PayChoose`, before the `pay` [反击] window), so this is a
 /// field effect, not a [反击].
-fn pay_at(player_id: i32) {
+fn pay_at(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PayAt
         || trigger::player_id() != player_id
-        || !ctx::is_placed(player_id)
+        || !ctx::is_placed()
         || trigger::value() <= 0
     {
-        return;
+        return Ok(());
     }
     // 规则书[持续]: 「取消此次资金变动」
     trigger::set_pay_amount(0);
     // 规则书[持续]: 「将此卡放置到弃卡区」
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("hold_hands_again_used")).player_id("who", player_id));
+    Ok(())
 }

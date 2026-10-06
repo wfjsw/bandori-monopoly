@@ -25,12 +25,15 @@ pub const EVE_UNIFY: CardDef = CardDef::new("skill:若宫伊芙:天下统一", &
     On::Hook(&[HookKind::RollAfter], mine, on_roll)]);
 
 fn mine(player_id: i32) -> bool {
+    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+        return false;
+    }
     ctx::trigger::player_id() == player_id
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得若宫伊芙的
 /// （2）技能」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -38,16 +41,17 @@ fn at_start(player_id: i32) {
         }
         ctx::place_card(p, "skill:若宫伊芙:天下统一", &Msg::new(key!("eve_unify_granted")));
     }
+    Ok(())
 }
 
 /// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」.
-fn on_roll(player_id: i32) {
+fn on_roll(player_id: i32) -> card_sdk::Asked {
     if ctx::fixed_roll().is_some() {
-        return;
+        return Ok(());
     }
     let up = ctx::tok(player_id, FANS_UP);
     if up < 1 {
-        return;
+        return Ok(());
     }
     let y = ctx::ask_number(
         player_id,
@@ -55,9 +59,9 @@ fn on_roll(player_id: i32) {
         &Msg::new(key!("eve_unify_ask")),
         0,
         up,
-    );
+    )?;
     if y < 1 {
-        return;
+        return Ok(());
     }
     let mut y = y;
     ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
@@ -93,4 +97,5 @@ fn on_roll(player_id: i32) {
         }
     }
     ctx::log(player_id, &Msg::new(key!("eve_unify_done")).i("n", add as i64));
+    Ok(())
 }

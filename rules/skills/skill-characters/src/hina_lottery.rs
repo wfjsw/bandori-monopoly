@@ -42,7 +42,7 @@ fn mine(player_id: i32) -> bool {
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得冰川日菜
 /// 的（2）技能」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -50,28 +50,33 @@ fn at_start(player_id: i32) {
         }
         ctx::place_card(p, "skill:冰川日菜:日菜抽中的大奖", &Msg::new(key!("hina_lottery_granted")));
     }
+    Ok(())
 }
 
 /// （2）「每回合开始时必须进行1次投掷1d4，根据最后投掷的结果在下回合开始前获得
 /// 以下角色的（2）技能」.
-fn roll(player_id: i32) {
+fn roll(player_id: i32) -> card_sdk::Asked {
     // 「在下回合开始前」 -- last round's borrow comes off first.
-    expire(player_id);
+    expire(player_id)?;
     let n = ctx::roll(player_id, 1, 4);
-    let Some(id) = POOL.get((n - 1).max(0) as usize) else { return; };
+    let Some(id) = POOL.get((n - 1).max(0) as usize) else { return Ok(()); };
     ctx::place_card(player_id, id, &Msg::new(key!("hina_lottery_note")));
     state::set(player_id, BORROWED, (n - 1) as i32);
     ctx::log(player_id, &Msg::new(key!("hina_lottery_rolled")).i("n", n as i64));
+    Ok(())
 }
 
 /// 「在下回合开始前」 -- the borrow wears off.
-fn expire(player_id: i32) {
+fn expire(player_id: i32) -> card_sdk::Asked {
     let k = state::get(player_id, BORROWED);
     if k < 0 {
-        return;
+        return Ok(());
     }
     if let Some(id) = POOL.get(k as usize) {
-        ctx::unplace_card_named(player_id, id);
+        if let Some(uid) = ctx::find_card(player_id, id) {
+            ctx::unplace_at(uid);
+        }
     }
     state::set(player_id, BORROWED, -1);
+    Ok(())
 }

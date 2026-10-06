@@ -28,7 +28,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::value() > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」
         TriggerKind::Pay => {
@@ -40,7 +40,7 @@ fn react(player_id: i32) {
             // 规则书[反击]: 「此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, "Mor:迷茫之蝶们的三全音", &Msg::new(key!("tritone_note")).n("money", amount as i64));
-            ctx::set_crystals(player_id, 3);
+            ctx::set_crystals(3);
             // C# `Mem["owed"]` -- the amount this card gained, paid back on decay.
             ctx::set_slot(player_id, "tritone_owed", amount);
             ctx::log(player_id, &Msg::new(key!("tritone_placed")).player_id("who", player_id).n("money", amount as i64));
@@ -52,21 +52,22 @@ fn react(player_id: i32) {
             // C# `DecayCard.TurnEnd` only ticks on its `DecayOn` player's turn end
             // (`turn != DecayOn || !H._placed.Contains(this)` -> return);
             // `DecayOn` defaults to `Player` = where the card is placed.
-            if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
-                return;
+            if trigger::player_id() != player_id || !ctx::is_placed() {
+                return Ok(());
             }
-            if ctx::add_crystals(player_id, -1, 0) > 0 {
-                return;
+            if ctx::add_crystals(-1, 0) > 0 {
+                return Ok(());
             }
             let owed = ctx::slot(player_id, "tritone_owed");
             // C# `H.Unplace(this, "discard")` -- off the field, onto the discard.
-            ctx::unplace_card(player_id);
+            ctx::unplace_self();
             ctx::to_discard(player_id, "Mor:迷茫之蝶们的三全音");
             if owed > 0 {
-                ctx::pay(player_id, owed, &Msg::new(key!("tritone_owed")).n("money", owed as i64));
+                ctx::pay(player_id, owed, &Msg::new(key!("tritone_owed")).n("money", owed as i64))?;
             }
             ctx::log(player_id, &Msg::new(key!("tritone_decayed")).player_id("who", player_id).n("money", owed as i64));
         }
         _ => {}
     }
+    Ok(())
 }

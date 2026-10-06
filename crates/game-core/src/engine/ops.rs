@@ -462,7 +462,10 @@ impl World {
                 .i("count", count)
                 .i("sides", sides)
                 .i("sum", total),
-        );
+        )
+        // The event carries the result so the client can show it on the dice
+        // rather than only in the log line (same as `Cx::roll`).
+        .value = total;
         self.turn.turn_rolls.push(total);
         total
     }
@@ -815,18 +818,23 @@ impl World {
     }
 
     /// Place a field card on the player (`tile: -1` -- it sits with its owner).
-    pub fn place_card(&mut self, player_id: i32, card: &str, note: Msg) {
-        self.place_card_on(player_id, -1, card, note);
+    /// Returns the new instance's uid, which is what addresses it afterwards.
+    pub fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
+        self.place_card_on(player_id, -1, card, note)
     }
 
     /// Place a field card **on a tile** (C# `H.PlaceFromPlay(c, i, tile)`) -- the
     /// mark sits on the board at `tile` rather than with its owner. `tile: -1`
     /// puts it with the owner, which is [`Self::place_card`].
-    pub fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) {
+    pub fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
+        if self.player_id(player_id).is_none() {
+            return -1;
+        }
+        let uid = self.st.next_card_uid;
+        self.st.next_card_uid += 1;
         let Some(s) = self.player_mut(player_id) else {
-            return;
+            return -1;
         };
-        let uid = s.field.iter().map(|f| f.uid).max().unwrap_or(0) + 1;
         s.field.push(FieldCard {
             uid,
             card: card.to_string(),
@@ -838,6 +846,117 @@ impl World {
             immune: false,
             note,
         });
+        uid
+    }
+
+    /// The card instance at `uid`, wherever it sits. `uid` is what identifies a
+    /// card in this match -- the *name* does not, because one player may hold
+    /// several copies of the same card in play at once.
+    pub fn field_by_uid(&self, uid: i32) -> Option<&FieldCard> {
+        self.st
+            .players
+            .iter()
+            .flat_map(|s| s.field.iter())
+            .find(|f| f.uid == uid)
+    }
+
+    fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
+        self.st
+            .players
+            .iter_mut()
+            .flat_map(|s| s.field.iter_mut())
+            .find(|f| f.uid == uid)
+    }
+
+    /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
+    /// order. The dispatch walks this rather than the names, so two copies of
+    /// the same card are two hooks.
+    pub fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
+        self.player_id(player_id).map_or_else(Vec::new, |s| {
+            s.field.iter().map(|f| (f.uid, f.card.clone())).collect()
+        })
+    }
+
+    /// Miracle crystals on the instance at `uid` (C# `Card.Crystals`).
+    pub fn crystals_at(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(0, |f| f.crystals)
+    }
+
+    /// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
+    pub fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return 0;
+        };
+        f.crystals = (f.crystals + n).max(0);
+        if max > 0 {
+            f.crystals = f.crystals.min(max);
+        }
+        f.crystals
+    }
+
+    /// Set the instance at `uid`'s crystals; returns the new count.
+    pub fn set_crystals_at(&mut self, uid: i32, n: i32) -> i32 {
+        self.add_crystals_at(uid, n - self.crystals_at(uid), 0)
+    }
+
+    /// Where the instance at `uid` sits, or -1 for "with its owner" / gone.
+    pub fn tile_at(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.tile)
+    }
+
+    /// Move the instance at `uid` to `tile` (-1 = back with its owner).
+    pub fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.tile = tile;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Is the instance at `uid` face-down?
+    pub fn is_face_down_at(&self, uid: i32) -> bool {
+        self.field_by_uid(uid).is_some_and(|f| f.face_down)
+    }
+
+    /// Flip the instance at `uid`; returns whether it exists.
+    pub fn set_face_down_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.face_down = on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Is the instance at `uid` marked 「不受任何效果影响」?
+    pub fn is_immune_at(&self, uid: i32) -> bool {
+        self.field_by_uid(uid).is_some_and(|f| f.immune)
+    }
+
+    /// Mark the instance at `uid` 「不受任何效果影响」; returns whether it exists.
+    pub fn set_immune_at(&mut self, uid: i32, on: bool) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.immune = on;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Take the instance at `uid` off the field; returns the owner it left
+    /// (or -1 when there was no such instance).
+    pub fn unplace_at(&mut self, uid: i32) -> i32 {
+        for s in self.st.players.iter_mut() {
+            if let Some(i) = s.field.iter().position(|f| f.uid == uid) {
+                s.field.remove(i);
+                return s.member;
+            }
+        }
+        -1
     }
 
     /// Place the player's skill rules on their field (C# `Fx`). This is the

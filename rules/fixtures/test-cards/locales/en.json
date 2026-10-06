@@ -12,5 +12,8 @@
   "shield_note": "unaffected by other players' effects",
   "shield_held": "shield held",
   "mover_planned": "planning a 3-step move",
-  "mover_done": "moved to tile {{pos}}"
+  "mover_done": "moved to tile {{pos}}",
+  "crystal_note": "crystal test card in play",
+  "crystal_empty": "out of Miracle Crystals; left the field",
+  "crystal_none": "no Miracle Crystals; left the field"
 }

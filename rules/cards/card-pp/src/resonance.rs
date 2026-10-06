@@ -30,20 +30,20 @@ pub const RESONANCE: CardDef = CardDef::new("PP:[衍生]共鸣", &[]);
 /// `false` when they decline or hold none -- the cost is this card, not some
 /// abstract point. On success the card is discarded and, for a
 /// Pastel✽Palettes player, 2 [奇迹水晶] go to the band card (「添加2[奇迹水晶]」).
-pub fn try_resonance(player_id: i32) -> bool {
+pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
     if ctx::hand_count(player_id, RESONANCE.id) <= 0 {
-        return false;
+        return Ok(false);
     }
     let yes = ctx::ask_yes(
         player_id,
         &Msg::new(key!("resonance_title")),
         &Msg::new(key!("resonance_text")),
-    );
+    )?;
     if !yes {
-        return false;
+        return Ok(false);
     }
     if !ctx::take_from_hand(player_id, RESONANCE.id) {
-        return false;
+        return Ok(false);
     }
     // 「将此卡放入弃卡区」
     ctx::to_discard(player_id, RESONANCE.id);
@@ -51,5 +51,5 @@ pub fn try_resonance(player_id: i32) -> bool {
     if ctx::in_band(player_id, "Pastel✽Palettes") {
         ctx::add_band_crystals(player_id, 2, i32::MAX);
     }
-    true
+    Ok(true)
 }

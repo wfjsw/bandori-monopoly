@@ -35,7 +35,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn sakiko_cut(player_id: i32) {
+fn sakiko_cut(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「若直接从抽牌堆打出，可不弃置手牌发动，或选择不发动此卡」
     // C# `c.FromDeck` gates the three-way pick. No FromDeck flag in the
     // vocabulary, so the base case (always discard) is taken.
@@ -51,7 +51,7 @@ fn sakiko_cut(player_id: i32) {
     if mine.is_empty() || ctx::cant_move(player_id).is_some() {
         // C# `c.Effective = false` when the list is empty or `H.MoveWhyNot(i)`
         // refuses.
-        return;
+        return Ok(());
     }
     // 规则书: 「最贵地契」 -- C# `list.OrderByDescending((int num) =>
     // H._tiles[num].price).First()`.
@@ -78,7 +78,7 @@ fn sakiko_cut(player_id: i32) {
                     &Msg::new(key!("sakiko_cut_title")),
                     &Msg::new(key!("sakiko_cut_discard")),
                     &pool,
-                );
+                )?;
                 ctx::discard_from_hand(player_id, pool[pick]);
             }
         } else {
@@ -101,14 +101,14 @@ fn sakiko_cut(player_id: i32) {
         }
     }
     if pool.is_empty() {
-        return;
+        return Ok(());
     }
     let to = ctx::ask_tile(
         player_id,
         &Msg::new(key!("sakiko_cut_title")),
         &Msg::new(key!("sakiko_cut_ask")),
         &pool,
-    );
+    )?;
     // 规则书: 「立刻传送至任意可购买或已拥有的格子并触发结算」 -- C# `H.CardMove`
     // with `TeleportTo = to` (`MoveCtx { TeleportTo = to }`, `Resolve` defaults
     // to true, MatchHost.cs:5807-5810) = `set_teleport_to(to)` +
@@ -128,4 +128,5 @@ fn sakiko_cut(player_id: i32) {
     // 规则书: 「作为你的主要移动」 -- `card_move` runs `MainMoveAs`
     // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
     // player; that is exactly `card_move`'s bookkeeping.
+    Ok(())
 }

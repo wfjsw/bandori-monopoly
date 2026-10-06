@@ -44,12 +44,12 @@ fn placed_count(player_id: i32) -> i32 {
     ctx::cards_in(player_id, ctx::CardPile::Field).len() as i32
 }
 
-fn ranger(player_id: i32) {
+fn ranger(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「根据场上你拥有的卡数量」
     let mut n = placed_count(player_id);
     // 规则书[手]: 「如果[共鸣]则视为数量加1」 -- the cost is the discard, and it
     // buys a fatter count rather than anything on its own.
-    if crate::resonance::try_resonance(player_id) {
+    if crate::resonance::try_resonance(player_id)? {
         n += 1;
     }
     ctx::log(player_id, &Msg::new(key!("ranger_count")).i("n", n as i64));
@@ -69,7 +69,7 @@ fn ranger(player_id: i32) {
     // 规则书[手]4: 「数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），
     // 盖房后减少1层”」 -- the 2,000 loss is `H.LoseR(i, 2000, CardName)`.
     if n >= 5 {
-        ctx::pay(player_id, 2000, &Msg::new(key!("ranger_why")).i("n", n as i64));
+        ctx::pay(player_id, 2000, &Msg::new(key!("ranger_why")).i("n", n as i64))?;
         // 规则书[手]4: 「下次盖房时减免2000（可溢出），盖房后减少1层」 -- a
         // layered cut on the build cost; the engine refunds the 「可溢出」 half
         // and pops one layer per build.
@@ -79,4 +79,5 @@ fn ranger(player_id: i32) {
     if n >= 6 {
         ctx::draw(player_id, 1);
     }
+    Ok(())
 }

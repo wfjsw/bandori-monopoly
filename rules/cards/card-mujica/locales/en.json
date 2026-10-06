@@ -35,6 +35,7 @@
   "j11_placed": "{{who}} placed \"#J11\" on the field",
   "j11_title": "#J11",
   "mortis_instinct_nothing": "{{who}} played \"Performing Instinct\", but there was no card to copy",
+  "nyamu_flipped_up": "Flipped face-up: drew a card",
   "nyamu_note": "May lose 2 fire pots when flipped face-down; draw 1 when flipped face-up",
   "nyamu_placed": "{{who}} placed \"(Nyamu)\" on the field",
   "saki_move_ask": "Move who 3 tiles and settle? (choose yourself = replace this turn's main move)",

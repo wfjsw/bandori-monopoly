@@ -35,20 +35,21 @@ fn any(_player_id: i32) -> bool {
 }
 
 /// 「每个回合在北泽精肉店生成一个可乐饼」.
-fn spawn(_player_id: i32) {
+fn spawn(_player_id: i32) -> card_sdk::Asked {
     let t = ctx::tile_named("北泽精肉店");
     if t >= 0 {
         ctx::add_mark(t, -1, ON_TILE, &Msg::new(key!("hagumi_homerun_note")));
     }
+    Ok(())
 }
 
 /// 「你经过格子上的可乐饼时可以将其转移到自己场上（持有上限10）」, and
 /// 「其他角色经过格子上可乐饼时…并向你支付50*X资金」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     let n = ctx::count_marks(t, ON_TILE, -2);
     if n <= 0 {
-        return;
+        return Ok(());
     }
     let mover = ctx::trigger::player_id();
     let mine = mover == player_id;
@@ -59,22 +60,22 @@ fn on_pass(player_id: i32) {
             mover,
             &Msg::new(key!("hagumi_homerun_title")),
             &Msg::new(key!("hagumi_homerun_take")).tile("tile", t),
-        ) {
-            return;
+        )? {
+            return Ok(());
         }
         let x = ctx::tok(mover, HELD);
-        ctx::transfer(mover, player_id, 50 * x, &Msg::new(key!("hagumi_homerun_fee")));
+        ctx::transfer(mover, player_id, 50 * x, &Msg::new(key!("hagumi_homerun_fee")))?;
     } else {
         // 「你经过…可以将其转移到自己场上（持有上限10）」
         if ctx::tok(player_id, HELD) >= 10 {
-            return;
+            return Ok(());
         }
         if !ctx::ask_yes(
             player_id,
             &Msg::new(key!("hagumi_homerun_title")),
             &Msg::new(key!("hagumi_homerun_take")).tile("tile", t),
-        ) {
-            return;
+        )? {
+            return Ok(());
         }
     }
     // The croquette moves from the tile to the collector.
@@ -86,28 +87,34 @@ fn on_pass(player_id: i32) {
     if mine {
         ctx::log(player_id, &Msg::new(key!("hagumi_homerun_got")).tile("tile", t));
     }
+    Ok(())
 }
 
 /// 「角色每拥有一个可乐饼，移动时多投掷1个1d2」.
-fn on_plan(player_id: i32) {
+fn on_plan(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tok(player_id, HELD);
     for _ in 0..n {
         plan::add_extra_dice(1, 2, "全垒打！");
     }
+    Ok(())
 }
 
 /// 「育美可在主要阶段消耗4个可乐饼兑换1000资金」.
 fn can_cash(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if ctx::tok(player_id, HELD) < 4 {
         return Some(Msg::new(key!("hagumi_homerun_no_croquette")));
     }
     None
 }
 
-fn cash(player_id: i32) {
+fn cash(player_id: i32) -> card_sdk::Asked {
     if ctx::tok(player_id, HELD) < 4 {
-        return;
+        return Ok(());
     }
     ctx::add_tok(player_id, HELD, -4, 10);
     ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_homerun_cash")));
+    Ok(())
 }

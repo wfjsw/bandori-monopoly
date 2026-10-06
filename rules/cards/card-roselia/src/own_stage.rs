@@ -27,13 +27,13 @@ fn can_react(player_id: i32) -> bool {
     trigger::abnormal_kind().is_some_and(|k| k != AbKind::Exile)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「选择自己的本次移动（或无法移动的回合结束时）是否触发结算」
     let yes = ctx::ask_yes(
         player_id,
         &Msg::new(key!("own_stage_ask_title")),
         &Msg::new(key!("own_stage_ask_text")),
-    );
+    )?;
     let why = if yes {
         Msg::new(key!("own_stage_settle")).player_id("who", player_id)
     } else {
@@ -53,4 +53,5 @@ fn react(player_id: i32) {
             ctx::set_slot(player_id, "resolveOverride", if yes { 1 } else { 0 });
         }
     }
+    Ok(())
 }

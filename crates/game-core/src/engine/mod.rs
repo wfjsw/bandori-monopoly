@@ -34,6 +34,7 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 
 use crate::data::GameData;
+use crate::state::stage;
 use crate::msg::Msg;
 use crate::net::{NetMessage, RoomMember};
 use crate::rng::Rng;
@@ -299,7 +300,7 @@ impl Match {
             st.shield = self.shield;
             st.bank = bank;
             st.time_left = self.shield + bank;
-            if st.step == 1 && !st.busy {
+            if st.step == stage::OPS && !st.busy {
                 if let Some(s) = st.current() {
                     st.skip_move = s.stay() > 0 || s.exile() > 0;
                 }
@@ -624,7 +625,7 @@ impl Match {
             return;
         }
         let st = &self.world.st;
-        let actor = if st.step == 1 && !st.skip_move && st.roller >= 0 {
+        let actor = if st.step == stage::OPS && !st.skip_move && st.roller >= 0 {
             st.roller as usize
         } else {
             turn
@@ -1225,7 +1226,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
     };
     match m.act.as_str() {
         "roll" => {
-            if !cx.playing() || st.step != 1 || busy {
+            if !cx.playing() || st.step != stage::OPS || busy {
                 return Some(Msg::new("err.no_roll_now"));
             }
             if st.skip_move && st.turn == i as i32 {
@@ -1241,7 +1242,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
         }
         "skill" => {
             // 「运营阶段」 -- the same window every other turn action gets.
-            if !cx.playing() || st.step != 1 || busy {
+            if !cx.playing() || st.step != stage::OPS || busy {
                 return Some(Msg::new("err.skill_not_now"));
             }
             if m.card.is_empty() {
@@ -1252,7 +1253,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             cx.rules.cant_play(cx, i, &m.card)
         }
         "buy" => {
-            if !my_turn || st.step != 3 || busy {
+            if !my_turn || st.step != stage::END || busy {
                 return Some(Msg::new("err.no_buy_now"));
             }
             if let Some(e) = moved_off("err.moved_off_buy") {
@@ -1267,7 +1268,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             None
         }
         "build" => {
-            if !my_turn || st.step != 3 || busy {
+            if !my_turn || st.step != stage::END || busy {
                 return Some(Msg::new("err.no_build_now"));
             }
             if let Some(e) = moved_off("err.moved_off_build") {
@@ -1303,10 +1304,10 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if busy {
                 return Some(Msg::new("err.busy"));
             }
-            if st.step == 1 && !st.skip_move {
+            if st.step == stage::OPS && !st.skip_move {
                 return Some(Msg::new("err.roll_first"));
             }
-            if st.step == 2 {
+            if st.step == stage::MOVE {
                 return Some(Msg::new("err.moving"));
             }
             if cx.over_hand(i) {

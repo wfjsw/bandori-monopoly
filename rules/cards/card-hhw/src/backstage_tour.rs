@@ -24,7 +24,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // C# `if (h.draw.Count < 2 && h.discard.Count > 0) { h.draw.InsertRange(0,
     // h.discard); h.discard.Clear(); }` -- when the draw pile is too thin, the
     // discard comes back underneath it (the C# log calls this 洗回).
@@ -42,7 +42,7 @@ fn play(player_id: i32) {
     // two of the draw pile, top card first (`cards_in(Deck)` is top-first).
     let top: Vec<String> = ctx::cards_in(player_id, CardPile::Deck).into_iter().take(2).collect();
     if top.is_empty() {
-        return;
+        return Ok(());
     }
     // C# removes the peeked cards from the draw pile before the keep/discard
     // prompts, then puts the keepers back on top.
@@ -57,7 +57,7 @@ fn play(player_id: i32) {
             player_id,
             &Msg::new(key!("backstage_tour_ask_title")),
             &Msg::new(key!("backstage_tour_ask_keep")).card("card", id),
-        );
+        )?;
         if yes {
             keep.push(id.clone());
             continue;
@@ -77,7 +77,7 @@ fn play(player_id: i32) {
             &Msg::new(key!("backstage_tour_ask_title")),
             &Msg::new(key!("backstage_tour_ask_top")),
             &refs,
-        );
+        )?;
         let top_i = pick.min(1);
         let under = keep[1 - top_i].clone();
         let over = keep[top_i].clone();
@@ -88,4 +88,5 @@ fn play(player_id: i32) {
             ctx::add_to_deck_at(player_id, &id, ctx::DeckPos::Top);
         }
     }
+    Ok(())
 }

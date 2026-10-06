@@ -42,13 +42,17 @@ export function Menu() {
   return (
     <>
       <TopBar section={tr("menu.section")} title={tr("menu.selectMode")} />
-      <Live2DStand key={D.artId(c)} id={D.artId(c)} className={s.stand} pulse={bounce} alt={c.display} onClick={talk} zoom={1.36} focusTop={0.14} headroom={0.025} />
-      <div className={s.dialog}>
-        <div className={s.tag}>
-          <span>{D.homeTag(c)}</span>
-          <img src={sceneImg("deco_star_stripes")} alt="" />
+      {/* Stand + dialogue are one column so they share a horizontal axis; the
+          dialogue is pulled up over the art's lower half. */}
+      <div className={s.left}>
+        <Live2DStand key={D.artId(c)} id={D.artId(c)} className={s.stand} pulse={bounce} alt={c.display} onClick={talk} zoom={1.36} focusTop={0.14} headroom={0.025} />
+        <div className={s.dialog}>
+          <div className={s.tag}>
+            <span>{D.homeTag(c)}</span>
+            <img src={sceneImg("deco_star_stripes")} alt="" />
+          </div>
+          <div className={s.box}>{line}</div>
         </div>
-        <div className={s.box}>{line}</div>
       </div>
 
       {/* The tile cluster is a flex column of rows: the two grouped pills sit

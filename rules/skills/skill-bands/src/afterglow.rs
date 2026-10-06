@@ -18,17 +18,18 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「你购买商店街的或价值小于等于1200的格子时自动免费在上面加盖一栋房子」.
-fn on_bought(player_id: i32) {
+fn on_bought(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if t < 0 {
-        return;
+        return Ok(());
     }
     if !ctx::is_shop(t) && ctx::tile_price(t) > 1200 {
-        return;
+        return Ok(());
     }
     // 「自动免费」 -- the cost is waived, so the build goes through regardless.
     ctx::set_build_discount(ctx::build_cost(t), 1);
     if ctx::card_build(player_id, t) {
         ctx::log(player_id, &Msg::new(key!("afterglow_free_house")).tile("tile", t));
     }
+    Ok(())
 }

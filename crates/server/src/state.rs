@@ -1,8 +1,11 @@
-//! Server-wide state: sessions and rooms.
+//! Server-wide state: the room table.
 //!
-//! Locking: `sessions` and each room have their own mutex, and code never holds a
-//! room lock while taking the sessions lock (or the reverse). Critical sections are
-//! short and never await.
+//! Sessions and match blobs are **not** held here -- they live in the [`store`],
+//! so a non-Dummy store means no durable state in this process at all. What
+//! stays in memory is the room *handle*: its lock, its broadcast channel, and
+//! the per-connection presence counts. Locking: each room has its own mutex and
+//! code never holds one lock across a store or worker call. Critical sections
+//! are short and never await.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -13,6 +16,7 @@ use game_core::engine::CardRules;
 
 use crate::pool::Pool;
 use crate::room::Room;
+use crate::store::CrossState;
 
 /// Seconds a seated player may be without an open stream before the AI takes over
 /// (`NetProtocol.Timeout`).
@@ -33,7 +37,10 @@ pub struct Server {
     pub rules: Arc<dyn CardRules>,
     /// Match execution. Workers hold no match state, so this is shared freely.
     pub engine: Arc<Pool>,
-    pub sessions: Mutex<HashMap<String, Session>>,
+    /// Cross-endpoint state (sessions, rooms, match blobs). Swappable: the
+    /// in-memory [`crate::store::dummy`] store for one process, Redis to share
+    /// or retain it. See `store` for what is deliberately *not* behind it.
+    pub store: Arc<dyn CrossState>,
     pub rooms: Mutex<HashMap<String, Arc<Mutex<Room>>>>,
     /// Overridable for tests.
     pub presence_timeout: Duration,
@@ -42,25 +49,58 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(data: Arc<GameData>, rules: Arc<dyn CardRules>, engine: Arc<Pool>) -> Arc<Self> {
+    pub fn new(data: Arc<GameData>, rules: Arc<dyn CardRules>, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Arc<Self> {
         Arc::new(Self {
             data,
             rules,
             engine,
-            sessions: Mutex::new(HashMap::new()),
+            store,
             rooms: Mutex::new(HashMap::new()),
             presence_timeout: PRESENCE_TIMEOUT,
             time_scale: 1.0,
         })
     }
 
+    /// A signed-in client. Goes to the store, so it survives across server
+    /// processes when the store does.
     pub fn session(&self, token: &str) -> Option<Session> {
-        self.sessions.lock().unwrap().get(token).cloned()
+        self.store.session_get(token).ok().flatten()
     }
 
+    /// Record (or clear) a session's room. The store is the only copy.
     pub fn set_room(&self, token: &str, room: Option<(String, i32)>) {
-        if let Some(s) = self.sessions.lock().unwrap().get_mut(token) {
-            s.room = room;
+        let Some(mut s) = self.session(token) else { return };
+        s.room = room;
+        let _ = self.store.session_put(&s);
+    }
+
+    /// Drop a session entirely (logout / sweep).
+    pub fn drop_session(&self, token: &str) {
+        let _ = self.store.session_del(token);
+    }
+
+    /// Rebuild every room the store knows about. This is what makes a restart
+    /// silent: the roster comes back from [`CrossState`], each room's match
+    /// blob is already there, and the clients' SSE reconnects into the same
+    /// game. Call once at startup, before the ticker starts.
+    pub fn restore_rooms(&self) {
+        let recs = match self.store.room_all() {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("room restore skipped: {e}");
+                return;
+            }
+        };
+        if recs.is_empty() {
+            return;
+        }
+        let mut rooms = self.rooms.lock().unwrap();
+        for rec in recs {
+            let id = rec.info.id.clone();
+            let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
+            r.restore_game();
+            eprintln!("restored room {id} (match: {})", if r.game.is_some() { "live" } else { "none" });
+            rooms.insert(id, Arc::new(Mutex::new(r)));
         }
     }
 

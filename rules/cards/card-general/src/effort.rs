@@ -21,7 +21,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「本回合的[主要移动]改为移动1到6以内的任意整数」 -- C#
     // `int max = c.N(0, 6)` sizes the ask; `H.AskNumber(c.Seat, ..., 1, max, ...)`
     // picks the step count.
@@ -32,7 +32,7 @@ fn play(player_id: i32) {
         &Msg::new(key!("effort_ask")),
         1,
         max,
-    );
+    )?;
     // 规则书[手]: 「立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]」
     // -- C# `H.CardMove(c, new MoveCtx { Steps = Math.Max(1, r.value) })`
     // (MatchHost.cs:2326-2329): `Steps` >= 0 walks exactly that many with no roll,
@@ -42,4 +42,5 @@ fn play(player_id: i32) {
     ctx::plan::set_steps(steps);
     ctx::plan::set_resolve(true);
     ctx::card_move(player_id);
+    Ok(())
 }

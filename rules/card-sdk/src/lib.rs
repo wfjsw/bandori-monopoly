@@ -24,10 +24,13 @@
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
 
-#[cfg(target_arch = "wasm32")]
+// `ctx` is compiled whenever `guest` is on, not just on wasm32 -- and it uses
+// `alloc::` throughout -- so `alloc` has to come along on native too. (A native
+// `cargo check` of the card crates is how this shows up.)
+#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 extern crate alloc;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(any(target_arch = "wasm32", feature = "guest"))]
 use alloc::vec::Vec;
 
 pub mod abi;
@@ -39,6 +42,23 @@ pub mod msg;
 pub mod native;
 
 pub use msg::Msg;
+
+/// The run stopped at a prompt: the host has published the question and will
+/// re-run this effect from the top with the answer plugged in (see the replay
+/// note in `game-rules`). Propagate it with `?`.
+///
+/// `#[must_use]` because swallowing it is a real bug: the effect would carry on
+/// with a made-up answer instead of stopping for the player. The trap this
+/// replaces could not be ignored; the type now says so in the docs and the
+/// lints. Pair it with a CI check over `rules/cards` for
+/// `ask_.*\.(unwrap_or|ok\(\)|let _)` -- `Result` can be ignored where the
+/// trap could not, and that is the one regression this migration introduces.
+#[must_use = "a prompt must be propagated with `?` -- swallowing it runs the effect on a made-up answer"]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Prompt;
+
+/// What every effect entry returns: done, or "asked, re-run me".
+pub type Asked = Result<(), Prompt>;
 
 #[cfg(any(target_arch = "wasm32", feature = "guest"))]
 pub mod ctx;
@@ -85,7 +105,7 @@ pub enum On {
     /// effect.
     Play(
         Option<fn(player_id: i32) -> Option<Msg>>,
-        fn(player_id: i32),
+        fn(player_id: i32) -> Asked,
     ),
     /// A [反击] at these chain links: the guard decides whether the card is
     /// offered in the hand window, then the effect resolves. The guard is a
@@ -93,21 +113,21 @@ pub enum On {
     CounterAct(
         &'static [abi::ChainKind],
         fn(player_id: i32) -> bool,
-        fn(player_id: i32),
+        fn(player_id: i32) -> Asked,
     ),
     /// A field-card (`Fx`) hook at these settlement points: runs automatically
     /// while the card is in play. Same shape as [`On::CounterAct`].
     Hook(
         &'static [abi::HookKind],
         fn(player_id: i32) -> bool,
-        fn(player_id: i32),
+        fn(player_id: i32) -> Asked,
     ),
     /// A question posed to this placed card at declaration or at resolution.
-    Gate(&'static [abi::GateKind], fn(player_id: i32)),
+    Gate(&'static [abi::GateKind], fn(player_id: i32) -> Asked),
     /// `Card.RollPlan` -- this card has a movement routine.
-    RollPlan(fn(player_id: i32)),
+    RollPlan(fn(player_id: i32) -> Asked),
     /// What `ctx::at_turn_end` schedules: run once at that turn end.
-    AtEnd(fn(player_id: i32)),
+    AtEnd(fn(player_id: i32) -> Asked),
 }
 
 impl On {

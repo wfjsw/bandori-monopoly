@@ -18,6 +18,7 @@ use std::sync::Mutex;
 
 use crate::error::{ApiError, ApiResult};
 use crate::pool::Pool;
+use crate::store::{CrossState, RoomRecord};
 
 /// A running match: its blob, plus the order its operations apply in.
 ///
@@ -25,26 +26,35 @@ use crate::pool::Pool;
 /// this handle out of the room and drop that lock first (see `state.rs`:
 /// critical sections are short). `gate` is what keeps two operations on one
 /// match from racing on the blob; it is held for exactly one round-trip, which
-/// the pool bounds with its deadline. `state` is held only to copy a blob in
-/// and out.
+/// the pool bounds with its deadline.
+///
+/// **The blob is not held here** -- it lives in the [`CrossState`], so a
+/// non-Dummy store means no match state in this process: any worker serves any
+/// request, and a restart keeps every live match.
 pub struct MatchHandle {
+    id: String,
+    store: Arc<dyn CrossState>,
     gate: Mutex<()>,
-    state: Mutex<String>,
     engine: Arc<Pool>,
 }
 
 impl MatchHandle {
-    pub fn new(engine: Arc<Pool>, blob: String) -> Self {
-        Self {
+    pub fn new(id: String, store: Arc<dyn CrossState>, engine: Arc<Pool>, blob: String) -> Result<Self, String> {
+        store.match_put(&id, &blob).map_err(|e| e.to_string())?;
+        Ok(Self {
+            id,
+            store,
             gate: Mutex::new(()),
-            state: Mutex::new(blob),
             engine,
-        }
+        })
     }
 
-    /// The blob, for callers that only need to read it (no round-trip).
-    pub fn snapshot(&self) -> String {
-        self.state.lock().unwrap().clone()
+    /// The blob, straight from the store.
+    pub fn snapshot(&self) -> Result<String, String> {
+        self.store
+            .match_get(&self.id)
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "no match".to_string())
     }
 
     /// One operation. `f` gets the current blob; `Some` in its first return
@@ -54,10 +64,10 @@ impl MatchHandle {
         f: impl FnOnce(&str, &Pool) -> Result<(Option<String>, T), String>,
     ) -> Result<T, String> {
         let _order = self.gate.lock().unwrap();
-        let before = self.state.lock().unwrap().clone();
+        let before = self.snapshot()?;
         let (after, out) = f(&before, &self.engine)?;
         if let Some(a) = after {
-            *self.state.lock().unwrap() = a;
+            self.store.match_put(&self.id, &a).map_err(|e| e.to_string())?;
         }
         Ok(out)
     }
@@ -126,6 +136,12 @@ struct Presence {
 }
 
 pub struct Room {
+    // DEV PHASE: `info` / `password` / `tokens` / `next_member` are held here
+    // rather than in the [`CrossState`]. The match blob and the sessions are
+    // already on the store; the roster is the remaining process-local durable
+    // data. When a real database lands (see `store`), these move behind the
+    // trait as a fourth bucket and `Room` keeps only the genuinely
+    // per-connection parts -- `presence` and `tx`.
     pub info: RoomInfo,
     password: String,
     /// Human member id -> session token.
@@ -135,6 +151,7 @@ pub struct Room {
     /// the `Match::save` blob and the order its operations apply in.
     pub game: Option<Arc<MatchHandle>>,
     pub engine: Arc<Pool>,
+    pub store: Arc<dyn CrossState>,
     pub tx: broadcast::Sender<Note>,
     presence: HashMap<i32, Presence>,
     pub dissolved: Option<Msg>,
@@ -156,6 +173,7 @@ impl Room {
         password: &str,
         weights: ScoreWeights,
         engine: Arc<Pool>,
+        store: Arc<dyn CrossState>,
     ) -> Self {
         let max = if ranked {
             max_players.clamp(2, 6)
@@ -180,9 +198,79 @@ impl Room {
             next_member: 1,
             game: None,
             engine,
+            store,
             tx,
             presence: HashMap::new(),
             dissolved: None,
+        }
+    }
+
+    /// The durable half of this room, for the store.
+    pub fn record(&self) -> RoomRecord {
+        RoomRecord {
+            info: self.info.clone(),
+            password: self.password.clone(),
+            next_member: self.next_member,
+            tokens: self.tokens.iter().map(|(&k, v)| (k, v.clone())).collect(),
+        }
+    }
+
+    /// Write the durable half back. Called after anything that changes it, so a
+    /// restart can rebuild the room (see [`Room::from_record`]).
+    fn persist(&self) {
+        if let Err(e) = self.store.room_put(&self.record()) {
+            eprintln!("room {} persist failed: {e}", self.info.id);
+        }
+    }
+
+    /// Rebuild a room the store already knows about -- what a restart does for
+    /// every [`RoomRecord`]. The match blob is picked up separately by
+    /// [`MatchHandle`]; presence starts at zero streams, so everyone is briefly
+    /// `away` until their SSE reconnects (well inside the presence timeout).
+    pub fn from_record(rec: RoomRecord, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Self {
+        let tokens: HashMap<i32, String> = rec.tokens.into_iter().collect();
+        let presence = tokens
+            .keys()
+            .map(|&m| {
+                (
+                    m,
+                    Presence {
+                        streams: 0,
+                        since: Instant::now(),
+                        away: false,
+                    },
+                )
+            })
+            .collect();
+        let (tx, _) = broadcast::channel(64);
+        Self {
+            info: rec.info,
+            password: rec.password,
+            tokens,
+            next_member: rec.next_member,
+            game: None,
+            engine,
+            store,
+            tx,
+            presence,
+            dissolved: None,
+        }
+    }
+
+    /// The running match as the store holds it, for restore.
+    pub fn restore_game(&mut self) {
+        let blob = match self.store.match_get(&self.info.id) {
+            Ok(b) => b,
+            Err(e) => {
+                eprintln!("room {} match restore failed: {e}", self.info.id);
+                return;
+            }
+        };
+        if let Some(blob) = blob {
+            match MatchHandle::new(self.info.id.clone(), self.store.clone(), self.engine.clone(), blob) {
+                Ok(m) => self.game = Some(Arc::new(m)),
+                Err(e) => eprintln!("room {} match restore failed: {e}", self.info.id),
+            }
         }
     }
 
@@ -236,6 +324,7 @@ impl Room {
             away: false,
         });
         self.tokens.insert(id, who.token.into());
+        self.persist();
         self.presence.insert(
             id,
             Presence {
@@ -266,6 +355,8 @@ impl Room {
         }
         if self.humans() == 0 {
             self.dissolve(Msg::new("room.dissolved_empty"));
+        } else {
+            self.persist();
         }
         self.notify();
         token
@@ -274,6 +365,10 @@ impl Room {
     pub fn dissolve(&mut self, reason: Msg) {
         if self.dissolved.is_none() {
             self.dissolved = Some(reason.clone());
+            // A dissolved room leaves no trace: the record and its match blob
+            // go, so a restart does not resurrect it.
+            let _ = self.store.room_del(&self.info.id);
+            let _ = self.store.match_del(&self.info.id);
             let _ = self.tx.send(Note::Dissolved(reason));
         }
     }
@@ -289,6 +384,7 @@ impl Room {
             .find(|m| m.id == member)
             .ok_or_else(|| ApiError::bad("err.room.not_member"))?;
         m.ready = on;
+        self.persist();
         self.notify();
         Ok(())
     }
@@ -326,6 +422,7 @@ impl Room {
         if self.info.members.len() == before {
             return Err(ApiError::bad("err.room.no_such_bot"));
         }
+        self.persist();
         self.notify();
         Ok(())
     }
@@ -341,6 +438,7 @@ impl Room {
             return Err(ApiError::bad("err.room.playing"));
         }
         self.info.weights = w.sanitized(rules_default);
+        self.persist();
         self.notify();
         Ok(())
     }
@@ -395,8 +493,11 @@ impl Room {
             .engine
             .new_match(&self.info.members, seed, mode as i32, &self.info.weights)
             .map_err(|e| ApiError::bad(e.as_str()))?;
-        self.game = Some(Arc::new(MatchHandle::new(self.engine.clone(), blob)));
+        let m = MatchHandle::new(self.info.id.clone(), self.store.clone(), self.engine.clone(), blob)
+            .map_err(|e| ApiError::bad(e.as_str()))?;
+        self.game = Some(Arc::new(m));
         self.info.playing = true;
+        self.persist();
         for m in &mut self.info.members {
             m.away = false;
             if !m.host && !m.bot {

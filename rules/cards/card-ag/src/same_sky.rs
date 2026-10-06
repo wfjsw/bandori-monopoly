@@ -22,7 +22,7 @@ const ID: &str = "AG:朝同一片天空迈进";
 /// the old `step() == 0` branch is unreachable; the brief maps this to
 /// `On::Hook(&[HookKind::DeckAtGameStart], ...)`, which fires on this card
 /// over draw + hand after the mulligan.
-fn return_at_opening(player_id: i32) {
+fn return_at_opening(player_id: i32) -> card_sdk::Asked {
     // Pull every copy out of the opening hand and shuffle it back into the deck.
     let mut returned = 0;
     while ctx::take_from_hand(player_id, ID) {
@@ -32,17 +32,18 @@ fn return_at_opening(player_id: i32) {
     if returned > 0 {
         ctx::log(player_id, &Msg::new(key!("same_sky_returned")).player_id("who", player_id));
     }
+    Ok(())
 }
 
 /// 规则书[反击]: 「抽出此卡时立刻打出」 -- C# `CardSameSky.Drawn` auto-plays it
 /// the moment it is drawn; it never answers the [反击] window.
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
-        return;
+        return Ok(());
     }
     // C# `Drawn` pulls the card out of hand first (`hand.Remove(Id)`).
     if !ctx::take_from_hand(player_id, ID) {
-        return;
+        return Ok(());
     }
     let n = ctx::hand_size(player_id);
     if n >= 3 {
@@ -54,4 +55,5 @@ fn react(player_id: i32) {
     }
     // Played: it goes to the discard pile.
     ctx::to_discard(player_id, ID);
+    Ok(())
 }

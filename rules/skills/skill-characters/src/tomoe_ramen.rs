@@ -40,22 +40,27 @@ fn afterglow(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
-fn tick(player_id: i32) {
+fn tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
         ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
     }
+    Ok(())
 }
 
 /// （2） 「你可以使用一个[火罐]」 + （3） 「若你位于银河拉面馆上，你无法使用（2）效果」.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if ctx::player_pos(player_id) == shop() {
         return Some(Msg::new(key!("tomoe_ramen_at_shop")));
     }
@@ -66,21 +71,21 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「使此次移动的起点向绝对距离"银河拉面馆"更近的方向移动10格」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let shop = shop();
     if shop < 0 {
-        return;
+        return Ok(());
     }
     let here = ctx::player_pos(player_id);
     if here == shop {
-        return;
+        return Ok(());
     }
     // 「向绝对距离…更近的方向」 -- whichever way shortens `dist`.
     let fwd = ctx::tile_steps_ahead(player_id, 10);
     let back = ctx::tile_steps_ahead(player_id, -10);
     let toward = if ctx::dist(fwd, shop) <= ctx::dist(back, shop) { fwd } else { back };
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_spend"))) {
-        return;
+        return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
     plan::set_start(toward, "豚骨酱油拉面大姐");
@@ -93,4 +98,5 @@ fn use_skill(player_id: i32) {
         ctx::gain_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_refund")));
     }
     ctx::log(player_id, &Msg::new(key!("tomoe_ramen_moved")).tile("tile", toward));
+    Ok(())
 }

@@ -24,10 +24,10 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new("HHW:（育美）", &[
     On::Play(None, play),
     On::Hook(&[HookKind::PassTile], hook_guard, hook)]);
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书（1）[手]: 「投掷2次4d20」 -- C# `H.Roll(i, 4, 20, ...)`.
     let a = ctx::roll(player_id, 4, 20);
@@ -43,14 +43,14 @@ fn play(player_id: i32) {
     }
     let title = Msg::new(key!("hagumi_marks_ask_title"));
     let text = Msg::new(key!("hagumi_marks_ask_text"));
-    let tile = ctx::ask_tile(player_id, &title, &text, &tiles);
+    let tile = ctx::ask_tile(player_id, &title, &text, &tiles)?;
     let chosen = rolls[tiles.iter().position(|&t| t == tile).unwrap_or(0)];
     // 规则书（1）[手]: 「若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记」
     // -- the board has 60 tiles, so a total above 60 wrapped past the end of it.
     if chosen > n {
         ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_marks_over_why")));
         ctx::draw(player_id, 1);
-        return;
+        return Ok(());
     }
     // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」
     let note = Msg::new(key!("hagumi_marks_mark_note")).n("money", 2000);
@@ -61,38 +61,39 @@ fn play(player_id: i32) {
     // hook surface only dispatches to placed cards, so this placement stands in
     // for the player attachment (same pattern as `HHW:爱心义演`); the `PassTile`
     // hook below is the stop body.
-    if !ctx::is_placed(player_id) {
+    if !ctx::is_placed() {
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(player_id, ID, &Msg::new(key!("hagumi_marks_note")));
     }
+    Ok(())
 }
 
 /// C# `HagumiMarkFx.PassTile` / `Stop` (MatchHost.cs:4314-4384).
 /// Pure guard for [`hook`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn hook(player_id: i32) {
+fn hook(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PassTile {
-        return;
+        return Ok(());
     }
     // C# `m.Seat != Seat` -- only the owner's own walk.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     // C# `m.Teleport` -- not a teleport.
     if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return;
+        return Ok(());
     }
     let t = trigger::tile();
     if t < 0 {
-        return;
+        return Ok(());
     }
     // C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on this tile.
     if ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) <= 0 {
-        return;
+        return Ok(());
     }
     // 规则书（1）: 「可在那格强制停下并获得2000资金」 -- C# `Stop`:
     // `H.AskYes(..., aiYes: true)` then `m.Stopped = true` (behind
@@ -101,13 +102,13 @@ fn hook(player_id: i32) {
         player_id,
         &Msg::new(key!("hagumi_marks_stop_title")),
         &Msg::new(key!("hagumi_marks_stop_ask")).tile("tile", t),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // 规则书（1）: 「[强制停下]」 -- behind `H.AbnormalGate`: a guarded or
     // unstoppable mover is not stopped, and the mark is not spent.
     if !ctx::gate(trigger::player_id(), card_sdk::abi::AbKind::Stop) {
-        return;
+        return Ok(());
     }
     // C# `m.Remaining > 0 && !m.Teleport` -- force-stop only mid-walk.
     if trigger::move_remaining() > 0 {
@@ -127,12 +128,13 @@ fn hook(player_id: i32) {
     // spent (C# `HagumiMarkFx` just goes quiet; the field-card stand-in files
     // itself away).
     if !any_marks(player_id) {
-        ctx::unplace_card(player_id);
+        ctx::unplace_self();
         ctx::to_discard(player_id, ID);
     }
     // TODO(规则书)（1）[judgement]: C# `HagumiMarkFx.PassTile` also has a circle-tile case
     //   (`H.Tile(t)?.kind == "circle"` -> `All(n)`: remove every 育美标记 and
     //   gain 1,000 per mark 「经过起点」). Not in the rulebook text, so held.
+    Ok(())
 }
 
 /// Does `player_id` still own any 育美标记 on the board?

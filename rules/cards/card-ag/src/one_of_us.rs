@@ -54,45 +54,45 @@ fn prefer(player_id: i32) -> Vec<i32> {
     }
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「选择场上的另一个Afterglow角色或者拥有商店街格子的角色」
     let cands = candidates(player_id);
     if cands.is_empty() {
-        return;
+        return Ok(());
     }
     let partner = ctx::ask_player(
         player_id,
         &Msg::new(key!("one_of_us_title")),
         &Msg::new(key!("one_of_us_partner")),
         &cands,
-    );
+    )?;
     // 规则书: 「指定双方各一块地契」; 「必须优先指定商店街格子」 -- C# `Prefer`
     // restricts each side's pick to its shop deeds when it has any.
     let mine = prefer(player_id);
     if mine.is_empty() {
-        return;
+        return Ok(());
     }
     let a = ctx::ask_tile(
         player_id,
         &Msg::new(key!("one_of_us_title")),
         &Msg::new(key!("one_of_us_mine")),
         &mine,
-    );
+    )?;
     let theirs = prefer(partner);
     if theirs.is_empty() {
-        return;
+        return Ok(());
     }
     let b = ctx::ask_tile(
         player_id,
         &Msg::new(key!("one_of_us_title")),
         &Msg::new(key!("one_of_us_theirs")).player_id("who", partner),
         &theirs,
-    );
+    )?;
     // 规则书: 「指定双方各一块地契」 -- C# `H.TargetTile(c, b, tt)` designates
     // the partner's deed (and so the partner, through ImmuneAll + the
     // targeted/target window); the own deed `a` is not gated in the C#.
     if !ctx::target_tile(b) {
-        return;
+        return Ok(());
     }
     // 规则书: 「将此卡放置在场上」 -- C# `H.PlaceFromPlay(c)` after `H.TargetTile`.
     ctx::set_dest(ctx::Dest::Field);
@@ -128,6 +128,7 @@ fn play(player_id: i32) {
     // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
     // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], ...)` below
     // (C# `CardOneOfUs.BeforeOut`).
+    Ok(())
 }
 
 /// 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
@@ -135,25 +136,25 @@ fn play(player_id: i32) {
 /// pair leaves, the designated deeds it still owns go to the survivor and the
 /// pair is cleared. (The C# transfers ownership directly; it does not park the
 /// deeds on the card.)
-fn before_out(owner: i32) {
+fn before_out(owner: i32) -> card_sdk::Asked {
     // `owner` is the card's player; `trigger::player_id()` is the player leaving (C#
     // `BeforeOut(int player_id)`).
-    if !ctx::is_placed(owner) {
-        return;
+    if !ctx::is_placed() {
+        return Ok(());
     }
     let partner = ctx::slot(owner, "one_of_us_partner") - 1;
     if partner < 0 {
-        return;
+        return Ok(());
     }
     let out = trigger::player_id();
     // C# `player_id != Player && player_id != Partner` -> return.
     if out != owner && out != partner {
-        return;
+        return Ok(());
     }
     let survivor = if out == owner { partner } else { owner };
-    // C# `if (H.Out(num) && num != player_id) return;`.
+    // C# `if (H.Out(num) && num != player_id) return Ok(());`.
     if ctx::player_out(survivor) && survivor != out {
-        return;
+        return Ok(());
     }
     let mine = ctx::slot(owner, "one_of_us_mine") - 1;
     let theirs = ctx::slot(owner, "one_of_us_theirs") - 1;
@@ -172,4 +173,5 @@ fn before_out(owner: i32) {
     }
     // C# `Mem["partner"] = -1` -- the pair is done.
     ctx::set_slot(owner, "one_of_us_partner", 0);
+    Ok(())
 }

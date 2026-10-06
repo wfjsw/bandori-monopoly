@@ -19,7 +19,7 @@ pub const WELCOME_MUJICA: CardDef = CardDef::new("Mujica:欢迎来到ave mujica�
     On::Play(None, play),
     On::CounterAct(&[ChainKind::State], can_react, react)]);
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」
     // The C# only offers players with `H.HasStates(p)` (skillState > 0); without a
     // state query the whole player list is offered and the toggle folds below.
@@ -30,21 +30,21 @@ fn play(player_id: i32) {
     // state 2 is unreachable. The clause does not say which, so the toggle below
     // follows 「转换任意一名玩家的状态」 and nothing else.
     if candidates.is_empty() {
-        return;
+        return Ok(());
     }
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("welcome_mujica_title")),
         &Msg::new(key!("welcome_mujica_ask")),
         &candidates,
-    );
+    )?;
     // C# `H.PickTarget` = `AskSeat` + `H.Target` (MatchHost.cs:18036-18057):
     // the pick runs the full targeting pipeline (out / exile / ImmuneAll /
     // _targeted / Untargetable / redirect / `target` [反击] window) and lands
     // on the player actually hit (`Some(hit)`, redirect may move it). None =
     // the designation failed and the play folds.
     let Some(hit) = ctx::target(who) else {
-        return;
+        return Ok(());
     };
     // 规则书（1）: 「转换任意一名玩家的状态」 -- C# applies `H.SwitchState` to
     // `r.index`, the post-redirect target (`res.index = t.index`).
@@ -58,6 +58,7 @@ fn play(player_id: i32) {
     let to = if cur == 2 { 1 } else { 2 };
     ctx::state::set(hit, state_key::SKILL_STATE, to);
     ctx::state::set(hit, "switchedRound", ctx::turn_key());
+    Ok(())
 }
 
 fn can_react(player_id: i32) -> bool {
@@ -66,7 +67,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::kind() == TriggerKind::State && trigger::player_id() != player_id
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）[反击]: 「你与所有本回合切换了状态的玩家同时切换一次状态」
     // C# lists `p == c.Seat || H.V(p, "switchedRound") == H.TurnKey`, then
     // `H.SwitchState` on each.
@@ -95,4 +96,5 @@ fn react(player_id: i32) {
         ctx::state::set(t, state_key::SKILL_STATE, if cur == 2 { 1 } else { 2 });
         ctx::state::set(t, "switchedRound", key);
     }
+    Ok(())
 }

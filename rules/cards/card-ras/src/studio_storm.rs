@@ -40,13 +40,13 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上」
     // -- C# `WhyNot` requires `owners[pos] == player_id && H.IsLiveHouse(player_id, pos)`;
     // the gate is now `cant_play` above.
     let pos = ctx::player_pos(player_id);
     if !on_own_lh(player_id) {
-        return;
+        return Ok(());
     }
     // 规则书（1）: 「将此卡放置在当前格子上」 -- C# `H.PlaceFromPlay(c, seat, pos)`.
     ctx::set_dest(ctx::Dest::Field);
@@ -57,60 +57,62 @@ fn play(player_id: i32) {
     );
     // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
     // -- crystals start at 0 (the default) and cap at 3 via `add_crystals(.., 3)`.
+    Ok(())
 }
 
 /// C# `CardStudioStorm.PassTile` -- the user passing a CiRCLE tile adds a crystal.
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn pass_tile(player_id: i32) {
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != User || H.Tile(t)?.kind != "circle"`.
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     let t = trigger::tile();
     // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
     if t < 0 || !ctx::is_circle(t) {
-        return;
+        return Ok(());
     }
-    ctx::add_crystals(player_id, 1, 3);
+    ctx::add_crystals(1, 3);
     ctx::log(
         player_id,
         &Msg::new(key!("studio_storm_crystal")).player_id("who", player_id).tile("tile", t),
     );
+    Ok(())
 }
 
 /// C# `CardStudioStorm.SettleAfter` -- a non-user settle within `Crystals` ring
 /// distance of the card's tile triggers the storm.
-fn settle_after(player_id: i32) {
-    if !ctx::is_placed(player_id) || trigger::player_id() == player_id {
-        return;
+fn settle_after(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() || trigger::player_id() == player_id {
+        return Ok(());
     }
-    let Some(tile) = ctx::placed_tile(player_id, ID) else { return; };
+    let Some(tile) = ctx::self_tile() else { return Ok(()); };
     if tile < 0 {
-        return;
+        return Ok(());
     }
     let a = trigger::tile();
     let a = if a >= 0 { a } else { ctx::player_pos(trigger::player_id()) };
     // 规则书（2）: 「此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动」
     let x = ctx::dist(a, tile);
-    let crystals = ctx::crystals(player_id);
+    let crystals = ctx::crystals();
     if x < 1 || x > crystals {
-        return;
+        return Ok(());
     }
     // 规则书（2）: 「将此卡放入弃牌堆」 -- C# `Storm`: unplace to discard.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(
         player_id,
         &Msg::new(key!("studio_storm_fired")).player_id("who", trigger::player_id()).tile("tile", tile).i("x", x as i64),
     );
-    // TODO(规则书）（2）: 「且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为
-    // 普通[结算]的(4-X)/4倍」 -- the rent factor is `ctx::plan::set_rent_factor`
-    // (milli-units, (4000 - 1000*X) / 4), but the settle routine (`H.SettleAt` /
-    // `H.Settle`) that would run that settle is still held. The SettleAfter hook,
-    // the ring distance `X`, the crystal gate, and the discard half above are done.
+    // 「且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的
+    // (4-X)/4倍」 -- the mover settles here at that rent factor (milli-units).
+    ctx::plan::set_rent_factor(4000 - 1000 * x);
+    ctx::card_settle_at(trigger::player_id(), tile, true);
+    Ok(())
 }

@@ -29,32 +29,32 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// Face-down cards this player has on the field.
-fn face_down(player_id: i32) -> alloc::vec::Vec<String> {
-    ctx::placed_cards(player_id)
+fn face_down(player_id: i32) -> alloc::vec::Vec<(i32, String)> {
+    ctx::field_instances(player_id)
         .into_iter()
-        .filter(|c| ctx::card_face_down(player_id, c))
+        .filter(|(uid, _)| ctx::is_face_down_at(*uid))
         .collect()
 }
 
 /// （1） and （2） -- the CiRCLE reward.
-fn on_circle(player_id: i32) {
+fn on_circle(player_id: i32) -> card_sdk::Asked {
     // （2）「若自己场上存在背面朝上的卡，则本次领取奖励被替换为将自己场上
     // 背面朝上的卡拿取至手中」 -- the replacement takes priority: it is what the
     // reward *is* once there is a face-down card to take.
     let down = face_down(player_id);
     if !down.is_empty() {
-        for c in down {
-            ctx::unplace_card_named(player_id, &c);
+        for (uid, c) in down {
+            ctx::unplace_at(uid);
             ctx::add_to_hand(player_id, &c);
             ctx::log(player_id, &Msg::new(key!("akao_cool_taken")).card("card", &c));
         }
-        return;
+        return Ok(());
     }
     // （1）「若选择抽卡，则可以看抽牌堆顶至多两张卡」 -- the reward is the draw;
     // look at up to two and keep one.
     let deck = ctx::cards_in(player_id, CardPile::Deck);
     if deck.is_empty() {
-        return;
+        return Ok(());
     }
     let n = deck.len().min(2);
     let look: alloc::vec::Vec<String> = deck[..n].to_vec();
@@ -66,10 +66,10 @@ fn on_circle(player_id: i32) {
             .iter()
             .map(|c| Msg::new(key!("akao_cool_option")).card("card", &c))
             .collect::<alloc::vec::Vec<_>>(),
-    );
-    let Some(keep) = look.get(pick).cloned() else { return; };
+    )?;
+    let Some(keep) = look.get(pick).cloned() else { return Ok(()); };
     if !ctx::take_card(player_id, CardPile::Deck, &keep) {
-        return;
+        return Ok(());
     }
     ctx::add_to_hand(player_id, &keep);
     // 「剩余的卡放入弃牌堆或花费500资金将其背面朝上放置在自己场上」
@@ -78,15 +78,19 @@ fn on_circle(player_id: i32) {
             player_id,
             &Msg::new(key!("akao_cool_place_title")),
             &Msg::new(key!("akao_cool_place_ask")).card("card", c),
-        );
-        if paid && ctx::pay(player_id, 500, &Msg::new(key!("akao_cool_place_pay"))) > 0 {
+        )?;
+        if paid && ctx::pay(player_id, 500, &Msg::new(key!("akao_cool_place_pay")))? > 0 {
             ctx::set_dest(ctx::Dest::Field);
-            ctx::place_card(player_id, c, &Msg::new(key!("akao_cool_note")));
-            ctx::set_card_face_down(player_id, c, true);
+            // Hold the uid `place_card` hands back: this is 「此卡」 -- the copy
+            // just placed -- and re-resolving `c` by name would pick whichever
+            // copy of that id is first on the field.
+            let uid = ctx::place_card(player_id, c, &Msg::new(key!("akao_cool_note")));
+            ctx::set_face_down_at(uid, true);
             ctx::log(player_id, &Msg::new(key!("akao_cool_placed")).card("card", &c));
         } else {
             ctx::take_card(player_id, CardPile::Deck, c);
             ctx::to_discard(player_id, c);
         }
     }
+    Ok(())
 }

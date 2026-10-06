@@ -20,7 +20,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn doll_garden(player_id: i32) {
+fn doll_garden(player_id: i32) -> card_sdk::Asked {
     let mut sum = 0;
     for p in ctx::others(player_id) {
         // 规则书: 「X为该玩家正常移动到你所在格子所需的移动数」 -- C#
@@ -40,16 +40,16 @@ fn doll_garden(player_id: i32) {
                 &[
                     Msg::new(key!("doll_garden_move")),
                     Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64)],
-            );
+            )?;
             if pick == 1 {
                 // 规则书: 「向你支付X*20资金」
-                ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")));
+                ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")))?;
                 continue;
             }
         } else {
             // 规则书: 「无法移动的玩家只能选择向你支付」 -- no prompt, straight to
             // the payment (C# leaves `num2 = 1` and pays).
-            ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")));
+            ctx::transfer(p, player_id, x * 20, &Msg::new(key!("doll_garden_why")))?;
             continue;
         }
         // 规则书: 「进行一次移动掷骰并移动对应步数（不[触发结算]）」
@@ -72,7 +72,7 @@ fn doll_garden(player_id: i32) {
     if sum <= 0 {
         // C# `H.Log("text", i, "没有人移动：... 不移动（人偶的箱庭）")`.
         ctx::log(player_id, &Msg::new(key!("doll_garden_no_move")).player_id("who", player_id));
-        return;
+        return Ok(());
     }
     // 规则书: 「你强制移动其他玩家本次移动掷骰数之和。视为你本回合的主要移动。」
     ctx::log(
@@ -91,4 +91,5 @@ fn doll_garden(player_id: i32) {
     // 规则书: 「视为你本回合的主要移动」 -- `H.CardMove` runs `MainMoveAs`
     // (MatchHost.cs:23102-23120), which sets `_turnCtx.MainMoved` on the turn
     // player; that is exactly `card_move`'s bookkeeping.
+    Ok(())
 }

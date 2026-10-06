@@ -18,11 +18,11 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
     let pos = ctx::player_pos(player_id);
     if n <= 0 || pos < 0 {
-        return;
+        return Ok(());
     }
     // 规则书: 「移动到当前格子绝对距离1到4格或以内的任何格子」 -- C#
     // `CardRimiChoco.Play` offers the eight tiles at offsets ±1..±4.
@@ -33,14 +33,14 @@ fn play(player_id: i32) {
         }
     }
     if tiles.is_empty() {
-        return;
+        return Ok(());
     }
     let to = ctx::ask_tile(
         player_id,
         &Msg::new(key!("rimi_choco_title")),
         &Msg::new(key!("rimi_choco_ask")),
         &tiles,
-    );
+    )?;
     // 规则书: 「期间[不可阻挡]」 -- a blocker cannot stop this walk. The window is
     // the move, and the move is the turn's main move and consumes it, so a
     // turn-end expiry is the same window here.
@@ -62,4 +62,5 @@ fn play(player_id: i32) {
             .i("n", len as i64),
     );
     ctx::card_move(player_id);
+    Ok(())
 }

@@ -26,42 +26,44 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
-fn on_pay(player_id: i32) {
+fn on_pay(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     let payer = ctx::trigger::player_id();
     if payer < 0 || payer == player_id {
-        return;
+        return Ok(());
     }
     let t = ctx::trigger::tile();
     if t < 0 || ctx::tile_owner(t) != player_id {
-        return;
+        return Ok(());
     }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("soyo_crychic_title")),
         &Msg::new(key!("soyo_crychic_ask")).tile("tile", t),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     // 「取消那次支付」
     ctx::trigger::set_pay_amount(0);
     // 「使你下回合的主要移动变为传送至触发此技能的那格」
     state::set(player_id, OWED, t);
     ctx::log(player_id, &Msg::new(key!("soyo_crychic_cancelled")).tile("tile", t));
+    Ok(())
 }
 
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan.
-fn on_plan(player_id: i32) {
+fn on_plan(player_id: i32) -> card_sdk::Asked {
     let t = state::get(player_id, OWED);
     if t < 0 {
-        return;
+        return Ok(());
     }
     state::set(player_id, OWED, -1);
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(t);
     plan::set_resolve(true);
     ctx::log(player_id, &Msg::new(key!("soyo_crychic_moved")).tile("tile", t));
+    Ok(())
 }

@@ -73,10 +73,12 @@ pub fn on(
         | (On::Hook(_, _, run), _)
         | (On::Gate(_, run), _)
         | (On::AtEnd(run), _)
-        | (On::RollPlan(run), _) => {
-            run(player_id);
-            0
-        }
+        | (On::RollPlan(run), _) => match run(player_id) {
+            Ok(()) => 0,
+            // Asked: the host reads the published question and re-runs us with
+            // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.
+            Err(crate::Prompt) => crate::abi::EXIT_NEED_INPUT as i64,
+        },
     }
 }
 

@@ -13,7 +13,7 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[
     On::Play(None, rain)]);
 
-fn rain(player_id: i32) {
+fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「投掷2d2并记录结果为X」
     // 投掷2d2并记录结果为X -- `ctx::n(1, ...)` so 「后勤人员的努力」 can double
     // this card's first number (C# `x = (c.Doubled == 0) ? x * 2 : x`).
@@ -31,7 +31,7 @@ fn rain(player_id: i32) {
             &Msg::new(key!("rain_title")),
             &Msg::new(key!("rain_ask")).i("n", targets.len() as i64 + 1).i("x", x as i64),
             &pool,
-        );
+        )?;
         // 规则书[手]: 「[指定]X名玩家」 -- the gate (out / exile / ImmuneAll /
         // Untargetable / Redirect / the `target` [反击] window). C# `PickTarget`
         // answers `t.yes ? t.index : -1` and a failed pick ends the loop.
@@ -49,4 +49,5 @@ fn rain(player_id: i32) {
         ctx::give_stay(t, 1);
         ctx::log(t, &Msg::new(key!("rain_stay")).player_id("who", t));
     }
+    Ok(())
 }

@@ -17,7 +17,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     ctx::cant_move(player_id)
 }
 
-fn tsukushi_garden(player_id: i32) {
+fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「获得100资金」 -- C# `H.GainR(i, 100, CardName)`.
     ctx::gain(player_id, 100, &Msg::new(key!("tsukushi_garden_why")));
     // 规则书: 「投掷1d6并根据结果传送到行动条上对应玩家前一格」
@@ -34,17 +34,17 @@ fn tsukushi_garden(player_id: i32) {
         }
     }
     if count <= 0 {
-        return;
+        return Ok(());
     }
     let r = ctx::roll(player_id, 1, 6);
     let who = list[((r - 1).rem_euclid(count)) as usize];
     let n = ctx::tile_count();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     let to = ctx::tile_steps_ahead(who, 1);
     if to < 0 {
-        return;
+        return Ok(());
     }
     if who == player_id {
         // 规则书: 「选中自己则前进一格」
@@ -62,7 +62,7 @@ fn tsukushi_garden(player_id: i32) {
         player_id,
         &Msg::new(key!("tsukushi_garden_settle_title")),
         &Msg::new(key!("tsukushi_garden_settle_text")).tile("tile", to),
-    );
+    )?;
     // 规则书: 「并视为主要移动」 -- C# `H.CardMove(c, new MoveCtx { ... })`.
     if settle {
         ctx::log(player_id, &Msg::new(key!("tsukushi_garden_will_settle")).tile("tile", to)); // 规则书: 「可以选择是否触发结算」
@@ -84,7 +84,7 @@ fn tsukushi_garden(player_id: i32) {
         ctx::card_move(player_id);
     }
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     // 规则书: 「直到下个你的回合开始时，你无法被异常移动」 -- `unstoppable` is
     // exactly that gate, and `expires: TurnStart` is the 「直到下个你的回合
@@ -92,4 +92,5 @@ fn tsukushi_garden(player_id: i32) {
     ctx::state::add(player_id, card_sdk::abi::state_key::UNSTOPPABLE, 1);
     ctx::state::set_expires(player_id, card_sdk::abi::state_key::UNSTOPPABLE, card_sdk::ctx::state::TURN_START);
     ctx::log(player_id, &Msg::new(key!("tsukushi_garden_guard")).player_id("who", player_id));
+    Ok(())
 }

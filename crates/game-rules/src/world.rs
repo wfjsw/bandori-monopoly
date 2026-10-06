@@ -22,7 +22,7 @@ pub struct Trigger {
     pub tile: i32,
     /// `t.Value` (`t.Pay.amount` on pay triggers).
     pub value: i32,
-    /// `t.Step` -- the turn step (0/1/2/3) active when this trigger fired.
+    /// `t.Step` -- the turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
     pub step: i32,
     /// `t.ByCard` -- the player whose card caused this trigger, or `None`.
     pub by_card: Option<i32>,
@@ -98,6 +98,13 @@ impl Trigger {
 pub trait CardWorld: Clone + 'static {
     // ---------------------------------------------------------- dice & log
     /// Sum of `count` d`sides` from the match RNG; also records a dice event.
+    /// Announce which effect a card just applied (`H.Effect`). Unlike [`Self::log`]
+    /// this reaches the player as a popup as well as a log line -- the two are
+    /// additive. Defaults to a plain log so test worlds need not implement it.
+    fn effect(&mut self, player_id: i32, msg: Msg) {
+        self.log(player_id, msg);
+    }
+
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32;
     /// C# `PlayCtx.Extreme` -- 1 = settle number ranges at their max, -1 = min.
     fn extreme(&self) -> i32 {
@@ -267,19 +274,44 @@ pub trait CardWorld: Clone + 'static {
     fn card_face_down(&self, _player_id: i32, _card: &str) -> bool {
         false
     }
-    fn place_card(&mut self, player_id: i32, card: &str, note: Msg);
+    /// Place a field card; returns the new instance's uid, which is what
+    /// addresses it afterwards. The *name* is not an identity -- one player may
+    /// hold several copies of the same card in play.
+    fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32;
     /// Place the card **on a tile** rather than with its owner (C#
     /// `H.PlaceFromPlay(c, i, tile)`); `tile: -1` is [`Self::place_card`].
-    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg);
+    /// Place a field card on a tile; returns the new instance's uid.
+    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32;
     /// `PlayCtx.Dest` -- where this card goes when its effect finishes.
     fn set_dest(&mut self, dest: i32);
     /// `H.Unplace` -- take the card out of play (`true` when it was there).
-    fn unplace_card(&mut self, player_id: i32) -> bool;
+    /// Take the *running* instance off the field; returns the owner it left
+    /// (or -1). No locator: the instance is the one the run was dispatched for.
+    fn unplace_card(&mut self) -> i32;
     /// Take a *named* card off the player's field (C# `H.Unplace(card, ...)`).
     fn unplace_card_named(&mut self, _player_id: i32, _card: &str) -> bool {
         false
     }
-    fn is_placed(&self, player_id: i32) -> i32;
+    fn is_placed(&self) -> i32;
+    /// Where the *running* instance sits (-1 = with its owner / gone).
+    fn self_tile(&self) -> i32 {
+        -1
+    }
+    fn set_self_tile(&mut self, _tile: i32) -> bool {
+        false
+    }
+    fn self_face_down(&self) -> bool {
+        false
+    }
+    fn set_self_face_down(&mut self, _on: bool) -> bool {
+        false
+    }
+    fn self_immune(&self) -> bool {
+        false
+    }
+    fn set_self_immune(&mut self, _on: bool) -> bool {
+        false
+    }
     /// Ids of the player's placed field cards, in placement order.
     fn placed_cards(&self, _player_id: i32) -> Vec<String> {
         Vec::new()
@@ -296,13 +328,49 @@ pub trait CardWorld: Clone + 'static {
     fn add_card_crystals(&mut self, _player_id: i32, _card: &str, _n: i32, _max: i32) -> i32 {
         0
     }
-    /// Miracle crystals on the *current* card placed at `player_id` (C# `Card.Crystals`).
-    fn crystals(&self, player_id: i32) -> i32;
-    /// Set the current card's crystals at `player_id`; returns the new count.
-    fn set_crystals(&mut self, player_id: i32, n: i32) -> i32;
-    /// `H.AddCrystals` -- adjust the current card's crystals at `player_id` by `n`,
+    /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
+    /// order. The hook dispatch walks this so two copies of a card are two hooks.
+    fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
+        Vec::new()
+    }
+    /// The instance at `uid`, wherever it sits.
+    fn crystals_at(&self, _uid: i32) -> i32 {
+        0
+    }
+    fn add_crystals_at(&mut self, _uid: i32, _n: i32, _max: i32) -> i32 {
+        0
+    }
+    fn unplace_at(&mut self, _uid: i32) -> i32 {
+        -1
+    }
+    fn tile_at(&self, _uid: i32) -> i32 {
+        -2
+    }
+    fn set_tile_at(&mut self, _uid: i32, _tile: i32) -> bool {
+        false
+    }
+    fn is_face_down_at(&self, _uid: i32) -> bool {
+        false
+    }
+    fn set_face_down_at(&mut self, _uid: i32, _on: bool) -> bool {
+        false
+    }
+    fn is_immune_at(&self, _uid: i32) -> bool {
+        false
+    }
+    fn set_immune_at(&mut self, _uid: i32, _on: bool) -> bool {
+        false
+    }
+    /// Miracle crystals on the *running card instance* (C# `Card.Crystals`).
+    /// The instance is the one the run was dispatched for -- its placement is
+    /// not a parameter, because the host already knows it from the dispatch and
+    /// the same card id can sit on several players' fields at once.
+    fn crystals(&self) -> i32;
+    /// Set the running card instance's crystals; returns the new count.
+    fn set_crystals(&mut self, n: i32) -> i32;
+    /// `H.AddCrystals` -- adjust the running card instance's crystals by `n`,
     /// clamped at 0 and at `max` (0 = uncapped); returns the new count.
-    fn add_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32;
+    fn add_crystals(&mut self, n: i32, max: i32) -> i32;
 
     // ------------------------------------------------------ marks & tokens
     /// `H.AddMark` -- a marker on a tile (`kind` names it, `note` explains it).
@@ -473,14 +541,18 @@ pub trait CardWorld: Clone + 'static {
     fn add_fire_max(&mut self, _player: i32, _n: i32) -> i32 {
         0
     }
-    /// Make `id` the running card for a nested `play_card` (fresh `Dest`);
-    /// returns what to hand back to [`Self::leave_card`].
-    fn enter_card(&mut self, _id: &str) -> (String, i32) {
-        (String::new(), 0)
+    /// Make `id` the running card for a nested `play_card`: a **fresh** instance
+    /// (C# `NewCard`), with a fresh `Dest`. The uid goes to -1 rather than being
+    /// inherited -- otherwise the inner run would read the *outer* instance's
+    /// crystals under its own name, which is not what "the inner card runs as
+    /// itself" means. Returns what to hand back to [`Self::leave_card`]:
+    /// `(card, dest, uid)`.
+    fn enter_card(&mut self, _id: &str) -> (String, i32, i32) {
+        (String::new(), 0, -1)
     }
     /// Restore the outer card after a nested `play_card`; returns the inner
     /// card's `Dest`.
-    fn leave_card(&mut self, _saved: (String, i32)) -> i32 {
+    fn leave_card(&mut self, _saved: (String, i32, i32)) -> i32 {
         0
     }
 

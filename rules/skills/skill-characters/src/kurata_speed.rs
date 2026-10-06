@@ -17,9 +17,9 @@ pub const KURATA_SPEED: CardDef = CardDef::new("skill:仓田真白:向后全速�
     On::RollPlan(roll_plan)]);
 
 /// （1）「[主动移动]时移动掷骰变为2d20」, （2）「反方向移动」.
-fn roll_plan(player_id: i32) {
+fn roll_plan(player_id: i32) -> card_sdk::Asked {
     if ctx::turn_player() != player_id {
-        return;
+        return Ok(());
     }
     // （1） -- the face is 2d20, not the default 1d20. `set_base_dice` clears
     // whatever the plan started from.
@@ -27,4 +27,5 @@ fn roll_plan(player_id: i32) {
     // （2） -- the walk runs backwards.
     plan::set_reverse(true);
     ctx::log(player_id, &Msg::new(key!("kurata_speed_plan")));
+    Ok(())
 }

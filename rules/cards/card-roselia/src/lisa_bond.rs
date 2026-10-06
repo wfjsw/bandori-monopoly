@@ -27,10 +27,10 @@ fn can_react(player_id: i32) -> bool {
     !ctx::players_on(ctx::player_pos(player_id), player_id).is_empty()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let candidates: Vec<i32> = ctx::players_on(ctx::player_pos(player_id), player_id);
     if candidates.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「并指定一个和你在同一地块的角色」 -- C# `H.PickTarget` over the
     // same-tile players: `H.AskSeat` then the `H.Target` gate (`SingleTarget`).
@@ -39,7 +39,7 @@ fn react(player_id: i32) {
         &Msg::new(key!("lisa_bond_ask_title")),
         &Msg::new(key!("lisa_bond_ask_text")),
         &candidates,
-    );
+    )?;
     // C# `H.Target(c, r.index, t)` -> `res.index = t.yes ? t.index : -1`: out /
     // exile / `ImmuneAll` / `Untargetable` / the `target` [反击] window all fail
     // the designation, and a `redirect` hook may move the hit.
@@ -60,4 +60,5 @@ fn react(player_id: i32) {
     //   -- needs a persistent skill-targeting exemption on the placed card (C#
     //   `CardLisaBond.NoteText` / the skill system's 「最近」 gate) plus the discard
     //   once the exemption is used.
+    Ok(())
 }

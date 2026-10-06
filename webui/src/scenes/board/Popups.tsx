@@ -196,6 +196,15 @@ export function showPlayerInfo(m: Model, i: number): void {
   ), { size: "mid" });
 }
 
+/** Which effect a card just applied -- a popup window, in addition to the log
+ *  line the same message already produced. Auto-closes after `ms`: these fire
+ *  mid-resolution (a card can land three in a row), so the player should see
+ *  each one without having to dismiss it. */
+export function showEffect(body: string, ms: number): void {
+  const close = openModal(tr("anim.effect"), <div className={s.info}><p className={s.pre}>{body}</p></div>, { size: "mid" });
+  window.setTimeout(close, ms);
+}
+
 export function showEvent(id: string, note: string): void {
   openModal(tr("events.label", { id }), <div className={s.info}><p className={s.pre}>{D.event(id)?.text ?? ""}</p>{note && <p className={s.pink}>{note}</p>}</div>, { size: "mid" });
 }

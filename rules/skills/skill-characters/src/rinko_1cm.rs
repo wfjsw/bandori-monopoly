@@ -32,20 +32,25 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始3，上限3」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得三个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 3, &Msg::new(key!("rinko_1cm_gain")));
+    Ok(())
 }
 
 /// （2） 「你可以在移动掷骰前消耗X个[火罐]」 -- X is what the player holds.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("rinko_1cm_no_fire")));
     }
@@ -57,10 +62,10 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「使这回合移动掷骰的结果固定为X*6。本次移动不受异常移动效果影响」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let have = state::get(player_id, state_key::FIRE);
     if have < 1 {
-        return;
+        return Ok(());
     }
     let x = ctx::ask_number(
         player_id,
@@ -68,9 +73,9 @@ fn use_skill(player_id: i32) {
         &Msg::new(key!("rinko_1cm_ask")),
         1,
         have,
-    );
+    )?;
     if x < 1 || !ctx::spend_fire(player_id, x, &Msg::new(key!("rinko_1cm_spend"))) {
-        return;
+        return Ok(());
     }
     // 「固定为X*6」 -- the face is pinned, not rolled.
     ctx::set_fixed_roll(x * 6);
@@ -78,4 +83,5 @@ fn use_skill(player_id: i32) {
     state::add(player_id, state_key::UNSTOPPABLE, 1);
     state::set_expires(player_id, state_key::UNSTOPPABLE, ctx::state::TURN_END);
     ctx::log(player_id, &Msg::new(key!("rinko_1cm_fixed")).i("n", (x * 6) as i64));
+    Ok(())
 }

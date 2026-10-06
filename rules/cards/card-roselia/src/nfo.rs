@@ -15,6 +15,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NFO: CardDef = CardDef::new("R:NFO", &[
+    On::Hook(&[card_sdk::abi::HookKind::PayChoose], gain_guard, gain_bump),
     On::Play(None, play),
     On::Hook(&[HookKind::PayAt], |_| true, react),
     On::AtEnd(at_end)]);
@@ -44,7 +45,7 @@ fn nearest_ahead(player_id: i32) -> i32 {
     best
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6」 -- C# `(H.Roll(i, 1, 6, "NFO") - 1) % 6 + 1` wraps above 6.
     let roll = ctx::roll(player_id, 1, 6);
     // 规则书: 「（若结果严格大于6，则从1开始重新计数）」
@@ -54,26 +55,30 @@ fn play(player_id: i32) {
     ctx::at_turn_end(player_id);
     if k == 6 {
         // 规则书: 「若结果为6，依次获得结果1-5的全部效果。」
+        ctx::effect(player_id, &Msg::new(key!("nfo_effect_all")));
         for x in 1..=5 {
-            effect(player_id, x);
+            apply(player_id, x)?;
         }
     } else {
         // 规则书: 「若投掷结果为1，获得1500资金；若结果为2，…；若结果为3，…；若结果为4，…；若结果为5，…」
-        effect(player_id, k);
+        ctx::effect(player_id, &Msg::new(key!("nfo_effect")).i("n", k as i64));
+        apply(player_id, k)?;
     }
+    Ok(())
 }
 
 /// C# `H._turnCtx.AfterEnd` -- the [停留] layer lands after the turn's status
 /// wear-off (so it survives into the next turn).
-fn at_end(player_id: i32) {
+fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, "NFO")`.
     ctx::give_stay(player_id, 1);
     ctx::log(player_id, &Msg::new(key!("nfo_stay")).player_id("who", player_id));
+    Ok(())
 }
 
-fn effect(player_id: i32, k: i32) {
+fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     match k {
         // 规则书: 「若投掷结果为1，获得1500资金」
@@ -85,7 +90,7 @@ fn effect(player_id: i32, k: i32) {
             let num = nearest_ahead(player_id);
             if num < 0 {
                 ctx::log(player_id, &Msg::new(key!("nfo_no_ahead")));
-                return;
+                return Ok(());
             }
             let pos = ctx::player_pos(player_id);
             let pos2 = ctx::player_pos(num);
@@ -124,31 +129,25 @@ fn effect(player_id: i32, k: i32) {
         }
         // 规则书: 「若结果为4，选择你弃牌堆中的一张满足打出条件的卡打出」
         4 => {
-            replay_from_discard(player_id);
+            replay_from_discard(player_id)?;
         }
         // 规则书: 「若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」
         5 => {
             ctx::add_tok(player_id, key!("nfo_crystals"), 6, i32::MAX);
             ctx::log(player_id, &Msg::new(key!("nfo_crystals_added")).player_id("who", player_id));
-            // TODO(规则书): 「为自己的角色卡添加6个奇迹水晶」 -- the crystals live on an
-            //   `H.ExtraOf<NfoCrystalsFx>(i)` attachment (C# `CardNfo.Effect` case 5), not
-            //   a plain player token; needs H.ExtraOf skill attachments.
-            // TODO(规则书): 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」
-            //   -- the C# `NfoCrystalsFx.PayChoose` body keys on `p.to == Player` and
-            //   bumps the gain by 300; the crystals live on an `H.ExtraOf` attachment
-            //   (held), so the hook is not written here. The gain-side `payChoose`
-            //   trigger now fires (with `t.player_id = -1`, `t.target` = the gainer) and
-            //   `set_pay_amount` rewrites the gain, so only the ExtraOf stand-in
-            //   remains unmapped.
+            // 「为自己的角色卡添加6个奇迹水晶」 -- held as a player counter
+            // (`nfo_crystals`), the stand-in for the C# `H.ExtraOf<NfoCrystalsFx>`
+            // attachment; the gain half is `gain_bump` below.
         }
         _ => {}
     }
+    Ok(())
 }
 
 /// 规则书: 「选择你弃牌堆中的一张满足打出条件的卡打出」 -- C#
 /// `h.discard.Distinct()` + `H.CanReplay` + `H.AskCard` + `h.discard.Remove` +
 /// `H.PlayCard`, which then applies the card's own `Dest`.
-fn replay_from_discard(player_id: i32) {
+fn replay_from_discard(player_id: i32) -> card_sdk::Asked {
     let mut ok: Vec<String> = Vec::new();
     for id in ctx::cards_in(player_id, ctx::CardPile::Discard) {
         // C# `where id != Id && H.CanReplay(i, id)` (`Distinct()` drops duplicates).
@@ -162,7 +161,7 @@ fn replay_from_discard(player_id: i32) {
     if ok.is_empty() {
         // C# 「弃卡区没有能打出的卡（NFO）」.
         ctx::log(player_id, &Msg::new(key!("nfo_no_replay")));
-        return;
+        return Ok(());
     }
     let refs: Vec<&str> = ok.iter().map(|c| c.as_str()).collect();
     let pick = ctx::ask_card(
@@ -170,16 +169,17 @@ fn replay_from_discard(player_id: i32) {
         &Msg::new(key!("nfo_title")),
         &Msg::new(key!("nfo_replay_ask")),
         &refs,
-    );
+    )?;
     let id = ok.swap_remove(pick.min(ok.len() - 1));
     // C# `h.discard.Remove(text)` -- the card leaves the discard before it resolves.
     if !ctx::take_card(player_id, ctx::CardPile::Discard, &id) {
-        return;
+        return Ok(());
     }
     ctx::log(player_id, &Msg::new("log.play").player_id("who", player_id).card("card", &id));
     // C# `H.PlayCard(...)` runs the effect and then applies that card's `Dest`.
-    let dest = ctx::play_card(&id, player_id);
+    let dest = ctx::play_card(&id, player_id)?;
     apply_dest(player_id, &id, dest);
+    Ok(())
 }
 
 /// Land a card just replayed out of the discard on its own `Dest` (C#
@@ -197,36 +197,64 @@ fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
 }
 
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
-fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) {
+fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
     let list: Vec<i32> = payers
         .iter()
         .copied()
         .filter(|&p| p != to && !ctx::player_out(p))
         .collect();
     if list.is_empty() || total <= 0 {
-        return;
+        return Ok(());
     }
     let per = (total + list.len() as i32 - 1) / list.len() as i32;
     let share = (per + 9) / 10 * 10;
     for p in list {
-        ctx::transfer(p, to, share, why);
+        ctx::transfer(p, to, share, why)?;
     }
+    Ok(())
 }
 
 /// C# `CardNfo.PayAt` (effect 3, while placed): the owner's next payment is cut
 /// by 1000, then the card is used up and goes to the discard pile. Runs through
 /// the Fx hook dispatch at `payAt` (after `PayChoose`, before the `pay` [反击]
 /// window), so this is a field effect, not a [反击].
-fn react(player_id: i32) {
-    if trigger::kind() != TriggerKind::PayAt || trigger::player_id() != player_id || !ctx::is_placed(player_id) {
-        return;
+fn react(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::PayAt || trigger::player_id() != player_id || !ctx::is_placed() {
+        return Ok(());
     }
     let amount = trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     trigger::set_pay_amount((amount - 1000).max(0));
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("nfo_used")).player_id("who", player_id).n("money", (amount.min(1000)) as i64));
+    Ok(())
+}
+
+fn gain_guard(player_id: i32) -> bool {
+    ctx::trigger::target() == player_id && ctx::tok(player_id, "nfo_crystals") > 0
+}
+
+/// 「你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」 -- C#
+/// `NfoCrystalsFx.PayChoose`, keyed on `p.to == Player` (the gainer).
+fn gain_bump(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::target() != player_id {
+        return Ok(());
+    }
+    if ctx::tok(player_id, "nfo_crystals") < 1 {
+        return Ok(());
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("nfo_title")),
+        &Msg::new(key!("nfo_bump")),
+    )? {
+        return Ok(());
+    }
+    ctx::add_tok(player_id, "nfo_crystals", -1, i32::MAX);
+    ctx::trigger::set_pay_amount(ctx::trigger::value() + 300);
+    ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
+    Ok(())
 }

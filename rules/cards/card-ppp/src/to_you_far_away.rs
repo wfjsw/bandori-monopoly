@@ -23,14 +23,14 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「[传送]至任意与[使用者]绝对距离最远的玩家的格子」 -- C# `H.Farthest(i)`
     // keeps every other player sitting at the maximum absolute distance.
     let pos = ctx::player_pos(player_id);
     let others = ctx::others(player_id);
     // C# `Play` yields break when `H.Farthest` is empty (WhyNot refuses earlier).
     if others.is_empty() {
-        return;
+        return Ok(());
     }
     let best = others.iter().map(|&p| ctx::dist(pos, ctx::player_pos(p))).max().unwrap_or(0);
     let mut far: Vec<i32> = others
@@ -38,7 +38,7 @@ fn play(player_id: i32) {
         .filter(|&p| ctx::dist(pos, ctx::player_pos(p)) == best)
         .collect();
     if far.is_empty() {
-        return;
+        return Ok(());
     }
     // C# `H.AskSeat` only when several players share the maximum. Re-verified
     // against `CardToYouFarAway.Play` (MatchHost.cs:8873-8918): the farthest-player
@@ -51,7 +51,7 @@ fn play(player_id: i32) {
             &Msg::new(key!("to_you_far_away_title")),
             &Msg::new(key!("to_you_far_away_ask")),
             &far,
-        )
+        )?
     } else {
         far[0]
     };
@@ -73,7 +73,7 @@ fn play(player_id: i32) {
     );
     ctx::card_move(player_id);
     if ctx::player_out(player_id) {
-        return;
+        return Ok(());
     }
     // 规则书: 「然后可以给任意与[使用者]绝对距离最远的[使用者]拥有且可盖房的格子加盖」
     // -- C# filters `H.OwnedBy` by `H.WhyNotBuildOn == null`, keeps those at the
@@ -85,4 +85,5 @@ fn play(player_id: i32) {
     // 规则书: 「加盖」 -- `H.OfferBuildAmong` over those: prompt to pay
     // `build_cost` and raise one house. Skips silently when none can take one.
     ctx::card_offer_build(player_id, &far_tiles);
+    Ok(())
 }

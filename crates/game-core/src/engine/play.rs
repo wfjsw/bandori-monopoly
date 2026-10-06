@@ -11,7 +11,7 @@ use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, Trigger};
 use super::world::{Signal, CIRCLE_MONEY, HAND_LIMIT, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
-use crate::state::{key, Tick};
+use crate::state::{key, stage, Tick};
 
 /// A payment (C# `PayCtx`, the fields the shell uses).
 #[derive(Debug, Clone)]
@@ -81,7 +81,7 @@ impl Cx<'_> {
         let st = &mut self.w.st;
         st.round = 1;
         st.turn = -1;
-        st.step = 0;
+        st.step = stage::NONE;
         self.w.log(
             "text",
             -1,
@@ -220,7 +220,7 @@ impl Cx<'_> {
         let i = next as usize;
         let st = &mut self.w.st;
         st.turn = next;
-        st.step = 1;
+        st.step = stage::START;
         st.bought = false;
         st.built = false;
         st.skip_move = false;
@@ -312,7 +312,7 @@ impl Cx<'_> {
                 i as i32,
                 Msg::new("log.stunned_skip").player_id("who", i),
             );
-            self.w.st.step = 3;
+            self.w.st.step = stage::END;
             self.wait(1.2);
             return self.end_turn(i);
         }
@@ -327,6 +327,11 @@ impl Cx<'_> {
                 Msg::new("log.stay_skip").player_id("who", i),
             );
         }
+        // 开始阶段 is over: status has ticked, `turnStart` has fired, and the
+        // stun/stay checks have run. 运营阶段 begins -- the player may play
+        // cards and roll. (A stunned player left above, so 眩晕 skips 运营 and
+        // 移动, as the rulebook says.)
+        self.w.st.step = stage::OPS;
         self.w.st.roller = i as i32;
         self.wait(1.2);
         Ok(())
@@ -351,7 +356,7 @@ impl Cx<'_> {
 
     /// `EndTurnRoutine` -- status effects wear off, next turn queued.
     pub(crate) fn end_turn(&mut self, i: usize) -> Flow<()> {
-        self.w.st.step = 3;
+        self.w.st.step = stage::END;
         // C# `EndTurnRoutine` (27493): TurnEndBefore -> `AtEnd` callbacks ->
         // status wear-off -> TurnEnd -> TurnEndAfter -> `AfterEnd` callbacks.
         // `turnEndBefore` also runs the `before_turn_end` callbacks (`AtEnd`).
@@ -423,7 +428,7 @@ impl Cx<'_> {
         plan.player_id = i;
         plan.roller = i;
         plan.main = is_turn;
-        self.w.st.step = 2;
+        self.w.st.step = stage::MOVE;
         if plan.teleport_to >= 0 {
             let to = plan.teleport_to as usize;
             let resolve = plan.resolve;
@@ -467,7 +472,7 @@ impl Cx<'_> {
             self.w.set_slot(i as i32, "lastWalk", plan.total + 1);
         }
         if is_turn {
-            self.w.st.step = 3;
+            self.w.st.step = stage::END;
         }
         self.wait(1.2);
         Ok(())
@@ -596,14 +601,14 @@ impl Cx<'_> {
 
     /// `MainMove` -- the turn's main roll-and-move.
     pub(crate) fn main_move(&mut self, i: usize, roller: usize) -> Flow<()> {
-        self.w.st.step = 2;
+        self.w.st.step = stage::MOVE;
         if self.w.turn.main_moved {
             self.w.log(
                 "text",
                 i as i32,
                 Msg::new("log.main_move_used").player_id("who", i),
             );
-            self.w.st.step = 3;
+            self.w.st.step = stage::END;
             return Ok(());
         }
         self.w.turn.main_moved = true;
@@ -631,7 +636,7 @@ impl Cx<'_> {
             // (which match `Roll | MoveRoll`) fire before any dice exist.
             raise!(self, "roll", i, @m m, value = -1)?;
             if self.out(i) || !self.playing() {
-                self.w.st.step = 3;
+                self.w.st.step = stage::END;
                 return Ok(());
             }
         }
@@ -647,7 +652,7 @@ impl Cx<'_> {
             raise!(self, "rollPlan", i, @m m)?;
             m = self.w.turn.plan.clone();
             if self.out(i) || !self.playing() {
-                self.w.st.step = 3;
+                self.w.st.step = stage::END;
                 return Ok(());
             }
             // C# `DoMoveRoll` + `TurnCtx.Plan.FixedRoll`: a stored fixed face
@@ -687,7 +692,7 @@ impl Cx<'_> {
                 self.w.set_slot(i as i32, "lastWalk", m.total + 1);
             }
         }
-        self.w.st.step = 3;
+        self.w.st.step = stage::END;
         self.wait(1.2);
         Ok(())
     }
@@ -942,6 +947,14 @@ impl Cx<'_> {
 
     // =============================================================== tiles
 
+    /// `circleAffected`'s `Trigger.value`: which half of the CiRCLE reward was
+    /// taken. These are the source of truth -- `card-sdk`'s `abi` mirrors them
+    /// (same convention as `Arg` / `TriggerKind`, which `abi` documents as
+    /// "must match the engine"). The stunned path forces [`CIRCLE_REWARD_CARD`],
+    /// so a money-only clause cannot fire there.
+    pub const CIRCLE_REWARD_MONEY: i32 = 0;
+    pub const CIRCLE_REWARD_CARD: i32 = 1;
+
     /// `CircleReward` -- 2,000 money or one card.
     fn circle_reward(&mut self, i: usize, landing: bool) -> Flow<()> {
         if self.w.st.players[i].exile() > 0 {
@@ -982,20 +995,36 @@ impl Cx<'_> {
             };
             self.ask(ask)?.of(i)
         };
-        if pick == 1 {
-            self.w.log(
-                "text",
-                i as i32,
-                Msg::new("log.circle_card").player_id("who", i),
-            );
-            self.draw_r(i, 1, "src.circle")?;
-        } else {
-            let mut p = Pay::new(CIRCLE_MONEY, "gain");
-            p.to = Some(i);
-            p.typ = Some("pass");
-            p.source = "src.circle";
-            p.text = Some(Msg::new("log.circle_money").player_id("who", i));
-            self.money(p)?;
+        // `circleAffected` -- the reward has been picked but not paid out. A
+        // field card can rewrite it or cancel it outright and pay something
+        // else (Morfonica replaces the money half), so this raises between the
+        // pick and the payout: after the pick, because a hook has to see which
+        // option was taken; before the payout, because it has to be able to
+        // change it.
+        //
+        // `value` is which option the reward resolved to: 0 = money, 1 = card.
+        // The stunned path forces the card, so it raises with `value = 1` --
+        // a money-only clause ("when the money option is chosen") checks
+        // `value == 0` and correctly does not fire there. Raised on both paths
+        // rather than only the choice, so a reward rewrite applies however the
+        // option was arrived at.
+        let ca = raise!(self, "circleAffected", i, value = pick)?;
+        if !ca.is_cancelled() {
+            if pick == Self::CIRCLE_REWARD_CARD {
+                self.w.log(
+                    "text",
+                    i as i32,
+                    Msg::new("log.circle_card").player_id("who", i),
+                );
+                self.draw_r(i, 1, "src.circle")?;
+            } else {
+                let mut p = Pay::new(CIRCLE_MONEY, "gain");
+                p.to = Some(i);
+                p.typ = Some("pass");
+                p.source = "src.circle";
+                p.text = Some(Msg::new("log.circle_money").player_id("who", i));
+                self.money(p)?;
+            }
         }
         self.wait(0.4);
         Ok(())
@@ -1497,7 +1526,7 @@ impl Cx<'_> {
     pub(crate) fn buyable_here(&self, i: usize) -> bool {
         let st = &self.w.st;
         let pos = st.players[i].pos;
-        st.step == 3
+        st.step == stage::END
             && st.turn == i as i32
             && !st.bought
             && st.landed == pos
@@ -1518,7 +1547,7 @@ impl Cx<'_> {
     pub(crate) fn can_build_here(&self, i: usize) -> bool {
         let st = &self.w.st;
         let pos = st.players[i].pos as usize;
-        st.step == 3
+        st.step == stage::END
             && st.turn == i as i32
             && !st.built
             && !st.bought
@@ -1535,7 +1564,7 @@ impl Cx<'_> {
         }
         if st.turn == i as i32
             && self.playing()
-            && st.step == 3
+            && st.step == stage::END
             && (st.landed != t as i32 || st.bought)
         {
             return Some(Msg::new("err.build_only_settling"));
@@ -1715,10 +1744,10 @@ impl Cx<'_> {
         if asking {
             return Some(Msg::new("err.busy"));
         }
-        if st.step == 2 {
+        if st.step == stage::MOVE {
             return Some(Msg::new("err.mortgage_moving"));
         }
-        if st.step == 3 && !self.pending_purchase(i) {
+        if st.step == stage::END && !self.pending_purchase(i) {
             return Some(Msg::new("err.mortgage_after_roll"));
         }
         None
@@ -1752,7 +1781,7 @@ impl Cx<'_> {
         if !st.mortgaged[t] {
             return Some(Msg::new("err.not_mortgaged"));
         }
-        if st.turn != i as i32 || st.step != 1 {
+        if st.turn != i as i32 || st.step != stage::OPS {
             return Some(Msg::new("err.redeem_phase"));
         }
         if asking {
@@ -2473,7 +2502,7 @@ impl Cx<'_> {
         if !self.w.hidden[i].hand.iter().any(|c| c == id) {
             return Some(Msg::new("err.no_such_card"));
         }
-        if !(self.playing() && self.w.st.turn == i as i32) || self.w.st.step != 1 || asking {
+        if !(self.playing() && self.w.st.turn == i as i32) || self.w.st.step != stage::OPS || asking {
             return Some(Msg::new("err.play_phase"));
         }
         if let Some(why) = self.cannot_play(i) {

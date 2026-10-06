@@ -23,16 +23,18 @@ fn can_react(player_id: i32) -> bool {
     trigger::kind() == TriggerKind::DrawOut && trigger::player_id() == player_id
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」
     ctx::log(player_id, &Msg::new(key!("elegant_shout_note")).player_id("who", player_id));
     // C# `H.ExtraOf<ElegantFx>(c.Seat).Count++` -- each reaction stacks one
     // draw; scheduling one `AtEnd` per reaction stacks the same way.
     ctx::at_next_turn_end(player_id);
+    Ok(())
 }
 
 /// C# `ElegantFx.TurnEnd` -- one draw at the end of the player's next turn.
-fn at_end(player_id: i32) {
+fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」
     ctx::draw(player_id, 1);
+    Ok(())
 }

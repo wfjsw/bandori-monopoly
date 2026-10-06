@@ -26,7 +26,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     None // playable
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     let pos = ctx::player_pos(player_id);
     // 规则书: 「移动到你前方一名玩家的格子」 -- C# `CardCaught.Play` offers the other
     // players at a different tile, nearest forward first (`orderby H.Forward`).
@@ -36,7 +36,7 @@ fn play(player_id: i32) {
         .collect();
     // C# `Play` only prompts when the list is non-empty (`if (list.Count != 0)`).
     if list.is_empty() {
-        return;
+        return Ok(());
     }
     list.sort_by_key(|&p| ctx::tile_forward(pos, ctx::player_pos(p)));
     let who = ctx::ask_player(
@@ -44,7 +44,7 @@ fn play(player_id: i32) {
         &Msg::new(key!("caught_title")),
         &Msg::new(key!("caught_ask")).player_id("who", player_id),
         &list,
-    );
+    )?;
     let steps = ctx::tile_forward(pos, ctx::player_pos(who));
     // 规则书: 「视为本回合的主要移动」 -- C# `H.CardMove(c, new MoveCtx { Steps =
     // H.Forward(...) })`: the walk passes intervening tiles and settles on the
@@ -59,4 +59,5 @@ fn play(player_id: i32) {
     // offer afterwards. An explicit `H.OfferBuildAmong` on the tile reached is
     // the same effect without a hidden turn flag: ask, then build there.
     ctx::card_offer_build(player_id, &[ctx::player_pos(player_id)]);
+    Ok(())
 }

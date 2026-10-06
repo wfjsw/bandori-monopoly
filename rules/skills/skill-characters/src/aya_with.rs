@@ -30,12 +30,15 @@ pub const AYA_WITH: CardDef = CardDef::new("skill:丸山彩:With~", &[
     On::Hook(&[HookKind::PayChoose], mine, on_pay)]);
 
 fn mine(player_id: i32) -> bool {
+    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+        return false;
+    }
     ctx::trigger::player_id() == player_id
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得丸山彩的
 /// （2）技能」.
-fn at_start(player_id: i32) {
+fn at_start(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     // 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- a grant is the skill
     // rule placed on the grantee's field. `bind_skills` already puts a player's
@@ -48,18 +51,19 @@ fn at_start(player_id: i32) {
         ctx::place_card(p, "skill:丸山彩:With~", &Msg::new(key!("aya_with_granted")));
         ctx::log(p, &Msg::new(key!("aya_with_grant")).player_id("who", p));
     }
+    Ok(())
 }
 
 /// （2）「自己每次需要支付资金时可选择将自己Y个正面[P✽P粉丝]变反，此次支付的
 /// 分摊前资金减少Y×100（最少0）」.
-fn on_pay(player_id: i32) {
+fn on_pay(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
     if amount <= 0 {
-        return;
+        return Ok(());
     }
     let up = ctx::tok(player_id, FANS_UP);
     if up < 1 {
-        return;
+        return Ok(());
     }
     let y = ctx::ask_number(
         player_id,
@@ -67,9 +71,9 @@ fn on_pay(player_id: i32) {
         &Msg::new(key!("aya_with_ask")).i("n", amount as i64),
         0,
         up.min((amount + 99) / 100),
-    );
+    )?;
     if y < 1 {
-        return;
+        return Ok(());
     }
     // 「将自己Y个正面[P✽P粉丝]变反」
     ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
@@ -84,6 +88,7 @@ fn on_pay(player_id: i32) {
         flip_all_pp();
     }
     ctx::log(player_id, &Msg::new(key!("aya_with_done")).i("n", y as i64));
+    Ok(())
 }
 
 /// 「将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正」 -- spread Y flips across the

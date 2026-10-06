@@ -36,7 +36,7 @@ fn cant_play(_player: i32) -> Option<Msg> {
     Some(Msg::new(key!("parking_space_no_space")))
 }
 
-fn play(player_id: i32) {
+fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- C# `H.PlaceFromPlay(c, i, s)`
     // with `s = H.TileNamed("Space")`.
     ctx::set_dest(ctx::Dest::Field);
@@ -44,9 +44,11 @@ fn play(player_id: i32) {
     // 规则书[手]: 「将此卡放置于“Space”格子上」 -- bound to the Space tile, not
     // to the player's field.
     ctx::place_card_on(player_id, space, ID, &Msg::new(key!("parking_space_note")));
-    // TODO(规则书)（2）[持续]: 「位于此卡所在格子上的玩家无法使用角色及乐队技能」
-    // -- needs a skill-suppression hook (C# `CardParkingSpace.NoteText` /
-    // `Fx` gate on skill use at this tile).
+    // （2）[持续]「位于此卡所在格子上的玩家无法使用角色及乐队技能」 -- the
+    // `skillBlock` mark is what the shared skill-press gate reads.
+    if space >= 0 {
+        ctx::add_mark(space, player_id, "skillBlock", &Msg::new(key!("parking_space_note")));
+    }
     // 规则书[手]: 「将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）」
     // -- C# takes `H.State.houses[s]` houses off the Space tile (only when the
     // player owns it) and hands one to each of the player's other buildable deeds
@@ -75,6 +77,7 @@ fn play(player_id: i32) {
         num -= 1;
     }
     // 规则书（1）[持续] runs in `react` at `settleInstead` / `turnEndAfter`.
+    Ok(())
 }
 
 /// C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` (MatchHost.cs:2469-2495).
@@ -82,10 +85,10 @@ fn play(player_id: i32) {
 /// Pure guard for [`react`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn react_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」 -- C#
         // `CardParkingSpace.SettleInstead`: when the settle lands on the card's
@@ -94,11 +97,11 @@ fn react(player_id: i32) {
         // out once another has (`trigger::cancelled()`).
         TriggerKind::SettleInstead => {
             if trigger::cancelled() {
-                return;
+                return Ok(());
             }
             let space = ctx::tile_named("Space");
             if space < 0 || trigger::tile() != space {
-                return;
+                return Ok(());
             }
             let who = trigger::player_id();
             // C# `((m.SettleTile >= 0) ? m.SettleTile : m.Seat.pos) != Tile` --
@@ -120,7 +123,7 @@ fn react(player_id: i32) {
             let turn = trigger::player_id();
             let layers = ctx::slot(turn, SLOT_STAY);
             if layers <= 0 {
-                return;
+                return Ok(());
             }
             ctx::set_slot(turn, SLOT_STAY, 0);
             // C# `H.GiveStay(turn, layers, Seat, "Parking Space")` -> `AddStay`
@@ -133,4 +136,5 @@ fn react(player_id: i32) {
         }
         _ => {}
     }
+    Ok(())
 }

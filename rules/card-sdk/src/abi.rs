@@ -327,6 +327,17 @@ impl CardPile {
     }
 }
 
+/// `circleAffected`'s `Trigger.value` -- which half of the CiRCLE reward was
+/// taken. `0` is 「[获得]资金」, `1` is the card. The stunned path forces the
+/// card, so a money-only clause cannot fire there.
+///
+/// **Must match the engine's `CIRCLE_REWARD_MONEY` / `CIRCLE_REWARD_CARD` in
+/// `game-core/src/engine/play.rs`** (the same relation `Arg` has to
+/// `game-core/src/msg.rs`): `game-core` is the source, this is the mirror.
+/// Renumbering one means renumbering the other.
+pub const REWARD_MONEY: i32 = 0;
+pub const REWARD_CARD: i32 = 1;
+
 /// Trigger kinds a reaction can be checked against (C# `Trigger.Kind`).
 ///
 /// The values are a wire enum: the host fills them at the same points the C#
@@ -488,6 +499,16 @@ pub enum TriggerKind {
     /// v28: C# `Fx.SkillUsed` -- `t.player_id` just used their character skill
     /// (「使用自己原有的技能（2）时」). `t.card` is the skill rule's id.
     SkillUsed = 74,
+    /// v29: a placed card's [奇迹水晶] count was just written (set or add).
+    /// `t.card` is the card whose count moved, `t.player_id` its owner, and
+    /// `t.value` is the **change applied** (0 = a write that landed on the same
+    /// count, e.g. a card placed with none). The count after the write is
+    /// `ctx::crystals()` on the instance itself.
+    ///
+    /// The 「此卡上不再拥有[奇迹水晶]时」 clauses (AG:绯红之魂 (3) and kin) listen
+    /// here instead of testing the count at each spend site, so a count that is
+    /// emptied by *any* path still leaves the field.
+    CrystalsChanged = 76,
 }
 
 impl TriggerKind {
@@ -568,6 +589,7 @@ impl TriggerKind {
             75 => Self::HouseAdded,
             73 => Self::FireSpent,
             74 => Self::SkillUsed,
+            76 => Self::CrystalsChanged,
             _ => Self::None,
         }
     }
@@ -651,6 +673,7 @@ impl TriggerKind {
             Self::HouseAdded => "houseAdded",
             Self::FireSpent => "fireSpent",
             Self::SkillUsed => "skillUsed",
+            Self::CrystalsChanged => "crystalsChanged",
         }
     }
 
@@ -732,6 +755,7 @@ impl TriggerKind {
             "houseAdded" => Self::HouseAdded,
             "fireSpent" => Self::FireSpent,
             "skillUsed" => Self::SkillUsed,
+            "crystalsChanged" => Self::CrystalsChanged,
             _ => Self::None,
         }
     }
@@ -953,6 +977,7 @@ declare_kinds! {
         FireSpent = 73,
         SkillUsed = 74,
         HouseAdded = 75,
+        CrystalsChanged = 76,
     }
 }
 

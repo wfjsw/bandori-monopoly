@@ -31,8 +31,9 @@ fn can_react(player_id: i32) -> bool {
     // reads as `value() == 0`, so the ≥5000 guard covers it.
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「免除此次支付」
     trigger::set_pay_amount(0);
     ctx::log(player_id, &Msg::new(key!("vocal_too_hard_note")).player_id("who", player_id));
+    Ok(())
 }

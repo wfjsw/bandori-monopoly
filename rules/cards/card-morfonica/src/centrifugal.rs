@@ -41,7 +41,7 @@ fn can_react(player_id: i32) -> bool {
     ctx::targeted_count(player_id) >= 2
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果」
     // C# `c.Trigger.Cancelled = true` also voids the targeting that opened the window.
     trigger::set_cancelled(); // void the targeting that opened this window
@@ -51,31 +51,34 @@ fn react(player_id: i32) {
     // 规则书[反击]: 「无效化你受到的所有效果」 -- the ImmuneAll hook below covers
     //   targeting (`H.Target`), money transfers (the pay pipeline), and abnormal
     //   effects (the gate checks ImmuneAll first).
+    Ok(())
 }
 
 /// `Fx.ImmuneAll` (C# `CardCentrifugal.ImmuneAll`): while placed, the owner is
 /// untouchable by other players' effects. The engine checks ImmuneAll before
 /// targeting, before abnormals, and before card-driven payments, so this one
 /// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`).
-fn immune_all(player_id: i32) {
+fn immune_all(player_id: i32) -> card_sdk::Asked {
     // The hook runs on every placed card across all players; only claim
     // immunity for our own seat (`t.player` = the protected seat).
     if trigger::player_id() != player_id {
-        return;
+        return Ok(());
     }
     trigger::set_cancelled();
     ctx::log(player_id, &Msg::new(key!("centrifugal_blocked")).player_id("who", player_id));
+    Ok(())
 }
 
 /// `Fx.TurnStart` (C# `CardCentrifugal.TurnStart` -> `H.Unplace`): the immunity
 /// ends at the owner's next turn start.
-fn turn_start(player_id: i32) {
-    if trigger::player_id() != player_id || !ctx::is_placed(player_id) {
-        return;
+fn turn_start(player_id: i32) -> card_sdk::Asked {
+    if trigger::player_id() != player_id || !ctx::is_placed() {
+        return Ok(());
     }
     // 规则书[反击]: 「直到下个你的回合开始时」 -- C# `H.Unplace(this, "discard",
     //   "效果结束了")`.
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     ctx::log(player_id, &Msg::new(key!("centrifugal_end")).player_id("who", player_id));
+    Ok(())
 }

@@ -27,9 +27,9 @@ fn can_react(player_id: i32) -> bool {
     matches!(trigger::move_roll(), Some(r) if r < 6)
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使结果+1」
-    let Some(before) = trigger::move_roll() else { return; };
+    let Some(before) = trigger::move_roll() else { return Ok(()); };
     trigger::set_move_roll(before + 1);
     ctx::log(
         player_id,
@@ -38,4 +38,5 @@ fn react(player_id: i32) {
             .card("card", "AG:（绯玛丽）如果并非没问题")
             .i("total", (before + 1) as i64),
     );
+    Ok(())
 }

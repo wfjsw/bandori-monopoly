@@ -17,15 +17,8 @@ pub const HEY_KIDS: CardDef = CardDef::new("RAS:狂乱Hey Kids!!", &[
 ]);
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
-/// would allow. `WhyNotBuildOn` (kind ring, rent capacity, house cap, NoBuild
-/// event, Fx.CanBuild, …) is still missing; the filter approximates with the
-/// checks now in the vocabulary.
-// TODO(规则书): `H.WhyNotBuildOn` for the full buildable-target filter (kind
-//   != "ring", rent-array capacity, house cap, `H._turnCtx.NoBuild`, event
-//   "卡池BUG", `Fx.CanBuild`) is still missing; only buyable / mortgaged /
-//   can-pay are checked here.
-/// 「属于你的可建造格子」 -- the same gate the build step uses (`WhyNotBuildOn`),
-/// so a transfer target cannot be one the engine would refuse to build on.
+/// would allow. 「属于你的可建造格子」 -- the same gate the build step uses, so a
+/// transfer target cannot be one the engine would refuse to build on.
 fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
     ctx::owned_tiles(player_id)
         .into_iter()
@@ -53,7 +46,7 @@ fn can_react(player_id: i32) -> bool {
     !buildable_targets(player_id, t).is_empty()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「将本次结算改为：将本格上的房屋转移到属于你的可建造格子上」
     // -- C# `c.Trigger.Cancelled = true` then `H.AskNumber` + `H.AskTileOf` +
     // `H.AddHouse` per target. Cancelling the settle is what makes the transfer
@@ -61,11 +54,11 @@ fn react(player_id: i32) {
     trigger::set_cancelled();
     let from = trigger::tile();
     if from < 0 {
-        return;
+        return Ok(());
     }
     let targets = buildable_targets(player_id, from);
     if targets.is_empty() {
-        return;
+        return Ok(());
     }
     // 规则书[反击]: 「转移的房屋与目标格子中，至少一方数量为1，且每个目标格子至多获得1层房屋」
     // -- the C# moves one house per picked target in a loop, so each target
@@ -74,7 +67,7 @@ fn react(player_id: i32) {
     let houses = ctx::houses_of(from);
     let max = houses.min(targets.len() as i32);
     if max < 1 {
-        return;
+        return Ok(());
     }
     let k = ctx::ask_number(
         player_id,
@@ -82,7 +75,7 @@ fn react(player_id: i32) {
         &Msg::new(key!("hey_kids_ask_count")).tile("tile", from),
         1,
         max,
-    );
+    )?;
     let k = k.clamp(1, max);
     // Pick `k` distinct targets (one house each).
     let mut picked: Vec<i32> = Vec::new();
@@ -100,7 +93,7 @@ fn react(player_id: i32) {
             &Msg::new(key!("hey_kids_title")),
             &Msg::new(key!("hey_kids_ask_target")).i("n", (n + 1) as i64).i("k", k as i64),
             &left,
-        );
+        )?;
         picked.push(t);
     }
     // Transfer: one house per picked target, source decrement capped at zero.
@@ -120,7 +113,7 @@ fn react(player_id: i32) {
         moved += 1;
     }
     if moved == 0 {
-        return;
+        return Ok(());
     }
     ctx::log(
         player_id,
@@ -136,6 +129,7 @@ fn react(player_id: i32) {
     // -- C# `H.LoseR(i, gained - picked.Count * 500, ...)` when positive.
     let fee = cost_in - moved * 500;
     if fee > 0 {
-        ctx::pay(player_id, fee, &Msg::new(key!("hey_kids_lose_fee")));
+        ctx::pay(player_id, fee, &Msg::new(key!("hey_kids_lose_fee")))?;
     }
+    Ok(())
 }

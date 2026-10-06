@@ -19,12 +19,13 @@ const ID: &str = "RAS:EXIST";
 /// C# `Mem["used"]` -- set by the redirect when this card retargeted a card.
 const SLOT_USED: &str = "exist_used";
 
-fn exist(player_id: i32) {
+fn exist(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
     ctx::set_slot(player_id, SLOT_USED, 0);
     ctx::log(player_id, &Msg::new(key!("exist_placed")).player_id("who", player_id));
+    Ok(())
 }
 
 /// C# `CardExist.Redirects` -> `Used()` -- while the card is placed, every
@@ -33,11 +34,11 @@ fn exist(player_id: i32) {
 /// `redirect` at single-target `ctx::target` calls and applies the answer only
 /// when it differs from both the intended target and the actor (C# `H.Target`'s
 /// `card.Seat != p && card.Seat != c.Seat`).
-fn redirect(player_id: i32) {
+fn redirect(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你」
     // -- C# `return target != Seat`: already aimed at us, nothing to retarget.
     if trigger::target() == player_id {
-        return;
+        return Ok(());
     }
     trigger::set_target(player_id);
     // C# calls `Used()` only when the redirect actually lands (`card.Seat != p
@@ -52,6 +53,7 @@ fn redirect(player_id: i32) {
         // hook) would mean "nothing landed on me", which is the other reading.
         ctx::set_slot(player_id, SLOT_USED, 1);
     }
+    Ok(())
 }
 
 /// C# `CardExist.TurnStart` -> `End()` -- flip the card into the discard at the
@@ -59,13 +61,13 @@ fn redirect(player_id: i32) {
 /// Pure guard for [`turn_start`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_start_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn turn_start(player_id: i32) {
+fn turn_start(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「你的下回合开始时将其翻入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
     let used = ctx::slot(player_id, SLOT_USED);
-    ctx::unplace_card(player_id);
+    ctx::unplace_self();
     ctx::to_discard(player_id, ID);
     // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- C# draws 1 only when
     // `Mem["used"]` was never set; the `redirect` hook above sets it (C#
@@ -74,4 +76,5 @@ fn turn_start(player_id: i32) {
         ctx::draw(player_id, 1);
     }
     ctx::log(player_id, &Msg::new(key!("exist_ended")).player_id("who", player_id));
+    Ok(())
 }

@@ -33,30 +33,32 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// （1）「你购买的第一个非"旭汤澡堂"或任意"Live House"格子获得"Live House"的颜色」.
-fn on_bought(player_id: i32) {
+fn on_bought(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, DONE) != 0 {
-        return;
+        return Ok(());
     }
     let t = ctx::trigger::tile();
     if t < 0 || is_bathhouse(t) || ctx::is_live_house_for(player_id, t) {
-        return;
+        return Ok(());
     }
     state::set(player_id, DONE, 1);
     ctx::set_extra_color(player_id, t, 6);
     ctx::log(player_id, &Msg::new(key!("asahi_aim_first")).tile("tile", t));
+    Ok(())
 }
 
 /// （2）「在你有初始"Live House"格子时你拥有的"旭汤澡堂"格子获得"Live House"的颜色」
 /// -- restated each turn while the condition holds.
-fn at_turn_start(player_id: i32) {
+fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     let bath = ctx::tile_named("旭汤澡堂");
     if bath < 0 || ctx::tile_owner(bath) != player_id {
-        return;
+        return Ok(());
     }
     if !ctx::owned_tiles(player_id).into_iter().any(|t| is_initial_livehouse(t)) {
-        return;
+        return Ok(());
     }
     ctx::set_extra_color(player_id, bath, 6);
+    Ok(())
 }
 
 /// 「初始"Live House"格子」 -- one that is a Live House by its own group, not

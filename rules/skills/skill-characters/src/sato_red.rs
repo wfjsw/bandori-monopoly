@@ -26,21 +26,26 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始0，上限2」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    Ok(())
 }
 
 /// （1）「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if t != ctx::tile_named("白雪学园") && t != ctx::tile_named("银河拉面馆") {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("sato_red_gain")));
+    Ok(())
 }
 
 /// （2） 「移动阶段前可使用X个[火罐]」 -- X is what the player holds.
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("sato_red_no_fire")));
     }
@@ -48,10 +53,10 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「本回合主要移动掷骰额外添加Xd10」.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     let have = state::get(player_id, state_key::FIRE);
     if have < 1 {
-        return;
+        return Ok(());
     }
     let x = ctx::ask_number(
         player_id,
@@ -59,10 +64,11 @@ fn use_skill(player_id: i32) {
         &Msg::new(key!("sato_red_ask")),
         1,
         have,
-    );
+    )?;
     if x < 1 || !ctx::spend_fire(player_id, x, &Msg::new(key!("sato_red_spend"))) {
-        return;
+        return Ok(());
     }
     plan::add_extra_dice(x, 10, "与燃烧的红色一起驰骋");
     ctx::log(player_id, &Msg::new(key!("sato_red_dice")).i("n", x as i64));
+    Ok(())
 }

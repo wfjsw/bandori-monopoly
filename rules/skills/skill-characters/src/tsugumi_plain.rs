@@ -40,25 +40,27 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
-fn tick(player_id: i32) {
+fn tick(player_id: i32) -> card_sdk::Asked {
     let n = state::get(player_id, REST_TURNS) + 1;
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
         ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
     }
+    Ok(())
 }
 
 /// 「当你进行主要移动时」 -- the (2) press is offered while the move is being
 /// planned.
-fn on_plan(player_id: i32) {
+fn on_plan(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, OWED) == 0 {
-        return;
+        return Ok(());
     }
     // 「进行一次双倍掷骰的移动，向后移动经过CiRCLE时不获得CiRCLE奖励」 --
     // the owed move's own shape.
@@ -67,9 +69,13 @@ fn on_plan(player_id: i32) {
     plan::set_reverse(true);
     plan::set_no_circle_reward(true);
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_owed")));
+    Ok(())
 }
 
 fn can_use(player_id: i32) -> Option<Msg> {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return Some(Msg::new(key!("skill_blocked")));
+    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Some(Msg::new(key!("tsugumi_plain_no_fire")));
     }
@@ -77,9 +83,9 @@ fn can_use(player_id: i32) -> Option<Msg> {
 }
 
 /// （2）「使本次移动反向」 + arm the deferred half.
-fn use_skill(player_id: i32) {
+fn use_skill(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tsugumi_plain_spend"))) {
-        return;
+        return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
     plan::set_reverse(true);
@@ -87,4 +93,5 @@ fn use_skill(player_id: i32) {
     // `RollPlan` of this player's own turn.
     state::set(player_id, OWED, 1);
     ctx::log(player_id, &Msg::new(key!("tsugumi_plain_reverse")));
+    Ok(())
 }

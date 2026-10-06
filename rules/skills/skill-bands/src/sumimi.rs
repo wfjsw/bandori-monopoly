@@ -28,43 +28,46 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// （1）'s latch.
-fn after_pay(player_id: i32) {
+fn after_pay(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() != player_id {
-        return;
+        return Ok(());
     }
     if ctx::trigger::player_id() == player_id {
-        return;
+        return Ok(());
     }
     state::set(player_id, GOT, 1);
+    Ok(())
 }
 
 /// （2）「此卡上的每个奇迹水晶可使你在向其他人收费时让金额额外提高100资金」.
-fn bend(player_id: i32) {
-    let n = ctx::card_crystals(player_id, ID);
+fn bend(player_id: i32) -> card_sdk::Asked {
+    let n = ctx::crystals();
     if n <= 0 {
-        return;
+        return Ok(());
     }
     // 「向其他人收费」 -- this player is the payer's counterpart.
     if ctx::trigger::target() != player_id {
-        return;
+        return Ok(());
     }
     let amount = ctx::trigger::value();
     ctx::trigger::set_pay_amount(amount + n * 100);
+    Ok(())
 }
 
 /// （1）「你的回合结束时为此卡添加1个奇迹水晶；否则，移除此卡上的所有奇迹水晶」.
-fn at_turn_end(player_id: i32) {
+fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, GOT) != 0 {
         state::set(player_id, GOT, 0);
-        ctx::add_card_crystals(player_id, ID, 1, i32::MAX);
+        ctx::add_crystals(1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("sumimi_crystal")));
-        return;
+        return Ok(());
     }
-    let n = ctx::card_crystals(player_id, ID);
+    let n = ctx::crystals();
     if n > 0 {
-        ctx::add_card_crystals(player_id, ID, -n, i32::MAX);
+        ctx::add_crystals(-n, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("sumimi_cleared")));
     }
+    Ok(())
 }
 
 // （3）「你可携带两个角色的专属卡牌，但仅有在你的角色卡为对应角色时才可打出」 --

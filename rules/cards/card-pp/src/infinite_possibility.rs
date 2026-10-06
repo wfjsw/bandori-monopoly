@@ -20,6 +20,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new("PP:[大和麻弥]可能性为∞", &[
+    On::Play(Some(can_swap), swap),
     On::Hook(&[HookKind::Drew], drew_guard, drew),
 ]);
 
@@ -36,28 +37,54 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new("PP:[大和麻弥]可能�
 /// Pure guard for [`drew`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn drew_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn drew(player_id: i32) {
+fn drew(player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
-        return;
+        return Ok(());
     }
-    if ctx::crystals(player_id) < 4 {
-        ctx::add_crystals(player_id, 1, 4);
+    if ctx::crystals() < 4 {
+        ctx::add_crystals(1, 4);
     } else {
-        let c = ctx::crystals(player_id);
-        ctx::add_crystals(player_id, -c, 0);
+        let c = ctx::crystals();
+        ctx::add_crystals(-c, 0);
         ctx::add_band_crystals(player_id, 1, i32::MAX);
         ctx::log(
             player_id,
             &Msg::new(key!("infinite_possibility_full")).player_id("who", player_id),
         );
     }
+    Ok(())
 }
 
-// TODO(规则书): [持续]（2）「[共鸣]交换[拥有者]的抽卡区和弃卡区」 -- needs
-// H.TryResonance (discard 「PP:[衍生]共鸣」 from hand) and the Fx.Actions hook
-// (C# `Card.Actions` offering 「[共鸣] 交换抽卡区和弃卡区」); the swap itself
-// (`H.ShuffleAllIntoDeck`-style exchange of `H._hidden[Player].draw` and
-// `.discard`) has no vocabulary either.
+// [持续]（2）「[共鸣]交换[拥有者]的抽卡区和弃卡区」 -- a press. The resonance
+// cost is the same `try_resonance` every other [共鸣] card uses; the swap is an
+// exchange of the two piles through `add_to_deck` / `to_discard`.
+
+/// （2）「[共鸣]交换[拥有者]的抽卡区和弃卡区」.
+fn can_swap(player_id: i32) -> Option<Msg> {
+    if !ctx::is_placed() {
+        return Some(Msg::new(key!("infinite_possibility_not_placed")));
+    }
+    None
+}
+
+fn swap(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() {
+        return Ok(());
+    }
+    if !crate::resonance::try_resonance(player_id)? {
+        return Ok(());
+    }
+    let deck = ctx::cards_in(player_id, ctx::CardPile::Deck);
+    let disc = ctx::cards_in(player_id, ctx::CardPile::Discard);
+    for c in &deck {
+        ctx::to_discard(player_id, c);
+    }
+    for c in &disc {
+        ctx::add_to_deck(player_id, c, false);
+    }
+    ctx::log(player_id, &Msg::new(key!("infinite_possibility_swapped")));
+    Ok(())
+}

@@ -27,36 +27,38 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「初始1，上限1」.
-fn declare_cap(player_id: i32) {
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
     state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    Ok(())
 }
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
-fn on_pass(player_id: i32) {
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
-        return;
+        return Ok(());
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("raise_effort_gain")));
+    Ok(())
 }
 
 /// （2）「进行任意掷骰后，可选择使用一个[火罐]再投一次骰子并择其一执行」.
-fn on_roll(player_id: i32) {
+fn on_roll(player_id: i32) -> card_sdk::Asked {
     if ctx::fixed_roll().is_some() {
-        return;
+        return Ok(());
     }
     if state::get(player_id, state_key::FIRE) < 1 {
-        return;
+        return Ok(());
     }
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("raise_effort_again_title")),
         &Msg::new(key!("raise_effort_again_text")).i("n", before as i64),
-    ) {
-        return;
+    )? {
+        return Ok(());
     }
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("raise_effort_spend"))) {
-        return;
+        return Ok(());
     }
     let again = ctx::do_move_roll(player_id).max(0);
     // 「择其一执行」 -- keep whichever the player names.
@@ -68,8 +70,9 @@ fn on_roll(player_id: i32) {
             Msg::new(key!("raise_effort_keep_old")).i("n", before as i64),
             Msg::new(key!("raise_effort_keep_new")).i("n", again as i64),
         ],
-    );
+    )?;
     let face = if keep == 1 { again } else { before };
     ctx::trigger::set_move_roll(face);
     ctx::log(player_id, &Msg::new(key!("raise_effort_kept")).i("n", face as i64));
+    Ok(())
 }

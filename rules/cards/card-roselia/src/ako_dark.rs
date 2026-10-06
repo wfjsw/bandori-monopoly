@@ -32,7 +32,7 @@ fn can_react(player_id: i32) -> bool {
     trigger::value() > 0
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[反击]: 「使自己获得一层[眩晕]」 -- C# `H.GiveStun(i, 1, i, "黑暗大魔姬亚子")`.
     ctx::give_stun(player_id, 1);
     ctx::log(player_id, &Msg::new(key!("ako_dark_stun")).player_id("who", player_id));
@@ -47,4 +47,5 @@ fn react(player_id: i32) {
         ctx::draw(player_id, 1);
         ctx::log(player_id, &Msg::new(key!("ako_dark_drawn")).player_id("who", player_id));
     }
+    Ok(())
 }

@@ -15,8 +15,11 @@ use card_sdk::{key, CardDef, On, Msg};
 const ID: &str = "HHW:笑容大游行";
 
 pub const SMILE_PARADE: CardDef = CardDef::new("HHW:笑容大游行", &[
+    On::Hook(&[card_sdk::abi::HookKind::SettleInstead], mine, settle_instead),
+    On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, move_after),
     On::CounterAct(&[ChainKind::Pass], can_react, react),
     On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+    On::Hook(&[HookKind::CrystalsChanged], crystals_changed_guard, on_crystals_changed),
 ]);
 
 /// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).
@@ -36,7 +39,7 @@ fn can_react(player_id: i32) -> bool {
         && trigger::move_kind().is_some()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     let group = group_tile();
     // 规则书（1）[反击]: 「可将此卡放置在其上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // Group, 3)` places the card on the 弦卷集团 tile, charged with 3 crystals.
@@ -44,43 +47,132 @@ fn react(player_id: i32) {
     ctx::place_card(player_id, ID, &Msg::new(key!("smile_parade_note")));
     // 规则书（1）: 「为此卡添加3个[奇迹水晶]」 -- the placement's crystal charge
     // (C# `H.PlaceFromPlay(c, ..., 3)`).
-    ctx::set_crystals(player_id, 3);
+    ctx::set_crystals(3);
     ctx::log(player_id, &Msg::new(key!("smile_parade_placed")).player_id("who", player_id).tile("tile", group));
     // 规则书（1）: 「当次移动的移动终点视为“弦卷集团”地产商」 -- the
     // `Fx.SettleInstead` hook kind is in (declare it and `trigger::set_cancelled()`
     // to replace the tile's effect); C# `CardSmileParade.SettleInstead` ->
     // `H.AgentLanding(m.Seat, Group)` is the replacement body.
-    // TODO(规则书)（1）: `H.AgentLanding` (same-colour buy / build / half-rent
-    // ladder at the agent tile) has no ctx counterpart, and the `m.Tags["parade"]`
-    // latch the C# react writes has only a player-slot stand-in, so the settle
-    // cannot be replaced yet.
+    // （1）「当次移动的移动终点视为"弦卷集团"地产商」 -- `settle_instead`
+    // below is the replacement: `plan::set_settle_as_agent` is
+    // `H.AgentLanding`'s shape.
+    Ok(())
 }
 
-/// 规则书（1）: 「你的每回合结束时移除一个，奇迹水晶为0时若此卡仍位于“弦卷集团”则
-/// 将其放入弃牌堆」 -- C# `CardSmileParade.TurnEnd` (`turn == Player && Tile ==
-/// Group && Crystals > 0` -> `AddCrystals(-1)`; empty -> `H.Unplace(this,
-/// "discard")`). `ctx::decay` is that body once the crystal runs out.
+/// 规则书（1）: 「你的每回合结束时移除一个」 -- C# `CardSmileParade.TurnEnd`
+/// (`turn == Player && Tile == Group && Crystals > 0` -> `AddCrystals(-1)`).
+/// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
+/// [`on_crystals_changed`].
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id) && trigger::player_id() == player_id
+    ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn turn_end(player_id: i32) {
+fn turn_end(_player_id: i32) -> card_sdk::Asked {
     // C# `Tile == Group` -- the decay only runs while the card still sits on
-    // 弦卷集团. Tile-bound placement is the held TODO below, so the card is
-    // placed on the owner's field and this gate cannot be tested yet.
-    if ctx::decay(player_id, ID) == 0 {
-        ctx::log(player_id, &Msg::new(key!("smile_parade_decayed")).player_id("who", player_id));
+    // 弦卷集团.
+    if !on_group() {
+        return Ok(());
+    }
+    ctx::decay();
+    Ok(())
+}
+
+/// Is the card still sitting on 「弦卷集团」?
+fn on_group() -> bool {
+    let group = ctx::tile_named("弦卷集团");
+    match ctx::self_tile() {
+        Some(t) => group >= 0 && t == group,
+        None => false,
     }
 }
 
-// TODO(规则书)（2）: 「[持续] [触发结算]后可将“弦卷集团”格子上的此卡放置于[移动终点]
-// 格子上并移除其上全部奇迹水晶」 -- needs the Fx.SettleAfter hook (C#
-// `CardSmileParade.SettleAfter` -> `Move`, `H.AskYes` over the owner's tile)
-// plus tile-bound placement so the card can sit on (and leave) 弦卷集团.
-// TODO(规则书)（3）: 「[持续] 当此卡位于格子上时，那格视为与“弦卷集团”格子交换位置，
-// 任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 -- needs the
-// Fx.SettleInstead tile-swap (C# `CardSmileParade.Swapped`) and unplace-to-
-// discard on that settle. Placing the card on a tile (not a player's field)
-// is itself missing (`H.PlaceFromPlay(c, owner, tile)`).
+/// 规则书（1）: 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 -- C#
+/// `H.Unplace(this, "discard")`.
+///
+/// 「若此卡仍位于"弦卷集团"」 is a real condition, not a restatement of the
+/// tick's own gate: （2） moves the card to the [移动终点] and strips its
+/// crystals, and that emptying is *not* this discard.
+/// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
+/// means the card is not activated at all.
+fn crystals_changed_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::card_is(ID)
+        && ctx::crystals() == 0
+        // Only a write that did not raise the count speaks for the empty
+        // state; see AG:绯红之魂 (3).
+        && trigger::value() <= 0
+        && on_group()
+}
+
+fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
+    ctx::unplace_self();
+    ctx::to_discard(player_id, ID);
+    ctx::log(player_id, &Msg::new(key!("smile_parade_decayed")).player_id("who", player_id));
+    Ok(())
+}
+
+/// （1）「当次移动的移动终点视为"弦卷集团"地产商」 -- `H.AgentLanding(m.Seat, Group)`.
+fn settle_instead(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::player_id() != player_id {
+        return Ok(());
+    }
+    let group = ctx::tile_named("弦卷集团");
+    if group < 0 {
+        return Ok(());
+    }
+    ctx::trigger::set_cancelled();
+    ctx::plan::set_settle_as_agent(true);
+    ctx::card_settle_at(player_id, group, true);
+    ctx::log(player_id, &Msg::new(key!("smile_parade_agent")).tile("tile", group));
+    Ok(())
+}
+
+/// （2）「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上并移除其上
+/// 全部奇迹水晶」.
+fn move_after(player_id: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() {
+        return Ok(());
+    }
+    let group = ctx::tile_named("弦卷集团");
+    let here = ctx::self_tile().unwrap_or(-1);
+    if group < 0 || here != group {
+        return Ok(());
+    }
+    let to = ctx::trigger::tile();
+    if to < 0 {
+        return Ok(());
+    }
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("smile_parade_title")),
+        &Msg::new(key!("smile_parade_move")).tile("tile", to),
+    )? {
+        return Ok(());
+    }
+    ctx::set_self_tile(to);
+    let n = ctx::crystals();
+    if n > 0 {
+        ctx::add_crystals(-n, i32::MAX);
+    }
+    ctx::log(player_id, &Msg::new(key!("smile_parade_moved")).tile("tile", to));
+    Ok(())
+}
+
+// （2）「[持续] [触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上
+// 并移除其上全部奇迹水晶」 -- a `settleAfter` press; `set_card_tile` is the
+// move, and `place_card_on` is what put it on 弦卷集团 in the first place.
+// TODO(规则书)（3）: 「[持续] 当此卡位于格子上时，那格视为与"弦卷集团"格子交换位置，
+//   任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 -- the swap is a board
+//   *position* exchange (「交换位置」), not a colour or an effect copy: settling on
+//   the card's tile has to resolve as if the mover landed on 弦卷集团, with the two
+//   tiles' rents and ownership reads exchanged for that settle. `set_tile_color`
+//   and `SettleInstead` are the wrong axes -- one re-colours, the other replaces
+//   one landing with another. The discard half (`unplace` + `to_discard` on that
+//   settle) is expressible and waits on the swap.
+
+fn mine(player_id: i32) -> bool {
+    ctx::trigger::player_id() == player_id
+}

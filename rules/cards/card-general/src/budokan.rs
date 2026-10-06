@@ -11,12 +11,12 @@ use card_sdk::{ctx, key, CardDef, On, Msg};
 pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[
     On::Play(None, budokan)]);
 
-fn budokan(player_id: i32) {
+fn budokan(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「[使用者]以外的[存活]玩家」 (`ctx::others` drops out players)
     let list = ctx::others(player_id);
     let n = list.len() as i32;
     if n == 0 {
-        return;
+        return Ok(());
     }
     // 规则书[手]: 「将X设为2000÷“[使用者]以外的[存活]玩家数量”向上取整10」
     // (the divisor is the candidate count, before the targeting gate).
@@ -29,7 +29,8 @@ fn budokan(player_id: i32) {
     // 规则书[手]: 「被[指定]的玩家[支付][使用者]X资金」
     let why = Msg::new(key!("budokan_why"));
     for p in got {
-        ctx::transfer(p, player_id, x, &why);
+        ctx::transfer(p, player_id, x, &why)?;
     }
     // 规则书[手]: 「Y设为[存活]玩家数量减1」 -- Y is defined but unused in the passage.
+    Ok(())
 }

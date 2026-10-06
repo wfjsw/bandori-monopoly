@@ -21,7 +21,7 @@ pub const WANT_HUMAN: CardDef = CardDef::new("CRYCHIC:想要成为人类", &[
 /// "never declared" (the C# default X is 10).
 pub(crate) const SLOT_X: &str = "want_human_x";
 
-fn want_human(player_id: i32) {
+fn want_human(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「将此卡置于场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "CRYCHIC:想要成为人类", &Msg::new(key!("want_human_note")));
@@ -32,7 +32,7 @@ fn want_human(player_id: i32) {
         &Msg::new(key!("want_human_ask")),
         1,
         20,
-    );
+    )?;
     // 规则书（1）: 「将其写下」 -- `Mem["x"]`; the player slot is the stand-in.
     ctx::set_slot(player_id, SLOT_X, x);
     // Fresh placement: no boost snapshot from a previous instance (C# `Mem` is
@@ -41,6 +41,7 @@ fn want_human(player_id: i32) {
     ctx::log(player_id, &Msg::new(key!("want_human_declared")).player_id("who", player_id).i("n", x as i64));
     // (1) and (2)'s boost are handled in `react`, which the Fx hook dispatch
     // runs at `rollAfter` / `turnStart` / `turnEnd`.
+    Ok(())
 }
 
 /// Where the armed boost is written down (C# `CardWantHuman.Mem["boost"]`).
@@ -56,20 +57,20 @@ const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 /// Pure guard for [`react`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn react_guard(player_id: i32) -> bool {
-    ctx::is_placed(player_id)
+    ctx::is_placed()
 }
 
-fn react(player_id: i32) {
+fn react(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）: 「每当你的移动掷骰小于X，为此卡添加一个奇迹水晶。」
         TriggerKind::RollAfter => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             let roll = trigger::value();
             let x = ctx::slot(player_id, SLOT_X);
             if x > 0 && roll < x {
-                ctx::add_crystals(player_id, 1, 0);
+                ctx::add_crystals(1, 0);
                 ctx::log(player_id, &Msg::new(key!("want_human_crystal")).player_id("who", player_id).i("n", roll as i64));
             }
             // 规则书（2）: the boost armed last turn start lands on this roll.
@@ -87,13 +88,13 @@ fn react(player_id: i32) {
         // 奇迹水晶并使你下次的移动掷骰结果额外增加20-X。」
         TriggerKind::TurnStart => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
-            if ctx::crystals(player_id) < 2 {
-                return;
+            if ctx::crystals() < 2 {
+                return Ok(());
             }
             let x = ctx::slot(player_id, SLOT_X);
-            ctx::set_crystals(player_id, 0);
+            ctx::set_crystals(0);
             ctx::set_slot(player_id, SLOT_BOOST, (20 - x).max(0));
             ctx::log(player_id, &Msg::new(key!("want_human_drained")).player_id("who", player_id).i("n", (20 - x).max(0) as i64));
         }
@@ -102,18 +103,19 @@ fn react(player_id: i32) {
         // the boost was consumed this turn.
         TriggerKind::TurnEnd => {
             if trigger::player_id() != player_id {
-                return;
+                return Ok(());
             }
             let ab_before = ctx::slot(player_id, SLOT_AB_BEFORE);
             if ab_before <= 0 {
-                return;
+                return Ok(());
             }
             ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
             if ctx::abnormal_count(player_id) > ab_before - 1 {
-                ctx::add_crystals(player_id, 2, 0);
+                ctx::add_crystals(2, 0);
                 ctx::log(player_id, &Msg::new(key!("want_human_abnormal")).player_id("who", player_id));
             }
         }
         _ => {}
     }
+    Ok(())
 }
