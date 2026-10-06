@@ -89,8 +89,7 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
     ctx::log(player_id, &Msg::new(key!("l12_fire_spent")).player_id("who", player_id).i("n", n as i64));
     // 规则书[持续]（3）: 「当此卡上拥有6个[奇迹水晶]时，将此卡返回手牌。」
     if ctx::crystals() >= 6 {
-        ctx::unplace_self();
-        ctx::add_to_hand(player_id, ID);
+        ctx::set_dest(ctx::Dest::Hand);
         ctx::log(player_id, &Msg::new(key!("l12_back")).player_id("who", player_id));
     }
     Ok(())

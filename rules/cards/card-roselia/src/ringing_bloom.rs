@@ -63,8 +63,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     // 规则书（3）: 「X为你收费格上的房屋数」 -- C# `H.State.houses[p.tile]`.
     let x = ctx::houses_of(tile);
     // 规则书（3）: 「此卡置入弃牌堆」 -- C# `H.Unplace(this, "discard", "自己的格子收了费")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("ringing_bloom_done")).player_id("who", player_id).tile("tile", tile));
     // 规则书（3）: 「然后你获得500*X资金」 -- C# `H.GainR(Seat, 500 * x, ...)`.
     if x > 0 {

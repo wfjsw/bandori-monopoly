@@ -77,8 +77,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[反击]: 「直到下个你的回合开始时」 -- C# `H.Unplace(this, "discard",
     //   "效果结束了")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("centrifugal_end")).player_id("who", player_id));
     Ok(())
 }

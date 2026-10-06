@@ -169,8 +169,8 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    // 规则书[持续]（3）: 「将此卡放入[使用者]弃卡区」
+    ctx::set_dest(ctx::Dest::Graveyard);
     // The [手] placing none 「没有奇迹水晶」; a spent-out card 「奇迹水晶用完了」.
     // `t.value` is the write's change -- 0 for the first, negative for the rest.
     let why = if trigger::value() < 0 {

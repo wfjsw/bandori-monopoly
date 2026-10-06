@@ -89,14 +89,13 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」.
-fn sweep(player_id: i32) -> card_sdk::Asked {
+fn sweep(_player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() > 0 {
         return Ok(());
     }
     if !ctx::is_placed() {
         return Ok(());
     }
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "MyGO:（灯）不再迷茫");
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

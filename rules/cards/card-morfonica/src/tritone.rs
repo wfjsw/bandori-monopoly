@@ -60,8 +60,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
             }
             let owed = ctx::slot(player_id, "tritone_owed");
             // C# `H.Unplace(this, "discard")` -- off the field, onto the discard.
-            ctx::unplace_self();
-            ctx::to_discard(player_id, "Mor:迷茫之蝶们的三全音");
+            ctx::set_dest(ctx::Dest::Graveyard);
             if owed > 0 {
                 ctx::pay(player_id, owed, &Msg::new(key!("tritone_owed")).n("money", owed as i64))?;
             }

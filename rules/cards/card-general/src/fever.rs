@@ -74,8 +74,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            ctx::unplace_self();
-            ctx::to_discard(player_id, ID);
+            ctx::set_dest(ctx::Dest::Graveyard);
             ctx::log(player_id, &Msg::new(key!("fever_unplaced")).player_id("who", player_id));
         }
         _ => {}

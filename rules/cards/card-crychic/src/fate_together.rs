@@ -91,12 +91,11 @@ fn react(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            ctx::unplace_self();
             if ctx::slot(player_id, SLOT_HIT) == 0 {
-                ctx::add_to_hand(player_id, ID);
+                ctx::set_dest(ctx::Dest::Hand);
                 ctx::log(player_id, &Msg::new(key!("fate_together_returned")).player_id("who", player_id));
             } else {
-                ctx::to_discard(player_id, ID);
+                ctx::set_dest(ctx::Dest::Graveyard);
             }
         }
         _ => {}

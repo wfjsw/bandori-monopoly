@@ -128,8 +128,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     // spent (C# `HagumiMarkFx` just goes quiet; the field-card stand-in files
     // itself away).
     if !any_marks(player_id) {
-        ctx::unplace_self();
-        ctx::to_discard(player_id, ID);
+        ctx::set_dest(ctx::Dest::Graveyard);
     }
     // TODO(规则书)（1）[judgement]: C# `HagumiMarkFx.PassTile` also has a circle-tile case
     //   (`H.Tile(t)?.kind == "circle"` -> `All(n)`: remove every 育美标记 and

@@ -101,8 +101,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("trainee_guide_build_off")).i("n", mono as i64));
     }
     // 「随后进入弃卡区」
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "PP:练习生解密指南");
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 

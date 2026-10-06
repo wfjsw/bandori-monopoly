@@ -84,7 +84,6 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
         ctx::gain(player_id, 1500, &Msg::new(key!("strong_flower_gain")));
     }
     // 3. 「此卡放入[使用者]弃卡区」
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

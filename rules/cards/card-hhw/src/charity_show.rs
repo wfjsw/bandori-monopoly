@@ -168,8 +168,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             ctx::set_slot(player_id, SLOT_TURN, 0);
-            ctx::unplace_self();
-            ctx::to_discard(player_id, ID);
+            ctx::set_dest(ctx::Dest::Graveyard);
         }
         _ => {}
     }

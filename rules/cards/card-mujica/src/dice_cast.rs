@@ -83,8 +83,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
         ctx::set_slot(player_id, NO_REACT, 0);
     }
     // 规则书: 「回合结束后放入弃牌堆」 -- C# `H.Unplace(this, "discard", "回合结束")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("dice_cast_ended")).player_id("who", player_id));
     // TODO(规则书)[judgement]: 「（此卡可以被反击）」 -- the engine must still let other
     //   the clause under-specifies -- see the note above it

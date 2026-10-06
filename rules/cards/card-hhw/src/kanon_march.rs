@@ -77,8 +77,7 @@ fn jump(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_kind(MoveKind::Teleport);
     ctx::plan::set_teleport_to(pick);
     ctx::plan::set_resolve(true);
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("kanon_march_jump")).tile("tile", pick));
     Ok(())
 }

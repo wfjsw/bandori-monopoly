@@ -160,8 +160,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
     if tile < 0 || trigger::tile() != tile || ctx::houses_of(tile) <= 0 {
         return Ok(());
     }
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("change_world_discarded")).player_id("who", player_id));
     Ok(())
 }

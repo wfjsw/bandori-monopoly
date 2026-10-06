@@ -126,8 +126,7 @@ fn crystal_changed_guard(player_id: i32) -> bool {
 }
 
 fn crystal_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "TEST:crystal");
+    ctx::set_dest(ctx::Dest::Graveyard);
     // Which write emptied it: a removal, or a write that landed on none.
     let why = if trigger::value() < 0 {
         key!("crystal_empty")

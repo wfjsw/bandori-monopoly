@@ -668,7 +668,8 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
     unsafe { sys::place_card_at(player_id, cp, cl, p, l) }
 }
 
-/// `PlayCtx.Dest` -- where this card goes afterwards (see [`Dest`]).
+/// `PlayCtx.Dest` -- where this card goes afterwards (see [`Dest`]). For a
+/// play it is the hand card's fate; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
     unsafe { sys::set_dest(dest as i32) }
 }
@@ -981,6 +982,13 @@ pub fn in_band(player_id: i32, name: &str) -> bool {
 /// `PlayCtx.Dest` -- where a card goes when its effect finishes (C# fates
 /// "discard" / "hand" / "placed" / "gone"). The port names them Graveyard /
 /// Hand / Field / Banished; wire values 0..=3 are the C# order.
+///
+/// One fate, two movers. A **play** names where its hand card ends and the
+/// engine applies it (`play_from_hand`); a **field effect** names where the
+/// instance it is running for ends and the host applies it when the run
+/// commits (C# `H.Unplace(this, "discard")` and kin). 「将此卡放入[使用者]
+/// 弃卡区」 is `Dest::Graveyard` either way -- no separate unplace-plus-discard
+/// dance. A run that names nothing leaves a placed card where it is.
 ///
 /// Planned: the draw-pile fates, one per insert position -- C# `c.Dest =
 /// "deck"` -> `H.AddToDeck(player, card, where)` with `where` = `"top"` /

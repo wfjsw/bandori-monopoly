@@ -184,8 +184,7 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     let paid = ctx::slot(player_id, SLOT_PAID);
     let got = ctx::slot(player_id, SLOT_GOT);
     // 规则书[反击]: 「此卡置入弃牌堆」 -- C# `H.Unplace(this, "discard", ...)`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "R:学生会的检查");
+    ctx::set_dest(ctx::Dest::Graveyard);
     // C# `CeilTo((double)H.RentOf(Tile) / 2.0, 10)` -- the expected halved rent.
     let expect = if tile >= 0 {
         let r = ctx::rent_of(tile) as i64;

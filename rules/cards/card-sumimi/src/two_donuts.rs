@@ -159,7 +159,6 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         }
     }
     // C# `H.RemoveExtra(this)` -- the stand-in leaves the field for the discard.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

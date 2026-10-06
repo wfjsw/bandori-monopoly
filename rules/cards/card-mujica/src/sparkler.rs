@@ -68,8 +68,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书: 「并立刻使你获得2层[眩晕]」
     ctx::give_stun(player_id, 2);
     ctx::log(player_id, &Msg::new(key!("sparkler_out")).player_id("who", player_id));

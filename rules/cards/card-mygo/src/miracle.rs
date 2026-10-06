@@ -123,8 +123,7 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
     }
     let left = ctx::crystals() > 0;
     // C# `H.Unplace(this, "discard", left ? "上面还有奇迹水晶：视为没有生效" : "完成了")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     if left {
         // TODO(规则书)[judgement]（3）: 「若此卡进入弃牌堆时其上仍有奇迹水晶，视为此卡未生效。」 -- needs
         //   the clause under-specifies -- see the note above it

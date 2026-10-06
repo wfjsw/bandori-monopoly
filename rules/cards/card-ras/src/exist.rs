@@ -67,8 +67,7 @@ fn turn_start_guard(player_id: i32) -> bool {
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「你的下回合开始时将其翻入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
     let used = ctx::slot(player_id, SLOT_USED);
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- C# draws 1 only when
     // `Mem["used"]` was never set; the `redirect` hook above sets it (C#
     // `CardExist.Used` -> `Mem["used"] = 1`) when this card retargeted a play.

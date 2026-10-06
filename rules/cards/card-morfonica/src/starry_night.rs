@@ -100,8 +100,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
     if ctx::crystals() == 0 && trigger::value() <= 0 {
-        ctx::unplace_self();
-        ctx::to_discard(player_id, ID);
+        ctx::set_dest(ctx::Dest::Graveyard);
         ctx::log(player_id, &Msg::new(key!("starry_night_empty")).player_id("who", player_id));
     }
     Ok(())

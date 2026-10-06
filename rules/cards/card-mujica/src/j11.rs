@@ -34,8 +34,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// C# `CardJ11.Fire` / `CardJ11.Ask`'s body -- discard the card to [stun] its
 /// owner and every player within 1 tile.
 fn fire(player_id: i32) {
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::give_stun(player_id, 1);
     let here = ctx::player_pos(player_id);
     for p in ctx::others(player_id) {
@@ -122,8 +121,7 @@ fn crystals_changed_guard(player_id: i32) -> bool {
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("j11_decayed")).player_id("who", player_id));
     Ok(())
 }

@@ -129,8 +129,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     trigger::set_pay_amount(0);
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("haneoka_cancelled")).card("card", ID).n("money", amount as i64));
     Ok(())
 }

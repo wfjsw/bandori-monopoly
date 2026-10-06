@@ -96,9 +96,8 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
 /// effect (3). Nothing drains the crystals yet (that is the skill hook above),
 /// but the branch is what runs when they hit 0.
 #[allow(dead_code)]
-fn exhausted(player_id: i32) {
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+fn exhausted(_player_id: i32) {
+    ctx::set_dest(ctx::Dest::Graveyard);
 }
 
 /// Effect (1) 「抽x张卡（可超过上限），回合结束后将手牌弃置到五张」 -- C# case 0 of

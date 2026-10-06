@@ -82,8 +82,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[持续]: 「将此卡放入[使用者]弃卡区」 -- C# `H.Unplace(this, "discard",
     // "有人在这里停下了")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "PPP:（香澄）大家我都喜欢哦");
+    ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书[持续]: 「为[使用者]的团卡添加一个[奇迹水晶]」 -- C# `H.AddBandCrystals(user, 1, ...)`.
     if !ctx::player_out(player_id) {
         ctx::add_band_crystals(player_id, 1, i32::MAX);

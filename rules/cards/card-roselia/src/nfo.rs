@@ -227,8 +227,7 @@ fn react(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     trigger::set_pay_amount((amount - 1000).max(0));
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("nfo_used")).player_id("who", player_id).n("money", (amount.min(1000)) as i64));
     Ok(())
 }

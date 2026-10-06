@@ -118,8 +118,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // C# `End`: `H.Unplace(this, "discard", "回到了使用者的场上")` +
     // `H.DrawR(User, 1, ...)`. The `Detach` -> `Drop` of the taken band cards
     // is the held half (no band inventory in the ABI).
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_slot(player_id, USER_KEY, 0);
     ctx::draw(user, 1);
     ctx::log(user, &Msg::new(key!("umiri_ended")).player_id("who", user));

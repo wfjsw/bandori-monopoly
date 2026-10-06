@@ -50,8 +50,7 @@ fn on_drew(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书（2）[持续]: 「此卡立即置入弃牌堆」 -- C# `H.Unplace(this, "discard", "手牌有 7 张以上")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("forever_discard")).player_id("who", player_id));
     Ok(())
 }

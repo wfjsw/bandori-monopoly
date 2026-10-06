@@ -78,8 +78,7 @@ fn after_move(player_id: i32) -> card_sdk::Asked {
             return Ok(());
         }
         ctx::set_slot(player_id, "childhood_cheer.fired", 0);
-        ctx::unplace_self();
-        ctx::to_discard(player_id, ID);
+        ctx::set_dest(ctx::Dest::Graveyard);
         return Ok(());
     }
     if ctx::slot(player_id, "childhood_cheer.fired") != 0 {
@@ -88,8 +87,7 @@ fn after_move(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "childhood_cheer.fired", 1);
     // 规则书: 「并在移动后获得一个火罐」
     ctx::gain_fire(player_id, 1, &Msg::new(key!("childhood_cheer_fire")));
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }
 
@@ -99,7 +97,6 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_placed() {
         return Ok(());
     }
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

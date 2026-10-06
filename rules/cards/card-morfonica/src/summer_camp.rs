@@ -63,8 +63,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「当此卡效果结束」 -- C# `H.Unplace(this, "discard", "效果结束了")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("summer_camp_end")).player_id("who", player_id));
     // 规则书: 「你没有因为此卡效果无效化任何影响则抽一张牌」 -- C# `End`:
     // `H.DrawR(Seat, 1, ...)` when `Blocked == 0`.

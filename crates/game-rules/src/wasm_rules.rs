@@ -29,6 +29,10 @@ use crate::{CardPile, TriggerKind};
 /// C# `PlayCtx.Dest` values the module returns.
 const DEST_GRAVEYARD: i32 = 0;
 const DEST_FIELD: i32 = 2;
+/// The run never named a fate. Distinct from [`DEST_GRAVEYARD`] on purpose: a
+/// play with no opinion still lands in the discard (`dest_from`'s wildcard),
+/// but a field effect with no opinion must leave its card where it is.
+const DEST_UNSET: i32 = -1;
 
 /// C# `MatchHost._reactDepth > 4` is a runaway net; a counter-war is bounded by
 /// hands shrinking as cards declare. 16 is plenty for a legal exchange.
@@ -960,7 +964,7 @@ impl CardWorld for Run {
     }
     fn enter_card(&mut self, id: &str) -> (String, i32, i32) {
         let card = std::mem::replace(&mut self.current_card, id.to_string());
-        let dest = std::mem::replace(&mut self.dest, DEST_GRAVEYARD);
+        let dest = std::mem::replace(&mut self.dest, DEST_UNSET);
         // Fresh instance (C# `NewCard`): the nested run is not the outer card's
         // field card, so it starts with no uid of its own until it places one.
         let uid = std::mem::replace(&mut self.current_uid, -1);
@@ -1168,7 +1172,7 @@ impl WasmRules {
                 trigger: trigger.clone(),
                 current_card: card_id.to_string(),
                 current_uid: uid,
-                dest: DEST_GRAVEYARD,
+                dest: DEST_UNSET,
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
@@ -1219,6 +1223,19 @@ impl WasmRules {
                             t.value = change;
                             t.by_card = by;
                         })?;
+                    }
+                    // A run that has an instance owns that instance's fate:
+                    // 「将此卡放入[使用者]弃卡区」 is `set_dest(Graveyard)` whether
+                    // the card was just placed or has been in play all along.
+                    // Reporting `DEST_FIELD` back tells the engine there is
+                    // nothing left for it to move -- the hand card became this
+                    // instance, and the host just moved that.
+                    //
+                    // `DEST_UNSET` is no opinion (a placed card stays put), and a
+                    // run that already unplaced itself has no instance to move.
+                    if after.current_uid >= 0 && dest >= 0 && dest != DEST_FIELD {
+                        self.apply_dest(cx, after.current_uid, card_id, dest)?;
+                        return Ok(DEST_FIELD);
                     }
                     return Ok(dest);
                 }
@@ -1391,7 +1408,7 @@ impl WasmRules {
             trigger: trigger.clone(),
             current_card: card_id.to_string(),
             current_uid: uid,
-            dest: DEST_GRAVEYARD,
+            dest: DEST_UNSET,
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],
@@ -1674,6 +1691,38 @@ impl WasmRules {
         Ok(t)
     }
 
+    /// Apply a field effect's `Dest` to the instance its run was for -- C#
+    /// `H.Unplace(this, "discard" / "hand" / "gone")`, the fate `set_dest` names.
+    /// A play's fate is the engine's instead (`play_from_hand` moves the hand
+    /// card); this is the same destination, pointed at a card that is already
+    /// in play.
+    fn apply_dest(&self, cx: &mut Cx, uid: i32, card: &str, dest: i32) -> Flow<()> {
+        let mut w = cx.world_copy();
+        let owner = w.unplace_at(uid);
+        if owner < 0 {
+            // Not in play -- the run may have moved it already.
+            cx.swap_world(w);
+            return Ok(());
+        }
+        if dest == DEST_GRAVEYARD {
+            w.to_discard(owner, card);
+        } else if dest == 1 {
+            // Back to the hand (手牌).
+            w.add_to_hand(owner, card);
+        }
+        // Banished (「[移除]」) is just "gone" -- it left above and goes nowhere.
+        cx.swap_world(w);
+        if dest == DEST_GRAVEYARD {
+            self.raise_core(cx, "discarded", owner, |t| t.card = card.to_string())?;
+        } else if dest != 1 {
+            cx.log(
+                owner,
+                Msg::new("log.card_removed").card("card", card.to_string()),
+            );
+        }
+        Ok(())
+    }
+
     /// The [反击] hand window (C# `MatchHost.React(Trigger)`): each player from the
     /// trigger's player around the table may answer with a reaction card from hand.
     /// Declarations are collected first (hands shrink as they declare) and then
@@ -1859,7 +1908,7 @@ impl WasmRules {
                 trigger: top.clone(),
                 current_card: id.clone(),
                 current_uid: -1,
-                dest: DEST_GRAVEYARD,
+                dest: DEST_UNSET,
                 paid_log: vec![],
                 discard_log: vec![],
                 reshuffle_log: vec![],
@@ -2074,7 +2123,7 @@ impl CardRules for WasmRules {
             trigger: Trigger::default(),
             current_card: card.to_string(),
             current_uid: -1,
-            dest: DEST_GRAVEYARD,
+            dest: DEST_UNSET,
             paid_log: vec![],
             discard_log: vec![],
             reshuffle_log: vec![],

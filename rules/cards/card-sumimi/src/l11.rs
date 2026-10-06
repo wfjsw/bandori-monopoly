@@ -34,14 +34,13 @@ fn mine(player_id: i32) -> bool {
 }
 
 /// 「此卡[奇迹水晶]数为0时放入弃牌堆」.
-fn sweep(player_id: i32) -> card_sdk::Asked {
+fn sweep(_player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() > 0 {
         return Ok(());
     }
     if !ctx::is_placed() {
         return Ok(());
     }
-    ctx::unplace_self();
-    ctx::to_discard(player_id, "Sumimi:#L11");
+    ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

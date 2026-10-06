@@ -64,8 +64,7 @@ fn pay_at(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]: 「取消此次资金变动」
     trigger::set_pay_amount(0);
     // 规则书[持续]: 「将此卡放置到弃卡区」
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(player_id, &Msg::new(key!("hold_hands_again_used")).player_id("who", player_id));
     Ok(())
 }

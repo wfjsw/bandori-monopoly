@@ -174,8 +174,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     clear_held(player_id);
     ctx::log(player_id, &Msg::new(key!("here_the_world_returned")).player_id("who", player_id));
     // C# `H.Unplace(this, "discard", "结束了")`.
-    ctx::unplace_self();
-    ctx::to_discard(player_id, ID);
+    ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_slot(player_id, SLOT_USER, 0);
     // C# `if (!H.Out(user)) yield return H.DrawR(user, 1, CardName)`.
     if user >= 0 && !ctx::player_out(user) {
