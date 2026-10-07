@@ -130,7 +130,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
             break;
         }
         let before = ctx::hand_size(player_id);
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
         if ctx::hand_size(player_id) <= before {
             break;
         }

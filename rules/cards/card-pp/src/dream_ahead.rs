@@ -22,8 +22,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::state_key;
-use card_sdk::abi::{CardPile, HookKind, TriggerKind};
+use card_sdk::abi::{prop, CardPile, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -35,7 +34,11 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
         On::Hook(&[HookKind::Drew], drew_guard, drew),
         On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
     ],
-);
+)
+// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous
+// properties (`docs/TILES.md`), stamped at placement and gone with the card:
+// `noBuild` gates `why_not_build_on`, `handLimitDelta` is C# `Card.HandLimitDelta`.
+.props(&[(prop::HAND_LIMIT_DELTA, -1), (prop::NO_BUILD, 1)]);
 
 /// C# `Mem["x"]` -- the overflow counter (starts 0, +1 per crystal past the cap).
 const SLOT_X: &str = "dream_ahead_x";
@@ -66,10 +69,10 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
         "PP:梦在前方，结彩当下",
         &Msg::new(key!("dream_ahead_place")),
     );
-    // 规则书[特]: 「初始手牌减1」 -- C# `H.IncV(seat, "startHandMinus")`.
-    ctx::inc_slot(player_id, "startHandMinus", 1);
+    // 规则书[特]: 「初始手牌减1」 -- the before-match-start point owns the
+    // authoritative initial hand size; this lowers it by 1 (minimum 0).
+    ctx::inc_start_hand(player_id, -1);
     // 规则书[持续]（2）: 「[拥有者]不可盖房」 -- the noBuild flag.
-    no_build(player_id);
     Ok(())
 }
 
@@ -83,33 +86,23 @@ fn drew_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
 }
 
+/// `drew` fires **per single card** (an N-card draw raises it N times), so
+/// 「每次抽牌时」 is one crystal per raise.
 fn drew(player_id: i32) -> card_sdk::Asked {
-    for _ in 0..trigger::value().max(0) {
-        if ctx::crystals() < 5 {
-            ctx::add_crystals(1, 5);
-        } else {
-            ctx::inc_slot(player_id, SLOT_X, 1);
-            ctx::log(
-                player_id,
-                &Msg::new(key!("dream_ahead_overflow")).i("x", x(player_id) as i64),
-            );
-        }
+    if ctx::crystals() < 5 {
+        ctx::add_crystals(1, 5);
+    } else {
+        ctx::inc_slot(player_id, SLOT_X, 1);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("dream_ahead_overflow")).i("x", x(player_id) as i64),
+        );
     }
     Ok(())
 }
 
-/// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- `noBuild` gates
-/// `why_not_build_on`; the hand-limit half is a continuous field-card delta
-/// (`CardData.hand_limit_delta`), stamped at placement and gone with the card.
-/// Pure guard for [`no_build`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn no_build_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
-fn no_build(player_id: i32) {
-    ctx::state::add(player_id, state_key::NO_BUILD, 1);
-}
+/// 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- both halves are
+/// continuous properties on the `CardDef` above, stamped at placement.
 
 /// C# `CardDreamAhead.SettleAfter`: someone else settles on an owned deed --
 /// they pay the owner `fans × X + min(X×30, 300)`.

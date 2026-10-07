@@ -1,13 +1,16 @@
 //! `skill:北泽育美:全垒打！`
 //!
-//! 规则书（skill sheet, 北泽育美）:
+//! 规则书（skill sheet, 北泽育美, `角色技能` E14 -- sheet wins over the older
+//! data text, 2026-10-06）:
 //! > （1）每个回合在北泽精肉店生成一个可乐饼。你经过格子上的可乐饼时可以将其转移到
 //! > 自己场上（持有上限10），其他角色经过格子上可乐饼时可以将其转移到自己场上并向
 //! > 你支付50*X资金，X为该角色持有的可乐饼数量。你将可乐饼转移至自己场上时可用其
 //! > 替换掉一个其他不位于[持续]卡上的标记。角色每拥有一个可乐饼，移动时多投掷1个1d2。
-//! > 育美经过其他角色时，可以把自己身上的可乐饼转移给该角色。
-//! > 育美可在主要阶段消耗4个可乐饼兑换1000资金，其他角色拥有4个可乐饼时自动移除
-//! > 所有可乐饼停留一回合。
+//!
+//! Sheet 2026-10-06: the three extra clauses in the old data text are **not**
+//! on `角色技能` E14 and are removed -- 「育美经过其他角色时，可以把自己身上
+//! 的可乐饼转移给该角色」, 「育美可在主要阶段消耗4个可乐饼兑换1000资金」,
+//! 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」.
 //!
 //! The 「可乐饼」 is a tile mark that a passing player takes as a counter: the
 //! board holds them, a player collects them. 「持有上限10」 is the collector's
@@ -26,7 +29,6 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Play(Some(can_cash), cash),
         On::Hook(&[HookKind::TurnEnd], |_| true, spawn),
         On::Hook(&[HookKind::Pass], |_| true, on_pass),
         On::Hook(&[HookKind::RollPlan], any, on_plan),
@@ -110,22 +112,7 @@ fn on_plan(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「育美可在主要阶段消耗4个可乐饼兑换1000资金」.
-fn can_cash(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
-        return Some(Msg::new(key!("skill_blocked")));
-    }
-    if ctx::tok(player_id, HELD) < 4 {
-        return Some(Msg::new(key!("hagumi_homerun_no_croquette")));
-    }
-    None
-}
-
-fn cash(player_id: i32) -> card_sdk::Asked {
-    if ctx::tok(player_id, HELD) < 4 {
-        return Ok(());
-    }
-    ctx::add_tok(player_id, HELD, -4, 10);
-    ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_homerun_cash")));
-    Ok(())
-}
+// Removed (sheet 2026-10-06 `角色技能` E14 lacks them):
+// 「育美可在主要阶段消耗4个可乐饼兑换1000资金」 -- the old `cash` press.
+// 「育美经过其他角色时，可以把自己身上的可乐饼转移给该角色」 -- never built.
+// 「其他角色拥有4个可乐饼时自动移除所有可乐饼停留一回合」 -- never built.

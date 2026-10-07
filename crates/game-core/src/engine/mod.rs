@@ -26,6 +26,7 @@ mod world;
 
 pub use cx::{Answered, Ask, Cx, Flow, Halt, Reply};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
+pub use play::{Paid, Pay};
 pub use rules::{CardRules, Dest, StubRules, Trigger};
 pub use world::{Hidden, Scheduled, TurnCtx, World};
 
@@ -148,7 +149,8 @@ struct Saved {
 }
 
 /// Bumped whenever [`Saved`] changes shape; older saves are rejected.
-const SAVE_VERSION: u32 = 1;
+/// v2: `FieldCard.hand_limit_delta` became the generic `FieldCard.props` map.
+const SAVE_VERSION: u32 = 3;
 
 /// A running match.
 pub struct Match {
@@ -353,7 +355,8 @@ impl Match {
     pub fn set_character(&mut self, member: i32, character: &str) {
         if let Some(i) = self.player_index(member) {
             self.world.st.players[i].character = character.to_string();
-            self.world.bind_skills(self.data.as_ref(), i as i32);
+            self.world
+                .bind_skills(self.data.as_ref(), &*self.rules, i as i32);
         }
     }
 
@@ -1197,7 +1200,7 @@ impl Match {
                     cx.w.st.players[i].character = c;
                 }
                 let d = cx.data;
-                cx.w.bind_skills(d, i as i32);
+                cx.w.bind_skills(d, cx.rules, i as i32);
                 if !cx.w.st.players[i].deck_ready {
                     cx.submit_deck(i, None);
                 }

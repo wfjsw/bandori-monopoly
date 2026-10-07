@@ -4,8 +4,17 @@
 //! embedded JIT is not available) and, with the `wasmi-native` feature, on the
 //! server too -- mainly to keep both paths covered by the same tests.
 
-pub use wasmi::{Caller, Engine, Instance, Linker, Module, Store};
+pub use wasmi::{
+    Caller, Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder,
+};
 use wasmi::{Config, Extern, Memory};
+
+/// Ceiling on one instance's linear memory. A card run allocates a handful of
+/// small buffers and the guest bump allocator (`card-sdk` `rt`, `MAX_MEMORY`)
+/// refuses past this same figure and traps, so this is the host's matching
+/// backstop: a runaway `memory.grow` stops here instead of eating the process.
+/// 16 MiB is far above any real effect (the modules boot at ~1 MiB).
+pub const MAX_MEMORY_BYTES: usize = 16 * 1024 * 1024;
 
 /// Host errors and traps. wasmi carries an i32 exit status on traps.
 pub type Error = wasmi::Error;

@@ -21,8 +21,13 @@ const ID: &str = "HHW:爱心义演";
 const KOKORO_ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 
 /// C# `H._turnCtx.HalfPayToOthers` / `CharityFx.Turn` -- the turn key the
-/// half-pay is armed for (expires with the turn).
-const SLOT_TURN: &str = "charity_show_turn";
+/// half-pay is armed for (expires with the turn). Stored on the card instance
+/// (`FieldCard::props`), not in the player's keyed-state map, so the write
+/// stays inside this rule's scope.
+const PROP_TURN: &str = "charity.turn";
+/// Running count of the walk's `+2` steps this turn (instance prop).
+const PROP_EXTRA: &str = "charity.extra";
+/// Per-tile first-pass marker (instance prop `charity.seen.<tile>`).
 
 pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
@@ -40,14 +45,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // C# `CardCharityShow.Play` arms the two turn-long effects and logs.
     // 规则书: 「打出此卡的回合内」 -- C# `H._turnCtx.HalfPayToOthers = true` and
     // `CharityFx.Turn = H.TurnKey` live on the turn, not on the card.
-    ctx::set_slot(player_id, SLOT_TURN, ctx::turn_key());
-    ctx::set_slot(player_id, "charity_extra_total", 0);
     // 规则书: 「打出此卡的回合内」 -- C# `H.ExtraOf<CharityFx>(seat)`. The hook
     // dispatch only runs on placed cards, so this placement stands in for the
     // player attachment (same pattern as `card-sumimi`'s 儿时玩伴的鼓励); the
     // `TurnEndAfter` hook below files it away at the owner's turn end.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("charity_show_note")));
+    // Instance props (not player state): scoped to this placed card.
+    ctx::set_prop(PROP_TURN, ctx::turn_key());
+    ctx::set_prop(PROP_EXTRA, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("charity_show_played")).player_id("who", player_id),
@@ -94,7 +100,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         // pay-to-other of the armed player. The `PayMul` pass (after `PayAdd`,
         // before `PayChoose`) rewrites the amount via `set_pay_amount`.
         TriggerKind::PayMul => {
-            if ctx::slot(player_id, SLOT_TURN) != ctx::turn_key() {
+            if ctx::prop(PROP_TURN) != ctx::turn_key() {
                 return Ok(());
             }
             // C# `HalfPayToOthers` only halves payments *to other players*
@@ -123,7 +129,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「你若进行掷骰移动，每初次经过一个属于你的格子，使你的总移动数+2」
         // -- C# `CharityFx.PassTile` (MatchHost.cs:4211-4222).
         TriggerKind::PassTile => {
-            if ctx::slot(player_id, SLOT_TURN) != ctx::turn_key() {
+            if ctx::prop(PROP_TURN) != ctx::turn_key() {
                 return Ok(());
             }
             // C# `m.Seat != Seat` -- only the owner's own walk.
@@ -144,12 +150,12 @@ fn hook(player_id: i32) -> card_sdk::Asked {
                 return Ok(());
             }
             // C# `Seen.Add(t)` -- only the first pass of each tile counts
-            // (the slot holds the turn key that first saw it).
-            let key = format!("charity_seen_{t}");
-            if ctx::slot(player_id, &key) == ctx::turn_key() {
+            // (the prop holds the turn key that first saw it).
+            let key = alloc::format!("charity.seen.{t}");
+            if ctx::prop(&key) == ctx::turn_key() {
                 return Ok(());
             }
-            ctx::set_slot(player_id, &key, ctx::turn_key());
+            ctx::set_prop(&key, ctx::turn_key());
             ctx::log(
                 player_id,
                 &Msg::new(key!("charity_show_pass"))
@@ -159,13 +165,13 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             // 规则书: 「使你的总移动数+2」 -- C# `m.ExtraSteps += 2` mid-walk.
             // The walk loop bound is `steps + m.ExtraSteps`, re-read each
             // step (play.rs). `set_extra_steps` assigns, so keep a running
-            // count in a slot and write the sum.
-            let mut extra = ctx::slot(player_id, "charity_extra_total");
+            // count on the instance and write the sum.
+            let mut extra = ctx::prop(PROP_EXTRA);
             if extra < 0 {
                 extra = 0;
             }
             extra += 2;
-            ctx::set_slot(player_id, "charity_extra_total", extra);
+            ctx::set_prop(PROP_EXTRA, extra);
             ctx::plan::set_extra_steps(extra);
             // TODO(规则书)[judgement]: the walk reads `m.extra_steps` off the in-flight
             //   the clause under-specifies -- see the note above it
@@ -180,7 +186,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            ctx::set_slot(player_id, SLOT_TURN, 0);
+            ctx::set_prop(PROP_TURN, 0);
             ctx::set_dest(ctx::Dest::Graveyard);
         }
         _ => {}

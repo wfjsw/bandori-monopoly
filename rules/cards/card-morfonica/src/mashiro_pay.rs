@@ -24,6 +24,12 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
+    // 规则书[反击]: 「支付」 -- the `pay` effect entry. The causer's own `abnormal`
+    // also rides an `effect` link with `player_id` = the causer and `value` = its
+    // `AbKind` (> 0); that is not a payment and must not open this window.
+    if !ctx::effect::has(TriggerKind::Pay) {
+        return false;
+    }
     let to = trigger::target();
     // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
     // reads as `value() == 0`, so the >0 guard covers it.

@@ -23,6 +23,13 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
+    // 规则书（1）[反击]: 「支付资金」 -- the `pay` effect entry. The causer's own
+    // `abnormal` also rides an `effect` link with `player_id` = the causer and
+    // `value` = its `AbKind` (> 0); that is not a payment and must not open this
+    // window.
+    if !ctx::effect::has(TriggerKind::Pay) {
+        return false;
+    }
     // `t.Pay.PayToOther` -- the payee is another player (`t.Pay.to` = `trigger::target()`).
     let to = trigger::target();
     if to < 0 || to == player_id {
@@ -48,7 +55,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）[反击]: 「若此卡从手牌以外的地方打出，你抽一张卡」 -- the
     // play's origin: a card run through `ctx::play_card` did not come from a hand.
     if !ctx::play_from_hand() {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
         ctx::log(
             player_id,
             &Msg::new(key!("ako_dark_drawn")).player_id("who", player_id),

@@ -36,7 +36,7 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::target() == player_id {
         return Ok(());
     }
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     ctx::log(
         player_id,
         &Msg::new(key!("morfonica_draw")).i("n", ctx::trigger::value() as i64),
@@ -61,7 +61,7 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         player_id,
         amount,
         &Msg::new(key!("morfonica_circle")).i("n", amount as i64),
-    );
+    )?;
     // The reward is replaced by the fixed sum.
     ctx::trigger::set_cancelled();
     Ok(())

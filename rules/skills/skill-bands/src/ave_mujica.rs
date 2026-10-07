@@ -61,9 +61,10 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     }
     let n = state::get(player_id, IN_TWO) + 1;
     state::set(player_id, IN_TWO, n);
-    // 「处于状态2的第三回合开始时为此卡添加一个奇迹水晶」
+    // 「处于状态2的第三回合开始时为此卡添加一个奇迹水晶」 -- a *band-card*
+    // crystal: this rule's own instance, the same pool `band_crystals` reads.
     if n == 3 {
-        ctx::add_band_crystals(player_id, 1, i32::MAX);
+        ctx::add_crystals(1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("ave_mujica_crystal")));
     }
     Ok(())
@@ -117,7 +118,7 @@ fn can_halve(player_id: i32) -> Option<Msg> {
     if state::get(player_id, state_key::SKILL_STATE) != 2 {
         return Some(Msg::new(key!("ave_mujica_not_two")));
     }
-    if ctx::band_crystals(player_id) < 1 {
+    if ctx::crystals() < 1 {
         return Some(Msg::new(key!("ave_mujica_no_crystal")));
     }
     None
@@ -134,10 +135,10 @@ fn halve(player_id: i32) -> card_sdk::Asked {
         }
     }
     if n > 0 {
-        if ctx::band_crystals(player_id) < n {
+        if ctx::crystals() < n {
             return Ok(());
         }
-        ctx::add_band_crystals(player_id, -n, i32::MAX);
+        ctx::add_crystals(-n, i32::MAX);
     }
     ctx::log(player_id, &Msg::new(key!("ave_mujica_halved")));
     Ok(())

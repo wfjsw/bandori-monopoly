@@ -65,7 +65,7 @@ fn taki_serious(player_id: i32) -> card_sdk::Asked {
         )?;
         // 「...你选择的一个格子进行一次[触发结算]，本次结算导致的所有[支付]变为
         // 原价的四分之一」 -- the stayer settles there at a quarter price.
-        ctx::plan::set_pay_factor(25);
+        ctx::plan::set_pay_factor(250);
         ctx::card_settle_at(p, pick, true);
         ctx::log(
             player_id,

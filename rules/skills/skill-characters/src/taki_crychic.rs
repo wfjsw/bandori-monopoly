@@ -66,7 +66,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     // The offer for *this* turn's move, before the walk runs.
     if state::get(player_id, "skill.takiCrychic.reroll") != 0 {
         state::set(player_id, "skill.takiCrychic.reroll", 0);
-        offer_reroll(player_id, roll);
+        offer_reroll(player_id, roll)?;
         return Ok(());
     }
     // 「严格小于…且那次移动掷骰结果不大于20」

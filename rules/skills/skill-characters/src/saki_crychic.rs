@@ -21,7 +21,11 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::SettleBefore], any, before_settle),
     ],
@@ -37,7 +41,7 @@ fn any(_player_id: i32) -> bool {
 
 /// 「初始1，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    crate::fire_pot(player_id, 1, 2);
     Ok(())
 }
 

@@ -37,7 +37,21 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
     // 规则书（1）[手]: 「结果至少为22则抽1张卡」
     if r >= 22 {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
+    }
+
+    // 规则书（3）[手]: 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」
+    // -- set before the (2) buy below so 「本回合购买」 includes it.
+    if r >= 28 {
+        // 规则书（3）: 「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- C#
+        // `H._turnCtx.BuyDiscount = 1500`.
+        ctx::set_buy_discount(1500);
+        ctx::log(
+            player_id,
+            &Msg::new(key!("tsugu_discount"))
+                .player_id("who", player_id)
+                .n("n", 1500),
+        );
     }
 
     // 规则书（2）[手]: 「结果至少为26则进进入移动阶段并将本回合的[主要移动]改为[传送]到
@@ -86,19 +100,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
         }
     }
 
-    // 规则书（3）[手]: 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」
-    if r >= 28 {
-        // 规则书（3）: 「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- C#
-        // `H._turnCtx.BuyDiscount = 1500`.
-        ctx::set_buy_discount(1500);
-        ctx::log(
-            player_id,
-            &Msg::new(key!("tsugu_discount"))
-                .player_id("who", player_id)
-                .n("n", 1500),
-        );
-    }
-
     // 规则书（4）[手]: 「结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]
     // 改为[传送]到“bandori车站”并[结算]」
     if r < 26 {
@@ -125,11 +126,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
             } else {
                 // 规则书（4）[手]: 「[获得]1000资金」 -- no station tile, or the main
                 // move is no longer available (C# falls back to the gain).
-                ctx::gain(player_id, 1000, &Msg::new(key!("tsugu_why")));
+                ctx::gain(player_id, 1000, &Msg::new(key!("tsugu_why")))?;
             }
         } else {
             // 规则书（4）[手]: 「[获得]1000资金」
-            ctx::gain(player_id, 1000, &Msg::new(key!("tsugu_why")));
+            ctx::gain(player_id, 1000, &Msg::new(key!("tsugu_why")))?;
         }
     }
     Ok(())

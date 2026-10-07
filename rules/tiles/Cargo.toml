@@ -1,0 +1,13 @@
+[package]
+name = "rules-tiles"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Board tile rules: one CardDef per tile kind, settling in the normal chain."
+
+[lib]
+# rlib: linked into the shipped module (card-all) like the band crates.
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../card-sdk", features = ["guest"] }

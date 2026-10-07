@@ -60,7 +60,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
                 player_id,
                 diff * 120,
                 &Msg::new(key!("tomori_inner_shout_gain")).i("n", diff as i64),
-            );
+            )?;
         }
     }
     // （2）「此卡不会被你乐队技能的（2）效果移除」 -- see `shuffle_in` and the

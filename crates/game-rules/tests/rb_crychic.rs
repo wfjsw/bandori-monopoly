@@ -93,6 +93,49 @@ fn want_to_be_human_places_and_declares_x() {
 }
 
 #[test]
+fn want_to_be_human_crystal_on_roll_equal_to_x() {
+    // Sheet 2026-10-06 新卡组卡 M2: 「每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶」
+    // -- equal to X qualifies (supersedes the earlier 「小于X」 reading).
+    // The X prompt offers 1..=20 as ask.intOption; pick X = 20 (option 19).
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "CRYCHIC:想要成为人类").unwrap();
+    let mut x = 20i32;
+    for _ in 0..5 {
+        if t.prompt().is_none() {
+            break;
+        }
+        let p = t.expect_prompt();
+        // Options are ask.intOption n=1..20; option index i names i+1.
+        let k = p
+            .options
+            .iter()
+            .position(|o| format!("{o:?}").contains("I(20)"))
+            .map(|i| i as i32)
+            .unwrap_or((p.options.len().saturating_sub(1)) as i32);
+        if let Some(o) = p.options.get(k as usize) {
+            if let Some(n) = format!("{o:?}")
+                .split("I(").nth(1)
+                .and_then(|s| s.split(')').next())
+                .and_then(|s| s.parse::<i32>().ok())
+            {
+                x = n;
+            }
+        }
+        answer_q(&mut t, 0, k).unwrap();
+    }
+    drain(&mut t);
+    // Roll exactly X.
+    t.dice(&[x]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let c = t.crystals(0, "CRYCHIC:想要成为人类").unwrap_or(0);
+    assert!(
+        c >= 1,
+        "crystal added for roll == X ({x}) under 「小于等于X」: {c}"
+    );
+}
+
+#[test]
 fn want_to_be_human_crystal_on_low_roll() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "CRYCHIC:想要成为人类").unwrap();
@@ -111,9 +154,9 @@ fn want_to_be_human_crystal_on_low_roll() {
     t.dice(&[3]);
     t.roll(0).unwrap();
     drain(&mut t);
-    // 规则书: 「每当你的移动掷骰小于X，为此卡添加一个奇迹水晶」
+    // 规则书 (sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶」
     let c = t.crystals(0, "CRYCHIC:想要成为人类").unwrap_or(0);
-    assert!(c >= 1, "crystal added for low roll (3 < X): {c}");
+    assert!(c >= 1, "crystal added for low roll (3 ≤ X): {c}");
 }
 
 // -- CRYCHIC:春日影 ----------------------------------------------------
@@ -212,6 +255,7 @@ fn if_only_it_lasted_hand_effect() {
     }
 }
 
+// 规则书: 「[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆」.
 #[test]
 fn if_only_it_lasted_discards_at_hand_7() {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "长崎素世（CRYCHIC）"]);
@@ -220,19 +264,42 @@ fn if_only_it_lasted_discards_at_hand_7() {
     while t.prompt().is_some() {
         decline_q(&mut t);
     }
-    // Place the card as [持续] (use place_raw since the [手] effect needs crystals).
-    t.place_raw(0, "CRYCHIC:如果能一直持续下去...");
+    // Place the card as [持续]: play it (the [手] effect pays out and leaves it).
+    t.give(0, &["CRYCHIC:如果能一直持续下去..."]);
+    let played = t.play(0, "CRYCHIC:如果能一直持续下去...");
+    eprintln!("if_only play: {played:?} field={:?}", t.field_ids(0));
+    drain(&mut t);
+    // Keep the draw pile non-empty so 「当抽卡区抽光时将弃卡区洗卡并放回抽卡区」
+    // does not shuffle the discard away.
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
+        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
     // 规则书: 「[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆」
+    // set_hand is a seam; force a real hand change at >= 7 so the check fires.
     t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压",
-        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+        "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压", "R:[衍生] 压"]);
+    t.discard_card(0, "R:[衍生] 压").ok();
     // Trigger a state change that checks hand size (e.g. end of turn).
     t.dice(&[3]);
     t.roll(0).ok();
     drain(&mut t);
     t.end(0).ok();
     drain(&mut t);
-    // After the turn, the card should have been discarded.
-    // (Timing may vary; just verify the game is consistent.)
+    // 规则书: 「[持续] 若你的手牌大于等于7，此卡立即置入弃牌堆」.
+    let in_discard = (0..2)
+        .any(|w| t.discard(w).iter().any(|c| c.contains("如果能一直持续")));
+    assert!(
+        in_discard,
+        "the card is in a discard: field={:?} d0={:?} d1={:?} draw0={:?} draw1={:?}",
+        t.field_ids(0),
+        t.discard(0),
+        t.discard(1),
+        t.draw_pile(0),
+        t.draw_pile(1)
+    );
+    assert!(
+        !t.on_field(0, "CRYCHIC:如果能一直持续下去..."),
+        "the card left the field"
+    );
 }
 
 // -- CRYCHIC:一起演奏音乐的命运共同体 ----------------------------------

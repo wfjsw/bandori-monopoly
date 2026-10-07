@@ -64,6 +64,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 fn cast(player_id: i32) {
     // 规则书: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
+    // A played card's own `counteract` also runs (the follow-up; see
+    // `a_played_cards_own_counteract_runs_once`), so `cast` is reached from both
+    // `play` and `counteract` on a hand play. Place at most once.
+    if ctx::is_placed() {
+        return;
+    }
     ctx::place_card(player_id, ID, &Msg::new(key!("dice_cast_note")));
     // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」 -- C#
     // `H._noCounteractTurn = c.Seat` makes `H.CanCounteractNow` refuse every other player.

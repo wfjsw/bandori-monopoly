@@ -22,6 +22,17 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     triggers: o.triggers(),
                 })
                 .collect(),
+            // Sorted by key so the wire bytes are deterministic regardless of
+            // declaration order.
+            props: {
+                let mut p: Vec<(String, i32)> = c
+                    .props
+                    .iter()
+                    .map(|(k, v)| (String::from(*k), *v))
+                    .collect();
+                p.sort_by(|a, b| a.0.cmp(&b.0));
+                p
+            },
         })
         .collect();
     leak(postcard::to_allocvec(&entries).unwrap_or_default())
@@ -79,6 +90,7 @@ pub fn on(
         | (On::Hook(_, _, run), _)
         | (On::Gate(_, run), _)
         | (On::AtEnd(run), _)
+        | (On::Settle(run), _)
         | (On::RollPlan(run), _) => match run(player_id) {
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with
@@ -143,7 +155,13 @@ fn on_panic(_info: &core::panic::PanicInfo) -> ! {
 /// Bump allocator for guest builds. A card run allocates a handful of small
 /// strings and never frees them -- the module is re-instantiated for every run
 /// -- so a pointer that only moves up is enough, and far smaller than dlmalloc.
-/// The heap is zeroed BSS: it costs nothing in the .wasm file.
+///
+/// The heap is not a fixed static arena: the cursor starts at `__heap_base`
+/// (just past data, bss and the stack) and linear memory is grown on demand
+/// with `memory.grow`, so an instance boots with the module's small initial
+/// memory and the ceiling is soft. The one concession to reuse is
+/// `realloc`: when the block being resized is the most recent allocation it is
+/// grown (or shrunk) in place, which is what `Vec`/`String` resizing wants.
 #[cfg(all(target_arch = "wasm32", feature = "guest"))]
 struct Bump;
 
@@ -151,28 +169,108 @@ struct Bump;
 #[global_allocator]
 static ALLOC: Bump = Bump;
 
+/// Hard ceiling on the absolute addresses the bump allocator will hand out
+/// (i.e. the whole linear memory, stack and data included -- `__heap_base` is
+/// ~1 MiB into it). Matches the host's per-instance `memory_size` limit in
+/// `game-rules` (`be_*::MAX_MEMORY_BYTES`); either side refusing is enough to
+/// stop a runaway effect, and the guest hitting its own ceiling first keeps
+/// the failure deterministic. Growth past this returns null and the run
+/// aborts into the panic handler, which traps and takes the card out cleanly.
 #[cfg(all(target_arch = "wasm32", feature = "guest"))]
-static mut HEAP: [u8; 256 * 1024] = [0; 256 * 1024];
+const MAX_MEMORY: usize = 16 * 1024 * 1024;
 
+/// One wasm page of linear memory.
+#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+const PAGE: usize = 64 * 1024;
+
+/// Bump cursor: the absolute address of the next free byte. `0` means "not
+/// started yet" -- the first allocation latches [`__heap_base`]. Nothing in
+/// the guest reads this for control flow, so it stays deterministic.
 #[cfg(all(target_arch = "wasm32", feature = "guest"))]
 static mut CURSOR: usize = 0;
+
+#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+extern "C" {
+    /// Linker-provided (rust-lld): the first address past data, bss and the
+    /// wasm shadow stack. The heap starts here; below it is not ours.
+    static __heap_base: u8;
+}
+
+/// Make sure linear memory covers the absolute address `end`. Grows by whole
+/// pages. Returns `false` if the host refused (its own per-instance limit) --
+/// `memory.grow` reports failure with `-1` instead of trapping, so we turn it
+/// into the allocator's null contract here.
+#[cfg(all(target_arch = "wasm32", feature = "guest"))]
+fn ensure_mem(end: usize) -> bool {
+    let have = core::arch::wasm32::memory_size::<0>() * PAGE;
+    if end <= have {
+        return true;
+    }
+    let pages = (end - have).div_ceil(PAGE);
+    // Both ceilings are exact multiples of a page, so a grow that covers
+    // `end` can never overshoot them by a partial page.
+    if have / PAGE + pages > MAX_MEMORY / PAGE {
+        return false;
+    }
+    core::arch::wasm32::memory_grow::<0>(pages) != usize::MAX
+}
 
 #[cfg(all(target_arch = "wasm32", feature = "guest"))]
 unsafe impl core::alloc::GlobalAlloc for Bump {
     unsafe fn alloc(&self, layout: core::alloc::Layout) -> *mut u8 {
         let align = layout.align().max(1);
+        if CURSOR == 0 {
+            CURSOR = &__heap_base as *const u8 as usize;
+        }
         let start = (CURSOR + align - 1) & !(align - 1);
         let end = match start.checked_add(layout.size()) {
-            Some(e) if e <= HEAP.len() => e,
+            Some(e) if e <= MAX_MEMORY && ensure_mem(e) => e,
             // Out of memory: return null so the allocator aborts into our
             // panic handler, which traps and takes the card out cleanly.
             _ => return core::ptr::null_mut(),
         };
         CURSOR = end;
-        HEAP.as_mut_ptr().add(start)
+        start as *mut u8
     }
 
     unsafe fn dealloc(&self, _ptr: *mut u8, _layout: core::alloc::Layout) {
         // never freed -- see the note above
+    }
+
+    unsafe fn realloc(
+        &self,
+        ptr: *mut u8,
+        layout: core::alloc::Layout,
+        new_size: usize,
+    ) -> *mut u8 {
+        let old_size = layout.size();
+        let addr = ptr as usize;
+        // In place when the block is the most recent allocation: it ends
+        // exactly at the cursor, so nothing has been handed out past it. The
+        // base -- and therefore the alignment -- is unchanged, and the tail of
+        // a shrink is simply handed back to the cursor.
+        if addr.wrapping_add(old_size) == CURSOR {
+            let end = match addr.checked_add(new_size) {
+                Some(e) if e <= MAX_MEMORY => e,
+                _ => return core::ptr::null_mut(),
+            };
+            if new_size > old_size && !ensure_mem(end) {
+                return core::ptr::null_mut();
+            }
+            CURSOR = end;
+            return ptr;
+        }
+        // Otherwise the default strategy: a fresh block and a copy. (Still
+        // leaky, like `dealloc` -- the module is re-instantiated per run.)
+        let new_layout = match core::alloc::Layout::from_size_align(new_size, layout.align().max(1)) {
+            Ok(l) => l,
+            Err(_) => return core::ptr::null_mut(),
+        };
+        let new_ptr = self.alloc(new_layout);
+        if new_ptr.is_null() {
+            return core::ptr::null_mut();
+        }
+        core::ptr::copy_nonoverlapping(ptr, new_ptr, old_size.min(new_size));
+        new_ptr
     }
 }

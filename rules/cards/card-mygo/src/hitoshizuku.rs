@@ -9,10 +9,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::state_key;
+use card_sdk::abi::{prop, state_key};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play(None, hitoshizuku)]);
+pub const HITOSHIZUKU: CardDef = CardDef::new("MyGO:壱雫空", &[On::Play(None, hitoshizuku)])
+    // 规则书: 「（此卡可在眩晕时打出）」 -- the `playableStunned` property
+    // (C# `Card.PlayableStunned`), skips the stun gate. The exile and no-hand
+    // gates have no such exception.
+    .props(&[(prop::PLAYABLE_STUNNED, 1)]);
 
 fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     // (player, number of effect kinds cleared there) -- C# `CardHitoshizuku`'s
@@ -61,20 +65,46 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
     }
     // TODO(ABI): the C# also un-skips the turn's move when the user's stay
     // drops to 0 (`H.State.skipMove = false`); needs a skip-move flag.
-    for (j, n) in cleared {
-        let amount = 1000 * n;
-        if j == player_id {
-            // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
-            // -- C# `item.Key == i` branch -> `H.GainR(i, 1000 * n, ...)`.
-            ctx::gain(player_id, amount, &Msg::new(key!("hitoshizuku_self_gain")));
-        } else {
-            // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
-            // C# `H.PayR(j, i, 1000 * n, CardName, i)` (a player-to-player transfer).
-            ctx::transfer(j, player_id, amount, &Msg::new(key!("hitoshizuku_pay")))?;
+    // Ruling 2026-10-06: 「每清除一种效果」 is per effect type, counted
+    // separately for each affected player. 2 types cleared from A and 1 from B
+    // counts 3. Every player pays 1000 × count; the user gains 1000 extra per
+    // own type (「每种效果使用者额外获得1000资金」).
+    //
+    // The money moves with `gain_fixed` rather than `transfer`/`gain` because
+    // those pause the guest run (`HostRequest::Pay`) and the money pipeline
+    // then runs against the **live** world -- which still has the [晕眩] we
+    // just cleared on the guest copy, so a stunned payer's leg is silently
+    // blocked (`play.rs` `can_pay`). `gain_fixed` is a direct world write with
+    // no pause, so the whole body commits in one `swap_world`.
+    // TODO(ABI): route these through `transfer`/`gain` (payAdd/payMul/payChoose)
+    //   once a status clear crosses to the live world before a host routine
+    //   (`adopt_turn_policy` copies `latch:` keys and turn policy, not `stun`).
+    let count: i32 = cleared.iter().map(|&(_, n)| n).sum();
+    if count > 0 {
+        let each = 1000 * count;
+        // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」 --
+        // every seat pays, the user included (a self-pay nets 0).
+        for j in 0..ctx::player_count() {
+            if ctx::player_out(j) {
+                continue;
+            }
+            if j == player_id {
+                // Self-pay nets nothing; keep the log so the count is visible.
+                ctx::log(
+                    player_id,
+                    &Msg::new(key!("hitoshizuku_pay")).player_id("who", j),
+                );
+            } else {
+                ctx::gain_fixed(j, -each, &Msg::new(key!("hitoshizuku_pay")));
+                ctx::gain_fixed(player_id, each, &Msg::new(key!("hitoshizuku_pay")));
+            }
         }
     }
-    // TODO(ABI): 「（此卡可在眩晕时打出）」 -- C# `CardHitoshizuku.PlayableStunned`;
-    // `CardDef` has no playable-stunned hook, so a stunned player cannot declare
-    // the card today.
+    // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
+    for &(j, n) in &cleared {
+        if j == player_id && n > 0 {
+            ctx::gain_fixed(player_id, 1000 * n, &Msg::new(key!("hitoshizuku_self_gain")));
+        }
+    }
     Ok(())
 }

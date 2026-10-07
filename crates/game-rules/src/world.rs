@@ -56,6 +56,11 @@ pub struct Trigger {
     pub move_total: i32,
     /// The cards a `drew` trigger is about.
     pub cards: Vec<String>,
+    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
+    /// `card_sdk::abi::roll_source` code (`0` = unattributed, `1` = a fire
+    /// pot, `2` = a hand/field card, `3` = a skill press). 「当你使用火罐进行
+    /// 掷骰时」 reads this.
+    pub roll_source: i32,
     /// `t.Move.Roll`; `None` when there is no move or it was cancelled.
     pub move_roll: Option<i32>,
     /// `t.Card` -- the card id on card/event/counteracted triggers (`""` otherwise).
@@ -203,6 +208,11 @@ pub trait CardWorld: Clone + 'static {
     fn tile_price(&self, tile: i32) -> i32;
     /// `H.State.houses[t]`.
     fn houses_of(&self, tile: i32) -> i32;
+    /// `H.RentHouses` -- the house count a **rent** lookup reads (the counted
+    /// value a 「房屋数视为…」 override may lift). Real houses are untouched.
+    fn rent_houses_of(&self, tile: i32) -> i32 {
+        self.houses_of(tile)
+    }
     /// Set the tile's house count (house transfer effects).
     fn set_houses(&mut self, tile: i32, n: i32);
     /// `H.AddHouse` -- returns the new count.
@@ -351,6 +361,37 @@ pub trait CardWorld: Clone + 'static {
     fn add_crystals_at(&mut self, _uid: i32, _n: i32, _max: i32) -> i32 {
         0
     }
+    /// One declared property of the instance at `uid` (`FieldCard::props`,
+    /// `card_sdk::abi::prop` keys). Default `0`.
+    fn prop_at(&self, _uid: i32, _key: &str) -> i32 {
+        0
+    }
+    fn set_prop_at(&mut self, _uid: i32, _key: &str, _value: i32) -> i32 {
+        0
+    }
+    /// A declared property of the rule instance governing `tile`
+    /// (`FieldCard::props`, `card_sdk::abi::prop` keys). This is what a card
+    /// that bends a tile writes instead of an engine flag (`docs/TILES.md`):
+    /// 「无法获取[CiRCLE奖励]」 arms `prop::NO_REWARD` on the tile's `tile:circle`
+    /// instance, （soyo） writes `prop::GROUP`, and so on. Reads the first
+    /// instance on the tile that carries the key; a tile with no rule instance
+    /// reads as the key's default (`0`).
+    fn tile_prop(&self, _tile: i32, _key: &str) -> i32 {
+        0
+    }
+    /// Write a [`Self::tile_prop`] on every rule instance governing `tile`.
+    /// Returns the stored value. The **source** owns the arming and the
+    /// disarming; the reader is the tile instance.
+    fn set_tile_prop(&mut self, _tile: i32, _key: &str, _value: i32) -> i32 {
+        0
+    }
+    /// The [经过] CiRCLE reward (`H.CircleReward`) -- `docs/TILES.md`'s
+    /// `ctx::settle_circle_reward`, the body of `tile:circle`'s Pass entry.
+    /// The engine runs the whole reward step (suppression, the choice, the
+    /// `circleAffected` window, the payout) and answers `1`.
+    fn settle_circle_reward(&mut self, _player_id: i32, _landing: bool) -> i32 {
+        1
+    }
     fn unplace_at(&mut self, _uid: i32) -> i32 {
         -1
     }
@@ -382,6 +423,17 @@ pub trait CardWorld: Clone + 'static {
     /// `H.AddCrystals` -- adjust the running card instance's crystals by `n`,
     /// clamped at 0 and at `max` (0 = uncapped); returns the new count.
     fn add_crystals(&mut self, n: i32, max: i32) -> i32;
+
+    /// One declared **property** of the running rule instance
+    /// (`FieldCard::props`, `card_sdk::abi::prop` keys). Default `0`.
+    fn self_prop(&self, key: &str) -> i32 {
+        let _ = key;
+        0
+    }
+    fn set_self_prop(&mut self, key: &str, value: i32) -> i32 {
+        let _ = (key, value);
+        0
+    }
 
     // ------------------------------------------------------ marks & tokens
     /// `H.AddMark` -- a marker on a tile (`kind` names it, `note` explains it).
@@ -453,11 +505,37 @@ pub trait CardWorld: Clone + 'static {
     }
 
     // ------------------------------------------------------- status pots
-    /// Sugar over the keyed state.
-    fn band_crystals(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, game_core::state::key::BAND_CRYSTALS)
+    /// The uid of `player_id`'s **band-skill field instance** (`skill:<band>:
+    /// <skill>`, `FieldCard::band_skill`), or -1 when the player has none. This
+    /// is the 「乐队卡 / 囡卡」 crystal holder -- see [`Self::band_crystals`].
+    fn band_skill_uid(&self, _player_id: i32) -> i32 {
+        -1
     }
-    fn add_band_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32;
+    /// 「乐队卡 / 囡卡」 crystals -- the count on the player's band-skill field
+    /// instance ([`Self::band_skill_uid`]). 0 when there is no band skill; a
+    /// write with no band skill is a no-op. The same pool every band skill and
+    /// every card that mentions the band card's crystals reads and writes, so
+    /// `add_crystals` inside a band skill's own handler and `add_band_crystals`
+    /// from a card land on one count.
+    fn band_crystals(&self, player_id: i32) -> i32 {
+        let uid = self.band_skill_uid(player_id);
+        if uid < 0 {
+            0
+        } else {
+            self.crystals_at(uid)
+        }
+    }
+    /// Add to that instance's crystals. `max` > 0 clamps, `max` = 0 is uncapped
+    /// (exactly as [`Self::add_crystals_at`]); returns the new count, or 0 when
+    /// the player has no band skill.
+    fn add_band_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
+        let uid = self.band_skill_uid(player_id);
+        if uid < 0 {
+            0
+        } else {
+            self.add_crystals_at(uid, n, max)
+        }
+    }
     /// Fire pots held. Sugar over the keyed state.
     fn fire(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::FIRE)
@@ -644,7 +722,6 @@ pub trait CardWorld: Clone + 'static {
     fn set_no_buy(&mut self, _v: bool) {}
     /// The landing cannot be built on.
     /// Passing CiRCLE pays nothing on this walk.
-    fn set_no_circle_reward(&mut self, _v: bool) {}
     /// Replace the starting dice (default 1d20). `sides == 0` is a flat `count`.
     fn set_base_dice(&mut self, _count: i32, _sides: i32, _why: &str) {}
     /// Drop every extra die another effect added to the plan.

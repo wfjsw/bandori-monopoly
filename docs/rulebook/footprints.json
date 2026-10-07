@@ -1,0 +1,3631 @@
+{
+ "AG:(兰) 像往常一样": {
+  "writes": [
+   "path.position",
+   "effects"
+  ],
+  "reads": [
+   "abnormal"
+  ],
+  "triggers": [
+   "Counteract:Abnormal",
+   "AtEnd"
+  ]
+ },
+ "AG:ONE OF US": {
+  "writes": [
+   "tile.owner",
+   "money",
+   "field"
+  ],
+  "reads": [
+   "settle",
+   "bankrupt"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "AG:Y.O.L.O": {
+  "writes": [
+   "roll.result"
+  ],
+  "reads": [
+   "roll.result"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "AG:刻入天穹傲岸的烈光": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "tile.price"
+  ],
+  "triggers": [
+   "Counteract:PassPlayer"
+  ]
+ },
+ "AG:即使夕阳落山": {
+  "writes": [
+   "money",
+   "tile.houses"
+  ],
+  "reads": [
+   "money",
+   "tile.houses",
+   "alive"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "AG:商店街的青梅竹马": {
+  "writes": [
+   "path.position"
+  ],
+  "reads": [
+   "dice",
+   "path.position"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "AG:回家的路上绕个道": {
+  "writes": [
+   "path.position",
+   "roll.set"
+  ],
+  "reads": [
+   "abnormal"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract:MoveRoll",
+   "RollPlan"
+  ]
+ },
+ "AG:宣战布告": {
+  "writes": [
+   "money",
+   "hand"
+  ],
+  "reads": [
+   "targeting"
+  ],
+  "triggers": [
+   "Counteract:Target"
+  ]
+ },
+ "AG:无论是何种颜色的夕阳": {
+  "writes": [
+   "money",
+   "hand",
+   "fire",
+   "draw.pile",
+   "discard.pile"
+  ],
+  "reads": [
+   "dice"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "AG:朝同一片天空迈进": {
+  "writes": [
+   "money",
+   "hand"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Hook:Card"
+  ]
+ },
+ "AG:绯红之魂": {
+  "writes": [
+   "crystals",
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "money",
+   "skill.use"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Counteract"
+  ]
+ },
+ "AG:（巴）商店街的救世主": {
+  "writes": [
+   "money",
+   "tile.owner",
+   "tile.mortgaged"
+  ],
+  "reads": [
+   "mortgage"
+  ],
+  "triggers": [
+   "Counteract:Mortgage"
+  ]
+ },
+ "AG:（摩卡）0.5倍速": {
+  "writes": [
+   "crystals",
+   "money",
+   "roll.result"
+  ],
+  "reads": [
+   "money",
+   "roll.result"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "AG:（绯玛丽）如果并非没问题": {
+  "writes": [
+   "roll.result"
+  ],
+  "reads": [
+   "roll.result"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "AG:（鸫）微小的『能做到』的事": {
+  "writes": [
+   "dice",
+   "effects"
+  ],
+  "reads": [
+   "dice",
+   "card.play"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract:Card"
+  ]
+ },
+ "CRYCHIC:一起演奏音乐的命运共同体": {
+  "writes": [
+   "path.position",
+   "hand",
+   "discard.pile"
+  ],
+  "reads": [
+   "money",
+   "order",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:TurnStart"
+  ]
+ },
+ "CRYCHIC:主唱太拼命了": {
+  "writes": [
+   "money",
+   "effects"
+  ],
+  "reads": [
+   "money"
+  ],
+  "triggers": [
+   "Counteract:Pay"
+  ]
+ },
+ "CRYCHIC:优雅的呐喊": {
+  "writes": [
+   "hand"
+  ],
+  "reads": [
+   "draw"
+  ],
+  "triggers": [
+   "Counteract:DrawOut",
+   "AtEnd"
+  ]
+ },
+ "CRYCHIC:初演大成功": {
+  "writes": [
+   "money",
+   "status.stun",
+   "crystals",
+   "effects"
+  ],
+  "reads": [
+   "money",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "AtEnd"
+  ]
+ },
+ "CRYCHIC:去唱卡拉ok吧": {
+  "writes": [
+   "roll.result",
+   "path.position",
+   "settle"
+  ],
+  "reads": [
+   "dice"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "CRYCHIC:如果能一直持续下去...": {
+  "writes": [
+   "money",
+   "crystals",
+   "discard.pile",
+   "hand"
+  ],
+  "reads": [
+   "crystals",
+   "hand"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "CRYCHIC:想要成为人类": {
+  "writes": [
+   "crystals",
+   "roll.result",
+   "abnormal"
+  ],
+  "reads": [
+   "roll.result",
+   "turn.start",
+   "abnormal"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:TurnStart"
+  ]
+ },
+ "CRYCHIC:想要抓住...": {
+  "writes": [
+   "status.stay",
+   "path.position",
+   "settle"
+  ],
+  "reads": [
+   "path.pass.player",
+   "turn.start",
+   "path.distance"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:PassPlayer",
+   "Hook:SettleBefore"
+  ]
+ },
+ "CRYCHIC:春日影": {
+  "writes": [
+   "hand",
+   "skill.use"
+  ],
+  "reads": [
+   "money",
+   "hand",
+   "discard"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract",
+   "Hook"
+  ]
+ },
+ "CRYCHIC:是我自己的问题": {
+  "writes": [
+   "path.position"
+  ],
+  "reads": [
+   "path.distance",
+   "abnormal"
+  ],
+  "triggers": [
+   "Counteract:SettleBefore"
+  ]
+ },
+ "CRYCHIC:（soyo）回到曾经": {
+  "writes": [
+   "money",
+   "hand",
+   "draw.pile",
+   "discard.pile",
+   "tile.houses",
+   "removed"
+  ],
+  "reads": [
+   "hand",
+   "discard.pile"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "CRYCHIC:（灯）内心的呐喊": {
+  "writes": [
+   "crystals",
+   "money",
+   "field",
+   "fire",
+   "skill.use"
+  ],
+  "reads": [
+   "crystals",
+   "hand",
+   "band"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:SettleBefore"
+  ]
+ },
+ "CRYCHIC:（睦）从没有觉得...": {
+  "writes": [
+   "crystals",
+   "hand",
+   "draw.pile",
+   "discard.pile",
+   "path.start",
+   "removed",
+   "skill.use"
+  ],
+  "reads": [
+   "hand",
+   "crystals"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "CRYCHIC:（祥子）带领着大家": {
+  "writes": [
+   "path.position",
+   "settle",
+   "money"
+  ],
+  "reads": [
+   "path.position",
+   "order"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "CRYCHIC:（立希）即便比不上...": {
+  "writes": [
+   "roll.result"
+  ],
+  "reads": [
+   "dice",
+   "roll.history"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "HHW:Happy, Lucky, Smile, Yeah！": {
+  "writes": [
+   "path.position"
+  ],
+  "reads": [
+   "dice",
+   "path.direction"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "HHW:出发！后台之旅！": {
+  "writes": [
+   "money",
+   "discard.pile",
+   "draw.pile"
+  ],
+  "reads": [
+   "draw.pile"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "HHW:因为我一直相信着你": {
+  "writes": [
+   "money",
+   "hand",
+   "draw.pile"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "HHW:微笑巡逻队": {
+  "writes": [
+   "money",
+   "tile.houses",
+   "dice"
+  ],
+  "reads": [
+   "tile.buildable"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "HHW:梦幻的回礼": {
+  "writes": [
+   "money",
+   "crystals"
+  ],
+  "reads": [
+   "settle.charge"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "HHW:热气球演出": {
+  "writes": [
+   "path.position"
+  ],
+  "reads": [
+   "dice"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "HHW:爱心义演": {
+  "writes": [
+   "money",
+   "roll.result"
+  ],
+  "reads": [
+   "path.pass",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "HHW:笑容大游行": {
+  "writes": [
+   "tile.position",
+   "crystals",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Hook",
+   "Counteract:Pass",
+   "SettleAfter"
+  ]
+ },
+ "HHW:运动的天赋": {
+  "writes": [
+   "money",
+   "crystals",
+   "roll.result",
+   "discard.pile"
+  ],
+  "reads": [
+   "dice",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "RollPlan",
+   "AtEnd"
+  ]
+ },
+ "HHW:黑衣人的补给": {
+  "writes": [
+   "crystals",
+   "tile.effect"
+  ],
+  "reads": [
+   "path.pass"
+  ],
+  "triggers": [
+   "Counteract:PassBefore",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "HHW:（kkr）前往笑容集结的地方！": {
+  "writes": [
+   "money",
+   "tile.effect"
+  ],
+  "reads": [
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:SettleAfter"
+  ]
+ },
+ "HHW:（美咲）": {
+  "writes": [
+   "path.position",
+   "money",
+   "fire"
+  ],
+  "reads": [
+   "roll.fire",
+   "settle"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "HHW:（育美）": {
+  "writes": [
+   "marks",
+   "money",
+   "hand",
+   "dice"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.gain"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Counteract"
+  ]
+ },
+ "HHW:（花音）Wacha Mocha 啪嗒进行曲": {
+  "writes": [
+   "marks",
+   "path.position",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.direction"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:Pass"
+  ]
+ },
+ "HHW:（薰）怪盗hello happy": {
+  "writes": [
+   "marks",
+   "roll.set",
+   "path.stop"
+  ],
+  "reads": [
+   "path.pass",
+   "path.move"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "RollPlan"
+  ]
+ },
+ "Mor:你的光芒将照亮前路": {
+  "writes": [
+   "path.start"
+  ],
+  "reads": [
+   "path.position"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mor:再次牵起手来": {
+  "writes": [
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "money"
+  ],
+  "triggers": [
+   "Counteract:Paid",
+   "Hook"
+  ]
+ },
+ "Mor:勇气展翅高飞之时": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "dice",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mor:夏日合宿": {
+  "writes": [
+   "effects",
+   "hand"
+  ],
+  "reads": [
+   "targeting",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Gate",
+   "Hook:TurnStart"
+  ]
+ },
+ "Mor:离心力，不为所动": {
+  "writes": [
+   "effects"
+  ],
+  "reads": [
+   "targeting",
+   "turn.start"
+  ],
+  "triggers": [
+   "Counteract",
+   "Gate",
+   "Hook:TurnStart"
+  ]
+ },
+ "Mor:秘密与青春的虹彩": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "money",
+   "grade"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "Mor:纯真振翅": {
+  "writes": [
+   "path.position",
+   "roll"
+  ],
+  "reads": [
+   "path.direction"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mor:蝴蝶飞舞的星月夜": {
+  "writes": [
+   "crystals",
+   "money",
+   "roll.result",
+   "discard.pile"
+  ],
+  "reads": [
+   "dice",
+   "path.pass",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "Mor:迷茫之蝶们的三全音": {
+  "writes": [
+   "money",
+   "crystals",
+   "discard.pile"
+  ],
+  "reads": [
+   "money",
+   "turn.end"
+  ],
+  "triggers": [
+   "Counteract:Pay",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "Mor:高贵的微蓝": {
+  "writes": [
+   "marks",
+   "settle"
+  ],
+  "reads": [
+   "tile.price",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mor:（NNM）稍微努力了一下": {
+  "writes": [
+   "hand",
+   "money",
+   "crystals",
+   "discard.pile"
+  ],
+  "reads": [
+   "marks",
+   "skill.use"
+  ],
+  "triggers": [
+   "Play",
+   "AtEnd"
+  ]
+ },
+ "Mor:（Rui）正论恶魔": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "skill.use"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mor:（toko）": {
+  "writes": [
+   "tile.owner",
+   "money"
+  ],
+  "reads": [
+   "tile.mortgaged",
+   "tile.colour"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mor:（小白）": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "money"
+  ],
+  "triggers": [
+   "Counteract:Pay"
+  ]
+ },
+ "Mor:（筑紫）迷茫的庭园": {
+  "writes": [
+   "money",
+   "path.position",
+   "abnormal.block"
+  ],
+  "reads": [
+   "dice",
+   "order"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:#J11": {
+  "writes": [
+   "crystals",
+   "status.stun",
+   "discard.pile"
+  ],
+  "reads": [
+   "money",
+   "targeting",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "Mujica:人偶的箱庭": {
+  "writes": [
+   "path.position",
+   "money",
+   "roll.set"
+  ],
+  "reads": [
+   "path.distance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:会被骗着买水晶的人": {
+  "writes": [
+   "crystals"
+  ],
+  "reads": [
+   "crystals"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:心の雨": {
+  "writes": [
+   "status.stay",
+   "status.stun",
+   "money"
+  ],
+  "reads": [
+   "path.position",
+   "dice"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:无法将视线移开": {
+  "writes": [
+   "path.position",
+   "settle"
+  ],
+  "reads": [
+   "counteract"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract:Counteracted"
+  ]
+ },
+ "Mujica:欢迎来到ave mujica的世界": {
+  "writes": [
+   "state"
+  ],
+  "reads": [
+   "state"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract:State"
+  ]
+ },
+ "Mujica:燃尽前的线香花火": {
+  "writes": [
+   "crystals",
+   "turn.extra",
+   "status.stun",
+   "discard.pile"
+  ],
+  "reads": [
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "Mujica:祥，移动": {
+  "writes": [
+   "path.position",
+   "money"
+  ],
+  "reads": [
+   "targeting"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:骰子已经掷下": {
+  "writes": [
+   "counter.window",
+   "discard.pile"
+  ],
+  "reads": [
+   "turn.end",
+   "counteract"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract:Card",
+   "Hook"
+  ]
+ },
+ "Mujica:黑色生日": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "money"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:（初华）我，无畏悲伤": {
+  "writes": [
+   "hand",
+   "roll.result"
+  ],
+  "reads": [
+   "path.pass",
+   "settle.memory"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Mujica:（喵梦）": {
+  "writes": [
+   "hand.face",
+   "draw"
+  ],
+  "reads": [
+   "card.flip",
+   "fire"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "Mujica:（海铃）": {
+  "writes": [
+   "band.skill",
+   "hand",
+   "discard.pile"
+  ],
+  "reads": [
+   "order",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "Mujica:（睦/mortis）表演的本能": {
+  "writes": [
+   "card.copy"
+  ],
+  "reads": [
+   "card.play"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract"
+  ]
+ },
+ "Mujica:（祥子）斩断留恋，忘却一切": {
+  "writes": [
+   "tile.mortgaged",
+   "hand",
+   "path.position",
+   "settle"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "MyGO:[千早爱音]Anon Tokyo": {
+  "writes": [
+   "money",
+   "crystals",
+   "path.position",
+   "settle"
+  ],
+  "reads": [
+   "tile.owner",
+   "tile.adjacent"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:即使迷茫着": {
+  "writes": [
+   "field",
+   "path.position"
+  ],
+  "reads": [
+   "card.affect",
+   "hand",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract",
+   "Hook"
+  ]
+ },
+ "MyGO:哪怕这旅程没有终点": {
+  "writes": [
+   "crystals",
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "settle",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "MyGO:壱雫空": {
+  "writes": [
+   "status",
+   "money"
+  ],
+  "reads": [
+   "status"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "MyGO:无路矢": {
+  "writes": [
+   "status.exile",
+   "path.position",
+   "money.redirect"
+  ],
+  "reads": [
+   "targeting",
+   "exile.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:普通与理所当然": {
+  "writes": [
+   "roll.result"
+  ],
+  "reads": [
+   "abnormal",
+   "path.move"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "MyGO:羽丘的不可思议女孩": {
+  "writes": [
+   "tile.houses",
+   "hand",
+   "money",
+   "field"
+  ],
+  "reads": [
+   "dice",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:若能再次交汇": {
+  "writes": [
+   "roll",
+   "path.position"
+  ],
+  "reads": [
+   "path.pass.player"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "MyGO:轮符雨": {
+  "writes": [
+   "status.stay",
+   "settle"
+  ],
+  "reads": [
+   "turn.end"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "MyGO:那天的雨": {
+  "writes": [
+   "status.stay",
+   "crystals",
+   "discard.pile"
+  ],
+  "reads": [
+   "dice",
+   "turn.start",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "MyGO:难以复刻的奇迹": {
+  "writes": [
+   "crystals",
+   "money",
+   "field",
+   "discard.pile"
+  ],
+  "reads": [
+   "build",
+   "path.pass",
+   "crystals"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:（soyo）混合的颜色": {
+  "writes": [
+   "tile.colour",
+   "money"
+  ],
+  "reads": [
+   "settle",
+   "agent"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:（乐奈）有趣的女人": {
+  "writes": [
+   "crystals",
+   "path.stop",
+   "settle",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "marks"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:（灯）不再迷茫": {
+  "writes": [
+   "status.stay",
+   "crystals",
+   "hand",
+   "field",
+   "removed"
+  ],
+  "reads": [
+   "skill.use",
+   "hand"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "MyGO:（立希）想认真去做": {
+  "writes": [
+   "money",
+   "settle"
+  ],
+  "reads": [
+   "status.stay"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:TITLE IDOL": {
+  "writes": [
+   "crystals"
+  ],
+  "reads": [
+   "crystals",
+   "resonance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:[丸山彩]憧憬的前方": {
+  "writes": [
+   "money",
+   "field",
+   "hand"
+  ],
+  "reads": [
+   "money",
+   "fans",
+   "resonance",
+   "reshuffle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PP:[冰川日菜]会发出怎样的声音呢？": {
+  "writes": [
+   "skill.borrow"
+  ],
+  "reads": [
+   "resonance",
+   "skill.2"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:[大和麻弥]可能性为∞": {
+  "writes": [
+   "crystals",
+   "field",
+   "draw.pile",
+   "discard.pile"
+  ],
+  "reads": [
+   "deck.view",
+   "draw",
+   "resonance"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PP:[白鹭千圣]微笑的铁假面": {
+  "writes": [
+   "money",
+   "field"
+  ],
+  "reads": [
+   "reshuffle",
+   "resonance"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PP:[若宫伊芙]属于我的武士道！": {
+  "writes": [
+   "money",
+   "crystals",
+   "field",
+   "dice"
+  ],
+  "reads": [
+   "draw",
+   "settle",
+   "resonance"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleBefore"
+  ]
+ },
+ "PP:[衍生]共鸣": {
+  "writes": [
+   "crystals",
+   "discard.pile"
+  ],
+  "reads": [
+   "resonance"
+  ],
+  "triggers": []
+ },
+ "PP:[衍生]明天见": {
+  "writes": [
+   "fans"
+  ],
+  "reads": [
+   "fans",
+   "resonance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:[衍生]重叠的声音": {
+  "writes": [
+   "field",
+   "path.position",
+   "status.stay",
+   "fans",
+   "hand",
+   "removed"
+  ],
+  "reads": [
+   "discard.pile",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "AtEnd"
+  ]
+ },
+ "PP:[衍生]魔法战队Pastel✽Ranger": {
+  "writes": [
+   "money",
+   "crystals",
+   "hand",
+   "status"
+  ],
+  "reads": [
+   "field.cards",
+   "fans",
+   "resonance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:不要背负期待": {
+  "writes": [
+   "roll.result",
+   "money",
+   "hand.limit",
+   "field"
+  ],
+  "reads": [
+   "money",
+   "reshuffle",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "PP:再次闪耀": {
+  "writes": [
+   "money",
+   "fans",
+   "field"
+  ],
+  "reads": [
+   "money",
+   "resonance",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "TurnStart"
+  ]
+ },
+ "PP:初次演出事故": {
+  "writes": [
+   "field",
+   "hand",
+   "draw.pile",
+   "skills.blocked"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:可爱又强壮的花朵": {
+  "writes": [
+   "path.stop",
+   "crystals",
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "resonance"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PP:同一个梦想": {
+  "writes": [
+   "crystals",
+   "fans",
+   "money"
+  ],
+  "reads": [
+   "fans",
+   "resonance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:找回珍妮弗": {
+  "writes": [
+   "money",
+   "fans",
+   "hand",
+   "removed",
+   "field"
+  ],
+  "reads": [
+   "path.pass"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PP:有你与我在这里共度": {
+  "writes": [
+   "fans",
+   "hand"
+  ],
+  "reads": [
+   "fans",
+   "resonance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PP:梦在前方，结彩当下": {
+  "writes": [
+   "crystals",
+   "money",
+   "hand.limit",
+   "tile.buy",
+   "hand"
+  ],
+  "reads": [
+   "draw",
+   "build",
+   "settle",
+   "resonance",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "PP:练习生解密指南": {
+  "writes": [
+   "crystals",
+   "hand.limit",
+   "marks",
+   "fans",
+   "discard.pile"
+  ],
+  "reads": [
+   "draw.pile",
+   "turn.end",
+   "resonance"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "BuildBefore"
+  ]
+ },
+ "PPP:Bang Dream!": {
+  "writes": [
+   "crystals",
+   "path.position",
+   "tile.houses"
+  ],
+  "reads": [
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:Popipa": {
+  "writes": [
+   "money",
+   "hand",
+   "draw.pile",
+   "removed"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:Returns": {
+  "writes": [
+   "field",
+   "band.skill",
+   "sticker",
+   "deck.size"
+  ],
+  "reads": [
+   "game.start",
+   "turn.start",
+   "card.play"
+  ],
+  "triggers": [
+   "Hook",
+   "TurnStartBefore"
+  ]
+ },
+ "PPP:STAR BEAT!": {
+  "writes": [
+   "sticker",
+   "path.position",
+   "status",
+   "tile.houses",
+   "money"
+  ],
+  "reads": [
+   "money.count",
+   "dice",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:SettleAfter"
+  ]
+ },
+ "PPP:Tomorrow's Door": {
+  "writes": [
+   "tile.position",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "PPP:[衍生]Pipopa": {
+  "writes": [
+   "money",
+   "field",
+   "removed"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:[衍生]Popipapapipopa": {
+  "writes": [
+   "crystals",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "money"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "PPP:[衍生]拍卖撤下来了": {
+  "writes": [
+   "field",
+   "fire.max",
+   "money",
+   "removed"
+  ],
+  "reads": [
+   "turn.start",
+   "hand"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "PPP:仓库里的Random Star": {
+  "writes": [
+   "field",
+   "hand",
+   "draw.pile",
+   "discard.pile",
+   "sticker"
+  ],
+  "reads": [
+   "path.pass"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PPP:向着未来的路标": {
+  "writes": [
+   "path.position",
+   "money",
+   "settle"
+  ],
+  "reads": [
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "AtEnd"
+  ]
+ },
+ "PPP:抓到了": {
+  "writes": [
+   "path.position",
+   "tile.houses"
+  ],
+  "reads": [
+   "path.pass.player"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:献给远方的你": {
+  "writes": [
+   "path.position",
+   "tile.houses",
+   "settle"
+  ],
+  "reads": [
+   "path.distance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:迷宫般的仓库": {
+  "writes": [
+   "path.position",
+   "money",
+   "tile.houses",
+   "tile.owner"
+  ],
+  "reads": [
+   "dice",
+   "path.pass"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:（多惠）寻找更好的声音": {
+  "writes": [
+   "path.position",
+   "fire"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:（有咲）等等等一下": {
+  "writes": [
+   "crystals",
+   "event",
+   "field"
+  ],
+  "reads": [
+   "event",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "EventAfter"
+  ]
+ },
+ "PPP:（沙绫）总有一天要给这片天空命名": {
+  "writes": [
+   "tile.position",
+   "fire",
+   "dice"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "PPP:（里美）我的心就像巧克力螺": {
+  "writes": [
+   "path.position",
+   "settle",
+   "status.block"
+  ],
+  "reads": [
+   "path.distance"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "PPP:（香澄）大家我都喜欢哦": {
+  "writes": [
+   "path.stop",
+   "crystals",
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "R:Fire bird": {
+  "writes": [
+   "money",
+   "crystals",
+   "tile.rent",
+   "discard.pile"
+  ],
+  "reads": [
+   "turn.end",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "R:NFO": {
+  "writes": [
+   "money",
+   "path.position",
+   "status.stay",
+   "crystals",
+   "field",
+   "discard.pile",
+   "hand"
+  ],
+  "reads": [
+   "dice",
+   "turn.end",
+   "money"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "R:Sprechchor": {
+  "writes": [
+   "money",
+   "dice"
+  ],
+  "reads": [
+   "turn.start",
+   "tile.name"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "R:[衍生] 觉悟": {
+  "writes": [
+   "money",
+   "removed"
+  ],
+  "reads": [
+   "hand",
+   "removed"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "R:live前的准备": {
+  "writes": [
+   "path.stop",
+   "settle"
+  ],
+  "reads": [
+   "path.pass"
+  ],
+  "triggers": [
+   "Counteract:Pass"
+  ]
+ },
+ "R:向着顶点": {
+  "writes": [
+   "path.position",
+   "money",
+   "tile.houses"
+  ],
+  "reads": [
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "R:学生会的检查": {
+  "writes": [
+   "tile.position",
+   "money",
+   "tile.houses",
+   "path.stop",
+   "discard.pile",
+   "draw.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "settle",
+   "build"
+  ],
+  "triggers": [
+   "Counteract:SettleBefore",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "R:必然的联系（莉莎）": {
+  "writes": [
+   "effects",
+   "field"
+  ],
+  "reads": [
+   "skill.teleport"
+  ],
+  "triggers": [
+   "Counteract:SkillTeleport"
+  ]
+ },
+ "R:曲奇时间": {
+  "writes": [
+   "money",
+   "draw.pile",
+   "discard.pile"
+  ],
+  "reads": [
+   "discard.pile"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "R:蓝玫瑰的骄傲": {
+  "writes": [
+   "money",
+   "path.position"
+  ],
+  "reads": [
+   "tile.owner",
+   "settle"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "R:轨迹": {
+  "writes": [
+   "tile.owner",
+   "tile.houses"
+  ],
+  "reads": [
+   "bankrupt"
+  ],
+  "triggers": [
+   "Counteract:Bankrupt"
+  ]
+ },
+ "R:选择自己的舞台": {
+  "writes": [
+   "settle"
+  ],
+  "reads": [
+   "abnormal"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "R:（ykn）louder": {
+  "writes": [
+   "tile.price"
+  ],
+  "reads": [
+   "card.play"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "R:（亚子）黑暗大魔姬亚子": {
+  "writes": [
+   "status.stun",
+   "hand"
+  ],
+  "reads": [
+   "money"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "R:（燐子）Ringing Bloom": {
+  "writes": [
+   "tile.houses",
+   "money",
+   "discard.pile",
+   "field"
+  ],
+  "reads": [
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "R:（纱夜）弹奏弹奏弹奏，继续弹奏": {
+  "writes": [
+   "skill.use"
+  ],
+  "reads": [
+   "counteract"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "RAS:Change the world": {
+  "writes": [
+   "crystals",
+   "roll.set",
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "RAS:EXIST": {
+  "writes": [
+   "targeting",
+   "field",
+   "discard.pile",
+   "hand"
+  ],
+  "reads": [
+   "targeting",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Gate",
+   "Hook"
+  ]
+ },
+ "RAS:PLEASE CHOOSE": {
+  "writes": [
+   "path.position",
+   "card.play",
+   "targeting"
+  ],
+  "reads": [
+   "settle"
+  ],
+  "triggers": [
+   "Counteract:Settle"
+  ]
+ },
+ "RAS:R. I. O. T.": {
+  "writes": [
+   "hand",
+   "draw.pile"
+  ],
+  "reads": [
+   "card.affect"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "RAS:Repaint": {
+  "writes": [
+   "roll.result",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "roll"
+  ],
+  "triggers": [
+   "Counteract:MoveRoll"
+  ]
+ },
+ "RAS:UNSTOPPABLE": {
+  "writes": [
+   "path.position",
+   "money",
+   "settle"
+  ],
+  "reads": [
+   "dice"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "RAS:成为最强": {
+  "writes": [
+   "path.position"
+  ],
+  "reads": [
+   "dice",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "RAS:游击演出": {
+  "writes": [
+   "path.position",
+   "tile.owner",
+   "settle",
+   "field",
+   "money"
+  ],
+  "reads": [
+   "discard.pile",
+   "money",
+   "path.pass",
+   "buy"
+  ],
+  "triggers": [
+   "Counteract:Paid",
+   "AtEnd"
+  ]
+ },
+ "RAS:狂乱Hey Kids!!": {
+  "writes": [
+   "tile.houses",
+   "money",
+   "settle"
+  ],
+  "reads": [
+   "settle"
+  ],
+  "triggers": [
+   "Counteract:Settle"
+  ]
+ },
+ "RAS:练习室里的风暴": {
+  "writes": [
+   "crystals",
+   "settle",
+   "money",
+   "discard.pile"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "RAS:（LOCK）追逐梦想的步伐": {
+  "writes": [
+   "path.position",
+   "status.exile",
+   "field",
+   "removed"
+  ],
+  "reads": [
+   "game.start",
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Hook",
+   "SettleBefore"
+  ]
+ },
+ "RAS:（MASKING）CRUSH ON THE DRUM!!!": {
+  "writes": [
+   "roll.set",
+   "effects"
+  ],
+  "reads": [
+   "turn.phase",
+   "discard.pile"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "RAS:（PAREO）渐渐远去的你": {
+  "writes": [
+   "marks",
+   "tile.houses"
+  ],
+  "reads": [
+   "tile.houses"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "RAS:（chuchu）演奏我的音乐吧": {
+  "writes": [
+   "crystals",
+   "money",
+   "field",
+   "hand",
+   "discard.pile"
+  ],
+  "reads": [
+   "turn.end",
+   "buy"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "BuyAfter"
+  ]
+ },
+ "RAS:（和奏瑞依）寄于指尖的执念": {
+  "writes": [
+   "roll.result",
+   "fire"
+  ],
+  "reads": [
+   "dice",
+   "turn.move"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "Sumimi:#L11": {
+  "writes": [
+   "crystals",
+   "discard.pile"
+  ],
+  "reads": [
+   "crystals"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "Sumimi:#L12": {
+  "writes": [
+   "hand",
+   "field",
+   "crystals",
+   "hand.limit",
+   "fire"
+  ],
+  "reads": [
+   "hand",
+   "fire",
+   "crystals"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励": {
+  "writes": [
+   "path.start",
+   "fire"
+  ],
+  "reads": [
+   "roll"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "Sumimi:Here the world": {
+  "writes": [
+   "field",
+   "crystals",
+   "hand",
+   "draw"
+  ],
+  "reads": [
+   "card.play",
+   "draw",
+   "turn.start"
+  ],
+  "triggers": [
+   "Counteract:TwoCards",
+   "Hook",
+   "TurnStart"
+  ]
+ },
+ "Sumimi:Sumimi不会解散哦": {
+  "writes": [
+   "path.position",
+   "money",
+   "effects"
+  ],
+  "reads": [
+   "money",
+   "mortgage"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Sumimi:Sumimi是二人一体的": {
+  "writes": [
+   "character.card",
+   "fire"
+  ],
+  "reads": [
+   "roll"
+  ],
+  "triggers": [
+   "Play",
+   "Counteract:MoveRoll"
+  ]
+ },
+ "Sumimi:Sweet Escape": {
+  "writes": [
+   "path.position",
+   "settle",
+   "tile.owner",
+   "money"
+  ],
+  "reads": [
+   "tile.charge",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Sumimi:一人两个甜甜圈": {
+  "writes": [
+   "status.exile",
+   "path.position",
+   "settle",
+   "fire",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "Sumimi:兼顾偶像与乐队": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "money",
+   "redeem"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "Sumimi:现在她是Sumimi的小初啦": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "money",
+   "tile.charge"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "Sumimi:（真奈）歌唱大赛5连冠": {
+  "writes": [
+   "effects",
+   "hand",
+   "counter.window"
+  ],
+  "reads": [
+   "card.affect",
+   "counteract"
+  ],
+  "triggers": [
+   "Counteract"
+  ]
+ },
+ "skill:Afterglow:商店街的宠儿": {
+  "writes": [
+   "tile.houses"
+  ],
+  "reads": [
+   "buy"
+  ],
+  "triggers": [
+   "Hook:BuyAfter"
+  ]
+ },
+ "skill:Ave Mujica:假面之下的真实": {
+  "writes": [
+   "money",
+   "crystals",
+   "fire",
+   "state"
+  ],
+  "reads": [
+   "money",
+   "turn.start",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "skill:CRYCHIC:美好的往日幻影": {
+  "writes": [
+   "hand",
+   "hand.limit",
+   "money",
+   "crystals",
+   "draw.pile",
+   "discard.pile",
+   "band.skill",
+   "circle.reward"
+  ],
+  "reads": [
+   "hand",
+   "turn.end",
+   "draw.pile",
+   "discard.pile"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "skill:CiRCLE:后勤人员的努力": {
+  "writes": [
+   "card.number",
+   "discard.pile"
+  ],
+  "reads": [
+   "card.play"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:Hello, Happy World!:传播笑容": {
+  "writes": [
+   "money",
+   "crystals"
+  ],
+  "reads": [
+   "money",
+   "build"
+  ],
+  "triggers": [
+   "Hook",
+   "BuildBefore"
+  ]
+ },
+ "skill:Morfonica:振翅高飞的练习曲": {
+  "writes": [
+   "hand",
+   "money"
+  ],
+  "reads": [
+   "money",
+   "circle.reward"
+  ],
+  "triggers": [
+   "Hook",
+   "CircleAffected"
+  ]
+ },
+ "skill:MyGO!!!!!:迷途之星": {
+  "writes": [
+   "path.start",
+   "crystals",
+   "roll.result",
+   "hand",
+   "discard.pile"
+  ],
+  "reads": [
+   "dice",
+   "card.effective",
+   "turn.start"
+  ],
+  "triggers": [
+   "Hook",
+   "Play"
+  ]
+ },
+ "skill:Pastel✽Palettes:与偶像一起": {
+  "writes": [
+   "fans",
+   "crystals",
+   "hand",
+   "circle.reward"
+  ],
+  "reads": [
+   "game.start",
+   "fans",
+   "path.pass",
+   "turn.start"
+  ],
+  "triggers": [
+   "Hook",
+   "TurnStartBefore",
+   "Play"
+  ]
+ },
+ "skill:Poppin' Party:星之鼓动": {
+  "writes": [
+   "sticker",
+   "crystals",
+   "money",
+   "hand",
+   "tile.owner",
+   "tile.houses",
+   "circle.reward",
+   "build"
+  ],
+  "reads": [
+   "path.pass",
+   "settle",
+   "game.start",
+   "buy"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass",
+   "SettleBefore",
+   "BuyBefore",
+   "Play"
+  ]
+ },
+ "skill:RAISE A SUILEN:UNSTOPPABLE": {
+  "writes": [
+   "abnormal",
+   "path.position"
+  ],
+  "reads": [
+   "abnormal",
+   "settle",
+   "turn.start"
+  ],
+  "triggers": [
+   "Hook",
+   "Settle",
+   "TurnStartBefore"
+  ]
+ },
+ "skill:Roselia:对音乐的纯粹": {
+  "writes": [
+   "money",
+   "tile.colour"
+  ],
+  "reads": [
+   "buy"
+  ],
+  "triggers": [
+   "Hook",
+   "BuyBefore"
+  ]
+ },
+ "skill:Sumimi:人气偶像组合": {
+  "writes": [
+   "crystals",
+   "money",
+   "hand"
+  ],
+  "reads": [
+   "money",
+   "turn.end",
+   "card.play"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:三角初华:Imprisoned XII": {
+  "writes": [
+   "roll.set",
+   "money",
+   "fire",
+   "status.block",
+   "turn.extra"
+  ],
+  "reads": [
+   "path.pass",
+   "settle",
+   "path.pass.player"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass",
+   "Settle",
+   "PassPlayer"
+  ]
+ },
+ "skill:三角初华（Sumimi）:成为偶像": {
+  "writes": [
+   "fire",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.start",
+   "path.pass"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:上原绯玛丽:大家一起迈出新的一步": {
+  "writes": [
+   "fire",
+   "path.parity"
+  ],
+  "reads": [
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "MoveRoll"
+  ]
+ },
+ "skill:丰川祥子:请把你们的人生交给我": {
+  "writes": [
+   "status",
+   "money",
+   "fire",
+   "hand",
+   "draw"
+  ],
+  "reads": [
+   "path.pass.player",
+   "status"
+  ],
+  "triggers": [
+   "Hook",
+   "PassPlayer",
+   "Stay",
+   "Stun",
+   "Exile"
+  ]
+ },
+ "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？": {
+  "writes": [
+   "fire",
+   "path.position",
+   "money",
+   "state",
+   "crystals"
+  ],
+  "reads": [
+   "path.pass",
+   "path.end",
+   "band"
+  ],
+  "triggers": [
+   "Hook:Pass",
+   "Hook:SettleBefore"
+  ]
+ },
+ "skill:丸山彩:With~": {
+  "writes": [
+   "fans",
+   "money"
+  ],
+  "reads": [
+   "game.start",
+   "money"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:二叶筑紫:交给班长吧": {
+  "writes": [
+   "money",
+   "hand",
+   "marks"
+  ],
+  "reads": [
+   "money",
+   "draw"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "skill:今井莉莎:慈爱女神": {
+  "writes": [
+   "fire",
+   "path.position",
+   "settle",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:仓田真白:向后全速前进": {
+  "writes": [
+   "roll.set",
+   "path.direction"
+  ],
+  "reads": [
+   "path.move"
+  ],
+  "triggers": [
+   "RollPlan"
+  ]
+ },
+ "skill:佐藤益木:与燃烧的红色一起驰骋": {
+  "writes": [
+   "fire",
+   "roll.set"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:八幡海铃:熟练的支援贝斯手": {
+  "writes": [
+   "fire",
+   "money",
+   "tile.rent",
+   "hand"
+  ],
+  "reads": [
+   "turn.start",
+   "settle",
+   "build"
+  ],
+  "triggers": [
+   "Hook",
+   "Play"
+  ]
+ },
+ "skill:八潮瑠唯:正论暴击": {
+  "writes": [
+   "money",
+   "roll"
+  ],
+  "reads": [
+   "money"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:冰川日菜:日菜抽中的大奖": {
+  "writes": [
+   "fans",
+   "skill.borrow",
+   "dice"
+  ],
+  "reads": [
+   "turn.start",
+   "game.start"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:冰川纱夜:踏上荆棘之路的觉悟": {
+  "writes": [
+   "fire",
+   "roll.result"
+  ],
+  "reads": [
+   "path.pass",
+   "path.pass.player",
+   "eliminate"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass",
+   "PassPlayer"
+  ]
+ },
+ "skill:凑友希那:来练习吧": {
+  "writes": [
+   "path.start",
+   "tile.owner",
+   "fire",
+   "path.stop",
+   "settle"
+  ],
+  "reads": [
+   "game.start",
+   "path.pass",
+   "path.end",
+   "path.pass.player"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass",
+   "PassPlayer",
+   "SettleAfter"
+  ]
+ },
+ "skill:北泽育美:全垒打！": {
+  "writes": [
+   "marks",
+   "money",
+   "roll.set",
+   "status.stay"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:千早爱音:重新开始": {
+  "writes": [
+   "fire",
+   "hand"
+  ],
+  "reads": [
+   "path.pass",
+   "abnormal"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass",
+   "Abnormal"
+  ]
+ },
+ "skill:和奏瑞依:一次又一次竭尽全力": {
+  "writes": [
+   "fire",
+   "roll.result"
+  ],
+  "reads": [
+   "path.pass",
+   "dice"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:大和麻弥:朝阳照耀的片刻": {
+  "writes": [
+   "fans",
+   "hand",
+   "draw.pile"
+  ],
+  "reads": [
+   "draw",
+   "game.start"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:奥泽美咲:另一个我": {
+  "writes": [
+   "fire",
+   "path.kind",
+   "status.exile"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:宇田川亚子:对帅气的憧憬": {
+  "writes": [
+   "hand",
+   "field",
+   "money",
+   "circle.reward",
+   "card.play"
+  ],
+  "reads": [
+   "path.pass",
+   "circle.reward"
+  ],
+  "triggers": [
+   "Hook:CircleAffected"
+  ]
+ },
+ "skill:宇田川巴:豚骨酱油拉面大姐": {
+  "writes": [
+   "fire",
+   "path.start"
+  ],
+  "reads": [
+   "path.position",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "MoveRoll"
+  ]
+ },
+ "skill:山吹沙绫:焕然一新的天空中": {
+  "writes": [
+   "marks",
+   "fire",
+   "money",
+   "roll.result"
+  ],
+  "reads": [
+   "money",
+   "dice"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:市谷有咲:盆栽爱好者": {
+  "writes": [
+   "fire",
+   "crystals",
+   "event"
+  ],
+  "reads": [
+   "event",
+   "path.pass",
+   "turn.end"
+  ],
+  "triggers": [
+   "Hook",
+   "Event",
+   "Pass"
+  ]
+ },
+ "skill:广町七深:这是很普通的事吧？": {
+  "writes": [
+   "fire",
+   "marks",
+   "skill.use"
+  ],
+  "reads": [
+   "path.pass",
+   "skill.use"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:弦卷心:弦卷集团": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "game.start",
+   "path.pass"
+  ],
+  "triggers": [
+   "Hook:TurnStartBefore",
+   "Pass"
+  ]
+ },
+ "skill:户山香澄:非凡之星": {
+  "writes": [
+   "fire",
+   "path.position",
+   "tile.houses"
+  ],
+  "reads": [
+   "settle",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Settle"
+  ]
+ },
+ "skill:月岛麻里奈:礼物还有好多好多哟": {
+  "writes": [
+   "money",
+   "dice"
+  ],
+  "reads": [
+   "path.pass"
+  ],
+  "triggers": [
+   "Hook:Pass"
+  ]
+ },
+ "skill:朝日六花:瞄准目标": {
+  "writes": [
+   "tile.colour"
+  ],
+  "reads": [
+   "buy",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:松原花音:真正的迷子": {
+  "writes": [
+   "path.start",
+   "roll.set"
+  ],
+  "reads": [
+   "dice",
+   "circle.reward"
+  ],
+  "triggers": [
+   "Hook",
+   "CircleAffected"
+  ]
+ },
+ "skill:桐谷透子:天上天下，唯我独尊": {
+  "writes": [
+   "fire",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.phase",
+   "settle"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:椎名立希:决定练习日的会议": {
+  "writes": [
+   "fire",
+   "crystals"
+  ],
+  "reads": [
+   "status.stay",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Hook",
+   "Abnormal"
+  ]
+ },
+ "skill:椎名立希（CRYCHIC）:克服劣等感": {
+  "writes": [
+   "roll.result"
+  ],
+  "reads": [
+   "roll.result",
+   "skill.use",
+   "turn.next"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:濑田薰:梦幻的王子殿下": {
+  "writes": [
+   "fire",
+   "marks",
+   "path.filter"
+  ],
+  "reads": [
+   "path.pass",
+   "path.move"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass",
+   "PassPlayer"
+  ]
+ },
+ "skill:牛込里美:里美的决心": {
+  "writes": [
+   "fire",
+   "path.position",
+   "settle",
+   "tile.houses"
+  ],
+  "reads": [
+   "path.pass",
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:珠手知由:天才制作人": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "build"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:白金燐子:即使1cm也要前进": {
+  "writes": [
+   "fire",
+   "roll.result",
+   "abnormal.block"
+  ],
+  "reads": [
+   "path.pass",
+   "dice"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:白鹭千圣:保持坦率的你": {
+  "writes": [
+   "fans",
+   "money"
+  ],
+  "reads": [
+   "money",
+   "game.start"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:祐天寺若麦:大主播喵梦亲": {
+  "writes": [
+   "fire",
+   "money",
+   "card.face"
+  ],
+  "reads": [
+   "money",
+   "fire"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:纯田真奈:甜甜圈爱好者": {
+  "writes": [
+   "fire",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:美竹兰:叛逆的红挑染": {
+  "writes": [
+   "fire",
+   "path.direction"
+  ],
+  "reads": [
+   "turn.count",
+   "path.pass"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass"
+  ]
+ },
+ "skill:羽泽鸫:伟大的平凡": {
+  "writes": [
+   "fire",
+   "path.direction",
+   "turn.next"
+  ],
+  "reads": [
+   "path.move"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "MoveRoll"
+  ]
+ },
+ "skill:花园多惠:花园警察，出警！": {
+  "writes": [
+   "marks",
+   "fire",
+   "money",
+   "effects"
+  ],
+  "reads": [
+   "circle.reward",
+   "path.pass",
+   "card.play",
+   "skill.use"
+  ],
+  "triggers": [
+   "Hook",
+   "CircleAffected",
+   "Pass",
+   "Counteract"
+  ]
+ },
+ "skill:若叶睦:天生的演员": {
+  "writes": [
+   "hand",
+   "character.card",
+   "fire"
+  ],
+  "reads": [
+   "hand",
+   "turn.start"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:若叶睦（CRYCHIC）:精致的人偶": {
+  "writes": [
+   "fire",
+   "roll.result",
+   "state",
+   "targeting"
+  ],
+  "reads": [
+   "path.pass",
+   "roll.result",
+   "hand",
+   "band"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:Pass",
+   "Hook"
+  ]
+ },
+ "skill:若宫伊芙:天下统一": {
+  "writes": [
+   "fans",
+   "roll.result"
+  ],
+  "reads": [
+   "dice",
+   "game.start"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:要乐奈:投币式停车场的猫": {
+  "writes": [
+   "fire",
+   "path.position",
+   "money",
+   "marks",
+   "hand"
+  ],
+  "reads": [
+   "path.pass",
+   "settle",
+   "path.pass.player"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass",
+   "SettleBefore",
+   "PassPlayer"
+  ]
+ },
+ "skill:都筑诗船:尽力了吗": {
+  "writes": [
+   "fire",
+   "money",
+   "roll.set",
+   "tile.owner"
+  ],
+  "reads": [
+   "path.pass",
+   "settle",
+   "build"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "Pass",
+   "MoveRoll"
+  ]
+ },
+ "skill:长崎素世:通透的颜色": {
+  "writes": [
+   "fire",
+   "tile.colour",
+   "money"
+  ],
+  "reads": [
+   "roll",
+   "path.pass",
+   "settle"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass",
+   "Settle"
+  ]
+ },
+ "skill:长崎素世（CRYCHIC）:雨中祈晴": {
+  "writes": [
+   "money",
+   "path.position"
+  ],
+  "reads": [
+   "settle",
+   "tile.owner"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "skill:青叶摩卡:我行我素": {
+  "writes": [
+   "fire",
+   "path.position"
+  ],
+  "reads": [
+   "card.play",
+   "skill.use"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "skill:高松灯:诗超绊": {
+  "writes": [
+   "fire",
+   "path.position",
+   "status.stay",
+   "money"
+  ],
+  "reads": [
+   "path.pass",
+   "path.end",
+   "settle"
+  ],
+  "triggers": [
+   "Hook",
+   "Pass",
+   "SettleBefore"
+  ]
+ },
+ "skill:高松灯（CRYCHIC）:跌跌撞撞...": {
+  "writes": [
+   "fire",
+   "status.stay",
+   "settle"
+  ],
+  "reads": [
+   "path.pass",
+   "roll.result",
+   "turn.end"
+  ],
+  "triggers": [
+   "Play",
+   "Hook:Pass",
+   "Hook"
+  ]
+ },
+ "skill:鳰原令王那:梦幻可爱♪女仆": {
+  "writes": [
+   "fans",
+   "money",
+   "marks"
+  ],
+  "reads": [
+   "game.start",
+   "tile.houses"
+  ],
+  "triggers": [
+   "Hook"
+  ]
+ },
+ "通用:10次招募（1回限定）": {
+  "writes": [
+   "money",
+   "hand"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:@Tsugu ycm": {
+  "writes": [
+   "money",
+   "hand",
+   "path.position",
+   "tile.owner",
+   "money.buy"
+  ],
+  "reads": [
+   "dice",
+   "tile.purchasable"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:CiRCLE THANKS PARTY!": {
+  "writes": [
+   "money",
+   "turn.extra"
+  ],
+  "reads": [
+   "money",
+   "dice"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:GREAT": {
+  "writes": [
+   "money",
+   "draw.pile",
+   "removed"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:[月岛麻里奈]今天也要加油工作喔": {
+  "writes": [
+   "effects"
+  ],
+  "reads": [
+   "path.pass",
+   "tile.effect"
+  ],
+  "triggers": [
+   "Counteract:CircleAffected"
+  ]
+ },
+ "通用:[衍生]FEVER!": {
+  "writes": [
+   "money",
+   "field"
+  ],
+  "reads": [
+   "money",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "AtEnd"
+  ]
+ },
+ "通用:[衍生]PERFECT": {
+  "writes": [
+   "money",
+   "discard.pile",
+   "removed"
+  ],
+  "reads": [
+   "hand"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:[都筑诗船]Parking Space": {
+  "writes": [
+   "tile.houses",
+   "status.stay",
+   "skills.blocked"
+  ],
+  "reads": [
+   "settle",
+   "tile.name"
+  ],
+  "triggers": [
+   "Play",
+   "Hook"
+  ]
+ },
+ "通用:安可": {
+  "writes": [
+   "effects"
+  ],
+  "reads": [
+   "abnormal"
+  ],
+  "triggers": [
+   "Counteract:Abnormal"
+  ]
+ },
+ "通用:尽力后的收获": {
+  "writes": [
+   "path.position"
+  ],
+  "reads": [
+   "turn.phase"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:登上武道馆": {
+  "writes": [
+   "money"
+  ],
+  "reads": [
+   "alive"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ },
+ "通用:网络链接异常": {
+  "writes": [
+   "effects"
+  ],
+  "reads": [
+   "card.play",
+   "event",
+   "targeting"
+  ],
+  "triggers": [
+   "Counteract:Card",
+   "Counteract:Event"
+  ]
+ },
+ "通用:该清CP了": {
+  "writes": [
+   "cp",
+   "money",
+   "tile.cp"
+  ],
+  "reads": [
+   "cp",
+   "settle",
+   "turn.start"
+  ],
+  "triggers": [
+   "Play",
+   "Hook",
+   "SettleAfter"
+  ]
+ },
+ "通用:雨啊，快点来吧": {
+  "writes": [
+   "status.stay"
+  ],
+  "reads": [
+   "dice",
+   "targeting"
+  ],
+  "triggers": [
+   "Play"
+  ]
+ }
+}

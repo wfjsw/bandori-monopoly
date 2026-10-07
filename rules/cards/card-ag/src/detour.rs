@@ -8,7 +8,7 @@
 //!
 //! an Afterglow-style move plan (or reverse a move) plus next roll 1d6.
 
-use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{prop, ChainKind, MoveKind, TriggerKind};
 use card_sdk::ctx::plan;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -19,6 +19,7 @@ pub const DETOUR: CardDef = CardDef::new(
         On::Play(Some(cant_play), play),
         On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract),
         On::RollPlan(next_roll),
+        On::AtEnd(clear_no_reward),
     ],
 );
 
@@ -65,7 +66,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         0 => {
             // Ran: `plan.Reverse = !plan.Reverse; plan.NoCircleReward = true`.
             ctx::plan::set_reverse(ctx::plan::dir() >= 0);
-            ctx::plan::set_no_circle_reward(true);
+            arm_no_reward(player_id);
         }
         2 | 3 => {
             // Himari: `plan.Parity = (pick == 2) ? 1 : 0` (odd tiles / even tiles).
@@ -113,7 +114,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     //   grants 「你的下回合开始时，进行一次双倍掷骰的移动」, which neither does. See the
     //   judgement block at the foot of this file.
     ctx::plan::set_reverse(true);
-    ctx::plan::set_no_circle_reward(true);
+    arm_no_reward(player_id);
     // 规则书(2): 「并将下一次的移动掷骰变更为1d6」 -- armed here, consumed by the
     // `RollPlan` hook below when the next plan is being built. One-shot: the hook
     // clears it so it does not rewrite the roll after that.
@@ -137,5 +138,30 @@ fn next_roll(player_id: i32) -> card_sdk::Asked {
     }
     ctx::state::set(player_id, NEXT_ROLL, 0);
     plan::set_base_dice(1, 6, "detour");
+    Ok(())
+}
+
+/// 「向后移动经过CiRCLE时不获得CiRCLE奖励」 -- the veto is `prop::NO_REWARD` on
+/// the CiRCLE tile's `tile:circle` instance (`docs/TILES.md`), not a walk-plan
+/// flag. This card is played from hand and leaves the field, so it cannot arm
+/// the prop in a per-pass hook: it arms it here and [`clear_no_reward`]
+/// disarms it at the turn end, when the clause 「进行一次 "afterglow"式的移动」
+/// is over. The reward step consumes the prop, so a walk that does pass CiRCLE
+/// disarms it early.
+fn arm_no_reward(player_id: i32) {
+    let circle = ctx::tile_named("CiRCLE");
+    if circle < 0 {
+        return;
+    }
+    ctx::set_tile_prop(circle, prop::NO_REWARD, 1);
+    ctx::at_turn_end(player_id);
+}
+
+/// The clause ends at the turn end -- disarm the veto this card armed.
+fn clear_no_reward(player_id: i32) -> card_sdk::Asked {
+    let circle = ctx::tile_named("CiRCLE");
+    if circle >= 0 {
+        ctx::set_tile_prop(circle, prop::NO_REWARD, 0);
+    }
     Ok(())
 }

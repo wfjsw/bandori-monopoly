@@ -67,7 +67,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
             passer,
             PAYOUT,
             &Msg::new(key!("marina_gifts_win")).i("n", face as i64),
-        );
+        )?;
     }
     Ok(())
 }

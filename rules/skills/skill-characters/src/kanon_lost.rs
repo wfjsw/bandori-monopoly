@@ -25,7 +25,9 @@ const SILENT: &str = "skill.kanonLost.silent";
 pub const KANON_LOST: CardDef = CardDef::new(
     "skill:松原花音:真正的迷子",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        // (1) is a starting square: the before-match-start point decides start
+        // positions.
+        On::Hook(&[HookKind::DeckBeforeGame], |_| true, at_start),
         On::Hook(&[HookKind::RollAfter], mine, on_roll),
         On::Hook(&[HookKind::CircleAffected], mine, on_circle),
         On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),

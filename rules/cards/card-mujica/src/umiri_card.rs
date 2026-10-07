@@ -126,7 +126,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     // is the held half (no band inventory in the ABI).
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_slot(player_id, USER_KEY, 0);
-    ctx::draw(user, 1);
+    ctx::draw(user, 1)?;
     ctx::log(user, &Msg::new(key!("umiri_ended")).player_id("who", user));
     Ok(())
 }

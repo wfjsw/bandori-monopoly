@@ -61,10 +61,29 @@ fn any(_player_id: i32) -> bool {
     true
 }
 
+/// PPP:Returns 「无效[拥有者]Poppin' Party团卡的（4）效果」 (ruling 2026-10-06)
+/// -- while Returns sits on the owner's field, skill (4) does nothing. The
+/// probe is a direct field scan: a token would survive `Returns` leaving the
+/// field and silently keep the veto lifted.
+fn returns_neutralises_skill4(player_id: i32) -> bool {
+    ctx::find_card(player_id, "PPP:Returns").is_some()
+}
+
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 0);
-    // （4）「不能通过[主要移动]的[结算]盖房」.
-    state::set(player_id, state_key::NO_BUILD, 1);
+    // （2）「无法获取[CiRCLE奖励]」 -- `prop::NO_REWARD` on this instance
+    // (`docs/TILES.md`), consulted by the CiRCLE-reward step off the passing
+    // player's field. Set every turn start so the prop tracks the card's
+    // presence (gone with the card).
+    ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
+    // （4）「不能通过[主要移动]的[结算]盖房」 -- `prop::NO_BUILD` on this
+    // instance (`docs/TILES.md`), read by `why_not_build_on` off the owner's
+    // field. Gone with the card. Neutralised by Returns' [持续]（1）.
+    if !returns_neutralises_skill4(player_id) {
+        ctx::set_prop(card_sdk::abi::prop::NO_BUILD, 1);
+    } else {
+        ctx::set_prop(card_sdk::abi::prop::NO_BUILD, 0);
+    }
     Ok(())
 }
 
@@ -84,12 +103,15 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （2）「无法获取[CiRCLE奖励]」, and （3）'s rent split.
 fn before_settle(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::player_id() == player_id {
-        // （2） -- this player's own pass earns nothing.
+        // （2） -- this player's own pass earns nothing. The veto is already
+        // armed on this instance at the turn start; re-arm so a pass that
+        // arrives before the first turn start of the match is covered too.
         if ctx::is_circle(ctx::trigger::tile()) {
-            plan::set_no_circle_reward(true);
+            ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
         }
-        // （4） -- no building off a main-move settle.
-        if ctx::trigger::move_is_main() {
+        // （4） -- no building off a main-move settle. Neutralised by Returns'
+        // [持续]（1）.
+        if ctx::trigger::move_is_main() && !returns_neutralises_skill4(player_id) {
             plan::set_can_build(false);
         }
         return Ok(());
@@ -191,9 +213,9 @@ fn cash(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("poppin_title")),
         &Msg::new(key!("poppin_which")),
     )? {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     } else {
-        ctx::gain(player_id, 2000, &Msg::new(key!("poppin_cash")));
+        ctx::gain(player_id, 2000, &Msg::new(key!("poppin_cash")))?;
     }
     Ok(())
 }

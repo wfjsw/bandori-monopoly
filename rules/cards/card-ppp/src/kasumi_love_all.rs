@@ -55,8 +55,15 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
-    // C# `m.Seat == User` -- the card's own placer is not stopped by it.
-    if trigger::player_id() == player_id {
+    // 规则书[持续]: 「[强制停下]」 is an abnormal movement effect -- it passes
+    // the C# `H.WithCard(User, H.AbnormalGate(a))` gate so [反击] cards (安可)
+    // get their window. `ctx::gate` returns false when the effect is guarded,
+    // the mover is immune, or they are [不可阻挡] (「可选择受到的…[强制停下]…
+    // 效果是否生效」).
+    let mover = trigger::player_id();
+    // 规则书[持续]: 「其他玩家[经过]」 -- other than the [使用者] (the placer).
+    // C# `m.Seat == User` skips the placer: their own card does not stop them.
+    if mover == player_id {
         return Ok(());
     }
     // C# `m.Remaining <= 0` -- 「[移动终点]不为此卡所在格子」: only a still-walking
@@ -68,16 +75,17 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if trigger::move_kind() == Some(MoveKind::Teleport) {
         return Ok(());
     }
+    if !ctx::gate(mover, card_sdk::abi::AbKind::Stop) {
+        return Ok(());
+    }
     // C# `m.Stopped = true; m.Resolve = true; m.RentFactor *= 0.5`
-    // (MatchHost.cs:9063-9078, behind `H.WithCard(User, H.AbnormalGate(a))`).
-    // `set_stop_at` is the forced stop from this `PassTile` hook: the walk
-    // settles at the stop tile (`plan::stopped()` is the read-only check).
+    // (MatchHost.cs:9063-9078). `set_stop_at` is the forced stop from this
+    // `PassTile` hook: the walk settles at the stop tile.
     ctx::plan::set_stop_at(tile);
     ctx::plan::set_resolve(true);
     // 规则书[持续]: 「那名玩家此次[结算]如果[支付]地租则地租只算作原本的一半」
     // -- milli-units: 500 = x0.5.
     ctx::plan::set_rent_factor(500);
-    let mover = trigger::player_id();
     ctx::log(
         player_id,
         &Msg::new(key!("kasumi_love_all_stop"))

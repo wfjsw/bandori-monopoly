@@ -9,7 +9,7 @@
 //!
 //! arm a turn-end undo of abnormal movement (counteraction or hand play).
 
-use card_sdk::abi::ChainKind;
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,14 +23,30 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
 );
 
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书（1）: 「此卡可以当反击使用」 -- C# counteracts on an `abnormal` trigger
-    // aimed at the player.
+    // 规则书（1）: 「此卡可以当反击使用」 -- the timing is （2）'s clause,
+    // 「受到异常移动效果（包括你的技能）」. C# counteracts on an `abnormal`
+    // trigger aimed at the player.
     if trigger::kind() != ChainKind::Effect {
         return false;
     }
     if trigger::target() != player_id {
         return false;
     }
+    // 规则书（2）: 「受到异常移动效果」 -- the abnormal family (传送/停留/晕眩/
+    // 除外/强制移动/强制停下/反方向), carried as the chain's `abnormal` effect
+    // entry. Not just any effect aimed at the user: the money pipeline declares
+    // a `pay` effect on every [支付]/[获得] and must not open this window.
+    if !ctx::effect::has(TriggerKind::Abnormal) {
+        return false;
+    }
+    // TODO(规则书)（2）: 「（包括你的技能）」 also covers an abnormal the user's
+    //   *own* skill applies to them, but the engine's `abnormal` chain only opens
+    //   when another player caused the effect (`by != target`) -- a self-[传送]
+    //   gets no window to answer (same gap as 通用:安可's 「因任何原因」).
+    // TODO(规则书)（1）: the C# adds a once-per-turn gate
+    //   (`!H.V(player_id, "asUsualTurn").Equals(H.TurnKey)`) that the passage
+    //   does not name -- 「此卡可以当反击使用」 has no per-turn limit. Left in
+    //   place (it narrows, never broadens) until the book rules on it.
     // C# `!H.V(player_id, "asUsualTurn").Equals(H.TurnKey)` -- once per turn.
     ctx::slot(player_id, "asUsualTurn") != ctx::turn_key()
 }

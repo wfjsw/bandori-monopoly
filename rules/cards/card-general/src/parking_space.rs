@@ -26,9 +26,9 @@ pub const PARKING_SPACE: CardDef = CardDef::new(
     "通用:[都筑诗船]Parking Space",
     &[
         On::Play(Some(cant_play), play),
-        // C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` -- field hooks, not [反击].
+        // C# `CardParkingSpace.SettleBody` / `TurnEndAfter` -- field hooks, not [反击].
         On::Hook(
-            &[HookKind::SettleInstead, HookKind::TurnEndAfter],
+            &[HookKind::SettleBody, HookKind::TurnEndAfter],
             counteract_guard,
             counteract,
         ),
@@ -89,11 +89,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ctx::add_house(t, 1);
         num -= 1;
     }
-    // 规则书（1）[持续] runs in `counteract` at `settleInstead` / `turnEndAfter`.
+    // 规则书（1）[持续] runs in `counteract` at `settleBody` / `turnEndAfter`.
     Ok(())
 }
 
-/// C# `CardParkingSpace.SettleInstead` / `TurnEndAfter` (MatchHost.cs:2469-2495).
+/// C# `CardParkingSpace.SettleBody` / `TurnEndAfter` (MatchHost.cs:2469-2495).
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击].
 /// Pure guard for [`counteract`] -- the activation gate. `false`
 /// means the card is not activated at all.
@@ -104,11 +104,11 @@ fn counteract_guard(player_id: i32) -> bool {
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）[持续]: 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」 -- C#
-        // `CardParkingSpace.SettleInstead`: when the settle lands on the card's
+        // `CardParkingSpace.SettleBody`: when the settle lands on the card's
         // tile, replace the tile's effect (`H.IncV(who, "parkingStay")`) and
         // cancel the settle body. First card to claim the settle wins, so bail
         // out once another has (`trigger::cancelled()`).
-        TriggerKind::SettleInstead => {
+        TriggerKind::SettleBody => {
             if trigger::cancelled() {
                 return Ok(());
             }

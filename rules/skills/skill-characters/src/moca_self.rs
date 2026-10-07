@@ -30,7 +30,11 @@ fn used_key(src: i32) -> alloc::string::String {
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::TurnEnd], afterglow, tick),
         On::Hook(&[HookKind::CardPlayed], other, on_card),
         On::Hook(&[HookKind::SkillUsed], other, on_skill),
@@ -47,7 +51,7 @@ fn other(player_id: i32) -> bool {
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    crate::fire_pot(player_id, 1, 1);
     Ok(())
 }
 
@@ -64,13 +68,13 @@ fn tick(player_id: i32) -> card_sdk::Asked {
 
 /// （2） 「当他人…打出手牌时」.
 fn on_card(player_id: i32) -> card_sdk::Asked {
-    offer(player_id, ctx::trigger::player_id());
+    offer(player_id, ctx::trigger::player_id())?;
     Ok(())
 }
 
 /// （2） 「当他人使用角色技能时」.
 fn on_skill(player_id: i32) -> card_sdk::Asked {
-    offer(player_id, ctx::trigger::player_id());
+    offer(player_id, ctx::trigger::player_id())?;
     Ok(())
 }
 

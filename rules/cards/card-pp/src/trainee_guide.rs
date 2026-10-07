@@ -18,7 +18,7 @@
 //! The crystal counter and the turn-end tick are live; the mark bookkeeping
 //! and the cash-in still need hooks the ABI lacks.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{prop, state_key, HookKind};
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -30,7 +30,10 @@ pub const TRAINEE_GUIDE: CardDef = CardDef::new(
         On::Play(None, trainee_guide),
         On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
     ],
-);
+)
+// 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
+// (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
+.props(&[(prop::HAND_LIMIT_DELTA, -1)]);
 
 fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
@@ -77,9 +80,9 @@ fn trainee_guide(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("trainee_guide_resonance_cost")),
         )?;
     }
-    // 规则书[持续]（1）: 「手卡上限数量减1」 -- a continuous field-card delta
-    // (`CardData.hand_limit_delta`), stamped on the instance at placement and
-    // gone with it. No state write: that would double-count.
+    // 规则书[持续]（1）: 「手卡上限数量减1」 -- the continuous delta declared on
+    // the `CardDef` above (`props(&[(prop::HAND_LIMIT_DELTA, -1)])`), stamped on the instance at
+    // placement and gone with it. No state write: that would double-count.
     Ok(())
 }
 

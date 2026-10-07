@@ -29,7 +29,11 @@ const PENALTY: &str = "skill.soyoClear.penalty";
 pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::RollAfter], mine, offer),
         On::Hook(&[HookKind::Settle], mine, on_settle),
@@ -42,7 +46,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    crate::fire_pot(player_id, 1, 1);
     Ok(())
 }
 

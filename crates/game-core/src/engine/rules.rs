@@ -131,6 +131,11 @@ pub struct Trigger {
     pub move_total: i32,
     /// The cards the trigger is about when there are several (`drew`).
     pub cards: Vec<String>,
+    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
+    /// `card_sdk::abi::roll_source` code (`0` = unattributed, `1` = a fire pot,
+    /// `2` = a hand/field card, `3` = a skill press). 「当你使用火罐进行掷骰时」
+    /// reads this. `0` on every non-roll trigger.
+    pub roll_source: i32,
 }
 
 impl Trigger {
@@ -158,6 +163,7 @@ impl Trigger {
             move_remaining: 0,
             move_total: 0,
             cards: Vec::new(),
+            roll_source: 0,
         }
     }
 
@@ -245,6 +251,44 @@ pub trait CardRules: Send + Sync {
     /// `Card.WhyNot` -- extra card-specific reason it can't be played right now.
     fn cant_play(&self, _cx: &Cx, _player: usize, _card: &str) -> Option<Msg> {
         None
+    }
+
+    /// The card rule's declared static **properties** (`CardDef::props`),
+    /// `key -> value`. Keys are [`crate::state::prop`] constants; a key the
+    /// card does not declare is simply absent and reads as its default (`0`).
+    /// Empty when the card declares none. Never derived from prose.
+    fn card_props(&self, _card: &str) -> std::collections::BTreeMap<String, i32> {
+        std::collections::BTreeMap::new()
+    }
+
+    /// One declared property (see [`Self::card_props`]). The defined default
+    /// is `0` for every key the engine reads.
+    fn card_prop(&self, card: &str, key: &str) -> i32 {
+        self.card_props(card).get(key).copied().unwrap_or(0)
+    }
+
+    /// Does this ruleset declare a rule with this id (a card id or a
+    /// `tile:*` tile-rule id)? `bind_tiles` asks before placing an instance.
+    /// Default `false` -- `StubRules` has no rules, so nothing binds and the
+    /// engine's built-in [`Self::settle_tile`] handles every tile.
+    fn has_rule(&self, _id: &str) -> bool {
+        false
+    }
+
+    /// Resolve the tile `player` stopped on -- the **settle body**.
+    ///
+    /// The default is the built-in plain-BanG Dream Monopoly settlement
+    /// (`land_at`'s body): buyable / circle / edogawa / cafe / ryuseido /
+    /// agent. `WasmRules` overrides this to run the tile's **rule instances**
+    /// (`docs/TILES.md`) and falls back to this default for a tile with none.
+    fn settle_tile(
+        &self,
+        cx: &mut Cx,
+        player_id: usize,
+        tile: usize,
+        main: bool,
+    ) -> Flow<()> {
+        cx.land_at_built_in(player_id, tile, main)
     }
 
     /// `Card.AiPlay` -- would a bot play it now?

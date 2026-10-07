@@ -19,7 +19,7 @@ pub const BLACK_SUITS: CardDef = CardDef::new(
             settle_after,
         ),
         On::Hook(&[card_sdk::abi::HookKind::PassTile], |_| true, pass_tile),
-        On::Counteract(&[ChainKind::Pass], can_counteract, counteract),
+        On::Counteract(&[ChainKind::PassBefore], can_counteract, counteract),
     ],
 );
 
@@ -30,7 +30,7 @@ fn can_counteract(player_id: i32) -> bool {
     if circle < 0 {
         return false;
     }
-    trigger::kind() == TriggerKind::Pass
+    trigger::kind() == TriggerKind::PassBefore
         && trigger::player_id() == player_id
         && trigger::tile() == circle
 }
@@ -77,7 +77,7 @@ fn settle_after(_player_id: i32) -> card_sdk::Asked {
     if t < 0 || ctx::count_marks(t, "黑衣人的补给", -2) <= 0 {
         return Ok(());
     }
-    ctx::draw(mover, 1);
+    ctx::draw(mover, 1)?;
     ctx::log(mover, &Msg::new(key!("black_suits_circle")).tile("tile", t));
     Ok(())
 }

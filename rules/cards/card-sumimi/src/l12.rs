@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 
 use alloc::string::String;
-use card_sdk::abi::state_key;
+use card_sdk::abi::{prop, state_key};
 use card_sdk::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,7 +23,11 @@ pub const L12: CardDef = CardDef::new(
             fire_spent,
         ),
     ],
-);
+)
+// 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
+// property (C# `Card.HandLimitDelta`), continuous while this instance sits on
+// the field.
+.props(&[(prop::HAND_LIMIT_DELTA, -1)]);
 
 const ID: &str = "Sumimi:#L12";
 
@@ -79,9 +83,9 @@ fn l12(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .card("card", &id),
     );
-    // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- a continuous field-card
-    // delta (`CardData.hand_limit_delta`), stamped at placement, gone with the
-    // card. No state write: that would double-count.
+    // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the continuous delta
+    // declared on the `CardDef` above (`props(&[(prop::HAND_LIMIT_DELTA, -1)])`), stamped at
+    // placement, gone with the card. No state write: that would double-count.
     // C# `NoteText` shows the crystal count / hand-limit note; CardDef has no
     // NoteText hook.
     Ok(())

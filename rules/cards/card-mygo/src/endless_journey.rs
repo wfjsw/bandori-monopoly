@@ -116,6 +116,6 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("endless_journey_gain"))
             .card("card", ID)
             .i("n", x as i64),
-    );
+    )?;
     Ok(())
 }

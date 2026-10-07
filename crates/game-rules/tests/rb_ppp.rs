@@ -29,8 +29,9 @@ fn skip_all(t: &mut Table) {
     }
 }
 
-/// A PPP player whose band skill is the real PPP one (Returns replaces it
-/// with the other player's band at game start).
+/// A PPP player whose band skill is the real PPP one (Returns sits beside it
+/// and may have borrowed a second band; strip those for tests that want only
+/// the PPP band).
 fn ppp_band_table() -> Table {
     let mut t = Table::new(&["户山香澄", "美竹兰"]);
     t.clean();
@@ -40,7 +41,9 @@ fn ppp_band_table() -> Table {
             .field
             .retain(|f| f.card != "PPP:Returns" && !f.card.contains("Afterglow"));
     }
-    t.place_raw(0, "skill:Poppin' Party:星之鼓动");
+    if !t.on_field(0, "skill:Poppin' Party:星之鼓动") {
+        t.place_raw(0, "skill:Poppin' Party:星之鼓动");
+    }
     t.begin_turn(0);
     t
 }
@@ -141,17 +144,150 @@ fn popipapapipopa_crystals_reduce_spend() {
 // =====================================================================
 // PPP:Returns
 // =====================================================================
+//
+// Ruling 2026-10-06: the borrowed band card sits BESIDE the PPP one (both on
+// the field). The PPP card's 4th skill is neutralised by Returns' [持续]（1）
+// 「无效[拥有者]Poppin' Party团卡的（4）效果」; its other skills (1)–(3) are
+// unaffected.
+//
+// PPP band card (skill:Poppin' Party:星之鼓动) skills, from COVERAGE.md:
+//   (1) pass #1/#16/#31/#46: +1 star sticker; 2 stickers → 1 crystal;
+//       2 crystals → draw 1 or +2000
+//   (2) no CiRCLE reward
+//   (3) game start: every PP character co-owns 星之鼓动山丘
+//   (4) no building off a main-move settle   ← neutralised by Returns
 
 // 规则书: 「（2）游戏开始时此卡从卡组放置到拥有此卡的玩家的[场地]上并获得一个其他存活玩家的团卡」
 #[test]
 fn returns_placed_at_start_and_borrows_band() {
     let mut t = Table::new(&["户山香澄", "美竹兰"]);
     assert!(t.on_field(0, "PPP:Returns"), "field {:?}", t.field_ids(0));
-    // The borrowed band card is the other player's (Afterglow).
+    // The borrowed band card is the other player's (Afterglow), and it sits
+    // BESIDE the PPP one -- both must be on the field.
+    let ids = t.field_ids(0);
     assert!(
-        t.field_ids(0).iter().any(|c| c.contains("Afterglow") || c.contains("Poppin")),
-        "borrowed band: {:?}",
-        t.field_ids(0)
+        ids.iter().any(|c| c.contains("Afterglow")),
+        "borrowed Afterglow band beside the PPP one: {ids:?}"
+    );
+    assert!(
+        ids.iter().any(|c| c.contains("Poppin") || c.contains("星之鼓动")),
+        "the Poppin' Party band card is still on the field: {ids:?}"
+    );
+}
+
+// Returns sheet [持续]（1）: 「无效[拥有者]Poppin' Party团卡的（4）效果」.
+// PPP band (4) (data/bands.json): 「不能通过[主要移动]的[结算]盖房」.
+// 规则书 基础[结算] 5.1 (bold): 「玩家拥有的[可购买格子]的[结算]是：如果格子
+// 地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 — the
+// upgrade IS the settle's 「可选择」, so (4) vetoes that choice and Returns
+// lifts the veto. The engine surfaces the 「可选择」 as the end-step `build`
+// command (rb_rulebook::s06: 「The buy is the end step's offer
+// (「[主要移动]和所需[结算]完成后进入结束阶段」)」), which is outside
+// 「[主要移动]的[结算]」 -- so (4) has nothing to gate and the neutralisation
+// is unobservable.
+#[test]
+fn returns_neutralises_ppp_band_skill_4() {
+    // With Returns on the field (its [特] (2)), band (4) is neutralised, so the
+    // 基础[结算] 5.1 upgrade on a main-move settle of one's own tile must work.
+    // Not `clean()`: it strips Returns (and the [特] (2) borrow with it), and
+    // this test wants the opening Returns on the field.
+    let mut t = Table::new(&["户山香澄", "美竹兰"]);
+    assert!(t.on_field(0, "PPP:Returns"), "field {:?}", t.field_ids(0));
+    t.begin_turn(0);
+    skip_all(&mut t);
+    t.own(0, &[HILL]);
+    t.set_houses(HILL, 0);
+    t.set_pos(0, HILL - 2);
+    t.dice(&[2]); // land on own HILL
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    t.build(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(
+        t.houses(HILL),
+        1,
+        "Returns neutralises band (4), so the 基础[结算] 5.1 upgrade must go through: houses={} events={:?}",
+        t.houses(HILL),
+        t.recent_keys(10)
+    );
+
+    // The neutralisation is only observable if band (4) is otherwise in force:
+    // without Returns the same main-move settle of one's own tile must refuse
+    // the upgrade.
+    let mut u = ppp_band_table();
+    assert!(
+        u.on_field(0, "skill:Poppin' Party:星之鼓动"),
+        "band skill armed: {:?}",
+        u.field_ids(0)
+    );
+    assert!(!u.on_field(0, "PPP:Returns"), "no Returns here");
+    u.own(0, &[HILL]);
+    u.set_houses(HILL, 0);
+    u.set_pos(0, HILL - 2);
+    u.dice(&[2]); // land on own HILL
+    u.roll(0).unwrap();
+    skip_all(&mut u);
+    let blocked = u.build(0);
+    skip_all(&mut u);
+    assert!(
+        blocked.is_err() || u.houses(HILL) == 0,
+        "band (4) 「不能通过[主要移动]的[结算]盖房」 must refuse the upgrade: {:?} houses={} events={:?}",
+        blocked,
+        u.houses(HILL),
+        u.recent_keys(10)
+    );
+}
+
+// Ruling 2026-10-06: skills (1)–(3) are unaffected. (1) still grants a star
+// sticker for passing a corner.
+#[test]
+fn returns_leaves_ppp_band_skill_1_working() {
+    // Not `clean()`: it strips Returns (and the [特] (2) borrow with it), and
+    // this test wants the opening Returns on the field.
+    let mut t = Table::new(&["户山香澄", "美竹兰"]);
+    assert!(t.on_field(0, "PPP:Returns"));
+    t.begin_turn(0);
+    skip_all(&mut t);
+    t.set_pos(0, 10);
+    t.dice(&[6]); // path 11..16 passes 15 (#16, a corner)
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    // 规则书 (band (1)): 「[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸」
+    assert_eq!(
+        t.token(0, STICKER),
+        1,
+        "skill (1) is unaffected by Returns; events {:?}",
+        t.recent_keys(8)
+    );
+}
+
+// Ruling 2026-10-06: skill (2) 「无法获取[CiRCLE奖励]」 is also unaffected.
+#[test]
+fn returns_leaves_ppp_band_skill_2_working() {
+    // Not `clean()`: it strips Returns (and the [特] (2) borrow with it), and
+    // this test wants the opening Returns on the field.
+    let mut t = Table::new(&["户山香澄", "美竹兰"]);
+    assert!(t.on_field(0, "PPP:Returns"));
+    t.begin_turn(0);
+    skip_all(&mut t);
+    t.set_pos(0, 55);
+    t.dice(&[6]); // passes and lands past CiRCLE
+    t.roll(0).unwrap();
+    // 规则书 (band (2)): 「无法获取[CiRCLE奖励]」 — no CiRCLE reward.
+    if t.prompt().is_some() {
+        let p = t.expect_prompt();
+        assert!(
+            !p.title.key().contains("circle"),
+            "CiRCLE reward offered anyway: {}",
+            t.dump_prompt()
+        );
+    }
+    skip_all(&mut t);
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "no CiRCLE reward money; events {:?}",
+        t.recent_keys(8)
     );
 }
 
@@ -213,20 +349,16 @@ fn bang_dream_crystal_teleport_build() {
     assert_eq!(t.pos(0), HILL);
     // 规则书: 「为[使用者]的团卡添加一个[奇迹水晶]」 — on the band card itself.
     eprintln!("field: {:?}", t.field(0));
-    eprintln!("band_crystals={} state={:?}", t.p(0).band_crystals, t.p(0).state);
     let band_x = t
         .field(0)
         .iter()
         .find(|f| f.card.contains("Poppin"))
         .map(|f| f.crystals)
         .unwrap_or(0);
-    let st_x = t.state(0, "bandCrystals");
     assert!(
-        t.p(0).band_crystals >= 1 || band_x >= 1 || st_x >= 1,
-        "band_crystals={} field_crystals={} state={} events {:?}",
-        t.p(0).band_crystals,
+        band_x >= 1,
+        "field_crystals={} events {:?}",
         band_x,
-        st_x,
         t.recent_keys(10)
     );
 }
@@ -296,9 +428,13 @@ fn signpost_moves_60_without_settle_and_loses_1000() {
     // 60 tiles from 0 lands back on 0.
     assert_eq!(t.pos(0), CIRCLE, "events {:?}", t.recent_keys(8));
     t.end(0).unwrap();
-    // 规则书: 「回合结束时[失去]1000资金」. The wrap-around pass also earned
-    // the CiRCLE reward (+2000), so the net is +1000.
-    assert_eq!(t.money(0), 11_000, "events {:?}", t.recent_keys(8));
+    // 规则书: 「回合结束时[失去]1000资金」.
+    //
+    // The wrap-around [经过]s CiRCLE, but 基础[结算] 1.1 is 「[经过]CiRCLE且
+    // [移动起点]不为CiRCLE时获得[CiRCLE奖励]」 -- this move started ON CiRCLE,
+    // so no reward. (An earlier revision of this test pinned the reward's
+    // +2000 here; that was the missing 移动起点 check, not a card effect.)
+    assert_eq!(t.money(0), 9_000, "events {:?}", t.recent_keys(8));
 }
 
 // =====================================================================
@@ -500,14 +636,28 @@ fn aoki_skill_spends_fire_for_crystal() {
         t.answer(0, 0).ok();
     }
     skip_all(&mut t);
-    eprintln!("fire={} crystals={}", t.fire(0), t.p(0).band_crystals);
+    let band_x = t
+        .field(0)
+        .iter()
+        .find(|f| f.band_skill)
+        .map(|f| f.crystals)
+        .unwrap_or(0);
+    eprintln!("fire={} crystals={}", t.fire(0), band_x);
 }
 
 // 规则书: 花园多惠「（1）每次你领取[CiRCLE奖励]时投掷3d20…放置一个[多惠兔子]」
+//
+// The trigger is 「领取[CiRCLE奖励]」, which PPP band (2) 「无法获取[CiRCLE奖励]」
+// makes unreachable in a real PPP game (see
+// `megumi_no_rabbit_when_band_2_blocks_the_reward`). To exercise the clause
+// itself, bind only the character skill -- no band skill to veto the reward.
 #[test]
 fn megumi_skill_places_rabbit_on_circle_reward() {
     let mut t = Table::new(&["花园多惠", "美竹兰"]);
     t.clean();
+    // Strip every bound skill and bind only the character skill.
+    t.strip_skills();
+    t.place_raw(0, "skill:花园多惠:花园警察，出警！");
     t.begin_turn(0);
     t.set_pos(0, 55);
     t.dice(&[6, 5, 5, 5]); // move 6, then 3d20 = 15
@@ -515,6 +665,44 @@ fn megumi_skill_places_rabbit_on_circle_reward() {
     skip_all(&mut t);
     // A [多惠兔子] mark somewhere on the board.
     assert!(!t.marks().is_empty(), "events {:?}", t.recent_keys(8));
+}
+
+// The real PPP-game outcome of the same walk: PPP band (2) 「无法获取[CiRCLE奖励]」
+// is a standing veto, so 花园多惠 never 「领取」s the reward and (1) never rolls.
+// 规则书: 花园多惠「（1）每次你领取[CiRCLE奖励]时投掷3d20…放置一个[多惠兔子]」 ×
+// Poppin' Party 团卡「（2）无法获取[CiRCLE奖励]」.
+#[test]
+fn megumi_no_rabbit_when_band_2_blocks_the_reward() {
+    let mut t = Table::new(&["花园多惠", "美竹兰"]);
+    t.clean();
+    // Both skills stay bound -- this is the live PPP game.
+    assert!(
+        t.on_field(0, "skill:花园多惠:花园警察，出警！"),
+        "character skill bound: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        t.on_field(0, "skill:Poppin' Party:星之鼓动"),
+        "PPP band skill bound: {:?}",
+        t.field_ids(0)
+    );
+    t.begin_turn(0);
+    t.set_pos(0, 55);
+    t.dice(&[6, 5, 5, 5]); // same walk: 3d20 would be 15 if (1) fired
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    // 「无法获取[CiRCLE奖励]」 -- no reward, so 「领取」 never happens.
+    assert_eq!(
+        t.money(0),
+        10_000,
+        "no CiRCLE reward money; events {:?}",
+        t.recent_keys(8)
+    );
+    assert!(
+        t.marks().is_empty(),
+        "no rabbit when the reward is never received: {:?}",
+        t.marks()
+    );
 }
 
 // 规则书: 山吹沙绫「（1）其他玩家一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时可让那名玩家获得200资金且自己获得1个saaya标记和1个[火罐]」
@@ -529,11 +717,35 @@ fn saaya_skill_offers_on_big_spend() {
     t.set_pos(1, HILL - 1);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    if t.prompt().is_some() {
-        eprintln!("saaya prompt: {}", t.dump_prompt());
+    let mut offered = false;
+    let mut took = false;
+    loop {
+        let Some(_) = t.prompt() else { break };
+        if !offered {
+            offered = true;
+            eprintln!("saaya prompt: {}", t.dump_prompt());
+        }
+        let k = t
+            .option("yes")
+            .or_else(|| t.option("200"))
+            .or_else(|| t.option("获得"));
+        if let Some(k) = k {
+            took = true;
+            t.answer(0, k).unwrap();
+        } else {
+            t.decline();
+        }
     }
-    skip_all(&mut t);
     eprintln!("money: {} {} fire={}", t.money(0), t.money(1), t.fire(0));
+    // 「可让那名玩家获得200资金且自己获得1个saaya标记和1个[火罐]」.
+    assert!(offered, "焕然一新的天空中 (1) window must open on a >=1000 payment");
+    assert!(took, "the trade option must be offered");
+    assert_eq!(t.fire(0), 1, "P0 gains 1 fire");
+    assert_eq!(
+        t.money(1),
+        10_000 - 1520 + 200,
+        "P1 pays the 1520 rent and gains 200 back"
+    );
 }
 
 // 规则书: 牛込里美「（2）运营阶段可选择使用3个[火罐]立刻进入移动阶段，[传送]至任意与你绝对距离最远的地产商并[结算]且可选择盖房」
@@ -571,7 +783,6 @@ fn band_sticker_on_corner_pass() {
 
 // 规则书: 「（2）无法获取[CiRCLE奖励]」
 #[test]
-#[ignore = "DISCREPANCY: 「无法获取[CiRCLE奖励]」 — passing CiRCLE still offers the reward prompt and pays +2000. (Band skill bound via place_raw; the sticker clause works, so the hooks are live)"]
 fn band_no_circle_reward() {
     let mut t = ppp_band_table();
     t.set_pos(0, 55);
@@ -644,10 +855,16 @@ fn ix_band_sticker_to_crystal_to_cash() {
         t.answer(0, 0).ok();
     }
     skip_all(&mut t);
+    let band_x = t
+        .field(0)
+        .iter()
+        .find(|f| f.band_skill)
+        .map(|f| f.crystals)
+        .unwrap_or(0);
     eprintln!(
         "stickers={} crystals={} money={}",
         t.token(0, STICKER),
-        t.p(0).band_crystals,
+        band_x,
         t.money(0)
     );
 }
@@ -694,9 +911,9 @@ fn ix_encore_vs_rimi_card_move() {
 #[test]
 fn ix_door_surcharge_on_rent() {
     let mut t = Table::vanilla(2);
-    t.give_play(0, "PPP:Tomorrow's Door").unwrap();
-    // Get the door into the owner's area (after 大阪中之岛公园, index 24).
-    // For a quick check: own a tile and have P1 land on it.
+    // (3) applies only 「此卡在自身游玩区域时」 — place_raw leaves it in the
+    // play area; give_play would drop it on 流星堂 per (2).
+    t.place_raw(0, "PPP:Tomorrow's Door");
     t.own(0, &[HILL]);
     t.set_houses(HILL, 2);
     t.begin_turn(1);
@@ -704,7 +921,11 @@ fn ix_door_surcharge_on_rent() {
     t.dice(&[1]);
     t.roll(1).unwrap();
     skip_all(&mut t);
+    let paid = 10_000 - t.money(1);
     eprintln!("money: {} {}", t.money(0), t.money(1));
+    // 规则书 (3): extra = (houses on 星之鼓动山丘)×100 = 2×100 on top of the rent.
+    let rent = data().tiles[HILL].rent[2.min(data().tiles[HILL].rent.len() - 1)];
+    assert_eq!(paid, rent + 200, "R(HILL,2) + 2×100 surcharge");
 }
 
 // STAR BEAT!'s teleport destination depends on who holds a 5 in their money.

@@ -18,7 +18,11 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::Abnormal], mine, on_abnormal),
     ],
@@ -30,7 +34,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始2，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    crate::fire_pot(player_id, 2, 3);
     Ok(())
 }
 
@@ -65,6 +69,6 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 2, &Msg::new(key!("anon_restart_spend"))) {
         return Ok(());
     }
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     Ok(())
 }

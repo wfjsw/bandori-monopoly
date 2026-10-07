@@ -5,11 +5,10 @@
 //! with, not cards you draw. Same rule language ([`CardDef`]), separate crate.
 //!
 //! The rule text lives in `data/bands.json` (`skill` is the name, `text` /
-//! `simple` the wording). A band skill that hands out [奇迹水晶] is a consumer
-//! of the keyed state (`state::add` / `ctx::add_band_crystals`); one that
-//! mandates a cap writes the bound and every card reads it back. See
-//! `game_core::state::StateVar` for the "engine holds values, enforces nothing"
-//! rule.
+//! `simple` the wording). A band skill's [奇迹水晶] live on its own field
+//! instance (`FieldCard::crystals`) -- `ctx::crystals` / `ctx::add_crystals`
+//! from inside this rule, `ctx::band_crystals` / `ctx::add_band_crystals` from
+//! any card meaning 「乐队卡 / 团卡」. One pool, no keyed-state side store.
 //!
 //! Hooks: the same two the character skills use, no third kind. A half the
 //! player presses is [`On::Play`] with its gate; a half a field event calls is

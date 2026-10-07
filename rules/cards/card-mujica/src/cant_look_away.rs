@@ -27,19 +27,19 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
-    run(player_id);
+    run(player_id)?;
     Ok(())
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    run(player_id);
+    run(player_id)?;
     Ok(())
 }
 
 fn run(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使当前回合内对你打出过[反击]的所有玩家」 -- C#
     // `H._counteractedAgainst` filtered by `target == player_id && turn == H.TurnKey`.
-    // TODO(规则书)[judgement](ABI): the counteraction history (C# `H._counteractedAgainst`); `ctx::turn_key()`
+    // TODO(规则书)[judgement](ABI): the counteraction history (C# `H._counteractedAgainst`)?; `ctx::turn_key()`
     //   the clause under-specifies -- see the note above it
     // covers the `turn == H.TurnKey` half of the filter, but the list itself
     // cannot be built without the history. We still walk the ordinary player list

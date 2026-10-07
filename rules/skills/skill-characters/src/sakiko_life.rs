@@ -17,7 +17,7 @@
 //! deck's top card at each of this player's turn starts.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state, CardPile};
+use card_sdk::ctx::{self, state, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// 「每获得一层停留，眩晕，你获得1500资金」.
@@ -26,14 +26,19 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
         On::Hook(&[HookKind::PassPlayer], in_one, on_pass_player),
-        On::Hook(
-            &[HookKind::Stay, HookKind::Stun, HookKind::Exile],
-            in_one,
-            on_abnormal,
-        ),
+        // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
+        // outcome of an abnormal effect landing on this player. `Abnormal` is
+        // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
+        // raised. The guard keeps 状态1 and this player as the *recipient*
+        // (`trigger::target()`), not the causer.
+        On::Hook(&[HookKind::Abnormal], im_hit, on_abnormal),
     ],
 );
 
@@ -45,9 +50,15 @@ fn in_one(player_id: i32) -> bool {
     mine(player_id) && state::get(player_id, state_key::SKILL_STATE) != 2
 }
 
+/// The `Abnormal` hook's guard: this player is the *recipient* of the effect
+/// (`trigger::target()`), still in 状态1.
+fn im_hit(player_id: i32) -> bool {
+    trigger::target() == player_id && state::get(player_id, state_key::SKILL_STATE) != 2
+}
+
 /// 「初始0，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    crate::fire_pot(player_id, 0, 3);
     Ok(())
 }
 
@@ -55,7 +66,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
         // 状态2: 「每回合开始时自动打出一张抽牌堆顶端的牌」
-        play_deck_top(player_id);
+        play_deck_top(player_id)?;
         return Ok(());
     }
     // 「火罐数达到上限时可在回合开始时选择进入状态2」
@@ -77,7 +88,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         let c = hand.pop().unwrap();
         ctx::discard_from_hand(player_id, &c);
     }
-    play_deck_top(player_id);
+    play_deck_top(player_id)?;
     Ok(())
 }
 
@@ -118,7 +129,7 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
         player_id,
         BOUNTY * (stay + stun),
         &Msg::new(key!("sakiko_life_bounty")),
-    );
+    )?;
     ctx::log(
         player_id,
         &Msg::new(key!("sakiko_life_moved"))
@@ -128,8 +139,21 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」.
+/// 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
+/// *recipient* of the abnormal gains the pot. `in_one` (the hook guard) has
+/// already checked 状态1; here we only need the recipient match.
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
+    // The `abnormal` hook carries `t.target` = the recipient and `t.player_id`
+    // = the causer. 「受到…影响」 names the recipient.
+    if trigger::target() != player_id {
+        return Ok(());
+    }
+    if !matches!(
+        trigger::abnormal_kind(),
+        Some(card_sdk::abi::AbKind::Stay | card_sdk::abi::AbKind::Stun | card_sdk::abi::AbKind::Exile)
+    ) {
+        return Ok(());
+    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("sakiko_life_gain")));
     Ok(())
 }

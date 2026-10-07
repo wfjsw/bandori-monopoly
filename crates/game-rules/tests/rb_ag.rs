@@ -64,6 +64,36 @@ fn declaration_offered_against_targeting_card() {
 
 // 规则书: 「你的掷骰结算前打出此卡，使结果增加1d4结果的数字」
 #[test]
+fn yolo_offered_on_a_non_move_roll() {
+    // Sheet 2026-10-06 新卡组卡 C3: 「你的任意掷骰结算前」 -- ANY of your rolls,
+    // not only the move roll (was 「你的掷骰结算前」). 热气球演出 rolls
+    // 4x3d20mod60 as a hand effect; Y.O.L.O must be offered on it.
+    let mut t = Table::vanilla(2);
+    t.give(0, &["AG:Y.O.L.O", "HHW:热气球演出"]);
+    t.dice(&[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1]); // 4x3d20 + YOLO's 1d4
+    t.play(0, "HHW:热气球演出").unwrap();
+    let mut offered = false;
+    while t.prompt().is_some() {
+        if t.counteract_offered("AG:Y.O.L.O") {
+            offered = true;
+            t.counteract(0, "AG:Y.O.L.O").unwrap();
+        } else {
+            let d = t.dump_prompt();
+            if d.contains("ask.intOption") || d.contains("tile") {
+                let _ = t.answer_one(0);
+            } else {
+                t.decline();
+            }
+        }
+    }
+    assert!(
+        offered,
+        "Y.O.L.O is 「你的任意掷骰」 -- offered on 热气球's 4x3d20 too: {:?}",
+        t.recent_keys(15)
+    );
+}
+
+#[test]
 fn yolo_adds_1d4_to_the_roll() {
     let mut t = Table::vanilla(2);
     t.set_pos(0, 10);
@@ -231,7 +261,6 @@ fn soul_leaves_when_empty() {
 
 // 规则书: 「[反击]抽出此卡时立刻打出，如果你手牌数大于等于3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡」
 #[test]
-#[ignore = "DISCREPANCY: 「抽出此卡时立刻打出」 — the card is drawn into hand but its draw-trigger does not auto-play it (no sky event, money unchanged beyond the draw source)"]
 fn sky_fires_on_draw() {
     let mut t = Table::vanilla(2);
     t.set_draw(0, &["AG:朝同一片天空迈进"]);
@@ -312,14 +341,23 @@ fn ran_card_returns_to_start_after_abnormal() {
     // P0's turn: the stay blocks the roll. End the turn to trigger the return.
     t.begin_turn(0);
     // The stay may have been cancelled by the Ran card already.
-    eprintln!("before end: pos={} stay={}", t.pos(0), t.state(0, "stay"));
-    if t.state(0, "stay") == 0 {
+    let stay_before = t.state(0, "stay");
+    eprintln!("before end: pos={} stay={}", t.pos(0), stay_before);
+    if stay_before == 0 {
         t.dice(&[3]);
         t.roll(0).unwrap();
         skip_all(&mut t);
     }
     t.end(0).unwrap();
-    eprintln!("after end: pos={} stay={}", t.pos(0), t.state(0, "stay"));
+    let stay_after = t.state(0, "stay");
+    eprintln!("after end: pos={} stay={}", t.pos(0), stay_after);
+    // [停留]: 「处于该状态时[无法移动]…玩家的每回合结束时移除一层」. The stay
+    // blocks the roll and decays one layer at turn end; P0 never moved. (m08_
+    // ran_undoes_forced_move covers 像往常一样 (2)'s return-to-start via the real
+    // counteract path — this setup cannot show it, since P0 is already at start.)
+    assert_eq!(stay_before, 1, "the stay was applied and blocks the roll");
+    assert_eq!(stay_after, 0, "one layer of [停留] is removed at turn end");
+    assert_eq!(t.pos(0), 0, "P0 never moved");
 }
 
 // =====================================================================
@@ -410,7 +448,6 @@ fn one_of_us_places_on_field() {
 
 // 规则书: 美竹兰「（1）每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]（初始1，上限1）」
 #[test]
-#[ignore = "DISCREPANCY: 「（初始1，上限1）」 — fire pots start at 0, not 1 (cap 1 is set). Same gap as 都筑诗船's 初始1"]
 fn ran_skill_starts_with_one_fire() {
     let mut t = Table::new(&["美竹兰", "户山香澄"]);
     assert_eq!(t.fire(0), 1, "初始1");
@@ -450,11 +487,32 @@ fn moca_skill_teleports_to_the_actor() {
     // P1 plays a card; P0 may teleport.
     t.give(1, &["通用:GREAT"]);
     t.play(1, "通用:GREAT").unwrap();
-    if t.prompt().is_some() {
-        eprintln!("moca prompt: {}", t.dump_prompt());
+    let mut offered = false;
+    let mut took = false;
+    loop {
+        let Some(_) = t.prompt() else { break };
+        if !offered {
+            offered = true;
+            eprintln!("moca prompt: {}", t.dump_prompt());
+        }
+        let k = t
+            .option("yes")
+            .or_else(|| t.option("传送"))
+            .or_else(|| t.option("火罐"));
+        if let Some(k) = k {
+            took = true;
+            t.answer(0, k).unwrap();
+        } else {
+            t.decline();
+        }
     }
     skip_all(&mut t);
     eprintln!("pos0={} fire={}", t.pos(0), t.fire(0));
+    // 「你可以消耗一个[火罐]传送到其所在格子」.
+    assert!(offered, "我行我素 (2) window must open when another plays a card");
+    assert!(took, "the teleport must be offered");
+    assert_eq!(t.pos(0), 30, "teleported to the actor");
+    assert_eq!(t.fire(0), 0, "spent 1 fire");
 }
 
 // 规则书: 宇田川巴「（2）移动阶段前，你可以使用一个[火罐]，使此次移动的起点向绝对距离“银河拉面馆”更近的方向移动10格」

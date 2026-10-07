@@ -23,7 +23,11 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
     "skill:冰川纱夜:踏上荆棘之路的觉悟",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::PassPlayer], mine, on_passed),
     ],
@@ -35,7 +39,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始10，上限10」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 10);
+    crate::fire_pot(player_id, 10, 10);
     Ok(())
 }
 

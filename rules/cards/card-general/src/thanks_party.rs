@@ -3,7 +3,7 @@
 //! 规则书（docs/rulebook/cards.json, id `通用:CiRCLE THANKS PARTY!`）:
 //! > CiRCLE THANKS PARTY!：
 //! > [手]：所有其他玩家可选择[消耗]500资金，你消耗500资金，将X设为因此卡[消耗]资金的玩家数量加1。根据X进行以下操作之一：
-//! > 1. X至少为2则[使用者]投掷Xd20，如果结果大于35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
+//! > 1. X至少为2则[使用者]投掷Xd20，如果结果至少为35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金；
 //! > 2. X等于1则[使用者]的本回合结束后获得一个额外回合。
 //!
 //! then Xd20 > 35 pays out; alone, an extra turn.
@@ -49,9 +49,10 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // 规则书[手]: 「1. X至少为2则[使用者]投掷Xd20」
+    // 规则书[手] (sheet 2026-10-06 新卡组卡 A12): 「1. X至少为2则[使用者]投掷
+    // Xd20，如果结果至少为35则…」 (was 「大于35」).
     let r = ctx::roll(player_id, x, 20);
-    if r <= 35 {
+    if r < 35 {
         ctx::log(
             player_id,
             &Msg::new(key!("thanks_party_miss")).i("roll", r as i64),
@@ -59,10 +60,10 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[手]: 「如果结果大于35则[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
-    ctx::gain(player_id, 3000, &why);
+    ctx::gain(player_id, 3000, &why)?;
     for p in payers {
         if !ctx::player_out(p) {
-            ctx::gain(p, 1500, &why);
+            ctx::gain(p, 1500, &why)?;
         }
     }
     Ok(())

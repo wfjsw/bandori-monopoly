@@ -26,7 +26,11 @@ pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::SettleBefore], any, before_settle),
         On::Hook(&[HookKind::PassPlayer], mine, on_overlap),
@@ -43,7 +47,7 @@ fn any(_player_id: i32) -> bool {
 
 /// 「初始3，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    crate::fire_pot(player_id, 3, 3);
     Ok(())
 }
 
@@ -62,7 +66,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("rana_parking_ring")),
         )? {
             ctx::add_tok(player_id, HELD, -1, i32::MAX);
-            ctx::gain(player_id, 400, &Msg::new(key!("rana_parking_ring_gain")));
+            ctx::gain(player_id, 400, &Msg::new(key!("rana_parking_ring_gain")))?;
         }
     }
     Ok(())
@@ -114,7 +118,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         // 「若space已属于其他玩家，免除付款并抽1张卡」 -- for the mover.
         if mover == player_id {
             ctx::trigger::set_pay_amount(0);
-            ctx::draw(player_id, 1);
+            ctx::draw(player_id, 1)?;
             ctx::log(player_id, &Msg::new(key!("rana_parking_free")));
         }
         return Ok(());

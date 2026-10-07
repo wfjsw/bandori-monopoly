@@ -41,7 +41,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // 「你的每6回合不打出任何手牌，在回合开始前抽1张牌」
     if state::get(player_id, QUIET) >= 6 {
         state::set(player_id, QUIET, 0);
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
         ctx::log(player_id, &Msg::new(key!("mutsumi_actor_draw")));
     }
     // 「若你的回合开始时手牌数为5，可选择进入状态2」

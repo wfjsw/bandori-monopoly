@@ -81,7 +81,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             player_id,
             x * 500,
             &Msg::new(key!("crychic_cash_out")).i("n", (x * 500) as i64),
-        );
+        )?;
         ctx::add_crystals(-x, 10);
     }
     // 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
@@ -130,7 +130,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         "skill:Ave Mujica:假面之下的真实"
     };
     ctx::place_card(player_id, band_skill, &Msg::new(key!("crychic_gained")));
-    ctx::draw(player_id, 2);
+    ctx::draw(player_id, 2)?;
     Ok(())
 }
 
@@ -155,7 +155,7 @@ fn force_card(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::trigger::set_cancelled();
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     ctx::log(player_id, &Msg::new(key!("crychic_forced_draw")));
     Ok(())
 }

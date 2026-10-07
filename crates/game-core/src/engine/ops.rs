@@ -66,9 +66,6 @@ impl World {
     }
 
     /// `NoCircleReward` -- passing CiRCLE pays nothing on this walk.
-    pub fn set_no_circle_reward(&mut self, on: bool) {
-        self.turn.plan.no_circle_reward = on;
-    }
 
     /// `Start` -- the tile the walk begins on instead of where the player stands
     /// (`-1` = the player's own tile). `why` names the effect on the log line.
@@ -88,10 +85,11 @@ impl World {
         };
     }
     /// `Base` -- replace the dice the roll starts from (default 1d20). Each
-    /// entry is `count`d`sides`, summed into `Parts`.
+    /// entry is `count`d`sides`, summed into `Parts`. `sides == 0` is a flat
+    /// `count` (see [`crate::engine::move_ctx::Roll`]).
     pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.turn.plan.base.clear();
-        if count > 0 && sides > 0 {
+        if count > 0 && sides >= 0 {
             self.turn.plan.base.push(crate::engine::move_ctx::Roll {
                 count,
                 sides,
@@ -100,9 +98,9 @@ impl World {
         }
     }
     /// `Base` -- add one more die group to the starting dice (3d20 = three of
-    /// these, or one `count = 3`).
+    /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
-        if count > 0 && sides > 0 {
+        if count > 0 && sides >= 0 {
             self.turn.plan.base.push(crate::engine::move_ctx::Roll {
                 count,
                 sides,
@@ -116,9 +114,10 @@ impl World {
     pub fn clear_dice(&mut self) {
         self.turn.plan.dice.clear();
     }
-    /// `Dice` -- extra dice added to the roll (summed into `Extra`).
+    /// `Dice` -- extra dice added to the roll (summed into `Extra`). A flat add
+    /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
-        if count > 0 && sides > 0 {
+        if count > 0 && sides >= 0 {
             self.turn.plan.dice.push(crate::engine::move_ctx::Roll {
                 count,
                 sides,
@@ -244,16 +243,45 @@ impl World {
             .collect()
     }
 
+    /// The house count a **rent** lookup reads (`H.RentHouses`). Real
+    /// `st.houses` is untouched by the override -- build caps, raze, sale and
+    /// asset value all still see the standing houses. See
+    /// [`crate::state::prop::RENT_HOUSES`]: presence on the tile's rule
+    /// instance (`ctx::set_tile_prop`) or on a placed card of the tile's
+    /// *owner* (`ctx::set_prop`, 「你的所有格子上的房屋数视为…」 -- gone with
+    /// the card) is the override; otherwise the standing count.
+    pub fn rent_houses(&self, tile: i32) -> i32 {
+        let Ok(t) = usize::try_from(tile) else {
+            return 0;
+        };
+        // A tile-scoped override wins (the source arms and disarms it).
+        for f in self.st.board_field.iter().filter(|f| f.tile == tile) {
+            if let Some(&v) = f.props.get(crate::state::prop::RENT_HOUSES) {
+                return v.max(0);
+            }
+        }
+        // Then a placed card of the owner (「你的所有格子」).
+        if let Some(&o) = self.st.owners.get(t) {
+            if let Ok(o) = usize::try_from(o) {
+                if let Some(p) = self.st.players.get(o) {
+                    for f in &p.field {
+                        if let Some(&v) = f.props.get(crate::state::prop::RENT_HOUSES) {
+                            return v.max(0);
+                        }
+                    }
+                }
+            }
+        }
+        self.st.houses.get(t).copied().unwrap_or(0)
+    }
+
     /// Rent of a tile as it stands right now (houses included; `H.RentOf`).
+    /// The house count is the **counted** one ([`Self::rent_houses`]).
     pub fn rent_of(&self, data: &GameData, tile: i32) -> i32 {
         let Some(t) = usize::try_from(tile).ok().and_then(|i| data.tiles.get(i)) else {
             return 0;
         };
-        let houses = usize::try_from(tile)
-            .ok()
-            .and_then(|i| self.st.houses.get(i))
-            .copied()
-            .unwrap_or(0) as usize;
+        let houses = self.rent_houses(tile) as usize;
         if t.kind == "ring" {
             // RiNG rent is rolled at payment time; the table value is the base.
             t.price
@@ -344,8 +372,8 @@ impl World {
         self.state_var(player_id, key).expires
     }
 
-    /// Write `value` raw and return it. **Not** clamped to `min`/`max`: the
-    /// engine is the holder, not the enforcer.
+    /// Write `value`, clamped to the item's declared bounds (status floors at
+    /// 0; `max > 0` is a real cap). See [`crate::state::MatchPlayer::state_set`].
     pub fn state_set(&mut self, player_id: i32, key: &str, value: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -353,7 +381,7 @@ impl World {
         s.state_set(key, value)
     }
 
-    /// Add `delta` raw and return the value now stored. No clamping, no log.
+    /// Add `delta`, clamped like [`Self::state_set`]. No log.
     pub fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -505,6 +533,10 @@ impl World {
 
     /// C# `H.GainR` with `fixedAmount` -- the money moves, but no skill or crit
     /// may bend the figure (「立刻获得此次失去的资金金额」).
+    ///
+    /// The ledger still closes: the movement is logged as a `gain` event with
+    /// its bank leg (`value`), even though it bypasses the `payAdd`/`payMul`/
+    /// `payChoose` modifier pipeline.
     pub fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::msg::Msg) -> i32 {
         if amount == 0 {
             return 0;
@@ -512,7 +544,8 @@ impl World {
         if let Some(s) = self.player_mut(player_id) {
             s.money += amount;
         }
-        self.log("text", player_id, why);
+        let e = self.log("gain", player_id, why);
+        e.value = amount;
         amount
     }
 
@@ -551,17 +584,49 @@ impl World {
 
     // -------------------------------------------------------- band crystals
 
+    /// The uid of `player_id`'s **band-skill field instance** -- the bound band
+    /// skill's field card (`skill:<band>:<skill>`, [`FieldCard::band_skill`]),
+    /// which is where 「乐队卡 / 团卡」 crystals live. -1 when the player has
+    /// none (no band skill bound, or it has left the field).
+    ///
+    /// Edge cases (the write target is always this one instance):
+    /// * **no band skill** -- every read is 0 and every write is a no-op;
+    /// * **several band cards** (PPP:Returns borrows another band's card beside
+    ///   its own; the book's 「多张…乐队卡时此效果不重复发动」 is about several
+    ///   *players* holding the same band card) -- the **first in placement
+    ///   order** is the bound one (`bind_skills` places it first; a later copy
+    ///   is a borrow that has not replaced it);
+    /// * **swapped or removed** -- the instance goes with its crystals, so a
+    ///   swap starts the new card at 0 and the old count is gone with the old
+    ///   card (Returns' 「替换并移除上面的所有[奇迹水晶]」 is exactly that).
+    pub fn band_skill_uid(&self, player_id: i32) -> i32 {
+        self.player_id(player_id)
+            .and_then(|s| s.field.iter().find(|f| f.band_skill))
+            .map_or(-1, |f| f.uid)
+    }
+
+    /// 「乐队卡 / 团卡」 crystals -- the count on the player's band-skill field
+    /// instance. 0 when there is no band skill. Same pool every band skill and
+    /// every card that mentions the band card's crystals reads and writes.
     pub fn band_crystals(&self, player_id: i32) -> i32 {
-        self.state_get(player_id, key::BAND_CRYSTALS)
+        let uid = self.band_skill_uid(player_id);
+        if uid < 0 {
+            0
+        } else {
+            self.crystals_at(uid)
+        }
     }
 
     /// C# `AddBandCrystals` -- a consumer of the passed cap, not the engine
-    /// deciding one. Returns how much it actually moved by.
+    /// deciding one (`max` > 0 clamps, `max` = 0 is uncapped, exactly as
+    /// [`Self::add_crystals_at`]). Returns the new count; 0 when the player has
+    /// no band skill (writes are no-ops).
     pub fn add_band_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
-        let was = self.band_crystals(player_id);
-        let now = (was + n).clamp(0, max);
-        self.state_set(player_id, key::BAND_CRYSTALS, now);
-        now - was
+        let uid = self.band_skill_uid(player_id);
+        if uid < 0 {
+            return 0;
+        }
+        self.add_crystals_at(uid, n, max)
     }
 
     // ------------------------------------------------------------- fire pots
@@ -767,9 +832,35 @@ impl World {
         {
             return Some(Msg::new("err.build_not_own"));
         }
-        // 「[拥有者]不可盖房」 -- a keyed flag any card can raise on its owner.
-        if s.state_get(crate::state::key::NO_BUILD) > 0 {
+        // 「[拥有者]不可盖房」 / 「本回合无法加盖房屋」 -- `prop::NO_BUILD` on a
+        // rule instance (`docs/TILES.md`), not a keyed flag. The **source**
+        // owns the arming and the disarming; the reader is the rule instance.
+        // Two placements are read, the same shape as the CiRCLE veto:
+        // the player's own field instance (a per-player veto) and the tile's
+        // rule instance (a per-tile veto).
+        if s
+            .field
+            .iter()
+            .any(|f| f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0)
+            || self
+                .st
+                .board_field
+                .iter()
+                .any(|f| {
+                    f.tile == tile
+                        && f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0
+                })
+        {
             return Some(Msg::new("err.build_blocked"));
+        }
+        // A card played from hand has no field instance to carry a prop
+        // (`ctx::set_prop` writes the *running* instance, and a hand play has
+        // none), so 学生会的检查's 「本回合无法加盖房屋」 is still a per-player
+        // scratch key it arms and its `On::AtEnd` clears. TODO(规则书): the
+        // hand-card home for a per-player veto; `docs/TILES.md` only names the
+        // instance-prop home.
+        if s.state_get("noBuild") != 0 {
+            return Some(Msg::new("err.build_denied"));
         }
         if t.kind == "ring" || t.rent.len() < 2 {
             return Some(Msg::new("err.build_ring"));
@@ -788,12 +879,6 @@ impl World {
         }
         if s.out() || s.stunned() || s.exile() > 0 {
             return Some(Msg::new("err.cannot_spend"));
-        }
-        // A card may have closed building for this turn (「本回合无法加盖房屋」).
-        // The flag is a slot the card writes and clears at turn end; the engine
-        // only honours it, exactly as it honours `can_build` on a move.
-        if s.state_get("noBuild") != 0 {
-            return Some(Msg::new("err.build_denied"));
         }
         None
     }
@@ -819,13 +904,29 @@ impl World {
 
     /// Place a field card on the player (`tile: -1` -- it sits with its owner).
     /// Returns the new instance's uid, which is what addresses it afterwards.
-    pub fn place_card(&mut self, data: &GameData, player_id: i32, card: &str, note: Msg) -> i32 {
-        self.place_card_on(data, player_id, -1, card, note)
+    ///
+    /// `props` is the card rule's declared static property map
+    /// (`CardRules::card_props`, see [`crate::state::prop`]). It rides on the
+    /// instance, so a continuous property like `HAND_LIMIT_DELTA` is gone the
+    /// moment the card leaves the field.
+    pub fn place_card(
+        &mut self,
+        data: &GameData,
+        player_id: i32,
+        card: &str,
+        note: Msg,
+        props: std::collections::BTreeMap<String, i32>,
+    ) -> i32 {
+        self.place_card_on(data, player_id, -1, card, note, props)
     }
 
     /// Place a field card **on a tile** (C# `H.PlaceFromPlay(c, i, tile)`) -- the
     /// mark sits on the board at `tile` rather than with its owner. `tile: -1`
     /// puts it with the owner, which is [`Self::place_card`].
+    ///
+    /// `player_id == ` [`crate::state::BOARD_OWNER`] places on the **board
+    /// field** -- the neutral owner of tile rule instances (`bind_tiles`). The
+    /// instance keeps `owner = user = -1`; `tile` names the board tile it governs.
     pub fn place_card_on(
         &mut self,
         data: &GameData,
@@ -833,19 +934,17 @@ impl World {
         tile: i32,
         card: &str,
         note: Msg,
+        props: std::collections::BTreeMap<String, i32>,
     ) -> i32 {
-        if self.player_id(player_id).is_none() {
+        if player_id != crate::state::BOARD_OWNER && self.player_id(player_id).is_none() {
             return -1;
         }
         let uid = self.st.next_card_uid;
         self.st.next_card_uid += 1;
-        // Continuous 「手卡上限数量减1」 rides on the instance, so it is gone
-        // the moment the card leaves the field.
-        let hand_limit_delta = data.card(card).map_or(0, |c| c.hand_limit_delta);
-        let Some(s) = self.player_mut(player_id) else {
-            return -1;
-        };
-        s.field.push(FieldCard {
+        // A band skill's instance is the 「乐队卡 / 团卡」 crystal holder; see
+        // [`Self::band_skill_uid`].
+        let band_skill = data.is_band_skill(card);
+        let inst = FieldCard {
             uid,
             card: card.to_string(),
             owner: player_id,
@@ -854,24 +953,37 @@ impl World {
             crystals: 0,
             face_down: false,
             immune: false,
-            hand_limit_delta,
+            props,
+            band_skill,
             note,
-        });
+        };
+        if player_id == crate::state::BOARD_OWNER {
+            self.st.board_field.push(inst);
+            return uid;
+        }
+        let Some(s) = self.player_mut(player_id) else {
+            return -1;
+        };
+        s.field.push(inst);
         uid
     }
 
-    /// The card instance at `uid`, wherever it sits. `uid` is what identifies a
-    /// card in this match -- the *name* does not, because one player may hold
-    /// several copies of the same card in play at once.
+    /// The card instance at `uid`, wherever it sits -- a player's field or the
+    /// board field. `uid` is what identifies a card in this match -- the *name*
+    /// does not, because one player may hold several copies of the same card in
+    /// play at once.
     pub fn field_by_uid(&self, uid: i32) -> Option<&FieldCard> {
         self.st
-            .players
+            .board_field
             .iter()
-            .flat_map(|s| s.field.iter())
+            .chain(self.st.players.iter().flat_map(|s| s.field.iter()))
             .find(|f| f.uid == uid)
     }
 
     fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
+        if let Some(f) = self.st.board_field.iter_mut().find(|f| f.uid == uid) {
+            return Some(f);
+        }
         self.st
             .players
             .iter_mut()
@@ -881,16 +993,84 @@ impl World {
 
     /// Every card instance on `player_id`'s field, as `(uid, id)` in placement
     /// order. The dispatch walks this rather than the names, so two copies of
-    /// the same card are two hooks.
+    /// the same card are two hooks. `BOARD_OWNER` lists the board field (the
+    /// tile rule instances).
     pub fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
+        if player_id == crate::state::BOARD_OWNER {
+            return self
+                .st
+                .board_field
+                .iter()
+                .map(|f| (f.uid, f.card.clone()))
+                .collect();
+        }
         self.player_id(player_id).map_or_else(Vec::new, |s| {
             s.field.iter().map(|f| (f.uid, f.card.clone())).collect()
         })
     }
 
+    /// The rule instances on board tile `tile`, in placement order -- what the
+    /// settle body runs. Board-owned only; a player's card *placed on* the tile
+    /// (`place_card_on(player, tile, …)`) is on that player's field and hears
+    /// the settle point through the normal field-hook dispatch.
+    pub fn tile_rule_instances(&self, tile: i32) -> Vec<(i32, String)> {
+        self.st
+            .board_field
+            .iter()
+            .filter(|f| f.tile == tile)
+            .map(|f| (f.uid, f.card.clone()))
+            .collect()
+    }
+
     /// Miracle crystals on the instance at `uid` (C# `Card.Crystals`).
     pub fn crystals_at(&self, uid: i32) -> i32 {
         self.field_by_uid(uid).map_or(0, |f| f.crystals)
+    }
+
+    /// One declared property of the instance at `uid` (`FieldCard::props`,
+    /// `crate::state::prop` keys). Default `0`.
+    pub fn prop_at(&self, uid: i32, key: &str) -> i32 {
+        self.field_by_uid(uid)
+            .and_then(|f| f.props.get(key).copied())
+            .unwrap_or(0)
+    }
+
+    /// Write a property on the instance at `uid`; returns the stored value.
+    pub fn set_prop_at(&mut self, uid: i32, key: &str, value: i32) -> i32 {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return 0;
+        };
+        f.props.insert(key.to_string(), value);
+        value
+    }
+
+    /// A declared property of the rule instance governing `tile` -- what a card
+    /// that bends a tile writes instead of an engine flag (`docs/TILES.md`).
+    /// Reads the first board-owned instance on `tile` that carries `key`; a tile
+    /// with no rule instance reads as `0`.
+    pub fn tile_prop(&self, tile: i32, key: &str) -> i32 {
+        self.st
+            .board_field
+            .iter()
+            .find(|f| f.tile == tile)
+            .and_then(|f| f.props.get(key).copied())
+            .unwrap_or(0)
+    }
+
+    /// Write [`Self::tile_prop`] on every board-owned rule instance governing
+    /// `tile`; returns the stored value. The source owns the arming and the
+    /// disarming; the reader is the tile instance.
+    pub fn set_tile_prop(&mut self, tile: i32, key: &str, value: i32) -> i32 {
+        let mut any = false;
+        for f in self.st.board_field.iter_mut().filter(|f| f.tile == tile) {
+            f.props.insert(key.to_string(), value);
+            any = true;
+        }
+        if any {
+            value
+        } else {
+            0
+        }
     }
 
     /// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
@@ -959,9 +1139,14 @@ impl World {
     }
 
     /// Take the instance at `uid` off the field; returns the **player index**
-    /// it left (or -1 when there was no such instance). Dest routing
+    /// it left (or -1 when there was no such instance -- including a board-owned
+    /// tile rule, which goes nowhere on removal). Dest routing
     /// (`to_discard` and kin) keys on the player index, not the room member id.
     pub fn unplace_at(&mut self, uid: i32) -> i32 {
+        if let Some(i) = self.st.board_field.iter().position(|f| f.uid == uid) {
+            self.st.board_field.remove(i);
+            return crate::state::BOARD_OWNER;
+        }
         for (pi, s) in self.st.players.iter_mut().enumerate() {
             if let Some(i) = s.field.iter().position(|f| f.uid == uid) {
                 s.field.remove(i);
@@ -975,15 +1160,79 @@ impl World {
     /// binding: see [`crate::data::GameData::skill_rules_of`]. Once placed,
     /// `On::Hook` reaches them like any other field card and `Card.Crystals`
     /// works on them. Idempotent -- calling it twice does not double-place.
-    pub fn bind_skills(&mut self, data: &crate::data::GameData, player_id: i32) {
+    pub fn bind_skills(
+        &mut self,
+        data: &crate::data::GameData,
+        rules: &dyn super::rules::CardRules,
+        player_id: i32,
+    ) {
         let character = self
             .player_id(player_id)
             .map(|s| s.character.clone())
             .unwrap_or_default();
         for id in data.skill_rules_of(&character) {
             if !self.placed_cards(player_id).contains(&id) {
-                self.place_card(data, player_id, &id, Msg::default());
+                let props = rules.card_props(&id);
+                self.place_card(data, player_id, &id, Msg::default(), props);
             }
+        }
+    }
+
+    /// Place the **tile rule** instances on the neutral board owner
+    /// ([`crate::state::BOARD_OWNER`]) -- one per board tile, the way
+    /// [`Self::bind_skills`] places a player's skills. Idempotent.
+    ///
+    /// The rule id comes from the tile's `kind` (`docs/TILES.md`):
+    /// `tile:property` / `tile:ring` / `tile:agent` / `tile:circle` /
+    /// `tile:edogawa` / `tile:event` (`cafe` and `ryuseido` share one).
+    /// Tile data (price, rent table, group, level cap) is stamped into the
+    /// instance's `props`; a key the kind does not use is still stamped, so a
+    /// card that retunes one reads and writes the same map the bodies do.
+    ///
+    /// A kind with no rule in the ruleset (e.g. `StubRules`) places nothing,
+    /// and the engine's built-in `settle_tile` default handles it.
+    pub fn bind_tiles(
+        &mut self,
+        data: &crate::data::GameData,
+        rules: &dyn super::rules::CardRules,
+    ) {
+        use crate::state::prop;
+        for (t, tile) in data.tiles.iter().enumerate() {
+            let id = crate::data::tile_rule_id(&tile.kind);
+            if id.is_empty() {
+                continue;
+            }
+            if self.tile_rule_instances(t as i32).iter().any(|(_, c)| c == id) {
+                continue;
+            }
+            if !rules.has_rule(id) {
+                // No such rule in this ruleset (StubRules). The engine's
+                // built-in settlement covers it; nothing to bind.
+                continue;
+            }
+            let mut props = rules.card_props(id);
+            props.insert(prop::PRICE.to_string(), tile.price);
+            props.insert(prop::HOUSE.to_string(), tile.house);
+            props.insert(prop::GROUP.to_string(), tile.group);
+            props.insert(prop::RENT_LEN.to_string(), tile.rent.len() as i32);
+            props.insert(
+                prop::BUILD_MAX.to_string(),
+                tile.rent.len().saturating_sub(1) as i32,
+            );
+            for (n, r) in tile.rent.iter().enumerate() {
+                props.insert(format!("{}{}", prop::RENT_PREFIX, n), *r);
+            }
+            if tile.kind == "ring" {
+                props.insert(prop::RING_MULT.to_string(), data.match_rules.ring_multiplier);
+            }
+            self.place_card_on(
+                data,
+                crate::state::BOARD_OWNER,
+                t as i32,
+                id,
+                Msg::default(),
+                props,
+            );
         }
     }
 

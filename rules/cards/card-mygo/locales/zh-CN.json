@@ -71,5 +71,6 @@
   "tomori_no_longer_note": "奇迹水晶：使用角色技能时用 1 个代替火罐",
   "tomori_no_longer_placed": "「（灯）不再迷茫」放在了 {{who}} 的场上",
   "tomori_no_longer_refund": "火罐已返还",
-  "tomori_no_longer_title": "不再迷茫"
+  "tomori_no_longer_title": "不再迷茫",
+  "tomori_no_longer_refilled": "「（灯）不再迷茫」水晶减少，立刻补回 {{n}} 个"
 }

@@ -87,7 +87,7 @@ fn fx(player_id: i32) -> card_sdk::Asked {
             if by < 0 || trigger::player_id() != by {
                 return Ok(());
             }
-            back(player_id, by, trigger::move_dir());
+            back(player_id, by, trigger::move_dir())?;
         }
         _ => {}
     }
@@ -169,7 +169,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
                 who,
                 missed * 500,
                 &Msg::new(key!("two_donuts_overflow")).i("n", missed as i64),
-            );
+            )?;
         }
     }
     // C# `H.RemoveExtra(this)` -- the stand-in leaves the field for the discard.

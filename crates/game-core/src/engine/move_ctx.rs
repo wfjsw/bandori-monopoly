@@ -152,7 +152,6 @@ pub struct MoveCtx {
     /// A queued second walk, in steps (the C# `MoreSteps` follow-up phase).
     pub more_steps: i32,
     /// Passing CiRCLE pays nothing on this walk.
-    pub no_circle_reward: bool,
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
     pub no_buy: bool,
 
@@ -208,7 +207,6 @@ impl Default for MoveCtx {
             settle_as_agent: false,
             can_build: true,
             more_steps: 0,
-            no_circle_reward: false,
             no_buy: false,
             cancelled: false,
             tags: Vec::new(),

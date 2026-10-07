@@ -26,7 +26,11 @@ pub const RAN_RED: CardDef = CardDef::new(
     "skill:美竹兰:叛逆的红挑染",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::TurnEnd], afterglow, tick),
     ],
 );
@@ -37,12 +41,15 @@ fn afterglow(player_id: i32) -> bool {
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    crate::fire_pot(player_id, 1, 1);
     Ok(())
 }
 
 /// （1）「每三回合没有使用Afterglow角色的（2）技能获得一个[火罐]」.
 fn tick(player_id: i32) -> card_sdk::Asked {
+    // （2）'s 「向后移动[经过]CiRCLE时不获得CiRCLE奖励」 ends with the turn (the
+    // reward step consumes the prop if the move did pass CiRCLE).
+    ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
     let n = state::get(player_id, REST_TURNS) + 1;
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
@@ -71,7 +78,9 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     // A press of any Afterglow (2) resets the band's rest counter.
     state::set(player_id, REST_TURNS, 0);
     plan::set_reverse(true);
-    plan::set_no_circle_reward(true);
+    // （2）「向后移动[经过]CiRCLE时不获得CiRCLE奖励」 -- `prop::NO_REWARD` on this
+    // instance (`docs/TILES.md`); `tick` disarms it at the turn end.
+    ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
     ctx::log(player_id, &Msg::new(key!("ran_red_reverse")));
     Ok(())
 }

@@ -29,6 +29,7 @@ pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
     // On::Hook(&[TriggerKind::TurnEnd], decay),      // field hooks, auto-run in play
     // On::AtEnd(at_end),                             // scheduled turn-end body
     // On::RollPlan(roll_plan),                       // shapes the main move
+    // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
 ]);
 fn press(player_id: i32) {
     ctx::gain(player_id, 1000, &Msg::new(key!("why_press")));
@@ -52,6 +53,70 @@ dispatched.
 * names are arguments, not text: `Msg::new(key!("x")).player_id("who", s).tile("tile", t)`
   -- the client resolves them to display names.
 
+## Declared card properties (`CardDef::props`)
+
+Some behaviours are **static properties of the card rule**, not effects that
+run at a trigger. They are a generic **property map** -- named `key -> i32`
+values declared on the `CardDef`, keyed by constants so the names are never
+stringly scattered:
+
+```rust
+use card_sdk::abi::prop;
+// 规则书[持续]（1）: 「手卡上限数量减1」 -- C# `Card.HandLimitDelta`
+pub const CUT: CardDef = CardDef::new("PP:不要背负期待", &[...])
+    .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
+// 规则书: 「（此卡可在眩晕时打出）」 -- C# `Card.PlayableStunned`
+pub const H: CardDef = CardDef::new("MyGO:壱雫空", &[...])
+    .props(&[(prop::PLAYABLE_STUNNED, 1)]);
+```
+
+The keys the engine reads live in **one place** each side (the two crates
+cannot share a definition, so they are mirrored -- keep them in step):
+
+* `card_sdk::abi::prop` -- what a card rule declares against;
+* `game_core::state::prop` -- what the engine reads back.
+
+| key | constant | rulebook clause | C# | what the engine does with it |
+|---|---|---|---|---|
+| `handLimitDelta` | `prop::HAND_LIMIT_DELTA` | 「手卡上限数量减1」 (`-1`) | `Card.HandLimitDelta` | stamped onto the field instance at placement (`FieldCard::props`) and summed into the owner's hand limit while it sits there; gone with the card. A `place_raw` test arrangement sees it too. |
+| `playableStunned` | `prop::PLAYABLE_STUNNED` | 「（此卡可在眩晕时打出）」 (`1`) | `Card.PlayableStunned` | the card skips the stun gate in `cannot_play`. The exile and no-hand gates have no such exception in the pool. |
+
+**Tile-rule properties** (the same map, on a *board-owned* tile rule instance --
+[TILES.md](TILES.md)): `price` / `house` / `group` / `buildMax` / `rentLen` /
+`rent:N` / `ringMult` are the tile's data, stamped at `bind_tiles`; `noReward` /
+`rentFactor` / `payFactor` / `buyDiscount` / `freeBuy` / `razeOnBuy` / `noBuild`
+are the modifiers a card writes in place of the engine flags those used to be.
+Two write surfaces, matching the two clause shapes (ABI v32):
+
+* `ctx::prop` / `ctx::set_prop` -- the **running** instance (a per-player veto
+  riding a placed card: PPP band (2) 「无法获取[CiRCLE奖励]」, 梦在前方's
+  「[拥有者]不可盖房」). Read back by scanning the passing / building player's
+  field.
+* `ctx::tile_prop` / `ctx::set_tile_prop` -- the rule instance(s) governing a
+  **tile** (a tile-scoped or walk-scoped veto: 「[经过]CiRCLE时不获得[CiRCLE奖励]」
+  arms `prop::NO_REWARD` on CiRCLE's `tile:circle` instance).
+
+`prop::NO_REWARD` is the CiRCLE-reward veto (`ctx::settle_circle_reward` reads
+and consumes the tile-scoped one); `prop::NO_BUILD` gates `why_not_build_on`;
+`prop::RENT_FACTOR` / `PAY_FACTOR` scale a settlement payment at the money
+pipeline's `payMul` stage. A rule body's own instance is the one running
+(`ctx::self_tile()` names its tile).
+
+**Defined default: `0`** for every key -- a card that does not declare a
+property reads as `0`, and `!= 0` is how a boolean-ish key like
+`playableStunned` is tested.
+
+Path: `CardDef::props` → `ManifestEntry.props` (a key-sorted
+`Vec<(String, i32)>`, so the wire bytes are deterministic; ABI v30) →
+`CardInfo::props` (a `BTreeMap<String, i32>` -- not a `HashMap`, so iteration
+and serialization stay deterministic) → `CardRules::card_props(card)` /
+`::card_prop(card, key)` → stamped onto `FieldCard::props` at placement.
+
+Each declaration cites its clause like any other line (see below). The current
+holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习生解密指南` and
+`Sumimi:#L12` declare `(prop::HAND_LIMIT_DELTA, -1)`; `MyGO:壱雫空` declares
+`(prop::PLAYABLE_STUNNED, 1)`.
+
 ## The vocabulary (`card_sdk::ctx`)
 
 | group | functions |
@@ -62,11 +127,12 @@ dispatched.
 | hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
 | marks & tokens | `add_mark`, `count_marks`, `remove_marks`, `tok`, `set_tok`, `add_tok` |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
-| pots & status | `band_crystals`, `add_band_crystals`, `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
+| pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals`, `decay` |
+| tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `settle_circle_reward`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 
 Prompts can carry an AI preference later (`H.AskXxx`'s `ai` parameter); until
 then bots take the prompt fallback.
@@ -95,6 +161,8 @@ original names where the pairing is already implied (`settleBefore` →
 | `discardBefore` / `discardAfter` | discarding from hand -- before the card leaves / after it is in the pile |
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |
 | `leaveBefore` / `leaveAfter` | forfeiting -- before any guard / after the player is cleared, before the game-over check |
+| `deckBeforeGame` / `deckAtGameStart` | the two match-start points. `deckBeforeGame` = **before match start**, before the opening hands are drawn: start positions and the authoritative initial hand size (`ctx::inc_start_hand`, default 2, minimum 0) are decided here. `deckAtGameStart` = **after match start**, after the opening deal and mulligan: initial tokens/resources (fire pots 「初始N」, P✽P fans). Both dispatch to **every effect source** of the player they are raised for -- field cards including skills (per player, in field order) and the card ids in that player's piles/hands -- each source running its own hook with `t.card` naming it. There is no separate "match started" point; nothing in the pool wants "after positions are set, before the deal". |
+| `drewBefore` / `drawn` + `drew` | the per-draw points, **one raise per single card** (an N-card draw is N iterations, each payload naming one card). `drewBefore` is the *replacement* point: `t.card` is the deck's top, and a hook that replaces the draw calls `trigger::set_cancelled()` and performs its own look/pick -- whatever it adds to the hand is the replacement draw (「此次加手视为抽卡动作」) and the after points fire for it. After the card is in hand: `drawn` runs on the **drawn card itself** (C# `AfterDraw`), `drew` on the **field cards** (crystal-per-draw effects). Opening hands raise **none** of the three -- 「抽卡」 means a draw during play, and 朝同一片天空迈进's 「（开局时抽到此卡洗回）」 is a `deckAtGameStart` clause for exactly that reason. |
 
 `roll` carries `value = -1` as a "no roll yet" sentinel so roll-counteracting cards
 (which match `Roll | MoveRoll`) stay dormant before the dice are cast.
@@ -152,7 +220,9 @@ cannot ship with a raw key showing to players.
 
 * seam: card modules run inside real matches (server and browser), prompts come
   out as engine prompts and effects commit -- `crates/game-rules/tests/live_match.rs`;
-* vocabulary above (ABI v26) is implemented end to end;
+* vocabulary above is implemented end to end (ABI v31 as of 2026-10-06 --
+  `card_sdk::abi::ABI_VERSION`; the wire format note above still says v26
+  because that is when `postcard` was adopted);
 * **all 184 cards are ported** (`rules/cards/card-*`, one module per card family
   crate, one `.rs` per card). `python tools/rulebook/check.py` verifies every
   card quotes its passage and cites it; `node tools/build-ruleset.mjs` ships
@@ -188,16 +258,24 @@ cannot ship with a raw key showing to players.
 * **Field-card (`Fx`) hooks** are persistent effects on a placed card. They are
   *not* [反击] points: the engine runs every placed card's `counteract` against them
   **automatically**, in placement order per player, with no player declaration.
-  They use their own `TriggerKind`s (`turnEnd`, `drawn`, `passTile`, `payAfter`,
+  They use their own `TriggerKind`s (`turnEnd`, `drewBefore`, `drew`,
+  `passTile`, `payAfter`,
   `rollAfter`, `cardPlayed`, `targeted`, `payChoose`) so a card can tell a field
   effect from a hand counteraction by its kind alone -- `match trigger::kind()` is the
   dispatch. Every hook kind is raised except `targeted` (it waits on the
   targeting pipeline). `drawn` runs on the card just drawn (named on
-  `t.card`, still in hand) rather than on placed cards. Hook-only kinds open no
+  `t.card`, still in hand) rather than on placed cards; `drewBefore` / `drew`
+  are the per-draw field points (one raise per single card). Hook-only kinds open no
   [反击] window; `turnStart` / `settleAfter` are both a hook and a [反击] point,
   so a card there tells which by `is_placed(player_id)`.
   Per-card miracle crystals (`crystals` / `set_crystals` / `add_crystals`) are
-  the decay counter `DecayCard.TurnEnd` uses.
+  the decay counter `DecayCard.TurnEnd` uses. **Band-card (「乐队卡 / 团卡」)
+  crystals are one pool with them**: they live on the band skill's own field
+  instance (`skill:<band>:<skill>`), so `band_crystals` / `add_band_crystals`
+  are sugar over that instance's count. No keyed-state side store. Edge cases:
+  a player with no band skill reads 0 and every write is a no-op; several band
+  cards (PPP:Returns) target the first in placement order; a swapped or removed
+  band card takes its crystals with it.
 * A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a
   move roll, `set_pay_amount` reduces or cancels (0) a payment, `set_pay_target`
   redirects its payee (-1 = the bank), and `set_cancelled` / `negate_effect` / `spare` shape what settles. The engine honours all four once the counteraction window closes.
@@ -221,7 +299,8 @@ cannot ship with a raw key showing to players.
   `TODO(规则书)` / `TODO(ABI)` naming the missing hook (251 markers remain after
   the v22-v25 waves). What is **landed** since the first cut: the `On::` handler
   form (Play / CantPlay / Counteract / Hook / AtEnd / RollPlan), the field-hook kinds
-  (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter/Instead`,
+  (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter` /
+  `SettleBody` -- `SettleBody` replaced `SettleInstead` --,
   `TurnStart`/`TurnEnd(+Before/After)`, `Drew/Drawn`, `RollAfter`, `Reshuffled`,
   `Bought`, `Discarded`, `DeckBeforeGame`/`DeckAtGameStart`, `BeforeOut`,
   `Teleported`), per-card `Crystals`, pile enumeration/take

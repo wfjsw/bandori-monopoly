@@ -35,6 +35,7 @@
   "hey_kids_lose_fee": "house build-cost fee",
   "hey_kids_moved": "{{tile}} transferred {{count}} house(s)",
   "hey_kids_title": "Wild Hey Kids!!",
+  "layer_keep_counter": "Layer Keep",
   "layer_keep_kept": "{{who}} kept the unchosen die {{n}} (Fingertip Resolve)",
   "layer_keep_no_die": "No die is being kept.",
   "layer_keep_no_fire": "You need a fire pot.",

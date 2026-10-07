@@ -34,7 +34,10 @@ pub const YURI_CRIT: CardDef = CardDef::new(
 );
 
 fn mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
+    // 「获得或失去资金」 -- the skill fires on either side of a money move:
+    // a delete (player -> game) carries `player_id = me`, a print (game ->
+    // player) carries `target = me`, a pay-player carries both.
+    ctx::trigger::player_id() == player_id || ctx::trigger::target() == player_id
 }
 
 /// 「X初始为0」 -- restated so a fresh match starts from zero.

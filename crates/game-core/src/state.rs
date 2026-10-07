@@ -94,6 +94,13 @@ pub struct MatchState {
     #[serde(default)]
     pub next_card_uid: i32,
     pub players: Vec<MatchPlayer>,
+    /// The **neutral board owner**'s field ([`BOARD_OWNER`]): one rule instance
+    /// per board tile, placed at match start by `bind_tiles` the way
+    /// `bind_skills` places a player's skills. Each carries `tile = <board tile
+    /// index>` and the tile's data in its [`FieldCard::props`]. Not a seat --
+    /// turn order, scoring and the alive/out loops never see it.
+    #[serde(default)]
+    pub board_field: Vec<FieldCard>,
     pub bans: Vec<String>,
     pub owners: Vec<i32>,
     pub houses: Vec<i32>,
@@ -142,6 +149,7 @@ impl Default for MatchState {
             built: false,
             next_card_uid: 1,
             players: vec![],
+            board_field: vec![],
             bans: vec![],
             owners: vec![],
             houses: vec![],
@@ -238,9 +246,11 @@ pub enum Tick {
 #[serde(default)]
 pub struct StateVar {
     pub value: i32,
-    /// Lower bound a consumer may enforce. The engine does not.
+    /// Lower bound a consumer may enforce. The engine floors status counters
+    /// at 0 regardless; `min` is informational.
     pub min: i32,
-    /// Upper bound a consumer may enforce -- the mandated cap. The engine does not.
+    /// Upper bound a consumer may enforce -- the mandated cap. `max > 0` is
+    /// enforced on write; `max == 0` is uncapped.
     pub max: i32,
     /// When this wears off, if it is a timed counter. See [`Tick`].
     pub expires: Option<Tick>,
@@ -265,14 +275,16 @@ pub mod key {
     /// written by the character skill -- and that is the one number to show:
     /// there is no separate "effective cap" beside it.
     pub const FIRE: &str = "fire";
-    /// Band crystals for band skills (C# `MatchSeat.band_crystals`).
-    pub const BAND_CRYSTALS: &str = "bandCrystals";
     /// Layers of "may hold no hand cards" (C# `MatchSeat.no_hand`).
     pub const NO_HAND: &str = "noHand";
     /// Layers of "cannot be stopped" (C# `MatchSeat.unstoppable`).
     pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit (C# `MatchSeat.hand_limit`).
     pub const HAND_LIMIT: &str = "handLimit";
+    /// The authoritative opening hand size (default 2; effects may lower it,
+    /// minimum 0). Written at the before-match-start point and read by the
+    /// opening draw. Mirrors `card_sdk::abi::state_key::START_HAND`.
+    pub const START_HAND: &str = "startHand";
     /// Skill-system scratch (C# `MatchSeat.skill_state`).
     pub const SKILL_STATE: &str = "skillState";
     /// Per-player `Fx.ExtraColor`: `extraColor:<tile>` = the group that tile
@@ -290,6 +302,102 @@ pub mod key {
     pub const MORTGAGED: &str = "mortgaged";
     /// A card has closed building for this turn (「本回合无法加盖房屋」).
     pub const NO_BUILD: &str = "noBuild";
+
+    /// Is `key` one the engine itself owns (a status gate the engine ticks or
+    /// enforces), as opposed to a card's own scratch / latch key? Only the
+    /// latter may be carried across a pause from a card's world copy -- a
+    /// stale copy of a status gate must not clobber the live one.
+    pub fn is_engine_owned(key: &str) -> bool {
+        matches!(
+            key,
+            STAY | STUN | STUN_START | EXILE | EXILE_TO | FIRE | NO_HAND | UNSTOPPABLE
+                | HAND_LIMIT | START_HAND | SKILL_STATE | BUILT | BOUGHT | REDEEMED | MORTGAGED
+                | NO_BUILD
+        ) || key.starts_with(EXTRA_COLOR)
+            // `skill.*` is skill scratch -- a hook writes it and the hook's own
+            // `swap_world` commits it; it must not be pulled back off a stale
+            // body copy at a pause.
+            || key.starts_with("skill.")
+    }
+}
+
+/// Named **card properties** -- the keys of a card rule's declared property
+/// map (`CardDef::props`, carried through the ruleset manifest). A property is
+/// a static fact about the card rule, not an effect: the engine reads it back
+/// by key and never by matching rulebook prose. Mirrors
+/// `card_sdk::abi::prop` (the two crates cannot share a definition; keep them
+/// in step). Every key has a defined default of `0` when a card does not
+/// declare it.
+pub mod prop {
+    /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`) while the card
+    /// sits on the field. Stamped onto the field instance at placement and
+    /// gone with the card. `-1` cuts the owner's hand limit.
+    pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
+    /// 「可在眩晕时打出」 (C# `Card.PlayableStunned`): `1` = the card skips the
+    /// stun gate when played from hand.
+    pub const PLAYABLE_STUNNED: &str = "playableStunned";
+    /// Virtual **rent** house count (「房屋数视为…」). Presence is the override
+    /// (a count of `0` is legitimate); real `st.houses` is untouched. On a
+    /// placed card of the tile's owner (`ctx::set_prop`, gone with the card) or
+    /// on the tile's rule instance (`ctx::set_tile_prop`). Read by
+    /// [`crate::engine::ops::World::rent_houses`]; `houses_of` stays real.
+    pub const RENT_HOUSES: &str = "rentHouses";
+
+    // ---------------------------------------------------------- tile data
+    // Stamped onto a board-owned tile rule instance at `bind_tiles` (from
+    // `TileData`), and read back by the settle bodies and by the end-step
+    // buy/build gates. Mirrors `card_sdk::abi::prop`; see `docs/TILES.md`.
+
+    /// Land price (houses are extra). `TileData.price`.
+    pub const PRICE: &str = "price";
+    /// Build cost per level. `TileData.house`.
+    pub const HOUSE: &str = "house";
+    /// Colour group (`TileData.group`). [`ALL_COLORS`] is 「该格获得所有颜色」.
+    pub const GROUP: &str = "group";
+    /// The tile's value that means 「该格获得所有颜色」.
+    pub const ALL_COLORS: i32 = -2;
+    /// 「每块地有标注的等级上限」 -- max houses. `TileData.rent.len() - 1`.
+    pub const BUILD_MAX: &str = "buildMax";
+    /// Length of the rent table (levels = houses + 1).
+    pub const RENT_LEN: &str = "rentLen";
+    /// Rent at level N: `rent:0` … `rent:rentLen-1` (`TileData.rent`).
+    pub const RENT_PREFIX: &str = "rent:";
+    /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
+    pub const RING_MULT: &str = "ringMult";
+
+    // ------------------------------------------------- tile rule modifiers
+    // What a card that bends a tile writes onto its rule instance, replacing
+    // the engine flags these used to be. See `docs/TILES.md`.
+
+    /// 「无法获取[CiRCLE奖励]」 on this tile's `tile:circle` instance.
+    pub const NO_REWARD: &str = "noReward";
+    /// Rent scale in milli-units (500 = x0.5). Replaces `rent_factor`.
+    pub const RENT_FACTOR: &str = "rentFactor";
+    /// Payment scale in milli-units (500 = x0.5). Replaces `pay_factor`.
+    pub const PAY_FACTOR: &str = "payFactor";
+    /// 「购买格子时[消耗]资金降低N（最低0）」. Replaces `buy_discount`.
+    pub const BUY_DISCOUNT: &str = "buyDiscount";
+    /// 「购买格子不[消耗]资金」. Replaces `free_buy`.
+    pub const FREE_BUY: &str = "freeBuy";
+    /// 「如果购买则拆除那个格子上的所有房屋」. Replaces `raze_on_buy`.
+    pub const RAZE_ON_BUY: &str = "razeOnBuy";
+    /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
+    pub const NO_BUILD: &str = "noBuild";
+}
+
+/// The **neutral board owner** of tile rule instances ([`MatchState::board_field`]).
+/// Not a seat: `-1` is already "no player" everywhere in the engine, and the
+/// alive/out/turn loops index `players` so they never reach this list. A card
+/// that attaches a rule to a tile places it here (`place_card_on(BOARD_OWNER, tile, …)`).
+pub const BOARD_OWNER: i32 = -1;
+
+/// Is `key` one of the engine's status counters, whose value cannot go
+/// negative (「清除」 floors at 0)?
+fn is_status_key(key: &str) -> bool {
+    matches!(
+        key,
+        key::STAY | key::STUN | key::STUN_START | key::EXILE | key::FIRE
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -316,7 +424,6 @@ pub struct MatchPlayer {
     pub out_order: i32,
     pub skill_note: Msg,
     pub skill_character: String,
-    pub band_crystals: i32,
     pub bands: String,
     pub tokens: Vec<Counter>,
     /// Keyed state: the counters this player carries (C# `MatchPlayer`'s pots
@@ -361,7 +468,6 @@ impl Default for MatchPlayer {
             out_order: 0,
             skill_note: Msg::default(),
             skill_character: String::new(),
-            band_crystals: 0,
             bands: String::new(),
             tokens: vec![],
             state: {
@@ -416,22 +522,36 @@ impl MatchPlayer {
         self.state_var(key).max
     }
 
-    /// Write `value` raw. Deliberately **not** clamped to `min`/`max`: a skill
-    /// that mandates a cap is the one that cares, and it is a consumer.
+    /// Write `value`, clamped to the item's declared bounds.
+    ///
+    /// The engine holds the bounds and enforces them on write: a status counter
+    /// (stay / stun / exile / fire) never goes negative (「清除」 floors at 0),
+    /// and a declared `max > 0` is a real cap (fire pots 「上限M」). `max == 0`
+    /// still means "uncapped". A consumer that wants a different policy (e.g.
+    /// `gain_fire`'s partial gain + log) does its own arithmetic first.
     pub fn state_set(&mut self, key: &str, value: i32) -> i32 {
-        self.state.entry(key.to_string()).or_default().value = value;
-        value
+        let e = self.state.entry(key.to_string()).or_default();
+        let mut v = value;
+        // Status counters cannot go negative -- clearing floors at 0.
+        if is_status_key(key) {
+            v = v.max(0);
+        }
+        // A declared cap is honoured (`max > 0`; `max == 0` is uncapped).
+        if e.max > 0 {
+            v = v.min(e.max);
+        }
+        e.value = v;
+        v
     }
 
-    /// Add `delta` raw -- no clamping, no logging. Consumers that cap or log do
-    /// it themselves (`gain_fire` is one such consumer).
+    /// Add `delta`, clamped like [`Self::state_set`].
     pub fn state_add(&mut self, key: &str, delta: i32) -> i32 {
-        let v = self.state_get(key).wrapping_add(delta);
+        let v = self.state_get(key).saturating_add(delta);
         self.state_set(key, v)
     }
 
-    /// Declare the bounds a consumer may enforce. The engine stores them and
-    /// applies nothing.
+    /// Declare the bounds a consumer may enforce. `max > 0` is enforced on
+    /// the next write; `max == 0` is uncapped.
     pub fn state_set_bounds(&mut self, key: &str, min: i32, max: i32) {
         let e = self.state.entry(key.to_string()).or_default();
         e.min = min;
@@ -498,10 +618,6 @@ impl MatchPlayer {
         self.state_max(key::FIRE)
     }
 
-    pub fn band_crystals(&self) -> i32 {
-        self.state_get(key::BAND_CRYSTALS)
-    }
-
     pub fn no_hand(&self) -> i32 {
         self.state_get(key::NO_HAND)
     }
@@ -511,9 +627,14 @@ impl MatchPlayer {
     }
 
     /// Hand size limit: the `handLimit` state (base 5, cards may cut or lift
-    /// it) plus every placed card's continuous delta (「手卡上限数量减1」).
+    /// it) plus every placed card's continuous `prop::HAND_LIMIT_DELTA`
+    /// (「手卡上限数量减1」).
     pub fn hand_limit(&self) -> i32 {
-        let field: i32 = self.field.iter().map(|f| f.hand_limit_delta).sum();
+        let field: i32 = self
+            .field
+            .iter()
+            .map(|f| f.props.get(prop::HAND_LIMIT_DELTA).copied().unwrap_or(0))
+            .sum();
         self.state_get(key::HAND_LIMIT) + field
     }
 
@@ -703,10 +824,19 @@ pub struct FieldCard {
     /// C# `Card.Immune` -- 「此卡不受…效果影响」. A value on the card, not a
     /// subclass override: effects that would touch it read this and skip.
     pub immune: bool,
-    /// C# `Card.HandLimitDelta` -- continuous 「手卡上限数量减1」 while this
-    /// instance sits on the field (stamped at placement, gone with the card).
+    /// The card rule's declared static **properties** (see [`prop`]), stamped
+    /// onto the instance at placement and gone with it. A continuous effect
+    /// like 「手卡上限数量减1」 (`prop::HAND_LIMIT_DELTA`) rides here, so a
+    /// `place_raw` test arrangement sees it too.
     #[serde(default)]
-    pub hand_limit_delta: i32,
+    pub props: BTreeMap<String, i32>,
+    /// This instance is a **band skill** (`skill:<band>:<skill>`, stamped at
+    /// placement from `GameData::is_band_skill`). 「乐队卡 / 团卡」 crystal
+    /// reads and writes land on this instance's [`Self::crystals`] -- see
+    /// `World::band_crystals`. A character skill is `skill:<character>:<skill>`
+    /// and is *not* flagged, even when it sits on someone else's field.
+    #[serde(default)]
+    pub band_skill: bool,
     pub note: Msg,
 }
 
@@ -721,7 +851,8 @@ impl Default for FieldCard {
             crystals: 0,
             face_down: false,
             immune: false,
-            hand_limit_delta: 0,
+            props: BTreeMap::new(),
+            band_skill: false,
             note: Msg::default(),
         }
     }

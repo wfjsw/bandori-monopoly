@@ -41,7 +41,7 @@ fn chisato_mask(player_id: i32) -> card_sdk::Asked {
         player_id,
         2000,
         &Msg::new(key!("chisato_mask_why")),
-    );
+    )?;
     // 规则书[持续]（2）: 「[共鸣]其他玩家[分摊][支付][拥有者]1500资金」
     if crate::resonance::try_resonance(player_id)? {
         split_pay(
@@ -49,7 +49,7 @@ fn chisato_mask(player_id: i32) -> card_sdk::Asked {
             player_id,
             1500,
             &Msg::new(key!("chisato_mask_resonance")),
-        );
+        )?;
     }
     Ok(())
 }
@@ -69,7 +69,7 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
         player_id,
         500,
         &Msg::new(key!("chisato_mask_why")),
-    );
+    )?;
     Ok(())
 }
 

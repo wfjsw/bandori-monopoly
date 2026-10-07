@@ -46,7 +46,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     );
     // 规则书[反击]: 「若没有人在此卡的效果期间打出[反击]卡，你抽一张卡。」 --
     // C# `H.DrawR(i, 1, ...)` on `!anyone` (MatchHost.cs:11586-11589).
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     // TODO(规则书)[judgement](ABI): nested counteraction half (C# `H.Counteract(copy, p)`,
     //   the clause under-specifies -- see the note above it
     // MatchHost.cs:11573) -- 「此时场上其他玩家可如同自身的对应目标被指定一般

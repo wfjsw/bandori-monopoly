@@ -71,5 +71,6 @@
   "tomori_no_longer_note": "miracle crystals: spend 1 instead of fire when using a character skill",
   "tomori_no_longer_placed": "“(Tomori) No Longer Lost” is now on {{who}}'s field",
   "tomori_no_longer_refund": "Fire pots returned",
-  "tomori_no_longer_title": "No Longer Lost"
+  "tomori_no_longer_title": "No Longer Lost",
+  "tomori_no_longer_refilled": "Tomori refilled {{n}} crystals (not a skill-cost substitution)"
 }

@@ -36,7 +36,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, DONE, 1);
-    ctx::gain(player_id, 1000, &Msg::new(key!("kasumi_group_start")));
+    ctx::gain(player_id, 1000, &Msg::new(key!("kasumi_group_start")))?;
     Ok(())
 }
 
@@ -49,6 +49,6 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain(player_id, 1500, &Msg::new(key!("kasumi_group_pass")));
+    ctx::gain(player_id, 1500, &Msg::new(key!("kasumi_group_pass")))?;
     Ok(())
 }

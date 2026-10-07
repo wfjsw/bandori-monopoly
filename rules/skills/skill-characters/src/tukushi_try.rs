@@ -28,7 +28,11 @@ pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            at_start,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::RollAfter], paired, on_roll),
         On::Hook(&[HookKind::PayChoose], paired, on_pay),
@@ -54,7 +58,7 @@ fn partner(player_id: i32) -> bool {
 
 /// 「初始1，上限2」 + （3）「初始获得"Space"」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    crate::fire_pot(player_id, 1, 2);
     let t = ctx::tile_named("Space");
     if t >= 0 && ctx::tile_owner(t) < 0 {
         ctx::set_owner(t, player_id);
@@ -170,7 +174,7 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
             player_id,
             cost,
             &Msg::new(key!("tukushi_try_kickback")).i("n", cost as i64),
-        );
+        )?;
     }
     Ok(())
 }

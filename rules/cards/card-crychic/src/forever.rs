@@ -11,14 +11,28 @@
 //! leaves the owner holding 7+ cards.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, trigger};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const FOREVER: CardDef = CardDef::new(
     "CRYCHIC:如果能一直持续下去...",
     &[
         On::Play(None, forever),
-        On::Hook(&[HookKind::Drew], |_| true, on_drew),
+        // 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a
+        // continuous condition, so the check runs at every point a hand size
+        // moves (draw, discard-from-hand, play-from-hand) and at the turn
+        // boundaries as a backstop. `Drew` alone only sees draws.
+        On::Hook(
+            &[
+                HookKind::Drew,
+                HookKind::DiscardAfter,
+                HookKind::CardPlayed,
+                HookKind::TurnEndBefore,
+                HookKind::TurnEnd,
+            ],
+            |_| true,
+            on_drew,
+        ),
     ],
 );
 
@@ -34,7 +48,7 @@ fn forever(player_id: i32) -> card_sdk::Asked {
         player_id,
         2000 + 500 * x,
         &Msg::new(key!("forever_why")).i("x", x as i64),
-    );
+    )?;
     // 规则书（1）[手]: 「获得2000+500*X资金，X为移除的奇迹水晶数量」
     // 规则书（2）[持续]: the card lives in play until a draw leaves 7+ in hand
     // (`on_drew` below).
@@ -43,14 +57,13 @@ fn forever(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- C#
-/// `CardForever.Drew` (the `Fx.Drew` placed-card walk, once per draw batch):
-/// when the owner draws and the hand is 7+, the card goes straight to the
-/// discard pile.
+/// 规则书（2）[持续]: 「若你的手牌大于等于7，此卡立即置入弃牌堆。」 -- a
+/// continuous [持续] condition: whenever the owner's hand is 7+, the card goes
+/// straight to the discard pile. C# `CardForever.Drew` only looked at the
+/// owner's own draws; the sheet says 「立即」, so every hand-size movement
+/// (and the turn boundaries as a backstop) re-checks.
 fn on_drew(player_id: i32) -> card_sdk::Asked {
-    // The hook fires on the placed card; only the owner's own draws count
-    // (C# `player_id != Player`).
-    if !ctx::is_placed() || trigger::player_id() != player_id {
+    if !ctx::is_placed() {
         return Ok(());
     }
     // 规则书（2）[持续]: 「若你的手牌大于等于7」 -- C# `H._hidden[Player].hand.Count < 7`.

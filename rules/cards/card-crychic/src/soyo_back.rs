@@ -24,7 +24,7 @@ const ID: &str = "CRYCHIC:（soyo）回到曾经";
 
 fn soyo_back(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）[手]: 「获得500资金」
-    ctx::gain(player_id, 500, &Msg::new(key!("soyo_back_why")));
+    ctx::gain(player_id, 500, &Msg::new(key!("soyo_back_why")))?;
     Ok(())
 }
 
@@ -52,7 +52,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     if pick == 0 {
         branch_discard(player_id)?;
     } else {
-        branch_keep(player_id);
+        branch_keep(player_id)?;
     }
     Ok(())
 }
@@ -78,10 +78,10 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
             player_id,
             500 * n,
             &Msg::new(key!("soyo_back_discard_why")).i("n", n as i64),
-        );
+        )?;
     }
     // 规则书（1）1: 「抽1张卡」
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     // 规则书（1）1: 「为你的一个格子付费加盖一间房屋」 -- the clause names the
     // player's own tiles and says 「付费」, so: choose one of them, pay its build
     // cost, put a house on it. A player who cannot pay just does not build.
@@ -119,10 +119,11 @@ fn branch_discard(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书（1）2: 「获得1000资金并将此卡加入手牌」
-fn branch_keep(player_id: i32) {
+fn branch_keep(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）2: 「获得1000资金」
-    ctx::gain(player_id, 1000, &Msg::new(key!("soyo_back_why")));
+    ctx::gain(player_id, 1000, &Msg::new(key!("soyo_back_why")))?;
     // 规则书（1）2: 「并将此卡加入手牌」 -- the card is already in hand from the draw
     // (C# leaves it there); `add_to_hand` is a no-op-looking second copy guard
     // and is skipped so the draw's copy is the one kept.
+    Ok(())
 }

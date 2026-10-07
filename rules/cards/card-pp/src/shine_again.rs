@@ -134,7 +134,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
             player_id,
             money,
             &Msg::new(key!("shine_again_why")).i("n", money as i64),
-        );
+        )?;
     }
     Ok(())
 }

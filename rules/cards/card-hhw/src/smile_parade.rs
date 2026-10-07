@@ -18,7 +18,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
     &[
         On::Hook(
-            &[card_sdk::abi::HookKind::SettleInstead],
+            &[card_sdk::abi::HookKind::SettleBody],
             mine,
             settle_instead,
         ),
@@ -66,8 +66,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .tile("tile", group),
     );
     // 规则书（1）: 「当次移动的移动终点视为“弦卷集团”地产商」 -- the
-    // `Fx.SettleInstead` hook kind is in (declare it and `trigger::set_cancelled()`
-    // to replace the tile's effect); C# `CardSmileParade.SettleInstead` ->
+    // `Fx.SettleBody` hook kind is in (declare it and `trigger::set_cancelled()`
+    // to replace the tile's effect); C# `CardSmileParade.SettleBody` ->
     // `H.AgentLanding(m.Seat, Group)` is the replacement body.
     // （1）「当次移动的移动终点视为"弦卷集团"地产商」 -- `settle_instead`
     // below is the replacement: `plan::set_settle_as_agent` is
@@ -193,7 +193,7 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 //   *position* exchange (「交换位置」), not a colour or an effect copy: settling on
 //   the card's tile has to resolve as if the mover landed on 弦卷集团, with the two
 //   tiles' rents and ownership reads exchanged for that settle. `set_tile_color`
-//   and `SettleInstead` are the wrong axes -- one re-colours, the other replaces
+//   and `SettleBody` are the wrong axes -- one re-colours, the other replaces
 //   one landing with another. The discard half (`unplace` + `to_discard` on that
 //   settle) is expressible and waits on the swap.
 

@@ -184,20 +184,24 @@ fn rain(player_id: i32) {
     };
     let (agent, color) = AGENTS[idx];
     let n = ctx::tile_count();
-    // 规则书: 「对应的颜色格子及这些格子相邻格子上的所有玩家」 -- C# builds `area`
-    // from every buyable tile of the agent's group plus its two ring neighbours.
+    // 规则书: 「对应的颜色格子及这些格子相邻格子上的所有玩家」 -- every tile of
+    // the agent's colour group plus each one's two ring neighbours. The agent
+    // tile itself is in the group (主要街道 is group 1) and so counts.
     let mut area: Vec<i32> = Vec::new();
-    for &name in color {
-        let t = ctx::tile_named(name);
+    let mut push_neighbours = |area: &mut Vec<i32>, t: i32| {
         if t < 0 || n <= 0 {
-            continue;
+            return;
         }
         for d in [t, (t + 1) % n, (t - 1 + n) % n] {
             if !area.contains(&d) {
                 area.push(d);
             }
         }
+    };
+    for &name in color {
+        push_neighbours(&mut area, ctx::tile_named(name));
     }
+    push_neighbours(&mut area, ctx::tile_named(agent));
     let agent_tile = ctx::tile_named(agent);
     ctx::log(
         player_id,

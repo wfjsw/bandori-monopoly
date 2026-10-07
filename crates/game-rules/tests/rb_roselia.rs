@@ -233,13 +233,38 @@ fn nfo_six_grants_the_1500_from_result_one() {
 
 #[test]
 fn toward_the_top_moves_to_the_next_purchasable_livehouse() {
-    // 规则书: 「移动到下一个可被购买的livehouse格子。」
+    // 规则书 (sheet 2026-10-06 新卡组卡 E4): 「移动到下一个可被购买的livehouse格子，
+    // 视为你的主要移动。」
     let mut t = vanilla2();
     t.set_pos(0, tile("RiNG 1") + 1);
     t.give_play(0, "R:向着顶点").unwrap();
     drain(&mut t);
     let ring2 = tile("RiNG 2");
     assert_eq!(t.pos(0), ring2, "events: {:?}", t.recent_keys(8));
+}
+
+#[test]
+fn toward_the_top_counts_as_the_main_move() {
+    // Sheet 2026-10-06 新卡组卡 E4 adds 「视为你的主要移动」 -- after the card
+    // the turn's main move is spent and a roll must not also move.
+    let mut t = vanilla2();
+    t.set_pos(0, tile("RiNG 1") + 1);
+    t.give_play(0, "R:向着顶点").unwrap();
+    drain(&mut t);
+    let ring2 = tile("RiNG 2");
+    assert_eq!(t.pos(0), ring2);
+    // The main move is consumed: a roll either fails or does not move.
+    t.dice(&[5]);
+    let r = t.roll(0);
+    drain(&mut t);
+    if let Ok(()) = r {
+        assert_eq!(
+            t.pos(0),
+            ring2,
+            "a roll after 「视为你的主要移动」 must not also move: {:?}",
+            t.recent_keys(10)
+        );
+    }
 }
 
 // ----- R:蓝玫瑰的骄傲
@@ -287,7 +312,6 @@ fn sprechchor_pays_1000_plus_120_per_die_face() {
 // ----- R:live前的准备
 
 #[test]
-#[ignore = "DISCREPANCY: book says live前的准备 「经过江户川乐器店时可打出…强制停下并触发结算」, engine opens no counteract window"]
 fn live_prep_stops_at_the_edogawa_store_when_passing() {
     // 规则书: 「[反击] 经过江户川乐器店时可打出此卡，使自己在江户川乐器店强制停下并触发结算」
     let mut t = vanilla2();
@@ -386,7 +410,6 @@ fn ako_exclusive_stuns_you_to_dodge_a_payment() {
 // ================================================================ character skills
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「初始获得“RiNG 4”格子，从“RiNG 4”格子开始游戏」, engine starts 凑友希那 on CiRCLE (pos 0) with no deeds"]
 fn yukina_skill_1_starts_on_ring4_and_owns_it() {
     // 规则书: 「（1）初始获得“RiNG 4”格子，从“RiNG 4”格子开始游戏」
     let t = Table::new(&["凑友希那", "户山香澄"]);
@@ -396,7 +419,6 @@ fn yukina_skill_1_starts_on_ring4_and_owns_it() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「首次经过CiRCLE不获得经过奖励」, engine still offers ask.circle and pays 2000"]
 fn yukina_skill_1_first_circle_pass_gives_no_reward() {
     // 规则书: 「首次经过CiRCLE不获得经过奖励」
     let mut t = Table::new(&["凑友希那", "户山香澄"]);
@@ -594,7 +616,6 @@ fn interaction_fire_bird_and_rent() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says live前的准备 is a [反击] 「经过江户川乐器店时可打出」, engine opens no counteract window on a walk past the store"]
 fn interaction_live_prep_vs_a_walk_past_the_store() {
     // live前的准备 [反击] vs an ordinary walk; also a cross-group piece of
     // board geometry (the store is not a Roselia tile).

@@ -107,13 +107,14 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（2）: 「获得相当于场上奇迹水晶数与你最相近的玩家资金后三位的资金，然后此卡
     // 进入弃牌堆。」 -- C# `Reward()`: `mine = PlacedOf(Player).Sum(Crystals) +
-    // BandCrystals(Player)`, pick the rival whose total is closest to `mine`, and
-    // gain `abs(money(rival)) % 1000`.
-    let mine = field_crystals(player_id) + ctx::band_crystals(player_id);
+    // BandCrystals(Player)`. Band-card crystals live on the band skill's own
+    // field instance now, so `field_crystals` already counts them -- the C# sum
+    // is one term, not two.
+    let mine = field_crystals(player_id);
     let mut best = -1;
     let mut best_d = i32::MAX;
     for o in others {
-        let d = (field_crystals(o) + ctx::band_crystals(o) - mine).abs();
+        let d = (field_crystals(o) - mine).abs();
         if d < best_d {
             best_d = d;
             best = o;
@@ -136,7 +137,7 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("miracle_reward"))
                 .player_id("who", best)
                 .n("money", purse as i64),
-        );
+        )?;
     }
     let left = ctx::crystals() > 0;
     // C# `H.Unplace(this, "discard", left ? "上面还有奇迹水晶：视为没有生效" : "完成了")`.

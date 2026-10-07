@@ -47,6 +47,22 @@ impl TileData {
     }
 }
 
+/// The rule id that settles a tile of this `kind` (`docs/TILES.md`). Empty when
+/// the kind has no rule (unknown kinds fall through to the engine's built-in
+/// settlement). `cafe` and `ryuseido` share `tile:event` -- the rulebook gives
+/// them one passage (「CiRCLE咖啡厅和流星堂的的[结算]是…」).
+pub fn tile_rule_id(kind: &str) -> &'static str {
+    match kind {
+        "property" => "tile:property",
+        "ring" => "tile:ring",
+        "agent" => "tile:agent",
+        "circle" => "tile:circle",
+        "edogawa" => "tile:edogawa",
+        "cafe" | "ryuseido" => "tile:event",
+        _ => "",
+    }
+}
+
 /// `CardData.cs`
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -60,11 +76,6 @@ pub struct CardData {
     pub tags: Vec<String>,
     pub text: String,
     pub cell: String,
-    /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`): stamped onto the
-    /// field instance while the card sits there, and gone with it. Derived from
-    /// the rulebook text at load.
-    #[serde(default)]
-    pub hand_limit_delta: i32,
 }
 
 impl CardData {
@@ -338,6 +349,16 @@ impl GameData {
         out
     }
 
+    /// Is `id` a **band** skill rule (`skill:<band>:<skill>` for some band in
+    /// `bands.json`), as against a character skill (`skill:<character>:<skill>`)?
+    /// This is what stamps `FieldCard::band_skill` at placement, and through it
+    /// what 「乐队卡 / 团卡」 crystal reads and writes land on.
+    pub fn is_band_skill(&self, id: &str) -> bool {
+        self.bands
+            .iter()
+            .any(|b| !b.skill.is_empty() && skill_id(&b.name, &b.skill) == id)
+    }
+
     /// Load every file in [`DATA_FILES`] through `read(file_name) -> contents`.
     pub fn load(mut read: impl FnMut(&str) -> Result<String, String>) -> Result<Self, String> {
         let mut get = |f: &str| read(f).map_err(|e| format!("{f}: {e}"));
@@ -361,14 +382,6 @@ impl GameData {
         for (i, c) in d.cards.iter().enumerate() {
             if !c.id.is_empty() {
                 d.card_by_id.entry(c.id.clone()).or_insert(i);
-            }
-        }
-        // Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`): read off the
-        // rulebook text so a card that says it gets it, and one that does not
-        // does not. Absolute overrides (「手牌数没有上限」) stay keyed state.
-        for c in d.cards.iter_mut() {
-            if c.text.contains("手卡上限数量减1") {
-                c.hand_limit_delta = -1;
             }
         }
         Ok(d)

@@ -21,7 +21,7 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
     let tile = (roll - 1) % n;
     // 规则书: 「若为地产商地块，获得1000资金」
     if ctx::is_agent(tile) {
-        ctx::gain(player_id, 1000, &Msg::new(key!("courage_wings_agent")));
+        ctx::gain(player_id, 1000, &Msg::new(key!("courage_wings_agent")))?;
         return Ok(());
     }
     // 规则书: 「所有者向你支付该地块的购买价格+地块已有房子的建造价格总额的一半」
@@ -34,9 +34,13 @@ fn courage_wings(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    // 「购买价格+地块已有房子的建造价格总额」 is `buy_price` (land + houses);
-    // 「…的一半」 is the C# `(price + houses * house) / 2`.
-    let amount = ctx::buy_price(tile) / 2;
+    // Ruling 2026-10-06: 「该地块的购买价格+地块已有房子的建造价格总额的一半」
+    // parses as land price + (total house cost / 2) -- only the house cost is
+    // halved; the land price counts in full. `buy_price` = land + houses*house,
+    // so the house total is `buy_price - tile_price`.
+    let land = ctx::tile_price(tile);
+    let house_total = ctx::buy_price(tile) - land;
+    let amount = land + house_total / 2;
     ctx::transfer(
         owner,
         player_id,

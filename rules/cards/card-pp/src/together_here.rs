@@ -27,7 +27,7 @@ fn together_here(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「如果[共鸣]则X减少5并抽1张卡」
     if crate::resonance::try_resonance(player_id)? {
         x -= 5;
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     }
     // 规则书[手]: 「将X个反面[P✽P粉丝]变正」
     let flip = x.max(0).min(down);

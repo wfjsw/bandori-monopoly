@@ -17,11 +17,13 @@ use std::sync::{Arc, OnceLock};
 
 use game_core::data::GameData;
 use game_core::engine::Match;
+use game_core::engine::CardRules;
 use game_core::msg::{Arg, Msg};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{
-    key, stage, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState, StateVar, TileMark,
+    key, prop, stage, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState, StateVar,
+    TileMark,
 };
 use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
@@ -443,14 +445,16 @@ impl Table {
             p.field.retain(|f| !f.card.starts_with("skill:"));
             p.state = MatchPlayer::default().state;
             p.tokens.clear();
-            p.band_crystals = 0;
         }
         self
     }
 
     /// A clean board: empty hands and piles, 10000 each, everyone on CiRCLE,
     /// no deeds / houses / mortgages / marks, no non-skill field cards, no
-    /// statuses, no pending turn-end callbacks.
+    /// statuses, no pending turn-end callbacks. Start-time resources (fire pots
+    /// 「初始N」, P✽P fans) are wiped too -- their caps stay, so a skill's
+    /// 「上限M」 still reads back. Use [`Table::set_fire`] to put a specific pot
+    /// back.
     pub fn clean(&mut self) -> &mut Self {
         let w = self.m.world_mut();
         for h in w.hidden.iter_mut() {
@@ -462,11 +466,30 @@ impl Table {
         for p in w.st.players.iter_mut() {
             p.money = 10_000;
             p.pos = 0;
+            // Keep bound skills only. Returns' [特]（2） places it at match
+            // start, but its [持续]（2） re-prompts at every one of the owner's
+            // turn starts, so a stray Returns is not a clean field. A test
+            // that wants Returns places it itself.
             p.field.retain(|f| f.card.starts_with("skill:"));
             for k in [key::STAY, key::STUN, key::STUN_START, key::EXILE, key::NO_HAND] {
                 p.state.remove(k);
             }
+            // A start-time gate like the fire pots: a band skill's 「无法获取
+            // [CiRCLE奖励]」 armed during `quick_start` must not leak into a
+            // `clean()`-ed board's CiRCLE pass. The veto is `prop::NO_REWARD`
+            // on the source's rule instance now (`docs/TILES.md`), not a
+            // per-player state latch.
+            for f in p.field.iter_mut() {
+                f.props.remove(prop::NO_REWARD);
+            }
             p.state_set(key::EXILE_TO, -1);
+            // Start-time resources: the value, not the cap.
+            p.state_set(key::FIRE, 0);
+            p.tokens
+                .retain(|t| !t.name.starts_with("P✽P粉丝"));
+        }
+        for f in w.st.board_field.iter_mut() {
+            f.props.remove(prop::NO_REWARD);
         }
         let n = w.st.owners.len();
         w.st.owners = vec![-1; n];
@@ -555,12 +578,14 @@ impl Table {
     }
 
     /// Put `card` on `who`'s field directly (no play, no hooks) -- for
-    /// arranging an interaction. Returns the field uid.
+    /// arranging an interaction. Returns the field uid. The card rule's
+    /// declared properties ride the instance, as in a real placement.
     pub fn place_raw(&mut self, who: usize, card: &str) -> i32 {
         let d = data();
+        let props = rules().card_props(card);
         self.m
             .world_mut()
-            .place_card(&d, who as i32, card, Msg::default())
+            .place_card(&d, who as i32, card, Msg::default(), props)
     }
 
     // ------------------------------------------------------------ observe
@@ -634,6 +659,16 @@ impl Table {
     /// Crystals on `who`'s first field copy of `card` (None if not placed).
     pub fn crystals(&self, who: usize, card: &str) -> Option<i32> {
         self.field(who).iter().find(|f| f.card == card).map(|f| f.crystals)
+    }
+
+    /// Put `n` [奇迹水晶] on `who`'s first field copy of `card`. No-op when the
+    /// card is not placed. This is where band-card crystals go now -- the band
+    /// skill's own instance, not a keyed state.
+    pub fn set_crystals(&mut self, who: usize, card: &str, n: i32) {
+        let w = self.m.world_mut();
+        if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
+            f.crystals = n;
+        }
     }
 
     /// `who`'s bound skills (`skill:<owner>:<skill>`).

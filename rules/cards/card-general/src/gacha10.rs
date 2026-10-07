@@ -28,7 +28,7 @@ fn gacha10(player_id: i32) -> card_sdk::Asked {
     let paid = ctx::pay(player_id, 1500, &Msg::new(key!("gacha10_why")))?;
     // 规则书[手]: 「抽1张卡」
     if paid > 0 {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     }
     Ok(())
 }

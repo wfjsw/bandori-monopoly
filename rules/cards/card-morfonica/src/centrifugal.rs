@@ -31,6 +31,13 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect {
         return false;
     }
+    // 规则书[反击]: 「成为其他角色技能或卡牌的目标」 -- the `target` effect entry
+    // (the designation), not just any effect aimed at the player. The money
+    // pipeline declares a `pay` effect on every [支付]/[获得] and must not open
+    // this window.
+    if !ctx::effect::has(TriggerKind::Target) {
+        return false;
+    }
     // `t.Target` is the one being aimed at (C# `t.Target == seat`).
     if trigger::target() != player_id {
         return false;

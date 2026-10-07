@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:学生会的检查`）:
 //! > 学生会的检查：
-//! >  移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“压”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。
+//! >  移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出，向抽牌堆中加入一张“觉悟”，本回合无法加盖房屋，但可支付那格一层房屋的建造价格一半将此卡放于那个格子上，使下一个经过且移动终点不在此各的你以外的玩家强制停下并触发结算。因此卡强制停下的玩家的结算地租价格为原价格一半。若此卡进入弃牌堆时结算获得的资金小于本卡原应拿到的资金或未结算则获得发动此卡消耗的资金。
 //!
 //! after the move, before settle: stuff a 「压」 into the deck, lock the turn's
 //! builds, and optionally pay half a house's build cost to leave this card on a
@@ -48,13 +48,14 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // 规则书[反击]: 「向抽牌堆中加入一张“压”」 -- C# `H.AddToDeck(i, "R:[衍生] 压")`.
-    ctx::add_to_deck(player_id, "R:[衍生] 压", true);
+    // 规则书[反击] (sheet 2026-10-06 新卡组卡 E3): 「向抽牌堆中加入一张“觉悟”」
+    // (was 「压」) -- C# `H.AddToDeck(i, "R:[衍生] 觉悟")`.
+    ctx::add_to_deck(player_id, "R:[衍生] 觉悟", true);
     ctx::log(
         player_id,
         &Msg::new(key!("council_check_added"))
             .player_id("who", player_id)
-            .card("card", "R:[衍生] 压"),
+            .card("card", "R:[衍生] 觉悟"),
     );
     // 规则书[反击]: 「本回合无法加盖房屋」 -- C# `H._turnCtx.NoBuild = true; H.State.built = true`.
     // 规则书[反击]: 「本回合无法加盖房屋」 -- a turn-wide flag the build gate reads.
@@ -214,7 +215,7 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
                 .n("got", got as i64)
                 .n("expect", expect as i64)
                 .n("paid", paid as i64),
-        );
+        )?;
     } else {
         ctx::log(
             player_id,

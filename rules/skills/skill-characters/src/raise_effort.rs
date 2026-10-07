@@ -13,14 +13,18 @@
 //! face replaces or is discarded at the player's choice; the choice is the
 //! whole point of spending the pot.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{roll_source, state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::RollAfter], mine, on_roll),
     ],
@@ -32,7 +36,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    crate::fire_pot(player_id, 1, 1);
     Ok(())
 }
 
@@ -64,7 +68,10 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("raise_effort_spend"))) {
         return Ok(());
     }
-    let again = ctx::do_move_roll(player_id).max(0);
+    // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so `roll_ask` with
+    // `roll_source::FIRE` raises the `Roll` chain link and 寄于指尖的执念
+    // 「[反击] 当你使用火罐进行掷骰时」 rings on it.
+    let again = ctx::do_move_roll_ask(player_id, roll_source::FIRE).max(0);
     // 「择其一执行」 -- keep whichever the player names.
     let keep = ctx::ask_pick(
         player_id,

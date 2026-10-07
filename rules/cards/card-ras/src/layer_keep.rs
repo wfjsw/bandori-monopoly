@@ -2,12 +2,12 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `RAS:（和奏瑞依）寄于指尖的执念`）:
 //! > （和奏瑞依）寄于指尖的执念：
-//! > 当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。
+//! >  [反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点，在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去该骰点。可保留多个骰点。
 //!
 //! keep the unpicked fire-pot die and later spend fire to reuse it.
 
 use alloc::vec::Vec;
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{roll_source, ChainKind, HookKind};
 
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
@@ -18,6 +18,10 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         On::Play(None, play),
         On::Play(Some(can_use), use_die),
         On::Hook(&[HookKind::RollAfter], roll_after_guard, roll_after),
+        // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
+        // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
+        // source is `roll_source::FIRE` (「使用火罐进行掷骰」).
+        On::Counteract(&[ChainKind::Roll], can_counter_fire, counter_fire),
     ],
 );
 
@@ -56,6 +60,24 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// means the card is not activated at all.
 fn roll_after_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
+}
+
+/// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
+/// source is `roll_source::FIRE` (the fire-pot reroll).
+fn can_counter_fire(player_id: i32) -> bool {
+    trigger::player_id() == player_id && trigger::roll_source() == roll_source::FIRE
+}
+
+/// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
+/// is played from hand; its `play` body places it on the field. The unchosen
+/// die is written by the fire-pot reroll path to the `layerUnused` slot and
+/// picked up by the `RollAfter` hook.
+fn counter_fire(player_id: i32) -> card_sdk::Asked {
+    ctx::log(
+        player_id,
+        &Msg::new(key!("layer_keep_counter")),
+    );
+    Ok(())
 }
 
 fn roll_after(player_id: i32) -> card_sdk::Asked {

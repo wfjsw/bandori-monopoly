@@ -191,7 +191,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_USER, 0);
     // C# `if (!H.Out(user)) yield return H.DrawR(user, 1, CardName)`.
     if user >= 0 && !ctx::player_out(user) {
-        ctx::draw(user, 1);
+        ctx::draw(user, 1)?;
     }
     Ok(())
 }

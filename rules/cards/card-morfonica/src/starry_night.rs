@@ -117,7 +117,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
             player_id,
             1000 * removed,
             &Msg::new(key!("starry_night_remove")).player_id("who", player_id),
-        );
+        )?;
     }
     // 规则书（1）: 「此卡没有[奇迹水晶]时加入弃牌堆」.
     if ctx::crystals() == 0 && trigger::value() <= 0 {
@@ -145,9 +145,9 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             let roller = trigger::player_id();
             let roll = trigger::move_roll().unwrap_or_else(trigger::value);
             if roller == player_id {
-                reroll(player_id, roll);
+                reroll(player_id, roll)?;
             } else if roll % 2 == 0 {
-                attack(player_id, roller, roll);
+                attack(player_id, roller, roll)?;
             }
         }
         TriggerKind::PassTile => {

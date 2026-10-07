@@ -23,6 +23,6 @@ fn great(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("great_added")).player_id("who", player_id),
     );
     // 规则书[手]: 「3. [获得]2000资金」
-    ctx::gain(player_id, 2000, &Msg::new(key!("great_why")));
+    ctx::gain(player_id, 2000, &Msg::new(key!("great_why")))?;
     Ok(())
 }

@@ -23,6 +23,7 @@ mod sys {
     extern "C" {
         // dice & log
         pub fn roll(player_id: i32, count: i32, sides: i32) -> i32;
+        pub fn roll_ask(player_id: i32, count: i32, sides: i32, source: i32) -> i32;
         pub fn log(player_id: i32, ptr: i32, len: i32);
         pub fn effect(player_id: i32, ptr: i32, len: i32);
         // board
@@ -45,6 +46,7 @@ mod sys {
         pub fn tile_group(tile: i32) -> i32;
         pub fn tile_price(tile: i32) -> i32;
         pub fn houses_of(tile: i32) -> i32;
+        pub fn rent_houses_of(tile: i32) -> i32;
         pub fn set_houses(tile: i32, n: i32);
         pub fn add_house(tile: i32, n: i32) -> i32;
         pub fn mortgaged_of(tile: i32) -> i32;
@@ -63,8 +65,14 @@ mod sys {
         pub fn money(player_id: i32) -> i32;
         pub fn gain(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
         pub fn pay(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
+        pub fn pay_to(from: i32, to: i32, amount: i32, ptr: i32, len: i32) -> i32;
         // hand & deck
         pub fn draw(player_id: i32, n: i32) -> i32;
+        pub fn draw_event(player_id: i32) -> i32;
+        pub fn pay_rent(player_id: i32, tile: i32, half: i32) -> i32;
+        pub fn offer_buy(player_id: i32, tile: i32) -> i32;
+        pub fn offer_force_buy(player_id: i32, tile: i32) -> i32;
+        pub fn offer_build(player_id: i32, tile: i32) -> i32;
         pub fn add_to_hand(player_id: i32, ptr: i32, len: i32);
         pub fn add_to_deck(player_id: i32, ptr: i32, len: i32, shuffle: i32);
         pub fn add_to_deck_at(player_id: i32, ptr: i32, len: i32, pos: i32);
@@ -98,6 +106,11 @@ mod sys {
         pub fn crystals() -> i32;
         pub fn set_crystals(n: i32) -> i32;
         pub fn add_crystals(n: i32, max: i32) -> i32;
+        pub fn self_prop(kp: i32, kl: i32) -> i32;
+        pub fn set_self_prop(kp: i32, kl: i32, v: i32) -> i32;
+        pub fn tile_prop(tile: i32, kp: i32, kl: i32) -> i32;
+        pub fn set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32;
+        pub fn settle_circle_reward(player_id: i32, landing: i32) -> i32;
         // marks & tokens
         pub fn add_mark(tile: i32, player_id: i32, kp: i32, kl: i32, np: i32, nl: i32);
         pub fn count_marks(tile: i32, kp: i32, kl: i32, owner: i32) -> i32;
@@ -161,6 +174,7 @@ mod sys {
         pub fn trig_move_total() -> i32;
         pub fn trig_cards(buf: i32, cap: i32) -> i32;
         pub fn trig_move_roll() -> i32;
+        pub fn trig_roll_source() -> i32;
         pub fn trig_set_move_roll(v: i32);
         pub fn trig_set_pay_amount(v: i32);
         pub fn trig_set_pay_target(to: i32);
@@ -206,7 +220,6 @@ mod sys {
         pub fn set_extra_steps(n: i32);
         pub fn set_more_steps(n: i32);
         pub fn set_tag(kp: i32, kl: i32, v: i32);
-        pub fn set_no_circle_reward(on: i32);
         pub fn set_settle_as_agent(on: i32);
         pub fn set_bonus(n: i32, ptr: i32, len: i32);
         pub fn move_stop_at() -> i32;
@@ -319,8 +332,29 @@ fn mj(m: &Msg) -> (i32, i32) {
 // ------------------------------------------------------------- dice & log
 
 /// `H.Roll(seat, count, sides, what)` -- sum of `count` d`sides`, logged as a dice event.
+///
+/// **No [反击] window.** A roll that 「掷骰结算前」 [反击]s must answer (Y.O.L.O
+/// 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」) goes through
+/// [`roll_ask`] instead, which raises the `Roll` chain link.
 pub fn roll(player_id: i32, count: i32, sides: i32) -> i32 {
     unsafe { sys::roll(player_id, count, sides) }
+}
+
+/// [`roll`], but the engine raises the `Roll` chain link on the face first -- the
+/// 「掷骰结算前」 [反击] window -- with the roller, the face and `source` (a
+/// [`crate::abi::roll_source`] code). Returns the face a counteraction left.
+///
+/// `sides == 0` is the `do_move_roll` shape: the face is the sum of the move
+/// plan's dice tables (「使用火罐进行掷骰」 rerolls) rather than `count`d`sides`.
+/// Pauses like [`card_move`] -- the trap unwinds the body and the replay reads
+/// the answer.
+pub fn roll_ask(player_id: i32, count: i32, sides: i32, source: i32) -> i32 {
+    unsafe { sys::roll_ask(player_id, count, sides, source) }
+}
+
+/// [`roll_ask`] for a move-plan reroll (`sides == 0`).
+pub fn do_move_roll_ask(player_id: i32, source: i32) -> i32 {
+    unsafe { sys::roll_ask(player_id, 0, 0, source) }
 }
 
 /// `H.Log("text", seat, text)`.
@@ -436,6 +470,14 @@ pub fn houses_of(tile: i32) -> i32 {
     unsafe { sys::houses_of(tile) }
 }
 
+/// The house count a **rent** lookup reads (`H.RentHouses`) -- the counted
+/// value, which a 「房屋数视为…」 override may lift above [`houses_of`].
+/// Real houses are untouched; build caps, raze and sale still see
+/// [`houses_of`]. 「X为你收费格上的房屋数」 reads this.
+pub fn rent_houses_of(tile: i32) -> i32 {
+    unsafe { sys::rent_houses_of(tile) }
+}
+
 /// Set the tile's house count directly (house transfer effects).
 pub fn set_houses(tile: i32, n: i32) {
     unsafe { sys::set_houses(tile, n) }
@@ -524,9 +566,12 @@ pub fn money_of(player_id: i32) -> i32 {
 }
 
 /// `H.GainR` -- money in, logged with its reason (`src` is a message key).
-pub fn gain(player_id: i32, amount: i32, src: &Msg) -> i32 {
+/// Runs the same `Money` pipeline as [`pay`] (print, game -> player), so
+/// `payAdd` / `payChoose` and the `effect` [反击] window see it; the answer is
+/// the amount that actually moved (0 = cancelled).
+pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(src);
-    unsafe { sys::gain(player_id, amount, p, l) }
+    asked(unsafe { sys::gain(player_id, amount, p, l) })
 }
 
 /// `H.PayR` -- money out (what the player could pay), logged.
@@ -535,19 +580,71 @@ pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     asked(unsafe { sys::pay(player_id, amount, p, l) })
 }
 
-/// Player-to-player money: the receiver gets exactly what the payer could pay.
-/// The usual shape of `H.PayR` + `H.GainR` in a transfer.
+/// Player-to-player money -- one pipeline entry (`pay_to`), so the `effect`
+/// declaration names both the payer and the payee and 「向其他玩家支付」 sees it.
+/// The receiver gets exactly what the payer could pay.
 pub fn transfer(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
-    let got = pay(from, amount, src)?;
-    gain(to, got, src);
-    Ok(got)
+    let (p, l) = mj(src);
+    asked(unsafe { sys::pay_to(from, to, amount, p, l) })
 }
 
 // ------------------------------------------------------------- hand / deck
 
 /// `H.DrawR` -- draw `n` cards; returns how many were drawn.
-pub fn draw(player_id: i32, n: i32) -> i32 {
-    unsafe { sys::draw(player_id, n) }
+///
+/// One **before-draw** point per single card (an N-card draw is N iterations):
+/// each card is adjudicated host-side (`drewBefore` may replace it), and the
+/// plain ones are moved here on the run's own world copy. The after points
+/// (`drawn` / `drew`) fire per card once the run commits. Pauses like [`pay`]
+/// does; the body must `?` the result.
+pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
+    let mut got = 0;
+    for _ in 0..n.max(0) {
+        got += asked(unsafe { sys::draw(player_id, 1) })?;
+    }
+    Ok(got)
+}
+
+/// `H.DrawEvent` -- draw the top event and resolve it (「抽取一个事件卡」).
+/// The card does not enter the hand: it is revealed to every player, its
+/// effect takes effect at once, and it goes to the event discard (reshuffling
+/// that into a new event deck when the deck runs dry). Rulebook 「基础[结算]规则」.
+/// Pauses like [`draw`]; the body must `?` the result.
+pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::draw_event(player_id) })?;
+    Ok(())
+}
+
+/// `H.PayRent` -- 「[支付]拥有格子的玩家格子地契所标记的现等级地租」. The engine's
+/// rent pipeline: the rent table at the tile's current level, or the RiNG
+/// dice-rent (「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」, TODO(规则书)),
+/// and with `half` the agent's 「半价收费（向上取整10）」 cut. Raises `pay`.
+/// Pauses; the body must `?` the result. `docs/TILES.md`.
+pub fn pay_rent(player_id: i32, tile: i32, half: bool) -> Result<(), Prompt> {
+    asked(unsafe { sys::pay_rent(player_id, tile, half as i32) })?;
+    Ok(())
+}
+
+/// `H.OfferBuy` -- 「可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子
+/// 地契和拥有权」 on a non-main landing on unowned land. Pauses; `?` it.
+pub fn offer_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::offer_buy(player_id, tile) })?;
+    Ok(())
+}
+
+/// `H.OfferForceBuy` -- 「可选择[支付]…资金总价的两倍，从该玩家处强行购买该格
+/// 地契，获得的地契仍为抵押状态」 on a mortgaged deed. 「此次购买的价格不受任何
+/// 资金变动效果影响」 is the engine's (it moves money directly). Pauses; `?` it.
+pub fn offer_force_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::offer_force_buy(player_id, tile) })?;
+    Ok(())
+}
+
+/// `H.OfferBuild` -- 「可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 on
+/// one's own land. Pauses; `?` it.
+pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
+    asked(unsafe { sys::offer_build(player_id, tile) })?;
+    Ok(())
 }
 
 pub fn add_to_hand(player_id: i32, card: &str) {
@@ -624,6 +721,21 @@ pub fn hand_count(player_id: i32, card: &str) -> i32 {
 /// Total cards in hand (C# `_hidden[s].hand.Count`).
 pub fn hand_size(player_id: i32) -> i32 {
     unsafe { sys::hand_size(player_id) }
+}
+
+/// The authoritative opening hand size (`state_key::START_HAND`; the engine
+/// seeds it to 2 before the before-match-start point). Effects lower it with
+/// [`inc_start_hand`]; the opening draw reads the final value.
+pub fn start_hand(player_id: i32) -> i32 {
+    state::get(player_id, crate::abi::state_key::START_HAND)
+}
+
+/// 「初始手牌减1」 and kin: move the opening hand size by `delta`, floored at 0.
+/// Live only at the before-match-start point (`DeckBeforeGame`) -- the opening
+/// draw reads the value once, afterwards.
+pub fn inc_start_hand(player_id: i32, delta: i32) {
+    let v = (state::get(player_id, crate::abi::state_key::START_HAND) + delta).max(0);
+    state::set(player_id, crate::abi::state_key::START_HAND, v);
 }
 
 /// Copies of `card` in the player's discard pile.
@@ -752,6 +864,52 @@ pub fn set_crystals(n: i32) -> i32 {
 /// and at `max` (`0` = uncapped); returns the new count.
 pub fn add_crystals(n: i32, max: i32) -> i32 {
     unsafe { sys::add_crystals(n, max) }
+}
+
+/// One declared **property** of the running rule instance (`FieldCard::props`,
+/// see [`crate::abi::prop`]). A tile rule body reads its tile data this way
+/// (`prop::PRICE`, `prop::RENT_PREFIX` + level, …); a key the instance does
+/// not carry reads as its defined default, `0`. The instance is the one
+/// running -- same reasoning as [`crystals`].
+pub fn prop(key: &str) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::self_prop(p, l) }
+}
+
+/// Write a **property** on the running rule instance. What a card that bends a
+/// tile does instead of an engine flag: 黑衣人的补给 sets `prop::NO_REWARD`,
+/// （soyo） sets `prop::GROUP`, and so on. `docs/TILES.md`.
+pub fn set_prop(key: &str, value: i32) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::set_self_prop(p, l, value) }
+}
+
+/// A **property of the rule instance governing `tile`** (`docs/TILES.md`) --
+/// what a card that bends a *tile* writes instead of an engine flag. The
+/// reader is the tile instance; the source owns the arming and the disarming.
+/// A tile with no rule instance reads as the key's default (`0`).
+pub fn tile_prop(tile: i32, key: &str) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::tile_prop(tile, p, l) }
+}
+
+/// Write [`tile_prop`] on the rule instance(s) governing `tile`; returns the
+/// stored value. 「无法获取[CiRCLE奖励]」 arms `prop::NO_REWARD` on CiRCLE's
+/// `tile:circle` instance this way, and the reward step reads it back.
+pub fn set_tile_prop(tile: i32, key: &str, value: i32) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::set_tile_prop(tile, p, l, value) }
+}
+
+/// The [经过] CiRCLE reward -- `H.CircleReward`, the body of `tile:circle`'s
+/// Pass entry. 规则书: 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]」.
+/// The engine runs the whole step: it consults `prop::NO_REWARD` on this
+/// instance, offers 「获得2000资金或抽1张卡」, raises `circleAffected`, and
+/// pays out. `landing` picks the 「获得」 wording for a stop on CiRCLE as
+/// against a pass over it. Pauses; `?` it.
+pub fn settle_circle_reward(player_id: i32, landing: bool) -> Result<(), Prompt> {
+    asked(unsafe { sys::settle_circle_reward(player_id, landing as i32) })?;
+    Ok(())
 }
 
 // --------------------------------------------------------- marks & tokens
@@ -896,10 +1054,21 @@ pub fn inc_slot(player_id: i32, key: &str, by: i32) -> i32 {
 
 // ----------------------------------------------------------- pots & status
 
+/// 「乐队卡 / 团卡」 [奇迹水晶] -- the count on `player_id`'s **band-skill field
+/// instance** (`skill:<band>:<skill>`). 0 when the player has no band skill.
+///
+/// This is one pool with [`crystals`] / [`add_crystals`] inside a band skill's
+/// own handlers (they run on that same instance), so a card that says 「为乐队卡
+/// 添加N个[奇迹水晶]」 feeds exactly what the band skill spends. There is no
+/// second store.
 pub fn band_crystals(player_id: i32) -> i32 {
     unsafe { sys::band_crystals(player_id) }
 }
 
+/// Add `n` to `player_id`'s band-card crystals ([`band_crystals`]). `max` > 0
+/// clamps the result, `max` = 0 is uncapped -- the caller declares the cap
+/// (「最多10个」), the engine does not invent one. Returns the new count; 0 (and
+/// a no-op) when the player has no band skill.
 pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
     unsafe { sys::add_band_crystals(player_id, n, max) }
 }
@@ -1267,9 +1436,6 @@ pub mod plan {
     }
 
     /// C# `NoCircleReward` -- passing CiRCLE pays nothing on this walk.
-    pub fn set_no_circle_reward(on: bool) {
-        unsafe { sys::set_no_circle_reward(on as i32) }
-    }
 
     /// C# `SettleAsAgent`.
     pub fn set_settle_as_agent(on: bool) {
@@ -1586,7 +1752,8 @@ pub mod trigger {
         }
     }
 
-    /// The cards a `drew` trigger is about, in draw order (empty otherwise).
+    /// The cards the trigger is about: the drawn cards on a `drew` trigger (in
+    /// draw order), the skill id on a `skillUsed` trigger. Empty otherwise.
     pub fn cards() -> Vec<String> {
         let need = unsafe { sys::trig_cards(0, 0) };
         if need <= 0 {
@@ -1614,6 +1781,14 @@ pub mod trigger {
     pub fn move_roll() -> Option<i32> {
         let v = unsafe { sys::trig_move_roll() };
         (v >= 0).then_some(v)
+    }
+
+    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
+    /// [`crate::abi::roll_source`] code (`0` = unattributed, `1` = a fire pot,
+    /// `2` = a card, `3` = a skill). 「当你使用火罐进行掷骰时」 reads this.
+    /// [`crate::abi::roll_source::NONE`] on every non-roll trigger.
+    pub fn roll_source() -> i32 {
+        unsafe { sys::trig_roll_source() }
     }
 
     pub fn set_move_roll(v: i32) {

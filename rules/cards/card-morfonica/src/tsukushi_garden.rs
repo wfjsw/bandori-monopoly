@@ -21,7 +21,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 
 fn tsukushi_garden(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「获得100资金」 -- C# `H.GainR(i, 100, CardName)`.
-    ctx::gain(player_id, 100, &Msg::new(key!("tsukushi_garden_why")));
+    ctx::gain(player_id, 100, &Msg::new(key!("tsukushi_garden_why")))?;
     // 规则书: 「投掷1d6并根据结果传送到行动条上对应玩家前一格」
     // 「若玩家数量不足6则超出部分重新计算，ex：在五人局roll到6时，视为选中第一位玩家」
     // -- C# `list` is the still-in players in index order,

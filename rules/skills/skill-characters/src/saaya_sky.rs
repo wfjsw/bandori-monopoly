@@ -22,7 +22,11 @@ const MARK: &str = "saaya标记";
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::PayAfter], other, on_pay_after),
         On::Hook(&[HookKind::RollAfter], mine, on_roll),
         On::Hook(&[HookKind::PayChoose], mine, on_pay),
@@ -39,7 +43,7 @@ fn other(player_id: i32) -> bool {
 
 /// 「初始3，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 5);
+    crate::fire_pot(player_id, 3, 5);
     Ok(())
 }
 
@@ -67,7 +71,7 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, MARK, 1, 1);
     ctx::gain_fire(player_id, 1, &Msg::new(key!("saaya_sky_gain")));
     if !ctx::player_out(payer) {
-        ctx::gain(payer, 200, &Msg::new(key!("saaya_sky_payee")));
+        ctx::gain(payer, 200, &Msg::new(key!("saaya_sky_payee")))?;
     }
     Ok(())
 }

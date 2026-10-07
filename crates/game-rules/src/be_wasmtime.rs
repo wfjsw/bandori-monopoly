@@ -7,8 +7,15 @@
 
 use std::sync::OnceLock;
 
-pub use wasmtime::{Caller, Engine, Instance, Linker, Module, Store};
+pub use wasmtime::{Caller, Engine, Instance, Linker, Module, Store, StoreLimits, StoreLimitsBuilder};
 use wasmtime::{Config, InstancePre};
+
+/// Ceiling on one instance's linear memory. A card run allocates a handful of
+/// small buffers and the guest bump allocator (`card-sdk` `rt`, `MAX_MEMORY`)
+/// refuses past this same figure and traps, so this is the host's matching
+/// backstop: a runaway `memory.grow` stops here instead of eating the process.
+/// 16 MiB is far above any real effect (the modules boot at ~1 MiB).
+pub const MAX_MEMORY_BYTES: usize = 16 * 1024 * 1024;
 
 /// Host errors and traps. The "a prompt is waiting" signal is a marker error the
 /// host raises instead of a plain message, so `is_need_input` can recognize it.

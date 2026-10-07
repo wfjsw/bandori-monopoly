@@ -44,11 +44,11 @@ fn eve_bushido(player_id: i32) -> card_sdk::Asked {
         player_id,
         n * 60,
         &Msg::new(key!("eve_bushido_why")).i("n", n as i64),
-    );
+    )?;
     Ok(())
 }
 
-/// C# `CardEveBushido.Drew` -- once per draw batch, add a crystal (cap 3).
+/// C# `CardEveBushido.Drew` -- per single card drawn, add a crystal (cap 3).
 /// 规则书[持续]（1）: 「[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）」
 /// Pure guard for [`drew`] -- the activation gate. `false`
 /// means the card is not activated at all.
@@ -56,7 +56,7 @@ fn drew_guard(player_id: i32) -> bool {
     ctx::is_placed() && trigger::player_id() == player_id
 }
 
-fn drew(player_id: i32) -> card_sdk::Asked {
+fn drew(_player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
         return Ok(());
     }

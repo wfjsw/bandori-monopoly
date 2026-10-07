@@ -136,7 +136,7 @@ impl Cx<'_> {
     pub(crate) fn do_pick(&mut self, i: usize, character: &str) {
         self.w.st.players[i].character = character.into();
         let d = self.data;
-        self.w.bind_skills(d, i as i32);
+        self.w.bind_skills(d, self.rules, i as i32);
         self.w.log(
             "pick",
             i as i32,

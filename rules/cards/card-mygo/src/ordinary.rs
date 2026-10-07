@@ -22,6 +22,13 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
         return false;
     }
+    // 规则书[反击]: 「异常移动效果」 -- the abnormal family, carried as the
+    // chain's `abnormal` effect entry. Not just any effect aimed at the player:
+    // the money pipeline declares a `pay` effect on every [支付]/[获得] and must
+    // not open this window.
+    if !ctx::effect::has(TriggerKind::Abnormal) {
+        return false;
+    }
     // C# also requires `H.V(seat, "lastWalk") > 0` -- there must be a previous
     // non-teleport main move whose length can be copied. The engine writes the
     // slot (`NoteWalk`: `SetV(player_id, "lastWalk", steps + 1)` after each

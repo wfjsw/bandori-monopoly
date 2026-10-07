@@ -662,9 +662,11 @@ fn fire_up_cost() {
     let world = TestWorld::new(1);
     let call = Call::Play { card, player_id: 0 };
     // One cold run to pay first-time costs, and to prove the entry really runs.
+    // `R:[衍生] 压` gains money, which is now a pipeline entry that pauses for the
+    // host (`NeedHost`); any of Done / NeedInput / NeedHost proves the entry ran.
     assert!(matches!(
         r.run(&world, call, &[]),
-        Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_))
+        Ok(Outcome::Done(_)) | Ok(Outcome::NeedInput(_)) | Ok(Outcome::NeedHost(_, _))
     ));
 
     let n = 100;

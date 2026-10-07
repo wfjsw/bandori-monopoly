@@ -79,16 +79,52 @@ pub mod rt;
 ///     On::Gate(&[GateKind::ImmuneAll], immune),
 /// ]);
 /// ```
+///
+/// A card also declares its **static properties** here -- named `key -> i32`
+/// facts about the card rule, not effects that run at a trigger -- so the
+/// engine never has to read them back out of the rulebook prose (which would
+/// break the moment a card is reworded). The keys are named constants in
+/// [`abi::prop`]; they ride the manifest to the host and the engine queries
+/// them by key (`CardRules::card_prop`), default `0`.
+///
+/// ```ignore
+/// use card_sdk::abi::prop;
+/// // 规则书[持续]（1）: 「手卡上限数量减1」 -- C# `Card.HandLimitDelta`
+/// pub const CUT: CardDef = CardDef::new("PP:不要背负期待", &[...])
+///     .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
+/// // 规则书: 「（此卡可在眩晕时打出）」 -- C# `Card.PlayableStunned`
+/// pub const H: CardDef = CardDef::new("MyGO:壱雫空", &[...])
+///     .props(&[(prop::PLAYABLE_STUNNED, 1)]);
+/// ```
 #[derive(Clone, Copy)]
 pub struct CardDef {
     /// Exact id from `game-data/cards.json`, e.g. `"AG:Y.O.L.O"`.
     pub id: &'static str,
     pub on: &'static [On],
+    /// The card's declared static properties, `(key, value)` in declaration
+    /// order (the manifest sorts them by key for deterministic wire bytes).
+    /// Keys are [`abi::prop`] constants; a key not declared reads as its
+    /// default (`0`).
+    pub props: &'static [(&'static str, i32)],
 }
 
 impl CardDef {
     pub const fn new(id: &'static str, on: &'static [On]) -> Self {
-        Self { id, on }
+        Self {
+            id,
+            on,
+            props: &[],
+        }
+    }
+
+    /// Declare this card's static properties (see [`abi::prop`] for the keys
+    /// the engine reads). Replaces any earlier `props` call.
+    pub const fn props(self, props: &'static [(&'static str, i32)]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props,
+        }
     }
 }
 
@@ -128,6 +164,13 @@ pub enum On {
     RollPlan(fn(player_id: i32) -> Asked),
     /// What `ctx::at_turn_end` schedules: run once at that turn end.
     AtEnd(fn(player_id: i32) -> Asked),
+    /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
+    /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
+    /// `CardDef` per tile kind and this is their body; the engine keeps
+    /// rent / buy / build / draw-event as `ctx` primitives so it stays thin.
+    /// Runs inside the settle chain: a counteraction to the settle link, or a
+    /// field hook that replaces the body, shapes whether and how it runs.
+    Settle(fn(player_id: i32) -> Asked),
 }
 
 impl On {
@@ -139,6 +182,7 @@ impl On {
             On::Gate(..) => abi::OnKind::Gate,
             On::AtEnd(..) => abi::OnKind::AtEnd,
             On::RollPlan(..) => abi::OnKind::RollPlan,
+            On::Settle(..) => abi::OnKind::Settle,
         }
     }
 

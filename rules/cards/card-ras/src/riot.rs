@@ -52,7 +52,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     }
     for (p, n) in redraw {
         if n > 0 {
-            ctx::draw(p, n);
+            ctx::draw(p, n)?;
         }
     }
     Ok(())

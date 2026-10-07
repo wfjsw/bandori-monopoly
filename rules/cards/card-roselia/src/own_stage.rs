@@ -16,6 +16,20 @@ pub const OWN_STAGE: CardDef = CardDef::new(
     &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
 );
 
+/// The [异常移动效果] this chain link declared, as its `AbKind`.
+///
+/// `trigger::abnormal_kind()` reads `t.Ab.Kind` on the settlement-hook kinds
+/// (`abnormal` / `abnormalGuard`); inside the `effect` [反击] window the kind
+/// is `Effect` and the abnormal rides the link's effect list instead -- each
+/// entry's `value` is its `AbKind`.
+fn abnormal_kind() -> Option<AbKind> {
+    (0..ctx::effect::count()).find_map(|i| {
+        (ctx::effect::kind(i) == TriggerKind::Abnormal)
+            .then(|| AbKind::from_i32(ctx::effect::value(i)))
+            .flatten()
+    })
+}
+
 /// 规则书[反击]: 「[反击] 受到[除外]以外的异常移动效果影响时可打出此卡」
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「受到[除外]以外的异常移动效果影响时」 -- C# `t.Kind == "abnormal" &&
@@ -23,9 +37,11 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
         return false;
     }
-    // 规则书[反击]: 「[除外]以外」 -- C# `t.Ab != null && t.Ab.Kind != "exile"`
-    // (`trigger::abnormal_kind()` is `t.Ab.Kind`).
-    trigger::abnormal_kind().is_some_and(|k| k != AbKind::Exile)
+    // 规则书[反击]: 「[除外]以外」 -- C# `t.Ab != null && t.Ab.Kind != "exile"`.
+    // The `abnormal` effect entry is the [异常移动效果] family (传送/停留/晕眩/
+    // 除外/强制移动/强制停下/反方向); a `pay` entry on the money pipeline must
+    // not open this window.
+    abnormal_kind().is_some_and(|k| k != AbKind::Exile)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -44,7 +60,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「（或无法移动的回合结束时）」 -- C# `H.SetV(i, "stageEnd", yes ? 1 : 2)`
     // when the abnormal is stay/stun (C# `CardOwnStage.Counteract` branches on
     // `c.Trigger.Ab.Kind`).
-    match trigger::abnormal_kind() {
+    match abnormal_kind() {
         Some(AbKind::Stay) | Some(AbKind::Stun) => {
             ctx::set_slot(player_id, "stageEnd", if yes { 1 } else { 2 });
         }

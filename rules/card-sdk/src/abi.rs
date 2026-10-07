@@ -63,7 +63,7 @@ use alloc::{string::String, vec::Vec};
 ///      pre-v21 names, kept here as history).
 /// v23: hook kinds from the C# call sites -- TurnEndBefore / TurnEndAfter,
 ///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
-///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleInstead, BeforeOut,
+///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleBody, BeforeOut,
 ///      Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
 ///      `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
 ///      the player's next turn, bit 2 = before the wear-off, C# `AtEnd`).
@@ -110,7 +110,53 @@ use alloc::{string::String, vec::Vec};
 ///      guest entry points are `counteract` / `can_counteract` (formerly
 ///      `react` / `can_react`). Only the `counteracted` string is on the wire;
 ///      the rest is naming.
-pub const ABI_VERSION: i32 = 28;
+/// v29: two semantic breaks share this bump.
+///      (a) **Band crystals are the band-skill field instance's crystals.**
+///      `band_crystals` / `add_band_crystals` no longer touch the keyed state
+///      `bandCrystals` (deleted, along with `MatchPlayer::band_crystals`): they
+///      are sugar over the player's band-skill field card (`skill:<band>:<skill>`,
+///      `FieldCard::band_skill`) -- the same instance `crystals` / `add_crystals`
+///      touch from inside a band skill's own handler, so 「乐队卡 / 团卡」 crystal
+///      text is one pool. `max` = 0 now means uncapped (it used to clamp the
+///      count to 0); `add_band_crystals` returns the new count (it used to
+///      return the delta). A player with no band skill reads 0 and every write
+///      is a no-op; a swapped or removed band card takes its crystals with it.
+///      (b) the match-start / per-draw raise points (see the `TriggerKind`
+///      notes on `DeckBeforeGame` / `DeckAtGameStart` / `Drawn` / `Drew`, and
+///      `prop::NO_REWARD`).
+/// v30: card-declared static **properties** ride the manifest -- a generic
+///      `props` map of named `key -> i32` values on `ManifestEntry`, declared
+///      by `CardDef::props`, replacing the engine's rulebook-prose matching
+///      (「手卡上限数量减1」 / 「可在眩晕时打出」). The keys the engine reads are
+///      named constants in [`prop`] (mirrored in `game_core::state::prop`):
+///      `handLimitDelta` (C# `Card.HandLimitDelta`) and `playableStunned`
+///      (C# `Card.PlayableStunned`). The host keeps them on `CardInfo`, the
+///      engine queries `CardRules::card_prop(card, key)` (default 0) and
+///      stamps the whole map onto the `FieldCard` at placement.
+/// v31: tile rule instances (`docs/TILES.md`) -- `OnKind::Settle` (a rule's
+///      settle body), the tile-data `prop` keys (`price` / `house` / `group` /
+///      `buildMax` / `rentLen` / `rent:N` / `ringMult`), `place_card` on
+///      `BOARD_OWNER`, and the `ctx::settle_*` primitives.
+/// v32: the tile-bending surface replaces the engine's tile flags
+///      (`docs/TILES.md` Phase 3). `tile_prop` / `set_tile_prop` read and write
+///      a rule instance's props **by tile**; `settle_circle_reward` is the
+///      [经过] CiRCLE reward (`tile:circle`'s Pass entry). `prop::NO_REWARD`
+///      replaces the `noCircleReward` plan flag and per-player state latch,
+///      `prop::RENT_FACTOR` / `PAY_FACTOR` replace `rent_factor` / `pay_factor`,
+///      `prop::BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` replace the turn-ctx
+///      buy knobs, `prop::NO_BUILD` replaces the `noBuild` state key, and
+///      `prop::GROUP` replaces `extraColor:`. Board-owned instances now hear
+///      the field hooks they declare (`passTile` &c.).
+/// v33: `roll_ask` (a card-/skill-driven roll that raises the `Roll` chain
+///      link -- the 「掷骰结算前」 [反击] window -- with the roller, the face and
+///      a `t.Roll.Source` code) and `trig_roll_source` /
+///      [`roll_source`]`::{NONE,FIRE,CARD,SKILL}`. `ctx::roll` is unchanged
+///      (no window); a roll that [反击]s must answer goes through
+///      `ctx::roll_ask` / `ctx::do_move_roll_ask`.
+/// v34: `prop::RENT_HOUSES` (virtual rent-house-count, 「房屋数视为…」 -- gone
+///      with a placed card) and `ctx::rent_houses_of` (the counted value the
+///      rent lookup reads). `ctx::houses_of` stays real.
+pub const ABI_VERSION: i32 = 34;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -148,18 +194,22 @@ pub mod state_key {
     /// Fire pots held. Its `max` is the mandated cap, written by the character
     /// skill -- and that is the one number to show.
     pub const FIRE: &str = "fire";
-    /// Band crystals for band skills.
-    pub const BAND_CRYSTALS: &str = "bandCrystals";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
     /// Layers of "cannot be stopped".
     pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit.
     pub const HAND_LIMIT: &str = "handLimit";
+    /// The authoritative opening hand size (default 2; effects may lower it,
+    /// minimum 0). Written at the before-match-start point, read by the opening
+    /// draw. Replaces the old ignored `startHandMinus` slot.
+    pub const START_HAND: &str = "startHand";
     /// Skill-system scratch.
     pub const SKILL_STATE: &str = "skillState";
     /// 「[拥有者]不可盖房」 -- `why_not_build_on` refuses while this is set.
     pub const NO_BUILD: &str = "noBuild";
+    // 「无法获取[CiRCLE奖励]」 is no longer a per-player state latch: it is
+    // `prop::NO_REWARD` on the source's rule instance (`docs/TILES.md`).
 }
 
 /// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
@@ -168,6 +218,92 @@ pub mod state_key {
 pub mod mark {
     /// Carrying tiles cannot be named as a target (`H.TargetTile` answers -1).
     pub const NO_TARGET: &str = "noTarget";
+}
+
+/// Named **card properties** -- the keys of a `CardDef`'s `props` map. A
+/// property is a static fact about the card rule (`key -> i32`), not an effect
+/// that runs at a trigger: the engine reads it back by key and never by
+/// matching rulebook prose. Mirrors `game_core::state::prop` (the two crates
+/// cannot share a definition; keep them in step).
+///
+/// Every key has a defined default of `0` when a card does not declare it.
+pub mod prop {
+    /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`) while the card
+    /// sits on the field. Stamped onto the field instance at placement and
+    /// gone with the card. `-1` cuts the owner's hand limit; a positive value
+    /// lifts it; `0` (the default) does nothing.
+    pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
+    /// 「可在眩晕时打出」 (C# `Card.PlayableStunned`): `1` = the card skips the
+    /// stun gate when played from hand. The exile and no-hand gates have no
+    /// such exception in the pool. Default `0` (blocked by stun).
+    pub const PLAYABLE_STUNNED: &str = "playableStunned";
+    /// Virtual **rent** house count (「房屋数视为…」, C# `H.RentHouses` + `boosted`).
+    /// Presence is the override -- a house count of `0` is a legitimate value,
+    /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is
+    /// untouched: build caps, raze, sale and asset value still see the standing
+    /// houses. Two write surfaces, matching the two clause shapes:
+    /// * `ctx::set_prop` on a placed card of the tile's **owner** -- 「你的所有
+    ///   格子上的房屋数视为…」. Gone with the card.
+    /// * `ctx::set_tile_prop` on the tile's rule instance -- a tile-scoped
+    ///   override. The source arms and disarms it.
+    /// The rent lookup (`pay_rent` / `rent_of` / `ctx::rent_houses_of`) reads
+    /// it; `ctx::houses_of` stays real.
+    pub const RENT_HOUSES: &str = "rentHouses";
+
+    // ---------------------------------------------------------- tile data
+    // Stamped onto a board-owned tile rule instance at bind time (from
+    // `TileData`), read back by the settle bodies and the end-step buy/build
+    // gates. Mirrors `game_core::state::prop`; see `docs/TILES.md`.
+
+    /// Land price (houses are extra). `TileData.price`.
+    pub const PRICE: &str = "price";
+    /// Build cost per level. `TileData.house`.
+    pub const HOUSE: &str = "house";
+    /// Colour group (`TileData.group`). [`ALL_COLORS`] is 「该格获得所有颜色」.
+    pub const GROUP: &str = "group";
+    /// The tile's value that means 「该格获得所有颜色」.
+    pub const ALL_COLORS: i32 = -2;
+    /// 「每块地有标注的等级上限」 -- max houses. `TileData.rent.len() - 1`.
+    pub const BUILD_MAX: &str = "buildMax";
+    /// Length of the rent table (levels = houses + 1).
+    pub const RENT_LEN: &str = "rentLen";
+    /// Rent at level N: `rent:0` … `rent:rentLen-1` (`TileData.rent`).
+    pub const RENT_PREFIX: &str = "rent:";
+    /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
+    pub const RING_MULT: &str = "ringMult";
+
+    // ------------------------------------------------- tile rule modifiers
+    // What a card that bends a tile writes onto its rule instance, replacing
+    // the engine flags these used to be.
+
+    /// 「无法获取[CiRCLE奖励]」 on this tile's `tile:circle` instance.
+    pub const NO_REWARD: &str = "noReward";
+    /// Rent scale in milli-units (500 = x0.5). Replaces `rent_factor`.
+    pub const RENT_FACTOR: &str = "rentFactor";
+    /// Payment scale in milli-units (500 = x0.5). Replaces `pay_factor`.
+    pub const PAY_FACTOR: &str = "payFactor";
+    /// 「购买格子时[消耗]资金降低N（最低0）」. Replaces `buy_discount`.
+    pub const BUY_DISCOUNT: &str = "buyDiscount";
+    /// 「购买格子不[消耗]资金」. Replaces `free_buy`.
+    pub const FREE_BUY: &str = "freeBuy";
+    /// 「如果购买则拆除那个格子上的所有房屋」. Replaces `raze_on_buy`.
+    pub const RAZE_ON_BUY: &str = "razeOnBuy";
+    /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
+    pub const NO_BUILD: &str = "noBuild";
+}
+
+/// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from. Read by
+/// 「当你使用火罐进行掷骰时」 (寄于指尖的执念) and kin. A `roll` / `moveRoll`
+/// trigger carries one; every other trigger reads [`roll_source::NONE`].
+pub mod roll_source {
+    /// Unattributed (the engine's own move roll, or a roll with no named source).
+    pub const NONE: i32 = 0;
+    /// A [火罐]-funded roll (「使用火罐进行掷骰」).
+    pub const FIRE: i32 = 1;
+    /// A hand/field card's own roll (`ctx::roll_ask` from a card body).
+    pub const CARD: i32 = 2;
+    /// A skill press's roll (`ctx::roll_ask` from a skill body).
+    pub const SKILL: i32 = 3;
 }
 
 /// `i32_exit` status the host uses to abort a run that reached an unanswered prompt.
@@ -425,7 +561,9 @@ pub enum TriggerKind {
     // field effect from a hand counteraction by its kind alone.
     /// `Fx.TurnEnd` -- a turn just ended (any player's).
     TurnEnd = 45,
-    /// `Fx.Drawn` -- the player drew cards.
+    /// `Fx.Drawn` -- **one card was drawn** (per single card; `t.card` names it,
+    /// still in hand). This is the drawn card's *own* hook (C# `AfterDraw`);
+    /// the per-draw field-card points are [`Self::DrewBefore`] / [`Self::Drew`].
     Drawn = 46,
     /// `Fx.PassTile` -- the player passed/stopped on a tile during a move.
     PassTile = 47,
@@ -451,18 +589,31 @@ pub enum TriggerKind {
     PayAt = 57,
     /// v23: C# `Card.OnDiscarded` -- this card (named on `t.card`) just went to the discard pile.
     Discarded = 58,
-    /// v23: C# `Card.DeckBeforeGame` -- this card is in a draw pile before the opening deal.
+    /// v23: **before match start** (C# `Card.DeckBeforeGame`) -- raised once per
+    /// player before the opening hands are drawn, and dispatched to *every*
+    /// effect source: field cards including skills (per player, in field order)
+    /// and the card ids in that player's piles/hands. Start positions and the
+    /// authoritative initial hand size are decided here.
     DeckBeforeGame = 59,
-    /// v23: C# `Card.DeckAtGameStart` -- this card is in a draw pile or hand after the mulligan.
+    /// v23: **after match start** (C# `Card.DeckAtGameStart`) -- raised once per
+    /// player after the opening draw and mulligan, dispatched to every effect
+    /// source as [`Self::DeckBeforeGame`] is. Initial tokens/resources (fire
+    /// pots 「初始N」, P✽P fans) are created here.
     DeckAtGameStart = 60,
-    /// v23: C# `Fx.Drew` -- a player drew `t.value` cards (after each card's own `Drawn`).
+    /// v23: C# `Fx.Drew` -- **after one card was drawn** (per single card; an
+    /// N-card draw raises this N times, each payload naming one card). This is
+    /// the per-draw field-card point; the drawn card's own hook is
+    /// [`Self::Drawn`].
     Drew = 61,
     /// v23: C# `Fx.Reshuffled` -- a player's discard pile was shuffled back into its deck.
     Reshuffled = 62,
     /// v23: C# `Fx.Bought` -- a player became the owner of `t.tile` (buy or auction).
     Bought = 63,
-    /// v23: C# `Fx.SettleInstead` -- a field card may replace the landed tile's effect: do it and call `trigger::set_cancelled()`.
-    SettleInstead = 64,
+    /// v23/31: the **settle body** point -- a field card placed on the tile may
+    /// replace the tile's rule instances' effect: do it and call
+    /// `trigger::set_cancelled()`. Was `SettleInstead` (C# `Fx.SettleInstead`);
+    /// renamed when the body became the tile's rule instances (`docs/TILES.md`).
+    SettleBody = 64,
     /// v23: C# `Fx.BeforeOut` -- a player is about to leave the game (bankrupt or forfeit).
     BeforeOut = 65,
     /// v23: C# `Teleported` -- a teleport finished (after its settlement, or at once if it does not settle).
@@ -516,6 +667,14 @@ pub enum TriggerKind {
     /// here instead of testing the count at each spend site, so a count that is
     /// emptied by *any* path still leaves the field.
     CrystalsChanged = 76,
+    /// v30: **before one card is drawn** (per single card; an N-card draw raises
+    /// this N times). `t.card` is the card that would be drawn (the deck's top,
+    /// or empty when the pile is dry). This is the per-draw *replacement* point:
+    /// a hook that wants to replace the draw calls `trigger::set_cancelled()`
+    /// and performs its own look/pick -- whatever it adds to the hand is the
+    /// replacement draw, and the after points ([`Self::Drawn`] / [`Self::Drew`])
+    /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
+    DrewBefore = 77,
 }
 
 impl TriggerKind {
@@ -584,7 +743,7 @@ impl TriggerKind {
             61 => Self::Drew,
             62 => Self::Reshuffled,
             63 => Self::Bought,
-            64 => Self::SettleInstead,
+            64 => Self::SettleBody,
             65 => Self::BeforeOut,
             66 => Self::Teleported,
             67 => Self::RollPlan,
@@ -597,6 +756,7 @@ impl TriggerKind {
             73 => Self::FireSpent,
             74 => Self::SkillUsed,
             76 => Self::CrystalsChanged,
+            77 => Self::DrewBefore,
             _ => Self::None,
         }
     }
@@ -668,7 +828,7 @@ impl TriggerKind {
             Self::Drew => "drew",
             Self::Reshuffled => "reshuffled",
             Self::Bought => "bought",
-            Self::SettleInstead => "settleInstead",
+            Self::SettleBody => "settleBody",
             Self::BeforeOut => "beforeOut",
             Self::Teleported => "teleported",
             Self::RollPlan => "rollPlan",
@@ -681,6 +841,7 @@ impl TriggerKind {
             Self::FireSpent => "fireSpent",
             Self::SkillUsed => "skillUsed",
             Self::CrystalsChanged => "crystalsChanged",
+            Self::DrewBefore => "drewBefore",
         }
     }
 
@@ -750,7 +911,7 @@ impl TriggerKind {
             "drew" => Self::Drew,
             "reshuffled" => Self::Reshuffled,
             "bought" => Self::Bought,
-            "settleInstead" => Self::SettleInstead,
+            "settleBody" => Self::SettleBody,
             "beforeOut" => Self::BeforeOut,
             "teleported" => Self::Teleported,
             "rollPlan" => Self::RollPlan,
@@ -763,6 +924,7 @@ impl TriggerKind {
             "fireSpent" => Self::FireSpent,
             "skillUsed" => Self::SkillUsed,
             "crystalsChanged" => Self::CrystalsChanged,
+            "drewBefore" => Self::DrewBefore,
             _ => Self::None,
         }
     }
@@ -859,6 +1021,12 @@ declare_kinds! {
         PassPlayer = 5,
         SettleBefore = 6,
         Settle = 7,
+        /// v32: the settle **body** is its own chain link (`docs/TILES.md`), so
+        /// 「replace the body」 (「将本次结算改为…」) and 「the settle never
+        /// happened」 are two separate [反击] targets. Cancelling `Settle` skips
+        /// the body *and* `settleAfter`; cancelling `SettleBody` skips only the
+        /// body and `settleAfter` still runs.
+        SettleBody = 64,
         Mortgage = 8,
         Paid = 10,
         Bankrupt = 11,
@@ -977,7 +1145,11 @@ declare_kinds! {
         Drew = 61,
         Reshuffled = 62,
         Bought = 63,
-        SettleInstead = 64,
+        /// The settle **body** (`docs/TILES.md`) -- a field card placed on the
+        /// tile may `set_cancelled()` here to *replace* the body (Parking Space,
+        /// 笑容大游行). The same kind is also a [`ChainKind`] (v32), so a hand
+        /// card may [反击] the body as its own link.
+        SettleBody = 64,
         BeforeOut = 65,
         Teleported = 66,
         RollPlan = 67,
@@ -985,6 +1157,7 @@ declare_kinds! {
         SkillUsed = 74,
         HouseAdded = 75,
         CrystalsChanged = 76,
+        DrewBefore = 77,
     }
 }
 
@@ -1034,6 +1207,12 @@ pub struct ManifestEntry {
     /// The card's entry points, in declaration order (the `entry` index the
     /// host passes back to `bandori_on`).
     pub on: Vec<ManifestOn>,
+    /// The card's declared static **properties** (`CardDef::props`), as
+    /// `(key, value)` pairs sorted by key for deterministic wire bytes. The
+    /// keys the engine reads are named in [`prop`]; a key a card does not
+    /// declare reads as its default (`0`). Host side becomes a `BTreeMap`.
+    #[serde(default)]
+    pub props: Vec<(String, i32)>,
 }
 
 /// One entry point in the manifest: what it is and which trigger kinds it
@@ -1057,6 +1236,10 @@ pub enum OnKind {
     AtEnd = 4,
     RollPlan = 5,
     Gate = 6,
+    /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle`. Tile
+    /// rules (`tile:*`) are one per board tile kind and this is what runs when
+    /// that tile is [结算]d.
+    Settle = 7,
 }
 
 impl OnKind {
@@ -1068,6 +1251,7 @@ impl OnKind {
             4 => Self::AtEnd,
             5 => Self::RollPlan,
             6 => Self::Gate,
+            7 => Self::Settle,
             _ => return None,
         })
     }

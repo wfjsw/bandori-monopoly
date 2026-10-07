@@ -226,6 +226,7 @@
   "log.no_events": "没有事件可以抽了",
   "log.order": "掷 1d20 决定行动顺序：{{rolls}}",
   "log.order_rerolled": "掷 1d20 决定行动顺序：{{rolls}}（平点的重掷过）",
+  "log.overlap": "{{who}} 与 {{to}} 重合，触发[重叠]",
   "log.paid_for": "{{who}} 为 {{tile}} 付了 {{amount}}",
   "log.paid_for_house": "{{who}} 为 {{tile}} 的房屋付了 {{amount}}",
   "log.part.auction_sample": "（从 {{n}} 块里随机抽 3 块）",

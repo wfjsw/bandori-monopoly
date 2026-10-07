@@ -17,8 +17,10 @@ pub const SOYO_COLORS: CardDef = CardDef::new(
     ],
 );
 
-/// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent on an agent
-/// tile whose colour differs from this card's.
+/// 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时」 -- rent charged
+/// on this card's own tile. The card's tile 「获得所有颜色」, so any agent
+/// settling it sees a "different colour" tile and the charge is halved again on
+/// top of the agent's half.
 fn on_rent(player_id: i32) -> bool {
     if !ctx::is_placed() {
         return false;
@@ -30,16 +32,13 @@ fn on_rent(player_id: i32) -> bool {
         return false;
     }
     let t = ctx::trigger::tile();
-    if t < 0 || !ctx::is_agent(t) {
+    if t < 0 {
         return false;
     }
     let Some(mine) = ctx::self_tile() else {
         return false;
     };
-    if mine < 0 {
-        return false;
-    }
-    ctx::tile_group(t) != ctx::tile_group(mine)
+    mine >= 0 && t == mine
 }
 
 /// 「收费在地产商的减半收费基础上额外减半」.

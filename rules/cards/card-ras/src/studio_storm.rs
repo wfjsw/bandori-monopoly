@@ -5,7 +5,7 @@
 //!
 //! > （1）当你位于你拥有的livehouse格子上时可将此卡放置在当前格子上，每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）
 //!
-//! > （2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的(4-X)/4倍，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动
+//! > （2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆且对那个玩家进行一次相当于此卡所在格子普通[结算]的(4-X)/4倍价格的收费，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动
 //!
 //! placed on your Live House; CiRCLE passes charge it, a nearby settle spends it.
 
@@ -133,8 +133,9 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
             .i("x", x as i64),
     );
     // 「且那个玩家进行一次此卡所在格子的[结算]，此次[结算]的地租为普通[结算]的
-    // (4-X)/4倍」 -- the mover settles here at that rent factor (milli-units).
-    ctx::plan::set_rent_factor(4000 - 1000 * x);
+    // (4-X)/4倍」 -- the mover settles here at that rent factor (milli-units:
+    // 1000 * (4-X)/4 = 250 * (4-X)).
+    ctx::plan::set_rent_factor(250 * (4 - x));
     ctx::card_settle_at(trigger::player_id(), tile, true);
     Ok(())
 }

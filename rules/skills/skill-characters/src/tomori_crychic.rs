@@ -20,9 +20,14 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::RollAfter], mine, on_roll),
+        On::AtEnd(settle_now),
     ],
 );
 
@@ -32,7 +37,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始1，上限1」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    crate::fire_pot(player_id, 1, 1);
     Ok(())
 }
 
@@ -52,8 +57,9 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::give_stay(player_id, 1);
-    // 「并在回合结束时触发结算」 -- the engine's `settleAtEnd` counter.
-    ctx::inc_slot(player_id, "settleAtEnd", 1);
+    // 「并在回合结束时触发结算」 -- a scheduled turn-end rule op
+    // (`docs/TILES.md`), not an engine counter.
+    ctx::before_turn_end(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("tomori_crychic_stay")).i("n", face as i64),
@@ -82,5 +88,16 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     }
     ctx::state::add(player_id, state_key::STAY, -1);
     ctx::log(player_id, &Msg::new(key!("tomori_crychic_cleared")));
+    Ok(())
+}
+
+/// （3）「并在回合结束时触发结算」 -- `H.SettleAt` on the square the player is
+/// standing on (`docs/TILES.md`: a scheduling clause, not an engine counter).
+fn settle_now(player_id: i32) -> card_sdk::Asked {
+    let at = ctx::player_pos(player_id);
+    if at < 0 {
+        return Ok(());
+    }
+    ctx::card_settle_at(player_id, at, false);
     Ok(())
 }

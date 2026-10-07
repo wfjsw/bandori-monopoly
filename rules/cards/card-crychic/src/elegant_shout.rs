@@ -41,6 +41,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// C# `ElegantFx.TurnEnd` -- one draw at the end of the player's next turn.
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你的下回合结束时抽一张卡」
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     Ok(())
 }

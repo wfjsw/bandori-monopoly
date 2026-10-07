@@ -51,7 +51,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // (= `_tiles[t].price / 2`) with a raw money add (not `H.GainR`).
         let v = ctx::mortgage_value(t);
         if v > 0 {
-            ctx::gain(player_id, v, &Msg::new(key!("tomoe_savior_why")));
+            ctx::gain(player_id, v, &Msg::new(key!("tomoe_savior_why")))?;
         }
         // 规则书[反击]: 「将地契翻回」 -- C# `H.State.mortgaged[t] = false`.
         ctx::set_mortgaged(t, false);

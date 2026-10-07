@@ -1,10 +1,11 @@
 //! Rulebook black-box tests: Pastel✽Palettes (PP) cards, character skills,
 //! band skill. Spec: `target/scratch/rb/pp.md` (live Google Sheet text).
 //!
-//! Fan tokens are `P✽P粉丝(正)` / `P✽P粉丝(反)`. 「乐队卡」 crystals live in two
-//! engine pools: `bandCrystals` state (where TITLE IDOL / 同一个梦想 write) and
-//! the band skill's field crystals (where (4) accrues and spends). Book
-//! assertions about 「乐队卡」 target the spendable pool.
+//! Fan tokens are `P✽P粉丝(正)` / `P✽P粉丝(反)`. 「乐队卡」 crystals live in
+//! **one** pool: the Pastel✽Palettes band skill's own field-card crystals
+//! (`skill:Pastel✽Palettes:与偶像一起`), which is what (4) accrues and spends
+//! and what TITLE IDOL / 同一个梦想 write. Book assertions about 「乐队卡」
+//! target that pool.
 
 mod common;
 use common::*;
@@ -68,14 +69,22 @@ fn walk_onto_y(t: &mut Table, who: usize, from: usize, tile: usize, y: i32) {
     let steps = ((tile + 60 - from) % 60) as i32;
     t.dice(&[steps.max(1)]);
     t.roll(who).unwrap();
-    while t.prompt().is_some() {
+    // Bounded so a runaway prompt loop fails the assertion below instead of
+    // hanging the suite.
+    for _ in 0..30 {
+        if t.prompt().is_none() {
+            return;
+        }
         let p = t.expect_prompt();
         if p.options.iter().any(|o| format!("{o:?}").contains("intOption")) {
-            let _ = t.answer(who, y);
+            // The Y prompt belongs to the skill owner (whoever the prompt
+            // waits on), which is not necessarily the mover -- answer as them.
+            let _ = t.answer_one(y);
         } else {
             t.decline();
         }
     }
+    panic!("walk_onto_y: prompts never stopped: {}", t.dump_prompt());
 }
 
 // ============================================================ PP:再次闪耀
@@ -163,6 +172,8 @@ fn accident_places_shuffles_overlap_draws() {
     t.set_draw(0, &["通用:GREAT", "通用:GREAT"]);
     t.give_play(0, "PP:初次演出事故").unwrap();
     drain(&mut t);
+    eprintln!("DBG tok: {}", t.token(0, "skillBlock:Pastel✺Palettes"));
+    eprintln!("DBG field: {:?}", t.field_ids(0));
     assert!(t.on_field(0, "PP:初次演出事故"), "{:?}", t.field_ids(0));
     let all: Vec<String> = t
         .draw_pile(0)
@@ -339,7 +350,6 @@ fn dream_ahead_autoplaced_at_game_start() {
 
 /// 规则书: 「…且初始手牌减1。」
 #[test]
-#[ignore = "DISCREPANCY: book says 梦在前方 reduces the starting hand by 1 (startHandMinus is set) but the opening hand is still 2"]
 fn dream_ahead_reduces_start_hand() {
     let t = Table::new(&["丸山彩", "户山香澄"]);
     assert_eq!(t.hand(0).len(), 1, "start hand 2-1: {:?}", t.hand(0));
@@ -358,7 +368,6 @@ fn dream_ahead_no_build() {
 
 /// 规则书: 「（1）[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5）」
 #[test]
-#[ignore = "DISCREPANCY: book says each draw adds a crystal to 梦在前方; a completed draw leaves its crystal count at 0"]
 fn dream_ahead_crystal_per_draw_cap_5() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
@@ -384,7 +393,6 @@ fn dream_ahead_crystal_per_draw_cap_5() {
 
 /// 规则书: 「（3）[拥有者]以外的玩家在[拥有者]拥有的格子[结算]时额外[支付]…粉丝数量×X+MIN(X×30,300)」
 #[test]
-#[ignore = "DISCREPANCY: X only grows from overflow crystals (see dream_ahead_crystal_per_draw_cap_5), so the extra rent never appears (paid base 140 vs 174)"]
 fn dream_ahead_extra_rent() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
@@ -517,11 +525,12 @@ fn flower_pass_forces_stop_and_discards() {
 
 /// 规则书: 「2.如果[共鸣]则获得1500资金」
 #[test]
-#[ignore = "DISCREPANCY: the flower's pass trigger discards the card but never [强制停下]s, so the 共鸣 window on that pass never opens"]
 fn flower_echo_gives_1500() {
     let mut t = Table::vanilla(2);
     t.own(0, &[7]);
-    t.place_raw(0, "PP:[衍生]共鸣");
+    // Setup fix: 「如果[共鸣]」 reads the hand (`try_resonance`), so the 共鸣
+    // card has to be in hand -- `place_raw` put it on the field instead.
+    t.give(0, &["PP:[衍生]共鸣"]);
     t.begin_turn(0);
     t.give_play(0, "PP:可爱又强壮的花朵").unwrap();
     while t.prompt().is_some() {
@@ -659,26 +668,34 @@ fn guide_play_sets_crystals() {
     );
 }
 
-/// 规则书: 「（1）手卡上限数量减1。（2）回合结束时添加1个[奇迹水晶]。」
+/// 规则书[持续]（1）: 「手卡上限数量减1。」
+/// 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]。」
+/// 规则书[手]: 「在此卡上放置"粉丝数量"÷3个[奇迹水晶]」 -- arrange 6 fans so
+/// the placement stamps 2, then one turn end adds 1.
 #[test]
-#[ignore = "TEST BUG: the test never sets P✽P fans, so placement's fans/3 = 0 and one turn-end add gives 1; the assertion (2 or 3) assumed fans/3=2 and only passed while end_turn raised turnEnd twice (0+1+1=2). Hand-limit half is green."]
 fn guide_hand_limit_and_turn_end_crystal() {
     let mut t = Table::vanilla(2);
+    set_fans(&mut t, 0, 6, 0);
     t.give_play(0, "PP:练习生解密指南").unwrap();
-    while t.prompt().is_some() {
-        t.decline();
-    }
+    drain(&mut t);
+    assert!(t.on_field(0, "PP:练习生解密指南"), "{:?}", t.field_ids(0));
     assert_eq!(t.p(0).hand_limit(), 4, "handLimit 5-1");
-    t.begin_turn(0);
+    assert_eq!(
+        t.crystals(0, "PP:练习生解密指南").unwrap_or(0),
+        2,
+        "placement stamps fans/3 = 6/3"
+    );
+    // One turn end: 「回合结束时添加1个[奇迹水晶]」 -> 2 + 1 = 3 (still under the
+    // 5-crystal cash-in of [持续]（3）).
     t.dice(&[4]);
     t.roll(0).unwrap();
     drain(&mut t);
     t.end(0).unwrap();
     drain(&mut t);
-    let c = t.crystals(0, "PP:练习生解密指南").unwrap_or(0);
-    assert!(
-        c == 2 || c == 3,
-        "placement put fans/3=2; turn end should add 1 -> 3: {c}"
+    assert_eq!(
+        t.crystals(0, "PP:练习生解密指南").unwrap_or(0),
+        3,
+        "2 from placement + 1 from the turn end"
     );
 }
 
@@ -698,7 +715,6 @@ fn eve_exclusive_rolls_12d4_times_60() {
 
 /// 规则书: 「（1）[使用者]抽卡后为此卡添加1个[奇迹水晶]（上限3）。」
 #[test]
-#[ignore = "DISCREPANCY: book says each draw adds a crystal to 属于我的武士道！; a completed draw leaves its crystal count at 0"]
 fn eve_exclusive_crystal_per_draw() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "若宫伊芙");
@@ -766,7 +782,6 @@ fn eve_skill_2_adds_yd4() {
 
 /// 规则书: 白鹭千圣（2）「收取资金时…增加Y×100」
 #[test]
-#[ignore = "DISCREPANCY: book says 白鹭千圣 (2) prompts on receiving money; no Y prompt opens and the income stays at base (640 vs 840)"]
 fn chiasa_skill_2_income_boost() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "白鹭千圣");
@@ -783,7 +798,6 @@ fn chiasa_skill_2_income_boost() {
 
 /// 规则书: 大和麻弥（2）「抽卡时…改为观看卡组顶端Y+1张…选择一张…加入手牌」
 #[test]
-#[ignore = "DISCREPANCY: book says 大和麻弥 (2) replaces the draw with watch-and-pick; no Y prompt opens (fans unchanged, plain draw happens)"]
 fn maya_skill_2_watch_and_pick() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "大和麻弥");
@@ -818,7 +832,6 @@ fn maya_skill_2_watch_and_pick() {
 
 /// 规则书: 「（3）[经过]CiRCLE时不获得[CiRCLE奖励]。」
 #[test]
-#[ignore = "DISCREPANCY: book says the band skill suppresses the CiRCLE bonus; walking through CiRCLE still pays 2000"]
 fn band_skill_no_circle_bonus() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩"); // Pastel✽Palettes
@@ -852,7 +865,7 @@ fn band_skill_turn_start_crystal_and_draw() {
 
 /// 规则书: 「（2）…X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
 #[test]
-#[ignore = "DISCREPANCY: book says flipping more reverse fans than owned adds overflow crystals to the band card; none appear in either crystal pool"]
+#[ignore = "DISCREPANCY: band skill (2) is a passive 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 reaction to a flip effect, not a press; there is no flip-effect trigger to observe, so 有你与我在这里共度's X>owned overflow never becomes crystals"]
 fn band_skill_overflow_to_crystals() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
@@ -863,7 +876,8 @@ fn band_skill_overflow_to_crystals() {
     accept_echo(&mut t);
     drain(&mut t);
     assert_eq!(fans(&t, 0), (2, 0), "flipped what it could");
-    let overflow = band_xtal(&t, 0) + t.p(0).state_get("bandCrystals");
+    // One pool now: the band skill's own field-card crystals.
+    let overflow = band_xtal(&t, 0);
     assert!(
         overflow == 3 || overflow == 4,
         "overflow crystals on the band card: {overflow}"
@@ -973,7 +987,7 @@ fn ix_echo_chain_adds_crystals() {
     accept_echo(&mut t);
     // dream step 1 +3 and 共鸣 +2 land in the same engine pool
     assert_eq!(
-        t.p(0).state_get("bandCrystals"),
+        band_xtal(&t, 0),
         5,
         "3 (dream) + 2 (共鸣) on the band card"
     );
@@ -996,7 +1010,6 @@ fn ix_shine_immunity_flag() {
 
 /// 规则书: 「（1）游戏开始后获得5个正面[P✽P粉丝]」(丸山彩 (1) and kin)
 #[test]
-#[ignore = "DISCREPANCY: book says game start grants 5 positive P✽P fans; engine grants none (tokens empty after Table::new)"]
 fn skill_1_grants_5_positive_fans_at_game_start() {
     let t = Table::new(&["丸山彩", "户山香澄"]);
     assert_eq!(fans(&t, 0), (5, 0), "5 positive fans at game start");
@@ -1004,7 +1017,6 @@ fn skill_1_grants_5_positive_fans_at_game_start() {
 
 /// 规则书: 「（1）游戏开始时非Pastel✽Palettes角色获得1个反面[P✽P粉丝]」
 #[test]
-#[ignore = "DISCREPANCY: book says non-PP players get 1 reverse P✽P fan at game start; engine grants none"]
 fn band_skill_1_grants_reverse_fan_to_non_pp() {
     let t = Table::new(&["丸山彩", "户山香澄"]);
     assert_eq!(fans(&t, 1), (0, 1), "1 reverse fan on non-PP");
@@ -1020,13 +1032,14 @@ fn shanyao_hand_play_places() {
 
 /// 规则书: 「为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」(TITLE IDOL step 1)
 #[test]
-#[ignore = "DISCREPANCY: book says band-card crystals are one pool; TITLE IDOL/同一个梦想 write bandCrystals state while band skill (4) accrues/spends the skill field card's crystals"]
 fn title_idol_band_crystals_feed_band_skill_spend() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
     t.place_raw(0, "skill:Pastel✽Palettes:与偶像一起");
-    set_band_xtal(&mut t, 0, 3);
     t.begin_turn(0);
+    // Set after the turn-start (4) add so the count under test is exactly the
+    // 3 + 2 the assertion names.
+    set_band_xtal(&mut t, 0, 3);
     t.give_play(0, "PP:TITLE IDOL").unwrap();
     drain(&mut t);
     assert_eq!(band_xtal(&t, 0), 5, "spendable band crystals 3+2");
@@ -1051,12 +1064,16 @@ fn dream_ahead_reduces_hand_limit() {
 
 /// 规则书: 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能。」(初次演出事故)
 #[test]
-#[ignore = "DISCREPANCY: book says 初次演出事故 blocks PP (2) skills; the aya_with/eve_unify prompt is still offered"]
+#[ignore = "DISCREPANCY: the skillBlock token is set (tok=1) but the aya_with PayChoose hook still prompts -- the guard/body skill_blocked check does not see it; needs a deeper look at hook-guard dispatch"]
 fn accident_blocks_pp_skill_2() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
     t.place_raw(0, "skill:丸山彩:With~");
-    t.place_raw(0, "PP:初次演出事故");
+    // Setup fix: `place_raw` skips the play body, which is what writes the
+    // `skillBlock:Pastel✽Palettes` token. Play the card for real.
+    t.give_play(0, "PP:初次演出事故").unwrap();
+    drain(&mut t);
+    eprintln!("DBG field={:?} tok={}", t.field_ids(0), t.token(0, "skillBlock:Pastel✽Palettes"));
     set_fans(&mut t, 0, 3, 0);
     t.own(1, &[7]);
     t.set_houses(7, 1);
@@ -1074,7 +1091,6 @@ fn accident_blocks_pp_skill_2() {
 
 /// 规则书: 「[手]：将此卡放置在[使用者]的[场地]并将弃卡区中的一张卡加入手卡。」(丸山彩 exclusive)
 #[test]
-#[ignore = "DISCREPANCY: book says [丸山彩]憧憬的前方 places itself and recycles a discard card; play() sends it to the discard and recycles nothing"]
 fn aya_exclusive_places_and_recycles() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");
@@ -1087,7 +1103,6 @@ fn aya_exclusive_places_and_recycles() {
 
 /// 规则书: 「将此卡放置在[使用者]的[场地]，其他玩家[分摊][支付][使用者]2000资金。」(白鹭千圣 exclusive)
 #[test]
-#[ignore = "DISCREPANCY: book says [白鹭千圣]微笑的铁假面 places itself and others split 2000; play() leaves money unchanged and the card off-field"]
 fn chiasa_exclusive_places_and_splits_2000() {
     let mut t = Table::vanilla(3);
     t.set_character_raw(0, "白鹭千圣");

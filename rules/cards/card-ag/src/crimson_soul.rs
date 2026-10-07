@@ -150,7 +150,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
         due,
         500,
         &Msg::new(key!("crimson_soul_payee")).player_id("who", due),
-    );
+    )?;
     Ok(())
 }
 

@@ -67,7 +67,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             player_id,
             amount,
             &Msg::new(key!("blue_rose_gain")).i("n", sum),
-        );
+        )?;
         return Ok(());
     }
     // 规则书（2）: 「传送至下一个未被购买的Livehouse格子」 -- nearest unowned ahead (C#

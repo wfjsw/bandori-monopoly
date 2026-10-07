@@ -75,7 +75,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             player_id,
             1000,
             &Msg::new(key!("backstage_tour_flip")).card("card", id),
-        );
+        )?;
     }
     // 规则书: 「以任意顺序放回」 -- when both are kept, C# `H.AskCard(..., "哪一张
     // 放在最上面？")` picks which one is the new top (`h.draw.Add(under);

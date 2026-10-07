@@ -21,7 +21,9 @@ const OVER: &str = "skill.mygo.over";
 pub const MYGO: CardDef = CardDef::new(
     "skill:MyGO!!!!!:迷途之星",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
+        // position: the before-match-start point decides those.
+        On::Hook(&[HookKind::DeckBeforeGame], |_| true, at_start),
         On::Hook(&[HookKind::RollAfter], mine, after_roll),
         On::Hook(&[HookKind::Discarded], mine, on_discarded),
         On::Play(Some(can_step), step_one),
@@ -91,8 +93,11 @@ fn step_one(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_crystals(-1, i32::MAX);
+    // 规则书（2）: 「移动1格以替代移动掷骰」 -- the shaped 1-step move replaces
+    // the roll and runs now (`ctx::card_move`).
     plan::clear_dice();
     plan::set_steps(1);
+    ctx::card_move(player_id);
     ctx::log(player_id, &Msg::new(key!("mygo_step")));
     Ok(())
 }
@@ -117,7 +122,7 @@ fn draw_two(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::add_crystals(-2, i32::MAX);
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     Ok(())
 }
 

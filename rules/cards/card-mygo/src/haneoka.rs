@@ -2,10 +2,10 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `MyGO:羽丘的不可思议女孩`）:
 //! > 羽丘的不可思议女孩：
-//! >  位于属于自己的格子上时，投掷1d20，若出目大于10则在当前格子免费加盖一层房屋，若出目大于15，则额外抽一张卡，大于20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若严格小于10，此卡放入弃牌堆且视为此卡未生效
+//! >  位于属于自己的格子上时，投掷1d20，若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，至少为20，则将此卡放置在自己场上，在后续任何时刻可将其置入弃牌堆并抵消一次任意付款。若小于10，此卡放入弃牌堆且视为此卡未生效
 //!
-//! on your own tile: 11+ builds a free house, 16+ draws, 20 keeps the card in
-//! play so it can cancel a payment later.
+//! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
+//! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -42,7 +42,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
     // `ctx::roll` honours a forced extreme (「以理论最大值或最小值结算」).
     let r = ctx::roll(player_id, 1, 20);
     if r < 10 {
-        // 规则书: 「若严格小于10，此卡放入弃牌堆且视为此卡未生效」
+        // 规则书 (sheet 2026-10-06): 「若小于10，此卡放入弃牌堆且视为此卡未生效」
         ctx::log(
             player_id,
             &Msg::new(key!("haneoka_no_effect"))
@@ -58,9 +58,8 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         // implies no)? And what counts a use that this would suppress?
         return Ok(());
     }
-    if r > 10 {
-        // 规则书: 「若出目大于10则在当前格子免费加盖一层房屋」 -- C# `H.AddHouse(seat,
-        // pos, CardName)`.
+    if r >= 10 {
+        // 规则书 (sheet 2026-10-06): 「若出目至少为10则在当前格子免费加盖一层房屋」
         // The C# gate is `H.WhyNotBuildOn(seat, pos) == null || (own && rent &&
         // under the rent-table cap && !mortgaged)`; the own + not-mortgaged arm
         // is what we can check (`WhyNotBuildOn` and the `rent.Length - 1` cap
@@ -87,14 +86,14 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
         // rent-table max (`rent.Length - 1`), so a tile that cannot take another
         // house simply does not move.
     }
-    if r > 15 {
-        // 规则书: 「若出目大于15，则额外抽一张卡」
-        ctx::draw(player_id, 1);
+    if r >= 15 {
+        // 规则书 (sheet 2026-10-06): 「若出目至少为15，则额外抽一张卡」
+        ctx::draw(player_id, 1)?;
     }
-    if r > 20 {
-        // 规则书: 「大于20，则将此卡放置在自己场上」 -- strictly greater than 20
-        // (a plain d20 tops out at 20, so this never fires on one); the PayChoose hook below
-        // offers 「在后续任何时刻可将其置入弃牌堆并抵消一次任意付款」.
+    if r >= 20 {
+        // 规则书 (sheet 2026-10-06): 「至少为20，则将此卡放置在自己场上」;
+        // the PayChoose hook below offers 「在后续任何时刻可将其置入弃牌堆并
+        // 抵消一次任意付款」.
         ctx::set_dest(ctx::Dest::Field);
         ctx::place_card(
             player_id,

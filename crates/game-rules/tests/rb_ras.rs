@@ -238,25 +238,15 @@ fn exist_flips_into_owner_discard() {
 // ===========================================================================
 // RAS:狂乱Hey Kids!!
 // ===========================================================================
+//
+// Ruling 2026-10-06: the [反击] triggers when ANOTHER player settles rent on
+// the holder's tiles. The holder's own settlement does not trigger it, and a
+// non-rent payment does not either.
 
 #[test]
-fn hey_kids_window_on_own_tile_settle() {
-    // 规则书: 「[反击] 在属于你的格子上结算时」
-    let mut t = Table::vanilla(2);
-    t.own(0, &[SHOPPING, EDOGAWA_PARK]);
-    t.set_houses(SHOPPING, 1);
-    t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
-    drain(&mut t);
-    t.dice(&[1]);
-    t.roll(0).unwrap();
-    assert!(t.counteract_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
-}
-
-#[test]
-fn hey_kids_no_window_when_another_settles_your_tile() {
-    // Engine reading of 「在属于你的格子上结算时」: the settler is the tile owner.
-    // (The text can also be read as "when anyone settles on your tile"; see report.)
+fn hey_kids_window_when_another_settles_your_tile() {
+    // 规则书: 「[反击] 在属于你的格子上结算时」 + ruling 2026-10-06:
+    // another player settling rent on my tile triggers it.
     let mut t = Table::vanilla(2);
     t.own(0, &[SHOPPING, EDOGAWA_PARK]);
     t.set_houses(SHOPPING, 1);
@@ -266,8 +256,48 @@ fn hey_kids_no_window_when_another_settles_your_tile() {
     t.set_pos(1, CIRCLE);
     t.dice(&[1]);
     t.roll(1).unwrap();
-    assert!(t.prompt().is_none(), "{}", t.dump_prompt());
-    assert!(t.hand(0).contains(&"RAS:狂乱Hey Kids!!".to_string()));
+    assert!(t.counteract_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
+}
+
+#[test]
+fn hey_kids_no_window_on_my_own_settle() {
+    // Ruling 2026-10-06: my own settlement does not trigger it.
+    let mut t = Table::vanilla(2);
+    t.own(0, &[SHOPPING, EDOGAWA_PARK]);
+    t.set_houses(SHOPPING, 1);
+    t.give(0, &["RAS:狂乱Hey Kids!!"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    assert!(!t.counteract_offered("RAS:狂乱Hey Kids!!"), "{}", t.dump_prompt());
+    assert!(
+        t.hand(0).contains(&"RAS:狂乱Hey Kids!!".to_string()),
+        "the card stays in hand: {:?}",
+        t.hand(0)
+    );
+}
+
+#[test]
+fn hey_kids_no_window_on_a_non_rent_payment() {
+    // Ruling 2026-10-06: a non-rent payment does not trigger it. P1 stands on
+    // P0's tile and pays via 黑色生日 (a [支付] that is not a tile [结算]).
+    let mut t = Table::vanilla(3);
+    t.own(0, &[SHOPPING, EDOGAWA_PARK]);
+    t.set_houses(SHOPPING, 1);
+    t.give(0, &["RAS:狂乱Hey Kids!!"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, SHOPPING); // standing on P0's tile, but the payment is not rent
+    // P1 plays 10次招募 (「[消耗]1500资金」) -- a spend, not a tile [结算].
+    t.give_play(1, "通用:10次招募（1回限定）").unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(1), 8_500, "spent 1500, not rent");
+    assert!(
+        t.hand(0).contains(&"RAS:狂乱Hey Kids!!".to_string()),
+        "a non-rent payment must not open the window: {}",
+        t.dump_prompt()
+    );
 }
 
 #[test]
@@ -279,10 +309,13 @@ fn hey_kids_transfers_one_house() {
     t.set_houses(EDOGAWA_PARK, 0);
     t.set_money(0, 20_000);
     t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
+    // Ruling 2026-10-06: the window opens when ANOTHER player settles rent on
+    // my tiles. P1 rolls onto P0's 购物中心 and settles.
+    t.begin_turn(1);
     drain(&mut t);
+    t.set_pos(1, CIRCLE);
     t.dice(&[1]);
-    t.roll(0).unwrap();
+    t.roll(1).unwrap();
     t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     // How many houses to move, then which target tile(s).
     while t.prompt().is_some() {
@@ -308,10 +341,13 @@ fn hey_kids_two_houses_to_two_targets() {
     t.set_houses(SHOPPING, 2);
     t.set_money(0, 20_000);
     t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
+    // Ruling 2026-10-06: the window opens when ANOTHER player settles rent on
+    // my tiles. P1 rolls onto P0's 购物中心 and settles.
+    t.begin_turn(1);
     drain(&mut t);
+    t.set_pos(1, CIRCLE);
     t.dice(&[1]);
-    t.roll(0).unwrap();
+    t.roll(1).unwrap();
     t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     // Pick count 2, then one house onto each of the two targets.
     let mut picked = vec![];
@@ -350,11 +386,12 @@ fn hey_kids_money_when_target_house_is_dearer() {
     t.set_houses(EDOGAWA_PARK, 1);
     t.set_money(0, 20_000);
     t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
+    // Ruling 2026-10-06: another player's rent settle on my tile triggers it.
+    t.begin_turn(1);
     drain(&mut t);
-    t.set_pos(0, EDOGAWA_PARK - 1);
+    t.set_pos(1, EDOGAWA_PARK - 1);
     t.dice(&[1]);
-    t.roll(0).unwrap();
+    t.roll(1).unwrap();
     t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
@@ -381,10 +418,13 @@ fn hey_kids_money_when_source_house_is_dearer() {
     t.set_houses(SHOPPING, 1);
     t.set_money(0, 20_000);
     t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
+    // Ruling 2026-10-06: the window opens when ANOTHER player settles rent on
+    // my tiles. P1 rolls onto P0's 购物中心 and settles.
+    t.begin_turn(1);
     drain(&mut t);
+    t.set_pos(1, CIRCLE);
     t.dice(&[1]);
-    t.roll(0).unwrap();
+    t.roll(1).unwrap();
     t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();
@@ -407,10 +447,13 @@ fn hey_kids_money_two_houses_to_two_targets() {
     t.set_houses(SHOPPING, 2);
     t.set_money(0, 20_000);
     t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
+    // Ruling 2026-10-06: the window opens when ANOTHER player settles rent on
+    // my tiles. P1 rolls onto P0's 购物中心 and settles.
+    t.begin_turn(1);
     drain(&mut t);
+    t.set_pos(1, CIRCLE);
     t.dice(&[1]);
-    t.roll(0).unwrap();
+    t.roll(1).unwrap();
     t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     let mut picked = vec![];
     while t.prompt().is_some() {
@@ -658,8 +701,11 @@ fn storm_gains_crystal_on_circle_pass() {
 
 #[test]
 fn storm_part2_discards_and_forces_a_settle() {
-    // 规则书: 「（2）[使用者]以外的玩家在距此卡所在格子X个格子处[结算]时将此卡放入弃牌堆
-    // 且那个玩家进行一次此卡所在格子的[结算]，…此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动」
+    // 规则书 (sheet 2026-10-06 新卡组卡 H8 (2)): 「[使用者]以外的玩家在距此卡所在格子X个
+    // 格子处[结算]时将此卡放入弃牌堆且对那个玩家进行一次相当于此卡所在格子普通[结算]的
+    // (4-X)/4倍价格的收费，此效果只有在X至少为1且小等于此卡[奇迹水晶]数量时可发动」
+    // (was 「那个玩家进行一次此卡所在格子的[结算]」 -- now a direct charge,
+    // not a forced re-settle.)
     let mut t = Table::vanilla(3);
     t.own(0, &[BUDOKAN]);
     t.set_houses(BUDOKAN, 2);
@@ -694,7 +740,6 @@ fn storm_part2_discards_and_forces_a_settle() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book scales that settle's rent by (4-X)/4 = 0.5 (3340 -> 1670); engine charges full 3340"]
 fn storm_part2_rent_factor() {
     let mut t = Table::vanilla(3);
     t.own(0, &[BUDOKAN]);
@@ -722,6 +767,8 @@ fn storm_part2_rent_factor() {
     t.roll(1).unwrap();
     drain(&mut t);
     // p0's money: 20000 + 2*2000 (CiRCLE) + 1670 (half of 3340).
+    // Sheet 2026-10-06 H8 (2) prices this as a direct 「(4-X)/4倍价格的收费」,
+    // not a forced re-settle; the amount is the same.
     assert_eq!(t.money(0), 25_670, "book: rent scaled to (4-2)/4");
     assert_eq!(t.money(1), 18_330);
 }
@@ -784,9 +831,11 @@ fn guerrilla_ends_on_the_chosen_tile() {
 
 #[test]
 fn unstoppable_maps_dice_and_pays_out() {
-    // 规则书: 「投掷1d6，根据结果1-6分别传送至白雪学园，艺术学院高中，瑟罗希亚国际学校，
-    // 银河拉面馆，旭汤澡堂，CHUCHU的公寓。本次传送不触发结算，视为你的主要移动。
-    // 且若骰点为1-3获得2000资金，若为4-6则获得1000资金。」
+    // 规则书 (sheet 2026-10-06 新卡组卡 H10): 「投掷1d6mod6，根据结果1-6分别传送至
+    // 白雪学园，艺术学院高中，瑟罗希亚国际学校，银河拉面馆，旭汤澡堂，CHUCHU的公寓。
+    // 本次传送不触发结算，视为你的主要移动。且若骰点为1-3获得2000资金，若为4-6则获得1000资金。」
+    // Face 6 is the 1d6mod6 wrap boundary (6 mod 6 = 0); the card still names
+    // 「结果1-6」, so 6 must land on CHUCHU的公寓.
     let cases = [
         (1, SHIRAYUKI, 2_000),
         (2, 19, 2_000), // 艺术学院高中
@@ -862,7 +911,6 @@ fn repaint_counts_only_the_original_path() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book halves that settle's payment (羽丘 1-house rent 1000 -> 500); engine charges the full 1000"]
 fn repaint_halves_the_settle_payment() {
     let mut t = Table::vanilla(3);
     t.own(0, &[TSUKIGAOKA]);
@@ -879,6 +927,34 @@ fn repaint_halves_the_settle_payment() {
     drain(&mut t);
     assert_eq!(t.money(1), 19_500, "1000 / 2");
     assert_eq!(t.money(0), 20_500);
+}
+
+// Ruling 2026-10-06 (the 祥，移动 reading, which applies here because the
+// sheet wording is 「对方此次结算的支付减半」 -- the settlement payment): a
+// payment shaped by another card effect is halved too. Tomorrow's Door (3)
+// adds (houses on 星之鼓动山丘)×100 on top of the rent; the whole shaped
+// payment is halved.
+#[test]
+#[ignore = "DISCREPANCY: ruling 2026-10-06: 「对方此次结算的支付减半」 -- a Tomorrow's Door surcharge is added at full price instead of halving the shaped settlement payment"]
+fn repaint_halves_a_shaped_settlement_payment() {
+    let mut t = Table::vanilla(3);
+    let hill = tile("星之鼓动山丘"); // rent[1] = 280; surcharge 1*100 = 100
+    t.own(0, &[hill]);
+    t.set_houses(hill, 1);
+    t.place_raw(0, "PPP:Tomorrow's Door");
+    t.set_pos(1, 5);
+    t.set_money(0, 20_000);
+    t.set_money(1, 20_000);
+    t.give(0, &["RAS:Repaint"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.dice(&[(hill - 1 - 5 - 2) as i32]); // reduced by X=2 lands on the hill
+    t.roll(1).unwrap();
+    t.counteract(0, "RAS:Repaint").unwrap();
+    drain(&mut t);
+    // Shaped payment = 280 + 100 = 380, halved → 190.
+    assert_eq!(t.pos(1), hill, "landed on the hill");
+    assert_eq!(t.money(1), 20_000 - 190, "shaped payment 380 halved to 190");
 }
 
 // ===========================================================================
@@ -1448,6 +1524,54 @@ fn interaction_encore_vs_unstoppable_teleport() {
     }
 }
 
+// ===========================================================================
+// RAS:（和奏瑞依）寄于指尖的执念
+// ===========================================================================
+
+#[test]
+fn nagisa_fingertip_is_offered_as_a_counter_on_a_fire_pot_roll() {
+    // Sheet 2026-10-06 新卡组卡 H16 adds a [反击] wrapper:
+    // 「[反击] 当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被选择的另一个骰点…」
+    // 和奏瑞依 (2) 「进行任意掷骰后，可选择使用一个[火罐]再投一次骰子」 is
+    // 「使用火罐进行掷骰」, so the card must ring up in the counteract ring.
+    let mut t = Table::new(&["和奏瑞依", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_fire(0, 1, 1);
+    t.give(0, &["RAS:（和奏瑞依）寄于指尖的执念"]);
+    t.dice(&[3, 1, 1]);
+    t.roll(0).unwrap();
+    let mut offered = false;
+    let mut used_fire = false;
+    for _ in 0..30 {
+        if t.prompt().is_none() {
+            break;
+        }
+        if t.counteract_offered("RAS:（和奏瑞依）寄于指尖的执念") {
+            offered = true;
+            t.counteract(0, "RAS:（和奏瑞依）寄于指尖的执念").unwrap();
+            continue;
+        }
+        let d = t.dump_prompt();
+        // Skill (2) reroll window: accept it so the fire-pot roll happens.
+        if !used_fire && d.contains("raise_effort_again") {
+            // Skill (2) 「进行任意掷骰后，可选择使用一个[火罐]再投一次骰子」.
+            let k = t.option("ask.yes").unwrap_or(0);
+            let _ = t.answer(0, k);
+            used_fire = true;
+            continue;
+        }
+        t.decline();
+    }
+    assert!(
+        offered,
+        "寄于指尖 is 「[反击] 当你使用火罐进行掷骰时」 -- must be offered; used_fire={used_fire} events {:?}",
+        t.recent_keys(15)
+    );
+}
+
+
 #[test]
 fn interaction_please_choose_opt2_is_an_abnormal_move() {
     // PLEASE CHOOSE opt2 [传送]s the counteractor -- an 「异常移动效果」 that 通用:安可
@@ -1505,10 +1629,13 @@ fn interaction_hey_kids_replaces_the_settle() {
     t.own(0, &[SHOPPING, EDOGAWA_PARK]);
     t.set_houses(SHOPPING, 1);
     t.give(0, &["RAS:狂乱Hey Kids!!"]);
-    t.begin_turn(0);
+    // Ruling 2026-10-06: the window opens when ANOTHER player settles rent on
+    // my tiles. P1 rolls onto P0's 购物中心 and settles.
+    t.begin_turn(1);
     drain(&mut t);
+    t.set_pos(1, CIRCLE);
     t.dice(&[1]);
-    t.roll(0).unwrap();
+    t.roll(1).unwrap();
     t.counteract(0, "RAS:狂乱Hey Kids!!").unwrap();
     while t.prompt().is_some() {
         let p = t.expect_prompt();

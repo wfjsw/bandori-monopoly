@@ -19,24 +19,36 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CARDS = join(ROOT, "rules", "cards");
 const SKILLS = join(ROOT, "rules", "skills");
+const TILES = join(ROOT, "rules", "tiles");
 const OUT = join(CARDS, "card-all");
 
-/** [{root, dir, name}] of every rule crate, sorted. Covers `rules/cards/*`
- *  (the cards you draw) and `rules/skills/*` (character / band skills) -- two
- *  areas on purpose, one shipped module. */
+/** [{root, dir, name, rel}] of every rule crate, sorted. Covers `rules/cards/*`
+ *  (the cards you draw), `rules/skills/*` (character / band skills) and
+ *  `rules/tiles` (board tile rules, `docs/TILES.md`) -- three areas on purpose,
+ *  one shipped module. */
 function ruleCrates() {
-  return [CARDS, SKILLS].flatMap((root) =>
+  const scan = (root, dirFilter, rel) =>
     readdirSync(root, { withFileTypes: true })
-      .filter((e) => e.isDirectory() && e.name !== "card-all")
+      .filter(dirFilter)
       .map((e) => e.name)
       .sort()
       .flatMap((dir) => {
         const toml = join(root, dir, "Cargo.toml");
         const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
         if (!m) throw new Error(`${toml}: no package name`);
-        return [{ root, dir, name: m[1] }];
-      })
-  );
+        return [{ root, dir, name: m[1], rel: rel + dir }];
+      });
+  return [
+    ...scan(CARDS, (e) => e.isDirectory() && e.name !== "card-all", "../"),
+    ...scan(SKILLS, (e) => e.isDirectory(), "../../skills/"),
+    // `rules/tiles` is one crate (not a directory of them).
+    ...(() => {
+      const toml = join(TILES, "Cargo.toml");
+      const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
+      if (!m) throw new Error(`${toml}: no package name`);
+      return [{ root: TILES, dir: "tiles", name: m[1], rel: "../../tiles" }];
+    })(),
+  ];
 }
 
 const crates = ruleCrates();
@@ -45,7 +57,7 @@ if (!crates.length) {
   process.exit(1);
 }
 
-const deps = crates.map((c) => `${c.name} = { path = "${c.root === SKILLS ? "../../skills/" : "../"}${c.dir}" }`).join("\n");
+const deps = crates.map((c) => `${c.name} = { path = "${c.rel}" }`).join("\n");
 const tables = crates.map((c) => `    ${c.name.replaceAll("-", "_")}::CARDS`).join(",\n");
 
 mkdirSync(join(OUT, "src"), { recursive: true });

@@ -33,7 +33,9 @@ fn rana_funny(player_id: i32) -> card_sdk::Asked {
         ID,
         &Msg::new(key!("rana_funny_note")),
     );
-    ctx::set_slot(player_id, "rana_funny_tile", ctx::player_pos(player_id));
+    // The instance carries its tile (`place_card_on` stamps it); `self_tile()`
+    // reads it back. A `slot` scratch would miss a `place_raw` / `place_on_tile`
+    // arrangement that never ran this play body.
     ctx::log(
         player_id,
         &Msg::new(key!("rana_funny_placed")).player_id("who", player_id),
@@ -47,7 +49,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
         return Ok(());
     }
-    let tile = ctx::slot(player_id, "rana_funny_tile");
+    // 规则书: 「将此卡置于当前格子上」 -- the instance carries its tile;
+    // `self_tile()` reads it back (works for a `place_on_tile` arrangement too).
+    let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
     }
@@ -67,7 +71,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // 或强制停下并[触发结算]」 -- C# `Crystals >= 5 && m.Seat != User` branches
     // into `Trap` instead of growing a crystal.
     if ctx::crystals() >= 5 && who != player_id {
-        trap(player_id, who, tile);
+        trap(player_id, who, tile)?;
         return Ok(());
     }
     // 规则书: 「每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶」
@@ -83,7 +87,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// 抹茶芭菲 or be forced to stop here and settle at half pay.
 fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
     // 规则书: 「选择失去一个"抹茶芭菲"或强制停下并[触发结算]」 -- C# `H.AskYes`
-    // only when the passer holds a 抹茶芭菲 (`aiYes` prefers losing it); with
+    // only when the passer holds a 抹茶芭菲 (`aiYes` prefers losing it)?; with
     // none in hand the forced stop is the only option.
     if ctx::tok(who, "抹茶芭菲") > 0 {
         let lose = ctx::ask_yes(
@@ -102,14 +106,17 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
             return Ok(());
         }
     }
-    // 规则书: 「强制停下并[触发结算]，如果强制停下则此卡洗入弃牌堆。由此卡效果导致[触发结算]
-    // 时需支付资金减半」 -- C# `m.Stopped = true; m.Resolve = true; m.PayFactor *= 0.5`
-    // then `H.Unplace(this, "discard", ...)` (MatchHost.cs:6836-6847, behind
-    // `H.WithCard(User, H.AbnormalGate(a))`). `set_stop_at` is the forced stop
-    // from this `PassTile` hook (the walk settles at the stop tile;
-    // `plan::stopped()` is the read-only check); the pay factor is milli-units
-    // (500 = x0.5). The C# multiplies the in-flight factor; this sets the x0.5
-    // value the walk starts from.
+    // 规则书: 「强制停下并[触发结算]」 -- a [强制停下] is an abnormal movement
+    // effect; it passes the C# `H.WithCard(User, H.AbnormalGate(a))` gate so
+    // [反击] cards (安可) get their window. `ctx::gate` returns false when the
+    // effect is guarded, the mover is immune, or they are [不可阻挡].
+    if !ctx::gate(who, card_sdk::abi::AbKind::Stop) {
+        return Ok(());
+    }
+    // 规则书: 「由此卡效果导致[触发结算]时需支付资金减半」 -- `set_stop_at` is
+    // the forced stop from this `PassTile` hook (the walk settles at the stop
+    // tile); the pay factor is milli-units (500 = x0.5). The C# multiplies the
+    // in-flight factor; this sets the x0.5 value the walk starts from.
     ctx::plan::set_stop_at(tile);
     ctx::plan::set_resolve(true);
     ctx::plan::set_pay_factor(500);

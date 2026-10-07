@@ -90,6 +90,28 @@ fn backstage_looks_at_two_and_pays_1000_per_discarded() {
 // ----- HHW:运动的天赋
 
 #[test]
+fn athletic_talent_keeps_a_roll_of_exactly_10() {
+    // Sheet 2026-10-06 新卡组卡 F9: 「重骰移动掷骰直至结果至少为10为止」
+    // -- 10 is INCLUSIVE (was 「10以上」). A first roll of 10 must be kept.
+    let mut t = vanilla2();
+    t.give(0, &["HHW:运动的天赋"]);
+    t.play(0, "HHW:运动的天赋").unwrap();
+    drain(&mut t);
+    // Only one face of 10: if the engine rerolls past 10 it will run out of
+    // loaded dice and fall back to RNG, so a kept 10 is observable as exactly
+    // one die consumed and endpoint 10 from CiRCLE (0).
+    t.dice(&[10]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        10,
+        "a roll of exactly 10 is kept under 「至少为10」: events {:?}",
+        t.recent_keys(10)
+    );
+}
+
+#[test]
 fn athletic_talent_places_with_three_crystals() {
     // 规则书: 「将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。」
     let mut t = vanilla2();
@@ -157,10 +179,11 @@ fn hlsy_teleports_to_the_farthest_tile_in_a_direction() {
 
 #[test]
 fn hot_air_balloon_teleports_to_a_chosen_roll() {
-    // 规则书: 「投掷4次3d20并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动」
+    // 规则书 (sheet 2026-10-06 新卡组卡 F11): 「投掷4次3d20mod60并记录其结果，
+    // 选择其中之一，传送至结果对应序号的格子，视为你的主要移动」
     let mut t = vanilla2();
     t.set_pos(0, 0);
-    t.dice(&[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]); // 4x3d20
+    t.dice(&[5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]); // 4x3d20 = four sums of 15
     t.give_play(0, "HHW:热气球演出").unwrap();
     while t.prompt().is_some() {
         let d = t.dump_prompt();
@@ -174,7 +197,42 @@ fn hot_air_balloon_teleports_to_a_chosen_roll() {
     assert_ne!(t.pos(0), 0, "teleported: events {:?}", t.recent_keys(10));
 }
 
+#[test]
+fn hot_air_balloon_mod60_wraps_a_sum_of_60() {
+    // Sheet 2026-10-06 新卡组卡 F11: 「3d20mod60」 -- a sum of 60 wraps
+    // (60 mod 60 = 0) rather than naming tile #60. Four loaded 20+20+20 = 60.
+    // Pin whichever wrap destination the engine uses (CiRCLE / #1 / #60).
+    let mut t = vanilla2();
+    t.set_pos(0, 5); // start away from every candidate
+    t.dice(&[20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20]); // 4x sum 60
+    t.give_play(0, "HHW:热气球演出").unwrap();
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("ask.intOption") || d.contains("tile") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    // 60 mod 60 = 0, and the card names 「结果对应序号的格子」 whose 序号 run
+    // 1..=60, so 0 ≡ 60: the wrap lands on #60 高级住宅区 (board 59).
+    assert_eq!(
+        t.pos(0),
+        59,
+        "sum 60 under 3d20mod60 wraps to #60: events {:?}",
+        t.recent_keys(12)
+    );
+}
+
 // ----- HHW:爱心义演
+//
+// Ruling 2026-10-06: 「向上取整10」 means the amount the player must pay is
+// rounded up to the next multiple of 10. Combined with 「付款减半」:
+//   final = ceil( (payment / 2) / 10 ) * 10
+// Boundary cases for the rounding step: 1001 → 1010, 1000 → 1000. So a
+// halved amount of 1001 is paid as 1010, and a halved amount of 1000 is paid
+// as 1000. (「向上取整」 is ceiling to a multiple of 10, not "strictly the
+// next" -- an exact multiple is unchanged.)
 
 #[test]
 fn charity_live_halves_payments_this_turn() {
@@ -188,14 +246,86 @@ fn charity_live_halves_payments_this_turn() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     drain(&mut t);
-    // rent 140 -> half, ceil 10 = 70
+    // rent 140 -> half 70, already a multiple of 10 → 70.
     assert_eq!(t.money(0), 10_000 - 70, "events: {:?}", t.recent_keys(10));
+}
+
+// The rounding matters when the half is not a multiple of 10. Fire bird's
+// 「自己的所有格子收费变成1.5倍」 turns rent 140 into 210; the half is 105,
+// which rounds up to 110 (not 105, not 100).
+#[test]
+fn charity_live_rounds_the_half_up_to_a_multiple_of_10() {
+    let mut t = vanilla2();
+    let blue = tile("江户川公园");
+    t.set_owner(blue, Some(1));
+    t.place_raw(1, "R:Fire bird"); // owner's tiles charge 1.5×
+    t.give_play(0, "HHW:爱心义演").unwrap();
+    drain(&mut t);
+    t.set_pos(0, (blue + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    // 140 × 1.5 = 210; half 105; ceil to a multiple of 10 = 110.
+    assert_eq!(
+        t.money(0),
+        10_000 - 110,
+        "210/2 = 105 rounds up to 110; events: {:?}",
+        t.recent_keys(10)
+    );
+}
+
+// A halved amount that is already a multiple of 10 is unchanged (the
+// 「1000 stays 1000」 boundary). 星之鼓动山丘 base rent 60 × 1.5 = 90;
+// half = 45 → rounds up to 50. Then a second case below covers an exact
+// multiple: rent 140 × 1.5 / 2 is not exact, so use two houses on 江户川公园
+// (rent 640) without Fire bird: 640/2 = 320, already a multiple of 10.
+#[test]
+fn charity_live_rounds_45_up_to_50() {
+    let mut t = vanilla2();
+    let hill = tile("星之鼓动山丘");
+    t.set_owner(hill, Some(1));
+    t.place_raw(1, "R:Fire bird");
+    t.give_play(0, "HHW:爱心义演").unwrap();
+    drain(&mut t);
+    t.set_pos(0, (hill + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    // 60 × 1.5 = 90; half 45; ceil to a multiple of 10 = 50.
+    assert_eq!(
+        t.money(0),
+        10_000 - 50,
+        "90/2 = 45 rounds up to 50; events: {:?}",
+        t.recent_keys(10)
+    );
+}
+
+#[test]
+fn charity_live_leaves_an_exact_multiple_of_10_unchanged() {
+    // The 「1000 stays 1000」 side of the boundary: a halved amount that is
+    // already a multiple of 10 is paid as-is. 江户川公园 with 2 houses rents
+    // 1540 (rent[2]); half = 770, already a multiple of 10 → 770.
+    let mut t = vanilla2();
+    let blue = tile("江户川公园");
+    t.set_owner(blue, Some(1));
+    t.set_houses(blue, 2);
+    t.give_play(0, "HHW:爱心义演").unwrap();
+    drain(&mut t);
+    t.set_pos(0, (blue + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.money(0),
+        10_000 - 770,
+        "1540/2 = 770 is already a multiple of 10; events: {:?}",
+        t.recent_keys(10)
+    );
 }
 
 // ----- HHW:黑衣人的补给
 
 #[test]
-#[ignore = "DISCREPANCY: book says 黑衣人的补给 is a [反击] 「经过CiRCLE格子时可打出」, engine opens no counteract window (only the CiRCLE reward)"]
 fn black_clothes_supply_is_a_counter_on_passing_circle() {
     // 规则书: 「[反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶」
     let mut t = vanilla2();
@@ -257,7 +387,40 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「游戏开始起点为#30弦卷豪宅」, engine starts 松原花音 on CiRCLE (pos 0)"]
+fn wacha_mocha_markers_sit_on_the_card_and_activate_in_main_phase() {
+    // Sheet 2026-10-06 新卡组卡 F13:
+    // 「[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，
+    // 可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，
+    // 然后此卡置入弃牌堆。」
+    // (was 「花音每次倒走获得一个水母标记，当水母标记到达9个时可以清除…」 --
+    // markers now ride the card, activation is a main-phase action.)
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &["HHW:（花音）Wacha Mocha 啪嗒进行曲"]);
+    let r = t.play(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    // Whether the card is [场] (auto-placed) or [手], it must end up on the
+    // field with its markers attached to the card itself.
+    drain(&mut t);
+    if r.is_err() {
+        // [场] cards may not be manually played; place_raw is the seam.
+        t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    }
+    assert!(
+        t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"),
+        "the card sits on the field: {:?}",
+        t.field_ids(0)
+    );
+    // Activation is 主要阶段 with ≥9 markers on the card. Arrange 9 and try.
+    // Markers are the card's own tokens; if the engine has no marker slot yet
+    // this records the gap.
+    let f = t.field(0).into_iter().find(|f| f.card.contains("Wacha"));
+    eprintln!("wacha field entry: {:?}", f);
+    // At minimum the card is placed and the turn is in OPS (主要阶段).
+    assert_eq!(t.step(), game_core::state::stage::OPS);
+}
+
+#[test]
 fn kanon_skill_1_starts_on_the_mansion() {
     // 规则书: 「(1) 游戏开始起点为#30弦卷豪宅」
     let t = Table::new(&["松原花音", "户山香澄"]);

@@ -6,7 +6,7 @@
 //!
 //! > （1）抽x张卡（可超过上限），回合结束后将手牌弃置到五张
 //!
-//! > （2）获得x*2000资金
+//! > （2）获得x次经过CiRCLE时的资金奖励
 //!
 //! > （3）将此卡放置在场上并放置x个奇迹水晶，你可以移除一个奇迹水晶视为发动你的
 //! > （2）技能，此次技能不受数量或轮数限制
@@ -76,7 +76,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     )?;
     match k {
         // (1) 「回合结束时抽x张卡（可超过上限）」 -- scheduled, runs in `effect_draw`.
-        0 => effect_draw(player_id, x),
+        0 => effect_draw(player_id, x)?,
         // (2) 「获得x*2000资金」
         1 => {
             let got = x * 2000;
@@ -84,7 +84,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
                 player_id,
                 got,
                 &Msg::new(key!("nanami_effort_money")).i("n", got as i64),
-            );
+            )?;
         }
         // (3) 「将此卡放置在场上并为其放置x个奇迹水晶」 -- placed with x crystals
         // on it; (4) is its exhaustion.
@@ -121,17 +121,18 @@ fn exhausted(_player_id: i32) {
 /// body below. Unreachable until the token-list query lands (the play folds
 /// first); written now so the queued scheduling is already the right hook.
 #[allow(dead_code)]
-fn effect_draw(player_id: i32, x: i32) {
+fn effect_draw(player_id: i32, x: i32) -> card_sdk::Asked {
     // 规则书（1）: 「抽x张卡（可超过上限）」 -- 「可超过上限」 is the hand limit
     // itself, so lift it for the draw and put it back (the limit is keyed state,
     // which is what `NoLimitFx` was an attachment for).
     let cap = ctx::state::get(player_id, card_sdk::abi::state_key::HAND_LIMIT);
     ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, i32::MAX);
-    ctx::draw(player_id, x);
+    ctx::draw(player_id, x)?;
     ctx::state::set(player_id, card_sdk::abi::state_key::HAND_LIMIT, cap);
     // 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C#
     // `H._turnCtx.AtEnd.Add(() => H.DiscardDownTo(i, 5, CardName))`.
     ctx::before_turn_end(player_id);
+    Ok(())
 }
 
 /// 规则书（1）: 「回合结束后将手牌弃置到五张」 -- C# `H._turnCtx.AtEnd.Add(() =>

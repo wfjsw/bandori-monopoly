@@ -27,7 +27,11 @@ const DUE: &str = "skill.tomoriPoem.due";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::SettleBefore], |_| true, before_settle),
         On::Hook(&[HookKind::PayMul], half, on_pay),
@@ -47,7 +51,7 @@ fn half(player_id: i32) -> bool {
 
 /// 「初始4，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 4);
+    crate::fire_pot(player_id, 4, 4);
     Ok(())
 }
 

@@ -48,6 +48,13 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect {
         return false;
     }
+    // 规则书[反击]: 「失去资金」 -- the `pay` effect entry. The causer's own
+    // `abnormal` also rides an `effect` link with `player_id` = the causer and
+    // `value` = its `AbKind` (> 0); that is not a money loss and must not open
+    // this window.
+    if !ctx::effect::has(TriggerKind::Pay) {
+        return false;
+    }
     if trigger::player_id() != player_id || trigger::value() <= 0 {
         return false;
     }
@@ -78,7 +85,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             player_id,
             tag,
             &Msg::new(key!("now_sumimi_why")).n("n", tag as i64),
-        );
+        )?;
     }
     Ok(())
 }

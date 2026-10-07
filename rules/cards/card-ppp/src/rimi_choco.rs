@@ -63,6 +63,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .tile("tile", to)
             .i("n", len as i64),
     );
+    // `ctx::card_move` routes through `abnormal_gate`, whose [不可阻挡] check
+    // refuses only *other-caused* movement abnormals (glossary 51 「可选择受到
+    // 的…效果是否生效」). This card's own move is self-chosen and goes through.
     ctx::card_move(player_id);
     Ok(())
 }

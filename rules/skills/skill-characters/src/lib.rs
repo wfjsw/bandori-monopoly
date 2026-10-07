@@ -47,7 +47,30 @@
 
 extern crate alloc;
 
+use card_sdk::abi::{state_key, TriggerKind};
+use card_sdk::ctx::{self, state};
 use card_sdk::CardDef;
+
+/// 「初始N，上限M」 -- the fire-pot bounds, plus the initial count at the
+/// after-match-start point (where initial tokens/resources are created).
+///
+/// Hook this from both `TurnStartBefore` (so the cap holds from the first turn
+/// even when the skill is placed mid-game) and `DeckAtGameStart` (where
+/// 「初始N」 is created), e.g.
+/// `On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], |_| true, declare_cap)`.
+///
+/// The cap is written **only when unset** (0), so a later `add_fire_max`
+/// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn
+/// re-hook. A character swap (`Sumimi:两个都想要`) writes the new bounds
+/// explicitly and is unaffected.
+pub fn fire_pot(player_id: i32, initial: i32, cap: i32) {
+    if state::max(player_id, state_key::FIRE) == 0 {
+        state::set_bounds(player_id, state_key::FIRE, 0, cap);
+    }
+    if ctx::trigger::kind() == TriggerKind::DeckAtGameStart {
+        state::set(player_id, state_key::FIRE, initial);
+    }
+}
 
 pub mod anon_restart;
 use anon_restart::ANON_RESTART;

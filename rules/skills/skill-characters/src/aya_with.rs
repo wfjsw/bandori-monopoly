@@ -34,6 +34,10 @@ pub const AYA_WITH: CardDef = CardDef::new(
 );
 
 fn mine(player_id: i32) -> bool {
+    // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 (初次演出事故)
+    // -- the `skillBlock:Pastel✽Palettes` token (one spelling, the band's real
+    // name). `skill_blocked` covers the token, the global `skillBlock`, and a
+    // `skillBlock` mark on the tile.
     if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
@@ -43,6 +47,11 @@ fn mine(player_id: i32) -> bool {
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得丸山彩的
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
+    // （1） belongs to the skill's own Pastel✽Palettes character, not to
+    // the grantees of the (2) below -- their copies must not re-fire it.
+    if !ctx::in_band(player_id, "Pastel✽Palettes") {
+        return Ok(());
+    }
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     // 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- a grant is the skill
     // rule placed on the grantee's field. `bind_skills` already puts a player's
@@ -61,6 +70,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「自己每次需要支付资金时可选择将自己Y个正面[P✽P粉丝]变反，此次支付的
 /// 分摊前资金减少Y×100（最少0）」.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
+    // 「不可使用」 -- same gate as `mine`, repeated in the body.
+    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
+        return Ok(());
+    }
     let amount = ctx::trigger::value();
     if amount <= 0 {
         return Ok(());

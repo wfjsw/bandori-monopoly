@@ -21,13 +21,15 @@ pub const EXIST: CardDef = CardDef::new(
 const ID: &str = "RAS:EXIST";
 
 /// C# `Mem["used"]` -- set by the redirect when this card retargeted a card.
-const SLOT_USED: &str = "exist_used";
+/// Stored on the card instance (`FieldCard::props`), not in the player's
+/// keyed-state map, so the write stays inside this rule's scope.
+const PROP_USED: &str = "exist.used";
 
 fn exist(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡放置于自己场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("exist_note")));
-    ctx::set_slot(player_id, SLOT_USED, 0);
+    ctx::set_prop(PROP_USED, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("exist_placed")).player_id("who", player_id),
@@ -58,7 +60,7 @@ fn redirect(player_id: i32) -> card_sdk::Asked {
         // opens), so a later counter that negates the effect still leaves the
         // flag set and the draw unearned. Moving it to settlement (a `target`
         // hook) would mean "nothing landed on me", which is the other reading.
-        ctx::set_slot(player_id, SLOT_USED, 1);
+        ctx::set_prop(PROP_USED, 1);
     }
     Ok(())
 }
@@ -73,13 +75,13 @@ fn turn_start_guard(player_id: i32) -> bool {
 
 fn turn_start(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「你的下回合开始时将其翻入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
-    let used = ctx::slot(player_id, SLOT_USED);
+    let used = ctx::prop(PROP_USED);
     ctx::set_dest(ctx::Dest::Graveyard);
     // 规则书: 「若在此期间此卡没有造成影响，抽1张卡」 -- C# draws 1 only when
     // `Mem["used"]` was never set; the `redirect` hook above sets it (C#
     // `CardExist.Used` -> `Mem["used"] = 1`) when this card retargeted a play.
     if used == 0 {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     }
     ctx::log(
         player_id,

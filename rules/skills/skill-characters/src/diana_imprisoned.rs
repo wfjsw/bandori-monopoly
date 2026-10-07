@@ -88,9 +88,11 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 
 /// 状态1: 「移动改为10+1d10」.
 fn on_plan(player_id: i32) -> card_sdk::Asked {
+    // 规则书: 「移动改为10+1d10」 -- the d20 becomes a d10 and a flat 10 rides
+    // along; the summed roll is the walk's length (`set_steps` would pin the
+    // walk to 10 and drop the die).
     plan::set_base_dice(1, 10, "Imprisoned XII");
-    plan::add_base_dice(1, 10, "Imprisoned XII");
-    plan::set_steps(10);
+    plan::add_extra_dice(10, 0, "Imprisoned XII");
     Ok(())
 }
 

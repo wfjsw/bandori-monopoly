@@ -32,7 +32,9 @@ fn is_ring(t: i32) -> bool {
 pub const KOKORO_PRACTICE: CardDef = CardDef::new(
     "skill:凑友希那:来练习吧",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        // （1）'s starting square and deed: the before-match-start point decides
+        // start positions.
+        On::Hook(&[HookKind::DeckBeforeGame], |_| true, at_start),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::PassPlayer], mine, on_passed),
         On::Hook(&[HookKind::SettleAfter], mine, on_settle),
@@ -52,7 +54,11 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     }
     ctx::set_owner(t, player_id);
     ctx::teleport_to(player_id, t);
+    // （1）「首次经过CiRCLE不获得经过奖励」 -- arm `prop::NO_REWARD` on this
+    // instance (`docs/TILES.md`), and disarm it after the first pass (in
+    // `on_pass`). Held as data on the source, never derived from prose.
     state::set(player_id, WAIVED, 0);
+    ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("kokoro_practice_start")).tile("tile", t),
@@ -64,12 +70,12 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （1）'s waived first CiRCLE pass and （3）'s pot-on-RiNG / lose-off-RiNG.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    // （1） 「首次经过CiRCLE不获得经过奖励」 -- the waiver is the tile's own
-    // reward, which the engine pays on the pass. Latching it here is too late
-    // to stop that payment, so the engine's `no_circle_reward` plan flag is the
-    // right place; see the TODO below.
+    // （1） 「首次经过CiRCLE不获得经过奖励」 -- the flag was armed at game start;
+    // this is the pass it waives, so disarm it now (after `circle_reward` has
+    // already consulted and honoured it). Subsequent passes earn normally.
     if ctx::is_circle(t) && state::get(player_id, WAIVED) == 0 {
         state::set(player_id, WAIVED, 1);
+        ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 0);
     }
     // （2） 「可以在[经过]的第一个RiNG停止移动」 -- offered on the first RiNG
     // the walk passes.

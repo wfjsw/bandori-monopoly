@@ -63,7 +63,15 @@ fn a_counter_window_is_offered_to_a_human_holding_a_counter() {
     assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
     assert_eq!(t.asked(), vec![1]);
     t.decline();
-    assert!(t.prompt().is_none(), "{}", t.dump_prompt());
+    // The card's payment is itself a [反击] point (any card-caused payment is
+    // answerable), so more windows may follow; drain them and prove the effect
+    // settled.
+    while t.prompt().is_some() {
+        t.decline();
+    }
+    // 通用:登上武道馆: X = 2000 ÷ 1 = 2000, paid by the one other player.
+    assert_eq!(t.money(0), 12_000, "{}", t.dump_prompt());
+    assert_eq!(t.money(1), 8_000);
 }
 
 #[test]

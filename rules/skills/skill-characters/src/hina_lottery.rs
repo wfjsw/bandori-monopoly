@@ -47,6 +47,11 @@ fn mine(player_id: i32) -> bool {
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得冰川日菜
 /// 的（2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
+    // （1） belongs to the skill's own Pastel✽Palettes character, not to
+    // the grantees of the (2) below -- their copies must not re-fire it.
+    if !ctx::in_band(player_id, "Pastel✽Palettes") {
+        return Ok(());
+    }
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {

@@ -68,7 +68,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     match k {
         // 规则书: 「若为1则立刻获得1500资金」
         1 => {
-            ctx::gain(player_id, 1500, &Msg::new(key!("any_color_sunset_why")));
+            ctx::gain(player_id, 1500, &Msg::new(key!("any_color_sunset_why")))?;
         }
         // 规则书: 「若为2则从弃牌堆中选择一张牌放置到抽牌堆顶」
         2 => {
@@ -78,7 +78,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若为3则抽一张牌」
         3 => {
-            ctx::draw(player_id, 1);
+            ctx::draw(player_id, 1)?;
         }
         // 规则书: 「若为4则可选择补满火罐或者获得2000资金」
         4 => {
@@ -106,7 +106,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                 }
             } else {
                 // 规则书: 「获得2000资金」
-                ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_why")));
+                ctx::gain(player_id, 2000, &Msg::new(key!("any_color_sunset_why")))?;
             }
         }
         // 规则书: 「若为5则从弃牌堆中选择一张牌加入手牌」

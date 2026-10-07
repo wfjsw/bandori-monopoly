@@ -3,10 +3,11 @@
 //! 规则书（docs/rulebook/cards.json, id `CRYCHIC:想要成为人类`）:
 //! > 想要成为人类 
 //! >  ：
-//! > （1）将此卡置于场上并从1-20间选择并声明X，将其写下。每当你的移动掷骰小于X，为此卡添加一个奇迹水晶。
+//! > （1）将此卡置于场上并从1-20间选择并声明X，将其写下。每当你的移动掷骰小于等于X，为此卡添加一个奇迹水晶。
 //! > （2）[自动]若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部奇迹水晶并使你下次的移动掷骰结果额外增加20-X；若该次移动过程中受到异常移动效果影响，为此卡添加两个奇迹水晶。
 //!
-//! card, declare X in 1-20, bank crystals when your move roll is under X.
+//! Sheet 2026-10-06 新卡组卡 M2: 「小于等于X」 (was 「小于X」) -- roll == X
+//! also banks a crystal.
 
 use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
@@ -79,14 +80,15 @@ fn counteract_guard(player_id: i32) -> bool {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
-        // 规则书（1）: 「每当你的移动掷骰小于X，为此卡添加一个奇迹水晶。」
+        // 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
+        // 为此卡添加一个奇迹水晶。」 (was 「小于X」).
         TriggerKind::RollAfter => {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
             let roll = trigger::value();
             let x = ctx::slot(player_id, SLOT_X);
-            if x > 0 && roll < x {
+            if x > 0 && roll <= x {
                 ctx::add_crystals(1, 0);
                 ctx::log(
                     player_id,

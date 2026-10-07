@@ -65,8 +65,8 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「若选择的投掷结果大于60，获得1000资金并抽一张卡，不放置标记」
     // -- the board has 60 tiles, so a total above 60 wrapped past the end of it.
     if chosen > n {
-        ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_marks_over_why")));
-        ctx::draw(player_id, 1);
+        ctx::gain(player_id, 1000, &Msg::new(key!("hagumi_marks_over_why")))?;
+        ctx::draw(player_id, 1)?;
         return Ok(());
     }
     // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」
@@ -139,7 +139,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     // the mark when it reaches 0.
     ctx::remove_marks(t, key!("hagumi_marks_mark"), player_id);
     // 规则书（1）: 「获得2000资金」 -- C# `H.GainR(Seat, 2000, "育美标记")`.
-    ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")));
+    ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
     ctx::log(
         player_id,
         &Msg::new(key!("hagumi_marks_stop_done"))

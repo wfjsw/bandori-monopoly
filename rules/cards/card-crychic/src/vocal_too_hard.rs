@@ -21,6 +21,11 @@ fn can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
         return false;
     }
+    // 规则书[反击]: 「支付资金」 -- the `pay` effect entry (the causer's own
+    // `abnormal` also rides an `effect` link and must not open this window).
+    if !ctx::effect::has(TriggerKind::Pay) {
+        return false;
+    }
     // 规则书[反击]: 「向其他玩家支付」 -- C# `t.Pay.PayToOther` (`Pay.from >= 0
     // && Pay.to >= 0`); on pay triggers `t.Pay.to` is `trigger::target()`.
     if trigger::target() < 0 {

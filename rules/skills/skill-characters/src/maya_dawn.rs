@@ -19,7 +19,7 @@
 use alloc::string::String;
 
 use card_sdk::abi::{CardPile, HookKind};
-use card_sdk::ctx;
+use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -29,7 +29,8 @@ pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
         On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::Drew], mine, on_draw),
+        // （2） replaces the draw, so it runs at the per-card **before** point.
+        On::Hook(&[HookKind::DrewBefore], mine, on_draw),
     ],
 );
 
@@ -40,6 +41,11 @@ fn mine(player_id: i32) -> bool {
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得大和麻弥的
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
+    // （1） belongs to the skill's own Pastel✽Palettes character, not to
+    // the grantees of the (2) below -- their copies must not re-fire it.
+    if !ctx::in_band(player_id, "Pastel✽Palettes") {
+        return Ok(());
+    }
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -90,12 +96,15 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
             .map(|c| Msg::new(key!("maya_dawn_option")).card("card", c))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
-    // 「选择一张牌（不公开）加入手牌（此次加手视为抽卡动作）」
+    // 「选择一张牌（不公开）加入手牌（此次加手视为抽卡动作）」 -- the pick is
+    // the draw: it replaces the plain draw (`set_cancelled`) and the engine's
+    // after-draw points fire for the card that entered the hand.
     let Some(keep) = look.get(pick).cloned() else {
         return Ok(());
     };
     if ctx::take_card(player_id, CardPile::Deck, &keep) {
         ctx::add_to_hand(player_id, &keep);
+        trigger::set_cancelled();
     }
     // 「剩余观看的牌洗回卡组」
     for c in look.iter().filter(|c| **c != keep) {

@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `R:向着顶点`）:
 //! > 向着顶点：
-//! >  移动到下一个可被购买的livehouse格子。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋。
+//! >  移动到下一个可被购买的livehouse格子，视为你的主要移动。若所有livehouse格子已被购买，可花费1.5倍价格为属于你的一个livehouse格子加盖一层房屋。
 //!
 //! free Livehouse, or build one of yours at 1.5x cost.
 

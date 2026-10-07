@@ -23,7 +23,7 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-const UP: &str = "X标记(正)";
+const UP: &str = "X";
 const DOWN: &str = "X标记(反)";
 /// Recorded figure per recipient, keyed `skill.tsugushi.rec:<player>`.
 fn rec_key(p: i32) -> alloc::string::String {
@@ -43,11 +43,16 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
 );
 
 fn mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
+    // （1）「当你获得资金」 -- the skill fires on *receiving* money, so the
+    // hook's `target` (the payee) is the skill owner. A print carries
+    // `target = me`, `player_id = -1`.
+    ctx::trigger::target() == player_id && ctx::trigger::value() > 0
 }
 
 fn other(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id
+    // （2）「当有角色获得金钱」 -- someone *else* received money.
+    let t = ctx::trigger::target();
+    t >= 0 && t != player_id && ctx::trigger::value() > 0
 }
 
 /// The per-lap rate starts at 800 and drops by 200 per (3), floored at 200.
@@ -72,6 +77,10 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
+    // 「可以改为指定场上除你以外的一个角色」 -- the 「可以」 is a yes/no first
+    // (`tsugushi_ask`: 「改为指定另一名角色进行该动作？」), then one pick over the
+    // other players (`tsugushi_who`: 「指定哪名角色？」). Declining the yes/no
+    // is "don't redirect" (the gain stays); `ask_pick` has no decline of its own.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tsugushi_title")),
@@ -92,15 +101,17 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     // 「可以改为指定…一个角色进行一次该动作」 -- the figure moves to them.
+    // The X mark and the record land *before* the forwarded gain: a downstream
+    // `payAfter` hook on that gain may return `Err(Prompt)`, and the mark must
+    // not be lost to that pause (the money has already moved by then).
     ctx::trigger::set_pay_amount(0);
+    ctx::add_tok(who, UP, 1, i32::MAX);
+    state::set(player_id, &rec_key(who), amount);
     ctx::gain(
         who,
         amount,
         &Msg::new(key!("tsugushi_forwarded")).i("n", amount as i64),
-    );
-    // 「发送给对方一个X（占位）标记并记录…数量」
-    ctx::add_tok(who, UP, 1, i32::MAX);
-    state::set(player_id, &rec_key(who), amount);
+    )?;
     ctx::log(
         player_id,
         &Msg::new(key!("tsugushi_sent"))
@@ -112,7 +123,9 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作」.
 fn on_theirs(player_id: i32) -> card_sdk::Asked {
-    let src = ctx::trigger::player_id();
+    // 「当有角色获得金钱」 -- the gainer is the payee (`target`), not `player_id`
+    // (which is the payer, -1 on a print).
+    let src = ctx::trigger::target();
     if src < 0 || src == player_id {
         return Ok(());
     }
@@ -147,13 +160,13 @@ fn on_theirs(player_id: i32) -> card_sdk::Asked {
         player_id,
         mine,
         &Msg::new(key!("tsugushi_taken")).i("n", mine as i64),
-    );
+    )?;
     if theirs > 0 {
         ctx::gain(
             src,
             theirs,
             &Msg::new(key!("tsugushi_excess")).i("n", theirs as i64),
-        );
+        )?;
     }
     Ok(())
 }
@@ -189,7 +202,7 @@ fn cash(player_id: i32) -> card_sdk::Asked {
         player_id,
         n * rate,
         &Msg::new(key!("tsugushi_cash")).i("n", (n * rate) as i64),
-    );
+    )?;
     // 「每次发动（3）技能时单个标记的收益减200，最低单标记收益200」
     state::set(player_id, RATE, (rate - 200).max(200));
     ctx::log(player_id, &Msg::new(key!("tsugushi_done")));

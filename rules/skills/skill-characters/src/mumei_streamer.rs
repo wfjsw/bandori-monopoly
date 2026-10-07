@@ -27,7 +27,11 @@ const FLIPPED: &str = "skill.mumei.flipped";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::PayAdd], in_one, on_pay_add),
         On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
         On::Hook(&[HookKind::TurnEnd], mine, at_turn_end_exit),
@@ -44,7 +48,7 @@ fn in_one(player_id: i32) -> bool {
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 5);
+    crate::fire_pot(player_id, 0, 5);
     Ok(())
 }
 

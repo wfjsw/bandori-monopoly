@@ -192,6 +192,19 @@ pub struct Cx<'a> {
     /// Seconds of presentation time requested since the last answered prompt; the
     /// host waits this long before the next automatic step.
     pub(crate) delay: f32,
+    /// How deep the `money()` pipeline is nested right now. A card hook that
+    /// forces another money movement from inside a before/after money event
+    /// re-enters `money()`; this bounds that, the way `MAX_COUNTERACT_DEPTH`
+    /// bounds the chain. Transient (not serialized).
+    pub(crate) money_depth: u32,
+    /// Card uids whose hooks are currently running and must not re-trigger on
+    /// their own movement (the termination argument for nested money). Transient.
+    pub reentrant_hooks: Vec<i32>,
+    /// The 移动起点 of the move currently being walked / teleported, or `-1`
+    /// when no move is in flight. 「[经过]CiRCLE且[移动起点]不为CiRCLE」 reads it
+    /// (`circle_reward`). Transient (not serialized) -- the walk sets it as it
+    /// starts and the reward step is the only reader.
+    pub(crate) move_start: i32,
 }
 
 impl<'a> Cx<'a> {
@@ -231,6 +244,44 @@ impl<'a> Cx<'a> {
         t.extreme = f.extreme;
         t.play_from_hand = f.play_from_hand;
         t.no_money_loss = f.no_money_loss.clone();
+        // The movement plan a card shaped just before pausing for a host
+        // routine (`plan::set_pay_factor` / `set_rent_factor` / `set_can_build`
+        // ) lives on the card's world copy; the routine
+        // runs against the live world, so the knobs have to cross too --
+        // otherwise 练习室里的风暴's (4-X)/4 and Repaint's 「支付减半」 are
+        // dropped at the `SettleAt` / `Move` boundary.
+        t.plan.pay_factor = f.plan.pay_factor;
+        t.plan.rent_factor = f.plan.rent_factor;
+        t.plan.can_build = f.plan.can_build;
+        t.plan.no_buy = f.plan.no_buy;
+        // A card body may latch a decision across the pauses its host routines
+        // cause -- e.g. 黑色生日 freezing 「资金在1000以下」 at resolution so the
+        // replay's re-run takes the same branch across its two [支付] entries.
+        // That write lives on the card's world copy and is dropped when the run
+        // pauses. Carry it over -- but *only* for keys a body explicitly
+        // registers under the `latch.` prefix.
+        //
+        // TODO(规则书): a card's *other* state writes (a status clear, e.g. 壱雫空
+        // zeroing [晕眩] and then paying) still do not reach the live world before
+        // the host routine runs, so `can_pay` blocks the leg. A general carry is
+        // **not** feasible in this replay model: the body re-runs from the top on
+        // every pause, so an additive write (`give_stun(2)`) would land here and
+        // again on the replay (4), and even a "clears only" carry breaks
+        // `rb_general::parking_replaces_settle_with_stay`. The card-side
+        // workaround is `gain_fixed` (see `rules/cards/card-mygo/src/hitoshizuku.rs`
+        // `TODO(ABI)`); a real fix wants the host routine to see a merged view
+        // that is not persisted (swap in the guest state for the routine's
+        // duration, restore after).
+        for (to, from_p) in self.w.st.players.iter_mut().zip(from.st.players.iter()) {
+            for (k, v) in &from_p.state {
+                if !k.starts_with("latch:") {
+                    continue;
+                }
+                if !to.state.contains_key(k) {
+                    to.state.insert(k.clone(), v.clone());
+                }
+            }
+        }
     }
 
     /// The shared game data (tile/card lookups).
@@ -256,6 +307,9 @@ impl<'a> Cx<'a> {
             answers,
             cursor: 0,
             delay: 0.0,
+            money_depth: 0,
+            reentrant_hooks: Vec::new(),
+            move_start: -1,
         }
     }
 

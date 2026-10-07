@@ -95,7 +95,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
         ctx::Dest::Graveyard,
     );
     if user >= 0 && !ctx::player_out(user) {
-        ctx::draw(user, 1);
+        ctx::draw(user, 1)?;
     }
     ctx::log(
         player_id,
@@ -127,7 +127,7 @@ fn buy_after(player_id: i32) -> card_sdk::Asked {
         user,
         pay,
         &Msg::new(key!("chuchu_music_gain")).i("n", pay as i64),
-    );
+    )?;
     // 规则书: 「将此卡移至除[使用者]外行动序列下一名玩家的场上并将奇迹水晶补充至3个」
     // -- C# `Move()`: next player in action order skipping the user and outed players.
     let n = ctx::player_count();

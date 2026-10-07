@@ -25,6 +25,15 @@ use game_rules::WasmRules;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
+/// The browser engine is long-lived and allocates on every tick, so the
+/// allocator is a real cost. wasm32 defaults to dlmalloc; talc's dynamic wasm
+/// heap is smaller and faster for this shape of load. (talc 5.x named the old
+/// `TalckWasm::new_global` API away -- `new_wasm_dynamic_allocator` is its
+/// replacement, and the crate is pinned in Cargo.toml.)
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocator();
+
 thread_local! {
     static DATA: RefCell<Option<Arc<GameData>>> = const { RefCell::new(None) };
 }

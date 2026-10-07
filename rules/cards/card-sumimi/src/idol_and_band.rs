@@ -31,6 +31,6 @@ fn idol_and_band(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书: 「将你的资金重设为3000」
     // C# H.Money(..., fixedAmount: true) -- the host's gain carries no such flag yet.
-    ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")));
+    ctx::gain(player_id, 3000 - have, &Msg::new(key!("idol_and_band_why")))?;
     Ok(())
 }

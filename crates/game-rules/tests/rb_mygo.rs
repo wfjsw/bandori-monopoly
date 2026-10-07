@@ -154,6 +154,51 @@ fn light_crystal_pays_skill_fire_cost() {
 }
 
 #[test]
+fn light_refills_crystals_lost_for_a_non_skill_cost_reason() {
+    // Sheet 2026-10-06 新卡组卡 I3 (2) adds:
+    // 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻获得等同于减少量的[奇迹水晶]」
+    // -- a decrease that is not the skill-cost substitution is refunded.
+    //
+    // The loss is a real in-game cause, not a field write: sheet J13
+    // 「将场上一张卡上的一个奇迹水晶移动到另一张可以放置奇迹水晶的卡上」
+    // (Mujica:会被骗着买水晶的人) moves one crystal off this card.
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "高松灯");
+    t.set_hand(0, &["R:[衍生] 压", "R:[衍生] 觉悟"]);
+    t.give_play(0, "MyGO:（灯）不再迷茫").unwrap();
+    let card = "MyGO:（灯）不再迷茫";
+    assert_eq!(crystals(&t, 0, card), 3, "X=2 -> 3");
+    // A second crystal-holding card is the move's destination.
+    t.place_raw(0, "AG:绯红之魂");
+    t.give_play(0, "Mujica:会被骗着买水晶的人").unwrap();
+    // Source prompt: this card. (Options name the card id.)
+    let k = t
+        .option(card)
+        .unwrap_or_else(|| panic!("source prompt: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    // Target prompt: the other card that can hold crystals.
+    let k = t
+        .option("AG:绯红之魂")
+        .unwrap_or_else(|| panic!("target prompt: {}", t.dump_prompt()));
+    t.answer(0, k).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    // The move took 1 crystal away for a non-substitution reason: the sheet
+    // refunds that 1 immediately, so the count is back to where it was.
+    assert_eq!(
+        crystals(&t, 0, card),
+        3,
+        "the 1 crystal lost to the J13 move is refunded 1:1: {:?}",
+        t.field_ids(0)
+    );
+    assert_eq!(
+        t.crystals(0, "AG:绯红之魂"),
+        Some(1),
+        "the moved crystal landed on the destination (the loss was real)"
+    );
+}
+
+#[test]
 fn light_zero_hand_gives_one_crystal() {
     // 规则书: 「X+1个[奇迹水晶]」 -- X=0 still gives 1.
     let mut t = Table::vanilla(2);
@@ -256,7 +301,6 @@ fn rain_stay_blocks_this_turn_move() {
 // ---------------------------------------------------------------- MyGO:壱雫空
 
 #[test]
-#[ignore = "DISCREPANCY: book says 清除场上所有[停留]与[眩晕]效果; engine leaves every stay/stun layer in place (it only moves money)"]
 fn clear_removes_all_stay_and_stun() {
     // 规则书: 「清除场上所有[停留]与[眩晕]效果」
     let mut t = Table::vanilla(3);
@@ -270,35 +314,58 @@ fn clear_removes_all_stay_and_stun() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 所有玩家 pay 1000 per cleared effect type; engine charges only the affected player 1000 per cleared effect and skips unaffected players"]
 fn clear_charges_every_player_per_type() {
     // 规则书: 「所有玩家因本效果每清除一种效果则支付此卡使用者1000资金」
-    // Two types (停留+眩晕) cleared, none on the user: every player pays 2000.
+    // Ruling 2026-10-06: 「每清除一种效果」 is per effect type, counted
+    // separately for each affected player. P1 has 停留 (1 type), P2 has 眩晕
+    // (1 type) → count = 1 + 1 = 2. Every player pays 2000. The user has none.
     let mut t = Table::vanilla(3);
     t.set_state(1, "stay", 1);
     t.set_state(2, "stun", 1);
     t.give_play(0, "MyGO:壱雫空").unwrap();
-    assert_eq!(t.money(1), 8_000, "P1 pays 2000 (two types)");
-    assert_eq!(t.money(2), 8_000, "P2 pays 2000 (two types)");
+    assert_eq!(t.money(1), 8_000, "P1 pays 2000 (count 2)");
+    assert_eq!(t.money(2), 8_000, "P2 pays 2000 (count 2)");
     assert_eq!(t.money(0), 14_000, "user collects 2000 x 2");
 }
 
+// Ruling 2026-10-06: the count is per effect type *per affected player*.
+// Clearing 2 types from A and 1 type from B counts 3.
 #[test]
-#[ignore = "DISCREPANCY: book says every player pays 1000 per type and the user gains an extra 1000 per own type; engine charges only affected players and does not add the user's extra"]
+fn clear_two_types_and_one_type_counts_three() {
+    // P1 has 停留+眩晕 (2 types), P2 has 停留 (1 type) → count = 3.
+    // Every player pays 3000; the user has none so no extra.
+    let mut t = Table::vanilla(3);
+    t.set_state(1, "stay", 1);
+    t.set_state(1, "stun", 1);
+    t.set_state(2, "stay", 1);
+    t.give_play(0, "MyGO:壱雫空").unwrap();
+    assert_eq!(t.state(1, "stay"), 0);
+    assert_eq!(t.state(1, "stun"), 0);
+    assert_eq!(t.state(2, "stay"), 0);
+    assert_eq!(t.money(1), 7_000, "P1 pays 3000 (count 3)");
+    assert_eq!(t.money(2), 7_000, "P2 pays 3000 (count 3)");
+    assert_eq!(t.money(0), 16_000, "user collects 3000 x 2");
+}
+
+#[test]
 fn clear_user_effect_gives_extra() {
     // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
+    // Ruling: stay on P0 and stay on P1 count separately → count = 2.
+    // Every player pays 2000; the user gains 1000 extra per own type (1).
     let mut t = Table::vanilla(3);
     t.set_state(0, "stay", 1);
     t.set_state(1, "stay", 1);
     t.give_play(0, "MyGO:壱雫空").unwrap();
-    // One type cleared: every player pays 1000; user also gains 1000 extra.
-    assert_eq!(t.money(2), 9_000, "unaffected P2 still pays the per-type 1000");
-    assert_eq!(t.money(1), 9_000);
-    assert_eq!(t.money(0), 12_000, "self-pay nets 0 + 1000 from P1 + 1000 extra");
+    assert_eq!(t.money(2), 8_000, "unaffected P2 still pays the count-2 2000");
+    assert_eq!(t.money(1), 8_000);
+    assert_eq!(
+        t.money(0),
+        15_000,
+        "self-pay nets 0 + 2000 from P1 + 2000 from P2 + 1000 extra"
+    );
 }
 
 #[test]
-#[ignore = "DISCREPANCY: 「（此卡可在眩晕时打出）」 now works (stun gate skips this card); the body still does not clear stay/stun (see clear_removes_all_stay_and_stun)"]
 fn clear_playable_while_stunned() {
     // 规则书: 「（此卡可在眩晕时打出）」
     let mut t = Table::vanilla(2);
@@ -357,7 +424,7 @@ fn haneoka(who: usize, face: i32) -> Table {
 
 #[test]
 fn haneoka_below_10_is_ineffective() {
-    // 规则书: 「若严格小于10，此卡放入弃牌堆且视为此卡未生效」
+    // 规则书 (sheet 2026-10-06 新卡组卡 I7): 「若小于10，此卡放入弃牌堆且视为此卡未生效」
     for face in [1, 5, 9] {
         let t = haneoka(0, face);
         assert_eq!(t.houses(7), 0, "face {face}: no house");
@@ -371,8 +438,8 @@ fn haneoka_below_10_is_ineffective() {
 
 #[test]
 fn haneoka_over_10_builds_free_house() {
-    // 规则书: 「若出目大于10则在当前格子免费加盖一层房屋」
-    for face in [11, 15, 16, 21] {
+    // 规则书 (sheet 2026-10-06 新卡组卡 I7): 「若出目至少为10则在当前格子免费加盖一层房屋」
+    for face in [11, 15, 16, 20] {
         let t = haneoka(0, face);
         assert_eq!(t.houses(7), 1, "face {face}: one free house");
         assert_eq!(t.money(0), 10_000, "face {face}: free");
@@ -380,37 +447,91 @@ fn haneoka_over_10_builds_free_house() {
 }
 
 #[test]
+fn haneoka_at_10_builds_free_house() {
+    // Boundary: 10 is INCLUSIVE under the sheet (supersedes 「大于10」).
+    let t = haneoka(0, 10);
+    assert_eq!(t.houses(7), 1, "face 10: one free house under 「至少为10」");
+    assert_eq!(t.money(0), 10_000, "face 10: free");
+}
+
+#[test]
+fn haneoka_at_9_does_not_build() {
+    // Boundary: 9 is 小于10 → ineffective, no house.
+    let t = haneoka(0, 9);
+    assert_eq!(t.houses(7), 0, "face 9: no house");
+}
+
+#[test]
 fn haneoka_over_15_also_draws() {
-    // 规则书: 「若出目大于15，则额外抽一张卡」
-    let t = haneoka(0, 16);
-    assert_eq!(t.houses(7), 1);
-    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "drew one");
+    // 规则书 (sheet 2026-10-06 新卡组卡 I7): 「若出目至少为15，则额外抽一张卡」
+    for face in [16, 20] {
+        let t = haneoka(0, face);
+        assert_eq!(t.houses(7), 1, "face {face}");
+        assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "face {face}: drew one");
+    }
 }
 
 #[test]
-fn haneoka_15_does_not_draw() {
-    // 规则书: 「若出目大于15」 -- 15 is not greater than 15.
+fn haneoka_at_15_draws() {
+    // Boundary: 15 is INCLUSIVE under the sheet (supersedes 「大于15」).
     let t = haneoka(0, 15);
-    assert_eq!(t.houses(7), 1);
-    assert!(t.hand(0).is_empty(), "15 is not >15");
+    assert_eq!(t.houses(7), 1, "face 15 ≥ 10");
+    assert_eq!(
+        t.hand(0),
+        vec!["R:[衍生] 压".to_string()],
+        "face 15: drew one under 「至少为15」"
+    );
 }
 
 #[test]
-fn haneoka_at_20_does_not_place() {
-    // 规则书: 「大于20，则将此卡放置在自己场上」 -- strictly greater than 20.
-    // A plain d20 tops out at 20, so 20 must NOT place the card.
+fn haneoka_14_does_not_draw() {
+    // 规则书 (sheet 2026-10-06 新卡组卡 I7): 「若出目至少为15」 -- 14 is below the
+    // inclusive threshold. (The old 「大于15」 reading made 15 itself a miss;
+    // the sheet now includes 15.)
+    let t = haneoka(0, 14);
+    assert_eq!(t.houses(7), 1);
+    assert!(t.hand(0).is_empty(), "14 is not ≥15");
+}
+
+#[test]
+fn haneoka_at_20_places_the_card() {
+    // Sheet 2026-10-06 新卡组卡 I7 supersedes the 2026-10-06 exclusive ruling:
+    // 「至少为20，则将此卡放置在自己场上」 -- a d20 of exactly 20 qualifies.
     let t = haneoka(0, 20);
-    assert_eq!(t.houses(7), 1, "20 > 10");
-    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "20 > 15 draws");
+    assert_eq!(t.houses(7), 1, "20 ≥ 10");
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "20 ≥ 15 draws");
+    assert!(
+        t.on_field(0, "MyGO:羽丘的不可思议女孩"),
+        "20 is ≥20; the card must stay on the field: {:?}",
+        t.field_ids(0)
+    );
+    assert!(
+        !t.discard(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+        "placed, not discarded"
+    );
+}
+
+#[test]
+fn haneoka_at_19_does_not_place() {
+    // Boundary: 19 is not ≥20 → the card does not stay on the field.
+    let t = haneoka(0, 19);
+    assert_eq!(t.houses(7), 1, "19 ≥ 10");
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()], "19 ≥ 15 draws");
     assert!(
         !t.on_field(0, "MyGO:羽丘的不可思议女孩"),
-        "20 is not >20; the card must not stay on the field"
+        "19 is not ≥20; the card must not stay on the field"
     );
     assert!(
         t.discard(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
         "to discard"
     );
 }
+
+// The old haneoka_over_20_places_the_card loaded a face of 21, but the dice
+// seam clamps to the die (a d20 tops out at 20), so 21 is unreachable without
+// a modifier card. Under the sheet's 「至少为20」 the reachable boundary is 20
+// itself -- see haneoka_at_20_places_the_card (DISCREPANCY against the
+// engine's 「大于20」) and haneoka_at_19_does_not_place.
 
 // ---------------------------------------------------------------- MyGO:[千早爱音]Anon Tokyo
 
@@ -551,7 +672,6 @@ fn soyo_mixed_colors_attaches_to_owned_tile() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says the card's tile is further halved on top of the agent's half-charge (1360/2/2=340); engine charges the plain agent half (680)"]
 fn soyo_mixed_colors_halves_agent_charge_again() {
     // 规则书: 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，
     //          收费在地产商的减半收费基础上额外减半。」
@@ -584,7 +704,6 @@ fn soyo_mixed_colors_halves_agent_charge_again() {
 // ---------------------------------------------------------------- MyGO:（立希）想认真去做
 
 #[test]
-#[ignore = "DISCREPANCY: book says payments from the forced [触发结算] cost a quarter (60/4=15); engine charges the full rent (60)"]
 fn rikki_settle_quarter_pay_exact() {
     // 规则书: 「使场上所有拥有[停留]的玩家立刻在所在格子前后2格内你选择的一个格子
     //          进行一次[触发结算]，本次结算导致的所有[支付]变为原价的四分之一」
@@ -648,7 +767,6 @@ fn rana_fun_woman_sits_on_current_tile() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says a pass without settle adds a crystal to the card; engine leaves the count at 0"]
 fn rana_fun_woman_gains_crystal_on_pass() {
     // 规则书: 「每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶」
     let mut t = Table::vanilla(3);
@@ -697,7 +815,6 @@ fn rain_day_d10_stays_the_matching_zone() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says players on tiles adjacent to the zone's tiles also gain [停留]; engine only covers the zone's own tiles"]
 fn rain_day_adjacent_tiles_also_stay() {
     // 规则书: 「及这些格子相邻格子上的所有玩家获得一层[停留]」
     // Blue tiles are 1,4,5,6,7. Tile 3 (水族馆) is adjacent to blue tile 4.
@@ -769,7 +886,6 @@ fn journey_places_on_tile_with_four_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says [持续] 触发结算时获得X*60资金 (X=3 -> +180); engine grants nothing"]
 fn journey_settle_gains_x_times_60() {
     // 规则书: 「（2）[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数」
     let mut t = Table::vanilla(2);
@@ -783,7 +899,6 @@ fn journey_settle_gains_x_times_60() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says a main move strictly over 6 drains one crystal at turn end (4->3); engine leaves the count at 4"]
 fn journey_drains_when_move_exceeds_six() {
     // 规则书: 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。」
     let mut t = Table::vanilla(2);
@@ -817,11 +932,13 @@ fn miracle_transfers_band_crystals_on_play() {
     let mut t = Table::new(&["高松灯", "千早爱音"]);
     t.clean();
     t.begin_turn(0);
-    t.set_state(0, "bandCrystals", 3);
+    // Band-card crystals live on the band skill's own field instance.
+    let band = t.skill_id(0, "迷途之星");
+    t.set_crystals(0, &band, 3);
     t.give_play(0, "MyGO:难以复刻的奇迹").unwrap();
     assert!(t.on_field(0, "MyGO:难以复刻的奇迹"), "{:?}", t.field_ids(0));
     assert_eq!(crystals(&t, 0, "MyGO:难以复刻的奇迹"), 3, "transferred");
-    assert_eq!(t.state(0, "bandCrystals"), 0, "band skill emptied");
+    assert_eq!(t.crystals(0, &band), Some(0), "band skill emptied");
 }
 
 #[test]
@@ -849,7 +966,6 @@ fn tomori_fire_cap_is_four() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 初始4 fire; engine starts every character at 0 fire (only the cap is set)"]
 fn tomori_initial_fire_is_four() {
     // 规则书: 「（初始4，上限4）」 -- the pot starts at 4.
     let t = Table::new(&["高松灯", "千早爱音"]);
@@ -900,7 +1016,6 @@ fn anon_char_fire_cap_is_three() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 初始2 fire; engine starts at 0 (only the cap 3 is set)"]
 fn anon_char_initial_fire_is_two() {
     // 规则书: 「（初始2，上限3）」
     let t = Table::new(&["千早爱音", "高松灯"]);
@@ -933,7 +1048,6 @@ fn soyo_char_fire_cap_is_one() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 初始1 fire; engine starts at 0 (only the cap 1 is set)"]
 fn soyo_char_initial_fire_is_one() {
     // 规则书: 「（初始1，上限1）」
     let t = Table::new(&["长崎素世", "高松灯"]);
@@ -1000,7 +1114,6 @@ fn rana_cat_fire_cap_is_three() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 初始3 fire; engine starts at 0 (only the cap 3 is set)"]
 fn rana_cat_initial_fire_is_three() {
     // 规则书: 「（初始3，上限3）」
     let t = Table::new(&["要乐奈", "高松灯"]);
@@ -1026,7 +1139,6 @@ fn rana_cat_space_teleport_spends_three_fire() {
 // ================================================================ band skill
 
 #[test]
-#[ignore = "DISCREPANCY: book says 开局时投掷3d20 as the starting tile; engine starts every player on CiRCLE with no opening roll"]
 fn band_start_tile_is_the_opening_3d20() {
     // 规则书: 「（1）开局时投掷3d20，并取出目作为你本局游戏的起始点」
     let t = Table::new(&["高松灯", "千早爱音"]);
@@ -1042,7 +1154,6 @@ fn band_start_tile_is_the_opening_3d20() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says a move roll of 16+ puts a crystal on the band card; engine adds none"]
 fn band_roll_16_plus_adds_crystal() {
     // 规则书: 「（2）若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
@@ -1086,7 +1197,6 @@ fn band_roll_gain_is_capped_at_one() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says an ineffective card entering the discard adds a (over-cap) crystal to the band card; engine adds none"]
 fn band_ineffective_card_adds_over_cap_crystal() {
     // 规则书: 「（3）每次你的卡在未生效的情况下进入弃牌堆时，为此卡添加一个
     //          可超出上限的[奇迹水晶]（最多超出2个）」
@@ -1109,7 +1219,7 @@ fn band_ineffective_card_adds_over_cap_crystal() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 2 crystals buy a draw; engine refuses the activation (field-card instance not bound on the skill act) even with crystals present"]
+#[ignore = "DISCREPANCY: the band skill declares two `On::Play` activations (move-1 and draw); `use_skill` runs the first entry only, so the draw half is unreachable and the press takes the move-1 half instead"]
 fn band_draw_for_two_crystals() {
     // 规则书: 「你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
@@ -1124,7 +1234,7 @@ fn band_draw_for_two_crystals() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 1 crystal replaces the move roll with a 1-tile move; engine refuses the activation (field-card instance not bound on the skill act)"]
+#[test]
 fn band_move_one_for_a_crystal() {
     // 规则书: 「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」
     let mut t = Table::new(&["高松灯", "千早爱音"]);
@@ -1213,7 +1323,7 @@ fn inter_budokan_opens_confused_counter_for_each_target() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says an ineffective card entering the discard adds a band-skill crystal; engine adds none"]
+#[test]
 fn inter_haneoka_ineffective_feeds_band_crystal() {
     // 羽丘的不可思议女孩 「若严格小于10…视为此卡未生效」 feeds the band skill's
     // 「每次你的卡在未生效的情况下进入弃牌堆时」 clause.
@@ -1257,7 +1367,6 @@ fn inter_yolo_pushes_haneoka_over_20() {
 // ---------------------------------------------------------------- further clauses
 
 #[test]
-#[ignore = "DISCREPANCY: book says tile income during [除外] goes to the designated player; engine collects nothing (the exiled owner cannot receive and no redirect happens)"]
 fn no_road_income_goes_to_the_designated_player() {
     // 规则书: 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得。」
     let mut t = Table::vanilla(3);

@@ -45,7 +45,7 @@ fn heart_rain(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("heart_rain_fallback")).player_id("who", player_id),
         );
         ctx::give_stun(player_id, 1);
-        ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")));
+        ctx::gain(player_id, 1000, &Msg::new(key!("heart_rain_why")))?;
     }
     Ok(())
 }

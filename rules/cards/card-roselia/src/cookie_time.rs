@@ -37,7 +37,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .i("n", x as i64),
     );
     // 规则书: 「获得500*X资金，X为返回卡的总数」
-    ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")));
+    ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")))?;
     // 规则书: the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the player.
     // v25: `sweep_to_deck` now raises `reshuffled` from the host (the C# card
     // body calls `H.Each(Reshuffled)` itself; the host folds that into the

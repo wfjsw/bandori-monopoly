@@ -21,7 +21,11 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Event], other, on_event),
         On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
         On::Hook(&[HookKind::Pass], mine, on_pass),
@@ -38,7 +42,7 @@ fn other(player_id: i32) -> bool {
 
 /// 「初始0，上限2」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 2);
+    crate::fire_pot(player_id, 0, 2);
     Ok(())
 }
 
@@ -70,7 +74,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "skill.arisa.passedStation", 0);
     // 「抽取一个视为在"流星堂"抽取的事件」 -- the draw is tagged as the
     // station's, which is what the `event` hook above reads.
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_end")));
     Ok(())
 }

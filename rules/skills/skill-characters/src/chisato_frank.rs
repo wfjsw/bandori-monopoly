@@ -30,12 +30,20 @@ fn mine(player_id: i32) -> bool {
     if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
-    ctx::trigger::player_id() == player_id
+    // 「自己每次收取资金时」 -- the skill fires on *receiving* money, so the
+    // hook's `target` (the payee) is the skill owner, not `player_id` (the
+    // payer). A print (game -> player) carries `target = me`, `player_id = -1`.
+    ctx::trigger::target() == player_id && ctx::trigger::value() > 0
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得白鹭千圣的
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
+    // （1） belongs to the skill's own Pastel✽Palettes character, not to
+    // the grantees of the (2) below -- their copies must not re-fire it.
+    if !ctx::in_band(player_id, "Pastel✽Palettes") {
+        return Ok(());
+    }
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {

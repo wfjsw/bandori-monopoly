@@ -69,6 +69,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let why = Msg::new(key!("declare_war_why")).card("card", "AG:宣战布告");
     ctx::transfer(hit, player_id, 500, &why)?;
     // 规则书[反击]: 「且[使用者]抽1张卡」
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     Ok(())
 }

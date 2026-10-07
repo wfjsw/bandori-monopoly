@@ -21,5 +21,6 @@ card_sdk::bandori_ruleset!(
     card_roselia::CARDS,
     card_sumimi::CARDS,
     skill_bands::CARDS,
-    skill_characters::CARDS
+    skill_characters::CARDS,
+    rules_tiles::CARDS
 );

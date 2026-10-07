@@ -226,6 +226,7 @@
   "log.no_events": "No event cards left to draw",
   "log.order": "Roll 1d20 for turn order: {{rolls}}",
   "log.order_rerolled": "Roll 1d20 for turn order: {{rolls}} (ties rerolled)",
+  "log.overlap": "{{who}} [Overlaps] {{to}}",
   "log.paid_for": "{{who}} paid {{amount}} for {{tile}}",
   "log.paid_for_house": "{{who}} paid {{amount}} for a house on {{tile}}",
   "log.part.auction_sample": " (3 of {{n}} chosen at random)",

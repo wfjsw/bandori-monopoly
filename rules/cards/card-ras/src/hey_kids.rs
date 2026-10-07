@@ -14,7 +14,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const HEY_KIDS: CardDef = CardDef::new(
     "RAS:狂乱Hey Kids!!",
-    &[On::Counteract(&[ChainKind::Settle], can_counteract, counteract)],
+    // `ChainKind::SettleBody`, not `Settle` (`docs/TILES.md`): 「将本次结算改为」
+    // is a **body replacement**, so it answers the body link and `settleAfter`
+    // still runs. Answering the outer `settle` would mean 「the settle never
+    // happened」.
+    &[On::Counteract(&[ChainKind::SettleBody], can_counteract, counteract)],
 );
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
@@ -28,15 +32,27 @@ fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
 }
 
 /// 规则书[反击]: 「在属于你的格子上结算时，打出此卡」
+///
+/// **User ruling (2026-10-06):** this fires when **another** player settles
+/// rent on *my* tiles -- 「在属于你的格子上结算时」 is someone else's settle on
+/// my square, not my own. A non-rent payment (a card's [支付] that is not a
+/// tile [结算]) does not open the window.
 fn can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != TriggerKind::Settle {
+    if trigger::kind() != TriggerKind::SettleBody {
         return false;
     }
-    if trigger::player_id() != player_id {
+    // The settler is someone else -- the window is on *their* rent landing.
+    let settler = trigger::player_id();
+    if settler == player_id {
         return false;
     }
     let t = trigger::tile();
     if t < 0 || ctx::tile_owner(t) != player_id {
+        return false;
+    }
+    // 「settles rent on my tiles」 -- a mortgaged deed charges no rent (the
+    // settle offers a forced purchase instead), so it does not open this.
+    if ctx::mortgaged_of(t) {
         return false;
     }
     // 规则书[反击]: 「将本格上的房屋转移到…」 -- the tile must have houses to
@@ -132,7 +148,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             player_id,
             cost_out - cost_in,
             &Msg::new(key!("hey_kids_gain_diff")),
-        );
+        )?;
     }
     // 规则书[反击]: 「随后，你失去"转移后各格房屋造价总和－获得房屋数量×500"的资金」
     // -- C# `H.LoseR(i, gained - picked.Count * 500, ...)` when positive.

@@ -76,16 +76,23 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
             .card("card", "MyGO:无路矢"),
     );
     // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- the redirect
-    // hook below reroutes this player's rent to `who` while the exile lasts.
+    // hook below reroutes this player's rent to `who` while the exile lasts. The
+    // redirect must outlive the play body, and a field hook only runs on a
+    // *placed* card -- so the card stands in on the field for the exile (the
+    // same field-stand-in + slot pattern Anon Tokyo uses). The hook's own
+    // `exile > 0` guard stops it once the exile ticks away.
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "MyGO:无路矢", &Msg::new(key!("no_road_log")));
     ctx::set_slot(player_id, "noRoad.who", who);
     Ok(())
 }
 
 /// 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- C#
-/// `NoRoadFx.RedirectReceiver`. The exile layer count is the live one off the
-/// turn snapshot (`stay_of` / `stun_of` are live; exile is not).
+/// `NoRoadFx.RedirectReceiver`. The exile layer count is the **live** one
+/// (`state_key::EXILE`); `turn_snap` is the turn-start snapshot and is stale
+/// for a layer granted mid-turn.
 fn redirect(player_id: i32) -> card_sdk::Asked {
-    if ctx::turn_snap(player_id).3 <= 0 {
+    if ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) <= 0 {
         return Ok(());
     }
     let who = ctx::slot(player_id, "noRoad.who");

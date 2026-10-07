@@ -2,11 +2,8 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `通用:该清CP了`）:
 //! > 该清CP了：
-//! > [特]：
 //!
-//! > （1）此卡的[手]效果只有在自己[场上]拥有的小等于2个[CP点]时才可发动。
-//!
-//! > （2）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
+//! > （1）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]。
 //! > [手]：
 //! > 在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]。在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金。
 //!
@@ -32,15 +29,13 @@ pub const CLEAR_CP: CardDef = CardDef::new(
 /// Where the spread countdown is written down (C# `CPControl.Spread`).
 const SLOT_SPREAD: &str = "clear_cp_spread";
 
-/// 规则书[特]（1）: 「此卡的[手]效果只有在自己[场上]拥有的小等于2个[CP点]时才可发动」
-/// -- C# `CardCP.WhyNot` refuses the card when `H.Tok(seat, "CP点") > 2`
-/// (`场上的 [CP点] 超过 2 个时不能发动`). The counter this port writes is the
-/// same `key!("clear_cp_tok")` the play adds.
-fn cant_play(player_id: i32) -> Option<Msg> {
-    if ctx::tok(player_id, key!("clear_cp_tok")) <= 2 {
-        return None;
-    }
-    Some(Msg::new(key!("clear_cp_too_many")))
+/// 规则书[特]（1）: **dropped** by sheet 2026-10-06 `新卡组卡` `A8` (「drops
+/// the 「[特]」 gate on the CP-count limit」). The old text 「此卡的[手]效果
+/// 只有在自己[场上]拥有的小等于2个[CP点]时才可发动」 is gone; a second play
+/// is no longer refused for holding 6 CP. Kept as a no-op so the `On::Play`
+/// shape is unchanged.
+fn cant_play(_player_id: i32) -> Option<Msg> {
+    None
 }
 
 fn clear_cp(player_id: i32) -> card_sdk::Asked {
@@ -165,7 +160,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             // PlayCtx number is the card's printed 800 (the C# stores it on
             // `CPControl.Reward` at Play; equivalent while `PlayCtx.Doubled`
             // is unported).
-            ctx::gain(player_id, ctx::n(0, 800), &Msg::new(key!("clear_cp_clean")));
+            ctx::gain(player_id, ctx::n(0, 800), &Msg::new(key!("clear_cp_clean")))?;
         }
         _ => {}
     }

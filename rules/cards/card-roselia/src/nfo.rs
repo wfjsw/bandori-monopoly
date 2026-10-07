@@ -90,7 +90,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
     match k {
         // 规则书: 「若投掷结果为1，获得1500资金」
         1 => {
-            ctx::gain(player_id, 1500, &Msg::new(key!("nfo_why")));
+            ctx::gain(player_id, 1500, &Msg::new(key!("nfo_why")))?;
         }
         // 规则书: 「若结果为2，立刻移动到你前方最近一名玩家的前方一格并使其格子上的玩家分摊支付你1000资金，视为本回合的主要移动但不[触发结算]」
         2 => {
@@ -126,7 +126,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
             // 规则书: 「并使其格子上的玩家分摊支付你1000资金」 -- C# `H.SplitPay(payers, i,
             // 1000, ...)`, only if the move did not knock the player_id out (C# `if (!H.Out(i))`).
             if !ctx::player_out(player_id) {
-                split_pay(&payers, player_id, 1000, &Msg::new(key!("nfo_pay")));
+                split_pay(&payers, player_id, 1000, &Msg::new(key!("nfo_pay")))?;
             }
         }
         // 规则书: 「若结果为3，将此卡置于场上，你下次付款时自动减免1000资金的消耗并将此卡置入弃牌堆」

@@ -24,14 +24,12 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
     } else {
         1
     };
-    // 规则书[手]2: 「为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]」 -- the
-    // Pastel✽Palettes band card's text contains 「奇迹水晶」 (C# adds `n` to the band
-    // card for exactly that reason: 「团卡的效果也包含奇迹水晶」); the other matching
-    // field cards are TODO below.
-    ctx::add_band_crystals(player_id, n, i32::MAX);
     // 规则书[手]2: 「为[使用者]所有效果包含[奇迹水晶]的卡添加1个[奇迹水晶]」 --
     // every placed card whose text mentions 「奇迹水晶」 and which is neither
-    // face-down nor immune (C# `H.PlacedOf(i)` + `p.FaceDown` + `p.Immune`).
+    // face-down nor immune (C# `H.PlacedOf(i)` + `p.FaceDown` + `p.Immune`). The
+    // Pastel✽Palettes band card's text contains 「奇迹水晶」 (「团卡的效果也包含
+    // 奇迹水晶」), so it is in this loop too -- clause 1's +2 and clause 2's +n
+    // are two separate adds to the same pool.
     for (uid, c) in ctx::field_instances(player_id) {
         if ctx::is_face_down_at(uid) || ctx::is_immune_at(uid) {
             continue;

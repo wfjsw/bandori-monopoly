@@ -2,11 +2,11 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:热气球演出`）:
 //! > 热气球演出：
-//! >  投掷4次3d20并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动
+//! >  投掷4次3d20mod60并记录其结果，选择其中之一，传送至结果对应序号的格子，视为你的主要移动
 //!
 
 use alloc::vec::Vec;
-use card_sdk::abi::MoveKind;
+use card_sdk::abi::{roll_source, MoveKind};
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BALLOON_SHOW: CardDef =
@@ -24,10 +24,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    // 规则书: 「投掷4次3d20并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four times.
+    // 规则书: 「投掷4次3d20并记录其结果」 -- C# `H.Roll(seat, 3, 20, ...)` four
+    // times. `roll_ask` so the 「掷骰结算前」 [反击] window (Y.O.L.O 「你的任意
+    // 掷骰结算前」) rings on each; source is CARD (a hand card's own roll).
     let mut tiles: Vec<i32> = Vec::new();
     for _ in 0..4 {
-        let r = ctx::roll(player_id, 3, 20);
+        let r = ctx::roll_ask(player_id, 3, 20, roll_source::CARD);
         let t = (r - 1).rem_euclid(n);
         if !tiles.contains(&t) {
             tiles.push(t);

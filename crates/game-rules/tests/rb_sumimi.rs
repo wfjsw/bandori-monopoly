@@ -124,10 +124,8 @@ fn sumimi_wont_break_up_requires_different_digits() {
     let r = t.give_play(0, "Sumimi:Sumimi不会解散哦");
     // 规则书: 「资金不含有相同数字时可打出」
     // 1111 has all the same digit → refused.
-    // (Engine may interpret 「不含有相同数字」 differently.)
     drain(&mut t);
-    // Just verify the card attempt doesn't crash.
-    let _ = r;
+    assert!(r.is_err(), "refused: 1111 has a repeated digit: {r:?}");
 }
 
 // -- Sumimi:一人两个甜甜圈 ---------------------------------------------
@@ -180,15 +178,18 @@ fn here_the_world_places_on_opponent() {
 
 // -- Sumimi:Sweet Escape ------------------------------------------------
 
+// 规则书: 「回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡」.
+// RULING: 「收费标价」 is not defined in the rulebook. Tiles within ±2 of CiRCLE
+// sum to price 8200 (≥2000 → gate met) but base rent 820 (<2000 → gate fails).
+#[ignore = "RULING: what 「收费标价」 means in Sweet Escape's gate (tile price vs base rent)"]
 #[test]
 fn sweet_escape_gate_requires_high_rent() {
     let mut t = Table::vanilla(2);
-    // No high-rent tiles nearby → gate not met.
-    t.give_play(0, "Sumimi:Sweet Escape").ok();
+    // No high-rent tiles nearby → gate not met (the test's premise).
+    let r = t.give_play(0, "Sumimi:Sweet Escape");
     drain(&mut t);
-    // 规则书: 「回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡」
-    // The card is only playable at turn start with the rent gate.
-    // With vanilla (all on CiRCLE, no deeds), the gate should fail.
+    eprintln!("sweet escape gate (RULING: 收费标价 = price or rent?): r = {r:?}");
+    assert!(r.is_err(), "the gate is not met: {r:?}");
 }
 
 // -- Sumimi:(初华（Sumimi）)儿时玩伴的鼓励 ------------------------------

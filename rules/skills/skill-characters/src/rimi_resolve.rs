@@ -25,7 +25,11 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
     "skill:牛込里美:里美的决心",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
     ],
@@ -37,7 +41,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始1，上限3」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 3);
+    crate::fire_pot(player_id, 1, 3);
     Ok(())
 }
 

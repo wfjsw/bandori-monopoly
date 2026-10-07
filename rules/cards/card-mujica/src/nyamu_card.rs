@@ -38,7 +38,7 @@ fn watch_flips(player_id: i32) -> card_sdk::Asked {
     let was = ctx::slot(player_id, WAS_DOWN) != 0;
     ctx::set_slot(player_id, WAS_DOWN, now as i32);
     if was && !now {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
         ctx::log(player_id, &Msg::new(key!("nyamu_flipped_up")));
     }
     Ok(())

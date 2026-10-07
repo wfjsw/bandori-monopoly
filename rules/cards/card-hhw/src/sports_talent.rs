@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `HHW:运动的天赋`）:
 //! > 运动的天赋：
-//! >  将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果为10以上为止。
+//! >  将此卡放置于自己场上并放置3个奇迹水晶，每回合结束时失去一个，为0时置入弃牌堆。此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100。每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。
 //!
 
 use card_sdk::abi::{HookKind, TriggerKind};
@@ -80,7 +80,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if trigger::move_roll().is_none() {
                 return Ok(());
             }
-            reward(player_id);
+            reward(player_id)?;
             // 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」
             reroll_to_ten(player_id);
         }
@@ -90,7 +90,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 }
 
 /// C# `CardSportsTalent.Reward` -- pay the current `Next` and step it down.
-fn reward(player_id: i32) {
+fn reward(player_id: i32) -> card_sdk::Asked {
     let mut next = ctx::slot(player_id, SLOT_NEXT);
     if next <= 0 {
         next = 700;
@@ -100,7 +100,8 @@ fn reward(player_id: i32) {
         player_id,
         next,
         &Msg::new(key!("sports_talent_reward")).n("money", next as i64),
-    );
+    )?;
+    Ok(())
 }
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- C#

@@ -37,7 +37,11 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::TurnStartBefore], other_turn, offer_support),
         On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
         On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
@@ -72,7 +76,7 @@ fn split_rent(player_id: i32) -> card_sdk::Asked {
         player_id,
         half,
         &Msg::new(key!("kaede_support_split")).i("n", half as i64),
-    );
+    )?;
     Ok(())
 }
 
@@ -86,7 +90,7 @@ fn other_turn(player_id: i32) -> bool {
 
 /// 「初始0，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 4);
+    crate::fire_pot(player_id, 0, 4);
     Ok(())
 }
 
@@ -151,7 +155,7 @@ fn offer_support(player_id: i32) -> card_sdk::Asked {
     // 「并获得相当于你获取数额的资金」
     let got = (ctx::money_of(player_id) - before).max(0);
     if got > 0 {
-        ctx::gain(player_id, got, &Msg::new(key!("kaede_support_gain")));
+        ctx::gain(player_id, got, &Msg::new(key!("kaede_support_gain")))?;
     }
     // 「直到这两名玩家的下回合结束…不会被该效果再次收款」
     let until = ctx::turn_key() + 2;
@@ -257,7 +261,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     // 「每通过此法消耗4个火罐，你抽1卡」
     let draws = x / 4;
     if draws > 0 {
-        ctx::draw(player_id, draws);
+        ctx::draw(player_id, draws)?;
         ctx::log(
             player_id,
             &Msg::new(key!("kaede_support_drew")).i("n", draws as i64),

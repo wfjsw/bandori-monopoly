@@ -28,7 +28,11 @@ pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            at_start,
+        ),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Hook(&[HookKind::RollAfter], other, latch),
     ],
@@ -44,7 +48,7 @@ fn other(player_id: i32) -> bool {
 
 /// 「初始1，上限1」 + （2）「开局时指定一名其他玩家」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 1);
+    crate::fire_pot(player_id, 1, 1);
     if state::get(player_id, OTHER) >= 0 {
         return Ok(());
     }

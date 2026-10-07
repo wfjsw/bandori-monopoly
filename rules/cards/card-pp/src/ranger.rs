@@ -61,7 +61,7 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
             player_id,
             500,
             &Msg::new(key!("ranger_why")).i("n", n as i64),
-        );
+        )?;
     }
     // 规则书[手]2: 「数量至少为3则为Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
     if n >= 3 {
@@ -70,7 +70,7 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]3: 「数量至少为4则移除Pastel✽Palettes乐队卡4个[奇迹水晶]并抽1张卡」
     if n >= 4 {
         ctx::add_band_crystals(player_id, -4, i32::MAX);
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     }
     // 规则书[手]4: 「数量至少为5则获得1层状态“失去2000资金，下次盖房时减免2000（可溢出），
     // 盖房后减少1层”」 -- the 2,000 loss is `H.LoseR(i, 2000, CardName)`.
@@ -87,7 +87,7 @@ fn ranger(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[手]5: 「数量至少为6则抽1张卡」
     if n >= 6 {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     }
     Ok(())
 }

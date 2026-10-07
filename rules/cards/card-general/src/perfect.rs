@@ -23,6 +23,6 @@ fn perfect(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("perfect_added")).player_id("who", player_id),
     );
     // 规则书[手]: 「3. [获得]3000资金」
-    ctx::gain(player_id, 3000, &Msg::new(key!("perfect_why")));
+    ctx::gain(player_id, 3000, &Msg::new(key!("perfect_why")))?;
     Ok(())
 }

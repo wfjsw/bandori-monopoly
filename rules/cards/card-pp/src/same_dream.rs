@@ -36,7 +36,7 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
             player_id,
             up * 100,
             &Msg::new(key!("same_dream_why")).i("n", up as i64),
-        );
+        )?;
     }
     // 规则书[手]3: 「将自己的所有反面[P✽P粉丝]变正，如果[共鸣]则此效果对所有
     // Pastel✽Palettes角色生效」 -- the resonance half widens the target from this

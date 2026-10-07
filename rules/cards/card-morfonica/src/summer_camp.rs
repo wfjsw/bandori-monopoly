@@ -80,7 +80,7 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
     let blocked = ctx::slot(player_id, SLOT_BLOCKED);
     ctx::set_slot(player_id, SLOT_BLOCKED, 0);
     if blocked == 0 {
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
         ctx::log(
             player_id,
             &Msg::new(key!("summer_camp_draw")).player_id("who", player_id),

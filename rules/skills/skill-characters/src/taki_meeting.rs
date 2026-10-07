@@ -23,7 +23,11 @@ pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
         On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Abnormal], |_| true, on_abnormal),
         On::Hook(&[HookKind::TurnStartBefore], mine, reset),
     ],
@@ -35,7 +39,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 5);
+    crate::fire_pot(player_id, 0, 5);
     Ok(())
 }
 
@@ -45,7 +49,8 @@ fn reset(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「场上每有玩家获得一层[停留]时，你获得一个[火罐]」 -- one pot per
-/// layer the effect actually landed.
+/// layer the effect actually landed. The `abnormal` outcome hook fires for
+/// every landing, self-applied included (「场上每有玩家」 is anyone).
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     if trigger::abnormal_kind() != Some(AbKind::Stay) {
         return Ok(());

@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `Mujica:（初华）我，无畏悲伤`）:
 //! > （初华）我，无畏悲伤：
-//! >  打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的投掷结果可定义为1-6以内的任何数字
+//! >  打出此卡时若自从上一次[经过]CiRCLE后有在任何[回忆地块][触发结算]，你可选择抽1张卡或使你本回合的移动掷骰结果可定义为1-6以内的任何数字
 //!
 //! if you settled on a memory tile since CiRCLE, draw 1 or fix this turn's roll.
 
@@ -66,7 +66,7 @@ fn uika_fearless(player_id: i32) -> card_sdk::Asked {
         );
     } else {
         // 规则书: 「抽1张卡」
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
         ctx::log(
             player_id,
             &Msg::new(key!("uika_fearless_drew")).player_id("who", player_id),

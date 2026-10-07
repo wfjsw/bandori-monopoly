@@ -36,11 +36,19 @@ const DEFAULT_FUEL: u64 = 5_000_000;
 pub const MAX_NESTING: u32 = 8;
 
 /// One card, as declared in its module's manifest: its id and its entry-point
-/// table (`card_sdk::On`), each entry with the trigger kinds it answers.
+/// table (`card_sdk::On`), each entry with the trigger kinds it answers, plus
+/// the card's declared static **properties**.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CardInfo {
     pub id: String,
     pub on: Vec<ManifestOn>,
+    /// The card rule's declared static properties (`CardDef::props`), `key ->
+    /// value`. Keys are `game_core::state::prop` / `card_sdk::abi::prop`
+    /// constants; a key the card does not declare is absent and reads as its
+    /// default (`0`). A `BTreeMap` (not a `HashMap`) so iteration and
+    /// serialization stay deterministic.
+    #[serde(default)]
+    pub props: std::collections::BTreeMap<String, i32>,
 }
 
 impl CardInfo {
@@ -101,6 +109,9 @@ pub enum Call {
     /// `On::RollPlan` -- the card's movement routine, called while the walk
     /// is being planned.
     RollPlan { card: i32, player_id: i32 },
+    /// `On::Settle` -- a rule's **settle body** (`docs/TILES.md`), run for the
+    /// tile the rule instance governs. `player_id` is the player settling.
+    Settle { card: i32, player_id: i32 },
 }
 
 impl Call {
@@ -112,7 +123,8 @@ impl Call {
             | Call::Counteract { player_id, .. }
             | Call::Hook { player_id, .. }
             | Call::AtEnd { player_id, .. }
-            | Call::RollPlan { player_id, .. } => player_id,
+            | Call::RollPlan { player_id, .. }
+            | Call::Settle { player_id, .. } => player_id,
         }
     }
 
@@ -122,7 +134,8 @@ impl Call {
             | Call::Counteract { card, .. }
             | Call::Hook { card, .. }
             | Call::AtEnd { card, .. }
-            | Call::RollPlan { card, .. } => card,
+            | Call::RollPlan { card, .. }
+            | Call::Settle { card, .. } => card,
         }
     }
 }
@@ -154,8 +167,15 @@ pub struct Prompt {
 #[derive(Debug, Clone, PartialEq)]
 pub enum HostRequest {
     /// A payment (`t.Pay`): the engine runs the C# `Money` pipeline on it and
-    /// answers with the final amount (0 = cancelled).
-    Pay { from: i32, to: i32, amount: i32 },
+    /// answers with the final amount (0 = cancelled). `from < 0` is a print
+    /// (game -> `to`), `to < 0` a delete (`from` -> game), both >= 0 a
+    /// pay-player. `src` is the reason line the money log carries.
+    Pay {
+        from: i32,
+        to: i32,
+        amount: i32,
+        src: Option<crate::Msg>,
+    },
     /// An abnormal effect about to hit `player_id`: the engine runs the C#
     /// `AbnormalGate` and answers 1 (it goes through) or 0 (blocked).
     Gate { player_id: i32, kind: AbKind },
@@ -194,6 +214,53 @@ pub enum HostRequest {
     OfferBuild { player_id: i32, tiles: Vec<i32> },
     /// C# `H.MortgageRoutine`: mortgage one of the player's deeds.
     Mortgage { player_id: i32, tile: i32 },
+    /// `H.DrawR`: draw `n` cards. The engine runs the draw itself -- one card at
+    /// a time, raising the per-draw points (`drewBefore` / `drawn` / `drew`) on
+    /// each, so a `drewBefore` hook may replace a card of it -- and answers with
+    /// how many were actually drawn. The effect then replays past this call and
+    /// does **not** move the cards again (they are already in the live world).
+    Draw { player_id: i32, n: i32 },
+    /// `H.DrawEvent` -- draw the top event and resolve it (「抽取一个事件卡」).
+    /// The engine runs the whole event pipeline (public reveal, immediate
+    /// effect, filing to the event discard, the reshuffle-when-empty half).
+    /// `docs/TILES.md`'s `ctx::draw_event`, what `tile:event`'s body calls.
+    DrawEvent { player_id: i32 },
+    /// `H.PayRent`: 「[支付]拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
+    /// pipeline (rent table / RiNG dice / the agent's 「半价收费」 half-flag).
+    /// `docs/TILES.md`'s `ctx::pay_rent`, what `tile:property` / `tile:ring` /
+    /// `tile:agent` bodies call.
+    PayRent {
+        player_id: i32,
+        tile: i32,
+        half: bool,
+    },
+    /// `H.OfferBuy`: 「可选择[消耗]购买格子地契和建造已有房子的资金总价」 on a
+    /// non-main landing on unowned land. `ctx::offer_buy`.
+    OfferBuy { player_id: i32, tile: i32 },
+    /// `H.OfferForceBuy`: 「可选择[支付]…资金总价的两倍，从该玩家处强行购买」
+    /// on a mortgaged deed. `ctx::offer_force_buy`.
+    OfferForceBuy { player_id: i32, tile: i32 },
+    /// `H.OfferBuild`: 「可选择[消耗]…房屋建筑费进行升级建造」 on a non-main
+    /// landing on one's own land. `ctx::offer_build`.
+    OfferBuildOne { player_id: i32, tile: i32 },
+    /// `H.CircleReward`: 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]」
+    /// -- the whole reward step (suppression, the choice, the `circleAffected`
+    /// window, the payout). `docs/TILES.md`'s `ctx::settle_circle_reward`, the
+    /// body of `tile:circle`'s Pass entry. `landing` picks the 「获得」 wording
+    /// for a stop on CiRCLE as against a pass over it.
+    CircleReward { player_id: i32, landing: bool },
+    /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
+    /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 [反击]
+    /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
+    /// 掷骰时」) with the roller, the face and `source`, then answers with the
+    /// face any counteraction left on the link. `source` is an
+    /// [`crate::abi::roll_source`] code (0 = unattributed, 1 = a fire pot, ...).
+    Roll {
+        player_id: i32,
+        count: i32,
+        sides: i32,
+        source: i32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -409,6 +476,24 @@ impl Ruleset {
         self.inner.by_id.get(id).copied()
     }
 
+    /// The card rule's declared static **properties** (`CardDef::props`), see
+    /// [`CardInfo::props`]. Empty when the card declares none. A property of
+    /// the card *rule*, never derived from rulebook prose.
+    pub fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32> {
+        self.card(id)
+            .and_then(|i| self.inner.cards.get(i as usize))
+            .map_or_else(Default::default, |c| c.props.clone())
+    }
+
+    /// One declared property; `0` when the card does not declare it (the
+    /// defined default for every key the engine reads).
+    pub fn card_prop(&self, id: &str, key: &str) -> i32 {
+        self.card(id)
+            .and_then(|i| self.inner.cards.get(i as usize))
+            .and_then(|c| c.props.get(key).copied())
+            .unwrap_or(0)
+    }
+
     /// Run an effect from `world` with the answers collected so far.
     ///
     /// `world` is never modified. On [`Outcome::Done`] the caller commits the returned
@@ -429,6 +514,7 @@ impl Ruleset {
             Call::Hook { kind, .. } => info.hook_entry(kind),
             Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
             Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
+            Call::Settle { .. } => info.entry(OnKind::Settle, None),
         };
         let Some(entry) = entry else {
             return Ok(Outcome::Done(world.clone()));
@@ -573,7 +659,7 @@ impl Ruleset {
         answers: &[i32],
     ) -> Result<Store<HostState<W>>, RuleError> {
         let state = HostState::new(self.inner.clone(), world, answers.to_vec(), 0);
-        let mut store = Store::new(&self.inner.engine, state);
+        let mut store = new_store(&self.inner.engine, state);
         store.set_fuel(self.fuel).map_err(trap)?;
         Ok(store)
     }
@@ -637,6 +723,25 @@ struct HostState<W> {
     asked: Option<Prompt>,
     host_request: Option<HostRequest>,
     depth: u32,
+    /// Per-instance resource ceiling. Installed on the store by [`new_store`];
+    /// lives in the store data because that is where `Store::limiter` wants its
+    /// resource limiter to come from.
+    limits: be::StoreLimits,
+}
+
+/// The per-instance memory ceiling, as a fresh [`be::StoreLimits`]. One per
+/// store (each nested `play_card` is its own instance).
+fn store_limits() -> be::StoreLimits {
+    be::StoreLimitsBuilder::new()
+        .memory_size(be::MAX_MEMORY_BYTES)
+        .build()
+}
+
+/// Build a store with the per-instance memory ceiling installed.
+fn new_store<W>(engine: &Engine, state: HostState<W>) -> Store<HostState<W>> {
+    let mut store = Store::new(engine, state);
+    store.limiter(|s| &mut s.limits);
+    store
 }
 
 impl<W> HostState<W> {
@@ -650,6 +755,7 @@ impl<W> HostState<W> {
             asked: None,
             host_request: None,
             depth,
+            limits: store_limits(),
         }
     }
 
@@ -740,7 +846,7 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
     let module = be::compile(engine, wasm).map_err(load)?;
 
     // Metadata exports never touch the world; a no-op world is enough.
-    let mut store = Store::new(engine, HostState::<NullWorld>::without_rules());
+    let mut store = new_store(engine, HostState::<NullWorld>::without_rules());
     set_fuel(&mut store, DEFAULT_FUEL).map_err(load)?;
     let inst = build_linker::<NullWorld>(engine)
         .map_err(|e| load(error_text(&e)))
@@ -767,7 +873,11 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
         postcard::from_bytes(&bytes).map_err(|e| load(format!("manifest: {e}")))?;
     let cards: Vec<CardInfo> = entries
         .into_iter()
-        .map(|e| CardInfo { id: e.id, on: e.on })
+        .map(|e| CardInfo {
+            id: e.id,
+            on: e.on,
+            props: e.props.into_iter().collect(),
+        })
         .collect();
     if cards.is_empty() {
         return Err(load("module declares no cards".into()));
@@ -986,7 +1096,24 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "gain",
         |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
             let src = guest_msg(&mut c, p, n)?;
-            Ok(c.data_mut().w().gain(player_id, amount, src))
+            let st = c.data_mut();
+            // A card-driven gain runs the same `Money` pipeline as a payment --
+            // print (game -> player) -- so PayAdd / PayChoose / the `effect`
+            // [反击] window all see it. The pause/resume is the same as `pay`:
+            // the engine answers with the amount that actually moved.
+            if let Some(&final_amount) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                // The engine-side money move already ran (the pipeline printed
+                // it); this only answers the guest with what moved.
+                return Ok(final_amount);
+            }
+            st.host_request = Some(HostRequest::Pay {
+                from: -1,
+                to: player_id,
+                amount,
+                src: Some(src),
+            });
+            Ok(abi::EXIT_NEED_INPUT)
         },
     )?;
     l.func_wrap(
@@ -1005,12 +1132,39 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             // ever saw a `Result`.
             if let Some(&final_amount) = st.answers.get(st.next_answer) {
                 st.next_answer += 1;
-                return Ok(st.w().pay(player_id, final_amount, src));
+                // The engine-side money move already ran (the pipeline deleted
+                // it); this only answers the guest with what moved.
+                return Ok(final_amount);
             }
             st.host_request = Some(HostRequest::Pay {
                 from: player_id,
                 to: -1,
                 amount,
+                src: Some(src),
+            });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    // `H.PayR` to a named payee (player -> player) -- one pipeline entry, so
+    // the `effect` declaration carries both the payer and the payee and （小白）
+    // sees 「向其他玩家支付」. The pause/resume is the same as `pay`.
+    l.func_wrap(
+        m,
+        "pay_to",
+        |mut c: C<W>, from: i32, to: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let src = guest_msg(&mut c, p, n)?;
+            let st = c.data_mut();
+            if let Some(&final_amount) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                // The engine-side money move already ran (the pipeline credited
+                // the payee); this only answers the guest with what moved.
+                return Ok(final_amount);
+            }
+            st.host_request = Some(HostRequest::Pay {
+                from,
+                to,
+                amount,
+                src: Some(src),
             });
             Ok(abi::EXIT_NEED_INPUT)
         },
@@ -1209,6 +1363,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "houses_of", |c: C<W>, tile: i32| {
         c.data().wr().houses_of(tile)
     })?;
+    l.func_wrap(m, "rent_houses_of", |c: C<W>, tile: i32| {
+        c.data().wr().rent_houses_of(tile)
+    })?;
     l.func_wrap(m, "set_houses", |mut c: C<W>, tile: i32, n: i32| {
         c.data_mut().w().set_houses(tile, n);
         Ok(())
@@ -1250,7 +1407,89 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         m,
         "draw",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            Ok(c.data_mut().w().draw(player_id, n))
+            let st = c.data_mut();
+            // A card-driven draw is paused so the engine can raise the per-card
+            // `drewBefore` point (and so a hook may replace a card of it) before
+            // the cards move. The engine adjudicates; **this** run then moves
+            // the plain cards on its own world copy -- the same shape as `pay`,
+            // where the engine runs the Money pipeline and the effect applies
+            // the payment. The answer is how many of the `n` are plain draws.
+            if let Some(&plain) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                let plain = plain.clamp(0, n);
+                return Ok(st.w().draw(player_id, plain));
+            }
+            st.host_request = Some(HostRequest::Draw { player_id, n });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "draw_event",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ans) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ans);
+            }
+            st.host_request = Some(HostRequest::DrawEvent { player_id });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "pay_rent",
+        |mut c: C<W>, player_id: i32, tile: i32, half: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ans) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ans);
+            }
+            st.host_request = Some(HostRequest::PayRent {
+                player_id,
+                tile,
+                half: half != 0,
+            });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "offer_buy",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ans) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ans);
+            }
+            st.host_request = Some(HostRequest::OfferBuy { player_id, tile });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "offer_force_buy",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ans) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ans);
+            }
+            st.host_request = Some(HostRequest::OfferForceBuy { player_id, tile });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "offer_build",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ans) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ans);
+            }
+            st.host_request = Some(HostRequest::OfferBuildOne { player_id, tile });
+            Ok(abi::EXIT_NEED_INPUT)
         },
     )?;
     l.func_wrap(
@@ -1425,6 +1664,60 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     })?;
     l.func_wrap(
         m,
+        "self_prop",
+        |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, kp, kl)?;
+            Ok(c.data().wr().self_prop(&key))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_self_prop",
+        |mut c: C<W>, kp: i32, kl: i32, v: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, kp, kl)?;
+            Ok(c.data_mut().w().set_self_prop(&key, v))
+        },
+    )?;
+    // `docs/TILES.md`: a card that bends a tile writes the tile instance's props
+    // instead of an engine flag. `prop::NO_REWARD` on the CiRCLE tile's
+    // `tile:circle` instance is 「无法获取[CiRCLE奖励]」; `prop::GROUP` is
+    // 「该格获得所有颜色」; and so on.
+    l.func_wrap(
+        m,
+        "tile_prop",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, kp, kl)?;
+            Ok(c.data().wr().tile_prop(tile, &key))
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_tile_prop",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, v: i32| -> Result<i32, Error> {
+            let key = guest_str(&mut c, kp, kl)?;
+            Ok(c.data_mut().w().set_tile_prop(tile, &key, v))
+        },
+    )?;
+    // `docs/TILES.md`'s `ctx::settle_circle_reward` -- the [经过] CiRCLE reward,
+    // `tile:circle`'s Pass entry. Prompts, so it is a host request.
+    l.func_wrap(
+        m,
+        "settle_circle_reward",
+        |mut c: C<W>, player_id: i32, landing: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ans) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ans);
+            }
+            st.host_request = Some(HostRequest::CircleReward {
+                player_id,
+                landing: landing != 0,
+            });
+            Ok(abi::EXIT_NEED_INPUT)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "count_marks",
         |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
             let kind = guest_str(&mut c, kp, kl)?;
@@ -1573,12 +1866,15 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     // Abnormal effects pass the C# `AbnormalGate` first (C# `GiveStay` /
     // `GiveStun` / `GiveExile` / `ForceTeleport` all run it): a blocked one
-    // does nothing.
+    // does nothing. Stripping layers (`n < 0`, 「清除」) is not applying an
+    // abnormal status and bypasses the gate.
     l.func_wrap(
         m,
         "give_stay",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-            if n > 0 && gate(&mut c, player_id, AbKind::Stay)? {
+            if n < 0 {
+                c.data_mut().w().give_stay(player_id, n);
+            } else if n > 0 && gate(&mut c, player_id, AbKind::Stay)? {
                 c.data_mut().w().give_stay(player_id, n);
             }
             Ok(())
@@ -1588,7 +1884,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         m,
         "give_stun",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-            if n > 0 && gate(&mut c, player_id, AbKind::Stun)? {
+            if n < 0 {
+                c.data_mut().w().give_stun(player_id, n);
+            } else if n > 0 && gate(&mut c, player_id, AbKind::Stun)? {
                 c.data_mut().w().give_stun(player_id, n);
             }
             Ok(())
@@ -1866,6 +2164,33 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             Err(need_input())
         },
     )?;
+    // `ctx::roll_ask` / `ctx::do_move_roll_ask` -- a card- or skill-driven dice
+    // roll. The engine rolls and raises the `Roll` chain link (the 「掷骰结算前」
+    // [反击] window) with the roller, the face and `source`; the answer is the
+    // face a counteraction left. `sides == 0` is the `do_move_roll` shape.
+    l.func_wrap(
+        m,
+        "roll_ask",
+        |mut c: C<W>,
+         player_id: i32,
+         count: i32,
+         sides: i32,
+         source: i32|
+         -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&face) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(face);
+            }
+            st.host_request = Some(HostRequest::Roll {
+                player_id,
+                count,
+                sides,
+                source,
+            });
+            Err(need_input())
+        },
+    )?;
     l.func_wrap(
         m,
         "agent_landing",
@@ -2087,6 +2412,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "trig_move_roll", |c: C<W>| {
         c.data().wr().trigger().move_roll.unwrap_or(-1)
     })?;
+    l.func_wrap(m, "trig_roll_source", |c: C<W>| {
+        c.data().wr().trigger().roll_source
+    })?;
     l.func_wrap(m, "trig_set_move_roll", |mut c: C<W>, v: i32| {
         c.data_mut().w().set_trigger_move_roll(v)
     })?;
@@ -2208,7 +2536,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
                 st.depth + 1,
             );
             nested.next_answer = st.next_answer;
-            let mut store = Store::new(&rules.engine, nested);
+            let mut store = new_store(&rules.engine, nested);
             store.set_fuel(fuel)?;
             let res = match rules.cards[card as usize].entry(OnKind::Play, None) {
                 Some(entry) => {
@@ -2276,7 +2604,7 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             let mut world = c.data().wr().clone();
             world.enter_card(&id);
             let depth = c.data().depth + 1;
-            let mut store = Store::new(
+            let mut store = new_store(
                 &rules.engine,
                 HostState::new(rules.clone(), world, vec![], depth),
             );
@@ -2429,9 +2757,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "set_more_steps", |mut c: C<W>, v: i32| {
         c.data_mut().w().set_more_steps(v)
     })?;
-    l.func_wrap(m, "set_no_circle_reward", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_no_circle_reward(v != 0)
-    })?;
     l.func_wrap(m, "move_stop_at", |c: C<W>| c.data().wr().move_stop_at())?;
     l.func_wrap(m, "move_stopped", |c: C<W>| {
         c.data().wr().move_stopped() as i32
@@ -2462,6 +2787,7 @@ impl HostState<NullWorld> {
             asked: None,
             host_request: None,
             depth: 0,
+            limits: store_limits(),
         }
     }
 }

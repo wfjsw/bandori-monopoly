@@ -25,7 +25,11 @@ const RABBIT: &str = "多惠兔子";
 pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            |_| true,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::CircleAffected], mine, on_circle),
         On::Hook(&[HookKind::Pass], mine, on_pass),
         On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], can_negate, negate),
@@ -38,7 +42,7 @@ fn mine(player_id: i32) -> bool {
 
 /// 「初始2，上限4」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
-    state::set_bounds(player_id, state_key::FIRE, 0, 4);
+    crate::fire_pot(player_id, 2, 4);
     Ok(())
 }
 
@@ -104,9 +108,9 @@ fn negate(player_id: i32) -> card_sdk::Asked {
     }
     trigger::set_cancelled();
     let src = trigger::player_id();
-    ctx::gain(player_id, 500, &Msg::new(key!("tae_police_gain_self")));
+    ctx::gain(player_id, 500, &Msg::new(key!("tae_police_gain_self")))?;
     if src >= 0 && !ctx::player_out(src) {
-        ctx::gain(src, 2000, &Msg::new(key!("tae_police_gain_other")));
+        ctx::gain(src, 2000, &Msg::new(key!("tae_police_gain_other")))?;
     }
     Ok(())
 }

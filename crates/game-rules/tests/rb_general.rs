@@ -107,7 +107,6 @@ fn tsugu_ge26_can_buy_any_unowned() {
 
 // 规则书: 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」
 #[test]
-#[ignore = "DISCREPANCY: 「[消耗]资金时降低1500」 — engine charges the full price (富士见坂 600 → pays 600, expected 0; 购物中心 3000 → pays 3000, expected 1500). tsugu_discount fires but the price is unchanged"]
 fn tsugu_ge28_buy_discount_1500() {
     let mut t = Table::vanilla(2);
     t.dice(&[10, 10, 9]); // sum 29
@@ -314,16 +313,73 @@ fn recruit_allows_a_second_copy() {
 
 const CP_TOK: &str = "cards:card-general.clear_cp_tok";
 
-// 规则书: 「（1）此卡的[手]效果只有在自己[场上]拥有的小等于2个[CP点]时才可发动」
+// Sheet 2026-10-06 新卡组卡 E3: 「向抽牌堆中加入一张“觉悟”」 (was 「压」).
+// The sheet gives this card a play *window*, not a [反击] tag and not a [手]
+// tag: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
+// (rulebook 时点流程 13–15: 移动后 → 结算前/[移动终点] → 触发结算). Window
+// plays like this one -- cf. AG:Y.O.L.O 「你的任意掷骰结算前打出此卡」 -- are
+// offered in the engine's counteract ring, so the card is triggered there,
+// not played as a normal 运营-phase hand card.
 #[test]
-fn cp_hand_gated_at_two_points() {
+fn student_council_check_adds_juewu_not_ya() {
+    let mut t = Table::vanilla(2);
+    let t1 = tile("购物中心");
+    t.own(0, &[t1]);
+    t.give(0, &["R:学生会的检查"]);
+    // The main move ends two tiles past the deed we hold, so after 「移动结束」
+    // that deed sits at 「前后三格」 of the 移动终点.
+    t.set_pos(0, t1);
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    assert!(
+        t.counteract_offered("R:学生会的检查"),
+        "sheet: 「移动结束后…[触发结算]前可打出」 — offered in that window: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "R:学生会的检查").unwrap();
+    // The sheet's follow-up 「但可支付那格一层房屋的建造价格一半将此卡放于
+    // 那个格子上」 is an optional placement; decline it -- this test only
+    // checks the 「觉悟」 addition.
+    while t.prompt().is_some() {
+        if t.prompt().unwrap().kind == "tile" {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    let draw = t.draw_pile(0);
+    // 规则书/卡面 E3: 「向抽牌堆中加入一张“觉悟”」 (was 「压」).
+    assert!(
+        draw.iter().any(|c| c.contains("觉悟")),
+        "sheet E3 adds 「觉悟」 to the draw pile: {draw:?}"
+    );
+    assert!(
+        !draw.iter().any(|c| c.contains("压")),
+        "the old 「压」 token is gone: {draw:?}"
+    );
+}
+
+#[test]
+fn cp_hand_is_not_gated_at_two_points() {
+    // Sheet 2026-10-06 新卡组卡 A8 drops the old 「[特]（1）此卡的[手]效果只有在
+    // 自己[场上]拥有的小等于2个[CP点]时才可发动」 gate. A second copy is no
+    // longer refused for holding 6 CP.
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:该清CP了").unwrap();
     t.answer_tile(0, 5).unwrap();
     assert_eq!(t.token(0, CP_TOK), 6, "six CP on the field");
-    // 规则书: 「小等于2个[CP点]时才可发动」 — 6 > 2, refused.
+    // The CP-count gate is gone: a second play must not be refused for it.
+    t.give(0, &["通用:该清CP了"]);
     let r = t.play(0, "通用:该清CP了");
-    assert!(r.is_err(), "second play with 6 CP: {r:?}");
+    // It may still be refused for another reason (e.g. no empty tile), but not
+    // for 「小等于2个[CP点]」.
+    if let Err(e) = &r {
+        let s = e.to_string();
+        assert!(
+            !s.contains("cp") && !s.contains("CP") && !s.contains("点"),
+            "refused for the dropped CP-count gate: {s}"
+        );
+    }
 }
 
 // 规则书: 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]」
@@ -483,6 +539,14 @@ fn harvest_moves_chosen_distance_and_settles() {
 // =====================================================================
 // 通用:CiRCLE THANKS PARTY!
 // =====================================================================
+//
+// Ruling 2026-10-06: X does NOT count the user. X+1 is the count that
+// includes the user. The sheet's 「将X设为因此卡[消耗]资金的玩家数量加1」
+// therefore reads: the base 「玩家数量」 counts only the *other* players who
+// spent 500; the 「加1」 supplies the user. So
+//   X = (number of other players who spent 500) + 1
+// which is exactly the count of spenders including the user. Alone → X = 1
+// (the extra-turn branch); one other joins → X = 2 (the Xd20 branch).
 
 // 规则书: 「X等于1则[使用者]的本回合结束后获得一个额外回合」
 #[test]
@@ -491,7 +555,7 @@ fn party_x1_grants_extra_turn() {
     t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
     t.answer(1, 1).unwrap(); // decline
     t.answer(2, 1).unwrap(); // decline
-    // Only the user's own 500 → X = 1.
+    // Only the user's own 500 → base count 0, X = 0 + 1 = 1 (the user).
     assert_eq!(t.money(0), 9_500, "user consumes 500");
     t.dice(&[1]);
     t.roll(0).unwrap();
@@ -505,27 +569,73 @@ fn party_x1_grants_extra_turn() {
 #[test]
 fn party_x2_roll_win_pays_out() {
     let mut t = Table::vanilla(3);
-    t.dice(&[20, 20]); // X = 2 → 2d20 sum 40 > 35
+    t.dice(&[20, 20]); // X = 1 other + 1 user = 2 → 2d20 sum 40 ≥ 35
     t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
     t.answer(1, 0).unwrap(); // P1 joins
     t.answer(2, 1).unwrap(); // P2 declines
     assert_eq!(t.dice_left(), 0, "Xd20 with X=2 consumed two dice");
-    // 规则书: 「[使用者][获得]3000」「其他…[获得]1500」
+    // 规则书 (sheet 2026-10-06 新卡组卡 A12): 「如果结果至少为35…[使用者][获得]3000」「其他…[获得]1500」
     assert_eq!(t.money(0), 9_500 + 3_000);
     assert_eq!(t.money(1), 9_500 + 1_500);
     assert_eq!(t.money(2), 10_000, "declined");
+}
+
+// Two others join: X = 2 + 1 = 3 → 3d20. Confirms X counts others + the user,
+// and that the user is not double-counted (X = 3, not 4).
+#[test]
+fn party_x3_rolls_three_dice() {
+    let mut t = Table::vanilla(4);
+    t.dice(&[20, 20, 20]); // X = 3 → 3d20 sum 60 > 35
+    t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
+    t.answer(1, 0).unwrap(); // joins
+    t.answer(2, 0).unwrap(); // joins
+    t.answer(3, 1).unwrap(); // declines
+    assert_eq!(t.dice_left(), 0, "Xd20 with X=3 consumed three dice");
+    // 规则书: 「其他因此卡[消耗]资金的玩家[获得]1500」
+    assert_eq!(t.money(0), 9_500 + 3_000);
+    assert_eq!(t.money(1), 9_500 + 1_500);
+    assert_eq!(t.money(2), 9_500 + 1_500);
+    assert_eq!(t.money(3), 10_000, "declined");
 }
 
 // 规则书: 「如果结果大于35则…」 — a low roll pays nobody.
 #[test]
 fn party_x2_roll_miss_pays_nobody() {
     let mut t = Table::vanilla(3);
-    t.dice(&[1, 1]); // 2d20 sum 2 ≤ 35
+    t.dice(&[1, 1]); // 2d20 sum 2 < 35
     t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
     t.answer(1, 0).unwrap();
     t.answer(2, 1).unwrap();
     assert_eq!(t.money(0), 9_500);
     assert_eq!(t.money(1), 9_500);
+}
+
+#[test]
+fn party_x2_roll_exactly_35_wins() {
+    // Sheet 2026-10-06 新卡组卡 A12: 「如果结果至少为35则[使用者][获得]3000资金
+    // 且其他因此卡[消耗]资金的玩家[获得]1500资金」 -- 35 is INCLUSIVE
+    // (supersedes the earlier 「大于35」 reading).
+    let mut t = Table::vanilla(3);
+    t.dice(&[20, 15]); // X = 2 → 2d20 sum exactly 35
+    t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
+    t.answer(1, 0).unwrap(); // P1 joins
+    t.answer(2, 1).unwrap(); // P2 declines
+    assert_eq!(t.dice_left(), 0, "Xd20 with X=2 consumed two dice");
+    assert_eq!(t.money(0), 9_500 + 3_000, "sum 35 ≥ 35 wins");
+    assert_eq!(t.money(1), 9_500 + 1_500);
+    assert_eq!(t.money(2), 10_000, "declined");
+}
+
+#[test]
+fn party_x2_roll_34_pays_nobody() {
+    // Boundary: 34 is below the inclusive threshold.
+    let mut t = Table::vanilla(3);
+    t.dice(&[20, 14]); // X = 2 → 2d20 sum 34
+    t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
+    t.answer(1, 0).unwrap();
+    t.answer(2, 1).unwrap();
+    assert_eq!(t.money(0), 9_500, "sum 34 < 35");
+    assert_eq!(t.money(1), 9_500, "sum 34 < 35");
 }
 
 // =====================================================================
@@ -758,7 +868,6 @@ fn tsugu_skill_gains_fire_on_pass() {
 
 // 规则书: 「（初始1，上限2）」
 #[test]
-#[ignore = "DISCREPANCY: 「（初始1，上限2）」 — fire pots start at 0, not 1 (cap 2 is set). The opening grants Space but not the initial pot"]
 fn tsugu_skill_starts_with_one_fire() {
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
     assert_eq!(t.fire(0), 1, "初始1");
@@ -900,7 +1009,6 @@ fn ix_net_vs_great() {
 
 // GREAT → PERFECT → FEVER!: the derived chain end to end.
 #[test]
-#[ignore = "TEST BUG: the assertion's 600 boost assumes X counts only the OTHER field cards; the rulebook 「每拥有一张卡」 includes FEVER itself (X=400, money 17400). The chain itself is fine -- see fever_x_counts_every_field_card."]
 fn ix_great_perfect_fever_chain() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:GREAT").unwrap();
@@ -908,15 +1016,17 @@ fn ix_great_perfect_fever_chain() {
     // Draw PERFECT (top of a one-card pile).
     t.give_play(0, "通用:[衍生]PERFECT").unwrap();
     assert_eq!(t.money(0), 15_000);
-    // FEVER! is waiting in the discard; give and play it.
+    // FEVER! is waiting in the discard; give and play it. GREAT and PERFECT
+    // [移除]'d themselves, so FEVER! is the only card on the field.
     t.give_play(0, "通用:[衍生]FEVER!").unwrap();
     assert!(t.on_field(0, "通用:[衍生]FEVER!"));
-    // A later gain is boosted.
+    // A later gain is boosted. 规则书: 「X为600，[拥有者]场上每拥有一张卡则X
+    // 降低200」 -- FEVER! counts itself, so X = 600 - 200 = 400.
     t.set_pos(0, 55);
     t.dice(&[6]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    assert_eq!(t.money(0), 17_600, "15000 + 2000 + 600");
+    assert_eq!(t.money(0), 17_400, "15000 + 2000 + 400 (X counts FEVER itself)");
 }
 
 // AG:宣战布告 (Afterglow) vs 通用:登上武道馆: a cross-group [反击] against
@@ -963,15 +1073,16 @@ fn ix_party_resolves_alongside_fever() {
     t.give_play(0, "通用:CiRCLE THANKS PARTY!").unwrap();
     t.answer(1, 0).unwrap();
     t.answer(2, 1).unwrap();
-    // The party's own numbers hold: -500, +3000 / +1500.
-    assert_eq!(t.money(0), 12_500, "events {:?}", t.recent_keys(8));
+    // 规则书（FEVER!）: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X」 --
+    // the party's +3000 to P0 is a [获得], so FEVER! (X=400 with one face-up
+    // card) raises it to 3400: 10000 - 500 + 3400 = 12900.
+    assert_eq!(t.money(0), 12_900, "events {:?}", t.recent_keys(8));
     assert_eq!(t.money(1), 11_000);
     assert_eq!(t.money(2), 10_000);
 }
 
 // FEVER! must raise a card's own [获得] too.
 #[test]
-#[ignore = "DISCREPANCY: FEVER! 「被[支付]或[获得]资金时」 does not fire on card-initiated [获得] (THANKS PARTY's +3000 lands unboosted; GREAT's +2000 likewise. The CiRCLE reward IS boosted). Expected +400 on top with one field card"]
 fn fever_boosts_card_gains() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:[衍生]FEVER!").unwrap();

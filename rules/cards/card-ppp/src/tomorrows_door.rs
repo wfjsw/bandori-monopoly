@@ -13,7 +13,7 @@
 //! route marker that walks 流星堂 -> 大阪中之岛公园 as its user passes it, then
 //! taxes settles from the owner's field.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -22,6 +22,9 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     &[
         On::Play(None, play),
         On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
+        // so a 「支付减半」 scaler sees the shaped total.
+        On::Hook(&[HookKind::PayAdd], pay_add_guard, pay_add),
         On::Hook(&[HookKind::SettleAfter], settle_after_guard, settle_after),
     ],
 );
@@ -103,22 +106,67 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.SettleAfter` (C# `CardTomorrowsDoor.SettleAfter`) -- once the card sits
-/// in the owner's play area, another player settling on the owner's land or on
-/// 梦开始的地方 pays `houses(星之鼓动山丘) × 100` to the owner.
-/// Pure guard for [`settle_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// (3)'s surcharge, as a flat add on the rent payment (`payAdd` runs before
+/// `payMul`, so a 「支付减半」 scaler sees rent + surcharge as one figure).
+fn pay_add_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+}
+
+/// Is the card in the owner's play area (the route finished)?
+/// `place_raw` / a direct placement sets no route cursor, so the card's own
+/// tile is the authority: `None` / `-1` = the play area.
+fn in_play_area() -> bool {
+    ctx::self_tile().unwrap_or(-1) < 0
+}
+
+fn pay_add(player_id: i32) -> card_sdk::Asked {
+    // Still travelling: no tax.
+    if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
+        return Ok(());
+    }
+    // 规则书（3）: 「[拥有者]以外的玩家在[拥有者]拥有的格子…[结算]时额外支付…」
+    // Only a rent payment on the owner's tile gets the add here; a settle on
+    // 梦开始的地方 (no rent to attach to) is charged in `settle_after`.
+    if trigger::kind() != TriggerKind::PayAdd || !trigger::pay_is_rent() {
+        return Ok(());
+    }
+    let payer = trigger::player_id();
+    if payer == player_id || ctx::player_out(payer) {
+        return Ok(());
+    }
+    let at = trigger::tile();
+    if at < 0 || ctx::tile_owner(at) != player_id {
+        return Ok(());
+    }
+    let hill = ctx::tile_named("星之鼓动山丘");
+    let houses = if hill >= 0 { ctx::houses_of(hill) } else { 0 };
+    let due = houses * 100;
+    if due <= 0 {
+        return Ok(());
+    }
+    let amount = trigger::value();
+    trigger::set_pay_amount(amount + due);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("tomorrows_door_tax"))
+            .player_id("who", player_id)
+            .player_id("target", payer)
+            .n("money", due as i64),
+    );
+    Ok(())
+}
+
+/// `Fx.SettleAfter` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
+/// a mortgaged owner tile, where no rent payment exists to carry the add) still
+/// owes `houses(星之鼓动山丘) × 100`.
 fn settle_after_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
 fn settle_after(player_id: i32) -> card_sdk::Asked {
-    // C# `Tile >= 0` -- still travelling along the route: no tax. The cursor is
-    // the stand-in for `Tile`; it only reaches `ROUTE.len()` once (2) lands.
-    if ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
+    if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
         return Ok(());
     }
-    // C# `m.Seat == Seat` -- the owner's own settle is not taxed.
     let payer = trigger::player_id();
     if payer == player_id || ctx::player_out(payer) {
         return Ok(());
@@ -131,7 +179,14 @@ fn settle_after(player_id: i32) -> card_sdk::Asked {
     }
     let dream = ctx::tile_named("梦开始的地方");
     let hill = ctx::tile_named("星之鼓动山丘");
-    if ctx::tile_owner(at) != player_id && !(dream >= 0 && at == dream) {
+    let is_dream = dream >= 0 && at == dream;
+    let is_owner_tile = ctx::tile_owner(at) == player_id;
+    if !is_dream && !is_owner_tile {
+        return Ok(());
+    }
+    // Rent on an unmortgaged owner tile already carried the surcharge via
+    // `pay_add`; don't charge it twice.
+    if is_owner_tile && !is_dream && !ctx::mortgaged_of(at) {
         return Ok(());
     }
     let houses = if hill >= 0 { ctx::houses_of(hill) } else { 0 };

@@ -15,7 +15,7 @@
 //! deck, draw 1. The roll shave and the pay bends live in the Fx hooks;
 //! the reshuffle stack growth runs on `Reshuffled`.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{prop, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -26,7 +26,10 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
         On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], hook_guard, hook),
         On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled),
     ],
-);
+)
+// 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
+// (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
+.props(&[(prop::HAND_LIMIT_DELTA, -1)]);
 
 /// C# `Mem["stacks"]` -- how many times the pay bend is stacked (2 on place,
 /// +2 per reshuffle).
@@ -56,7 +59,7 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
             .card("card", "PP:[衍生]共鸣"),
     );
     // 规则书[手]: 「然后抽1张牌」
-    ctx::draw(player_id, 1);
+    ctx::draw(player_id, 1)?;
     // 规则书[特]: 「此卡不受任何其他效果影响」 -- C# `Card.Immune`. A flag on the
     // card: effects that would touch it read `card_immune` and skip.
     ctx::set_self_immune(true);

@@ -46,7 +46,15 @@ export interface StateVar {
   value: number; min: number; max: number;
   expires?: "turnStart" | "turnEnd" | null;
 }
-export interface FieldCard { uid: number; card: string; owner: number; user: number; tile: number; crystals: number; faceDown: boolean; note: Msg }
+export interface FieldCard {
+  uid: number; card: string; owner: number; user: number; tile: number;
+  /** Miracle crystals on this instance. A band skill's count is the player's 「乐队卡 / 团卡」 pool. */
+  crystals: number;
+  faceDown: boolean;
+  /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
+  bandSkill?: boolean;
+  note: Msg;
+}
 export interface SkillAction { id: string; source: string; title: Msg; text: Msg; enabled: boolean; reason: Msg }
 export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; note: Msg; faceDown: boolean }
 export interface TileMark { uid: number; tile: number; kind: string; owner: number; count: number; card: string; note: Msg }

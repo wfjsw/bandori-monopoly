@@ -92,7 +92,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     plan::set_resolve(true);
     // 2. 「如果[共鸣]则获得1500资金」
     if crate::resonance::try_resonance(player_id)? {
-        ctx::gain(player_id, 1500, &Msg::new(key!("strong_flower_gain")));
+        ctx::gain(player_id, 1500, &Msg::new(key!("strong_flower_gain")))?;
     }
     // 3. 「此卡放入[使用者]弃卡区」
     ctx::set_dest(ctx::Dest::Graveyard);

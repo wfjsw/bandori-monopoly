@@ -2,7 +2,7 @@
 //!
 //! 规则书（docs/rulebook/cards.json, id `AG:朝同一片天空迈进`）:
 //! > 朝同一片天空迈进：
-//! > [反击]抽出此卡时立刻打出，如果你手牌数大于等于3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）
+//! > [反击]抽出此卡时立刻打出，如果你手牌数至少为3，获得手牌数*600的资金，如果你的手牌数小于3，抽一张卡（开局时抽到此卡洗回）
 //!
 //! [反击] auto-plays when drawn: money by hand size, else draw.
 
@@ -58,10 +58,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             player_id,
             n * 600,
             &Msg::new(key!("same_sky_why")).i("n", n as i64),
-        );
+        )?;
     } else {
         // 规则书[反击]: 「如果你的手牌数小于3，抽一张卡」
-        ctx::draw(player_id, 1);
+        ctx::draw(player_id, 1)?;
     }
     // Played: it goes to the discard pile.
     ctx::to_discard(player_id, ID);
