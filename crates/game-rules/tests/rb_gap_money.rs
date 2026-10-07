@@ -188,9 +188,8 @@ fn g02_half_speed_plus_expectations_floor_on_a_rent() {
 // 规则书 (微笑的铁假面): 「其他玩家[分摊][支付][使用者]2000资金」.
 // 规则书 (网络链接异常) 1: 「手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」.
 // RULING: does X (the share) recompute after the drop? Assert the pre-drop
-// share ceil10(2000/n).
-// TODO(ABI): no static targeting query to confirm the designations.
-#[ignore = "TODO(ABI): no static targeting query for 微笑的铁假面's 分摊 designations"]
+// share ceil10(2000/n). The static targeting query names the split's payers;
+// a per-pair cancel drops one leg.
 #[test]
 fn g03_net_error_drops_one_leg_of_a_split() {
     let mut t = Table::new(&["白鹭千圣", "仓田真白", "花园多惠", "山吹沙绫"]);

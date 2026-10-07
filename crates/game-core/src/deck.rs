@@ -98,6 +98,25 @@ pub fn preset(data: &GameData, c: &CharacterData) -> Vec<String> {
     fill(data, c, &c.preset)
 }
 
+/// A random legal deck: `SIZE` cards drawn without replacement from [`pool`],
+/// then put back in pool order. The caller supplies the index picker (the
+/// match RNG -- never `thread_rng`, so a chaos bot stays replayable). Falls
+/// short of [`SIZE`] only when the pool itself is smaller; the caller then
+/// falls back to [`preset`].
+pub fn random(
+    data: &GameData,
+    c: &CharacterData,
+    mut below: impl FnMut(usize) -> usize,
+) -> Vec<String> {
+    let mut ids: Vec<String> = pool(data, c).into_iter().map(|k| k.id.clone()).collect();
+    let mut out = Vec::with_capacity(SIZE);
+    while out.len() < SIZE && !ids.is_empty() {
+        let k = below(ids.len()).min(ids.len() - 1);
+        out.push(ids.remove(k));
+    }
+    clean(data, c, &out)
+}
+
 pub fn is_complete<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> bool {
     clean(data, c, ids).len() == SIZE
 }

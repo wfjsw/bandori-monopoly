@@ -162,6 +162,12 @@ pub struct MoveCtx {
     /// the engine; the cards track that themselves now). The engine never reads
     /// it -- it is scratch space for the card that armed the effect.
     pub tags: Vec<(String, i32)>,
+    /// 「使你的下次主要移动结果对那些玩家一起执行」 -- players who replay this
+    /// move's result after the mover settles (C# `LeadFx.Who` / `Follow`). The
+    /// engine walks each one the same way, in the order recorded here (「你先
+    /// 触发结算，此后其他玩家按行动顺序依次触发结算」), carrying the same plan
+    /// (steps / kind / destination / `pay_factor`).
+    pub followers: Vec<i32>,
 }
 
 impl Default for MoveCtx {
@@ -210,6 +216,7 @@ impl Default for MoveCtx {
             no_buy: false,
             cancelled: false,
             tags: Vec::new(),
+            followers: Vec::new(),
         }
     }
 }

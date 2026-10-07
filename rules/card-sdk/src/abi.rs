@@ -156,7 +156,29 @@ use alloc::{string::String, vec::Vec};
 /// v34: `prop::RENT_HOUSES` (virtual rent-house-count, 「房屋数视为…」 -- gone
 ///      with a placed card) and `ctx::rent_houses_of` (the counted value the
 ///      rent lookup reads). `ctx::houses_of` stays real.
-pub const ABI_VERSION: i32 = 34;
+/// v35: the skill / band-skill / follow surface.
+///      (a) `invoke_skill(player_id, id)` -- run a skill rule's press entry
+///      (`On::Play`) for a player, nested like `play_card`. This is 「立即执行
+///      乐队技能的（2）效果」 (mutsumi_never) and 「触发其技能的发动」 (pareo_far):
+///      the C# direct method calls (`BandCrychic.TransformNow()` /
+///      `SkillPareo -> Offer()`). No `skillUsed` raise -- that is the player's
+///      own press (`use_skill`), not a card running the body.
+///      (b) the skill **attachment surface** (C# `H._fx[i].bands` / `.skill`):
+///      `band_skill(player_id)` / `character_skill(player_id)` name the bound
+///      rule id, `band_skills(player_id)` lists every band attachment as
+///      `(uid, id, extra)`, `add_band_skill(player_id, id, extra)` attaches one
+///      (C# `H.MakeBand`). `extra` is 「拿取」's borrowed copy: 「相同乐队技能卡
+///      的效果不可叠加」 (the hook dispatch skips an extra when a non-extra copy
+///      of the same id is already attached) and 「不视为那个乐队的角色」
+///      (`in_band` still reads only the character).
+///      (c) `raise_bought(player_id, tile)` -- a card that hands a deed over
+///      (tomoe_savior's 「从该玩家处收购该地契」) announces the acquisition so
+///      the `bought` hook chain hears it (C# `f.Bought(i, t)`).
+///      (d) `plan::add_follower(player_id)` -- 「使你的下次主要移动结果对那些
+///      玩家一起执行」 (sakiko_lead): the move's result is replayed for each
+///      follower after the mover settles, in the recorded order (「你先触发结算，
+///      此后其他玩家按行动顺序依次触发结算」).
+pub const ABI_VERSION: i32 = 35;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -191,6 +213,10 @@ pub mod state_key {
     pub const EXILE: &str = "exile";
     /// Tile the exile returns to, or -1 for none.
     pub const EXILE_TO: &str = "exileTo";
+    /// 「在[除外]层数归0后[传送]至该格子，视为当回合的主要移动」 -- the exile
+    /// expiry teleport is that turn's main move (MyGO:无路矢). Read and consumed
+    /// by the engine's exile tick.
+    pub const EXILE_MAIN: &str = "exileMain";
     /// Fire pots held. Its `max` is the mandated cap, written by the character
     /// skill -- and that is the one number to show.
     pub const FIRE: &str = "fire";
@@ -237,6 +263,12 @@ pub mod prop {
     /// stun gate when played from hand. The exile and no-hand gates have no
     /// such exception in the pool. Default `0` (blocked by stun).
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
+    /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
+    /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
+    /// 所有的效果」. The named set is the play's **other living players** (the
+    /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
+    /// (names nobody).
+    pub const DESIGNATES: &str = "designates";
     /// Virtual **rent** house count (「房屋数视为…」, C# `H.RentHouses` + `boosted`).
     /// Presence is the override -- a house count of `0` is a legitimate value,
     /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is

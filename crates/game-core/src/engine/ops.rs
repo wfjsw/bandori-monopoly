@@ -146,6 +146,14 @@ impl World {
     pub fn set_settle_as_agent(&mut self, on: bool) {
         self.turn.plan.settle_as_agent = on;
     }
+    /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record a follower of the
+    /// move being planned (C# `LeadFx.Who`). After the mover settles, the engine
+    /// replays this move's result for each follower in the order recorded.
+    pub fn plan_add_follower(&mut self, player_id: i32) {
+        if player_id >= 0 && !self.turn.plan.followers.contains(&player_id) {
+            self.turn.plan.followers.push(player_id);
+        }
+    }
     /// `MoreSteps` -- a queued second walk, in steps.
     pub fn set_more_steps(&mut self, n: i32) {
         self.turn.plan.more_steps = n;
@@ -489,7 +497,9 @@ impl World {
                 .player_id("who", player_id)
                 .i("count", count)
                 .i("sides", sides)
-                .i("sum", total),
+                .opt("what", None)
+                .i("sum", total)
+                .opt("detail", None),
         )
         // The event carries the result so the client can show it on the dice
         // rather than only in the log line (same as `Cx::roll`).
@@ -543,6 +553,11 @@ impl World {
         }
         if let Some(s) = self.player_mut(player_id) {
             s.money += amount;
+        }
+        // 「当前回合内你每获得过一次资金」 -- only money **in** counts; a
+        // negative `gain_fixed` is a loss.
+        if amount > 0 {
+            self.bump_gain(player_id, 1);
         }
         let e = self.log("gain", player_id, why);
         e.value = amount;
@@ -629,6 +644,76 @@ impl World {
         self.add_crystals_at(uid, n, max)
     }
 
+    // ---------------------------------------------- skill / band attachments
+
+    /// Rule id of the player's bound **band skill** (`skill:<band>:<skill>`),
+    /// the one 「乐队卡 / 团卡」 crystals land on. `None` when there is none.
+    pub fn band_skill_id(&self, player_id: i32) -> Option<String> {
+        let uid = self.band_skill_uid(player_id);
+        if uid < 0 {
+            return None;
+        }
+        self.field_by_uid(uid).map(|f| f.card.clone())
+    }
+
+    /// Rule id of the player's **character skill** (`skill:<character>:<skill>`,
+    /// C# `H._fx[i].skill`). A character skill is a `skill:` instance that is
+    /// *not* a band skill; `bind_skills` places it beside the band one.
+    pub fn character_skill_id(&self, player_id: i32) -> Option<String> {
+        let s = self.player_id(player_id)?;
+        s.field
+            .iter()
+            .find(|f| f.card.starts_with("skill:") && !f.band_skill)
+            .map(|f| f.card.clone())
+    }
+
+    /// Every band-skill attachment on the player's field, as
+    /// `(uid, rule id, extra)` in placement order (C# `H._fx[i].bands`).
+    pub fn band_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
+        let Some(s) = self.player_id(player_id) else {
+            return Vec::new();
+        };
+        s.field
+            .iter()
+            .filter(|f| f.band_skill)
+            .map(|f| (f.uid, f.card.clone(), f.extra as i32))
+            .collect()
+    }
+
+    /// Attach a band-skill instance (C# `H.MakeBand(band, user, extra)`).
+    /// `extra` marks a 「拿取」ed copy: 「相同乐队技能卡的效果不可叠加」 (refused
+    /// when an attachment of the same id is already there) and 「不视为那个乐队
+    /// 的角色」 (`in_band` still reads only the character). Returns the new uid,
+    /// or -1 when refused.
+    pub fn add_band_skill(
+        &mut self,
+        data: &crate::data::GameData,
+        player_id: i32,
+        id: &str,
+        extra: bool,
+        props: std::collections::BTreeMap<String, i32>,
+    ) -> i32 {
+        if !data.is_band_skill(id) {
+            return -1;
+        }
+        if self
+            .player_id(player_id)
+            .is_some_and(|s| s.field.iter().any(|f| f.card == id))
+        {
+            return -1;
+        }
+        let uid = self.place_card(data, player_id, id, Msg::default(), props);
+        if uid < 0 {
+            return -1;
+        }
+        if extra {
+            if let Some(f) = self.field_by_uid_mut(uid) {
+                f.extra = true;
+            }
+        }
+        uid
+    }
+
     // ------------------------------------------------------------- fire pots
 
     /// Fire pots held (C# `fire`).
@@ -696,6 +781,7 @@ impl World {
             return 0;
         }
         s.money += amount;
+        self.bump_gain(player_id, 1);
         self.log(
             "gain",
             player_id,
@@ -955,6 +1041,7 @@ impl World {
             immune: false,
             props,
             band_skill,
+            extra: false,
             note,
         };
         if player_id == crate::state::BOARD_OWNER {
@@ -1388,6 +1475,14 @@ impl World {
             let v = (s.stay() + n).max(0);
             s.state_set(key::STAY, v);
             s.state_set_expires(key::STAY, Some(Tick::TurnEnd));
+            // 「[停留]：处于该状态时[无法移动]」 -- the skip is a *consequence* of
+            // the state, not a separate latch. Dropping the last layer (with no
+            // [除外] holding the move either) un-skips the turn's main move, the
+            // same as the C#'s `H.State.skipMove = false` when 壱雫空 clears it.
+            let unskip = v == 0 && s.exile() == 0;
+            if unskip && self.st.turn == player_id {
+                self.st.skip_move = false;
+            }
         }
     }
 

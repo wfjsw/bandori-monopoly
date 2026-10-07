@@ -63,22 +63,22 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
             }
         }
     }
-    // TODO(ABI): the C# also un-skips the turn's move when the user's stay
-    // drops to 0 (`H.State.skipMove = false`); needs a skip-move flag.
+    // The stay-clear un-skips the turn's move on its own (「[停留]：处于该状态时
+    // [无法移动]」 -- the skip is a consequence of the state, not a latch the
+    // card has to write; `game-core`'s `give_stay` clears `skip_move` when the
+    // last layer goes and no [除外] holds the move either, the same as the C#'s
+    // `H.State.skipMove = false`).
+    //
     // Ruling 2026-10-06: 「每清除一种效果」 is per effect type, counted
     // separately for each affected player. 2 types cleared from A and 1 from B
     // counts 3. Every player pays 1000 × count; the user gains 1000 extra per
     // own type (「每种效果使用者额外获得1000资金」).
     //
-    // The money moves with `gain_fixed` rather than `transfer`/`gain` because
-    // those pause the guest run (`HostRequest::Pay`) and the money pipeline
-    // then runs against the **live** world -- which still has the [晕眩] we
-    // just cleared on the guest copy, so a stunned payer's leg is silently
-    // blocked (`play.rs` `can_pay`). `gain_fixed` is a direct world write with
-    // no pause, so the whole body commits in one `swap_world`.
-    // TODO(ABI): route these through `transfer`/`gain` (payAdd/payMul/payChoose)
-    //   once a status clear crosses to the live world before a host routine
-    //   (`adopt_turn_policy` copies `latch:` keys and turn policy, not `stun`).
+    // The money moves through the pipeline (`transfer` / `gain` -> payAdd /
+    // payMul / payChoose / payAt -> the `pay` [反击] window), so 「[支付]时可以
+    // 打出」 windows open on each leg. The status clears above reach the live
+    // world for the routine's duration (`Cx::overlay_guest_state`), so a payer
+    // we just un-stunned is not blocked by `can_pay`.
     let count: i32 = cleared.iter().map(|&(_, n)| n).sum();
     if count > 0 {
         let each = 1000 * count;
@@ -95,15 +95,14 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
                     &Msg::new(key!("hitoshizuku_pay")).player_id("who", j),
                 );
             } else {
-                ctx::gain_fixed(j, -each, &Msg::new(key!("hitoshizuku_pay")));
-                ctx::gain_fixed(player_id, each, &Msg::new(key!("hitoshizuku_pay")));
+                ctx::transfer(j, player_id, each, &Msg::new(key!("hitoshizuku_pay")))?;
             }
         }
     }
     // 规则书: 「若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金」
     for &(j, n) in &cleared {
         if j == player_id && n > 0 {
-            ctx::gain_fixed(player_id, 1000 * n, &Msg::new(key!("hitoshizuku_self_gain")));
+            ctx::gain(player_id, 1000 * n, &Msg::new(key!("hitoshizuku_self_gain")))?;
         }
     }
     Ok(())

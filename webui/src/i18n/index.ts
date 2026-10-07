@@ -66,7 +66,15 @@ void i18n.use(initReactI18next).init({
   // message keys and the card crates' locale files exactly.
   keySeparator: false,
   nsSeparator: ":",
+  // An argument the sender left out renders as nothing rather than as a raw
+  // `{{what}}` -- the engine's convention is that optional parts (`what`,
+  // `detail`, ...) are blank when absent, and an older server or a card that
+  // forgets one should not leak template syntax into the log.
   interpolation: { escapeValue: false },
+  missingInterpolationHandler: (_text: string, value: unknown) => {
+    if (import.meta.env?.DEV) console.warn("[i18n] missing interpolation", value);
+    return "";
+  },
   returnNull: false,
   resources: bundled as unknown as Record<string, Record<string, object>>,
 });

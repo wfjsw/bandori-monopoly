@@ -164,13 +164,30 @@ impl Cx<'_> {
         }
     }
 
-    /// `SubmitDeck` -- a complete legal deck, or the character's preset.
+    /// `SubmitDeck` -- a complete legal deck, or the character's preset. A
+    /// chaos bot without a supplied list submits a random legal deck instead
+    /// of the designer's preset.
     pub(crate) fn submit_deck(&mut self, i: usize, cards: Option<&[String]>) {
         let character = self.w.st.players[i].character.clone();
         let list = match self.data.character(&character) {
             Some(c) => match cards {
                 Some(ids) if deck::is_complete(self.data, c, ids) => deck::clean(self.data, c, ids),
-                _ => deck::preset(self.data, c),
+                _ => {
+                    let c = self.data.character(&character).expect("checked");
+                    if self.is_chaos(i) {
+                        let picked = {
+                            let (data, rng) = (&*self.data, &mut self.w.rng);
+                            deck::random(data, c, |n| rng.below(n))
+                        };
+                        if deck::is_complete(self.data, c, &picked) {
+                            picked
+                        } else {
+                            deck::preset(self.data, c)
+                        }
+                    } else {
+                        deck::preset(self.data, c)
+                    }
+                }
             },
             None => vec![],
         };

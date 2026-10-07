@@ -26,7 +26,7 @@
 | `world.rs` | `World` — everything a routine touches, incl. RNG and event/prompt counters |
 | `cx.rs` | `Cx` routine context, `Flow`/`Halt`, `Ask` prompt builders |
 | `play.rs` | routines: turns, movement, CiRCLE reward, landing, agents, rent, forced purchase, buy/build, payments, raising funds, bankruptcy, auctions, hand/draw, events, play card, scoring |
-| `ai.rs` | bot decisions (same thresholds as the C#) |
+| `ai.rs` | bot decisions: the standard policy (same thresholds as the C#) and the chaos one |
 | `setup.rs` | turn order, ban (Ranked), pick, deck |
 | `rules.rs` | `CardRules` — where card/event content plugs in; `StubRules` = no effects |
 
@@ -116,6 +116,107 @@ hand card that shapes a settle and then leaves the field). A purchase
 效果影响」) and a print (`gain`) are never scaled. See
 [TILES.md](TILES.md) 「支付减半」 wording comparison.
 
+### The guest's pending state, overlaid (not persisted)
+
+A card body that pauses for a host routine (pay / gain / move / ...) would
+otherwise run that routine against a world that does not yet see the body's
+own writes: 壱雫空 「清除场上所有[停留]与[眩晕]效果」 then has every player pay,
+and a payer the body just un-stunned is still blocked by `can_pay` on the live
+world. Two earlier attempts failed -- *persisting* all keys double-counts
+additive writes (the body replays from the top), and persisting only clears
+breaks `rb_general::parking_replaces_settle_with_stay`.
+
+The design that works is a **merged view that is not persisted**
+(`cx.rs::overlay_guest_state` / `restore_guests_to`). At the `NeedHost`
+boundary the guest's pending player-state **clears** (status keys that went
+*down*) are overlaid on the live world for the routine's duration; when the
+drive's next iteration starts, the overlay is dropped, **keeping only the
+routine's own effects** (a key the routine also touched keeps its delta on the
+base value). The replay then re-applies the guest writes deterministically.
+
+Only decreases cross. A status the body itself just *applied* -- 心の雨's
+fallback `give_stun` then `gain 1000` -- must not gate its own follow-on money
+(`money_inner`'s stunned-payee gate would refuse the print). Whether
+「无法收付款」 should block a card's own gain to a player it just stunned is an
+open ruling; the pre-overlay behaviour stands until it is decided. Money is
+not overlaid at all: a `gain_fixed` is re-applied on the replay, and the
+pipeline's own moves are routine effects, not guest writes. `adopt_turn_policy`
+still carries the `latch.` keys and the turn-ctx policy (those are "already
+taken" and the replay's re-write is a no-op). Nested drives push and pop their
+own overlay, so a hook's routine never sees an outer one's dropped.
+
+### 「资金变动」 is `payAfter`
+
+Rulebook 支付阶段 7 (「资金变动, 合并到[支付后]?」) is a hook point, not a
+[反击] window, so it merges into `payAfter`: `payAfter` now fires on **any**
+money change -- a print (`gain`) and a `gain_fixed` included -- while `paid`
+stays the payer-side-loss [反击] window (再次牵起手来 / 游击演出 are
+「[消耗]或[支付]」). Every credit also bumps a per-player **turn gain counter**
+(`World::gains`, reset for everyone at each turn start), which is what
+「当前回合内你每获得过一次资金」 reads (`ctx::gains_this_turn`) -- so a hand
+card can count gains with no field stand-in observing them.
+
+### `exileMain` consumes the turn's main move
+
+MyGO:无路矢's 「在[除外]层数归0后[传送]至该格子，视为当回合的主要移动」 is the
+`exileMain` slot (`state_key::EXILE_MAIN`). The exile tick reads and consumes
+it: the return teleport runs as the main move (`teleport_as(..., main: true)`)
+and `TurnCtx::main_moved` is set, so 「一回合只能触发一次［主要移动］」 keeps the
+player from rolling as well. `why_not_act`'s `roll` / `end` gates both look at
+`main_moved`. Clearing a [停留] down to 0 also un-skips the move
+(`give_stay`): 「[停留]：处于该状态时[无法移动]」 makes the skip a consequence of
+the state, not a latch.
+
+## Bot AI (mentalities)
+
+Every seat carries a **`BotMentality`** (`state.rs`, serde-defaulted to
+`standard` so older saves and room records load unchanged). It is chosen when
+the match is created -- solo (`SoloSetup`, one choice for all bots with a
+per-bot override) or online (`POST /api/rooms/{id}/bots`, stored on the room
+member and copied onto the seat by `Match::new`) -- and it is what
+`Cx::bot_mentality` reads. Only `bot` seats take one: **a human who times out or
+disconnects is always answered with the standard policy** (`ai` flips on,
+`bot` stays off).
+
+Two policies, one decision surface (`ai_step`, `tick_live`, `tick_choice`,
+`auto_mortgage`, and the precomputed `Ask::ai` / `ai_picked` / `worth`):
+
+**`standard`** is the ported C# bot. Constants live in `ai.rs` and are mirrored
+by the web client's 托管 autopilot (`webui/src/game/autopilot.ts`) -- keep the
+two in sync:
+
+| Constant | Value | Meaning |
+|---|---|---|
+| `BUY_RESERVE` | 2,000 | keep this much after buying |
+| `BUILD_RESERVE` | 3,500 | keep this much after building |
+| `REDEEM_RESERVE` | 4,000 | keep this much after redeeming |
+| `FORCE_BUY_RESERVE` | 4,000 | 「可选择[支付]…两倍…强行购买」 only while it leaves this much |
+| `PLAY_CARD_CHANCE` | 0.7 | odds of playing a card rather than rolling in 运营 |
+| `MAX_PLAYS_PER_TURN` | 2 | hand cards played in one turn before rolling |
+
+**`chaos`** is legal but maximally disruptive and effect-heavy: it plays a card
+at every legal opportunity (no odds roll, no per-turn cap beyond the engine's
+own; the rule's `ai_play` heuristic is ignored, only `cant_play` counts), presses
+character and band skills whenever they are usable (at most once each per turn,
+so a no-op skill cannot park it), declares every offered counteract with a
+random offered card, and picks uniformly among the non-default prompt options --
+a tile prompt gets a random target, never 「无」 while one exists. Ban / pick /
+deck are random (the deck is a random legal one, `deck::random`), hand overflow
+discards at random, and it only ends the turn when nothing else is legal.
+
+Chaos still keeps a coin reserve, or it burns out in a few turns and stops
+being disruptive. **`CHAOS_RESERVE = 1,000`** is its only money gate: voluntary
+spending (buy, build, redeem, auction bids, and the optional paid offers) happens
+only when it leaves that much; a forced purchase is accepted only under the same
+condition; auction raises are capped at `money − CHAOS_RESERVE` and otherwise
+random within the cap. Card plays and counteracts are unrestricted -- a card's
+own cost is not visible to the AI layer (it lives in the play body), so the
+reserve cannot gate them.
+
+All chaos randomness comes from the match RNG (the world's, plus the host's
+`live_rng` for answer pacing and auction raises) -- never `thread_rng` -- so a
+chaos game replays and restores like any other (`tests/mentality.rs`).
+
 ## Not in the shell (card content / later phases)
 
 | What | C# | Where it goes |
@@ -134,11 +235,15 @@ The stub rules give a complete game of plain BanG Dream Monopoly: cards can be p
 
 * `cargo test -p game-core` — routine tests on hand-built boards (rent, RiNG rent,
   agent half-rent and purchases, raise funds, bankruptcy + game over, leftover
-  auctions, forced purchase, CiRCLE reward, scoring/ranking, exact replays) and
+  auctions, forced purchase, CiRCLE reward, scoring/ranking, exact replays),
   end-to-end tests (bot games to the end with invariants, determinism, a human turn
-  by command, prompt time-outs, vote, leaving, disconnect/reconnect).
+  by command, prompt time-outs, vote, leaving, disconnect/reconnect), and the
+  mentality suite (`tests/mentality.rs`: chaos buys with no standard reserve,
+  plays every card before rolling, declares an offered counteract, picks a
+  non-default prompt option, same seed = same game).
 * `cargo run -p game-core --release --example sim -- 50 4 200` — plays bot matches and
-  counts what happened.
+  counts what happened. Add `standard` or `chaos` as a trailing word to pick the
+  bots' mentality (default `standard`): `sim -- 50 4 200 chaos`.
 
 Sample (50 games, 4 bots, 200-round cap): ~360 ms per game in release; 34,461 rolls,
 5,915 CiRCLE passes, 19,612 rent payments, 4,641 houses, 2,908 purchases, 415 forced

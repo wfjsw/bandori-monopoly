@@ -65,17 +65,13 @@ fn card_payment_opens_the_counteract_window() {
 
 /// Per-pair cancel: a multi-target payment's individual entries can be
 /// cancelled one at a time. `通用:网络链接异常`'s 「取消其对目标之一的[指定]」
-/// is the archetype.
-///
-/// TODO(ABI): the pipeline splits a multi-target command into payer×payee
-/// entries and a post-split cancel can drop one, but the card-level
-/// 「取消其对目标之一的[指定]」 needs a static targeting query the ABI does not
-/// expose yet (today it negates the whole multi-target card). See
-/// `net_cancels_one_target_not_all` in `rb_general.rs`, still ignored.
+/// is the archetype. The static targeting query (`ctx::designations`, C#
+/// `H.Db.Card(id).Targeting`) names the play's recipients before its body runs;
+/// `ctx::cancel_designation` drops one (C# `play.Tags["immune"+seat]`), and the
+/// rest of the play's designations still land.
 ///
 /// 规则书（网络链接异常）: 「取消其对目标之一的[指定]」
 #[test]
-#[ignore = "TODO(ABI): per-pair cancel of one designation needs a static targeting query; see net_cancels_one_target_not_all"]
 fn per_pair_cancel_drops_one_designation() {
     let mut t = Table::vanilla(3);
     t.give(1, &["通用:网络链接异常"]);

@@ -36,6 +36,11 @@ impl Halt {
 
 pub type Flow<T> = Result<T, Halt>;
 
+/// Sentinel in [`Ask::ai`] for "no precomputed answer -- fill it in when the
+/// prompt is raised, from the seat's [`crate::state::BotMentality`]". Never
+/// survives into a saved [`Ask`]: [`Cx::ask`] replaces every entry.
+pub const AI_UNSET: i32 = i32::MIN;
+
 /// A prompt plus everything the host needs to answer it without the routine:
 /// per-player AI answers (computed when the prompt was raised) and auction valuations.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -62,13 +67,15 @@ impl Ask {
                 time_left: time,
                 ..MatchPrompt::default()
             },
-            ai: vec![0; n],
+            ai: vec![AI_UNSET; n],
             ai_picked: vec![vec![]; n],
             worth: vec![0; n],
         }
     }
 
-    /// `Choice`: pick one of `options`.
+    /// `Choice`: pick one of `options`. The AI answer is left [`AI_UNSET`];
+    /// [`Cx::ask`] fills it per seat (standard: the fallback; chaos: a random
+    /// non-default option) unless [`Self::with_ai`] overrides it.
     pub fn choice(
         players: Vec<usize>,
         title: Msg,
@@ -80,11 +87,11 @@ impl Ask {
         let mut a = Self::new("choice", players, title, text, time);
         a.view.options = options;
         a.view.fallback = fallback;
-        a.ai = vec![fallback; a.view.players.len()];
         a
     }
 
-    /// `TileAsk`: pick one of `tiles` (answer == len means "none").
+    /// `TileAsk`: pick one of `tiles` (answer == len means "none"). Same AI
+    /// fill as [`Self::choice`]; chaos never takes "none" while a tile exists.
     pub fn tile(
         player_id: usize,
         title: Msg,
@@ -96,7 +103,6 @@ impl Ask {
         a.view.items = tiles.iter().map(|t| t.to_string()).collect();
         a.view.options = labels;
         a.view.fallback = tiles.len() as i32;
-        a.ai = vec![a.view.fallback];
         a
     }
 
@@ -117,6 +123,8 @@ impl Ask {
         );
         a.view.items = deeds.iter().map(|t| t.to_string()).collect();
         a.view.bid = need;
+        // The selection is `ai_picked` (already mentality-aware); `ai` is unused.
+        a.ai = vec![0];
         a.ai_picked = vec![ai_pick];
         a
     }
@@ -129,10 +137,13 @@ impl Ask {
         text: Msg,
         worth: Vec<i32>,
     ) -> Self {
+        let n = players.len();
         let mut a = Self::new("auction", players, title, text, 10.0);
         a.view.tile = tile as i32;
         a.view.bid = 0;
         a.view.bidder = -1;
+        // Bidding reads `worth` (already mentality-aware); `ai` is unused.
+        a.ai = vec![0; n];
         a.worth = worth;
         a
     }
@@ -205,6 +216,28 @@ pub struct Cx<'a> {
     /// (`circle_reward`). Transient (not serialized) -- the walk sets it as it
     /// starts and the reward step is the only reader.
     pub(crate) move_start: i32,
+    /// Guest state writes overlaid on the live world for a host routine's
+    /// duration (see [`Self::overlay_guest_state`]). A stack: nested drives push
+    /// and pop their own. Transient (not serialized).
+    pub(crate) guest_overlays: Vec<GuestOverlay>,
+}
+
+/// The guest's pending player-state **clears**, overlaid on the live world
+/// while a host routine runs, and **not persisted**:
+/// [`Cx::restore_guests_to`] drops the overlay, keeping only the routine's own
+/// effects, and the replay re-applies the guest writes deterministically from
+/// the top of the body.
+///
+/// This is the merged view for 「…时」 a status the guest just cleared (e.g.
+/// 壱雫空 zeroing [晕眩] and then paying) must be visible to `can_pay` without
+/// the clear landing twice -- the body replays from the top, so a *persisted*
+/// clear would be re-applied on top of itself and an additive write would
+/// double-count. Only decreases cross; see [`Cx::overlay_guest_state`].
+#[derive(Debug, Default)]
+pub struct GuestOverlay {
+    /// `(player, key, base, wrote)` for each state item the guest decreased.
+    /// `base` is `None` when the key was absent before the overlay.
+    state: Vec<(usize, String, Option<crate::state::StateVar>, crate::state::StateVar)>,
 }
 
 impl<'a> Cx<'a> {
@@ -259,19 +292,8 @@ impl<'a> Cx<'a> {
         // replay's re-run takes the same branch across its two [支付] entries.
         // That write lives on the card's world copy and is dropped when the run
         // pauses. Carry it over -- but *only* for keys a body explicitly
-        // registers under the `latch.` prefix.
-        //
-        // TODO(规则书): a card's *other* state writes (a status clear, e.g. 壱雫空
-        // zeroing [晕眩] and then paying) still do not reach the live world before
-        // the host routine runs, so `can_pay` blocks the leg. A general carry is
-        // **not** feasible in this replay model: the body re-runs from the top on
-        // every pause, so an additive write (`give_stun(2)`) would land here and
-        // again on the replay (4), and even a "clears only" carry breaks
-        // `rb_general::parking_replaces_settle_with_stay`. The card-side
-        // workaround is `gain_fixed` (see `rules/cards/card-mygo/src/hitoshizuku.rs`
-        // `TODO(ABI)`); a real fix wants the host routine to see a merged view
-        // that is not persisted (swap in the guest state for the routine's
-        // duration, restore after).
+        // registers under the `latch.` prefix. (A latch is "already taken", so
+        // the replay's re-write is a no-op and nothing double-counts.)
         for (to, from_p) in self.w.st.players.iter_mut().zip(from.st.players.iter()) {
             for (k, v) in &from_p.state {
                 if !k.starts_with("latch:") {
@@ -279,6 +301,99 @@ impl<'a> Cx<'a> {
                 }
                 if !to.state.contains_key(k) {
                     to.state.insert(k.clone(), v.clone());
+                }
+            }
+        }
+    }
+
+    /// Overlay the guest's pending **player state** (status keys + money) on
+    /// the live world for a host routine's duration, and push the saved base on
+    /// [`Self::guest_overlays`]. See [`GuestOverlay`].
+    ///
+    /// Called at the `NeedHost` boundary: the routine (`pay` / `gain` / `move` /
+    /// ...) runs against the live world, so a status the guest just **cleared**
+    /// (e.g. 壱雫空 zeroing [晕眩] and then paying) has to be visible to
+    /// `can_pay` -- without being *persisted*, because the body replays from
+    /// the top and would re-apply the write (double-counting an additive one).
+    /// [`Self::restore_guests_to`] drops it again, keeping only the routine's
+    /// own effects; the replay then re-applies the guest writes.
+    ///
+    /// Only **decreases** cross (「清除」). A status the body itself just
+    /// *applied* (心の雨's fallback `give_stun` then `gain 1000`) must not gate
+    /// its own follow-on money -- 「无法收付款」 blocking a card's own gain to a
+    /// player it just stunned is an open ruling, and the pre-overlay behaviour
+    /// stands until it is decided. Money is not overlaid at all: a `gain_fixed`
+    /// is re-applied on the replay and the pipeline's own moves are routine
+    /// effects, not guest writes.
+    pub fn overlay_guest_state(&mut self, from: &World) {
+        let mut o = GuestOverlay::default();
+        let n = self.w.st.players.len().min(from.st.players.len());
+        for i in 0..n {
+            // The guest map's keys only: a key the guest does not carry was not
+            // written this iteration (the guest's copy came from this world).
+            let keys: Vec<String> = from.st.players[i].state.keys().cloned().collect();
+            for k in keys {
+                let wrote = from.st.players[i].state[&k];
+                let base = self.w.st.players[i].state.get(&k).copied();
+                if base == Some(wrote) {
+                    continue;
+                }
+                // Decrease only (a clear). `base` absent reads as 0, so a key
+                // the guest created is never a decrease.
+                let base_v = base.map(|b| b.value).unwrap_or(0);
+                if wrote.value >= base_v {
+                    continue;
+                }
+                self.w.st.players[i].state.insert(k.clone(), wrote);
+                o.state.push((i, k, base, wrote));
+            }
+        }
+        self.guest_overlays.push(o);
+    }
+
+    /// How many guest overlays are currently on the stack. A drive records
+    /// this at entry and calls [`Self::restore_guests_to`] with it, so nested
+    /// drives never pop an outer one.
+    pub fn guest_overlay_depth(&self) -> usize {
+        self.guest_overlays.len()
+    }
+
+    /// Drop every [`GuestOverlay`] this drive pushed (down to `base`), keeping
+    /// only the host routine's own effects.
+    ///
+    /// * a key the routine left alone goes back to its pre-overlay value (the
+    ///   replay re-applies the guest write on top);
+    /// * a key the routine also touched keeps the routine's **delta** on the
+    ///   base value, so the replay's re-application composes rather than
+    ///   double-counts.
+    pub fn restore_guests_to(&mut self, base: usize) {
+        while self.guest_overlays.len() > base {
+            let o = self.guest_overlays.pop().expect("len > base");
+            for (i, k, base_v, wrote_v) in o.state {
+                let now = self
+                    .w
+                    .st
+                    .players
+                    .get(i)
+                    .and_then(|p| p.state.get(&k).copied())
+                    .unwrap_or_default();
+                if now == wrote_v {
+                    // The routine left it: restore the base.
+                    if let Some(p) = self.w.st.players.get_mut(i) {
+                        match base_v {
+                            Some(v) => {
+                                p.state.insert(k, v);
+                            }
+                            None => {
+                                p.state.remove(&k);
+                            }
+                        }
+                    }
+                } else if let Some(p) = self.w.st.players.get_mut(i) {
+                    // The routine changed it too: keep only its delta.
+                    let mut v = now;
+                    v.value = base_v.map(|b| b.value).unwrap_or(0) + (now.value - wrote_v.value);
+                    p.state.insert(k, v);
                 }
             }
         }
@@ -310,13 +425,22 @@ impl<'a> Cx<'a> {
             money_depth: 0,
             reentrant_hooks: Vec::new(),
             move_start: -1,
+            guest_overlays: Vec::new(),
         }
     }
 
     /// Raise a prompt. Returns the logged answer, or halts the routine.
+    ///
+    /// Every [`AI_UNSET`] entry in `ask.ai` is filled here, from the seat's
+    /// [`crate::state::BotMentality`] (see [`Self::fill_ai`]), before the
+    /// prompt is shown -- so a saved `Ask` always carries concrete answers and
+    /// the host's bot schedule (`tick_live`) just reads them. The fill runs on
+    /// the replay too (the ask is rebuilt from the same snapshot), so the world
+    /// RNG advances identically on both passes.
     pub fn ask(&mut self, mut ask: Ask) -> Flow<Reply> {
         self.w.ask_seq += 1;
         ask.view.id = self.w.ask_seq;
+        self.fill_ai(&mut ask);
         if let Some(a) = self.answers.get(self.cursor) {
             self.cursor += 1;
             self.delay = 0.0;
@@ -328,6 +452,53 @@ impl<'a> Cx<'a> {
         }
         self.w.st.prompt = ask.view.clone();
         Err(Halt(HaltKind::Ask(Box::new(ask))))
+    }
+
+    /// Replace every [`AI_UNSET`] entry of `ask.ai` with the answer this seat's
+    /// policy would give. Standard (and every human seat, including one taken
+    /// over after a time-out) takes the prompt's fallback. Chaos picks uniformly
+    /// among the non-default options -- never the "none" / "skip" / "do nothing"
+    /// while an alternative exists -- and a tile prompt gets a random target
+    /// rather than "none".
+    fn fill_ai(&mut self, ask: &mut Ask) {
+        let fallback = ask.view.fallback;
+        // A tile prompt carries its targets in `items` (answer == len is
+        // "none"); every other prompt's answers index `options`.
+        let n = if ask.view.items.is_empty() {
+            ask.view.options.len() as i32
+        } else {
+            ask.view.items.len() as i32
+        };
+        for (k, &s) in ask.view.players.iter().enumerate() {
+            if ask.ai.get(k).copied().unwrap_or(AI_UNSET) != AI_UNSET {
+                continue;
+            }
+            let seat = s as usize;
+            ask.ai[k] = if self.is_chaos(seat) {
+                self.chaos_pick(fallback, n)
+            } else {
+                fallback
+            };
+        }
+    }
+
+    /// Uniform among `0..n` except `fallback`, falling back to `fallback` when
+    /// it is the only option (or `n` is empty). Allocation-free: one draw from
+    /// the `n-1` non-default slots, shifted past `fallback`.
+    fn chaos_pick(&mut self, fallback: i32, n: i32) -> i32 {
+        if n <= 1 {
+            return fallback;
+        }
+        let has_fallback = fallback >= 0 && fallback < n;
+        let non_default = n - i32::from(has_fallback);
+        if non_default <= 0 {
+            return fallback;
+        }
+        let mut k = self.w.rng.below(non_default as usize) as i32;
+        if has_fallback && k >= fallback {
+            k += 1;
+        }
+        k
     }
 
     /// Presentation pause (C# `yield return <float>`).

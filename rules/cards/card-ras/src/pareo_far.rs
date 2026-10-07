@@ -4,8 +4,9 @@
 //! > （PAREO）渐渐远去的你：
 //! > 获得2个PAREO标记，然后视为你的房屋总数增加且可选择移除任意你拥有的格子上的一层房屋
 //!
-//! (cap 3). The rest of the C# effect needs the character-skill hook
-//! (TODO in source).
+//! (cap 3). 「视为你的房屋总数增加」 is the character-skill offer (C#
+//! `SkillPareo -> Offer()`), reached through `ctx::character_skill` +
+//! `ctx::invoke_skill`.
 
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
@@ -23,8 +24,19 @@ fn pareo_far(player_id: i32) -> card_sdk::Asked {
             .i("got", got as i64)
             .i("total", total as i64),
     );
-    // TODO(ABI): H._fx[i].skill is SkillPareo -> Offer() -- needs the skill hook
-    // and SplitPay; `ctx::houses_of` is ready for the house-count part.
+    // 规则书: 「视为你的房屋总数增加」 -- C# `H._fx[i].skill is SkillPareo ->
+    // Offer()`: reach the player's character skill and trigger its offer (the
+    // 「失去1PAREO标记，所有非自己的玩家分摊支付…」 half of 鳰原令王那 (2)).
+    // The skill exposes that offer as its press entry (`On::Play`), so the
+    // invoke is `ctx::invoke_skill` on the id `ctx::character_skill` names.
+    // Only when that skill *is* SkillPareo -- the C#'s `is SkillPareo` check;
+    // some other character skill has no such offer.
+    const SKILL_PAREO: &str = "skill:鳰原令王那:梦幻可爱♪女仆";
+    if let Some(skill) = ctx::character_skill(player_id) {
+        if skill == SKILL_PAREO {
+            ctx::invoke_skill(player_id, &skill)?;
+        }
+    }
     // 规则书: 「可选择移除任意你拥有的格子上的一层房屋」 -- optional, any tile
     // this player owns, one layer. The ABI has no `ask_tile(allowNone: true)?`,
     // so the option is a yes/no first and the tile a second prompt; that reads

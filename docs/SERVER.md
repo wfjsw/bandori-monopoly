@@ -36,6 +36,84 @@ engine's `Match::save`) about once a second and on page hide, and resumed by
 `/play/solo`; an online player is re-attached with the tab's session token
 (`sessionStorage`) and `GET /api/rooms/{id}/state`, within the presence timeout.
 
+### 托管 / 混沌 (auto-play)
+
+Inside a match -- solo or online -- the TopBar carries an auto mode selector
+(`webui/src/ui/AutoToggle.tsx`): **off** (手动) → **托管** (the bot policy) →
+**混沌** (the chaos policy) → off. Either auto mode hands the seat to a
+browser-side autopilot (`webui/src/game/autopilot.ts`) and locks every input
+button: the board's roll / end / skill / build / mortgage / redeem, the hand's
+play and discard, the popups' buy / build / mortgage / redeem / skill / settle /
+leave, prompt answers, tile-pick clicks, and the ban / pick / deck controls.
+Inspecting a deed, the log, the draw pile and the skill text stays available,
+and the prompt modal is not opened at all so the board stays watchable. The
+selector itself remains clickable to change mode or take the controls back.
+
+The takeover runs **solely in the browser**: the client computes every choice
+from what it can see (the match view, its own hand, its prompts) and sends it
+through the ordinary `POST /api/rooms/{id}/act` / solo `act` path, exactly as a
+button press would. The server's engine is never asked to drive the seat -- no
+new act flips `players[i].ai`, and `member_left` is not reused -- so the server
+is unchanged and the player's seat is still theirs.
+
+Both policies share one driver; only the decision policy is pluggable
+(`policies: { bot, chaos }`).
+
+**托管 (`bot`)** is a port of the bot AI in `crates/game-core/src/engine/ai.rs`
+over public data (thresholds kept in sync next to the TS copy): redeem the most
+valuable mortgaged deed that still leaves 4 000; play a card with 70% odds while
+fewer than two have been played this turn; otherwise roll; after landing, buy
+while it leaves 2 000 and build while it leaves 3 500; discard at random over
+the hand limit. Prompts prefer the engine's own precomputed AI answer, which the
+match frame carries per viewer in `aiAnswer` (`Match::view_extra`) -- only for
+the player being asked, never another seat, because an auction ceiling is
+hidden information -- and fall back to the prompt's `fallback` when the frame
+does not carry one (counteract therefore declines). Ban / pick choose a random
+free character; the deck phase submits the character's preset; a live vote is
+answered yes so the table is never left hanging.
+
+**混沌 (`chaos`)** is legal but maximally disruptive -- it prefers whatever
+makes more things happen. Play every legal card (100%, no cap) and fire every
+usable character / band skill; always declare an offered [反击], picking a
+random card rather than the skip option; prompts pick uniformly among the
+non-default options, a random target for tile prompts (never "none" while a
+target exists), a random valid subset for mortgage / pick; buy, build and
+accept forced purchases whenever they keep the reserve; redeem what it can
+afford; bid at auctions with random raises; random votes; a random free
+character and a random legal deck. Money still gets a floor so the seat does
+not die instantly: every voluntary spend must leave `CHAOS_RESERVE = 1 000`
+(buy, build, redeem, auction bids, optional paid prompt choices). Card plays
+and counteracts are unrestricted -- the view carries no visible card cost to
+check against the reserve. End turn only when nothing else is legal.
+
+Pacing matches the engine's bot clock in both modes: one command at a time,
+after a 0.4–1.0 s human beat, never while one is in flight. The policy returns
+an ordered candidate list; a refused command is logged, marked tried for the
+current state, and the next candidate is attempted -- so a speculative try that
+bounces moves on instead of looping. Online it always moves well inside the
+turn timer.
+
+Limitations: auto-play is client-only, so other players do not see the
+`board.afk` tag on the seat. Card play uses the view's `playable` list
+(`Match::view_extra`), not a live `rules.ai_play` call -- the two agree today
+because `CardRules::ai_play` defaults to `true`, but a card rule that overrides
+it would not be consulted by the takeover. Chaos's "no visible card cost" note
+above is the same gap.
+
+### Bot mentality (engine bots)
+
+The auto-play takeover above is a *human* seat driven by the browser. A **bot**
+member is driven by the engine, and it carries the same two policies as a
+`BotMentality` on the seat (`standard` / `chaos`, see
+[ENGINE.md](ENGINE.md#bot-ai-mentalities)). `POST /api/rooms/{id}/bots` takes
+`mentality` on `op: "add"` (default `standard`); it is stored on the room
+member, shown as a tag in the lobby, and copied onto the seat when the match
+starts. Solo's setup screen offers the same choice (one for all bots, with a
+per-bot override).
+
+The two are meant to play alike: a chaos bot and a chaos-托管 human follow the
+same policy over the same options, differing only in what they can see.
+
 ## Auth
 
 `POST /api/session {player}` returns `{token}` and sets an `HttpOnly` cookie
@@ -54,7 +132,7 @@ works, for tools.
 | POST | `/api/rooms` | `{name, ranked, maxPlayers, password, weights?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/join` | `{password, version?}` | `{room, you}` |
 | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
-| POST | `/api/rooms/{id}/bots` | `{op: "add" \| "remove", member?}` | `RoomInfo` (host) |
+| POST | `/api/rooms/{id}/bots` | `{op: "add" \| "remove", member?, mentality?}` | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/weights` | `{money, property, houses}` | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/leave` | | `{ok}` |

@@ -7,7 +7,7 @@ import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, skillText } from "../../core/data";
 import { isLight, n0, plain } from "../../core/format";
-import { useMatchView } from "../../core/hooks";
+import { useAutoplay, useMatchView } from "../../core/hooks";
 import type { MatchState } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
@@ -46,6 +46,7 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
 
 function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => void }) {
   const m = useModel(sess);
+  const auto = useAutoplay(sess); // 托管: the buy/build/mortgage/redeem button is locked
   // A new turn (or the end of the match) closes the deed card.
   const turnKey = m ? `${m.S.phase}:${m.S.round}:${m.S.turn}` : "";
   const [openedAt] = useState(turnKey);
@@ -104,7 +105,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
       )}
       {marks.length > 0 && <div className={cx(s.note, s.marks)}>{tr("deed.marks", { marks: marks.join(tr("common.listSep")) })}</div>}
       {notes.length > 0 && <div className={s.note}>{notes.join("\n")}</div>}
-      {a && <Btn kind="pink" className={s.deedAct} disabled={!a.enabled} onClick={async () => { if (await act(sess, a.cmd)) close(); }}>{a.label}</Btn>}
+      {a && <Btn kind="pink" className={s.deedAct} disabled={!a.enabled || auto} onClick={async () => { if (await act(sess, a.cmd)) close(); }}>{a.label}</Btn>}
     </div>
   );
 }
@@ -115,6 +116,7 @@ export function openDeed(sess: GameSession, i: number): void {
 
 function DeedList({ sess, redeem, close }: { sess: GameSession; redeem: boolean; close: () => void }) {
   const m = useModel(sess);
+  const auto = useAutoplay(sess); // 托管
   if (!m) return null;
   const S = m.S;
   const mine = D.tiles.map((_, i) => i).filter((i) => S.owners[i] === m.playerId && !!S.mortgaged[i] === redeem && (redeem || D.tiles[i].kind !== "ring"));
@@ -132,7 +134,7 @@ function DeedList({ sess, redeem, close }: { sess: GameSession; redeem: boolean;
               <div key={i} className={s.row}>
                 <i className={s.strip} style={{ background: t.color }} />
                 <div className={s.rowName}><b>{plain(t.name)}</b><small>{tr("deedList.deedInfo", { price: n0(t.price), houses: S.houses[i] ? tr("deedList.housesN", { n: S.houses[i] }) : "", mortgaged: redeem ? tr("deed.mortgagedTag") : "" })}</small></div>
-                <Btn size="small" kind={redeem ? "white" : "pink"} onClick={async () => { if (await act(sess, { act: redeem ? "redeem" : "mortgage", value: i })) close(); }}>
+                <Btn size="small" kind={redeem ? "white" : "pink"} disabled={auto} onClick={async () => { if (await act(sess, { act: redeem ? "redeem" : "mortgage", value: i })) close(); }}>
                   {redeem ? tr("deed.redeem", { n: n0(redeemCost(i)) }) : tr("deed.mortgage", { n: n0(mortgageValue(i)) })}
                 </Btn>
               </div>
@@ -151,6 +153,7 @@ export function showDeedList(sess: GameSession, redeem: boolean): void {
 
 function Skills({ sess, close }: { sess: GameSession; close: () => void }) {
   const m = useModel(sess);
+  const auto = useAutoplay(sess); // 托管
   const list = m?.me.actions ?? [];
   if (!list.length) return <div className={s.empty}>{tr("skills.none")}</div>;
   return (
@@ -158,7 +161,7 @@ function Skills({ sess, close }: { sess: GameSession; close: () => void }) {
       {list.map((a) => (
         <div key={a.id} className={s.row}>
           <div className={s.rowName}><b>{fmtMsg(a.title, namesOf(sess.view?.state))}<small> {a.source}</small></b><p>{fmtMsg(a.text, namesOf(sess.view?.state))}</p></div>
-          <Btn kind="pink" size="small" disabled={!a.enabled} title={fmtMsg(a.reason, namesOf(sess.view?.state))} onClick={async () => { if (await act(sess, { act: "skill", card: a.id })) close(); }}>{a.enabled ? tr("common.use") : a.reason?.k ? fmtMsg(a.reason, namesOf(sess.view?.state)) : tr("skills.unavailable")}</Btn>
+          <Btn kind="pink" size="small" disabled={!a.enabled || auto} title={fmtMsg(a.reason, namesOf(sess.view?.state))} onClick={async () => { if (await act(sess, { act: "skill", card: a.id })) close(); }}>{a.enabled ? tr("common.use") : a.reason?.k ? fmtMsg(a.reason, namesOf(sess.view?.state)) : tr("skills.unavailable")}</Btn>
         </div>
       ))}
     </div>
@@ -268,29 +271,40 @@ export function showDeck(m: Model): void {
   ) : <div className={s.empty}>{tr("board.drawPileEmpty")}</div>, { size: "wide" });
 }
 
-export function showSettle(sess: GameSession): void {
+function SettleConfirm({ sess, close }: { sess: GameSession; close: () => void }) {
+  const auto = useAutoplay(sess); // 托管
   const solo = sess.kind === "solo";
-  openModal(solo ? tr("board.settle") : tr("board.voteTitle"), (close) => (
+  return (
     <div className={s.confirm}>
       <p>{solo ? tr("board.settleAsk") : tr("board.voteAsk")}</p>
       <div className={s.btns}>
         <Btn onClick={close}>{tr("common.cancel")}</Btn>
-        <Btn kind="pink" onClick={async () => { if (await act(sess, { act: "vote", value: 1 })) close(); }}>{solo ? tr("board.settleOk") : tr("board.voteStart")}</Btn>
+        <Btn kind="pink" disabled={auto} onClick={async () => { if (await act(sess, { act: "vote", value: 1 })) close(); }}>{solo ? tr("board.settleOk") : tr("board.voteStart")}</Btn>
       </div>
     </div>
-  ), { size: "small" });
+  );
 }
 
-export function showLeave(sess: GameSession, exit: () => void): void {
+export function showSettle(sess: GameSession): void {
   const solo = sess.kind === "solo";
-  openModal(tr("board.leaveTitle"), (close) => (
+  openModal(solo ? tr("board.settle") : tr("board.voteTitle"), (close) => <SettleConfirm sess={sess} close={close} />, { size: "small" });
+}
+
+function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => void; exit: () => void }) {
+  const auto = useAutoplay(sess); // 托管: settle / forfeit are locked
+  const solo = sess.kind === "solo";
+  return (
     <div className={s.confirm}>
       <p>{solo ? tr("board.leaveSoloText") : tr("board.leaveOnlineText")}</p>
       <div className={s.btns}>
         {solo ? <Btn onClick={() => { close(); exit(); }}>{tr("board.leaveStay")}</Btn> : <Btn onClick={close}>{tr("board.continue")}</Btn>}
-        <Btn kind="blue" onClick={() => { close(); showSettle(sess); }}>{solo ? tr("board.settle") : tr("board.voteEnd")}</Btn>
-        <Btn kind="pink" onClick={async () => { close(); await act(sess, { act: "leave" }); exit(); }}>{tr("board.leaveForfeit")}</Btn>
+        <Btn kind="blue" disabled={auto} onClick={() => { close(); showSettle(sess); }}>{solo ? tr("board.settle") : tr("board.voteEnd")}</Btn>
+        <Btn kind="pink" disabled={auto} onClick={async () => { close(); await act(sess, { act: "leave" }); exit(); }}>{tr("board.leaveForfeit")}</Btn>
       </div>
     </div>
-  ), { size: "mid" });
+  );
+}
+
+export function showLeave(sess: GameSession, exit: () => void): void {
+  openModal(tr("board.leaveTitle"), (close) => <LeaveConfirm sess={sess} close={close} exit={exit} />, { size: "mid" });
 }

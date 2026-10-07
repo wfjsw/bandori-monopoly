@@ -261,6 +261,12 @@ pub enum HostRequest {
         sides: i32,
         source: i32,
     },
+    /// C# `f.Bought(i, t)` -- a card handed a deed over (tomoe_savior's
+    /// 「从该玩家处收购该地契」) and is announcing the acquisition: the engine
+    /// raises the `bought` hook chain over the field (`TriggerKind::Bought`),
+    /// with `by_card` = the run's own player. `buy()` raises the same hook
+    /// itself after an ordinary purchase; this is the card-driven half.
+    RaiseBought { player_id: i32, tile: i32 },
 }
 
 #[derive(Debug, Clone)]
@@ -1850,6 +1856,141 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             c.data_mut().w().add_band_crystals(player_id, n, max)
         },
     )?;
+    // v35: the skill / band-skill attachment surface (C# `H._fx[i].bands` /
+    // `.skill`) and the skill invoke. `band_skill` / `character_skill` answer a
+    // postcard `String` (empty = none); `band_skills` answers a postcard
+    // `Vec<(uid, id, extra)>`.
+    l.func_wrap(
+        m,
+        "band_skill",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let s = c.data().wr().band_skill_id(player_id).unwrap_or_default();
+            let bytes =
+                postcard::to_allocvec(&s).map_err(|e| err(format!("band_skill encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "character_skill",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let s = c
+                .data()
+                .wr()
+                .character_skill_id(player_id)
+                .unwrap_or_default();
+            let bytes = postcard::to_allocvec(&s)
+                .map_err(|e| err(format!("character_skill encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "band_skills",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let list = c.data().wr().band_skills(player_id);
+            let bytes = postcard::to_allocvec(&list)
+                .map_err(|e| err(format!("band_skills encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_band_skill",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32, extra: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, p, n)?;
+            Ok(c.data_mut().w().add_band_skill(player_id, &id, extra != 0))
+        },
+    )?;
+    // Run a skill rule's press entry (`On::Play`) for a player. Same nested-run
+    // shape as `play_card` below; the id is expected to be a `skill:` rule.
+    l.func_wrap(
+        m,
+        "invoke_skill",
+        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, p, n)?;
+            let rules = c
+                .data()
+                .rules
+                .clone()
+                .ok_or_else(|| err("invoke_skill unavailable here"))?;
+            let card = *rules
+                .by_id
+                .get(&id)
+                .ok_or_else(|| err(format!("invoke_skill: unknown skill {id:?}")))?;
+            if c.data().depth >= MAX_NESTING {
+                return Err(err(format!(
+                    "invoke_skill nested deeper than {MAX_NESTING}"
+                )));
+            }
+            let fuel = c.get_fuel()?;
+            let st = c.data_mut();
+            let saved = st.w().enter_card(&id);
+            let was_from_hand = st.w().play_from_hand();
+            st.w().set_play_from_hand(false);
+            let mut nested = HostState::new(
+                rules.clone(),
+                st.world.take().expect("world present"),
+                std::mem::take(&mut st.answers),
+                st.depth + 1,
+            );
+            nested.next_answer = st.next_answer;
+            let mut store = new_store(&rules.engine, nested);
+            store.set_fuel(fuel)?;
+            let res = match rules.cards[card as usize].entry(OnKind::Play, None) {
+                Some(entry) => {
+                    call_card(&rules, &mut store, card, entry, export::OP_RUN, player_id)
+                        .map(|_| ())
+                }
+                None => Ok(()),
+            };
+            let left = store.get_fuel().unwrap_or(0);
+            let inner = store.into_data();
+            let st = c.data_mut();
+            st.world = inner.world;
+            if let Some(w) = st.world.as_mut() {
+                w.set_play_from_hand(was_from_hand);
+            }
+            st.answers = inner.answers;
+            st.next_answer = inner.next_answer;
+            if inner.asked.is_some() {
+                st.asked = inner.asked;
+            }
+            if inner.host_request.is_some() {
+                st.host_request = inner.host_request;
+            }
+            let dest = st.w().leave_card(saved);
+            c.set_fuel(left)?;
+            match res {
+                Ok(()) => Ok(dest),
+                Err(e) if is_need_input(&e) => Ok(abi::EXIT_NEED_INPUT),
+                Err(e) => Err(e),
+            }
+        },
+    )?;
+    // C# `f.Bought(i, t)` -- the engine raises the `bought` hook chain.
+    l.func_wrap(
+        m,
+        "raise_bought",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::RaiseBought { player_id, tile });
+            Err(need_input())
+        },
+    )?;
     l.func_wrap(m, "fire", |c: C<W>, player_id: i32| {
         c.data().wr().fire(player_id)
     })?;
@@ -2125,6 +2266,31 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     })?;
     l.func_wrap(m, "targeted_count", |c: C<W>, player_id: i32| {
         c.data().wr().targeted_count(player_id)
+    })?;
+    l.func_wrap(m, "gains_this_turn", |c: C<W>, player_id: i32| {
+        c.data().wr().gains_this_turn(player_id)
+    })?;
+    // The static targeting query + per-pair cancel (C# `H.Db.Card(id).Targeting`
+    // / `play.Tags["immune"+seat]`).
+    l.func_wrap(
+        m,
+        "designations",
+        |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
+            let list = c.data().wr().designations(player_id);
+            let bytes = postcard::to_allocvec(&list)
+                .map_err(|e| err(format!("designations encode: {e}")))?;
+            if bytes.len() as i32 <= cap {
+                write_guest(&mut c, buf, &bytes)?;
+            }
+            Ok(bytes.len() as i32)
+        },
+    )?;
+    l.func_wrap(m, "cancel_designation", |mut c: C<W>, seat: i32| -> Result<(), Error> {
+        c.data_mut().w().cancel_designation(seat);
+        Ok(())
+    })?;
+    l.func_wrap(m, "designation_cancelled", |c: C<W>, seat: i32| {
+        c.data().wr().designation_cancelled(seat) as i32
     })?;
     l.func_wrap(
         m,
@@ -2753,6 +2919,11 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     })?;
     l.func_wrap(m, "set_settle_as_agent", |mut c: C<W>, v: i32| {
         c.data_mut().w().set_settle_as_agent(v != 0)
+    })?;
+    // v35: 「使你的下次主要移动结果对那些玩家一起执行」 -- the follower list on
+    // the move being planned (C# `LeadFx.Who`).
+    l.func_wrap(m, "plan_add_follower", |mut c: C<W>, v: i32| {
+        c.data_mut().w().plan_add_follower(v)
     })?;
     l.func_wrap(m, "set_more_steps", |mut c: C<W>, v: i32| {
         c.data_mut().w().set_more_steps(v)

@@ -161,7 +161,8 @@ fn force_card(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「立即执行乐队技能的（2）效果」 -- the (2) reshuffle is also a press, so a card
-/// can run it out of turn (`mutsumi_never` calls `play_card` on this id).
+/// can run it out of turn (`mutsumi_never` calls `ctx::invoke_skill` on the id
+/// `ctx::band_skill` names).
 fn can_transform(player_id: i32) -> Option<Msg> {
     if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
         return Some(Msg::new(key!("crychic_not_empty")));

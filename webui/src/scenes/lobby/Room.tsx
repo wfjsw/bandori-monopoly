@@ -9,6 +9,7 @@ import { cx } from "../../core/cx";
 import { D } from "../../core/data";
 import { useSessionOther } from "../../core/hooks";
 import { getProfile } from "../../core/store";
+import type { BotMentality } from "../../core/types";
 import { endSession, matchScene, OnlineSession, resumeOnline } from "../../game/session";
 import { api } from "../../net/api";
 import { fmtMsg, type Msg } from "../../i18n/msg";
@@ -56,6 +57,8 @@ export function useOnline(id: string): OnlineSession | null {
 export function Room({ id }: { id: string }) {
   const sess = useOnline(id);
   const [armed, setArmed] = useState(false);
+  /** Mentality of the next bot the host adds. */
+  const [nextMentality, setNextMentality] = useState<BotMentality>("standard");
   useEffect(() => sfx("place"), []);
   // The match started: go to it.
   useEffect(() => {
@@ -104,6 +107,7 @@ export function Room({ id }: { id: string }) {
               <div className={s.tags}>
                 {m.host && <span className={s.tagHost}>{tr("room.host")}</span>}
                 {m.bot && <span className={s.tagBot}>{tr("solo.bot")}</span>}
+                {m.bot && m.mentality === "chaos" && <span className={s.tagChaos}>{tr("solo.mentalityChaos")}</span>}
                 {m.away && <span className={s.tagAway}>{tr("room.offline")}</span>}
               </div>
               <div className={s.text}>
@@ -120,7 +124,19 @@ export function Room({ id }: { id: string }) {
         {Array.from({ length: empty }, (_, i) => (
           <div key={`e${i}`} className={cx(s.member, s.empty)}>
             {isHost && !r.playing
-              ? <button type="button" className={s.add} onClick={async () => report(await api.bot(r.id, "add"))}><Icon name="person_add" />{tr("solo.addBot")}</button>
+              ? (
+                <div className={s.addWrap}>
+                  <button type="button" className={s.add} onClick={async () => report(await api.bot(r.id, "add", 0, nextMentality))}><Icon name="person_add" />{tr("solo.addBot")}</button>
+                  <button
+                    type="button"
+                    className={cx(s.mentalityPick, nextMentality === "chaos" && s.mentalityChaos)}
+                    title={tr("solo.mentalityHint")}
+                    onClick={() => setNextMentality(nextMentality === "chaos" ? "standard" : "chaos")}
+                  >
+                    {nextMentality === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard")}
+                  </button>
+                </div>
+              )
               : <div className={s.wait}><Icon name="hourglass" />{tr("room.waitingJoin")}</div>}
           </div>
         ))}

@@ -47,8 +47,14 @@ export function model(v: MatchView): Model {
   };
 }
 
-/** Send a command; toast the error. Resolves to success. */
+/**
+ * Send a command; toast the error. Resolves to success.
+ * While 托管 / 混沌 is on the seat belongs to the autopilot, so a user-driven
+ * command is dropped here (the buttons that would send one are disabled too).
+ * The autopilot itself calls `sess.act` directly and bypasses this guard.
+ */
 export async function act(sess: GameSession, cmd: Command): Promise<boolean> {
+  if (sess.autoMode !== "off") return false;
   const err = await sess.act(cmd);
   if (err) toast(fmtMsg(err, namesOf(sess.view?.state)), "error");
   return !err;

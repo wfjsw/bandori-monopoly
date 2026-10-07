@@ -129,6 +129,12 @@ mod sys {
         // pots & status
         pub fn band_crystals(player_id: i32) -> i32;
         pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32;
+        pub fn band_skill(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn character_skill(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn band_skills(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn add_band_skill(player_id: i32, p: i32, n: i32, extra: i32) -> i32;
+        pub fn invoke_skill(player_id: i32, p: i32, n: i32) -> i32;
+        pub fn raise_bought(player_id: i32, tile: i32) -> i32;
         pub fn fire(player_id: i32) -> i32;
         pub fn fire_max(player_id: i32) -> i32;
         pub fn gain_fire(player_id: i32, n: i32, ptr: i32, len: i32) -> i32;
@@ -221,6 +227,7 @@ mod sys {
         pub fn set_more_steps(n: i32);
         pub fn set_tag(kp: i32, kl: i32, v: i32);
         pub fn set_settle_as_agent(on: i32);
+        pub fn plan_add_follower(player_id: i32);
         pub fn set_bonus(n: i32, ptr: i32, len: i32);
         pub fn move_stop_at() -> i32;
         pub fn move_parity() -> i32;
@@ -232,6 +239,7 @@ mod sys {
         pub fn abnormal_count(player_id: i32) -> i32;
         pub fn target(player_id: i32, tile: i32, single: i32) -> i32;
         pub fn targeted_count(player_id: i32) -> i32;
+        pub fn gains_this_turn(player_id: i32) -> i32;
         pub fn placed_tile(player_id: i32, ptr: i32, len: i32) -> i32;
         pub fn play_doubled() -> i32;
         pub fn set_play_doubled(n: i32);
@@ -279,6 +287,9 @@ mod sys {
         pub fn unplace_card_named(player_id: i32, cp: i32, cl: i32) -> i32;
         pub fn bump_mark(tile: i32, kp: i32, kl: i32, owner: i32, delta: i32) -> i32;
         pub fn tok_names(player_id: i32, p: i32, n: i32, buf: i32, cap: i32) -> i32;
+        pub fn designations(player_id: i32, buf: i32, cap: i32) -> i32;
+        pub fn cancel_designation(seat: i32);
+        pub fn designation_cancelled(seat: i32) -> i32;
         pub fn gate(player_id: i32, kind: i32) -> i32;
         pub fn card_settle_at(player_id: i32, tile: i32, main: i32) -> i32;
         pub fn card_offer_build(player_id: i32, buf: i32, n: i32) -> i32;
@@ -1073,6 +1084,90 @@ pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
     unsafe { sys::add_band_crystals(player_id, n, max) }
 }
 
+/// The rule id of `player_id`'s **band skill** attachment (C# `H._fx[i].bands`'s
+/// own band card -- `skill:<band>:<skill>`, `FieldCard::band_skill`), or `None`
+/// when the player has none. This is 「乐队技能」: 「立即执行乐队技能的（2）效果」
+/// names it, and [`invoke_skill`] runs a numbered effect on it.
+pub fn band_skill(player_id: i32) -> Option<String> {
+    let cap = 1024;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::band_skill(player_id, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return None;
+    }
+    let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+/// The rule id of `player_id`'s **character skill** (C# `H._fx[i].skill` --
+/// `skill:<character>:<skill>`), or `None`. A card that reaches 「你的技能」
+/// (pareo_far's 「视为你的房屋总数增加」 -> `SkillPareo -> Offer()`) names it and
+/// [`invoke_skill`] runs its offer.
+pub fn character_skill(player_id: i32) -> Option<String> {
+    let cap = 1024;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::character_skill(player_id, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return None;
+    }
+    let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+/// One band-skill attachment: `(uid, rule id, extra)` in placement order.
+/// `extra` is a 「拿取」ed copy (C# `MakeBand(.., extra: true)`): 「相同乐队技能卡
+/// 的效果不可叠加」 and 「不视为那个乐队的角色」.
+pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
+    let cap = 8192;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::band_skills(player_id, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// Attach a band-skill instance to `player_id` (C# `H.MakeBand(band, user,
+/// extra)`). `extra` marks a 「拿取」ed copy (「相同乐队技能卡的效果不可叠加」 /
+/// 「不视为那个乐队的角色」). Returns the new instance's uid, or -1 when the id
+/// is not a band skill or the player is gone. Idempotent per id: a second
+/// attach of an id already present (extra or not) is refused, which is the
+/// 「不可叠加」 half.
+pub fn add_band_skill(player_id: i32, id: &str, extra: bool) -> i32 {
+    let (p, l) = s(id);
+    unsafe { sys::add_band_skill(player_id, p, l, extra as i32) }
+}
+
+/// Run a skill rule's **press entry** (`On::Play`) for `player_id`, nested in
+/// this run the way [`play_card`] is (C# `BandCrychic.TransformNow()` /
+/// `SkillPareo -> Offer()`). Returns where the skill says it goes ([`Dest`]);
+/// skills normally leave their own instance in place. Unlike the engine's
+/// `use_skill` (the player pressing the skill button) this raises **no**
+/// `skillUsed` -- it is a card executing the body, not the player using it.
+pub fn invoke_skill(player_id: i32, id: &str) -> Result<Dest, Prompt> {
+    let (p, l) = s(id);
+    let v = asked(unsafe { sys::invoke_skill(player_id, p, l) })?;
+    Ok(Dest::from_i32(v))
+}
+
+/// C# `f.Bought(i, t)` -- announce that `player_id` just became the owner of
+/// `tile`, so the `bought` hook chain (「购买」 reactions: Afterglow's free
+/// house, ...) hears it. A card that hands a deed over outside the buy routine
+/// (tomoe_savior's 「从该玩家处收购该地契」) calls this after the ownership
+/// change; `buy()` raises the same hook itself. The run's own player is the
+/// cause (`t.by_card`).
+pub fn raise_bought(player_id: i32, tile: i32) -> bool {
+    unsafe { sys::raise_bought(player_id, tile) != 0 }
+}
+
 pub fn fire(player_id: i32) -> i32 {
     unsafe { sys::fire(player_id) }
 }
@@ -1442,6 +1537,17 @@ pub mod plan {
         unsafe { sys::set_settle_as_agent(on as i32) }
     }
 
+    /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record `player_id` as a
+    /// **follower** of the move being planned (C# `LeadFx.Who` + `Follow`).
+    /// After the mover settles, the engine replays this move's result for each
+    /// follower in the order they were added (「你先触发结算，此后其他玩家按
+    /// 行动顺序依次触发结算」 -- add them in action order). The follower's
+    /// replay carries the same plan (steps / kind / destination / `pay_factor`),
+    /// so 「触发结算时进行的支付价格减半」 reaches them too.
+    pub fn add_follower(player_id: i32) {
+        unsafe { sys::plan_add_follower(player_id) }
+    }
+
     /// C# `TeleportTo` -- the teleport's destination. -1 derives it from the
     /// roll (the 「视为 [传送]（只触发终点）」 shape).
     pub fn set_teleport_to(tile: i32) {
@@ -1556,6 +1662,40 @@ pub fn target_tile(tile: i32) -> bool {
 /// own turn last started.
 pub fn targeted_count(player_id: i32) -> i32 {
     unsafe { sys::targeted_count(player_id) }
+}
+
+/// 「当前回合内你每获得过一次资金」 -- money-ins for `player_id` during the
+/// current turn (any cause: a print, a pay-player credit, a `gain_fixed`).
+/// Zeroed for everyone at each turn start. This is what a hand card reads when
+/// it has no field stand-in observing the gains (HHW:（育美）(2)).
+pub fn gains_this_turn(player_id: i32) -> i32 {
+    unsafe { sys::gains_this_turn(player_id) }
+}
+
+/// The **static targeting query**: which players the play being resolved (by
+/// `player_id`) designates (C# `H.Db.Card(id).Targeting` + `H.Others`). Empty
+/// when the play names nobody. This is what 「有[指定]目标」 /
+/// 「取消其对目标之一的[指定]」 branches on, before the play's body has run.
+pub fn designations(player_id: i32) -> Vec<i32> {
+    let cap = 4096;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let n = unsafe { sys::designations(player_id, buf.as_mut_ptr() as i32, cap) };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// Per-pair cancel (「取消其对目标之一的[指定]」, C# `play.Tags["immune"+seat]`):
+/// mark `seat`'s designation on the play being resolved as cancelled. The rest
+/// of the play's designations still land.
+pub fn cancel_designation(seat: i32) {
+    unsafe { sys::cancel_designation(seat) }
+}
+
+/// Is `seat`'s designation on the play being resolved cancelled?
+pub fn designation_cancelled(seat: i32) -> bool {
+    unsafe { sys::designation_cancelled(seat) != 0 }
 }
 
 /// C# `_abnormalTurn[player_id]` -- abnormal effects that got through to `player_id`

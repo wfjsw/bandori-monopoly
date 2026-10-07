@@ -66,11 +66,33 @@ fn umiri_card(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「使用者打出此卡时以及使用者的回合开始时，从卡堆拿取场上有此卡的玩家的所有乐队技能卡（相同乐队技能卡的效果不可叠加），但不视为那个乐队的角色。」
     // C# `CardUmiriCard.Take` copies every non-extra `BandBase` of the holder
     // onto the user as `extra: true` (stackable band skills, but "not that
-    // band's character"). The ABI has no band-skill-card inventory (only
-    // `band_crystals` / `add_band_crystals` for the crystal counter).
-    // TODO(ABI): `H._fx[player_id].bands` enumeration + `H.MakeBand(band, user, extra)`
-    // so the take / drop bookkeeping (C# `_taken`) can run.
+    // band's character"). `ctx::band_skills` enumerates the holder's
+    // attachments (C# `H._fx[i].bands`); `ctx::add_band_skill(.., extra)` is
+    // `H.MakeBand`. 「相同乐队技能卡的效果不可叠加」 -- `add_band_skill` refuses
+    // an id already attached to the user -- and 「不视为那个乐队的角色」 --
+    // `in_band` reads only the character.
+    take_bands(next, player_id);
     Ok(())
+}
+
+/// C# `CardUmiriCard.Take` -- copy every real band-skill attachment of `holder`
+/// onto `user` as an `extra` (「拿取」).
+fn take_bands(holder: i32, user: i32) {
+    for (_uid, id, extra) in ctx::band_skills(holder) {
+        if extra != 0 {
+            // Only real attachments are taken; an extra copy is not a second source.
+            continue;
+        }
+        let got = ctx::add_band_skill(user, &id, true);
+        if got >= 0 {
+            ctx::log(
+                user,
+                &Msg::new(key!("umiri_took_band"))
+                    .player_id("who", user)
+                    .card("card", &id),
+            );
+        }
+    }
 }
 
 /// C# `CardUmiriCard.TurnStart` (MatchHost.cs:6189-6214) -- at the user's turn
@@ -104,8 +126,8 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", dest)
                 .player_id("user", user),
         );
-        // 规则书（2）: `Take()` -- the band-skill take on the new holder. Held
-        // (no `H._fx[player_id].bands` / `H.MakeBand` in the ABI); see `umiri_card`.
+        // 规则书（2）: `Take()` -- the band-skill take on the new holder.
+        take_bands(dest, user);
     }
     Ok(())
 }
@@ -122,8 +144,27 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（3）: 「当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。」
     // C# `End`: `H.Unplace(this, "discard", "回到了使用者的场上")` +
-    // `H.DrawR(User, 1, ...)`. The `Detach` -> `Drop` of the taken band cards
-    // is the held half (no band inventory in the ABI).
+    // `H.DrawR(User, 1, ...)`; `Detach` -> `Drop` of the taken band cards.
+    // 「使用者拿取的所有乐队技能卡」 is every **extra** attachment on the user
+    // (the 「拿取」 copies `take_bands` made); the user's own band skill is not
+    // one of them and stays.
+    for (uid, id, extra) in ctx::band_skills(user) {
+        if extra == 0 {
+            continue;
+        }
+        ctx::unplace_at(uid);
+        // TODO(规则书): 「置入弃牌堆」 for a taken band-skill card. A band
+        //   attachment is not a card in a pile -- C# `Drop` only detaches it --
+        //   and putting a `skill:` id in the discard would make it drawable.
+        //   Detached here; the 「置入弃牌堆」 half has no home in the attachment
+        //   model.
+        ctx::log(
+            user,
+            &Msg::new(key!("umiri_dropped_band"))
+                .player_id("who", user)
+                .card("card", &id),
+        );
+    }
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::set_slot(player_id, USER_KEY, 0);
     ctx::draw(user, 1)?;

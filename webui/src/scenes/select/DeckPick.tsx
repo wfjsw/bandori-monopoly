@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
-import { useMatchView } from "../../core/hooks";
+import { useAutoplay, useMatchView } from "../../core/hooks";
 import { hasProfile, profileJson, updateProfile } from "../../core/store";
 import type { Command } from "../../core/types";
 import type { GameSession } from "../../game/session";
@@ -18,6 +18,7 @@ const slotName = (n: number) => tr("deck.slotNames").split("|")[n] ?? `#${n}`;
 
 function DeckPick({ sess, character, act, close }: { sess: GameSession; character: string; act: (c: Command) => Promise<boolean>; close: () => void }) {
   const c = D.character(character)!;
+  const auto = useAutoplay(sess); // 托管
   const { view } = useMatchView(sess);
   const slotCards = (n: number): string[] =>
     n === 0 ? JSON.parse(rules.deck_preset(c.name)) : hasProfile() ? JSON.parse(rules.deck_slot_cards(profileJson(), c.name, n)) : [];
@@ -40,7 +41,7 @@ function DeckPick({ sess, character, act, close }: { sess: GameSession; characte
           const cards = slotCards(n);
           const ok = cards.length === 10;
           return (
-            <button key={n} type="button" className={cx(s.row, n === pick && s.on, !ok && s.off)} disabled={!ok} onClick={() => setPick(n)}>
+            <button key={n} type="button" className={cx(s.row, n === pick && s.on, !ok && s.off)} disabled={!ok || auto} onClick={() => setPick(n)}>
               <div className={s.check}>{n === pick && <Icon name="check" />}</div>
               <div className={s.name}>
                 <b>{slotName(n)}</b>
@@ -56,7 +57,7 @@ function DeckPick({ sess, character, act, close }: { sess: GameSession; characte
         })}
       </div>
       <div className={s.foot}>
-        <Btn kind="pink" wide onClick={async () => {
+        <Btn kind="pink" wide disabled={auto} onClick={async () => {
           if (await act({ act: "deck", cards: slotCards(pick) }) && hasProfile()) updateProfile(rules.deck_choose(profileJson(), c.name, pick));
         }}>{tr("common.confirm")}</Btn>
       </div>

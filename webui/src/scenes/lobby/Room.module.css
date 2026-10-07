@@ -14,8 +14,9 @@
 .silhouette { margin: auto; color: #d7cdd5; }
 .silhouette i { width: 110px; height: 110px; }
 .tags { position: absolute; left: 10px; top: 10px; display: flex; gap: 6px; }
-.tagHost, .tagBot, .tagAway { font-size: 13px; padding: 1px 10px; border-radius: 10px; color: #fff; background: var(--pink); }
+.tagHost, .tagBot, .tagAway, .tagChaos { font-size: 13px; padding: 1px 10px; border-radius: 10px; color: #fff; background: var(--pink); }
 .tagBot { background: var(--sub); }
+.tagChaos { background: var(--pink); }
 .tagAway { background: var(--tag-red); }
 .text { display: flex; flex-direction: column; align-items: center; padding: 8px 6px 12px; }
 .name { font-size: 20px; font-weight: 700; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -28,6 +29,9 @@
 .add, .wait { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--pink); font-size: 17px; font-weight: 700; }
 .wait { color: var(--sub); }
 .add i, .wait i { width: 48px; height: 48px; }
+.addWrap { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.mentalityPick { height: 28px; padding: 0 14px; border-radius: 14px; background: #fff; color: var(--text); font-size: 13px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
+.mentalityChaos { background: var(--pink); color: #fff; }
 .dense .member:not(.empty) { flex-direction: row; }
 .dense .art { flex: none; width: 45%; }
 .dense .text { flex: 1; justify-content: center; }

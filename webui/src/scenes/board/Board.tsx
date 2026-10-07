@@ -5,10 +5,11 @@
 import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";
 import { t as tr } from "../../i18n/t";
-import { useTick } from "../../core/hooks";
+import { useAutoplay, useTick } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
+import { AutoBanner } from "../../ui/AutoToggle";
 import { TopBar } from "../../ui/TopBar";
 import { useBoardSession } from "./anim";
 import { act, buyable, canBuildOn, modeName, model } from "./model";
@@ -23,6 +24,7 @@ import s from "./Board.module.css";
 export function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
   useTick(500); // turn timer
+  const auto = useAutoplay(sess); // 托管 -- one shared input-lock
   const promptFor = useRef(0);
   const autoDeed = useRef(-1);
   const resultsShown = useRef(false);
@@ -37,15 +39,17 @@ export function Board({ sess }: { sess: GameSession }) {
   const m = view ? model(view) : null;
 
   // Prompts, the landing deed popup and the results open once the animation has caught up.
+  // While 托管 is on the prompt modal is not opened at all (it would block the
+  // board) and the landing deed is left alone -- the autopilot answers both.
   useEffect(() => {
     if (!m || anim.animating) return;
     const S = m.S;
-    if (waitingOn(S.prompt, m.playerId) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
+    if (!auto && waitingOn(S.prompt, m.playerId) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
       promptFor.current = S.prompt.id;
       sfx("prompt");
       openPrompt(sess, S.prompt);
     }
-    if (m.myTurn && S.step === 4 && !S.busy && !m.asking && S.landed >= 0) {
+    if (!auto && m.myTurn && S.step === 4 && !S.busy && !m.asking && S.landed >= 0) {
       const key = S.round * 100 + S.turn;
       if (autoDeed.current !== key && !isModalOpen("deed") && (buyable(m, S.landed) || canBuildOn(m, S.landed))) {
         autoDeed.current = key;
@@ -60,7 +64,9 @@ export function Board({ sess }: { sess: GameSession }) {
 
   if (!m) return null;
   const S = m.S;
-  const tilePick = waitingOn(S.prompt, m.playerId) && S.prompt.kind === "tile" && !anim.animating ? S.prompt.items.map(Number) : [];
+  // Tile-pick clicks answer a `tile` prompt; while 托管 is on they must not
+  // (the deed-inspect click stays -- that is read-only).
+  const tilePick = !auto && waitingOn(S.prompt, m.playerId) && S.prompt.kind === "tile" && !anim.animating ? S.prompt.items.map(Number) : [];
   const onTile = (i: number) => {
     const k = tilePick.indexOf(i);
     if (k >= 0) return void act(sess, { act: "answer", prompt: S.prompt.id, value: k });
@@ -71,14 +77,15 @@ export function Board({ sess }: { sess: GameSession }) {
   return (
     <>
       <TopBar compact help={false} section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })} title={tr("board.round", { n: Math.max(1, S.round) })} onBack={leave} right={<></>} />
+      <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>
-          <Players m={m} />
+          <Players m={m} solo={sess.kind === "solo"} elapsed={(performance.now() - at) / 1000} />
           <Log lines={anim.log} />
         </div>
         <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
         <div className={s.right}>
-          <Side m={m} sess={sess} anim={anim} elapsed={(performance.now() - at) / 1000} />
+          <Side m={m} sess={sess} anim={anim} />
         </div>
       </div>
     </>

@@ -22,6 +22,9 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
         On::Hook(&[HookKind::HouseAdded], mine, on_built),
+        // （2）'s offer is also a press, so a card can run it out of turn
+        // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
+        On::Play(None, offer),
     ],
 );
 
@@ -43,6 +46,14 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// （2）「你拥有格子上的房屋总数增加时可选择失去1PAREO标记」 -- `houseAdded`
 /// is the moment a house commits.
 fn on_built(player_id: i32) -> card_sdk::Asked {
+    offer(player_id)
+}
+
+/// （2）'s offer body: lose 1 PAREO mark, the others split-pay a quarter of the
+/// largest `build_cost × houses` among the player's deeds. Reached two ways --
+/// the `houseAdded` hook above, and the press entry (`On::Play`) a card runs
+/// for 「视为你的房屋总数增加」 (pareo_far, C# `SkillPareo -> Offer()`).
+fn offer(player_id: i32) -> card_sdk::Asked {
     if ctx::tok(player_id, PAREO) < 1 {
         return Ok(());
     }

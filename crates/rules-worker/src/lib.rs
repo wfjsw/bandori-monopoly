@@ -159,6 +159,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
             let state = m.state();
             let player_id = state.player_of(member);
+            let extra = m.view_extra(member);
             Ok(json!({
                 "ok": true,
                 "view": {
@@ -168,6 +169,8 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     "draw": m.draw_of(member),
                     "you": member,
                     "playerId": player_id,
+                    "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(Value::Null),
+                    "playable": extra.get("playable").cloned().unwrap_or(Value::Null),
                 }
             }))
         }

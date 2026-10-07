@@ -123,14 +123,16 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 |---|---|
 | dice & log | `roll`, `log` |
 | board | `tile_count`, `tile_named`, `tile_owner`, `player_pos`, `tile_steps_ahead`, `rent_of`, `buy_price`, `build_cost`, `mortgage_value`, `owned_tiles`, `is_buyable`, `is_shop`, `tile_group`, `tile_price`, `houses_of`, `set_houses`, `add_house`, `mortgaged_of`, `set_mortgaged`, `set_owner`, `dist`, `tile_forward`, `neighbor`, `players_on`, `is_ring`, `is_circle`, `is_live_house` |
-| players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `character_is`, `in_band`, `turn_player`, `round_no`, `turn_key` |
+| players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `character_is`, `in_band`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start) |
+| targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
 | marks & tokens | `add_mark`, `count_marks`, `remove_marks`, `tok`, `set_tok`, `add_tok` |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
 | pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
+| skills & band attachments (ABI v35) | `band_skill` / `character_skill` (the bound rule id, C# `H._fx[i].bands` / `.skill`), `band_skills` (every band attachment as `(uid, id, extra)`), `add_band_skill` (C# `H.MakeBand`; `extra` = 「拿取」 copy: 「相同乐队技能卡的效果不可叠加」 / 「不视为那个乐队的角色」), `invoke_skill` (run a skill rule's press entry `On::Play` for a player -- 「立即执行乐队技能的（2）效果」 / `SkillPareo -> Offer()`. No `skillUsed`: that is the player's own press (`use_skill`).) |
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_player`, `ask_card`, `ask_number` |
-| nesting & trigger | `play_card`, `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
+| nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals`, `decay` |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `settle_circle_reward`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 
@@ -152,7 +154,7 @@ original names where the pairing is already implied (`settleBefore` →
 | `passBefore` / `pass` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives |
 | `settleBefore` / `settle` / `settleAfter` | landing -- before resolving the tile / before its effect / after it fully resolves |
 | `mortgageBefore` / `mortgage` | mortgaging a deed -- before any guard (can block) / after it applied |
-| `pay` / `paid` | money leaving a player -- before the deduction / after. `player_id` = payer, `target` = payee, `value` = amount |
+| `pay` / `paid` | money leaving a player -- before the deduction / after. `player_id` = payer, `target` = payee, `value` = amount. `paid` is the [反击] window and opens only on a payer-side loss (再次牵起手来 / 游击演出 are 「[消耗]或[支付]」 / 「被…收取资金」). `payAfter` is the 「资金变动」 hook (rulebook 支付阶段 7, 「合并到[支付后]」) and fires on **any** money change, a print (`gain`) and a `gain_fixed` included |
 | `bankruptBefore` / `bankrupt` | bankruptcy -- before asset cash-in / after cash-in, before removal from the game |
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
 | `event` / `eventAfter` | drawing an event -- before it resolves / after it is filed away |
@@ -220,7 +222,7 @@ cannot ship with a raw key showing to players.
 
 * seam: card modules run inside real matches (server and browser), prompts come
   out as engine prompts and effects commit -- `crates/game-rules/tests/live_match.rs`;
-* vocabulary above is implemented end to end (ABI v31 as of 2026-10-06 --
+* vocabulary above is implemented end to end (ABI v35 as of 2026-10-06 --
   `card_sdk::abi::ABI_VERSION`; the wire format note above still says v26
   because that is when `postcard` was adopted);
 * **all 184 cards are ported** (`rules/cards/card-*`, one module per card family
@@ -296,8 +298,10 @@ cannot ship with a raw key showing to players.
   card that forced the payment, so only `by_card()` can tell a card-caused
   payment from rent.
 * most cards are **partial**: what the vocabulary cannot express is marked
-  `TODO(规则书)` / `TODO(ABI)` naming the missing hook (251 markers remain after
-  the v22-v25 waves). What is **landed** since the first cut: the `On::` handler
+  `TODO(规则书)` / `TODO(ABI)` naming the missing hook (78 markers remain as of
+  the v35 wave -- 2 of them `TODO(ABI)`, and those two are only the convention
+  notes in `skill-bands` / `skill-characters`'s `lib.rs`; the card pool's
+  `TODO(ABI)` list is empty). What is **landed** since the first cut: the `On::` handler
   form (Play / CantPlay / Counteract / Hook / AtEnd / RollPlan), the field-hook kinds
   (`PassTile`, `PayAdd/PayMul/PayChoose/PayAt/PayAfter`, `SettleAfter` /
   `SettleBody` -- `SettleBody` replaced `SettleInstead` --,
@@ -309,7 +313,16 @@ cannot ship with a raw key showing to players.
   (`abnormal_count`, `abnormal_kind`, `AbnormalGuard`, the `abnormal` [反击]
   window), the trigger payload (`by_card`, `pay_is_rent`, `move_flags/main/dir`,
   `step`, pay mutators, `cards()`), and the plan-shaping ops
-  (`ctx::plan::*`). What **remains**, from the markers:
+  (`ctx::plan::*`), and (v35) the **skill / band / follow** surface:
+  `band_skill` / `character_skill` / `band_skills` / `add_band_skill`
+  (C# `H._fx[i].bands` / `.skill` / `H.MakeBand`; `extra` = 「拿取」 copy),
+  `invoke_skill` (run a skill's press entry `On::Play` -- 「立即执行乐队技能的
+  （2）效果」, `SkillPareo -> Offer()`), `raise_bought` (C# `f.Bought(i, t)`,
+  a card-driven hand-over announcing the acquisition), and
+  `plan::add_follower` (「使你的下次主要移动结果对那些玩家一起执行」 -- the
+  engine replays the move's result for each follower after the mover settles,
+  in the recorded order, carrying the same plan / `pay_factor`).
+  What **remains**, from the markers:
   * **`ctx::card_move`** (C# `H.CardMove`: run the move now as the main move) --
     the largest family (~20 markers); plan-shaping is written and waits only for
     this + the plan-readback wiring in `main_move`;
@@ -317,11 +330,15 @@ cannot ship with a raw key showing to players.
     (teleport-with-settle shaping), multi-die `MoveCtx.Base` tables, and
     in-flight move writeback (counteractions setting `m.Stopped`/`m.ExtraSteps`);
   * **targeting** is landed in v26 (`target`/`target_all`/`target_tile`,
-    `ImmuneAll`/`Untargetable`/`Redirect`, `targeted_count`); what remains is
-    the per-play `immune<p>` tags, `PlayCtx` `Effective`/`Extreme`, `t.Pay.tile`,
-    `H.ExtraOf` skill attachments, the
-    skill system (`TryResonance`, `SwitchState`, `SkillUsed`, ...), and
+    `ImmuneAll`/`Untargetable`/`Redirect`, `targeted_count`) and, since the
+    2026-10-06 group-A wave, the **static targeting query** (`designations`,
+    C# `H.Db.Card(id).Targeting` + `H.Others`, declared via
+    `prop::DESIGNATES`) and **per-pair cancel** (`cancel_designation` /
+    `designation_cancelled`, C# `play.Tags["immune"+seat]` -- one designation
+    drops, the rest land). What remains is `PlayCtx` `Effective`/`Extreme`,
+    `t.Pay.tile`, the skill system (`TryResonance`, `SwitchState`, ...), and
     host->guest strings (`AbName`/`EventTitle`);
+    (`H.ExtraOf` skill attachments landed in v35 as `band_skills`' `extra`);
   * routines (`BuyRoutine`/`BuildRoutine`/`MortgageRoutine`/`SettleAt`),
     `AgentLanding`, `RevealSeen`/`Actions`, world snapshot/restore.
 

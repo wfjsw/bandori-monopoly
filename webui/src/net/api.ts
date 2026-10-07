@@ -1,7 +1,7 @@
 // REST client and SSE stream for the Rust server (docs/SERVER.md).
 
 import type { Msg } from "../i18n/msg";
-import type { Command, MatchEvent, MatchView, RoomInfo, ScoreWeights } from "../core/types";
+import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, ScoreWeights } from "../core/types";
 
 const TOKEN_KEY = "bm.token";
 let token = sessionStorage.getItem(TOKEN_KEY) ?? "";
@@ -53,7 +53,8 @@ export const api = {
   createRoom: (o: { name: string; ranked: boolean; maxPlayers: number; password: string; weights?: ScoreWeights }) => call<{ room: RoomInfo; you: number }>("POST", "/api/rooms", o),
   join: (id: string, password = "") => call<{ room: RoomInfo; you: number }>("POST", `/api/rooms/${id}/join`, { password, version: "9" }),
   ready: (id: string, on: boolean) => call<RoomInfo>("POST", `/api/rooms/${id}/ready`, { on }),
-  bot: (id: string, op: "add" | "remove", member = 0) => call<RoomInfo>("POST", `/api/rooms/${id}/bots`, { op, member }),
+  bot: (id: string, op: "add" | "remove", member = 0, mentality: BotMentality = "standard") =>
+    call<RoomInfo>("POST", `/api/rooms/${id}/bots`, { op, member, mentality }),
   weights: (id: string, w: ScoreWeights) => call<RoomInfo>("POST", `/api/rooms/${id}/weights`, w),
   start: (id: string, force: boolean) => call<RoomInfo>("POST", `/api/rooms/${id}/start`, { force }),
   leave: (id: string) => call<unknown>("POST", `/api/rooms/${id}/leave`, {}),

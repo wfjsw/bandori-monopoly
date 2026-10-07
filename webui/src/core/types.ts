@@ -31,6 +31,8 @@ export interface MatchPlayer {
   character: string; deckReady: boolean; money: number; pos: number; hand: number; draw: number;
   discard: string[]; mulligan: boolean; bankrupt: boolean; left: boolean; outOrder: number;
   assets: number; score: number; rank: number;
+  /** Bot decision policy (`"standard"` / `"chaos"`). Ignored on a human seat. */
+  mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
   skillCharacter: string; bands: string; tokens: { name: string; value: number }[];
@@ -102,12 +104,28 @@ export interface MatchView {
   draw: string[];
   you: number;
   playerId: number;
+  /**
+   * The engine's own AI answer for *this* player's live prompt, only while they
+   * are still waiting on it (`Match::view_extra`). Never another seat's entry.
+   * Absent online when the frame predates the field; the autopilot then falls
+   * back to the prompt's `fallback`.
+   */
+  aiAnswer?: { answer: number; picked: string[]; worth: number } | null;
+  /** Parallel to `hand`: would the engine allow each card right now? */
+  playable?: boolean[];
 }
 
 export interface ScoreWeights { money: number; property: number; houses: number }
+/**
+ * Bot decision policy: `standard` is the ported C# bot, `chaos` is legal but
+ * maximally disruptive. Serde-defaults to `standard` on the wire, so a missing
+ * field is standard. Only meaningful on a `bot` member.
+ */
+export type BotMentality = "standard" | "chaos";
 export interface RoomMember {
   id: number; player: string; character: string; cnId: string;
   ready: boolean; host: boolean; bot: boolean; away: boolean;
+  mentality: BotMentality;
 }
 export interface RoomInfo {
   id: string; name: string; ranked: boolean; maxPlayers: number; locked: boolean;

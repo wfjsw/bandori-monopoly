@@ -24,7 +24,12 @@ pub mod rules;
 mod setup;
 mod world;
 
-pub use cx::{Answered, Ask, Cx, Flow, Halt, Reply};
+pub use ai::{
+    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, wants_buy, wants_build,
+    wants_redeem, BUY_RESERVE, BUILD_RESERVE, CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN,
+    PLAY_CARD_CHANCE, REDEEM_RESERVE,
+};
+pub use cx::{Answered, Ask, Cx, Flow, Halt, Reply, AI_UNSET};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay};
 pub use rules::{CardRules, Dest, StubRules, Trigger};
@@ -150,7 +155,9 @@ struct Saved {
 
 /// Bumped whenever [`Saved`] changes shape; older saves are rejected.
 /// v2: `FieldCard.hand_limit_delta` became the generic `FieldCard.props` map.
-const SAVE_VERSION: u32 = 3;
+/// Public so a match record's [`crate::record::EngineStamp`] can name the save
+/// format it was written against (see `docs/REPLAY.md`).
+pub const SAVE_VERSION: u32 = 3;
 
 /// A running match.
 pub struct Match {
@@ -247,6 +254,7 @@ impl Match {
                     player: m.player.clone(),
                     bot: m.bot,
                     ai: m.bot,
+                    mentality: m.mentality,
                     ..MatchPlayer::default()
                 })
                 .collect(),
@@ -422,6 +430,47 @@ impl Match {
             .iter()
             .map(|c| self.rules.hand_note(&cx, i, c))
             .collect()
+    }
+
+    /// Per-viewer extras the client's 托管 autopilot reads on top of [`Match::state`].
+    ///
+    /// Two things the shared [`MatchState`] deliberately does not carry:
+    ///
+    /// * `aiAnswer` -- the engine's own AI answer for **this** player's live
+    ///   prompt (`Ask::ai` / `ai_picked` / `worth`), only while they are still
+    ///   waiting on it. Never another seat's entry: an auction ceiling is
+    ///   hidden information. That is data, not a takeover -- the seat still
+    ///   belongs to the player, and a browser autopilot just relays it through
+    ///   the ordinary `act` path.
+    /// * `playable` -- parallel to [`Match::hand_of`]: would `cant_play` allow
+    ///   each card right now? Recomputed from the world, so the client does not
+    ///   have to re-derive the phase / exclusive / status gates.
+    ///
+    /// Both view builders (`web-glue` and `rules-worker`) merge this into the
+    /// match frame.
+    pub fn view_extra(&self, member: i32) -> serde_json::Value {
+        let Some(i) = self.player_index(member) else {
+            return serde_json::json!({ "aiAnswer": null, "playable": [] });
+        };
+        let ai_answer = self.pending.as_ref().and_then(|p| {
+            let l = &p.live;
+            let k = l.ask.view.player_index(i as i32)?;
+            if l.answers.get(k).copied().unwrap_or(-1) >= 0 {
+                return None;
+            }
+            Some(serde_json::json!({
+                "answer": l.ask.ai.get(k).copied().unwrap_or(l.ask.view.fallback),
+                "picked": l.ask.ai_picked.get(k).cloned().unwrap_or_default(),
+                "worth": l.ask.worth.get(k).copied().unwrap_or(0),
+            }))
+        });
+        let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+        let playable = self.world.hidden[i]
+            .hand
+            .iter()
+            .map(|c| cx.cant_play(i, c, false).is_none())
+            .collect::<Vec<_>>();
+        serde_json::json!({ "aiAnswer": ai_answer, "playable": playable })
     }
 
     // ---------------------------------------------------------------- running routines
@@ -627,7 +676,11 @@ impl Match {
         let turn = self.world.st.turn as usize;
         if self.world.st.phase == "ban" {
             self.direct(|cx| {
-                let pick = if cx.w.st.players[turn].ai && cx.w.rng.chance(0.5) {
+                // Standard: 50% a random character, else no ban. Chaos always
+                // bans something if anything is left. A human seat (time-out)
+                // never bans.
+                let chaos = cx.is_chaos(turn);
+                let pick = if cx.w.st.players[turn].ai && (chaos || cx.w.rng.chance(0.5)) {
                     cx.random_character(false)
                 } else {
                     String::new()
@@ -787,8 +840,23 @@ impl Match {
                         if min > cap || !can_pay[k] {
                             l.answers[k] = 1;
                         } else {
-                            let bid = cap.min(min + 100 * rng.below(3) as i32);
-                            l.place_bid(players[k], bid);
+                            // Standard nudges the minimum (up to +200) -- the
+                            // original formula, untouched. Chaos raises anywhere
+                            // up to its ceiling, which `Ask::worth` already
+                            // capped at money - `CHAOS_RESERVE`. A human seat is
+                            // never chaos: a time-out keeps the standard policy.
+                            let seat = players[k];
+                            let chaos = {
+                                let x = &self.world.st.players[seat];
+                                x.bot && x.mentality == crate::state::BotMentality::Chaos
+                            };
+                            let bid = if chaos {
+                                let steps = ((cap - min) / 100 + 1).max(1) as usize;
+                                min + 100 * rng.below(steps) as i32
+                            } else {
+                                cap.min(min + 100 * rng.below(3) as i32)
+                            };
+                            l.place_bid(seat, bid);
                         }
                     }
                     _ => {}
@@ -1329,6 +1397,13 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if st.skip_move && st.turn == i as i32 {
                 return Some(Msg::new("err.roll_stay"));
             }
+            // The turn's main move is already spent (an `exileMain` expiry
+            // teleport, or a `card_move` that ran it early): 「一回合只能触发
+            // 一次［主要移动］效果,多次触发［主要移动］时无效」. Refuse the roll
+            // and let `end` through below.
+            if cx.w.turn.main_moved && st.turn == i as i32 {
+                return Some(Msg::new("err.roll_main_used"));
+            }
             if st.roller != i as i32 {
                 if st.turn != i as i32 || st.roller < 0 {
                     return Some(Msg::new("err.not_your_roll"));
@@ -1401,7 +1476,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if busy {
                 return Some(Msg::new("err.busy"));
             }
-            if st.step == stage::OPS && !st.skip_move {
+            if st.step == stage::OPS && !st.skip_move && !cx.w.turn.main_moved {
                 return Some(Msg::new("err.roll_first"));
             }
             if st.step == stage::MOVE {

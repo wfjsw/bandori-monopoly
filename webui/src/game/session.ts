@@ -5,13 +5,127 @@
 // resumed on load; an online player is re-attached through the server session
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
-import { rules } from "../core/data";
-import type { Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
+import { D, rules } from "../core/data";
+import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
 import type { Msg } from "../i18n/msg";
+import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
 
 type ViewCb = (v: MatchView) => void;
 type EventCb = (e: MatchEvent) => void;
+
+/**
+ * 托管 / 混沌 driver: on every view change, wait a human beat (0.4–1.0 s, like
+ * `tick_live`), then send one candidate through the ordinary `act` path. The
+ * policy (`bot` / `chaos`) is pluggable; the driver is shared.
+ *
+ * Never two commands in flight. Each distinct command is sent at most once per
+ * `state.seq`, and a refused one is marked tried so the next candidate is
+ * attempted instead of looping.
+ */
+class Autopilot {
+  private timer = 0;
+  private inFlight = false;
+  private seq = -1;
+  private tried = new Set<string>();
+  private played = 0;
+  private turnKey = "";
+  private off: (() => void) | null = null;
+
+  constructor(private sess: GameSession) {}
+
+  start(): void {
+    if (this.off) return;
+    this.off = this.sess.subscribe((v) => this.onView(v));
+    if (this.sess.view) this.onView(this.sess.view);
+  }
+
+  stop(): void {
+    clearTimeout(this.timer);
+    this.timer = 0;
+    this.inFlight = false;
+    this.seq = -1;
+    this.tried.clear();
+    this.off?.();
+    this.off = null;
+  }
+
+  private delay(): number {
+    return 400 + Math.random() * 600;
+  }
+
+  private schedule(): void {
+    clearTimeout(this.timer);
+    this.timer = window.setTimeout(() => this.step(), this.delay());
+  }
+
+  private onView(v: MatchView): void {
+    if (!isAuto(this.sess.autoMode)) return;
+    const key = `${v.state.round}:${v.state.turn}`;
+    if (key !== this.turnKey) {
+      this.turnKey = key;
+      this.played = 0;
+    }
+    if (v.state.seq === this.seq && this.tried.size > 0) return;
+    this.schedule();
+  }
+
+  private ctx(): AutopilotCtx {
+    return {
+      tiles: D.tiles,
+      characters: D.characters,
+      playedThisTurn: this.played,
+      deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
+      deckRandom: (c) => {
+        const pool: string[] = JSON.parse(rules.deck_pool(c));
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return JSON.parse(rules.deck_clean(c, JSON.stringify(pool)));
+      },
+      random: Math.random,
+    };
+  }
+
+  private static key(cmd: Command): string {
+    return JSON.stringify(cmd);
+  }
+
+  private step(): void {
+    const s = this.sess;
+    const mode = s.autoMode;
+    if (!isAuto(mode) || this.inFlight) return;
+    const v = s.view;
+    if (!v) return;
+    if (v.state.seq !== this.seq) {
+      this.seq = v.state.seq;
+      this.tried.clear();
+    }
+    const cmd = plan(v, this.ctx(), mode).find((c) => !this.tried.has(Autopilot.key(c)));
+    if (!cmd) return;
+    this.tried.add(Autopilot.key(cmd));
+    this.inFlight = true;
+    Promise.resolve(s.act(cmd))
+      .then((err) => {
+        if (err) {
+          // Logged, marked tried, and the next candidate is attempted after
+          // the usual human beat -- never a tight retry loop.
+          console.warn(`${mode}: command refused`, cmd, err);
+          this.schedule();
+        } else if (cmd.act === "play") {
+          this.played++;
+        }
+      })
+      .finally(() => {
+        this.inFlight = false;
+        // Solo's `pump` emits the next view inside `act`; catch up if one
+        // already landed while we were in flight.
+        const now = s.view;
+        if (isAuto(s.autoMode) && now && now.state.seq !== this.seq) this.schedule();
+      });
+  }
+}
 
 export abstract class GameSession {
   abstract readonly kind: "solo" | "online";
@@ -23,6 +137,13 @@ export abstract class GameSession {
   connected = true;
   /** Set when the match result has been recorded on the profile. */
   recorded = false;
+  /**
+   * Auto-play mode for this seat: `off` (you), `bot` (托管), `chaos` (混沌).
+   * Per-session, not persisted. Any non-`off` value locks the user's inputs.
+   */
+  autoMode: AutoMode = "off";
+  private autoCbs = new Set<() => void>();
+  private autopilot: Autopilot | null = null;
   protected views = new Set<ViewCb>();
   protected events = new Set<EventCb>();
   protected others = new Set<() => void>();
@@ -38,6 +159,25 @@ export abstract class GameSession {
       if (onEvent) this.events.delete(onEvent);
       if (onOther) this.others.delete(onOther);
     };
+  }
+
+  /** Set 托管 / 混沌 / off. Takes effect immediately (mid-command included). */
+  setAutoMode(mode: AutoMode): void {
+    if (this.autoMode === mode) return;
+    this.autoMode = mode;
+    if (isAuto(mode)) {
+      this.autopilot ??= new Autopilot(this);
+      this.autopilot.start();
+    } else {
+      this.autopilot?.stop();
+    }
+    this.autoCbs.forEach((cb) => cb());
+  }
+
+  /** Re-render when the auto mode flips. Returns unsubscribe. */
+  subscribeAutoMode(cb: () => void): () => void {
+    this.autoCbs.add(cb);
+    return () => this.autoCbs.delete(cb);
   }
 
   protected emitView(v: MatchView): void {
@@ -61,6 +201,7 @@ export abstract class GameSession {
 export let session: GameSession | null = null;
 
 export function endSession(): void {
+  session?.setAutoMode("off");
   session?.leave();
   session = null;
 }
@@ -103,10 +244,20 @@ export class SoloSession extends GameSession {
     this.pump();
   }
 
-  static start(player: string, bots: string[], weights: ScoreWeights): SoloSession {
+  static start(player: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
     const members: RoomMember[] = [
-      { id: 1, player, character: "", cnId: "", ready: true, host: true, bot: false, away: false },
-      ...bots.map((name, i) => ({ id: i + 2, player: name, character: "", cnId: "", ready: true, host: false, bot: true, away: false })),
+      { id: 1, player, character: "", cnId: "", ready: true, host: true, bot: false, away: false, mentality: "standard" },
+      ...bots.map((b, i) => ({
+        id: i + 2,
+        player: b.name,
+        character: "",
+        cnId: "",
+        ready: true,
+        host: false,
+        bot: true,
+        away: false,
+        mentality: b.mentality,
+      })),
     ];
     const seed = Math.floor(Math.random() * 0xffffffff);
     return new SoloSession(new rules.SoloMatch(JSON.stringify(members), seed, 0, JSON.stringify(weights)), weights);
@@ -199,7 +350,13 @@ export class SoloSession extends GameSession {
   }
 }
 
-export function startSolo(player: string, bots: string[], weights: ScoreWeights): SoloSession {
+/** One bot seat in a solo match: its name and decision policy. */
+export interface SoloBot {
+  name: string;
+  mentality: BotMentality;
+}
+
+export function startSolo(player: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
   endSession();
   const s = SoloSession.start(player, bots, weights);
   session = s;

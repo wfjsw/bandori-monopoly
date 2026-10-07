@@ -31,9 +31,15 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
     // `H.SeatsOn(H.State.seats[seat].pos, seat)` (other players still in the game on
     // this tile).
     let pos = ctx::player_pos(player_id);
-    let shared = ctx::players_on(pos, player_id);
+    let mut shared = ctx::players_on(pos, player_id);
     // 规则书: 「并记录那些玩家」 -- the log is the visible record (C# keeps the
     // list on `LeadFx.Who`).
+    //
+    // 规则书: 「你先触发结算，此后其他玩家按行动顺序依次触发结算」 -- the list is
+    // recorded in **action order** starting from the seat after the user, which
+    // is the order `plan::add_follower` replays them in.
+    let n = ctx::player_count().max(1);
+    shared.sort_by_key(|&w| (w - player_id).rem_euclid(n));
     for &who in &shared {
         ctx::log(
             player_id,
@@ -41,18 +47,17 @@ fn sakiko_lead(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", player_id)
                 .player_id("other", who),
         );
+        // 规则书: 「使你的下次主要移动结果对那些玩家一起执行」 -- C# `LeadFx.Who`
+        // + `Follow`: after the user settles, the engine replays this move's
+        // result for each follower (`ctx::plan::add_follower`).
+        ctx::plan::add_follower(who);
     }
     // 规则书: 「触发结算时进行的支付价格减半」 -- C# `LeadFx.Mark` on the player's
     // next main move (`m.PayFactor *= 0.5`). Milli-units: 500 = x0.5. Written on
     // the turn's move plan here at 「回合开始时」 (before the dice), the same
     // `MoveCtx` the C# marks at `MoveBefore`; with the default factor of 1.0
-    // `*= 0.5` and `= 0.5` agree.
+    // `*= 0.5` and `= 0.5` agree. The followers' replays carry the same plan,
+    // so their settle payments are halved too.
     ctx::plan::set_pay_factor(500);
-    // TODO(ABI): 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他玩家按
-    //   行动顺序依次触发结算」 -- still needs the `LeadFx` follow (C#
-    //   `LeadFx.SettleAfter` / `TurnEndBefore` -> `Follow`): walk each recorded
-    //   player the same way with `H.ForceWalk(..., settle, payFactor: 0.5)` /
-    //   `H.ForceTeleport` + `H.SettleAt` (the held `H.ForceWalk` / `H.SettleAt`
-    //   family), plus a place to keep the recorded player list (`LeadFx.Who`).
     Ok(())
 }

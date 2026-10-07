@@ -75,15 +75,21 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             // The two branches are decided by whether the play *names* anyone:
             // `H.Db.Card(id).Targeting` is the effect list's own recipients, which
             // is `ctx::effect::count()` / `effect::target(i)`.
-            let targeting = (0..ctx::effect::count()).any(|i| ctx::effect::target(i) >= 0);
-            if targeting {
-                // （1）「取消其对目标之一的[指定]」 -- per-designation, handled at
-                // the `target` window below. The C# instead pre-tags the play with
-                // `play.Tags["immune"+seat]` so `H.Target` never reaches its window;
-                // that per-play tag has no op, so this half is the `target` branch.
+            let designations = ctx::designations(trigger::player_id());
+            if !designations.is_empty() {
+                // （1）「取消其对目标之一的[指定]」 -- per-pair cancel (C#
+                // `play.Tags["immune"+seat]=1`): cancel the counteractor's own
+                // designation when it has one, else the first named seat. The
+                // rest of the play's designations still land.
+                let seat = designations
+                    .iter()
+                    .copied()
+                    .find(|&s| s == player_id)
+                    .unwrap_or(designations[0]);
+                ctx::cancel_designation(seat);
                 ctx::log(
                     player_id,
-                    &Msg::new(key!("net_error_card")).player_id("who", player_id),
+                    &Msg::new(key!("net_error_target")).player_id("who", seat),
                 );
             } else {
                 // （2）「没有[指定]目标则抵消其所有的效果」

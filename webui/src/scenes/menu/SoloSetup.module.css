@@ -9,6 +9,12 @@
 .ic { width: 38px; height: 38px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; color: var(--sub); }
 .you .ic { color: var(--pink); }
 .tag { width: 76px; text-align: center; font-size: 13px; color: var(--sub); }
+.mentalityRow { display: flex; align-items: center; gap: 10px; }
+.mentalityLabel { font-size: 15px; color: var(--sub); margin-right: 4px; }
+.mentality { height: 34px; padding: 0 18px; border-radius: 17px; background: #fff; color: var(--text); font-size: 15px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
+.mentalityOn { background: var(--pink); color: #fff; }
+.mentalityTag { cursor: pointer; border: none; background: var(--light-pill); border-radius: 13px; line-height: 26px; height: 28px; font-weight: 700; }
+.mentalityTagChaos { background: var(--pink); color: #fff; }
 .youTag { background: var(--pink); color: #fff; border-radius: 13px; line-height: 26px; }
 .x, .xSpace { width: 34px; height: 34px; flex: none; }
 .x { border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }

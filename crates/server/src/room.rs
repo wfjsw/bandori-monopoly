@@ -334,6 +334,7 @@ impl Room {
             host,
             bot: false,
             away: false,
+            mentality: Default::default(),
         });
         self.tokens.insert(id, who.token.into());
         self.persist();
@@ -401,8 +402,15 @@ impl Room {
         Ok(())
     }
 
-    /// `names`: the data's bot name list (`match_rules.json`).
-    pub fn add_bot(&mut self, member: i32, names: &[String]) -> ApiResult<()> {
+    /// `names`: the data's bot name list (`match_rules.json`). `mentality` is
+    /// the bot's decision policy; it rides the room record and is applied when
+    /// the match starts (`Match::new` copies it onto the seat).
+    pub fn add_bot(
+        &mut self,
+        member: i32,
+        names: &[String],
+        mentality: game_core::state::BotMentality,
+    ) -> ApiResult<()> {
         self.host_only(member)?;
         if self.info.playing {
             return Err(ApiError::bad("err.room.bot_add_playing"));
@@ -418,8 +426,10 @@ impl Room {
             player,
             ready: true,
             bot: true,
+            mentality,
             ..Default::default()
         });
+        self.persist();
         self.notify();
         Ok(())
     }

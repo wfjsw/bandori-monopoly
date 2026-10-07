@@ -656,12 +656,9 @@ async fn a_restart_restores_the_room_and_its_match() {
     let member = RoomMember {
         id: 1,
         player: "A".into(),
-        character: "".into(),
-        cn_id: "".into(),
         ready: true,
         host: true,
-        bot: false,
-        away: false,
+        ..Default::default()
     };
     let rec = RoomRecord {
         info: RoomInfo {
@@ -712,4 +709,78 @@ async fn a_restart_restores_the_room_and_its_match() {
 
     // And a session that names the room still resolves.
     assert_eq!(server.session("tok-A").unwrap().player, "A");
+}
+
+/// `POST /api/rooms/{id}/bots` takes a mentality, it rides the room record, and
+/// the match carries it onto the seat when the room starts.
+#[tokio::test]
+async fn adding_a_chaos_bot_round_trips() {
+    let (base, _) = spawn(Duration::from_secs(20)).await;
+    let a = Client::new(&base, "Host").await;
+    let id = a.ok("/api/rooms", json!({ "name": "Bots" })).await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // A chaos bot, named and tagged on the roster.
+    let room = a
+        .ok(
+            &format!("/api/rooms/{id}/bots"),
+            json!({ "op": "add", "mentality": "chaos" }),
+        )
+        .await;
+    let bots: Vec<_> = room["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["bot"] == true)
+        .collect();
+    assert_eq!(bots.len(), 1);
+    assert_eq!(bots[0]["mentality"], "chaos", "{room}");
+    assert!(!bots[0]["player"].as_str().unwrap().is_empty());
+
+    // Omitted mentality is standard; a named one round-trips too.
+    let room = a
+        .ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    let bots: Vec<_> = room["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["bot"] == true)
+        .collect();
+    assert_eq!(bots.len(), 2);
+    assert_eq!(bots[1]["mentality"], "standard", "{room}");
+
+    // An unknown tag is refused rather than silently coerced.
+    let (s, v) = a
+        .post(
+            &format!("/api/rooms/{id}/bots"),
+            json!({ "op": "add", "mentality": "wild" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert_eq!(v["error"]["k"], "err.bad_mentality");
+
+    // Start (force -- only the host is here) and the seat carries the tag.
+    let started = a
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["playing"], true);
+    let (s, state) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{state}");
+    // `RoomState` serialises the view under `"match"`.
+    let players = state["match"]["state"]["players"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no match view in {state}"));
+    let chaos = players
+        .iter()
+        .find(|p| p["mentality"] == "chaos")
+        .expect("the chaos seat is in the match");
+    assert_eq!(chaos["bot"], true);
+    let standard = players
+        .iter()
+        .find(|p| p["mentality"] == "standard")
+        .expect("the standard seat is in the match");
+    assert_eq!(standard["bot"], true);
 }

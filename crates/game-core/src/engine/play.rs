@@ -288,6 +288,11 @@ impl Cx<'_> {
         if let Some(n) = self.w.targeted.get_mut(i) {
             *n = 0;
         }
+        // 「当前回合内你每获得过一次资金」 is per **turn**, not per own-turn:
+        // a [反击] read at a turn's end (HHW:（育美）(2), 「你回合外收到资金的回合
+        // 结束时」) sees just that turn's credits. Everyone's counter starts
+        // fresh with the turn.
+        self.w.reset_gains();
         // C# `_abnormalTurn` -- 「a new turn starts them all at 0」. The turn ctx
         // is rebuilt at `next_turn`, so this is already empty there; zero it
         // again at the turn-start boundary so a world carried across a card's
@@ -315,13 +320,22 @@ impl Cx<'_> {
             }
             let to = self.w.st.players[i].exile_to();
             self.w.st.players[i].state_set(key::EXILE_TO, -1);
+            // MyGO:无路矢's 「视为当回合的主要移动」 (C# `H.SetV(i, "exileMain", 1)`):
+            // the return teleport **is** that turn's main move. Read and consume
+            // the slot so the player cannot also roll, and mark the move `main`
+            // so `t.Move.Main` is true for anything observing it.
+            let as_main = self.w.st.players[i].state_get(key::EXILE_MAIN) != 0;
+            if as_main {
+                self.w.st.players[i].state_set(key::EXILE_MAIN, 0);
+                self.w.turn.main_moved = true;
+            }
             self.w.log(
                 "status",
                 i as i32,
                 Msg::new("log.exile_over").player_id("who", i),
             );
             if to >= 0 {
-                self.teleport(i, to as usize, false, None)?;
+                self.teleport_as(i, to as usize, false, None, as_main)?;
             }
         }
         let s = &mut self.w.st.players[i];
@@ -580,6 +594,22 @@ impl Cx<'_> {
         self.buy(player_id, tile)
     }
 
+    /// C# `f.Bought(i, t)` -- a card handed a deed over outside the buy routine
+    /// (tomoe_savior's 「从该玩家处收购该地契」) and announces the acquisition:
+    /// raise the `bought` hook chain over the field, with `by` as the cause
+    /// (`t.ByCard`, 「购买」 reactions key 「来自你以外」 on it). `buy()` raises
+    /// the same hook itself after an ordinary purchase.
+    pub fn card_raise_bought(&mut self, player_id: usize, tile: usize, by: usize) -> Flow<()> {
+        if self.out(player_id) || !self.playing() {
+            return Ok(());
+        }
+        let mut t = Trigger::new("bought", player_id);
+        t.tile = tile as i32;
+        t.by_card = Some(by as i32);
+        self.raise(t)?;
+        Ok(())
+    }
+
     /// `H.BuildRoutine` -- pay the tile's build cost and raise one house. Refuses
     /// (with the engine's own reason) when the tile cannot take a house.
     pub fn card_build(&mut self, player_id: usize, tile: usize) -> Flow<()> {
@@ -736,6 +766,42 @@ impl Cx<'_> {
                 m.roll = m.roll.max(m.min_roll);
             }
             self.walk(&mut m)?;
+            // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
+            // 玩家按行动顺序依次触发结算」 (C# `LeadFx.SettleAfter` / `Follow`):
+            // each follower recorded on the plan replays this move's result,
+            // after the mover has settled, in the order the card added them.
+            // The replay carries the same plan -- steps / kind / destination /
+            // `pay_factor` -- so 「触发结算时进行的支付价格减半」 reaches them too.
+            // No `roll` / `rollPlan` / `rollAfter` / `moveRoll`: the result is
+            // already resolved, this is the same move re-executed.
+            let followers = std::mem::take(&mut m.followers);
+            for &f in &followers {
+                let fi = f as usize;
+                if self.out(fi) || !self.playing() || fi == i {
+                    continue;
+                }
+                let mut fm = m.clone();
+                fm.player_id = fi;
+                fm.roller = fi;
+                fm.main = false;
+                fm.followers.clear();
+                fm.path.clear();
+                fm.total = 0;
+                fm.remaining = 0;
+                fm.passed_players.clear();
+                fm.stopped = false;
+                fm.cancelled = false;
+                fm.from = 0;
+                fm.to = 0;
+                if fm.teleport_to >= 0 {
+                    let to = fm.teleport_to as usize;
+                    let resolve = fm.resolve;
+                    let why = fm.why.clone();
+                    self.teleport(fi, to, resolve, why)?;
+                } else {
+                    self.walk(&mut fm)?;
+                }
+            }
             // C# `TurnCtx.LastMain`, and `NoteWalk`: `SetV(player_id, "lastWalk",
             // steps + 1)` after a non-teleport main walk (0 means "none").
             self.w.turn.main_steps = m.total;
@@ -948,12 +1014,26 @@ impl Cx<'_> {
         resolve: bool,
         why: Option<Msg>,
     ) -> Flow<()> {
+        self.teleport_as(i, to, resolve, why, false)
+    }
+
+    /// [`Self::teleport`] with the move's `main` flag named (「视为当回合的主要
+    /// 移动」 -- the `exileMain` expiry teleport, C# `MoveCtx.Main`).
+    pub(crate) fn teleport_as(
+        &mut self,
+        i: usize,
+        to: usize,
+        resolve: bool,
+        why: Option<Msg>,
+        main: bool,
+    ) -> Flow<()> {
         if to >= self.data.tiles.len() || self.out(i) {
             return Ok(());
         }
         let from = self.w.st.players[i].pos;
         self.w.st.players[i].pos = to as i32;
         let mut m = Move::new(i);
+        m.main = main;
         m.resolve = resolve;
         m.kind = MoveKind::Teleport;
         m.teleport_to = to as i32;
@@ -1654,6 +1734,7 @@ impl Cx<'_> {
             return Ok(());
         }
         let money = self.w.st.players[i].money;
+        let m = self.bot_mentality(i);
         let ask = Ask::choice(
             vec![i],
             Msg::new("ask.force_buy.title"),
@@ -1669,7 +1750,13 @@ impl Cx<'_> {
             1,
             15.0,
         )
-        .with_ai(|_| if money - price < 4000 { 1 } else { 0 })
+        .with_ai(|_| {
+            if super::ai::bot_wants_force_buy(m, money, price) {
+                0
+            } else {
+                1
+            }
+        })
         .with_tile(t);
         if self.ask(ask)?.of(i) == 0
             && self.w.st.owners[t] == owner as i32
@@ -1826,7 +1913,23 @@ impl Cx<'_> {
     }
 
     /// `AutoMortgage` -- the AI's (and the time-out) selection.
-    fn auto_mortgage(&self, player_id: usize, need: i32) -> Vec<String> {
+    ///
+    /// Standard: bare land first, cheapest first, until `need` is covered (the
+    /// order the C# uses). Chaos: a random subset that covers `need` -- at
+    /// least one deed, never a tidy little list.
+    fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
+        if self.is_chaos(player_id) {
+            let mut rest = self.mortgageable(player_id);
+            let mut got = 0;
+            let mut out = vec![];
+            while !rest.is_empty() && (got < need || out.is_empty()) {
+                let k = self.w.rng.below(rest.len());
+                let t = rest.remove(k);
+                out.push(t.to_string());
+                got += self.mortgage_value(t);
+            }
+            return out;
+        }
         let mut got = 0;
         let mut out = vec![];
         for t in self.mortgage_order(self.mortgageable(player_id)) {
@@ -2387,6 +2490,9 @@ impl Cx<'_> {
         if let Some(t) = to {
             if !self.out(t) {
                 self.w.st.players[t].money += gain;
+                // 「当前回合内你每获得过一次资金」 -- one count per settled credit,
+                // whatever the cause (rulebook 支付阶段 7 「资金变动」).
+                self.w.bump_gain(t as i32, 1);
             }
         }
         self.log_money(&p, loss, gain);
@@ -2696,13 +2802,12 @@ impl Cx<'_> {
             return Ok(());
         }
         let base = self.buy_price(t);
-        let worth: Vec<i32> = players
-            .iter()
-            .map(|&s| {
-                let v = ((base as f64 * (0.6 + self.w.rng.f64() * 0.7) / 100.0) as i32) * 100;
-                v.min(self.w.st.players[s].money - 1000)
-            })
-            .collect();
+        // Per-seat ceiling, from the seat's own policy (standard randomises
+        // around the price; chaos spends down to `CHAOS_RESERVE`).
+        let mut worth: Vec<i32> = Vec::with_capacity(players.len());
+        for &s in &players {
+            worth.push(self.ai_auction_worth(s, base));
+        }
         let houses = self.w.st.houses[t];
         let text = Msg::new("ask.auction.text")
             .n("price", self.tile(t).price)
@@ -2982,6 +3087,9 @@ impl Cx<'_> {
         // it from the snapshot.
         let prev_extreme = self.w.turn.extreme;
         self.w.turn.extreme = 0;
+        // `play.Tags["immune"+seat]` -- per-pair designations cancelled on the
+        // previous play must not leak into this one.
+        self.w.turn.cancelled_designations.clear();
         self.w
             .log(
                 "play",

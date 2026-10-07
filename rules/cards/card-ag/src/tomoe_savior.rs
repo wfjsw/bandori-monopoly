@@ -86,10 +86,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .player_id("from", from)
             .player_id("who", player_id),
     );
-    // TODO(ABI)[反击]: the C# also runs `f.Bought(i, t)` over the Fx chain after
-    //   the hand-over. `TriggerKind::Bought` is raised by `buy()` / auction, but a
-    //   forced hand-over off an owned tile is not a buy (`card_buy` -> `buy`
-    //   refuses a tile with an owner), and there is no card-side `raise`. Running
-    //   the hand-over through `set_owner` fires nothing.
+    // 规则书[反击]: 「收购该地契」 -- C# `f.Bought(i, t)` runs over the Fx chain
+    // after the hand-over, so 「购买」 reactions (Afterglow's free house on a
+    // cheap/shop-street deed, ...) hear a buy caused by this card. A forced
+    // hand-over off an owned tile is not a `buy()` (that refuses an owned tile),
+    // so the card announces it (`ctx::raise_bought`).
+    ctx::raise_bought(player_id, t);
     Ok(())
 }

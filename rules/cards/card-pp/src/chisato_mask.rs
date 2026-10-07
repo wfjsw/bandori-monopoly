@@ -25,7 +25,11 @@ pub const CHISATO_MASK: CardDef = CardDef::new(
         On::Play(None, chisato_mask),
         On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled),
     ],
-);
+)
+// 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
+// play's designations (`Card.Def.Targeting`), so 网络链接异常 「取消其对目标
+// 之一的[指定]」 can drop one leg of the split.
+.props(&[(card_sdk::abi::prop::DESIGNATES, 1)]);
 
 fn chisato_mask(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」
@@ -86,6 +90,11 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
     let per = (total + list.len() as i32 - 1) / list.len() as i32;
     let share = (per + 9) / 10 * 10;
     for p in list {
+        // 「取消其对目标之一的[指定]」 -- a per-pair cancel drops one leg of the
+        // split; the share is the **pre-drop** figure (RULING 2026-10-06).
+        if ctx::designation_cancelled(p) {
+            continue;
+        }
         ctx::transfer(p, to, share, why)?;
     }
     Ok(())

@@ -11,6 +11,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::scoring::ScoreWeights;
+use crate::state::BotMentality;
 use crate::MatchMode;
 
 /// `NetProtocol.Game`
@@ -150,6 +151,9 @@ pub struct RoomMember {
     pub host: bool,
     pub bot: bool,
     pub away: bool,
+    /// Bot decision policy (bots only). Carried on the room record so the match
+    /// can apply it when it starts; serde-defaults to standard.
+    pub mentality: BotMentality,
 }
 
 /// `RoomService.Bot` -- the next bot name not already in `taken`: the data's bot

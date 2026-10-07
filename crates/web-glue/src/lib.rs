@@ -369,11 +369,13 @@ impl SoloMatch {
         }
     }
 
-    /// `{state, hand, handNotes, draw, you, player_id}` -- the same shape as the
-    /// server's `match` frame.
+    /// `{state, hand, handNotes, draw, you, playerId, aiAnswer, playable}` -- the
+    /// same shape as the server's `match` frame. `aiAnswer` / `playable` are the
+    /// per-viewer extras from [`Match::view_extra`] (the 托管 autopilot's inputs).
     pub fn view(&self, member: i32) -> String {
         let state = self.m.state();
         let player_id = state.player_of(member);
+        let extra = self.m.view_extra(member);
         json(&serde_json::json!({
             "state": state,
             "hand": self.m.hand_of(member),
@@ -381,6 +383,8 @@ impl SoloMatch {
             "draw": self.m.draw_of(member),
             "you": member,
             "playerId": player_id,
+            "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
+            "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
         }))
     }
 

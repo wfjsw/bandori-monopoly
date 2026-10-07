@@ -14,6 +14,7 @@ pub mod msg;
 pub mod net;
 pub mod profile;
 pub mod progression;
+pub mod record;
 pub mod rng;
 pub mod scoring;
 pub mod state;

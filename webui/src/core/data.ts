@@ -26,6 +26,29 @@ export interface GameData {
 export let D: GameData;
 export const rules = glue;
 
+/** The card / skill / tile rule modules `tools/build-ruleset.mjs` copies to
+ *  `/assets/rules/`. Without them every solo match runs on the engine's
+ *  `StubRules` (plain-Monopoly tiles, no card or skill effects), so this has to
+ *  run after `load_data` (the ruleset binds to the game data) and before any
+ *  `SoloMatch` is built. Online play runs the rules on the server, so a failure
+ *  here is logged rather than fatal. */
+async function loadRuleset(): Promise<void> {
+  try {
+    const r = await fetch("/assets/rules/index.json");
+    if (!r.ok) throw new Error(`index.json: HTTP ${r.status}`);
+    const index: { modules: { file: string }[] } = await r.json();
+    for (const m of index.modules) {
+      const w = await fetch("/assets/rules/" + m.file);
+      if (!w.ok) throw new Error(`${m.file}: HTTP ${w.status}`);
+      glue.ruleset_add(new Uint8Array(await w.arrayBuffer()));
+    }
+    const n = glue.ruleset_build();
+    console.info(`[rules] ${n} card module(s) loaded`);
+  } catch (e) {
+    console.error("[rules] card modules failed to load; solo matches will run without card, skill or tile rules", e);
+  }
+}
+
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
   await init();
   const names: string[] = JSON.parse(glue.data_files());
@@ -40,6 +63,7 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
     }),
   );
   glue.load_data(JSON.stringify(files));
+  await loadRuleset();
 
   const j = (n: string) => JSON.parse(files[n].replace(/^﻿/, ""));
   const cards: CardData[] = j("cards.json").cards;

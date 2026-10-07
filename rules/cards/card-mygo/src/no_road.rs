@@ -64,8 +64,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // `H.GiveExile(seat, 2, tile)` stores the return Ok(tile); the engine teleports
     // there when the last layer ticks away.
     ctx::give_exile(player_id, 2, tile);
-    // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`.
-    ctx::set_slot(player_id, "exileMain", 1);
+    // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`. The
+    // engine's exile tick reads this slot and consumes the turn's main move.
+    ctx::set_slot(player_id, card_sdk::abi::state_key::EXILE_MAIN, 1);
     // 规则书: 「在[除外]层数归0后[传送]至该格子」 -- the log names both the
     // destination and the redirect below.
     ctx::log(
@@ -111,6 +112,8 @@ fn redirect(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-// TODO(ABI): the engine must honour the `exileMain` slot so the expiry teleport
-//   counts as that turn's main move (C# `H.MoveWhyNot` / `_turnCtx.MainMoved`);
-//   today `game-core`'s exile tick teleports without consuming the main move.
+// `exileMain` is honoured by the engine now (2026-10-06): `game-core`'s exile
+// tick reads the slot at 「在[除外]层数归0后」 and runs the return teleport as
+// that turn's main move -- `TurnCtx::main_moved` is set, so 「一回合只能触发
+// 一次［主要移动］」 keeps the player from rolling as well (C#
+// `H.MoveWhyNot` / `_turnCtx.MainMoved`).

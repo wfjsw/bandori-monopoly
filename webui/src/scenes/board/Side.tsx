@@ -2,13 +2,15 @@
 // action buttons, end turn, and the hand (with a full-size hover preview) and
 // your draw pile.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
 import { n0 } from "../../core/format";
+import { useAutoplay } from "../../core/hooks";
 import type { GameSession } from "../../game/session";
 import { SoloSession } from "../../game/session";
+import { AutoToggle } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { type CardAction, CardFace, showCard, TagChip } from "../../ui/Card";
 import { Avatar, bandColor } from "../../ui/Character";
@@ -22,31 +24,19 @@ import { byTitle, openDeed, showDeck, showDeedList, showSettle, showSkills } fro
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf, stateOf } from "../../core/names";
+import { namesOf, stateMax, stateOf } from "../../core/names";
+import { statusChips } from "./Players";
 
 /** The turn stages, by the game's own names (开始 / 运营 / 移动 / 结束) -- the
  *  sweep effect that announces them is separate and unchanged. */
 
 const phases = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
 
-function timerOf(m: Model, elapsed: number): { value: string; caption: string; frac: number; cls: string } {
+export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Animator }) {
+  const auto = useAutoplay(sess); // 托管: every input here is locked
   const S = m.S;
   const cur = S.players[S.turn];
-  if (S.phase !== "play") return { value: "—", caption: "", frac: 0, cls: s.idle };
-  if (S.turn < 0) return { value: "—", caption: tr("board.ready"), frac: 0, cls: s.idle };
-  if (cur?.ai) return { value: "—", caption: cur.bot ? tr("solo.bot") : tr("board.afk"), frac: 0, cls: s.idle };
-  const e = !S.busy && !m.asking ? elapsed : 0;
-  const shield = Math.max(0, S.shield - e);
-  const bank = Math.max(0, S.bank - Math.max(0, e - S.shield));
-  if (shield > 0) return { value: String(Math.ceil(shield)), caption: tr("board.shield"), frac: Math.min(1, shield / 20), cls: s.shield };
-  return { value: String(Math.ceil(bank)), caption: tr("board.remain"), frac: Math.min(1, bank / 60), cls: bank < 10 ? s.low : "" };
-}
-
-export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; anim: Animator; elapsed: number }) {
-  const S = m.S;
-  const cur = S.players[S.turn];
-  const c = S.turn >= 0 ? m.charOf(S.turn) : undefined;
-  const t = timerOf(m, elapsed);
+  const myChar = m.charOf(m.playerId);
   // The rulebook's four stages are 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`)
   // and `phases()` lists them in that order. The engine's `step` carries the
   // rulebook's own stage number (0 before a turn, 1..4 after), so `step - 1`
@@ -61,8 +51,8 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
   // "stuck in 开始" while the dice are already live.
   const shown = S.phase !== "play" ? -1 : Math.min(3, Math.max(0, (anim.stage ?? S.step) - 1));
   const animating = anim.animating;
-  const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 2 && !S.skipMove && !S.busy && !m.asking && !animating;
-  const can = m.myTurn && !S.busy && !m.asking && !animating;
+  const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 2 && !S.skipMove && !S.busy && !m.asking && !animating && !auto;
+  const can = m.myTurn && !S.busy && !m.asking && !animating && !auto;
 
   let hint: string;
   if (S.phase !== "play") hint = "";
@@ -88,18 +78,23 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
 
   return (
     <>
-      <div className={s.turnCard}>
-        <Avatar c={c} size={92} />
+      {/* Your own status only -- whose turn it is, and its clock, live on the
+          player panels (Players.tsx). */}
+      <div className={cx(s.turnCard, m.myTurn && s.myTurn)}>
+        <Avatar c={myChar} size={64} />
         <div className={s.tcMid}>
-          <div className={s.tcTag}>{tr("board.turn")}</div>
-          <div className={s.tcName}>{cur ? c?.display ?? cur.player : "—"}</div>
-          <div className={s.tcMoney}><img src={sceneImg("icon_coin")} alt="" />{cur ? n0(cur.money) : ""}</div>
+          <div className={s.tcTop}>
+            <span className={s.tcName}>{myChar?.display ?? m.me.player}</span>
+            {m.myTurn && <span className={s.tcTag}>{tr("board.turn")}</span>}
+          </div>
+          <div className={s.tcMoney}><img src={sceneImg("icon_coin")} alt="" />{n0(m.me.money)}</div>
+          <div className={s.tcStats}>
+            <span className={s.tcFire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(m.me, "fire")}/{stateMax(m.me, "fire")}</span>
+            {statusChips(m.me).map((x) => <span key={x} className={s.tcStatus}>{x}</span>)}
+          </div>
         </div>
-        {/* Solo has no deadlines at all (the engine never expires one), so the
-            clock is not shown rather than shown spent or frozen. */}
-        {sess.kind !== "solo" && (
-          <div className={cx(s.timer, t.cls)} style={{ ["--frac" as string]: t.frac }}><b>{t.value}</b><small>{t.caption}</small></div>
-        )}
+        {/* 托管 / 混沌: your own seat's mode. */}
+        <AutoToggle sess={sess} compact />
       </div>
 
       <div className={s.steps}>
@@ -116,10 +111,10 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
       </button>
 
       <div className={s.actions}>
-        <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
-        <Btn icon="construction" className={s.act} onClick={buildFromButton}>{tr("board.build")}</Btn>
-        <Btn icon="account_balance" className={s.act} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
-        <Btn icon="redo" className={s.act} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
+        <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} disabled={auto} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
+        <Btn icon="construction" className={s.act} disabled={auto} onClick={buildFromButton}>{tr("board.build")}</Btn>
+        <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
+        <Btn icon="redo" className={s.act} disabled={auto} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
       </div>
       {/* Matches `why_not_act`'s "end": legal anywhere the player's turn is
           theirs and quiet, except 运营 with a move still owed (roll first) and
@@ -135,11 +130,11 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
         {vote.id ? (
           <div className={s.vote}>
             <span>{tr("board.voteStatus", { n: vote.answers.filter((a) => a === 1).length, total: vote.players.length })}</span>
-            {k >= 0 && vote.answers[k] < 0 && <Btn kind="pink" size="small" onClick={() => void act(sess, { act: "vote", value: 1 })}>{tr("board.voteFor")}</Btn>}
-            {k >= 0 && vote.answers[k] < 0 && <Btn size="small" onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>}
+            {k >= 0 && vote.answers[k] < 0 && <Btn kind="pink" size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 1 })}>{tr("board.voteFor")}</Btn>}
+            {k >= 0 && vote.answers[k] < 0 && <Btn size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>}
           </div>
         ) : (
-          <Btn size="small" icon="leaderboard" disabled={S.phase !== "play" || m.out} onClick={() => showSettle(sess)}>{sess.kind === "solo" ? tr("board.settle") : tr("board.voteEnd")}</Btn>
+          <Btn size="small" icon="leaderboard" disabled={S.phase !== "play" || m.out || auto} onClick={() => showSettle(sess)}>{sess.kind === "solo" ? tr("board.settle") : tr("board.voteEnd")}</Btn>
         )}
         <Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(weights, false, undefined, tr("board.scoreRulesLocked"))}>{tr("solo.scoreRules")}</Btn>
       </div>
@@ -150,18 +145,59 @@ export function Side({ m, sess, anim, elapsed }: { m: Model; sess: GameSession; 
 function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   const [hover, setHover] = useState<{ id: string; note: string } | null>(null);
   const [peek, setPeek] = useState(false);
+  const auto = useAutoplay(sess); // 托管: play / discard are locked (inspect stays)
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
-  const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy;
+  const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
   const detail = (id: string, k: number) => {
     setHover(null);
     const acts: CardAction[] = [];
-    if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: true, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
+    if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: !auto, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
     acts.push({ label: canPlay ? tr("board.play") : tr("board.playOnlyOps"), enabled: canPlay, run: () => act(sess, { act: "play", card: id }) });
     showCard(id, acts, fmtMsg(m.v.handNotes[k], namesOf(m.S)));
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
+  // The preview is `pointer-events: none` (it sits beside the hand, not under
+  // the cursor), so a long card text is scrolled from the hovered hand card:
+  // the wheel over the hand, or PgUp/PgDn/↑/↓ while a card is hovered.
+  const cardsRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (textRef.current) textRef.current.scrollTop = 0;
+  }, [hover?.id]);
+  useEffect(() => {
+    if (!hover) return;
+    const text = () => {
+      const el = textRef.current;
+      return el && el.scrollHeight > el.clientHeight ? el : null;
+    };
+    const onWheel = (e: WheelEvent) => {
+      const el = text();
+      if (!el) return;
+      e.preventDefault();
+      el.scrollTop += e.deltaMode === 1 ? e.deltaY * 21 : e.deltaMode === 2 ? e.deltaY * el.clientHeight : e.deltaY;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      const el = text();
+      if (!el || e.altKey || e.ctrlKey || e.metaKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+      const line = 21; // `.pText` line-height: 13px × 1.6
+      const page = Math.max(line, el.clientHeight - line);
+      const delta = { ArrowDown: line, ArrowUp: -line, PageDown: page, PageUp: -page }[e.key];
+      if (delta === undefined) return;
+      e.preventDefault();
+      el.scrollTop += delta;
+    };
+    const cards = cardsRef.current;
+    cards?.addEventListener("wheel", onWheel, { passive: false });
+    window.addEventListener("keydown", onKey);
+    return () => {
+      cards?.removeEventListener("wheel", onWheel);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [hover]);
   return (
     <>
       <div className={s.hand}>
@@ -174,7 +210,7 @@ function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean })
             <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
           </button>
         </div>
-        <div className={s.cards}>
+        <div className={s.cards} ref={cardsRef}>
           {m.v.hand.map((id, k) => (
             <CardFace key={`${id}:${k}`} id={id} size="hand" onClick={() => detail(id, k)} onMouseEnter={() => setHover({ id, note: fmtMsg(m.v.handNotes[k], namesOf(m.S)) })} onMouseLeave={() => setHover(null)} />
           ))}
@@ -187,7 +223,7 @@ function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean })
             <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
             <div className={s.pTitle}>{cardTitle(hover.id)}</div>
             {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-            <div className={s.pText}><SkillBody text={hc?.text ?? ""} /></div>
+            <div className={s.pText} ref={textRef}><SkillBody text={hc?.text ?? ""} /></div>
             {hover.note && <div className={s.pNote}>{hover.note}</div>}
           </>
         )}

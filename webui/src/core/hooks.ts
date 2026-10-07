@@ -5,6 +5,7 @@ import { langVersion, onLangChange } from "../i18n";
 import { getProfile, hasProfile, onProfile, settings } from "./store";
 import type { MatchEvent, MatchView, PlayerProfile } from "./types";
 import type { GameSession } from "../game/session";
+import { isAuto, type AutoMode } from "../game/autopilot";
 
 const subscribeProfile = (cb: () => void) => onProfile(cb);
 let profileVersion = 0;
@@ -48,6 +49,22 @@ export function useSessionOther(s: GameSession | null): number {
   const [n, bump] = useReducer((x: number) => x + 1, 0);
   useEffect(() => (s ? s.subscribe(() => undefined, undefined, bump) : undefined), [s]);
   return n;
+}
+
+/** 托管 / 混沌 / off for this session. */
+export function useAutoMode(s: GameSession | null): AutoMode {
+  const [mode, setMode] = useState<AutoMode>(s?.autoMode ?? "off");
+  useEffect(() => {
+    if (!s) return;
+    setMode(s.autoMode);
+    return s.subscribeAutoMode(() => setMode(s.autoMode));
+  }, [s]);
+  return mode;
+}
+
+/** True while either auto mode owns the seat -- the one input-lock every button reads. */
+export function useAutoplay(s: GameSession | null): boolean {
+  return isAuto(useAutoMode(s));
 }
 
 /** Re-render on language change (the shell keys its tree with this). */

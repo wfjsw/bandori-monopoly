@@ -31,17 +31,17 @@
 //! So there is no `On::Skill`. Inventing one would be a third axis for a
 //! question the two above already answer.
 //!
-//! # What is actually missing: binding, not hooks
+//! # Binding
 //!
 //! The rule needs to know whose it is. The id carries that --
-//! `skill:户山香澄:非凡之星` -- and the engine resolves a player's two skills
-//! from the character they picked and their band, the way it resolves a card
-//! from its id today. That resolution is the piece that is not built yet, which
-//! is why the table below is empty: a rule nothing dispatches to is worse than
-//! no rule (it is the `plan::set_bonus` trap -- a name with no caller).
+//! `skill:户山香澄:非凡之星` -- and `GameData::skill_rules_of` resolves a
+//! player's two skills from the character they picked and their band. The
+//! engine places them at match start (`bind_skills`), so `On::Hook` reaches
+//! them like any field card and `On::Play` answers the skill button. A card
+//! that reaches a skill by name uses `ctx::character_skill` /
+//! `ctx::band_skill` + `ctx::invoke_skill` (ABI v35).
 //!
-//! Adding a skill is one file here plus an entry in [`CARDS`]. The two halves
-//! land together: id resolution first, then the rules.
+//! Adding a skill is one file here plus an entry in [`CARDS`].
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
 
@@ -188,8 +188,9 @@ use taki_crychic::TAKI_CRYCHIC;
 // modulo the sheet's literal backslash-n escapes -- so the JSON is safe to
 // code against, and the sheet is where to check a body against.
 //
-// All 54 character skills are written. What is left on each is its own
-// `TODO(规则书)` / `TODO(ABI)` note -- see the tally in the module docs.
+// All 54 character skills are written and bound (`bind_skills`). What is left
+// on each is its own `TODO(规则书)` / `TODO(ABI)` note -- 11 of the 54 carry
+// one (2026-10-06); the module docs describe the hook/binding shape.
 //
 pub const CARDS: &[CardDef] = &[
     ANON_RESTART,

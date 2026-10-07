@@ -275,6 +275,8 @@ pub struct BotReq {
     /// `"add"` or `"remove"`.
     pub op: String,
     pub member: i32,
+    /// Bot mentality for `op: "add"`: `"standard"` (default) or `"chaos"`.
+    pub mentality: String,
 }
 
 pub async fn bots(
@@ -286,7 +288,11 @@ pub async fn bots(
     let (room, me) = member_room(&s, &sess, &id)?;
     let mut r = room.lock().unwrap();
     match req.op.as_str() {
-        "add" => r.add_bot(me, &s.data.match_rules.bot_names)?,
+        "add" => {
+            let m = game_core::state::BotMentality::parse(&req.mentality)
+                .ok_or_else(|| ApiError::bad("err.bad_mentality"))?;
+            r.add_bot(me, &s.data.match_rules.bot_names, m)?
+        }
         "remove" => r.remove_bot(me, req.member)?,
         _ => return Err(ApiError::bad("err.bad_bot_op")),
     }

@@ -1,6 +1,8 @@
 //! Simulate bot-only matches and report what happened.
 //!
-//!   cargo run -p game-core --release --example sim -- [games] [players] [max_rounds]
+//!   cargo run -p game-core --release --example sim -- [games] [players] [max_rounds] [standard|chaos]
+//!
+//! The trailing word picks every bot's mentality (default `standard`).
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -10,13 +12,16 @@ use game_core::data::GameData;
 use game_core::engine::{Match, StubRules};
 use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
+use game_core::state::BotMentality;
 use game_core::MatchMode;
 
 fn main() {
-    let args: Vec<u64> = std::env::args()
-        .skip(1)
-        .filter_map(|a| a.parse().ok())
-        .collect();
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    let mentality = raw
+        .iter()
+        .find_map(|a| BotMentality::parse(a))
+        .unwrap_or_default();
+    let args: Vec<u64> = raw.iter().filter_map(|a| a.parse().ok()).collect();
     let games = args.first().copied().unwrap_or(50);
     let players = args.get(1).copied().unwrap_or(4) as i32;
     let max_rounds = args.get(2).copied().unwrap_or(200) as i32;
@@ -38,6 +43,7 @@ fn main() {
                 id: i,
                 player: format!("Bot{i}"),
                 bot: true,
+                mentality,
                 ..Default::default()
             })
             .collect();
@@ -86,7 +92,8 @@ fn main() {
     }
     let secs = started.elapsed().as_secs_f64();
     println!(
-        "{games} games x {players} bots, cap {max_rounds} rounds: {secs:.2}s ({:.1} ms/game)",
+        "{games} games x {players} {} bots, cap {max_rounds} rounds: {secs:.2}s ({:.1} ms/game)",
+        mentality.as_str(),
         secs * 1000.0 / games as f64
     );
     println!("avg rounds {:.1}", rounds as f64 / games as f64);

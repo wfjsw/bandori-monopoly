@@ -504,7 +504,6 @@ fn net_negates_untargeted_hand_effect() {
 
 // 规则书: 「1. 手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」
 #[test]
-#[ignore = "DISCREPANCY: 「取消其对目标之一的[指定]」 — countering 登上武道馆 (2 targets) cancels EVERY payment (all money unchanged) instead of dropping one target (expected one player still pays 1000)"]
 fn net_cancels_one_target_not_all() {
     let mut t = Table::vanilla(3);
     t.give(1, &["通用:网络链接异常"]);

@@ -27,11 +27,18 @@ fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡时，使用者可以选择（2）或（3）效果之一发动。」 -- C#
     // `H.AskPick` between the two effects (default the last option).
     // C# only offers (2) when a real (non-Extra) `BandCrychic` skill is attached
-    // (`H._fx[i].bands.Any(b => b is BandCrychic && !b.Extra)`); the skill
-    // attachments are not in the vocabulary, so both options are offered and the
-    // band-skill part of (2) is TODO'd below.
+    // (`H._fx[i].bands.Any(b => b is BandCrychic && !b.Extra)`); the ABI names
+    // the band attachments (`ctx::band_skills`), so (2) is offered only when a
+    // real (non-Extra) one is there. TODO(规则书): the C# narrows further to
+    // `BandCrychic` specifically -- 「乐队技能的（2）效果」 reads as the player's
+    // own band skill whatever it is, so the wider gate is taken here.
+    let has_band = ctx::band_skills(player_id)
+        .iter()
+        .any(|&(_, _, extra)| extra == 0);
     let mut options: Vec<Msg> = Vec::new();
-    options.push(Msg::new(key!("mutsumi_never_opt2")));
+    if has_band {
+        options.push(Msg::new(key!("mutsumi_never_opt2")));
+    }
     options.push(Msg::new(key!("mutsumi_never_opt3")));
     let pick = ctx::ask_pick(
         player_id,
@@ -39,7 +46,7 @@ fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("mutsumi_never_ask")),
         &options,
     )?;
-    if pick == 0 {
+    if has_band && pick == 0 {
         branch_crystals(player_id)?;
     } else {
         branch_shuffle(player_id)?;
@@ -60,9 +67,15 @@ fn branch_crystals(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .i("n", n as i64),
     );
-    // TODO(ABI): （2） 「立即执行乐队技能的（2）效果」 -- needs the band-skill
-    //   attachment surface (C# `BandCrychic.TransformNow()`, the CRYCHIC band
-    //   skill (2) that swaps in a new band).
+    // 规则书（2）: 「立即执行乐队技能的（2）效果」 -- C# `BandCrychic.TransformNow()`.
+    // A band skill exposes its numbered active effect as `On::Play` (the press),
+    // so the invoke is `ctx::invoke_skill` on the bound band skill
+    // (`ctx::band_skill` -- C# `H._fx[i].bands`). The CRYCHIC band skill's (2)
+    // is exactly that entry (`transform_now`), and it re-checks its own
+    // 「若你的抽牌堆与弃牌堆中都没有卡」 gate before doing anything.
+    if let Some(skill) = ctx::band_skill(player_id) {
+        ctx::invoke_skill(player_id, &skill)?;
+    }
     // 规则书（2）: 「然后弃一张卡」 -- C# `H.AskCard(i, ..., H._hidden[i].hand.ToList())`.
     let hand = ctx::cards_in(player_id, ctx::CardPile::Hand);
     if !hand.is_empty() {

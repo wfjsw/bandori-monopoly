@@ -271,6 +271,11 @@ pub mod key {
     pub const EXILE: &str = "exile";
     /// Tile the exile returns to (C# `MatchSeat.exile_to`), or -1 for none.
     pub const EXILE_TO: &str = "exileTo";
+    /// 「在[除外]层数归0后[传送]至该格子，视为当回合的主要移动」 -- when the
+    /// exile ticks out, the return teleport **is** that turn's main move
+    /// (MyGO:无路矢, C# `H.SetV(i, "exileMain", 1)`). The expiry tick reads and
+    /// consumes it: `TurnCtx::main_moved` is set so the player cannot also roll.
+    pub const EXILE_MAIN: &str = "exileMain";
     /// Fire pots held. Its `max` is the mandated cap (C# `MatchSeat.fireMax`),
     /// written by the character skill -- and that is the one number to show:
     /// there is no separate "effective cap" beside it.
@@ -336,6 +341,10 @@ pub mod prop {
     /// 「可在眩晕时打出」 (C# `Card.PlayableStunned`): `1` = the card skips the
     /// stun gate when played from hand.
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
+    /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
+    /// recipients (the play's other living players). Mirrors
+    /// `card_sdk::abi::prop::DESIGNATES`.
+    pub const DESIGNATES: &str = "designates";
     /// Virtual **rent** house count (「房屋数视为…」). Presence is the override
     /// (a count of `0` is legitimate); real `st.houses` is untouched. On a
     /// placed card of the tile's owner (`ctx::set_prop`, gone with the card) or
@@ -400,6 +409,39 @@ fn is_status_key(key: &str) -> bool {
     )
 }
 
+/// How a bot player decides. Serde-defaults to [`Self::Standard`] so older
+/// saves and room records load unchanged.
+///
+/// Only `bot` seats take a mentality: a human who times out or disconnects is
+/// still answered with the standard policy (`ai` flips on, `bot` stays off).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum BotMentality {
+    /// The ported C# bot (`ai.rs`) -- reserved money, card-play odds, cap per turn.
+    #[default]
+    Standard,
+    /// Legal but maximally disruptive: play everything, take every offer, spend
+    /// down to [`crate::engine::CHAOS_RESERVE`].
+    Chaos,
+}
+
+impl BotMentality {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            BotMentality::Standard => "standard",
+            BotMentality::Chaos => "chaos",
+        }
+    }
+
+    pub fn parse(s: &str) -> Option<Self> {
+        match s {
+            "standard" | "" => Some(BotMentality::Standard),
+            "chaos" => Some(BotMentality::Chaos),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchPlayer {
@@ -407,6 +449,8 @@ pub struct MatchPlayer {
     pub player: String,
     pub bot: bool,
     pub ai: bool,
+    /// Bot decision policy. Meaningless on a human seat; see [`BotMentality`].
+    pub mentality: BotMentality,
     pub roll: i32,
     pub ban_done: bool,
     pub ban: String,
@@ -452,6 +496,7 @@ impl Default for MatchPlayer {
             player: String::new(),
             bot: false,
             ai: false,
+            mentality: BotMentality::Standard,
             roll: 0,
             ban_done: false,
             ban: String::new(),
@@ -837,6 +882,12 @@ pub struct FieldCard {
     /// and is *not* flagged, even when it sits on someone else's field.
     #[serde(default)]
     pub band_skill: bool,
+    /// A 「拿取」ed band-skill copy (C# `BandBase.Extra`, `H.MakeBand(.., extra)`).
+    /// 「相同乐队技能卡的效果不可叠加」 -- the hook dispatch skips an extra when
+    /// a non-extra attachment of the same id is already on the field -- and
+    /// 「不视为那个乐队的角色」 (`in_band` reads only the character).
+    #[serde(default)]
+    pub extra: bool,
     pub note: Msg,
 }
 
@@ -853,6 +904,7 @@ impl Default for FieldCard {
             immune: false,
             props: BTreeMap::new(),
             band_skill: false,
+            extra: false,
             note: Msg::default(),
         }
     }

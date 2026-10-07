@@ -53,8 +53,9 @@ use crychic::CRYCHIC;
 // `data/bands.json` (`text`) is a faithful copy of it -- 12/12 rows match modulo
 // the sheet's literal backslash-n escapes -- so the JSON is safe to code against.
 //
-// All 12 band skills are written. What is left on each is its own
-// `TODO(规则书)` / `TODO(ABI)` note.
+// All 12 band skills are written and bound (`bind_skills`). What is left on
+// each is its own `TODO(规则书)` / `TODO(ABI)` note -- 4 of the 12 carry one
+// (2026-10-06).
 //
 pub const CARDS: &[CardDef] = &[
     AVE_MUJICA,

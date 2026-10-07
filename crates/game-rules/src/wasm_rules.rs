@@ -145,7 +145,17 @@ impl CardWorld for Run {
         self.world.turn.play_from_hand = v;
     }
     fn gain_fixed(&mut self, player_id: i32, amount: i32, why: crate::Msg) -> i32 {
-        self.world.gain_fixed(player_id, amount, why)
+        let got = self.world.gain_fixed(player_id, amount, why);
+        // 资金变动 (rulebook 支付阶段 7): a fixed gain/loss is still a money
+        // change. Logged as `(-1, player, n)` for money in and `(player, -1, n)`
+        // for money out, so the Done handler can raise `payAfter` for both and
+        // open the `paid` [反击] window only for the loss.
+        if got > 0 {
+            self.paid_log.push((-1, player_id, got));
+        } else if got < 0 {
+            self.paid_log.push((player_id, -1, -got));
+        }
+        got
     }
     fn set_card_face_down(&mut self, player_id: i32, card: &str, down: bool) -> bool {
         self.world.set_card_face_down(player_id, card, down)
@@ -219,7 +229,11 @@ impl CardWorld for Run {
         self.world.player_money(player_id)
     }
     fn gain(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
-        self.world.gain_money(player_id, amount, src)
+        let got = self.world.gain_money(player_id, amount, src);
+        if got > 0 {
+            self.paid_log.push((-1, player_id, got));
+        }
+        got
     }
     fn pay(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         let paid = self.world.pay_money(player_id, amount, src);
@@ -559,6 +573,20 @@ impl CardWorld for Run {
     fn band_skill_uid(&self, player_id: i32) -> i32 {
         self.world.band_skill_uid(player_id)
     }
+    fn band_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.band_skill_id(player_id)
+    }
+    fn character_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.character_skill_id(player_id)
+    }
+    fn band_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
+        self.world.band_skills(player_id)
+    }
+    fn add_band_skill(&mut self, player_id: i32, id: &str, extra: bool) -> i32 {
+        let props = self.ruleset.card_props(id);
+        self.world
+            .add_band_skill(&self.data, player_id, id, extra, props)
+    }
     fn gain_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
         self.world.gain_fire(player_id, n, why)
     }
@@ -874,6 +902,34 @@ impl CardWorld for Run {
             .and_then(|s| self.world.targeted.get(s).copied())
             .unwrap_or(0)
     }
+    fn gains_this_turn(&self, player_id: i32) -> i32 {
+        self.world.gains_this_turn(player_id)
+    }
+    fn designations(&self, player_id: i32) -> Vec<i32> {
+        // `Card.Def.Targeting` + `H.Others`: a play that names recipients names
+        // the other living players of its user (「[指定][使用者]以外的所有玩家」
+        // / 「其他玩家[分摊]」). The play's card is the one the trigger names.
+        let card = &self.trigger.card;
+        let designates = self
+            .ruleset
+            .card_props(card)
+            .get(game_core::state::prop::DESIGNATES)
+            .copied()
+            .unwrap_or(0)
+            != 0;
+        if !designates {
+            return Vec::new();
+        }
+        self.world.others(player_id)
+    }
+    fn cancel_designation(&mut self, seat: i32) {
+        if !self.world.turn.cancelled_designations.contains(&seat) {
+            self.world.turn.cancelled_designations.push(seat);
+        }
+    }
+    fn designation_cancelled(&self, seat: i32) -> bool {
+        self.world.turn.cancelled_designations.contains(&seat)
+    }
     fn placed_tile(&self, player_id: i32, id: &str) -> i32 {
         usize::try_from(player_id)
             .ok()
@@ -1108,6 +1164,9 @@ impl CardWorld for Run {
     fn set_settle_as_agent(&mut self, v: bool) {
         self.world.set_settle_as_agent(v);
     }
+    fn plan_add_follower(&mut self, player_id: i32) {
+        self.world.plan_add_follower(player_id);
+    }
     fn set_more_steps(&mut self, v: i32) {
         self.world.set_more_steps(v);
     }
@@ -1304,7 +1363,13 @@ impl WasmRules {
         guarded: bool,
     ) -> Flow<i32> {
         let mut answers: Vec<i32> = Vec::new();
+        // Guest-state overlays this drive pushed (one per `NeedHost`). Dropped
+        // at the top of the next iteration -- the routine has finished and the
+        // replay re-applies the guest writes from the restored world. Nested
+        // drives record their own base, so they never pop an outer one.
+        let overlay_base = cx.guest_overlay_depth();
         loop {
+            cx.restore_guests_to(overlay_base);
             let run = Run {
                 world: cx.world_copy(),
                 data: self.data.clone(),
@@ -1354,8 +1419,20 @@ impl WasmRules {
                     // PayAfter + `paid`, and `Discarded`).
                     let by = Some(call.player_id());
                     for (from, to, amount) in after.paid_log {
-                        for kind in ["payAfter", "paid"] {
-                            self.raise_core(cx, kind, from, |t| {
+                        // 资金变动 (rulebook 支付阶段 7) fires on **any** money
+                        // change, merged into `payAfter` per the doc's
+                        // 「合并到[支付后]?」 -- a print (game -> player) included.
+                        // The `paid` [反击] window opens only when money left a
+                        // player (C# 25234), matching 再次牵起手来 / 游击演出.
+                        let side = if from >= 0 { from } else { to };
+                        self.raise_core(cx, "payAfter", side, |t| {
+                            t.player_id = from;
+                            t.target = to;
+                            t.value = amount;
+                            t.by_card = by;
+                        })?;
+                        if from >= 0 {
+                            self.raise_core(cx, "paid", from, |t| {
                                 t.target = to;
                                 t.value = amount;
                                 t.by_card = by;
@@ -1442,6 +1519,12 @@ impl WasmRules {
                     // (build/buy discounts, free buy, ...) has to cross now.
                     // Progress counters stay on the copy: the replay redoes them.
                     cx.adopt_turn_policy(&run.world);
+                    // The guest's pending player state (a status clear, e.g.
+                    // 壱雫空 zeroing [晕眩] and then paying) is overlaid for the
+                    // routine's duration -- `can_pay` must see it -- and dropped
+                    // at the next iteration's top, so the replay re-applies it
+                    // rather than double-counting. See `Cx::overlay_guest_state`.
+                    cx.overlay_guest_state(&run.world);
                     match req {
                 HostRequest::Gate { player_id, kind } => {
                     let allowed = self.abnormal_gate(cx, player_id, kind, call.player_id())?;
@@ -1570,6 +1653,17 @@ impl WasmRules {
                         t.roll_source = source;
                     })?;
                     answers.push(t.value.max(0));
+                }
+                // C# `f.Bought(i, t)` -- the card announces an acquisition it
+                // performed outside the buy routine (tomoe_savior). The `bought`
+                // hook chain runs over the field; `by_card` is the run's player.
+                HostRequest::RaiseBought { player_id, tile } => {
+                    cx.card_raise_bought(
+                        player_id.max(0) as usize,
+                        tile.max(0) as usize,
+                        call.player_id().max(0) as usize,
+                    )?;
+                    answers.push(1);
                 }
                 // `H.DrawR`: the engine runs the draw itself -- one card at a
                 // time, raising the per-draw points (`drewBefore` / `drawn` /
@@ -1896,6 +1990,11 @@ impl WasmRules {
             return Ok(-1);
         };
         if s >= cx.state().players.len() || cx.world_copy().out(s) {
+            return Ok(-1);
+        }
+        // Per-pair cancel (「取消其对目标之一的[指定]」, C# `play.Tags["immune"+
+        // seat]`): this designation was cancelled; the rest still land.
+        if cx.world_copy().turn.cancelled_designations.contains(&p) {
             return Ok(-1);
         }
         if p == by {

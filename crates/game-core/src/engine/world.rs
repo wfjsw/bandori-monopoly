@@ -93,6 +93,12 @@ pub struct TurnCtx {
     /// other than the hand (`false`). 「若此卡从手牌以外的地方打出」 reads this.
     #[serde(default)]
     pub play_from_hand: bool,
+    /// C# `play.Tags["immune"+seat]` -- seats whose designation on the play
+    /// being resolved is cancelled (「取消其对目标之一的[指定]」). A per-pair
+    /// cancel: the rest of the play's designations still land. Cleared at the
+    /// start of each play.
+    #[serde(default)]
+    pub cancelled_designations: Vec<i32>,
     /// C# `TurnCtx.BuyDiscount` -- 「本回合购买格子时[消耗]资金时降低N」. A value,
     /// not a policy: `buy()` subtracts it from the price (floored at 0).
     #[serde(default)]
@@ -145,6 +151,7 @@ impl Default for TurnCtx {
             abnormal: Vec::new(),
             extreme: 0,
             play_from_hand: false,
+            cancelled_designations: Vec::new(),
             buy_discount: 0,
             paid_in_settle: 0,
             free_buy: false,
@@ -351,6 +358,13 @@ pub struct World {
     /// its own turn last started.
     #[serde(default)]
     pub targeted: Vec<i32>,
+    /// 「当前回合内你每获得过一次资金」 -- per player, times money landed on them
+    /// during the **current turn** (a print, a pay-player credit, or a
+    /// `gain_fixed`). Zeroed for everyone at each turn start, so a [反击] read at
+    /// a turn's end sees just that turn. The count a hand card reads without any
+    /// field stand-in (HHW:（育美）(2)).
+    #[serde(default)]
+    pub gains: Vec<i32>,
 }
 
 impl World {
@@ -374,7 +388,37 @@ impl World {
             signals: vec![],
             scheduled: vec![],
             targeted: vec![],
+            gains: vec![],
         }
+    }
+
+    /// 「当前回合内你每获得过一次资金」 -- count a money-in for `player_id`.
+    /// Every credit path funnels through here (`money`'s settlement,
+    /// `gain_fixed`, `gain_money`).
+    pub fn bump_gain(&mut self, player_id: i32, times: i32) {
+        let Ok(s) = usize::try_from(player_id) else {
+            return;
+        };
+        if times <= 0 {
+            return;
+        }
+        if self.gains.len() <= s {
+            self.gains.resize(s + 1, 0);
+        }
+        self.gains[s] += times;
+    }
+
+    /// The current turn's gain count for `player_id`.
+    pub fn gains_this_turn(&self, player_id: i32) -> i32 {
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.gains.get(s).copied())
+            .unwrap_or(0)
+    }
+
+    /// Zero every player's turn-gain counter (「当前回合内」 starts fresh).
+    pub fn reset_gains(&mut self) {
+        self.gains.iter_mut().for_each(|n| *n = 0);
     }
 
     /// Append an event (`MatchHost.Log`). Returns it for further fields.

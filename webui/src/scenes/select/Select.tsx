@@ -7,10 +7,11 @@ import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
 import { D, skillText } from "../../core/data";
-import { useMatchView, useTick } from "../../core/hooks";
+import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { CharacterData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
+import { AutoBanner, AutoToggle } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { SkillBody } from "../../ui/SkillBody";
 import { SkillTextToggle } from "../../ui/SkillTextToggle";
@@ -32,20 +33,24 @@ const modeChip = (mode: number): [string, string] => ([[tr("mode.solo"), "solo"]
 export function Select({ sess }: { sess: GameSession }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
+  const auto = useAutoplay(sess); // 托管: ban / pick / deck input is locked
   const [tab, setTab] = useState<string>(tr("common.all"));
   const [picked, setPicked] = useState("");
   const deckOpenedFor = useRef("");
 
   const act = async (cmd: Command) => {
+    if (sess.autoMode !== "off") return false;
     const err = await sess.act(cmd);
     if (err) toast(fmtMsg(err, namesOf(sess.view?.state)), "error");
     return !err;
   };
 
   // Open tr("deckPick.title") once when the deck phase starts.
+  // While 托管 is on the autopilot submits the preset deck itself, so the
+  // modal is not opened (it would block the board for nothing).
   const me = view?.state.players[view.playerId];
   useEffect(() => {
-    if (!view || !me) return;
+    if (!view || !me || sess.autoMode !== "off") return;
     if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.character && !isModalOpen("deck")) {
       deckOpenedFor.current = me.character;
       showDeckPick(sess, me.character, act);
@@ -77,14 +82,14 @@ export function Select({ sess }: { sess: GameSession }) {
     hint = myTurn ? tr("select.banHintYou") : tr("select.banHintWait", { who: cur });
     const ok = myTurn && picked && free(picked);
     label = myTurn ? (ok ? tr("select.stepBan") : tr("select.noBan")) : tr("select.banning");
-    if (myTurn) onGo = () => void act({ act: "ban", character: ok ? picked : "" });
+    if (myTurn && !auto) onGo = () => void act({ act: "ban", character: ok ? picked : "" });
   } else if (st.phase === "pick") {
     hint = myTurn ? tr("select.pickHintYou") : tr("select.pickHintWait", { who: cur });
-    if (myTurn && picked && free(picked)) onGo = () => void act({ act: "pick", character: picked });
+    if (myTurn && !auto && picked && free(picked)) onGo = () => void act({ act: "pick", character: picked });
   } else if (st.phase === "deck") {
     label = tr("select.stepDeck");
     hint = me.deckReady ? tr("select.deckDone") : tr("select.deckHint");
-    if (!me.deckReady) onGo = () => showDeckPick(sess, me.character, act);
+    if (!me.deckReady && !auto) onGo = () => showDeckPick(sess, me.character, act);
   }
 
   const [modeLabel, modeCls] = modeChip(st.mode);
@@ -101,13 +106,15 @@ export function Select({ sess }: { sess: GameSession }) {
         onBack={leave}
         right={
           <div className={s.steps}>
+            <AutoToggle sess={sess} />
             <span className={cx(s.mode, s[modeCls])}>{modeLabel}</span>
             {step(1, tr("select.stepBan"), st.mode !== 2)}<i>›</i>{step(2, tr("select.stepPick"))}<i>›</i>{step(3, tr("select.stepDeck"))}
           </div>
         }
       />
+      <AutoBanner sess={sess} />
       {sess instanceof SoloSession && st.phase !== "deck" && (
-        <Btn size="small" icon="redo" className={s.quick} title={tr("select.quickHint")} onClick={() => sess.quickStart()}>{tr("select.quickStart")}</Btn>
+        <Btn size="small" icon="redo" className={s.quick} title={tr("select.quickHint")} disabled={auto} onClick={() => sess.quickStart()}>{tr("select.quickStart")}</Btn>
       )}
       <div className={s.body}>
         {preview && <Preview c={preview} />}
@@ -132,6 +139,7 @@ export function Select({ sess }: { sess: GameSession }) {
                     stampKind={banned ? "gray" : "pink"}
                     check={c.name === chosen && (mine || myTurn)}
                     onClick={() => {
+                      if (auto) return;
                       sfx("place");
                       if (!me.character) setPicked(c.name);
                     }}

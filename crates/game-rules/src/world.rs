@@ -536,6 +536,39 @@ pub trait CardWorld: Clone + 'static {
             self.add_crystals_at(uid, n, max)
         }
     }
+    // -------------------------------------------- skill / band attachments
+    // C# `H._fx[i].bands` / `.skill` and `H.MakeBand`. The *bound* band skill
+    // (the first in placement order, [`Self::band_skill_uid`]) and the character
+    // skill are named; `band_skills` lists every band attachment, including the
+    // 「拿取」ed `extra` copies.
+    /// Rule id of the player's bound **band skill** (`skill:<band>:<skill>`).
+    fn band_skill_id(&self, player_id: i32) -> Option<String> {
+        let uid = self.band_skill_uid(player_id);
+        if uid < 0 {
+            None
+        } else {
+            self.field_instances(player_id)
+                .into_iter()
+                .find(|(u, _)| *u == uid)
+                .map(|(_, id)| id)
+        }
+    }
+    /// Rule id of the player's **character skill** (`skill:<character>:<skill>`).
+    fn character_skill_id(&self, _player_id: i32) -> Option<String> {
+        None
+    }
+    /// Every band-skill attachment on the player's field, as
+    /// `(uid, rule id, extra)` in placement order. `extra` is a 「拿取」ed copy.
+    fn band_skills(&self, _player_id: i32) -> Vec<(i32, String, i32)> {
+        Vec::new()
+    }
+    /// Attach a band-skill instance (C# `H.MakeBand(band, user, extra)`).
+    /// Returns the new uid, or -1 when refused (not a band skill, player gone,
+    /// or 「相同乐队技能卡的效果不可叠加」 -- an attachment of the same id is
+    /// already there).
+    fn add_band_skill(&mut self, _player_id: i32, _id: &str, _extra: bool) -> i32 {
+        -1
+    }
     /// Fire pots held. Sugar over the keyed state.
     fn fire(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::FIRE)
@@ -655,6 +688,23 @@ pub trait CardWorld: Clone + 'static {
     fn targeted_count(&self, _player: i32) -> i32 {
         0
     }
+    /// 「当前回合内你每获得过一次资金」 -- money-ins for `player_id` this turn.
+    fn gains_this_turn(&self, _player: i32) -> i32 {
+        0
+    }
+    /// The **static targeting query**: which players the play being resolved
+    /// (by `player_id`) designates (C# `H.Db.Card(id).Targeting` + `H.Others`).
+    /// Empty when the play names nobody.
+    fn designations(&self, _player_id: i32) -> Vec<i32> {
+        Vec::new()
+    }
+    /// Per-pair cancel (C# `play.Tags["immune"+seat]`): mark `seat`'s
+    /// designation on the play being resolved as cancelled. The rest land.
+    fn cancel_designation(&mut self, _seat: i32) {}
+    /// Is `seat`'s designation on the play being resolved cancelled?
+    fn designation_cancelled(&self, _seat: i32) -> bool {
+        false
+    }
     /// The tile `id` is bound to on `player_id`'s field (-1 = not on a tile), or -2
     /// when the player has no such card in play.
     fn placed_tile(&self, _player: i32, _id: &str) -> i32 {
@@ -740,6 +790,11 @@ pub trait CardWorld: Clone + 'static {
     fn set_can_build(&mut self, _v: bool) {}
     /// C# `SettleAsAgent`.
     fn set_settle_as_agent(&mut self, _v: bool) {}
+    /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record a follower of the
+    /// move being planned (C# `LeadFx.Who` / `Follow`). After the mover settles
+    /// the engine replays this move's result for each follower, in the order
+    /// they were added.
+    fn plan_add_follower(&mut self, _player_id: i32) {}
     /// C# `MoreSteps` -- a queued second walk, in steps.
     fn set_more_steps(&mut self, _v: i32) {}
     /// Card-owned per-move state (fire-roll counters etc.).

@@ -1,21 +1,23 @@
 .players { position: absolute; left: 0; top: 107px; width: 100%; height: 548px; display: flex; flex-direction: column; }
-.panel { position: relative; flex: none; display: grid; grid-template-columns: 76px 1fr auto; grid-template-rows: 1fr 1fr; align-items: center; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 0 14px 0 8px; text-align: left; border: 3px solid transparent; }
+.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px 1fr auto; grid-template-rows: 1fr 1fr; align-items: center; column-gap: 4px; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; }
 .turn { border-color: var(--pink); background: #fff7f9; }
 .out { opacity: 0.55; filter: grayscale(0.6); }
+/* The seat number; on the seat whose turn it is (online) it becomes the turn
+   clock: the 20s shield ring, then the 60s bank. */
 .n { position: absolute; left: 6px; top: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 14px; text-align: center; line-height: 24px; box-shadow: 0 0 0 2px #fff; }
 .av { grid-row: 1 / 3; position: relative; }
 .bot { position: absolute; left: 2px; bottom: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
 .bot i { width: 15px; height: 15px; }
 .who { display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; align-self: end; }
-.who b { font-size: 21px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.who small { font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who b { font-size: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who small { font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .money { display: flex; align-items: center; gap: 8px; justify-content: flex-end; align-self: end; }
-.money img { width: 26px; }
-.money b { font-size: 23px; }
-.sub { grid-column: 2 / 4; display: flex; align-items: center; justify-content: flex-end; gap: 14px; font-size: 16px; align-self: start; margin-top: 2px; }
+.money img { width: 22px; }
+.money b { font-size: 20px; }
+.sub { grid-column: 2 / 4; display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 14px; align-self: start; margin-top: 2px; }
 .hand, .fire { display: flex; align-items: center; gap: 3px; }
-.hand i { color: var(--tag-red); width: 20px; height: 20px; }
-.fire img { width: 22px; }
+.hand i { color: var(--tag-red); width: 17px; height: 17px; }
+.fire img { width: 18px; }
 /* Per-player graveyard, at the right of the module. */
 .grave { display: flex; align-items: center; gap: 3px; cursor: pointer; padding-left: 10px; border-left: 2px solid var(--line, rgba(0, 0, 0, 0.1)); }
 .grave img { width: 18px; height: 24px; object-fit: cover; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
@@ -24,7 +26,7 @@
 .compact .grave b { font-size: 13px; }
 .status { font-size: 12px; padding: 0 6px; border-radius: 8px; background: var(--purple); color: #fff; }
 .outMark { position: absolute; right: 70px; top: 50%; transform: translateY(-50%) rotate(-12deg); border: 3px solid var(--tag-red); color: var(--tag-red); border-radius: 6px; padding: 0 8px; font-size: 20px; font-weight: 700; }
-.compact { grid-template-columns: 50px 1fr auto; padding-right: 10px; }
+.compact { grid-template-columns: 46px 1fr auto; padding-right: 10px; }
 .compact .who b { font-size: 16px; }
 .compact .who small { display: none; }
 .compact .money b { font-size: 17px; }
@@ -37,3 +39,8 @@
 .lines::-webkit-scrollbar { width: 5px; }
 .turnLine { color: var(--pink); font-weight: 700; margin-top: 4px; }
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
+
+.clock { width: 30px; height: 30px; line-height: 30px; left: 2px; top: 2px; font-size: 13px; font-weight: 700; color: var(--pink); background: radial-gradient(#fff 56%, transparent 59%), conic-gradient(var(--pink) calc(var(--frac) * 360deg), var(--light-pill) 0); }
+.shield { color: var(--shield); background: radial-gradient(#fff 56%, transparent 59%), conic-gradient(var(--shield) calc(var(--frac) * 360deg), var(--light-pill) 0); }
+.low { color: var(--tag-red); }
+.compact .clock { width: 24px; height: 24px; line-height: 24px; font-size: 11px; }

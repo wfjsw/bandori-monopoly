@@ -1114,7 +1114,6 @@ fn m26_two_donuts() {
 // Sheet wording is identical to 祥，移动's 「触发结算时进行的支付价格减半」, so
 // the ruling 2026-10-06 reading applies: payments shaped by other card effects
 // are halved too. (No 「向上取整10」 here -- that is 爱心义演's rule.)
-#[ignore = "DISCREPANCY: ruling 2026-10-06: （祥子）带领着大家 「触发结算时进行的支付价格减半」 -- P1 is not moved with P0, and the settlement payment is not halved"]
 #[test]
 fn m27_sakiko_leads() {
     let mut t = Table::new(&["丰川祥子（CRYCHIC）", "花园多惠", "青叶摩卡"]);

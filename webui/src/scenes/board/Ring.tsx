@@ -259,7 +259,7 @@ function Center({ m }: { m: Model }) {
               <div className={s.fieldRows}>
                 {rows.map(([i, f]) => (
                   <div key={i} className={s.fieldRow} style={{ borderLeftColor: m.colorOf(i) }}>
-                    <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
+                    <div className={s.who} title={m.nameOf(i)}><Avatar c={m.charOf(i)} size={28} /></div>
                     <div className={s.fieldCards}>
                       {f.map((fc) => (
                         <button key={fc.uid} type="button" className={s.fieldCard} onClick={() => showCard(fc.card, [], fmtMsg(fc.note, namesOf(S)))}>

@@ -19,15 +19,12 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "HHW:（育美）";
-/// 「当前回合内你每获得过一次资金」 -- per-turn gain counter (see [`count_pay`]).
-const GAINS: &str = "hagumi_gains";
 
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
         On::Play(None, play),
         On::Hook(&[HookKind::PassTile], hook_guard, hook),
-        On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], hook_guard, count_pay),
         On::Counteract(&[ChainKind::EndTurnAfter], can_counteract2, counteract2),
     ],
 );
@@ -164,25 +161,12 @@ fn any_marks(player_id: i32) -> bool {
     (0..n).any(|t| ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) > 0)
 }
 
-/// 规则书（2）: 「当前回合内你每获得过一次资金」 -- latch per money-in event,
-/// cleared at each turn start. Runs on the field stand-in.
-/// TODO(ABI)（2）: `ctx::gain` (「获得」) raises no hook, so only payments landing
-///   in this player's favour are counted (C# `H.GainR` covers both). Also, the
-///   stand-in only exists after (1) has placed it, so a pure-hand (2) sees 0.
-fn count_pay(player_id: i32) -> card_sdk::Asked {
-    match trigger::kind() {
-        TriggerKind::TurnStart => {
-            ctx::set_slot(player_id, GAINS, 0);
-        }
-        TriggerKind::PayAfter => {
-            if trigger::target() == player_id && trigger::value() > 0 {
-                ctx::inc_slot(player_id, GAINS, 1);
-            }
-        }
-        _ => {}
-    }
-    Ok(())
-}
+/// 规则书（2）: 「当前回合内你每获得过一次资金」 -- the engine's per-turn gain
+/// counter (`ctx::gains_this_turn`, rulebook 支付阶段 7 「资金变动」) counts every
+/// money-in whatever the cause (C# `H.GainR` covers 「获得」 and payments landing
+/// in this player's favour alike). Reading it here, rather than latching it on
+/// a field stand-in, means a pure-hand (2) sees the count too -- nothing needs
+/// to be placed for the card to observe the turn's gains.
 
 /// 规则书（2）: 「此卡可在你回合外收到资金的回合结束时打出」.
 fn can_counteract2(player_id: i32) -> bool {
@@ -193,15 +177,14 @@ fn can_counteract2(player_id: i32) -> bool {
     if trigger::player_id() == player_id {
         return false;
     }
-    // 「收到资金」 -- at least one observed gain this turn (see [`count_pay`]).
-    ctx::slot(player_id, GAINS) > 0
+    // 「收到资金」 -- at least one gain this turn.
+    ctx::gains_this_turn(player_id) > 0
 }
 
 /// 规则书（2）: 「当前回合内你每获得过一次资金，此卡的投掷次数+1」 -- the (1)
 /// body with 2 + gains rolls of 4d20 instead of 2.
 fn counteract2(player_id: i32) -> card_sdk::Asked {
-    let gains = ctx::slot(player_id, GAINS);
-    ctx::set_slot(player_id, GAINS, 0);
+    let gains = ctx::gains_this_turn(player_id);
     // 规则书（2）: 「此卡的投掷次数+1」 per gain, on top of (1)'s 「投掷2次」.
     rolls(player_id, 2 + gains)
 }
