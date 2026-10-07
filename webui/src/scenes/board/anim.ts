@@ -21,6 +21,10 @@ import { t as tr } from "../../i18n/t";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** True while the queue is deep enough (or the replay is at 4x) that the
+ *  events should just snap into place instead of playing out. */
+const FAST_QUEUE = 8;
+
 const EVENT_SFX: Record<string, string> = {
   gain: "coin_gain", pass: "bonus", lose: "coin_pay", draw: "draw", mulligan: "draw", discard: "card_play",
 };
@@ -67,12 +71,25 @@ export class Animator {
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
+  /** Replay speed (1 / 2 / 4): scales every sleep and timer. At 4 the queue
+   *  takes the fast path and nothing waits at all. */
+  speed = 1;
   private seq = 0;
   private bannerTimer = 0;
   private phaseTimer = 0;
   private disposed = false;
 
   constructor(private bump: () => void, private view: () => MatchView | null) {}
+
+  /** `sleep` scaled by [`speed`]. */
+  private nap(ms: number): Promise<void> {
+    return sleep(ms / Math.max(1, this.speed)) as Promise<void>;
+  }
+
+  /** The queue plays fast when it is deep, or when a replay is at 4x. */
+  private fast(): boolean {
+    return this.queue.length > FAST_QUEUE || this.speed >= 4;
+  }
 
   /** (Re)attach -- React StrictMode unmounts and remounts once in development. */
   revive(): void {
@@ -123,7 +140,7 @@ export class Animator {
     // A new turn sweeps 「<player> 的回合」, then 开始, then the stage the turn
     // has reached (usually 运营 -- the engine runs through 开始 in the same
     // call), each like any other stage change.
-    const gap = () => (fast ? Promise.resolve() : sleep(PHASE_MS));
+    const gap = () => (fast ? Promise.resolve() : this.nap(PHASE_MS));
     this.stage = 1;
     if (m.label) {
       this.showPhase(stageKey(1), m.label);
@@ -151,7 +168,7 @@ export class Animator {
     this.bannerTimer = window.setTimeout(() => {
       this.banner = null;
       this.bump();
-    }, 2200);
+    }, 2200 / Math.max(1, this.speed));
     this.bump();
   }
 
@@ -164,7 +181,7 @@ export class Animator {
     this.phaseTimer = window.setTimeout(() => {
       this.phase = null;
       this.bump();
-    }, PHASE_MS);
+    }, PHASE_MS / Math.max(1, this.speed));
     this.bump();
   }
 
@@ -176,8 +193,8 @@ export class Animator {
     while (this.queue.length && !this.disposed) {
       const it = this.queue.shift()!;
       try {
-        if ("mark" in it) await this.enterStage(it.mark, this.queue.length > 8);
-        else await this.play(it.ev, this.queue.length > 8);
+        if ("mark" in it) await this.enterStage(it.mark, this.fast());
+        else await this.play(it.ev, this.fast());
       } catch (err) {
         console.error(err);
       }
@@ -205,7 +222,7 @@ export class Animator {
     for (let k = 0; k < DICE_ROLL_MS / 55; k++) {
       this.dice = 1 + Math.floor(Math.random() * 20);
       this.bump();
-      await sleep(55);
+      await this.nap(55);
     }
     this.dice = value;
     this.rolling = false;
@@ -228,7 +245,7 @@ export class Animator {
           this.hop = { playerId, id: ++this.seq };
           sfx("step");
           this.bump();
-          await sleep(hop);
+          await this.nap(hop);
         }
       }
     } finally {
@@ -244,7 +261,7 @@ export class Animator {
     const v = this.view();
     const playerId = e.playerId;
     const ok = playerId >= 0 && !!v && playerId < v.state.players.length;
-    const wait = (ms: number) => (fast ? Promise.resolve() : sleep(ms));
+    const wait = (ms: number) => (fast ? Promise.resolve() : this.nap(ms));
     switch (e.type) {
       case "turn":
         // The turn announcement rides the 开始 stage sweep (see `showPhase`) --
@@ -332,10 +349,10 @@ export class Animator {
         sfx("card_play");
         this.reveal = { card: e.card, out: false, id: ++this.seq };
         this.bump();
-        await sleep(1100);
+        await this.nap(1100);
         this.reveal = { ...this.reveal, out: true };
         this.bump();
-        await sleep(250);
+        await this.nap(250);
         this.reveal = null;
         this.bump();
         break;
@@ -364,6 +381,11 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
   }
   useEffect(() => {
     const a = animRef.current!;
+    // A replay drives `Animator.speed` (1 / 2 / 4) through the session.
+    const syncSpeed = () => {
+      a.speed = sess.animSpeed;
+    };
+    syncSpeed();
     const off = sess.subscribe(
       (v) => {
         const prev = viewRef.current?.state;
@@ -386,6 +408,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
         }
       },
       (e) => a.push(e),
+      syncSpeed,
     );
     return () => {
       off();

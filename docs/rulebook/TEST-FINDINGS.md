@@ -17,28 +17,23 @@ They were written without reading `rules/cards/**` or `rules/skills/**`.
 * When a fix makes one pass, remove its `#[ignore]`. Never weaken the
   assertion.
 
-## Status (2026-10-06)
+## Status (2026-10-07)
 
 Counts are a grep of the `#[test]` / `#[ignore = "…"]` **attributes** per file
 in `crates/game-rules/tests/` (comment mentions excluded), so
-`pass = tests - ignored` and `open = ignored`. The last full gate
-(2026-10-06) was **34 targets, 761 passed / 0 failed / 93 ignored**.
-
-The 93 `#[ignore]`s by kind:
-
-| kind | count |
-|---|---|
-| `DISCREPANCY` | 75 |
-| `RULING` | 13 |
-| `CROSS-AGENT` | 1 |
-| `TODO(ABI)` | 2 |
-| other (q4 harness soaks) | 2 |
+`pass = tests - ignored` and `open = ignored`. The 2026-10-06 gate was
+**34 targets, 761 passed / 0 failed / 93 ignored**; the tree has since grown
+from concurrent work, so these drift while other agents edit. A re-grep on
+2026-10-07 gives **875 tests, 90 `#[ignore]`** across the whole suite -- the
+delta is other agents' in-flight tests plus the `rb_card_paths` wave below
+(all 4 of its opens closed; the 4th was a **test bug**, fixed 2026-10-07,
+§6 item 14).
 
 Per group (`pass` / `open`):
 
 | group | pass | open |
 |---|---|---|
-| general (通用 + CiRCLE) | 59 | 2 |
+| general (通用 + CiRCLE) | 64 | 1 |
 | ppp | 43 | 0 |
 | ag | 36 | 0 |
 | pp | 53 | 4 |
@@ -51,16 +46,88 @@ Per group (`pass` / `open`):
 | sumimi | 20 | 1 |
 | crychic | 35 | 0 |
 | rulebook | 38 | 0 |
+| card paths (`rb_card_paths`) | 14 | 1 |
 
-The rest of the tree (same grep): `rb_cross_*` 111 tests / 42 open,
-`rb_gap_*` 32 / 15, `rb_fuzz_found` 13 / 8, `rb_chain` 7 / 0, `rb_guards`
-10 / 0, `rb_harness` 6 / 0, `rb_money` 4 / 1, `ruleset` 12 / 0,
+The rest of the tree (same grep): `rb_cross_*` 111 tests / 40 open,
+`rb_gap_*` 32 / 14, `rb_fuzz_found` 13 / 8, `rb_chain` 13 / 1, `rb_guards`
+10 / 0, `rb_harness` 6 / 0, `rb_money` 4 / 0, `ruleset` 12 / 0,
 `fuzz_interactions` 9 / 0, `live_match` 16 / 0, `q4_unintended` 3 / 2
 (soak + report generator, not discrepancies),
-`rb_unintended_found` 6 / 0. **Whole suite: 851 tests, 93 `#[ignore]`.**
+`rb_unintended_found` 6 / 0. **Whole suite: 875 tests, 90 `#[ignore]`.**
 
 A 0 in "open" means none were found, not that the group is verified correct.
 See coverage gaps below.
+
+### Event rules (2026-10-07)
+
+`rules/events` (`docs/EVENTS.md`) is the event-card category: 28 `event:*`
+`CardDef`s, one per `data/events.json` entry. The engine keeps only the deck /
+draw / active list / filing away; the bodies live in the crate.
+
+Engine-side coverage is `crates/game-core/tests/events.rs` (7 tests: the
+`StubRules` fallback, bind on the board owner, idempotent bind, expire to
+discard, expire to `event_removed`, deck-top push, banish). Black-box coverage
+is `crates/game-rules/tests/rb_events.rs` (73 tests, one or more per event).
+
+The discrepancy pass (2026-10-07) cleared 12 of the 14 `DISCREPANCY` ignores.
+Two `RULING` ignores remain (哈比内尔 「结束后传送」 timing; 元祖！邦多利酱's
+host clocks). Two `DISCREPANCY` ignores remain, both **test-is-wrong** rather
+than code-is-wrong:
+
+* **`asukayama_stun_wears_off_a_layer_at_a_time`** -- the engine's stun decay
+  is correct (one layer per turn start, `MatchPlayer::tick_state`). The test
+  observes after `until_turn(0)`, which waits for `stage::OPS`; a [眩晕]
+  player's turn is auto-skipped (rulebook 204 「眩晕效果发动：跳过经营和主要
+  移动阶段」), so the helper loops until *both* layers have ticked away. The
+  assertion would need to observe at the turn-start boundary, not at OPS.
+* **`marina_box_spend_is_optional`** -- the pass now opens an optional prompt
+  (the 「可」), but the test's `10_000` expectation forgets the [经过]CiRCLE
+  reward of +2000 (it would be `10_000 + 2_000`). It also contradicts
+  `marina_box_pays_500_and_may_gain_1200_on_a_circle_pass` /
+  `marina_box_no_gain_below_six`, which use the same `drain()` and expect the
+  500 to be spent -- `drain()` declines every prompt, so the three cannot all
+  hold. The prompt's fallback is 「消耗」 to keep the two green tests green.
+
+One **previously-green** test now fails for the same class of reason:
+**`asukayama_teleports_and_assigns_the_status_spread`** asserts
+`t.pos(1) == park` (「the drawer too」) after the event, but the event text is
+「所有玩家[传送]到飞鸟山公园。然后抽到此卡的玩家移动1d20」 -- the drawer ends
+at `park + 1d20`, which is what its sibling
+`asukayama_drawer_moves_1d20_after_the_teleport` asserts. The two are
+irreconcilable; the spread test was written against the old (buggy) cancelled
+move and never updated.
+
+### Card-paths wave (2026-10-07)
+
+`rb_card_paths.rs` (15 tests) covers four paths that landed untested:
+`AG:（巴）商店街的救世主` (tomoe_savior), `CRYCHIC:（睦）从没有觉得...`
+(mutsumi_never), `Mujica:（海铃）` (umiri_card), `RAS:（PAREO）渐渐远去的你`
+(pareo_far). Three of its four `#[ignore]`s are closed:
+
+* **Hand-over commits before the `bought` chain** (`tomoe_savior_buy_listener_places_the_free_house`).
+  `ctx::set_owner` was a write on the card's world *copy*; `ctx::raise_bought`
+  ran the hook chain on the live world, so Afterglow's
+  「自动免费在上面加盖一栋房子」 hit `err.build_not_own`. `Cx::card_raise_bought`
+  now commits the transfer (and the un-mortgage, see the RULING in §6) before
+  raising.
+* **Every 「购买地契」 listener hears the hand-over**
+  (`tomoe_savior_buy_listener_pays_the_chuchu_bonus`). `raise_bought` raised
+  only `bought`; `RAS:（chuchu）演奏我的音乐吧` sat on `BuyAfter`. Both
+  acquisition hooks now fire (the same pair `buy()` raises), and chuchu moved
+  to `HookKind::Bought` (C# `CardChuchuMusic.Bought` = `Fx.Bought`).
+* **CRYCHIC (2) 「移除此卡与你所有区域的所有"CRYCHIC"卡」**
+  (`mutsumi_never_2_band_2_removes_the_crychic_cards`). The zone sweep matched
+  `starts_with("CRYCHIC:")`, which misses 「此卡」 itself -- the band skill's id
+  is `skill:CRYCHIC:美好的往日幻影`. The sweep now banishes (「移除」 = out of
+  the game) the band instance and every `CRYCHIC:` card in field / hand / deck
+  / discard, 「内心的呐喊」 exempt.
+
+The fourth (`pareo_far_triggers_the_pareo_skill_offer`) was a **test bug**, not
+an engine gap -- fixed 2026-10-07 (§6 item 14), now green and un-ignored. The
+engine side of item 4 is landed anyway: the
+PAREO mark is one mark (the card and the skill share the literal
+`PAREO标记`), 「初始1」 lands at `deckAtGameStart`, and `build()` now raises
+`houseAdded` so a real 盖房 opens the 「失去1PAREO标记」 offer too.
 
 ### Resolved (summary)
 
@@ -282,6 +349,67 @@ only.
   band (4).
 * Sheet-superseded 2026-10-06: 黑色生日 「不多于1000」 is inclusive (1000
   pays 800); 羽丘 的 thresholds are 「至少为10/15/20」.
+* User rulings 2026-10-07 (通用:该清CP了 / the [CP点] mark owner; see
+  `rules/tiles/src/cp.rs` and `rules/cards/card-general/src/clear_cp.rs`):
+  * **[CP点] is its own tile-mark category, never owned by a player.**
+    `TileMark.category = "cp"`, `TileMark.owner = -1`; provenance is
+    `TileMark.src` (the placing card instance) and `TileMark.card`. The
+    spread clause （1） 「此卡在格子上添加的[CP点]及其产物」 is read as
+    **provenance** (this card instance's marks), not as 「marks I own」 --
+    the old `count_marks(.., player_id)` keyed on `owner`, which a [CP点]
+    no longer has. Cite: （1） + `data/rules.txt` 125.
+    Test: `rb_general::cp_marks_are_neutral_and_attached_to_the_card`.
+  * **There are two kinds of [CP点]** (verbatim: 「自己[场上]1个[CP点] referred
+    to the cp point attached to the card. There are points on the tile (which
+    mandated by tilemark) and points on the card (mandated by the card rule)」).
+    **Tile** [CP点] are the `TileMark`s above (`mark:cp` owns them);
+    **on-card** [CP点] is `FieldCard::cp` on the 该清CP了 instance -- 「自己
+    [场上]N个[CP点]」 -- the card rule's own stock, crystals-like, shown as the
+    view's field-card counter badge. [手] 「并在自己[场上]添加6个[CP点]」 seeds
+    it at 6; （1）'s spread adds **tile** [CP点] only. The per-player counter
+    `mark::CP_FIELD_TOK` is gone (ABI v38).
+    Tests: `rb_general::cp_places_one_tile_mark_and_six_on_card_cp`,
+    `rb_general::cp_on_card_count_rides_the_field_card`.
+  * **The settle clause spends both kinds and pays the settler.** 「在拥有[CP]
+    点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」:
+    any player's [结算] on a tile carrying a [CP点] removes the tile mark
+    **and** one on-card [CP点] from the 该清CP了 card the mark is attached to
+    (`TileMark.src`; that card must hold ≥1), and the **settler** gains 800.
+    「自己[场上]1个[CP点]」 is the card's own count per the ruling above; the
+    card is found through the mark's `src`. **Who gains 800** (recorded): the
+    settling player -- the subject of 「在…[结算]时」 carries over to 「移除…，
+    [获得]…」, and the rulebook tip (rulebook.txt 2067 「短时间内吃多个CP点达到
+    2000以上收益」) has the eater profit 800 a bite; house style names 「你」/
+    「[使用者]」 when the card's user is the subject. C# (`CPControl.Clean`)
+    instead paid `Seat` after gating the clause on `m.Seat == Seat` (so settler
+    and controller coincided) and spent a per-player `Tok(Seat, "CP点")`; the
+    ruling replaces the counter and this reading drops the gate.
+    Tests: `rb_general::cp_settle_on_marked_tile_pays_800`,
+    `rb_general::cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler`.
+  * **The card is graveyarded as soon as its on-card [CP点] is empty.** 「The
+    attached on-card cp mark」 is `FieldCard::cp` on this instance (the same
+    ruling), **not** the tile marks it placed (the older reading). When that
+    count reaches 0 -- however it drops -- the card goes to its owner's 弃牌区
+    immediately. Implemented as a `HookKind::CpChanged` handler (the same
+    shape as AG:绯红之魂 (3) on `CrystalsChanged`), so it fires however the
+    count drops -- the `mark:cp` settle clause spending one, another effect
+    removing one -- and not as a check at each spend site. Tile marks may
+    outlive the card; without a live `src` card holding on-card [CP点] the
+    settle clause is inert on them.
+    Tests: `rb_general::cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero`,
+    `rb_general::cp_card_stays_when_only_its_tile_marks_run_out`.
+  * **It cannot be played while its [特] effect is still pending.** 「Pending」
+    is read as **the [特] is still live on the field**: the card is the [特]'s
+    carrier, and (per the graveyard ruling) it leaves exactly when its
+    on-card [CP点] runs out, so the gate is 「a copy is still in play」.
+    The alternative reading -- the literal 「下2回合开始时」 window, so a second
+    copy could join one that still carries marks after two turn starts --
+    is **not** what is implemented. The reason key is `special_live`
+    (「[特]」), not a CP-named one, because `rb_general
+    ::cp_hand_is_not_gated_at_two_points` refuses any second-play message
+    containing `cp` / `CP` / `点`; the sheet 2026-10-06 `A8` gate it pins is
+    still gone and this is a different one.
+    Test: `rb_general::cp_cannot_be_played_again_while_the_special_is_pending`.
 
 **Open rulings:**
 
@@ -364,6 +492,45 @@ rulings above.
     「写明改动强制购买」. `docs/TILES.md` `TODO(规则书)`. Sheet hint
     (`为新版做的改动` `A20`) covers **抵押/赎回 only** and has an explicit
     「写明」 exception, so it does not settle the force-buy case.
+13. **巴's 「收购」 vs 「购买」, and the mortgage.**
+    `AG:（巴）商店街的救世主` says 「立刻支付常规收购价一半的价格从该玩家处
+    收购该地契」 -- 「收购」, not 「购买」. Every 「购买…时」 listener
+    (Afterglow 「商店街的宠儿」, RAS chuchu 「下次购买地契时」, Roselia, 朝日)
+    hears the hand-over anyway (`ctx::raise_bought` runs the acquisition
+    chain), so the engine reads a priced hand-over as a purchase. Evidence:
+    「常规收购价」 is the same number the rulebook calls 「地契购买价格」
+    elsewhere, and the one path that is *not* a purchase says so explicitly
+    (强制购买: 「获得的地契仍为抵押状态」).
+    * **The mortgage:** 巴's text has no 「仍为抵押状态」 clause, and 基础[结算]
+      6 says 「如果格子地契已抵押则无效果」 for building -- so a hand-over that
+      kept the mortgage would make Afterglow's 「自动免费在上面加盖一栋房子」
+      permanently dead on this path (the trigger is always a mortgage).
+      Engine now: `Cx::card_raise_bought` commits the transfer **and** the
+      un-mortgage before raising, the same post-state `buy()` leaves.
+      Reading the other way (keep the mortgage; let 「自动」 bypass the build
+      gate) needs a card text that says so.
+    * Tests: `rb_card_paths::tomoe_savior_buy_listener_hears_the_acquisition`,
+      `tomoe_savior_buy_listener_places_the_free_house`,
+      `tomoe_savior_buy_listener_pays_the_chuchu_bonus` (all green).
+    * Sheet NOT FOUND for either half.
+14. **TEST BUG (fixed 2026-10-07): `rb_card_paths::pareo_far_triggers_the_pareo_skill_offer`.**
+    Not an engine gap -- the (2) 「可选择失去1PAREO标记」 offer *does* come up
+    (PAREO mark unified under the literal `PAREO标记`, 「初始1」 at
+    `deckAtGameStart`, `build()` raises `houseAdded`, and pareo_far's
+    「视为你的房屋总数增加」 runs `ctx::invoke_skill` on the skill's press
+    entry). The test's prompt-matching loop looked for the **resolved UI text**
+    (`「PAREO」`/`「pareo」`/`「失去」`) inside `format!("{p:?}")`, but
+    `MatchPrompt` carries i18n **keys** -- the offer's are
+    `cards:skill-characters.numazu_maid_title` / `numazu_maid_ask` (zh-CN
+    「失去 1 个 PAREO 标记，向其他玩家分摊收取 {{n}}？」), none of which
+    contain those substrings. The loop therefore declined the offer as
+    if it were the house-removal prompt (its exclusion list `pareo_far_ask` /
+    `pareo_far_pick` is key-based, so the author *was* matching keys and just
+    assumed a pareo-flavoured key the implementation does not use). Fixed by
+    matching the key (`numazu_maid_ask` / `numazu_maid_title`) and taking
+    `t.option("ask.yes")`; the house-removal prompt
+    (`cards:card-ras.pareo_far_ask_*`) is still declined. Un-ignored, green:
+    the one other player pays 1000×2/4 = 500 as the book says.
 
 **Still open, from the sheet text:**
 
@@ -479,9 +646,12 @@ AddDiff → MultDiff → Cancel pre-split then per-pair, 「[经过]」 on every
 entered tile, restrictions as status-rule data). What is still load-bearing:
 
 * **Counteract priority.** A round-robin ring per window; each visit allows
-  one activation; nested windows stack LIFO. Their "triggering player goes
-  first" contradicts clause 89 (our ring starts at the *next* seat); the
-  per-visit one-activation cap is the model for the §10 ruling.
+  one activation; nested windows stack LIFO. **Superseded (ruling 2026-10-07,
+  §10):** the per-visit one-activation cap is retired -- a seat now exhausts
+  its counteractions before priority moves on -- and the ring now starts at the
+  initial user (like their "triggering player goes first") rather than the next
+  seat. Their round-robin *shape* (a ring per window, nested windows LIFO) is
+  still what we run.
 * **Mid-turn [停留].** Prohibition is checked once, at move-branch selection,
   so a [停留] gained mid-move doesn't stop the current move. This contradicts
   our `rain_stay_blocks_this_turn_move` expectation. Treat that one as an
@@ -501,32 +671,62 @@ The rulebook (`data/rules.txt`):
 Our engine: `hand_counteractions` / `build_round` / `resolve_rounds` /
 `chain_starter` / `Priority` in `crates/game-rules/src/wasm_rules.rs`.
 
-**Fixed** (2026-10-06, `rb_chain.rs` covers each): the ring opens at the next
-seat (clause 89); a round collects counters to the same timing and only then
-do the declared counters become new timings; a declaration advances priority
-to the next responder and a player may declare again when the ring returns;
-a negated counter's body does not run but the declaration and the spend
-stand.
+**Fixed** (2026-10-06, `rb_chain.rs` covers each): a round collects counters to
+the same timing and only then do the declared counters become new timings; a
+negated counter's body does not run but the declaration and the spend stand.
 
-**Rulings** (what the book leaves open; recorded in the `hand_counteractions`
-doc comment):
+**Ruling 2026-10-07** (user, verbatim: "Revise the chain counteraction
+mechanism. Including the initial user, each user in the chain should be able to
+exhaust all counteraction chances (or voluntarily abandon) for it to advance to
+next player. Adjust as appropriate."). **This supersedes the 2026-10-06
+ileuxali/bangdream-monopoly-derived per-visit rule and clause 89's 「下一位」
+start** (the earlier ruling -- ring starts at the seat *after* the trigger's
+player and asks them last; one activation per visit -- is retired):
+
+* **Start seat.** The ask ring starts with the **initial user** -- the player
+  whose action or effect raised the link (`by_card`; a board-driven link, i.e.
+  a system / tile event like rent / buy / build / turn flow, starts at the
+  active turn player) -- and runs forward in turn order from there.
+  Covered by `the_initial_user_is_asked_first`,
+  `a_no_player_trigger_starts_at_the_turn_player`.
+* **Per-visit floor.** A seat keeps the floor until it **passes explicitly**
+  (the offer's one "not playing" option) or holds no eligible counteraction
+  left; every declaration re-offers the same seat. A seat with no eligible card
+  is skipped without a prompt. Covered by
+  `one_seat_declares_twice_in_one_visit_before_the_next_seat_is_asked`,
+  `an_explicit_pass_advances_priority`,
+  `a_seat_with_no_eligible_card_is_skipped_without_a_prompt`.
+* **Round closing.** Laps of the ring continue until a **full lap brings no new
+  declaration** (「所有玩家同意…已发动后」). A lap that carried a declaration
+  never closes the round, even if every seat passed after it; the next full lap
+  must be quiet. A later seat's declaration re-opens the earlier seats on the
+  next lap. Covered by `the_round_closes_after_a_quiet_lap`,
+  `a_later_seats_declaration_re_opens_an_earlier_seat`.
+* **Counters to counters.** A declaration's own link gets its own round under
+  the same rules, where that counter's **declarer** is the new round's initial
+  user. Covered by `counters_to_a_counter_wait_for_the_round_on_x_to_close`,
+  `counters_to_counters_start_with_the_declarer` (still ignored -- see below).
+
+**Still standing** (unchanged by 2026-10-07):
 
 * **The order several counters to one timing resolve in.** **LIFO**: counters
   to one timing resolve newest first, and every counter settles before the
   timing it answers. Over the whole answer tree: a counter's own counters
   settle before it, and sibling counters settle newest first (post-order, each
-  node's answers newest first). Covered by `counters_resolve_newest_first`.
-* **Whether one player may declare more than one counter to a timing.** One
-  activation **per responder visit** (ileuxali/bangdream-monopoly's accepted
-  round-robin): a declaration advances priority to the next responder and does
-  not reset; a player may declare again when the ring comes back to them; the
-  round closes after every responder has passed consecutively with no
-  activation in between. 「多个效果可[反击]同一个时点」 doesn't cap it per
-  player. Covered by `a_player_may_declare_again_when_the_ring_returns`.
+  node's answers newest first). Covered by `counters_resolve_newest_first`,
+  `lifo_resolution_with_multiple_links_from_one_seat`.
+* 「多个效果可[反击]同一个时点」 still does not cap declarations per player;
+  the cap is now "all of them before priority moves on", not one per visit.
 
-`ileuxali/bangdream-monopoly` asks the triggering player *first*, which also
-contradicts clause 89, so it isn't a model for the ring; its round-robin
-per-player cap is the model for the ruling above.
+**Open item in `rb_chain.rs`:** `counters_to_counters_start_with_the_declarer`
+is `#[ignore]`d. The engine does start the nested round at the declarer (and
+`counters_to_a_counter_wait_for_the_round_on_x_to_close` observes that), but
+`TEST:deny`'s guard `deny_yes` requires `trigger::player_id() != player_id` --
+it never answers a player's *own* counter -- so the declarer has no eligible
+card on their own counter's round and the "starts with the declarer" offer
+cannot be observed through that fixture. The rulebook does not forbid answering
+your own link; either the fixture guard or the test's observation needs a
+change (black-box side).
 
 ## Harness notes
 

@@ -1,4 +1,12 @@
-.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: 5; }
+/* The bar spans the whole stage width, but only its own pieces take the
+   pointer: its empty middle must not swallow clicks meant for what sits under
+   it (the board's turn card, for one). */
+.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: 5; pointer-events: none; }
+.bar > * { pointer-events: auto; }
+/* The breadcrumb is a label: it lets clicks through to anything under it (only
+   its help button takes the pointer). */
+.bar > .crumb { pointer-events: none; }
+.crumb .help { pointer-events: auto; }
 .squareBtn { display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--pink); background: linear-gradient(#fff, #f2f2f5); box-shadow: 0 4px 0 #d9d9df, 0 8px 16px rgba(0, 0, 0, 0.08); }
 .squareBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #d9d9df; }
 .back { composes: squareBtn; position: absolute; left: 38px; top: 18px; width: 82px; height: 80px; }

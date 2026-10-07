@@ -32,9 +32,15 @@
 use std::fmt;
 
 use game_core::net::RoomInfo;
+use game_core::record::{EngineStamp, Init, Input};
 use serde::{Deserialize, Serialize};
 
 use crate::state::Session;
+
+/// How long a finished match's record stays downloadable. Past that it is
+/// stale: the engines it names may have moved on, and the hands it reveals are
+/// nobody's business any more.
+pub const RECORD_TTL_SECS: u64 = 24 * 60 * 60;
 
 /// What a store failed to do. Carries enough to log; never a stack.
 #[derive(Debug, Clone)]
@@ -82,6 +88,20 @@ pub trait CrossState: Send + Sync {
     fn match_get(&self, room: &str) -> Result<Option<String>, StoreError>;
     fn match_put(&self, room: &str, blob: &str) -> Result<(), StoreError>;
     fn match_del(&self, room: &str) -> Result<(), StoreError>;
+
+    /// The room's **record log** for the match in progress: one JSON line per
+    /// [`RecordHead`] / [`Input`] / [`Cp`] (`docs/REPLAY.md` §4). It lives
+    /// beside the match blob rather than inside it -- the blob is the engine's
+    ///, and the log is the driver's. Cleared when the match is sealed into a
+    /// [`StoredRecord`].
+    fn record_log_append(&self, room: &str, line: &str) -> Result<(), StoreError>;
+    fn record_log_get(&self, room: &str) -> Result<Vec<String>, StoreError>;
+    fn record_log_del(&self, room: &str) -> Result<(), StoreError>;
+
+    /// The last **finished** match's record for a room, kept for
+    /// [`RECORD_TTL_SECS`] (a store with native expiry may drop it sooner).
+    fn record_put(&self, room: &str, rec: &StoredRecord) -> Result<(), StoreError>;
+    fn record_get(&self, room: &str) -> Result<Option<StoredRecord>, StoreError>;
 }
 
 /// Everything needed to rebuild a [`crate::room::Room`] after a restart.
@@ -142,3 +162,68 @@ impl From<SessionRecord> for Session {
 
 pub mod dummy;
 pub mod redis;
+
+// ---------------------------------------------------------------- record log
+
+/// One line of a room's record log. Externally tagged, so a line is either a
+/// [`RecordHead`] (written once, at `start`), an [`Input`] of the match, or the
+/// [`Cp`] checkpoint that follows it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum LogEntry {
+    Head(RecordHead),
+    Input(Input),
+    Cp(Cp),
+}
+
+/// The first log line: how the match was started and who is writing it. Lives
+/// in the log rather than in memory so a restart can still seal the record.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RecordHead {
+    /// `Init::Seed` -- members (bot mentality included), seed and weights.
+    pub init: Init,
+    /// The engine that is running the match (`pool.info()`).
+    pub stamp: EngineStamp,
+    /// The tick quantum this match actually uses (`0.05 * time_scale`).
+    pub step: f32,
+    /// `yyyy-MM-dd HH:mm` on the server's clock, for display only.
+    pub created: String,
+    /// [`game_core::MatchMode`] as its wire integer.
+    pub mode: i32,
+}
+
+/// A turn boundary. `at` counts [`Input`]s (the open tick run included), so the
+/// checkpoint always sits between two of them -- the same shape
+/// [`game_core::record::Checkpoint`] has.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cp {
+    pub at: u32,
+    #[serde(with = "game_core::record::u64_str")]
+    pub tick: u64,
+    pub round: i32,
+    pub turn: i32,
+    /// `hash_save` of the `Match::save()` at the boundary.
+    pub hash: String,
+}
+
+/// A finished match's record, as `record:{room}:last` holds it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct StoredRecord {
+    /// The sealed `.bdrec` as bytes: a **zstd** frame of the record JSON (what
+    /// [`crate::room`] writes at seal). A store written before compression may
+    /// hold plain record JSON here; the endpoint serves either as-is and names
+    /// the type by sniffing.
+    pub record: Vec<u8>,
+    /// Member ids that sat down for this match. `GET /api/rooms/{id}/record`
+    /// only serves one of these, resolved through the room's tokens.
+    pub members: Vec<i32>,
+}
+
+impl LogEntry {
+    pub fn to_line(&self) -> String {
+        serde_json::to_string(self).expect("log entry serializes")
+    }
+
+    pub fn parse_line(s: &str) -> Option<Self> {
+        serde_json::from_str(s).ok()
+    }
+}

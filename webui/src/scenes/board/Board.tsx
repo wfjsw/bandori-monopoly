@@ -5,7 +5,7 @@
 import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";
 import { t as tr } from "../../i18n/t";
-import { useAutoplay, useTick } from "../../core/hooks";
+import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
@@ -25,12 +25,16 @@ export function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
   useTick(500); // turn timer
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
+  // Screen stays on during a live match only -- not in a replay (which also
+  // renders this Board) and not once the match has ended.
+  useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
   const promptFor = useRef(0);
   const autoDeed = useRef(-1);
   const resultsShown = useRef(false);
 
   const exit = () => {
-    if (sess.kind === "solo") {
+    if (sess.kind === "replay") navigate({ name: "replay" });
+    else if (sess.kind === "solo") {
       endSession();
       navigate({ name: "menu" });
     } else navigate({ name: "room", id: sess.id });
@@ -72,7 +76,7 @@ export function Board({ sess }: { sess: GameSession }) {
     if (k >= 0) return void act(sess, { act: "answer", prompt: S.prompt.id, value: k });
     openDeed(sess, i);
   };
-  const leave = () => (S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
+  const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
 
   return (
     <>
@@ -80,7 +84,7 @@ export function Board({ sess }: { sess: GameSession }) {
       <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>
-          <Players m={m} solo={sess.kind === "solo"} elapsed={(performance.now() - at) / 1000} />
+          <Players m={m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
           <Log lines={anim.log} />
         </div>
         <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />

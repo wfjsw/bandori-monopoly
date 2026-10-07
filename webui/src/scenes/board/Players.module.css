@@ -1,20 +1,33 @@
 .players { position: absolute; left: 0; top: 107px; width: 100%; height: 548px; display: flex; flex-direction: column; }
-.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px 1fr auto; grid-template-rows: 1fr 1fr; align-items: center; column-gap: 4px; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; }
+/* Two lines beside the avatar: [character · player] … money, then status /
+   hand / fire / graveyard. Each line is one row high, so a 54-70px panel
+   holds both without spilling. */
+.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 4px; row-gap: 3px; overflow: hidden; box-sizing: border-box; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; }
 .turn { border-color: var(--pink); background: #fff7f9; }
+/* Your own seat: a fixed blue (never the pink of the turn frame, and not your
+   seat colour, which may be pink too) -- a thick bar down the left edge, a
+   blue wash, and an outer ring. It stacks with `.turn`, whose pink border sits
+   inside the ring. */
+.me { background: linear-gradient(90deg, #d6e8ff 0%, #eef5ff 60%, #fff 100%); box-shadow: var(--shadow), inset 8px 0 0 var(--me-blue); outline: 3px solid var(--me-blue); outline-offset: 2px; }
+.me.turn { background: linear-gradient(90deg, #d6e8ff 0%, #eef5ff 60%, #fff7f9 100%); }
+.players { --me-blue: #2f7df6; }
 .out { opacity: 0.55; filter: grayscale(0.6); }
 /* The seat number; on the seat whose turn it is (online) it becomes the turn
    clock: the 20s shield ring, then the 60s bank. */
 .n { position: absolute; left: 6px; top: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 14px; text-align: center; line-height: 24px; box-shadow: 0 0 0 2px #fff; }
 .av { grid-row: 1 / 3; position: relative; }
-.bot { position: absolute; left: 2px; bottom: 0; width: 22px; height: 22px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
-.bot i { width: 15px; height: 15px; }
-.who { display: flex; flex-direction: column; justify-content: flex-end; min-width: 0; align-self: end; }
-.who b { font-size: 18px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.who small { font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.money { display: flex; align-items: center; gap: 8px; justify-content: flex-end; align-self: end; }
+.bot { position: absolute; left: 1px; bottom: 0; width: 16px; height: 16px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
+.bot i { width: 11px; height: 11px; }
+.chaos { background: var(--pink); }
+.who { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; }
+/* Character name then the player name on one line; both shrink (with an
+   ellipsis) so the player name is never squeezed out. */
+.who b { flex: 0 1 auto; min-width: 0; font-size: 16px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who small { flex: 0 1 auto; min-width: 3.5em; font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.money { display: flex; align-items: center; gap: 5px; justify-content: flex-end; }
 .money img { width: 22px; }
-.money b { font-size: 20px; }
-.sub { grid-column: 2 / 4; display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 14px; align-self: start; margin-top: 2px; }
+.money b { font-size: 19px; line-height: 1.2; }
+.sub { grid-column: 2 / 4; display: flex; align-items: center; justify-content: flex-end; gap: 10px; font-size: 14px; line-height: 1.2; min-width: 0; overflow: hidden; white-space: nowrap; }
 .hand, .fire { display: flex; align-items: center; gap: 3px; }
 .hand i { color: var(--tag-red); width: 17px; height: 17px; }
 .fire img { width: 18px; }
@@ -24,11 +37,11 @@
 .grave b { font-size: 16px; }
 .compact .grave img { width: 14px; height: 18px; }
 .compact .grave b { font-size: 13px; }
-.status { font-size: 12px; padding: 0 6px; border-radius: 8px; background: var(--purple); color: #fff; }
+.status { flex: none; font-size: 12px; padding: 0 6px; border-radius: 8px; background: var(--purple); color: #fff; }
 .outMark { position: absolute; right: 70px; top: 50%; transform: translateY(-50%) rotate(-12deg); border: 3px solid var(--tag-red); color: var(--tag-red); border-radius: 6px; padding: 0 8px; font-size: 20px; font-weight: 700; }
-.compact { grid-template-columns: 46px 1fr auto; padding-right: 10px; }
-.compact .who b { font-size: 16px; }
-.compact .who small { display: none; }
+.compact { grid-template-columns: 46px minmax(0, 1fr) auto; padding-right: 10px; }
+.compact .who b { font-size: 14px; }
+.compact .who small { font-size: 11px; min-width: 3em; }
 .compact .money b { font-size: 17px; }
 .compact .money img { width: 18px; }
 .compact .sub { font-size: 13px; gap: 8px; }
@@ -44,3 +57,14 @@
 .shield { color: var(--shield); background: radial-gradient(#fff 56%, transparent 59%), conic-gradient(var(--shield) calc(var(--frac) * 360deg), var(--light-pill) 0); }
 .low { color: var(--tag-red); }
 .compact .clock { width: 24px; height: 24px; line-height: 24px; font-size: 11px; }
+
+/* Graveyard hover peek: beside the column, over the ring (like Side's draw-pile peek). */
+.peek { position: absolute; left: calc(100% + 12px); width: 240px; max-height: 520px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(-10px); transition: opacity 0.12s, transform 0.12s; }
+.peekOn { opacity: 1; transform: none; }
+.peekHead { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; margin: 2px 4px 6px; }
+.peekHead b { color: var(--pink); }
+.peekRow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 13px; }
+.peekRow + .peekRow { border-top: 1px solid var(--light-pill); }
+.peekRow img { flex: none; width: 26px; height: 26px; object-fit: cover; border-radius: 3px; }
+.peekRow span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.peekEmpty { font-size: 13px; color: var(--sub); padding: 4px; }

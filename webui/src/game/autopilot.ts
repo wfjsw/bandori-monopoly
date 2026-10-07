@@ -12,7 +12,7 @@
 //     an auction ceiling is hidden information); when it is absent the
 //     prompt's `fallback` / the table below is used.
 //   * `chaos` -- legal but maximally disruptive: play every card, fire every
-//     skill, take every offered counteract, buy/build whenever it keeps a
+//     skill, counter on CHAOS_COUNTER_CHANCE of offers, buy/build whenever it keeps a
 //     1 000 float (`CHAOS_RESERVE`). Prefers whatever makes more things happen.
 //
 // Both cover solo and online, never use hidden information (other hands, deck
@@ -43,6 +43,11 @@ export const MAX_PLAYS_PER_TURN = 2;
  * unrestricted -- the view carries no visible card cost to check against it.
  */
 export const CHAOS_RESERVE = 1000;
+
+/** `chaos` declares a [反击] on this share of the counteract offers it gets
+ *  (and passes on the rest), so a chain does not always escalate. Mirrors the
+ *  engine's chaos bots (`ai.rs`). */
+export const CHAOS_COUNTER_CHANCE = 0.3;
 
 export type AutoMode = "off" | "bot" | "chaos";
 export type PolicyName = Exclude<AutoMode, "off">;
@@ -116,6 +121,13 @@ export interface AutopilotCtx {
   deckPreset: (character: string) => string[];
   /** A random legal deck (`rules.deck_pool` + `rules.deck_clean`). */
   deckRandom: (character: string) => string[];
+  /**
+   * Deck book suggestion (`rules.deck_suggest`): the book's entry for the
+   * public table when it has one, else the character's preset
+   * (`docs/BOT.md` §3.7). `seat` is own seat, `opponents` the other seats'
+   * characters in seat order. Pure -- no RNG.
+   */
+  deckSuggest: (character: string, seat: number, opponents: string[]) => string[];
   /** Client RNG. Not the engine's -- a takeover does not need to be deterministic. */
   random: () => number;
 }
@@ -262,8 +274,9 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
 
 /**
  * `chaos` prompt answer: accept every offer that keeps [`CHAOS_RESERVE`], take
- * a random target, pick uniformly among the non-default options (counteract
- * therefore declares). The fallback only when it is the sole option.
+ * a random target, pick uniformly among the non-default options. A counteract
+ * offer declares (a random card) only on [`CHAOS_COUNTER_CHANCE`], else skips.
+ * The fallback only when it is the sole option.
  */
 function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command | null {
   const me = view.playerId;
@@ -302,9 +315,14 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
           // Accept a forced purchase only while the reserve is kept.
           return { act: "answer", prompt: p.id, value: money - 2 * buyPrice(view.state, tiles, p.tile) >= CHAOS_RESERVE ? 0 : 1 };
         default: {
-          // Uniform among the non-default options; the fallback (the engine's
-          // "do nothing" -- counteract's skip among them) only when it is alone.
           const n = p.options.length;
+          // [反击] offer: counter only on CHAOS_COUNTER_CHANCE, else skip
+          // (the fallback is the skip option).
+          if (p.title?.k === "ask.counteract.title" && n > 1 && random() >= CHAOS_COUNTER_CHANCE) {
+            return { act: "answer", prompt: p.id, value: clampAnswer(p, p.fallback) };
+          }
+          // Uniform among the non-default options; the fallback (the engine's
+          // "do nothing") only when it is alone.
           if (n <= 1) return { act: "answer", prompt: p.id, value: clampAnswer(p, p.fallback) };
           const others = Array.from({ length: n }, (_, i) => i).filter((i) => i !== p.fallback);
           const v = pick(others.length ? others : [p.fallback], random) ?? p.fallback;
@@ -389,7 +407,12 @@ export const policies: Record<PolicyName, Policy> = {
       }
       if (S.phase === "deck") {
         if (mine.deckReady) return null;
-        return { act: "deck", cards: ctx.deckPreset(mine.character) };
+        // The deck book's entry for this public table, else the preset
+        // (`docs/BOT.md` §3.7). Key is public: own character, own seat, the
+        // other seats' characters in seat order.
+        const opponents = S.players.filter((_, j) => j !== me).map((p) => p.character);
+        const cards = ctx.deckSuggest(mine.character, me, opponents);
+        return { act: "deck", cards: cards.length ? cards : ctx.deckPreset(mine.character) };
       }
       return null;
     },

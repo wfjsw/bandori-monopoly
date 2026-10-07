@@ -18,3 +18,4 @@ game-core = { path = "../game-core" }
 game-rules = { path = "../game-rules" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }

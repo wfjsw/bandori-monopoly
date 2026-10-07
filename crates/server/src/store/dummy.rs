@@ -1,4 +1,4 @@
-//! In-memory [`CrossState`]: three maps, one process, no durability.
+//! In-memory [`CrossState`]: a handful of maps, one process, no durability.
 //!
 //! This is the single-process default. A restart loses every session, room and
 //! match -- which is exactly what the pre-trait behaviour was, kept honest
@@ -7,15 +7,25 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-use super::{CrossState, RoomRecord, SessionRecord, StoreError};
+use super::{CrossState, RoomRecord, SessionRecord, StoreError, StoredRecord, RECORD_TTL_SECS};
 use crate::state::Session;
 
-/// Three independent maps. One mutex per bucket so a busy room does not stall
-/// session lookups (the same reasoning as `state.rs`'s locking note).
+/// How many finished records the in-memory store keeps. A real store expires
+/// them by [`RECORD_TTL_SECS`] instead; this one has no clock, so it bounds the
+/// map and drops the least recently used.
+pub const RECORD_KEEP: usize = 64;
+
+/// One mutex per bucket so a busy room does not stall session lookups (the
+/// same reasoning as `state.rs`'s locking note).
 pub struct Store {
     sessions: Mutex<HashMap<String, SessionRecord>>,
     rooms: Mutex<HashMap<String, RoomRecord>>,
     matches: Mutex<HashMap<String, String>>,
+    /// `room -> (last-used stamp, record)`, evicted LRU past [`RECORD_KEEP`].
+    records: Mutex<HashMap<String, (u64, StoredRecord)>>,
+    /// `room -> record log lines`, for the match in progress.
+    logs: Mutex<HashMap<String, Vec<String>>>,
+    used: Mutex<u64>,
 }
 
 impl Store {
@@ -24,7 +34,18 @@ impl Store {
             sessions: Mutex::new(HashMap::new()),
             rooms: Mutex::new(HashMap::new()),
             matches: Mutex::new(HashMap::new()),
+            records: Mutex::new(HashMap::new()),
+            logs: Mutex::new(HashMap::new()),
+            used: Mutex::new(0),
         }
+    }
+
+    /// Monotonic "now" for the LRU order. Not wall time: this store has no
+    /// expiry, only recency.
+    fn tick(&self) -> u64 {
+        let mut n = self.used.lock().unwrap_or_else(|e| e.into_inner());
+        *n += 1;
+        *n
     }
 }
 
@@ -92,5 +113,52 @@ impl CrossState for Store {
     fn match_del(&self, room: &str) -> Result<(), StoreError> {
         lock(&self.matches)?.remove(room);
         Ok(())
+    }
+
+    fn record_log_append(&self, room: &str, line: &str) -> Result<(), StoreError> {
+        lock(&self.logs)?
+            .entry(room.to_string())
+            .or_default()
+            .push(line.to_string());
+        Ok(())
+    }
+
+    fn record_log_get(&self, room: &str) -> Result<Vec<String>, StoreError> {
+        Ok(lock(&self.logs)?.get(room).cloned().unwrap_or_default())
+    }
+
+    fn record_log_del(&self, room: &str) -> Result<(), StoreError> {
+        lock(&self.logs)?.remove(room);
+        Ok(())
+    }
+
+    fn record_put(&self, room: &str, rec: &StoredRecord) -> Result<(), StoreError> {
+        let now = self.tick();
+        let mut map = lock(&self.records)?;
+        map.insert(room.to_string(), (now, rec.clone()));
+        // LRU past the cap. `RECORD_TTL_SECS` is what the Redis store uses;
+        // here the bound is the map size instead.
+        let _ = RECORD_TTL_SECS;
+        while map.len() > RECORD_KEEP {
+            let Some(oldest) = map
+                .iter()
+                .min_by_key(|(_, (used, _))| *used)
+                .map(|(k, _)| k.clone())
+            else {
+                break;
+            };
+            map.remove(&oldest);
+        }
+        Ok(())
+    }
+
+    fn record_get(&self, room: &str) -> Result<Option<StoredRecord>, StoreError> {
+        let now = self.tick();
+        let mut map = lock(&self.records)?;
+        if let Some((used, rec)) = map.get_mut(room) {
+            *used = now;
+            return Ok(Some(rec.clone()));
+        }
+        Ok(None)
     }
 }

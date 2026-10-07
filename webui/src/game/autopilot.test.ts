@@ -154,6 +154,7 @@ const ctx = (over: Partial<AutopilotCtx> = {}): AutopilotCtx => ({
   playedThisTurn: 0,
   deckPreset: () => ["c1", "c2"],
   deckRandom: () => ["r1", "r2", "r3"],
+  deckSuggest: () => ["b1", "b2"],
   random: rng(0.1),
   ...over,
 });
@@ -342,8 +343,8 @@ test("chaos plays a playable card instead of rolling in 运营", () => {
   assert.deepEqual(cmd, { act: "play", card: "c1" });
 });
 
-test("chaos declares a counteract when offered", () => {
-  const v = view({
+function counterView() {
+  return view({
     state: state({
       busy: true,
       prompt: {
@@ -367,10 +368,19 @@ test("chaos declares a counteract when offered", () => {
     }),
     aiAnswer: null,
   });
-  const cmd = suggest(v, ctx({ random: rng(0.5) }), "chaos");
+}
+
+test("chaos declares a counteract on a roll under CHAOS_COUNTER_CHANCE", () => {
+  // First draw 0.1 < 0.3 counters; the second picks the card.
+  const cmd = suggest(counterView(), ctx({ random: rng(0.1, 0.5) }), "chaos");
   assert.equal(cmd?.act, "answer");
   assert.equal(cmd?.prompt, 9);
   assert.ok((cmd?.value ?? -1) >= 0 && (cmd?.value ?? -1) <= 1, "picks a card, never the skip option");
+});
+
+test("chaos skips a counteract on a roll at or over CHAOS_COUNTER_CHANCE", () => {
+  const cmd = suggest(counterView(), ctx({ random: rng(0.3) }), "chaos");
+  assert.deepEqual(cmd, { act: "answer", prompt: 9, value: 2 }, "the skip option");
 });
 
 test("chaos picks a non-default prompt option", () => {
@@ -453,4 +463,68 @@ test("chaos lists every playable card before rolling", () => {
     list.map((c) => c.act),
     ["play", "play", "roll"],
   );
+});
+
+// ---------------------------------------------------------------- deck book
+
+test("standard 托管 picks the deck book entry for the public table key", () => {
+  const calls: [string, number, string[]][] = [];
+  const v = view({
+    playerId: 1,
+    state: state({
+      phase: "deck",
+      players: [
+        player({ character: "A", deckReady: true }),
+        player({ character: "B", deckReady: false }),
+        player({ character: "C", deckReady: true }),
+      ],
+    }),
+  });
+  const cmd = suggest(
+    v,
+    ctx({
+      deckSuggest: (c, seat, opponents) => {
+        calls.push([c, seat, opponents]);
+        return ["b1", "b2"];
+      },
+    }),
+  );
+  assert.deepEqual(cmd, { act: "deck", cards: ["b1", "b2"] });
+  // Key is public: own character, own seat, the others in seat order.
+  assert.deepEqual(calls, [["B", 1, ["A", "C"]]]);
+});
+
+test("standard 托管 falls back to the preset when the suggestion is empty", () => {
+  const v = view({
+    playerId: 0,
+    state: state({
+      phase: "deck",
+      players: [player({ character: "A", deckReady: false })],
+    }),
+  });
+  const cmd = suggest(v, ctx({ deckSuggest: () => [] }));
+  assert.deepEqual(cmd, { act: "deck", cards: ["c1", "c2"] });
+});
+
+test("chaos still picks a random deck, not the book", () => {
+  const v = view({
+    playerId: 0,
+    state: state({
+      phase: "deck",
+      players: [player({ character: "A", deckReady: false })],
+    }),
+  });
+  let asked = false;
+  const cmd = suggest(
+    v,
+    ctx({
+      deckSuggest: () => {
+        asked = true;
+        return ["b1"];
+      },
+    }),
+    "chaos",
+  );
+  assert.deepEqual(cmd, { act: "deck", cards: ["r1", "r2", "r3"] });
+  assert.equal(asked, false);
 });

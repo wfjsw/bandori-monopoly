@@ -311,8 +311,6 @@ fn recruit_allows_a_second_copy() {
 // 通用:该清CP了
 // =====================================================================
 
-const CP_TOK: &str = "cards:card-general.clear_cp_tok";
-
 // Sheet 2026-10-06 新卡组卡 E3: 「向抽牌堆中加入一张“觉悟”」 (was 「压」).
 // The sheet gives this card a play *window*, not a [反击] tag and not a [手]
 // tag: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
@@ -367,7 +365,13 @@ fn cp_hand_is_not_gated_at_two_points() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:该清CP了").unwrap();
     t.answer_tile(0, 5).unwrap();
-    assert_eq!(t.token(0, CP_TOK), 6, "six CP on the field");
+    // ruling 2026-10-07 (on-card vs tile CP): 「自己[场上]」 is the card's own
+    // on-card count, not a per-player counter.
+    assert_eq!(
+        t.cp_on_card(0, "通用:该清CP了"),
+        Some(6),
+        "six on-card [CP点] on the card"
+    );
     // The CP-count gate is gone: a second play must not be refused for it.
     t.give(0, &["通用:该清CP了"]);
     let r = t.play(0, "通用:该清CP了");
@@ -383,21 +387,48 @@ fn cp_hand_is_not_gated_at_two_points() {
 }
 
 // 规则书: 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]并在自己[场上]添加6个[CP点]」
+// ruling 2026-10-07 (on-card vs tile CP): the first is a **tile** [CP点]
+// (a `mark:cp` tile mark), the second is the **on-card** [CP点] on the card
+// instance itself (`FieldCard::cp`).
 #[test]
-fn cp_places_one_mark_and_six_tokens() {
+fn cp_places_one_tile_mark_and_six_on_card_cp() {
     let mut t = Table::vanilla(2);
     t.give_play(0, "通用:该清CP了").unwrap();
     // Everyone sits on CiRCLE; pick tile 5.
     t.answer_tile(0, 5).unwrap();
+    // The **tile** [CP点].
     let marks = t.marks_on(5);
     assert_eq!(marks.len(), 1, "marks {:?}", t.marks());
     assert_eq!(marks[0].count, 1);
-    assert_eq!(t.token(0, CP_TOK), 6);
+    // The **on-card** [CP点]: 6 on this card instance, not a player counter.
+    assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(6));
     // The card itself stays on the field as a lasting piece.
     assert!(t.on_field(0, "通用:该清CP了"));
 }
 
+// ruling 2026-10-07 (on-card vs tile CP): the on-card count rides the card's
+// own `FieldCard` -- the same object the view reads for the field-card counter
+// badge. Not `MatchPlayer::tokens`, not the tile marks.
+#[test]
+fn cp_on_card_count_rides_the_field_card() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    let f = t
+        .field(0)
+        .into_iter()
+        .find(|f| f.card == "通用:该清CP了")
+        .expect("the card is on the field");
+    // The view's `FieldCard.cp` -- what `Ring.tsx` shows as the badge.
+    assert_eq!(f.cp, 6, "the field card carries the on-card count: {f:?}");
+    // The per-player 「自己[场上]」 counter is gone (ruling: the card's own
+    // count replaces it).
+    assert_eq!(t.token(0, "cards:card-general.clear_cp_tok"), 0);
+}
+
 // 规则书: 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」
+// ruling 2026-10-07 (on-card vs tile CP): one **tile** [CP点] and one
+// **on-card** [CP点] go per [结算], and the settler gains 800.
 #[test]
 fn cp_settle_on_marked_tile_pays_800() {
     let mut t = Table::vanilla(2);
@@ -409,12 +440,46 @@ fn cp_settle_on_marked_tile_pays_800() {
     t.dice(&[1]);
     t.roll(0).unwrap();
     skip_all(&mut t);
-    // 规则书: 「[获得]800资金」
+    // 规则书: 「[获得]800资金」 -- to the settling player.
     assert_eq!(t.money(0), 10_800, "events {:?}", t.recent_keys(8));
-    // 规则书: 「移除…自己[场上]1个[CP点]」
-    assert_eq!(t.token(0, CP_TOK), 5, "one field CP spent");
-    // 规则书: 「移除格子上的个[CP点]」
+    // 规则书: 「移除…自己[场上]1个[CP点]」 -- one **on-card** [CP点].
+    assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(5), "one on-card CP spent");
+    // 规则书: 「移除格子上的个[CP点]」 -- the **tile** mark.
     assert!(t.marks_on(5).is_empty(), "tile mark gone: {:?}", t.marks());
+    // The card stays: its on-card [CP点] is not empty (ruling 2026-10-07, the
+    // graveyard is keyed on the on-card count, not on the tile marks).
+    assert!(t.on_field(0, "通用:该清CP了"), "still 5 on-card [CP点] left");
+}
+
+// ruling 2026-10-07 (on-card vs tile CP): 「自己[场上]1个[CP点]」 is the CP
+// point attached to the 该清CP了 card the tile mark is attached to
+// (`TileMark.src`) -- not the settler's own field and not a per-player
+// counter. 「[获得]800资金」 goes to the settling player (the subject of
+// 「在…[结算]时」 carries over to 「[获得]」; the rulebook tip 「吃多个CP点达到
+// 2000以上收益」 has the eater profit).
+#[test]
+fn cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    // P1 -- not the card's owner -- settles on P0's CP tile.
+    t.begin_turn(1);
+    t.set_pos(1, 4);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    skip_all(&mut t);
+    // 「[获得]800资金」 -- the settler (P1), not the card's owner.
+    assert_eq!(t.money(1), 10_800, "events {:?}", t.recent_keys(8));
+    assert_eq!(t.money(0), 10_000, "the card's owner gains nothing");
+    // 「自己[场上]1个[CP点]」 -- spent from the card the mark was attached to
+    // (P0's 该清CP了), found by the mark's `src`.
+    assert_eq!(
+        t.cp_on_card(0, "通用:该清CP了"),
+        Some(5),
+        "one on-card CP spent from the mark's src card"
+    );
+    assert!(t.marks_on(5).is_empty(), "tile mark gone: {:?}", t.marks());
+    assert!(t.on_field(0, "通用:该清CP了"), "the card stays at 5");
 }
 
 // 规则书: 「（2）[使用者]使用此卡后的下2回合开始时，此卡在格子上添加的[CP点]及其产物将在相邻的没有[CP点]的格子添加1个[CP点]」
@@ -446,6 +511,103 @@ fn cp_spreads_to_adjacent_for_two_turn_starts() {
     t.end(1).unwrap();
     let m2: Vec<usize> = t.marks().iter().map(|m| m.tile as usize).collect();
     assert_eq!(m2.len(), 4, "two more products: {:?}", t.marks());
+}
+
+// User ruling 2026-10-07 / refactor: [CP点] is its own tile-mark category and
+// carries **no player owner** (owner = -1, the neutral board owner). 「此卡在
+// 格子上添加的[CP点]及其产物」 (（1）) is provenance -- the placing card instance
+// -- not ownership.
+#[test]
+fn cp_marks_are_neutral_and_attached_to_the_card() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    let marks = t.marks_on(5);
+    assert_eq!(marks.len(), 1, "marks {:?}", t.marks());
+    let m = &marks[0];
+    // 「These marks should not be owned by any player」.
+    assert_eq!(m.owner, -1, "no player owns a [CP点]: {m:?}");
+    // Its own tile-mark category, not a `kind` among the player marks.
+    assert_eq!(m.category, "cp", "[CP点] is its own category: {m:?}");
+    // Provenance for the log / 「来自」, and the instance 「此卡」 keys on.
+    assert_eq!(m.card, "通用:该清CP了", "「来自」 provenance: {m:?}");
+    assert!(m.src > 0, "attached to the placing card instance: {m:?}");
+}
+
+// User ruling 2026-10-07 (on-card vs tile CP): 「该清CP了 should be graveyarded
+// as soon as the attached on-card cp mark is empty」 -- the card's **on-card**
+// [CP点] (`FieldCard::cp`, 「自己[场上]N个[CP点]」), not the tile marks it
+// placed. An event handler on that count (`HookKind::CpChanged`), so it fires
+// however the count drops -- here the `mark:cp` settle clause 「自己[场上]1个
+// [CP点]」 spending the last one.
+#[test]
+fn cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    assert!(t.on_field(0, "通用:该清CP了"), "the card is in play");
+    // Arrange one on-card [CP点] left (the sheet seeds 6; the count only drops
+    // one per [结算], and a play seeds fewer tile marks than that, so a test
+    // seam sets the starting count the way `set_crystals` does). The settle's
+    // own write is what raises `cpChanged` and leaves the field -- the rule is
+    // event-driven on the count change, not a re-check at the spend site.
+    t.set_cp_on_card(0, "通用:该清CP了", 1);
+    t.set_pos(0, 4);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert_eq!(
+        t.cp_on_card(0, "通用:该清CP了"),
+        None,
+        "the on-card count is spent to 0"
+    );
+    assert!(
+        !t.on_field(0, "通用:该清CP了"),
+        "the card left the field the moment its on-card [CP点] was empty"
+    );
+    assert!(
+        t.discard(0).iter().any(|c| c == "通用:该清CP了"),
+        "the card went to the discard: {:?}",
+        t.discard(0)
+    );
+}
+
+// ruling 2026-10-07 (on-card vs tile CP): the graveyard is keyed on the
+// on-card count, so spending a card's **tile** marks alone does not leave the
+// field while it still carries on-card [CP点].
+#[test]
+fn cp_card_stays_when_only_its_tile_marks_run_out() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    // One settle spends the seed tile mark (and one on-card [CP点], 6 → 5).
+    t.set_pos(0, 4);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    skip_all(&mut t);
+    assert!(t.marks_on(5).is_empty(), "the tile mark is gone: {:?}", t.marks());
+    assert_eq!(t.cp_on_card(0, "通用:该清CP了"), Some(5));
+    assert!(
+        t.on_field(0, "通用:该清CP了"),
+        "the card stays while it still has on-card [CP点]"
+    );
+}
+
+// User ruling 2026-10-07: 「It also cannot be played when its [特] effect is
+// still pending.」 Engine now: 「pending」 = the [特] is still live on the field,
+// i.e. a copy is still in play carrying its on-card [CP点].
+#[test]
+fn cp_cannot_be_played_again_while_the_special_is_pending() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "通用:该清CP了").unwrap();
+    t.answer_tile(0, 5).unwrap();
+    t.give(0, &["通用:该清CP了"]);
+    let r = t.play(0, "通用:该清CP了");
+    let e = r.expect_err("the [特] is still pending, so the card cannot be played");
+    assert!(
+        e.contains("special_live"),
+        "refused because the [特] is still live: {e}"
+    );
 }
 
 // =====================================================================
@@ -1102,4 +1264,235 @@ fn ix_parking_blocks_tsugu_skill() {
     t.set_pos(0, SPACE);
     let sid = t.skill_id(0, "尽力了吗");
     assert!(t.skill(0, &sid).is_err(), "blocked while standing on Space");
+}
+// =====================================================================
+// card-driven money lines must carry the action (regression)
+// =====================================================================
+//
+// 规则书 / log presentation. A card's `ctx::pay` / `ctx::gain` /
+// `ctx::transfer` used to be logged with the card's own reason key as the
+// *whole* line (`Pay::text` in `wasm_rules.rs`), so every move printed just
+// the card name -- 「登上武道馆」 / 「CiRCLE THANKS PARTY!」 -- with no actor
+// and no amount. A card that moves money several times (登上武道馆 pays once
+// per other player; THANKS PARTY pays and pays out) then stacked identical
+// bare-name lines into a "loop" in the match log. Each move now rides the
+// standard `log.pay` / `log.lose` / `log.gain` line, with the card's reason in
+// parentheses.
+
+use game_core::state::MatchEvent;
+
+/// The money line kinds `log_money` writes.
+fn is_money_line(typ: &str) -> bool {
+    matches!(typ, "pay" | "lose" | "gain" | "rent")
+}
+
+/// Every money line must be the standard action line naming who acted and how
+/// much; the cause rides along in parentheses (`log.part.why`). A line keyed by
+/// a card locale key is the old bare-name spam.
+fn assert_money_lines_carry_action(events: &[MatchEvent]) {
+    for e in events {
+        if !is_money_line(&e.r#type) {
+            continue;
+        }
+        let k = e.msg.key();
+        assert!(
+            !k.starts_with("cards:"),
+            "money line is the bare card name ({k}): {:?}",
+            e.msg
+        );
+        assert!(
+            matches!(k, "log.pay" | "log.lose" | "log.gain" | "log.with_received"),
+            "money line is not an action line ({k}): {:?}",
+            e.msg
+        );
+        if k == "log.with_received" {
+            // A transfer where the payee got less than the payer lost: the
+            // action line is nested in `base`.
+            assert!(e.msg.a.contains_key("base"), "no base line: {:?}", e.msg);
+            continue;
+        }
+        assert!(
+            e.msg.a.contains_key("who"),
+            "money line has no actor: {:?}",
+            e.msg
+        );
+        assert!(
+            e.msg.a.contains_key("amount"),
+            "money line has no amount: {:?}",
+            e.msg
+        );
+    }
+}
+
+/// Bound the log: no two identical messages may pile up more than `max` times
+/// in one play. Compares whole messages, so `log.pay` with a different payer
+/// each time is fine -- it is the identical bare-name lines that used to stack.
+fn assert_no_line_spam(events: &[MatchEvent], max: usize) {
+    let mut seen: std::collections::BTreeMap<String, usize> = Default::default();
+    for e in events {
+        let n = seen.entry(format!("{:?}", e.msg)).or_default();
+        *n += 1;
+        assert!(*n <= max, "a line repeated {n}x (max {max}): {:?}", e.msg);
+    }
+}
+
+/// One play of `card` on a `n`-player vanilla table: the invariants above, a
+/// bound on the whole log, and the play terminating (no prompt left behind).
+/// `answer` is the script of join/decline answers for the other seats, in
+/// order (0 = yes, 1 = no); `dice` are the loaded faces for an Xd20.
+fn play_card_log_ok(
+    n: usize,
+    card: &str,
+    dice: &[i32],
+    answers: &[i32],
+) -> Vec<MatchEvent> {
+    let mut t = Table::vanilla(n);
+    if !dice.is_empty() {
+        t.dice(dice);
+    }
+    let mark = t.mark();
+    t.give_play(0, card).unwrap();
+    for &a in answers {
+        if t.prompt().is_some() {
+            let asked = t.asked();
+            if !asked.is_empty() {
+                t.answer(asked[0], a).unwrap();
+            }
+        }
+    }
+    skip_all(&mut t);
+    assert!(
+        t.prompt().is_none(),
+        "{card}: a prompt was left open: {}",
+        t.dump_prompt()
+    );
+    let evs = t.events_since(mark);
+    assert_money_lines_carry_action(&evs);
+    assert_no_line_spam(&evs, 2);
+    // 规则书 sanity: one play is a handful of lines (the play itself, one per
+    // money move, the roll), not a runaway.
+    assert!(
+        evs.len() <= 16,
+        "{card}: {} log entries for one play: {:?}",
+        evs.len(),
+        t.recent_keys(24)
+    );
+    evs
+}
+
+// 规则书: 「被[指定]的玩家[支付][使用者]X资金」 -- one transfer per other
+// player. Each line must say who paid whom how much (登上武道馆), not just
+// 「登上武道馆」 three times over.
+#[test]
+fn budokan_pay_lines_carry_the_action() {
+    let evs = play_card_log_ok(4, "通用:登上武道馆", &[], &[]);
+    let pays: Vec<_> = evs.iter().filter(|e| e.r#type == "pay").collect();
+    assert_eq!(pays.len(), 3, "one transfer per other player: {:?}", evs);
+    for e in &pays {
+        // 「P1 向 P0 支付 670（登上武道馆）」 -- actor, counterparty, amount.
+        assert_eq!(e.msg.key(), "log.pay", "{:?}", e.msg);
+        assert!(e.msg.a.contains_key("to"), "no payee: {:?}", e.msg);
+    }
+}
+
+// 规则书: 「X至少为2则…[使用者][获得]3000资金且其他因此卡[消耗]资金的玩家[获得]1500资金」
+// -- two pays and two gains. Every one of them must name the action; the card
+// name appears only as the parenthetical cause.
+#[test]
+fn party_x2_pay_and_gain_lines_carry_the_action() {
+    let evs = play_card_log_ok(
+        3,
+        "通用:CiRCLE THANKS PARTY!",
+        &[20, 20],
+        &[0, 1], // P1 joins, P2 declines
+    );
+    let moves: Vec<_> = evs.iter().filter(|e| is_money_line(&e.r#type)).collect();
+    assert_eq!(moves.len(), 4, "2 pays + 2 gains: {:?}", evs);
+    for e in &moves {
+        assert!(
+            matches!(e.msg.key(), "log.pay" | "log.lose" | "log.gain"),
+            "{:?}",
+            e.msg
+        );
+    }
+    // The dice roll is logged too -- with its action (「掷 2d20 = 40」).
+    let dice = evs.iter().find(|e| e.r#type == "dice").expect("a roll");
+    assert_eq!(dice.msg.key(), "log.dice", "{:?}", dice.msg);
+}
+
+// 规则书: 「X等于1则[使用者]的本回合结束后获得一个额外回合」 -- alone, one
+// pay and an extra turn. The play must terminate (the extra turn is granted
+// once, not re-granted every pause) and the log must not spin.
+#[test]
+fn party_x1_extra_turn_log_is_bounded() {
+    let evs = play_card_log_ok(
+        3,
+        "通用:CiRCLE THANKS PARTY!",
+        &[],
+        &[1, 1], // nobody joins
+    );
+    let moves: Vec<_> = evs.iter().filter(|e| is_money_line(&e.r#type)).collect();
+    assert_eq!(moves.len(), 1, "only the user's own 500: {:?}", evs);
+}
+
+// Sweep: every card-driven money move goes through the same `HostRequest::Pay`
+// path, so the bare-name bug was shared. Check the pattern holds for a gain, a
+// consume and a transfer.
+#[test]
+fn every_card_money_move_logs_an_action_line() {
+    for (n, card, dice, answers) in [
+        (2usize, "通用:GREAT", &[][..], &[][..]),
+        (2, "通用:10次招募（1回限定）", &[], &[]),
+        (4, "通用:登上武道馆", &[], &[]),
+        (3, "通用:CiRCLE THANKS PARTY!", &[20, 20][..], &[0, 1][..]),
+    ] {
+        let evs = play_card_log_ok(n, card, dice, answers);
+        assert!(
+            evs.iter().any(|e| is_money_line(&e.r#type)),
+            "{card}: no money line at all: {:?}",
+            evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
+        );
+    }
+}
+
+// A short scripted game, one money card per turn. The bug was shared by every
+// card-driven move (`HostRequest::Pay`), so the sweep is over turns as well as
+// cards: each turn's log stays bounded and every money line carries the action.
+#[test]
+fn money_card_log_is_bounded_across_a_scripted_game() {
+    let mut t = Table::vanilla(4);
+    t.set_draw(3, &["通用:GREAT"]);
+    // (who, card, loaded dice, join/decline script for the other seats)
+    let script: &[(usize, &str, &[i32], &[i32])] = &[
+        (0, "通用:登上武道馆", &[], &[]),
+        // Nobody joins -> X = 1 -> the extra-turn branch.
+        (1, "通用:CiRCLE THANKS PARTY!", &[], &[1, 1]),
+        // One joins -> X = 2 -> the Xd20 branch (2d20 = 40 >= 35 pays out).
+        (2, "通用:CiRCLE THANKS PARTY!", &[20, 20], &[0, 1]),
+        (3, "通用:10次招募（1回限定）", &[], &[]),
+        (0, "通用:GREAT", &[], &[]),
+    ];
+    for &(who, card, dice, answers) in script {
+        t.begin_turn(who);
+        if !dice.is_empty() {
+            t.dice(dice);
+        }
+        let mark = t.mark();
+        t.give(who, &[card]);
+        t.play(who, card).unwrap();
+        for &a in answers {
+            if t.prompt().is_some() {
+                let asked = t.asked();
+                if !asked.is_empty() {
+                    t.answer(asked[0], a).unwrap();
+                }
+            }
+        }
+        skip_all(&mut t);
+        assert!(t.prompt().is_none(), "{card}: prompt left open");
+        let evs = t.events_since(mark);
+        assert_money_lines_carry_action(&evs);
+        assert_no_line_spam(&evs, 2);
+        assert!(evs.len() <= 16, "{card}: {} lines: {:?}", evs.len(), evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>());
+    }
 }

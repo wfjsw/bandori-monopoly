@@ -57,7 +57,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
       {side}
       <div className={s.main}>
         {/* Solo has no answer deadline, so the clock is not shown at all. */}
-        {sess.kind !== "solo" && (
+        {sess.kind === "online" && (
           <div className={s.timer}><Icon name="timer" /><b>{left}</b>{tr("common.unitSec")}</div>
         )}
         <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>

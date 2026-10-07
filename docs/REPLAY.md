@@ -1,7 +1,25 @@
 # Match records and replay — design (2026-10-07)
 
-Status: design approved for implementation; phases P1–P5 below. Line numbers
-were taken from the 2026-10-07 working tree and drift.
+Status: P1 (core), P2 (web-glue), P3 (solo UI) and P4 (server + rules-worker)
+implemented 2026-10-07; P5 remains. The same day, storage and download moved
+from gzip to **zstd** (see "Framing and codec"): one shared codec in
+`game-core`, the server seals compressed, and the loader still reads gzip and
+plain JSON.
+Line numbers were taken from the 2026-10-07 working tree and drift.
+
+**Implemented:** `crates/game-core/src/record.rs` (schema, `RecordedMatch`,
+`Recorder`, `Replayer`, `compat`, the zstd codec), `crates/game-core/tests/record.rs`
+(§7 core matrix) and `tests/record_codec.rs`, the additive web-glue surface (`engine_stamp`,
+`SoloMatch.tick_steps` / `record_state` / `restore_with_record` / `record` /
+`record_with_events` / `record_zst` / `record_with_events_zst`,
+`ReplayMatch` / `from_record_bytes`, `record_header` / `record_header_bytes`)
+with regenerated `webui/src/wasm/glue.{js,d.ts}`, the solo UI
+(`webui/src/game/{record,replay}.ts`, `webui/src/scenes/replay/*`), and the
+server / rules-worker path (`info` / `cp` / `replay` worker ops, the quantized
+ticker, `MatchHandle`'s record log, `CrossState::record_*`,
+`GET /api/rooms/{id}/record`). See `docs/ENGINE.md`
+§Records for the API as built, `docs/SERVER.md` §Match records for the
+endpoint policy, and the deviations below.
 
 ## 0. Findings that drive the design
 
@@ -35,6 +53,14 @@ were taken from the 2026-10-07 working tree and drift.
 
 ## 1. Decisions
 
+* **Local files play only in the browser** (user rule, 2026-10-07). A record
+  opened from disk, or kept in IndexedDB, is decoded and replayed entirely by
+  the web client's wasm engine (`ReplayMatch`). It is never uploaded to the
+  server, and the server never hosts, stores or replays a client's file.
+  * The server's only record route is the read-only
+    `GET /api/rooms/{id}/record` (download of a match it played itself).
+  * There is deliberately no upload / POST route.
+  * The worker `replay` op is internal (tests / admin), with no HTTP exposure.
 * **Format.** A hybrid, input-log first. The authoritative body is:
   * an `Init`;
   * ordered `Input`s;
@@ -62,12 +88,18 @@ were taken from the 2026-10-07 working tree and drift.
   * The full record reveals every hand and the deck order, so it is only
     available after the match ends, and only to participants.
 * **Serialization:**
-  * serde JSON from Rust, gzipped in the browser via `CompressionStream` /
-    `DecompressionStream` (no flate2 in the wasm).
-  * The server sends `Content-Encoding: gzip` and
+  * The body is serde JSON; the **file is that JSON in a zstd frame** (`.bdrec`).
+    Compression runs in Rust -- the browser has no reliable zstd -- through one
+    shared codec in `game-core` (`encode_record_zst` / `decode_record`). See
+    "Format and codec" below.
+  * The server serves the sealed bytes as-is:
+    `Content-Type: application/zstd` and
     `Content-Disposition: attachment; filename="bdrec-<room>-<yyyymmdd-hhmm>.bdrec"`.
-  * Extension `.bdrec`. The loader sniffs the gzip magic `1f 8b` and also
-    accepts plain JSON.
+    No `Content-Encoding: zstd` -- browsers would transparently decode that,
+    and inconsistently.
+  * Extension `.bdrec`. The loader sniffs the zstd magic `28 B5 2F FD`, the
+    gzip magic `1f 8b` (older browser downloads and IndexedDB rows) and plain
+    JSON.
   * `check` = FNV-1a-64 hex of `serde_json::to_string(&body)`, recomputed after
     parsing.
   * u64 values are serialized as strings.
@@ -99,17 +131,63 @@ were taken from the 2026-10-07 working tree and drift.
   round R, turn T」. The user can continue (flagged inaccurate) or switch to the
   log view.
 * **Storage.**
-  * The last 10 solo records go in IndexedDB (`bm.replays`). A record is saved
-    automatically once when a solo match ends.
-  * Download via a Blob and `a[download]`. Open via
-    `<input type=file accept=".bdrec,.json">` or drag and drop.
-  * Size: about 6–8 KB gzipped for a typical 160-turn input log, and about
-    60–90 KB with events.
+  * The last 10 solo records go in IndexedDB (`bm.replays`), as the zstd
+    bytes. A record is saved automatically once when a solo match ends. Older
+    rows, which are gzip, still list and play -- the engine decodes both.
+  * Download via a Blob and `a[download]`; the file is the same zstd bytes.
+    Open via `<input type=file accept=".bdrec,.json">` or drag and drop --
+    zstd, gzip and plain JSON all load.
+  * Size (a real 200-round bot game, `tests/record_codec.rs`):
+
+    | Body | raw JSON | zstd (native, what the server seals) | zstd (wasm / structured-zstd) | gzip |
+    |---|---|---|---|---|
+    | input log | 77 769 B | 14 403 B (5.4x) | 14 307 B (5.4x) | 17 659 B (4.4x) |
+    | + events | 879 015 B | 65 132 B (13.5x) | 65 042 B (13.5x) | 68 074 B (12.9x) |
 * **Performance.** `Match` is not modified; recording is a wrapper, so
   `examples/sim.rs` is unchanged. The per-tick cost is one run-length
   increment. At each turn change: `save()` plus FNV.
 
 ## 2. Schema (`crates/game-core/src/record.rs`)
+
+### Framing and codec
+
+A `.bdrec` is a **zstd-framed `RecordFile` JSON**. The codec lives in
+`game-core::record` and is shared by every caller (browser, server, worker):
+
+* `encode_record_zst(&RecordFile) -> Vec<u8>` -- what storage and download
+  write.
+* `decode_record(&[u8]) -> Result<RecordFile, ReplayError>` and
+  `parse_header_bytes(&[u8])` -- what every reader uses. Both **sniff the
+  magic** first (`sniff_record`):
+
+  | Magic | Framing | Where it came from |
+  |---|---|---|
+  | `28 B5 2F FD` | zstd | the current form, every writer |
+  | `1F 8B` | gzip | the browser's old `CompressionStream("gzip")` |
+  | anything else | plain JSON | hand-edited files, records stored before compression |
+
+  All three play everywhere: the same decode path runs in wasm and natively.
+
+* **Encoders.** zstd, two implementations, chosen by target:
+  * **wasm32** -- `structured-zstd` at `CompressionLevel::Fastest` (its
+    level 1; `zst_encode_pure`). Pure Rust, so no C toolchain in the wasm
+    build (`zstd-sys` would need one). It is the maintained continuation of
+    `ruzstd` by the same author, with a real level table where `ruzstd`'s
+    encoder only implements `Fastest` -- which measured **worse than gzip**
+    on record JSON (3.1x vs gzip's 4.4x on the input log). `structured-zstd`
+    lands on the reference binding's ratio instead (table above).
+  * **native** -- the reference `zstd` binding at level 1 (better ratio than
+    levels 3 and 9 on record JSON). The server seals and serves the bytes
+    where the ratio shows up in Redis and in the download.
+  Both emit standard zstd frames; `zstd_frames_are_standard` cross-checks
+  each direction against the reference binding -- including the browser
+  encoder's bytes, so wasm and native agree on the wire format.
+* **Decode** is `ruzstd` everywhere (plus `flate2` / miniz_oxide for gzip).
+  One decoder reads both encoders' frames and older recordings.
+* `check` still covers the **JSON body**, not the frame: recomputing it is a
+  parse away, and the frame is transport only.
+
+### Schema
 
 ```rust
 pub const RECORD_VERSION: u32 = 1;
@@ -162,13 +240,17 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
     * `tick_steps(k)`;
     * `record_state()`;
     * `restore_with_record(save, rec)`;
-    * `record(created)` and `record_with_events(created)`.
+    * `record(created)` / `record_with_events(created)` (JSON) and
+      `record_zst(created)` / `record_with_events_zst(created)` (the zstd
+      `.bdrec` that storage and download write).
 
     `tick(dt)` is kept but records nothing.
-  * **`ReplayMatch`:** `from_record(json, force)`, `header`, `compat`, `step`,
-    `next_input`, `index`, `seek`, `turns`, `total_ticks`,
+  * **`ReplayMatch`:** `from_record(json, force)` (the constructor) and
+    `from_record_bytes(bytes, force)` (zstd / gzip / JSON), plus `header`,
+    `compat`, `step`, `next_input`, `index`, `seek`, `turns`, `total_ticks`,
     `view(member; 0 = spectator)`, `events_since`, `take_changed`.
-  * `record_header(json)` gives a cheap header parse for the list.
+  * `record_header(json)` and `record_header_bytes(bytes)` give a cheap header
+    parse for the list.
 * **rules-worker:**
   * an `info` op returning the `EngineStamp`;
   * mutating ops add `"cp":{round,turn,hash}` when the turn key changed;
@@ -188,13 +270,47 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
   * **`api.rs`:** `GET /api/rooms/{id}/record`, returning 409 / 404 / 403 as
     above.
 
+### As built (2026-10-07, P4)
+
+Everything above is in place, with these departures from the letter of the
+design — all of them forced by something the design already says:
+
+* **`header.step` is `0.05 * time_scale`, not a constant `0.05`.** The server
+  ticks `k * step` (see the accumulator), so a record written on a scaled
+  clock has to name the quantum it used or a replay would feed the engine
+  different `tick(dt)` f32s and diverge. Solo is unscaled, so its `step` is
+  still `STEP`. `Replayer` has always read `header.step`.
+* **`RecordHeader.gaps`** (new, `#[serde(default)]`) marks a record whose
+  buffered tick run was lost to a restart. §1's "mark the record
+  unverifiable" needed somewhere to put the flag.
+* **The record is sealed zstd-compressed, and served as `application/zstd`
+  with no `Content-Encoding`.** §1 asked for `Content-Encoding: gzip`; the
+  shipping form is zstd-in-the-body instead (see "Framing and codec"), because
+  a `Content-Encoding` is something a browser would transparently -- and
+  inconsistently -- undo. `Content-Disposition` is set as specified. The
+  in-progress log stays plain JSON lines; only the sealed blob is compressed.
+  A record stored before compression is served as-is as `application/json`.
+* **Participants are member ids resolved through the room's live token map.**
+  A participant who left the room (and would rejoin under a fresh member id)
+  is outside that set — deliberately narrow, since the record reveals every
+  hand.
+* **`CardRules::ruleset_sha256()`** (a defaulted trait method) is how the
+  worker fills `EngineStamp.ruleset_sha256`; `StubRules` reports `"stub"`.
+  `Ctx::load` hashes the `DATA_FILES` contents for `data_sha256`, the same
+  recipe web-glue uses. The in-process `Ctx::new` (tests, and the fallback
+  when no worker binary is installed) leaves `data_sha256` empty, which
+  `compat` reads as "unknown" and skips.
+* **The in-memory store has no clock.** `record:{room}:last` is an LRU of 64
+  there instead of a 24 h TTL; Redis does `SET EX 86400`.
+
 ## 5. UI (webui)
 
 * **`game/session.ts`:**
   * Solo uses a fixed-step accumulator calling `m.tick_steps(k)`.
   * `persist` saves `rec: m.record_state()` atomically with the save. `resume`
     calls `restore_with_record`.
-  * When the match ends, `saveReplay(gzip(m.record(now)))` runs once.
+  * When the match ends, `saveReplay(m.record_zst(now))` runs once (the zstd
+    bytes go to IndexedDB and to the Results buttons).
 * **Shared lock:**
   * `GameSession.readOnly`.
   * `core/hooks.ts` `useAutoplay` = `isAuto(mode) || !!s?.readOnly`.
@@ -205,8 +321,10 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
   * `setPerspective(member)`;
   * `act()` returns `err.replay`;
   * `index()` runs in setTimeout chunks.
-* **`game/record.ts`:** gzip / gunzip, `downloadRecord`, `readRecordFile`, and
-  an IndexedDB store (list, put with keep = 10, get, delete).
+* **`game/record.ts`:** framing sniffing (`zstd` / `gzip` / `json`),
+  `downloadRecord`, `readRecordFile` (raw bytes), the legacy gzip helpers, and
+  an IndexedDB store (list, put with keep = 10, get, delete). The engine does
+  the compressing and decompressing.
 * **Router:** `/replay` (list) and `/replay/view`. Scenes:
   `scenes/replay/{Replays,ReplayPlayer,ReplayBar}.tsx`, plus the compat dialog.
 * **Elsewhere:**
@@ -219,10 +337,10 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
 
 ## 6. Phases
 
-* **P1 – core.** `record.rs` and `tests/record.rs`.
-* **P2 – glue.** web-glue and regenerated bindings.
-* **P3 – solo UI.**
-* **P4 – server and rules-worker.**
+* **P1 – core.** `record.rs` and `tests/record.rs`. **done 2026-10-07.**
+* **P2 – glue.** web-glue and regenerated bindings. **done 2026-10-07.**
+* **P3 – solo UI.** **done 2026-10-07.**
+* **P4 – server and rules-worker.** **done 2026-10-07.**
 * **P5 – polish:**
   * speed, skip-idle, the perspective switcher;
   * events bundle and the log-only fallback;
@@ -245,10 +363,18 @@ pub struct RecordBody { init: Init, inputs: Vec<Input>, checkpoints: Vec<Checkpo
   * u64 and f32 values are bit-exact.
 * **`crates/game-rules/tests/record_wasm.rs`:** a real-ruleset round-trip,
   cross-backend if possible.
+* **`crates/game-core/tests/record_codec.rs`:** encode / decode round trip
+  through all three framings; magic sniffing; the reference `zstd` binding
+  must read what the browser encoder (`zst_encode_pure`) and the native
+  encoder write, and vice versa; corrupt input is `Corrupt`;
+  and the size comparison on a real 200-round bot game (raw JSON vs zstd vs
+  gzip, input log and events-bundled).
 * **`server/tests/http.rs`:** 409 mid-match, 200 after the end, 403 to an
-  outsider; left / back are recorded; the `replay` op's hash equals the final
-  blob hash.
-* **webui tests:** gzip round-trip, file sniffing, IndexedDB keep-N.
+  outsider; left / back are recorded; the response is `application/zstd` with
+  the zstd magic and no `Content-Encoding`; the `replay` op (bytes and JSON
+  forms) ends on the final blob hash.
+* **webui tests:** framing sniffing, gzip round-trip (legacy), a zstd record
+  through the store, `decodeRecord`'s refusal of zstd, IndexedDB keep-N.
 * **Performance:** the sim is unchanged, and `RecordedMatch` overhead stays
   under 2%.
 

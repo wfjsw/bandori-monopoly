@@ -11,13 +11,15 @@ import { Lobby } from "../scenes/lobby/Lobby";
 import { Room } from "../scenes/lobby/Room";
 import { Menu } from "../scenes/menu/Menu";
 import { Play } from "../scenes/Play";
+import { Replays } from "../scenes/replay/Replays";
+import { ReplayPlayer } from "../scenes/replay/ReplayPlayer";
 import { closeAllModals, ModalHost } from "../ui/Modal";
 import { ToastHost } from "../ui/Toast";
 import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
 
-const BACKDROP: Record<Route["name"], string> = { menu: "bg_common", lobby: "bg_live", room: "bg_live", play: "bg_band", gallery: "bg_band", deck: "bg_band" };
-const BGM: Record<Route["name"], string> = { menu: "menu", lobby: "lobby", room: "lobby", play: "select", gallery: "gallery", deck: "deck" };
+const BACKDROP: Record<Route["name"], string> = { menu: "bg_common", lobby: "bg_live", room: "bg_live", play: "bg_band", gallery: "bg_band", deck: "bg_band", replay: "bg_common", replayView: "bg_common" };
+const BGM: Record<Route["name"], string> = { menu: "menu", lobby: "lobby", room: "lobby", play: "select", gallery: "gallery", deck: "deck", replay: "menu", replayView: "board" };
 
 function scene(r: Route): ReactNode {
   switch (r.name) {
@@ -27,6 +29,8 @@ function scene(r: Route): ReactNode {
     case "lobby": return <Lobby />;
     case "room": return <Room id={r.id} />;
     case "play": return <Play id={r.id} />;
+    case "replay": return <Replays />;
+    case "replayView": return <ReplayPlayer />;
   }
 }
 

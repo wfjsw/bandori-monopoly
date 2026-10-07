@@ -10,6 +10,7 @@ import { D } from "../../core/data";
 import { useSessionOther } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { BotMentality } from "../../core/types";
+import { downloadRecord } from "../../game/record";
 import { endSession, matchScene, OnlineSession, resumeOnline } from "../../game/session";
 import { api } from "../../net/api";
 import { fmtMsg, type Msg } from "../../i18n/msg";
@@ -143,6 +144,21 @@ export function Room({ id }: { id: string }) {
       </div>
       <div className={s.foot}>
         <p className={s.formula}>{formula(r.weights)}</p>
+        {!r.playing && (
+          <Btn
+            icon="download"
+            onClick={async () => {
+              const res = await api.record(r.id);
+              if (!res.ok) {
+                toast(fmtMsg(res.error), "error");
+                return;
+              }
+              downloadRecord(res.bytes, res.filename);
+            }}
+          >
+            {tr("room.downloadLastReplay")}
+          </Btn>
+        )}
         <Btn size="big" icon="logout" onClick={leave}>{tr("room.leave")}</Btn>
         {r.playing ? <Btn kind="pink" size="big" className={s.main} onClick={() => navigate({ name: "play", id })}>{tr("room.backToMatch")}</Btn>
           : isHost ? <Btn kind="pink" size="big" className={s.main} onClick={start}>{armed ? tr("room.forceStart") : tr("solo.start")}</Btn>

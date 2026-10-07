@@ -15,6 +15,7 @@
 //! | POST | `/api/rooms/{id}/leave` | | `{ok}` |
 //! | GET  | `/api/rooms/{id}/state` | | `{room, you, match: {state, hand, handNotes, you, player_id}}` |
 //! | POST | `/api/rooms/{id}/act` | `NetMessage` (`act`, `card`, `cards`, `value`, `prompt`, ...) | `{ok}` or 400 `{error}` |
+//! | GET  | `/api/rooms/{id}/record` | | the last finished match's `.bdrec`, participants only |
 //! | GET  | `/api/rooms/{id}/stream` | | SSE, see [`sse`] |
 //!
 //! Errors are `{error, reason}` with the original game's Chinese messages; `reason`
@@ -65,6 +66,7 @@ pub fn router(
         .route("/api/rooms/{id}/leave", post(api::leave))
         .route("/api/rooms/{id}/state", get(api::room_state))
         .route("/api/rooms/{id}/act", post(api::act))
+        .route("/api/rooms/{id}/record", get(api::record))
         .route("/api/rooms/{id}/stream", get(sse::stream))
         .layer(DefaultBodyLimit::max(game_core::net::MAX_MESSAGE))
         .with_state(server);
@@ -104,11 +106,15 @@ async fn spa_index(State(index): State<PathBuf>, uri: Uri) -> Response {
     }
 }
 
-/// Advance every room by `dt` and apply presence time-outs.
+/// Advance every room by one tick quantum and apply presence time-outs.
 /// Advance every room. The match clock is a worker round-trip, so each room is
 /// checked out of its lock first and the round-trip runs with nothing held --
 /// then the rooms are fanned out over `spawn_blocking` and run in parallel.
-pub async fn tick_all(server: &Arc<Server>, dt: f32) {
+///
+/// `dt` is the game time this call advances and `k` how many whole quanta of
+/// `header.step` that is (see [`spawn_ticker`]); the record logs `k`, so a
+/// replay recomputes the identical f32.
+pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
     let rooms: Vec<(String, Arc<std::sync::Mutex<room::Room>>)> = server
         .rooms
         .lock()
@@ -141,7 +147,7 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32) {
                     changed = true;
                 }
                 if playing {
-                    match m.tick(dt) {
+                    match m.tick(dt, k) {
                         Ok(c) => changed |= c,
                         Err(e) => eprintln!("room {id} tick failed: {e}"),
                     }
@@ -182,17 +188,37 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32) {
     }
 }
 
+/// One tick quantum of **wall** time, the unit the accumulator counts in. At
+/// `TICK_HZ` that is one interval, so `k` is 1 unless the loop stalled.
+pub const TICK_QUANTUM: f32 = 0.05;
+
+/// Drive every room's match on a fixed-step accumulator (`docs/REPLAY.md` §1).
+///
+/// `k = floor(acc / TICK_QUANTUM).min(10)` whole quanta are owed to the engine;
+/// `k == 0` skips the round-trip entirely. Each quantum is
+/// `TICK_QUANTUM * time_scale` of game time, so the record's `step` is that
+/// same number and a replay feeds the engine the identical `tick(dt)` f32s.
+/// The `min(10)` bound is what keeps one long stall from making a single
+/// enormous step.
 pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         let mut iv = tokio::time::interval(Duration::from_millis(1000 / TICK_HZ));
         iv.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let mut last = Instant::now();
+        let mut acc = 0.0f32;
         loop {
             iv.tick().await;
             let now = Instant::now();
             let dt = (now - last).as_secs_f32().min(0.5);
             last = now;
-            tick_all(&server, dt * server.time_scale).await;
+            acc += dt;
+            let k = (acc / TICK_QUANTUM).floor().clamp(0.0, 10.0) as u8;
+            if k == 0 {
+                continue;
+            }
+            acc -= k as f32 * TICK_QUANTUM;
+            let step = TICK_QUANTUM * server.time_scale;
+            tick_all(&server, k as f32 * step, k).await;
         }
     })
 }

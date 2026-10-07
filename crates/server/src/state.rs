@@ -141,3 +141,40 @@ pub fn room_code() -> String {
         .map(|b| ALPHABET[*b as usize % ALPHABET.len()] as char)
         .collect()
 }
+
+/// `yyyy-MM-dd HH:mm` UTC, for a record's `created` (display only). Formatted
+/// by hand -- the server has no calendar dependency and this is the one place
+/// that needs one.
+pub fn now_stamp() -> String {
+    let secs = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0);
+    let (y, m, d) = civil_from_days(secs.div_euclid(86_400));
+    let tod = secs.rem_euclid(86_400);
+    format!(
+        "{y:04}-{m:02}-{d:02} {:02}:{:02}",
+        tod / 3600,
+        (tod % 3600) / 60
+    )
+}
+
+/// `yyyymmdd-hhmm` UTC, for the download filename.
+pub fn now_file_stamp() -> String {
+    let s = now_stamp();
+    format!("{}-{}", s[..10].replace('-', ""), s[11..].replace(':', ""))
+}
+
+/// Howard Hinnant's `civil_from_days`: days since 1970-01-01 -> `(y, m, d)`.
+fn civil_from_days(z: i64) -> (i64, u32, u32) {
+    let z = z + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = (z - era * 146_097) as i64; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}

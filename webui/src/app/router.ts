@@ -2,11 +2,13 @@
 // (and the rsbuild dev server) answer every page path with index.html.
 //
 //   /menu  /gallery  /deck  /lobby  /room/<id>  /play/solo  /play/<roomId>
+//   /replay  /replay/view
 
 import { useSyncExternalStore } from "react";
 
 export type Route =
-  | { name: "menu" | "gallery" | "deck" | "lobby" }
+  | { name: "menu" | "gallery" | "deck" | "lobby" | "replay" }
+  | { name: "replayView" }
   | { name: "room"; id: string }
   | { name: "play"; id: string };
 
@@ -15,6 +17,8 @@ export function parse(path: string): Route | null {
   switch (parts[0]) {
     case "menu": case "gallery": case "deck": case "lobby":
       return { name: parts[0] };
+    case "replay":
+      return parts[1] === "view" ? { name: "replayView" } : { name: "replay" };
     case "room":
       return parts[1] ? { name: "room", id: parts[1] } : { name: "lobby" };
     case "play":
@@ -25,6 +29,7 @@ export function parse(path: string): Route | null {
 }
 
 export function href(r: Route): string {
+  if (r.name === "replayView") return "/replay/view";
   return "/" + ("id" in r ? `${r.name}/${encodeURIComponent(r.id)}` : r.name);
 }
 

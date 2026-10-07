@@ -6,6 +6,12 @@ Official card behaviours are WASM card modules (the authoring choice: **wasmi +
 (`game-core`) never holds card text; every message is a key (see
 [I18N.md](I18N.md)).
 
+The same authoring shape covers the other rule categories: board tiles
+(`rules/tiles`, [TILES.md](TILES.md)) and event cards (`rules/events`,
+[EVENTS.md](EVENTS.md)). An event's `CardDef` id is `event:<id>` and its body is
+the same `On::` table -- `On::Play` for what happens on draw, `On::Hook` for
+what runs while it is active, `On::AtEnd` for expiry.
+
 ## How a card runs
 
 A card effect is straight-line Rust. When it needs a player decision it calls an
@@ -127,6 +133,7 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
 | marks & tokens | `add_mark`, `count_marks`, `remove_marks`, `tok`, `set_tok`, `add_tok` |
+| [CP点] (ABI v36/38) | **Tile marks** (`mark:cp` owner, `docs/TILES.md` → 「Board marks」): `place_cp`, `count_cp`, `count_cp_from`, `clear_cp`, `cp_src_at` -- [CP点] is its own tile-mark category with **no player owner**; the writer stamps the running card instance as provenance. **On-card** [CP点] (`FieldCard::cp`, 「自己[场上]N个[CP点]」): `cp_attached`, `add_cp`, `cp_at`, `add_cp_at` -- the card rule's own stock (user ruling 2026-10-07). Never reach [CP点] through the generic mark ops. |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
 | pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
 | skills & band attachments (ABI v35) | `band_skill` / `character_skill` (the bound rule id, C# `H._fx[i].bands` / `.skill`), `band_skills` (every band attachment as `(uid, id, extra)`), `add_band_skill` (C# `H.MakeBand`; `extra` = 「拿取」 copy: 「相同乐队技能卡的效果不可叠加」 / 「不视为那个乐队的角色」), `invoke_skill` (run a skill rule's press entry `On::Play` for a player -- 「立即执行乐队技能的（2）效果」 / `SkillPareo -> Offer()`. No `skillUsed`: that is the player's own press (`use_skill`).) |
@@ -135,6 +142,7 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals`, `decay` |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `settle_circle_reward`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
+| event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
 
 Prompts can carry an AI preference later (`H.AskXxx`'s `ai` parameter); until
 then bots take the prompt fallback.

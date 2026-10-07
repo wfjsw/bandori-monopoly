@@ -30,3 +30,7 @@ pub use host::{
 };
 pub use wasm_rules::WasmRules;
 pub use world::{CardWorld, Trigger};
+
+/// Measurement counters for `docs/BOT.md` §5 (B0); see `host::bot_cost`.
+#[cfg(feature = "bot-cost")]
+pub use host::bot_cost;

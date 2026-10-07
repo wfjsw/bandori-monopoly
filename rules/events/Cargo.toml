@@ -1,0 +1,13 @@
+[package]
+name = "rules-events"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Event card (事件卡) rules: one CardDef per event, active on the neutral board owner."
+
+[lib]
+# rlib: linked into the shipped module (card-all) like the band crates.
+crate-type = ["rlib"]
+
+[dependencies]
+card-sdk = { path = "../card-sdk", features = ["guest"] }

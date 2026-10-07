@@ -30,20 +30,57 @@ export interface Model {
 
 export function model(v: MatchView): Model {
   const S = v.state;
-  const me = S.players[v.playerId];
+  // A replay's spectator perspective has no seat (`playerId` -1); give the
+  // read-only chrome an empty player rather than crash on `me.*`.
+  const me = S.players[v.playerId] ?? blankPlayer();
   const charOf = (i: number) => D.character(S.players[i]?.character ?? "");
   return {
     v,
     S,
     playerId: v.playerId,
     me,
-    myTurn: S.phase === "play" && S.turn === v.playerId,
+    myTurn: v.playerId >= 0 && S.phase === "play" && S.turn === v.playerId,
     asking: S.prompt.id > 0,
-    out: me.bankrupt || me.left,
+    out: v.playerId < 0 || me.bankrupt || me.left,
     charOf,
     colorOf: (i) => charOf(i)?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length],
-    nameOf: (i) => (i === v.playerId ? tr("common.you") : S.players[i]?.player ?? ""),
+    nameOf: (i) => (i === v.playerId && i >= 0 ? tr("common.you") : S.players[i]?.player ?? ""),
     overHand: v.hand.length > (stateOf(me, "handLimit") || 5),
+  };
+}
+
+/** A zeroed seat, for the spectator perspective (no `me` in the state). */
+function blankPlayer(): MatchPlayer {
+  return {
+    member: 0,
+    player: "",
+    bot: false,
+    ai: false,
+    roll: 0,
+    banDone: false,
+    ban: "",
+    character: "",
+    deckReady: false,
+    money: 0,
+    pos: 0,
+    hand: 0,
+    draw: 0,
+    discard: [],
+    mulligan: false,
+    bankrupt: false,
+    left: false,
+    outOrder: 0,
+    assets: 0,
+    score: 0,
+    rank: 0,
+    state: {},
+    skillCharacter: "",
+    bands: "",
+    tokens: [],
+    skillNote: { k: "" },
+    field: [],
+    actions: [],
+    mentality: "standard",
   };
 }
 
@@ -54,7 +91,7 @@ export function model(v: MatchView): Model {
  * The autopilot itself calls `sess.act` directly and bypasses this guard.
  */
 export async function act(sess: GameSession, cmd: Command): Promise<boolean> {
-  if (sess.autoMode !== "off") return false;
+  if (sess.readOnly || sess.autoMode !== "off") return false;
   const err = await sess.act(cmd);
   if (err) toast(fmtMsg(err, namesOf(sess.view?.state)), "error");
   return !err;

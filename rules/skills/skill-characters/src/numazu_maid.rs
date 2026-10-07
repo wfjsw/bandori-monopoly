@@ -32,8 +32,13 @@ fn mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-/// （1）「游戏开始时如果场上有"Pastel✽Palettes"角色则额外获得1个正面[P✽P粉丝]」.
+/// （1）「游戏开始时如果场上有"Pastel✽Palettes"角色则额外获得1个正面[P✽P粉丝]」,
+/// and （2）'s 「初始1」 -- the PAREO mark starts at 1 (cap 3).
 fn at_start(player_id: i32) -> card_sdk::Asked {
+    // 规则书（2）: 「失去1PAREO标记（初始1，上限3）」 -- the mark exists from
+    // match start, one deep. Written before the (1) loop so the early return
+    // there cannot skip it.
+    ctx::add_tok(player_id, PAREO, 1, 3);
     for p in 0..ctx::player_count() {
         if p != player_id && !ctx::player_out(p) && ctx::in_band(p, "Pastel✽Palettes") {
             ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX);

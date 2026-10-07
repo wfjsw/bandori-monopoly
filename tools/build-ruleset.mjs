@@ -22,8 +22,11 @@ const run = (...args) => {
 };
 const cargo = (...args) => run("cargo", ...args);
 
-// Regenerate the aggregate crate (one shipped module linking every band) so a
-// newly added band crate is picked up automatically.
+// Regenerate the aggregate crate (one shipped module linking every band, the
+// skill crates, `rules/tiles` and `rules/events`) so a newly added rule crate
+// is picked up automatically. That is how event card rules (`rules/events`,
+// `docs/EVENTS.md`) land in `card_all`: the aggregate scans them, this build
+// links the result.
 run(process.execPath, "tools/rules-aggregate.mjs");
 
 cargo("build", "--manifest-path", "rules/Cargo.toml", "--workspace",

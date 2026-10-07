@@ -371,3 +371,64 @@ fn final_score_and_ranking() {
     };
     assert_eq!(order, vec![r0, r1, 4, 3], "later elimination ranks higher");
 }
+
+/// P0 (`docs/PURCHASE.md`): `quote_native` matches today's buy price on every
+/// tile -- land price plus the houses already standing on it -- and the
+/// force-buy base is twice that. No behaviour change, just the surface.
+#[test]
+fn quote_native_matches_todays_prices_on_every_tile() {
+    let d = data();
+    let (_d, w) = setup(4);
+    let st = &w.st;
+    for t in 0..d.tiles.len() {
+        let tile = &d.tiles[t];
+        let expect = tile.price + st.houses.get(t).copied().unwrap_or(0) * tile.house;
+        assert_eq!(
+            purchase::quote_native(&d, st, t),
+            expect,
+            "quote_native(tile {t}) == price + houses*house"
+        );
+        assert_eq!(
+            purchase::force_price_native(&d, st, t),
+            2 * expect.max(0),
+            "force_price_native(tile {t}) == 2x"
+        );
+        // The engine's own `buy_price` is the same formula.
+        assert_eq!(w.buy_price(&d, t as i32), expect, "World::buy_price(tile {t})");
+    }
+    // A tile with houses on it counts them in.
+    let prop = d
+        .tiles
+        .iter()
+        .position(|t| t.is_buyable() && t.house > 0)
+        .expect("a buyable tile with a house cost");
+    let mut w2 = w.clone();
+    w2.st.houses[prop] = 2;
+    let expect = d.tiles[prop].price + 2 * d.tiles[prop].house;
+    assert_eq!(purchase::quote_native(&d, &w2.st, prop), expect);
+    assert_eq!(purchase::force_price_native(&d, &w2.st, prop), 2 * expect);
+}
+
+/// P0: `assign_deed` is the one ownership primitive -- owner / houses /
+/// mortgage in one write -- and `default_deal` picks the rulebook defaults.
+#[test]
+fn assign_deed_writes_owner_houses_mortgage() {
+    let d = data();
+    let (_d, mut w) = setup(2);
+    let t = d.tiles.iter().position(|x| x.is_buyable()).unwrap();
+    purchase::assign_deed(&mut w, t, 1, 3, true);
+    assert_eq!(w.st.owners[t], 1);
+    assert_eq!(w.st.houses[t], 3);
+    assert!(w.st.mortgaged[t]);
+    // A land buy clears the mortgage and keeps the houses.
+    let deal = purchase::default_deal(&d, &w.st, t, 0, purchase::BuyKind::Land, 500, false);
+    assert_eq!(deal.seller, -1, "land buy pays the bank");
+    assert_eq!(deal.owner_after, 0);
+    assert_eq!(deal.houses_after, 3, "houses stay unless a hook razes");
+    assert!(!deal.mortgaged_after, "a land buy clears the mortgage");
+    // A force-buy names the owner as payee and keeps the mortgage by default.
+    let deal = purchase::default_deal(&d, &w.st, t, 0, purchase::BuyKind::Force, 1000, true);
+    assert_eq!(deal.seller, 1, "force-buy pays the owner");
+    assert!(deal.mortgaged_after, "FORCE_STAYS_MORTGAGED keeps it");
+    assert!(!deal.direct, "direct is set by FORCE_FIXED, not by kind");
+}

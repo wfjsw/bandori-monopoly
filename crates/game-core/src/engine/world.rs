@@ -465,6 +465,18 @@ impl World {
         st.event_deck = self.event_deck.len() as i32;
         st.event_discard = self.event_discard.clone();
         st.event_removed = self.event_removed.clone();
+        // Active events ride their rule instance (`docs/EVENTS.md`): the view's
+        // counters mirror the instance's crystals / props so the client shows
+        // what the body is counting without a second store.
+        for e in st.event_active.iter_mut() {
+            let rid = crate::data::event_rule_id(&e.id);
+            if let Some(f) = st.board_field.iter().find(|f| f.card == rid && f.tile < 0) {
+                e.counter = f.crystals;
+                e.counter2 = f.props.get("count2").copied().unwrap_or(0);
+                e.note = f.note.clone();
+                e.face_down = f.face_down;
+            }
+        }
         st
     }
 }

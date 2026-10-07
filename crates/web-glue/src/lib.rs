@@ -12,17 +12,22 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use game_core::data::{CharacterData, GameData};
+use game_core::data::{CharacterData, GameData, DATA_FILES};
 use game_core::deck;
-use game_core::engine::{CardRules, Match, StubRules};
+use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::profile::{PlayerProfile, Seen};
 use game_core::progression;
+use game_core::record::{
+    decode_record, encode_record_zst, parse_header, parse_header_bytes, parse_record, EngineStamp,
+    MatchSetup, RecordedMatch, Replayer, RECORD_VERSION,
+};
 use game_core::scoring::ScoreWeights;
 use game_core::MatchMode;
 use game_rules::WasmRules;
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::*;
 
 /// The browser engine is long-lived and allocates on every tick, so the
@@ -36,6 +41,11 @@ static ALLOC: talc::wasm::WasmDynamicTalc = talc::wasm::new_wasm_dynamic_allocat
 
 thread_local! {
     static DATA: RefCell<Option<Arc<GameData>>> = const { RefCell::new(None) };
+    /// Sha256 over the `DATA_FILES` contents in order, captured by [`load_data`].
+    static DATA_SHA: RefCell<String> = const { RefCell::new(String::new()) };
+    /// `Ruleset::sha256()` of the last [`ruleset_build`]; `"stub"` when the
+    /// page runs without card modules.
+    static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn data() -> Result<Arc<GameData>, JsError> {
@@ -56,14 +66,69 @@ fn character<'a>(d: &'a GameData, name: &str) -> Result<&'a CharacterData, JsErr
         .ok_or_else(|| JsError::new(&format!("unknown character {name}")))
 }
 
-/// `files_json`: `{"board.json": "<contents>", ...}` for every file in `DATA_FILES`.
+/// `files_json`: `{"board.json": "<contents>", ...}` for every file in
+/// `DATA_FILES`, plus the optional `deck_book.json` (bot deck book,
+/// `docs/BOT.md` §3.7) when the client has one.
 #[wasm_bindgen]
 pub fn load_data(files_json: &str) -> Result<(), JsError> {
     let files: HashMap<String, String> = parse("files", files_json)?;
     let d = GameData::load(|f| files.get(f).cloned().ok_or_else(|| "missing".to_string()))
         .map_err(|e| JsError::new(&e))?;
+    // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
+    // can tell whether the board / card data it was written against is here.
+    let mut hasher = Sha256::new();
+    for name in DATA_FILES {
+        if let Some(contents) = files.get(name) {
+            hasher.update(contents.as_bytes());
+        }
+    }
+    let sha = hex(&hasher.finalize());
+    DATA_SHA.with(|s| *s.borrow_mut() = sha);
     DATA.with(|slot| *slot.borrow_mut() = Some(Arc::new(d)));
     Ok(())
+}
+
+fn hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
+}
+
+fn data_sha() -> String {
+    DATA_SHA.with(|s| s.borrow().clone())
+}
+
+fn ruleset_sha() -> String {
+    RULESET_SHA.with(|s| {
+        let s = s.borrow().clone();
+        if s.is_empty() {
+            "stub".to_string()
+        } else {
+            s
+        }
+    })
+}
+
+/// The [`EngineStamp`] of the engine that is running right now: format
+/// versions from game-core, the ABI from `card-sdk` via game-rules, and the
+/// data / ruleset hashes captured by [`load_data`] and [`ruleset_build`].
+#[wasm_bindgen]
+pub fn engine_stamp() -> String {
+    json(&EngineStamp {
+        format: RECORD_VERSION,
+        save_version: SAVE_VERSION,
+        abi: game_rules::ABI_VERSION as u32,
+        ruleset_sha256: ruleset_sha(),
+        data_sha256: data_sha(),
+        engine: "game-core".into(),
+        build: env!("CARGO_PKG_VERSION").into(),
+    })
+}
+
+fn stamp() -> EngineStamp {
+    parse::<EngineStamp>("stamp", &engine_stamp()).unwrap_or_default()
 }
 
 /// The file names `load_data` needs.
@@ -88,6 +153,35 @@ pub fn deck_pool(character_name: &str) -> Result<String, JsError> {
 pub fn deck_preset(character_name: &str) -> Result<String, JsError> {
     let d = data()?;
     Ok(json(&deck::preset(&d, character(&d, character_name)?)))
+}
+
+/// The deck 托管 / a standard bot should submit at this table: the deck book's
+/// entry for the public key when it has one, else the character's preset
+/// (`docs/BOT.md` §3.7). Pure -- no RNG.
+///
+/// * `seat` -- own seat (turn order index).
+/// * `opponents_json` -- the other seats' characters in seat order
+///   (`["...", ...]`). Never an opponent's deck.
+///
+/// The book must match the running ruleset's hash (the one `ruleset_build`
+/// produced, `"stub"` without card modules) and the `standard` policy;
+/// otherwise the whole book is ignored and this is just [`deck_preset`].
+#[wasm_bindgen]
+pub fn deck_suggest(
+    character_name: &str,
+    seat: i32,
+    opponents_json: &str,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let c = character(&d, character_name)?;
+    let opponents: Vec<String> = parse("opponents", opponents_json)?;
+    Ok(json(&game_core::deck_book::suggest(
+        &d,
+        c,
+        seat.max(0) as usize,
+        &opponents,
+        &ruleset_sha(),
+    )))
 }
 
 /// Usable ids from `ids_json`, at most 10, in pool order.
@@ -292,6 +386,7 @@ pub fn ruleset_build() -> Result<usize, JsError> {
             .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
         let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
         let n = set.module_count();
+        RULESET_SHA.with(|s| *s.borrow_mut() = set.sha256().to_string());
         let rules = WasmRules::new(set, data()?);
         RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
         Ok(n)
@@ -306,15 +401,18 @@ fn rules() -> Result<Arc<dyn CardRules>, JsError> {
 
 // ------------------------------------------------------------------ solo match
 
-/// A match running entirely in the browser (solo mode vs bots).
+/// A match running entirely in the browser (solo mode vs bots). Wraps a
+/// [`RecordedMatch`], so the whole game can be exported as a `.bdrec`.
 #[wasm_bindgen]
 pub struct SoloMatch {
-    m: Match,
+    m: RecordedMatch,
 }
 
 #[wasm_bindgen]
 impl SoloMatch {
-    /// `members_json`: `RoomMember[]`; `mode`: 0 solo, 1 casual, 2 ranked.
+    /// `members_json`: `RoomMember[]` (each carries its `mentality`);
+    /// `seed`: the match seed; `mode`: 0 solo, 1 casual, 2 ranked;
+    /// `weights_json`: `ScoreWeights` (empty = default).
     #[wasm_bindgen(constructor)]
     pub fn new(
         members_json: &str,
@@ -329,25 +427,56 @@ impl SoloMatch {
             parse("weights", weights_json)?
         };
         let mode = MatchMode::from_i32(mode).unwrap_or_default();
+        let setup = MatchSetup {
+            members,
+            seed: seed as u64,
+            weights,
+        };
         Ok(SoloMatch {
-            m: Match::new(data()?, rules()?, &members, seed as u64, mode, weights),
+            m: RecordedMatch::new(data()?, rules()?, setup, mode),
         })
     }
 
-    /// Rebuild a match from [`SoloMatch::save`] (page refresh).
+    /// Rebuild a match from [`SoloMatch::save`] (page refresh). The record
+    /// restarts at the snapshot and is marked `partial`; use
+    /// [`SoloMatch::restore_with_record`] to keep the log.
     pub fn restore(json: &str) -> Result<SoloMatch, JsError> {
+        let m = Match::restore(data()?, rules()?, json)
+            .map_err(|e| JsError::new(&e.to_string()))?;
         Ok(SoloMatch {
-            m: Match::restore(data()?, rules()?, json).map_err(|e| JsError::new(&e.to_string()))?,
+            m: RecordedMatch::from_snapshot(m),
         })
+    }
+
+    /// [`SoloMatch::restore`], but with the recorder JSON from
+    /// [`SoloMatch::record_state`] beside it: the log continues where it left
+    /// off, so the exported record covers the whole match.
+    pub fn restore_with_record(&self, save: &str, rec: &str) -> Result<SoloMatch, JsError> {
+        let m = RecordedMatch::restore(data()?, rules()?, save, rec)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(SoloMatch { m })
     }
 
     /// The whole match as JSON, for `restore`.
     pub fn save(&self) -> String {
-        self.m.save()
+        self.m.inner().save()
     }
 
+    /// The recorder beside [`SoloMatch::save`] (persist the two together).
+    pub fn record_state(&self) -> String {
+        self.m.recorder_json()
+    }
+
+    /// One recorded tick quantum: `dt = k * 0.05`, k in 1..=10. This is what
+    /// the solo driver should call; [`SoloMatch::tick`] is kept for the
+    /// unrecorded path and writes nothing to the log.
+    pub fn tick_steps(&mut self, k: u8) {
+        self.m.tick_steps(k);
+    }
+
+    /// Unrecorded tick. Prefer [`SoloMatch::tick_steps`].
     pub fn tick(&mut self, dt: f32) {
-        self.m.tick(dt);
+        self.m.inner_mut().tick(dt);
     }
 
     /// Skip ban/pick/deck with random characters and preset decks.
@@ -373,14 +502,15 @@ impl SoloMatch {
     /// same shape as the server's `match` frame. `aiAnswer` / `playable` are the
     /// per-viewer extras from [`Match::view_extra`] (the 托管 autopilot's inputs).
     pub fn view(&self, member: i32) -> String {
-        let state = self.m.state();
+        let m = self.m.inner();
+        let state = m.state();
         let player_id = state.player_of(member);
-        let extra = self.m.view_extra(member);
+        let extra = m.view_extra(member);
         json(&serde_json::json!({
             "state": state,
-            "hand": self.m.hand_of(member),
-            "handNotes": self.m.hand_notes_of(member),
-            "draw": self.m.draw_of(member),
+            "hand": m.hand_of(member),
+            "handNotes": m.hand_notes_of(member),
+            "draw": m.draw_of(member),
             "you": member,
             "playerId": player_id,
             "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
@@ -389,18 +519,196 @@ impl SoloMatch {
     }
 
     pub fn events_since(&self, last_id: i32) -> String {
-        json(&self.m.events_since(last_id))
+        json(&self.m.inner().events_since(last_id))
     }
 
     pub fn take_changed(&mut self) -> bool {
-        self.m.take_changed()
+        self.m.inner_mut().take_changed()
     }
 
     pub fn ended(&self) -> bool {
-        self.m.ended()
+        self.m.inner().ended()
     }
 
     pub fn finish(&mut self) {
         self.m.finish();
     }
+
+    /// Seal the record as a `.bdrec` JSON string (`created` is a display
+    /// timestamp, `yyyy-MM-dd HH:mm`).
+    pub fn record(&self, created: &str) -> Result<String, JsError> {
+        Ok(json(&self.m.export(stamp(), created)))
+    }
+
+    /// [`SoloMatch::record`], with the public event log bundled into the body
+    /// (re-simulated at export). Bigger, but the log-only view works even if
+    /// the engine's rules drift later.
+    pub fn record_with_events(&self, created: &str) -> Result<String, JsError> {
+        let file = self
+            .m
+            .export_with_events(data()?, rules()?, stamp(), created)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(json(&file))
+    }
+
+    /// [`SoloMatch::record`], zstd-framed: what goes to IndexedDB and what a
+    /// download writes. The compression runs here (the browser has no reliable
+    /// zstd), so the bytes are a standard zstd frame of the record JSON.
+    pub fn record_zst(&self, created: &str) -> Result<Vec<u8>, JsError> {
+        Ok(encode_record_zst(&self.m.export(stamp(), created)))
+    }
+
+    /// [`SoloMatch::record_zst`], with the public event log bundled.
+    pub fn record_with_events_zst(&self, created: &str) -> Result<Vec<u8>, JsError> {
+        let file = self
+            .m
+            .export_with_events(data()?, rules()?, stamp(), created)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(encode_record_zst(&file))
+    }
+}
+
+// ------------------------------------------------------------------ replay
+
+/// Plays a `.bdrec` back through the same engine the solo match runs.
+#[wasm_bindgen]
+pub struct ReplayMatch {
+    rp: Replayer,
+}
+
+#[wasm_bindgen]
+impl ReplayMatch {
+    /// `json` is a `.bdrec` (or its plain-JSON form). `force` plays through a
+    /// stamp mismatch; without it any difference refuses the replay and the
+    /// error carries the [`game_core::record::Mismatch`] list.
+    #[wasm_bindgen(constructor)]
+    pub fn from_record(json: &str, force: bool) -> Result<ReplayMatch, JsError> {
+        let rec = parse_record(json).map_err(|e| JsError::new(&e.to_string()))?;
+        let rp = Replayer::new_with_stamp(data()?, rules()?, &rec, &stamp(), force)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(ReplayMatch { rp })
+    }
+
+    /// [`ReplayMatch::from_record`] over raw `.bdrec` bytes: zstd (the current
+    /// form), gzip (older downloads and IndexedDB rows) or plain JSON. The
+    /// sniffing and decompression happen in `game_core::record::decode_record`,
+    /// so every framing plays in the browser.
+    pub fn from_record_bytes(bytes: &[u8], force: bool) -> Result<ReplayMatch, JsError> {
+        let rec = decode_record(bytes).map_err(|e| JsError::new(&e.to_string()))?;
+        let rp = Replayer::new_with_stamp(data()?, rules()?, &rec, &stamp(), force)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(ReplayMatch { rp })
+    }
+
+    /// The `RecordHeader` JSON (seats, stamp, ticks, ...).
+    pub fn header(&self) -> String {
+        json(self.rp.header())
+    }
+
+    /// What would block this replay right now: the [`Mismatch`] list as JSON
+    /// (empty array = play).
+    pub fn compat(&self) -> String {
+        json(&game_core::record::compat(&stamp(), &self.rp.header().engine))
+    }
+
+    /// Advance at most `n` tick quanta. Returns the `Status` JSON
+    /// (`{tick, ended, diverged}`).
+    pub fn step(&mut self, n: u32) -> String {
+        json(&self.rp.step_ticks(n))
+    }
+
+    /// Apply exactly one log entry (a whole tick run, or one call).
+    pub fn next_input(&mut self) -> String {
+        json(&self.rp.next_input())
+    }
+
+    /// Advance the background keyframe pass by at most `budget` inputs.
+    /// Returns the `IndexStatus` JSON.
+    pub fn index(&mut self, budget: u32) -> String {
+        json(&self.rp.index(budget as usize))
+    }
+
+    /// Jump to `tick` (clamped to [`ReplayMatch::total_ticks`]).
+    pub fn seek(&mut self, tick: u32) -> Result<String, JsError> {
+        let st = self
+            .rp
+            .seek(tick as u64)
+            .map_err(|e| JsError::new(&e.to_string()))?;
+        Ok(json(&st))
+    }
+
+    /// Turn marks for the scrub bar: `[{round, turn, tick}, ...]`.
+    pub fn turns(&self) -> String {
+        json(&self.rp.turns())
+    }
+
+    /// Ticks in the whole record (the scrub bar's right edge).
+    pub fn total_ticks(&self) -> u32 {
+        self.rp.total_ticks().min(u32::MAX as u64) as u32
+    }
+
+    /// The same frame shape as [`SoloMatch::view`]. `member` 0 is the
+    /// spectator: no hand, no draw, no per-viewer extras.
+    pub fn view(&self, member: i32) -> String {
+        let m = self.rp.match_ref();
+        let state = m.state();
+        if member == 0 {
+            return json(&serde_json::json!({
+                "state": state,
+                "hand": [],
+                "handNotes": [],
+                "draw": [],
+                "you": 0,
+                "playerId": -1,
+                "aiAnswer": serde_json::Value::Null,
+                "playable": serde_json::Value::Null,
+            }));
+        }
+        let player_id = state.player_of(member);
+        let extra = m.view_extra(member);
+        json(&serde_json::json!({
+            "state": state,
+            "hand": m.hand_of(member),
+            "handNotes": m.hand_notes_of(member),
+            "draw": m.draw_of(member),
+            "you": member,
+            "playerId": player_id,
+            "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
+            "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
+        }))
+    }
+
+    /// Events the replayer has produced so far (the full stream, not the
+    /// engine's 400-tail).
+    pub fn events_since(&self, last_id: i32) -> String {
+        json(&self.rp.events_since(last_id))
+    }
+
+    pub fn take_changed(&mut self) -> bool {
+        self.rp.match_mut().take_changed()
+    }
+
+    /// Nothing left to play (log exhausted, or the match ended early).
+    pub fn ended(&self) -> bool {
+        self.rp.ended()
+    }
+
+    /// The `Status` JSON without advancing.
+    pub fn status(&self) -> String {
+        json(&self.rp.status())
+    }
+}
+
+/// Cheap header-only parse of a `.bdrec` for the replay list (no body check).
+#[wasm_bindgen]
+pub fn record_header(json_str: &str) -> Result<String, JsError> {
+    let h = parse_header(json_str).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(json(&h))
+}
+
+/// [`record_header`] over raw `.bdrec` bytes -- zstd, gzip or plain JSON.
+#[wasm_bindgen]
+pub fn record_header_bytes(bytes: &[u8]) -> Result<String, JsError> {
+    let h = parse_header_bytes(bytes).map_err(|e| JsError::new(&e.to_string()))?;
+    Ok(json(&h))
 }

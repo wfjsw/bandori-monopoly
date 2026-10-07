@@ -3,6 +3,13 @@
 //! Black-box: effects from different cards / skills meeting on one timing.
 //! Expectations come from the sheet extracts (`target/scratch/rb/*.md`) and
 //! `data/rules.txt` (32, 89 and the counter rulings).
+//!
+//! Chain order is **ruling 2026-10-07**: the ask ring starts with the initial
+//! user (the player whose action or effect raised the link; the active turn
+//! player when there is no player), each visit exhausts every eligible
+//! counteraction or ends on an explicit pass, laps continue until a quiet lap,
+//! and a counter's own round starts with its declarer. LIFO resolution is
+//! unchanged.
 
 mod common;
 
@@ -93,7 +100,10 @@ fn c01_a_single_counter_answers_a_multi_target_card() {
     set_draw_n(&mut t, 1, 3);
     t.give(1, &["AG:宣战布告"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    // The window is offered to P1 (the seat after the trigger's player, 89).
+    // ruling 2026-10-07: the ring starts at the initial user (P0, who played
+    // 武道馆). P0 holds no counter, so it is skipped without a prompt and the
+    // first offer is P1 -- the old rule (seat after the trigger player) gave
+    // the same first offer only by accident here.
     assert_eq!(t.asked(), vec![1], "{}", t.dump_prompt());
     assert!(t.counteract_offered("AG:宣战布告"), "{}", t.dump_prompt());
     t.counteract(1, "AG:宣战布告").unwrap();
@@ -120,11 +130,15 @@ fn c02_two_counters_on_the_same_timing() {
     t.give(1, &["AG:宣战布告"]);
     t.give(2, &["AG:宣战布告"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    // The asks go P1, then P2; both windows answer 登上武道馆.
+    // ruling 2026-10-07: the ring starts at the initial user P0, who holds no
+    // counter and is skipped; P1 is the first offer. Both windows answer
+    // 登上武道馆 (X), not each other.
     assert_eq!(t.asked(), vec![1], "{}", t.dump_prompt());
     assert_eq!(answered_card(&t).as_deref(), Some("通用:登上武道馆"));
     t.counteract(1, "AG:宣战布告").unwrap();
-    assert_eq!(t.asked(), vec![2], "priority passes on: {}", t.dump_prompt());
+    // ruling 2026-10-07: P1's visit is exhausted (its only counter is spent),
+    // so priority advances to the next seat -- not the declaration itself.
+    assert_eq!(t.asked(), vec![2], "the visit exhausted, priority advances: {}", t.dump_prompt());
     assert_eq!(
         answered_card(&t).as_deref(),
         Some("通用:登上武道馆"),
@@ -155,16 +169,19 @@ fn c03_counter_to_counter_cancels_designation() {
     t.give(1, &["AG:宣战布告"]);
     t.give(0, &["通用:网络链接异常"]);
     t.give_play(0, "通用:登上武道馆").unwrap();
-    // Round on X. P1 declares 宣战布告.
+    // Round on X. ruling 2026-10-07: the ring starts at the initial user P0,
+    // whose 网络链接异常 answers a *counter's* play and is therefore not
+    // eligible on X -- P0 is skipped and P1 is the first offer. P1 declares
+    // 宣战布告.
     assert_eq!(t.asked(), vec![1], "{}", t.dump_prompt());
     assert_eq!(answered_card(&t).as_deref(), Some("通用:登上武道馆"));
     t.counteract(1, "AG:宣战布告").unwrap();
-    // The round on X continues: P2 then P0 pass. 网络链接异常 is not yet
-    // offered against the *counter* (counters to counters wait, 89).
+    // The round on X closes (nobody holds a card eligible on X);
+    // 网络链接异常 is not offered against the *counter* yet (counters to
+    // counters wait until the round on X has closed, 89).
     while t.prompt().is_some() {
         let asked = t.asked();
         assert_eq!(asked.len(), 1, "{}", t.dump_prompt());
-        let who = asked[0];
         let answering = answered_card(&t);
         if answering.as_deref() == Some("AG:宣战布告") {
             break;
@@ -176,11 +193,11 @@ fn c03_counter_to_counter_cancels_designation() {
             t.dump_prompt()
         );
         t.decline();
-        if who == 0 {
-            // the ring lap closed
-        }
     }
-    // The round on 宣战布告 is open; P2 then P0 are asked.
+    // The round on 宣战布告 is open. ruling 2026-10-07 point 4: it starts with
+    // its declarer P1, who holds no card that answers a counter's play and is
+    // skipped; P2 holds nothing either, so the only offer is P0's
+    // 网络链接异常.
     assert!(t.prompt().is_some(), "round on 宣战布告");
     assert_eq!(
         answered_card(&t).as_deref(),
@@ -188,7 +205,7 @@ fn c03_counter_to_counter_cancels_designation() {
         "the new timing: {}",
         t.dump_prompt()
     );
-    // P2 passes, then P0 declares 网络链接异常.
+    // P0 declares 网络链接异常 when asked.
     while t.prompt().is_some() {
         let asked = t.asked();
         assert_eq!(asked.len(), 1, "{}", t.dump_prompt());
@@ -335,7 +352,8 @@ fn c07_three_deep_encore_negated() {
         }
         t.decline();
     }
-    // Round on 安可 (asks P2, P0, P1): P2 declares 网络链接异常.
+    // Round on 安可: ruling 2026-10-07 point 4 starts it with its declarer P1,
+    // who is out of cards and is skipped; P2's 网络链接异常 is next.
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("通用:网络链接异常") {
@@ -366,14 +384,16 @@ fn c07_three_deep_encore_negated() {
 // C8. The user counters their own card's abnormal move
 // =====================================================================
 
-// 规则书: 89 -- the ring is P1 then P0. 安可: 「因任何原因」.
+// 规则书: 89 / ruling 2026-10-07 -- the ring starts with the initial user
+// (P0, who played 无路矢), not with the seat after them. 安可: 「因任何原因」.
 // 无路矢: designate another player's tile, gain 2 [除外], teleport when it hits 0.
-#[ignore = "DISCREPANCY: 安可 does not cancel 无路矢's self-[除外]; P0 still gains 2 exile"]
+// (Old expectation, rewritten per ruling 2026-10-07: the ring was P1 then P0
+// with P1 asked first; the ring order is now asserted per window.)
 #[test]
 fn c08_user_counters_own_card() {
     let mut t = Table::vanilla(2);
     t.set_pos(1, 10);
-    // P1 holds a decoy so the ring is observable (P1 is asked first).
+    // P1 holds a decoy so the ring is observable (both seats eligible).
     t.give(1, &["通用:网络链接异常"]);
     t.give(0, &["通用:安可"]);
     t.give_play(0, "MyGO:无路矢").unwrap();
@@ -386,21 +406,50 @@ fn c08_user_counters_own_card() {
             break;
         }
     }
-    // The counter window: P1 first, then P0.
-    let mut order = vec![];
+    // The counter windows: ruling 2026-10-07 -- the ring starts with the
+    // initial user P0. Record every ask as (who, window), where the window is
+    // the link its detail line names, so the ring order can be checked per
+    // window. (The old rule asked P1 first in every window.)
+    let mut order: Vec<(usize, String)> = vec![];
     loop {
-        let Some(_) = t.prompt() else { break };
+        let Some(p) = t.prompt() else { break };
         let asked = t.asked();
         assert_eq!(asked.len(), 1, "{}", t.dump_prompt());
-        order.push(asked[0]);
+        order.push((asked[0], format!("{:?}", p.text)));
         if asked[0] == 0 && t.counteract_offered("通用:安可") {
             t.counteract(0, "通用:安可").unwrap();
         } else {
             t.decline();
         }
     }
-    assert_eq!(order.first(), Some(&1), "P1 before P0: {order:?}");
-    assert!(order.contains(&0), "P0 is in the ring: {order:?}");
+    // ruling 2026-10-07: within every window that asks both seats, the initial
+    // user P0 leads P1. A window whose link only P1's decoy answers skips P0
+    // (no eligible card) and may ask P1 alone.
+    let mut by_win: Vec<(String, Vec<usize>)> = vec![];
+    for (who, win) in &order {
+        match by_win.iter_mut().find(|(w, _)| w == win) {
+            Some((_, asks)) => asks.push(*who),
+            None => by_win.push((win.clone(), vec![*who])),
+        }
+    }
+    for (win, asks) in &by_win {
+        let p0 = asks.iter().position(|&w| w == 0);
+        let p1 = asks.iter().position(|&w| w == 1);
+        if let (Some(i0), Some(i1)) = (p0, p1) {
+            assert!(
+                i0 < i1,
+                "the initial user P0 leads P1 in one window (ruling 2026-10-07): {win} -> {asks:?}"
+            );
+        }
+    }
+    assert!(
+        order.iter().any(|(w, _)| *w == 0),
+        "P0 is in the ring: {order:?}"
+    );
+    assert!(
+        order.iter().any(|(w, _)| *w == 1),
+        "P1 is in the ring: {order:?}"
+    );
     eprintln!("c08 record: order = {order:?}, exile = {}", t.state(0, "exile"));
     // 安可 answers the [除外] application (an abnormal move), not the play.
     assert_eq!(t.state(0, "exile"), 0, "P0 gets no exile");

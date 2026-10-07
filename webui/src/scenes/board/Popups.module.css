@@ -48,6 +48,10 @@
 .pileRow { display: flex; gap: 12px; align-items: flex-start; }
 .who { display: flex; align-items: center; gap: 6px; width: 120px; flex: none; font-size: 14px; font-weight: 700; }
 .pileCards { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 场上的卡: a card face (the graveyard's size) with its live note (crystals, counters) under it. */
+.fieldSlot { display: flex; flex-direction: column; gap: 3px; width: 120px; }
+.fieldSlot small { font-size: 11px; line-height: 1.3; color: var(--sub); overflow-wrap: anywhere; }
+.faceDown img { width: 120px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.12); }
 
 .confirm { display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
 .confirm p { white-space: pre-wrap; font-size: 18px; }

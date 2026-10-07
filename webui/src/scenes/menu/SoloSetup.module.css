@@ -2,12 +2,17 @@
 .top { display: flex; gap: 20px; align-items: flex-start; }
 .desc { flex: 1; font-size: 13px; color: var(--sub); line-height: 1.6; }
 .score { min-width: 184px; }
-.rows { display: flex; flex-direction: column; gap: 9px; width: 386px; min-height: 260px; max-height: 330px; overflow: auto; }
-.row { display: flex; align-items: center; gap: 12px; height: 56px; flex: none; border-radius: 10px; background: var(--light-pill); padding: 0 10px; font-size: 19px; }
-.row b { flex: 1; }
+.rows { display: flex; flex-direction: column; gap: 9px; width: 520px; min-height: 260px; max-height: 330px; overflow: auto; }
+.row { display: flex; align-items: center; gap: 12px; height: 60px; flex: none; border-radius: 10px; background: var(--light-pill); padding: 0 10px; font-size: 19px; }
 .you { background: var(--pink-pale); }
-.ic { width: 38px; height: 38px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; color: var(--sub); }
-.you .ic { color: var(--pink); }
+/* The character button: the seat's avatar, or the 随机 swirl. */
+.charBtn { flex: none; width: 48px; height: 48px; padding: 0; border: none; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
+.charBtn:hover { box-shadow: 0 3px 10px rgba(237, 78, 118, 0.28); }
+.randomAv { width: 44px; height: 44px; border-radius: 50%; background: var(--light-pill); display: flex; align-items: center; justify-content: center; color: var(--sub); }
+.nameCol { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.25; }
+.nameCol b { font-size: 19px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.charName { font-size: 13px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.charRandom { opacity: 0.75; font-style: italic; }
 .tag { width: 76px; text-align: center; font-size: 13px; color: var(--sub); }
 .mentalityRow { display: flex; align-items: center; gap: 10px; }
 .mentalityLabel { font-size: 15px; color: var(--sub); margin-right: 4px; }
@@ -17,7 +22,7 @@
 .mentalityTagChaos { background: var(--pink); color: #fff; }
 .youTag { background: var(--pink); color: #fff; border-radius: 13px; line-height: 26px; }
 .x, .xSpace { width: 34px; height: 34px; flex: none; }
-.x { border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; }
+.x { border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; }
 .foot { display: flex; align-items: center; gap: 36px; padding: 10px 20px 4px; }
 .add { width: 284px; }
 .count { width: 180px; font-size: 24px; }
@@ -25,3 +30,12 @@
 .go { width: 248px; }
 .resume { display: flex; flex-direction: column; gap: 20px; align-items: center; font-size: 19px; }
 .resumeBtns { display: flex; gap: 16px; }
+/* The character picker: band chips over a card grid (Deck's picker shape). */
+.picker { display: flex; flex-direction: column; gap: 14px; }
+.pickerGrid { height: 560px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 124px); gap: 14px; align-content: start; padding: 4px; }
+/* 随机: one card-width tile ahead of the character grid. */
+.randomCard { display: flex; flex-direction: column; width: 124px; background: #fff; border: none; border-radius: 6px; padding: 5px 5px 10px; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.1); cursor: pointer; }
+.randomCard:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(80, 40, 60, 0.16); }
+.randomOn { box-shadow: 0 0 0 4px var(--pink-light), 0 6px 14px rgba(237, 78, 118, 0.25); }
+.randomFace { height: 136px; border-radius: 4px; background: var(--light-pill); color: var(--sub); display: flex; align-items: center; justify-content: center; }
+.randomName { margin-top: 8px; font-size: 15px; font-weight: 700; color: var(--text); }

@@ -4,9 +4,37 @@ version.workspace = true
 edition.workspace = true
 description = "Shared match state, data models, step machine and Ruleset boundary. Compiles native AND wasm32."
 
+[features]
+# Measurement counters for docs/BOT.md §5 (B0). Off by default; zero
+# behavioural difference -- a few `AtomicU64` bumps in `Cx::world_copy`.
+bot-cost = []
+
 [dependencies]
 serde = { workspace = true, features = ["rc"] }
 bitflags = { workspace = true }
 serde_json = { workspace = true }
+# One zstd frame format for every target (wasm and native alike): two
+# encoders, one decoder. `zstd-sys` would need a C toolchain for wasm32.
+# Decode is `ruzstd` everywhere (battle-tested decoder, 70M downloads).
+ruzstd = "0.9.0"
+# Browser-side encode: `structured-zstd` (the maintained continuation of
+# `ruzstd` by its original author) has a real level-1 encoder, where
+# `ruzstd`'s only implemented level compresses record JSON far worse.
+# Measured on the 200-round record: level 1 matches the reference `zstd`
+# binding within a byte. Pure Rust, wasm32-ready. See `record::zst_encode`.
+structured-zstd = { version = "0.0.58", default-features = false, features = ["hash", "std"] }
+# gzip inflate for legacy `.bdrec` downloads and IndexedDB rows (the browser
+# used `CompressionStream("gzip")` before zstd). Pure Rust (miniz_oxide), so it
+# also builds for wasm32. Encode here too -- the size-comparison test and the
+# gzip sniffing round trip need it.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+
+# Native encode: the reference binding at level 1, the strictest witness
+# available for the "standard zstd frames" claim. Off on wasm32 --
+# `zstd-sys` needs a C toolchain there. The tests use it both ways: the
+# reference must read what the pure-Rust browser encoder writes, and vice
+# versa (see `record::zst_encode` / `zst_encode_pure`).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+zstd = "0.13"
 
 [dev-dependencies]

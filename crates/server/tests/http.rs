@@ -21,6 +21,13 @@ fn data() -> Arc<GameData> {
 
 /// Start a server with a fast clock. Returns its base URL.
 async fn spawn(presence_timeout: Duration) -> (String, Arc<Server>) {
+    spawn_scaled(presence_timeout, 5.0).await
+}
+
+/// [`spawn`] with the clock speed named. The match clock is `time_scale` game
+/// seconds per wall second (see `server::spawn_ticker`); a record seals the
+/// quantum it ran on (`0.05 * time_scale`) into its header.
+async fn spawn_scaled(presence_timeout: Duration, time_scale: f32) -> (String, Arc<Server>) {
     let d = data();
     let rules: Arc<dyn game_core::engine::CardRules> = Arc::new(StubRules);
     // In-process engine: the tests exercise the server, not the worker pool.
@@ -33,7 +40,7 @@ async fn spawn(presence_timeout: Duration) -> (String, Arc<Server>) {
     {
         let s = Arc::get_mut(&mut server).expect("fresh");
         s.presence_timeout = presence_timeout;
-        s.time_scale = 5.0;
+        s.time_scale = time_scale;
     }
     server::spawn_ticker(server.clone());
     let app = server::router(server.clone(), None, None);
@@ -91,6 +98,21 @@ impl Client {
             .unwrap();
         let status = r.status();
         (status, r.json().await.unwrap_or(Value::Null))
+    }
+
+    /// GET as raw bytes plus the response headers (the record endpoint serves
+    /// a file, not a JSON envelope).
+    async fn get_bytes(&self, path: &str) -> (StatusCode, bytes::Bytes, reqwest::header::HeaderMap) {
+        let r = self
+            .http
+            .get(format!("{}{path}", self.base))
+            .bearer_auth(&self.token)
+            .send()
+            .await
+            .unwrap();
+        let status = r.status();
+        let headers = r.headers().clone();
+        (status, r.bytes().await.unwrap(), headers)
     }
 
     async fn ok(&self, path: &str, body: Value) -> Value {
@@ -778,9 +800,179 @@ async fn adding_a_chaos_bot_round_trips() {
         .find(|p| p["mentality"] == "chaos")
         .expect("the chaos seat is in the match");
     assert_eq!(chaos["bot"], true);
-    let standard = players
+    // The host's own (human) seat also reads "standard" -- the field's default
+    // -- so look for the standard *bot*.
+    players
         .iter()
-        .find(|p| p["mentality"] == "standard")
-        .expect("the standard seat is in the match");
-    assert_eq!(standard["bot"], true);
+        .find(|p| p["mentality"] == "standard" && p["bot"] == true)
+        .expect("the standard bot seat is in the match");
+}
+
+/// The whole record path (`docs/REPLAY.md` §4): a match is logged as it is
+/// played, sealed when it ends, and served to its participants only.
+///
+/// Covers the P4 test matrix: a bot room on a high clock plays to the end; the
+/// endpoint answers 409 mid-match, 200 after it and 403 to an outsider; a
+/// `member_left` / `member_back` pair is recorded; the worker's `replay` op
+/// ends on the hash of the blob the server kept; and an in-process `Replayer`
+/// gets there too.
+#[tokio::test]
+async fn the_record_endpoint_serves_the_last_finished_match() {
+    use game_core::record::{hash_save, Input, Origin, Replayer};
+
+    // A high clock and a short presence time-out: the match ticks fast, and A
+    // is handed to the AI as soon as the stream drops.
+    let (base, server) = spawn_scaled(Duration::from_millis(400), 20.0).await;
+    let a = Client::new(&base, "Host").await;
+    let outsider = Client::new(&base, "Outsider").await;
+    let id = a
+        .ok("/api/rooms", json!({ "name": "Record" }))
+        .await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    // Nothing has been played here yet.
+    let (s, v) = a.get(&format!("/api/rooms/{id}/record")).await;
+    assert_eq!(s, StatusCode::NOT_FOUND, "{v}");
+    assert_eq!(v["error"]["k"], "err.record.none");
+
+    a.ok(
+        &format!("/api/rooms/{id}/bots"),
+        json!({ "op": "add", "mentality": "chaos" }),
+    )
+    .await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+
+    // Skip pick / deck so the match is in play immediately -- and so the log
+    // carries a `QuickStart`.
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().expect("match started").clone()
+    };
+    handle.quick_start().unwrap();
+
+    // Mid-match the record is not served at all.
+    let (s, v) = a.get(&format!("/api/rooms/{id}/record")).await;
+    assert_eq!(s, StatusCode::CONFLICT, "{v}");
+    assert_eq!(v["error"]["k"], "err.record.live");
+
+    // A's stream drops: the AI takes the seat (`Left`), and reopening it brings
+    // the player back (`Back`).
+    let mut sse = a.stream(&id, None).await;
+    let _ = sse.next(Duration::from_millis(200)).await;
+    drop(sse);
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    let mut sse = a.stream(&id, None).await;
+    let _ = sse.next(Duration::from_millis(400)).await;
+    tokio::time::sleep(Duration::from_millis(800)).await;
+
+    // Let the bots play, then settle the match by score (`Finish`).
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    handle.finish().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+        assert_eq!(s, StatusCode::OK, "{st}");
+        if st["room"]["playing"] == false {
+            break;
+        }
+        assert!(Instant::now() < deadline, "match did not end: {st}");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    drop(sse);
+
+    // The record is there, and it is the match we just watched. It is served
+    // as the sealed bytes: a zstd-framed `.bdrec`, `application/zstd`, no
+    // `Content-Encoding` (the client decompresses in wasm).
+    let (s, body, headers) = a.get_bytes(&format!("/api/rooms/{id}/record")).await;
+    assert_eq!(s, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
+    let ctype = headers[reqwest::header::CONTENT_TYPE]
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(ctype, "application/zstd", "Content-Type: {ctype}");
+    assert!(
+        !headers.contains_key(reqwest::header::CONTENT_ENCODING),
+        "no Content-Encoding: the client decodes in wasm"
+    );
+    assert!(
+        body.len() >= 4 && body[..4] == [0x28, 0xB5, 0x2F, 0xFD],
+        "zstd magic 28 B5 2F FD, got {:02x?}",
+        &body[..body.len().min(4)]
+    );
+    let disp = headers[reqwest::header::CONTENT_DISPOSITION]
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        disp.starts_with("attachment; filename=\"bdrec-") && disp.ends_with(".bdrec\""),
+        "Content-Disposition: {disp}"
+    );
+    let file = game_core::record::decode_record(&body).unwrap_or_else(|e| panic!("record: {e}"));
+    assert_eq!(
+        file.header.origin,
+        Origin::Online { room: id.clone() },
+        "an online record names its room"
+    );
+    assert!(file.header.ended);
+    assert!(file.header.total_ticks > 0, "the clock ran");
+    assert!(!file.header.gaps, "a clean run has no gaps");
+    assert!(!file.body.checkpoints.is_empty(), "turns were checkpointed");
+    assert_eq!(file.header.step, 0.05 * 20.0, "the quantum is sealed");
+    // Every kind of input the design names shows up.
+    let kinds: Vec<&str> = file
+        .body
+        .inputs
+        .iter()
+        .map(|i| match i {
+            Input::Ticks { .. } => "ticks",
+            Input::Act { .. } => "act",
+            Input::QuickStart => "quick_start",
+            Input::Finish => "finish",
+            Input::Left { .. } => "left",
+            Input::Back { .. } => "back",
+        })
+        .collect();
+    for want in ["ticks", "quick_start", "left", "back", "finish"] {
+        assert!(kinds.contains(&want), "missing {want} in {kinds:?}");
+    }
+
+    // An outsider who never sat down is refused -- the record reveals every
+    // hand and the deck order.
+    let (s, v) = outsider.get(&format!("/api/rooms/{id}/record")).await;
+    assert_eq!(s, StatusCode::FORBIDDEN, "{v}");
+    assert_eq!(v["error"]["k"], "err.record.forbidden");
+
+    // The worker's `replay` op ends on the same hash as the blob the server kept
+    // -- fed the raw zstd bytes (the form the server itself stores), and again
+    // as the plain JSON string older callers send.
+    let final_blob = handle.snapshot().unwrap();
+    let want = hash_save(&final_blob);
+    assert_eq!(file.body.final_hash, want, "the seal hashed the live blob");
+    let (got, diverged) = server.engine.replay(&body).expect("worker replay");
+    assert!(!diverged, "the record replays clean");
+    assert_eq!(got, want, "worker `replay` ends on the final blob's hash");
+    let json = serde_json::to_string(&file).unwrap();
+    let v = server
+        .engine
+        .call(serde_json::json!({ "op": "replay", "record": json }))
+        .expect("worker replay from JSON");
+    assert_eq!(v["final_hash"], want.as_str(), "the JSON form replays too");
+    assert_eq!(v["diverged"], false);
+
+    // ... and so does a plain in-process `Replayer`.
+    let mut rp = Replayer::new(data(), Arc::new(StubRules), &file, false).expect("load record");
+    let mut guard = 0u32;
+    while !rp.status().ended {
+        rp.step_ticks(64);
+        guard += 1;
+        assert!(guard < 500_000, "replay stuck");
+    }
+    assert!(!rp.status().diverged, "every checkpoint matched");
+    assert_eq!(hash_save(&rp.match_ref().save()), want, "same final hash");
 }

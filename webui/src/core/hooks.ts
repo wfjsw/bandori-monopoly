@@ -22,6 +22,49 @@ export function useSettings() {
   return settings();
 }
 
+/**
+ * Keep the screen on while `active` (a live match, from the ban / pick phase on) and
+ * the 「保持屏幕常亮」 setting is on -- the Screen Wake Lock API. The browser
+ * drops the lock whenever the page is hidden (another app, another tab, the
+ * phone locked), so it is taken again each time the page becomes visible; it
+ * never holds the screen on in the background. It needs a secure context
+ * (HTTPS or localhost) and is a no-op where unsupported or refused (battery
+ * saver), so the game behaves the same either way.
+ */
+export function useWakeLock(active: boolean): void {
+  const on = active && settings().keepAwake;
+  useSettings(); // re-run when the setting flips
+  useEffect(() => {
+    if (!on || !("wakeLock" in navigator)) return;
+    let lock: WakeLockSentinel | null = null;
+    let disposed = false;
+    const take = async () => {
+      if (disposed || lock || document.visibilityState !== "visible") return;
+      try {
+        const l = await navigator.wakeLock.request("screen");
+        if (disposed) return void l.release();
+        lock = l;
+        l.addEventListener("release", () => {
+          if (lock === l) lock = null;
+        });
+      } catch {
+        // Refused (battery saver, policy, insecure context) -- carry on.
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void take();
+    };
+    void take();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      disposed = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void lock?.release();
+      lock = null;
+    };
+  }, [on]);
+}
+
 /** Re-render every `ms` (timers, countdowns). */
 export function useTick(ms: number): number {
   const [n, bump] = useReducer((x: number) => x + 1, 0);
@@ -62,9 +105,10 @@ export function useAutoMode(s: GameSession | null): AutoMode {
   return mode;
 }
 
-/** True while either auto mode owns the seat -- the one input-lock every button reads. */
+/** True while either auto mode owns the seat -- or the session itself is
+ *  read-only (a replay) -- the one input-lock every button reads. */
 export function useAutoplay(s: GameSession | null): boolean {
-  return isAuto(useAutoMode(s));
+  return isAuto(useAutoMode(s)) || !!s?.readOnly;
 }
 
 /** Re-render on language change (the shell keys its tree with this). */

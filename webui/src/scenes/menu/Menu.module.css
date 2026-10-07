@@ -42,7 +42,8 @@
 
 .small { composes: tile; height: 100%; border-radius: 10px; display: flex; align-items: center; justify-content: center; gap: 0.45em; font-size: 22px; font-weight: 700; background: linear-gradient(#fff, #f3f3f6); box-shadow: 0 4px 0 #d9d9df, 0 6px 12px rgba(0, 0, 0, 0.08); }
 .small i { width: 1.27em; height: 1.27em; }
-.history { width: 178px; }
+.history { width: 150px; }
+.replay { width: 95px; }
 .settings { width: 105px; }
 .settings i { color: var(--gold); }
 .fire { width: 120px; margin-left: auto; }

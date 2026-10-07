@@ -99,6 +99,7 @@ shape as `rules/cards/card-*` and `rules/skills/*`:
 | `tile:circle` | `circle.rs` | `circle` | lines 95–96 |
 | `tile:edogawa` | `edogawa.rs` | `edogawa` | line 95 |
 | `tile:event` | `event.rs` | `cafe`, `ryuseido` | lines 97–99 |
+| `mark:cp` | `cp.rs` | (none -- board-wide) | line 125 (「CP点：放置于路面上的指示物」) + 通用:该清CP了 |
 
 The crate is a **rule crate**, not a card crate: its ids are `tile:*`, not
 `data/cards.json` ids. `tools/rules-aggregate.mjs` gains `rules/tiles` as a
@@ -110,6 +111,65 @@ Each body quotes the passage above and cites it per line, exactly like a card
 tools/rulebook/check.py` is extended to require the quote on `rules/tiles/*`
 the way it does on `rules/cards/*` -- the passage lives in the file header
 since `docs/rulebook/cards.json` has no `tile:*` ids.
+
+### Board marks: `mark:cp`
+
+`mark:*` is a second shape of board-owned rule: a **mark owner** rather than a
+tile-kind rule. There is one instance per mark category on the neutral board
+owner, governing **no single tile** (`tile = -1`), placed at match start next to
+the `tile:*` ones (`bind_tiles`, `game_core::data::mark_rule_ids`). Like an
+event instance, it hears every trigger its rule declares wherever the trigger
+points -- the hook dispatch adds `mark:*` instances to the board list for a
+tile-carrying trigger too.
+
+`mark:cp` owns the **tile-mark** half of the [CP点] lifecycle (「CP点：放置于
+路面上的指示物」, `data/rules.txt` 125). There are **two kinds of [CP点]**
+(user ruling 2026-10-07: 「自己[场上]1个[CP点] referred to the cp point
+attached to the card. There are points on the tile (which mandated by
+tilemark) and points on the card (mandated by the card rule)」):
+
+* **Tile [CP点]** -- the [`TileMark`]s of category `mark_category::CP`, owned
+  by this rule instance. That is the `data/rules.txt` 125 object.
+* **On-card [CP点]** -- `FieldCard::cp` on the 该清CP了 card instance, the card
+  rule's own stock (crystals-like; 通用:该清CP了 [手] 「在自己[场上]添加6个
+  [CP点]」 seeds it at 6). The view shows it as the field card's counter badge.
+
+| step | clause | API |
+|---|---|---|
+| placement | 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 | `ctx::place_cp(tile)` -- the *where* is the placer's gate |
+| stacking | 「添加1个[CP点]」 onto a 「没有[CP点]的格子」 | one mark object per tile, `count` is the [CP点] there |
+| landing | 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | `On::Hook(SettleAfter)` on this instance -- spends **both** kinds |
+| removal | 「移除格子上的个[CP点]」 | `ctx::clear_cp(tile)` (a tile-mark write) |
+| on-card seed | 「并在自己[场上]添加6个[CP点]」 | the card rule's `ctx::add_cp(6, 0)` -- not this owner |
+| on-card spend | 「自己[场上]1个[CP点]」 | `ctx::add_cp_at(src, -1, 0)`, `src` = the mark's `TileMark.src` |
+
+Cards reach the tile marks **only** through that small API (`ctx::place_cp` /
+`count_cp` / `count_cp_from` / `clear_cp` / `cp_src_at`), never through the
+generic mark ops, and the on-card count through `ctx::cp_attached` /
+`add_cp` / `cp_at` / `add_cp_at`. A [CP点] mark is **not owned by any player**:
+`TileMark.owner` is always `BOARD_OWNER` (`-1`). Provenance is
+`TileMark.src` (the placing card instance, what 「此卡在格子上添加的[CP点]及其
+产物」 keys on) plus `TileMark.card` (its id, the view's 「来自」).
+
+`TileMark.category` is what says which category a mark is (`""` = a
+player/generic mark coloured by `owner`'s seat; `mark_category::CP` for [CP点]).
+Both `category` and `src` are serde-defaulted, so a pre-category save still
+loads -- `Match::restore` re-reads the old CP `kind`
+(`cards:card-general.clear_cp_mark`) into the category and drops its player
+owner. The old per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone:
+the card's own `FieldCard::cp` replaces it (ABI v38).
+
+**The settle clause's reading** (recorded; see `rules/tiles/src/cp.rs` for the
+long form). 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个
+[CP点]，[获得]800资金」: any player's [结算] on a tile carrying a [CP点] removes
+the tile's mark **and** one on-card [CP点] of the 该清CP了 card the mark is
+attached to (`TileMark.src`, which must hold ≥1), and the **settler** gains
+800 -- the subject of 「[结算]」 carries over to 「[获得]」 (the rulebook tip
+「吃多个CP点达到2000以上收益」 has the eater profit). C# instead kept a
+per-player `Tok(Seat, "CP点")` and gated the clause on `m.Seat == Seat`; the
+2026-10-07 ruling replaces the counter with the card's own count and this
+reading drops the gate. The 该清CP了 graveyard rule is the on-card count
+hitting 0 (`HookKind::CpChanged`), not the tile marks running out.
 
 ### The bodies stay thin
 

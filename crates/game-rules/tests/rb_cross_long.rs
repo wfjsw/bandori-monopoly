@@ -97,8 +97,11 @@ fn rent(t: usize, h: usize) -> i32 {
 // L1. A counter war five links deep
 // =====================================================================
 
-// 规则书: 32 「[反击]…结算优先于X」 + 89 (ring, one per visit, counters to
-// counters after the round closes) + the LIFO ruling.
+// 规则书: 32 「[反击]…结算优先于X」 + 89 / ruling 2026-10-07 (the ask ring
+// starts with the initial user -- the player whose action raised the link;
+// each visit exhausts every eligible counteraction or ends on an explicit
+// pass; laps continue until a quiet lap; a counter's own round starts with its
+// declarer) + the LIFO ruling (unchanged).
 #[ignore = "DISCREPANCY: in a 4-player war the ring skips P1 (宣战布告 is never offered) and nothing settles"]
 #[test]
 fn l01_counter_war_five_links_deep() {
@@ -401,7 +404,8 @@ fn l04_forced_move_into_remote_settle() {
 // L5. One skill use, several reactions
 // =====================================================================
 
-// 规则书: clause-89 order for reactions to one skill use.
+// 规则书: clause-89 order for reactions to one skill use (ruling 2026-10-07:
+// the ring starts with the initial user of the skill use).
 // RULING: whether P1 still gets the mark and P2 still teleports when the use
 // is cancelled; whether P0's fire is refunded.
 #[ignore = "DISCREPANCY: 花园多惠 (2) cancel window never opens; P0's teleport resolves (pos 10 not 5)"]

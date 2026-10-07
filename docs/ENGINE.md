@@ -27,7 +27,7 @@
 | `cx.rs` | `Cx` routine context, `Flow`/`Halt`, `Ask` prompt builders |
 | `play.rs` | routines: turns, movement, CiRCLE reward, landing, agents, rent, forced purchase, buy/build, payments, raising funds, bankruptcy, auctions, hand/draw, events, play card, scoring |
 | `ai.rs` | bot decisions: the standard policy (same thresholds as the C#) and the chaos one |
-| `setup.rs` | turn order, ban (Ranked), pick, deck |
+| `setup.rs` | turn order, ban (Ranked), pick, deck (bots take the deck book entry) |
 | `rules.rs` | `CardRules` — where card/event content plugs in; `StubRules` = no effects |
 
 Routines: `Opening`, `NextTurn`, `Ai(player_id)`, `Act(player_id, command)`, `Leftovers(deeds)`.
@@ -55,6 +55,25 @@ tile-filtered for a tile-carrying trigger like `passTile`. That is how
 (`ctx::settle_circle_reward`), with the walk's `circle_reward` as the built-in
 fallback when no instance is bound.
 
+Two other kinds of board-owned instance sit beside the `tile:*` ones
+([TILES.md](TILES.md)): **event** rules (`event:*`, `tile = -1`, bound while the
+event is live) and **mark owners** (`mark:*`, one per mark category,
+`game_core::data::mark_rule_ids`). Neither governs a single tile, so the hook
+dispatch adds them to the board list for a tile-carrying trigger as well.
+`mark:cp` is the [CP点] **tile-mark** owner: [CP点] is its own tile-mark category
+(`TileMark.category`, 「放置于路面上的指示物」, `data/rules.txt` 125), held by the
+neutral board owner and **never by a player** (`TileMark.owner = -1`);
+provenance is `TileMark.src` (the placing card instance) and `TileMark.card`
+(its id). Cards place / count / clear through `ctx::place_cp` / `count_cp` /
+`clear_cp` / `cp_src_at` -- the small API that owner implements. The other
+[CP点] kind is the **on-card** count (`FieldCard::cp`, 「自己[场上]N个[CP点]」,
+user ruling 2026-10-07): the card rule's own stock, written with `ctx::add_cp`
+/ `add_cp_at` and read with `ctx::cp_attached` / `cp_at` (ABI v38).
+`HookKind::CpChanged` / `TriggerKind::CpChanged` (`cpChanged`, ABI v36/38)
+fires whenever a card instance's **on-card** [CP点] count is written, the same
+shape as v29's `crystalsChanged`, so 「…时」 clauses on the count live in one
+event handler (通用:该清CP了's graveyard rule) instead of at each spend site.
+
 The engine keeps the money/deck work as primitives the bodies call
 (`ctx::pay_rent` / `offer_buy` / `offer_build` / `offer_force_buy` /
 `agent_landing` / `draw` / `draw_event` / `settle_circle_reward`), so a tile
@@ -72,17 +91,26 @@ modifier has touched it -- that is the stable [反击] key for the rulebook's
 「被其他玩家的卡效果影响」. `Target` / `Abnormal` / `Pay` are settlement hooks:
 they fire as the effect settles and cannot be used to reconstruct that clause.
 
-Counters answer one timing per round (rulebook 89): the ring starts at the seat
-after the player the timing belongs to and asks them last; every counter in the
-round answers the *same* link; the declared counters then become new timings,
-newest first, with their own rounds. Resolution is LIFO over the resulting
-answer tree -- a counter's own answers settle before it, sibling counters settle
-newest first, every counter before the timing it answers -- so a counter can
-invalidate the effect before it settles. `Negation::{Activation, Effect}` and
-`spare(seat)` replace the single `Cancelled` flag -- "the link never happened",
-"it happened and settled to nothing", and "everyone but this seat settles" are
-three different things. See `game-core/src/engine/rules.rs` and
-`game-rules/src/wasm_rules.rs` (`hand_counteractions`).
+Counters answer one timing per round (rulebook 89, under **ruling 2026-10-07**):
+the ask ring starts at the **initial user** -- the player whose action or effect
+raised the link (`by_card`; a board-driven link -- rent, buy, build, turn flow --
+is a system / tile event and starts at the active turn player) and runs forward
+in turn order from there. Each seat **exhausts its counteractions before
+priority moves on**: on its visit it is kept being offered its eligible cards
+until it passes explicitly (one "not playing" option ends the visit) or holds
+none left. Every counter in the round answers the *same* link. The round closes
+at the end of a full lap of the ring that brings no new declaration -- a lap
+that carried a declaration never closes it. The declared counters then become
+new timings, newest first, with their own rounds under the same rules, where
+that counter's declarer is the new round's initial user. Resolution is LIFO over
+the resulting answer tree -- a counter's own answers settle before it, sibling
+counters settle newest first, every counter before the timing it answers -- so a
+counter can invalidate the effect before it settles.
+`Negation::{Activation, Effect}` and `spare(seat)` replace the single `Cancelled`
+flag -- "the link never happened", "it happened and settled to nothing", and
+"everyone but this seat settles" are three different things. See
+`game-core/src/engine/rules.rs` and `game-rules/src/wasm_rules.rs`
+(`hand_counteractions`).
 
 ### Why host events are deferred
 
@@ -194,24 +222,34 @@ two in sync:
 | `PLAY_CARD_CHANCE` | 0.7 | odds of playing a card rather than rolling in 运营 |
 | `MAX_PLAYS_PER_TURN` | 2 | hand cards played in one turn before rolling |
 
+**Deck pick.** A standard bot (and the browser 托管) submits the deck book's
+entry for its public table -- own character, own seat, the other seats'
+characters in seat order -- when `data/deck_book.json` has one
+(`game-core/src/deck_book.rs` back-off lookup, `docs/BOT.md` §3.7), else the
+designer's preset (`deck::preset`). The book must match the running ruleset's
+hash and the `standard` policy, or it is ignored; every entry still has to
+clean down to a complete legal deck. Pure -- no RNG. Chaos never reads it.
+
 **`chaos`** is legal but maximally disruptive and effect-heavy: it plays a card
 at every legal opportunity (no odds roll, no per-turn cap beyond the engine's
 own; the rule's `ai_play` heuristic is ignored, only `cant_play` counts), presses
 character and band skills whenever they are usable (at most once each per turn,
-so a no-op skill cannot park it), declares every offered counteract with a
-random offered card, and picks uniformly among the non-default prompt options --
-a tile prompt gets a random target, never 「无」 while one exists. Ban / pick /
-deck are random (the deck is a random legal one, `deck::random`), hand overflow
-discards at random, and it only ends the turn when nothing else is legal.
+so a no-op skill cannot park it), and picks uniformly among the non-default
+prompt options -- a tile prompt gets a random target, never 「无」 while one
+exists. An offered [反击] is the one gate left: it declares on only
+**`CHAOS_COUNTER_CHANCE = 0.3`** of the offers it gets (a random offered card)
+and passes the rest, rolled per offer from the match RNG. Ban / pick / deck are
+random (the deck is a random legal one, `deck::random`), hand overflow discards
+at random, and it only ends the turn when nothing else is legal.
 
 Chaos still keeps a coin reserve, or it burns out in a few turns and stops
 being disruptive. **`CHAOS_RESERVE = 1,000`** is its only money gate: voluntary
 spending (buy, build, redeem, auction bids, and the optional paid offers) happens
 only when it leaves that much; a forced purchase is accepted only under the same
 condition; auction raises are capped at `money − CHAOS_RESERVE` and otherwise
-random within the cap. Card plays and counteracts are unrestricted -- a card's
-own cost is not visible to the AI layer (it lives in the play body), so the
-reserve cannot gate them.
+random within the cap. Card plays are unrestricted -- a card's own cost is not
+visible to the AI layer (it lives in the play body), so the reserve cannot gate
+them.
 
 All chaos randomness comes from the match RNG (the world's, plus the host's
 `live_rng` for answer pacing and auction raises) -- never `thread_rng` -- so a
@@ -222,14 +260,16 @@ chaos game replays and restores like any other (`tests/mentality.rs`).
 | What | C# | Where it goes |
 |---|---|---|
 | Card, skill, band and `Fx` hooks (`PayAdd`, `CircleRewardChoice`, `SkipTile`, `BuyPrice`...) | nested classes | card rules (WASM) |
-| Active events (`EvOn(...)`: 协助CiRCLE重建, Forbidden Moca, ...) | `EventEffect` | card rules |
+| Event cards (事件卡: 对邦, 协助CiRCLE重建, Forbidden Moca, ...) | `EventEffect` | `rules/events` (`docs/EVENTS.md`); the engine keeps the deck, the draw, the active list and the filing away |
 | Per-player card variables (`V(i, ...)`), marks, embers, field cards | `V`/`AddMark`/... | with card content |
 | Character skills (`skill` command) | `DoSkill` | card rules; currently rejected with a message |
 | Debug commands (`debug`) | `DebugAct` | P7 (dev panel) |
 | Speed multiplier | `Speed` | P7 |
 
 The stub rules give a complete game of plain BanG Dream Monopoly: cards can be played
-(no effect) and events are drawn (no effect).
+(no effect) and events are drawn (no effect). With the shipped ruleset
+(`card_all`) an event draws its `event:*` rule instance on the neutral board
+owner and the body resolves -- see [EVENTS.md](EVENTS.md).
 
 ## Verification
 
@@ -239,7 +279,7 @@ The stub rules give a complete game of plain BanG Dream Monopoly: cards can be p
   end-to-end tests (bot games to the end with invariants, determinism, a human turn
   by command, prompt time-outs, vote, leaving, disconnect/reconnect), and the
   mentality suite (`tests/mentality.rs`: chaos buys with no standard reserve,
-  plays every card before rolling, declares an offered counteract, picks a
+  plays every card before rolling, counters on ~30% of offers, picks a
   non-default prompt option, same seed = same game).
 * `cargo run -p game-core --release --example sim -- 50 4 200` — plays bot matches and
   counts what happened. Add `standard` or `chaos` as a trailing word to pick the
@@ -258,6 +298,56 @@ rarely go broke, so bot-only games mostly end by `finish()` (human games end by 
 identically (`tests/engine.rs::save_and_restore_continue_identically`). The format
 is versioned (`SAVE_VERSION`); older saves are rejected rather than misread. The
 web client uses it for solo refresh recovery (`SoloMatch.save` / `SoloMatch.restore`).
+
+A field added under `#[serde(default)]` does **not** bump `SAVE_VERSION`: the
+old JSON simply reads as the default. `TileMark.category` / `TileMark.src` are
+both defaulted that way, so a pre-category save still loads; `Match::restore`
+then re-reads the old [CP点] `kind` (`cards:card-general.clear_cp_mark`) into
+`mark_category::CP` and drops the player owner it used to carry (a [CP点] has
+none). New writes never use that `kind`.
+
+## Records
+
+`crates/game-core/src/record.rs` (`docs/REPLAY.md`) wraps the public `Match` API
+into a replayable input log; `Match` itself is untouched.
+
+* **`RecordedMatch`** forwards `new` / `restore` / `save` / `tick_steps(k)` /
+  `act` / `quick_start` / `finish` / `member_left` / `member_back` to the match
+  and appends to a `Recorder`. `tick_steps(k)` ticks `dt = k as f32 * 0.05`
+  (k in 1..=10); consecutive calls with the same `k` run-length merge into
+  `Ticks{k, n}`. Rejected acts are recorded too (`ok: false`).
+* **Checkpoints.** Whenever the turn key `(round, turn)` changes, the recorder
+  closes the open tick run and writes a `Checkpoint { at, tick, round, turn,
+  hash }`, where `hash` is an FNV-1a-64 of `save()`. `at` counts inputs, so
+  every checkpoint sits between two of them. Recording stops once the match has
+  `ended()`; a final `hash_save(save())` seals the body. The `check` field of a
+  `RecordFile` is the FNV-1a-64 hex of `serde_json::to_string(&body)`.
+* **`Replayer`** rebuilds the match from `Init::Seed(MatchSetup)` or
+  `Init::Snapshot { save }` and drives it through the same public calls,
+  re-deriving every checkpoint. `Status.divged` is sticky: the first mismatched
+  checkpoint (or an act whose Ok/Err bit disagreed) flags the rest of the
+  replay. `seek` restores the nearest keyframe (`save()` every ~4 turn
+  boundaries or 20 s of game time, capped at `MAX_KEYFRAME_BYTES`) and
+  re-simulates forward. `export_with_events` bundles the public event log by
+  re-simulating, because `world.recent` is only a 400-event tail.
+* **`EngineStamp`** names the writer: `format` (the record version),
+  `save_version`, the card `abi`, and the ruleset / data sha256s. game-core can
+  only see the two format versions (`EngineStamp::current`), so web-glue and
+  the rules worker pass the full stamp to `Replayer::new_with_stamp`;
+  `compat(a, b)` reports the differences (format / abi fatal, the rest
+  warnings).
+* **Codec.** A `.bdrec` is a zstd-framed `RecordFile` JSON. `encode_record_zst`
+  / `decode_record` (`docs/REPLAY.md` "Framing and codec") are the shared
+  surface; `decode_record` sniffs zstd / gzip / plain JSON so older recordings
+  still load. The wasm build encodes with `structured-zstd` (pure Rust, no C
+  toolchain), natively with the `zstd` crate; both land at the same ratio on
+  record JSON and emit standard frames, and `ruzstd` decodes either.
+* **Cost.** Per tick the recorder is one run-length increment. Per turn change
+  it is `save()` plus FNV — about 0.6 ms of an 88 KB save on the dev machine,
+  which is **the dominant cost of recording** and is the design's own budget
+  (`docs/REPLAY.md` §1). The wrapper's bookkeeping on top of that is under 2%
+  (`tests/record.rs::recorded_match_overhead_is_under_two_percent`, ignored,
+  run explicitly); `examples/sim` is unchanged.
 
 ## Allocators
 

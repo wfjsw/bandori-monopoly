@@ -96,6 +96,11 @@ mod sys {
         pub fn add_ring_bonus(n: i32) -> i32;
         pub fn teleport_to(player_id: i32, tile: i32);
         pub fn unplace_card() -> i32;
+        // active events (`docs/EVENTS.md`)
+        pub fn event_expire(ip: i32, il: i32, removed: i32);
+        pub fn event_is_active(ip: i32, il: i32) -> i32;
+        pub fn event_deck_push(ip: i32, il: i32, face_down: i32);
+        pub fn event_banish(ip: i32, il: i32);
         pub fn self_tile() -> i32;
         pub fn set_self_tile(tile: i32) -> i32;
         pub fn self_face_down() -> i32;
@@ -115,6 +120,17 @@ mod sys {
         pub fn add_mark(tile: i32, player_id: i32, kp: i32, kl: i32, np: i32, nl: i32);
         pub fn count_marks(tile: i32, kp: i32, kl: i32, owner: i32) -> i32;
         pub fn remove_marks(tile: i32, kp: i32, kl: i32, owner: i32) -> i32;
+        // [CP点] -- the `mark:cp` owner's tile-mark API plus the on-card count
+        // (see `rules/tiles/src/cp.rs` / `docs/TILES.md`)
+        pub fn place_cp(tile: i32) -> i32;
+        pub fn count_cp(tile: i32) -> i32;
+        pub fn count_cp_from(tile: i32) -> i32;
+        pub fn clear_cp(tile: i32) -> i32;
+        pub fn cp_src_at(tile: i32) -> i32;
+        pub fn cp_attached() -> i32;
+        pub fn add_cp(n: i32, max: i32) -> i32;
+        pub fn cp_at(uid: i32) -> i32;
+        pub fn add_cp_at(uid: i32, n: i32, max: i32) -> i32;
         pub fn tok(player_id: i32, ptr: i32, len: i32) -> i32;
         pub fn set_tok(player_id: i32, ptr: i32, len: i32, v: i32);
         pub fn add_tok(player_id: i32, ptr: i32, len: i32, by: i32, max: i32) -> i32;
@@ -181,6 +197,18 @@ mod sys {
         pub fn trig_cards(buf: i32, cap: i32) -> i32;
         pub fn trig_move_roll() -> i32;
         pub fn trig_roll_source() -> i32;
+        // v40 purchase payload
+        pub fn trig_buy_kind() -> i32;
+        pub fn trig_seller() -> i32;
+        pub fn trig_price() -> i32;
+        pub fn trig_set_price(v: i32);
+        pub fn trig_deal_owner() -> i32;
+        pub fn trig_set_deal_owner(v: i32);
+        pub fn trig_deal_houses() -> i32;
+        pub fn trig_set_deal_houses(v: i32);
+        pub fn trig_deal_mortgaged() -> i32;
+        pub fn trig_set_deal_mortgaged(v: i32);
+        pub fn trig_set_reason(ptr: i32, len: i32);
         pub fn trig_set_move_roll(v: i32);
         pub fn trig_set_pay_amount(v: i32);
         pub fn trig_set_pay_target(to: i32);
@@ -203,6 +231,7 @@ mod sys {
         pub fn agent_landing(player_id: i32, agent: i32) -> i32;
         pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32;
         // movement shaping: the move being planned (C# `TurnCtx.Plan`)
+        pub fn set_roller(player_id: i32);
         pub fn set_steps(n: i32);
         pub fn set_reverse(on: i32);
         pub fn set_signed(on: i32);
@@ -257,6 +286,12 @@ mod sys {
         pub fn clear_dice();
         pub fn can_build_on(player_id: i32, tile: i32) -> i32;
         pub fn card_buy(player_id: i32, tile: i32) -> i32;
+        // v40 purchase surface (`docs/PURCHASE.md`)
+        pub fn buy_quotes(player_id: i32, kind: i32, buf: i32, n: i32, out: i32) -> i32;
+        pub fn buy(player_id: i32, tile: i32, kind: i32) -> i32;
+        pub fn acquire(player_id: i32, from: i32, tile: i32, price: i32) -> i32;
+        pub fn agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> i32;
+        pub fn linger(player_id: i32, expires: i32) -> i32;
         pub fn card_immune(player_id: i32, cp: i32, cl: i32) -> i32;
         pub fn card_mortgage(player_id: i32, tile: i32) -> i32;
         pub fn card_text_mentions(cp: i32, cl: i32, np: i32, nl: i32) -> i32;
@@ -851,6 +886,35 @@ pub fn unplace_self() -> i32 {
     unsafe { sys::unplace_card() }
 }
 
+/// Expire the active event `id` (`docs/EVENTS.md`): unbind its rule instance
+/// and file it away. `removed = true` is 「永久移除」; `false` is 「放入事件弃牌」.
+/// A one-shot event never calls this -- `draw_event` files it away itself when
+/// the body does not stay.
+pub fn event_expire(id: &str, removed: bool) {
+    let (p, l) = s(id);
+    unsafe { sys::event_expire(p, l, removed as i32) }
+}
+
+/// Is `id` active and face-up? 「此卡在场上则…」
+pub fn event_is_active(id: &str) -> bool {
+    let (p, l) = s(id);
+    unsafe { sys::event_is_active(p, l) != 0 }
+}
+
+/// Put `id` on the top of the event deck. `face_down` is 「背面朝上放置于事件
+/// 牌堆顶部」 -- the draw still reveals it (「向所有玩家公开」).
+pub fn event_deck_push(id: &str, face_down: bool) {
+    let (p, l) = s(id);
+    unsafe { sys::event_deck_push(p, l, face_down as i32) }
+}
+
+/// Take `id` out of the event deck / discard / active list for good --
+/// 「从所有非衍生事件中选择3个移除」.
+pub fn event_banish(id: &str) {
+    let (p, l) = s(id);
+    unsafe { sys::event_banish(p, l) }
+}
+
 /// Is this card in play at the player?
 pub fn is_placed() -> bool {
     unsafe { sys::is_placed() != 0 }
@@ -941,6 +1005,84 @@ pub fn count_marks(tile: i32, kind: &str, owner: i32) -> i32 {
 pub fn remove_marks(tile: i32, kind: &str, owner: i32) -> i32 {
     let (kp, kl) = s(kind);
     unsafe { sys::remove_marks(tile, kp, kl, owner) }
+}
+
+// ------------------------------------------------------------ [CP点]
+// Two kinds (user ruling 2026-10-07). **Tile marks** are the `mark:cp` rule
+// owner's small API (`rules/tiles/src/cp.rs`): [CP点] is a tile-mark category
+// of its own -- 「放置于路面上的指示物」 (`data/rules.txt` 125) -- held by the
+// neutral board owner, **never by a player**. A card places / counts / clears
+// through these and nothing else; the writer stamps the placing card instance
+// as provenance (`TileMark.src`) so 「此卡在格子上添加的[CP点]及其产物」 can be
+// told apart from someone else's. **On-card** [CP点] is `FieldCard::cp` --
+// 「自己[场上]N个[CP点]」, the CP points attached to the card itself (the card
+// rule's own stock, crystals-like) -- `cp_attached` / `add_cp` / `cp_at` /
+// `add_cp_at`.
+
+/// Place one [CP点] on `tile`, attached to **this card instance** (provenance;
+/// not an owner). Returns how many [CP点] the tile now carries.
+///
+/// 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 --
+/// the *where* is the caller's gate; this only owns the what and the attachment.
+pub fn place_cp(tile: i32) -> i32 {
+    unsafe { sys::place_cp(tile) }
+}
+
+/// [CP点] on `tile`, any provenance. 通用:该清CP了 [手] 「在拥有[CP]点的格子上
+/// [结算]时」 / 「没有[CP点]的格子」 read this.
+pub fn count_cp(tile: i32) -> i32 {
+    unsafe { sys::count_cp(tile) }
+}
+
+/// [CP点] on `tile` that **this card instance** placed and their products --
+/// 通用:该清CP了 (1) 「此卡在格子上添加的[CP点]及其产物」.
+pub fn count_cp_from(tile: i32) -> i32 {
+    unsafe { sys::count_cp_from(tile) }
+}
+
+/// Remove one [CP点] from `tile` (通用:该清CP了 [手] 「移除格子上的个[CP点]」);
+/// returns how many are left there. A tile-mark write: it does not touch
+/// anyone's on-card count.
+pub fn clear_cp(tile: i32) -> i32 {
+    unsafe { sys::clear_cp(tile) }
+}
+
+/// The card instance a [CP点] on `tile` is attached to (`TileMark.src`), or
+/// `-1` when the tile has none. The settle clause finds 「自己[场上]1个[CP点]」
+/// this way: that card's on-card count.
+pub fn cp_src_at(tile: i32) -> i32 {
+    unsafe { sys::cp_src_at(tile) }
+}
+
+/// On-card [CP点] on **this card instance** (`FieldCard::cp`) -- 「自己[场上]N个
+/// [CP点]」 (user ruling 2026-10-07: 「the cp point attached to the card」). The
+/// 该清CP了 graveyard rule -- 「as soon as the attached on-card cp mark is
+/// empty」 -- is this hitting 0, as a [`crate::abi::HookKind::CpChanged`]
+/// handler and not a re-check at each spend site.
+pub fn cp_attached() -> i32 {
+    unsafe { sys::cp_attached() }
+}
+
+/// Adjust **this card instance's** on-card [CP点] by `n`, clamped at 0 and at
+/// `max` (`0` = uncapped); returns the new count.
+///
+/// 通用:该清CP了 [手] 「并在自己[场上]添加6个[CP点]」 is `add_cp(6, 0)`.
+pub fn add_cp(n: i32, max: i32) -> i32 {
+    unsafe { sys::add_cp(n, max) }
+}
+
+/// On-card [CP点] on the instance at `uid` (`FieldCard::cp`). The `mark:cp`
+/// settle clause reads the card the tile mark is attached to this way.
+pub fn cp_at(uid: i32) -> i32 {
+    unsafe { sys::cp_at(uid) }
+}
+
+/// Adjust the on-card [CP点] on the instance at `uid`; `max` caps (0 =
+/// uncapped). Returns the new count. 通用:该清CP了 [手] 「自己[场上]1个[CP点]」
+/// (spent by the settle clause against the tile mark's `src` card) is
+/// `add_cp_at(src, -1, 0)`.
+pub fn add_cp_at(uid: i32, n: i32, max: i32) -> i32 {
+    unsafe { sys::add_cp_at(uid, n, max) }
 }
 
 pub fn tok(player_id: i32, name: &str) -> i32 {
@@ -1443,6 +1585,13 @@ pub mod plan {
         unsafe { sys::set_steps(n) }
     }
 
+    /// 「上一名玩家代替进行此次投掷」 (幻觉来了) -- attribute the planned roll to
+    /// another seat. The log line shows 「by」; the move still belongs to the
+    /// original player, and 「所有影响投掷的效果服从于原本进行投掷的玩家」.
+    pub fn set_roller(player_id: i32) {
+        unsafe { sys::set_roller(player_id) }
+    }
+
     /// C# `Reverse` -- walk backwards.
     pub fn set_reverse(on: bool) {
         unsafe { sys::set_reverse(on as i32) }
@@ -1931,6 +2080,64 @@ pub mod trigger {
         unsafe { sys::trig_roll_source() }
     }
 
+    // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
+
+    /// `t.Buy.Kind` -- a [`crate::abi::BuyKind`] as `i32` (`0` = land).
+    pub fn buy_kind() -> i32 {
+        unsafe { sys::trig_buy_kind() }
+    }
+
+    /// `t.Buy.Seller` -- the payee (`-1` = the bank).
+    pub fn seller() -> i32 {
+        unsafe { sys::trig_seller() }
+    }
+
+    /// `t.Buy.Price` -- the price the buyer would be charged.
+    pub fn price() -> i32 {
+        unsafe { sys::trig_price() }
+    }
+
+    /// Rewrite the quoted price (the `BuyAdd` / `BuyMul` / `BuySet` stages).
+    pub fn set_price(v: i32) {
+        unsafe { sys::trig_set_price(v) }
+    }
+
+    /// `t.Buy.DealOwner` -- ownership after the deal (default: the buyer).
+    pub fn deal_owner() -> i32 {
+        unsafe { sys::trig_deal_owner() }
+    }
+
+    /// Rewrite the deal's post-commit owner (`BuyAssign`).
+    pub fn set_deal_owner(v: i32) {
+        unsafe { sys::trig_set_deal_owner(v) }
+    }
+
+    /// `t.Buy.DealHouses` -- houses after the deal (default: as standing).
+    pub fn deal_houses() -> i32 {
+        unsafe { sys::trig_deal_houses() }
+    }
+
+    /// Rewrite the deal's post-commit house count (`BuyAssign`, raze).
+    pub fn set_deal_houses(v: i32) {
+        unsafe { sys::trig_set_deal_houses(v) }
+    }
+
+    /// `t.Buy.DealMortgaged` -- mortgage after the deal.
+    pub fn deal_mortgaged() -> bool {
+        unsafe { sys::trig_deal_mortgaged() != 0 }
+    }
+
+    /// Rewrite the deal's post-commit mortgage flag (`BuyAssign`).
+    pub fn set_deal_mortgaged(v: bool) {
+        unsafe { sys::trig_set_deal_mortgaged(v as i32) }
+    }
+
+    /// A `BuyGate` refusal's reason key, shown instead of a bare cancel.
+    pub fn set_reason(reason: &str) {
+        let (p, l) = s(reason);
+        unsafe { sys::trig_set_reason(p, l) }
+    }
+
     pub fn set_move_roll(v: i32) {
         unsafe { sys::trig_set_move_roll(v) }
     }
@@ -2190,8 +2397,64 @@ pub fn can_build_on(player_id: i32, tile: i32) -> bool {
 }
 
 /// `H.BuyRoutine` -- buy `tile` now (the 「必须购买」 clauses).
+/// Kept as the P0 alias of [`buy`] with [`crate::abi::BuyKind::Card`].
 pub fn card_buy(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_buy(player_id, tile) != 0 }
+}
+
+/// Batched purchase quote (`docs/PURCHASE.md`): what would `player_id` be
+/// charged for each tile in `tiles`, and may they buy it at all?
+///
+/// Returns a postcard `Vec<(price, eligible)>` parallel to `tiles`
+/// (`price = -1` when the tile is not buyable at all). One `HostRequest::Quote`
+/// for the whole batch.
+pub fn buy_quotes(player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> {
+    let cap = 4096;
+    let mut buf = alloc::vec![0u8; cap as usize];
+    let raw: Vec<i32> = tiles.to_vec();
+    let bytes = postcard::to_allocvec(&raw).unwrap_or_default();
+    let n = unsafe {
+        sys::buy_quotes(
+            player_id,
+            kind,
+            bytes.as_ptr() as i32,
+            bytes.len() as i32,
+            buf.as_mut_ptr() as i32,
+        )
+    };
+    if n <= 0 || n > cap {
+        return Vec::new();
+    }
+    postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// Buy `tile` as `kind` (`docs/PURCHASE.md`). Replaces [`card_buy`] for new
+/// call sites; `kind` selects the pipeline shape (Land / Agent / Card run the
+/// money pipeline, Force / Acquire name the owner as payee, Auction is the
+/// direct win).
+pub fn buy(player_id: i32, tile: i32, kind: i32) -> bool {
+    unsafe { sys::buy(player_id, tile, kind) != 0 }
+}
+
+/// 「收购」 -- take `tile` from `from` at `price`: pipeline pay, then assign →
+/// `bought` → `buyAfter` (`docs/PURCHASE.md`).
+pub fn acquire(player_id: i32, from: i32, tile: i32, price: i32) -> bool {
+    unsafe { sys::acquire(player_id, from, tile, price) != 0 }
+}
+
+/// The agent offer's chosen branch: buy (`kind = 0`) or build (`kind = 1`)
+/// `tile` from the `agent` tile's colour set.
+pub fn agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> bool {
+    unsafe { sys::agent_offer(player_id, agent, tile, kind) != 0 }
+}
+
+/// Bind the running card's own def as a **turn-scoped** instance in
+/// `TurnCtx.lingering` (`docs/PURCHASE.md`). `expires` is the turn count it
+/// survives (`0` = this turn only). This is the hand-card home that closes
+/// `buy_discount` / `free_buy` / `raze_on_buy` and noBuild. Cleared at turn
+/// start and carried across `NeedHost` by `adopt_turn_policy`.
+pub fn linger(player_id: i32, expires: i32) -> bool {
+    unsafe { sys::linger(player_id, expires) != 0 }
 }
 
 /// Is this placed field card immune to other effects?

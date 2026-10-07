@@ -251,6 +251,9 @@ impl<'a> Cx<'a> {
     /// the same shape as every other turn action.
     /// A copy of the replayable world (a rules host runs against one).
     pub fn world_copy(&self) -> World {
+        #[cfg(feature = "bot-cost")]
+        crate::engine::bot_cost::WORLD_CLONES
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.w.clone()
     }
 
@@ -460,6 +463,13 @@ impl<'a> Cx<'a> {
     /// among the non-default options -- never the "none" / "skip" / "do nothing"
     /// while an alternative exists -- and a tile prompt gets a random target
     /// rather than "none".
+    ///
+    /// A [反击] offer is the one exception: chaos declares on only
+    /// [`CHAOS_COUNTER_CHANCE`](super::CHAOS_COUNTER_CHANCE) of the offers it
+    /// gets (a random offered card) and passes the rest, rolled here from the
+    /// world RNG so it replays. The prompt is identified by its title key --
+    /// the same marker the client's 托管 chaos policy reads
+    /// (`autopilot.ts`'s `ask.counteract.title`).
     fn fill_ai(&mut self, ask: &mut Ask) {
         let fallback = ask.view.fallback;
         // A tile prompt carries its targets in `items` (answer == len is
@@ -469,13 +479,19 @@ impl<'a> Cx<'a> {
         } else {
             ask.view.items.len() as i32
         };
+        let counteract = ask.view.title.key() == "ask.counteract.title";
         for (k, &s) in ask.view.players.iter().enumerate() {
             if ask.ai.get(k).copied().unwrap_or(AI_UNSET) != AI_UNSET {
                 continue;
             }
             let seat = s as usize;
             ask.ai[k] = if self.is_chaos(seat) {
-                self.chaos_pick(fallback, n)
+                if counteract && n > 1 && self.w.rng.f64() >= super::CHAOS_COUNTER_CHANCE {
+                    // This offer it passes (the fallback is the skip option).
+                    fallback
+                } else {
+                    self.chaos_pick(fallback, n)
+                }
             } else {
                 fallback
             };

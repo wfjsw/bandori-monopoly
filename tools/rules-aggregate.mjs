@@ -20,12 +20,13 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const CARDS = join(ROOT, "rules", "cards");
 const SKILLS = join(ROOT, "rules", "skills");
 const TILES = join(ROOT, "rules", "tiles");
+const EVENTS = join(ROOT, "rules", "events");
 const OUT = join(CARDS, "card-all");
 
 /** [{root, dir, name, rel}] of every rule crate, sorted. Covers `rules/cards/*`
- *  (the cards you draw), `rules/skills/*` (character / band skills) and
- *  `rules/tiles` (board tile rules, `docs/TILES.md`) -- three areas on purpose,
- *  one shipped module. */
+ *  (the cards you draw), `rules/skills/*` (character / band skills),
+ *  `rules/tiles` (board tile rules, `docs/TILES.md`) and `rules/events` (event
+ *  card rules, `docs/EVENTS.md`) -- four areas on purpose, one shipped module. */
 function ruleCrates() {
   const scan = (root, dirFilter, rel) =>
     readdirSync(root, { withFileTypes: true })
@@ -38,16 +39,18 @@ function ruleCrates() {
         if (!m) throw new Error(`${toml}: no package name`);
         return [{ root, dir, name: m[1], rel: rel + dir }];
       });
+  // `rules/tiles` and `rules/events` are one crate each (not directories of them).
+  const single = (root, dir, rel) => {
+    const toml = join(root, "Cargo.toml");
+    const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
+    if (!m) throw new Error(`${toml}: no package name`);
+    return [{ root, dir, name: m[1], rel }];
+  };
   return [
     ...scan(CARDS, (e) => e.isDirectory() && e.name !== "card-all", "../"),
     ...scan(SKILLS, (e) => e.isDirectory(), "../../skills/"),
-    // `rules/tiles` is one crate (not a directory of them).
-    ...(() => {
-      const toml = join(TILES, "Cargo.toml");
-      const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
-      if (!m) throw new Error(`${toml}: no package name`);
-      return [{ root: TILES, dir: "tiles", name: m[1], rel: "../../tiles" }];
-    })(),
+    ...single(TILES, "tiles", "../../tiles"),
+    ...single(EVENTS, "events", "../../events"),
   ];
 }
 
@@ -93,5 +96,8 @@ ${tables}
 );
 `);
 
-console.log(`card-all: ${crates.length} band crates linked`);
-for (const c of crates) console.log(`  ${c.name} <- rules/${c.root === SKILLS ? "skills" : "cards"}/${c.dir}`);
+console.log(`card-all: ${crates.length} rule crates linked`);
+for (const c of crates) {
+  const sub = c.root === SKILLS ? "skills" : c.root === TILES ? "" : c.root === EVENTS ? "" : "cards";
+  console.log(`  ${c.name} <- rules/${sub ? sub + "/" : ""}${c.dir}`);
+}

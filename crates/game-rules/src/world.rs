@@ -65,6 +65,21 @@ pub struct Trigger {
     pub move_roll: Option<i32>,
     /// `t.Card` -- the card id on card/event/counteracted triggers (`""` otherwise).
     pub card: String,
+    // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
+    /// `t.Buy.Kind` -- a [`card_sdk::abi::BuyKind`] as `i32` (`0` = land).
+    pub buy_kind: i32,
+    /// `t.Buy.Seller` -- the payee (`-1` = the bank).
+    pub seller: i32,
+    /// `t.Buy.Price` -- the price the buyer would be charged.
+    pub price: i32,
+    /// `t.Buy.DealOwner` -- ownership after the deal (default: the buyer).
+    pub deal_owner: i32,
+    /// `t.Buy.DealHouses` -- houses after the deal (default: as standing).
+    pub deal_houses: i32,
+    /// `t.Buy.DealMortgaged` -- mortgage after the deal.
+    pub deal_mortgaged: bool,
+    /// A `BuyGate` refusal's reason key.
+    pub reason: String,
 }
 
 impl Trigger {
@@ -313,6 +328,24 @@ pub trait CardWorld: Clone + 'static {
     fn unplace_card_named(&mut self, _player_id: i32, _card: &str) -> bool {
         false
     }
+    // -------------------------------------------------------- active events
+    // (`docs/EVENTS.md`) The engine owns the event deck and the active list;
+    // these are the rule body's handles on it. Defaults are no-ops so test
+    // worlds need not implement them.
+    /// Expire the active event `id` (`ctx::event_expire`): unbind its rule
+    /// instance and file it away. `removed` = 「永久移除」 rather than
+    /// 「放入事件弃牌」.
+    fn event_expire(&mut self, _id: &str, _removed: bool) {}
+    /// Is `id` active and face-up? (`ctx::event_is_active`.)
+    fn event_is_active(&self, _id: &str) -> bool {
+        false
+    }
+    /// Put `id` on the top of the event deck (`ctx::event_deck_push`); the end
+    /// of the deck list is the top. `face_down` = 「背面朝上放置于事件牌堆顶部」.
+    fn event_deck_push(&mut self, _id: &str, _face_down: bool) {}
+    /// Take `id` out of the event deck / discard / active list for good
+    /// (`ctx::event_banish`) -- 「从所有非衍生事件中选择3个移除」.
+    fn event_banish(&mut self, _id: &str) {}
     fn is_placed(&self) -> i32;
     /// Where the *running* instance sits (-1 = with its owner / gone).
     fn self_tile(&self) -> i32 {
@@ -439,6 +472,57 @@ pub trait CardWorld: Clone + 'static {
     /// `H.AddMark` -- a marker on a tile (`kind` names it, `note` explains it).
     fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg);
     fn count_marks(&self, tile: i32, kind: &str, owner: i32) -> i32;
+
+    // ---------------------------------------------------------- [CP点] marks
+    // The `mark:cp` rule owner's small API (`rules/tiles/src/cp.rs`). [CP点] is
+    // its own tile-mark category, held by the neutral board owner -- never by a
+    // player. The writer stamps the running card instance as provenance.
+
+    /// Place one [CP点] on `tile`, attached to the running card instance.
+    /// Returns the tile's [CP点] count after the write.
+    fn place_cp(&mut self, _tile: i32, _note: Msg) -> i32 {
+        0
+    }
+    /// [CP点] on `tile`, any provenance.
+    fn count_cp(&self, _tile: i32) -> i32 {
+        0
+    }
+    /// [CP点] on `tile` the running card instance placed (and its products).
+    fn count_cp_from(&self, _tile: i32) -> i32 {
+        0
+    }
+    /// Remove one [CP点] from `tile`; returns how many are left there.
+    fn clear_cp(&mut self, _tile: i32) -> i32 {
+        0
+    }
+    /// The card instance a [CP点] on `tile` is attached to (`TileMark.src`), or
+    /// `-1` when the tile has none. The settle clause looks the card up this
+    /// way (「自己[场上]1个[CP点]」 is that card's on-card count).
+    fn cp_src_at(&self, _tile: i32) -> i32 {
+        -1
+    }
+    /// On-card [CP点] on the **running card instance** (`FieldCard::cp`) --
+    /// 「自己[场上]N个[CP点]」, the CP points attached to this card (user ruling
+    /// 2026-10-07). Not a tile mark and not a per-player counter.
+    fn cp_attached(&self) -> i32 {
+        0
+    }
+    /// Adjust the running card instance's on-card [CP点] by `n`, clamped at 0
+    /// and at `max` (`0` = uncapped); returns the new count.
+    fn add_cp(&mut self, _n: i32, _max: i32) -> i32 {
+        0
+    }
+    /// On-card [CP点] on the instance at `uid` (`FieldCard::cp`). The `mark:cp`
+    /// settle clause spends another card's stock this way -- it identifies the
+    /// card by the tile mark's provenance, not by being that card.
+    fn cp_at(&self, _uid: i32) -> i32 {
+        0
+    }
+    /// Adjust the on-card [CP点] on the instance at `uid`; `max` caps (0 =
+    /// uncapped). Returns the new count.
+    fn add_cp_at(&mut self, _uid: i32, _n: i32, _max: i32) -> i32 {
+        0
+    }
     /// C# `Card.Immune` -- 「此卡不受…效果影响」.
     fn set_card_immune(&mut self, _player_id: i32, _card: &str, _on: bool) -> bool {
         false
@@ -637,6 +721,17 @@ pub trait CardWorld: Clone + 'static {
     fn declare_trigger_effect(&mut self, kind: i32, target: i32, from: i32, tile: i32, value: i32);
     /// `t.Card == id` -- is this trigger about that card?
     fn trig_card_is(&self, id: &str) -> i32;
+    /// `t.Buy.Price` -- rewrite the quoted price (the `BuyAdd` / `BuyMul` /
+    /// `BuySet` stages). Also the generic `set_price` on a buy trigger.
+    fn set_trigger_price(&mut self, v: i32);
+    /// `t.Buy.DealOwner` -- rewrite the deal's post-commit owner (`BuyAssign`).
+    fn set_trigger_deal_owner(&mut self, v: i32);
+    /// `t.Buy.DealHouses` -- rewrite the deal's post-commit house count.
+    fn set_trigger_deal_houses(&mut self, v: i32);
+    /// `t.Buy.DealMortgaged` -- rewrite the deal's post-commit mortgage flag.
+    fn set_trigger_deal_mortgaged(&mut self, v: i32);
+    /// A `BuyGate` refusal's reason key, shown instead of a bare cancel.
+    fn set_trigger_reason(&mut self, reason: &str);
 
     // ----------------------------------------------- turn plan & scheduling
     // Defaults are no-ops so test worlds need not implement them.
@@ -744,6 +839,10 @@ pub trait CardWorld: Clone + 'static {
     //   - `no_build` -- folded into `can_build = false`; one flag is enough.
     /// C# `SetSteps` -- the planned length; keeps the sign of a reverse walk.
     fn set_steps(&mut self, _v: i32) {}
+    /// 「上一名玩家代替进行此次投掷」 (幻觉来了) -- attribute the roll to another
+    /// seat. Shown on the log line as 「by」; the move still belongs to the
+    /// original player (and 「影响投掷的效果服从于原本进行投掷的玩家」).
+    fn set_roller(&mut self, _v: i32) {}
     /// C# `Reverse` -- walk backwards.
     fn set_reverse(&mut self, _v: bool) {}
     /// C# `Signed` -- a negative roll walks backwards instead of clamping to 0.

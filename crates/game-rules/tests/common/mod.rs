@@ -22,8 +22,8 @@ use game_core::msg::{Arg, Msg};
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
 use game_core::state::{
-    key, prop, stage, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState, StateVar,
-    TileMark,
+    key, prop, stage, ActiveEvent, FieldCard, MatchEvent, MatchPlayer, MatchPrompt, MatchState,
+    StateVar, TileMark,
 };
 use game_core::MatchMode;
 use game_rules::{Ruleset, WasmRules};
@@ -588,6 +588,62 @@ impl Table {
             .place_card(&d, who as i32, card, Msg::default(), props)
     }
 
+    // ------------------------------------------------------- event deck
+
+    /// Replace the event deck; `top_first[0]` is drawn first.
+    ///
+    /// The engine's live deck is `World::event_deck`, a `Vec` whose **end** is
+    /// the top (`draw_event` pops from the end). There is no other event-deck
+    /// seam in this harness -- `MatchState::event_top` is only the public view
+    /// of face-down cards pushed on top -- so this is the test setter for it.
+    /// Ids are the `data/events.json` ids (`"对邦"`), not the `event:*` rule ids.
+    pub fn set_event_deck(&mut self, top_first: &[&str]) {
+        self.m.world_mut().event_deck = top_first.iter().rev().map(|s| s.to_string()).collect();
+    }
+
+    /// The live event deck, top first.
+    pub fn event_deck(&self) -> Vec<String> {
+        self.m.world().event_deck.iter().rev().cloned().collect()
+    }
+
+    /// The event discard pile (`World::event_discard`).
+    pub fn event_discard(&self) -> Vec<String> {
+        self.m.world().event_discard.clone()
+    }
+
+    /// Events permanently removed from the game (`World::event_removed`).
+    pub fn event_removed(&self) -> Vec<String> {
+        self.m.world().event_removed.clone()
+    }
+
+    /// The `ActiveEvent` row for `id` (either face), if it is in play.
+    pub fn active_event(&self, id: &str) -> Option<ActiveEvent> {
+        self.m
+            .world()
+            .st
+            .event_active
+            .iter()
+            .find(|e| e.id == id)
+            .cloned()
+    }
+
+    /// Is `id` on the active list (「将此卡放置于场地中央」)?
+    pub fn event_in_play(&self, id: &str) -> bool {
+        self.active_event(id).is_some()
+    }
+
+    /// Crystal count on the event's board-owner rule instance (the public
+    /// `ActiveEvent::counter` mirrors it).
+    pub fn event_crystals(&self, id: &str) -> Option<i32> {
+        self.m
+            .world()
+            .st
+            .board_field
+            .iter()
+            .find(|f| f.card == format!("event:{id}"))
+            .map(|f| f.crystals)
+    }
+
     // ------------------------------------------------------------ observe
 
     pub fn st(&self) -> MatchState {
@@ -671,6 +727,25 @@ impl Table {
         }
     }
 
+    /// On-card [CP点] on `who`'s first field copy of `card` (None if not
+    /// placed) -- `FieldCard::cp`, 「自己[场上]N个[CP点]」 (user ruling
+    /// 2026-10-07: the CP points attached to the card). This is the number the
+    /// view's field-card counter badge shows.
+    pub fn cp_on_card(&self, who: usize, card: &str) -> Option<i32> {
+        self.field(who).iter().find(|f| f.card == card).map(|f| f.cp)
+    }
+
+    /// Put `n` on-card [CP点] on `who`'s first field copy of `card` (test seam,
+    /// the same shape as [`Self::set_crystals`]). No-op when the card is not
+    /// placed. Does not raise `cpChanged` -- that rides a real write through
+    /// `ctx::add_cp` / `add_cp_at`; use this only to arrange a starting count.
+    pub fn set_cp_on_card(&mut self, who: usize, card: &str, n: i32) {
+        let w = self.m.world_mut();
+        if let Some(f) = w.st.players[who].field.iter_mut().find(|f| f.card == card) {
+            f.cp = n;
+        }
+    }
+
     /// `who`'s bound skills (`skill:<owner>:<skill>`).
     pub fn skills(&self, who: usize) -> Vec<String> {
         self.field_ids(who)
@@ -680,10 +755,24 @@ impl Table {
     }
 
     /// The skill on `who`'s field whose id contains `needle`.
+    ///
+    /// Band skills win over character skills when both match: a needle like
+    /// `"CRYCHIC"` names the band (`skill:CRYCHIC:美好的往日幻影`) but also
+    /// appears inside 若叶睦（CRYCHIC）'s character-skill id, and the band one is
+    /// what a 「乐队技能卡」 clause means. Unique needles (a skill's own name)
+    /// resolve the same either way.
     pub fn skill_id(&self, who: usize, needle: &str) -> String {
-        self.skills(who)
+        let mut hits: Vec<(bool, String)> = self
+            .field(who)
             .into_iter()
-            .find(|s| s.contains(needle))
+            .filter(|f| f.card.starts_with("skill:") && f.card.contains(needle))
+            .map(|f| (f.band_skill, f.card))
+            .collect();
+        // Band skills first (stable within each group).
+        hits.sort_by_key(|(band, _)| !band);
+        hits.into_iter()
+            .next()
+            .map(|(_, c)| c)
             .unwrap_or_else(|| panic!("no skill matching {needle:?}: {:?}", self.skills(who)))
     }
 

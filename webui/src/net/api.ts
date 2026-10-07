@@ -60,6 +60,31 @@ export const api = {
   leave: (id: string) => call<unknown>("POST", `/api/rooms/${id}/leave`, {}),
   roomState: (id: string) => call<{ room: RoomInfo; you: number; game: MatchView | null }>("GET", `/api/rooms/${id}/state`),
   act: (id: string, cmd: Command) => call<unknown>("POST", `/api/rooms/${id}/act`, cmd),
+  /**
+   * The last finished match's `.bdrec` (docs/SERVER.md). The full record
+   * reveals every hand, so the server answers 409 `err.record.live` while the
+   * room is playing, 403 `err.record.forbidden` to anyone who was not in it,
+   * and 404 `err.record.none` when there is nothing sealed yet. The body is a
+   * zstd-framed `.bdrec` (`Content-Type: application/zstd`); older stores may
+   * answer plain JSON. The engine's `from_record_bytes` sniffs the magic.
+   */
+  record: async (id: string): Promise<{ ok: true; bytes: Uint8Array; filename: string } | { ok: false; error: Msg; status: number }> => {
+    try {
+      const r = await fetch(`/api/rooms/${id}/record`, {
+        credentials: "same-origin",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!r.ok) {
+        const data = await r.json().catch(() => null);
+        return { ok: false, error: data?.error ?? msg("err.http", { status: { i: r.status } }), status: r.status };
+      }
+      const disp = r.headers.get("content-disposition") ?? "";
+      const named = /filename="([^"]+)"/.exec(disp)?.[1];
+      return { ok: true, bytes: new Uint8Array(await r.arrayBuffer()), filename: named || `bdrec-${id}.bdrec` };
+    } catch {
+      return { ok: false, error: msg("err.offline"), status: 0 };
+    }
+  },
 };
 
 export interface StreamHandlers {

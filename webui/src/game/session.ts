@@ -10,6 +10,7 @@ import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember
 import { api, ensureSession, openStream } from "../net/api";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
+import { putReplay, recordFilename, type RecordHeader } from "./record";
 
 type ViewCb = (v: MatchView) => void;
 type EventCb = (e: MatchEvent) => void;
@@ -23,8 +24,21 @@ type EventCb = (e: MatchEvent) => void;
  * `state.seq`, and a refused one is marked tried so the next candidate is
  * attempted instead of looping.
  */
+/** After 托管 / 混沌 is switched on (or switched between the two), the
+ *  autopilot waits this long before its first command, so a misclick can be
+ *  undone -- or the mode cycled on -- before anything is sent. */
+export const AUTO_COOLDOWN_MS = 3000;
+
+/** The autopilot re-checks the view this often when nothing is scheduled, so a
+ *  missed wake-up (a view that arrived while a command was in flight, a
+ *  prompt that appeared without a seq change) cannot leave it idle. */
+const AUTO_HEARTBEAT_MS = 1500;
+
 class Autopilot {
   private timer = 0;
+  private heartbeat = 0;
+  /** `performance.now()` before which no command is sent (the cooldown). */
+  armedAt = 0;
   private inFlight = false;
   private seq = -1;
   private tried = new Set<string>();
@@ -35,6 +49,12 @@ class Autopilot {
   constructor(private sess: GameSession) {}
 
   start(): void {
+    this.rearm();
+    if (!this.heartbeat) {
+      this.heartbeat = window.setInterval(() => {
+        if (!this.timer && !this.inFlight && isAuto(this.sess.autoMode)) this.schedule();
+      }, AUTO_HEARTBEAT_MS);
+    }
     if (this.off) return;
     this.off = this.sess.subscribe((v) => this.onView(v));
     if (this.sess.view) this.onView(this.sess.view);
@@ -43,6 +63,8 @@ class Autopilot {
   stop(): void {
     clearTimeout(this.timer);
     this.timer = 0;
+    clearInterval(this.heartbeat);
+    this.heartbeat = 0;
     this.inFlight = false;
     this.seq = -1;
     this.tried.clear();
@@ -50,8 +72,14 @@ class Autopilot {
     this.off = null;
   }
 
+  /** Restart the cooldown (a mode switch while running counts too). */
+  rearm(): void {
+    this.armedAt = performance.now() + AUTO_COOLDOWN_MS;
+    if (this.off) this.schedule();
+  }
+
   private delay(): number {
-    return 400 + Math.random() * 600;
+    return Math.max(400 + Math.random() * 600, this.armedAt - performance.now());
   }
 
   private schedule(): void {
@@ -66,7 +94,7 @@ class Autopilot {
       this.turnKey = key;
       this.played = 0;
     }
-    if (v.state.seq === this.seq && this.tried.size > 0) return;
+    if (v.state.seq * 100000 + Math.max(0, v.state.prompt?.id ?? 0) === this.seq && this.tried.size > 0) return;
     this.schedule();
   }
 
@@ -76,6 +104,10 @@ class Autopilot {
       characters: D.characters,
       playedThisTurn: this.played,
       deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
+      // Deck book entry for the public table, else the preset
+      // (`docs/BOT.md` §3.7); the lookup itself lives in game-core.
+      deckSuggest: (c, seat, opponents) =>
+        JSON.parse(rules.deck_suggest(c, seat, JSON.stringify(opponents))),
       deckRandom: (c) => {
         const pool: string[] = JSON.parse(rules.deck_pool(c));
         for (let i = pool.length - 1; i > 0; i--) {
@@ -93,13 +125,17 @@ class Autopilot {
   }
 
   private step(): void {
+    this.timer = 0;
     const s = this.sess;
     const mode = s.autoMode;
     if (!isAuto(mode) || this.inFlight) return;
+    if (performance.now() < this.armedAt) return this.schedule();
     const v = s.view;
     if (!v) return;
-    if (v.state.seq !== this.seq) {
-      this.seq = v.state.seq;
+    // A new state, or a new prompt on the same state, resets what was tried.
+    const at = v.state.seq * 100000 + Math.max(0, v.state.prompt?.id ?? 0);
+    if (at !== this.seq) {
+      this.seq = at;
       this.tried.clear();
     }
     const cmd = plan(v, this.ctx(), mode).find((c) => !this.tried.has(Autopilot.key(c)));
@@ -122,13 +158,13 @@ class Autopilot {
         // Solo's `pump` emits the next view inside `act`; catch up if one
         // already landed while we were in flight.
         const now = s.view;
-        if (isAuto(s.autoMode) && now && now.state.seq !== this.seq) this.schedule();
+        if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== this.seq) this.schedule();
       });
   }
 }
 
 export abstract class GameSession {
-  abstract readonly kind: "solo" | "online";
+  abstract readonly kind: "solo" | "online" | "replay";
   /** Route id: "solo" or the room id. */
   abstract readonly id: string;
   view: MatchView | null = null;
@@ -137,6 +173,10 @@ export abstract class GameSession {
   connected = true;
   /** Set when the match result has been recorded on the profile. */
   recorded = false;
+  /** Input is locked regardless of `autoMode` (a replay is read-only). */
+  readOnly = false;
+  /** Animation speed the board's `Animator` follows (1 / 2 / 4). */
+  animSpeed = 1;
   /**
    * Auto-play mode for this seat: `off` (you), `bot` (托管), `chaos` (混沌).
    * Per-session, not persisted. Any non-`off` value locks the user's inputs.
@@ -161,7 +201,9 @@ export abstract class GameSession {
     };
   }
 
-  /** Set 托管 / 混沌 / off. Takes effect immediately (mid-command included). */
+  /** Set 托管 / 混沌 / off. Off takes effect immediately (mid-command
+   *  included); turning a mode on, or switching modes, starts the
+   *  [`AUTO_COOLDOWN_MS`] cooldown before the first command. */
   setAutoMode(mode: AutoMode): void {
     if (this.autoMode === mode) return;
     this.autoMode = mode;
@@ -172,6 +214,12 @@ export abstract class GameSession {
       this.autopilot?.stop();
     }
     this.autoCbs.forEach((cb) => cb());
+  }
+
+  /** Milliseconds until the autopilot may act (0 when off or already live). */
+  autoCooldownLeft(): number {
+    if (!isAuto(this.autoMode) || !this.autopilot) return 0;
+    return Math.max(0, this.autopilot.armedAt - performance.now());
   }
 
   /** Re-render when the auto mode flips. Returns unsubscribe. */
@@ -210,6 +258,8 @@ export function endSession(): void {
 
 const SOLO_KEY = "bm.solo";
 const SOLO_VERSION = 1;
+/** One recorded tick quantum (`docs/REPLAY.md` §1). */
+const TICK_STEP = 0.05;
 
 interface SoloSave {
   v: number;
@@ -217,47 +267,86 @@ interface SoloSave {
   weights: ScoreWeights;
   recorded: boolean;
   last: number;
+  /** The recorder beside `match` (absent on saves from before records). */
+  rec?: string;
+  /** IndexedDB id of the `.bdrec` exported when the match ended. */
+  replayId?: string;
+}
+
+/**
+ * Rebuild a solo match from its save plus the recorder beside it. Old saves
+ * carry no `rec` and fall back to a partial record (`RecordedMatch` starts a
+ * fresh log at the snapshot). `restore_with_record` is bound as an instance
+ * method in the glue, so borrow a throwaway instance to call it -- the Rust
+ * side does not read `self`.
+ */
+function restoreSoloMatch(save: string, rec: string | undefined): InstanceType<typeof rules.SoloMatch> {
+  if (!rec) return rules.SoloMatch.restore(save);
+  const tmp = rules.SoloMatch.restore(save);
+  try {
+    return tmp.restore_with_record(save, rec);
+  } finally {
+    tmp.free();
+  }
 }
 
 export class SoloSession extends GameSession {
   readonly kind = "solo";
   readonly id = "solo";
   readonly weights: ScoreWeights;
+  /** The `.bdrec` exported when the match ended (zstd-framed), kept for Results. */
+  replayBytes: Uint8Array | null = null;
+  replayId: string | null = null;
+  replayName = "bdrec-replay.bdrec";
   private m: InstanceType<typeof rules.SoloMatch>;
   private timer: number;
   private last = 0;
   private lastTick = performance.now();
+  /** Whole `TICK_STEP` quanta still owed to the engine. */
+  private acc = 0;
   private dirty = true;
   private savedAt = 0;
   private closed = false;
+  private exportStarted = false;
   private onHide = () => this.persist(true);
 
-  private constructor(m: InstanceType<typeof rules.SoloMatch>, weights: ScoreWeights, last = 0) {
+  private constructor(m: InstanceType<typeof rules.SoloMatch>, weights: ScoreWeights, last = 0, replayId: string | null = null) {
     super();
     this.you = 1;
     this.m = m;
     this.weights = weights;
     this.last = last;
+    // Set before the first `pump`, which would otherwise export the record
+    // again on resume of an already-finished match.
+    this.replayId = replayId;
     this.timer = window.setInterval(() => this.tick(), 50);
     window.addEventListener("pagehide", this.onHide);
     document.addEventListener("visibilitychange", this.onHide);
     this.pump();
   }
 
-  static start(player: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
-    const members: RoomMember[] = [
-      { id: 1, player, character: "", cnId: "", ready: true, host: true, bot: false, away: false, mentality: "standard" },
-      ...bots.map((b, i) => ({
-        id: i + 2,
-        player: b.name,
-        character: "",
-        cnId: "",
+  static start(player: string, playerCharacter: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
+    // The solo setup screen's picks, its `""` (random) seats resolved here
+    // among the free characters -- everything not explicitly picked. The
+    // engine sees a character on every seat and starts past ban / pick.
+    const chars = resolveSoloCharacters([playerCharacter, ...bots.map((b) => b.character)]);
+    const seat = (id: number, name: string, character: string, bot: boolean, mentality: BotMentality): RoomMember => {
+      const c = D.character(character);
+      return {
+        id,
+        player: name,
+        character,
+        cnId: c ? D.artId(c) : "",
         ready: true,
-        host: false,
-        bot: true,
+        host: id === 1,
+        bot,
         away: false,
-        mentality: b.mentality,
-      })),
+        mentality,
+      };
+    };
+    const members: RoomMember[] = [
+      seat(1, player, chars[0], false, "standard"),
+      ...bots.map((b, i) => seat(i + 2, b.name, chars[i + 1], true, b.mentality)),
     ];
     const seed = Math.floor(Math.random() * 0xffffffff);
     return new SoloSession(new rules.SoloMatch(JSON.stringify(members), seed, 0, JSON.stringify(weights)), weights);
@@ -270,7 +359,7 @@ export class SoloSession extends GameSession {
     try {
       const s: SoloSave = JSON.parse(raw);
       if (s.v !== SOLO_VERSION) throw new Error("old save");
-      const out = new SoloSession(rules.SoloMatch.restore(s.match), s.weights, s.last);
+      const out = new SoloSession(restoreSoloMatch(s.match, s.rec), s.weights, s.last, s.replayId ?? null);
       out.recorded = s.recorded;
       return out;
     } catch (e) {
@@ -284,11 +373,19 @@ export class SoloSession extends GameSession {
     return !!localStorage.getItem(SOLO_KEY);
   }
 
+  /** Fixed-step: whole `TICK_STEP` quanta, `tick_steps(k)` with k in 1..=10,
+   *  the remainder carried over -- so the record's tick runs match what ran. */
   private tick(): void {
     const t = performance.now();
     const dt = Math.min(0.5, (t - this.lastTick) / 1000);
     this.lastTick = t;
-    this.m.tick(dt);
+    this.acc += dt;
+    let k = Math.floor(this.acc / TICK_STEP);
+    if (k > 10) k = 10;
+    if (k > 0) {
+      this.acc -= k * TICK_STEP;
+      this.m.tick_steps(k);
+    }
     this.pump();
     this.persist(false);
   }
@@ -304,21 +401,63 @@ export class SoloSession extends GameSession {
       this.dirty = true;
       this.emitView(JSON.parse(this.m.view(this.you)));
     }
+    if (this.m.ended()) this.exportReplay();
   }
 
-  /** Save at most once a second (and always when the page is hidden). */
+  /** Save at most once a second (and always when the page is hidden). The
+   *  recorder rides along in the same write, so a refresh keeps the log. */
   private persist(force: boolean): void {
     if (this.closed || !this.dirty) return;
     const now = performance.now();
     if (!force && now - this.savedAt < 1000) return;
     this.savedAt = now;
     this.dirty = false;
-    const save: SoloSave = { v: SOLO_VERSION, match: this.m.save(), weights: this.weights, recorded: this.recorded, last: this.last };
+    const save: SoloSave = {
+      v: SOLO_VERSION,
+      match: this.m.save(),
+      weights: this.weights,
+      recorded: this.recorded,
+      last: this.last,
+      rec: this.m.record_state(),
+      replayId: this.replayId ?? undefined,
+    };
     try {
       localStorage.setItem(SOLO_KEY, JSON.stringify(save));
     } catch (e) {
       console.warn("could not save the solo match:", e);
     }
+  }
+
+  /** Export the `.bdrec` once, when the match ends: zstd-frame it into
+   *  IndexedDB (keep 10) and hold the bytes for the Results buttons. Guarded
+   *  by `replayId` in the save, so a refresh on the results screen does not
+   *  export twice. */
+  private exportReplay(): void {
+    if (this.exportStarted || this.replayId) return;
+    this.exportStarted = true;
+    const created = new Date().toISOString();
+    let bytes: Uint8Array;
+    try {
+      bytes = this.m.record_zst(created);
+    } catch (e) {
+      console.warn("could not export the replay:", e);
+      return;
+    }
+    void (async () => {
+      try {
+        const header = JSON.parse(rules.record_header_bytes(bytes)) as RecordHeader;
+        const id = await putReplay(header, bytes);
+        this.replayBytes = bytes;
+        this.replayId = id;
+        this.replayName = recordFilename(created);
+        this.dirty = true;
+        this.persist(true);
+      } catch (e) {
+        console.warn("could not save the replay:", e);
+      } finally {
+        this.emitOther();
+      }
+    })();
   }
 
   markRecorded(): void {
@@ -350,15 +489,32 @@ export class SoloSession extends GameSession {
   }
 }
 
-/** One bot seat in a solo match: its name and decision policy. */
+/** One bot seat in a solo match: its name, character and decision policy. */
 export interface SoloBot {
   name: string;
   mentality: BotMentality;
+  /** Explicit character name, or `""` for a random free one at start. */
+  character: string;
 }
 
-export function startSolo(player: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
+/**
+ * Resolve `""` (random) seats to distinct characters from the free pool
+ * (everything not explicitly picked). Explicit picks are kept as they are,
+ * so "random" never steals a character somebody named.
+ */
+export function resolveSoloCharacters(want: readonly string[]): string[] {
+  const taken = new Set(want.filter(Boolean));
+  const free = D.characters.map((c) => c.name).filter((n) => !taken.has(n));
+  return want.map((w) => {
+    if (w) return w;
+    if (!free.length) return "";
+    return free.splice(Math.floor(Math.random() * free.length), 1)[0];
+  });
+}
+
+export function startSolo(player: string, playerCharacter: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
   endSession();
-  const s = SoloSession.start(player, bots, weights);
+  const s = SoloSession.start(player, playerCharacter, bots, weights);
   session = s;
   return s;
 }

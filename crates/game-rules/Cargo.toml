@@ -16,6 +16,9 @@ serde_json = { workspace = true }
 [features]
 # Run the interpreter even natively (the tests then cover both backends).
 wasmi-native = []
+# Measurement counters for docs/BOT.md §5 (B0). Off by default; zero
+# behavioural difference -- a few `AtomicU64` bumps around each card run.
+bot-cost = ["game-core/bot-cost"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 wasmtime = "37"

@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex};
 use game_core::data::GameData;
 use game_core::engine::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, Ask, Cx, Dest, Flow,
-    Match, StubRules, Trigger, BUY_RESERVE, BUILD_RESERVE, CHAOS_RESERVE, FORCE_BUY_RESERVE,
-    REDEEM_RESERVE,
+    Match, StubRules, Trigger, BUY_RESERVE, BUILD_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
+    FORCE_BUY_RESERVE, REDEEM_RESERVE,
 };
 use game_core::msg::Msg;
 use game_core::net::RoomMember;
@@ -221,10 +221,13 @@ fn chaos_picks_a_non_default_prompt_option() {
     }
 }
 
-/// `Counteract: always declare one when offered` -- a chaos seat never takes
-/// the prompt's skip option while a declaration exists.
+/// `Counteract: counter within 30% random chances` -- a chaos seat declares on
+/// about [`CHAOS_COUNTER_CHANCE`] of the offers it gets (a random offered card)
+/// and passes the rest. Both branches must actually happen.
 #[test]
-fn chaos_declares_a_counteract_when_offered() {
+fn chaos_counters_only_on_chance() {
+    let mut declared = 0usize;
+    let mut offered = 0usize;
     for seed in 1..=8 {
         let rules = Arc::new(PromptRules::default());
         let members = [member(1, true, BotMentality::Chaos), member(2, true, BotMentality::Chaos)];
@@ -233,11 +236,19 @@ fn chaos_declares_a_counteract_when_offered() {
         play_out(&mut m, 25);
         let picks = rules.counteract_picks.lock().unwrap().clone();
         assert!(!picks.is_empty(), "no counteract window on seed {seed}");
-        assert!(
-            picks.iter().all(|&p| p != 1),
-            "chaos skipped an offered counteract: {picks:?} (seed {seed})"
-        );
+        offered += picks.len();
+        declared += picks.iter().filter(|&&p| p != 1).count();
     }
+    assert!(declared > 0, "chaos never declared a counteract in {offered} offers");
+    assert!(
+        declared < offered,
+        "chaos declared every one of {offered} offers (expected ~30%)"
+    );
+    let rate = declared as f64 / offered as f64;
+    assert!(
+        (0.15..=0.45).contains(&rate),
+        "chaos counter rate {rate:.2} ({declared}/{offered}) is nowhere near {CHAOS_COUNTER_CHANCE}"
+    );
 }
 
 /// Standard keeps the fallback on both prompt shapes.

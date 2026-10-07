@@ -257,6 +257,52 @@ export function showGraveyard(m: Model, playerId: number): void {
   ) : <div className={s.empty}>{tr("graveyard.empty")}</div>, { size: "wide" });
 }
 
+/** Every card in play (场上的卡), grouped by the player whose field it is on,
+ *  drawn as card faces like the hand and graveyard. Skill rules (`skill:` ids) are bound on the field
+ *  but are not cards, so they are left out; a face-down card stays face down.
+ *  The active events (生效中的事件) are listed under the cards. */
+export function showField(m: Model): void {
+  const S = m.S;
+  const names = namesOf(S);
+  const rows = S.players
+    .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
+    .filter(([, f]) => f.length);
+  const events = S.eventActive ?? [];
+  openModal(tr("board.field"), rows.length || events.length ? (
+    <div className={s.pile}>
+      {rows.map(([i, f]) => (
+        <div key={i} className={s.pileRow}>
+          <div className={s.who}><Avatar c={m.charOf(i)} size={30} /><span>{m.nameOf(i)}</span></div>
+          <div className={s.pileCards}>
+            {f.map((fc) => {
+              const note = fc.note ? fmtMsg(fc.note, names) : [fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "", fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : ""].filter(Boolean).join(" · ");
+              return fc.faceDown ? (
+                <div key={fc.uid} className={s.fieldSlot}>
+                  <div className={s.faceDown}><img src={sceneImg("card_back")} alt="" /></div>
+                  <small>{tr("board.faceDown")}</small>
+                </div>
+              ) : (
+                <div key={fc.uid} className={s.fieldSlot}>
+                  <CardFace id={fc.card} onClick={() => showCard(fc.card, [], note)} />
+                  {note && <small>{note}</small>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      {events.length > 0 && (
+        <div className={s.pileRow}>
+          <div className={s.who}><span>{tr("board.activeEvents")}</span></div>
+          <div className={s.pileCards}>
+            {events.map((e) => <Btn key={e.id} size="small" onClick={() => showEvent(e.id, fmtMsg(e.note, names))}>{tr("events.label", { id: e.id })}{e.counter ? ` ×${e.counter}` : ""}</Btn>)}
+          </div>
+        </div>
+      )}
+    </div>
+  ) : <div className={s.empty}>{tr("board.fieldEmpty")}</div>, { size: "wide" });
+}
+
 /** What is left in the player's own draw pile, alphabetical by name.
  *  Mirrors {@link showGraveyard} -- the pile's own draw order is never shown. */
 export function showDeck(m: Model): void {
@@ -273,7 +319,7 @@ export function showDeck(m: Model): void {
 
 function SettleConfirm({ sess, close }: { sess: GameSession; close: () => void }) {
   const auto = useAutoplay(sess); // 托管
-  const solo = sess.kind === "solo";
+  const solo = sess.kind !== "online";
   return (
     <div className={s.confirm}>
       <p>{solo ? tr("board.settleAsk") : tr("board.voteAsk")}</p>
@@ -286,13 +332,13 @@ function SettleConfirm({ sess, close }: { sess: GameSession; close: () => void }
 }
 
 export function showSettle(sess: GameSession): void {
-  const solo = sess.kind === "solo";
+  const solo = sess.kind !== "online";
   openModal(solo ? tr("board.settle") : tr("board.voteTitle"), (close) => <SettleConfirm sess={sess} close={close} />, { size: "small" });
 }
 
 function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => void; exit: () => void }) {
   const auto = useAutoplay(sess); // 托管: settle / forfeit are locked
-  const solo = sess.kind === "solo";
+  const solo = sess.kind !== "online";
   return (
     <div className={s.confirm}>
       <p>{solo ? tr("board.leaveSoloText") : tr("board.leaveOnlineText")}</p>

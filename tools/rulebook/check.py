@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Check that every card in rules/cards/ and every tile in rules/tiles/ cites
-its rule book passage.
+"""Check that every card in rules/cards/, every tile in rules/tiles/ and every
+event in rules/events/ cites its rule book passage.
 
 The rule book (docs/rulebook/cards-sheet.csv -> cards.json via extract.py) is the
 spec; a card's file quotes the passage (`//! > …`) and its code lines cite the
@@ -13,6 +13,10 @@ authoritative rulebook text (「基础[结算]规则」 + 「专有名词」) --
 (whitespace aside). Each file must also carry at least one `// 规则书: …`
 citation line. `TODO(规则书)` notes do not exempt a file from quoting.
 
+Event rules (rules/events/src/*.rs) are `event:*` ids with no cards.json entry
+either; their quote is the event's `text` in `data/events.json` (the sheet's
+中立事件 tab), matched the same way.
+
 Usage: python tools/rulebook/check.py
 """
 
@@ -23,7 +27,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 BOOK = json.load(open(ROOT / "docs" / "rulebook" / "cards.json", encoding="utf-8"))
 RULES = (ROOT / "data" / "rules.txt").read_text(encoding="utf-8")
-CARD_ID = re.compile(r'(?:id: |CardDef::new\()"([^"]+)"')
+EVENTS = {
+    e["id"]: e["text"]
+    for e in json.load(open(ROOT / "data" / "events.json", encoding="utf-8"))["events"]
+}
+CARD_ID = re.compile(r'(?:id: |CardDef::new\(\s*)"([^"]+)"')
 CITES = re.compile(r"//+\s*规则书\s*[:：]")
 
 
@@ -109,6 +117,38 @@ def main() -> int:
             bad += 1
             print(f"{rel}: quotes the passage but no code line cites it (// 规则书: ...)")
     print(f"{tiles} tiles checked, {bad - card_bad} problem(s).")
+
+    # Event rules cite data/events.json from the file header (cards.json has no
+    # `event:*` ids). The quote is the event's `text` field, matched the same
+    # way a tile's quote is matched against data/rules.txt.
+    events = 0
+    ev_bad = bad
+    for src in sorted(ROOT.glob("rules/events/src/*.rs")):
+        if src.name in ("lib.rs", "util.rs"):
+            continue
+        text = src.read_text(encoding="utf-8")
+        m = CARD_ID.search(text)
+        if not m:
+            continue
+        events += 1
+        rel = src.relative_to(ROOT)
+        cid = m.group(1)
+        if not cid.startswith("event:"):
+            bad += 1
+            print(f"{rel}: {cid} is not an event:* rule id")
+            continue
+        want = EVENTS.get(cid.removeprefix("event:"))
+        if want is None:
+            bad += 1
+            print(f"{rel}: {cid} has no data/events.json entry")
+            continue
+        if norm(want) not in norm(quoted_text(text)):
+            bad += 1
+            print(f"{rel}: {cid} does not quote its event text")
+        elif not CITES.search(text):
+            bad += 1
+            print(f"{rel}: {cid} quotes the text but no code line cites it (// 规则书: ...)")
+    print(f"{events} events checked, {bad - ev_bad} problem(s).")
     return 1 if bad else 0
 
 

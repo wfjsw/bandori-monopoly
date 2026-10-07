@@ -11,6 +11,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+use crate::deck_book::{DeckBook, DECK_BOOK_FILE};
+
 /// `TileData.cs`
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -61,6 +63,14 @@ pub fn tile_rule_id(kind: &str) -> &'static str {
         "cafe" | "ryuseido" => "tile:event",
         _ => "",
     }
+}
+
+/// Board-wide **mark-owner** rules (`mark:*`) -- one instance each on the
+/// neutral board owner, governing no single tile (unlike [`tile_rule_id`]'s
+/// `tile:*`, which binds one per board tile of the kind). `mark:cp` is the
+/// [CP点] tile-mark owner (`rules/tiles/src/cp.rs`, `docs/TILES.md`).
+pub fn mark_rule_ids() -> &'static [&'static str] {
+    &["mark:cp"]
 }
 
 /// `CardData.cs`
@@ -288,6 +298,18 @@ pub fn skill_id(owner: &str, skill: &str) -> String {
     format!("skill:{owner}:{skill}")
 }
 
+/// The rule id of an **event card**'s effect (the crate under `rules/events`).
+///
+/// The id names the event (`data/events.json`), so drawing 「对邦」 resolves the
+/// rule `event:对邦`. The `event:` prefix keeps it from ever colliding with a
+/// card id or a `tile:*` / `skill:*` rule id, the same way [`skill_id`] and
+/// [`tile_rule_id`] do. Gaps in the text are the rule body's `TODO(规则书)`;
+/// an event with no rule in the ruleset falls back to the engine's
+/// `StubRules::event` (log 「还没有移植」 and file it away).
+pub fn event_rule_id(id: &str) -> String {
+    format!("event:{id}")
+}
+
 /// All static game data plus the `BandoriDatabase` lookups.
 #[derive(Debug, Clone, Default)]
 pub struct GameData {
@@ -303,6 +325,11 @@ pub struct GameData {
     pub match_rules: MatchRulesData,
     pub rules_text: String,
     pub rules_version: i32,
+    /// Bot deck book (`docs/BOT.md` §3.7) from the optional
+    /// `data/deck_book.json`. Empty when the file is absent or unparsable --
+    /// bots then keep using [`crate::deck::preset`]. Not part of
+    /// [`DATA_FILES`] / the data hash: it tunes bots, not the match.
+    pub deck_book: DeckBook,
     card_by_id: HashMap<String, usize>,
 }
 
@@ -376,6 +403,7 @@ impl GameData {
             match_rules: parse("match_rules.json", &get("match_rules.json")?)?,
             rules_text: get("rules.txt")?.trim_start_matches('\u{feff}').to_string(),
             rules_version: RULES_VERSION,
+            deck_book: DeckBook::default(),
             card_by_id: HashMap::new(),
         };
         // First card wins on duplicate ids, like the C# GroupBy(...).First().
@@ -383,6 +411,12 @@ impl GameData {
             if !c.id.is_empty() {
                 d.card_by_id.entry(c.id.clone()).or_insert(i);
             }
+        }
+        // Optional, outside `DATA_FILES` (so the data hash and records do not
+        // move with it): a missing file is an empty book and bots stay on the
+        // preset decks.
+        if let Ok(text) = read(DECK_BOOK_FILE) {
+            d.deck_book = DeckBook::parse_or_empty(&text);
         }
         Ok(d)
     }

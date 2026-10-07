@@ -249,10 +249,10 @@ assert the clause (or the reason it is not).
 | `通用:[衍生]FEVER!#4` | (2) at owner's turn start: to user's discard | **ok** | fever_leaves_to_users_discard |
 | `通用:10次招募（1回限定）#1` | [限] one copy per game | **ok** | recruit_allows_a_second_copy |
 | `通用:10次招募（1回限定）#2` | spend 1500, draw 1 | **ok** | recruit_costs_1500_and_draws |
-| `通用:该清CP了#1` | [特](1) [手] only if owner has <= 2 CP points | **ok** | cp_hand_gated_at_two_points |
+| `通用:该清CP了#1` | [特](1) [手] only if owner has <= 2 CP points | **ok** | cp_hand_is_not_gated_at_two_points |
 | `通用:该清CP了#2` | [特](2) next 2 turn starts: spread 1 CP to an adjacent empty tile | **ok** | cp_spreads_to_adjacent_for_two_turn_starts |
-| `通用:该清CP了#3` | [手] add 1 CP to an empty tile, +6 CP to self | **ok** | cp_places_one_mark_and_six_tokens |
-| `通用:该清CP了#4` | settle on a CP tile: remove 1 tile CP + 1 self CP, gain 800 | **ok** | cp_settle_on_marked_tile_pays_800 |
+| `通用:该清CP了#3` | [手] add 1 tile CP to an empty tile, +6 on-card CP to the card | **ok** | cp_places_one_tile_mark_and_six_on_card_cp |
+| `通用:该清CP了#4` | settle on a CP tile: remove 1 tile CP + 1 on-card CP (the mark's `src` card), the settler gains 800 | **ok** | cp_settle_on_marked_tile_pays_800,cp_settle_spends_the_src_cards_on_card_cp_and_pays_the_settler |
 | `通用:雨啊，快点来吧#1` | roll 2d2 as X | **ok** | rain_stays_x_players_including_user |
 | `通用:雨啊，快点来吧#2` | [指定] X players, must include the user | **ok** | rain_user_is_always_targeted |
 | `通用:雨啊，快点来吧#3` | each designated gains 1 [停留] | **ok** | rain_stays_x_players_including_user,ix_encore_vs_rain |

@@ -1,8 +1,9 @@
 // Left column: player panels (PlayerPanelView) and the match log.
 
 import { stateOf, stateMax } from "../../core/names";
-import { useEffect, useRef } from "react";
-import { sceneImg } from "../../core/assets";
+import { useEffect, useRef, useState } from "react";
+import { cardArt, sceneImg } from "../../core/assets";
+import { cardTitle } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
 import { Avatar } from "../../ui/Character";
@@ -12,7 +13,7 @@ import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
 import s from "./Players.module.css";
-import { showGraveyard, showPlayerInfo } from "./Popups";
+import { byTitle, showGraveyard, showPlayerInfo } from "./Popups";
 import { t as tr } from "../../i18n/t";
 
 /** A player's status chips: [停留] / [眩晕] / [除外] / 托管 (the engine's takeover). */
@@ -58,9 +59,15 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   const gap = n > 6 ? 5 : 8;
   const height = Math.min(70, Math.floor((548 - gap * (n - 1)) / n));
   const t = timerOf(m, solo, elapsed);
+  const order = turnOrder(S);
+  // Graveyard hover peek (like the draw pile's in Side): which seat, and its
+  // panel's row so the peek lines up beside it.
+  const [peek, setPeek] = useState<number | null>(null);
+  const peekRow = peek == null ? -1 : order.indexOf(peek);
+  const peekCards = peek == null ? [] : byTitle(S.players[peek]?.discard ?? []);
   return (
     <div className={s.players} style={{ gap }}>
-      {turnOrder(S).map((i) => {
+      {order.map((i) => {
         const x = S.players[i];
         const c = m.charOf(i);
         const out = x.bankrupt || x.left;
@@ -68,7 +75,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
         // The seat number doubles as the turn clock while it is this seat's turn.
         const clock = i === S.turn ? t : null;
         return (
-          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)}>
+          <button key={i} type="button" style={{ height }} className={cx(s.panel, i === m.playerId && s.me, i === S.turn && s.turn, out && s.out, height < 58 && s.compact)} onClick={() => showPlayerInfo(m, i)}>
             {clock ? (
               <span className={cx(s.n, s.clock, clock.cls)} style={{ ["--frac" as string]: clock.frac }} title={clock.caption}>{clock.value}</span>
             ) : (
@@ -76,7 +83,14 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
             )}
             <div className={s.av}>
               <Avatar c={c} size={height < 58 ? 40 : 54} />
-              {x.bot && <span className={s.bot}><Icon name="smart_toy" /></span>}
+              {x.bot && (
+                <span
+                  className={cx(s.bot, x.mentality === "chaos" && s.chaos)}
+                  title={x.mentality === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard")}
+                >
+                  <Icon name={x.mentality === "chaos" ? "cyclone" : "smart_toy"} />
+                </span>
+              )}
             </div>
             <div className={s.who}>
               <b>{c?.display ?? "—"}</b>
@@ -89,7 +103,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
               <span className={s.fire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(x, "fire")}/{stateMax(x, "fire")}</span>
               {/* Per-player graveyard, at the right of the module (it used to be
                   one shared pile in the board centre). */}
-              <span className={s.grave} title={tr("board.graveyardPile")} onClick={(e) => { e.stopPropagation(); showGraveyard(m, i); }}>
+              <span className={s.grave} title={tr("board.graveyardPile")} onMouseEnter={() => setPeek(i)} onMouseLeave={() => setPeek(null)} onClick={(e) => { e.stopPropagation(); setPeek(null); showGraveyard(m, i); }}>
                 <img src={sceneImg("card_back")} alt="" /><b>{x.discard.length}</b>
               </span>
             </div>
@@ -97,6 +111,17 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
           </button>
         );
       })}
+      {/* The hovered player's graveyard, alphabetical, beside their panel. */}
+      <div className={cx(s.peek, peek != null && s.peekOn)} style={{ top: Math.max(0, peekRow) * (height + gap) }}>
+        {peek != null && (
+          <>
+            <div className={s.peekHead}>{tr("board.graveyardPile")}<b>×{peekCards.length}</b></div>
+            {peekCards.length
+              ? peekCards.map((id, k) => <div key={k} className={s.peekRow}><img src={cardArt(id)} alt="" /><span>{cardTitle(id)}</span></div>)
+              : <div className={s.peekEmpty}>{tr("graveyard.empty")}</div>}
+          </>
+        )}
+      </div>
     </div>
   );
 }

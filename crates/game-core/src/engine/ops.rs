@@ -939,6 +939,27 @@ impl World {
         {
             return Some(Msg::new("err.build_blocked"));
         }
+        // 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `prop::NO_BUILD_ABOVE`
+        // on a board-owned instance that governs no single tile (`tile < 0`):
+        // an active event. Refuses a build whose house cost is `>=` the prop.
+        let house_cost = t.house;
+        if house_cost > 0
+            && self.st.board_field.iter().any(|f| {
+                f.tile < 0
+                    && f.props
+                        .get(crate::state::prop::NO_BUILD_ABOVE)
+                        .copied()
+                        .unwrap_or(0)
+                        > 0
+                    && house_cost
+                        >= f.props
+                            .get(crate::state::prop::NO_BUILD_ABOVE)
+                            .copied()
+                            .unwrap_or(0)
+            })
+        {
+            return Some(Msg::new("err.build_blocked"));
+        }
         // A card played from hand has no field instance to carry a prop
         // (`ctx::set_prop` writes the *running* instance, and a hand play has
         // none), so 学生会的检查's 「本回合无法加盖房屋」 is still a per-player
@@ -1037,6 +1058,7 @@ impl World {
             user: player_id,
             tile,
             crystals: 0,
+            cp: 0,
             face_down: false,
             immune: false,
             props,
@@ -1109,9 +1131,65 @@ impl World {
             .collect()
     }
 
+    /// The **event rule** instances on the neutral board owner, in activation
+    /// order (`docs/EVENTS.md`). Board-owned like the tile rules, but with
+    /// `tile = -1`: they govern a drawn event that is still in play, not a
+    /// board square. Each is `card = event:<id>`, one per active event.
+    pub fn event_rule_instances(&self) -> Vec<(i32, String)> {
+        self.st
+            .board_field
+            .iter()
+            .filter(|f| f.tile < 0 && f.card.starts_with("event:"))
+            .map(|f| (f.uid, f.card.clone()))
+            .collect()
+    }
+
+    /// The board-wide **mark owners** (`mark:*`, [`crate::data::mark_rule_ids`])
+    /// -- one instance each on the neutral board owner, governing no single
+    /// tile. `mark:cp` is the [CP点] tile-mark owner. Like
+    /// [`Self::event_rule_instances`], these hear every trigger their rule
+    /// declares wherever it points, not just the ones on "their" tile (they
+    /// have none).
+    pub fn mark_rule_instances(&self) -> Vec<(i32, String)> {
+        self.st
+            .board_field
+            .iter()
+            .filter(|f| f.tile < 0 && f.card.starts_with("mark:"))
+            .map(|f| (f.uid, f.card.clone()))
+            .collect()
+    }
+
     /// Miracle crystals on the instance at `uid` (C# `Card.Crystals`).
     pub fn crystals_at(&self, uid: i32) -> i32 {
         self.field_by_uid(uid).map_or(0, |f| f.crystals)
+    }
+
+    /// On-card [CP点] on the instance at `uid` (`FieldCard::cp`) -- 「自己[场上]
+    /// N个[CP点]」, the CP points attached to *that* card (user ruling
+    /// 2026-10-07). Crystals-like: the card rule's own stock, as against the
+    /// neutral [CP点] tile marks below.
+    pub fn cp_at(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(0, |f| f.cp)
+    }
+
+    /// Adjust the on-card [CP点] on the instance at `uid` by `n`, clamped at 0
+    /// and at `max` (`0` = uncapped); returns the new count. The `cpChanged`
+    /// follow-up (通用:该清CP了's graveyard rule) hears about this write like
+    /// any other.
+    pub fn add_cp_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return 0;
+        };
+        f.cp = (f.cp + n).max(0);
+        if max > 0 {
+            f.cp = f.cp.min(max);
+        }
+        f.cp
+    }
+
+    /// Set the on-card [CP点] on the instance at `uid`; returns the new count.
+    pub fn set_cp_at(&mut self, uid: i32, n: i32) -> i32 {
+        self.add_cp_at(uid, n - self.cp_at(uid), 0)
     }
 
     /// One declared property of the instance at `uid` (`FieldCard::props`,
@@ -1161,6 +1239,11 @@ impl World {
     }
 
     /// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
+    ///
+    /// Also mirrors the count into [`crate::state::MatchState::event_active`]
+    /// when the instance is an event's board-owner rule (`docs/EVENTS.md`):
+    /// `ActiveEvent::counter` is the public view of the instance's crystals,
+    /// and the raw row is what clients (and tests) read.
     pub fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
         let Some(f) = self.field_by_uid_mut(uid) else {
             return 0;
@@ -1169,7 +1252,18 @@ impl World {
         if max > 0 {
             f.crystals = f.crystals.min(max);
         }
-        f.crystals
+        let now = f.crystals;
+        let card = f.card.clone();
+        let tile = f.tile;
+        if tile < 0 && card.starts_with("event:") {
+            let short = card.strip_prefix("event:").unwrap_or(&card);
+            for e in self.st.event_active.iter_mut() {
+                if e.id == short {
+                    e.counter = now;
+                }
+            }
+        }
+        now
     }
 
     /// Set the instance at `uid`'s crystals; returns the new count.
@@ -1229,9 +1323,17 @@ impl World {
     /// it left (or -1 when there was no such instance -- including a board-owned
     /// tile rule, which goes nowhere on removal). Dest routing
     /// (`to_discard` and kin) keys on the player index, not the room member id.
+    ///
+    /// An **event rule** instance leaving the field is the event expiring
+    /// (`ctx::unplace_self` from its body): drop it from the active list too.
+    /// Where it is filed (`event_discard` / `event_removed`) is the body's own
+    /// `ctx::event_expire` call -- this only unbinds.
     pub fn unplace_at(&mut self, uid: i32) -> i32 {
         if let Some(i) = self.st.board_field.iter().position(|f| f.uid == uid) {
-            self.st.board_field.remove(i);
+            let card = self.st.board_field.remove(i).card;
+            if let Some(id) = card.strip_prefix("event:") {
+                self.st.event_active.retain(|e| e.id != id);
+            }
             return crate::state::BOARD_OWNER;
         }
         for (pi, s) in self.st.players.iter_mut().enumerate() {
@@ -1320,6 +1422,149 @@ impl World {
                 Msg::default(),
                 props,
             );
+        }
+        // Board-wide **mark owners** (`mark:*`, `crate::data::mark_rule_ids`) --
+        // one instance each on the neutral board owner, governing no single
+        // tile (`tile = -1`). `mark:cp` is the [CP点] tile-mark owner
+        // (`rules/tiles/src/cp.rs`): a board-wide category, so it is not bound
+        // per board tile the way `tile:*` is. Idempotent.
+        for id in crate::data::mark_rule_ids() {
+            if !rules.has_rule(id) {
+                continue;
+            }
+            if self
+                .st
+                .board_field
+                .iter()
+                .any(|f| f.card == *id && f.tile < 0)
+            {
+                continue;
+            }
+            let props = rules.card_props(id);
+            self.place_card_on(
+                data,
+                crate::state::BOARD_OWNER,
+                -1,
+                id,
+                Msg::default(),
+                props,
+            );
+        }
+    }
+
+    /// Bind one **event rule** instance on the neutral board owner and record
+    /// the event in [`crate::state::MatchState::event_active`] (`docs/EVENTS.md`).
+    ///
+    /// Called from `draw_event` when the event's rule exists in the ruleset, so
+    /// the body's `On::Play` and any `On::Hook` it declares run against a live
+    /// instance (props, crystals, `unplace_self` = expire). Idempotent per
+    /// event id: a second activation of the same event keeps the first
+    /// instance. Returns the instance uid, or -1 when there is no rule
+    /// (`StubRules`) -- the engine's built-in fallback files the card away and
+    /// binds nothing.
+    pub fn bind_event(
+        &mut self,
+        data: &crate::data::GameData,
+        rules: &dyn super::rules::CardRules,
+        player_id: i32,
+        id: &str,
+    ) -> i32 {
+        let rid = crate::data::event_rule_id(id);
+        if !rules.has_rule(&rid) {
+            return -1;
+        }
+        if let Some((uid, _)) = self
+            .event_rule_instances()
+            .into_iter()
+            .find(|(_, c)| c == &rid)
+        {
+            return uid;
+        }
+        let props = rules.card_props(&rid);
+        let uid = self.place_card_on(
+            data,
+            crate::state::BOARD_OWNER,
+            -1,
+            &rid,
+            Msg::default(),
+            props,
+        );
+        self.st.event_active.push(crate::state::ActiveEvent {
+            id: id.to_string(),
+            player_id: player_id as i32,
+            counter: 0,
+            counter2: 0,
+            note: Msg::default(),
+            face_down: false,
+        });
+        uid
+    }
+
+    /// Expire an active event: drop it from [`crate::state::MatchState::event_active`]
+    /// and unbind its rule instance. `removed` files it to `event_removed`
+    /// (「永久移除」) rather than `event_discard`.
+    ///
+    /// This is `ctx::event_expire` -- the 「放入事件弃牌」 / 「永久移除」 half of an
+    /// event's expiry clause. A one-shot event never gets here: `draw_event`
+    /// files it away itself when the rule reports it does not stay.
+    pub fn expire_event(&mut self, id: &str, removed: bool) {
+        let rid = crate::data::event_rule_id(id);
+        if let Some(i) = self
+            .st
+            .board_field
+            .iter()
+            .position(|f| f.card == rid && f.tile < 0)
+        {
+            self.st.board_field.remove(i);
+        }
+        self.st.event_active.retain(|e| e.id != id);
+        if removed {
+            if !self.event_removed.iter().any(|e| e == id) {
+                self.event_removed.push(id.to_string());
+            }
+        } else if !self.event_discard.iter().any(|e| e == id) {
+            self.event_discard.push(id.to_string());
+        }
+    }
+
+    /// An empty event deck takes the shuffled discard as the new deck. Called
+    /// once a draw has fully resolved (the drawn card filed away included), and
+    /// before a draw as a fallback; never mid-resolution.
+    pub fn refill_event_deck(&mut self) {
+        if !self.event_deck.is_empty() || self.event_discard.is_empty() {
+            return;
+        }
+        let mut deck = std::mem::take(&mut self.event_discard);
+        self.rng.shuffle(&mut deck);
+        self.event_deck = deck;
+        self.log("text", -1, Msg::new("log.events_reshuffled"));
+    }
+
+    /// Is this event active and face-up? (`ctx::event_is_active`.)
+    pub fn event_is_active(&self, id: &str) -> bool {
+        self.st
+            .event_active
+            .iter()
+            .any(|e| e.id == id && !e.face_down)
+    }
+
+    /// Take `id` out of the game for good (`ctx::event_banish`): off the deck,
+    /// the discard and the active list. 「从所有非衍生事件中选择3个移除」.
+    pub fn event_banish(&mut self, id: &str) {
+        self.event_deck.retain(|e| e != id);
+        self.event_discard.retain(|e| e != id);
+        self.st.event_top.retain(|e| e != id);
+        self.expire_event(id, true);
+    }
+
+    /// Push `id` onto the **top** of the event deck (`event_deck`'s end is the
+    /// top). `face_down` records it on the public `event_top` view as a
+    /// face-down slot (「背面朝上放置于事件牌堆顶部」) -- the draw still reveals
+    /// it, matching the rulebook's 「抽取的事件卡不进入手卡并向所有玩家公开」.
+    pub fn event_deck_push(&mut self, id: &str, face_down: bool) {
+        self.event_deck.push(id.to_string());
+        if face_down {
+            self.st.event_top.push(id.to_string());
         }
     }
 
@@ -1455,11 +1700,127 @@ impl World {
             uid,
             tile,
             kind: kind.to_string(),
+            category: crate::state::mark_category::PLAYER.to_string(),
             owner: player_id,
             count: 1,
             card: String::new(),
+            src: -1,
             note,
         });
+    }
+
+    // ------------------------------------------------------- [CP点] marks
+    // `docs/TILES.md` / `rules/tiles/src/cp.rs`: [CP点] is its own tile-mark
+    // category, owned by the `mark:cp` rule instance on the neutral board
+    // owner -- never by a player. Cards touch it only through this small API
+    // (`place_cp` / `count_cp` / `clear_cp` / the attached counts), which is
+    // what stamps the category and keeps `owner` at [`crate::state::BOARD_OWNER`].
+    //
+    // Provenance is `src` (the placing card instance's `FieldCard::uid`) plus
+    // `card` (its card id, for the log / the view's 「来自」) -- not `owner`.
+    // 通用:该清CP了 (1) 「此卡在格子上添加的[CP点]及其产物」 keys on `src`.
+
+    /// Place one [CP点] on `tile`, attached to the card instance at `src_uid`
+    /// (provenance; `-1` when not attached to an instance). The mark is neutral
+    /// (`owner` = [`crate::state::BOARD_OWNER`]) regardless of who played the
+    /// card. `card_id` is the provenance string the view shows as 「来自」.
+    ///
+    /// Placement semantics (通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的
+    /// 格子上添加1个[CP点]」) are the *caller's* gate -- the rule that says where
+    /// a CP may go lives with `mark:cp`, not with every writer.
+    pub fn add_cp_mark(&mut self, tile: i32, src_uid: i32, card_id: &str, note: Msg) -> i32 {
+        // 「添加1个[CP点]」 -- stacking is +1 on the tile's single CP mark, so a
+        // tile holds one mark object whose `count` is the [CP点] it carries.
+        if let Some(m) = self.st.marks.iter_mut().find(|m| m.tile == tile && m.is_cp()) {
+            m.count += 1;
+            return m.count;
+        }
+        let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        self.st.marks.push(TileMark {
+            uid,
+            tile,
+            kind: crate::state::mark_kind::CP.to_string(),
+            category: crate::state::mark_category::CP.to_string(),
+            // Neutral: 「These marks should not be owned by any player」.
+            owner: crate::state::BOARD_OWNER,
+            count: 1,
+            card: card_id.to_string(),
+            src: src_uid,
+            note,
+        });
+        1
+    }
+
+    /// [CP点] on `tile`, any provenance. `H.CountMarks` for the CP category.
+    pub fn count_cp(&self, tile: i32) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .filter(|m| m.tile == tile && m.is_cp())
+            .map(|m| m.count)
+            .sum()
+    }
+
+    /// [CP点] on `tile` that the card instance at `src_uid` placed (and its
+    /// products) -- 通用:该清CP了 (1) 「此卡在格子上添加的[CP点]及其产物」.
+    pub fn count_cp_from(&self, tile: i32, src_uid: i32) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .filter(|m| m.tile == tile && m.is_cp() && m.src == src_uid)
+            .map(|m| m.count)
+            .sum()
+    }
+
+    /// Total [CP点] the card instance at `src_uid` placed anywhere on the board
+    /// -- the tile marks carrying it as provenance (「此卡在格子上添加的[CP点]
+    /// 及其产物」). Distinct from [`Self::cp_at`], the **on-card** [CP点] on the
+    /// instance itself (user ruling 2026-10-07's two kinds).
+    pub fn count_cp_from_all(&self, src_uid: i32) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .filter(|m| m.is_cp() && m.src == src_uid)
+            .map(|m| m.count)
+            .sum()
+    }
+
+    /// The card instance a [CP点] on `tile` is attached to (`TileMark.src`),
+    /// or `-1` when the tile has none. Read before a write: dropping the last
+    /// mark takes its provenance with it.
+    pub fn cp_src_at(&self, tile: i32) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .find(|m| m.tile == tile && m.is_cp())
+            .map_or(-1, |m| m.src)
+    }
+
+    /// Remove one [CP点] from `tile` (通用:该清CP了 [手] 「移除格子上的个[CP点]」
+    /// -- C# `tileMark.count--`, at most one per [结算]). Returns how many are
+    /// left there. The mark is dropped at 0. This is a **tile-mark** write: it
+    /// does not touch the card's on-card [CP点] ([`Self::cp_at`]) and so does
+    /// not raise `cpChanged` -- the graveyard rule watches the on-card count.
+    pub fn clear_cp(&mut self, tile: i32) -> i32 {
+        self.bump_cp(tile, -1)
+    }
+
+    /// Move the [CP点] on `tile` by `delta`; the mark is dropped at 0. Returns
+    /// the count now on the tile.
+    pub fn bump_cp(&mut self, tile: i32, delta: i32) -> i32 {
+        let Some(m) = self.st.marks.iter_mut().find(|m| m.tile == tile && m.is_cp())
+        else {
+            return 0;
+        };
+        m.count = (m.count + delta).max(0);
+        let now = m.count;
+        let src = m.src;
+        if now == 0 {
+            self.st
+                .marks
+                .retain(|m| !(m.tile == tile && m.is_cp() && m.src == src && m.count == 0));
+        }
+        now
     }
 
     // ------------------------------------------------------ status effects

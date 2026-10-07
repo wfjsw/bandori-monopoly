@@ -7,11 +7,11 @@ import { navigate } from "../../app/router";
 import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
 import { D, skillText } from "../../core/data";
-import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
+import { useAutoplay, useMatchView, useTick, useWakeLock } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { CharacterData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
-import { AutoBanner, AutoToggle } from "../../ui/AutoToggle";
+import { AutoBanner, AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { SkillBody } from "../../ui/SkillBody";
 import { SkillTextToggle } from "../../ui/SkillTextToggle";
@@ -34,6 +34,7 @@ export function Select({ sess }: { sess: GameSession }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
   const auto = useAutoplay(sess); // 托管: ban / pick / deck input is locked
+  useWakeLock(true); // a match is on from the ban / pick phase
   const [tab, setTab] = useState<string>(tr("common.all"));
   const [picked, setPicked] = useState("");
   const deckOpenedFor = useRef("");
@@ -106,12 +107,13 @@ export function Select({ sess }: { sess: GameSession }) {
         onBack={leave}
         right={
           <div className={s.steps}>
-            <AutoToggle sess={sess} />
             <span className={cx(s.mode, s[modeCls])}>{modeLabel}</span>
             {step(1, tr("select.stepBan"), st.mode !== 2)}<i>›</i>{step(2, tr("select.stepPick"))}<i>›</i>{step(3, tr("select.stepDeck"))}
           </div>
         }
       />
+      {/* Outside the TopBar so it can sit above modals: clickable at any time. */}
+      <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} /></div>
       <AutoBanner sess={sess} />
       {sess instanceof SoloSession && st.phase !== "deck" && (
         <Btn size="small" icon="redo" className={s.quick} title={tr("select.quickHint")} disabled={auto} onClick={() => sess.quickStart()}>{tr("select.quickStart")}</Btn>

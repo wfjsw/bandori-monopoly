@@ -76,9 +76,16 @@ pub struct MoveCtx {
     // -- who ---------------------------------------------------------------
     pub player_id: usize,
     /// Who rolled, when that is not the player (shown on the log line).
+    /// [`Self::ROLLER_UNSET`] until someone claims it -- `card_move` then
+    /// defaults it to the mover, and a substitution (幻觉来了 「上一名玩家代替
+    /// 进行此次投掷」) writes the stand-in through `plan::set_roller`.
     pub roller: usize,
     /// The turn's [main move](C# `Main`), as opposed to a card's side move.
     pub main: bool,
+    /// An event-driven forced move (「移动X」 / 「移动1d20」): not a main move, so
+    /// it goes through even when the turn's main move is already spent
+    /// (`docs/EVENTS.md`). Set by the host when the running rule is `event:*`.
+    pub forced: bool,
     /// Why the move happened (a card / effect), shown in parentheses on the
     /// log line.
     pub why: Option<Msg>,
@@ -170,16 +177,22 @@ pub struct MoveCtx {
     pub followers: Vec<i32>,
 }
 
+impl MoveCtx {
+    /// `roller` sentinel: nobody has claimed the roll yet.
+    pub const ROLLER_UNSET: usize = usize::MAX;
+}
+
 impl Default for MoveCtx {
     /// The sentinels a derived `Default` would get wrong: `Resolve = true`,
-    /// `TeleportTo/Start/StopAt/Parity/Steps = -1`, `Base = 1d20`. Getting these
-    /// wrong is silent -- the walk just never settles, or a teleport goes to
-    /// tile 0.
+    /// `TeleportTo/Start/StopAt/Parity/Steps = -1`, `Base = 1d20`, and
+    /// `roller = ROLLER_UNSET`. Getting these wrong is silent -- the walk just
+    /// never settles, or a teleport goes to tile 0.
     fn default() -> Self {
         Self {
             player_id: 0,
-            roller: 0,
+            roller: Self::ROLLER_UNSET,
             main: false,
+            forced: false,
             why: None,
             kind: MoveKind::Walk,
             teleport_to: -1,

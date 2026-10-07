@@ -74,17 +74,18 @@ answered yes so the table is never left hanging.
 
 **混沌 (`chaos`)** is legal but maximally disruptive -- it prefers whatever
 makes more things happen. Play every legal card (100%, no cap) and fire every
-usable character / band skill; always declare an offered [反击], picking a
-random card rather than the skip option; prompts pick uniformly among the
-non-default options, a random target for tile prompts (never "none" while a
-target exists), a random valid subset for mortgage / pick; buy, build and
-accept forced purchases whenever they keep the reserve; redeem what it can
-afford; bid at auctions with random raises; random votes; a random free
-character and a random legal deck. Money still gets a floor so the seat does
-not die instantly: every voluntary spend must leave `CHAOS_RESERVE = 1 000`
-(buy, build, redeem, auction bids, optional paid prompt choices). Card plays
-and counteracts are unrestricted -- the view carries no visible card cost to
-check against the reserve. End turn only when nothing else is legal.
+usable character / band skill; prompts pick uniformly among the non-default
+options, a random target for tile prompts (never "none" while a target exists),
+a random valid subset for mortgage / pick; buy, build and accept forced
+purchases whenever they keep the reserve; redeem what it can afford; bid at
+auctions with random raises; random votes; a random free character and a random
+legal deck. An offered [反击] is the one gate left: it declares on only
+`CHAOS_COUNTER_CHANCE = 0.3` of the offers it gets (a random offered card) and
+passes the rest. Money still gets a floor so the seat does not die instantly:
+every voluntary spend must leave `CHAOS_RESERVE = 1 000` (buy, build, redeem,
+auction bids, optional paid prompt choices). Card plays are unrestricted -- the
+view carries no visible card cost to check against the reserve. End turn only
+when nothing else is legal.
 
 Pacing matches the engine's bot clock in both modes: one command at a time,
 after a 0.4–1.0 s human beat, never while one is in flight. The policy returns
@@ -138,6 +139,7 @@ works, for tools.
 | POST | `/api/rooms/{id}/leave` | | `{ok}` |
 | GET  | `/api/rooms/{id}/state` | | `{room, you, match}` |
 | POST | `/api/rooms/{id}/act` | `NetMessage` | `{ok}` |
+| GET  | `/api/rooms/{id}/record` | | the last finished match's `.bdrec` (see below) |
 | GET  | `/api/rooms/{id}/stream` | | SSE |
 
 Errors: `{error, reason}`. `error` is the player-facing message from the original
@@ -180,6 +182,58 @@ The body is the original `NetMessage` shape; only the fields the command uses ma
 * `state.prompt` describes the prompt in progress (`id`, `kind`, `players`, `answers`
   with `-1` = still waiting, `timeLeft`, auction `bid` / `bidder`).
 * Keep-alive comments every 15 s.
+
+## Match records
+
+The server records every online match as an input log beside the match blob
+(`docs/REPLAY.md` §4): `Init::Seed` (members, seed, weights), every ordered
+public call (`act` with its Ok/Err bit, tick runs, `quick_start`, `finish`,
+`member_left`, `member_back`), and a state-hash checkpoint at each turn
+boundary. When the match ends the log is sealed into a `RecordFile` -- seats
+from the final view, `final_hash` an FNV-1a-64 of the final `Match::save()` --
+and stored **zstd-compressed** as `record:{room}:last`; the log is then
+cleared. Seal-time compression is enough: the in-progress log stays one JSON
+line per entry.
+
+**`GET /api/rooms/{id}/record`** serves that `.bdrec`:
+
+| Case | Answer |
+|---|---|
+| the room is still playing | `409` `err.record.live` |
+| nothing sealed yet | `404` `err.record.none` |
+| the caller was not in the match | `403` `err.record.forbidden` |
+| otherwise | `200`, the record as `application/zstd` |
+
+Participation is resolved through the room's member → session-token map: the
+caller's token names a member id, and that id must be one of the seats the
+record was sealed for. A participant who has since left the room (and would
+rejoin under a fresh member id) is therefore outside the set -- deliberately
+narrow, since the full record reveals every hand and the deck order.
+
+* **The body is the sealed bytes as stored**: a zstd-framed `.bdrec`
+  (`Content-Type: application/zstd`), with
+  `Content-Disposition: attachment; filename="bdrec-<room>-<yyyymmdd-hhmm>.bdrec"`.
+  Deliberately **no** `Content-Encoding: zstd` -- a browser would transparently
+  decode that, and inconsistently; the client decompresses in wasm
+  (`ReplayMatch::from_record_bytes`), which sniffs the magic and also accepts
+  gzip and plain JSON. A record stored before compression is plain JSON and is
+  served as-is as `application/json`.
+* **Storage.** `StoredRecord` holds the bytes. Redis writes them with a
+  binary-safe `SET` under `bm:rec:<room>` (the member list rides a companion
+  `bm:rec:<room>:members` key, same TTL) and reads them back with `GET`; the
+  in-memory store keeps the bytes in its 64-entry LRU. A value written before
+  compression (one JSON envelope) is still read and served.
+* **TTL 24 h.** `record:{room}:last` is written with a 24 h expiry (Redis
+  `SET EX`; the in-memory store bounds itself to a 64-entry LRU instead of a
+  clock). The in-progress log gets the same expiry so a box that dies mid-match
+  does not leak a list.
+* **`gaps`.** A restart mid-match loses the buffered tick run (up to 100
+  ticks). The sealed record then has `header.gaps = true` and is not
+  checkpoint-verifiable. Everything else about it still plays.
+* **Tick quantization.** The match clock is a fixed-step accumulator:
+  `k = floor(acc / 0.05).min(10)` whole quanta per ticker wake-up, each worth
+  `0.05 * time_scale` of game time. The record seals that quantum into
+  `header.step`, so a replay feeds the engine the identical `tick(dt)` f32s.
 
 ## Presence
 

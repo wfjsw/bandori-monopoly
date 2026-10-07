@@ -166,7 +166,8 @@ impl Cx<'_> {
 
     /// `SubmitDeck` -- a complete legal deck, or the character's preset. A
     /// chaos bot without a supplied list submits a random legal deck instead
-    /// of the designer's preset.
+    /// of the designer's preset; a standard one takes the deck book's entry
+    /// for its public table when the book has one (`docs/BOT.md` §3.7).
     pub(crate) fn submit_deck(&mut self, i: usize, cards: Option<&[String]>) {
         let character = self.w.st.players[i].character.clone();
         let list = match self.data.character(&character) {
@@ -185,7 +186,19 @@ impl Cx<'_> {
                             deck::preset(self.data, c)
                         }
                     } else {
-                        deck::preset(self.data, c)
+                        // Public key only: own character, own seat, the other
+                        // seats' characters in seat order. Pure -- no RNG.
+                        let opponents: Vec<String> = self
+                            .w
+                            .st
+                            .players
+                            .iter()
+                            .enumerate()
+                            .filter(|(j, _)| *j != i)
+                            .map(|(_, p)| p.character.clone())
+                            .collect();
+                        let sha = self.rules.ruleset_sha256().unwrap_or("stub");
+                        crate::deck_book::suggest(self.data, c, i, &opponents, sha)
                     }
                 }
             },

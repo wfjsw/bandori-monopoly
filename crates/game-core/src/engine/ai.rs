@@ -29,6 +29,10 @@ pub const MAX_PLAYS_PER_TURN: usize = 2;
 /// The one knob the chaos policy spends to -- without it a chaos bot burns out
 /// in a few turns and stops being disruptive.
 pub const CHAOS_RESERVE: i32 = 1_000;
+/// Chaos declares a [反击] on this share of the counteract offers it gets
+/// (a random offered card); the rest of the offers it passes. Rolled per offer
+/// from the match RNG, so a repeated offer ring naturally stops after a skip.
+pub const CHAOS_COUNTER_CHANCE: f64 = 0.3;
 
 /// `AiWantsBuy` -- would buying `price` leave [`BUY_RESERVE`]?
 pub fn wants_buy(money: i32, price: i32) -> bool {

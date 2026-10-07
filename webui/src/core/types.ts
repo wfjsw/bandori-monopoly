@@ -52,6 +52,10 @@ export interface FieldCard {
   uid: number; card: string; owner: number; user: number; tile: number;
   /** Miracle crystals on this instance. A band skill's count is the player's 「乐队卡 / 团卡」 pool. */
   crystals: number;
+  /** On-card [CP点] -- 「自己[场上]N个[CP点]」, the CP points attached to this
+   *  card (user ruling 2026-10-07). The other [CP点] kind is the tile mark
+   *  (`TileMark.category === "cp"`). Shown as the field card's counter badge. */
+  cp: number;
   faceDown: boolean;
   /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
   bandSkill?: boolean;
@@ -59,7 +63,13 @@ export interface FieldCard {
 }
 export interface SkillAction { id: string; source: string; title: Msg; text: Msg; enabled: boolean; reason: Msg }
 export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; note: Msg; faceDown: boolean }
-export interface TileMark { uid: number; tile: number; kind: string; owner: number; count: number; card: string; note: Msg }
+/** A tile marker. `category` sorts it: `""` is a player/generic mark (coloured
+ *  by `owner`'s seat), `"cp"` is a neutral [CP点] -- `owner` is then -1 and the
+ *  provenance is `src` (the placing card instance) / `card` (its id, 「来自」). */
+export interface TileMark {
+  uid: number; tile: number; kind: string; category: string; owner: number;
+  count: number; card: string; src: number; note: Msg;
+}
 export interface MatchPrompt {
   id: number; kind: string; title: Msg; text: Msg; card: string; options: Msg[];
   fallback: number; players: number[]; answers: number[]; timeLeft: number; tile: number;
@@ -156,4 +166,4 @@ export interface MatchReward {
   exp: number; levelBefore: number; levelAfter: number; progressBefore: number; progressAfter: number;
   coins: number; stars: number;
 }
-export interface SoundSettings { bgm: number; voice: number; se: number; skipLine: boolean; greet: boolean; idleTalk: boolean; skillTextSimple: boolean }
+export interface SoundSettings { bgm: number; voice: number; se: number; skipLine: boolean; greet: boolean; idleTalk: boolean; skillTextSimple: boolean; keepAwake: boolean }

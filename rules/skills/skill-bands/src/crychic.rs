@@ -75,6 +75,13 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     }
     ctx::log(player_id, &Msg::new(key!("crychic_empty")));
     // 「当此卡移除时，你获得X*500资金」
+    // TODO(规则书)（3）: 「当此卡移除时」 is a removal-time clause and should fire
+    //   whenever the card leaves -- including the (2)-driven 「移除此卡」 that
+    //   follows. On the `transform_now` path (`mutsumi_never` 「立即执行乐队技能
+    //   的（2）效果」) the nested run has no running instance (`invoke_skill`
+    //   clears `current_uid`), so `crystals()` reads 0 and the cash-out is
+    //   skipped. `mutsumi_never_2_runs_the_band_skill_2` pins that as
+    //   「no money clause in (2)」; deciding (3) here would flip it.
     let x = ctx::crystals();
     if x > 0 {
         ctx::gain(
@@ -84,11 +91,15 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         )?;
         ctx::add_crystals(-x, 10);
     }
-    // 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
+    // 规则书（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
+    // 「移除」 is the out-of-game keyword (`apply_dest`'s Banished = "just
+    // gone"), so the cards leave the game rather than land in a discard pile.
+    // 「此卡」 is the band skill instance itself (`skill:CRYCHIC:美好的往日幻影`),
+    // whose id does not start with `CRYCHIC:` -- it was skipped by the old
+    // prefix sweep and stayed on the field beside the successor.
     for (uid, c) in ctx::field_instances(player_id) {
-        if c.starts_with("CRYCHIC:") {
+        if c == ID || c.starts_with("CRYCHIC:") {
             ctx::unplace_at(uid);
-            ctx::to_discard(player_id, &c);
         }
     }
     for c in ctx::cards_in(player_id, CardPile::Hand) {
@@ -97,13 +108,17 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         if c.starts_with("CRYCHIC:") {
-            ctx::discard_from_hand(player_id, &c);
+            ctx::take_from_hand(player_id, &c);
         }
     }
-    for c in ctx::cards_in(player_id, CardPile::Deck) {
-        if c.starts_with("CRYCHIC:") {
-            ctx::take_card(player_id, CardPile::Deck, &c);
-            ctx::to_discard(player_id, &c);
+    for pile in [CardPile::Deck, CardPile::Discard] {
+        for c in ctx::cards_in(player_id, pile) {
+            if c == "CRYCHIC:（灯）内心的呐喊" {
+                continue;
+            }
+            if c.starts_with("CRYCHIC:") {
+                ctx::take_card(player_id, pile, &c);
+            }
         }
     }
     // 「将你剩余的所有手牌放入抽牌堆」
@@ -143,9 +158,11 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 // （1）「领取CiRCLE奖励时必须选择抽一张卡」 -- `circleAffected` fires between the
 // pick and the payout, so the money half can be cancelled and replaced with the
 // draw the clause mandates.
-// （2）「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- a zone-by-zone sweep:
-// `placed_cards` + `unplace_card_named` for the field, `cards_in(Hand)` +
-// `discard_from_hand` for the hand, `cards_in(Deck)` + `take_card` for the deck.
+// （2）「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- a zone-by-zone sweep that
+// **banishes** (「移除」 = out of the game): `field_instances` + `unplace_at`
+// for the field (the band skill itself included -- its id is `skill:CRYCHIC:…`,
+// not `CRYCHIC:…`), `take_from_hand` for the hand, `take_card` for deck and
+// discard. 「内心的呐喊」 is exempt everywhere (its own (2)).
 // 「获得角色对应的"MyGO"或"Ave Mujica"乐队技能卡」 is the same pick the reshuffle
 // already offers -- the two band-skill ids are fixed, and the choice names which.
 

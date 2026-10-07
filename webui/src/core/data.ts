@@ -62,6 +62,16 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
       progress(++done / names.length);
     }),
   );
+  // Optional: the bot deck book (`docs/BOT.md` §3.7). Missing = empty book =
+  // 托管 / bots keep the designer's preset decks. Outside `data_files()` on
+  // purpose -- it tunes bots, not the match, so it is not part of the data
+  // hash either.
+  try {
+    const book = await fetch("/data/deck_book.json");
+    if (book.ok) files["deck_book.json"] = await book.text();
+  } catch {
+    /* absent book is fine */
+  }
   glue.load_data(JSON.stringify(files));
   await loadRuleset();
 

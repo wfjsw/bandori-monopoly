@@ -178,7 +178,46 @@ use alloc::{string::String, vec::Vec};
 ///      玩家一起执行」 (sakiko_lead): the move's result is replayed for each
 ///      follower after the mover settles, in the recorded order (「你先触发结算，
 ///      此后其他玩家按行动顺序依次触发结算」).
-pub const ABI_VERSION: i32 = 35;
+/// v36: [CP点] is its own tile-mark category (`mark::CP_CATEGORY` / `mark::CP_KIND`),
+///      owned by the `mark:cp` rule instance on the neutral board owner and never
+///      by a player. The small writer API is `ctx::place_cp` / `ctx::count_cp` /
+///      `ctx::clear_cp` plus the attached counts (`ctx::count_cp_from` per tile,
+///      `ctx::cp_attached` in total) -- provenance is the placing card instance
+///      (`TileMark.src`), not `TileMark.owner`. `HookKind::CpChanged` /
+///      `TriggerKind::CpChanged` (`cpChanged`) fires whenever a card instance's
+///      attached [CP点] count is written, so 「…时」 clauses on the count (the
+///      该清CP了 graveyard rule) live in one event handler instead of at each
+///      spend site. Mirrors v29's `crystalsChanged`.
+/// v37: event rule instances (`docs/EVENTS.md`) -- the `rules/events` category.
+///      `ctx::event_expire` / `event_is_active` / `event_deck_push` /
+///      `event_banish` are the rule body's handles on the engine's event deck
+///      and active list. An event's `CardDef` id is `event:<id>` and it is
+///      bound on the neutral board owner (`BOARD_OWNER`) with `tile = -1` for
+///      as long as it is active, the same shape as a `tile:*` instance.
+/// v38: the two [CP点] kinds (user ruling 2026-10-07). **Tile marks** stay the
+///      `mark:cp` owner's (`ctx::place_cp` / `count_cp` / `count_cp_from` /
+///      `clear_cp`, plus `ctx::cp_src_at` for the mark's provenance lookup).
+///      **On-card** [CP点] is `FieldCard::cp` -- 「自己[场上]N个[CP点]」, the CP
+///      points attached to the card itself (the card rule's own stock,
+///      crystals-like) -- written with `ctx::add_cp` / `add_cp_at` and read
+///      with `ctx::cp_attached` (the running instance) / `cp_at` (another
+///      instance). `cp_attached` changed meaning in place: it used to total
+///      the tile marks carrying the instance as `src`, it now reads
+///      `FieldCard::cp`. `HookKind::CpChanged` rides the on-card writes only.
+///      The per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone: the
+///      card's own count replaces it.
+/// v40: the **purchase surface** (`docs/PURCHASE.md`). `TriggerKind`s
+///      `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` / `BuyAssign` (wire names
+///      `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign`) and the
+///      [`BuyKind`] payload (`buy_kind` / `seller` / `price` / `deal_*`).
+///      New tile props: [`prop::BUYABLE`], [`prop::BUY_HOUSES`],
+///      [`prop::FORCE_MULT`] / [`prop::FORCE_FIXED`] /
+///      [`prop::FORCE_STAYS_MORTGAGED`], [`prop::ANY_COLOR`] and the
+///      `colorFor:` prefix. `ctx::buy_quotes` / `ctx::buy` / `ctx::acquire` /
+///      `ctx::agent_offer` / `ctx::linger`. The retired props
+///      `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` stay for one ABI (P5
+///      deletes them and the `TurnCtx` flags together).
+pub const ABI_VERSION: i32 = 40;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -244,6 +283,17 @@ pub mod state_key {
 pub mod mark {
     /// Carrying tiles cannot be named as a target (`H.TargetTile` answers -1).
     pub const NO_TARGET: &str = "noTarget";
+
+    /// Tile-mark **category**: [CP点], 「放置于路面上的指示物」
+    /// (`data/rules.txt` 125). Its own category, not a `kind` among the player
+    /// marks. Mirrors `game_core::state::mark_category::CP`. This is the
+    /// **tile** kind of [CP点]; the other kind is the on-card count
+    /// (`FieldCard::cp`, 「自己[场上]N个[CP点]」) -- user ruling 2026-10-07.
+    pub const CP_CATEGORY: &str = "cp";
+    /// The [CP点] mark's stable `kind`. Its display label comes from
+    /// [`CP_CATEGORY`] (「CP点」), not from this string. Mirrors
+    /// `game_core::state::mark_kind::CP`.
+    pub const CP_KIND: &str = "mark:cp";
 }
 
 /// Named **card properties** -- the keys of a `CardDef`'s `props` map. A
@@ -322,6 +372,43 @@ pub mod prop {
     pub const RAZE_ON_BUY: &str = "razeOnBuy";
     /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
+    /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
+    /// refuses a build whose house cost is `>=` this, while the instance is in
+    /// play. On a board-owned instance (`ctx::set_prop`); `0` disables.
+    pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
+
+    // ------------------------------------------------------ purchase surface
+    // v40 (`docs/PURCHASE.md`). Tile props that decide eligibility, price and
+    // the deal. The retired `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` above
+    // stay one ABI and are deleted at P5 together with the `TurnCtx` flags.
+
+    /// 「可购买格子」 (`data/rules.txt` line 19) -- `1` = this tile can be bought
+    /// at all. Stamped from `TileData::is_buyable` at bind time; a rule
+    /// instance may clear it (rana_parking's 「不可被抵押双倍支付购买」).
+    pub const BUYABLE: &str = "buyable";
+    /// Houses already standing on the tile, counted into the buy price
+    /// (「购买格子地契和建造已有房子的资金总价」). `0` disables; a positive
+    /// value overrides the real `st.houses` count for the quote.
+    pub const BUY_HOUSES: &str = "buyHouses";
+    /// Force-buy price scale in milli-units (2000 = ×2, the rulebook default
+    /// 「两倍」). Replaces the hardcoded `2 *`.
+    pub const FORCE_MULT: &str = "forceMult";
+    /// 「此次购买的价格不受任何资金变动效果影响」 (`data/rules.txt` lines 92,
+    /// 106) -- `1` = the force-buy / buy moves money **directly**, bypassing
+    /// the pay pipeline.
+    pub const FORCE_FIXED: &str = "forceFixed";
+    /// 「获得的地契仍为抵押状态」 (`data/rules.txt` line 106) -- `1` = a
+    /// force-buy leaves the deed mortgaged. Default `1` for Force (the
+    /// rulebook's own words); `0` clears it.
+    pub const FORCE_STAYS_MORTGAGED: &str = "forceStaysMortgaged";
+    /// 「该格获得所有颜色」 / soyo 「所有颜色」 -- this tile counts as every
+    /// colour group for agent-set membership. Mirrors [`ALL_COLORS`] as a
+    /// tile prop rather than a `group` value.
+    pub const ANY_COLOR: &str = "anyColor";
+    /// Per-player colour override prefix: `colorFor:<p>` = the group tile `p`
+    /// treats this tile as (`-1` clears, `-2` = all colours). Replaces the
+    /// `extraColor:` player-state key and `st.tile_colors`.
+    pub const COLOR_FOR_PREFIX: &str = "colorFor:";
 }
 
 /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from. Read by
@@ -431,6 +518,51 @@ bitflags::bitflags! {
         /// `land` -> `settleAfter`. On a teleport this gates the destination's
         /// [经过] too (C# 24371 returns before the pass block when `!m.Resolve`).
         const DEST = 2;
+    }
+}
+
+/// Which kind of purchase a buy trigger / quote is about (`docs/PURCHASE.md`).
+/// Mirrors `game_core::engine::play::purchase::BuyKind`.
+#[repr(i32)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BuyKind {
+    /// An ordinary land buy (the end step's offer, or `ctx::buy`).
+    #[default]
+    Land = 0,
+    /// An agent offer's buy branch.
+    Agent = 1,
+    /// A card-driven buy (`ctx::buy` from a card body).
+    Card = 2,
+    /// 「强行购买」 -- a mortgaged deed bought out at 2×.
+    Force = 3,
+    /// 「收购」 -- a deed taken from its owner at the acquisition price.
+    Acquire = 4,
+    /// An auction win.
+    Auction = 5,
+}
+
+impl BuyKind {
+    pub fn from_i32(v: i32) -> Option<Self> {
+        Some(match v {
+            0 => Self::Land,
+            1 => Self::Agent,
+            2 => Self::Card,
+            3 => Self::Force,
+            4 => Self::Acquire,
+            5 => Self::Auction,
+            _ => return None,
+        })
+    }
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Land => "land",
+            Self::Agent => "agent",
+            Self::Card => "card",
+            Self::Force => "force",
+            Self::Acquire => "acquire",
+            Self::Auction => "auction",
+        }
     }
 }
 
@@ -707,6 +839,35 @@ pub enum TriggerKind {
     /// replacement draw, and the after points ([`Self::Drawn`] / [`Self::Drew`])
     /// fire for it (「此次加手视为抽卡动作」). Opening hands do not raise it.
     DrewBefore = 77,
+    /// v36: a card instance's attached [CP点] count was just written (placed or
+    /// cleared). `t.card` is the card the marks are attached to, `t.player_id`
+    /// its owner, and `t.value` is the **change applied** to the attached count
+    /// (negative when a [CP点] left). The count after the write is
+    /// `ctx::cp_attached()` on the instance itself.
+    ///
+    /// The 「该清CP了 should be graveyarded as soon as the attached on-card cp
+    /// mark is empty」 rule (user ruling 2026-10-07) listens here rather than
+    /// re-checking at each spend site, so a count emptied by *any* write --
+    /// a settle, another effect's removal -- leaves the field just the same.
+    /// Mirrors [`Self::CrystalsChanged`], which is the same shape for [奇迹水晶].
+    CpChanged = 78,
+
+    // v40: the purchase surface (`docs/PURCHASE.md`).
+    /// `Fx.BuyGate` -- may `t.player_id` buy `t.tile` at all? A placed card
+    /// refuses with `trigger::set_cancelled()` plus a reason. Runs for every
+    /// [`BuyKind`], Force included (Poppin's hill lock).
+    BuyGate = 79,
+    /// `Fx.BuyAdd` -- the buy price's first modifier stage (fixed ±), before
+    /// [`Self::BuyMul`] and [`Self::BuySet`]. `t.value` / `set_price`.
+    BuyAdd = 80,
+    /// `Fx.BuyMul` -- second modifier stage (×), after [`Self::BuyAdd`].
+    BuyMul = 81,
+    /// `Fx.BuySet` -- third modifier stage (free / fixed price), after
+    /// [`Self::BuyMul`]. Each stage floors the price at 0.
+    BuySet = 82,
+    /// `Fx.BuyAssign` -- the deal is committing, before the `bought` hook.
+    /// Rewrites `deal_owner` / `deal_houses` / `deal_mortgaged`.
+    BuyAssign = 83,
 }
 
 impl TriggerKind {
@@ -789,6 +950,12 @@ impl TriggerKind {
             74 => Self::SkillUsed,
             76 => Self::CrystalsChanged,
             77 => Self::DrewBefore,
+            78 => Self::CpChanged,
+            79 => Self::BuyGate,
+            80 => Self::BuyAdd,
+            81 => Self::BuyMul,
+            82 => Self::BuySet,
+            83 => Self::BuyAssign,
             _ => Self::None,
         }
     }
@@ -874,6 +1041,12 @@ impl TriggerKind {
             Self::SkillUsed => "skillUsed",
             Self::CrystalsChanged => "crystalsChanged",
             Self::DrewBefore => "drewBefore",
+            Self::CpChanged => "cpChanged",
+            Self::BuyGate => "buyGate",
+            Self::BuyAdd => "buyAdd",
+            Self::BuyMul => "buyMul",
+            Self::BuySet => "buySet",
+            Self::BuyAssign => "buyAssign",
         }
     }
 
@@ -957,6 +1130,12 @@ impl TriggerKind {
             "skillUsed" => Self::SkillUsed,
             "crystalsChanged" => Self::CrystalsChanged,
             "drewBefore" => Self::DrewBefore,
+            "cpChanged" => Self::CpChanged,
+            "buyGate" => Self::BuyGate,
+            "buyAdd" => Self::BuyAdd,
+            "buyMul" => Self::BuyMul,
+            "buySet" => Self::BuySet,
+            "buyAssign" => Self::BuyAssign,
             _ => Self::None,
         }
     }
@@ -1190,6 +1369,16 @@ declare_kinds! {
         HouseAdded = 75,
         CrystalsChanged = 76,
         DrewBefore = 77,
+        CpChanged = 78,
+        /// v40: the buy price's modifier stages (`docs/PURCHASE.md`) --
+        /// `BuyAdd` (fixed ±) → `BuyMul` (×) → `BuySet` (free / fixed), each
+        /// floored at 0. `t.value` / `set_price` on the run.
+        BuyAdd = 80,
+        BuyMul = 81,
+        BuySet = 82,
+        /// v40: the deal is committing (before `bought`); rewrite
+        /// `deal_owner` / `deal_houses` / `deal_mortgaged`.
+        BuyAssign = 83,
     }
 }
 
@@ -1218,6 +1407,10 @@ declare_kinds! {
         /// re-naming**: the recipient set is settled before the chain opens, so
         /// whoever holds the name is the one who answers.
         Redirect = 71,
+        /// v40: may `t.player_id` buy `t.tile` at all (`docs/PURCHASE.md`)?
+        /// A placed card refuses with `trigger::set_cancelled()` plus a
+        /// reason. Runs for every [`BuyKind`], Force included.
+        BuyGate = 79,
     }
 }
 

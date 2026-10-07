@@ -10,7 +10,7 @@ import { n0 } from "../../core/format";
 import { useAutoplay } from "../../core/hooks";
 import type { GameSession } from "../../game/session";
 import { SoloSession } from "../../game/session";
-import { AutoToggle } from "../../ui/AutoToggle";
+import { AutoToggle, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { type CardAction, CardFace, showCard, TagChip } from "../../ui/Card";
 import { Avatar, bandColor } from "../../ui/Character";
@@ -93,9 +93,11 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
             {statusChips(m.me).map((x) => <span key={x} className={s.tcStatus}>{x}</span>)}
           </div>
         </div>
-        {/* 托管 / 混沌: your own seat's mode. */}
-        <AutoToggle sess={sess} compact />
       </div>
+      {/* 托管 / 混沌: your own seat's mode. Drawn over the card's right end but
+          outside it, so it can sit above any open modal -- it has to be
+          clickable at any time. */}
+      <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} compact /></div>
 
       <div className={s.steps}>
         {phases().map((label, i) => <span key={label} className={cx(s.step, i === shown ? s.stepOn : i < shown && s.stepDone)}>{label}</span>)}
@@ -134,7 +136,7 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
             {k >= 0 && vote.answers[k] < 0 && <Btn size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>}
           </div>
         ) : (
-          <Btn size="small" icon="leaderboard" disabled={S.phase !== "play" || m.out || auto} onClick={() => showSettle(sess)}>{sess.kind === "solo" ? tr("board.settle") : tr("board.voteEnd")}</Btn>
+          <Btn size="small" icon="leaderboard" disabled={S.phase !== "play" || m.out || auto} onClick={() => showSettle(sess)}>{sess.kind !== "online" ? tr("board.settle") : tr("board.voteEnd")}</Btn>
         )}
         <Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(weights, false, undefined, tr("board.scoreRulesLocked"))}>{tr("solo.scoreRules")}</Btn>
       </div>

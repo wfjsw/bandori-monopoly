@@ -25,6 +25,7 @@ use game_core::engine::CardRules;
 use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::scoring::ScoreWeights;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 /// How long one round-trip may take before the worker is treated as wedged.
@@ -91,6 +92,52 @@ impl Worker {
         let _ = self.child.kill();
         let _ = self.child.wait();
     }
+}
+
+/// One mutating round-trip: the new blob, the op's own value, the turn-boundary
+/// checkpoint it crossed (if any), and whether the match has just ended.
+#[derive(Debug, Clone)]
+pub struct Out<T> {
+    pub state: String,
+    pub value: T,
+    /// `cp` from the worker: `{round, turn, hash}` at a turn boundary.
+    pub cp: Option<Cp>,
+    pub ended: bool,
+}
+
+impl Out<()> {
+    fn unit(v: Value) -> Result<Self, String> {
+        let (state, cp, ended) = split(&v)?;
+        Ok(Self {
+            state,
+            value: (),
+            cp,
+            ended,
+        })
+    }
+}
+
+/// The worker's turn-boundary checkpoint. [`crate::store::Cp`] is the same
+/// thing once the server has filled in the input count and tick total.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Cp {
+    pub round: i32,
+    pub turn: i32,
+    pub hash: String,
+}
+
+fn split(v: &Value) -> Result<(String, Option<Cp>, bool), String> {
+    let state = v
+        .get("state")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| "worker returned no state".to_string())?;
+    let cp = match v.get("cp") {
+        None | Some(Value::Null) => None,
+        Some(c) => Some(serde_json::from_value(c.clone()).map_err(|e| format!("cp: {e}"))?),
+    };
+    let ended = v.get("ended").and_then(Value::as_bool).unwrap_or(false);
+    Ok((state, cp, ended))
 }
 
 /// N warm workers, shared across rooms.
@@ -212,7 +259,21 @@ impl Pool {
     // -------------------------------------------------- typed operations
     //
     // Each is one request. `state` is `Match::save`; the `String` in the Ok is
-    // the new blob the caller must store.
+    // the new blob the caller must store. Mutating ops come back as an [`Out`],
+    // which also carries the turn-boundary checkpoint and the `ended` bit the
+    // record log needs (`docs/REPLAY.md` §4).
+
+    /// The engine's identity: the [`EngineStamp`] a record should be sealed
+    /// with. From the worker's `info` op, so a worker binary and the in-process
+    /// fallback report the same thing.
+    pub fn info(&self) -> Result<game_core::record::EngineStamp, String> {
+        let v = self.call(json!({"op": "info"}))?;
+        let s = v
+            .get("stamp")
+            .cloned()
+            .ok_or_else(|| "worker returned no stamp".to_string())?;
+        serde_json::from_value(s).map_err(|e| format!("stamp: {e}"))
+    }
 
     pub fn new_match(
         &self,
@@ -228,49 +289,50 @@ impl Pool {
             .ok_or_else(|| "worker returned no state".to_string())
     }
 
-    /// `(new state, error message if the command was rejected)`. The state is
-    /// returned either way: a rejected command may still have moved the match.
+    /// `Ok` on a rejected command too: the state is returned either way (a
+    /// rejected command may still have moved the match). `value` is the `Msg`
+    /// that rejected it, or `None`.
     pub fn act(
         &self,
         state: &str,
         member: i32,
         cmd: &NetMessage,
-    ) -> Result<(String, Option<Msg>), String> {
+    ) -> Result<Out<Option<Msg>>, String> {
         let v = self.call(json!({"op": "act", "state": state, "member": member, "cmd": cmd}))?;
-        let new = v
-            .get("state")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())?;
+        let (state, cp, ended) = split(&v)?;
         let err = match v.get("error") {
             None | Some(Value::Null) => None,
             Some(e) => Some(serde_json::from_value(e.clone()).map_err(|e| e.to_string())?),
         };
-        Ok((new, err))
+        Ok(Out {
+            state,
+            value: err,
+            cp,
+            ended,
+        })
     }
 
-    pub fn tick(&self, state: &str, dt: f32) -> Result<String, String> {
+    /// `value` is whether the match changed (`"changed"` in the reply).
+    pub fn tick(&self, state: &str, dt: f32) -> Result<Out<bool>, String> {
         let v = self.call(json!({"op": "tick", "state": state, "dt": dt}))?;
-        v.get("state")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())
+        let (state, cp, ended) = split(&v)?;
+        let changed = v.get("changed").and_then(Value::as_bool).unwrap_or(false);
+        Ok(Out {
+            state,
+            value: changed,
+            cp,
+            ended,
+        })
     }
 
-    pub fn quick_start(&self, state: &str) -> Result<String, String> {
+    pub fn quick_start(&self, state: &str) -> Result<Out<()>, String> {
         let v = self.call(json!({"op": "quick_start", "state": state}))?;
-        v.get("state")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())
+        Out::unit(v)
     }
 
-    pub fn finish(&self, state: &str) -> Result<String, String> {
+    pub fn finish(&self, state: &str) -> Result<Out<()>, String> {
         let v = self.call(json!({"op": "finish", "state": state}))?;
-        v.get("state")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())
+        Out::unit(v)
     }
 
     pub fn member_left(
@@ -278,22 +340,16 @@ impl Pool {
         state: &str,
         member: i32,
         can_return: bool,
-    ) -> Result<String, String> {
+    ) -> Result<Out<()>, String> {
         let v = self.call(
             json!({"op": "member_left", "state": state, "member": member, "canReturn": can_return}),
         )?;
-        v.get("state")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())
+        Out::unit(v)
     }
 
-    pub fn member_back(&self, state: &str, member: i32) -> Result<String, String> {
+    pub fn member_back(&self, state: &str, member: i32) -> Result<Out<()>, String> {
         let v = self.call(json!({"op": "member_back", "state": state, "member": member}))?;
-        v.get("state")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| "worker returned no state".to_string())
+        Out::unit(v)
     }
 
     pub fn view(&self, state: &str, member: i32) -> Result<Value, String> {
@@ -325,5 +381,22 @@ impl Pool {
             .get("changed")
             .and_then(Value::as_bool)
             .unwrap_or(false))
+    }
+
+    /// Re-run a `.bdrec` on the worker: `(final_hash, diverged)`. `record` is
+    /// the sealed file's bytes -- a zstd frame today, plain JSON from an older
+    /// store -- and the worker decodes any framing. `final_hash` is the hash of
+    /// the `save()` the replay **produced**, so the caller can compare it
+    /// against the blob it kept.
+    pub fn replay(&self, record: &[u8]) -> Result<(String, bool), String> {
+        let bytes: Vec<Value> = record.iter().map(|&b| Value::from(b)).collect();
+        let v = self.call(json!({"op": "replay", "record": bytes}))?;
+        let hash = v
+            .get("final_hash")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .ok_or_else(|| "worker returned no final_hash".to_string())?;
+        let diverged = v.get("diverged").and_then(Value::as_bool).unwrap_or(false);
+        Ok((hash, diverged))
     }
 }

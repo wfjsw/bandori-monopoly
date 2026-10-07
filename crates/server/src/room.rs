@@ -3,6 +3,12 @@
 //! The match itself lives in a `rules-worker` process, not here: `game` is the
 //! `Match::save` blob and every operation is a round-trip through the pool. The
 //! room therefore holds no engine state -- only the blob the caller must keep.
+//!
+//! Beside the blob lives the **record log** (`docs/REPLAY.md` §4): every input
+//! the match took, with a checkpoint at each turn boundary. It is appended
+//! after a successful store put and sealed into a [`StoredRecord`] when the
+//! match ends, so a restart mid-match loses at most the buffered tick run (and
+//! flags the record `gaps`).
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -10,15 +16,41 @@ use std::time::Instant;
 
 use game_core::msg::Msg;
 use game_core::net::{self, NetMessage, RoomInfo, RoomMember};
+use game_core::record::{
+    body_check, hash_save, Init, Input, MatchSetup, Origin, RecordBody, RecordFile, RecordHeader,
+    SeatInfo, MAGIC,
+};
 use game_core::scoring::ScoreWeights;
+use game_core::MatchMode;
 use serde_json::Value;
 use tokio::sync::broadcast;
 
 use std::sync::Mutex;
 
 use crate::error::{ApiError, ApiResult};
-use crate::pool::Pool;
-use crate::store::{CrossState, RoomRecord};
+use crate::pool::{Out, Pool};
+use crate::store::{CrossState, LogEntry, RecordHead, RoomRecord, StoredRecord};
+
+/// Bookkeeping for one match's record log. Lives beside the blob rather than
+/// inside it: the blob is the engine's, this is the driver's.
+#[derive(Debug, Default)]
+struct RecState {
+    /// The open tick run, buffered in memory (one `Input::Ticks`).
+    buf: Option<(u8, u32)>,
+    /// Inputs the log holds, counting the buffered run as one.
+    inputs: u32,
+    /// Tick calls recorded -- the sum of every `Ticks.n`.
+    ticks: u64,
+    /// `at` of the last checkpoint, so a run closes at a turn boundary.
+    last_cp_at: u32,
+    /// Buffered ticks were lost (a restart mid-match). The record is then
+    /// unverifiable: see `RecordHeader::gaps`.
+    gaps: bool,
+    /// Members seated when the match started -- the record's participants.
+    members: Vec<i32>,
+    /// Sealed; stop appending.
+    done: bool,
+}
 
 /// A running match: its blob, plus the order its operations apply in.
 ///
@@ -36,21 +68,73 @@ pub struct MatchHandle {
     store: Arc<dyn CrossState>,
     gate: Mutex<()>,
     engine: Arc<Pool>,
+    rec: Mutex<RecState>,
 }
 
 impl MatchHandle {
-    pub fn new(
+    /// Start of a match: `head` becomes the log's first line, and `members` are
+    /// the seats that may download the record once it is sealed.
+    pub fn start(
+        id: String,
+        store: Arc<dyn CrossState>,
+        engine: Arc<Pool>,
+        blob: String,
+        head: RecordHead,
+        members: Vec<i32>,
+    ) -> Result<Self, String> {
+        store.match_put(&id, &blob).map_err(|e| e.to_string())?;
+        // A stale log from a match that never sealed must not mix with this one.
+        let _ = store.record_log_del(&id);
+        let _ = store.record_log_append(&id, &LogEntry::Head(head).to_line());
+        Ok(Self {
+            id,
+            store,
+            gate: Mutex::new(()),
+            engine,
+            rec: Mutex::new(RecState {
+                members,
+                ..RecState::default()
+            }),
+        })
+    }
+
+    /// A match already in progress, picked up after a restart. The in-memory
+    /// tick buffer went with the process, so anything still unflushed is gone:
+    /// that is what `gaps` marks.
+    pub fn restore(
         id: String,
         store: Arc<dyn CrossState>,
         engine: Arc<Pool>,
         blob: String,
     ) -> Result<Self, String> {
         store.match_put(&id, &blob).map_err(|e| e.to_string())?;
+        let lines = store.record_log_get(&id).map_err(|e| e.to_string())?;
+        let mut st = RecState::default();
+        for line in &lines {
+            match LogEntry::parse_line(line) {
+                Some(LogEntry::Head(h)) => {
+                    st.members = match &h.init {
+                        Init::Seed(s) => s.members.iter().map(|m| m.id).collect(),
+                        Init::Snapshot { .. } => vec![],
+                    };
+                }
+                Some(LogEntry::Input(i)) => {
+                    st.inputs += 1;
+                    if let Input::Ticks { n, .. } = i {
+                        st.ticks += n as u64;
+                    }
+                }
+                Some(LogEntry::Cp(c)) => st.last_cp_at = c.at,
+                None => {}
+            }
+        }
+        st.gaps = !lines.is_empty();
         Ok(Self {
             id,
             store,
             gate: Mutex::new(()),
             engine,
+            rec: Mutex::new(st),
         })
     }
 
@@ -62,67 +146,267 @@ impl MatchHandle {
             .ok_or_else(|| "no match".to_string())
     }
 
-    /// One operation. `f` gets the current blob; `Some` in its first return
-    /// slot replaces the blob. The gate is held for the whole call.
+    /// One **recorded** operation. `f` gets the current blob and returns the
+    /// new one; the gate is held for the whole call. Only a successful
+    /// round-trip **and** a successful store put reaches the log -- a failure
+    /// leaves no trace, because there is no matching engine state to replay
+    /// it against.
     fn run<T>(
         &self,
-        f: impl FnOnce(&str, &Pool) -> Result<(Option<String>, T), String>,
+        log: impl FnOnce(&Out<T>) -> Input,
+        f: impl FnOnce(&str, &Pool) -> Result<Out<T>, String>,
     ) -> Result<T, String> {
         let _order = self.gate.lock().unwrap();
         let before = self.snapshot()?;
-        let (after, out) = f(&before, &self.engine)?;
-        if let Some(a) = after {
-            self.store
-                .match_put(&self.id, &a)
-                .map_err(|e| e.to_string())?;
+        let out = f(&before, &self.engine)?;
+        self.store
+            .match_put(&self.id, &out.state)
+            .map_err(|e| e.to_string())?;
+        self.note(log(&out), &out);
+        let ended = out.ended;
+        drop(_order);
+        if ended {
+            self.finalize();
         }
-        Ok(out)
+        Ok(out.value)
+    }
+
+    /// One read-only operation: nothing is appended to the log.
+    fn peek<T>(&self, f: impl FnOnce(&str, &Pool) -> Result<T, String>) -> Result<T, String> {
+        let _order = self.gate.lock().unwrap();
+        let before = self.snapshot()?;
+        f(&before, &self.engine)
     }
 
     /// `(error message if the command was rejected)`. The blob moves on either
-    /// way: a rejected command may still have changed the match.
+    /// way: a rejected command may still have changed the match -- and it is
+    /// recorded either way, with `ok: false`.
     pub fn act(&self, member: i32, cmd: &NetMessage) -> Result<Option<Msg>, String> {
-        self.run(|s, e| {
-            let (s2, err) = e.act(s, member, cmd)?;
-            Ok((Some(s2), err))
-        })
+        let for_log = cmd.clone();
+        self.run(
+            move |out: &Out<Option<Msg>>| Input::Act {
+                m: member,
+                msg: for_log.clone(),
+                ok: out.value.is_none(),
+            },
+            |s, e| e.act(s, member, cmd),
+        )
     }
 
-    /// Advance the clock. Returns whether the match changed.
-    pub fn tick(&self, dt: f32) -> Result<bool, String> {
-        self.run(|s, e| {
-            let s2 = e.tick(s, dt)?;
-            let changed = e.changed(&s2)?;
-            Ok((Some(s2), changed))
-        })
+    /// Advance the clock by `dt` (`k` quanta of `header.step`). Returns whether
+    /// the match changed; `k` is what the record's `Ticks` run-length counts.
+    pub fn tick(&self, dt: f32, k: u8) -> Result<bool, String> {
+        self.run(|_| Input::Ticks { k, n: 1 }, |s, e| e.tick(s, dt))
     }
 
     pub fn ended(&self) -> Result<bool, String> {
-        self.run(|s, e| Ok((None, e.ended(s)?)))
+        self.peek(|s, e| e.ended(s))
     }
 
     pub fn quick_start(&self) -> Result<(), String> {
-        self.run(|s, e| Ok((Some(e.quick_start(s)?), ())))
+        self.run(|_| Input::QuickStart, |s, e| e.quick_start(s))
     }
 
     pub fn finish(&self) -> Result<(), String> {
-        self.run(|s, e| Ok((Some(e.finish(s)?), ())))
+        self.run(|_| Input::Finish, |s, e| e.finish(s))
     }
 
     pub fn member_left(&self, member: i32, can_return: bool) -> Result<(), String> {
-        self.run(|s, e| Ok((Some(e.member_left(s, member, can_return)?), ())))
+        self.run(
+            |_| Input::Left { m: member, can_return },
+            |s, e| e.member_left(s, member, can_return),
+        )
     }
 
     pub fn member_back(&self, member: i32) -> Result<(), String> {
-        self.run(|s, e| Ok((Some(e.member_back(s, member)?), ())))
+        self.run(|_| Input::Back { m: member }, |s, e| e.member_back(s, member))
     }
 
     pub fn view(&self, member: i32) -> Result<Value, String> {
-        self.run(|s, e| Ok((None, e.view(s, member)?)))
+        self.peek(|s, e| e.view(s, member))
     }
 
     pub fn events(&self, since: i32) -> Result<Vec<Value>, String> {
-        self.run(|s, e| Ok((None, e.events(s, since)?)))
+        self.peek(|s, e| e.events(s, since))
+    }
+
+    // ---------------------------------------------------------------- record log
+
+    /// Append `input` (and the checkpoint its op crossed) to the log. Mirrors
+    /// `RecordedMatch`: consecutive ticks with the same `k` run-length merge
+    /// into one `Ticks` input, and a turn boundary closes the run so the
+    /// checkpoint sits between two inputs.
+    fn note<T>(&self, input: Input, out: &Out<T>) {
+        let mut rec = self.rec.lock().unwrap();
+        if rec.done {
+            return;
+        }
+        match &input {
+            Input::Ticks { k, .. } => {
+                rec.ticks += 1;
+                let closed = rec.last_cp_at == rec.inputs;
+                match rec.buf {
+                    Some((k2, n)) if k2 == *k && !closed => rec.buf = Some((k2, n + 1)),
+                    _ => {
+                        Self::flush_buf(&self.store, &self.id, &mut rec);
+                        rec.buf = Some((*k, 1));
+                        rec.inputs += 1;
+                    }
+                }
+                // Bound how much a crash can lose.
+                if rec.ticks % 100 == 0 {
+                    Self::flush_buf(&self.store, &self.id, &mut rec);
+                }
+            }
+            other => {
+                // The tick run comes first, so the log stays ordered.
+                Self::flush_buf(&self.store, &self.id, &mut rec);
+                let line = LogEntry::Input(other.clone()).to_line();
+                if self.store.record_log_append(&self.id, &line).is_err() {
+                    rec.gaps = true;
+                    return;
+                }
+                rec.inputs += 1;
+            }
+        }
+        if let Some(cp) = &out.cp {
+            Self::flush_buf(&self.store, &self.id, &mut rec);
+            let entry = crate::store::Cp {
+                at: rec.inputs,
+                tick: rec.ticks,
+                round: cp.round,
+                turn: cp.turn,
+                hash: cp.hash.clone(),
+            };
+            let line = LogEntry::Cp(entry).to_line();
+            if self.store.record_log_append(&self.id, &line).is_err() {
+                rec.gaps = true;
+            } else {
+                rec.last_cp_at = rec.inputs;
+            }
+        }
+    }
+
+    fn flush_buf(store: &Arc<dyn CrossState>, id: &str, rec: &mut RecState) {
+        if let Some((k, n)) = rec.buf.take() {
+            let line = LogEntry::Input(Input::Ticks { k, n }).to_line();
+            if store.record_log_append(id, &line).is_err() {
+                rec.gaps = true;
+            }
+        }
+    }
+
+    /// Seal the record: seats from the final view, `final_hash` from the blob
+    /// the server kept. Idempotent -- the first call wins. The log is cleared
+    /// afterwards so the next match in this room starts clean.
+    pub fn finalize(&self) {
+        let (lines, members, ticks, gaps) = {
+            let mut rec = self.rec.lock().unwrap();
+            if rec.done {
+                return;
+            }
+            rec.done = true;
+            Self::flush_buf(&self.store, &self.id, &mut rec);
+            let ticks = rec.ticks;
+            let gaps = rec.gaps;
+            let members = rec.members.clone();
+            let lines = self.store.record_log_get(&self.id).unwrap_or_default();
+            (lines, members, ticks, gaps)
+        };
+        if let Err(e) = self.seal(&lines, &members, ticks, gaps) {
+            eprintln!("room {}: record seal failed: {e}", self.id);
+        }
+        let _ = self.store.record_log_del(&self.id);
+    }
+
+    fn seal(
+        &self,
+        lines: &[String],
+        members: &[i32],
+        ticks: u64,
+        gaps: bool,
+    ) -> Result<(), String> {
+        let mut head: Option<RecordHead> = None;
+        let mut inputs = Vec::new();
+        let mut checkpoints = Vec::new();
+        for line in lines {
+            match LogEntry::parse_line(line) {
+                Some(LogEntry::Head(h)) => head = Some(h),
+                Some(LogEntry::Input(i)) => inputs.push(i),
+                Some(LogEntry::Cp(c)) => checkpoints.push(game_core::record::Checkpoint {
+                    at: c.at,
+                    tick: c.tick,
+                    round: c.round,
+                    turn: c.turn,
+                    hash: c.hash,
+                }),
+                None => {}
+            }
+        }
+        let Some(head) = head else {
+            return Err("record log has no head".into());
+        };
+        let blob = self.snapshot()?;
+        // Any seated view carries the whole public `MatchState`; the seats'
+        // ranks and scores are what the results screen showed.
+        let member = members.first().copied().unwrap_or(0);
+        let view = self.engine.view(&blob, member)?;
+        let st: game_core::state::MatchState = serde_json::from_value(
+            view.get("state").cloned().unwrap_or(Value::Null),
+        )
+        .map_err(|e| format!("final view: {e}"))?;
+        let seats = st
+            .players
+            .iter()
+            .map(|p| SeatInfo {
+                member: p.member,
+                player: p.player.clone(),
+                bot: p.bot,
+                mentality: p.mentality,
+                character: p.character.clone(),
+                rank: p.rank,
+                score: p.score,
+            })
+            .collect();
+        let body = RecordBody {
+            init: head.init.clone(),
+            inputs,
+            checkpoints,
+            final_hash: hash_save(&blob),
+            events: None,
+        };
+        let header = RecordHeader {
+            engine: head.stamp.clone(),
+            mode: MatchMode::from_i32(head.mode).unwrap_or_default(),
+            step: head.step,
+            origin: Origin::Online {
+                room: self.id.clone(),
+            },
+            created: head.created.clone(),
+            seats,
+            partial: matches!(head.init, Init::Snapshot { .. }),
+            ended: true,
+            reason: st.end_reason.clone(),
+            rounds: st.round,
+            total_ticks: ticks,
+            gaps,
+        };
+        let check = body_check(&body);
+        let file = RecordFile {
+            magic: MAGIC.to_string(),
+            header,
+            body,
+            check,
+        };
+        // Sealed compressed: `record:{room}:last` holds the zstd-framed
+        // `.bdrec` the endpoint serves as-is (`docs/SERVER.md` "Match records").
+        let rec = StoredRecord {
+            record: game_core::record::encode_record_zst(&file),
+            members: members.to_vec(),
+        };
+        self.store
+            .record_put(&self.id, &rec)
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -274,7 +558,7 @@ impl Room {
             }
         };
         if let Some(blob) = blob {
-            match MatchHandle::new(
+            match MatchHandle::restore(
                 self.info.id.clone(),
                 self.store.clone(),
                 self.engine.clone(),
@@ -378,10 +662,13 @@ impl Room {
     pub fn dissolve(&mut self, reason: Msg) {
         if self.dissolved.is_none() {
             self.dissolved = Some(reason.clone());
-            // A dissolved room leaves no trace: the record and its match blob
-            // go, so a restart does not resurrect it.
+            // A dissolved room leaves no trace: the room record, its match blob
+            // and any in-progress record log go, so a restart does not
+            // resurrect it. The **sealed** record (`record:{id}:last`) stays
+            // until its TTL -- a participant may still want last match's replay.
             let _ = self.store.room_del(&self.info.id);
             let _ = self.store.match_del(&self.info.id);
+            let _ = self.store.record_log_del(&self.info.id);
             let _ = self.tx.send(Note::Dissolved(reason));
         }
     }
@@ -475,7 +762,11 @@ impl Room {
 
     /// Start a match. Without `force`, everyone must be ready and the player count
     /// must fit the mode (Casual 3-10, Ranked 5-6).
-    pub fn start(&mut self, member: i32, force: bool, seed: u64) -> ApiResult<()> {
+    ///
+    /// `step` is the tick quantum this match will run on (`0.05 * time_scale`,
+    /// see `docs/REPLAY.md` §1): the record seals it into its header so a
+    /// replay reproduces the same `tick(dt)` f32s.
+    pub fn start(&mut self, member: i32, force: bool, seed: u64, step: f32) -> ApiResult<()> {
         self.host_only(member)?;
         if self.info.playing {
             return Err(ApiError::bad("err.room.started"));
@@ -515,11 +806,28 @@ impl Room {
             .engine
             .new_match(&self.info.members, seed, mode as i32, &self.info.weights)
             .map_err(|e| ApiError::bad(e.as_str()))?;
-        let m = MatchHandle::new(
+        // The record starts from the same inputs `new_match` got, plus the
+        // engine's own identity (`docs/REPLAY.md` §4).
+        let stamp = self.engine.info().map_err(|e| ApiError::bad(e.as_str()))?;
+        let head = RecordHead {
+            init: Init::Seed(MatchSetup {
+                members: self.info.members.clone(),
+                seed,
+                weights: self.info.weights.clone(),
+            }),
+            stamp,
+            step,
+            created: crate::state::now_stamp(),
+            mode: mode as i32,
+        };
+        let participants = self.info.members.iter().map(|m| m.id).collect();
+        let m = MatchHandle::start(
             self.info.id.clone(),
             self.store.clone(),
             self.engine.clone(),
             blob,
+            head,
+            participants,
         )
         .map_err(|e| ApiError::bad(e.as_str()))?;
         self.game = Some(Arc::new(m));

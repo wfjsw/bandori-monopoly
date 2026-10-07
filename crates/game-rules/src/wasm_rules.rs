@@ -38,6 +38,13 @@ const DEST_UNSET: i32 = -1;
 /// hands shrinking as cards declare. 16 is plenty for a legal exchange.
 const MAX_COUNTERACT_DEPTH: u32 = 16;
 
+/// Hard cap on the offers one seat gets in a single visit of the ask ring
+/// (ruling 2026-10-07: a seat keeps the floor until it passes or runs out of
+/// eligible counteractions). The offer set shrinks as cards are declared, so a
+/// visit terminates on its own; the cap is a runaway guard, not a design limit.
+/// TODO(规则书): the book states no per-visit bound.
+const MAX_COUNTERACT_PER_VISIT: u32 = 16;
+
 #[derive(Clone)]
 struct Run {
     world: game_core::engine::World,
@@ -80,6 +87,17 @@ struct Run {
     /// same count, e.g. a card placed with none); the count it left is the
     /// instance's own `crystals()`.
     crystals_log: Vec<(i32, String, i32)>,
+    /// [CP点] writes this run made, `(owner, card, change)` -- the engine raises
+    /// `cpChanged` for each once the run commits (the same shape as
+    /// `crystals_log`). `change` is the signed delta the write applied to an
+    /// instance's **on-card** [CP点] count (`FieldCard::cp`, 「自己[场上]N个
+    /// [CP点]」 -- user ruling 2026-10-07); the count it left is `cp_attached()`
+    /// on that instance. Tile-mark writes (`place_cp` / `clear_cp`) are the
+    /// other [CP点] kind and do not ride this log.
+    cp_log: Vec<(i32, String, i32)>,
+    /// Players this run granted [除外] layers to -- the engine raises `exile`
+    /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
+    exile_log: Vec<i32>,
     /// C# `PlayCtx.Doubled`: which of the card's numbers this play doubles, or
     /// -1. Set by the doubling band skill, which is not ported yet.
     doubled: i32,
@@ -98,6 +116,21 @@ impl Run {
         };
         let (owner, card) = (f.owner, f.card.clone());
         self.crystals_log.push((owner, card, now - was));
+    }
+
+    /// Record an **on-card** [CP点] write against the instance at `uid` so the
+    /// commit point can raise `cpChanged` (the same shape as
+    /// [`Self::note_crystals`]). `was` and `now` bracket that instance's
+    /// `FieldCard::cp`, so a write that lands on the same count still raises
+    /// and a count emptied by *any* path -- this run's settle, another effect's
+    /// removal -- leaves the field the same way. A write with no live instance
+    /// raises nothing.
+    fn note_cp(&mut self, uid: i32, was: i32, now: i32) {
+        let Some(f) = self.world.field_by_uid(uid) else {
+            return;
+        };
+        let (owner, card) = (f.owner, f.card.clone());
+        self.cp_log.push((owner, card, now - was));
     }
 
     /// Move the running instance to `dest` **now** -- `H.Unplace(this, "discard")`
@@ -375,6 +408,18 @@ impl CardWorld for Run {
         }
         owner
     }
+    fn event_expire(&mut self, id: &str, removed: bool) {
+        self.world.expire_event(id, removed);
+    }
+    fn event_is_active(&self, id: &str) -> bool {
+        self.world.event_is_active(id)
+    }
+    fn event_deck_push(&mut self, id: &str, face_down: bool) {
+        self.world.event_deck_push(id, face_down);
+    }
+    fn event_banish(&mut self, id: &str) {
+        self.world.event_banish(id);
+    }
     fn self_tile(&self) -> i32 {
         if self.current_uid < 0 {
             return -2;
@@ -400,9 +445,23 @@ impl CardWorld for Run {
         self.world.placed_cards(player_id)
     }
     fn card_text_mentions(&self, card: &str, needle: &str) -> bool {
-        self.data
-            .card(card)
-            .is_some_and(|c| c.text.contains(needle))
+        if let Some(c) = self.data.card(card) {
+            return c.text.contains(needle);
+        }
+        // A `skill:<owner>:<skill>` rule id is not in `cards.json`; the skill's
+        // text is the owner's (character's or band's) `text` field
+        // (发送熊饼表情 「所有技能中含有火罐的玩家」).
+        if let Some(rest) = card.strip_prefix("skill:") {
+            if let Some((owner, _)) = rest.split_once(':') {
+                if let Some(c) = self.data.character(owner) {
+                    return c.text.contains(needle);
+                }
+                if let Some(b) = self.data.bands.iter().find(|b| b.name == owner) {
+                    return b.text.contains(needle);
+                }
+            }
+        }
+        false
     }
     fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
         self.world.card_crystals(player_id, card)
@@ -519,6 +578,57 @@ impl CardWorld for Run {
     fn remove_marks(&mut self, tile: i32, kind: &str, owner: i32) -> i32 {
         self.world.remove_marks(tile, kind, owner)
     }
+    // [CP点] -- the two kinds (user ruling 2026-10-07). **Tile marks** are the
+    // `mark:cp` owner's API (`place_cp` / `count_cp` / `count_cp_from` /
+    // `clear_cp` / `cp_src_at`): neutral marks with the placing instance as
+    // provenance, never owned by a player. **On-card** [CP点] (`cp_attached` /
+    // `add_cp` / `cp_at` / `add_cp_at`) is `FieldCard::cp` -- 「自己[场上]N个
+    // [CP点]」, the CP points attached to the card itself, the card rule's own
+    // stock. Only on-card writes ride `note_cp` (→ `cpChanged`, the graveyard
+    // rule); a tile-mark write is the other kind and raises nothing.
+    fn place_cp(&mut self, tile: i32, note: Msg) -> i32 {
+        let me = self.current_uid;
+        let card = self
+            .world
+            .field_by_uid(me)
+            .map(|f| f.card.clone())
+            .unwrap_or_default();
+        // A fresh mark attaches to the placer. Stacking onto an existing mark
+        // keeps that mark's attachment (the placement rule forbids it -- 「没有
+        // [CP点]的格子」 -- so this is the defensive path).
+        self.world.add_cp_mark(tile, me, &card, note)
+    }
+    fn count_cp(&self, tile: i32) -> i32 {
+        self.world.count_cp(tile)
+    }
+    fn count_cp_from(&self, tile: i32) -> i32 {
+        self.world.count_cp_from(tile, self.current_uid)
+    }
+    fn clear_cp(&mut self, tile: i32) -> i32 {
+        self.world.clear_cp(tile)
+    }
+    fn cp_src_at(&self, tile: i32) -> i32 {
+        self.world.cp_src_at(tile)
+    }
+    fn cp_attached(&self) -> i32 {
+        self.world.cp_at(self.current_uid)
+    }
+    fn add_cp(&mut self, n: i32, max: i32) -> i32 {
+        let uid = self.current_uid;
+        let was = self.world.cp_at(uid);
+        let now = self.world.add_cp_at(uid, n, max);
+        self.note_cp(uid, was, now);
+        now
+    }
+    fn cp_at(&self, uid: i32) -> i32 {
+        self.world.cp_at(uid)
+    }
+    fn add_cp_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
+        let was = self.world.cp_at(uid);
+        let now = self.world.add_cp_at(uid, n, max);
+        self.note_cp(uid, was, now);
+        now
+    }
     fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
         self.world.tok_names(player_id, prefix)
     }
@@ -597,6 +707,10 @@ impl CardWorld for Run {
         self.world.give_stun(player_id, n);
     }
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
+        if n > 0 {
+            // 「任意玩家获得[除外]…时」 -- the grant is a raise point (embers).
+            self.exile_log.push(player_id);
+        }
         self.world.give_exile(player_id, n, to);
     }
     fn give_extra_turn(&mut self, player_id: i32) {
@@ -1048,6 +1162,21 @@ impl CardWorld for Run {
     fn trig_card_is(&self, id: &str) -> i32 {
         (self.trigger.card == id) as i32
     }
+    fn set_trigger_price(&mut self, v: i32) {
+        self.trigger.price = v;
+    }
+    fn set_trigger_deal_owner(&mut self, v: i32) {
+        self.trigger.deal_owner = v;
+    }
+    fn set_trigger_deal_houses(&mut self, v: i32) {
+        self.trigger.deal_houses = v;
+    }
+    fn set_trigger_deal_mortgaged(&mut self, v: i32) {
+        self.trigger.deal_mortgaged = v != 0;
+    }
+    fn set_trigger_reason(&mut self, reason: &str) {
+        self.trigger.reason = reason.to_string();
+    }
 
     // turn plan & scheduling -------------------------------------------------
     fn schedule_turn_end(&mut self, player_id: i32, next_of_player: bool, early: bool) {
@@ -1115,6 +1244,14 @@ impl CardWorld for Run {
     // movement shaping ---------------------------------------------------------
     fn set_steps(&mut self, v: i32) {
         self.world.set_steps(v);
+    }
+    fn set_roller(&mut self, v: i32) {
+        // `plan::set_roller` -- the stand-in roller for 「上一名玩家代替进行此次
+        // 投掷」. `MoveCtx::roller` rides `TurnCtx.plan`, so `main_move`'s
+        // post-`rollPlan` re-clone picks it up.
+        if v >= 0 {
+            self.world.turn.plan.roller = v as usize;
+        }
     }
     fn set_reverse(&mut self, v: bool) {
         self.world.set_reverse(v);
@@ -1386,6 +1523,8 @@ impl WasmRules {
                 fire_spent_log: vec![],
                 house_log: vec![],
                 crystals_log: vec![],
+                cp_log: vec![],
+            exile_log: vec![],
                 doubled: -1,
             };
             let outcome: Result<Outcome<Run>, RuleError> = if guarded {
@@ -1478,6 +1617,28 @@ impl WasmRules {
                             t.by_card = by;
                         })?;
                     }
+                    // `cpChanged` -- the 该清CP了 「its on-card [CP点] is empty →
+                    // graveyard」 rule (user ruling 2026-10-07) lives here, for
+                    // the same reason: a count emptied by *any* write (this
+                    // run's `add_cp_at`, another effect's removal) leaves the
+                    // field. The count watched is `FieldCard::cp`, the CP points
+                    // attached to the card -- not the tile marks.
+                    for (owner, card, change) in after.cp_log {
+                        self.raise_core(cx, "cpChanged", owner, |t| {
+                            t.card = card;
+                            t.value = change;
+                            t.by_card = by;
+                        })?;
+                    }
+                    // `exile` -- 「任意玩家获得[除外]…时」 (火种燃尽之后会怎么样呢？
+                    // 「移除所有此卡的复制品」) listens here rather than at each
+                    // grant site, so a layer granted by *any* path still fires.
+                    for player_id in after.exile_log {
+                        self.raise_core(cx, "exile", player_id, |t| {
+                            t.value = 1;
+                            t.by_card = by;
+                        })?;
+                    }
                     // A run that has an instance owns that instance's fate:
                     // 「将此卡放入[使用者]弃卡区」 is `set_dest(Graveyard)` whether
                     // the card was just placed or has been in play all along.
@@ -1545,7 +1706,14 @@ impl WasmRules {
                 // C# `H.CardMove(c, m)`: the card shaped the plan and asked for
                 // the move to run now. The engine runs it (it may prompt), then
                 // the effect replays past this call.
-                HostRequest::Move { player_id, plan } => {
+                HostRequest::Move { player_id, mut plan } => {
+                    // An event-driven move is not a main move (`docs/EVENTS.md`):
+                    // 「移动X」 / 「移动1d20」 go through even when the turn's
+                    // main move is already spent. Mark it so `card_move` does
+                    // not consume (or refuse on) `main_moved`.
+                    if card_id.starts_with("event:") {
+                        plan.forced = true;
+                    }
                     // Forced moves go through the abnormal gate so [反击] cards
                     // (安可, 像往常一样) get their window. `AbKind::Forced`
                     // covers both other-player and self-applied forced moves.
@@ -1577,6 +1745,46 @@ impl WasmRules {
                 HostRequest::Buy { player_id, tile } => {
                     cx.card_buy(player_id.max(0) as usize, tile.max(0) as usize)?;
                     answers.push(1);
+                }
+                // v40 purchase surface. P0: stubs; engine-side dispatch lands
+                // with P1 (property buy) / P2 (agent) / P3 (force & acquire) /
+                // P5 (linger).
+                HostRequest::BuyQuotes {
+                    player_id: _,
+                    kind: _,
+                    tiles,
+                    out: _,
+                } => {
+                    // P0: every tile quotes at its native price, eligible if
+                    // buyable. The hook-aware quote lands at P1.
+                    let _ = tiles;
+                    answers.push(1);
+                }
+                HostRequest::Acquire {
+                    player_id,
+                    from,
+                    tile,
+                    price,
+                } => {
+                    // P3 wires `ctx::acquire`; P0 is a no-op.
+                    let _ = (player_id, from, tile, price);
+                    answers.push(0);
+                }
+                HostRequest::AgentOffer {
+                    player_id: _,
+                    agent: _,
+                    tile: _,
+                    kind: _,
+                } => {
+                    // P2 wires the agent offer; P0 is a no-op.
+                    answers.push(0);
+                }
+                HostRequest::Linger {
+                    player_id: _,
+                    expires: _,
+                } => {
+                    // P5 wires `linger`; P0 is a no-op.
+                    answers.push(0);
                 }
                 HostRequest::Build { player_id, tile } => {
                     cx.card_build(player_id.max(0) as usize, tile.max(0) as usize)?;
@@ -1755,7 +1963,15 @@ impl WasmRules {
                         p.to = Some(to as usize);
                     }
                     p.by_card = by;
-                    p.text = src;
+                    // The card's `why` is a **reason** (「登上武道馆」), not a log
+                    // line: it names the cause and says nothing about who paid
+                    // what. It rides the standard `log.pay` / `log.lose` /
+                    // `log.gain` line as the parenthetical `{{src}}`, the same
+                    // way `Pay::source` carries `src.*`. (It used to be assigned
+                    // to `Pay::text`, which *replaces* the line -- so every
+                    // card-driven move logged as the bare card name and a card
+                    // that moves money several times spammed that name.)
+                    p.reason = src;
                     let paid = cx.money(p)?;
                     answers.push(paid.moved());
                 }
@@ -2202,35 +2418,48 @@ impl WasmRules {
     /// * **Resolution order:** counters to one timing resolve **newest first
     ///   (LIFO)**, and every counter still settles before the timing (effect) it
     ///   answers.
-    /// * **Per-player cap** (modelled on ileuxali/bangdream-monopoly's accepted
-    ///   round-robin): **one activation per responder visit**. A declaration
-    ///   advances priority to the **next** responder -- it does not reset to the
-    ///   starter. A player may declare again when the ring comes back to them.
-    ///   A round on a timing closes after **every responder has passed
-    ///   consecutively** with no activation in between.
+    /// * **Ask ring and per-visit floor** (user ruling 2026-10-07; supersedes
+    ///   the 2026-10-06 ileuxali/bangdream-monopoly-derived "one activation per
+    ///   visit, ring starts after the trigger's player"): the ring starts with
+    ///   the **initial user** -- the player whose action or effect raised the
+    ///   link, `chain_starter`'s seat -- and each seat **exhausts its
+    ///   counteractions before priority moves on**. On a visit the seat keeps
+    ///   being offered its eligible cards until it explicitly passes
+    ///   (voluntarily abandons) or holds none left; every declaration adds its
+    ///   link. The pass is one explicit "not playing" option on the offer
+    ///   (`ask.counteract.skip`) and ends the visit.
+    /// * **Round closing:** laps of the ring continue until a **full lap
+    ///   brings no new declaration** (「所有玩家同意…已发动后」). A lap that
+    ///   carried a declaration never closes the round, even if every seat
+    ///   passed after it -- the next full lap must be quiet. A later seat's
+    ///   declaration can re-open earlier seats on the next lap.
     ///
     /// # Round on timing X
     ///
     /// `t` is **L1**, the effect declaration -- the card effect already aimed at
-    /// its named recipients. One round runs on it. The ring order starts at the
-    /// player after the one who triggered X (`chain_starter`'s seat + 1), goes
-    /// forward in turn order and includes the triggering player **last**. Out /
-    /// AI / exiled / stunned / no-hand players are skipped
-    /// (`can_counteract_now`). Each visit, the responder declares one eligible
-    /// hand card answering **X** -- so several players may counter the same
-    /// effect, each answering X rather than each other -- or passes. A
-    /// declaration advances to the next responder (one per visit); the round
-    /// ends after a full consecutive pass of the ring.
+    /// its named recipients. One round runs on it. The ring starts at the
+    /// initial user (`chain_starter`: the player whose card caused the link; a
+    /// board-driven link -- rent, buy, build, turn flow -- is a system / tile
+    /// event and starts at the active turn player) and runs forward in turn
+    /// order from there. Out / AI / exiled / stunned / no-hand players are
+    /// skipped (`can_counteract_now`), a seat with no eligible card is skipped
+    /// without a prompt, and `can_counteract` is re-evaluated before every
+    /// offer. Each visit, the responder declares every eligible hand card
+    /// answering **X** it wants -- so several players may counter the same
+    /// effect, each answering X rather than each other -- or passes to end the
+    /// visit; only then does priority advance to the next responder.
     ///
     /// # Counters to counters (「…后可对新的时点发动[反击]」)
     ///
     /// Once the round on X closes, the counters it collected are new timings.
     /// **Design choice (ours):** they are taken **newest first**, each with its
-    /// own round (the ring starts after *that* counter's declarer), recursively;
-    /// answers become timings in turn. Newest first keeps answering consistent
-    /// with LIFO resolution -- the newest counter settles first, so it is the
-    /// one answered first. Termination is natural (a declaration removes a card
-    /// from a hand); `MAX_COUNTERACT_DEPTH` is the runaway guard.
+    /// own round (same rules; the "initial user" of that round is *that*
+    /// counter's declarer), recursively; answers become timings in turn. Newest
+    /// first keeps answering consistent with LIFO resolution -- the newest
+    /// counter settles first, so it is the one answered first. Termination is
+    /// natural (a declaration removes a card from a hand);
+    /// `MAX_COUNTERACT_DEPTH` / `MAX_COUNTERACT_PER_VISIT` are the runaway
+    /// guards.
     ///
     /// # Resolution
     ///
@@ -2278,9 +2507,11 @@ impl WasmRules {
         }];
 
         // Hard bound: the tree is only as deep and as wide as the hands
-        // involved, so this is a runaway guard, not a design limit. Every round
-        // costs at most one lap of asks, plus the closing lap.
-        let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 + 8;
+        // involved, so this is a runaway guard, not a design limit. One round
+        // is at most (declarations + a quiet lap) visits, each visit at most
+        // `MAX_COUNTERACT_PER_VISIT` offers, over `MAX_COUNTERACT_DEPTH + 1`
+        // rounds.
+        let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
         self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
         self.resolve_rounds(cx, &mut chain, 0)?;
 
@@ -2306,54 +2537,66 @@ impl WasmRules {
             return Ok(());
         }
         let n = cx.state().players.len();
-        // The ring starts after the player the timing belongs to, so that
-        // player is asked last (clause 89).
+        // The ring starts at the **initial user** (ruling 2026-10-07): the
+        // player the timing belongs to -- `chain_starter` at the root, the
+        // declarer on a counter's own round.
         let mut priority = Priority::new(chain[timing].seat, n);
         // Counters this round collected, in declaration order.
         let mut round: Vec<usize> = Vec::new();
-        while *budget > 0 {
-            *budget -= 1;
+        'visits: while *budget > 0 {
             let cursor = priority.seat();
-            let declared = if can_counteract_now(cx, cursor) {
-                match self.declare_one(cx, cursor, &chain[timing].link)? {
-                    Some((id, idx)) => {
-                        // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
-                        let mut w = cx.world_copy();
-                        if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
-                            w.hidden[cursor].hand.remove(pos);
-                        }
-                        cx.swap_world(w);
-                        let mut link = CoreTrigger::new("card", cursor);
-                        link.card = id.clone();
-                        link.step = cx.state().step;
-                        link.by_card = Some(cursor as i32);
-                        let at = chain.len();
-                        link.seq = (at + 1) as u32;
-                        link.answers = timing as u32;
-                        round.push(at);
-                        chain[timing].answers.push(at);
-                        chain.push(ChainLink {
-                            seat: cursor,
-                            idx,
-                            id,
-                            answered: timing,
-                            link: bridge_trigger(&link),
-                            answers: Vec::new(),
-                        });
-                        true
+            // Ruling 2026-10-07: the visit keeps the floor until this seat
+            // passes (the offer's `ask.counteract.skip`) or holds no eligible
+            // counteraction left -- every declaration re-offers the same seat.
+            // Each offer is its own prompt, so the AI answer (chaos re-rolls
+            // its counter chance per offer) is recomputed per offer in
+            // `Cx::ask` / `fill_ai`.
+            let mut declared_any = false;
+            if can_counteract_now(cx, cursor) {
+                for _ in 0..MAX_COUNTERACT_PER_VISIT {
+                    if *budget == 0 {
+                        break 'visits;
                     }
-                    None => false,
+                    *budget -= 1;
+                    let Some((id, idx)) = self.declare_one(cx, cursor, &chain[timing].link)? else {
+                        // Explicit pass, or nothing eligible left: the visit
+                        // ends and priority advances.
+                        break;
+                    };
+                    // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
+                    let mut w = cx.world_copy();
+                    if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
+                        w.hidden[cursor].hand.remove(pos);
+                    }
+                    cx.swap_world(w);
+                    let mut link = CoreTrigger::new("card", cursor);
+                    link.card = id.clone();
+                    link.step = cx.state().step;
+                    link.by_card = Some(cursor as i32);
+                    let at = chain.len();
+                    link.seq = (at + 1) as u32;
+                    link.answers = timing as u32;
+                    round.push(at);
+                    chain[timing].answers.push(at);
+                    chain.push(ChainLink {
+                        seat: cursor,
+                        idx,
+                        id,
+                        answered: timing,
+                        link: bridge_trigger(&link),
+                        answers: Vec::new(),
+                    });
+                    declared_any = true;
                 }
-            } else {
-                false
-            };
-            if !priority.answered(declared) {
+            }
+            if !priority.answered(declared_any) {
                 break;
             }
         }
 
         // The counters just declared are themselves timings. Answer the newest
-        // first (LIFO), each with its own round starting after its declarer.
+        // first (LIFO), each with its own round starting at its declarer (the
+        // new round's initial user).
         for &child in round.iter().rev() {
             self.build_round(cx, chain, child, depth + 1, budget)?;
         }
@@ -2468,6 +2711,8 @@ impl WasmRules {
                 fire_spent_log: vec![],
                 house_log: vec![],
                 crystals_log: vec![],
+                cp_log: vec![],
+            exile_log: vec![],
                 doubled: -1,
             };
             if self.ruleset.can_counteract(&run, idx, s as i32).unwrap_or(false) {
@@ -2548,6 +2793,13 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         .then_some(t.value),
         card: t.card.clone(),
         roll_source: t.roll_source,
+        buy_kind: t.buy_kind,
+        seller: t.seller,
+        price: t.price,
+        deal_owner: t.deal_owner,
+        deal_houses: t.deal_houses,
+        deal_mortgaged: t.deal_mortgaged,
+        reason: t.reason.clone(),
     }
 }
 
@@ -2622,17 +2874,17 @@ fn prompt_to_ask(p: Prompt) -> Ask {
 
 /// The engine's string trigger kinds -> the module's small enum.
 
-/// The player a [反击] timing at the chain root belongs to: whoever activated
-/// the effect at its root. That is `by_card` when a card caused the trigger --
-/// **not** the trigger's own player, which for a payment is the payer: seat 2's
-/// card making seat 0 pay belongs to seat 2, not seat 0. A board-driven trigger
-/// (rent, turn flow) has no activating card and belongs to its player; one with
-/// neither belongs to whoever's turn it is. The round's ring starts at the seat
-/// after this one (clause 89), so this player is asked **last**.
+/// The initial user of a [反击] round at the chain root (ruling 2026-10-07):
+/// the player whose action or effect raised the link. That is `by_card` when a
+/// card caused the trigger -- **not** the trigger's own player, which for a
+/// payment is the payer: seat 2's card making seat 0 pay starts at seat 2, not
+/// seat 0. A board-driven trigger (rent, buy, build, turn flow -- `by_card` is
+/// `None`, docs/CARDS.md) is a system / tile event, so the link has no player
+/// and the ring starts at the active turn player. The ring starts **at** this
+/// seat (superseding clause 89's 「下一位」).
 fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
     let seat = match t.by_card {
         Some(by) if by >= 0 => by,
-        _ if t.player_id >= 0 => t.player_id,
         _ => turn.max(0),
     };
     seat as usize % n
@@ -2641,7 +2893,7 @@ fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
 /// One node of the [反击] answer tree (see `hand_counteractions`). Index 0 is
 /// the timing the chain answers (L1); every other node is one declared counter.
 struct ChainLink {
-    /// Who declared it. For L1, the player the timing belongs to
+    /// Who declared it. For L1, the initial user of the round
     /// (`chain_starter`).
     seat: usize,
     /// The declared card's ruleset handle (-1 for L1).
@@ -2658,22 +2910,28 @@ struct ChainLink {
 
 /// Who is asked next during a round on one timing (see `hand_counteractions`).
 ///
-/// Clause 89: the ring starts at the seat **after** the player the timing
-/// belongs to and runs forward in turn order, so that player is asked **last**.
-/// A declaration advances to the next responder -- it never resets -- and a
-/// player may declare again when the ring comes back to them. The round closes
-/// after a full lap of the ring with no declaration (「所有玩家同意…已发动后」).
+/// Ruling 2026-10-07 (supersedes clause 89's 「下一位」 start and the
+/// 2026-10-06 one-activation-per-visit cap): the ring starts **at** the initial
+/// user and runs forward in turn order; a visit holds the floor until the seat
+/// passes or runs out of eligible counteractions (`build_round`). The round
+/// closes at the end of a **lap** -- one full cycle of all seats starting from
+/// the initial user -- that brings no new declaration (「所有玩家同意…已发动
+/// 后」). A lap that carried a declaration never closes the round, even if
+/// every seat passed after it; the next full lap must be quiet.
 struct Priority {
     n: usize,
     cursor: usize,
-    /// Seats advanced since the last declaration.
-    quiet: usize,
+    /// Visits completed in the current lap (0..n). A lap is one full cycle of
+    /// the ring from the initial user.
+    in_lap: usize,
+    /// Did any visit in the current lap declare a counter?
+    lap_carried: bool,
 }
 
 impl Priority {
-    /// A round on `declarer`'s timing: starts at the seat after `declarer`.
-    fn new(declarer: usize, n: usize) -> Self {
-        Self { n, cursor: (declarer + 1) % n, quiet: 0 }
+    /// A round on `initial`'s timing: starts at the initial user's seat.
+    fn new(initial: usize, n: usize) -> Self {
+        Self { n, cursor: initial % n, in_lap: 0, lap_carried: false }
     }
 
     /// The seat to ask now.
@@ -2681,16 +2939,20 @@ impl Priority {
         self.cursor
     }
 
-    /// The current seat answered -- `declared` if it added a counter. Returns
-    /// whether the round is still open.
+    /// The current seat's visit ended -- `declared` if it added at least one
+    /// counter. Returns whether the round is still open.
     fn answered(&mut self, declared: bool) -> bool {
         self.cursor = (self.cursor + 1) % self.n;
         if declared {
-            self.quiet = 0;
+            self.lap_carried = true;
+        }
+        self.in_lap += 1;
+        if self.in_lap < self.n {
             return true;
         }
-        self.quiet += 1;
-        self.quiet < self.n
+        // Lap boundary: a lap that brought no declaration closes the round.
+        self.in_lap = 0;
+        std::mem::take(&mut self.lap_carried)
     }
 }
 
@@ -2743,6 +3005,10 @@ fn trigger_kind(kind: &str) -> TriggerKind {
 }
 
 impl CardRules for WasmRules {
+    fn ruleset_sha256(&self) -> Option<&str> {
+        Some(self.ruleset.sha256())
+    }
+
     /// The card rule's declared static properties (`CardDef::props`), see
     /// [`game_core::engine::CardRules::card_props`].
     fn card_props(&self, card: &str) -> std::collections::BTreeMap<String, i32> {
@@ -2801,6 +3067,13 @@ impl CardRules for WasmRules {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            buy_kind: 0,
+            seller: -1,
+            price: 0,
+            deal_owner: -1,
+            deal_houses: 0,
+            deal_mortgaged: false,
+            reason: String::new(),
         };
         for (uid, id) in instances {
             let Some(idx) = self.ruleset.card(&id) else {
@@ -2852,6 +3125,8 @@ impl CardRules for WasmRules {
             fire_spent_log: vec![],
             house_log: vec![],
             crystals_log: vec![],
+            cp_log: vec![],
+            exile_log: vec![],
             doubled: -1,
         };
         self.ruleset
@@ -2902,6 +3177,13 @@ impl CardRules for WasmRules {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            buy_kind: 0,
+            seller: -1,
+            price: 0,
+            deal_owner: -1,
+            deal_houses: 0,
+            deal_mortgaged: false,
+            reason: String::new(),
         };
         let dest = self.drive(
             cx,
@@ -2917,13 +3199,23 @@ impl CardRules for WasmRules {
     }
 
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool> {
-        let Some(idx) = self.ruleset.card(id) else {
+        // The rule id is `event:<id>` (`docs/EVENTS.md`); the engine binds its
+        // instance on the board owner before this runs, so the body's
+        // `On::Play` sees a live instance (`is_placed` / `crystals` / props).
+        let rid = game_core::data::event_rule_id(id);
+        let Some(idx) = self.ruleset.card(&rid) else {
             cx.log(
                 player_id as i32,
                 Msg::new("log.event_not_ported").event("event", id),
             );
             return Ok(false);
         };
+        let uid = cx
+            .world_copy()
+            .event_rule_instances()
+            .into_iter()
+            .find(|(_, c)| c == &rid)
+            .map_or(-1, |(uid, _)| uid);
         let mut trigger = Trigger {
             kind: TriggerKind::None,
             player_id: player_id as i32,
@@ -2950,6 +3242,13 @@ impl CardRules for WasmRules {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            buy_kind: 0,
+            seller: -1,
+            price: 0,
+            deal_owner: -1,
+            deal_houses: 0,
+            deal_mortgaged: false,
+            reason: String::new(),
         };
         let dest = self.drive(
             cx,
@@ -2957,8 +3256,8 @@ impl CardRules for WasmRules {
                 card: idx,
                 player_id: player_id as i32,
             },
-            id,
-            -1,
+            &rid,
+            uid,
             &mut trigger,
         )?;
         Ok(dest == DEST_FIELD)
@@ -3095,19 +3394,23 @@ impl CardRules for WasmRules {
                         }
                     }
                 }
-                // Board-owned tile rule instances (`docs/TILES.md`) hear the
-                // hooks they declare, the same as a player's field cards do.
-                // They run **after** the player fields so a suppressing card
-                // can arm `prop::NO_REWARD` on the tile instance in its own hook
-                // before `tile:circle`'s Pass entry reads it.
+                // Board-owned rule instances (`docs/TILES.md`, `docs/EVENTS.md`)
+                // hear the hooks they declare, the same as a player's field
+                // cards do. They run **after** the player fields so a suppressing
+                // card can arm `prop::NO_REWARD` on the tile instance in its own
+                // hook before `tile:circle`'s Pass entry reads it.
                 //
                 // A tile-carrying trigger (`passTile`, `settle`, a rent `pay`)
                 // reaches only the instances governing *that* tile -- the cheap
                 // path, since `passTile` fires on every step of every walk and
-                // the board holds one instance per tile. A trigger with no tile
-                // reaches them all, but only when some `tile:*` rule actually
-                // declares the hook (otherwise the board list is never touched).
-                let board: Vec<(i32, String)> = if t.tile >= 0 {
+                // the board holds one instance per tile. **Event** instances
+                // (`tile = -1`, `event:*`) are not tile-governed: they hear
+                // every trigger their rule declares, which is how an active
+                // event reacts to a pass / settle / roll anywhere on the board.
+                // A trigger with no tile reaches every board instance, but only
+                // when some `tile:*` or `event:*` rule actually declares the
+                // hook (otherwise the board list is never touched).
+                let mut board: Vec<(i32, String)> = if t.tile >= 0 {
                     world.tile_rule_instances(t.tile)
                 } else if self
                     .ruleset
@@ -3119,6 +3422,35 @@ impl CardRules for WasmRules {
                 } else {
                     Vec::new()
                 };
+                if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("event:") && c.hooks(kind))
+                {
+                    for ent in world.event_rule_instances() {
+                        if !board.iter().any(|(u, _)| *u == ent.0) {
+                            board.push(ent);
+                        }
+                    }
+                }
+                // **Mark** owners (`mark:*`, `mark:cp` = the [CP点] tile-mark
+                // owner) are board-wide the same way: they govern no single
+                // tile, so they hear every trigger their rule declares
+                // wherever it points -- `mark:cp`'s settle clause is 「在拥有
+                // [CP]点的格子上[结算]时」, any tile.
+                if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("mark:") && c.hooks(kind))
+                {
+                    for ent in world.mark_rule_instances() {
+                        if !board.iter().any(|(u, _)| *u == ent.0) {
+                            board.push(ent);
+                        }
+                    }
+                }
                 for (uid, id) in board {
                     if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
                         continue;
@@ -3265,6 +3597,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::Untargetable
             | TriggerKind::Redirect
             | TriggerKind::CrystalsChanged
+            | TriggerKind::CpChanged
     )
 }
 
@@ -3305,34 +3638,36 @@ mod tests {
     fn a_round_belongs_to_the_player_who_activated_the_effect() {
         // Seat 2's card makes seat 0 pay: the `effect` is the payer's (player 0),
         // but seat 2 activated it, so the round is seat 2's -- and the ring
-        // asks seat 2 last (clause 89).
+        // starts at seat 2 (ruling 2026-10-07).
         let mut pay = CoreTrigger::new("effect", 0);
         pay.by_card = Some(2);
         assert_eq!(chain_starter(&pay, 1, 4), 2);
-        // Rent has no activating card: the payer who landed owns the timing.
+        // Rent is board-driven (`by_card` is None -- a system / tile event):
+        // the link has no player, so the ring starts at the active turn player
+        // (ruling 2026-10-07), not at the payer (player 3).
         let rent = CoreTrigger::new("effect", 3);
-        assert_eq!(chain_starter(&rent, 1, 4), 3);
-        // Neither a card nor a player (the bank's side): whoever's turn it is.
+        assert_eq!(chain_starter(&rent, 1, 4), 1);
+        // A bank-side link with neither: whoever's turn it is.
         let mut bank = CoreTrigger::new("effect", 0);
         bank.player_id = -1;
         assert_eq!(chain_starter(&bank, 1, 4), 1);
     }
 
-    /// Drive one round's asking order: `declares` lists the seats that declare a
-    /// counter, in order, each the first time it is asked after the previous
-    /// one. Returns every seat asked. `declarer` is the player the round's
-    /// timing belongs to; the ring starts at the seat after them (clause 89).
-    fn asked(declarer: usize, n: usize, declares: &[usize]) -> Vec<usize> {
-        let mut p = Priority::new(declarer, n);
-        let mut left = declares.iter().copied().peekable();
+    /// Drive one round's visit order. `script` gives, per visit in order, how
+    /// many counters that visit declares -- a visit keeps the floor until the
+    /// seat passes or runs out (ruling 2026-10-07; `build_round`), so several
+    /// declarations in one entry are one visit. Returns every seat visited.
+    /// `initial` is the round's initial user; the ring starts at their seat and
+    /// a lap is one full cycle from there.
+    fn visited(initial: usize, n: usize, script: &[usize]) -> Vec<usize> {
+        let mut p = Priority::new(initial, n);
         let mut out = vec![];
+        let mut i = 0;
         loop {
             let s = p.seat();
             out.push(s);
-            let declared = left.peek() == Some(&s);
-            if declared {
-                left.next();
-            }
+            let declared = script.get(i).copied().unwrap_or(0) > 0;
+            i += 1;
             if !p.answered(declared) {
                 return out;
             }
@@ -3340,23 +3675,33 @@ mod tests {
     }
 
     #[test]
-    fn a_round_opens_at_the_seat_after_the_triggering_player() {
-        // Seat 2 triggered the timing: the ring asks 3, 0, 1 -- and 2 last.
-        assert_eq!(asked(2, 4, &[]), [3, 0, 1, 2]);
+    fn a_round_opens_at_the_initial_user() {
+        // Seat 2 raised the timing: the ring asks 2 first, then 3, 0, 1 --
+        // superseding clause 89's 「下一位」 start (2026-10-07).
+        assert_eq!(visited(2, 4, &[]), [2, 3, 0, 1]);
         // A one-player ring asks that seat once.
-        assert_eq!(asked(0, 1, &[]), [0]);
+        assert_eq!(visited(0, 1, &[]), [0]);
     }
 
     #[test]
-    fn a_declaration_advances_priority_and_the_ring_can_return() {
-        // Seat 0 declares: priority moves on to 1, not back to the starter (3,
-        // the seat before 0 in the ring), and the ring brings 0 back for a
-        // second declaration before a quiet lap closes the round.
-        assert_eq!(asked(2, 4, &[0]), [3, 0, 1, 2, 3, 0]);
-        assert_eq!(asked(2, 4, &[0, 0]), [3, 0, 1, 2, 3, 0, 1, 2, 3, 0]);
-        // Two seats answering the same timing, one each: the ring just runs on
-        // and closes on a quiet lap.
-        assert_eq!(asked(2, 4, &[3, 1]), [3, 0, 1, 2, 3, 0, 1]);
+    fn a_quiet_lap_closes_the_round_and_a_carried_lap_does_not() {
+        // No declarations: one lap and done.
+        assert_eq!(visited(2, 4, &[]), [2, 3, 0, 1]);
+        // A declaration anywhere in lap 1 carries it -- even at its last visit
+        // -- so the round runs lap 2 in full and closes only when that lap is
+        // quiet (ruling 2026-10-07: "a lap that carried a declaration never
+        // closes the round").
+        assert_eq!(visited(2, 4, &[0, 0, 0, 1]), [2, 3, 0, 1, 2, 3, 0, 1]);
+        // A declaration at the initial user's own visit carries lap 1 the same
+        // way; the visits after it in that lap do not close the round.
+        assert_eq!(visited(2, 4, &[1]), [2, 3, 0, 1, 2, 3, 0, 1]);
+        // Declarations in two consecutive laps need a third quiet one.
+        assert_eq!(
+            visited(2, 4, &[0, 1, 0, 0, 1]),
+            [2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1]
+        );
+        // A one-player ring: a declaring visit is carried, the next one closes.
+        assert_eq!(visited(0, 1, &[1, 0]), [0, 0]);
     }
 
     /// The engine raises these kinds; folding any of them to `None` would make
@@ -3437,6 +3782,8 @@ mod tests {
             "houseAdded",
             // v29: crystal writes
             "crystalsChanged",
+            // v36: [CP点] writes
+            "cpChanged",
         ] {
             assert!(
                 !matches!(trigger_kind(k), TriggerKind::None),

@@ -13,6 +13,9 @@ use super::world::{Signal, CIRCLE_MONEY, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
 
+/// The purchase surface (`docs/PURCHASE.md`): quote / deal / assign.
+pub(crate) mod purchase;
+
 /// Safety cap on nested money pipelines. The rulebook (「[支付]时可以打出」)
 /// has no depth limit, so nested money movements past any reasonable depth
 /// should still open their [反击] windows. The real termination argument is
@@ -38,10 +41,18 @@ pub struct Pay {
     pub tile: Option<usize>,
     /// Mandatory: raise funds (mortgage, then bankruptcy) if short.
     pub must: bool,
-    /// Log line; gets the amount as the `amount` argument.
+    /// Log line; gets the amount as the `amount` argument. A **full** line
+    /// (`log.paid_for` and kin), never a bare reason -- see [`Pay::reason`].
     pub text: Option<Msg>,
     /// Key naming where the money came from (`src.*`), shown in parentheses.
     pub source: &'static str,
+    /// The cause of the move, shown in parentheses on the standard line the
+    /// same way [`Pay::source`] is -- but as a full [`Msg`], for a card's own
+    /// reason key (`cards:<crate>.<key>`, e.g. 「登上武道馆」) which is not a
+    /// static `src.*` key. Prefer this over [`Pay::text`] for card-driven
+    /// moves: `text` replaces the whole line and so must carry the action
+    /// (who / to / amount) itself, which a bare card name does not.
+    pub reason: Option<Msg>,
     /// The player whose card caused this payment (C# `t.ByCard`), or `None` when
     /// the payment is board-driven (rent, buy, build). Stamped onto the `pay` /
     /// `paid` triggers so `H.HitByOtherCard` can tell the two apart.
@@ -60,6 +71,7 @@ impl Pay {
             must: false,
             text: None,
             source: "",
+            reason: None,
             by_card: None,
         }
     }
@@ -458,12 +470,19 @@ impl Cx<'_> {
     /// this consumes the turn's main move and walks it immediately, with the
     /// normal raise points.
     ///
+    /// An **event-driven** move (`plan.forced`, 「移动X」 / 「移动1d20」) is not a
+    /// main move: it goes through even when the turn's main move is already
+    /// spent and does not consume it (`docs/EVENTS.md`).
+    ///
     /// Returns `Ok(())` without moving when the turn's main move is already
     /// spent (the C# logs 「这回合已经进行过 [主要移动]，这次移动无效」).
     pub fn card_move(&mut self, player_id: usize, mut plan: Move) -> Flow<()> {
         let i = player_id;
         let is_turn = self.w.st.turn == i as i32;
-        if self.w.turn.main_moved && is_turn {
+        // An event's forced side move is never the main move -- even for the
+        // turn player, and even mid-landing of the main move.
+        let as_main = is_turn && !plan.forced;
+        if as_main && self.w.turn.main_moved {
             self.w.log(
                 "text",
                 i as i32,
@@ -471,15 +490,20 @@ impl Cx<'_> {
             );
             return Ok(());
         }
-        if is_turn {
+        if as_main {
             self.w.turn.main_moved = true;
         }
         plan.player_id = i;
-        plan.roller = i;
-        plan.main = is_turn;
-        // Only the turn player's move drives the stage machine; a card moving
-        // somebody else must not leave `step` parked in MOVE.
-        if is_turn {
+        // A substitution (hallucination 「上一名玩家代替进行此次投掷」) writes
+        // `roller` through `plan::set_roller`; otherwise the mover rolls.
+        if plan.roller == Move::ROLLER_UNSET {
+            plan.roller = i;
+        }
+        plan.main = as_main;
+        // Only the turn player's *main* move drives the stage machine; a card
+        // moving somebody else, and an event's forced move of the turn player,
+        // must not leave `step` parked in MOVE.
+        if as_main {
             self.w.st.step = stage::MOVE;
         }
         if plan.teleport_to >= 0 {
@@ -513,7 +537,7 @@ impl Cx<'_> {
             }
         }
         // `NoteWalk` / `LastMain` -- the C# writes `lastWalk` from `Total`.
-        if is_turn {
+        if as_main {
             self.w.turn.main_steps = if plan.kind == MoveKind::Teleport {
                 0
             } else {
@@ -524,7 +548,7 @@ impl Cx<'_> {
         if plan.kind != MoveKind::Teleport {
             self.w.set_slot(i as i32, "lastWalk", plan.total + 1);
         }
-        if is_turn {
+        if as_main {
             self.w.st.step = stage::END;
         }
         self.wait(1.2);
@@ -595,15 +619,44 @@ impl Cx<'_> {
     }
 
     /// C# `f.Bought(i, t)` -- a card handed a deed over outside the buy routine
-    /// (tomoe_savior's 「从该玩家处收购该地契」) and announces the acquisition:
-    /// raise the `bought` hook chain over the field, with `by` as the cause
-    /// (`t.ByCard`, 「购买」 reactions key 「来自你以外」 on it). `buy()` raises
-    /// the same hook itself after an ordinary purchase.
+    /// (tomoe_savior's 「从该玩家处收购该地契」) and announces the acquisition.
+    ///
+    /// Three things land here, in the order C# has them:
+    ///
+    /// 1. **The transfer is committed first.** The card's own `set_owner` is a
+    ///    write on its world *copy*; this runs against the live world the hook
+    ///    chain sees, and 「购买」 reactions build on the tile (Afterglow
+    ///    「自动免费在上面加盖一栋房子」 calls `card_build`, which refuses with
+    ///    `err.build_not_own` while the old owner is still live). C# has no
+    ///    copy -- `H.State.owners[t] = i` is immediate -- so the hand-over is
+    ///    already visible to `f.Bought(i, t)` there.
+    /// 2. **The deed comes off mortgage**, the same post-state `buy()` leaves.
+    ///    规则书 基础[结算] 6: 「如果格子地契已抵押则无效果」 -- no house can be
+    ///    built on a mortgaged deed -- and 巴's 「收购」 pays the 「常规收购价」
+    ///    (「地契购买价格」) with no 「仍为抵押状态」 clause, unlike 强制购买
+    ///    which states one explicitly. RULING in TEST-FINDINGS §6.
+    /// 3. **Both acquisition hooks fire**, the same pair `buy()` raises after an
+    ///    ordinary purchase: `bought` (C# `Fx.Bought`, 「a player became the
+    ///    owner of `t.tile`」) then `buyAfter` (「after the deed has changed
+    ///    hands」). Every 「购买地契」 listener therefore hears a hand-over the
+    ///    rulebook counts as a purchase, whichever of the two it sits on.
+    ///
+    /// `by` is the cause (`t.ByCard`, 「购买」 reactions key 「来自你以外」 on it).
     pub fn card_raise_bought(&mut self, player_id: usize, tile: usize, by: usize) -> Flow<()> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
         }
+        if tile < self.w.st.owners.len() {
+            self.w.st.owners[tile] = player_id as i32;
+        }
+        if tile < self.w.st.mortgaged.len() {
+            self.w.st.mortgaged[tile] = false;
+        }
         let mut t = Trigger::new("bought", player_id);
+        t.tile = tile as i32;
+        t.by_card = Some(by as i32);
+        self.raise(t)?;
+        let mut t = Trigger::new("buyAfter", player_id);
         t.tile = tile as i32;
         t.by_card = Some(by as i32);
         self.raise(t)?;
@@ -2061,7 +2114,12 @@ impl Cx<'_> {
     /// `BuildRoutine`
     pub(crate) fn build(&mut self, i: usize, t: usize) -> Flow<()> {
         // `buildBefore` -- before any guard or payment, so it is a real pre-hook.
-        raise!(self, "buildBefore", i, tile = t as i32)?;
+        // A hook that claims it with `set_cancelled` vetoes the build outright
+        // (卡池BUG 「不可在造价1500及以上的格子上加盖房屋」).
+        let bt = raise!(self, "buildBefore", i, tile = t as i32)?;
+        if bt.is_cancelled() {
+            return Ok(());
+        }
         if self.out(i) || !self.playing() {
             return Ok(());
         }
@@ -2133,6 +2191,14 @@ impl Cx<'_> {
         e.value = 0;
         e.to = t as i32;
         e.other = h;
+        // `houseAdded` -- 「你拥有格子上的房屋总数增加时」 (鳰原令王那 (2)) is
+        // the post-commit point for *any* house increase, the same raise the
+        // guest's `add_house` logs at its own commit (`wasm_rules.rs`
+        // `house_log`). The engine's build writes `houses[t]` directly and used
+        // to raise nothing here, so a real 盖房 never offered the skill.
+        // Raised before `buildAfter` (the Fx point before the action hook,
+        // matching `buy()`'s `bought` → `buyAfter`).
+        raise!(self, "houseAdded", i, tile = t as i32, value = h)?;
         // `buildAfter` -- only after the house actually commits (not on the
         // refund path above).
         raise!(self, "buildAfter", i, tile = t as i32)?;
@@ -2541,11 +2607,19 @@ impl Cx<'_> {
             "gain"
         });
         let amount = if p.from.is_some() { loss } else { gain };
+        // The cause, in parentheses (`log.part.why`). A card's own reason key
+        // rides `reason` as a `Msg`; a board-driven one is the static `src.*`
+        // key in `source`. Never the whole line: `text` is for that, and a bare
+        // card name (「登上武道馆」) says nothing about who paid what.
+        let why = match &p.reason {
+            Some(r) => Some(r.clone()),
+            None if !p.source.is_empty() => Some(Msg::new(p.source)),
+            _ => None,
+        };
+        let src = why.map(|w| Msg::new("log.part.why").msg("why", w));
         let mut text = match &p.text {
             Some(t) => t.clone().n("amount", amount),
             None => {
-                let src = (!p.source.is_empty())
-                    .then(|| Msg::new("log.part.why").msg("why", Msg::new(p.source)));
                 let m = match (p.from, p.to) {
                     (Some(f), Some(t)) => {
                         Msg::new("log.pay").player_id("who", f).player_id("to", t)
@@ -3180,22 +3254,23 @@ impl Cx<'_> {
     ///
     /// Also the `ctx::draw_event` primitive (`docs/TILES.md`): `tile:event`'s
     /// body is 「抽取一张手卡，然后抽取一个事件卡」 and the event half is this.
+    ///
+    /// The engine keeps only the generic mechanics (`docs/EVENTS.md`): the
+    /// deck, the draw, the public reveal, the **active list** and the filing
+    /// away. What the event *does* is its rule instance on the neutral board
+    /// owner -- bound here before the body runs, unbound when it expires.
     pub fn card_draw_event(&mut self, i: usize) -> Flow<()> {
         self.draw_event(i)
     }
 
     fn draw_event(&mut self, i: usize) -> Flow<()> {
-        if self.w.event_deck.is_empty() {
-            if self.w.event_discard.is_empty() {
-                self.w.log("text", i as i32, Msg::new("log.no_events"));
-                return Ok(());
-            }
-            let mut deck = std::mem::take(&mut self.w.event_discard);
-            self.w.rng.shuffle(&mut deck);
-            self.w.event_deck = deck;
-            self.w.log("text", -1, Msg::new("log.events_reshuffled"));
-        }
-        let id = self.w.event_deck.pop().expect("deck refilled above");
+        // Fallback for a deck left empty outside a draw (an expiry or a raw
+        // state write since the last one).
+        self.w.refill_event_deck();
+        let Some(id) = self.w.event_deck.pop() else {
+            self.w.log("text", i as i32, Msg::new("log.no_events"));
+            return Ok(());
+        };
         self.w
             .log(
                 "event",
@@ -3206,24 +3281,43 @@ impl Cx<'_> {
             )
             .card = id.clone();
         self.wait(3.0);
+        // Face-down slot on the public `eventTop` view: consumed by this draw.
+        self.w.st.event_top.retain(|e| e != &id);
         let t = raise!(self, "event", i, card = id.clone())?;
         let rules = self.rules;
         // `Trigger.Cancelled` -- the event's effect is negated; it is still
         // filed away below but does not resolve.
+        //
+        // Bind the rule instance first so the body's `On::Play` and any hook it
+        // declares run against a live instance. `bind_event` is a no-op for
+        // `StubRules` (no `event:*` rule), which is the built-in fallback: the
+        // draw is logged and the card filed away, the same as before.
+        // Bind the rule instance first so the body's `On::Play` and any hook it
+        // declares run against a live instance. `bind_event` is a no-op for
+        // `StubRules` (no `event:*` rule), which is the built-in fallback: the
+        // draw is logged and the card filed away, the same as before. A
+        // negated draw binds nothing -- its effect never resolves.
         let placed = if t.is_cancelled() {
             false
         } else {
+            self.w.bind_event(self.data, rules, i as i32, &id);
             rules.event(self, i, &id)?
         };
-        if !placed {
-            if self.data.event(&id).is_some_and(|e| e.derived) {
-                self.w.event_removed.push(id.clone());
-            } else {
-                self.w.event_discard.push(id.clone());
-            }
+        // A body that expired itself mid-Play (「放入事件弃牌」 / 「永久移除」
+        // through `ctx::event_expire`) has already filed the card away. A
+        // one-shot, a negated draw and the `StubRules` fallback are filed here.
+        // Derived events are 「永久移除」 rather than recycled.
+        let filed = self.w.event_discard.iter().any(|e| e == &id)
+            || self.w.event_removed.iter().any(|e| e == &id);
+        if !placed && !filed {
+            self.w
+                .expire_event(&id, self.data.event(&id).is_some_and(|e| e.derived));
         }
         // `eventAfter` -- the event is fully resolved and filed away.
         raise!(self, "eventAfter", i, card = id)?;
+        // Everything has resolved and the card is filed: only now does an
+        // emptied deck take the shuffled discard (this card included).
+        self.w.refill_event_deck();
         self.wait(0.4);
         Ok(())
     }

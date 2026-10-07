@@ -136,6 +136,29 @@ pub struct Trigger {
     /// `2` = a hand/field card, `3` = a skill press). 「当你使用火罐进行掷骰时」
     /// reads this. `0` on every non-roll trigger.
     pub roll_source: i32,
+    // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
+    /// `t.Buy.Kind` -- a [`super::play::purchase::BuyKind`] as `i32`
+    /// (`0` = land). `0` on every non-buy trigger.
+    pub buy_kind: i32,
+    /// `t.Buy.Seller` -- the payee (`-1` = the bank). Force-buy and 收购 name
+    /// the owner; land / agent / card / auction buys name the bank.
+    pub seller: i32,
+    /// `t.Buy.Price` -- the price the buyer would be charged, post the
+    /// `BuyAdd` / `BuyMul` / `BuySet` stages. A hook rewrites it with
+    /// `set_price`.
+    pub price: i32,
+    /// `t.Buy.DealOwner` -- ownership after the deal (default: the buyer).
+    /// A `BuyAssign` hook rewrites it with `set_deal_owner`.
+    pub deal_owner: i32,
+    /// `t.Buy.DealHouses` -- houses after the deal (default: as standing,
+    /// unless a hook razes). `set_deal_houses`.
+    pub deal_houses: i32,
+    /// `t.Buy.DealMortgaged` -- mortgage after the deal (default: cleared,
+    /// except a Force buy keeps `FORCE_STAYS_MORTGAGED`). `set_deal_mortgaged`.
+    pub deal_mortgaged: bool,
+    /// A `BuyGate` refusal's reason key (`"log.gate_poppin_hill"` and kin).
+    /// Written by the responder alongside `set_cancelled`.
+    pub reason: String,
 }
 
 impl Trigger {
@@ -164,6 +187,13 @@ impl Trigger {
             move_total: 0,
             cards: Vec::new(),
             roll_source: 0,
+            buy_kind: 0,
+            seller: -1,
+            price: 0,
+            deal_owner: -1,
+            deal_houses: 0,
+            deal_mortgaged: false,
+            reason: String::new(),
         }
     }
 
@@ -243,6 +273,14 @@ macro_rules! raise {
 pub(crate) use raise;
 
 pub trait CardRules: Send + Sync {
+    /// Hex SHA-256 of the built ruleset, when the implementation has one.
+    /// `None` (the default) means "unknown" and is skipped by
+    /// [`crate::record::compat`]; `WasmRules` reports the ruleset's own hash.
+    /// `StubRules` has no ruleset, so its stamp reads `"stub"`.
+    fn ruleset_sha256(&self) -> Option<&str> {
+        None
+    }
+
     /// `Card.Normal` -- may be played from hand in the operation phase.
     fn normal(&self, _card: &str) -> bool {
         true
@@ -315,6 +353,33 @@ pub trait CardRules: Send + Sync {
     /// Short note shown on a card in hand (`HandNotesOf`).
     fn hand_note(&self, _cx: &Cx, _player: usize, _card: &str) -> Msg {
         Msg::default()
+    }
+
+    /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
+    /// charged for each tile in `q.tiles`, and may they buy it at all?
+    ///
+    /// The default is the plain rulebook formula -- [`super::play::purchase::quote_native`]
+    /// -- which is what `StubRules` and the sim run. `WasmRules` overrides it
+    /// to run the `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` hooks in pure
+    /// guard mode (like `cant_play`), cloning the world only when a hooking
+    /// instance exists. The commit re-quotes, so quote == charge.
+    fn buy_quote(
+        &self,
+        cx: &Cx,
+        q: &super::play::purchase::BuyQuery,
+    ) -> Vec<super::play::purchase::Quote> {
+        let data = cx.game_data();
+        let st = cx.state();
+        q.tiles
+            .iter()
+            .map(|&t| {
+                let price = super::play::purchase::quote_native(data, st, t);
+                super::play::purchase::Quote {
+                    price,
+                    eligible: price >= 0,
+                }
+            })
+            .collect()
     }
 }
 

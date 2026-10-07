@@ -158,6 +158,62 @@ fn ranked_games_run_the_ban_phase() {
     );
 }
 
+/// Solo with a character on every seat (the solo setup screen's picks) skips
+/// the timed ban / pick entirely and opens the deck phase on those characters.
+#[test]
+fn solo_preset_characters_skip_the_pick_phase() {
+    let d = data();
+    let names: Vec<String> = d.characters.iter().take(3).map(|c| c.name.clone()).collect();
+    let members: Vec<RoomMember> = (1..=3)
+        .map(|i| RoomMember {
+            id: i,
+            player: format!("P{i}"),
+            bot: i != 1,
+            character: names[(i - 1) as usize].clone(),
+            ..Default::default()
+        })
+        .collect();
+    let m = new_match(&members, 42, MatchMode::Solo);
+    let st = m.state();
+    // Past ban / pick: the human still has a deck to choose.
+    assert_eq!(st.phase, "deck", "preset characters land on the deck phase");
+    assert!(st.bans.is_empty(), "solo preset skips bans too");
+    for mem in &members {
+        let p = st
+            .players
+            .iter()
+            .find(|p| p.member == mem.id)
+            .expect("member is seated");
+        assert_eq!(p.character, mem.character, "member {}", mem.id);
+    }
+    // The roll still seats everyone; only the choice phases are skipped.
+    let mut rolls: Vec<i32> = st.players.iter().map(|p| p.roll).collect();
+    rolls.sort_unstable();
+    assert!(rolls.iter().all(|&r| (1..=20).contains(&r)), "{rolls:?}");
+    // Bots submit their decks the moment the deck phase opens; the human does not.
+    for p in &st.players {
+        assert_eq!(p.deck_ready, p.bot, "{}", p.player);
+    }
+    // Deterministic: the same seed rebuilds the same match on the same picks.
+    let again = new_match(&members, 42, MatchMode::Solo);
+    assert_eq!(m.save(), again.save());
+    let other = new_match(&members, 43, MatchMode::Solo);
+    assert_ne!(m.save(), other.save(), "the seed still decides the seating");
+}
+
+/// Without presets the pick phase stays: solo's test harness (and old saves)
+/// still drive it, and `quick_start` still skips it.
+#[test]
+fn solo_without_presets_still_picks() {
+    let members: Vec<RoomMember> = (1..=3).map(|i| member(i, true)).collect();
+    let m = new_match(&members, 7, MatchMode::Solo);
+    assert_eq!(m.state().phase, "order");
+    let mut m = m;
+    m.quick_start();
+    assert_eq!(m.state().phase, "play");
+    assert!(m.state().players.iter().all(|p| !p.character.is_empty()));
+}
+
 #[test]
 fn same_seed_same_game() {
     let d = data();

@@ -1,7 +1,7 @@
 // Card faces (art, color strip, title, tags) and the card detail popup
 // (CardDetailView).
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { D, cardTitle, GENERAL_BAND } from "../core/data";
@@ -49,12 +49,13 @@ export interface CardFaceProps {
   children?: ReactNode;
   className?: string;
   title?: string;
+  style?: CSSProperties;
 }
 
-export function CardFace({ id, size = "mini", on, onClick, onMouseEnter, onMouseLeave, children, className, title }: CardFaceProps) {
+export function CardFace({ id, size = "mini", on, onClick, onMouseEnter, onMouseLeave, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
   return (
-    <div className={cx(s.face, s[size], on && s.on, className)} onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} title={title}>
+    <div className={cx(s.face, s[size], on && s.on, className)} style={style} onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} title={title}>
       <div className={s.art}><img src={cardArt(id)} alt="" loading="lazy" draggable={false} /></div>
       <div className={s.line} style={{ background: c ? bandColor(c.band) : "#ED4E76" }} />
       <div className={s.title}>{cardTitle(id)}</div>

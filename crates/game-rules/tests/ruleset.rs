@@ -293,6 +293,21 @@ impl CardWorld for TestWorld {
     fn trig_card_is(&self, id: &str) -> i32 {
         (self.trigger.card == id) as i32
     }
+    fn set_trigger_price(&mut self, v: i32) {
+        self.trigger.price = v;
+    }
+    fn set_trigger_deal_owner(&mut self, v: i32) {
+        self.trigger.deal_owner = v;
+    }
+    fn set_trigger_deal_houses(&mut self, v: i32) {
+        self.trigger.deal_houses = v;
+    }
+    fn set_trigger_deal_mortgaged(&mut self, v: i32) {
+        self.trigger.deal_mortgaged = v != 0;
+    }
+    fn set_trigger_reason(&mut self, reason: &str) {
+        self.trigger.reason = reason.to_string();
+    }
     // The test world models money, marks and dice only -- board/hand queries are
     // neutral until a test needs them.
     fn is_buyable(&self, _: i32) -> i32 {

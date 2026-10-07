@@ -27,6 +27,24 @@ use be::{Caller, Engine, Error, Linker, Module, Store};
 
 use crate::world::CardWorld;
 
+/// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
+/// `bot-cost` feature is on; nothing behavioural either way.
+#[cfg(feature = "bot-cost")]
+pub mod bot_cost {
+    use std::sync::atomic::AtomicU64;
+    /// Card module instantiations (a fresh `Store` + `Instance` per card run,
+    /// hook, gate or guard probe).
+    pub static INSTANTIATIONS: AtomicU64 = AtomicU64::new(0);
+    /// ns spent creating the store and instantiating the module.
+    pub static INSTANTIATE_NS: AtomicU64 = AtomicU64::new(0);
+    /// ns spent building the per-run `Store` (state, limiter, fuel).
+    pub static STORE_NS: AtomicU64 = AtomicU64::new(0);
+    /// ns spent inside the guest entry call (includes host import callbacks).
+    pub static GUEST_NS: AtomicU64 = AtomicU64::new(0);
+    /// `World` clones at the card-host boundary (one per store built).
+    pub static HOST_WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
+}
+
 /// Fuel per top-level effect run, shared by any nested `play_card` calls. Plenty
 /// for straight-line card logic; stops runaway loops at the same instruction on
 /// every machine.
@@ -208,6 +226,29 @@ pub enum HostRequest {
     },
     /// C# `H.BuyRoutine`: the purchase itself.
     Buy { player_id: i32, tile: i32 },
+    /// v40: batched purchase quote (`docs/PURCHASE.md`).
+    BuyQuotes {
+        player_id: i32,
+        kind: i32,
+        tiles: Vec<i32>,
+        out: i32,
+    },
+    /// v40: 「收购」 -- take a deed from its owner at a price.
+    Acquire {
+        player_id: i32,
+        from: i32,
+        tile: i32,
+        price: i32,
+    },
+    /// v40: the agent offer's chosen branch (buy / build).
+    AgentOffer {
+        player_id: i32,
+        agent: i32,
+        tile: i32,
+        kind: i32,
+    },
+    /// v40: bind the running card as a turn-scoped lingering instance.
+    Linger { player_id: i32, expires: i32 },
     /// C# `H.BuildRoutine`: pay and raise one house on `tile`.
     Build { player_id: i32, tile: i32 },
     /// C# `H.OfferBuildAmong`: prompt to build on one of `tiles`, then build.
@@ -664,9 +705,18 @@ impl Ruleset {
         world: W,
         answers: &[i32],
     ) -> Result<Store<HostState<W>>, RuleError> {
+        #[cfg(feature = "bot-cost")]
+        let t0 = std::time::Instant::now();
+        #[cfg(feature = "bot-cost")]
+        bot_cost::HOST_WORLD_CLONES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let state = HostState::new(self.inner.clone(), world, answers.to_vec(), 0);
         let mut store = new_store(&self.inner.engine, state);
         store.set_fuel(self.fuel).map_err(trap)?;
+        #[cfg(feature = "bot-cost")]
+        bot_cost::STORE_NS.fetch_add(
+            t0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         Ok(store)
     }
 }
@@ -808,10 +858,24 @@ fn call_card<W: CardWorld>(
     player_id: i32,
 ) -> Result<i64, Error> {
     let slot = rules.slots[card as usize];
+    #[cfg(feature = "bot-cost")]
+    let t0 = std::time::Instant::now();
     let inst = instantiate_cached(rules, &mut *store, slot.module)?;
-    inst.get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
+    #[cfg(feature = "bot-cost")]
+    {
+        use std::sync::atomic::Ordering::Relaxed;
+        bot_cost::INSTANTIATIONS.fetch_add(1, Relaxed);
+        bot_cost::INSTANTIATE_NS.fetch_add(t0.elapsed().as_nanos() as u64, Relaxed);
+    }
+    #[cfg(feature = "bot-cost")]
+    let t1 = std::time::Instant::now();
+    let out = inst
+        .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
         .call(&mut *store, (slot.local, entry, op, player_id))
-        .and_then(fold_exit)
+        .and_then(fold_exit);
+    #[cfg(feature = "bot-cost")]
+    bot_cost::GUEST_NS.fetch_add(t1.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+    out
 }
 
 /// Like [`call_card`] for a `Play` gate, which answers with a packed `Msg`
@@ -828,11 +892,23 @@ fn call_card_msg<W: CardWorld>(
     player_id: i32,
 ) -> Result<Option<crate::Msg>, Error> {
     let slot = rules.slots[card as usize];
+    #[cfg(feature = "bot-cost")]
+    let t0 = std::time::Instant::now();
     let inst = instantiate_cached(rules, &mut *store, slot.module)?;
+    #[cfg(feature = "bot-cost")]
+    {
+        use std::sync::atomic::Ordering::Relaxed;
+        bot_cost::INSTANTIATIONS.fetch_add(1, Relaxed);
+        bot_cost::INSTANTIATE_NS.fetch_add(t0.elapsed().as_nanos() as u64, Relaxed);
+    }
+    #[cfg(feature = "bot-cost")]
+    let t1 = std::time::Instant::now();
     let packed = inst
         .get_typed_func::<(i32, i32, i32, i32), i64>(&mut *store, export::ON)?
         .call(&mut *store, (slot.local, entry, op, player_id))
         .and_then(fold_exit)?;
+    #[cfg(feature = "bot-cost")]
+    bot_cost::GUEST_NS.fetch_add(t1.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
     if packed == 0 {
         return Ok(None);
     }
@@ -1093,6 +1169,32 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             c.data_mut().w().add_mark(tile, player_id, &kind, note);
             Ok(())
         },
+    )?;
+    // [CP点] -- the two kinds (user ruling 2026-10-07). Tile marks are the
+    // `mark:cp` owner's small API (`rules/tiles/src/cp.rs`); `place_cp` takes no
+    // note: the label comes from the mark's category (「CP点」) and the provenance
+    // from `TileMark.src` / `TileMark.card`, so there is no per-call text to
+    // carry. `cp_src_at` is that provenance (the instance a tile's mark is
+    // attached to). The on-card count (`cp_attached` / `add_cp` / `cp_at` /
+    // `add_cp_at`) is `FieldCard::cp` -- the CP points attached to the card.
+    l.func_wrap(m, "place_cp", |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+        Ok(c.data_mut().w().place_cp(tile, crate::Msg::default()))
+    })?;
+    l.func_wrap(m, "count_cp", |c: C<W>, tile: i32| c.data().wr().count_cp(tile))?;
+    l.func_wrap(m, "count_cp_from", |c: C<W>, tile: i32| {
+        c.data().wr().count_cp_from(tile)
+    })?;
+    l.func_wrap(m, "clear_cp", |mut c: C<W>, tile: i32| c.data_mut().w().clear_cp(tile))?;
+    l.func_wrap(m, "cp_src_at", |c: C<W>, tile: i32| c.data().wr().cp_src_at(tile))?;
+    l.func_wrap(m, "cp_attached", |c: C<W>| c.data().wr().cp_attached())?;
+    l.func_wrap(m, "add_cp", |mut c: C<W>, n: i32, max: i32| {
+        c.data_mut().w().add_cp(n, max)
+    })?;
+    l.func_wrap(m, "cp_at", |c: C<W>, uid: i32| c.data().wr().cp_at(uid))?;
+    l.func_wrap(
+        m,
+        "add_cp_at",
+        |mut c: C<W>, uid: i32, n: i32, max: i32| c.data_mut().w().add_cp_at(uid, n, max),
     )?;
     l.func_wrap(m, "money", |c: C<W>, player_id: i32| {
         c.data().wr().money(player_id)
@@ -1606,6 +1708,43 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(m, "unplace_card", |mut c: C<W>| {
         c.data_mut().w().unplace_card()
     })?;
+    // Active events (`docs/EVENTS.md`) -- the rule body's handles on the
+    // engine's event deck and active list.
+    l.func_wrap(
+        m,
+        "event_expire",
+        |mut c: C<W>, ip: i32, il: i32, removed: i32| -> Result<(), Error> {
+            let id = guest_str(&mut c, ip, il)?;
+            c.data_mut().w().event_expire(&id, removed != 0);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "event_is_active",
+        |mut c: C<W>, ip: i32, il: i32| -> Result<i32, Error> {
+            let id = guest_str(&mut c, ip, il)?;
+            Ok(c.data().wr().event_is_active(&id) as i32)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "event_deck_push",
+        |mut c: C<W>, ip: i32, il: i32, face_down: i32| -> Result<(), Error> {
+            let id = guest_str(&mut c, ip, il)?;
+            c.data_mut().w().event_deck_push(&id, face_down != 0);
+            Ok(())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "event_banish",
+        |mut c: C<W>, ip: i32, il: i32| -> Result<(), Error> {
+            let id = guest_str(&mut c, ip, il)?;
+            c.data_mut().w().event_banish(&id);
+            Ok(())
+        },
+    )?;
     l.func_wrap(
         m,
         "placed_cards",
@@ -2404,6 +2543,104 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
             Err(need_input())
         },
     )?;
+    // v40 purchase surface (`docs/PURCHASE.md`). P0 registers the ABI; the
+    // engine-side dispatch lands with P1 (property buy) / P2 (agent) /
+    // P3 (force & acquire) / P5 (linger).
+    l.func_wrap(
+        m,
+        "buy",
+        |mut c: C<W>, player_id: i32, tile: i32, _kind: i32| -> Result<i32, Error> {
+            // P0: same as `card_buy`; the kind selects the pipeline shape at P1+.
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::Buy { player_id, tile });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "buy_quotes",
+        |mut c: C<W>,
+         player_id: i32,
+         kind: i32,
+         buf: i32,
+         n: i32,
+         out: i32|
+         -> Result<i32, Error> {
+            let bytes = read_guest(&mut c, buf, n)?;
+            let tiles: Vec<i32> = bytes
+                .chunks_exact(4)
+                .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                .collect();
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::BuyQuotes {
+                player_id,
+                kind,
+                tiles,
+                out,
+            });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "acquire",
+        |mut c: C<W>, player_id: i32, from: i32, tile: i32, price: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::Acquire {
+                player_id,
+                from,
+                tile,
+                price,
+            });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "agent_offer",
+        |mut c: C<W>, player_id: i32, agent: i32, tile: i32, kind: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::AgentOffer {
+                player_id,
+                agent,
+                tile,
+                kind,
+            });
+            Err(need_input())
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "linger",
+        |mut c: C<W>, player_id: i32, expires: i32| -> Result<i32, Error> {
+            let st = c.data_mut();
+            if let Some(&ok) = st.answers.get(st.next_answer) {
+                st.next_answer += 1;
+                return Ok(ok);
+            }
+            st.host_request = Some(HostRequest::Linger {
+                player_id,
+                expires,
+            });
+            Err(need_input())
+        },
+    )?;
     l.func_wrap(
         m,
         "card_build",
@@ -2580,6 +2817,38 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     })?;
     l.func_wrap(m, "trig_roll_source", |c: C<W>| {
         c.data().wr().trigger().roll_source
+    })?;
+    // v40 purchase payload (`docs/PURCHASE.md`)
+    l.func_wrap(m, "trig_buy_kind", |c: C<W>| {
+        c.data().wr().trigger().buy_kind
+    })?;
+    l.func_wrap(m, "trig_seller", |c: C<W>| c.data().wr().trigger().seller)?;
+    l.func_wrap(m, "trig_price", |c: C<W>| c.data().wr().trigger().price)?;
+    l.func_wrap(m, "trig_set_price", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_price(v)
+    })?;
+    l.func_wrap(m, "trig_deal_owner", |c: C<W>| {
+        c.data().wr().trigger().deal_owner
+    })?;
+    l.func_wrap(m, "trig_set_deal_owner", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_deal_owner(v)
+    })?;
+    l.func_wrap(m, "trig_deal_houses", |c: C<W>| {
+        c.data().wr().trigger().deal_houses
+    })?;
+    l.func_wrap(m, "trig_set_deal_houses", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_deal_houses(v)
+    })?;
+    l.func_wrap(m, "trig_deal_mortgaged", |c: C<W>| {
+        c.data().wr().trigger().deal_mortgaged as i32
+    })?;
+    l.func_wrap(m, "trig_set_deal_mortgaged", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_trigger_deal_mortgaged(v)
+    })?;
+    l.func_wrap(m, "trig_set_reason", |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
+        let reason = guest_str(&mut c, p, n)?;
+        c.data_mut().w().set_trigger_reason(&reason);
+        Ok(())
     })?;
     l.func_wrap(m, "trig_set_move_roll", |mut c: C<W>, v: i32| {
         c.data_mut().w().set_trigger_move_roll(v)
@@ -2813,6 +3082,9 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         c.data_mut().w().add_fire_max(player_id, n)
     })?;
     // movement shaping: the move being planned (TurnCtx.plan)
+    l.func_wrap(m, "set_roller", |mut c: C<W>, v: i32| {
+        c.data_mut().w().set_roller(v)
+    })?;
     l.func_wrap(m, "set_steps", |mut c: C<W>, v: i32| {
         c.data_mut().w().set_steps(v)
     })?;
@@ -3168,6 +3440,11 @@ impl CardWorld for NullWorld {
     fn trig_card_is(&self, _: &str) -> i32 {
         0
     }
+    fn set_trigger_price(&mut self, _: i32) {}
+    fn set_trigger_deal_owner(&mut self, _: i32) {}
+    fn set_trigger_deal_houses(&mut self, _: i32) {}
+    fn set_trigger_deal_mortgaged(&mut self, _: i32) {}
+    fn set_trigger_reason(&mut self, _: &str) {}
     fn is_buyable(&self, _: i32) -> i32 {
         0
     }

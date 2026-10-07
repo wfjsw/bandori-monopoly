@@ -190,7 +190,6 @@ fn tomoe_savior_buy_listener_hears_the_acquisition() {
 // 规则书 band:Afterglow:商店街的宠儿: 「自动免费在上面加盖一栋房子」 -- the free
 // house itself, as part of the same handover.
 #[test]
-#[ignore = "DISCREPANCY: the Afterglow 「购买」 listener runs on the handover (events show `cards:skill-bands.afterglow_free_house`) but the free house is blocked by `err.build_not_own` -- the deed is transferred only after the hook chain, so 「自动免费在上面加盖一栋房子」 places nothing"]
 fn tomoe_savior_buy_listener_places_the_free_house() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "宇田川巴");
@@ -216,7 +215,6 @@ fn tomoe_savior_buy_listener_places_the_free_house() {
 // The same handover is a 「购买」 for every listener: RAS:（chuchu）演奏我的音乐吧
 // 「场上存在此卡的玩家下次购买地契时，[使用者]获得100资金」 must pay its user.
 #[test]
-#[ignore = "DISCREPANCY: the tomoe_savior handover raises the `bought` chain (Afterglow's free house hears it) but RAS:（chuchu）演奏我的音乐吧's 「场上存在此卡的玩家下次购买地契时，[使用者]获得100资金」 does not fire -- its user gains nothing"]
 fn tomoe_savior_buy_listener_pays_the_chuchu_bonus() {
     let mut t = Table::vanilla(3);
     t.set_character_raw(0, "宇田川巴");
@@ -394,7 +392,6 @@ fn mutsumi_never_2_runs_the_band_skill_2() {
 // 规则书 band:CRYCHIC:美好的往日幻影（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」
 // -- part of the (2) body mutsumi_never's (2) must run.
 #[test]
-#[ignore = "DISCREPANCY: mutsumi_never (2) runs the CRYCHIC band (2) body (successor band skill, fill to 10, draw 2) but 「移除此卡与你所有区域的所有\"CRYCHIC\"卡」 is not done -- the CRYCHIC band card stays on the field beside the gained Ave Mujica one"]
 fn mutsumi_never_2_band_2_removes_the_crychic_cards() {
     let mut t = Table::new(&["若叶睦（CRYCHIC）", "长崎素世（CRYCHIC）"]);
     t.clean();
@@ -668,8 +665,14 @@ fn umiri_copies_go_away_when_the_card_returns() {
 // 「可选择失去1PAREO标记」 must come up; taking it moves a quarter of
 // (house cost * houses) of the dearest tile. 山吹面包房: house cost 1000,
 // 2 houses -> 1000*2/4 = 500, split over the one other player.
+//
+// `MatchPrompt` carries i18n *keys*, not resolved UI text: the offer's prompt is
+// `cards:skill-characters.numazu_maid_title` / `numazu_maid_ask` (zh-CN
+// 「失去 1 个 PAREO 标记，向其他玩家分摊收取 {{n}}？」), so the needle below
+// matches that key rather than the rendered 「PAREO」/「失去」 text. The card's
+// own house-removal prompts are `cards:card-ras.pareo_far_ask_*` /
+// `pareo_far_pick` and stay declined.
 #[test]
-#[ignore = "DISCREPANCY: with skill:鳰原令王那:梦幻可爱♪女仆 bound, pareo_far resolves (gains its 2 PAREO marks and offers the house removal) but the (2) 「可选择失去1PAREO标记」 offer never comes up -- neither the card's 「视为你的房屋总数增加」 nor a real house increase raises it (probed both, with and without a PAREO mark in hand), so 「所有非自己的玩家分摊支付…」 never pays"]
 fn pareo_far_triggers_the_pareo_skill_offer() {
     let mut t = Table::new(&["鳰原令王那", "和奏瑞依"]);
     t.clean();
@@ -695,7 +698,7 @@ fn pareo_far_triggers_the_pareo_skill_offer() {
         let Some(p) = t.prompt() else { break };
         let hay = format!("{p:?}");
         if !took_offer
-            && (hay.contains("PAREO") || hay.contains("pareo") || hay.contains("失去"))
+            && (hay.contains("numazu_maid_ask") || hay.contains("numazu_maid_title"))
             && !hay.contains("pareo_far_ask")
             && !hay.contains("pareo_far_pick")
         {

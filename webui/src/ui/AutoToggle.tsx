@@ -4,6 +4,7 @@
 // it is in the TopBar `right` slot. The banner strip is rendered by the match
 // screens.
 
+import { useEffect, useState } from "react";
 import { useAutoMode } from "../core/hooks";
 import { cx } from "../core/cx";
 import type { AutoMode } from "../game/autopilot";
@@ -15,12 +16,17 @@ import { t as tr } from "../i18n/t";
 const NEXT: Record<AutoMode, AutoMode> = { off: "bot", bot: "chaos", chaos: "off" };
 const LABEL = (m: AutoMode) => (m === "bot" ? tr("board.afk") : m === "chaos" ? tr("board.chaos") : tr("board.autoOff"));
 
+/** Class for a wrapper that lifts the pill above modals (see the CSS). */
+export const autoFloat = s.float;
+
 /**
  * The mode pill itself. Click cycles
  * off → 托管 → 混沌 → off; the label and colour name the current mode.
  */
 export function AutoToggle({ sess, className, compact }: { sess: GameSession; className?: string; compact?: boolean }) {
   const mode = useAutoMode(sess);
+  // A replay is read-only: there is no seat to hand to the autopilot.
+  if (sess.readOnly) return null;
   return (
     <button
       type="button"
@@ -35,14 +41,36 @@ export function AutoToggle({ sess, className, compact }: { sess: GameSession; cl
   );
 }
 
-/** The "托管中 / 混沌中" strip -- shown while an autopilot owns the seat. */
+/** How long the strip stays after the cooldown ends (it is transient: the
+ *  pill in the turn card is the standing indicator). */
+const BANNER_HOLD_MS = 2000;
+const BANNER_FADE_MS = 400;
+
+/** The "托管中 / 混沌中" strip: shown when an autopilot mode is switched on (or
+ *  changed), through the start-up cooldown, then fades away. */
 export function AutoBanner({ sess }: { sess: GameSession }) {
   const mode = useAutoMode(sess);
-  if (mode === "off") return null;
+  const [, tick] = useState(0);
+  // When to drop the strip: re-armed on every mode change.
+  const [hideAt, setHideAt] = useState(0);
+  useEffect(() => {
+    setHideAt(mode === "off" ? 0 : performance.now() + sess.autoCooldownLeft() + BANNER_HOLD_MS);
+  }, [mode, sess]);
+  const now = performance.now();
+  const left = Math.ceil(sess.autoCooldownLeft() / 1000);
+  const visible = mode !== "off" && now < hideAt;
+  // Re-render to count the cooldown down and to fade / drop the strip on time.
+  useEffect(() => {
+    if (!visible) return;
+    const id = window.setTimeout(() => tick((n) => n + 1), 200);
+    return () => clearTimeout(id);
+  });
+  if (sess.readOnly || !visible) return null;
   return (
-    <div className={cx(s.banner, mode === "chaos" && s.chaos)} role="status">
+    <div className={cx(s.banner, mode === "chaos" && s.chaos, hideAt - now < BANNER_FADE_MS && s.fading)} role="status">
       <Icon name={mode === "chaos" ? "cyclone" : "smart_toy"} />
       {tr("board.autoplayBanner", { mode: LABEL(mode) })}
+      {left > 0 && <span className={s.cooldown}>{tr("board.autoplayStarting", { n: left })}</span>}
     </div>
   );
 }

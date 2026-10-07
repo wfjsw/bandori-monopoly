@@ -4,7 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use axum::extract::{Path, State};
-use axum::http::header;
+use axum::http::{header, StatusCode};
 use axum::response::IntoResponse;
 use axum::Json;
 use game_core::net::{self, NetMessage, RoomInfo};
@@ -326,9 +326,12 @@ pub async fn start(
     Json(req): Json<StartReq>,
 ) -> ApiResult<Json<RoomInfo>> {
     let (room, me) = member_room(&s, &sess, &id)?;
+    // The tick quantum this match will run on, sealed into its record header
+    // so a replay reproduces the same `tick(dt)` f32s (docs/REPLAY.md §1).
+    let step = crate::TICK_QUANTUM * s.time_scale;
     let info = tokio::task::spawn_blocking(move || {
         let mut r = room.lock().unwrap();
-        r.start(me, req.force, random_u64())?;
+        r.start(me, req.force, random_u64(), step)?;
         Ok::<_, ApiError>(r.info.clone())
     })
     .await
@@ -429,4 +432,66 @@ pub async fn act(
     }
     room.lock().unwrap().notify();
     Ok(Json(serde_json::json!({ "ok": true })))
+}
+
+// ------------------------------------------------------------------ record
+
+/// `GET /api/rooms/{id}/record` -- the last finished match's `.bdrec`.
+///
+/// The full record reveals every hand and the deck order, so it is only served
+/// **after** the match ends, and only to the people who sat down for it
+/// (`docs/REPLAY.md` §1). `409 err.record.live` while the room is playing,
+/// `404 err.record.none` when there is nothing sealed yet, `403
+/// err.record.forbidden` to anyone the room's tokens do not put in the match.
+///
+/// The body is the sealed bytes **as stored**: a zstd-framed `.bdrec` today,
+/// served as `application/zstd`. Deliberately **not** `Content-Encoding: zstd`
+/// -- a browser would transparently decode that, and inconsistently; the
+/// client decompresses in wasm (`from_record_bytes`). A record stored before
+/// compression is plain JSON and is served as-is as `application/json`.
+/// `Content-Disposition` names the file the way a download should.
+pub async fn record(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+) -> ApiResult<impl IntoResponse> {
+    let room = s.room(&id);
+    if let Some(room) = &room {
+        if room.lock().unwrap().info.playing {
+            return Err(ApiError::new(StatusCode::CONFLICT, "err.record.live"));
+        }
+    }
+    let rec = s
+        .store
+        .record_get(&id)
+        .map_err(|e| ApiError::bad(e.to_string().as_str()))?
+        .ok_or_else(|| ApiError::not_found("err.record.none"))?;
+    // "whoever the room's tokens put in this match" -- a member id, checked
+    // against the seats the record was sealed for.
+    let me = room
+        .as_ref()
+        .and_then(|r| r.lock().unwrap().member_of(&sess.token));
+    let me = me.or_else(|| match &sess.room {
+        Some((rid, member)) if *rid == id => Some(*member),
+        _ => None,
+    });
+    if !me.is_some_and(|m| rec.members.contains(&m)) {
+        return Err(ApiError::forbidden("err.record.forbidden"));
+    }
+    let ctype = if game_core::record::is_zstd(&rec.record) {
+        "application/zstd"
+    } else {
+        "application/json"
+    };
+    let name = format!("bdrec-{id}-{}.bdrec", crate::state::now_file_stamp());
+    Ok((
+        [
+            (header::CONTENT_TYPE, ctype.to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{name}\""),
+            ),
+        ],
+        rec.record,
+    ))
 }

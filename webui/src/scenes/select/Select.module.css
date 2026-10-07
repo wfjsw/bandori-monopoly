@@ -10,6 +10,8 @@
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 
 .steps { position: absolute; right: 37px; top: 20px; width: 466px; height: 60px; border-radius: 30px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+/* The 托管 pill, just left of the steps pill (steps: right 37 + width 466). */
+.autoSlot { right: 515px; top: 22px; }
 .steps > i { font-style: normal; color: var(--faint); font-size: 12px; }
 .mode { height: 2.25em; line-height: 2.25em; padding: 0 1.375em; border-radius: 1.125em; color: #fff; font-weight: 700; font-size: 16px; background: var(--blue); margin-right: 10px; }
 .casual { background: var(--teal); }

@@ -392,6 +392,29 @@ pub mod prop {
     pub const RAZE_ON_BUY: &str = "razeOnBuy";
     /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
+    /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
+    /// refuses a build whose house cost is `>=` this. On a board-owned instance;
+    /// `0` disables. Mirrors `card_sdk::abi::prop::NO_BUILD_ABOVE`.
+    pub const NO_BUILD_ABOVE: &str = "noBuildAbove";
+
+    // ------------------------------------------------------ purchase surface
+    // v40 (`docs/PURCHASE.md`). Mirrors `card_sdk::abi::prop`; keep in step.
+
+    /// 「可购买格子」 (`data/rules.txt` line 19) -- `1` = this tile can be bought.
+    pub const BUYABLE: &str = "buyable";
+    /// Houses counted into the buy price (「建造已有房子的资金总价」).
+    pub const BUY_HOUSES: &str = "buyHouses";
+    /// Force-buy price scale in milli-units (2000 = ×2, 「两倍」).
+    pub const FORCE_MULT: &str = "forceMult";
+    /// 「此次购买的价格不受任何资金变动效果影响」 -- `1` = direct transfer.
+    pub const FORCE_FIXED: &str = "forceFixed";
+    /// 「获得的地契仍为抵押状态」 -- `1` = a force-buy keeps the mortgage.
+    pub const FORCE_STAYS_MORTGAGED: &str = "forceStaysMortgaged";
+    /// 「该格获得所有颜色」 / soyo 「所有颜色」.
+    pub const ANY_COLOR: &str = "anyColor";
+    /// Per-player colour override prefix: `colorFor:<p>` = the group tile `p`
+    /// treats this tile as. Replaces `key::EXTRA_COLOR`.
+    pub const COLOR_FOR_PREFIX: &str = "colorFor:";
 }
 
 /// The **neutral board owner** of tile rule instances ([`MatchState::board_field`]).
@@ -722,6 +745,17 @@ pub struct MatchPrompt {
     pub bidder: i32,
     pub items: Vec<String>,
     pub count: i32,
+    /// The quoted price on a buy / force_buy prompt (`docs/PURCHASE.md`).
+    /// `-1` when the prompt is not a purchase.
+    #[serde(default = "neg_one")]
+    pub price: i32,
+    /// Per-option prices on an agent prompt, parallel to `options`.
+    #[serde(default)]
+    pub prices: Vec<i32>,
+}
+
+fn neg_one() -> i32 {
+    -1
 }
 
 impl Default for MatchPrompt {
@@ -742,6 +776,8 @@ impl Default for MatchPrompt {
             bidder: -1,
             items: vec![],
             count: 0,
+            price: -1,
+            prices: vec![],
         }
     }
 }
@@ -865,6 +901,16 @@ pub struct FieldCard {
     pub user: i32,
     pub tile: i32,
     pub crystals: i32,
+    /// On-card [CP点] -- 「自己[场上]N个[CP点]」, the CP points **attached to this
+    /// card** (user ruling 2026-10-07: 「自己[场上]1个[CP点] referred to the cp
+    /// point attached to the card」). One of the two [CP点] kinds: this is the
+    /// card rule's own stock (通用:该清CP了 [手] 「在自己[场上]添加6个[CP点]」),
+    /// as against the neutral [CP点] **tile marks** in [`TileMark`] (category
+    /// [`mark_category::CP`], mandated by `mark:cp`). Crystals-like: lives on
+    /// the instance, rides the view's field-card counter badge, and is what
+    /// `HookKind::CpChanged` watches. Serde-defaulted so pre-CP saves load.
+    #[serde(default)]
+    pub cp: i32,
     pub face_down: bool,
     /// C# `Card.Immune` -- 「此卡不受…效果影响」. A value on the card, not a
     /// subclass override: effects that would touch it read this and skip.
@@ -900,6 +946,7 @@ impl Default for FieldCard {
             user: -1,
             tile: -1,
             crystals: 0,
+            cp: 0,
             face_down: false,
             immune: false,
             props: BTreeMap::new(),
@@ -910,6 +957,32 @@ impl Default for FieldCard {
     }
 }
 
+/// Tile-mark **categories** -- what sort of thing a [`TileMark`] is. A category
+/// is the mark's identity for the board, as against `TileMark::kind` (the i18n
+/// key that names a particular mark) and `TileMark::owner` (which seat placed a
+/// player mark). Mirrors `card_sdk::abi::mark` (the two crates cannot share a
+/// definition; keep them in step).
+///
+/// [CP点] is its own category, not a `kind` string mixed in with the player
+/// marks (`data/rules.txt` 125: 「CP点：放置于路面上的指示物」), and it carries
+/// **no player owner** -- see [`TileMark::owner`].
+pub mod mark_category {
+    /// A player/generic mark (the default): 兔子 / 奇迹水晶 / PAREO / 抹茶巴菲 …
+    /// Placed by a seat, coloured by that seat in the view.
+    pub const PLAYER: &str = "";
+    /// [CP点] -- 「放置于路面上的指示物」. Neutral: `owner` is always
+    /// [`super::BOARD_OWNER`], never a seat.
+    pub const CP: &str = "cp";
+}
+
+/// Well-known tile-mark kinds (the i18n key / stable id on `TileMark::kind`).
+/// Mirrors `card_sdk::abi::mark`.
+pub mod mark_kind {
+    /// The [CP点] mark's stable kind. Its display label comes from the
+    /// category (「CP点」), not from this string.
+    pub const CP: &str = "mark:cp";
+}
+
 /// `TileMark.cs` -- a marker placed on a tile.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -917,11 +990,27 @@ pub struct TileMark {
     pub uid: i32,
     pub tile: i32,
     /// `card` for a card placed on the tile (see `card`); otherwise the i18n key
-    /// naming the mark (e.g. `cards:hhw-hagumi-marks.mark`).
+    /// naming the mark (e.g. `cards:hhw-hagumi-marks.mark`). [CP点] uses the
+    /// stable [`mark_kind::CP`] -- the label comes from [`Self::category`].
     pub kind: String,
+    /// Which category of mark this is: [`mark_category::PLAYER`] (default) or
+    /// [`mark_category::CP`]. Serde-defaulted so pre-category saves still load.
+    pub category: String,
+    /// The seat that placed a **player** mark (colours it in the view), or
+    /// [`BOARD_OWNER`] (`-1`) for a neutral mark. [CP点] is always neutral --
+    /// 「These marks should not be owned by any player」 -- so a CP mark's owner
+    /// is [`BOARD_OWNER`] and its provenance lives in [`Self::src`] /
+    /// [`Self::card`] instead.
     pub owner: i32,
     pub count: i32,
+    /// Provenance for the log / the view's 「来自」: the card id that placed the
+    /// mark (empty when none). Not an owner.
     pub card: String,
+    /// Provenance for the rules: the **card instance** (`FieldCard::uid`) that
+    /// placed the mark, or `-1`. 「此卡在格子上添加的[CP点]及其产物」
+    /// (通用:该清CP了 (1)) keys on this, not on [`Self::owner`]. Serde-defaulted
+    /// so pre-`src` saves still load.
+    pub src: i32,
     pub note: Msg,
 }
 
@@ -931,11 +1020,21 @@ impl Default for TileMark {
             uid: 0,
             tile: 0,
             kind: String::new(),
+            category: String::new(),
             owner: -1,
             count: 1,
             card: String::new(),
+            src: -1,
             note: Msg::default(),
         }
+    }
+}
+
+impl TileMark {
+    /// Is this a [CP点]? CP marks are a category of their own, not a `kind`
+    /// string among the player marks.
+    pub fn is_cp(&self) -> bool {
+        self.category == mark_category::CP
     }
 }
 

@@ -11,12 +11,19 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
+/// The shared mark name. `skill:鳰原令王那:梦幻可爱♪女仆` (2) reads and spends
+/// 「PAREO标记」 by that literal, so the card must add under the same name --
+/// a `key!`-namespaced stand-in would be a different mark and the
+/// 「失去1PAREO标记」 offer would see 0. 规则书: 「获得2个PAREO标记」 /
+/// 「失去1PAREO标记（初始1，上限3）」 name one mark.
+const PAREO: &str = "PAREO标记";
+
 pub const PAREO_FAR: CardDef =
     CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play(None, pareo_far)]);
 
 fn pareo_far(player_id: i32) -> card_sdk::Asked {
-    let got = ctx::add_tok(player_id, key!("pareo_far_tok"), 2, 3);
-    let total = ctx::tok(player_id, key!("pareo_far_tok"));
+    let got = ctx::add_tok(player_id, PAREO, 2, 3);
+    let total = ctx::tok(player_id, PAREO);
     ctx::log(
         player_id,
         &Msg::new(key!("pareo_far_got"))

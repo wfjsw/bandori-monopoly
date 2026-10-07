@@ -154,8 +154,10 @@ fn g19_manas_join_window_lets_a_third_party_drop_one() {
     t.give(3, &["通用:网络链接异常"]);
     // P1 plays 武道馆, designating P0, P2 and P3 (X = ceil10(2000/3) = 670).
     t.give_play(1, "通用:登上武道馆").unwrap();
-    // The ring on the [手] effect: P0 counters with 真奈, P3 plays 网络链接异常
-    // under the join (its self-directed cancel 「改为你」, i.e. P0).
+    // The ring on the [手] effect (ruling 2026-10-07: starts with the initial
+    // user P1, who holds no counter and is skipped): P0 counters with 真奈,
+    // P3 plays 网络链接异常 under the join (its self-directed cancel
+    // 「改为你」, i.e. P0).
     for _ in 0..30 {
         if t.prompt().is_none() {
             break;

@@ -196,6 +196,12 @@ pub struct RecordHeader {
     pub rounds: i32,
     #[serde(with = "u64_str")]
     pub total_ticks: u64,
+    /// Server-side recording lost buffered ticks (a restart mid-match). The
+    /// record is then unverifiable: checkpoints after the gap do not line up
+    /// with the inputs that produced them. Set by the server; always `false`
+    /// for a record the engine itself wrote.
+    #[serde(default)]
+    pub gaps: bool,
 }
 
 impl Default for RecordHeader {
@@ -212,6 +218,7 @@ impl Default for RecordHeader {
             reason: String::new(),
             rounds: 0,
             total_ticks: 0,
+            gaps: false,
         }
     }
 }
@@ -317,7 +324,8 @@ impl Default for RecordBody {
     }
 }
 
-/// A complete `.bdrec` file (also served as plain JSON).
+/// A complete `.bdrec` file: this JSON, zstd-framed on disk and on the wire
+/// (see [`encode_record_zst`] / [`decode_record`]).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RecordFile {
     /// Always [`MAGIC`].
@@ -466,6 +474,156 @@ pub fn seal(file: &mut RecordFile) {
     file.check = body_check(&file.body);
 }
 
+// ---------------------------------------------------------------- codec
+
+/// zstd frame magic (`28 B5 2F FD`, little-endian `0xFD2FB528`).
+pub const ZSTD_MAGIC: [u8; 4] = [0x28, 0xB5, 0x2F, 0xFD];
+
+/// gzip magic (`1F 8B`).
+pub const GZIP_MAGIC: [u8; 2] = [0x1F, 0x8B];
+
+/// What framing a `.bdrec` byte string carries. The body is always the same
+/// record JSON; only the outer layer differs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecordEncoding {
+    /// A zstd frame -- the current form for storage and download.
+    Zstd,
+    /// A gzip member -- what the browser wrote before zstd.
+    Gzip,
+    /// Plain record JSON (UTF-8).
+    Json,
+}
+
+/// Sniff the framing of a `.bdrec` byte string. Bytes that are neither zstd
+/// nor gzip are taken as plain JSON -- the parse is what rejects garbage.
+pub fn sniff_record(bytes: &[u8]) -> RecordEncoding {
+    if bytes.len() >= 4 && bytes[..4] == ZSTD_MAGIC {
+        RecordEncoding::Zstd
+    } else if bytes.len() >= 2 && bytes[..2] == GZIP_MAGIC {
+        RecordEncoding::Gzip
+    } else {
+        RecordEncoding::Json
+    }
+}
+
+/// True when `bytes` starts with the zstd frame magic.
+pub fn is_zstd(bytes: &[u8]) -> bool {
+    sniff_record(bytes) == RecordEncoding::Zstd
+}
+
+/// True when `bytes` starts with the gzip magic.
+pub fn is_gzip(bytes: &[u8]) -> bool {
+    sniff_record(bytes) == RecordEncoding::Gzip
+}
+
+/// Expand any accepted framing to the record JSON bytes.
+///
+/// Accepts zstd (the current form), gzip (older browser downloads and
+/// IndexedDB rows) and plain JSON. One decode path for every caller -- the
+/// wasm build included -- so an old recording plays anywhere a new one does.
+pub fn expand_record(bytes: &[u8]) -> Result<Vec<u8>, ReplayError> {
+    match sniff_record(bytes) {
+        RecordEncoding::Zstd => {
+            use std::io::Read;
+            let mut out = Vec::new();
+            let mut dec = ruzstd::decoding::StreamingDecoder::new(bytes)
+                .map_err(|e| ReplayError::Corrupt(format!("zstd: {e}")))?;
+            dec.read_to_end(&mut out)
+                .map_err(|e| ReplayError::Corrupt(format!("zstd: {e}")))?;
+            Ok(out)
+        }
+        RecordEncoding::Gzip => {
+            use std::io::Read;
+            let mut out = Vec::new();
+            flate2::read::GzDecoder::new(bytes)
+                .read_to_end(&mut out)
+                .map_err(|e| ReplayError::Corrupt(format!("gzip: {e}")))?;
+            Ok(out)
+        }
+        RecordEncoding::Json => Ok(bytes.to_vec()),
+    }
+}
+
+/// Serialize a record to plain JSON (the form the `check` covers).
+pub fn encode_record_json(file: &RecordFile) -> String {
+    serde_json::to_string(file).expect("record serializes")
+}
+
+/// Serialize a record to a zstd-framed `.bdrec`.
+///
+/// One format, two encoders, chosen by target (see [`zst_encode`]). The frame
+/// is a standard zstd frame either way: any zstd decoder reads it.
+pub fn encode_record_zst(file: &RecordFile) -> Vec<u8> {
+    zst_encode(encode_record_json(file).as_bytes())
+}
+
+/// zstd-compress a byte string into a standard frame.
+///
+/// * **wasm32** -- [`zst_encode_pure`]: the pure-Rust `structured-zstd`
+///   encoder at level 1 (`zstd-sys` would need a C toolchain here). Measured
+///   on a real 200-round record JSON: 5.4x -- the same ratio as the
+///   reference binding, and ~1.7x what `ruzstd`'s only implemented level
+///   managed.
+/// * **native** -- the reference `zstd` binding at level 1. Measured on the
+///   same JSON: 5.4x, better than levels 3 and 9. The server seals and
+///   serves the bytes where the ratio shows up in Redis and in the download.
+///
+/// Decode stays on `ruzstd` everywhere (see [`expand_record`]): one decoder
+/// reads both encoders' frames, and an old recording plays in either build.
+pub fn zst_encode(bytes: &[u8]) -> Vec<u8> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        zst_encode_pure(bytes)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        zstd::stream::encode_all(bytes, 1).expect("zstd encodes")
+    }
+}
+
+/// The browser-side encoder: pure-Rust `structured-zstd` at level 1.
+///
+/// `structured-zstd` is the maintained continuation of `ruzstd` (same
+/// author) with a real level table. Its level 1 matches the reference
+/// `zstd` binding's level-1 output on record JSON (same size to within a
+/// fraction of a percent; see the size table in `tests/record_codec.rs`),
+/// where `ruzstd`'s encoder, which only implements `Fastest`, was ~1.7x
+/// worse than gzip. Output is a standard zstd frame either way.
+///
+/// Always compiled, not just on wasm32, so the tests measure and
+/// cross-check the exact bytes the browser writes (`tests/record_codec.rs`).
+pub fn zst_encode_pure(bytes: &[u8]) -> Vec<u8> {
+    structured_zstd::encoding::compress_slice_to_vec(
+        bytes,
+        structured_zstd::encoding::CompressionLevel::Fastest,
+    )
+}
+
+/// Serialize a record to a gzip member (legacy framing; tests and the size
+/// comparison use it).
+pub fn encode_record_gz(file: &RecordFile) -> Vec<u8> {
+    use std::io::Write;
+    let mut out = Vec::new();
+    let mut enc =
+        flate2::write::GzEncoder::new(&mut out, flate2::Compression::default());
+    enc.write_all(encode_record_json(file).as_bytes())
+        .expect("gzip write");
+    enc.finish().expect("gzip finish");
+    out
+}
+
+/// Parse any accepted framing into a [`RecordFile`].
+pub fn decode_record(bytes: &[u8]) -> Result<RecordFile, ReplayError> {
+    let json = expand_record(bytes)?;
+    parse_record(std::str::from_utf8(&json).map_err(|e| ReplayError::Corrupt(e.to_string()))?)
+}
+
+/// Cheap header-only parse of any accepted framing (ignores the body check).
+pub fn parse_header_bytes(bytes: &[u8]) -> Result<RecordHeader, ReplayError> {
+    let json = expand_record(bytes)?;
+    parse_header(std::str::from_utf8(&json).map_err(|e| ReplayError::Corrupt(e.to_string()))?)
+}
+
 // ---------------------------------------------------------------- recorder
 
 /// The live input log. Serializes on its own so the client can persist it
@@ -483,6 +641,11 @@ pub struct Recorder {
     pub events: Option<Vec<MatchEvent>>,
     pub origin: Origin,
     pub partial: bool,
+    /// Running total of the recorded tick calls (the sum of every `Ticks.n`).
+    /// Kept up to date by [`Recorder::push_ticks`] so a checkpoint is O(1);
+    /// recomputed by [`Recorder::recount`] after a deserialize.
+    #[serde(skip)]
+    ticks: u64,
 }
 
 impl Default for Recorder {
@@ -497,6 +660,7 @@ impl Default for Recorder {
             events: None,
             origin: Origin::Solo,
             partial: false,
+            ticks: 0,
         }
     }
 }
@@ -527,13 +691,19 @@ impl Recorder {
 
     /// Total tick calls recorded (each `Ticks{k, n}` contributes `n`).
     pub fn total_ticks(&self) -> u64 {
-        self.inputs
+        self.ticks
+    }
+
+    /// Recompute [`Recorder::total_ticks`] from `inputs` (after a deserialize).
+    pub fn recount(&mut self) {
+        self.ticks = self
+            .inputs
             .iter()
             .map(|i| match i {
                 Input::Ticks { n, .. } => *n as u64,
                 _ => 0,
             })
-            .sum()
+            .sum();
     }
 
     /// True when the next tick must start a new run: a checkpoint was taken at
@@ -546,6 +716,7 @@ impl Recorder {
 
     /// Record one `tick_steps(k)` call; merges into the open run.
     pub fn push_ticks(&mut self, k: u8) {
+        self.ticks += 1;
         let closed = self.run_closed();
         if let Some(Input::Ticks { k: k2, n }) = self.inputs.last_mut() {
             if *k2 == k && !closed {
@@ -677,8 +848,9 @@ impl RecordedMatch {
         rec_json: &str,
     ) -> Result<Self, Msg> {
         let m = Match::restore(data, rules, save)?;
-        let rec: Recorder = serde_json::from_str(rec_json)
+        let mut rec: Recorder = serde_json::from_str(rec_json)
             .map_err(|e| Msg::new("err.save_corrupt").text("detail", e.to_string()))?;
+        rec.recount();
         let turn_key = turn_key(&m);
         let rec_done = m.ended();
         Ok(Self {
@@ -821,6 +993,7 @@ impl RecordedMatch {
             reason: st.end_reason.clone(),
             rounds: st.round,
             total_ticks: self.rec.total_ticks(),
+            gaps: false,
         };
         let check = body_check(&body);
         RecordFile {

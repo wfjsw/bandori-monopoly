@@ -1,0 +1,177 @@
+/* Replay list + player chrome. The player itself is the ordinary Board; this
+   covers the transport bar under it, the list screen, and the two banners. */
+
+/* ---------------------------------------------------------------- list */
+
+/* Below the TopBar (110px tall, z-index 5): a fixed header row, then the list,
+   which is the only part that scrolls; the empty state centres in the rest. */
+.page {
+  position: absolute;
+  top: 124px;
+  left: 80px;
+  right: 80px;
+  bottom: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+.dragging { outline: 3px dashed var(--pink); outline-offset: -12px; border-radius: 18px; }
+.drop {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--pink);
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 18px;
+  z-index: 2;
+  pointer-events: none;
+}
+.empty {
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  color: var(--sub);
+  font-size: 18px;
+}
+.empty i { opacity: 0.5; }
+
+/* The list header: the count, the drop hint and the open-file button, on the
+   list's own row (not floating in the TopBar). */
+.head { flex: none; display: flex; align-items: center; gap: 14px; padding: 0 6px; }
+.head b { font-size: 18px; }
+.headHint { flex: 1; color: var(--sub); font-size: 13px; }
+.list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 4px; }
+.list > * { flex: none; }
+.row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--light-pill);
+  border-radius: 14px;
+  padding: 14px 20px;
+}
+.when { width: 210px; display: flex; flex-direction: column; gap: 2px; }
+.when b { font-size: 17px; }
+.when small, .who small { color: var(--sub); font-size: 12px; }
+.who { flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
+.who span { font-size: 15px; }
+.badge {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.badOk { background: #d8f3e0; color: #1f7a45; }
+.badWarn { background: #fff0c9; color: #9a6b00; }
+.badFatal { background: var(--pink-pale); color: var(--pink-deep); }
+.acts { display: flex; gap: 8px; }
+
+/* ---------------------------------------------------------------- player */
+
+.player {
+  position: absolute;
+  inset: 0;
+}
+/* The transport rides at the bottom of the board. */
+.bar {
+  position: absolute;
+  left: 40px;
+  right: 40px;
+  bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  padding: 12px 20px;
+  z-index: 6;
+}
+.transport { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.speeds { display: flex; gap: 4px; background: #fff; border-radius: 10px; padding: 3px; }
+.speed {
+  border: 0;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sub);
+  background: transparent;
+  cursor: pointer;
+}
+.speed.on { background: var(--pink); color: #fff; }
+.skip { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sub); white-space: nowrap; cursor: pointer; }
+
+.scrub { flex: 1; position: relative; min-width: 0; padding-top: 14px; }
+.range { width: 100%; accent-color: var(--pink); }
+.marks { position: absolute; left: 0; right: 0; top: 0; height: 14px; pointer-events: none; }
+.mark {
+  position: absolute;
+  top: 2px;
+  width: 2px;
+  height: 10px;
+  padding: 0;
+  border: 0;
+  background: var(--pink-light);
+  opacity: 0.7;
+  transform: translateX(-1px);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.at { text-align: center; font-size: 12px; color: var(--sub); }
+
+.side { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.persp { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--sub); }
+.persp select {
+  max-width: 260px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 14px;
+  color: var(--text);
+  background: #fff;
+}
+
+/* Divergence / compat banners. */
+.banner {
+  position: absolute;
+  left: 50%;
+  top: 88px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 14px 22px;
+  font-size: 17px;
+  font-weight: 700;
+  z-index: 7;
+}
+.diverge { border: 2px solid var(--pink); color: var(--pink-deep); }
+.btns { display: flex; gap: 8px; }
+
+/* Load / compat screens. */
+.error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  text-align: center;
+  padding: 40px;
+}
+.error p { font-size: 18px; font-weight: 700; }
+.detail { color: var(--sub); font-weight: 400; font-size: 14px; max-width: 640px; }
+.mismatch { text-align: left; color: var(--sub); font-size: 14px; }

@@ -61,6 +61,7 @@ export function Menu() {
       <div className={s.cluster}>
         <div className={s.topRow}>
           <button type="button" className={cx(s.small, s.history)} onClick={showHistory}><Icon name="history" />{tr("menu.history")}{badge(hasNew("history"))}</button>
+          <button type="button" className={cx(s.small, s.replay)} onClick={() => navigate({ name: "replay" })}><Icon name="hourglass" />{tr("menu.replay")}</button>
           <button type="button" className={cx(s.small, s.settings)} onClick={showSettings}><Icon name="chevrons" />{tr("menu.settings")}</button>
           <button type="button" className={cx(s.small, s.fire)} onClick={showFire}>
             <div className={s.ribbon}>{tr("menu.fireRibbon", { n: p.firePerGame })}</div>

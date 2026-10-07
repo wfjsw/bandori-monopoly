@@ -81,7 +81,7 @@ function Settings({ close }: { close: () => void }) {
       <span className={s.setVal}>{st[key]}</span>
     </label>
   );
-  const toggle = (label: string, key: "skipLine" | "greet" | "idleTalk") => (
+  const toggle = (label: string, key: "skipLine" | "greet" | "idleTalk" | "keepAwake") => (
     <label className={s.setRow}>
       <span className={s.setLabel}>{label}</span>
       <input className={s.switch} type="checkbox" checked={st[key]} onChange={(e) => update({ [key]: e.target.checked })} />
@@ -94,6 +94,7 @@ function Settings({ close }: { close: () => void }) {
       {slider(tr("settings.se"), "se", "volume_up")}
       {toggle(tr("settings.skipLine"), "skipLine")}
       {toggle(tr("settings.greet"), "greet")}
+      {toggle(tr("settings.keepAwake"), "keepAwake")}
       <div className={s.setRow}>
         <span className={s.setLabel}>{tr("settings.language")}</span>
         <div className={s.langs}>

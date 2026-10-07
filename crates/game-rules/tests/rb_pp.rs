@@ -1042,7 +1042,9 @@ fn title_idol_band_crystals_feed_band_skill_spend() {
     set_band_xtal(&mut t, 0, 3);
     t.give_play(0, "PP:TITLE IDOL").unwrap();
     drain(&mut t);
-    assert_eq!(band_xtal(&t, 0), 5, "spendable band crystals 3+2");
+    // Step 2 「所有效果包含[奇迹水晶]的卡」 includes the band card itself
+    // (「团卡的效果也包含奇迹水晶」): 3 + 2 + 1.
+    assert_eq!(band_xtal(&t, 0), 6, "spendable band crystals 3+2+1");
 }
 
 /// 规则书: 「（1）…手卡上限数量减1。」(不要背负期待)

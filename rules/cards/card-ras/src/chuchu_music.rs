@@ -15,7 +15,13 @@ pub const CHUCHU_MUSIC: CardDef = CardDef::new(
     &[
         On::Play(Some(cant_play), play),
         On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-        On::Hook(&[HookKind::BuyAfter], buy_after_guard, buy_after),
+        // 规则书: 「场上存在此卡的玩家下次购买地契时」 -- the acquisition moment,
+        // C# `CardChuchuMusic.Bought` (`Fx.Bought` = 「a player became the owner
+        // of `t.tile`」), the same hook Afterglow / Roselia / 朝日 listen on for
+        // their 「购买…时」 clauses. It was `BuyAfter` (「after `Card.Buy`
+        // resolves」), which `ctx::raise_bought`'s card-driven hand-over (巴's
+        // 「收购该地契」) does not raise -- so the bonus never fired there.
+        On::Hook(&[HookKind::Bought], buy_after_guard, buy_after),
     ],
 );
 

@@ -12,6 +12,7 @@ game-core = { path = "../game-core" }
 game-rules = { path = "../game-rules" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 # Must match the wasm-bindgen CLI exactly (tools/build-glue.mjs).
 wasm-bindgen = "=0.2.129"
 

@@ -26,14 +26,25 @@ mod world;
 
 pub use ai::{
     bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, wants_buy, wants_build,
-    wants_redeem, BUY_RESERVE, BUILD_RESERVE, CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN,
-    PLAY_CARD_CHANCE, REDEEM_RESERVE,
+    wants_redeem, BUY_RESERVE, BUILD_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
+    FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN, PLAY_CARD_CHANCE, REDEEM_RESERVE,
 };
 pub use cx::{Answered, Ask, Cx, Flow, Halt, Reply, AI_UNSET};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay};
 pub use rules::{CardRules, Dest, StubRules, Trigger};
 pub use world::{Hidden, Scheduled, TurnCtx, World};
+
+/// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
+/// `bot-cost` feature is on; nothing behavioural either way.
+#[cfg(feature = "bot-cost")]
+pub mod bot_cost {
+    use std::sync::atomic::AtomicU64;
+    /// [`Cx::world_copy`] calls -- the per-drive / per-probe `World` clones.
+    /// Engine-side routine snapshots (`Match::execute` / `start`) clone the
+    /// world too, 1-2 per routine (re)run; those are not counted here.
+    pub static WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
+}
 
 use std::sync::Arc;
 
@@ -159,6 +170,12 @@ struct Saved {
 /// format it was written against (see `docs/REPLAY.md`).
 pub const SAVE_VERSION: u32 = 3;
 
+/// The `TileMark.kind` a [CP点] wore before it had a category of its own
+/// (`card-general`'s `key!("clear_cp_mark")`). [`Match::restore`] re-reads one
+/// of these into [`crate::state::mark_category::CP`]; new writes use
+/// [`crate::state::mark_kind::CP`] and never this.
+const LEGACY_CP_KIND: &str = "cards:card-general.clear_cp_mark";
+
 /// A running match.
 pub struct Match {
     data: Arc<GameData>,
@@ -212,11 +229,27 @@ impl Match {
         if s.version != SAVE_VERSION {
             return Err(Msg::new("err.save_version"));
         }
+        // Serde defaults fill in `TileMark.category` / `TileMark.src` for older
+        // saves, but a [CP点] written before the category existed only says so
+        // through its `kind` (and was player-owned, which it must not be). Say
+        // it through the category instead so the view and the rules see the
+        // same thing a fresh game writes.
+        let mut world = s.world;
+        for m in &mut world.st.marks {
+            if m.category.is_empty() && m.kind == LEGACY_CP_KIND {
+                m.category = crate::state::mark_category::CP.to_string();
+                m.kind = crate::state::mark_kind::CP.to_string();
+                m.owner = crate::state::BOARD_OWNER;
+                // No instance provenance survived the old format; these marks
+                // belong to no live card instance.
+                m.src = -1;
+            }
+        }
         Ok(Self {
             data,
             rules,
             mode: s.mode,
-            world: s.world,
+            world,
             pending: s.pending,
             live_rng: s.live_rng,
             wait: s.wait,
@@ -243,6 +276,21 @@ impl Match {
     ) -> Self {
         let members = &members[..members.len().min(10)];
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
+        // Solo with a character already on every seat (the solo setup screen's
+        // picks, its randoms resolved before the match is built) skips the
+        // timed ban / pick entirely and opens the deck phase instead. Online
+        // never takes this path: there `RoomMember.character` is the lobby
+        // avatar, not a match pick, and the pick phase must stay. An unknown
+        // or duplicated pick is not a preset -- fall through to the pick phase.
+        let preset = mode == MatchMode::Solo
+            && !members.is_empty()
+            && members.iter().all(|m| data.character(&m.character).is_some())
+            && {
+                let mut names: Vec<&str> = members.iter().map(|m| m.character.as_str()).collect();
+                names.sort_unstable();
+                names.dedup();
+                names.len() == members.len()
+            };
         let st = MatchState {
             match_id: ((seed as i32) & 0x7FFF_FFFF) | 1,
             phase: "order".into(),
@@ -255,6 +303,13 @@ impl Match {
                     bot: m.bot,
                     ai: m.bot,
                     mentality: m.mentality,
+                    // Carries through `roll_order`, so the seat that rolls high
+                    // keeps the character its member was given.
+                    character: if preset {
+                        m.character.clone()
+                    } else {
+                        String::new()
+                    },
                     ..MatchPlayer::default()
                 })
                 .collect(),
@@ -284,6 +339,25 @@ impl Match {
             changed: true,
         };
         m.direct(|cx| cx.roll_order());
+        if preset {
+            // Seat order is rolled; take the picks in seat order the way the
+            // pick phase would, which logs each one and opens the deck phase
+            // (bots submit their decks at the end of `do_pick`).
+            m.direct(|cx| {
+                cx.w.st.phase = "pick".into();
+                cx.w.st.turn = 0;
+                for i in 0..cx.w.player_count() {
+                    let c = cx.w.st.players[i].character.clone();
+                    cx.do_pick(i, &c);
+                }
+            });
+            m.wait = 0.0;
+            // A table of nothing but bots has every deck already; start now
+            // rather than sitting in the deck phase until the first tick.
+            if m.world.st.players.iter().all(|p| p.deck_ready) {
+                m.begin_play();
+            }
+        }
         m
     }
 

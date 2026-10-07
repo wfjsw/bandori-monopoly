@@ -13,12 +13,16 @@ use std::sync::Mutex;
 
 use redis::Commands;
 
-use super::{CrossState, RoomRecord, SessionRecord, StoreError};
+use super::{CrossState, RoomRecord, SessionRecord, StoreError, StoredRecord, RECORD_TTL_SECS};
 use crate::state::Session;
 
 const NS_SESSION: &str = "bm:s:";
 const NS_ROOM: &str = "bm:r:";
 const NS_MATCH: &str = "bm:m:";
+/// `record:{room}:last` -- the last finished match's record.
+const NS_RECORD: &str = "bm:rec:";
+/// The match's input log, one JSON line per entry.
+const NS_RECLOG: &str = "bm:reclog:";
 
 pub struct Store {
     conn: Mutex<redis::Connection>,
@@ -144,5 +148,87 @@ impl CrossState for Store {
     fn match_del(&self, room: &str) -> Result<(), StoreError> {
         self.call(|c| c.del::<_, ()>(format!("{NS_MATCH}{room}")))
             .map(|_| ())
+    }
+
+    fn record_log_append(&self, room: &str, line: &str) -> Result<(), StoreError> {
+        let key = format!("{NS_RECLOG}{room}");
+        self.call(|c| {
+            c.rpush::<_, _, ()>(&key, line)?;
+            // A match that is never sealed (the box died mid-play) must not
+            // leak a list forever.
+            c.expire::<_, ()>(&key, RECORD_TTL_SECS as i64)
+        })
+        .map(|_| ())
+    }
+
+    fn record_log_get(&self, room: &str) -> Result<Vec<String>, StoreError> {
+        self.call(|c| c.lrange(format!("{NS_RECLOG}{room}"), 0, -1))
+    }
+
+    fn record_log_del(&self, room: &str) -> Result<(), StoreError> {
+        self.call(|c| c.del::<_, ()>(format!("{NS_RECLOG}{room}")))
+            .map(|_| ())
+    }
+
+    fn record_put(&self, room: &str, rec: &StoredRecord) -> Result<(), StoreError> {
+        let key = format!("{NS_RECORD}{room}");
+        let mkey = format!("{NS_RECORD}{room}:members");
+        let members = json(&rec.members)?;
+        // `SET key value EX <ttl>` -- spelled out so the TTL is visible at the
+        // call site rather than buried in a helper. The record itself is the
+        // sealed `.bdrec` bytes (a zstd frame), so the value is written as
+        // bytes: a Redis bulk string is binary-safe, and JSON-encoding it
+        // would be both wasteful and a UTF-8 hazard. The member list rides a
+        // companion key under the same TTL.
+        self.call(|c| {
+            redis::cmd("SET")
+                .arg(&key)
+                .arg(&rec.record)
+                .arg("EX")
+                .arg(RECORD_TTL_SECS)
+                .query::<()>(c)?;
+            redis::cmd("SET")
+                .arg(&mkey)
+                .arg(&members)
+                .arg("EX")
+                .arg(RECORD_TTL_SECS)
+                .query::<()>(c)
+        })
+        .map(|_| ())
+    }
+
+    fn record_get(&self, room: &str) -> Result<Option<StoredRecord>, StoreError> {
+        let key = format!("{NS_RECORD}{room}");
+        let mkey = format!("{NS_RECORD}{room}:members");
+        let raw: Option<Vec<u8>> = self.call(|c| c.get(&key))?;
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        if let Some(members) = self.call(|c| c.get::<_, Option<String>>(mkey))? {
+            let members = from_json(&members)?;
+            return Ok(Some(StoredRecord {
+                record: raw,
+                members,
+            }));
+        }
+        // A value written before compression: one JSON envelope with the
+        // record as a string. Read it through so that record still downloads
+        // (as plain JSON -- the endpoint sniffs and names the type).
+        #[derive(serde::Deserialize)]
+        struct Legacy {
+            record: String,
+            members: Vec<i32>,
+        }
+        if let Ok(env) = serde_json::from_slice::<Legacy>(&raw) {
+            return Ok(Some(StoredRecord {
+                record: env.record.into_bytes(),
+                members: env.members,
+            }));
+        }
+        // The bytes, with nobody cleared to download them.
+        Ok(Some(StoredRecord {
+            record: raw,
+            members: vec![],
+        }))
     }
 }
