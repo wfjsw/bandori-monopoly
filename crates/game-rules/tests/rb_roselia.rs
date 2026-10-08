@@ -94,14 +94,41 @@ fn louder_is_refused_for_a_non_owner() {
 fn cookie_time_reshuffles_the_discard_and_pays_500_each() {
     // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆并洗切，获得500*X资金，X为返回卡的总数。」
     let mut t = vanilla2();
+    t.set_hand(0, &["R:Sprechchor", "R:[衍生] 压"]);
+    let hand = t.hand(0);
+    t.set_draw(0, &["R:向着顶点"]);
     t.set_discard(0, &["R:NFO", "R:轨迹", "R:Fire bird"]);
     t.give_play(0, "R:曲奇时间").unwrap();
     drain(&mut t);
     assert_eq!(t.money(0), 10_000 + 3 * 500, "events: {:?}", t.recent_keys(8));
-    let draw = t.draw_pile(0);
-    assert!(draw.contains(&"R:NFO".to_string()), "draw {draw:?}");
-    assert!(draw.contains(&"R:轨迹".to_string()));
-    assert!(draw.contains(&"R:Fire bird".to_string()));
+    assert_eq!(t.hand(0), hand, "other hand cards must not be shuffled");
+    let mut draw = t.draw_pile(0);
+    draw.sort();
+    let mut expected = vec!["R:向着顶点", "R:NFO", "R:轨迹", "R:Fire bird"];
+    expected.sort();
+    assert_eq!(draw, expected);
+    assert_eq!(
+        t.discard(0),
+        vec!["R:曲奇时间"],
+        "discard this card after reshuffling"
+    );
+}
+
+#[test]
+fn cookie_time_only_returns_copies_already_in_the_discard() {
+    let mut t = vanilla2();
+    t.set_hand(0, &["R:曲奇时间", "R:曲奇时间", "R:[衍生] 压"]);
+    t.set_draw(0, &[]);
+    t.set_discard(0, &["R:曲奇时间", "R:NFO"]);
+    t.play(0, "R:曲奇时间").unwrap();
+    drain(&mut t);
+
+    assert_eq!(t.money(0), 10_000 + 2 * 500);
+    assert_eq!(t.hand(0), vec!["R:曲奇时间", "R:[衍生] 压"]);
+    let mut draw = t.draw_pile(0);
+    draw.sort();
+    assert_eq!(draw, vec!["R:NFO", "R:曲奇时间"]);
+    assert_eq!(t.discard(0), vec!["R:曲奇时间"]);
 }
 
 #[test]
@@ -109,9 +136,14 @@ fn cookie_time_refuses_with_an_empty_discard() {
     // 规则书: 「将自己弃牌堆的卡全部返回抽牌堆…获得500*X资金」 -- nothing to return.
     let mut t = vanilla2();
     t.set_discard(0, &[]);
+    t.give(0, &["R:曲奇时间"]);
+    let hand = t.hand(0);
     let r = t.play(0, "R:曲奇时间");
     // observed: the card refuses (`cookie_time_no_discard`) rather than paying 0
     assert!(r.is_err(), "expected a refusal, got {r:?}");
+    assert_eq!(t.hand(0), hand);
+    assert_eq!(t.money(0), 10_000);
+    assert!(t.discard(0).is_empty());
 }
 
 // ----- R:Fire bird
