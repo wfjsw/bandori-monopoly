@@ -93,8 +93,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
               )}
             </div>
             <div className={s.who}>
-              <b>{c?.display ?? "—"}</b>
-              <small>{i === m.playerId ? tr("common.youName", { name: x.player }) : x.player}</small>
+              <b>{c?.display.replace(/[（(]CRYCHIC[）)]$/i, "(c)") ?? "—"}</b>
             </div>
             <div className={s.money}><img src={sceneImg("icon_coin")} alt="" /><b>{n0(x.money)}</b></div>
             <div className={s.sub}>
