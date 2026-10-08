@@ -75,7 +75,6 @@
   "err.cannot_buy": "This tile cannot be bought",
   "err.cannot_spend": "[Stunned] / [Exiled] -- cannot spend",
   "err.chara_taken": "This character is banned or already taken",
-  "err.debug_not_ported": "Debug tools are not ported yet",
   "err.deck_band": "This is a {{band}} card -- only characters of that band can take it",
   "err.deck_derived": "Derived cards cannot go in a starting deck; they are created by other cards during play",
   "err.deck_exclusive": "This is {{owner}}'s exclusive card",
@@ -383,5 +382,11 @@
   "status.move_not_your_turn": "You can only do this on your own turn",
   "status.stunned": "[Stunned]",
   "vote.against": "{{who}} voted against",
-  "vote.timeout": "time ran out with votes missing"
+  "vote.timeout": "time ran out with votes missing",
+  "err.debug_solo_only": "Cheats are only available in solo matches",
+  "err.debug_play_only": "Cheats require the play phase",
+  "err.debug_busy": "Finish the pending prompt or movement before using cheats",
+  "err.debug_target": "Target player is missing or out of the match",
+  "err.debug_argument": "Invalid cheat arguments: check value, card ID, or existing state key",
+  "log.debug": "[Console] {{who}}: {{command}} {{detail}} {{value}}"
 }

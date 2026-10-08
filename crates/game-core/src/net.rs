@@ -4,7 +4,7 @@
 //! The transport changed (TCP/Steam -> HTTP + SSE): what the C# sent as one flat
 //! `NetMessage` bag over the socket is now a **match command** (`POST
 //! /api/rooms/{id}/act`), room listings (`RoomInfo`) and SSE state frames. So the
-//! command is exactly the seven fields the client sends (`webui/src/core/types.ts`
+//! command is the fields the client sends (`webui/src/core/types.ts`
 //! `Command`) -- the 17 join/room/match fields of the C# union are gone rather
 //! than carried as dead weight.
 
@@ -53,8 +53,10 @@ pub fn describe(reason: &str) -> crate::msg::Msg {
 #[serde(default, rename_all = "camelCase")]
 pub struct NetMessage {
     /// "roll" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" |
-    /// "end" | "ban" | "pick" | "deck" | "answer" | "vote" | "leave".
+    /// "end" | "ban" | "pick" | "deck" | "answer" | "vote" | "leave" | "debug".
     pub act: String,
+    /// Solo-only console operation: money / tp / give / draw / state.
+    pub debug: String,
     /// `ban` / `pick`: the character id.
     pub character: String,
     /// `play` / `discard`: the card id.
@@ -66,8 +68,8 @@ pub struct NetMessage {
     pub value: i32,
     /// `answer`: the prompt id being answered.
     pub prompt: i32,
-    /// `answer`: the target player (C# `NetMessage.target`; the engine does not
-    /// read it yet -- targeting is unported).
+    /// `debug`: player index, -1 = the sender. `answer`: the original target
+    /// player field (not currently used by the prompt handler).
     pub target: i32,
 }
 
@@ -75,6 +77,7 @@ impl Default for NetMessage {
     fn default() -> Self {
         Self {
             act: String::new(),
+            debug: String::new(),
             character: String::new(),
             card: String::new(),
             cards: Vec::new(),

@@ -168,6 +168,8 @@ export interface RoomInfo {
 export interface Command {
   act: string; character?: string; card?: string; cards?: string[];
   value?: number; prompt?: number; target?: number;
+  /** Replayable solo console operation. Rejected by the engine online. */
+  debug?: string;
 }
 
 export interface MatchRecord {

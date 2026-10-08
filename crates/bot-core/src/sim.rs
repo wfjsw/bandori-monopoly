@@ -226,7 +226,7 @@ impl Simulator for MatchSim {
         // which is the halt/replay path. The old path is `inline = false`.
         let install = self.inline && !intercept_seat;
         if install {
-            fork.set_provider(Some(Box::new(HeuristicProvider)));
+            fork.set_provider(Some(Box::new(HeuristicProvider::new())));
         }
         let r = self.advance_inner(fork, seat, horizon, intercept_seat);
         if install {

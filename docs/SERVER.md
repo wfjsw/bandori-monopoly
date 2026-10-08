@@ -261,6 +261,43 @@ The body is the original `NetMessage` shape; only the fields the command uses ma
 | `answer` | `prompt` = prompt id; `value`, or `cards` for `mortgage` / `pick` prompts; auction: `value` = bid, `-1` = pass | a prompt is waiting for you |
 | `vote` | `value` 1 = yes, 0 = no | start or answer the end-match vote |
 | `leave` | | forfeit |
+| `debug` | `debug` = money / tp / give / draw / state; `value`; `target` = player index (-1 = sender); `card` for give; `character` = state key | solo play only, no pending routine or movement; always rejected online |
+
+### In-game console
+
+Press the backquote / tilde key (`\`` / `~` / `～`) to toggle the console;
+Escape closes it. Opening it keeps the game running. The shortcut does not
+interrupt typing in other inputs or IME composition. The console stays above
+scene transitions and popups and is also available during boot and replays.
+
+Enter `help` for all commands. `status`, `players`, `hand`, `inspect`, `cards`
+and `tiles` inspect the current screen's match and data. `act {"act":"roll"}`
+sends an ordinary engine command; `auto off` returns the seat from autopilot
+before manual commands. Replays allow inspection only. Up/Down recalls the
+last 100 commands; Tab completes an unambiguous command name.
+
+Solo cheats use zero-based player indices (omit the index for yourself):
+
+```text
+money 50000          # set your money
+tp 10                # move without passing or landing effects
+give "Ringing Bloom" # add a card by unique exact name or ID
+draw 2               # draw from your deck
+state fire 2         # set an existing counter, respecting its declared cap
+inspect player       # list your state keys and bounds
+```
+
+Money is limited to 0–100,000,000; draw/give counts to 1–100. Cheats reject
+invalid seats/cards/keys, inactive players, setup/end phases and pending
+prompts. They run through `RecordedMatch::act`, so saves, live views and
+replays retain the changes. A successful cheat sets `MatchState.debugOpen`
+(shown as `cheated` in `status`) and emits a localized match-log entry.
+
+The console captures browser logs, uncaught errors, rejected promises and
+live match events. Filter by source, warnings/errors or text, toggle scrolling,
+clear the display or export a `.log` file. The in-memory tail holds 500 entries,
+with each entry capped at 12,000 characters; neither logs nor history write to
+the profile or match save.
 
 ## SSE stream
 

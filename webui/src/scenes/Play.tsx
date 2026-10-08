@@ -13,6 +13,7 @@ import { Board } from "./board/Board";
 import { useOnline } from "./lobby/Room";
 import { Select } from "./select/Select";
 import { t as tr } from "../i18n/t";
+import { bindConsoleSession } from "../console/context";
 
 function SoloPlay() {
   const [sess] = useState(() => resumeSolo());
@@ -31,6 +32,7 @@ function OnlinePlay({ id }: { id: string }) {
 }
 
 function Match({ sess }: { sess: GameSession }) {
+  useEffect(() => bindConsoleSession(sess), [sess, bindConsoleSession]);
   const { view } = useMatchView(sess);
   const scene = matchScene(view);
   const [fade, setFade] = useState(false);
