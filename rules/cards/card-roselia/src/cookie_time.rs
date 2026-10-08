@@ -27,9 +27,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「获得500*X资金，X为返回卡的总数」 -- X is `hidden.discard.Count`
     // before the shuffle (C# `CardCookieTime.Play`).
     let x = ctx::discard_size(player_id);
-    // TODO(ABI): The hook sweeps hand + discard (there is no `hand: false` flag on
-    // `sweep_to_deck`); X stays the discard size the rule names.
-    ctx::sweep_to_deck(player_id);
+    // The played card is already out of the hand; the engine discards it only
+    // after this effect resolves, so it is not part of this shuffle or payout.
+    ctx::shuffle_into_deck(player_id, false, true);
     ctx::log(
         player_id,
         &Msg::new(key!("cookie_time_shuffle"))
@@ -39,9 +39,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「获得500*X资金，X为返回卡的总数」
     ctx::gain(player_id, 500 * x, &Msg::new(key!("cookie_time_why")))?;
     // 规则书: the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the player.
-    // v25: `sweep_to_deck` now raises `reshuffled` from the host (the C# card
-    // body calls `H.Each(Reshuffled)` itself; the host folds that into the
-    // sweep's commit). Listener cards declare `On::Hook(&[HookKind::Reshuffled], "", Some(...))`
+    // `shuffle_into_deck` raises `reshuffled` from the host on commit.
+    // Listener cards declare `On::Hook(&[HookKind::Reshuffled], "", Some(...))`
     // and get the notification without any card-side raise.
     Ok(())
 }
