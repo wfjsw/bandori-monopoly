@@ -37,12 +37,10 @@ interface StageMark { step: number; newTurn: boolean; label?: string }
 
 type Item = { ev: MatchEvent } | { mark: StageMark };
 
-/** How long a stage sweep holds (`showPhase`). A new turn's 回合 → 开始 → 运营
- *  run waits this long between sweeps, so 开始 is on screen as long as any
- *  other stage (结束 included) rather than cut short by the next sweep. */
-const PHASE_MS = 1500;
+/** How long the new-turn announcement stays on screen. */
+const TURN_MS = 1500;
 
-/** The sweep / label key of an engine stage number. */
+/** The log label key of an engine stage number. */
 function stageKey(step: number): string {
   return step >= 4 ? "board.stepEnd" : step === 3 ? "board.stepMove" : step === 2 ? "board.stepOps" : "common.start";
 }
@@ -50,23 +48,17 @@ function stageKey(step: number): string {
 export class Animator {
   private queue: Item[] = [];
   animating = false;
-  /** The stage the marker shows while the queue plays (engine numbering), or
-   *  null to follow the state. The engine rolls, walks and reaches 结束 in one
-   *  call, so a single update carries the dice, the walk *and* `step = 结束` --
-   *  read straight off the state, the marker (and the sweep) would say 结束
-   *  before the dice land, flip to 移动 for the walk, then back. Instead the
-   *  main roll opens 移动 as it plays, and each state's stage change is queued
-   *  behind that update's events (`stageTo`), so stages show in the order the
-   *  player sees them happen. */
+  /** The stage reached by the animation queue. The engine can roll, walk and
+   *  reach 结束 in one update; logging the stage here keeps it after the events
+   *  that led to it. Null means the queue has caught up with the state. */
   stage: number | null = null;
   /** Token positions while animating (null: use the state). */
   pos: number[] | null = null;
   dice = 0;
   rolling = false;
   banner: { title: string; body: string; id: number } | null = null;
-  /** Stage transition sweeping in. `key` names the stage; `label` overrides the
-   *  swept text -- a new turn's first sweep names whose turn it is. */
-  phase: { key: string; label?: string; id: number } | null = null;
+  /** Only the new-turn announcement appears over the board. */
+  turnAnnouncement: { label: string; id: number } | null = null;
   reveal: { card: string; out: boolean; id: number } | null = null;
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
@@ -77,7 +69,7 @@ export class Animator {
   private seq = 0;
   private localLogId = 0;
   private bannerTimer = 0;
-  private phaseTimer = 0;
+  private turnTimer = 0;
   private disposed = false;
 
   constructor(private bump: () => void, private view: () => MatchView | null) {}
@@ -104,7 +96,7 @@ export class Animator {
   dispose(): void {
     this.disposed = true;
     clearTimeout(this.bannerTimer);
-    clearTimeout(this.phaseTimer);
+    clearTimeout(this.turnTimer);
   }
 
   addLog(e: MatchEvent): void {
@@ -126,7 +118,7 @@ export class Animator {
   /** The state moved from stage `from` to `mark.step`. The view arrives after
    *  the events that produced it (solo `pump` and the SSE frames both send
    *  events first), so queueing the change here plays it after them; until it
-   *  plays, the marker holds the stage the animation started in. */
+   *  plays, the log holds the stage the animation started in. */
   stageTo(from: number, mark: StageMark): void {
     if (this.stage == null) this.stage = from;
     this.queue.push({ mark });
@@ -134,33 +126,31 @@ export class Animator {
   }
 
   private async enterStage(m: StageMark, fast: boolean): Promise<void> {
-    if (!m.newTurn) return this.toStage(m.step, m.label);
+    if (!m.newTurn) return this.toStage(m.step);
     // A new turn starts from no roll -- don't leave the previous player's face
     // sitting on the dice.
     this.dice = 0;
-    // A new turn sweeps 「<player> 的回合」, then 开始, then the stage the turn
-    // has reached (usually 运营 -- the engine runs through 开始 in the same
-    // call), each like any other stage change.
-    const gap = () => (fast ? Promise.resolve() : this.nap(PHASE_MS));
-    this.stage = 1;
+    // Announce whose turn it is once. The engine's 开始 → 运营 transition
+    // stays in the log and does not add another popup or animation delay.
+    this.toStage(1, true);
     if (m.label) {
-      this.showPhase(stageKey(1), m.label);
-      await gap();
+      this.showTurn(m.label);
+      if (!fast) await this.nap(TURN_MS);
     }
-    this.showPhase(stageKey(1));
-    if (m.step > 1) {
-      await gap();
-      this.toStage(m.step, undefined, true);
-    }
+    if (m.step > 1) this.toStage(m.step, true);
   }
 
-  /** Put the marker on `step`, sweeping its name only when that is a change:
-   *  the roll opens 移动 itself, so a state that stopped mid-walk (a [反击]
-   *  window) arriving at 移动 behind it must not sweep 移动 a second time. */
-  private toStage(step: number, label?: string, force = false): void {
+  /** Record each stage once: the roll opens 移动 itself, so a state that stops
+   *  mid-walk (a [反击] window) must not log 移动 a second time. */
+  private toStage(step: number, force = false): void {
     const cur = this.stage ?? this.view()?.state.step;
     this.stage = step;
-    if (force || cur !== step) this.showPhase(stageKey(step), label);
+    if (force || cur !== step) {
+      this.log = [...this.log.slice(-199), {
+        id: --this.localLogId, text: tr("board.logStage", { stage: tr(stageKey(step)) }), turn: false, stage: true,
+      }];
+      this.bump();
+    }
   }
 
   private showBanner(title: string, body = ""): void {
@@ -173,19 +163,13 @@ export class Animator {
     this.bump();
   }
 
-  /** Chain/resolve the stage name across the board (Master Duel's phase change):
-   *  chain links snap in across the banner, then it resolves. The effect runs
-   *  for 1.5s; the marker does not wait for it (see `stage`). */
-  showPhase(key: string, label?: string): void {
-    if (!label) this.log = [...this.log.slice(-199), {
-      id: --this.localLogId, text: tr("board.logStage", { stage: tr(key) }), turn: false, stage: true,
-    }];
-    this.phase = { key, label, id: ++this.seq };
-    clearTimeout(this.phaseTimer);
-    this.phaseTimer = window.setTimeout(() => {
-      this.phase = null;
+  private showTurn(label: string): void {
+    this.turnAnnouncement = { label, id: ++this.seq };
+    clearTimeout(this.turnTimer);
+    this.turnTimer = window.setTimeout(() => {
+      this.turnAnnouncement = null;
       this.bump();
-    }, PHASE_MS / Math.max(1, this.speed));
+    }, TURN_MS / Math.max(1, this.speed));
     this.bump();
   }
 
@@ -268,8 +252,7 @@ export class Animator {
     const wait = (ms: number) => (fast ? Promise.resolve() : this.nap(ms));
     switch (e.type) {
       case "turn":
-        // The turn announcement rides the 开始 stage sweep (see `showPhase`) --
-        // there is no separate 「<player> 的回合」 card over the board.
+        // The queued new-turn marker announces whose turn it is once.
         if (!ok) break;
         if (!fast) sfx(playerId === v!.playerId ? "my_turn" : "turn");
         await wait(300);
@@ -395,17 +378,11 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
         const prev = viewRef.current?.state;
         viewRef.current = v;
         set({ view: v, at: performance.now() });
-        // Stage transition: every turn-stage change sweeps the
-        // stage name across the board. The rulebook's four stages are
-        // 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`) and the engine's `step`
-        // is 0 before a turn and 1..4 for those. The sweep also records the
-        // stage in the match log.
+        // Queue stage changes for the match log after their events. Only a
+        // new turn gets an announcement over the board.
         const now = v.state;
         if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
           const newTurn = prev.turn !== now.turn;
-          // A new turn first sweeps whose turn it is (this replaces the separate
-          // 「<player> 的回合」 card that used to sit over the board), then 开始
-          // and the stage reached -- see `enterStage`.
           const who = now.players[now.turn]?.player ?? "";
           const label = newTurn ? (now.turn === v.playerId ? tr("anim.yourTurn") : tr("anim.turnOf", { who })) : undefined;
           a.stageTo(prev.step, { step: now.step, newTurn, label });
