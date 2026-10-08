@@ -28,6 +28,17 @@ async fn spawn(presence_timeout: Duration) -> (String, Arc<Server>) {
 /// seconds per wall second (see `server::spawn_ticker`); a record seals the
 /// quantum it ran on (`0.05 * time_scale`) into its header.
 async fn spawn_scaled(presence_timeout: Duration, time_scale: f32) -> (String, Arc<Server>) {
+    spawn_tuned(presence_timeout, time_scale, |_| {}).await
+}
+
+/// [`spawn_scaled`] plus a tuning hook that runs before the ticker starts
+/// (the [`Server`] is inside an [`Arc`] by then). Tests that need a
+/// `bot-service` or a non-default bot budget hang it here.
+async fn spawn_tuned(
+    presence_timeout: Duration,
+    time_scale: f32,
+    tune: impl FnOnce(&mut Server),
+) -> (String, Arc<Server>) {
     let d = data();
     let rules: Arc<dyn game_core::engine::CardRules> = Arc::new(StubRules);
     // In-process engine: the tests exercise the server, not the worker pool.
@@ -41,6 +52,7 @@ async fn spawn_scaled(presence_timeout: Duration, time_scale: f32) -> (String, A
         let s = Arc::get_mut(&mut server).expect("fresh");
         s.presence_timeout = presence_timeout;
         s.time_scale = time_scale;
+        tune(s);
     }
     server::spawn_ticker(server.clone());
     let app = server::router(server.clone(), None, None);
@@ -975,4 +987,468 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
     }
     assert!(!rp.status().diverged, "every checkpoint matched");
     assert_eq!(hash_save(&rp.match_ref().save()), want, "same final hash");
+}
+
+// ------------------------------------------------------- advanced bots (B5)
+
+/// A room with one human + `bots` Advanced bots, force-started into play.
+/// Returns `(room id, match handle)`. The caller has already quick-started or
+/// will.
+async fn advanced_room(server: &Arc<Server>, who: &Client, bots: usize) -> String {
+    let id = who
+        .ok("/api/rooms", json!({ "name": "Advanced" }))
+        .await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    for _ in 0..bots {
+        who.ok(
+            &format!("/api/rooms/{id}/bots"),
+            json!({ "op": "add", "mentality": "advanced" }),
+        )
+        .await;
+    }
+    let started = who
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["playing"], true, "{started}");
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().expect("match started").clone()
+    };
+    // Skip pick / deck so the match is in play immediately.
+    handle.quick_start().unwrap();
+    id
+}
+
+/// Wait until the room's match is no longer `playing`, or give up.
+async fn wait_ended(who: &Client, id: &str, deadline: Duration) -> bool {
+    let until = Instant::now() + deadline;
+    loop {
+        let (s, st) = who.get(&format!("/api/rooms/{id}/state")).await;
+        assert_eq!(s, StatusCode::OK, "{st}");
+        if st["room"]["playing"] == false {
+            return true;
+        }
+        if Instant::now() >= until {
+            return false;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
+/// The seat the server drives: a bot tagged `advanced` in the match view.
+fn advanced_seats(state: &Value) -> Vec<Value> {
+    state["match"]["state"]["players"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|p| p["bot"] == true && p["mentality"] == "advanced")
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// With a bot-service attached, Advanced seats are **server-driven** (`ai` is
+/// off) and the search answers for them; a short match runs to completion.
+#[tokio::test]
+async fn advanced_bots_play_with_the_bot_service() {
+    let (base, server) = spawn_tuned(Duration::from_secs(30), 3.0, |s| {
+        s.bots = Some(server::botsvc::BotService::in_process(
+            s.data.clone(),
+            s.rules.clone(),
+        ));
+        // Tiny budget: this test is about the plumbing, not strength.
+        s.bot_budget_ms = Some(15);
+        s.bot_ask_timeout = Some(Duration::from_millis(400));
+    })
+    .await;
+    let a = Client::new(&base, "Host").await;
+    let id = advanced_room(&server, &a, 2).await;
+
+    // The seats are in the match tagged advanced and held (`ai` off) -- the
+    // service, not the engine, answers for them.
+    let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{st}");
+    let seats = advanced_seats(&st);
+    assert_eq!(seats.len(), 2, "{st}");
+    for p in &seats {
+        assert_eq!(p["ai"], false, "the server drives this seat: {p}");
+    }
+
+    // Let the drive loop + search play, then settle by score.
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().unwrap().clone()
+    };
+    let before = handle.snapshot().unwrap();
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let after = handle.snapshot().unwrap();
+    assert_ne!(before, after, "the search-driven seats moved the match");
+    // Mid-match the seats are still tagged advanced (never rewritten -- that
+    // only happens with no service).
+    let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{st}");
+    assert_eq!(advanced_seats(&st).len(), 2, "{st}");
+    handle.finish().unwrap();
+    assert!(
+        wait_ended(&a, &id, Duration::from_secs(15)).await,
+        "the match ended"
+    );
+}
+
+/// With **no** bot-service, Advanced seats play as standard engine bots: the
+/// mentality is rewritten at match start and the engine drives them.
+#[tokio::test]
+async fn advanced_bots_play_as_standard_without_the_service() {
+    let (base, server) = spawn_scaled(Duration::from_secs(30), 3.0).await;
+    assert!(server.bots.is_none(), "no service in this test");
+    let a = Client::new(&base, "Host").await;
+    let id = advanced_room(&server, &a, 2).await;
+
+    // Rewritten: the match seats are standard, and the engine holds them.
+    let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{st}");
+    let seats = advanced_seats(&st);
+    assert!(seats.is_empty(), "advanced was rewritten to standard: {st}");
+    let std_bots: Vec<_> = st["match"]["state"]["players"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|p| p["bot"] == true && p["mentality"] == "standard")
+        .collect();
+    assert_eq!(std_bots.len(), 2, "{st}");
+    for p in &std_bots {
+        assert_eq!(p["ai"], true, "the engine drives this seat: {p}");
+    }
+
+    // The engine plays them; a short match still completes.
+    tokio::time::sleep(Duration::from_millis(2500)).await;
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().unwrap().clone()
+    };
+    handle.finish().unwrap();
+    assert!(
+        wait_ended(&a, &id, Duration::from_secs(15)).await,
+        "the match ended without a service"
+    );
+}
+
+/// A service that never answers in time must not stall the match: the server
+/// falls back to the engine's heuristic for that decision and moves on.
+#[tokio::test]
+async fn a_bot_service_timeout_falls_back_without_stalling() {
+    let (base, server) = spawn_tuned(Duration::from_secs(30), 3.0, |s| {
+        // The service is present (so the seats stay server-driven) but every
+        // ask is given a deadline of zero, so every one of them times out.
+        s.bots = Some(server::botsvc::BotService::in_process(
+            s.data.clone(),
+            s.rules.clone(),
+        ));
+        s.bot_budget_ms = Some(15);
+        s.bot_ask_timeout = Some(Duration::from_millis(0));
+    })
+    .await;
+    let a = Client::new(&base, "Host").await;
+    let id = advanced_room(&server, &a, 2).await;
+
+    let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{st}");
+    assert_eq!(advanced_seats(&st).len(), 2, "seats stay advanced: {st}");
+
+    // The drive loop must keep answering (via the heuristic) even though the
+    // service never does. The clock moves, the match does not hang.
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().unwrap().clone()
+    };
+    let before = handle.snapshot().unwrap();
+    tokio::time::sleep(Duration::from_millis(2000)).await;
+    let after = handle.snapshot().unwrap();
+    assert_ne!(before, after, "the match moved despite the timeouts");
+
+    // Every decide fell back; none was answered by the service.
+    let bots = server.bots.as_ref().expect("a service is attached");
+    let stats = bots.stats();
+    assert!(stats.decides > 0, "the drive kept asking: {stats:?}");
+    assert_eq!(stats.decide_ok, 0, "no ask ever beat the zero deadline: {stats:?}");
+    assert_eq!(
+        stats.decide_fallback, stats.decides,
+        "every decide fell back to the heuristic: {stats:?}"
+    );
+
+    handle.finish().unwrap();
+    assert!(
+        wait_ended(&a, &id, Duration::from_secs(15)).await,
+        "the match ended despite every ask timing out"
+    );
+}
+
+/// The lobby accepts `"advanced"` and refuses anything else.
+#[tokio::test]
+async fn the_bot_mentality_picker_accepts_advanced() {
+    let (base, _server) = spawn(Duration::from_secs(30)).await;
+    let a = Client::new(&base, "Host").await;
+    let id = a
+        .ok("/api/rooms", json!({ "name": "Mentality" }))
+        .await["room"]["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let room = a
+        .ok(
+            &format!("/api/rooms/{id}/bots"),
+            json!({ "op": "add", "mentality": "advanced" }),
+        )
+        .await;
+    let bot = room["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["bot"] == true)
+        .expect("one bot");
+    assert_eq!(bot["mentality"], "advanced", "{room}");
+    // Standard / chaos still parse; the two stay the solo choices.
+    let room = a
+        .ok(
+            &format!("/api/rooms/{id}/bots"),
+            json!({ "op": "add", "mentality": "chaos" }),
+        )
+        .await;
+    let bots: Vec<_> = room["members"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|m| m["bot"] == true)
+        .collect();
+    assert_eq!(bots[1]["mentality"], "chaos");
+    let (s, v) = a
+        .post(
+            &format!("/api/rooms/{id}/bots"),
+            json!({ "op": "add", "mentality": "quantum" }),
+        )
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    assert_eq!(v["error"]["k"], "err.bad_mentality");
+}
+
+// ------------------------------------------------- advanced bots: ponder (B7)
+
+/// An idle advanced seat (someone else's turn) gets a speculative
+/// `op: "ponder"`, and sending it does **not** block the tick: the ticker and
+/// the HTTP surface keep running while a ponder is in flight, at most one per
+/// seat.
+#[tokio::test]
+async fn ponder_is_sent_for_an_idle_advanced_seat_and_does_not_block_the_tick() {
+    let (base, server) = spawn_tuned(Duration::from_secs(30), 3.0, |s| {
+        let bots = server::botsvc::BotService::in_process(s.data.clone(), s.rules.clone());
+        // Every request is slow enough to observe in flight (and to prove the
+        // tick does not wait on one), while still inside the ask deadline.
+        bots.set_latency(Duration::from_millis(250));
+        s.bots = Some(bots);
+        s.bot_budget_ms = Some(15);
+        s.bot_ponder_budget_ms = Some(15);
+        s.bot_ask_timeout = Some(Duration::from_millis(600));
+    })
+    .await;
+    let a = Client::new(&base, "Host").await;
+    let id = advanced_room(&server, &a, 2).await;
+    let bots = server.bots.as_ref().expect("a service is attached").clone();
+
+    // One seat acts, the other is idle -- the idle one is who we ponder for.
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().unwrap().clone()
+    };
+    let before = handle.snapshot().unwrap();
+
+    // Wait until a ponder has actually been sent, and grab a sample while one
+    // is still in flight (the latency knob keeps it outstanding for 250 ms).
+    let mut saw_ponder = false;
+    let mut health_while_pondering = None;
+    let mut max_drive_pondering = 0usize;
+    let until = Instant::now() + Duration::from_secs(8);
+    while Instant::now() < until {
+        let in_flight = server.bot_drive.lock().unwrap().ponders_in_flight();
+        max_drive_pondering = max_drive_pondering.max(in_flight);
+        if bots.stats().ponders > 0 {
+            saw_ponder = true;
+            if in_flight > 0 && health_while_pondering.is_none() {
+                // The tick loop / HTTP surface must stay live while the
+                // speculative search runs on its own task.
+                let t0 = Instant::now();
+                let (s, _) = a.get("/api/health").await;
+                let dt = t0.elapsed();
+                assert_eq!(s, StatusCode::OK, "the server answers while pondering");
+                health_while_pondering = Some(dt);
+            }
+        }
+        if saw_ponder && health_while_pondering.is_some() {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(25)).await;
+    }
+    assert!(saw_ponder, "an idle advanced seat was pondered: {:?}", bots.stats());
+    let dt = health_while_pondering.expect("a health probe during a ponder");
+    assert!(
+        dt < Duration::from_millis(150),
+        "the tick / HTTP surface is not blocked by a ponder (health took {dt:?})"
+    );
+    // One in flight per seat (2 advanced seats here), never a pile-up.
+    assert!(
+        max_drive_pondering <= 2,
+        "at most one ponder per seat: {max_drive_pondering}"
+    );
+    assert!(
+        bots.stats().ponder_in_flight_max <= 2,
+        "at most one ponder per seat: {:?}",
+        bots.stats()
+    );
+
+    // And the tick kept moving the match while the ponders flew.
+    let after = handle.snapshot().unwrap();
+    assert_ne!(before, after, "the match advanced while ponders were in flight");
+
+    handle.finish().unwrap();
+    assert!(
+        wait_ended(&a, &id, Duration::from_secs(15)).await,
+        "the match ended"
+    );
+}
+
+/// Park a match at one seat's **searchable** decision (the abstracted action
+/// list is non-empty) and return the exact view frame the server sends.
+fn parked_searchable_view() -> (Value, i32, i32) {
+    use game_core::engine::Match;
+    use game_core::net::RoomMember;
+    use game_core::scoring::ScoreWeights;
+    use game_core::state::{stage, BotMentality};
+    use game_core::MatchMode;
+
+    let members = vec![
+        RoomMember {
+            id: 1,
+            player: "Searcher".into(),
+            ..Default::default()
+        },
+        RoomMember {
+            id: 2,
+            player: "BotA".into(),
+            bot: true,
+            mentality: BotMentality::Standard,
+            ..Default::default()
+        },
+        RoomMember {
+            id: 3,
+            player: "BotB".into(),
+            bot: true,
+            mentality: BotMentality::Standard,
+            ..Default::default()
+        },
+    ];
+    let d = data();
+    let mut m = Match::new(
+        d.clone(),
+        Arc::new(StubRules),
+        &members,
+        7,
+        MatchMode::Casual,
+        ScoreWeights::default(),
+    );
+    m.quick_start();
+    for _ in 0..20_000 {
+        if m.ended() {
+            break;
+        }
+        let st = m.state();
+        let me = st.player_of(1);
+        let at = (st.prompt.id > 0 && st.prompt.waiting(me))
+            || (!st.busy
+                && st.turn == me
+                && (st.step == stage::OPS || st.step == stage::END));
+        if st.phase == "play" && at {
+            let view = bot_service::BotSeatView::from_match(&m, 1);
+            let acts = bot_service::bot_action::legal_actions(
+                &d,
+                &view.state,
+                &view.hand,
+                &view.playable,
+                me.max(0) as usize,
+            );
+            if !acts.is_empty() {
+                let prompt_id = if st.prompt.id > 0 && st.prompt.waiting(me) {
+                    st.prompt.id
+                } else {
+                    0
+                };
+                let frame = serde_json::to_value(&view).expect("view frame");
+                return (frame, 1, prompt_id);
+            }
+            let msg = bot_service::heuristic_message_view(&d, &view);
+            let _ = m.act(1, &msg);
+        }
+        m.tick(0.25);
+    }
+    panic!("no searchable decision for member 1");
+}
+
+/// The server's `decide` after a `ponder` for the **same information-set key**
+/// is answered from the service's cache (`reused: true`) and does not spend
+/// the decision's budget (BOT-RESEARCH #5 / `docs/BOT.md` §3.5).
+#[tokio::test]
+async fn a_decide_after_a_ponder_for_the_same_key_is_answered_from_cache() {
+    let d = data();
+    let bots = server::botsvc::BotService::in_process(d.clone(), Arc::new(StubRules));
+    let (view, member, prompt_id) = parked_searchable_view();
+
+    // Speculative search first -- the wire shape the idle probes send.
+    let reused = bots
+        .ponder("R", member, &view, 200, 11, Duration::from_secs(3))
+        .await
+        .expect("ponder answers");
+    assert!(!reused, "the first ponder searches: {:?}", bots.stats());
+
+    // The real decision for the same view must come from the cache.
+    let started = Instant::now();
+    let ans = bots
+        .decide(
+            "R",
+            member,
+            &view,
+            prompt_id,
+            200,
+            12,
+            Duration::from_secs(3),
+        )
+        .await
+        .expect("decide answers");
+    let dt = started.elapsed();
+    assert!(ans.reused, "the decide reuses the pondered result: {ans:?}");
+    assert!(!ans.answer.act.is_empty(), "a command came back: {ans:?}");
+    assert!(
+        dt < Duration::from_millis(150),
+        "a reused decide must not search again (took {dt:?})"
+    );
+    let stats = bots.stats();
+    assert_eq!(stats.ponders, 1, "{stats:?}");
+    assert_eq!(stats.decides, 1, "{stats:?}");
+    assert_eq!(stats.decide_reused, 1, "{stats:?}");
+    assert_eq!(stats.decide_fallback, 0, "{stats:?}");
+
+    // A different information set misses.
+    let (other, _, _) = parked_searchable_view();
+    if other != view {
+        let ans2 = bots
+            .decide("R", member, &other, prompt_id, 50, 13, Duration::from_secs(3))
+            .await
+            .expect("decide answers");
+        assert!(!ans2.reused, "a different key must not hit the cache");
+    }
 }

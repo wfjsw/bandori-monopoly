@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play(None, saki_move)]);
+pub const SAKI_MOVE: CardDef = CardDef::new("Mujica:祥，移动", &[On::Play(None, saki_move, "")]);
 
 fn saki_move(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「强制一名玩家向你选择的方向移动3格」 -- pick the target.

@@ -18,9 +18,9 @@ const PHASE_DOWN: i32 = 2;
 pub const HEAT_HEAD: CardDef = CardDef::new(
     "event:超燃甩头",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::RollPlan], always, add_die),
-        On::Hook(&[HookKind::RollAfter], always, sub_die),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::RollPlan], Some(always), add_die, ""),
+        On::Hook(&[HookKind::RollAfter], Some(always), sub_die, ""),
         On::AtEnd(phase_end),
     ],
 );

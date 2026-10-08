@@ -13,15 +13,15 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CHUCHU_MUSIC: CardDef = CardDef::new(
     "RAS:（chuchu）演奏我的音乐吧",
     &[
-        On::Play(Some(cant_play), play),
-        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+        On::Play(Some(cant_play), play, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
         // 规则书: 「场上存在此卡的玩家下次购买地契时」 -- the acquisition moment,
         // C# `CardChuchuMusic.Bought` (`Fx.Bought` = 「a player became the owner
         // of `t.tile`」), the same hook Afterglow / Roselia / 朝日 listen on for
         // their 「购买…时」 clauses. It was `BuyAfter` (「after `Card.Buy`
         // resolves」), which `ctx::raise_bought`'s card-driven hand-over (巴's
         // 「收购该地契」) does not raise -- so the bonus never fired there.
-        On::Hook(&[HookKind::Bought], buy_after_guard, buy_after),
+        On::Hook(&[HookKind::Bought], Some(buy_after_guard), buy_after, ""),
     ],
 );
 
@@ -90,7 +90,7 @@ fn turn_end_guard(player_id: i32) -> bool {
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「那名玩家的每个回合结束时失去一个」 -- C# `AddCrystals(-1, ...)`.
-    if ctx::add_crystals(-1, 0) > 0 {
+    if ctx::add_crystals(-1, 0)? > 0 {
         return Ok(());
     }
     // 规则书: 「此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡」

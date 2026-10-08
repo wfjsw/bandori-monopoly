@@ -25,8 +25,8 @@ const ID: &str = "PP:可爱又强壮的花朵";
 pub const STRONG_FLOWER: CardDef = CardDef::new(
     "PP:可爱又强壮的花朵",
     &[
-        On::Play(Some(cant_play), strong_flower),
-        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+        On::Play(Some(cant_play), strong_flower, ""),
+        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
     ],
 );
 

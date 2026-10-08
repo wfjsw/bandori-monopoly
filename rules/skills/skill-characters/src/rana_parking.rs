@@ -12,9 +12,17 @@
 //! The 「抹茶芭菲」 is the tile-mark / player-counter split again: the board
 //! holds them on space, a player holds them as a counter, and 「每个将使其收费
 //! 增加500资金」 is the tile's rent reading the mark count.
+//!
+//! R4 (`SETTLE-STAGES.md` §9, user ruling 2026-10-07): （2）'s two branches are
+//! two different gestures and live on two different stages. 「免除付款」 is a
+//! **payment-stage cancel** (`payTotalCancel`, 规则书 支付阶段 5). 「将该次结算
+//! 改为在space格子上添加一个"抹茶芭菲"」 is a **settle replacement** -- the
+//! `settleBody` body-replace gesture (「将该次结算改为」, the same shape as Hey
+//! Kids / Parking Space), not a pre-settle write. Both used to be done at
+//! `settleBefore`.
 
 use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use card_sdk::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「抹茶芭菲」 parked on space.
@@ -25,19 +33,22 @@ const HELD: &str = "抹茶芭菲";
 pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::SettleBefore], any, before_settle),
-        On::Hook(&[HookKind::PassPlayer], mine, on_overlap),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
+        // rides the settle's effect list below.
+        On::Hook(&[HookKind::PayTotalCancel], Some(any), exempt_pay, ""),
+        // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
+        // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
+        // other branch.
+        On::Hook(&[HookKind::SettleBody], Some(any), replace_body, ""),
+        On::Hook(&[HookKind::PassPlayer], None, on_overlap, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (5, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -56,7 +67,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if ctx::is_circle(t) {
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("rana_parking_gain")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("rana_parking_gain")))?;
         return Ok(());
     }
     if ctx::is_ring(t) && ctx::tok(player_id, HELD) >= 1 {
@@ -65,7 +76,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
             &Msg::new(key!("rana_parking_title")),
             &Msg::new(key!("rana_parking_ring")),
         )? {
-            ctx::add_tok(player_id, HELD, -1, i32::MAX);
+            ctx::add_tok(player_id, HELD, -1, i32::MAX)?;
             ctx::gain(player_id, 400, &Msg::new(key!("rana_parking_ring_gain")))?;
         }
     }
@@ -89,7 +100,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if space < 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rana_parking_spend"))) {
+    if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rana_parking_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -104,20 +115,58 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「在space上结算时，若space已属于其他玩家，免除付款并抽1张卡；若自己为
-/// space的拥有者，则可选择将该次结算改为…添加一个"抹茶芭菲"」.
-fn before_settle(player_id: i32) -> card_sdk::Asked {
-    let space = ctx::tile_named("Space");
-    let t = ctx::trigger::tile();
-    if t != space || t < 0 {
+/// （2）「若space已属于其他玩家，免除付款」 -- R4: a **payment-stage cancel**
+/// (规则书 支付阶段 5 「取消支付」), not a pre-settle write. Cancels the Space
+/// payment the mover would have owed; the 「并抽1张卡」 half rides the settle
+/// body entry below.
+fn exempt_pay(player_id: i32) -> card_sdk::Asked {
+    if trigger::cancelled() {
         return Ok(());
     }
-    let owner = ctx::tile_owner(t);
-    let mover = ctx::trigger::player_id();
+    let space = ctx::tile_named("Space");
+    if space < 0 || trigger::tile() != space {
+        return Ok(());
+    }
+    let mover = trigger::player_id();
+    if mover != player_id {
+        return Ok(());
+    }
+    let owner = ctx::tile_owner(space);
+    // 「若space已属于其他玩家」 -- the owner-branch is the settle replace, not
+    // this.
+    if owner < 0 || owner == mover {
+        return Ok(());
+    }
+    // 「免除付款」 -- drop the payment command.
+    trigger::set_cancelled();
+    ctx::log(player_id, &Msg::new(key!("rana_parking_free")));
+    Ok(())
+}
+
+/// （2）'s two settle-stage halves (`SETTLE-STAGES.md` §9 R4).
+///
+/// * 「若space已属于其他玩家，…并抽1张卡」 -- an entry in the settle's effect
+///   list: the settle happens, the payment was already exempted above, and the
+///   mover draws.
+/// * 「若自己为space的拥有者，则可选择将该次结算改为在space格子上添加一个
+///   "抹茶芭菲"」 -- the **body-replace** gesture (`trigger::set_cancelled()`,
+///   the same shape as Parking Space / Hey Kids): the settle becomes "add a
+///   parfait", so the tile's own effect list (including any payment) never
+///   runs.
+fn replace_body(player_id: i32) -> card_sdk::Asked {
+    if trigger::cancelled() {
+        return Ok(());
+    }
+    let space = ctx::tile_named("Space");
+    if space < 0 || trigger::tile() != space {
+        return Ok(());
+    }
+    let owner = ctx::tile_owner(space);
+    let mover = trigger::player_id();
     if owner >= 0 && owner != mover {
-        // 「若space已属于其他玩家，免除付款并抽1张卡」 -- for the mover.
+        // 「免除付款并抽1张卡」 -- the draw half. (The payment cancel already
+        // ran at `payTotalCancel`.)
         if mover == player_id {
-            ctx::trigger::set_pay_amount(0);
             ctx::draw(player_id, 1)?;
             ctx::log(player_id, &Msg::new(key!("rana_parking_free")));
         }
@@ -127,7 +176,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「若自己为space的拥有者，则可选择将该次结算改为在space格子上添加一个
-    // "抹茶芭菲"」
+    // "抹茶芭菲"」 -- the body-replace gesture (R4).
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("rana_parking_title")),
@@ -135,11 +184,13 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::trigger::set_pay_amount(0);
-    ctx::add_mark(t, player_id, ON_TILE, &Msg::new(key!("rana_parking_note")));
+    // 「将该次结算改为…」 -- replace the body: the tile's own effect list is
+    // skipped and the parfait is what the settle does instead.
+    trigger::set_cancelled();
+    ctx::add_mark(space, player_id, ON_TILE, &Msg::new(key!("rana_parking_note")));
     ctx::log(
         player_id,
-        &Msg::new(key!("rana_parking_placed")).tile("tile", t),
+        &Msg::new(key!("rana_parking_placed")).tile("tile", space),
     );
     Ok(())
 }
@@ -156,7 +207,7 @@ fn on_overlap(player_id: i32) -> card_sdk::Asked {
         800,
         &Msg::new(key!("rana_parking_overlap")),
     )?;
-    ctx::add_tok(other, HELD, 1, i32::MAX);
+    ctx::add_tok(other, HELD, 1, i32::MAX)?;
     ctx::log(
         player_id,
         &Msg::new(key!("rana_parking_gave")).player_id("who", other),

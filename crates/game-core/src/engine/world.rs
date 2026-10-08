@@ -99,20 +99,10 @@ pub struct TurnCtx {
     /// start of each play.
     #[serde(default)]
     pub cancelled_designations: Vec<i32>,
-    /// C# `TurnCtx.BuyDiscount` -- 「本回合购买格子时[消耗]资金时降低N」. A value,
-    /// not a policy: `buy()` subtracts it from the price (floored at 0).
-    #[serde(default)]
-    pub buy_discount: i32,
     /// C# `TurnCtx.PaidInSettle` -- money paid to other players during this
     /// turn's [触发结算]s. 「本回合的[结算]向其他玩家支付了至少1000资金」.
     #[serde(default)]
     pub paid_in_settle: i32,
-    /// C# `TurnCtx.FreeBuy` -- 「本回合购买格子不[消耗]资金」.
-    #[serde(default)]
-    pub free_buy: bool,
-    /// C# `TurnCtx.RazeOnBuy` -- 「如果购买则拆除那个格子上的所有房屋」.
-    #[serde(default)]
-    pub raze_on_buy: bool,
     /// C# `_turnSnap[i].pos` -- where each player stood when the turn started.
     /// 「在Livehouse地块开始回合时」 is a question about that square, not the
     /// one a mid-turn walk has since reached.
@@ -135,6 +125,28 @@ pub struct TurnCtx {
     /// 100 = full, 50 = half, 0 = free (「本回合加盖房屋变为免费」).
     #[serde(default = "full_build_cost")]
     pub build_cost_pct: i32,
+    /// Turn-scoped lingering card instances (`docs/PURCHASE.md` P5). Each entry
+    /// is `(card_id, owner, expires_turn)`; the entry lives until `expires_turn`
+    /// and is cleared at turn start. This is the hand-card home for 「本回合」
+    /// effects: a card that wants 「本回合购买格子时[消耗]资金降低N」 lingers with a
+    /// `BuyAdd` hook on its own def, and one that wants 「本回合无法加盖房屋」
+    /// lingers carrying `prop::NO_BUILD`.
+    #[serde(default)]
+    pub lingering: Vec<Lingering>,
+}
+
+/// One turn-scoped lingering card instance (`docs/PURCHASE.md`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Lingering {
+    /// The card rule's id (the `CardDef` the instance binds).
+    pub card: String,
+    /// The player the instance acts for.
+    pub owner: i32,
+    /// The turn number it expires on (`0` = this turn only).
+    pub expires: i32,
+    /// Props the instance carries (e.g. `prop::NO_BUILD`).
+    #[serde(default)]
+    pub props: std::collections::BTreeMap<String, i32>,
 }
 
 impl Default for TurnCtx {
@@ -152,16 +164,14 @@ impl Default for TurnCtx {
             extreme: 0,
             play_from_hand: false,
             cancelled_designations: Vec::new(),
-            buy_discount: 0,
             paid_in_settle: 0,
-            free_buy: false,
-            raze_on_buy: false,
             turn_start_pos: Vec::new(),
             turn_snap: Vec::new(),
             turn_rolls: Vec::new(),
             build_discount: 0,
             build_discount_layers: 0,
             build_cost_pct: full_build_cost(),
+            lingering: Vec::new(),
         }
     }
 }
@@ -234,6 +244,28 @@ pub struct EventTail {
     tail: Arc<Vec<MatchEvent>>,
     /// Visible event count, so `len` is O(1).
     len: usize,
+    /// Bumped on every visible-content change (`push_back` / `back_mut`).
+    gen: u64,
+    /// Cached [`STATE_EVENTS`] window for [`MatchState::events`], behind a
+    /// mutex so `window()` can take `&self` (the view builder is a read).
+    window: std::sync::Mutex<WindowCache>,
+}
+
+/// The shared [`EventTail::window`] cache: the window plus the `gen` it was
+/// built at. Rebuilt only when the tail has changed since the last read.
+#[derive(Debug)]
+struct WindowCache {
+    gen: u64,
+    events: Arc<Vec<MatchEvent>>,
+}
+
+impl Default for WindowCache {
+    fn default() -> Self {
+        Self {
+            gen: u64::MAX, // never matches a real gen -> first read rebuilds
+            events: Arc::new(Vec::new()),
+        }
+    }
 }
 
 impl Clone for EventTail {
@@ -243,6 +275,10 @@ impl Clone for EventTail {
             start: self.start,
             tail: Arc::clone(&self.tail),
             len: self.len,
+            gen: self.gen,
+            // The cache is per-instance: a clone diverges as soon as either
+            // side logs, and a rebuild is cheap. Start it cold.
+            window: std::sync::Mutex::new(WindowCache::default()),
         }
     }
 }
@@ -296,6 +332,7 @@ impl EventTail {
     }
 
     pub fn back_mut(&mut self) -> Option<&mut MatchEvent> {
+        self.gen = self.gen.wrapping_add(1);
         Arc::make_mut(&mut self.tail).last_mut()
     }
 
@@ -308,13 +345,36 @@ impl EventTail {
         }
         Arc::make_mut(&mut self.tail).push(e);
         self.len += 1;
+        self.gen = self.gen.wrapping_add(1);
+    }
+
+    /// The [`STATE_EVENTS`] window a [`MatchState`] snapshot carries, shared
+    /// behind an `Arc`. Rebuilt only when the tail changed since the previous
+    /// read, so a `state()` poll between log lines is a refcount bump.
+    pub fn window(&self) -> Arc<Vec<MatchEvent>> {
+        let mut g = self.window.lock().unwrap_or_else(|e| e.into_inner());
+        if g.gen != self.gen {
+            let n = self.len;
+            let v: Vec<MatchEvent> = self
+                .iter()
+                .skip(n.saturating_sub(STATE_EVENTS))
+                .cloned()
+                .collect();
+            g.events = Arc::new(v);
+            g.gen = self.gen;
+        }
+        Arc::clone(&g.events)
     }
 
     /// Drop `n` events from the front.
     pub fn drain_front(&mut self, n: usize) {
         let n = n.min(self.len);
+        if n == 0 {
+            return;
+        }
         self.start += n;
         self.len -= n;
+        self.gen = self.gen.wrapping_add(1);
         while let Some(c) = self.chunks.first() {
             if self.start >= c.len() {
                 self.start -= c.len();
@@ -365,6 +425,18 @@ pub struct World {
     /// field stand-in (HHW:（育美）(2)).
     #[serde(default)]
     pub gains: Vec<i32>,
+    /// Marker **ownership** (user ruling 2026-10-07): a marker is owned by the
+    /// **rule that creates it**, wherever its copies sit. Maps a marker name
+    /// (「抹茶芭菲」, 「P✽P粉丝」, …) to the owning rule's card id
+    /// (`skill:要乐奈:投币式停车场的猫` owns **all** 抹茶芭菲 -- its player's
+    /// counter, every other player's counter, and those on tiles).
+    ///
+    /// Stamped on first creation from the creating run's `current_card`.
+    /// Bankruptcy of the owning rule's player removes every copy of the
+    /// marker, wherever it sits (`remove_from_game`). Neutral board marks
+    /// ([CP点], `owner == -1`) have no player-owned rule and stay.
+    #[serde(default)]
+    pub marker_owner: std::collections::BTreeMap<String, String>,
 }
 
 impl World {
@@ -389,6 +461,7 @@ impl World {
             scheduled: vec![],
             targeted: vec![],
             gains: vec![],
+            marker_owner: std::collections::BTreeMap::new(),
         }
     }
 
@@ -414,6 +487,23 @@ impl World {
             .ok()
             .and_then(|s| self.gains.get(s).copied())
             .unwrap_or(0)
+    }
+
+    /// Stamp marker ownership (user ruling 2026-10-07): a marker is owned by
+    /// the **rule that creates it**. First writer wins -- a later rule that
+    /// moves someone else's marker does not take it over.
+    pub fn note_marker_owner(&mut self, name: &str, rule: &str) {
+        if name.is_empty() || rule.is_empty() {
+            return;
+        }
+        self.marker_owner
+            .entry(name.to_string())
+            .or_insert_with(|| rule.to_string());
+    }
+
+    /// The rule that owns marker `name`, if any.
+    pub fn marker_owner_of(&self, name: &str) -> Option<&str> {
+        self.marker_owner.get(name).map(|s| s.as_str())
     }
 
     /// Zero every player's turn-gain counter (「当前回合内」 starts fresh).
@@ -450,18 +540,20 @@ impl World {
     /// Public state: hidden-zone sizes and the event tail filled in (`SyncAll`).
     pub fn public_state(&self) -> MatchState {
         let mut st = self.st.clone();
+        // `st.buy_price` / `st.build_cost` are view previews (`docs/PURCHASE.md`):
+        // the quoted price at the player's position when a buy/build is on the
+        // table, `-1` otherwise. Written on the public copy; the live fields are
+        // refreshed by `Cx::refresh_buy_preview` at the END step.
+        st.buy_price = -1;
+        st.build_cost = -1;
         for (player_id, h) in st.players.iter_mut().zip(&self.hidden) {
             player_id.hand = h.hand.len() as i32;
             player_id.draw = h.draw.len() as i32;
             player_id.discard = h.discard.clone();
         }
-        let n = self.recent.len();
-        st.events = self
-            .recent
-            .iter()
-            .skip(n.saturating_sub(STATE_EVENTS))
-            .cloned()
-            .collect();
+        // The recent-event window: shared via `Arc`, rebuilt in `EventTail`
+        // only when something was logged since the last read.
+        st.events = self.recent.window();
         st.event_deck = self.event_deck.len() as i32;
         st.event_discard = self.event_discard.clone();
         st.event_removed = self.event_removed.clone();

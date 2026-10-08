@@ -13,8 +13,14 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        Some(can_counteract),
+        counteract,
+        "target == owner",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
 /// The [异常移动效果] this chain link declared, as its `AbKind`.
 ///
@@ -31,16 +37,17 @@ fn abnormal_kind() -> Option<AbKind> {
 }
 
 /// 规则书[反击]: 「[反击] 受到[除外]以外的异常移动效果影响时可打出此卡」
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「受到[除外]以外的异常移动效果影响时」 -- C# `t.Kind == "abnormal" &&
-    // t.Target == player && t.Ab != null && t.Ab.Kind != "exile"`.
+fn can_counteract(_player_id: i32) -> bool {
+    // G4: the actor rel is the condition (`target == owner`); 「[除外]以外」 is
+    // a derived chain lookup (GUARDS.md §6) and stays here.
+    abnormal_kind().is_some_and(|k| k != AbKind::Exile)
+}
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {
         return false;
     }
-    // 规则书[反击]: 「[除外]以外」 -- C# `t.Ab != null && t.Ab.Kind != "exile"`.
-    // The `abnormal` effect entry is the [异常移动效果] family (传送/停留/晕眩/
-    // 除外/强制移动/强制停下/反方向); a `pay` entry on the money pipeline must
-    // not open this window.
     abnormal_kind().is_some_and(|k| k != AbKind::Exile)
 }
 

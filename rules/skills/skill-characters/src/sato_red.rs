@@ -18,17 +18,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SATO_RED: CardDef = CardDef::new(
     "skill:佐藤益木:与燃烧的红色一起驰骋",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -44,7 +41,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if t != ctx::tile_named("白雪学园") && t != ctx::tile_named("银河拉面馆") {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("sato_red_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("sato_red_gain")))?;
     Ok(())
 }
 
@@ -72,7 +69,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         1,
         have,
     )?;
-    if x < 1 || !ctx::spend_fire(player_id, x, &Msg::new(key!("sato_red_spend"))) {
+    if x < 1 || !ctx::spend_fire(player_id, x, &Msg::new(key!("sato_red_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(x, 10, "与燃烧的红色一起驰骋");

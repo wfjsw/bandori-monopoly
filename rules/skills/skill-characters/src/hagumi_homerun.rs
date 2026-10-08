@@ -29,9 +29,9 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Hook(&[HookKind::TurnEnd], |_| true, spawn),
-        On::Hook(&[HookKind::Pass], |_| true, on_pass),
-        On::Hook(&[HookKind::RollPlan], any, on_plan),
+        On::Hook(&[HookKind::TurnEnd], None, spawn, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, ""),
+        On::Hook(&[HookKind::RollPlan], Some(any), on_plan, ""),
     ],
 );
 
@@ -91,7 +91,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     // The croquette moves from the tile to the collector.
     ctx::bump_mark(t, ON_TILE, -2, -1);
     let who = mover;
-    ctx::add_tok(who, HELD, 1, 10);
+    ctx::add_tok(who, HELD, 1, 10)?;
     // 「你将可乐饼转移至自己场上时可用其替换掉一个其他不位于[持续]卡上的标记」 --
     // offered when the collector is this player.
     if mine {

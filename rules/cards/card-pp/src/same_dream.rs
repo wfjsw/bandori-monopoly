@@ -12,7 +12,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play(None, same_dream)]);
+pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play(None, same_dream, "")]);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -24,8 +24,8 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]2: 「将所有正面[P✽P粉丝]变反，[获得]变反数量乘100的资金」
     let up = ctx::tok(player_id, FANS_UP);
     if up > 0 {
-        ctx::add_tok(player_id, FANS_UP, -up, i32::MAX);
-        ctx::add_tok(player_id, FANS_DOWN, up, i32::MAX);
+        ctx::add_tok(player_id, FANS_UP, -up, i32::MAX)?;
+        ctx::add_tok(player_id, FANS_DOWN, up, i32::MAX)?;
         ctx::log(
             player_id,
             &Msg::new(key!("same_dream_down"))
@@ -48,8 +48,8 @@ fn same_dream(player_id: i32) -> card_sdk::Asked {
         }
         let down = ctx::tok(p, FANS_DOWN);
         if down > 0 {
-            ctx::add_tok(p, FANS_DOWN, -down, i32::MAX);
-            ctx::add_tok(p, FANS_UP, down, i32::MAX);
+            ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
+            ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
             ctx::log(
                 p,
                 &Msg::new(key!("same_dream_up"))

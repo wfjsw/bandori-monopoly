@@ -1,6 +1,7 @@
-//! `server [--port 8080] [--data data] [--static webui/dist] [--workers N] [--redis URL]`
+//! `server [--port 8080] [--data data] [--static webui/dist] [--workers N] [--redis URL] [--bot-service PATH] [--bot-threads N] [--bot-search-threads N]`
 //!
-//! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`, `BM_REDIS`.
+//! Environment: `PORT`, `BM_DATA`, `BM_STATIC`, `BM_WORKER`, `BM_WORKERS`, `BM_REDIS`,
+//! `BM_BOT_SERVICE`, `BOT_THREADS`, `BOT_SEARCH_THREADS`.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -83,7 +84,47 @@ async fn main() {
         eprintln!("cross-endpoint state: redis at {redis_url}");
         Arc::new(server::store::redis::Store::connect(&redis_url).expect("redis store"))
     };
-    let server = server::Server::new(data, rules, engine, store);
+    let mut server = server::Server::new(data, rules, engine, store);
+    // Advanced-bot decisions (`docs/BOT.md` B5): optional. Absent (no
+    // `--bot-service` / `BM_BOT_SERVICE`) means advanced bots play as standard
+    // -- logged once, here.
+    let bot_exe = arg("--bot-service", "BM_BOT_SERVICE", "");
+    let bots = if bot_exe.is_empty() {
+        eprintln!(
+            "bot-service: not configured -- advanced bots play as standard \
+             (pass --bot-service PATH or BM_BOT_SERVICE)"
+        );
+        None
+    } else {
+        let threads: usize = arg("--bot-threads", "BOT_THREADS", "4")
+            .parse()
+            .unwrap_or(4);
+        // Root-parallel searches per decision. Default = the request-worker
+        // count; the outer deadline (`budget + 1.5 s`, `docs/BOT.md` §5 B7)
+        // leaves room for one iteration overrun at this fan-out.
+        let search_threads: usize = arg("--bot-search-threads", "BOT_SEARCH_THREADS", &threads.to_string())
+            .parse()
+            .unwrap_or(threads);
+        match server::botsvc::BotService::start(
+            PathBuf::from(&bot_exe),
+            data_dir.clone(),
+            rules_dir.clone(),
+            threads,
+            search_threads,
+        ) {
+            Ok(b) => Some(b),
+            Err(e) => {
+                eprintln!(
+                    "bot-service failed to start ({e}) -- advanced bots play as standard"
+                );
+                None
+            }
+        }
+    };
+    {
+        let s = Arc::get_mut(&mut server).expect("fresh server handle");
+        s.bots = bots;
+    }
     // Bring back anything the store still knows about, so a restart is silent.
     server.restore_rooms();
     server::spawn_ticker(server.clone());

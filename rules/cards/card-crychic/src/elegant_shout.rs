@@ -13,12 +13,15 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
-        On::Counteract(&[ChainKind::DrawOut], can_counteract, counteract),
+        On::Counteract(&[ChainKind::DrawOut], None, counteract, card_sdk::pre::MINE),
         On::AtEnd(at_end),
     ],
-);
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1): the pre-migration guard, kept until
+/// the `guard-audit` run over the whole corpus is clean.
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你在回合外受到抽卡效果时打出」 -- C#
     // `t.Kind == "drawOut" && t.Seat == seat`. The "回合外" window is what the
     // `drawOut` trigger means (a draw that hit you outside your own turn); the

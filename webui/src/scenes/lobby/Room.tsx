@@ -60,6 +60,9 @@ export function Room({ id }: { id: string }) {
   const [armed, setArmed] = useState(false);
   /** Mentality of the next bot the host adds. */
   const [nextMentality, setNextMentality] = useState<BotMentality>("standard");
+  /** Cycle the picker: standard -> chaos -> advanced -> standard. */
+  const cycleMentality = () =>
+    setNextMentality(nextMentality === "standard" ? "chaos" : nextMentality === "chaos" ? "advanced" : "standard");
   useEffect(() => sfx("place"), []);
   // The match started: go to it.
   useEffect(() => {
@@ -109,6 +112,7 @@ export function Room({ id }: { id: string }) {
                 {m.host && <span className={s.tagHost}>{tr("room.host")}</span>}
                 {m.bot && <span className={s.tagBot}>{tr("solo.bot")}</span>}
                 {m.bot && m.mentality === "chaos" && <span className={s.tagChaos}>{tr("solo.mentalityChaos")}</span>}
+                {m.bot && m.mentality === "advanced" && <span className={s.tagBot}>{tr("solo.mentalityAdvanced")}</span>}
                 {m.away && <span className={s.tagAway}>{tr("room.offline")}</span>}
               </div>
               <div className={s.text}>
@@ -132,9 +136,13 @@ export function Room({ id }: { id: string }) {
                     type="button"
                     className={cx(s.mentalityPick, nextMentality === "chaos" && s.mentalityChaos)}
                     title={tr("solo.mentalityHint")}
-                    onClick={() => setNextMentality(nextMentality === "chaos" ? "standard" : "chaos")}
+                    onClick={cycleMentality}
                   >
-                    {nextMentality === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard")}
+                    {nextMentality === "chaos"
+                      ? tr("solo.mentalityChaos")
+                      : nextMentality === "advanced"
+                        ? tr("solo.mentalityAdvanced")
+                        : tr("solo.mentalityStandard")}
                   </button>
                 </div>
               )

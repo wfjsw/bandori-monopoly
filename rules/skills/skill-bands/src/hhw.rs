@@ -24,13 +24,14 @@ const SAVED: &str = "skill.hhw.saved";
 pub const HHW: CardDef = CardDef::new(
     "skill:Hello, Happy World!:传播笑容",
     &[
-        On::Hook(&[HookKind::PayChoose], mine, on_pay_choose),
-        On::Hook(&[HookKind::PayAfter], mine, after_pay),
-        On::Hook(&[HookKind::BuildBefore], mine, before_build),
+        On::Hook(&[HookKind::PayChoose], None, on_pay_choose, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayAfter], None, after_pay, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::BuildBefore], None, before_build, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -54,7 +55,7 @@ fn on_pay_choose(player_id: i32) -> card_sdk::Asked {
     ctx::trigger::set_pay_amount(amount * 2);
     // 「记录该玩家并使此卡获得一个奇迹水晶」
     state::set(player_id, WHO, to);
-    ctx::add_crystals(1, i32::MAX);
+    ctx::add_crystals(1, i32::MAX)?;
     ctx::log(
         player_id,
         &Msg::new(key!("hhw_recorded")).player_id("who", to),
@@ -81,7 +82,7 @@ fn after_pay(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() < 1 {
         return Ok(());
     }
-    ctx::add_crystals(-1, i32::MAX);
+    ctx::add_crystals(-1, i32::MAX)?;
     let v = ctx::trigger::value();
     state::set(player_id, SAVED, state::get(player_id, SAVED) + v);
     ctx::log(player_id, &Msg::new(key!("hhw_saved")).i("n", v as i64));

@@ -16,11 +16,12 @@ const JELLY: &str = "水母标记";
 pub const KANON_MARCH: CardDef = CardDef::new(
     "HHW:（花音）Wacha Mocha 啪嗒进行曲",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Play(Some(can_jump), jump),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Play(Some(can_jump), jump, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「[场]」 -- a field card; C# `H.PlaceFromPlay(c)`.
@@ -34,11 +35,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("kanon_march_placed")).player_id("who", player_id),
     );
-    ctx::add_tok(player_id, JELLY, 0, 9);
+    ctx::add_tok(player_id, JELLY, 0, 9)?;
     Ok(())
 }
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -51,7 +52,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::move_dir() >= 0 {
         return Ok(());
     }
-    ctx::add_tok(player_id, JELLY, 1, 9);
+    ctx::add_tok(player_id, JELLY, 1, 9)?;
     ctx::log(
         player_id,
         &Msg::new(key!("kanon_march_mark")).i("n", ctx::tok(player_id, JELLY) as i64),

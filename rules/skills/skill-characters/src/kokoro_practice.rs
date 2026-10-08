@@ -34,15 +34,28 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
     &[
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
-        On::Hook(&[HookKind::DeckBeforeGame], |_| true, at_start),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::PassPlayer], mine, on_passed),
-        On::Hook(&[HookKind::SettleAfter], mine, on_settle),
+        On::Hook(&[HookKind::DeckBeforeGame], None, at_start, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
+        // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
+        // the mover and the tile being entered, so it is `passed_by`, not `mine`.
+        On::Hook(&[HookKind::PassTile], Some(passed_by), on_passed, ""),
+        // （3）「移动终点为任意"RiNG"时，获得一个火罐」 -- 行动阶段 13
+        // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
+        // settle, for every completed move including a 「不触发结算」 one.
+        On::Hook(&[HookKind::MoveAfter], None, on_move_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
+}
+
+/// 「当其他玩家移动[经过]您时」 -- another player's step onto **my** tile.
+/// `trigger::tile()` is the tile being entered; the mover is `trigger::player_id()`.
+fn passed_by(player_id: i32) -> bool {
+    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == ctx::player_pos(player_id)
 }
 
 /// （1）「初始获得"RiNG 4"格子，从"RiNG 4"格子开始游戏，首次经过CiRCLE不获得
@@ -96,7 +109,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !is_ring(t) {
         let have = state::get(player_id, state_key::FIRE);
         if have > 0 {
-            ctx::spend_fire(player_id, have, &Msg::new(key!("kokoro_practice_lost")));
+            ctx::spend_fire(player_id, have, &Msg::new(key!("kokoro_practice_lost")))?;
         }
     }
     Ok(())
@@ -104,10 +117,14 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// （3）「当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下
 /// 并触发结算」.
+///
+/// `SETTLE-STAGES.md` §4 M4: this is a 经过 clause, so it rides the passer's
+/// `passTile` step (`passed_by` names the shape). The `move_remaining() > 0`
+/// guard keeps it to a **mid-route** pass -- 「强制停下」 is meaningless on the
+/// destination tile, and E13's 「移动终点触发[经过]」 is the overlap half. It
+/// used to sit on `passPlayer`, where `move_remaining()` is always 0 and the
+/// force-stop could never fire (§4 M4's latent bug).
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::target() != player_id {
-        return Ok(());
-    }
     if state::get(player_id, state_key::FIRE) < 1 {
         return Ok(());
     }
@@ -121,7 +138,7 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kokoro_practice_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kokoro_practice_spend")))? {
         return Ok(());
     }
     if !ctx::gate(ctx::trigger::player_id(), card_sdk::abi::AbKind::Stop) {
@@ -132,12 +149,14 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （3）「移动终点为任意"RiNG"时，获得一个火罐（上限1）」 -- the landing, which
-/// is where the move ends.
-fn on_settle(player_id: i32) -> card_sdk::Asked {
+/// （3）「移动终点为任意"RiNG"时，获得一个火罐（上限1）」 -- the move's end
+/// tile, 行动阶段 13 (`SETTLE-STAGES.md` §4 M1). `moveAfter` runs after [重叠]
+/// and before any settle, for every completed move -- a 「不触发结算」 move
+/// grants the pot too.
+fn on_move_end(player_id: i32) -> card_sdk::Asked {
     if !is_ring(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("kokoro_practice_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
     Ok(())
 }

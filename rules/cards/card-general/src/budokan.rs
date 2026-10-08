@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play(None, budokan)])
+pub const BUDOKAN: CardDef = CardDef::new("通用:登上武道馆", &[On::Play(None, budokan, "")])
     // 规则书: 「[指定][使用者]以外的所有玩家」 -- `Card.Def.Targeting`, so
     // 网络链接异常 「取消其对目标之一的[指定]」 sees the designations.
     .props(&[(card_sdk::abi::prop::DESIGNATES, 1)]);

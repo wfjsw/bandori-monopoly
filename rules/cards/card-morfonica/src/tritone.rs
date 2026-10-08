@@ -15,12 +15,18 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TRITONE: CardDef = CardDef::new(
     "Mor:迷茫之蝶们的三全音",
     &[
-        On::Counteract(&[ChainKind::Effect], can_counteract, counteract),
-        On::Hook(&[HookKind::TurnEnd], |_| true, counteract),
+        On::Counteract(
+            &[ChainKind::Effect],
+            None,
+            counteract,
+            "actor == owner && effect.has(Pay) && value > 0",
+        ),
+        On::Hook(&[HookKind::TurnEnd], None, counteract, ""),
     ],
-);
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「任意时刻当你将要失去或支付资金时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.amount > 0 && !t.Pay.cancel`.
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {
@@ -46,13 +52,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         TriggerKind::Effect => {
             let amount = trigger::value();
             // 规则书[反击]: 「立刻获得此次失去的资金金额」
-            // C# `H.Money(new PayCtx { to = seat, amount, kind = "gain", fixedAmount = true })`
-            // -- `fixedAmount`, so no skill or crit bends the figure.
+            // `NEGATION-AUDIT` V4: this gain goes through the money pipeline
+            // (the `effect` [反击] window, the modifier stages, `pay` / `payAfter`).
+            // It used to be C# `fixedAmount` (bypassing every 支付阶段 window).
             ctx::gain_fixed(
                 player_id,
                 amount,
                 &Msg::new(key!("tritone_why")).n("money", amount as i64),
-            );
+            )?;
             // 规则书[反击]: 「此卡放置在场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 3)`.
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(
@@ -80,7 +87,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id || !ctx::is_placed() {
                 return Ok(());
             }
-            if ctx::add_crystals(-1, 0) > 0 {
+            if ctx::add_crystals(-1, 0)? > 0 {
                 return Ok(());
             }
             let owed = ctx::slot(player_id, "tritone_owed");

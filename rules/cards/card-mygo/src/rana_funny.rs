@@ -14,8 +14,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RANA_FUNNY: CardDef = CardDef::new(
     "MyGO:（乐奈）有趣的女人",
     &[
-        On::Play(None, rana_funny),
-        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+        On::Play(None, rana_funny, ""),
+        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
     ],
 );
 
@@ -75,7 +75,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书: 「每当有人经过且未在其上[触发结算]时为其增加一个奇迹水晶」
-    ctx::add_crystals(1, 0);
+    ctx::add_crystals(1, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("rana_funny_crystal")).player_id("who", who),
@@ -98,7 +98,7 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
         if lose {
             // 规则书: 「失去一个"抹茶芭菲"」 -- C# `H.AddTok(who, "抹茶芭菲", -1)`
             // (default `max = int.MaxValue`).
-            ctx::add_tok(who, "抹茶芭菲", -1, i32::MAX);
+            ctx::add_tok(who, "抹茶芭菲", -1, i32::MAX)?;
             ctx::log(
                 owner,
                 &Msg::new(key!("rana_funny_parfait")).player_id("who", who),

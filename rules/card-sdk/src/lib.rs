@@ -74,8 +74,8 @@ pub mod rt;
 ///
 /// ```ignore
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
-///     On::Play(play),
-///     On::Hook(&[HookKind::TurnEnd], decay),
+///     On::Play(None, play, ""),
+///     On::Hook(&[HookKind::TurnEnd], guard, decay, pre::MINE),
 ///     On::Gate(&[GateKind::ImmuneAll], immune),
 /// ]);
 /// ```
@@ -106,6 +106,11 @@ pub struct CardDef {
     /// Keys are [`abi::prop`] constants; a key not declared reads as its
     /// default (`0`).
     pub props: &'static [(&'static str, i32)],
+    /// G3 migration audit (docs/GUARDS.md §5.1): the card's pre-migration
+    /// guard(s), as `(entry index, legacy fn)`. Kept beside the migrated entry
+    /// while the `guard-audit` host feature is in play; deleted once the card
+    /// is clean. Empty for a card that is not under audit.
+    pub legacy: &'static [(i32, fn(i32) -> bool)],
 }
 
 impl CardDef {
@@ -114,6 +119,7 @@ impl CardDef {
             id,
             on,
             props: &[],
+            legacy: &[],
         }
     }
 
@@ -124,6 +130,20 @@ impl CardDef {
             id: self.id,
             on: self.on,
             props,
+            legacy: self.legacy,
+        }
+    }
+
+    /// Keep the pre-migration guard of entry `entry` as `legacy` for the G3
+    /// equivalence audit (docs/GUARDS.md §5.1). The `guard-audit` host calls it
+    /// through `export::OP_LEGACY_GUARD` and panics on any mismatch with
+    /// `pre ∧ guard`. Delete the copy once the card's audit is clean.
+    pub const fn legacy(self, legacy: &'static [(i32, fn(i32) -> bool)]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            legacy,
         }
     }
 }
@@ -132,33 +152,45 @@ impl CardDef {
 /// entry is for, and its kind list is typed to match -- a counteraction can only be
 /// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
 /// at a [`abi::GateKind`]. An empty list is never dispatched.
+///
+/// Guarded entries (`Play` gate / `Counteract` / `Hook`) carry a trailing
+/// **condition** string (`pre`) -- docs/GUARDS.md §4.3. `""` = no condition.
+/// Sugar: [`pre::MINE`] (`actor == owner`); or attach one with
+/// [`On::pre`]. The condition is compiled once at ruleset build (host) and
+/// evaluated natively before the wasm guard is instantiated.
 #[derive(Clone, Copy)]
 pub enum On {
     /// `Card.Play` -- play this card from hand. The first field is the gate
     /// (`Card.WhyNot`, the old `On::CantPlay`): a pure query with no prompts,
     /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
     /// show. `None` for the gate itself means no gate. The second field is the
-    /// effect.
+    /// effect. The third is the gate's condition (see the type doc).
     Play(
         Option<fn(player_id: i32) -> Option<Msg>>,
         fn(player_id: i32) -> Asked,
+        &'static str,
     ),
     /// A [反击] at these chain links: the guard decides whether the card is
     /// offered in the hand window, then the effect resolves. The guard is a
-    /// pure query.
+    /// pure query. Third field: the guard's condition (see the type doc).
+    /// The guard is `Option`: `None` means G4 deleted it because the condition
+    /// alone decides (docs/GUARDS.md §2/§4.3).
     Counteract(
         &'static [abi::ChainKind],
-        fn(player_id: i32) -> bool,
+        Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
+        &'static str,
     ),
     /// A field-card (`Fx`) hook at these settlement points: runs automatically
     /// while the card is in play. Same shape as [`On::Counteract`].
     Hook(
         &'static [abi::HookKind],
-        fn(player_id: i32) -> bool,
+        Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
+        &'static str,
     ),
     /// A question posed to this placed card at declaration or at resolution.
+    /// Not guarded -- no condition field.
     Gate(&'static [abi::GateKind], fn(player_id: i32) -> Asked),
     /// `Card.RollPlan` -- this card has a movement routine.
     RollPlan(fn(player_id: i32) -> Asked),
@@ -173,7 +205,70 @@ pub enum On {
     Settle(fn(player_id: i32) -> Asked),
 }
 
+/// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
+/// schema is the §4.2 window/candidate vocabulary, compiled at ruleset build.
+pub mod pre {
+    /// `actor == owner` -- the 118 `mine` guards. Turns a same-seat-only
+    /// guard into a condition plus (at most) a residual guard.
+    pub const MINE: &str = "actor == owner";
+}
+
 impl On {
+    /// Replace the entry's condition string (docs/GUARDS.md §4.3). A const
+    /// builder so a declaration can stay a one-liner:
+    ///
+    /// ```ignore
+    /// On::Counteract(&[ChainKind::MoveRoll], Some(can_counteract), counteract, "").pre(pre::MINE)
+    /// ```
+    pub const fn pre(self, pre: &'static str) -> Self {
+        match self {
+            On::Play(g, r, _) => On::Play(g, r, pre),
+            On::Counteract(k, g, r, _) => On::Counteract(k, g, r, pre),
+            On::Hook(k, g, r, _) => On::Hook(k, g, r, pre),
+            other => other,
+        }
+    }
+
+    /// Delete the residual guard (G4): the condition alone decides. The host
+    /// then skips the `OP_GUARD` instantiation entirely (`admits_pre`).
+    pub const fn no_guard(self) -> Self {
+        match self {
+            On::Counteract(k, _, r, pre) => On::Counteract(k, None, r, pre),
+            On::Hook(k, _, r, pre) => On::Hook(k, None, r, pre),
+            other => other,
+        }
+    }
+
+    /// The residual guard, if any. `None` = G4-deleted (condition-only entry).
+    /// For `On::Play` this is the gate (`WhyNot`), which has a different
+    /// signature -- use [`Self::has_guard`] for the host's skip-the-wasm test.
+    pub const fn guard(&self) -> Option<fn(i32) -> bool> {
+        match self {
+            On::Counteract(_, g, _, _) | On::Hook(_, g, _, _) => *g,
+            _ => None,
+        }
+    }
+
+    /// Does this entry have a residual wasm guard / gate the host must call?
+    /// `false` = G4-deleted: the condition alone decides (`admits_pre`).
+    pub const fn has_guard(&self) -> bool {
+        match self {
+            On::Play(g, _, _) => g.is_some(),
+            On::Counteract(_, g, _, _) | On::Hook(_, g, _, _) => g.is_some(),
+            // Unguarded by design (Gate / AtEnd / RollPlan / Settle).
+            _ => true,
+        }
+    }
+
+    /// The entry's condition source (`""` = none). Compiled by the host at
+    /// ruleset build (`docs/GUARDS.md` §4.3).
+    pub const fn condition(&self) -> &'static str {
+        match self {
+            On::Play(_, _, pre) | On::Counteract(_, _, _, pre) | On::Hook(_, _, _, pre) => *pre,
+            _ => "",
+        }
+    }
+
     pub const fn kind(&self) -> abi::OnKind {
         match self {
             On::Play(..) => abi::OnKind::Play,

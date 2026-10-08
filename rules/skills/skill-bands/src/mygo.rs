@@ -23,15 +23,16 @@ pub const MYGO: CardDef = CardDef::new(
     &[
         // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
         // position: the before-match-start point decides those.
-        On::Hook(&[HookKind::DeckBeforeGame], |_| true, at_start),
-        On::Hook(&[HookKind::RollAfter], mine, after_roll),
-        On::Hook(&[HookKind::Discarded], mine, on_discarded),
-        On::Play(Some(can_step), step_one),
-        On::Play(Some(can_draw), draw_two),
+        On::Hook(&[HookKind::DeckBeforeGame], None, at_start, ""),
+        On::Hook(&[HookKind::RollAfter], None, after_roll, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Discarded], None, on_discarded, card_sdk::pre::MINE),
+        On::Play(Some(can_step), step_one, ""),
+        On::Play(Some(can_draw), draw_two, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -55,7 +56,7 @@ fn after_roll(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::move_roll().unwrap_or(0) < 16 {
         return Ok(());
     }
-    ctx::add_crystals(1, 1);
+    ctx::add_crystals(1, 1)?;
     ctx::log(player_id, &Msg::new(key!("mygo_crystal")));
     Ok(())
 }
@@ -69,7 +70,7 @@ fn on_discarded(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, OVER, state::get(player_id, OVER) + 1);
-    ctx::add_crystals(1, i32::MAX);
+    ctx::add_crystals(1, i32::MAX)?;
     Ok(())
 }
 
@@ -88,11 +89,11 @@ fn can_step(player_id: i32) -> Option<Msg> {
 }
 
 fn step_one(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id);
+    crate::spend_copy_sticker(player_id)?;
     if ctx::crystals() < 1 {
         return Ok(());
     }
-    ctx::add_crystals(-1, i32::MAX);
+    ctx::add_crystals(-1, i32::MAX)?;
     // 规则书（2）: 「移动1格以替代移动掷骰」 -- the shaped 1-step move replaces
     // the roll and runs now (`ctx::card_move`).
     plan::clear_dice();
@@ -117,11 +118,11 @@ fn can_draw(player_id: i32) -> Option<Msg> {
 }
 
 fn draw_two(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id);
+    crate::spend_copy_sticker(player_id)?;
     if ctx::crystals() < 2 {
         return Ok(());
     }
-    ctx::add_crystals(-2, i32::MAX);
+    ctx::add_crystals(-2, i32::MAX)?;
     ctx::draw(player_id, 1)?;
     Ok(())
 }

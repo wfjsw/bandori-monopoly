@@ -18,6 +18,7 @@
   "believe_you_shuffled": "{{who}} 洗切了抽卡区",
   "believe_you_title": "因为我一直相信着你",
   "black_suits_circle": "补给：落在{{tile}}上，像CiRCLE一样抽1张卡",
+  "black_suits_attach": "有奇迹水晶时这格获得 CiRCLE 的全部效果",
   "black_suits_crystal": "奇迹水晶",
   "black_suits_crystal_note": "有奇迹水晶时这格获得 CiRCLE 的全部效果",
   "black_suits_placed": "{{who}} 在 {{tile}} 上放了一个 [奇迹水晶]（黑衣人的补给）",

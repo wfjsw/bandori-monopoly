@@ -20,12 +20,19 @@ const ID: &str = "Mor:再次牵起手来";
 pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
     "Mor:再次牵起手来",
     &[
-        On::Counteract(&[ChainKind::Paid], can_counteract, counteract),
-        On::Hook(&[HookKind::PayAt], |_| true, pay_at),
+        On::Counteract(
+            &[ChainKind::Paid],
+            None,
+            counteract,
+            "actor != owner && actor == neighbor(owner, -1) && value > 0",
+        ),
+        On::Hook(&[HookKind::PayAt], None, pay_at, ""),
     ],
-);
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当[使用者]的行动序列前一名玩家[消耗]或[支付]大于0资金后」
     // C# `t.Kind == "paid" && t.Seat == H.Neighbor(seat, -1) && t.Seat != seat && t.Value > 0`.
     if trigger::kind() != TriggerKind::Paid {
@@ -66,13 +73,11 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// `payAt` (after `PayChoose`, before the `pay` [反击] window), so this is a
 /// field effect, not a [反击].
 fn pay_at(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayAt
-        || trigger::player_id() != player_id
+        if trigger::player_id() != player_id
         || !ctx::is_placed()
-        || trigger::value() <= 0
-    {
+        || trigger::value() <= 0 {
         return Ok(());
-    }
+        }
     // 规则书[持续]: 「取消此次资金变动」
     trigger::set_pay_amount(0);
     // 规则书[持续]: 「将此卡放置到弃卡区」

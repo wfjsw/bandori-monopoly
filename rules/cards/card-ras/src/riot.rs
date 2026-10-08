@@ -14,11 +14,17 @@ use card_sdk::{CardDef, On};
 
 pub const RIOT: CardDef = CardDef::new(
     "RAS:R. I. O. T.",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        None,
+        counteract,
+        "by >= 0 && by != owner && effect.hits(owner)",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
 /// 规则书[反击]: 「当你被其他人的卡效果影响时打出此卡」 -- C# `H.HitByOtherCard`.
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
     // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
     if !trigger::by_card().is_some_and(|by| by != player_id) {

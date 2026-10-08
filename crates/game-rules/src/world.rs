@@ -173,24 +173,15 @@ pub trait CardWorld: Clone + 'static {
     fn is_ring(&self, tile: i32) -> i32;
     /// `TileData.kind == "circle"` -- the CiRCLE tile.
     fn is_circle(&self, tile: i32) -> i32;
-    /// C# `H.IsLiveHouse` -- a Live House deed (buyable, colour group 6).
-    /// C# `_tileColors[t]` / `Fx.ExtraColor` -- re-colour a tile for everyone /
-    /// for one player. `-1` clears; `key::ALL_COLORS` = every colour.
-    fn set_tile_color(&mut self, _tile: i32, _group: i32) {}
-    fn set_extra_color(&mut self, _player_id: i32, _tile: i32, _group: i32) {}
     /// C# `H.IsColor` -- does `tile` count as colour `group` for `player_id`?
+    /// Reads the tile props (`prop::ANY_COLOR` / `prop::colorFor:<p>`).
     fn is_color(&self, _player_id: i32, _tile: i32, _group: i32) -> bool {
         false
     }
-    /// The turn's buy discount (C# `TurnCtx.BuyDiscount`).
-    fn set_buy_discount(&mut self, _n: i32) {}
     /// What this turn's [触发结算]s have cost the player so far.
     fn paid_in_settle(&self) -> i32 {
         0
     }
-    /// 「本回合购买格子不[消耗]资金」 / 「如果购买则拆除那个格子上的所有房屋」.
-    fn set_free_buy(&mut self, _on: bool) {}
-    fn set_raze_on_buy(&mut self, _on: bool) {}
     /// C# `_turnSnap[i].pos` -- where the player stood when the turn started.
     fn turn_start_pos(&self, _player_id: i32) -> i32 {
         -1
@@ -211,9 +202,10 @@ pub trait CardWorld: Clone + 'static {
     fn is_agent(&self, _tile: i32) -> i32 {
         0
     }
+    /// C# `H.IsLiveHouse` -- a Live House deed (buyable, colour group 6).
     fn is_live_house(&self, tile: i32) -> i32;
-    /// `H.IsLiveHouse` for one player: the base check plus their `Fx.ExtraColor`
-    /// (「使其对你视为live house格子」).
+    /// `H.IsLiveHouse` for one player: the base check plus their colour
+    /// override (「使其对你视为live house格子」).
     fn is_live_house_for(&self, _player_id: i32, tile: i32) -> i32 {
         self.is_live_house(tile)
     }

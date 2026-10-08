@@ -17,12 +17,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const FATE_TOGETHER: CardDef = CardDef::new(
     "CRYCHIC:一起演奏音乐的命运共同体",
     &[
-        On::Play(None, fate_together),
-        On::Hook(
-            &[HookKind::PayAfter, HookKind::TurnStart],
-            counteract_guard,
-            counteract,
-        ),
+        On::Play(None, fate_together, ""),
+        On::Hook(&[HookKind::PayAfter, HookKind::TurnStart], Some(counteract_guard), counteract, ""),
     ],
 );
 

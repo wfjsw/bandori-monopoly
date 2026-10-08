@@ -25,27 +25,36 @@ use card_sdk::{key, CardDef, Msg, On};
 /// 「回忆地块」 -- the three the clause names.
 const MEMORY: [&str; 3] = ["小豆岛", "武道馆", "旧古河庭园"];
 /// Settled on a memory tile since the last CiRCLE pass.
-const DIRTY: &str = "skill.dianaImprisoned.dirty";
+const DIRTY: &str = "skill.uikaImprisoned.dirty";
 /// The same latch under a neutral name, so a *card* that asks the same question
 /// (`Mujica:（初华）我，无畏悲伤`) can read it without knowing this skill.
 pub const MEMO_DIRTY: &str = "memory.dirty";
 /// 1d6 bonuses taken in 状态2 this move. Cap 4.
-const BONUS: &str = "skill.dianaImprisoned.bonus";
+const BONUS: &str = "skill.uikaImprisoned.bonus";
 
-pub const DIANA_IMPRISONED: CardDef = CardDef::new(
+pub const UIKA_IMPRISONED: CardDef = CardDef::new(
     "skill:三角初华:Imprisoned XII",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::RollPlan], in_one, on_plan),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::Settle], any, on_settle),
-        On::Hook(&[HookKind::PassPlayer], in_two, on_pass_player),
-        On::Hook(&[HookKind::SettleBefore], in_two, before_settle),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollPlan], Some(in_one), on_plan, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Settle], Some(any), on_settle, ""),
+        // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
+        // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
+        // not the end-tile [重叠]. The other player is read off the tile.
+        On::Hook(&[HookKind::PassTile], Some(in_two), on_pass_player, ""),
+        On::Hook(&[HookKind::SettleBefore], Some(in_two), before_settle, ""),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
+}
+
+/// G4: kept as a callable alias for in-body uses of the old guard.
+fn mine(player_id: i32) -> bool {
+    legacy_mine(player_id)
 }
 
 fn any(_player_id: i32) -> bool {
@@ -76,13 +85,13 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     }
     if !ctx::ask_yes(
         player_id,
-        &Msg::new(key!("diana_imprisoned_title")),
-        &Msg::new(key!("diana_imprisoned_enter")),
+        &Msg::new(key!("uika_imprisoned_title")),
+        &Msg::new(key!("uika_imprisoned_enter")),
     )? {
         return Ok(());
     }
     state::set(player_id, state_key::SKILL_STATE, 2);
-    ctx::log(player_id, &Msg::new(key!("diana_imprisoned_two")));
+    ctx::log(player_id, &Msg::new(key!("uika_imprisoned_two")));
     Ok(())
 }
 
@@ -120,24 +129,30 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态2: 「主动移动经过任何玩家都将向其收取200资金」.
+///
+/// `SETTLE-STAGES.md` §4 M4: 「主动移动经过任何玩家」 is the mover's step onto
+/// a tile a player stands on (行动阶段 12 [经过]). The other player is read off
+/// the tile -- a `passTile` payload has no `target`. (It used to sit on
+/// `passPlayer` and read `trigger::player_id()` as "the other", which is the
+/// mover -- the guard already pinned that to `player_id`, so the body bailed
+/// and the charge never fired.)
 fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if !ctx::trigger::move_is_main() {
         return Ok(());
     }
-    let other = ctx::trigger::player_id();
-    if other == player_id {
-        return Ok(());
+    let at = ctx::trigger::tile();
+    for other in ctx::players_on(at, player_id) {
+        ctx::transfer(
+            other,
+            player_id,
+            200,
+            &Msg::new(key!("uika_imprisoned_fee")),
+        )?;
+        ctx::log(
+            player_id,
+            &Msg::new(key!("uika_imprisoned_charged")).player_id("who", other),
+        );
     }
-    ctx::transfer(
-        other,
-        player_id,
-        200,
-        &Msg::new(key!("diana_imprisoned_fee")),
-    )?;
-    ctx::log(
-        player_id,
-        &Msg::new(key!("diana_imprisoned_charged")).player_id("who", other),
-    );
     Ok(())
 }
 
@@ -148,8 +163,8 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     }
     if !ctx::ask_yes(
         player_id,
-        &Msg::new(key!("diana_imprisoned_title")),
-        &Msg::new(key!("diana_imprisoned_extra")),
+        &Msg::new(key!("uika_imprisoned_title")),
+        &Msg::new(key!("uika_imprisoned_extra")),
     )? {
         return Ok(());
     }
@@ -158,7 +173,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_extra_steps(d);
     ctx::log(
         player_id,
-        &Msg::new(key!("diana_imprisoned_moved")).i("n", d as i64),
+        &Msg::new(key!("uika_imprisoned_moved")).i("n", d as i64),
     );
     Ok(())
 }

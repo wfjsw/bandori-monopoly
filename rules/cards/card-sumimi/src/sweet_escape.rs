@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SWEET_ESCAPE: CardDef = CardDef::new(
     "Sumimi:Sweet Escape",
-    &[On::Play(Some(cant_play), sweet_escape)],
+    &[On::Play(Some(cant_play), sweet_escape, "")],
 );
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's

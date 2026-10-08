@@ -28,10 +28,14 @@ const THIEF: &str = "怪盗标记";
 pub const KAORU_PRINCE: CardDef = CardDef::new(
     "skill:濑田薰:梦幻的王子殿下",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare_cap),
-        On::Hook(&[HookKind::Pass], |_| true, on_pass),
-        On::Hook(&[HookKind::PassPlayer], |_| true, on_passed),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, ""),
+        // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
+        // M4), the passer's step onto this player's tile -- not the end-tile
+        // [重叠]. `target` is not on a `passTile` payload, so the guard reads
+        // the tile being entered.
+        On::Hook(&[HookKind::PassTile], Some(passed_by), on_passed, ""),
     ],
 );
 
@@ -41,24 +45,27 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 「被[经过]」 -- another player's step onto **my** tile (行动阶段 12,
+/// `SETTLE-STAGES.md` §4 M4).
+fn passed_by(player_id: i32) -> bool {
+    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == ctx::player_pos(player_id)
+}
+
 /// （1） 「每次[经过]…时」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    settle(player_id);
+    settle(player_id)?;
     Ok(())
 }
 
 /// （1） 「…或被[经过]时」 -- someone passed this player.
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::target() != player_id {
-        return Ok(());
-    }
-    settle(player_id);
+    settle(player_id)?;
     Ok(())
 }
 
 /// （1） 「若场上不存在[怪盗标记]，获得1火罐；若场上存在[怪盗标记]，则移除场上的
 /// 一个[怪盗标记]」.
-fn settle(player_id: i32) {
+fn settle(player_id: i32) -> card_sdk::Asked {
     for t in 0..ctx::tile_count() {
         if ctx::count_marks(t, THIEF, -2) > 0 {
             // 「移除场上的一个[怪盗标记]」 -- one tick off a single mark.
@@ -67,10 +74,11 @@ fn settle(player_id: i32) {
                 player_id,
                 &Msg::new(key!("kaoru_prince_removed")).tile("tile", t),
             );
-            return;
+            return Ok(());
         }
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("kaoru_prince_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("kaoru_prince_gain")))?;
+    Ok(())
 }
 
 /// （2） 「主要阶段可消耗7火罐」.
@@ -118,7 +126,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = near.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 7, &Msg::new(key!("kaoru_prince_spend"))) {
+    if !ctx::spend_fire(player_id, 7, &Msg::new(key!("kaoru_prince_spend")))? {
         return Ok(());
     }
     // 「在…玩家场上放置3个[怪盗标记]」 -- on one of that player's tiles.

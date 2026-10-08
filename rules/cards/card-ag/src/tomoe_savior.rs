@@ -11,16 +11,21 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     "AG:（巴）商店街的救世主",
-    &[On::Counteract(&[ChainKind::Mortgage], can_counteract, counteract)],
-);
+    // G4: kind (Mortgage) is the category. The money threshold moves to the
+    // condition (`owner.money >= tile.price / 2` on the non-self arm); the
+    // shop-street check is a derived predicate (GUARDS.md §6) and stays in the
+    // residual guard.
+    &[On::Counteract(
+        &[ChainKind::Mortgage],
+        Some(can_counteract),
+        counteract,
+        "actor == owner || owner.money >= tile.price / 2",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-/// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
-fn is_shop(t: i32) -> bool {
-    t >= 0 && ctx::is_shop(t)
-}
-
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当其他玩家抵押商店街地契时」 / 「当你抵押商店街地契时」
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     if trigger::kind() != TriggerKind::Mortgage {
         return false;
     }
@@ -29,12 +34,23 @@ fn can_counteract(player_id: i32) -> bool {
         return false;
     }
     if trigger::player_id() != player_id {
-        // 规则书[反击]: 「立刻支付常规收购价一半的价格」 -- C# also requires
-        // `money >= H._tiles[t].price / 2` before the counteraction is offered.
         ctx::money_of(player_id) >= ctx::tile_price(t) / 2
     } else {
         true
     }
+}
+
+/// The buyable shop-street deeds (C# `H.IsShop`: `IsBuyable && group == 10`).
+fn is_shop(t: i32) -> bool {
+    t >= 0 && ctx::is_shop(t)
+}
+
+fn can_counteract(player_id: i32) -> bool {
+    // 规则书[反击]: 「商店街地契」 -- the shop-street check is a derived
+    // predicate (GUARDS.md §6) and stays here. The money threshold is the
+    // condition (`owner.money >= tile.price / 2`).
+    let _ = player_id;
+    is_shop(trigger::tile())
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -69,16 +85,21 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     if ctx::tile_owner(t) != from {
         return Ok(());
     }
+    // TODO(规则书) ruling 8: 「常规收购价一半」 -- the base (land / land + houses
+    // / 2× force) is undecided. C# used `H._tiles[t].price / 2` (land alone), and
+    // that is what this passes.
     let price = ctx::tile_price(t) / 2;
     if price <= 0 {
         return Ok(());
     }
-    let why = Msg::new(key!("tomoe_savior_buy")).tile("tile", t);
-    ctx::transfer(player_id, from, price, &why)?;
-    // 规则书[反击]: 「从该玩家处收购该地契」 -- C# `if (p.paid) H.State.owners[t] = i`
-    // (`H.Money` marks a positive-amount run paid even when `must: false` clamps
-    // the loss to what the player has).
-    ctx::set_owner(t, player_id);
+    // 规则书[反击]: 「从该玩家处收购该地契」 -- `ctx::acquire` (`docs/PURCHASE.md`)
+    // is the 收购 pipeline: pay to `from`, then assign → `bought` → `buyAfter`.
+    // C# `if (p.paid) H.State.owners[t] = i` -- the pipeline marks a
+    // positive-amount run paid even when `must: false` clamps the loss to what
+    // the player has -- and `f.Bought(i, t)` then runs over the Fx chain, so
+    // 「购买」 hooks (Afterglow's free house on a cheap/shop-street deed, ...)
+    // hear a buy caused by this card.
+    ctx::acquire(player_id, from, t, price);
     ctx::log(
         player_id,
         &Msg::new(key!("tomoe_savior_bought"))
@@ -86,11 +107,5 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .player_id("from", from)
             .player_id("who", player_id),
     );
-    // 规则书[反击]: 「收购该地契」 -- C# `f.Bought(i, t)` runs over the Fx chain
-    // after the hand-over, so 「购买」 reactions (Afterglow's free house on a
-    // cheap/shop-street deed, ...) hear a buy caused by this card. A forced
-    // hand-over off an owned tile is not a `buy()` (that refuses an owned tile),
-    // so the card announces it (`ctx::raise_bought`).
-    ctx::raise_bought(player_id, t);
     Ok(())
 }

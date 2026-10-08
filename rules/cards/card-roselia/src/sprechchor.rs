@@ -8,7 +8,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SPRECHCHOR: CardDef =
-    CardDef::new("R:Sprechchor", &[On::Play(Some(cant_play), sprechchor)]);
+    CardDef::new("R:Sprechchor", &[On::Play(Some(cant_play), sprechchor, "")]);
 
 /// 规则书: 「在Livehouse地块开始回合时」 -- the **turn-start** square, not the
 /// one a mid-turn walk has since reached (C# `H._turnSnap[i].pos`).

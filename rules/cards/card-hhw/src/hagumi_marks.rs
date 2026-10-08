@@ -23,9 +23,9 @@ const ID: &str = "HHW:（育美）";
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::PassTile], hook_guard, hook),
-        On::Counteract(&[ChainKind::EndTurnAfter], can_counteract2, counteract2),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PassTile], Some(hook_guard), hook, ""),
+        On::Counteract(&[ChainKind::EndTurnAfter], Some(can_counteract2), counteract2, ""),
     ],
 );
 
@@ -93,9 +93,6 @@ fn hook_guard(player_id: i32) -> bool {
 }
 
 fn hook(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile {
-        return Ok(());
-    }
     // C# `m.Seat != Seat` -- only the owner's own walk.
     if trigger::player_id() != player_id {
         return Ok(());
@@ -170,9 +167,6 @@ fn any_marks(player_id: i32) -> bool {
 
 /// 规则书（2）: 「此卡可在你回合外收到资金的回合结束时打出」.
 fn can_counteract2(player_id: i32) -> bool {
-    if trigger::kind() != TriggerKind::EndTurnAfter {
-        return false;
-    }
     // 「你回合外」 -- someone else's turn end.
     if trigger::player_id() == player_id {
         return false;

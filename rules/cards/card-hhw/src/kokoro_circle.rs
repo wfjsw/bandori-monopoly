@@ -14,22 +14,28 @@ const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 pub const KOKORO_CIRCLE: CardDef = CardDef::new(
     "HHW:（kkr）前往笑容集结的地方！",
     &[
-        On::Play(Some(cant_play), play),
-        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+        On::Play(Some(cant_play), play, ""),
+        // 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
+        // -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M3): 「视为格子的收款」 is an
+        // entry in the tile's settle effect list, not an after-hook. A field
+        // card that replaces the body skips this entry. `docs/TILES.md` names
+        // the long-term home as a collect rule instance on CiRCLE; the
+        // `settleBody` hook is the same list entry for now.
+        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
     ],
-);
+).props(&[(card_sdk::abi::prop::EST_COST, 10000)]);
 
-fn cant_play(player_id: i32) -> Option<Msg> {
-    // C# `CardKokoroCircle.WhyNot`: refuses without 10,000 money, or when a
-    // `CardKokoroCircle` is already placed on CiRCLE.
-    if ctx::money_of(player_id) < 10000 {
-        return Some(Msg::new(key!("x_no_money_10000")));
-    }
+fn cant_play(_player_id: i32) -> Option<Msg> {
+    // C# `CardKokoroCircle.WhyNot`: refuses when a `CardKokoroCircle` is
+    // already placed on CiRCLE. TODO(规则书) NEGATION-AUDIT V2: the **money** half is gone (see
+    // V2): the 「支付10000资金」 is effect content.
     // 规则书: 「并将此卡置于CiRCLE上」 -- C# `H._placed.Any(p => p is CardKokoroCircle)`
     // (`ctx::placed_tile` answers "is this id in play on that player").
+    // (`ctx::self_tile` is the *playing* card's destination slot and is the
+    // wrong query -- it used to mask this gate behind the money check.)
     let n = ctx::player_count();
     for s in 0..n {
-        if ctx::self_tile().is_some() {
+        if ctx::placed_tile(s, ID).is_some() {
             return Some(Msg::new(key!("kokoro_circle_already")));
         }
     }
@@ -65,8 +71,12 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书: 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
 /// -- C# `CardKokoroCircle.SettleAfter`: a settle on the card's tile by anyone
 /// but the owner pays the owner 6,000 as if it were the tile's rent (`kind =
-/// "rent"`).
-fn settle_after(player_id: i32) -> card_sdk::Asked {
+/// "rent"`). `SETTLE-STAGES.md` §4 M3: an entry in the settle's effect list
+/// (行动阶段 15), so a body replace skips it.
+fn settle_body(player_id: i32) -> card_sdk::Asked {
+    if trigger::cancelled() {
+        return Ok(());
+    }
     // C# `H._placed.Contains(this)` / `Tile` -- this card must be the one in
     // play (`placed_tile` asks about *this* id; `is_placed` only asks about
     // "any card").

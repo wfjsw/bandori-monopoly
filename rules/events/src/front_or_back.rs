@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play(None, play)]);
+pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play(None, play, "")]);
 
 /// 规则书: 「所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加
 /// 定位X且站在格子序号31到60的玩家的投掷结果相加定位Y」 -- one bare 1d20 each.
@@ -52,9 +52,17 @@ fn play(_player_id: i32) -> card_sdk::Asked {
     if winners.is_empty() {
         return Ok(());
     }
-    let each = 1000 / winners.len() as i32;
+    // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes the 1000
+    // before it divides (the 「分摊前」 figure). TODO(规则书): 「分摊」 -- even
+    // integer split of the remainder (`1000 % n`) is dropped, the text does not
+    // say who gets it.
+    let why = Msg::new("log.event.front_or_back_win");
+    let Some(shaped) = ctx::pay_total(-1, winners[0], 1000, &why)? else {
+        return Ok(());
+    };
+    let each = shaped / winners.len() as i32;
     for &p in &winners {
-        ctx::gain(p, each, &Msg::new("log.event.front_or_back_win").i("n", each as i64))?;
+        ctx::pay_leg(-1, p, each, &why.clone().i("n", each as i64))?;
     }
     Ok(())
 }

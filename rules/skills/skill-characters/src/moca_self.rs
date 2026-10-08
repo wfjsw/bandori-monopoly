@@ -30,14 +30,10 @@ fn used_key(src: i32) -> alloc::string::String {
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
-        On::Hook(&[HookKind::CardPlayed], other, on_card),
-        On::Hook(&[HookKind::SkillUsed], other, on_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(afterglow), tick, ""),
+        On::Hook(&[HookKind::CardPlayed], Some(other), on_card, ""),
+        On::Hook(&[HookKind::SkillUsed], Some(other), on_skill, ""),
     ],
 );
 
@@ -61,7 +57,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     }
     Ok(())
 }
@@ -98,7 +94,7 @@ fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("moca_self_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("moca_self_spend")))? {
         return Ok(());
     }
     state::set(player_id, &key, state::get(player_id, &key) + 1);

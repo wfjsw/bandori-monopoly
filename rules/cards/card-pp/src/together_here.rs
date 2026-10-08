@@ -10,7 +10,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TOGETHER_HERE: CardDef =
-    CardDef::new("PP:有你与我在这里共度", &[On::Play(None, together_here)]);
+    CardDef::new("PP:有你与我在这里共度", &[On::Play(None, together_here, "")]);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -32,8 +32,8 @@ fn together_here(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将X个反面[P✽P粉丝]变正」
     let flip = x.max(0).min(down);
     if flip > 0 {
-        ctx::add_tok(player_id, FANS_DOWN, -flip, i32::MAX);
-        ctx::add_tok(player_id, FANS_UP, flip, i32::MAX);
+        ctx::add_tok(player_id, FANS_DOWN, -flip, i32::MAX)?;
+        ctx::add_tok(player_id, FANS_UP, flip, i32::MAX)?;
         ctx::log(
             player_id,
             &Msg::new(key!("together_here_up"))

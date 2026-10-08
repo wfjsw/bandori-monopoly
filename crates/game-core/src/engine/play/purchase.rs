@@ -121,6 +121,56 @@ pub fn quote_native(data: &GameData, st: &MatchState, t: usize) -> i32 {
     tile.price + st.houses.get(t).copied().unwrap_or(0) * tile.house
 }
 
+/// The base a quote starts from, before the `BuyAdd` / `BuyMul` / `BuySet`
+/// stages. `Force` is 「购买格子地契和建造已有房子的资金总价的两倍」; every other
+/// kind is the plain land price plus standing houses.
+pub fn base_quote(data: &GameData, st: &MatchState, t: usize, kind: BuyKind) -> i32 {
+    match kind {
+        BuyKind::Force => force_price_native(data, st, t),
+        _ => quote_native(data, st, t),
+    }
+}
+
+/// Ask the rules crate's `buy_quote` for `tiles` -- each `(tile, seller)`, the
+/// seller `-1` for the bank -- on behalf of `player` at `kind`. One batched
+/// call, so a hooking ruleset fires its hooks once for the whole list and the
+/// callers all see the same figure (quote == charge).
+pub fn quote_for(
+    rules: &dyn crate::engine::rules::CardRules,
+    w: &World,
+    data: &GameData,
+    player: usize,
+    kind: BuyKind,
+    tiles: &[(usize, i32)],
+) -> Vec<Quote> {
+    let q = BuyQuery {
+        player,
+        kind,
+        tiles: tiles.iter().map(|&(t, _)| t).collect(),
+        seller: tiles.first().map_or(-1, |&(_, s)| s),
+    };
+    rules.buy_quote(w, data, &q)
+}
+
+/// The price stages (`docs/PURCHASE.md`): `BuyAdd` (fixed ±) → `BuyMul` (×) →
+/// `BuySet` (free / fixed), each floored at 0. Applied to `base` after the
+/// native quote. The stages are the rules crate's hooks; for `StubRules` there
+/// are none and `base` passes through unchanged.
+pub fn apply_stages(mut base: i32, add: i32, mul_milli: i32, set: Option<i32>) -> i32 {
+    // BuyAdd: fixed ±, floored at 0.
+    base = (base + add).max(0);
+    // BuyMul: ×, floored at 0. Milli-units (500 = ×0.5, 1000 = ×1).
+    if mul_milli != 1000 && mul_milli > 0 {
+        base = ((base as i64 * mul_milli as i64) / 1000) as i32;
+        base = base.max(0);
+    }
+    // BuySet: free / fixed, floored at 0.
+    if let Some(s) = set {
+        base = s.max(0);
+    }
+    base
+}
+
 /// The force-buy base: 2×(land price + houses). 「购买格子地契和建造已有房子的
 /// 资金总价的两倍」. Not scaled by any money-modifying effect
 /// (「此次购买的价格不受任何资金变动效果影响」).

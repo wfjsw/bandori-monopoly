@@ -35,10 +35,10 @@ const RATE: &str = "skill.tsugushi.rate";
 pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
-        On::Play(Some(can_cash), cash),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare),
-        On::Hook(&[HookKind::PayChoose], mine, on_gain),
-        On::Hook(&[HookKind::PayChoose], other, on_theirs),
+        On::Play(Some(can_cash), cash, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, declare, ""),
+        On::Hook(&[HookKind::PayChoose], Some(mine), on_gain, ""),
+        On::Hook(&[HookKind::PayChoose], Some(other), on_theirs, ""),
     ],
 );
 
@@ -105,7 +105,7 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     // `payAfter` hook on that gain may return `Err(Prompt)`, and the mark must
     // not be lost to that pause (the money has already moved by then).
     ctx::trigger::set_pay_amount(0);
-    ctx::add_tok(who, UP, 1, i32::MAX);
+    ctx::add_tok(who, UP, 1, i32::MAX)?;
     state::set(player_id, &rec_key(who), amount);
     ctx::gain(
         who,
@@ -149,8 +149,8 @@ fn on_theirs(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「将对方的X标记翻面」
-    ctx::add_tok(src, UP, -1, i32::MAX);
-    ctx::add_tok(src, DOWN, 1, i32::MAX);
+    ctx::add_tok(src, UP, -1, i32::MAX)?;
+    ctx::add_tok(src, DOWN, 1, i32::MAX)?;
     // 「以此效果获得的金钱数量不能超过记录数字+300，超出部分由原主获得」
     let cap = recorded + 300;
     let mine = amount.min(cap);
@@ -192,8 +192,8 @@ fn cash(player_id: i32) -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         let both = ctx::tok(p, UP) + ctx::tok(p, DOWN);
         if both > 0 {
-            ctx::add_tok(p, UP, -ctx::tok(p, UP), i32::MAX);
-            ctx::add_tok(p, DOWN, -ctx::tok(p, DOWN), i32::MAX);
+            ctx::add_tok(p, UP, -ctx::tok(p, UP), i32::MAX)?;
+            ctx::add_tok(p, DOWN, -ctx::tok(p, DOWN), i32::MAX)?;
             n += both;
         }
     }

@@ -59,6 +59,60 @@ dispatched.
 * names are arguments, not text: `Msg::new(key!("x")).player_id("who", s).tile("tile", t)`
   -- the client resolves them to display names.
 
+## Authoring a condition (`pre`, ABI v45)
+
+A guarded entry (`On::Counteract`, `On::Hook`, `On::Play` gates) carries a
+trailing **condition** string -- docs/[GUARDS.md](GUARDS.md) §4.3. `""` = no
+condition. The condition is a CEL expression over the §4.2 window/candidate
+vocabulary; it is compiled **once** at ruleset build and evaluated natively
+before the wasm guard is ever instantiated.
+
+```rust
+use card_sdk::{pre, On};
+
+// trailing `pre: &'static str`
+On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract,
+               "actor == owner && move.roll != null"),
+
+// sugar: `pre::MINE` = `actor == owner`
+On::Hook(&[HookKind::TurnEnd], guard, decay, pre::MINE),
+
+// or the const builder
+On::Play(Some(cant_play), play, "").pre("owner.money >= 1500"),
+```
+
+**Distinct layers (nothing is rejected twice).** The category filter (the
+`On::*` kind list) owns the trigger kind; the condition owns everything
+expressible in the schema; the wasm guard owns only the residual. A guard must
+not restate its condition. `kind` is an ordinary variable, so a multi-kind
+entry may still *branch* on it -- never use it to reject what the category
+filter already rejected.
+
+Fail-closed: a parse error, an unknown variable/function, or a float literal
+(the schema is int-only) fails `build-ruleset` / `RulesetBuilder::build` with
+`RuleError::BadPre`. An absent condition means "no clauses beyond the guard".
+
+The compiled lean form (`Cond::to_bytes(false)`) rides the ruleset so the
+browser glue evaluates with `rules-cond`'s `runtime-only` build and never ships
+the CEL parser.
+
+## Bot-only estimated execution cost
+
+`prop::EST_COST` (`"estCost"`) is a card's **estimated execution cost** (user
+ruling 2026-10-07): what activating the card is expected to cost the player, in
+资金. Read **only** by bots / autopilot as a reserve check -- never by legality.
+Constant for now; an X-dependent cost may later become a `rules-cond`
+expression. Declare it with `CardDef::new(...).props(&[(prop::EST_COST, N)])`.
+`0` (the default) means unknown / assume free.
+
+```rust
+pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play(None, gacha10)])
+    .props(&[(card_sdk::abi::prop::EST_COST, 1500)]);
+```
+
+Filled for cards with fixed payments (the six formerly money-gated ones plus
+the other flat `ctx::pay(N)` bodies); leave it at `0` for computed costs.
+
 ## Declared card properties (`CardDef::props`)
 
 Some behaviours are **static properties of the card rule**, not effects that
@@ -140,6 +194,7 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
+| purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
 | field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals`, `decay` |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `settle_circle_reward`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 | event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
@@ -159,14 +214,18 @@ original names where the pairing is already implied (`settleBefore` →
 |---|---|
 | `turnStartBefore` / `turnStart` | a turn begins -- before / after the exile & stun status ticks |
 | `roll` / `moveRoll` | the main roll -- before the d20 is cast / after it, before walking (a counteraction may reroll via `set_move_roll`) |
-| `passBefore` / `pass` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives |
-| `settleBefore` / `settle` / `settleAfter` | landing -- before resolving the tile / before its effect / after it fully resolves |
+| `passBefore` / `pass` / `passTile` | each tile stepped over (CiRCLE and the destination) -- before / after the player arrives. `passTile` is the [经过] step (行动阶段 12); a 「被[经过]」 clause reads the tile being entered. `passPlayer` is the end-tile [重叠] only |
+| `moveBefore` / `moveAfter` | the move head / tail (ABI v43, `SETTLE-STAGES.md` §7). `moveBefore` fires once the plan is fixed and before the first step / the teleport -- counteractions that cancel or alter the move go here. `moveAfter` is 「移动后」/「主要移动结束时」/「[移动终点]」: after `passPlayer`, before `settleBefore`, for every completed move including a 「不触发结算」 one |
+| `settleBefore` / `settle` / `settleBody` / `settleAfter` | landing -- before resolving the tile / before its effect / the settle's effect list (a field card may replace it with 「将本次结算改为…」) / after it fully resolves |
 | `mortgageBefore` / `mortgage` | mortgaging a deed -- before any guard (can block) / after it applied |
 | `pay` / `paid` | money leaving a player -- before the deduction / after. `player_id` = payer, `target` = payee, `value` = amount. `paid` is the [反击] window and opens only on a payer-side loss (再次牵起手来 / 游击演出 are 「[消耗]或[支付]」 / 「被…收取资金」). `payAfter` is the 「资金变动」 hook (rulebook 支付阶段 7, 「合并到[支付后]」) and fires on **any** money change, a print (`gain`) and a `gain_fixed` included |
-| `bankruptBefore` / `bankrupt` | bankruptcy -- before asset cash-in / after cash-in, before removal from the game |
+| `payTotalAdd` / `payTotalMul` / `payTotalCancel` | the **command-wide pre-split** stage (「分摊前」, `PIPELINE-AUDIT` Q2): `payTotalAdd` (fixed ±) → `payTotalMul` (×) → `payTotalCancel` (drop the whole command) shape the figure **before** any 「[分摊]」 divides it into shares. A single-pair payment's command total is its own amount, so the three run there too. `trigger::value()` / `set_pay_amount` rewrite the total; `set_cancelled` on `payTotalCancel` drops the command. The per-share counterparts are `payAdd` / `payMul` / `payChoose` / `payAt` |
+| `tileResolved` / `moveResolved` / `bankruptResolved` | terminal points (「结算完成时」, `PIPELINE-AUDIT` Q6). `tileResolved` fires after `settleAfter` (and after a cancelled settle); `moveResolved` after a move and any settle it asked for; `bankruptResolved` after the seat is cleared and the leftover auctions finish. `payAfter` / `buyAfter`+`bought` / `eventAfter` are already the terminals of their pipelines |
+| `bankruptBefore` / `bankrupt` | bankruptcy -- before asset cash-in / after cash-in, before removal from the game. The seat is marked **dead before `bankruptBefore`** (B3), so the dying player's own sources cannot join that window; other players' hooks still fire and may inspect the remaining state. `bankruptResolved` is the terminal |
 | `card` / `cardAfter` | playing a card from hand -- before its `play` body / after its `Dest` handling |
 | `event` / `eventAfter` | drawing an event -- before it resolves / after it is filed away |
 | `buyBefore` / `buyAfter` | buying a deed -- before any guard (fires even on a no-op attempt) / after the deed changes hands |
+| `buyGate` / `buyAdd` / `buyMul` / `buySet` / `buyAssign` | the purchase surface (`docs/PURCHASE.md`). `buyGate` (an `On::Gate`, runs for **every** `BuyKind` -- Force included) refuses a buy with `set_cancelled` + `set_reason`. `buyAdd` (fixed ±) → `buyMul` (×) → `buySet` (free / fixed) are the quote's price stages, each floored at 0, rewriting the running `trigger::price()`. `buyAssign` runs at commit and rewrites `deal_owner` / `deal_houses` / `deal_mortgaged` before the one ownership write. `bought` / `buyAfter` still do not fire for Force or Auction (rulings 6 / 7, undecided). |
 | `buildBefore` / `buildAfter` | building a house -- before payment / after the house commits (not on the refund path) |
 | `discardBefore` / `discardAfter` | discarding from hand -- before the card leaves / after it is in the pile |
 | `endTurnBefore` / `endTurnAfter` | ending a turn -- the player's command / any turn end, including stun & exile auto-skips |

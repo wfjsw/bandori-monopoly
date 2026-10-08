@@ -13,18 +13,19 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const YOLO: CardDef = CardDef::new(
     "AG:Y.O.L.O",
+    // G4: kind (Roll|MoveRoll) is the category; `mine` + the settled-roll
+    // clause are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::Roll, ChainKind::MoveRoll],
-        can_counteract,
+        None,
         counteract,
+        "actor == owner && (move.roll != null || value >= 0)",
     )],
-);
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书 (sheet 2026-10-06): 「你的**任意**掷骰结算前」 -- any of the
-    // user's own rolls (move or card-driven), not anyone else's. `roll`
-    // carries `value = -1` as the pre-cast sentinel; the settled figure is
-    // on `moveRoll` / `value`.
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll)
         && trigger::player_id() == player_id
         && (trigger::move_roll().is_some() || trigger::value() >= 0)

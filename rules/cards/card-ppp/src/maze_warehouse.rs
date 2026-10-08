@@ -6,10 +6,48 @@
 //!
 //! and walk from 流星堂 past that many unowned buyable tiles, buying for free.
 
-use card_sdk::{ctx, key, CardDef, Msg, On};
+use card_sdk::abi::HookKind;
+use card_sdk::ctx::{self, trigger};
+use card_sdk::{key, CardDef, Msg, On};
 
-pub const MAZE_WAREHOUSE: CardDef =
-    CardDef::new("PPP:迷宫般的仓库", &[On::Play(Some(cant_play), play)]);
+pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
+    "PPP:迷宫般的仓库",
+    &[
+        On::Play(Some(cant_play), play, ""),
+        // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
+        // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
+        // instance for the turn (`docs/PURCHASE.md`).
+        On::Hook(&[HookKind::BuySet], None, free_buy, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::BuyAssign], None, raze, card_sdk::pre::MINE),
+    ],
+).props(&[(card_sdk::abi::prop::EST_COST, 6000)])
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
+
+/// The lingering instance only answers for its own player's buys
+/// (「本回合购买格子」 is the turn player's purchase).
+fn legacy_mine(player_id: i32) -> bool {
+    trigger::player_id() == player_id
+}
+
+/// 「本回合购买格子不[消耗]资金」 -- `BuySet` is the free / fixed stage
+/// (`docs/PURCHASE.md`), so the hook sets the running price to 0.
+fn free_buy(_player_id: i32) -> card_sdk::Asked {
+    if trigger::tile() < 0 {
+        return Ok(());
+    }
+    trigger::set_price(0);
+    Ok(())
+}
+
+/// 「如果购买则拆除那个格子上的所有房屋」 -- `BuyAssign` rewrites the deal's
+/// post-commit house count (`docs/PURCHASE.md`).
+fn raze(_player_id: i32) -> card_sdk::Asked {
+    if trigger::tile() < 0 {
+        return Ok(());
+    }
+    trigger::set_deal_houses(0);
+    Ok(())
+}
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「位于“流星堂”前后5格内时，可打出此卡」 -- C# `CardMazeWarehouse.WhyNot`
@@ -59,17 +97,15 @@ fn play(player_id: i32) -> card_sdk::Asked {
     }
     let dest = (ryuseido + steps) % n;
     // 规则书: 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」
-    // -- C# `H._turnCtx.FreeBuy = true; H._turnCtx.RazeOnBuy = true`.
+    // -- a turn-scoped `BuySet` 0 + `BuyAssign` raze instance (`docs/PURCHASE.md`),
+    // the hand-card home that replaces the old `free_buy` / `raze_on_buy` flags.
     ctx::log(
         player_id,
         &Msg::new(key!("maze_warehouse_free_buy"))
             .player_id("who", player_id)
             .i("n", want as i64),
     );
-    // 规则书: 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」
-    // -- C# `H._turnCtx.FreeBuy = true; H._turnCtx.RazeOnBuy = true`.
-    ctx::set_free_buy(true);
-    ctx::set_raze_on_buy(true);
+    ctx::linger(player_id, 0);
     // 规则书: 「视为你的主要移动」 / 「从“流星堂”开始移动」 -- C# `H.CardMove(c, new
     // MoveCtx { Steps = steps, Start = ryuseido, StartWhy = "迷宫般的仓库" })`
     // (MatchHost.cs:8854-8859): the walk runs now as the main move, starting from

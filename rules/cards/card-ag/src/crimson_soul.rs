@@ -25,37 +25,32 @@ const ID: &str = "AG:绯红之魂";
 pub const CRIMSON_SOUL: CardDef = CardDef::new(
     "AG:绯红之魂",
     &[
-        On::Play(Some(cant_play), play),
-        On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
-        On::Hook(&[HookKind::PayAfter], pay_after_guard, pay_after),
-        On::Hook(&[HookKind::SkillUsed], skill_used_guard, skill_used),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The
+        // 「[消耗]1到5次500资金」 is effect content (rulebook L13-14), so there
+        // is no `money >= 500` play gate -- an unaffordable in-body payment
+        // takes the Q1 shortfall path. C# `CardCrimsonSoul.WhyNot` had one.
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PayChoose], Some(pay_choose_guard), pay_choose, ""),
+        On::Hook(&[HookKind::PayAfter], Some(pay_after_guard), pay_after, ""),
+        On::Hook(&[HookKind::SkillUsed], Some(skill_used_guard), skill_used, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
-);
-
-/// C# `CardCrimsonSoul.WhyNot`: refuses under 500.
-fn cant_play(player_id: i32) -> Option<Msg> {
-    if ctx::money_of(player_id) < 500 {
-        return Some(Msg::new(key!("crimson_soul_no_money")));
-    }
-    None
-}
+).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- C# `H.PlaceFromPlay(c, -1, -1, num)`.
     ctx::set_dest(ctx::Dest::Field);
     // 规则书[手]: 「选择[消耗]1到5次500资金」 -- C# `H.AskNumber(i, ..., 1, Math.Max(1, min(5, money/500)))`.
-    let max = (ctx::money_of(player_id) / 500).min(5);
+    // Always at least 1: the clause is 「1到5次」, and with the money play gate
+    // gone (NEGATION-AUDIT V2) a 0-cash player still chooses 1 and the payment
+    // takes the Q1 shortfall path.
+    let max = ((ctx::money_of(player_id) / 500).min(5)).max(1);
     let n = ctx::ask_number(
         player_id,
         &Msg::new(key!("crimson_soul_title")),
         &Msg::new(key!("crimson_soul_ask")),
         1,
-        max.max(1),
+        max,
     )?;
     // C# `n = Math.Max(1, Math.Min(max, r.value))`.
     let n = n.clamp(1, max);
@@ -103,7 +98,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // C# `AddCrystals(-1, "付钱时使用")`.
-    ctx::add_crystals(-1, 0);
+    ctx::add_crystals(-1, 0)?;
     // 规则书[持续]（1）: 「金额减少1000（最少为0）」 -- C# `p.amount = Math.Max(0, p.amount - 1000)`.
     trigger::set_pay_amount((amount - 1000).max(0));
     ctx::log(
@@ -163,7 +158,7 @@ fn skill_used_guard(player_id: i32) -> bool {
 }
 
 fn skill_used(player_id: i32) -> card_sdk::Asked {
-    ctx::add_crystals(-1, 0);
+    ctx::add_crystals(-1, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("crimson_soul_skill")).player_id("who", player_id),

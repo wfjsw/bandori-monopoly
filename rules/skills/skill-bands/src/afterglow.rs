@@ -12,10 +12,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
-    &[On::Hook(&[HookKind::Bought], mine, on_bought)],
-);
+    &[On::Hook(&[HookKind::Bought], None, on_bought, card_sdk::pre::MINE)],
+)
+    .legacy(&[(0, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

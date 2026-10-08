@@ -17,9 +17,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::PayChoose], gain_guard, gain_bump),
-        On::Play(None, play),
-        On::Hook(&[HookKind::PayAt], |_| true, counteract),
+        On::Hook(&[card_sdk::abi::HookKind::PayChoose], Some(gain_guard), gain_bump, ""),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PayAt], None, counteract, ""),
         On::AtEnd(at_end),
     ],
 );
@@ -145,7 +145,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         }
         // 规则书: 「若结果为5，为自己的角色卡添加6个奇迹水晶，你每次获得资金时，可消耗一个奇迹水晶使本次的额度提高300」
         5 => {
-            ctx::add_tok(player_id, key!("nfo_crystals"), 6, i32::MAX);
+            ctx::add_tok(player_id, key!("nfo_crystals"), 6, i32::MAX)?;
             ctx::log(
                 player_id,
                 &Msg::new(key!("nfo_crystals_added")).player_id("who", player_id),
@@ -217,20 +217,10 @@ fn apply_dest(player_id: i32, id: &str, dest: ctx::Dest) {
 }
 
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
+/// `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes `total` before
+/// it divides (`ctx::split_pay`).
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
-    let list: Vec<i32> = payers
-        .iter()
-        .copied()
-        .filter(|&p| p != to && !ctx::player_out(p))
-        .collect();
-    if list.is_empty() || total <= 0 {
-        return Ok(());
-    }
-    let per = (total + list.len() as i32 - 1) / list.len() as i32;
-    let share = (per + 9) / 10 * 10;
-    for p in list {
-        ctx::transfer(p, to, share, why)?;
-    }
+    ctx::split_pay(payers, to, total, why)?;
     Ok(())
 }
 
@@ -239,12 +229,10 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
 /// the Fx hook dispatch at `payAt` (after `PayChoose`, before the `pay` [反击]
 /// window), so this is a field effect, not a [反击].
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayAt
-        || trigger::player_id() != player_id
-        || !ctx::is_placed()
-    {
+        if trigger::player_id() != player_id
+        || !ctx::is_placed() {
         return Ok(());
-    }
+        }
     let amount = trigger::value();
     if amount <= 0 {
         return Ok(());
@@ -280,7 +268,7 @@ fn gain_bump(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_tok(player_id, "nfo_crystals", -1, i32::MAX);
+    ctx::add_tok(player_id, "nfo_crystals", -1, i32::MAX)?;
     ctx::trigger::set_pay_amount(ctx::trigger::value() + 300);
     ctx::log(player_id, &Msg::new(key!("nfo_bumped")));
     Ok(())

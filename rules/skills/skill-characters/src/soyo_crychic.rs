@@ -20,12 +20,13 @@ const OWED: &str = "skill.soyoCrychic.owed";
 pub const SOYO_CRYCHIC: CardDef = CardDef::new(
     "skill:长崎素世（CRYCHIC）:雨中祈晴",
     &[
-        On::Hook(&[HookKind::PayChoose], mine, on_pay),
-        On::Hook(&[HookKind::RollPlan], mine, on_plan),
+        On::Hook(&[HookKind::PayChoose], None, on_pay, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollPlan], None, on_plan, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

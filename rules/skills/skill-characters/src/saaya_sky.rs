@@ -22,18 +22,15 @@ const MARK: &str = "saaya标记";
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::PayAfter], other, on_pay_after),
-        On::Hook(&[HookKind::RollAfter], mine, on_roll),
-        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::PayAfter], Some(other), on_pay_after, ""),
+        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayChoose], None, on_pay, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -68,8 +65,8 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_tok(player_id, MARK, 1, 1);
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("saaya_sky_gain")));
+    ctx::add_tok(player_id, MARK, 1, 1)?;
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("saaya_sky_gain")))?;
     if !ctx::player_out(payer) {
         ctx::gain(payer, 200, &Msg::new(key!("saaya_sky_payee")))?;
     }
@@ -82,7 +79,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     if ctx::tok(player_id, MARK) < 1 {
         return Ok(());
     }
-    ctx::add_tok(player_id, MARK, -1, 1);
+    ctx::add_tok(player_id, MARK, -1, 1)?;
     let cut = ctx::roll(player_id, 1, 10).max(0);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     let after = before - cut;
@@ -133,7 +130,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if ctx::spend_fire(player_id, 5, &Msg::new(key!("saaya_sky_spend"))) {
+    if ctx::spend_fire(player_id, 5, &Msg::new(key!("saaya_sky_spend")))? {
         ctx::trigger::set_pay_amount((amount - 5000).max(0));
     }
     Ok(())

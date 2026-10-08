@@ -25,8 +25,8 @@ const TOKEN_PREFIX: &str = "角色标记:";
 pub const NANAMI_EFFORT: CardDef = CardDef::new(
     "Mor:（NNM）稍微努力了一下",
     &[
-        On::Play(Some(can_use_skill), use_skill),
-        On::Play(None, nanami_effort),
+        On::Play(Some(can_use_skill), use_skill, ""),
+        On::Play(None, nanami_effort, ""),
         On::AtEnd(discard_down_to_five),
     ],
 );
@@ -59,7 +59,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         }
         let take = ctx::tok(player_id, name).min(left);
         if take > 0 {
-            ctx::add_tok(player_id, name, -take, i32::MAX);
+            ctx::add_tok(player_id, name, -take, i32::MAX)?;
             left -= take;
         }
     }
@@ -91,7 +91,7 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
         2 => {
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("nanami_effort_note")));
-            ctx::add_crystals(x, 0);
+            ctx::add_crystals(x, 0)?;
             ctx::log(
                 player_id,
                 &Msg::new(key!("nanami_effort_placed")).i("n", x as i64),
@@ -186,7 +186,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(id) = owner_skill(player_id) else {
         return Ok(());
     };
-    ctx::add_crystals(-1, 0);
+    ctx::add_crystals(-1, 0)?;
     // 「此次技能不受数量或轮数限制」 -- the press is a plain `play_card`, so the
     // skill's own gate is what runs; nothing here counts a use.
     ctx::log(

@@ -154,7 +154,10 @@ impl Cx<'_> {
                 Msg::new("log.deck_phase").i("n", crate::deck::SIZE as i64),
             );
             for p in 0..self.w.player_count() {
-                if self.w.st.players[p].ai {
+                // Every machine seat -- bots of any mentality and a taken-over
+                // human -- gets its deck here; Advanced included (setup is
+                // engine-side, `docs/BOT.md` B5).
+                if self.w.st.players[p].auto_setup() {
                     self.submit_deck(p, None);
                 }
             }
@@ -206,7 +209,7 @@ impl Cx<'_> {
         };
         self.w.hidden[i].draw = list;
         self.w.st.players[i].deck_ready = true;
-        if !self.w.st.players[i].ai {
+        if !self.w.st.players[i].auto_setup() {
             self.w.log(
                 "deck",
                 i as i32,

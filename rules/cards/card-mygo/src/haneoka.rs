@@ -14,9 +14,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
     &[
-        On::Play(Some(cant_play), haneoka),
+        On::Play(Some(cant_play), haneoka, ""),
         // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-        On::Hook(&[HookKind::PayChoose], |_| true, pay_choose),
+        On::Hook(&[HookKind::PayChoose], None, pay_choose, ""),
     ],
 );
 
@@ -109,12 +109,10 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
 /// C# `CardHaneoka.PayChoose` -- while placed, ask to bin the card and cancel
 /// one payment of yours (`p.cancel = true`).
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayChoose
-        || trigger::player_id() != player_id
-        || !ctx::is_placed()
-    {
+        if trigger::player_id() != player_id
+        || !ctx::is_placed() {
         return Ok(());
-    }
+        }
     let amount = trigger::value();
     if amount <= 0 {
         return Ok(());

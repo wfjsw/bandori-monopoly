@@ -9,7 +9,7 @@
 //!
 //! Two entries. The **landing** half is `On::Settle` -- one draw, the
 //! 「[结算]是：抽取一张手卡」 clause. The **pass** half (「[经过]CiRCLE」) is
-//! `On::Hook(&[HookKind::PassTile])` -- `ctx::settle_circle_reward`, the reward
+//! `On::Hook(&[HookKind::PassTile], "")` -- `ctx::settle_circle_reward`, the reward
 //! choice the walk used to run as `circle_reward` in `play.rs`. `docs/TILES.md`.
 //!
 //! Suppression is `prop::NO_REWARD` on *this* instance (`H.CircleReward` reads
@@ -37,7 +37,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle(settle),
-        On::Hook(&[HookKind::PassTile], passes_here, on_pass),
+        On::Hook(&[HookKind::PassTile], Some(passes_here), on_pass, ""),
     ],
 );
 

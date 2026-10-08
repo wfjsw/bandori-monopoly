@@ -10,11 +10,11 @@ use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play(Some(cant_play), play)]);
+pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play(Some(cant_play), play, "")]);
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
-/// where `IsColor` sees both the global `_tileColors` re-colour and this
-/// player's `Fx.ExtraColor`.
+/// where `IsColor` sees both the `anyColor` tile prop and this player's
+/// `colorFor:<p>`.
 fn livehouses(player_id: i32) -> Vec<i32> {
     (0..ctx::tile_count())
         .filter(|&t| ctx::is_buyable(t) && ctx::is_color(player_id, t, 6))

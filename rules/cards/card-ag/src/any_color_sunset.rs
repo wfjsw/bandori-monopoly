@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
-    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play(None, play)]);
+    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play(None, play, "")]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」
@@ -102,7 +102,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
                 // 规则书: 「补满火罐」 -- C# `H.GainFire(i, H.FireMax(i) - fire, ...)`.
                 let need = ctx::fire_max(player_id) - ctx::fire(player_id);
                 if need > 0 {
-                    ctx::gain_fire(player_id, need, &Msg::new(key!("any_color_sunset_why")));
+                    ctx::gain_fire(player_id, need, &Msg::new(key!("any_color_sunset_why")))?;
                 }
             } else {
                 // 规则书: 「获得2000资金」

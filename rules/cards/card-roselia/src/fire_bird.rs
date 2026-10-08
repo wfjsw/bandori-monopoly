@@ -15,28 +15,18 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const FIRE_BIRD: CardDef = CardDef::new(
     "R:Fire bird",
     &[
-        On::Play(Some(cant_play), play),
-        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-        On::Hook(&[HookKind::PayMul], pay_mul_guard, pay_mul),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The 「支付1600资金」
+        // is effect content (rulebook L13-14), so there is no `money >= 1600`
+        // play gate -- an unaffordable in-body payment takes the Q1 shortfall
+        // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
+        On::Hook(&[HookKind::PayMul], Some(pay_mul_guard), pay_mul, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
-);
+).props(&[(card_sdk::abi::prop::EST_COST, 1600)]);
 
 const ID: &str = "R:Fire bird";
-
-/// C# `CardFireBird.WhyNot`: 「资金不够 1,600」.
-fn cant_play(player_id: i32) -> Option<Msg> {
-    // 规则书: 「支付1600资金」 -- the pay is the card's cost (C#
-    // `H.State.seats[seat].money >= 1600`).
-    if ctx::money_of(player_id) < 1600 {
-        return Some(Msg::new(key!("fire_bird_no_money")));
-    }
-    None
-}
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「支付1600资金」 -- C# `PayCtx { amount = 1600, kind = "pay", must = false }`.
@@ -125,9 +115,6 @@ fn turn_end_guard(player_id: i32) -> bool {
 }
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnEnd {
-        return Ok(());
-    }
     // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(
         player_id,
@@ -136,7 +123,7 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     )?;
     // 规则书: 「并移除1个奇迹水晶」 -- C# `AddCrystals(-1, "回合结束")`. The
     // 「奇迹水晶耗尽时将此卡放入弃牌堆」 half is [`on_crystals_changed`].
-    ctx::decay();
+    ctx::decay()?;
     Ok(())
 }
 

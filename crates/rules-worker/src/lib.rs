@@ -103,8 +103,18 @@ impl Ctx {
     /// `save_version` come from game-core, `abi` from `card-sdk`, the ruleset
     /// hash from the loaded card modules (`"stub"` without any) and the data
     /// hash from [`Ctx::load`] / [`Ctx::with_data_sha`].
+    ///
+    /// `bundle` names the engine bundle a browser can replay the record with
+    /// (`docs/REPLAY.md` §9). The server binary is not the browser glue, so
+    /// the glue identity comes from the build it was deployed with: the
+    /// `BD_GLUE_SHA` env var, or the `glueSha256` in the file `BD_ENGINE_ID`
+    /// (default `webui/src/wasm/engine_id.json`, written by
+    /// `tools/build-glue.mjs`). Same deploy, same ruleset and data -- the
+    /// same stamp a browser session of that build seals. With neither, the
+    /// bundle is empty ("unknown") and the loader falls back to matching the
+    /// other fields.
     pub fn stamp(&self) -> EngineStamp {
-        EngineStamp {
+        let stamp = EngineStamp {
             format: RECORD_VERSION,
             save_version: SAVE_VERSION,
             abi: game_rules::ABI_VERSION as u32,
@@ -116,8 +126,46 @@ impl Ctx {
             data_sha256: self.data_sha256.clone(),
             engine: "game-core".into(),
             build: env!("CARGO_PKG_VERSION").into(),
-        }
+            bundle: String::new(),
+        };
+        let bundle = game_core::record::bundle_id(&deployed_glue_sha(), &stamp);
+        EngineStamp { bundle, ..stamp }
     }
+}
+
+/// The deployed build's glue identity (see [`Ctx::stamp`]). Cached: the
+/// environment and the file do not move under a running server.
+fn deployed_glue_sha() -> String {
+    use std::sync::OnceLock;
+    static SHA: OnceLock<String> = OnceLock::new();
+    SHA.get_or_init(|| {
+        if let Ok(s) = std::env::var("BD_GLUE_SHA") {
+            let s = s.trim().to_string();
+            if !s.is_empty() {
+                return s;
+            }
+        }
+        let path = std::env::var("BD_ENGINE_ID")
+            .unwrap_or_else(|_| "webui/src/wasm/engine_id.json".to_string());
+        let Ok(text) = std::fs::read_to_string(&path) else {
+            eprintln!(
+                "no BD_GLUE_SHA and cannot read {path} -- records get an empty engine bundle id"
+            );
+            return String::new();
+        };
+        let v: serde_json::Value = match serde_json::from_str(&text) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{path}: {e} -- records get an empty engine bundle id");
+                return String::new();
+            }
+        };
+        v.get("glueSha256")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    })
+    .clone()
 }
 
 fn hex(bytes: &[u8]) -> String {
@@ -259,6 +307,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     "playerId": player_id,
                     "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(Value::Null),
                     "playable": extra.get("playable").cloned().unwrap_or(Value::Null),
+                    "estCost": extra.get("estCost").cloned().unwrap_or(Value::Null),
                 }
             }))
         }

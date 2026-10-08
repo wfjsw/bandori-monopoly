@@ -14,11 +14,17 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(
     "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
-    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::MoveRoll],
+        None,
+        counteract,
+        "actor == owner && move.kind == Walk && move.roll != null",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
 /// 规则书: 「[反击] 时机合适时打出」 -- counteraction-only (C# `Normal => false`).
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书: 「[反击] 时机合适时打出」 -- C# window is the player's own move roll.
     if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
         return false;

@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
-    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::MoveRoll], Some(can_counteract), counteract, "")],
 );
 
 /// `CardRepaint.OnPath` -- tiles of `me` on `them`'s planned path.

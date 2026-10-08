@@ -17,7 +17,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
     &[
-        On::Counteract(&[ChainKind::Paid], can_counteract, counteract),
+        On::Counteract(&[ChainKind::Paid], Some(can_counteract), counteract, ""),
         On::AtEnd(check),
     ],
 );
@@ -173,10 +173,14 @@ fn check(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .tile("tile", best),
     );
-    // 规则书[特]: 「使其对你视为live house格子」 -- C# `CardGuerrilla.ExtraColor`:
-    // the deed counts as a Live House for this player only.
+    // 规则书[特]: 「使其对你视为live house格子」 -- the `colorFor:<player_id>`
+    // tile prop on the deed's board instance: group 6 for this player only.
     if best >= 0 {
-        ctx::set_extra_color(player_id, best, 6);
+        ctx::set_tile_prop(
+            best,
+            &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
+            6,
+        );
     }
     Ok(())
 }

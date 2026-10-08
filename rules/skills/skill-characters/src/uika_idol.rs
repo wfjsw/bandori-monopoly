@@ -15,23 +15,20 @@ use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind 「火罐」 this skill parks on a tile.
-const POT: &str = "skill.dianaIdol.pot";
+const POT: &str = "skill.uikaIdol.pot";
 
-pub const DIANA_IDOL: CardDef = CardDef::new(
+pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::PassTile], any, on_pass_tile),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PassTile], Some(any), on_pass_tile, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -50,7 +47,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("diana_idol_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("uika_idol_gain")))?;
     Ok(())
 }
 
@@ -73,30 +70,30 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     }
     if !ctx::ask_yes(
         player_id,
-        &Msg::new(key!("diana_idol_title")),
-        &Msg::new(key!("diana_idol_ask")),
+        &Msg::new(key!("uika_idol_title")),
+        &Msg::new(key!("uika_idol_ask")),
     )? {
         return Ok(());
     }
     let pick = ctx::ask_pick(
         player_id,
-        &Msg::new(key!("diana_idol_title")),
-        &Msg::new(key!("diana_idol_which")),
+        &Msg::new(key!("uika_idol_title")),
+        &Msg::new(key!("uika_idol_which")),
         &pool
             .iter()
-            .map(|&t| Msg::new(key!("diana_idol_option")).tile("tile", t))
+            .map(|&t| Msg::new(key!("uika_idol_option")).tile("tile", t))
             .collect::<alloc::vec::Vec<_>>(),
     )?;
     let Some(&tile) = pool.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("diana_idol_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("uika_idol_spend")))? {
         return Ok(());
     }
-    ctx::add_mark(tile, player_id, POT, &Msg::new(key!("diana_idol_note")));
+    ctx::add_mark(tile, player_id, POT, &Msg::new(key!("uika_idol_note")));
     ctx::log(
         player_id,
-        &Msg::new(key!("diana_idol_placed")).tile("tile", tile),
+        &Msg::new(key!("uika_idol_placed")).tile("tile", tile),
     );
     Ok(())
 }
@@ -123,11 +120,11 @@ fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
         mover,
         player_id,
         due,
-        &Msg::new(key!("diana_idol_why")).i("n", due as i64),
+        &Msg::new(key!("uika_idol_why")).i("n", due as i64),
     )?;
     ctx::log(
         player_id,
-        &Msg::new(key!("diana_idol_paid"))
+        &Msg::new(key!("uika_idol_paid"))
             .player_id("who", mover)
             .i("n", due as i64),
     );

@@ -19,19 +19,16 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
         On::AtEnd(settle_now),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -46,7 +43,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_crychic_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_crychic_gain")))?;
     Ok(())
 }
 
@@ -83,7 +80,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「消耗1火罐清除自身一层[停留]」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomori_crychic_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
         return Ok(());
     }
     ctx::state::add(player_id, state_key::STAY, -1);

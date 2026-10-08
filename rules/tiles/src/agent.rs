@@ -14,7 +14,8 @@
 //! primitive.
 //!
 //! TODO(规则书): 「同色」 is the board's `group` (see `data/board.json`); the
-//! book never says whether `extraColor` / 「该格获得所有颜色」 widens it. The
+//! book never says whether the per-player colour overrides (`anyColor` /
+//! `colorFor:<p>`) / 「该格获得所有颜色」 widens it. The
 //! half-charge's 「向上取整10」 is implemented as `ceil(full/2/10)*10` in
 //! `pay_rent`, matching the C#; the book only says 「向上取整10」.
 

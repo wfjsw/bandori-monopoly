@@ -21,13 +21,14 @@ const GOT: &str = "skill.sumimi.got";
 pub const SUMIMI: CardDef = CardDef::new(
     "skill:Sumimi:人气偶像组合",
     &[
-        On::Hook(&[HookKind::PayAfter], mine, after_pay),
-        On::Hook(&[HookKind::PayMul], mine, bend),
-        On::Hook(&[HookKind::TurnEndBefore], mine, at_turn_end),
+        On::Hook(&[HookKind::PayAfter], None, after_pay, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayMul], None, bend, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEndBefore], None, at_turn_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -62,13 +63,13 @@ fn bend(player_id: i32) -> card_sdk::Asked {
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, GOT) != 0 {
         state::set(player_id, GOT, 0);
-        ctx::add_crystals(1, i32::MAX);
+        ctx::add_crystals(1, i32::MAX)?;
         ctx::log(player_id, &Msg::new(key!("sumimi_crystal")));
         return Ok(());
     }
     let n = ctx::crystals();
     if n > 0 {
-        ctx::add_crystals(-n, i32::MAX);
+        ctx::add_crystals(-n, i32::MAX)?;
         ctx::log(player_id, &Msg::new(key!("sumimi_cleared")));
     }
     Ok(())

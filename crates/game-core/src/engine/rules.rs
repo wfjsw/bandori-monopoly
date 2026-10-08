@@ -156,8 +156,8 @@ pub struct Trigger {
     /// `t.Buy.DealMortgaged` -- mortgage after the deal (default: cleared,
     /// except a Force buy keeps `FORCE_STAYS_MORTGAGED`). `set_deal_mortgaged`.
     pub deal_mortgaged: bool,
-    /// A `BuyGate` refusal's reason key (`"log.gate_poppin_hill"` and kin).
-    /// Written by the responder alongside `set_cancelled`.
+    /// A `BuyGate` refusal's reason key (a `log.*` message key naming why the
+    /// gate refused). Written by the responder alongside `set_cancelled`.
     pub reason: String,
 }
 
@@ -358,22 +358,24 @@ pub trait CardRules: Send + Sync {
     /// The purchase quote (`docs/PURCHASE.md`): what would `q.player` be
     /// charged for each tile in `q.tiles`, and may they buy it at all?
     ///
-    /// The default is the plain rulebook formula -- [`super::play::purchase::quote_native`]
-    /// -- which is what `StubRules` and the sim run. `WasmRules` overrides it
-    /// to run the `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` hooks in pure
-    /// guard mode (like `cant_play`), cloning the world only when a hooking
-    /// instance exists. The commit re-quotes, so quote == charge.
+    /// Takes the world by reference rather than a [`Cx`] so the view's
+    /// `st.buy_price` preview can ask without cloning the world. The default is
+    /// the plain rulebook formula -- [`super::play::purchase::quote_native`] --
+    /// which is what `StubRules` and the sim run. `WasmRules` overrides it to
+    /// run the `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet` hooks in pure guard
+    /// mode (like `cant_play`), cloning the world only when a hooking instance
+    /// exists. The commit re-quotes, so quote == charge.
     fn buy_quote(
         &self,
-        cx: &Cx,
+        w: &super::World,
+        data: &crate::data::GameData,
         q: &super::play::purchase::BuyQuery,
     ) -> Vec<super::play::purchase::Quote> {
-        let data = cx.game_data();
-        let st = cx.state();
+        let st = &w.st;
         q.tiles
             .iter()
             .map(|&t| {
-                let price = super::play::purchase::quote_native(data, st, t);
+                let price = super::play::purchase::base_quote(data, st, t, q.kind);
                 super::play::purchase::Quote {
                     price,
                     eligible: price >= 0,

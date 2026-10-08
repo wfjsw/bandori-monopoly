@@ -23,8 +23,8 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::RollAfter], Some(mine), on_roll, ""),
     ],
 );
 
@@ -43,7 +43,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     if !ctx::in_band(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
@@ -77,8 +77,8 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let mut y = y;
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
+    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
     // 「为此次投掷结果增加Yd4」
     let add = ctx::roll(player_id, y, 4);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
@@ -93,8 +93,8 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
             }
             let down = ctx::tok(p, FANS_DOWN).min(y);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX);
-                ctx::add_tok(p, FANS_UP, down, i32::MAX);
+                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
+                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
                 y -= down;
             }
         }
@@ -104,8 +104,8 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
                 continue;
             }
             if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX);
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX);
+                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
+                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
             }
         }
     }

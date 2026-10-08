@@ -14,10 +14,11 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, after_settle),
-        On::Play(Some(cant_play), play),
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], None, after_settle, card_sdk::pre::MINE),
+        On::Play(Some(cant_play), play, ""),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine)]);
 
 /// C# `CardStarBeat.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -67,7 +68,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     )?;
     if pick == 0 {
         // 规则书1: 「获得2个星星贴纸」 -- C# `H.AddTok(i, "星星贴纸", 2)`.
-        ctx::add_tok(player_id, "星星贴纸", 2, i32::MAX);
+        ctx::add_tok(player_id, "星星贴纸", 2, i32::MAX)?;
         ctx::log(
             player_id,
             &Msg::new(key!("star_beat_stickers"))
@@ -150,6 +151,6 @@ fn after_settle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }

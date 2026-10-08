@@ -20,9 +20,9 @@ const ID: &str = "通用:[衍生]FEVER!";
 pub const FEVER: CardDef = CardDef::new(
     "通用:[衍生]FEVER!",
     &[
-        On::Play(None, fever),
+        On::Play(None, fever, ""),
         // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], counteract_guard, counteract),
+        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], Some(counteract_guard), counteract, ""),
     ],
 );
 

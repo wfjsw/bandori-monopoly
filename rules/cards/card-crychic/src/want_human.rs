@@ -16,12 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
-        On::Play(None, want_human),
-        On::Hook(
-            &[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd],
-            counteract_guard,
-            counteract,
-        ),
+        On::Play(None, want_human, ""),
+        On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], Some(counteract_guard), counteract, ""),
     ],
 );
 
@@ -89,7 +85,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             let roll = trigger::value();
             let x = ctx::slot(player_id, SLOT_X);
             if x > 0 && roll <= x {
-                ctx::add_crystals(1, 0);
+                ctx::add_crystals(1, 0)?;
                 ctx::log(
                     player_id,
                     &Msg::new(key!("want_human_crystal"))
@@ -149,7 +145,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             }
             ctx::set_slot(player_id, SLOT_AB_BEFORE, 0);
             if ctx::abnormal_count(player_id) > ab_before - 1 {
-                ctx::add_crystals(2, 0);
+                ctx::add_crystals(2, 0)?;
                 ctx::log(
                     player_id,
                     &Msg::new(key!("want_human_abnormal")).player_id("who", player_id),

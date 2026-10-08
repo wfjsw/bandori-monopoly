@@ -14,22 +14,20 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "HHW:因为我一直相信着你";
 
 pub const BELIEVE_YOU: CardDef =
-    CardDef::new("HHW:因为我一直相信着你", &[On::Play(Some(cant_play), play)]);
+    CardDef::new("HHW:因为我一直相信着你", &[On::Play(Some(cant_play), play, "")])
+        .props(&[(card_sdk::abi::prop::EST_COST, 800)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBelieveYou.WhyNot`: refuses without another hand card / 800 money
-    // / a living rival.
-    // 规则书: 「至少有另一张手牌时可发动」 -- C# `h.hand.Count(id => id != Id) >= 1`
-    // (this card itself does not count; it is still in hand at the gate).
+    // / a living rival. TODO(规则书) NEGATION-AUDIT V2: the **money** half is gone -- the
+    // 「消耗800资金」 is effect content, not an activation cost.
+    // 规则书: 「至少有另一张手牌时可发动」 -- a real [限] on hand count, kept.
     let others_in_hand = ctx::cards_in(player_id, CardPile::Hand)
         .into_iter()
         .filter(|c| c != ID)
         .count();
     if others_in_hand < 1 {
         return Some(Msg::new(key!("believe_you_no_hand")));
-    }
-    if ctx::money_of(player_id) < 800 {
-        return Some(Msg::new(key!("x_no_money_800")));
     }
     if ctx::others(player_id).is_empty() {
         return Some(Msg::new(key!("x_no_rival")));

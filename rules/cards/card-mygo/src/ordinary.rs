@@ -13,10 +13,16 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const ORDINARY: CardDef = CardDef::new(
     "MyGO:普通与理所当然",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        None,
+        counteract,
+        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「受到异常移动效果影响后可打出」 -- C# `t.Kind == "abnormal"
     // && t.Target == player`.
     if trigger::kind() != ChainKind::Effect || trigger::target() != player_id {

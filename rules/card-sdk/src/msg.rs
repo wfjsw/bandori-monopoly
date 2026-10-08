@@ -24,7 +24,10 @@ use serde::Serialize;
 // feature rather than on `target_arch`: the solo engine is game-rules built for
 // wasm32 and it decodes guest messages, so "wasm32" was never the real
 // condition (it left `postcard::from_bytes::<Msg>` unbuildable there).
-#[cfg(not(feature = "guest"))]
+// On a native `guest` build (`rules-native`) the same binary is both the
+// card and the host, so it decodes Msg too -- only the wasm32 cdylib keeps
+// the derive off for size.
+#[cfg(not(all(feature = "guest", target_arch = "wasm32")))]
 use serde::Deserialize;
 
 /// One typed argument, as the engine's `Msg.a` values.
@@ -32,7 +35,7 @@ use serde::Deserialize;
 /// The tag names are the wire form (`{"player_id": 1}`); they must match the engine's
 /// `Arg` enum in `game-core/src/msg.rs`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(not(feature = "guest"), derive(Deserialize))]
+#[cfg_attr(not(all(feature = "guest", target_arch = "wasm32")), derive(Deserialize))]
 #[serde(rename_all = "camelCase")]
 pub enum Arg {
     /// A player -> that player's name.
@@ -53,7 +56,7 @@ pub enum Arg {
 
 /// A message by key with typed arguments.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[cfg_attr(not(feature = "guest"), derive(Deserialize))]
+#[cfg_attr(not(all(feature = "guest", target_arch = "wasm32")), derive(Deserialize))]
 pub struct Msg {
     pub k: String,
     /// Always present: postcard is not self-describing, so a skipped field

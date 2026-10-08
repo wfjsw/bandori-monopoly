@@ -508,39 +508,6 @@ impl World {
         total
     }
 
-    /// C# `_tileColors[t]` -- re-colour a tile for everyone. `-1` clears,
-    /// [`crate::state::key::ALL_COLORS`] means it counts as every colour
-    /// (「该格获得所有颜色」).
-    pub fn set_tile_color(&mut self, tile: i32, group: i32) {
-        let t = tile.max(0) as usize;
-        if self.st.tile_colors.len() <= t {
-            self.st.tile_colors.resize(t + 1, -1);
-        }
-        self.st.tile_colors[t] = group;
-    }
-
-    /// C# `Fx.ExtraColor` -- 「使其对你视为live house格子」 etc. `-1` clears.
-    pub fn set_extra_color(&mut self, player_id: i32, tile: i32, group: i32) {
-        let key = format!("{}{}", crate::state::key::EXTRA_COLOR, tile.max(0));
-        self.state_set(player_id, &key, group);
-    }
-
-    /// The colour `tile` counts as for `player_id`, or `None` when neither the
-    /// global re-colour nor the player's `Fx.ExtraColor` applies -- then it is
-    /// just its own group, which only `GameData` knows.
-    pub fn color_override(&self, player_id: i32, tile: i32) -> Option<i32> {
-        let t = tile.max(0) as usize;
-        if let Some(&g) = self.st.tile_colors.get(t) {
-            return Some(g);
-        }
-        self.player_id(player_id)
-            .and_then(|s| {
-                s.state
-                    .get(&format!("{}{}", crate::state::key::EXTRA_COLOR, t))
-            })
-            .map(|v| v.value)
-    }
-
     /// C# `H.GainR` with `fixedAmount` -- the money moves, but no skill or crit
     /// may bend the figure (「立刻获得此次失去的资金金额」).
     ///
@@ -918,24 +885,20 @@ impl World {
         {
             return Some(Msg::new("err.build_not_own"));
         }
-        // 「[拥有者]不可盖房」 / 「本回合无法加盖房屋」 -- `prop::NO_BUILD` on a
-        // rule instance (`docs/TILES.md`), not a keyed flag. The **source**
-        // owns the arming and the disarming; the reader is the rule instance.
-        // Two placements are read, the same shape as the CiRCLE veto:
-        // the player's own field instance (a per-player veto) and the tile's
-        // rule instance (a per-tile veto).
-        if s
-            .field
+        // 「[拥有者]不可盖房」 -- `prop::NO_BUILD` on a rule instance
+        // (`docs/TILES.md`), not a keyed flag. The **source** owns the arming
+        // and the disarming; the reader is the rule instance. Two placements
+        // are read, the same shape as the CiRCLE veto: the player's own field
+        // instance (a per-player veto) and the tile's rule instance (a per-tile
+        // veto). A hand card's 「本回合无法加盖房屋」 rides a lingering instance
+        // instead -- see below.
+        if s.field
             .iter()
             .any(|f| f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0)
-            || self
-                .st
-                .board_field
-                .iter()
-                .any(|f| {
-                    f.tile == tile
-                        && f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0
-                })
+            || self.st.board_field.iter().any(|f| {
+                f.tile == tile
+                    && f.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0
+            })
         {
             return Some(Msg::new("err.build_blocked"));
         }
@@ -960,13 +923,17 @@ impl World {
         {
             return Some(Msg::new("err.build_blocked"));
         }
-        // A card played from hand has no field instance to carry a prop
-        // (`ctx::set_prop` writes the *running* instance, and a hand play has
-        // none), so 学生会的检查's 「本回合无法加盖房屋」 is still a per-player
-        // scratch key it arms and its `On::AtEnd` clears. TODO(规则书): the
-        // hand-card home for a per-player veto; `docs/TILES.md` only names the
-        // instance-prop home.
-        if s.state_get("noBuild") != 0 {
+        // 学生会的检查's 「本回合无法加盖房屋」 rides a **lingering** instance
+        // carrying `prop::NO_BUILD` (`docs/PURCHASE.md` P5) -- the hand-card
+        // home for a per-player veto, since a hand play has no field instance
+        // for `ctx::set_prop` to write. It keeps its own message key so the
+        // log line does not move.
+        if self
+            .turn
+            .lingering
+            .iter()
+            .any(|l| l.owner == player_id && l.props.get(crate::state::prop::NO_BUILD).copied().unwrap_or(0) > 0)
+        {
             return Some(Msg::new("err.build_denied"));
         }
         if t.kind == "ring" || t.rent.len() < 2 {
@@ -1403,6 +1370,7 @@ impl World {
             props.insert(prop::PRICE.to_string(), tile.price);
             props.insert(prop::HOUSE.to_string(), tile.house);
             props.insert(prop::GROUP.to_string(), tile.group);
+            props.insert(prop::BUYABLE.to_string(), tile.is_buyable() as i32);
             props.insert(prop::RENT_LEN.to_string(), tile.rent.len() as i32);
             props.insert(
                 prop::BUILD_MAX.to_string(),

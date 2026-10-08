@@ -11,7 +11,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKIKO_CUT: CardDef = CardDef::new(
     "Mujica:（祥子）斩断留恋，忘却一切",
-    &[On::Play(Some(cant_play), sakiko_cut)],
+    &[On::Play(Some(cant_play), sakiko_cut, "")],
 );
 
 /// C# `H.Mortgageable(seat)`: owned ∧ `IsBuyable` ∧ `kind != "ring"` ∧ not

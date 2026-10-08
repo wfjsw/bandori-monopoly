@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     "CRYCHIC:是我自己的问题",
-    &[On::Counteract(&[ChainKind::SettleBefore], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::SettleBefore], Some(can_counteract), counteract, "")],
 );
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.
@@ -39,6 +39,10 @@ fn nearest(player_id: i32) -> Vec<i32> {
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「主要移动结束时，[触发结算]前打出此卡」 -- C#
     // `t.Kind == "settleBefore" && t.Seat == seat && t.Move != null && t.Move.Main`.
+    // `SETTLE-STAGES.md` §4 M1: the anchor is 「主要移动结束时」 (行动阶段 13)
+    // but the window is 「[触发结算]前」 (行动阶段 14), so this stays on
+    // `settleBefore` and reads "the move ended" as a **fact** (`move_is_main`),
+    // not as "a settle is happening".
     if trigger::kind() != TriggerKind::SettleBefore || trigger::player_id() != player_id {
         return false;
     }

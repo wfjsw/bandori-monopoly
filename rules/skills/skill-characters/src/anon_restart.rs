@@ -18,17 +18,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::Abnormal], mine, on_abnormal),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Abnormal], None, on_abnormal, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -43,7 +40,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("anon_restart_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("anon_restart_gain")))?;
     Ok(())
 }
 
@@ -66,7 +63,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 2, &Msg::new(key!("anon_restart_spend"))) {
+    if !ctx::spend_fire(player_id, 2, &Msg::new(key!("anon_restart_spend")))? {
         return Ok(());
     }
     ctx::draw(player_id, 1)?;

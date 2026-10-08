@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const SCHOOL_TIME: CardDef = CardDef::new("event:上学时间", &[On::Play(None, play)]);
+pub const SCHOOL_TIME: CardDef = CardDef::new("event:上学时间", &[On::Play(None, play, "")]);
 
 /// `data/schools.json` (whose own note is 「事件「上学时间」用」), inlined: `ctx`
 /// has no school lookup, so the character -> school-tile map lives here.

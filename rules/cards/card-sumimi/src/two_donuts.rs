@@ -23,8 +23,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
-        On::Play(None, two_donuts),
-        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], fx_guard, fx),
+        On::Play(None, two_donuts, ""),
+        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], Some(fx_guard), fx, ""),
     ],
 );
 
@@ -162,7 +162,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         if ctx::player_out(who) {
             continue;
         }
-        let got = ctx::gain_fire(who, 2, &Msg::new(key!("two_donuts_fire")));
+        let got = ctx::gain_fire(who, 2, &Msg::new(key!("two_donuts_fire")))?;
         let missed = 2 - got;
         if missed > 0 {
             ctx::gain(

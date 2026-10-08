@@ -15,8 +15,15 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
-        On::Play(Some(cant_play), play),
-        On::Hook(&[HookKind::BeforeOut], |_| true, before_out),
+        On::Play(Some(cant_play), play, ""),
+        On::Hook(&[HookKind::BeforeOut], None, before_out, ""),
+        // 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle
+        // runs to completion at the original owner (`tileResolved`, the
+        // 「结算完成时」 terminal, `SETTLE-STAGES.md` §4 M5) and only then does
+        // the partner's share land. `PayAfter` just measures the rent income
+        // the settle produced; the split is the terminal's job.
+        On::Hook(&[HookKind::PayAfter], None, measure_rent, ""),
+        On::Hook(&[HookKind::TileResolved], None, share_at_resolved, ""),
     ],
 );
 
@@ -124,17 +131,100 @@ fn play(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, "one_of_us_partner", partner + 1);
     ctx::set_slot(player_id, "one_of_us_mine", a + 1);
     ctx::set_slot(player_id, "one_of_us_theirs", b + 1);
-    // TODO(规则书)[judgement]: 「触发结算收益平分，被指定的地块不会有第三方参与分钱，必须优先指定商店街格子（先在地契原主人方结算完成，之后被分享方资金直接增加，不受其他任何效果影响）」
-    //   the clause under-specifies -- see the note above it
-    // -- the Fx.PayAfter hook (`TriggerKind::PayAfter`) exists and `pay_is_rent()` /
-    // `value()` carry `p.IsRent` / `p.finalGain`, but the designated-tile match
-    // (`p.tile == MyTile` / `p.tile == TheirTile`) needs `t.Pay.tile` on the pay
-    // trigger (currently -1), and 「被分享方资金直接增加，不受其他任何效果影响」
-    // needs the raw `H.State.seats[].money` add (not `H.GainR`). Until both land
-    // the split cannot key on the designated tiles without over-firing.
+    // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金
+    // 直接增加，不受其他任何效果影响）」 -- the split is `measure_rent` +
+    // `share_at_resolved` below: the settle completes at the original owner
+    // (`tileResolved`), then the partner's half lands.
+    // TODO(规则书)[judgement]: 「不受其他任何效果影响」 wants a raw money add
+    // (`H.State.seats[].money`), not a payment; `ctx::transfer` still rides the
+    // payment pipeline. And 「平分」 reads as a half-share of the settle income
+    // moving owner -> partner (the C# note: "P0 gets half from P1"); whether
+    // the owner keeps the full rent and the partner is topped up, or the two
+    // split the rent itself, is the same shape either way at half.
     // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
-    // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], ...)` below
+    // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], Some(...), "")` below
     // (C# `CardOneOfUs.BeforeOut`).
+    Ok(())
+}
+
+/// Is `tile` one of the pair's designated deeds?
+fn designated(owner: i32, tile: i32) -> bool {
+    tile >= 0
+        && (tile == ctx::slot(owner, "one_of_us_mine") - 1
+            || tile == ctx::slot(owner, "one_of_us_theirs") - 1)
+}
+
+/// Measure the rent income a designated deed just produced (`Fx.PayAfter`).
+/// `t.Pay.tile` rides the pay trigger (ABI v42), so the designated-tile match
+/// is exact. Recorded on a slot; `share_at_resolved` spends it.
+fn measure_rent(owner: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() || ctx::slot(owner, "one_of_us_partner") <= 0 {
+        return Ok(());
+    }
+    let k = trigger::kind();
+    if k != card_sdk::abi::TriggerKind::PayAfter || !trigger::pay_is_rent() {
+        return Ok(());
+    }
+    if !designated(owner, trigger::tile()) {
+        return Ok(());
+    }
+    // `value()` is the settled figure (`p.finalGain`).
+    let paid = trigger::value().max(0);
+    if paid <= 0 {
+        return Ok(());
+    }
+    ctx::set_slot(owner, "one_of_us_rent", paid);
+    Ok(())
+}
+
+/// 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle's
+/// terminal (`tileResolved`, 「结算完成时」; `SETTLE-STAGES.md` §4 M5). The
+/// owner's side has already settled; now the partner's half lands. Fires even
+/// when the settle was cancelled (complete-as-nothing) -- with no recorded
+/// income there is nothing to split.
+fn share_at_resolved(owner: i32) -> card_sdk::Asked {
+    if !ctx::is_placed() {
+        return Ok(());
+    }
+    let partner = ctx::slot(owner, "one_of_us_partner") - 1;
+    if partner < 0 {
+        return Ok(());
+    }
+    let income = ctx::slot(owner, "one_of_us_rent");
+    ctx::set_slot(owner, "one_of_us_rent", 0);
+    if income <= 0 {
+        return Ok(());
+    }
+    if !designated(owner, trigger::tile()) {
+        return Ok(());
+    }
+    // 「触发结算收益平分」 -- half the settle income to the partner. The
+    // settle has already paid the owner in full (「先在地契原主人方结算完成」);
+    // this is the partner's share, moving owner -> partner (the C# note: "P0
+    // gets half from P1").
+    let half = income / 2;
+    if half <= 0 {
+        return Ok(());
+    }
+    let tile = trigger::tile();
+    let owner_of_tile = ctx::tile_owner(tile);
+    if owner_of_tile < 0 || owner_of_tile == partner {
+        return Ok(());
+    }
+    // TODO(规则书)[judgement]: 「不受其他任何效果影响」 -- see the note in `play`.
+    ctx::transfer(
+        owner_of_tile,
+        partner,
+        half,
+        &Msg::new(key!("one_of_us_share")),
+    )?;
+    ctx::log(
+        partner,
+        &Msg::new(key!("one_of_us_shared"))
+            .player_id("who", partner)
+            .tile("tile", tile)
+            .n("money", half as i64),
+    );
     Ok(())
 }
 

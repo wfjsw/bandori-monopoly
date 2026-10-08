@@ -20,7 +20,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
-        On::Play(Some(cant_play), overlapping_voices),
+        On::Play(Some(cant_play), overlapping_voices, ""),
         On::AtEnd(at_end),
     ],
 );
@@ -62,7 +62,7 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]3: 「获得1层[停留]」
     ctx::give_stay(player_id, 1);
     // 规则书[手]3: 「和1个正面的[P✽P粉丝]」 -- C# `H.GainFans(i, 1, up: true)`.
-    ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX);
+    ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
     // 规则书[手]3: 「将1张“明天见”加入手卡」
     ctx::add_to_hand(player_id, "PP:[衍生]明天见");
     ctx::log(

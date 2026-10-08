@@ -45,19 +45,16 @@ fn cd_key(id: &str) -> alloc::string::String {
 pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::SkillUsed], any, on_skill),
-        On::Hook(&[HookKind::TurnEnd], mine, tick),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::SkillUsed], Some(any), on_skill, ""),
+        On::Hook(&[HookKind::TurnEnd], None, tick, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (4, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -76,7 +73,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_gain")))?;
     Ok(())
 }
 
@@ -114,10 +111,10 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("nanami_ordinary_spend")))? {
         return Ok(());
     }
-    ctx::add_tok(player_id, &mark_name(&id), 1, i32::MAX);
+    ctx::add_tok(player_id, &mark_name(&id), 1, i32::MAX)?;
     state::set(player_id, &cd, 3);
     ctx::log(
         player_id,
@@ -167,7 +164,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     let id = mark_skill(&mark);
-    ctx::add_tok(player_id, &mark, -1, i32::MAX);
+    ctx::add_tok(player_id, &mark, -1, i32::MAX)?;
     ctx::play_card(id, player_id)?;
     ctx::log(
         player_id,

@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play(Some(cant_play), play)]);
+pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play(Some(cant_play), play, "")]);
 
 /// C# `CardEffort.WhyNot` defers to `H.MoveWhyNot`: refuses after the main move
 /// (`这回合已经移动过了`) and while `H.State.skipMove` (`本回合不能移动`).

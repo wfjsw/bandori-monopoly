@@ -1,0 +1,4483 @@
+use crate::common::ast::{operators, ComprehensionExpr, EntryExpr, Expr};
+use crate::common::types::bool::Bool;
+use crate::common::types::map;
+use crate::common::types::optional::{unwrap_optional, Unwrapped};
+use crate::common::types::*;
+use crate::common::value::{BuiltinRef, CowVal, FromVal, StaticVal, Val};
+use crate::context::Context;
+use crate::{ExecutionError, Expression, FunctionContext};
+#[cfg(feature = "chrono")]
+use chrono::TimeZone;
+use std::any::Any;
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::collections::HashMap;
+use std::convert::{Infallible, TryFrom, TryInto};
+use std::fmt::{Debug, Display, Formatter};
+use std::ops;
+use std::ops::Deref;
+use std::sync::Arc;
+#[cfg(feature = "chrono")]
+use std::sync::LazyLock;
+
+/// Timestamp values are limited to the range of values which can be serialized as a string:
+/// `["0001-01-01T00:00:00Z", "9999-12-31T23:59:59.999999999Z"]`. Since the max is a smaller
+/// and the min is a larger timestamp than what is possible to represent with
+/// [`chrono::DateTime`], we need to perform our own spec-compliant overflow checks.
+///
+/// <https://github.com/google/cel-spec/blob/master/doc/langdef.md#overflow>
+#[cfg(feature = "chrono")]
+static MAX_TIMESTAMP: LazyLock<chrono::DateTime<chrono::FixedOffset>> = LazyLock::new(|| {
+    let naive = chrono::NaiveDate::from_ymd_opt(9999, 12, 31)
+        .unwrap()
+        .and_hms_nano_opt(23, 59, 59, 999_999_999)
+        .unwrap();
+    chrono::FixedOffset::east_opt(0)
+        .unwrap()
+        .from_utc_datetime(&naive)
+});
+
+#[cfg(feature = "chrono")]
+static MIN_TIMESTAMP: LazyLock<chrono::DateTime<chrono::FixedOffset>> = LazyLock::new(|| {
+    let naive = chrono::NaiveDate::from_ymd_opt(1, 1, 1)
+        .unwrap()
+        .and_hms_opt(0, 0, 0)
+        .unwrap();
+    chrono::FixedOffset::east_opt(0)
+        .unwrap()
+        .from_utc_datetime(&naive)
+});
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Map {
+    pub map: Arc<HashMap<Key, Value>>,
+}
+
+impl PartialOrd for Map {
+    fn partial_cmp(&self, _: &Self) -> Option<Ordering> {
+        None
+    }
+}
+
+impl Map {
+    /// Returns a reference to the value corresponding to the key. Implicitly converts between int
+    /// and uint keys.
+    pub fn get(&self, key: &(dyn AsKeyRef + '_)) -> Option<&Value> {
+        self.map.get(key).or_else(|| {
+            // Also check keys that are cross type comparable.
+            let keyref = key.as_keyref();
+            match keyref {
+                KeyRef::Int(k) => {
+                    let converted = u64::try_from(k).ok()?;
+                    self.map.get(&Key::Uint(converted))
+                }
+                KeyRef::Uint(k) => {
+                    let converted = i64::try_from(k).ok()?;
+                    self.map.get(&Key::Int(converted))
+                }
+                _ => None,
+            }
+        })
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, Ord, Clone, PartialOrd)]
+pub enum Key {
+    Int(i64),
+    Uint(u64),
+    Bool(bool),
+    String(Arc<String>),
+}
+
+impl From<CelMapKey<'_>> for Key {
+    fn from(value: CelMapKey<'_>) -> Self {
+        match value {
+            CelMapKey::Bool(b) => b.into_inner().into(),
+            CelMapKey::Int(i) => i.into_inner().into(),
+            CelMapKey::String(s) => s.into_inner().into(),
+            CelMapKey::UInt(u) => u.into_inner().into(),
+        }
+    }
+}
+
+impl From<Key> for CelMapKey<'_> {
+    fn from(key: Key) -> Self {
+        match key {
+            Key::Int(i) => CelMapKey::from(i),
+            Key::Uint(u) => CelMapKey::from(u),
+            Key::Bool(b) => CelMapKey::from(b),
+            Key::String(s) => CelMapKey::from(Arc::unwrap_or_clone(s)),
+        }
+    }
+}
+
+/// A borrowed version of [`Key`] that avoids allocating for lookups.
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash, Ord, PartialOrd)]
+pub enum KeyRef<'a> {
+    Int(i64),
+    Uint(u64),
+    Bool(bool),
+    String(&'a str),
+}
+
+/// Trait for converting to a borrowed [`KeyRef`] for efficient lookups.
+pub trait AsKeyRef {
+    fn as_keyref(&self) -> KeyRef<'_>;
+}
+
+impl AsKeyRef for Key {
+    fn as_keyref(&self) -> KeyRef<'_> {
+        match self {
+            Key::Int(i) => KeyRef::Int(*i),
+            Key::Uint(u) => KeyRef::Uint(*u),
+            Key::Bool(b) => KeyRef::Bool(*b),
+            Key::String(s) => KeyRef::String(s.as_str()),
+        }
+    }
+}
+
+impl<'a> AsKeyRef for KeyRef<'a> {
+    fn as_keyref(&self) -> KeyRef<'a> {
+        *self
+    }
+}
+
+/// Trait object implementations for `dyn AsKeyRef` to enable hashing and comparison.
+impl<'a> PartialEq for dyn AsKeyRef + 'a {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_keyref().eq(&other.as_keyref())
+    }
+}
+
+impl<'a> Eq for dyn AsKeyRef + 'a {}
+
+impl<'a> std::hash::Hash for dyn AsKeyRef + 'a {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.as_keyref().hash(state)
+    }
+}
+
+impl<'a> PartialOrd for dyn AsKeyRef + 'a {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<'a> Ord for dyn AsKeyRef + 'a {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_keyref().cmp(&other.as_keyref())
+    }
+}
+
+/// Implement `Borrow<dyn AsKeyRef>` for `Key` to enable efficient lookups.
+impl<'a> Borrow<dyn AsKeyRef + 'a> for Key {
+    fn borrow(&self) -> &(dyn AsKeyRef + 'a) {
+        self
+    }
+}
+
+/// Implement conversions from primitive types to [`Key`]
+impl From<String> for Key {
+    fn from(v: String) -> Self {
+        Key::String(v.into())
+    }
+}
+
+impl From<Arc<String>> for Key {
+    fn from(v: Arc<String>) -> Self {
+        Key::String(v)
+    }
+}
+
+impl<'a> From<&'a str> for Key {
+    fn from(v: &'a str) -> Self {
+        Key::String(Arc::new(v.into()))
+    }
+}
+
+impl From<bool> for Key {
+    fn from(v: bool) -> Self {
+        Key::Bool(v)
+    }
+}
+
+impl From<i64> for Key {
+    fn from(v: i64) -> Self {
+        Key::Int(v)
+    }
+}
+
+impl From<i32> for Key {
+    fn from(v: i32) -> Self {
+        Key::Int(v as i64)
+    }
+}
+
+impl From<u64> for Key {
+    fn from(v: u64) -> Self {
+        Key::Uint(v)
+    }
+}
+
+impl From<u32> for Key {
+    fn from(v: u32) -> Self {
+        Key::Uint(v as u64)
+    }
+}
+
+impl serde::Serialize for Key {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Key::Int(v) => v.serialize(serializer),
+            Key::Uint(v) => v.serialize(serializer),
+            Key::Bool(v) => v.serialize(serializer),
+            Key::String(v) => v.serialize(serializer),
+        }
+    }
+}
+
+impl Display for Key {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Int(v) => write!(f, "{v}"),
+            Key::Uint(v) => write!(f, "{v}"),
+            Key::Bool(v) => write!(f, "{v}"),
+            Key::String(v) => write!(f, "{v}"),
+        }
+    }
+}
+
+/// Implement conversions from [`Key`] into [`Value`]
+impl TryInto<Key> for Value {
+    type Error = Value;
+
+    #[inline(always)]
+    fn try_into(self) -> Result<Key, Self::Error> {
+        match self {
+            Value::Int(v) => Ok(Key::Int(v)),
+            Value::UInt(v) => Ok(Key::Uint(v)),
+            Value::String(v) => Ok(Key::String(v)),
+            Value::Bool(v) => Ok(Key::Bool(v)),
+            _ => Err(self),
+        }
+    }
+}
+
+/// Implement conversions from [`KeyRef`] into [`Value`]
+impl<'a> TryFrom<&'a Value> for KeyRef<'a> {
+    type Error = Value;
+
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Int(v) => Ok(KeyRef::Int(*v)),
+            Value::UInt(v) => Ok(KeyRef::Uint(*v)),
+            Value::String(v) => Ok(KeyRef::String(v.as_str())),
+            Value::Bool(v) => Ok(KeyRef::Bool(*v)),
+            _ => Err(value.clone()),
+        }
+    }
+}
+
+// Implement conversion from HashMap<K, V> into CelMap
+impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Map {
+    fn from(map: HashMap<K, V>) -> Self {
+        let mut new_map = HashMap::with_capacity(map.len());
+        for (k, v) in map {
+            new_map.insert(k.into(), v.into());
+        }
+        Map {
+            map: Arc::new(new_map),
+        }
+    }
+}
+
+/// Equality helper for [`Opaque`] values.
+///
+/// Implementors define how two values of the same runtime type compare for
+/// equality when stored as [`Value::Opaque`].
+///
+/// You normally don't implement this trait manually. It is automatically
+/// provided for any `T: Eq + PartialEq + Any + Opaque` (see the blanket impl
+/// below). The runtime will first ensure the two values have the same
+/// [`Opaque::runtime_type_name`], and only then attempt a downcast and call
+/// `Eq::eq`.
+pub trait OpaqueEq {
+    /// Compare with another [`Opaque`] erased value.
+    ///
+    /// Implementations should return `false` if `other` does not have the same
+    /// runtime type, or if it cannot be downcast to the concrete type of `self`.
+    fn opaque_eq(&self, other: &dyn Opaque) -> bool;
+}
+
+impl<T> OpaqueEq for T
+where
+    T: Eq + PartialEq + Any + Opaque,
+{
+    fn opaque_eq(&self, other: &dyn Opaque) -> bool {
+        if self.runtime_type_name() != other.runtime_type_name() {
+            return false;
+        }
+        if let Some(other) = other.downcast_ref::<T>() {
+            self.eq(other)
+        } else {
+            false
+        }
+    }
+}
+
+/// Helper trait to obtain a `&dyn Debug` view.
+///
+/// This is auto-implemented for any `T: Debug` and is used by the runtime to
+/// format [`Opaque`] values without knowing their concrete type.
+pub trait AsDebug {
+    /// Returns `self` as a `&dyn Debug` trait object.
+    fn as_debug(&self) -> &dyn Debug;
+}
+
+impl<T> AsDebug for T
+where
+    T: Debug,
+{
+    fn as_debug(&self) -> &dyn Debug {
+        self
+    }
+}
+
+/// Trait for user-defined opaque values stored inside [`Value::Opaque`].
+///
+/// Implement this trait for types that should participate in CEL evaluation as
+/// opaque/user-defined values. An opaque value:
+/// - must report a stable runtime type name via [`Opaque::runtime_type_name`];
+/// - participates in equality via the blanket [`OpaqueEq`] implementation;
+/// - can be formatted via [`AsDebug`];
+/// - must be thread-safe (`Send + Sync`).
+///
+/// When the `json` feature is enabled you may optionally provide a JSON
+/// representation for diagnostics, logging or interop. Returning `None` keeps the
+/// value non-serializable for JSON.
+///
+/// Example
+/// ```rust
+/// use std::fmt::{Debug, Formatter, Result as FmtResult};
+/// use std::sync::Arc;
+/// use cel::common::types::Type;
+/// use cel::objects::{Opaque, Value};
+/// use cel::{Context, Env};
+///
+/// #[derive(Eq, PartialEq)]
+/// struct MyId(u64);
+///
+/// impl Debug for MyId {
+///     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult { write!(f, "MyId({})", self.0) }
+/// }
+///
+/// impl Opaque for MyId {
+///     fn runtime_type_name(&self) -> &str { "example.MyId" }
+/// }
+///
+/// // Values of `MyId` can now be wrapped in `Value::Opaque` and compared.
+/// let a = Value::Opaque(Arc::new(MyId(7)));
+/// let b = Value::Opaque(Arc::new(MyId(7)));
+/// assert_eq!(a, b);
+///
+/// // Registering its type lets expressions name it.
+/// let mut env = Env::stdlib();
+/// env.add_type(Type::new_opaque_type("example.MyId")).unwrap();
+/// let program = env.compile("type(id) == example.MyId").unwrap();
+/// let mut context = Context::with_env(Arc::new(env));
+/// context.add_variable_from_value("id", a);
+///
+/// assert_eq!(program.execute(&context), Ok(Value::Bool(true)));
+/// ```
+pub trait Opaque: Any + OpaqueEq + AsDebug + Send + Sync {
+    /// Returns a stable, fully-qualified type name for this value's runtime type.
+    ///
+    /// This name is used to check type compatibility before attempting downcasts
+    /// during equality checks and other operations. It should be stable across
+    /// versions and unique within your application or library (e.g., a package
+    /// qualified name like `my.pkg.Type`).
+    fn runtime_type_name(&self) -> &str;
+
+    /// Optional JSON representation (requires the `json` feature).
+    ///
+    /// The default implementation returns `None`, indicating that the value
+    /// cannot be represented as JSON.
+    #[cfg(feature = "json")]
+    fn json(&self) -> Option<serde_json::Value> {
+        None
+    }
+}
+
+impl dyn Opaque {
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        let any: &dyn Any = self;
+        any.downcast_ref()
+    }
+}
+
+struct OpaqueVal {
+    r#type: Type,
+    val: Arc<dyn Opaque>,
+}
+
+impl Debug for OpaqueVal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OpaqueVal<{}>", self.val.runtime_type_name())
+    }
+}
+
+impl Val for OpaqueVal {
+    fn get_type(&self) -> &Type {
+        &self.r#type
+    }
+
+    /// `OpaqueVal`'s runtime type is per-instance - the opaque type name is part of
+    /// the value - so there is no single static `Type` to return, and it
+    /// cannot be named in the overload-registration macros. Use
+    /// [`get_type`](Val::get_type) on a value instead.
+    fn cel_type() -> &'static Type {
+        panic!("`OpaqueVal` has no static `Val::cel_type()`: its type varies per value")
+    }
+
+    fn equals(&self, other: &dyn Val) -> bool {
+        if other.get_type() != self.get_type() {
+            false
+        } else {
+            match other.downcast_ref::<OpaqueVal>() {
+                None => false,
+                Some(other) => self.val.opaque_eq(other.val.deref()),
+            }
+        }
+    }
+
+    fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v>
+    where
+        Self: 'v,
+    {
+        Box::new(Self {
+            r#type: Type::new_opaque_type(self.val.runtime_type_name().to_owned()),
+            val: self.val.clone(),
+        })
+    }
+
+    fn as_any(&self) -> Option<&dyn Any> {
+        Some(self)
+    }
+}
+
+impl StaticVal for OpaqueVal {}
+
+impl OpaqueVal {
+    fn new(val: Arc<dyn Opaque>) -> Self {
+        Self {
+            r#type: Type::new_opaque_type(val.runtime_type_name().to_owned()),
+            val,
+        }
+    }
+
+    fn clone_inner(&self) -> Arc<dyn Opaque> {
+        self.val.clone()
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub struct OptionalValue {
+    value: Option<Value>,
+}
+
+impl OptionalValue {
+    pub fn of(value: Value) -> Self {
+        OptionalValue { value: Some(value) }
+    }
+    pub fn none() -> Self {
+        OptionalValue { value: None }
+    }
+    pub fn value(&self) -> Option<&Value> {
+        self.value.as_ref()
+    }
+
+    pub(crate) fn inner(&self) -> Option<&Value> {
+        self.value.as_ref()
+    }
+}
+
+impl Opaque for OptionalValue {
+    fn runtime_type_name(&self) -> &str {
+        "optional_type"
+    }
+}
+
+impl From<OptionalValue> for Option<Value> {
+    fn from(value: OptionalValue) -> Self {
+        value.value
+    }
+}
+
+impl<'a> TryFrom<&'a Value> for &'a OptionalValue {
+    type Error = ExecutionError;
+
+    fn try_from(value: &'a Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Opaque(opaque) if opaque.runtime_type_name() == "optional_type" => opaque
+                .downcast_ref::<OptionalValue>()
+                .ok_or_else(|| ExecutionError::function_error("optional", "failed to downcast")),
+            Value::Opaque(opaque) => Err(ExecutionError::UnexpectedType {
+                got: opaque.runtime_type_name().to_string(),
+                want: "optional_type".to_string(),
+            }),
+            v => Err(ExecutionError::UnexpectedType {
+                got: v.type_of().to_string(),
+                want: "optional_type".to_string(),
+            }),
+        }
+    }
+}
+
+pub trait TryIntoValue {
+    type Error: std::error::Error + 'static + Send + Sync;
+    fn try_into_value(self) -> Result<Value, Self::Error>;
+}
+
+impl<T: serde::Serialize> TryIntoValue for T {
+    type Error = crate::ser::SerializationError;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        crate::ser::to_value(self)
+    }
+}
+impl TryIntoValue for Value {
+    type Error = Infallible;
+    fn try_into_value(self) -> Result<Value, Self::Error> {
+        Ok(self)
+    }
+}
+
+#[derive(Clone)]
+pub enum Value {
+    List(Arc<Vec<Value>>),
+    Map(Map),
+
+    Function(Arc<String>, Option<Box<Value>>),
+
+    // Atoms
+    Int(i64),
+    UInt(u64),
+    Float(f64),
+    String(Arc<String>),
+    Bytes(Arc<Vec<u8>>),
+    Bool(bool),
+    #[cfg(feature = "chrono")]
+    Duration(chrono::Duration),
+    #[cfg(feature = "chrono")]
+    Timestamp(chrono::DateTime<chrono::FixedOffset>),
+    Opaque(Arc<dyn Opaque>),
+    Struct(Arc<CelStruct<'static>>),
+    Null,
+}
+
+impl Debug for Value {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Value::List(l) => write!(f, "List({:?})", l),
+            Value::Map(m) => write!(f, "Map({:?})", m),
+            Value::Function(name, func) => write!(f, "Function({:?}, {:?})", name, func),
+            Value::Int(i) => write!(f, "Int({:?})", i),
+            Value::UInt(u) => write!(f, "UInt({:?})", u),
+            Value::Float(d) => write!(f, "Float({:?})", d),
+            Value::String(s) => write!(f, "String({:?})", s),
+            Value::Bytes(b) => write!(f, "Bytes({:?})", b),
+            Value::Bool(b) => write!(f, "Bool({:?})", b),
+            #[cfg(feature = "chrono")]
+            Value::Duration(d) => write!(f, "Duration({:?})", d),
+            #[cfg(feature = "chrono")]
+            Value::Timestamp(t) => write!(f, "Timestamp({:?})", t),
+            Value::Opaque(o) => write!(f, "Opaque<{}>({:?})", o.runtime_type_name(), o.as_debug()),
+            Value::Null => write!(f, "Null"),
+            Value::Struct(s) => write!(f, "{} {{}}", s.name()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum ValueType {
+    List,
+    Map,
+    Function,
+    Int,
+    UInt,
+    Float,
+    String,
+    Bytes,
+    Bool,
+    Duration,
+    Timestamp,
+    Opaque,
+    Null,
+    Struct,
+}
+
+impl Display for ValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueType::List => write!(f, "list"),
+            ValueType::Map => write!(f, "map"),
+            ValueType::Function => write!(f, "function"),
+            ValueType::Int => write!(f, "int"),
+            ValueType::UInt => write!(f, "uint"),
+            ValueType::Float => write!(f, "float"),
+            ValueType::String => write!(f, "string"),
+            ValueType::Bytes => write!(f, "bytes"),
+            ValueType::Bool => write!(f, "bool"),
+            ValueType::Opaque => write!(f, "opaque"),
+            ValueType::Duration => write!(f, "duration"),
+            ValueType::Timestamp => write!(f, "timestamp"),
+            ValueType::Null => write!(f, "null"),
+            ValueType::Struct => write!(f, "struct"),
+        }
+    }
+}
+
+impl Value {
+    pub fn type_of(&self) -> ValueType {
+        match self {
+            Value::List(_) => ValueType::List,
+            Value::Map(_) => ValueType::Map,
+            Value::Function(_, _) => ValueType::Function,
+            Value::Int(_) => ValueType::Int,
+            Value::UInt(_) => ValueType::UInt,
+            Value::Float(_) => ValueType::Float,
+            Value::String(_) => ValueType::String,
+            Value::Bytes(_) => ValueType::Bytes,
+            Value::Bool(_) => ValueType::Bool,
+            Value::Opaque(_) => ValueType::Opaque,
+            #[cfg(feature = "chrono")]
+            Value::Duration(_) => ValueType::Duration,
+            #[cfg(feature = "chrono")]
+            Value::Timestamp(_) => ValueType::Timestamp,
+            Value::Null => ValueType::Null,
+            Value::Struct(_) => ValueType::Struct,
+        }
+    }
+
+    pub fn is_zero(&self) -> bool {
+        match self {
+            Value::List(v) => v.is_empty(),
+            Value::Map(v) => v.map.is_empty(),
+            Value::Int(0) => true,
+            Value::UInt(0) => true,
+            Value::Float(f) => *f == 0.0,
+            Value::String(v) => v.is_empty(),
+            Value::Bytes(v) => v.is_empty(),
+            Value::Bool(false) => true,
+            #[cfg(feature = "chrono")]
+            Value::Duration(v) => v.is_zero(),
+            Value::Null => true,
+            _ => false,
+        }
+    }
+
+    pub fn error_expected_type(&self, expected: ValueType) -> ExecutionError {
+        ExecutionError::UnexpectedType {
+            got: self.type_of().to_string(),
+            want: expected.to_string(),
+        }
+    }
+}
+
+impl From<&Value> for Value {
+    fn from(value: &Value) -> Self {
+        value.clone()
+    }
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Value::Map(a), Value::Map(b)) => a == b,
+            (Value::List(a), Value::List(b)) => a == b,
+            (Value::Function(a1, a2), Value::Function(b1, b2)) => a1 == b1 && a2 == b2,
+            (Value::Int(a), Value::Int(b)) => a == b,
+            (Value::UInt(a), Value::UInt(b)) => a == b,
+            (Value::Float(a), Value::Float(b)) => a == b,
+            (Value::String(a), Value::String(b)) => a == b,
+            (Value::Bytes(a), Value::Bytes(b)) => a == b,
+            (Value::Bool(a), Value::Bool(b)) => a == b,
+            (Value::Null, Value::Null) => true,
+            #[cfg(feature = "chrono")]
+            (Value::Duration(a), Value::Duration(b)) => a == b,
+            #[cfg(feature = "chrono")]
+            (Value::Timestamp(a), Value::Timestamp(b)) => a == b,
+            // Allow different numeric types to be compared without explicit casting.
+            (Value::Int(a), Value::UInt(b)) => a
+                .to_owned()
+                .try_into()
+                .map(|a: u64| a == *b)
+                .unwrap_or(false),
+            (Value::Int(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::UInt(a), Value::Int(b)) => a
+                .to_owned()
+                .try_into()
+                .map(|a: i64| a == *b)
+                .unwrap_or(false),
+            (Value::UInt(a), Value::Float(b)) => (*a as f64) == *b,
+            (Value::Float(a), Value::Int(b)) => *a == (*b as f64),
+            (Value::Float(a), Value::UInt(b)) => *a == (*b as f64),
+            (Value::Opaque(a), Value::Opaque(b)) => a.opaque_eq(b.deref()),
+            (_, _) => false,
+        }
+    }
+}
+
+impl Eq for Value {}
+
+impl PartialOrd for Value {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        match (self, other) {
+            (Value::Int(a), Value::Int(b)) => Some(a.cmp(b)),
+            (Value::UInt(a), Value::UInt(b)) => Some(a.cmp(b)),
+            (Value::Float(a), Value::Float(b)) => a.partial_cmp(b),
+            (Value::String(a), Value::String(b)) => Some(a.cmp(b)),
+            (Value::Bool(a), Value::Bool(b)) => Some(a.cmp(b)),
+            (Value::Null, Value::Null) => Some(Ordering::Equal),
+            #[cfg(feature = "chrono")]
+            (Value::Duration(a), Value::Duration(b)) => Some(a.cmp(b)),
+            #[cfg(feature = "chrono")]
+            (Value::Timestamp(a), Value::Timestamp(b)) => Some(a.cmp(b)),
+            // Allow different numeric types to be compared without explicit casting.
+            (Value::Int(a), Value::UInt(b)) => Some(
+                a.to_owned()
+                    .try_into()
+                    .map(|a: u64| a.cmp(b))
+                    // If the i64 doesn't fit into a u64 it must be less than 0.
+                    .unwrap_or(Ordering::Less),
+            ),
+            (Value::Int(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
+            (Value::UInt(a), Value::Int(b)) => Some(
+                a.to_owned()
+                    .try_into()
+                    .map(|a: i64| a.cmp(b))
+                    // If the u64 doesn't fit into a i64 it must be greater than i64::MAX.
+                    .unwrap_or(Ordering::Greater),
+            ),
+            (Value::UInt(a), Value::Float(b)) => (*a as f64).partial_cmp(b),
+            (Value::Float(a), Value::Int(b)) => a.partial_cmp(&(*b as f64)),
+            (Value::Float(a), Value::UInt(b)) => a.partial_cmp(&(*b as f64)),
+            _ => None,
+        }
+    }
+}
+
+impl From<&Key> for Value {
+    fn from(value: &Key) -> Self {
+        match value {
+            Key::Int(v) => Value::Int(*v),
+            Key::Uint(v) => Value::UInt(*v),
+            Key::Bool(v) => Value::Bool(*v),
+            Key::String(v) => Value::String(v.clone()),
+        }
+    }
+}
+
+impl From<Key> for Value {
+    fn from(value: Key) -> Self {
+        match value {
+            Key::Int(v) => Value::Int(v),
+            Key::Uint(v) => Value::UInt(v),
+            Key::Bool(v) => Value::Bool(v),
+            Key::String(v) => Value::String(v),
+        }
+    }
+}
+
+impl From<&Key> for Key {
+    fn from(key: &Key) -> Self {
+        key.clone()
+    }
+}
+
+// Convert Vec<T> to Value
+impl<T: Into<Value>> From<Vec<T>> for Value {
+    fn from(v: Vec<T>) -> Self {
+        Value::List(v.into_iter().map(|v| v.into()).collect::<Vec<_>>().into())
+    }
+}
+
+// Convert Vec<u8> to Value
+impl From<Vec<u8>> for Value {
+    fn from(v: Vec<u8>) -> Self {
+        Value::Bytes(v.into())
+    }
+}
+
+#[cfg(feature = "bytes")]
+// Convert Bytes to Value
+impl From<::bytes::Bytes> for Value {
+    fn from(v: ::bytes::Bytes) -> Self {
+        Value::Bytes(v.to_vec().into())
+    }
+}
+
+#[cfg(feature = "bytes")]
+// Convert &Bytes to Value
+impl From<&::bytes::Bytes> for Value {
+    fn from(v: &::bytes::Bytes) -> Self {
+        Value::Bytes(v.to_vec().into())
+    }
+}
+
+// Convert String to Value
+impl From<String> for Value {
+    fn from(v: String) -> Self {
+        Value::String(v.into())
+    }
+}
+
+impl From<&str> for Value {
+    fn from(v: &str) -> Self {
+        Value::String(v.to_string().into())
+    }
+}
+
+// Convert Option<T> to Value
+impl<T: Into<Value>> From<Option<T>> for Value {
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(v) => v.into(),
+            None => Value::Null,
+        }
+    }
+}
+
+// Convert HashMap<K, V> to Value
+impl<K: Into<Key>, V: Into<Value>> From<HashMap<K, V>> for Value {
+    fn from(v: HashMap<K, V>) -> Self {
+        Value::Map(v.into())
+    }
+}
+
+impl From<ExecutionError> for ResolveResult {
+    fn from(value: ExecutionError) -> Self {
+        Err(value)
+    }
+}
+
+pub type ResolveResult = Result<Value, ExecutionError>;
+
+impl From<Value> for ResolveResult {
+    fn from(value: Value) -> Self {
+        Ok(value)
+    }
+}
+
+/// The error returned when a `dyn Val` has no `Value` representation.
+fn no_value_repr(v: &dyn Val) -> ExecutionError {
+    ExecutionError::UnexpectedType {
+        got: v.get_type().name().to_string(),
+        want: "a type representable as `Value`".to_string(),
+    }
+}
+
+/// Downcasts a `dyn Val` to the built-in type its [`Kind`] implies.
+///
+/// `Val` is public and not sealed, so a foreign implementation may report a
+/// `Kind` without being the built-in value that carries it - a custom lazy list
+/// reports `Kind::List` but is not a [`CelList`]. Those reach `Value` as an
+/// error, not a panic.
+fn built_in<'b, 'v, T: FromVal<'b, 'v>>(v: &'b (dyn Val + 'v)) -> Result<&'b T, ExecutionError> {
+    v.downcast_ref::<T>().ok_or_else(|| no_value_repr(v))
+}
+
+impl<'b, 'v> TryFrom<&'b (dyn Val + 'v)> for Value {
+    type Error = ExecutionError;
+    fn try_from(v: &'b (dyn Val + 'v)) -> Result<Self, Self::Error> {
+        match v.get_type().kind() {
+            Kind::Boolean => Ok(Value::Bool(*built_in::<CelBool>(v)?.inner())),
+            Kind::Int => Ok(Value::Int(*built_in::<CelInt>(v)?.inner())),
+            Kind::UInt => Ok(Value::UInt(*built_in::<CelUInt>(v)?.inner())),
+            Kind::Double => Ok(Value::Float(*built_in::<CelDouble>(v)?.inner())),
+            Kind::String => Ok(Value::String(Arc::new(
+                built_in::<CelString>(v)?.inner().to_string(),
+            ))),
+            Kind::NullType => Ok(Value::Null),
+            Kind::Bytes => Ok(Value::Bytes(Arc::new(
+                built_in::<CelBytes>(v)?.inner().to_vec(),
+            ))),
+            #[cfg(feature = "chrono")]
+            Kind::Duration => Ok(Value::Duration(*built_in::<CelDuration>(v)?.inner())),
+            #[cfg(feature = "chrono")]
+            Kind::Timestamp => Ok(Value::Timestamp(*built_in::<CelTimestamp>(v)?.inner())),
+            Kind::List => {
+                let list = built_in::<CelList>(v)?.inner();
+                let items = list
+                    .iter()
+                    .map(|i| Value::try_from(i.as_ref()))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(Value::List(Arc::new(items)))
+            }
+            Kind::Map => {
+                let map = built_in::<CelMap>(v)?.inner();
+                let entries = map
+                    .iter()
+                    .map(|(k, v)| Ok((Key::from(k.clone()), Value::try_from(v.as_ref())?)))
+                    .collect::<Result<HashMap<_, _>, ExecutionError>>()?;
+                Ok(Value::Map(Map {
+                    map: Arc::new(entries),
+                }))
+            }
+            Kind::Type => Ok(Value::String(Arc::new(
+                built_in::<CelType>(v)?.name().to_string(),
+            ))),
+            Kind::Opaque => Ok(Value::Opaque(match v.downcast_ref::<CelOptional>() {
+                None => built_in::<OpaqueVal>(v)?.clone_inner(),
+                // A present optional whose value has no `Value` representation is
+                // an error, not an absent one.
+                Some(opt) => match opt.option() {
+                    None => Arc::new(OptionalValue::none()),
+                    Some(v) => Arc::new(OptionalValue::of(Value::try_from(v)?)),
+                },
+            })),
+            _ => {
+                if let Some(v) = v.downcast_ref::<CelStruct>() {
+                    return Ok(Value::Struct(Arc::new(v.to_static()?)));
+                }
+                if let Some(opaque) = v.downcast_ref::<OpaqueVal>() {
+                    Ok(Value::Opaque(opaque.val.clone()))
+                } else {
+                    Err(no_value_repr(v))
+                }
+            }
+        }
+    }
+}
+
+impl TryFrom<Value> for Box<dyn Val> {
+    type Error = ExecutionError;
+    fn try_from(value: Value) -> Result<Self, Self::Error> {
+        match value {
+            Value::Bool(b) => Ok(Box::new(CelBool::from(b))),
+            Value::Int(i) => Ok(Box::new(CelInt::from(i))),
+            Value::UInt(u) => Ok(Box::new(CelUInt::from(u))),
+            Value::Float(f) => Ok(Box::new(CelDouble::from(f))),
+            Value::String(s) => Ok(Box::new(CelString::from(Arc::unwrap_or_clone(s)))),
+            Value::Null => Ok(Box::new(CelNull)),
+            Value::Bytes(b) => Ok(Box::new(CelBytes::from(b.as_slice().to_vec()))),
+            #[cfg(feature = "chrono")]
+            Value::Duration(d) => Ok(Box::new(CelDuration::from(d))),
+            #[cfg(feature = "chrono")]
+            Value::Timestamp(ts) => Ok(Box::new(CelTimestamp::from(ts))),
+            Value::List(l) => {
+                let result: Result<Vec<Box<dyn Val>>, ExecutionError> =
+                    (*l).clone().into_iter().map(|i| i.try_into()).collect();
+                Ok(Box::new(CelList::from(result?)))
+            }
+            Value::Map(map) => {
+                let result: Result<HashMap<CelMapKey, Box<dyn Val>>, ExecutionError> = (*map.map)
+                    .clone()
+                    .into_iter()
+                    .map(|(k, v)| v.clone().try_into().map(|v| (k.clone().into(), v)))
+                    .collect();
+                Ok(Box::new(CelMap::from(result?)))
+            }
+            Value::Opaque(o) => {
+                let v: Box<dyn Val> = if let Some(value) = o.downcast_ref::<OptionalValue>() {
+                    match value.inner() {
+                        None => Box::new(CelOptional::none()),
+                        Some(v) => Box::new(CelOptional::of(v.clone().try_into()?)),
+                    }
+                } else {
+                    Box::new(OpaqueVal::new(o))
+                };
+                Ok(v)
+            }
+            Value::Struct(s) => Ok(Arc::try_unwrap(s)
+                .map(|s| Box::new(s) as Box<dyn Val>)
+                .unwrap_or_else(|arc| arc.clone_as_boxed())),
+            _ => Err(ExecutionError::UnsupportedTargetType { target: value }),
+        }
+    }
+}
+
+impl Value {
+    pub fn resolve_all(expr: &[Expression], ctx: &Context) -> ResolveResult {
+        let mut res = Vec::with_capacity(expr.len());
+        for expr in expr {
+            res.push(Value::resolve(expr, ctx)?);
+        }
+        Ok(Value::List(res.into()))
+    }
+
+    pub fn resolve(expr: &Expression, ctx: &Context) -> ResolveResult {
+        Self::resolve_val(expr, ctx)?.as_ref().try_into()
+    }
+
+    /// Evaluates `expr` against `ctx`.
+    ///
+    /// The result borrows where it can: a literal borrows the AST (`'e`), a
+    /// variable borrows the context (`'e`), and anything carrying data the
+    /// context's resolver or values borrow is bounded by `'v`. Nothing is
+    /// copied unless an operation produces a new value.
+    #[inline(always)]
+    pub fn resolve_val<'e, 'p, 'v>(
+        expr: &'e Expression,
+        ctx: &'e Context<'p, 'v>,
+    ) -> Result<CowVal<'e, 'v>, ExecutionError> {
+        match &expr.expr {
+            Expr::Literal(literal) => Ok(literal.to_val()),
+            Expr::Call(call) => {
+                // START OF SPECIAL CASES FOR operators::...
+                if call.args.len() == 3 && call.func_name == operators::CONDITIONAL {
+                    let cond = Value::resolve_val(&call.args[0], ctx);
+                    return if try_bool(cond)? {
+                        Value::resolve_val(&call.args[1], ctx)
+                    } else {
+                        Value::resolve_val(&call.args[2], ctx)
+                    };
+                }
+                if call.args.len() == 2 {
+                    match call.func_name.as_str() {
+                        operators::LOGICAL_OR => {
+                            let left = try_bool(Value::resolve_val(&call.args[0], ctx));
+                            return if Ok(true) == left {
+                                Ok(bool(true))
+                            } else {
+                                let right_value = Value::resolve_val(&call.args[1], ctx)?;
+                                let right =
+                                    right_value.downcast_ref::<CelBool>().map(|b| *b.inner());
+                                match (left, right) {
+                                    (Ok(false), Some(right)) => Ok(bool(right)),
+                                    (Err(_), Some(true)) => Ok(bool(true)),
+                                    (left, _) => Err(boolean_operator_error(
+                                        &call.func_name,
+                                        left,
+                                        right_value.as_ref(),
+                                    )),
+                                }
+                            };
+                        }
+                        operators::LOGICAL_AND => {
+                            let left = try_bool(Value::resolve_val(&call.args[0], ctx));
+                            return if Ok(false) == left {
+                                Ok(bool(false))
+                            } else {
+                                let right_value = Value::resolve_val(&call.args[1], ctx)?;
+                                let right =
+                                    right_value.downcast_ref::<CelBool>().map(|b| *b.inner());
+                                match (left, right) {
+                                    (Ok(true), Some(right)) => Ok(bool(right)),
+                                    (Err(_), Some(false)) => Ok(bool(false)),
+                                    (left, _) => Err(boolean_operator_error(
+                                        &call.func_name,
+                                        left,
+                                        right_value.as_ref(),
+                                    )),
+                                }
+                            };
+                        }
+                        operators::EQUALS => {
+                            return Ok(bool(
+                                Value::resolve_val(&call.args[0], ctx)?
+                                    == Value::resolve_val(&call.args[1], ctx)?,
+                            ))
+                        }
+                        operators::NOT_EQUALS => {
+                            return Ok(bool(
+                                Value::resolve_val(&call.args[0], ctx)?
+                                    != Value::resolve_val(&call.args[1], ctx)?,
+                            ))
+                        }
+                        operators::INDEX | operators::OPT_INDEX => {
+                            let mut is_optional = call.func_name == operators::OPT_INDEX;
+                            let value = Value::resolve_val(&call.args[0], ctx)?;
+
+                            let value = match unwrap_optional(value) {
+                                Unwrapped::NotOptional(value) => value,
+                                Unwrapped::Some(value) => {
+                                    is_optional = true;
+                                    value
+                                }
+                                Unwrapped::None => return Ok(CowVal::owned(CelOptional::none())),
+                            };
+
+                            let index = Self::resolve_val(&call.args[1], ctx)?;
+                            let result =
+                                index_into(value, index.as_ref(), &call.func_name, |value| {
+                                    ExecutionError::overload_for_values(
+                                        &call.func_name,
+                                        [value, index.as_ref()],
+                                        false,
+                                    )
+                                });
+                            return if is_optional {
+                                Ok(CowVal::owned(match result {
+                                    Ok(val) => CelOptional::of(val.into_owned()),
+                                    Err(_) => CelOptional::none(),
+                                }))
+                            } else {
+                                result
+                            };
+                        }
+                        operators::OPT_SELECT => {
+                            let operand = Value::resolve_val(&call.args[0], ctx)?;
+                            let field_literal = Value::resolve_val(&call.args[1], ctx)?;
+                            let field = match field_literal.get_type().kind() {
+                                Kind::String => field_literal
+                                    .downcast_ref::<CelString>()
+                                    .expect("field must be string"),
+                                _ => {
+                                    return Err(ExecutionError::function_error(
+                                        "_?._",
+                                        "field must be string",
+                                    ))
+                                }
+                            };
+                            // Unwrap outer optional if present — a `None`
+                            // short-circuits to `Optional::none()`. Otherwise
+                            // the operand is the target itself. A missing
+                            // key/field maps to `Optional::none()` per
+                            // cel-spec (mirrors OPT_INDEX semantics).
+                            let target = match unwrap_optional(operand) {
+                                Unwrapped::NotOptional(v) | Unwrapped::Some(v) => v,
+                                Unwrapped::None => return Ok(CowVal::owned(CelOptional::none())),
+                            };
+                            let result = match index_into(target, field, "_?._", |value| {
+                                ExecutionError::overload_for_values("_?._", [value, field], false)
+                            }) {
+                                Ok(v) => CelOptional::of(v.into_owned()),
+                                Err(_) => CelOptional::none(),
+                            };
+                            return Ok(CowVal::owned(result));
+                        }
+                        // END OF SPECIAL CASES
+
+                        // all below is NOT special in the interpreter
+                        operators::ADD => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(CowVal::Owned(
+                                lhs.as_adder()
+                                    .ok_or_else(|| {
+                                        ExecutionError::unsupported_binary_operator(
+                                            "add",
+                                            lhs.as_ref(),
+                                            rhs.as_ref(),
+                                        )
+                                    })?
+                                    .add(rhs.as_ref())?
+                                    .into_owned(),
+                            ));
+                        }
+                        operators::SUBSTRACT => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(CowVal::Owned(
+                                lhs.as_subtractor()
+                                    .ok_or_else(|| {
+                                        ExecutionError::unsupported_binary_operator(
+                                            "sub",
+                                            lhs.as_ref(),
+                                            rhs.as_ref(),
+                                        )
+                                    })?
+                                    .sub(rhs.as_ref())?
+                                    .into_owned(),
+                            ));
+                        }
+                        operators::DIVIDE => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(CowVal::Owned(
+                                lhs.as_divider()
+                                    .ok_or_else(|| {
+                                        ExecutionError::unsupported_binary_operator(
+                                            "div",
+                                            lhs.as_ref(),
+                                            rhs.as_ref(),
+                                        )
+                                    })?
+                                    .div(rhs.as_ref())?
+                                    .into_owned(),
+                            ));
+                        }
+                        operators::MULTIPLY => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(CowVal::Owned(
+                                lhs.as_multiplier()
+                                    .ok_or_else(|| {
+                                        ExecutionError::unsupported_binary_operator(
+                                            "mul",
+                                            lhs.as_ref(),
+                                            rhs.as_ref(),
+                                        )
+                                    })?
+                                    .mul(rhs.as_ref())?
+                                    .into_owned(),
+                            ));
+                        }
+                        operators::MODULO => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(CowVal::Owned(
+                                lhs.as_modder()
+                                    .ok_or_else(|| {
+                                        ExecutionError::unsupported_binary_operator(
+                                            "rem",
+                                            lhs.as_ref(),
+                                            rhs.as_ref(),
+                                        )
+                                    })?
+                                    .modulo(rhs.as_ref())?
+                                    .into_owned(),
+                            ));
+                        }
+                        operators::LESS => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(bool(
+                                compare_values(&call.func_name, lhs.as_ref(), rhs.as_ref())?
+                                    == Ordering::Less,
+                            ));
+                        }
+                        operators::LESS_EQUALS => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(bool(
+                                compare_values(&call.func_name, lhs.as_ref(), rhs.as_ref())?
+                                    != Ordering::Greater,
+                            ));
+                        }
+                        operators::GREATER => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(bool(
+                                compare_values(&call.func_name, lhs.as_ref(), rhs.as_ref())?
+                                    == Ordering::Greater,
+                            ));
+                        }
+                        operators::GREATER_EQUALS => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            return Ok(bool(
+                                compare_values(&call.func_name, lhs.as_ref(), rhs.as_ref())?
+                                    != Ordering::Less,
+                            ));
+                        }
+                        operators::IN => {
+                            let lhs = Value::resolve_val(&call.args[0], ctx)?;
+                            let rhs = Value::resolve_val(&call.args[1], ctx)?;
+                            let overload_error = || {
+                                ExecutionError::overload_for_values(
+                                    &call.func_name,
+                                    [lhs.as_ref(), rhs.as_ref()],
+                                    false,
+                                )
+                            };
+                            let container = rhs.as_container().ok_or_else(overload_error)?;
+                            return container
+                                .contains(lhs.as_ref())
+                                .map(bool)
+                                .map_err(|error| error.with_overload_context(overload_error()));
+                        }
+                        _ => (),
+                    }
+                }
+                if call.args.len() == 1 {
+                    match call.func_name.as_str() {
+                        operators::LOGICAL_NOT => {
+                            let expr = Value::resolve_val(&call.args[0], ctx)?;
+                            let overload_error = ExecutionError::overload_for_values(
+                                &call.func_name,
+                                [expr.as_ref()],
+                                false,
+                            );
+                            return expr
+                                .downcast_ref::<CelBool>()
+                                .map(Bool::negate)
+                                .ok_or(overload_error)
+                                .map(|b| bool(b.into_inner()));
+                        }
+                        operators::NEGATE => {
+                            let val = Value::resolve_val(&call.args[0], ctx)?;
+                            let overload_error = ExecutionError::overload_for_values(
+                                &call.func_name,
+                                [val.as_ref()],
+                                false,
+                            );
+                            return Ok(CowVal::Owned(
+                                val.as_negator()
+                                    .ok_or_else(|| overload_error.clone())?
+                                    .negate()
+                                    .map_err(|error| error.with_overload_context(overload_error))?,
+                            ));
+                        }
+                        operators::NOT_STRICTLY_FALSE => {
+                            return Ok(bool(
+                                try_bool(Value::resolve_val(&call.args[0], ctx)).unwrap_or(true),
+                            ));
+                        }
+                        _ => (),
+                    }
+                }
+                match &call.target {
+                    None => {
+                        // TODO: Optimize for the 1 and 2 arg cases and avoid the Vec altogether
+                        let args: Result<Vec<CowVal<'e, 'v>>, ExecutionError> = call
+                            .args
+                            .iter()
+                            .map(|a| Value::resolve_val(a, ctx))
+                            .collect();
+                        let name = ctx.resolve_function(&call.func_name);
+                        call_function(ctx, &name, &call.func_name, args?)
+                    }
+                    Some(target_expr) => {
+                        let args: Result<Vec<CowVal<'e, 'v>>, ExecutionError> = call
+                            .args
+                            .iter()
+                            .map(|a| Value::resolve_val(a, ctx))
+                            .collect();
+                        let mut args = args?;
+                        // As in cel-go, a call whose target spells a qualified
+                        // name that, with the function's, names a function is
+                        // a call to that function: `optional.of(x)` calls
+                        // `optional.of`.
+                        if let Some(name) =
+                            ctx.resolve_qualified_function(target_expr, &call.func_name)
+                        {
+                            return call_function(ctx, &name, &call.func_name, args);
+                        }
+                        let target = Value::resolve_val(target_expr, ctx)?;
+                        args.insert(0, target);
+                        if let Some(op) = ctx.env().find_member_overload(&call.func_name, &args) {
+                            return op(args);
+                        }
+                        let func = match ctx.get_function(&call.func_name) {
+                            Some(func) => func,
+                            None => {
+                                return Err(if ctx.env().has_member_overload(&call.func_name) {
+                                    ExecutionError::overload_for_values(
+                                        &call.func_name,
+                                        args.iter().map(|arg| arg.as_ref()),
+                                        true,
+                                    )
+                                } else {
+                                    ExecutionError::UndeclaredReference(
+                                        call.func_name.clone().into(),
+                                    )
+                                });
+                            }
+                        };
+                        let target = args.remove(0);
+                        let mut ctx =
+                            FunctionContext::new(&call.func_name, Some(target), ctx, args);
+                        (func)(&mut ctx)
+                    }
+                }
+            }
+            Expr::Ident(name) => ctx
+                .resolve_ident(name)
+                .ok_or_else(|| ExecutionError::UndeclaredReference(Arc::new(name.to_string()))),
+            Expr::Select(select) => {
+                // `has(a.b.c)` tests for `c` on `a.b`: only its operand is a name
+                let name = if select.test {
+                    select.operand.expr.qualified_name_segments()
+                } else {
+                    expr.expr.qualified_name_segments()
+                };
+                let Some(name) = name else {
+                    let left = Value::resolve_val(select.operand.deref(), ctx)?;
+                    return select_field(left, &select.field, select.test);
+                };
+                let (mut value, fields) = ctx.resolve_qualified(&name)?;
+                for field in fields {
+                    value = select_field(value, field, false)?;
+                }
+                if select.test {
+                    select_field(value, &select.field, true)
+                } else {
+                    Ok(value)
+                }
+            }
+            Expr::List(list_expr) => {
+                let mut list: Vec<Box<dyn Val + 'v>> = Vec::with_capacity(list_expr.elements.len());
+                for (idx, element) in list_expr.elements.iter().enumerate() {
+                    let value = Value::resolve_val(element, ctx)?;
+                    if list_expr.optional_indices.contains(&idx) {
+                        match unwrap_optional(value) {
+                            Unwrapped::NotOptional(v) | Unwrapped::Some(v) => {
+                                list.push(v.into_owned())
+                            }
+                            Unwrapped::None => {}
+                        }
+                    } else {
+                        list.push(value.into_owned());
+                    }
+                }
+                Ok(CowVal::owned(CelList::from(list)))
+            }
+            Expr::Map(map_expr) => {
+                let mut map: HashMap<CelMapKey<'v>, Box<dyn Val + 'v>> =
+                    HashMap::with_capacity(map_expr.entries.len());
+                for entry in map_expr.entries.iter() {
+                    let (k, v, is_optional) = match &entry.expr {
+                        EntryExpr::StructField(_) => panic!("WAT?"),
+                        EntryExpr::MapEntry(e) => (&e.key, &e.value, e.optional),
+                    };
+                    let key: CelMapKey<'v> = Value::resolve_val(k, ctx)?.try_into()?;
+                    let value = Value::resolve_val(v, ctx)?;
+
+                    // An optional entry holding no value adds nothing, not even its key.
+                    let value = if is_optional {
+                        match unwrap_optional(value) {
+                            Unwrapped::NotOptional(v) | Unwrapped::Some(v) => Some(v),
+                            Unwrapped::None => None,
+                        }
+                    } else {
+                        Some(value)
+                    };
+
+                    if let Some(value) = value {
+                        if ctx.env().error_on_duplicate_map_keys() && map::has_key(&map, &key) {
+                            return Err(ExecutionError::DuplicateKey(Key::from(key).into()));
+                        }
+                        map.insert(key, value.into_owned());
+                    }
+                }
+                Ok(CowVal::owned(CelMap::from(map)))
+            }
+            Expr::Comprehension(comprehension) => {
+                let accu_init = Value::resolve_val(&comprehension.accu_init, ctx)?;
+                let iter = Value::resolve_val(&comprehension.iter_range, ctx)?;
+
+                // Mirror cel-go's optimization (see `folder.ResolveName` in
+                // `cel-go/interpreter/interpretable.go`): when the
+                // accumulator starts out as an empty list and the loop step
+                // only ever appends to it (`map` / `filter`), build the
+                // result in a single preallocated `MutableList` instead of
+                // paying O(n) clone-and-extend on every iteration
+                // (`@result + [expr]`).
+                if let Some(step) = AppendStep::of(comprehension) {
+                    if accu_init
+                        .downcast_ref::<CelList>()
+                        .is_some_and(|list| list.inner().is_empty())
+                    {
+                        return step.run(comprehension, &iter, ctx);
+                    }
+                }
+
+                let mut ctx = ctx.new_inner_scope();
+                ctx.add_variable_as_val(&comprehension.accu_var, accu_init.into_owned());
+
+                let mut items = iter
+                    .as_iterable()
+                    .ok_or_else(|| ExecutionError::UnexpectedType {
+                        got: iter.get_type().name().to_owned(),
+                        want: "iterable".to_owned(),
+                    })?
+                    .iter();
+                let mut deferred = DeferredErrors::of(comprehension);
+                while let Some(item) = items.next() {
+                    if !try_bool(Value::resolve_val(&comprehension.loop_cond, &ctx))? {
+                        break;
+                    }
+                    ctx.add_variable_as_val(&comprehension.iter_var, item.clone_as_boxed());
+                    let step = Value::resolve_val(&comprehension.loop_step, &ctx);
+                    if let Some(accu) = deferred.step(step)? {
+                        ctx.add_variable_as_val(&comprehension.accu_var, accu.into_owned());
+                    }
+                }
+                deferred.finish()?;
+                Ok(CowVal::Owned(
+                    Value::resolve_val(&comprehension.result, &ctx)?.into_owned(),
+                ))
+            }
+            Expr::Struct(strct) => {
+                let name = strct.type_name.clone();
+                let struct_type = ctx
+                    .find_struct(&name)
+                    .ok_or(ExecutionError::UnexpectedType {
+                        got: name.to_owned(),
+                        want: "known struct".to_owned(),
+                    })?;
+                let mut fields = std::collections::BTreeMap::new();
+                for entry in &strct.entries {
+                    match &entry.expr {
+                        EntryExpr::StructField(expr) => {
+                            let f = expr.field.clone();
+                            fields.insert(f, Value::resolve_val(&expr.value, ctx)?);
+                        }
+                        EntryExpr::MapEntry(entry) => {
+                            return Err(ExecutionError::InternalError(format!(
+                                "Expected struct_field_expr, got {entry:?}"
+                            )))
+                        }
+                    }
+                }
+                Ok(CowVal::Owned(struct_type.new_value(fields)?))
+            }
+            Expr::Unspecified => panic!("Can't evaluate Unspecified Expr"),
+        }
+    }
+}
+
+/// A boolean result, borrowed from a constant: no allocation.
+fn bool<'b, 'v>(boolean: bool) -> CowVal<'b, 'v> {
+    CowVal::Borrowed(if boolean { &Bool::TRUE } else { &Bool::FALSE })
+}
+
+fn compare_values(
+    operator: &str,
+    lhs: &dyn Val,
+    rhs: &dyn Val,
+) -> Result<Ordering, ExecutionError> {
+    let context = ExecutionError::overload_for_values(operator, [lhs, rhs], false);
+    lhs.as_comparer()
+        .ok_or_else(|| context.clone())
+        .and_then(|comparer| comparer.compare(rhs))
+        .map_err(|error| error.with_overload_context(context))
+}
+
+fn boolean_operator_error(
+    operator: &str,
+    left: Result<bool, ExecutionError>,
+    right: &dyn Val,
+) -> ExecutionError {
+    let right_type = right.get_type().name().to_owned();
+    match left {
+        Err(ExecutionError::UnexpectedType { got, want }) if want == "bool" => {
+            ExecutionError::no_such_overload(operator, vec![got, right_type])
+        }
+        Err(error) => error,
+        Ok(_) => ExecutionError::no_such_overload(operator, vec!["bool".to_owned(), right_type]),
+    }
+}
+
+/// The connective of an `all()` / `exists()` loop step: `@result && x` or
+/// `@result || x`.
+#[derive(Clone, Copy)]
+enum LogicalFold {
+    And,
+    Or,
+}
+
+impl LogicalFold {
+    fn of(comprehension: &ComprehensionExpr) -> Option<Self> {
+        let Expr::Call(call) = &comprehension.loop_step.expr else {
+            return None;
+        };
+        let folds_accu = call.target.is_none()
+            && matches!(
+                call.args.first().map(|arg| &arg.expr),
+                Some(Expr::Ident(name)) if *name == comprehension.accu_var
+            );
+        match call.func_name.as_str() {
+            operators::LOGICAL_AND if folds_accu => Some(Self::And),
+            operators::LOGICAL_OR if folds_accu => Some(Self::Or),
+            _ => None,
+        }
+    }
+
+    /// The operand that decides the result regardless of any error beside
+    /// it: `false` for `&&`, `true` for `||`.
+    fn absorbing(self) -> bool {
+        matches!(self, Self::Or)
+    }
+
+    fn absorbs(self, value: &dyn Val) -> bool {
+        value
+            .downcast_ref::<CelBool>()
+            .is_some_and(|b| *b.inner() == self.absorbing())
+    }
+}
+
+/// Errors from an `all()` / `exists()` loop step that a later element may
+/// still override, as in cel-go's `evalAnd` / `evalOr`: `error && false` is
+/// `false`, while `error && true` stays the error.
+struct DeferredErrors {
+    fold: Option<LogicalFold>,
+    pending: Option<ExecutionError>,
+}
+
+impl DeferredErrors {
+    fn of(comprehension: &ComprehensionExpr) -> Self {
+        Self {
+            fold: LogicalFold::of(comprehension),
+            pending: None,
+        }
+    }
+
+    /// Feeds one loop-step result. Returns the new accumulator, or `None`
+    /// when it must be left unchanged because an error is pending.
+    fn step<'b, 'v>(
+        &mut self,
+        step: Result<CowVal<'b, 'v>, ExecutionError>,
+    ) -> Result<Option<CowVal<'b, 'v>>, ExecutionError> {
+        match (step, self.fold) {
+            (Err(err), Some(_)) => {
+                self.pending = Some(err);
+                Ok(None)
+            }
+            (Err(err), None) => Err(err),
+            (Ok(accu), Some(fold)) if self.pending.is_some() && !fold.absorbs(&*accu) => Ok(None),
+            (Ok(accu), _) => {
+                self.pending = None;
+                Ok(Some(accu))
+            }
+        }
+    }
+
+    /// Fails with the error still pending once the loop ends.
+    fn finish(self) -> Result<(), ExecutionError> {
+        self.pending.map_or(Ok(()), Err)
+    }
+}
+
+/// The loop step of a `map` / `filter` comprehension: `@result + [expr]`,
+/// optionally guarded as `cond ? @result + [expr] : @result`, with `@result`
+/// as the comprehension's result.
+///
+/// Evaluating it generically clones the whole accumulator on every
+/// iteration; recognising the shape lets [`AppendStep::run`] append to a
+/// [`MutableList`] in place instead. `@result` cannot be written in CEL
+/// source, so nothing but the step itself can observe the accumulator.
+struct AppendStep<'e> {
+    /// The `cond` of a guarded step.
+    guard: Option<&'e Expression>,
+    /// The `[expr]` list appended on every iteration.
+    items: &'e Expression,
+}
+
+impl<'e> AppendStep<'e> {
+    fn of(comprehension: &'e ComprehensionExpr) -> Option<Self> {
+        let accu = comprehension.accu_var.as_str();
+        let is_accu = |e: &Expression| matches!(&e.expr, Expr::Ident(name) if name == accu);
+        let items_of = |e: &'e Expression| match &e.expr {
+            Expr::Call(call) if call.func_name == operators::ADD && call.target.is_none() => {
+                match call.args.as_slice() {
+                    [lhs, rhs] if is_accu(lhs) && matches!(rhs.expr, Expr::List(_)) => Some(rhs),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+
+        if !is_accu(&comprehension.result)
+            || !matches!(comprehension.loop_cond.expr, Expr::Literal(_))
+        {
+            return None;
+        }
+        match &comprehension.loop_step.expr {
+            Expr::Call(call)
+                if call.func_name == operators::CONDITIONAL && call.target.is_none() =>
+            {
+                match call.args.as_slice() {
+                    [guard, step, otherwise] if is_accu(otherwise) => Some(AppendStep {
+                        guard: Some(guard),
+                        items: items_of(step)?,
+                    }),
+                    _ => None,
+                }
+            }
+            _ => Some(AppendStep {
+                guard: None,
+                items: items_of(&comprehension.loop_step)?,
+            }),
+        }
+    }
+
+    /// Runs the comprehension over `iter`, starting from an empty list.
+    fn run<'p, 'v>(
+        &self,
+        comprehension: &'e ComprehensionExpr,
+        iter: &CowVal<'e, 'v>,
+        ctx: &'e Context<'p, 'v>,
+    ) -> Result<CowVal<'e, 'v>, ExecutionError> {
+        let size_hint = iter
+            .as_sizer()
+            .map(|s| *s.size().inner() as usize)
+            .unwrap_or(0);
+        let mut accu = MutableList::with_capacity(size_hint);
+
+        let mut ctx = ctx.new_inner_scope();
+        let mut items = iter
+            .as_iterable()
+            .ok_or_else(|| ExecutionError::UnexpectedType {
+                got: iter.get_type().name().to_owned(),
+                want: "iterable".to_owned(),
+            })?
+            .iter();
+        while let Some(item) = items.next() {
+            if !try_bool(Value::resolve_val(&comprehension.loop_cond, &ctx))? {
+                break;
+            }
+            ctx.add_variable_as_val(&comprehension.iter_var, item.clone_as_boxed());
+            if let Some(guard) = self.guard {
+                if !try_bool(Value::resolve_val(guard, &ctx))? {
+                    continue;
+                }
+            }
+            accu.extend(Value::resolve_val(self.items, &ctx)?.as_ref())?;
+        }
+        Ok(CowVal::owned(accu.to_immutable()))
+    }
+}
+
+fn try_bool(val: Result<CowVal<'_, '_>, ExecutionError>) -> Result<bool, ExecutionError> {
+    match val {
+        Ok(val) => val
+            .downcast_ref::<CelBool>()
+            .map(|b| *b.inner())
+            .ok_or_else(|| ExecutionError::UnexpectedType {
+                got: val.get_type().name().to_owned(),
+                want: "bool".to_owned(),
+            }),
+        Err(err) => Result::Err(err),
+    }
+}
+
+/// Calls the global function `name` with `args`. The function is told
+/// `ftx_name`, borrowed for as long as the result: a qualified function is
+/// told its unqualified name.
+#[inline(always)]
+fn call_function<'e, 'p, 'v>(
+    ctx: &'e Context<'p, 'v>,
+    name: &str,
+    ftx_name: &'e str,
+    args: Vec<CowVal<'e, 'v>>,
+) -> Result<CowVal<'e, 'v>, ExecutionError> {
+    if let Some(op) = ctx.env().find_overload(name, &args) {
+        return op(args);
+    }
+    let func = match ctx.get_function(name) {
+        Some(func) => func,
+        None if ctx.env().has_overload(name) => {
+            return Err(ExecutionError::overload_for_values(
+                name,
+                args.iter().map(|arg| arg.as_ref()),
+                false,
+            ));
+        }
+        None => {
+            return Err(ExecutionError::UndeclaredReference(name.to_owned().into()));
+        }
+    };
+    let mut ctx = FunctionContext::new(ftx_name, None, ctx, args);
+    (func)(&mut ctx)
+}
+
+/// Selects `field` on `left`, the already resolved operand of a select:
+/// `left.field`, or `has(left.field)` when `test` is set.
+#[inline(always)]
+fn select_field<'b, 'v>(
+    left: CowVal<'b, 'v>,
+    field: &str,
+    test: bool,
+) -> Result<CowVal<'b, 'v>, ExecutionError> {
+    // borrows the field name from the AST
+    let key: CelString = field.into();
+    let no_such_key = || ExecutionError::NoSuchKey(Arc::new(field.to_owned()));
+    let overload_error =
+        |value: &dyn Val| ExecutionError::overload_for_values("_._", [value, &key], false);
+
+    // Plain `.field` on an `Optional` propagates optional-ness
+    // per cel-spec — matches cel-go `applyQualifiers` at
+    // `interpreter/attributes.go:1259` where an initial optional
+    // operand makes the whole qualifier chain optional. `has()`
+    // (test=true) on the same shape returns Bool(false) when the
+    // chain is empty.
+    let left = match unwrap_optional(left) {
+        Unwrapped::NotOptional(left) => left,
+        // Optional::none() short-circuits — the chain stops.
+        Unwrapped::None => {
+            return if test {
+                Ok(bool(false))
+            } else {
+                Ok(CowVal::owned(CelOptional::none()))
+            }
+        }
+        // Otherwise unwrap and access the field. A missing key on
+        // a real container maps to Optional::none(); a field
+        // access on a value that isn't a container at all
+        // (Null, Int, …) is an error, matching cel-go's
+        // `errorOnBadPresenceTest=true` mode which the cel-spec
+        // conformance runner enables (see
+        // `interpreter/attributes.go:1382` and
+        // `conformance/conformance_test.go:87`).
+        Unwrapped::Some(inner) => {
+            return if test {
+                let has = inner
+                    .as_indexer()
+                    .ok_or_else(no_such_key)?
+                    .get(&key)
+                    .is_ok();
+                Ok(bool(has))
+            } else {
+                // a non-container operand is an error, a missing
+                // key maps to `optional.none()`
+                if inner.as_indexer().is_none() {
+                    return Err(no_such_key());
+                }
+                Ok(CowVal::owned(
+                    match index_into(inner, &key, "_._", |_| no_such_key()) {
+                        Ok(v) => CelOptional::of(v.into_owned()),
+                        Err(_) => CelOptional::none(),
+                    },
+                ))
+            };
+        }
+    };
+
+    if test {
+        let indexer = left
+            .as_indexer()
+            .ok_or_else(|| overload_error(left.as_ref()))?;
+        match indexer.get(&key) {
+            Ok(_) => Ok(bool(true)),
+            Err(ExecutionError::NoSuchKey(_)) => Ok(bool(false)),
+            Err(error) => Err(error.with_lazy_overload_context(|| overload_error(left.as_ref()))),
+        }
+    } else {
+        let is_map = left.get_type().kind() == Kind::Map;
+        index_into(left, &key, "_._", |value| {
+            if is_map {
+                no_such_key()
+            } else {
+                overload_error(value)
+            }
+        })
+    }
+}
+
+/// Indexes `value` with `idx`: a borrowed container hands out a borrow of
+/// the element, an owned one moves the element out. `missing` is given `value`
+/// and returns the error when it cannot be indexed at all.
+///
+/// A lookup that fails for want of a matching overload (say, a list indexed
+/// with a string) reports `function` applied to the types of `value` and `idx`.
+/// That error is only built when there is one.
+///
+/// Only the built-in containers are known to be able to give up their
+/// elements; any other owned value is indexed in place and the element is
+/// copied out, so a `Val` need only implement [`Val::as_indexer`].
+fn index_into<'b, 'v>(
+    value: CowVal<'b, 'v>,
+    idx: &dyn Val,
+    function: &str,
+    missing: impl FnOnce(&dyn Val) -> ExecutionError,
+) -> Result<CowVal<'b, 'v>, ExecutionError> {
+    let overload = |value_type: &Type| {
+        ExecutionError::no_such_overload(
+            function,
+            vec![
+                value_type.name().to_owned(),
+                idx.get_type().name().to_owned(),
+            ],
+        )
+    };
+    match value {
+        CowVal::Borrowed(v) => v
+            .as_indexer()
+            .ok_or_else(|| missing(v))?
+            .get(idx)
+            .map_err(|error| error.with_lazy_overload_context(|| overload(v.get_type()))),
+        CowVal::Owned(b) => {
+            let indexer = b.as_indexer().ok_or_else(|| missing(b.as_ref()))?;
+            if matches!(b.as_builtin(), BuiltinRef::Other) {
+                return indexer
+                    .get(idx)
+                    .map(|v| CowVal::Owned(v.into_owned()))
+                    .map_err(|error| error.with_lazy_overload_context(|| overload(b.get_type())));
+            }
+            // `b` is consumed below: keep what an error would need to say about it
+            let value_type = b.get_type().to_owned();
+            b.into_indexer()
+                .ok_or_else(|| overload(&value_type))?
+                .steal(idx)
+                .map(CowVal::Owned)
+                .map_err(|error| error.with_lazy_overload_context(|| overload(&value_type)))
+        }
+    }
+}
+
+impl ops::Add<Value> for Value {
+    type Output = ResolveResult;
+
+    #[inline(always)]
+    fn add(self, rhs: Value) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(l), Value::Int(r)) => l
+                .checked_add(r)
+                .ok_or_else(|| ExecutionError::Overflow("add", l.into(), r.into()))
+                .map(Value::Int),
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_add(r)
+                .ok_or_else(|| ExecutionError::Overflow("add", l.into(), r.into()))
+                .map(Value::UInt),
+
+            (Value::Float(l), Value::Float(r)) => Value::Float(l + r).into(),
+
+            (Value::List(mut l), Value::List(mut r)) => {
+                {
+                    // If this is the only reference to `l`, we can append to it in place.
+                    // `l` is replaced with a clone otherwise.
+                    let l = Arc::make_mut(&mut l);
+
+                    // Likewise, if this is the only reference to `r`, we can move its values
+                    // instead of cloning them.
+                    match Arc::get_mut(&mut r) {
+                        Some(r) => l.append(r),
+                        None => l.extend(r.iter().cloned()),
+                    }
+                }
+
+                Ok(Value::List(l))
+            }
+            (Value::String(mut l), Value::String(r)) => {
+                // If this is the only reference to `l`, we can append to it in place.
+                // `l` is replaced with a clone otherwise.
+                Arc::make_mut(&mut l).push_str(&r);
+                Ok(Value::String(l))
+            }
+            #[cfg(feature = "chrono")]
+            (Value::Duration(l), Value::Duration(r)) => l
+                .checked_add(&r)
+                .ok_or_else(|| ExecutionError::Overflow("add", l.into(), r.into()))
+                .map(Value::Duration),
+            #[cfg(feature = "chrono")]
+            (Value::Timestamp(l), Value::Duration(r)) => checked_op(TsOp::Add, &l, &r),
+            #[cfg(feature = "chrono")]
+            (Value::Duration(l), Value::Timestamp(r)) => r
+                .checked_add_signed(l)
+                .ok_or_else(|| ExecutionError::Overflow("add", l.into(), r.into()))
+                .map(Value::Timestamp),
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "add", left, right,
+            )),
+        }
+    }
+}
+
+impl ops::Sub<Value> for Value {
+    type Output = ResolveResult;
+
+    #[inline(always)]
+    fn sub(self, rhs: Value) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(l), Value::Int(r)) => l
+                .checked_sub(r)
+                .ok_or_else(|| ExecutionError::Overflow("sub", l.into(), r.into()))
+                .map(Value::Int),
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_sub(r)
+                .ok_or_else(|| ExecutionError::Overflow("sub", l.into(), r.into()))
+                .map(Value::UInt),
+
+            (Value::Float(l), Value::Float(r)) => Value::Float(l - r).into(),
+
+            #[cfg(feature = "chrono")]
+            (Value::Duration(l), Value::Duration(r)) => l
+                .checked_sub(&r)
+                .ok_or_else(|| ExecutionError::Overflow("sub", l.into(), r.into()))
+                .map(Value::Duration),
+            #[cfg(feature = "chrono")]
+            (Value::Timestamp(l), Value::Duration(r)) => checked_op(TsOp::Sub, &l, &r),
+            #[cfg(feature = "chrono")]
+            (Value::Timestamp(l), Value::Timestamp(r)) => {
+                Value::Duration(l.signed_duration_since(r)).into()
+            }
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "sub", left, right,
+            )),
+        }
+    }
+}
+
+impl ops::Div<Value> for Value {
+    type Output = ResolveResult;
+
+    #[inline(always)]
+    fn div(self, rhs: Value) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(l), Value::Int(r)) => {
+                if r == 0 {
+                    Err(ExecutionError::DivisionByZero(l.into()))
+                } else {
+                    l.checked_div(r)
+                        .ok_or_else(|| ExecutionError::Overflow("div", l.into(), r.into()))
+                        .map(Value::Int)
+                }
+            }
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_div(r)
+                .ok_or_else(|| ExecutionError::DivisionByZero(l.into()))
+                .map(Value::UInt),
+
+            (Value::Float(l), Value::Float(r)) => Value::Float(l / r).into(),
+
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "div", left, right,
+            )),
+        }
+    }
+}
+
+impl ops::Mul<Value> for Value {
+    type Output = ResolveResult;
+
+    #[inline(always)]
+    fn mul(self, rhs: Value) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(l), Value::Int(r)) => l
+                .checked_mul(r)
+                .ok_or_else(|| ExecutionError::Overflow("mul", l.into(), r.into()))
+                .map(Value::Int),
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_mul(r)
+                .ok_or_else(|| ExecutionError::Overflow("mul", l.into(), r.into()))
+                .map(Value::UInt),
+
+            (Value::Float(l), Value::Float(r)) => Value::Float(l * r).into(),
+
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "mul", left, right,
+            )),
+        }
+    }
+}
+
+impl ops::Rem<Value> for Value {
+    type Output = ResolveResult;
+
+    #[inline(always)]
+    fn rem(self, rhs: Value) -> Self::Output {
+        match (self, rhs) {
+            (Value::Int(l), Value::Int(r)) => {
+                if r == 0 {
+                    Err(ExecutionError::RemainderByZero(l.into()))
+                } else {
+                    l.checked_rem(r)
+                        .ok_or_else(|| ExecutionError::Overflow("rem", l.into(), r.into()))
+                        .map(Value::Int)
+                }
+            }
+
+            (Value::UInt(l), Value::UInt(r)) => l
+                .checked_rem(r)
+                .ok_or_else(|| ExecutionError::RemainderByZero(l.into()))
+                .map(Value::UInt),
+
+            (left, right) => Err(ExecutionError::UnsupportedBinaryOperator(
+                "rem", left, right,
+            )),
+        }
+    }
+}
+
+/// Op represents a binary arithmetic operation supported on a timestamp
+///
+#[cfg(feature = "chrono")]
+enum TsOp {
+    Add,
+    Sub,
+}
+
+#[cfg(feature = "chrono")]
+impl TsOp {
+    fn str(&self) -> &'static str {
+        match self {
+            TsOp::Add => "add",
+            TsOp::Sub => "sub",
+        }
+    }
+}
+
+/// Performs a checked arithmetic operation [`TsOp`] on a timestamp and a duration and ensures that
+/// the resulting timestamp does not overflow the data type internal limits, as well as the timestamp
+/// limits defined in the cel-spec. See [`MAX_TIMESTAMP`] and [`MIN_TIMESTAMP`] for more details.
+#[cfg(feature = "chrono")]
+fn checked_op(
+    op: TsOp,
+    lhs: &chrono::DateTime<chrono::FixedOffset>,
+    rhs: &chrono::Duration,
+) -> ResolveResult {
+    // Add lhs and rhs together, checking for data type overflow
+    let result = match op {
+        TsOp::Add => lhs.checked_add_signed(*rhs),
+        TsOp::Sub => lhs.checked_sub_signed(*rhs),
+    }
+    .ok_or_else(|| ExecutionError::Overflow(op.str(), (*lhs).into(), (*rhs).into()))?;
+
+    // Check for cel-spec limits
+    if result > *MAX_TIMESTAMP || result < *MIN_TIMESTAMP {
+        Err(ExecutionError::Overflow(
+            op.str(),
+            (*lhs).into(),
+            (*rhs).into(),
+        ))
+    } else {
+        Value::Timestamp(result).into()
+    }
+}
+
+#[cfg(all(test, feature = "parser"))]
+mod tests {
+    use crate::common::traits::Sizer;
+    use crate::common::types::{CelInt, Type, LIST_TYPE};
+    use crate::common::value::{StaticVal, Val};
+    use crate::{objects::Key, Context, Env, ExecutionError, Program, ResolveResult, Value};
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    #[test]
+    fn test_indexed_map_access() {
+        let mut context = Context::default();
+        let mut headers = HashMap::new();
+        headers.insert("Content-Type", "application/json".to_string());
+        context.add_variable_from_value("headers", headers);
+
+        let program = Program::compile("headers[\"Content-Type\"]").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, "application/json".into());
+    }
+
+    #[test]
+    fn test_numeric_map_access() {
+        let mut context = Context::default();
+        let mut numbers = HashMap::new();
+        numbers.insert(Key::Uint(1), "one".to_string());
+        context.add_variable_from_value("numbers", numbers);
+
+        let program = Program::compile("numbers[1u]").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, "one".into());
+
+        // A borrowed map falls back to the other numeric key types too
+        for expr in ["numbers[1]", "numbers[1.0]"] {
+            let value = Program::compile(expr).unwrap().execute(&context);
+            assert_eq!(value, Ok("one".into()), "{expr}");
+        }
+    }
+
+    /// As in cel-go, a numeric key that misses falls back to its lossless conversion to the other
+    /// numeric key type, which isn't the same as `==`: `9007199254740993 == 9007199254740992.0`
+    /// holds, but a map with the former as key doesn't find it with the latter.
+    #[test]
+    fn test_numeric_map_key_lookup() {
+        let context = Context::default();
+        let eval = |expr: &str| Program::compile(expr).unwrap().execute(&context);
+
+        for expr in [
+            "{1u: 'x'}[1]",
+            "{1: 'x'}[1u]",
+            "{1u: 'x'}[1.0]",
+            "{1: 'x'}[1.0]",
+            "{0: 'x'}[-0.0]",
+            "{9223372036854775807u: 'x'}[9223372036854775807]",
+            "{9223372036854775808u: 'x'}[9223372036854775808.0]",
+            "{9007199254740992: 'x'}[9007199254740992.0]",
+        ] {
+            assert_eq!(eval(expr), Ok("x".into()), "{expr}");
+        }
+        for expr in [
+            "{1: 'x'}[1.5]",
+            "{18446744073709551615u: 'x'}[-1]",
+            "{9007199254740993: 'x'}[9007199254740992.0]",
+            "{9223372036854775807: 'x'}[9223372036854775808.0]",
+            "{18446744073709551615u: 'x'}[18446744073709551616.0]",
+            // cel-go rejects -2^63 when converting a double to an int
+            "{-9223372036854775808: 'x'}[-9223372036854775808.0]",
+            "{1: 'x'}[0.0/0.0]",
+            "{1: 'x'}[1.0/0.0]",
+        ] {
+            let value = eval(expr);
+            assert!(
+                matches!(value, Err(ExecutionError::NoSuchKey(_))),
+                "{expr} gave {value:?}"
+            );
+        }
+        for expr in [
+            "1 in {1u: 'x'} && 1.0 in {1u: 'x'} && !(1.5 in {1u: 'x'})",
+            "{1: 'a'} == {1u: 'a'} && {1u: 'a'} == {1: 'a'}",
+        ] {
+            assert_eq!(eval(expr), Ok(true.into()), "{expr}");
+        }
+
+        // A map can only hold both `1` and `1u` without the repeated key check, as in cel-go
+        let mut env = Env::stdlib();
+        env.set_error_on_duplicate_map_keys(false);
+        let context = Context::with_env(Arc::new(env));
+        let eval = |expr: &str| Program::compile(expr).unwrap().execute(&context);
+        for expr in [
+            // The exact key wins
+            "{1: 'a', 1u: 'b'}[1] == 'a' && {1: 'a', 1u: 'b'}[1u] == 'b'",
+            "{0: 1, 0u: 2}[0.0] == 1 && {0u: 2, 0: 1}[0.0] == 1",
+            // Only our keys are looked up in the other map, so this isn't symmetric, as in cel-go
+            "{1: 'a', 1u: 'a'} == {1: 'a', 2u: 'a'} && {1: 'a', 2u: 'a'} != {1: 'a', 1u: 'a'}",
+        ] {
+            assert_eq!(eval(expr), Ok(true.into()), "{expr}");
+        }
+    }
+
+    /// A registered [`crate::magic::Function`] that hands back one of its arguments
+    /// unchanged must be able to do so without cloning it - i.e. it can return the
+    /// `Cow::Borrowed` it was handed as-is, rather than being forced through `Value`.
+    #[test]
+    fn test_function_can_return_borrowed_val() {
+        use crate::magic::Function;
+        use crate::FunctionContext;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        #[derive(Debug)]
+        struct CountedVal(Arc<AtomicUsize>);
+
+        impl Val for CountedVal {
+            fn get_type(&self) -> &Type {
+                &LIST_TYPE
+            }
+
+            fn cel_type() -> &'static Type {
+                &LIST_TYPE
+            }
+
+            fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v> {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                Box::new(CountedVal(self.0.clone()))
+            }
+        }
+
+        let clones = Arc::new(AtomicUsize::new(0));
+        let mut ctx = Context::default();
+        ctx.add_variable_as_val("counted", Box::new(CountedVal(clones.clone())));
+
+        let echo: Function = Box::new(|ftx: &mut FunctionContext| Ok(ftx.args[0].clone()));
+        ctx.add_function("echo", echo).unwrap();
+
+        let program = Program::compile("echo(counted)").unwrap();
+        // `Value` has no representation for `CountedVal`, so the final conversion at
+        // the library boundary errors out - only the clone count matters here.
+        let _ = program.execute(&ctx);
+
+        assert_eq!(clones.load(Ordering::SeqCst), 0);
+    }
+
+    /// All the CEL-primitive argument types a registered function can declare must
+    /// still extract correctly now that they're pulled straight from the `Val`
+    /// instead of via an intermediate `Value`, including through the `This`
+    /// extractor and its `Option<T>` (i.e. "or null") form.
+    #[test]
+    fn test_typed_args_still_extract_correctly() {
+        use crate::extractors::This;
+        use crate::objects::Opaque;
+
+        fn check(
+            a: i64,
+            b: u64,
+            c: f64,
+            d: bool,
+            e: Arc<String>,
+            f: Arc<Vec<u8>>,
+            g: Arc<Vec<Value>>,
+        ) -> bool {
+            a == 1
+                && b == 2
+                && c == 3.5
+                && d
+                && e.as_str() == "hi"
+                && f.as_slice() == b"by"
+                && g.len() == 2
+        }
+
+        fn this_is_null(This(v): This<Option<i64>>) -> bool {
+            v.is_none()
+        }
+
+        #[derive(Debug, Eq, PartialEq)]
+        struct Blob(i64);
+
+        impl Opaque for Blob {
+            fn runtime_type_name(&self) -> &str {
+                "blob"
+            }
+        }
+
+        fn opaque_len(o: Arc<dyn Opaque>) -> i64 {
+            o.downcast_ref::<Blob>().map(|b| b.0).unwrap_or(-1)
+        }
+
+        let mut ctx = Context::default();
+        ctx.add_function("check", check).unwrap();
+        ctx.add_function("thisIsNull", this_is_null).unwrap();
+        ctx.add_function("opaqueLen", opaque_len).unwrap();
+        ctx.add_variable_from_value("blob", Value::Opaque(Arc::new(Blob(42))));
+
+        let program = Program::compile(
+            "check(1, 2u, 3.5, true, 'hi', b'by', [1, 2]) && null.thisIsNull() && opaqueLen(blob) == 42",
+        )
+        .unwrap();
+        assert_eq!(program.execute(&ctx), Ok(true.into()));
+    }
+
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn test_chrono_args_still_extract_correctly() {
+        fn check(d: chrono::Duration, t: chrono::DateTime<chrono::FixedOffset>) -> bool {
+            d == chrono::Duration::seconds(5) && t.timestamp() == 0
+        }
+
+        let mut ctx = Context::default();
+        ctx.add_function("check", check).unwrap();
+
+        let program =
+            Program::compile("check(duration('5s'), timestamp('1970-01-01T00:00:00Z'))").unwrap();
+        assert_eq!(program.execute(&ctx), Ok(true.into()));
+    }
+
+    /// `map` and `filter` (and a guarded `map`) are recognised as appending to
+    /// their accumulator; the other comprehension macros are not.
+    #[test]
+    fn test_append_step_is_recognised_for_map_and_filter_only() {
+        use super::AppendStep;
+        use crate::common::ast::Expr;
+        use crate::parser::Parser;
+
+        let recognised = |expr: &str| {
+            let ast = Parser::default().parse(expr).unwrap();
+            match &ast.expr {
+                Expr::Comprehension(c) => AppendStep::of(c).is_some(),
+                other => panic!("`{expr}` is not a comprehension: {other:?}"),
+            }
+        };
+
+        assert!(recognised("[1, 2, 3].map(x, x * 2)"));
+        assert!(recognised("[1, 2, 3].map(x, x > 1, x * 2)"));
+        assert!(recognised("[1, 2, 3].filter(x, x > 1)"));
+        assert!(!recognised("[1, 2, 3].all(x, x > 0)"));
+        assert!(!recognised("[1, 2, 3].exists(x, x > 2)"));
+        assert!(!recognised("[1, 2, 3].exists_one(x, x > 2)"));
+    }
+
+    /// An element error in `all()` / `exists()` is absorbed by a later element
+    /// that produces the short-circuit value (`false` for `&&`, `true` for
+    /// `||`), and survives otherwise.
+    #[test]
+    fn test_all_and_exists_absorb_element_errors() {
+        let context = Context::default();
+        let eval = |expr: &str| Program::compile(expr).unwrap().execute(&context);
+        let div_by_zero = |expr: &str| {
+            assert!(
+                matches!(eval(expr), Err(ExecutionError::DivisionByZero(_))),
+                "{expr}"
+            );
+        };
+
+        assert_eq!(eval("[1, 2, 3].all(e, 6 / (2 - e) == 6)"), Ok(false.into()));
+        assert_eq!(eval("[2, 3].all(e, 6 / (2 - e) == 6)"), Ok(false.into()));
+        div_by_zero("[2, 1].all(e, 6 / (2 - e) == 6)");
+        div_by_zero("[2].all(e, 6 / (2 - e) == 6)");
+
+        assert_eq!(eval("[2, 0].exists(e, 6 / (2 - e) == 3)"), Ok(true.into()));
+        assert_eq!(
+            eval("[0, 2, 3].exists(e, 6 / (2 - e) == 3)"),
+            Ok(true.into())
+        );
+        div_by_zero("[2, 3].exists(e, 6 / (2 - e) == 3)");
+        div_by_zero("[2].exists(e, 6 / (2 - e) == 3)");
+    }
+
+    /// Building the result in place must be indistinguishable from the generic
+    /// `@result + [expr]` evaluation, including for empty inputs, guards, maps
+    /// (which iterate their keys) and errors raised part-way through.
+    #[test]
+    fn test_map_and_filter_results() {
+        let context = Context::default();
+        let eval = |expr: &str| Program::compile(expr).unwrap().execute(&context);
+        let ints = |v: &[i64]| Value::List(Arc::new(v.iter().map(|i| Value::Int(*i)).collect()));
+
+        assert_eq!(eval("[1, 2, 3].map(x, x * 2)"), Ok(ints(&[2, 4, 6])));
+        assert_eq!(
+            eval("[1, 2, 3, 4].map(x, x % 2 == 0, x * 10)"),
+            Ok(ints(&[20, 40]))
+        );
+        assert_eq!(eval("[1, 2, 3, 4].filter(x, x > 2)"), Ok(ints(&[3, 4])));
+        assert_eq!(eval("[].map(x, x)"), Ok(ints(&[])));
+        assert_eq!(eval("[1, 2].filter(x, x > 5)"), Ok(ints(&[])));
+        // (a single entry: the order in which a map's keys are visited is unspecified)
+        assert_eq!(eval("{1: 'a'}.map(k, k + 1)"), Ok(ints(&[2])));
+        assert_eq!(
+            eval("[[1, 2], [3]].map(l, l.map(x, x + 1))"),
+            Ok(Value::List(Arc::new(vec![ints(&[2, 3]), ints(&[4])])))
+        );
+        // A step that is not a `bool` guard, or an expression that fails, is an error
+        // rather than a partial result.
+        assert!(eval("[1, 2].filter(x, x)").is_err());
+        assert!(eval("[1, 0].map(x, 1 / x)").is_err());
+    }
+
+    /// Selecting a field from something that has none reports the `_._` overload
+    /// and the runtime types involved, whether the operand is borrowed (a variable)
+    /// or owned (a literal, consumed by the lookup); a missing key on a real map
+    /// is still a `NoSuchKey`.
+    #[test]
+    fn test_select_errors_report_the_overload_and_types() {
+        let mut context = Context::default();
+        context.add_variable_from_value("borrowed", vec![1, 2]);
+        let eval = |expr: &str| Program::compile(expr).unwrap().execute(&context);
+        let overload = |types: [&str; 2]| {
+            ExecutionError::no_such_overload("_._", types.iter().map(|t| t.to_string()).collect())
+        };
+
+        assert_eq!(eval("borrowed.field"), Err(overload(["list", "string"])));
+        assert_eq!(eval("[1, 2].field"), Err(overload(["list", "string"])));
+        assert_eq!(eval("(1).field"), Err(overload(["int", "string"])));
+        assert_eq!(eval("{'a': 1}.b"), Err(ExecutionError::no_such_key("b")));
+        assert_eq!(eval("{'a': 1}.a"), Ok(Value::Int(1)));
+    }
+
+    #[test]
+    fn test_map_repeated_key() {
+        let context = Context::default();
+
+        for script in [
+            "{1: 'a', 1: 'b'}",
+            "{'a': 1, 'a': 2}",
+            "{true: 1, false: 2, true: 3}",
+            // Numeric keys compare by value
+            "{0: 'a', 0u: 'b'}",
+            "{9223372036854775807u: 'a', 9223372036854775807: 'b'}",
+        ] {
+            let value = Program::compile(script).unwrap().execute(&context);
+            assert!(
+                matches!(value, Err(ExecutionError::DuplicateKey(_))),
+                "{script} gave {value:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_map_distinct_keys() {
+        let context = Context::default();
+
+        let program = Program::compile("{1: 'a', 2: 'b', 'c': 3}").unwrap();
+        assert!(program.execute(&context).is_ok());
+
+        // No wrapping: -1 is not u64::MAX
+        let program = Program::compile("{-1: 'a', 18446744073709551615u: 'b'}").unwrap();
+        assert!(program.execute(&context).is_ok());
+    }
+
+    #[test]
+    fn test_map_repeated_key_opt_out() {
+        let mut env = Env::stdlib();
+        env.set_error_on_duplicate_map_keys(false);
+        let context = Context::with_env(Arc::new(env));
+
+        // With the check off the last entry wins, as it did before and as cel-go does.
+        let program = Program::compile("{'a': 1, 'a': 2}['a'] == 2").unwrap();
+        assert_eq!(program.execute(&context).unwrap(), true.into());
+    }
+
+    #[test]
+    fn test_heterogeneous_compare() {
+        let context = Context::default();
+
+        let program = Program::compile("1 < uint(2)").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+
+        let program = Program::compile("1 < 1.1").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+
+        let program = Program::compile("uint(0) > -10").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(
+            value,
+            true.into(),
+            "negative signed ints should be less than uints"
+        );
+    }
+
+    #[test]
+    fn test_float_compare() {
+        let context = Context::default();
+
+        let program = Program::compile("1.0 > 0.0").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, true.into());
+
+        let program = Program::compile("double('NaN') == double('NaN')").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, false.into(), "NaN should not equal itself");
+
+        let program = Program::compile("1.0 > double('NaN')").unwrap();
+        let result = program.execute(&context);
+        assert!(
+            result.is_err(),
+            "NaN should not be comparable with inequality operators"
+        );
+    }
+
+    #[test]
+    fn test_invalid_compare() {
+        let context = Context::default();
+
+        let program = Program::compile("{} == []").unwrap();
+        let value = program.execute(&context).unwrap();
+        assert_eq!(value, false.into());
+    }
+
+    #[test]
+    fn test_size_fn_var() {
+        let program = Program::compile("size(requests) + size == 5").unwrap();
+        let mut context = Context::default();
+        let requests = vec![Value::Int(42), Value::Int(42)];
+        context
+            .add_variable("requests", Value::List(Arc::new(requests)))
+            .unwrap();
+        context.add_variable("size", Value::Int(3)).unwrap();
+        assert_eq!(program.execute(&context).unwrap(), Value::Bool(true));
+    }
+
+    fn test_execution_error(program: &str, expected: ExecutionError) {
+        let program = Program::compile(program).unwrap();
+        let result = program.execute(&Context::default());
+        assert_eq!(result.unwrap_err(), expected);
+    }
+
+    #[test]
+    fn test_invalid_sub() {
+        test_execution_error(
+            "'foo' - 10",
+            ExecutionError::UnsupportedBinaryOperator("sub", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn test_invalid_add() {
+        test_execution_error(
+            "'foo' + 10",
+            ExecutionError::UnsupportedBinaryOperator("add", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn test_invalid_div() {
+        test_execution_error(
+            "'foo' / 10",
+            ExecutionError::UnsupportedBinaryOperator("div", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn test_invalid_rem() {
+        test_execution_error(
+            "'foo' % 10",
+            ExecutionError::UnsupportedBinaryOperator("rem", "foo".into(), Value::Int(10)),
+        );
+    }
+
+    #[test]
+    fn out_of_bound_list_access() {
+        let program = Program::compile("list[10]").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable("list", Value::List(Arc::new(vec![])))
+            .unwrap();
+        let result = program.execute(&context);
+        assert_eq!(
+            result,
+            Err(ExecutionError::IndexOutOfBounds(Value::Int(10)))
+        );
+    }
+
+    #[test]
+    fn out_of_bound_list_access_negative() {
+        let program = Program::compile("list[-1]").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable("list", Value::List(Arc::new(vec![])))
+            .unwrap();
+        let result = program.execute(&context);
+        assert_eq!(
+            result,
+            Err(ExecutionError::IndexOutOfBounds(Value::Int(-1)))
+        );
+    }
+
+    #[test]
+    fn list_access_uint() {
+        let program = Program::compile("list[1u]").unwrap();
+        let mut context = Context::default();
+        context
+            .add_variable("list", Value::List(Arc::new(vec![1.into(), 2.into()])))
+            .unwrap();
+        let result = program.execute(&context);
+        assert_eq!(result, Ok(Value::Int(2.into())));
+    }
+
+    #[test]
+    fn reference_to_value() {
+        let test = "example".to_string();
+        let direct: Value = test.as_str().into();
+        assert_eq!(direct, Value::String(Arc::new(String::from("example"))));
+
+        let vec = vec![test.as_str()];
+        let indirect: Value = vec.into();
+        assert_eq!(
+            indirect,
+            Value::List(Arc::new(vec![Value::String(Arc::new(String::from(
+                "example"
+            )))]))
+        );
+    }
+
+    #[test]
+    fn test_short_circuit_and() {
+        let mut context = Context::default();
+        let data: HashMap<String, String> = HashMap::new();
+        context.add_variable_from_value("data", data);
+
+        let program = Program::compile("has(data.x) && data.x.startsWith(\"foo\")").unwrap();
+        let value = program.execute(&context);
+        println!("{value:?}");
+        assert!(
+            value.is_ok(),
+            "The AND expression should support short-circuit evaluation."
+        );
+    }
+
+    #[test]
+    fn test_or_ignores_err_when_short_circuiting() {
+        let mut context = Context::default();
+        context.add_variable_from_value("foo", 42);
+        context.add_variable_from_value("bar", 42);
+        let program = Program::compile("foo || bar > 0").unwrap();
+        let value = program.execute(&context);
+        assert_eq!(value, Ok(true.into()));
+
+        let program = Program::compile("foo || bar < 0").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_err());
+    }
+
+    #[test]
+    fn test_and_ignores_err_when_short_circuiting() {
+        let mut context = Context::default();
+        context.add_variable_from_value("foo", 42);
+        context.add_variable_from_value("bar", 42);
+        let program = Program::compile("foo && bar < 0").unwrap();
+        let value = program.execute(&context);
+        assert_eq!(value, Ok(false.into()));
+
+        let program = Program::compile("foo && bar > 0").unwrap();
+        let value = program.execute(&context);
+        assert!(value.is_err());
+    }
+
+    #[test]
+    fn invalid_int_math() {
+        use ExecutionError::*;
+
+        let cases = [
+            ("1 / 0", DivisionByZero(1.into())),
+            ("1 % 0", RemainderByZero(1.into())),
+            (
+                &format!("{} + 1", i64::MAX),
+                Overflow("add", i64::MAX.into(), 1.into()),
+            ),
+            (
+                &format!("{} - 1", i64::MIN),
+                Overflow("sub", i64::MIN.into(), 1.into()),
+            ),
+            (
+                &format!("{} * 2", i64::MAX),
+                Overflow("mul", i64::MAX.into(), 2.into()),
+            ),
+            (
+                &format!("{} / -1", i64::MIN),
+                Overflow("div", i64::MIN.into(), (-1).into()),
+            ),
+            (
+                &format!("{} % -1", i64::MIN),
+                Overflow("rem", i64::MIN.into(), (-1).into()),
+            ),
+        ];
+
+        for (expr, err) in cases {
+            test_execution_error(expr, err);
+        }
+    }
+
+    #[test]
+    fn invalid_uint_math() {
+        use ExecutionError::*;
+
+        let cases = [
+            ("1u / 0u", DivisionByZero(1u64.into())),
+            ("1u % 0u", RemainderByZero(1u64.into())),
+            (
+                &format!("{}u + 1u", u64::MAX),
+                Overflow("add", u64::MAX.into(), 1u64.into()),
+            ),
+            ("0u - 1u", Overflow("sub", 0u64.into(), 1u64.into())),
+            (
+                &format!("{}u * 2u", u64::MAX),
+                Overflow("mul", u64::MAX.into(), 2u64.into()),
+            ),
+        ];
+
+        for (expr, err) in cases {
+            test_execution_error(expr, err);
+        }
+    }
+
+    #[test]
+    fn test_index_missing_map_key() {
+        let mut ctx = Context::default();
+        let mut map = HashMap::new();
+        map.insert("a".to_string(), Value::Int(1));
+        ctx.add_variable_from_value("mymap", map);
+
+        let p = Program::compile(r#"mymap["missing"]"#).expect("Must compile");
+        let result = p.execute(&ctx);
+
+        assert!(result.is_err(), "Should error on missing map key");
+    }
+
+    /// `has()` asks whether the value has the field, whatever its kind: as
+    /// cel-go's `refQualify` does, it goes by what the value can do.
+    mod presence {
+        use crate::common::traits::Indexer;
+        use crate::common::types::{CelString, Kind, Type};
+        use crate::common::value::{CowVal, Val};
+        use crate::{Context, ExecutionError, Program, Value};
+        use std::collections::HashMap;
+
+        /// A value of the user's own, with a field `path`, of any kind.
+        #[derive(Debug)]
+        struct Fields(Type);
+
+        impl Val for Fields {
+            fn get_type(&self) -> &Type {
+                &self.0
+            }
+            fn cel_type() -> &'static Type {
+                unimplemented!("we don't need this for this test")
+            }
+            fn as_indexer<'b, 'v>(&'b self) -> Option<&'b (dyn Indexer + 'v)>
+            where
+                Self: 'v,
+            {
+                Some(self)
+            }
+            fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v> {
+                Box::new(Fields(self.0.to_owned()))
+            }
+        }
+
+        impl Indexer for Fields {
+            fn get<'b, 'v>(&'b self, idx: &dyn Val) -> Result<CowVal<'b, 'v>, ExecutionError>
+            where
+                Self: 'v,
+            {
+                match idx.downcast_ref::<CelString>().map(|s| s.inner()) {
+                    Some("path") => Ok(CowVal::owned(CelString::from("/users/42"))),
+                    Some("broken") => Err(ExecutionError::function_error("path", "broken")),
+                    Some(field) => Err(ExecutionError::no_such_key(field)),
+                    None => Err(ExecutionError::no_such_key("?")),
+                }
+            }
+            fn steal<'v>(
+                self: Box<Self>,
+                idx: &dyn Val,
+            ) -> Result<Box<dyn Val + 'v>, ExecutionError>
+            where
+                Self: 'v,
+            {
+                self.get(idx).map(CowVal::into_owned)
+            }
+        }
+
+        fn execute(value: Box<dyn Val>, expr: &str) -> Result<Value, ExecutionError> {
+            let mut context = Context::default();
+            context.add_variable_as_val("v", value);
+            Program::compile(expr).unwrap().execute(&context)
+        }
+
+        #[test]
+        fn a_value_with_fields_has_them_whatever_its_kind() {
+            for t in [
+                Type::simple_type(Kind::Struct, "acme.Request"),
+                Type::simple_type(Kind::Opaque, "acme.Request"),
+                Type::simple_type(Kind::Unspecified, "acme.Request"),
+            ] {
+                let kind = t.kind();
+                assert_eq!(
+                    execute(Box::new(Fields(t.to_owned())), "has(v.path)"),
+                    Ok(Value::Bool(true)),
+                    "{kind:?}"
+                );
+                assert_eq!(
+                    execute(Box::new(Fields(t)), "has(v.missing)"),
+                    Ok(Value::Bool(false)),
+                    "{kind:?}"
+                );
+            }
+        }
+
+        /// `v['path']` reads the field `v.path` does, also on a value nothing
+        /// else holds, such as an element moved out of a list.
+        #[test]
+        fn a_value_with_fields_is_indexed_by_field_name() {
+            let request = || Box::new(Fields(Type::simple_type(Kind::Unspecified, "acme.Request")));
+            for expr in ["v['path']", "[v][0].path", "[v][0]['path']"] {
+                assert_eq!(
+                    execute(request(), expr),
+                    Ok(Value::from("/users/42")),
+                    "{expr}"
+                );
+            }
+        }
+
+        /// Only a field reported missing is absent: any other error stands.
+        #[test]
+        fn a_field_that_fails_otherwise_is_an_error() {
+            assert_eq!(
+                execute(
+                    Box::new(Fields(Type::simple_type(Kind::Struct, "acme.Request"))),
+                    "has(v.broken)"
+                ),
+                Err(ExecutionError::function_error("path", "broken"))
+            );
+        }
+
+        #[test]
+        fn a_map_has_its_keys() {
+            let mut context = Context::default();
+            context.add_variable_from_value("m", HashMap::from([("a", 1)]));
+            let has = |expr| Program::compile(expr).unwrap().execute(&context);
+            assert_eq!(has("has(m.a)"), Ok(Value::Bool(true)));
+            assert_eq!(has("has(m.b)"), Ok(Value::Bool(false)));
+        }
+
+        /// A list is indexed by position, not by field name, and a scalar is
+        /// not indexed at all: testing either for a field is an error.
+        #[test]
+        fn a_value_without_fields_cannot_be_tested_for_one() {
+            let context = Context::default();
+            for (expr, operand) in [("has([1].f)", "list"), ("has((1).f)", "int")] {
+                assert_eq!(
+                    Program::compile(expr).unwrap().execute(&context),
+                    Err(ExecutionError::no_such_overload(
+                        "_._",
+                        vec![operand.to_owned(), "string".to_owned()]
+                    )),
+                    "{expr}"
+                );
+            }
+        }
+    }
+
+    /// The built-in type names are identifiers resolving to type values.
+    #[test]
+    fn type_names_resolve_as_type_values() {
+        let context = Context::default();
+        for expr in [
+            "type(true) == bool",
+            "type(b'') == bytes",
+            "type(1.0) == double",
+            "type(1) == int",
+            "type([]) == list",
+            "type({}) == map",
+            "type(null) == null_type",
+            "type(optional.none()) == optional_type",
+            "type('') == string",
+            "type(int) == type",
+            "type(1u) == uint",
+        ] {
+            let program = Program::compile(expr).unwrap();
+            assert_eq!(program.execute(&context), Ok(Value::Bool(true)), "{expr}");
+        }
+    }
+
+    /// A variable shadows a type of the same name, whether bound on the
+    /// context or by a comprehension in a child scope.
+    #[test]
+    fn a_variable_shadows_a_type_name() {
+        let mut context = Context::default();
+        context.add_variable_from_value("int", 42);
+        let program = Program::compile("int").unwrap();
+        assert_eq!(program.execute(&context), Ok(Value::Int(42)));
+
+        let context = Context::default();
+        let program = Program::compile("[1].map(int, int + 1)").unwrap();
+        assert_eq!(program.execute(&context), Ok(vec![2].into()));
+    }
+
+    #[test]
+    fn an_unknown_identifier_is_an_undeclared_reference() {
+        test_execution_error(
+            "not_a_type",
+            ExecutionError::UndeclaredReference(Arc::new("not_a_type".to_string())),
+        );
+    }
+
+    mod registered_types {
+        use crate::common::types::{CelType, Kind, Type};
+        use crate::common::value::{StaticVal, Val};
+        use crate::{Context, Env, ExecutionError, Program, Value};
+        use std::any::Any;
+        use std::sync::Arc;
+
+        static IP_TYPE: Type = Type::simple_type(Kind::Opaque, "Ip");
+
+        #[derive(Debug)]
+        struct Ip(u32);
+
+        impl Val for Ip {
+            fn get_type(&self) -> &Type {
+                &IP_TYPE
+            }
+            fn cel_type() -> &'static Type {
+                &IP_TYPE
+            }
+            fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v> {
+                Box::new(Ip(self.0))
+            }
+            fn as_any(&self) -> Option<&dyn Any> {
+                Some(self)
+            }
+        }
+        impl StaticVal for Ip {}
+
+        fn execute(context: &Context, expr: &str) -> Result<Value, ExecutionError> {
+            Program::compile(expr).unwrap().execute(context)
+        }
+
+        #[test]
+        fn a_registered_type_resolves_as_a_type_value() {
+            let mut env = Env::stdlib();
+            env.add_type(Type::simple_type(Kind::Opaque, "Ip")).unwrap();
+            let mut context = Context::with_env(Arc::new(env));
+            context.add_variable_as_val("ip", Box::new(Ip(0x7f000001)));
+            assert_eq!(execute(&context, "type(ip) == Ip"), Ok(Value::Bool(true)));
+            assert_eq!(execute(&context, "type(1) == Ip"), Ok(Value::Bool(false)));
+        }
+
+        #[test]
+        fn an_unregistered_type_is_an_undeclared_reference() {
+            let mut context = Context::default();
+            context.add_variable_as_val("ip", Box::new(Ip(0x7f000001)));
+            assert_eq!(
+                execute(&context, "type(ip) == Ip"),
+                Err(ExecutionError::UndeclaredReference(Arc::new(
+                    "Ip".to_string()
+                )))
+            );
+        }
+
+        /// Evaluates `expr` to a type value, and returns its name.
+        fn type_name(context: &Context, expr: &str) -> Result<String, ExecutionError> {
+            let ast = crate::parser::Parser::default().parse(expr).unwrap();
+            let value = Value::resolve_val(&ast, context)?;
+            Ok(value.downcast_ref::<CelType>().unwrap().name().to_owned())
+        }
+
+        /// Types are known once a library registered them, the core types
+        /// included.
+        #[test]
+        fn types_come_with_the_standard_library() {
+            for name in ["int", "optional_type"] {
+                assert_eq!(
+                    type_name(&Context::empty(), name),
+                    Err(ExecutionError::UndeclaredReference(Arc::new(
+                        name.to_string()
+                    )))
+                );
+                assert_eq!(type_name(&Context::default(), name), Ok(name.to_owned()));
+            }
+        }
+    }
+
+    mod qualified_idents {
+        use crate::common::types::Type;
+        use crate::{Context, Env, ExecutionError, Program, Value};
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        fn execute(context: &Context, expr: &str) -> Result<Value, ExecutionError> {
+            Program::compile(expr).unwrap().execute(context)
+        }
+
+        fn undeclared(name: &str) -> Result<Value, ExecutionError> {
+            Err(ExecutionError::UndeclaredReference(Arc::new(
+                name.to_string(),
+            )))
+        }
+
+        #[test]
+        fn a_qualified_variable_resolves() {
+            let mut context = Context::default();
+            context.add_variable_from_value("a.b.c", "yeah");
+            assert_eq!(execute(&context, "a.b.c"), Ok("yeah".into()));
+        }
+
+        /// The most specific name wins, as in cel-go: `a.b.c` is the
+        /// variable `a.b.c` rather than the field `c` of the variable `a.b`.
+        #[test]
+        fn the_longest_variable_name_wins() {
+            let mut context = Context::default();
+            context.add_variable_from_value("a.b.c", "yeah");
+            context.add_variable_from_value("a.b", HashMap::from([("c", "oops")]));
+            assert_eq!(execute(&context, "a.b.c"), Ok("yeah".into()));
+            assert_eq!(
+                execute(&context, "a.b"),
+                Ok(HashMap::from([("c", "oops")]).into())
+            );
+        }
+
+        #[test]
+        fn fields_are_selected_on_a_qualified_variable() {
+            let mut context = Context::default();
+            context.add_variable_from_value("a.b", HashMap::from([("c", "x")]));
+            assert_eq!(execute(&context, "a.b.c"), Ok("x".into()));
+            context.add_variable_from_value("a.list", vec![1, 2]);
+            assert_eq!(execute(&context, "a.list.size()"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn fields_are_selected_on_a_variable() {
+            let mut context = Context::default();
+            context.add_variable_from_value("a", HashMap::from([("b", HashMap::from([("c", 1)]))]));
+            assert_eq!(execute(&context, "a.b.c"), Ok(Value::Int(1)));
+            let context = Context::default();
+            assert_eq!(
+                execute(&context, "[{'b': 1}].map(a, a.b)"),
+                Ok(vec![1].into())
+            );
+        }
+
+        #[test]
+        fn a_qualified_type_resolves() {
+            let mut env = Env::stdlib();
+            env.add_type(Type::new_opaque_type("my.pkg.Ip")).unwrap();
+            let context = Context::with_env(Arc::new(env));
+            assert_eq!(
+                execute(
+                    &context,
+                    "type(my.pkg.Ip) == type && my.pkg.Ip == my.pkg.Ip"
+                ),
+                Ok(Value::Bool(true))
+            );
+        }
+
+        #[cfg(feature = "chrono")]
+        #[test]
+        fn well_known_types_resolve() {
+            let context = Context::default();
+            assert_eq!(
+                execute(
+                    &context,
+                    "type(duration('1s')) == google.protobuf.Duration \
+                     && type(timestamp('2009-02-13T23:31:30Z')) == google.protobuf.Timestamp"
+                ),
+                Ok(Value::Bool(true))
+            );
+        }
+
+        /// A variable shadows a type of the same name, qualified or not.
+        #[test]
+        fn a_qualified_variable_shadows_a_type() {
+            let mut env = Env::stdlib();
+            env.add_type(Type::new_opaque_type("my.pkg.Ip")).unwrap();
+            let mut context = Context::with_env(Arc::new(env));
+            context.add_variable_from_value("my.pkg.Ip", 1);
+            assert_eq!(execute(&context, "my.pkg.Ip"), Ok(Value::Int(1)));
+        }
+
+        /// Types have no fields: only the whole name is looked up as a type.
+        #[test]
+        fn a_type_is_only_the_whole_name() {
+            let mut env = Env::stdlib();
+            env.add_type(Type::new_opaque_type("a.b")).unwrap();
+            let context = Context::with_env(Arc::new(env));
+            assert_eq!(execute(&context, "a.b.c"), undeclared("a"));
+        }
+
+        #[test]
+        fn an_unresolved_qualified_name_reports_its_root() {
+            assert_eq!(execute(&Context::default(), "a.b.c"), undeclared("a"));
+        }
+
+        /// `has(a.b.c)` tests for `c` on the name `a.b`.
+        #[test]
+        fn a_presence_test_resolves_its_operand_as_a_name() {
+            let mut context = Context::default();
+            context.add_variable_from_value("a.b", HashMap::from([("c", 1)]));
+            assert_eq!(execute(&context, "has(a.b.c)"), Ok(Value::Bool(true)));
+            assert_eq!(execute(&context, "has(a.b.d)"), Ok(Value::Bool(false)));
+
+            let mut context = Context::default();
+            context.add_variable_from_value("a.b.c", 1);
+            assert_eq!(execute(&context, "has(a.b.c)"), undeclared("a"));
+        }
+    }
+
+    mod scopes {
+        use crate::{Context, ExecutionError, Program, Value};
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        fn execute(context: &Context, expr: &str) -> Result<Value, ExecutionError> {
+            Program::compile(expr).unwrap().execute(context)
+        }
+
+        fn undeclared(name: &str) -> Result<Value, ExecutionError> {
+            Err(ExecutionError::UndeclaredReference(Arc::new(
+                name.to_string(),
+            )))
+        }
+
+        #[test]
+        fn a_dotted_variable_of_an_inner_scope_resolves() {
+            let root = Context::default();
+            let mut child = root.new_inner_scope();
+            child.add_variable_from_value("a.b", 7);
+            child.add_variable_from_value("m.n", HashMap::from([("c", 8)]));
+            assert_eq!(execute(&child, "a.b"), Ok(Value::Int(7)));
+            assert_eq!(execute(&child, "m.n.c"), Ok(Value::Int(8)));
+        }
+
+        #[test]
+        fn an_inner_variable_shadows_a_dotted_root_name() {
+            let mut root = Context::default();
+            root.add_variable_from_value("a.b", 1);
+            root.add_variable_from_value("a", HashMap::from([("b", 2)]));
+            let mut child = root.new_inner_scope();
+            child.add_variable_from_value("a", HashMap::from([("b", 3)]));
+            assert_eq!(execute(&child, "a.b"), Ok(Value::Int(3)));
+            assert_eq!(execute(&root, "a.b"), Ok(Value::Int(1)));
+        }
+
+        #[test]
+        fn a_macro_variable_shadows_a_dotted_global() {
+            let mut context = Context::default();
+            context.add_variable_from_value("y.z", 1);
+            assert_eq!(
+                execute(&context, "[{'z':0}].exists(y, y.z == 0)"),
+                Ok(Value::Bool(true))
+            );
+            assert_eq!(execute(&context, "y.z"), Ok(Value::Int(1)));
+        }
+
+        #[test]
+        fn the_longest_prefix_wins_within_a_scope() {
+            let mut root = Context::default();
+            root.add_variable_from_value("a", HashMap::from([("b", 1)]));
+            let mut child = root.new_inner_scope();
+            child.add_variable_from_value("a.b", 2);
+            assert_eq!(execute(&child, "a.b"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn a_name_missing_from_an_inner_scope_resolves_in_its_parent() {
+            let mut root = Context::default();
+            root.add_variable_from_value("a.b", 1);
+            let mut child = root.new_inner_scope();
+            child.add_variable_from_value("a.c", 2);
+            assert_eq!(execute(&child, "a.b"), Ok(Value::Int(1)));
+        }
+
+        #[test]
+        fn a_leading_dot_skips_inner_scopes() {
+            let mut root = Context::default();
+            root.add_variable_from_value("q", 1);
+            let mut child = root.new_inner_scope();
+            child.add_variable_from_value("q", 2);
+            assert_eq!(execute(&child, "q"), Ok(Value::Int(2)));
+            assert_eq!(execute(&child, ".q"), Ok(Value::Int(1)));
+            assert_eq!(
+                execute(&root, "[2].map(q, .q + q)"),
+                Ok(Value::List(vec![Value::Int(3)].into()))
+            );
+        }
+
+        #[test]
+        fn a_leading_dot_resolves_a_dotted_root_name() {
+            let mut root = Context::default();
+            root.add_variable_from_value("a.b", 1);
+            assert_eq!(execute(&root, ".a.b"), Ok(Value::Int(1)));
+            assert_eq!(
+                execute(&root, "[{'b':2}].map(a, [a.b, .a.b])"),
+                Ok(Value::List(
+                    vec![Value::List(vec![Value::Int(2), Value::Int(1)].into())].into()
+                ))
+            );
+        }
+
+        #[test]
+        fn a_leading_dot_name_that_is_not_declared_is_reported() {
+            let context = Context::default();
+            assert_eq!(execute(&context, ".q"), undeclared(".q"));
+            assert_eq!(execute(&context, ".a.b"), undeclared(".a"));
+        }
+
+        #[test]
+        fn a_leading_dot_calls_a_global_function() {
+            let mut context = Context::default();
+            context.add_function("f", |i: i64| i + 1).unwrap();
+            context.add_function("a.g", |i: i64| i + 2).unwrap();
+            assert_eq!(execute(&context, ".f(1)"), Ok(Value::Int(2)));
+            assert_eq!(execute(&context, ".a.g(1)"), Ok(Value::Int(3)));
+        }
+    }
+
+    mod containers {
+        use crate::common::types::Type;
+        use crate::{Context, Env, ExecutionError, Program, Value};
+        use std::sync::Arc;
+
+        fn execute(context: &Context, expr: &str) -> Result<Value, ExecutionError> {
+            Program::compile(expr).unwrap().execute(context)
+        }
+
+        fn context_in(container: &str) -> Context<'static, 'static> {
+            let mut env = Env::stdlib();
+            env.set_container(container).unwrap();
+            Context::with_env(Arc::new(env))
+        }
+
+        /// The issue's own scenario (cel-rust#358): in container `x`, `y`
+        /// resolves to `x.y` before the plain `y`.
+        #[test]
+        fn an_identifier_resolves_under_the_container_first() {
+            let mut context = context_in("x");
+            context.add_variable_from_value("x.y", true);
+            context.add_variable_from_value("y", "false");
+            assert_eq!(execute(&context, "y"), Ok(Value::Bool(true)));
+        }
+
+        #[test]
+        fn an_identifier_falls_back_to_the_plain_name() {
+            let mut context = context_in("x");
+            context.add_variable_from_value("y", "plain");
+            assert_eq!(execute(&context, "y"), Ok("plain".into()));
+        }
+
+        /// For container `a.b.c` and name `R.s`, candidates are tried most
+        /// specific first: `a.b.c.R.s`, `a.b.R.s`, `a.R.s`, then `R.s`.
+        #[test]
+        fn a_qualified_identifier_tries_every_container_prefix() {
+            let mut context = context_in("a.b.c");
+            context.add_variable_from_value("a.R.s", "found");
+            assert_eq!(execute(&context, "R.s"), Ok("found".into()));
+        }
+
+        /// The longest-prefix rule still applies within a container: for
+        /// `y.z` in container `x`, `x.y.z`, `y.z`, `x.y` + `.z`, `y` + `.z`.
+        #[test]
+        fn the_longest_prefix_rule_combines_with_the_container() {
+            let mut context = context_in("x");
+            context.add_variable_from_value("x.y", std::collections::HashMap::from([("z", 1)]));
+            assert_eq!(execute(&context, "y.z"), Ok(Value::Int(1)));
+        }
+
+        #[test]
+        fn a_struct_type_name_resolves_under_the_container() {
+            let mut env = Env::stdlib();
+            env.set_container("x").unwrap();
+            env.add_type(Type::new_opaque_type("x.y.Ip")).unwrap();
+            let context = Context::with_env(Arc::new(env));
+            assert_eq!(
+                execute(&context, "type(y.Ip) == type"),
+                Ok(Value::Bool(true))
+            );
+        }
+
+        /// Each candidate is tried whole, variable then type, before the next.
+        #[test]
+        fn a_more_specific_type_candidate_wins_over_a_less_specific_variable() {
+            let mut env = Env::stdlib();
+            env.set_container("x").unwrap();
+            env.add_type(Type::new_opaque_type("x.y")).unwrap();
+            let mut context = Context::with_env(Arc::new(env));
+            context.add_variable_from_value("y", "plain-var");
+            assert_eq!(execute(&context, "type(y) == type"), Ok(Value::Bool(true)));
+        }
+
+        #[test]
+        fn a_macro_variable_shadows_the_container() {
+            let mut context = context_in("x");
+            context.add_variable_from_value("x.y", 42);
+            assert_eq!(execute(&context, "[0].exists(y, y == 0)"), Ok(true.into()));
+        }
+
+        #[test]
+        fn a_dotted_variable_of_an_inner_scope_resolves_under_the_container() {
+            let root = context_in("x");
+            let mut child = root.new_inner_scope();
+            child.add_variable_from_value("x.a.b", 7);
+            child.add_variable_from_value("a.c", 8);
+            assert_eq!(execute(&child, "a.b"), Ok(Value::Int(7)));
+            assert_eq!(execute(&child, "a.c"), Ok(Value::Int(8)));
+        }
+
+        #[test]
+        fn a_function_name_resolves_under_the_container() {
+            let mut context = context_in("x");
+            context.add_function("x.f", |i: i64| i + 1).unwrap();
+            assert_eq!(execute(&context, "f(1)"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn a_qualified_function_call_resolves_under_the_container() {
+            let mut context = context_in("x");
+            context.add_function("x.a.f", |i: i64| i + 1).unwrap();
+            assert_eq!(execute(&context, "a.f(1)"), Ok(Value::Int(2)));
+        }
+
+        /// A leading `.` is absolute: it skips the container entirely.
+        #[test]
+        fn a_leading_dot_is_absolute_and_skips_the_container() {
+            let mut context = context_in("x");
+            context.add_variable_from_value("x.y", true);
+            context.add_variable_from_value("y", "plain");
+            assert_eq!(execute(&context, ".y"), Ok("plain".into()));
+        }
+
+        #[test]
+        fn no_container_means_only_the_plain_name() {
+            let context = Context::default();
+            assert_eq!(
+                execute(&context, "y"),
+                Err(ExecutionError::UndeclaredReference(Arc::new(
+                    "y".to_string()
+                )))
+            );
+        }
+    }
+
+    mod qualified_functions {
+        use crate::common::types::{CelInt, INT_TYPE};
+        use crate::common::value::CowVal;
+        use crate::{Context, Env, ExecutionError, Program, Value};
+        use std::collections::HashMap;
+        use std::sync::Arc;
+
+        fn increment<'b, 'v>(args: Vec<CowVal<'b, 'v>>) -> Result<CowVal<'b, 'v>, ExecutionError> {
+            let i = args[0].downcast_ref::<CelInt>().unwrap();
+            Ok(CowVal::owned(CelInt::from(i.inner() + 1)))
+        }
+
+        fn context_with_overload(name: &str) -> Context<'static, 'static> {
+            let mut env = Env::stdlib();
+            env.add_overload(name, "increment_int", vec![INT_TYPE], increment)
+                .unwrap();
+            Context::with_env(Arc::new(env))
+        }
+
+        fn execute(context: &Context, expr: &str) -> Result<Value, ExecutionError> {
+            Program::compile(expr).unwrap().execute(context)
+        }
+
+        #[test]
+        fn an_overload_resolves_through_one_qualifier() {
+            let context = context_with_overload("a.f");
+            assert_eq!(execute(&context, "a.f(1)"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn an_overload_resolves_through_several_qualifiers() {
+            let context = context_with_overload("a.b.f");
+            assert_eq!(execute(&context, "a.b.f(1)"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn a_function_resolves_through_several_qualifiers() {
+            let mut context = Context::default();
+            context.add_function("a.b.f", |i: i64| i + 1).unwrap();
+            assert_eq!(execute(&context, "a.b.f(1)"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn a_mismatched_qualified_overload_names_the_qualified_function() {
+            let context = context_with_overload("a.b.f");
+            let error = execute(&context, "a.b.f('one')").unwrap_err();
+            assert!(error.to_string().contains("a.b.f"), "{error}");
+        }
+
+        /// As in cel-go, the qualified function is called rather than a
+        /// method that applies to the target.
+        #[test]
+        fn a_qualified_function_is_called_before_a_method() {
+            fn forty_two<'b, 'v>(_: Vec<CowVal<'b, 'v>>) -> Result<CowVal<'b, 'v>, ExecutionError> {
+                Ok(CowVal::owned(CelInt::from(42)))
+            }
+            let mut env = Env::stdlib();
+            env.add_overload("m.size", "m_size", vec![], forty_two)
+                .unwrap();
+            let mut context = Context::with_env(Arc::new(env));
+            context.add_variable_from_value("m", vec![1, 2]);
+            assert_eq!(execute(&context, "m.size()"), Ok(Value::Int(42)));
+        }
+
+        /// A namespace of functions is no function: a call with no function
+        /// of its qualified name is a method call.
+        #[test]
+        fn a_method_is_called_on_a_variable_named_as_a_namespace() {
+            let mut context = Context::default();
+            context.add_variable_from_value("optional", vec![1, 2]);
+            assert_eq!(execute(&context, "optional.size()"), Ok(Value::Int(2)));
+            assert_eq!(
+                execute(&context, "optional.of(1).hasValue()"),
+                Ok(Value::Bool(true))
+            );
+        }
+
+        /// A comprehension's scope finds the namespaces of its root context.
+        #[test]
+        fn a_qualified_function_is_called_in_a_child_scope() {
+            let context = context_with_overload("a.f");
+            assert_eq!(execute(&context, "[1].map(x, a.f(x))"), Ok(vec![2].into()));
+            let mut context = Context::default();
+            context.add_function("a.b.f", |i: i64| i + 1).unwrap();
+            assert_eq!(
+                execute(&context, "[1].map(x, a.b.f(x))"),
+                Ok(vec![2].into())
+            );
+        }
+
+        #[test]
+        fn a_qualified_function_is_called_when_no_method_applies() {
+            let mut context = context_with_overload("a.f");
+            context.add_variable_from_value("a", 1);
+            assert_eq!(execute(&context, "a.f(1)"), Ok(Value::Int(2)));
+        }
+
+        #[test]
+        fn a_call_on_an_undeclared_target_reports_the_target() {
+            let context = Context::default();
+            assert_eq!(
+                execute(&context, "foo.bar()"),
+                Err(ExecutionError::UndeclaredReference(Arc::new(
+                    "foo".to_string()
+                )))
+            );
+        }
+
+        /// Without a function of the qualified name, the call is a member
+        /// call on the selected field.
+        #[test]
+        fn a_member_call_on_a_selected_field_is_not_qualified() {
+            let mut context = Context::default();
+            context.add_variable_from_value("m", HashMap::from([("b", vec![1, 2])]));
+            assert_eq!(execute(&context, "m.b.size()"), Ok(Value::Int(2)));
+        }
+    }
+
+    mod opaque {
+        use crate::objects::{Map, Opaque, OpaqueVal, OptionalValue};
+        use crate::parser::Parser;
+        use crate::{Context, ExecutionError, FunctionContext, Program, Value};
+        use serde::Serialize;
+        use std::collections::HashMap;
+        use std::fmt::Debug;
+        use std::ops::Deref;
+        use std::sync::Arc;
+
+        #[derive(Debug, Eq, PartialEq, Serialize)]
+        struct MyStruct {
+            field: String,
+        }
+
+        impl Opaque for MyStruct {
+            fn runtime_type_name(&self) -> &str {
+                "my_struct"
+            }
+
+            #[cfg(feature = "json")]
+            fn json(&self) -> Option<serde_json::Value> {
+                Some(serde_json::to_value(self).unwrap())
+            }
+        }
+
+        #[test]
+        fn test_opaque_fn() {
+            pub fn my_fn(ftx: &FunctionContext) -> Result<Value, ExecutionError> {
+                if let Some(Some(opaque)) = ftx.this.as_ref().map(|v| v.downcast_ref::<OpaqueVal>())
+                {
+                    if opaque.val.runtime_type_name() == "my_struct" {
+                        Ok(opaque
+                            .val
+                            .deref()
+                            .downcast_ref::<MyStruct>()
+                            .unwrap()
+                            .field
+                            .clone()
+                            .into())
+                    } else {
+                        Err(ExecutionError::UnexpectedType {
+                            got: opaque.val.runtime_type_name().to_string(),
+                            want: "my_struct".to_string(),
+                        })
+                    }
+                } else {
+                    Err(ExecutionError::UnexpectedType {
+                        got: format!("{:?}", ftx.this),
+                        want: "Value::Opaque".to_string(),
+                    })
+                }
+            }
+
+            let value = Arc::new(MyStruct {
+                field: String::from("value"),
+            });
+
+            let mut ctx = Context::default();
+            ctx.add_variable_from_value("mine", Value::Opaque(value.clone()));
+            ctx.add_function("myFn", my_fn).unwrap();
+            let prog = Program::compile("mine.myFn()").unwrap();
+            assert_eq!(
+                Ok(Value::String(Arc::new("value".into()))),
+                prog.execute(&ctx)
+            );
+        }
+
+        #[test]
+        fn opaque_eq() {
+            let value_1 = Arc::new(MyStruct {
+                field: String::from("1"),
+            });
+            let value_2 = Arc::new(MyStruct {
+                field: String::from("2"),
+            });
+
+            let mut ctx = Context::default();
+            ctx.add_variable_from_value("v1", Value::Opaque(value_1.clone()));
+            ctx.add_variable_from_value("v1b", Value::Opaque(value_1));
+            ctx.add_variable_from_value("v2", Value::Opaque(value_2));
+            assert_eq!(
+                Program::compile("v2 == v1").unwrap().execute(&ctx),
+                Ok(false.into())
+            );
+            assert_eq!(
+                Program::compile("v1 == v1b").unwrap().execute(&ctx),
+                Ok(true.into())
+            );
+            assert_eq!(
+                Program::compile("v2 == v2").unwrap().execute(&ctx),
+                Ok(true.into())
+            );
+        }
+
+        #[test]
+        fn test_value_holder_dbg() {
+            let opaque = Arc::new(MyStruct {
+                field: "not so opaque".to_string(),
+            });
+            let opaque = Value::Opaque(opaque);
+            assert_eq!(
+                "Opaque<my_struct>(MyStruct { field: \"not so opaque\" })",
+                format!("{:?}", opaque)
+            );
+        }
+
+        #[test]
+        #[cfg(feature = "json")]
+        fn test_json() {
+            let value = Arc::new(MyStruct {
+                field: String::from("value"),
+            });
+            let cel_value = Value::Opaque(value);
+            let mut map = serde_json::Map::new();
+            map.insert(
+                "field".to_string(),
+                serde_json::Value::String("value".to_string()),
+            );
+            assert_eq!(
+                cel_value.json().expect("Must convert"),
+                serde_json::Value::Object(map)
+            );
+        }
+
+        #[test]
+        fn test_optional() {
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none()")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::none())))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(1)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::of(Value::Int(1)))))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.ofNonZeroValue(0)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::none())))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.ofNonZeroValue(1)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::of(Value::Int(1)))))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(1).value()")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(1))
+            );
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().value()")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Err(ExecutionError::FunctionError {
+                    function: "value".to_string(),
+                    message: "optional.none() dereference".to_string()
+                })
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(1).hasValue()")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Bool(true))
+            );
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().hasValue()")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Bool(false))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(1).or(optional.of(2))")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::of(Value::Int(1)))))
+            );
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().or(optional.of(2))")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::of(Value::Int(2)))))
+            );
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().or(optional.none())")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Opaque(Arc::new(OptionalValue::none())))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(1).orValue(5)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(1))
+            );
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().orValue(5)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(5))
+            );
+
+            let mut ctx = Context::default();
+            ctx.add_variable_from_value("msg", HashMap::from([("field", "value")]));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("msg.?field")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &ctx),
+                Ok(Value::Opaque(Arc::new(OptionalValue::of(Value::String(
+                    Arc::new("value".to_string())
+                )))))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(msg).?field")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &ctx),
+                Ok(Value::Opaque(Arc::new(OptionalValue::of(Value::String(
+                    Arc::new("value".to_string())
+                )))))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().?field")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &ctx),
+                Ok(Value::Opaque(Arc::new(OptionalValue::none())))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of(msg).?field.orValue('default')")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &ctx),
+                Ok(Value::String(Arc::new("value".to_string())))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none().?field.orValue('default')")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &ctx),
+                Ok(Value::String(Arc::new("default".to_string())))
+            );
+
+            let mut map_ctx = Context::default();
+            let mut map = HashMap::new();
+            map.insert("a".to_string(), Value::Int(1));
+            map_ctx.add_variable_from_value("mymap", map);
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"mymap[?"missing"].orValue(99)"#)
+                .expect("Must parse");
+            assert_eq!(Value::resolve(&expr, &map_ctx), Ok(Value::Int(99)));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"mymap[?"missing"].hasValue()"#)
+                .expect("Must parse");
+            assert_eq!(Value::resolve(&expr, &map_ctx), Ok(Value::Bool(false)));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"mymap[?"a"].orValue(99)"#)
+                .expect("Must parse");
+            assert_eq!(Value::resolve(&expr, &map_ctx), Ok(Value::Int(1)));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"mymap[?"a"].hasValue()"#)
+                .expect("Must parse");
+            assert_eq!(Value::resolve(&expr, &map_ctx), Ok(Value::Bool(true)));
+
+            let mut list_ctx = Context::default();
+            list_ctx.add_variable_from_value(
+                "mylist",
+                vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("mylist[?10].orValue(99)")
+                .expect("Must parse");
+            assert_eq!(Value::resolve(&expr, &list_ctx), Ok(Value::Int(99)));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("mylist[?1].orValue(99)")
+                .expect("Must parse");
+            assert_eq!(Value::resolve(&expr, &list_ctx), Ok(Value::Int(2)));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of([1, 2, 3])[1].orValue(99)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(2))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of([1, 2, 3])[4].orValue(99)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(99))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.none()[1].orValue(99)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(99))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("optional.of([1, 2, 3])[?1].orValue(99)")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Int(2))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("[1, 2, ?optional.of(3), 4]")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::List(Arc::new(vec![
+                    Value::Int(1),
+                    Value::Int(2),
+                    Value::Int(3),
+                    Value::Int(4)
+                ])))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("[1, 2, ?optional.none(), 4]")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::List(Arc::new(vec![
+                    Value::Int(1),
+                    Value::Int(2),
+                    Value::Int(4)
+                ])))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("[?optional.of(1), ?optional.none(), ?optional.of(3)]")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::List(Arc::new(vec![Value::Int(1), Value::Int(3)])))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"[1, ?mymap[?"missing"], 3]"#)
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &map_ctx),
+                Ok(Value::List(Arc::new(vec![Value::Int(1), Value::Int(3)])))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"[1, ?mymap[?"a"], 3]"#)
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &map_ctx),
+                Ok(Value::List(Arc::new(vec![
+                    Value::Int(1),
+                    Value::Int(1),
+                    Value::Int(3)
+                ])))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("[?optional.none(), ?optional.none()]")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::List(Arc::new(vec![])))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{"a": 1, "b": 2, ?"c": optional.of(3)}"#)
+                .expect("Must parse");
+            let mut expected_map = HashMap::new();
+            expected_map.insert("a".into(), Value::Int(1));
+            expected_map.insert("b".into(), Value::Int(2));
+            expected_map.insert("c".into(), Value::Int(3));
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Map(Map {
+                    map: Arc::from(expected_map)
+                }))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{"a": 1, "b": 2, ?"c": optional.none()}"#)
+                .expect("Must parse");
+            let mut expected_map = HashMap::new();
+            expected_map.insert("a".into(), Value::Int(1));
+            expected_map.insert("b".into(), Value::Int(2));
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Map(Map {
+                    map: Arc::from(expected_map)
+                }))
+            );
+
+            // An entry holding no value adds no key, so it has none to repeat. Whether it
+            // should instead drop the earlier entry, as cel-go does, is left alone here.
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{"a": 1, ?"a": optional.none()}"#)
+                .expect("Must parse");
+            assert!(!matches!(
+                Value::resolve(&expr, &Context::default()),
+                Err(ExecutionError::DuplicateKey(_))
+            ));
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{"a": 1, ?"b": optional.none(), ?"c": optional.of(3)}"#)
+                .expect("Must parse");
+            let mut expected_map = HashMap::new();
+            expected_map.insert("a".into(), Value::Int(1));
+            expected_map.insert("c".into(), Value::Int(3));
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Map(Map {
+                    map: Arc::from(expected_map)
+                }))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{"a": 1, ?"b": mymap[?"missing"]}"#)
+                .expect("Must parse");
+            let mut expected_map = HashMap::new();
+            expected_map.insert("a".into(), Value::Int(1));
+            assert_eq!(
+                Value::resolve(&expr, &map_ctx),
+                Ok(Value::Map(Map {
+                    map: Arc::from(expected_map)
+                }))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{"x": 10, ?"y": mymap[?"a"]}"#)
+                .expect("Must parse");
+            let mut expected_map = HashMap::new();
+            expected_map.insert("x".into(), Value::Int(10));
+            expected_map.insert("y".into(), Value::Int(1));
+            assert_eq!(
+                Value::resolve(&expr, &map_ctx),
+                Ok(Value::Map(Map {
+                    map: Arc::from(expected_map)
+                }))
+            );
+
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse(r#"{?"a": optional.none(), ?"b": optional.none()}"#)
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::Map(Map {
+                    map: Arc::from(HashMap::new())
+                }))
+            );
+        }
+
+        /// A comprehension binds a copy of each element to its variable: a copy
+        /// of an optional is an optional, not the value it holds.
+        #[test]
+        fn a_comprehension_binds_an_optional_element_as_an_optional() {
+            let expr = Parser::default()
+                .enable_optional_syntax(true)
+                .parse("[optional.of(1), optional.none()].map(x, x.hasValue())")
+                .expect("Must parse");
+            assert_eq!(
+                Value::resolve(&expr, &Context::default()),
+                Ok(Value::List(Arc::new(vec![
+                    Value::Bool(true),
+                    Value::Bool(false)
+                ])))
+            );
+        }
+    }
+
+    mod structs {
+        use std::sync::Arc;
+
+        use crate::{
+            common::{
+                types::{self, CelBool, CelInt, CelString, CelStruct},
+                value::{CowVal, Val},
+            },
+            env::StructDef,
+            Context, Env, ExecutionError, Program, Value,
+        };
+
+        #[test]
+        fn test_empty_struct() {
+            let mut env = Env::stdlib();
+            env.add_type(StructDef::new(String::from("cel.MyStruct")))
+                .unwrap();
+            let program = Program::compile("cel.MyStruct {}").unwrap();
+            let value = program.execute(&Context::with_env(Arc::new(env))).unwrap();
+            match value {
+                Value::Struct(s) => assert_eq!(s.name(), "cel.MyStruct"),
+                _ => panic!("This can't be!"),
+            }
+        }
+
+        #[test]
+        fn test_struct() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.Problem"))
+                    .add_field(String::from("solved"), types::BOOL_TYPE)
+                    .add_field(String::from("answer"), types::INT_TYPE),
+            )
+            .unwrap();
+            let program =
+                Program::compile("cel.Problem { solved: 0 != null, answer: 21 * 2 }").unwrap();
+            let value = program.execute(&Context::with_env(Arc::new(env))).unwrap();
+            match value {
+                Value::Struct(s) => {
+                    assert_eq!(s.name(), "cel.Problem");
+                    assert_eq!(
+                        s.field_value("solved"),
+                        Some(&CelBool::from(true) as &dyn Val)
+                    );
+                    assert_eq!(s.field_value("answer"), Some(&CelInt::from(42) as &dyn Val));
+                    assert_eq!(s.field_values().len(), 2);
+                    assert_eq!(
+                        s.field_values().get("solved").cloned(),
+                        Some(Arc::new(CelBool::from(true)) as Arc<dyn Val>)
+                    );
+                    assert_eq!(
+                        s.field_values().get("answer").cloned(),
+                        Some(Arc::new(CelInt::from(42)) as Arc<dyn Val>)
+                    );
+                }
+                _ => panic!("This can't be!"),
+            }
+        }
+
+        #[test]
+        fn test_struct_field_access() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("some".into(), types::STRING_TYPE),
+            )
+            .unwrap();
+            let program = Program::compile("cel.MyStruct { some: 'value' }.some").unwrap();
+            let value = program.execute(&Context::with_env(env.into())).unwrap();
+            assert_eq!(value, Value::String(Arc::new("value".to_owned())));
+        }
+
+        #[test]
+        fn test_struct_no_such_field() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("some".into(), types::STRING_TYPE),
+            )
+            .unwrap();
+            let program = Program::compile("cel.MyStruct { not_here: 'value' }").unwrap();
+            let result = program.execute(&Context::with_env(env.into()));
+            assert_eq!(
+                result,
+                Err(ExecutionError::NoSuchKey(
+                    String::from("field `not_here` on struct `cel.MyStruct`").into()
+                ))
+            );
+        }
+
+        #[test]
+        fn test_struct_with_default() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("some".into(), types::STRING_TYPE)
+                    .add_field_with_default("here".into(), Box::new(CelString::from("yes"))),
+            )
+            .unwrap();
+            let program = Program::compile("cel.MyStruct { some: 'value' }.here").unwrap();
+            let result = program.execute(&Context::with_env(env.into()));
+            assert_eq!(result, Ok(Value::String(Arc::new(String::from("yes")))));
+        }
+
+        #[test]
+        fn test_struct_with_default_overwritten() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("some".into(), types::STRING_TYPE)
+                    .add_field_with_default("here".into(), Box::new(CelString::from("yes"))),
+            )
+            .unwrap();
+            let program =
+                Program::compile("cel.MyStruct { some: 'value', here: 'totally' }.here").unwrap();
+            let result = program.execute(&Context::with_env(env.into()));
+            assert_eq!(result, Ok(Value::String(Arc::new(String::from("totally")))));
+        }
+
+        #[test]
+        fn test_struct_has_macro() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("name".into(), types::STRING_TYPE)
+                    .add_field("value".into(), types::INT_TYPE),
+            )
+            .unwrap();
+
+            let mut my_struct = CelStruct::new("cel.MyStruct".to_owned());
+            my_struct.add_field_value("name".to_owned(), CowVal::owned(CelString::from("test")));
+            my_struct.add_field_value("value".to_owned(), CowVal::owned(CelInt::from(42)));
+
+            let mut context = Context::with_env(Arc::new(env));
+            context
+                .add_variable("my_var", Value::Struct(Arc::new(my_struct)))
+                .unwrap();
+
+            let program = Program::compile("has(my_var.name)").unwrap();
+            let result = program.execute(&context).unwrap();
+            assert_eq!(result, Value::Bool(true));
+
+            let program = Program::compile("has(my_var.missing)").unwrap();
+            let result = program.execute(&context).unwrap();
+            assert_eq!(result, Value::Bool(false));
+
+            let program =
+                Program::compile("has(cel.MyStruct{name: 'foo', value: 1}.name)").unwrap();
+            let result = program.execute(&context).unwrap();
+            assert_eq!(result, Value::Bool(true));
+
+            let program = Program::compile("has(cel.MyStruct{}.name)").unwrap();
+            let result = program.execute(&context).unwrap();
+            assert_eq!(result, Value::Bool(false));
+        }
+
+        #[test]
+        fn test_struct_no_such_field_access() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("some".into(), types::STRING_TYPE),
+            )
+            .unwrap();
+            let program = Program::compile("cel.MyStruct { some: 'value' }.not_here").unwrap();
+            let result = program.execute(&Context::with_env(env.into()));
+            assert_eq!(
+                result,
+                Err(ExecutionError::NoSuchKey(String::from("not_here").into()))
+            );
+        }
+
+        #[test]
+        fn unknown_struct() {
+            let program = Program::compile("cel.MyStruct { some: 'value' }.not_here").unwrap();
+            let result = program.execute(&Context::default());
+            assert_eq!(
+                result,
+                Err(ExecutionError::UnexpectedType {
+                    got: String::from("cel.MyStruct"),
+                    want: String::from("known struct")
+                })
+            );
+        }
+
+        #[test]
+        fn a_struct_name_is_its_type() {
+            let mut env = Env::stdlib();
+            env.add_type(StructDef::new(String::from("cel.MyStruct")))
+                .unwrap();
+            let context = Context::with_env(Arc::new(env));
+            let program =
+                Program::compile("type(cel.MyStruct{}) == cel.MyStruct && type(1) != cel.MyStruct")
+                    .unwrap();
+            assert_eq!(program.execute(&context), Ok(Value::Bool(true)));
+        }
+
+        /// A struct type's `Type` alone names it; its `StructType`, e.g.
+        /// a `StructDef`, also constructs it, even once the `Type` is known.
+        #[test]
+        fn a_struct_is_constructed_once_its_struct_type_is_added() {
+            let program = Program::compile("type(cel.MyStruct{}) == cel.MyStruct").unwrap();
+            let mut env = Env::stdlib();
+            env.add_type(types::Type::new_struct_type("cel.MyStruct"))
+                .unwrap();
+            let unknown = Err(ExecutionError::UnexpectedType {
+                got: String::from("cel.MyStruct"),
+                want: String::from("known struct"),
+            });
+            assert_eq!(program.execute(&Context::with_env(Arc::new(env))), unknown);
+
+            let mut env = Env::stdlib();
+            env.add_type(types::Type::new_struct_type("cel.MyStruct"))
+                .unwrap();
+            env.add_type(StructDef::new(String::from("cel.MyStruct")))
+                .unwrap();
+            assert_eq!(
+                program.execute(&Context::with_env(Arc::new(env))),
+                Ok(Value::Bool(true))
+            );
+        }
+
+        #[test]
+        fn a_struct_can_only_be_added_once() {
+            let mut env = Env::stdlib();
+            env.add_type(StructDef::new(String::from("cel.MyStruct")))
+                .unwrap();
+            assert_eq!(
+                env.add_type(StructDef::new(String::from("cel.MyStruct"))),
+                Err(crate::DeclarationError::type_conflict("cel.MyStruct"))
+            );
+        }
+
+        /// Any [`StructType`](crate::StructType) can be constructed by a
+        /// struct literal, whatever value it makes.
+        #[test]
+        fn a_custom_struct_type_is_constructed() {
+            use crate::common::types::Type;
+            use crate::common::value::StaticVal;
+            use crate::StructType;
+            use std::any::Any;
+            use std::collections::BTreeMap;
+
+            static POINT_TYPE: Type = Type::new_struct_type("geo.Point");
+
+            #[derive(Debug, PartialEq)]
+            struct Point(i64, i64);
+
+            impl Val for Point {
+                fn get_type(&self) -> &Type {
+                    &POINT_TYPE
+                }
+                fn cel_type() -> &'static Type {
+                    &POINT_TYPE
+                }
+                fn equals(&self, other: &dyn Val) -> bool {
+                    other.downcast_ref::<Point>() == Some(self)
+                }
+                fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v> {
+                    Box::new(Point(self.0, self.1))
+                }
+                fn as_any(&self) -> Option<&dyn Any> {
+                    Some(self)
+                }
+            }
+            impl StaticVal for Point {}
+
+            struct PointType;
+
+            impl StructType for PointType {
+                fn get_type(&self) -> &Type {
+                    &POINT_TYPE
+                }
+                fn new_value<'b, 'v>(
+                    &self,
+                    fields: BTreeMap<String, CowVal<'b, 'v>>,
+                ) -> Result<Box<dyn Val + 'v>, ExecutionError> {
+                    let coordinate = |name: &str| {
+                        fields
+                            .get(name)
+                            .and_then(|v| v.downcast_ref::<CelInt>())
+                            .map(|i| *i.inner())
+                            .unwrap_or_default()
+                    };
+                    Ok(Box::new(Point(coordinate("x"), coordinate("y"))))
+                }
+            }
+
+            let mut env = Env::stdlib();
+            env.add_type(PointType).unwrap();
+            let context = Context::with_env(Arc::new(env));
+            let ast = crate::parser::Parser::default()
+                .parse("geo.Point{x: 1, y: 2}")
+                .unwrap();
+            let value = Value::resolve_val(&ast, &context).unwrap();
+            assert_eq!(value.downcast_ref::<Point>(), Some(&Point(1, 2)));
+
+            let program = Program::compile(
+                "geo.Point{x: 1, y: 2} == geo.Point{y: 2, x: 1} \
+                 && geo.Point{x: 1} != geo.Point{} \
+                 && type(geo.Point{}) == geo.Point",
+            )
+            .unwrap();
+            assert_eq!(program.execute(&context), Ok(Value::Bool(true)));
+        }
+
+        #[test]
+        fn add_struct_variable_to_context() {
+            let mut env = Env::stdlib();
+            env.add_type(
+                StructDef::new(String::from("cel.MyStruct"))
+                    .add_field("name".into(), types::STRING_TYPE)
+                    .add_field("value".into(), types::INT_TYPE),
+            )
+            .unwrap();
+
+            let mut my_struct = CelStruct::new("cel.MyStruct".to_owned());
+            my_struct.add_field_value("name".to_owned(), CowVal::owned(CelString::from("test")));
+            my_struct.add_field_value("value".to_owned(), CowVal::owned(CelInt::from(42)));
+
+            let mut context = Context::with_env(Arc::new(env));
+            context
+                .add_variable("my_var", Value::Struct(Arc::new(my_struct)))
+                .unwrap();
+
+            let program = Program::compile("my_var.name + ' ' + string(my_var.value)").unwrap();
+            let result = program.execute(&context).unwrap();
+            assert_eq!(result, Value::String(Arc::new("test 42".to_owned())));
+        }
+    }
+    /// A custom type on the `dyn Val` path, as `Type::new_opaque_type` invites.
+    #[derive(Debug)]
+    struct Ip(Type, String);
+
+    impl Ip {
+        fn new(addr: &str) -> Self {
+            Ip(Type::new_opaque_type("net.IP"), addr.to_owned())
+        }
+    }
+
+    impl Val for Ip {
+        fn get_type(&self) -> &Type {
+            &self.0
+        }
+
+        fn cel_type() -> &'static Type {
+            panic!("`Ip` builds its opaque `Type` per value")
+        }
+
+        fn equals(&self, other: &dyn Val) -> bool {
+            other.downcast_ref::<Ip>().is_some_and(|o| o.1 == self.1)
+        }
+
+        fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v>
+        where
+            Self: 'v,
+        {
+            Box::new(Ip::new(&self.1))
+        }
+
+        fn as_any(&self) -> Option<&dyn std::any::Any> {
+            Some(self)
+        }
+    }
+
+    impl StaticVal for Ip {}
+
+    /// A list whose contents are resolved on access rather than materialized,
+    /// the shape `Context::add_variable_as_val` was made public for.
+    #[derive(Debug)]
+    struct LazyList(Vec<i64>);
+
+    impl Sizer for LazyList {
+        fn size(&self) -> CelInt {
+            CelInt::from(self.0.len() as i64)
+        }
+    }
+
+    impl Val for LazyList {
+        fn get_type(&self) -> &Type {
+            &LIST_TYPE
+        }
+
+        fn cel_type() -> &'static Type {
+            &LIST_TYPE
+        }
+
+        fn as_sizer(&self) -> Option<&dyn Sizer> {
+            Some(self)
+        }
+
+        fn clone_as_boxed<'v>(&self) -> Box<dyn Val + 'v>
+        where
+            Self: 'v,
+        {
+            Box::new(LazyList(self.0.clone()))
+        }
+    }
+
+    fn context_with_custom_vals() -> Context<'static, 'static> {
+        let mut context = Context::default();
+        context.add_variable_as_val("ip", Box::new(Ip::new("1.2.3.4")));
+        context.add_variable_as_val("lazy", Box::new(LazyList(vec![1, 2])));
+        context
+    }
+
+    fn execute(expr: &str) -> ResolveResult {
+        Program::compile(expr)
+            .unwrap()
+            .execute(&context_with_custom_vals())
+    }
+
+    /// A `Val` a caller implemented has no `Value` representation. Reaching the
+    /// result of `Program::execute` it must be reported through the `Result`
+    /// that call already returns.
+    #[test]
+    fn custom_val_as_result_is_an_error() {
+        for expr in [
+            "ip",
+            "[ip]",
+            "[[ip]]",
+            "{'k': ip}",
+            "lazy",
+            "optional.of(ip)",
+        ] {
+            assert!(
+                matches!(execute(expr), Err(ExecutionError::UnexpectedType { .. })),
+                "`{expr}` should report an unexpected type, got {:?}",
+                execute(expr)
+            );
+        }
+    }
+
+    /// ... while the same values stay usable within an expression, which is the
+    /// whole point of implementing `Val`.
+    #[test]
+    fn custom_val_within_an_expression_still_evaluates() {
+        assert_eq!(execute("ip == ip"), Ok(Value::Bool(true)));
+        assert_eq!(execute("size(lazy)"), Ok(Value::Int(2)));
+        assert_eq!(execute("optional.of(ip).hasValue()"), Ok(Value::Bool(true)));
+        assert_eq!(
+            execute("optional.of(ip).value() == ip"),
+            Ok(Value::Bool(true))
+        );
+    }
+}

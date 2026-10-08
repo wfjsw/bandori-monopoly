@@ -17,9 +17,20 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
             on: c
                 .on
                 .iter()
-                .map(|o| ManifestOn {
+                .enumerate()
+                .map(|(ei, o)| ManifestOn {
                     kind: o.kind() as i32,
                     triggers: o.triggers(),
+                    pre: {
+                        let p = o.condition();
+                        if p.is_empty() {
+                            None
+                        } else {
+                            Some(String::from(p))
+                        }
+                    },
+                    has_guard: o.has_guard(),
+                    has_legacy: c.legacy.iter().any(|(e, _)| *e == ei as i32),
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of
@@ -76,18 +87,39 @@ pub fn on(
         panic!("bad entry {entry} on card {idx}")
     };
     match (*o, op) {
-        (On::Counteract(_, guard, _), export::OP_GUARD)
-        | (On::Hook(_, guard, _), export::OP_GUARD) => guard(player_id) as i64,
-        (On::Play(why, _), export::OP_GUARD) => match why {
+        (On::Counteract(_, guard, _, _), export::OP_GUARD)
+        | (On::Hook(_, guard, _, _), export::OP_GUARD) => match guard {
+            // G4-deleted residual: the condition alone decides, and the host
+            // normally skips this call (`has_guard == false`). If it does ask,
+            // the residual admits.
+            None => 1,
+            Some(g) => g(player_id) as i64,
+        },
+        (_, export::OP_LEGACY_GUARD) => {
+            // G3 migration audit: the pre-migration guard kept on the card.
+            let card = card(bands, idx);
+            match card
+                .legacy
+                .iter()
+                .find(|(e, _)| *e == entry.max(0))
+                .map(|(_, f)| *f)
+            {
+                Some(legacy) => legacy(player_id) as i64,
+                // No legacy copy: trap-free "no legacy" so the host skips the
+                // check for this entry (the same contract as `has_legacy=false`).
+                None => -1,
+            }
+        }
+        (On::Play(why, _, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
                 None => 0,
                 Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
             },
             None => 0,
         },
-        (On::Counteract(_, _, run), _)
-        | (On::Play(_, run), _)
-        | (On::Hook(_, _, run), _)
+        (On::Counteract(_, _, run, _), _)
+        | (On::Play(_, run, _), _)
+        | (On::Hook(_, _, run, _), _)
         | (On::Gate(_, run), _)
         | (On::AtEnd(run), _)
         | (On::Settle(run), _)
@@ -106,21 +138,48 @@ pub fn on(
 /// pub static CARDS: &[CardDef] = &[cards::yolo::CARD, cards::hagumi_marks::CARD];
 /// card_sdk::bandori_ruleset!(CARDS);
 /// ```
+///
+/// On `wasm32` this emits the `bandori_*` exports the sandbox host calls. On a
+/// native build (the `rules-native` bot path) it instead publishes a plain
+/// `RULESET` table so every rule crate can link into one binary without
+/// `#[no_mangle]` clashes; `rules-native` calls [`crate::rt::on`] over the
+/// concatenated tables.
 #[macro_export]
 macro_rules! bandori_ruleset {
     ($($cards:expr),+ $(,)?) => {
         /// Every band's table, in the order given. `static` so the export
         /// functions can hand out `'static` references into it.
+        #[allow(dead_code)]
         static BAND_TABLE: &[&[$crate::CardDef]] = &[$($cards),+];
 
+        /// Native (non-wasm) mode: the table `rules-native` aggregates.
+        #[cfg(not(target_arch = "wasm32"))]
+        pub static RULESET: &[&[$crate::CardDef]] = &[$($cards),+];
+
+        /// Native call entry -- same body as the wasm export, no `#[no_mangle]`
+        /// so every rule crate can link into one binary.
+        #[cfg(not(target_arch = "wasm32"))]
+        pub fn bandori_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
+            $crate::rt::on(BAND_TABLE, card, entry, op, player_id)
+        }
+
+        /// Native manifest -- same body as the wasm export.
+        #[cfg(not(target_arch = "wasm32"))]
+        pub fn bandori_manifest() -> i64 {
+            $crate::rt::manifest(BAND_TABLE)
+        }
+
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn bandori_abi_version() -> i32 {
             $crate::abi::ABI_VERSION
         }
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn bandori_manifest() -> i64 {
             $crate::rt::manifest(BAND_TABLE)
         }
+        #[cfg(target_arch = "wasm32")]
         #[no_mangle]
         pub extern "C" fn bandori_on(card: i32, entry: i32, op: i32, player_id: i32) -> i64 {
             $crate::rt::on(BAND_TABLE, card, entry, op, player_id)

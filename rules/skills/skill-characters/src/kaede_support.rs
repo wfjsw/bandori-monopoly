@@ -37,18 +37,15 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::TurnStartBefore], other_turn, offer_support),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-        On::Play(Some(can_enter_two), enter_two),
-        On::Hook(&[HookKind::PayMul], splitting, split_rent),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::TurnStartBefore], Some(other_turn), offer_support, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Play(Some(can_enter_two), enter_two, ""),
+        On::Hook(&[HookKind::PayMul], Some(splitting), split_rent, ""),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
 /// 「直到状态2结束为止」 -- only while this player is in 状态2.
 fn splitting(player_id: i32) -> bool {
@@ -80,7 +77,7 @@ fn split_rent(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -182,7 +179,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST, n);
     if n >= 2 {
         state::set(player_id, REST, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("kaede_support_gain_fire")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("kaede_support_gain_fire")))?;
     }
     if state::get(player_id, state_key::FIRE) < state::max(player_id, state_key::FIRE) {
         return Ok(());
@@ -229,7 +226,7 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
     if x <= 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, x, &Msg::new(key!("kaede_support_spend"))) {
+    if !ctx::spend_fire(player_id, x, &Msg::new(key!("kaede_support_spend")))? {
         return Ok(());
     }
     for _ in 0..x {

@@ -16,9 +16,43 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+
+// Same determinism recipe as tools/build-glue.mjs: strip absolute paths from
+// panic strings and never leave incremental artifacts behind, so a ruleset
+// module hashes the same wherever it is built (docs/REPLAY.md §9 option C).
+const runOut = (...args) =>
+  execFileSync(args[0], args.slice(1), { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+function rustFlagList() {
+  const flags = [];
+  const remap = (from, to) => {
+    if (from) flags.push(`--remap-path-prefix=${from}=${to}`);
+  };
+  remap(ROOT, ".");
+  const home = process.env.USERPROFILE || process.env.HOME || process.env.USER_HOME;
+  if (home) {
+    remap(process.env.CARGO_HOME || join(home, ".cargo"), "/.cargo");
+    remap(home, "/home/build");
+  }
+  try {
+    remap(runOut("rustc", "--print", "sysroot"), "/rustc/sysroot");
+  } catch {
+    /* best-effort */
+  }
+  return flags;
+}
+const ENV = {
+  ...process.env,
+  CARGO_INCREMENTAL: "0",
+  CARGO_ENCODED_RUSTFLAGS: [
+    ...(process.env.RUSTFLAGS || "").split(/\s+/).filter(Boolean),
+    ...rustFlagList(),
+  ].join("\x1f"),
+};
+delete ENV.RUSTFLAGS;
+
 const run = (...args) => {
   console.log("+", args.join(" "));
-  execFileSync(args[0], args.slice(1), { cwd: ROOT, stdio: "inherit" });
+  execFileSync(args[0], args.slice(1), { cwd: ROOT, stdio: "inherit", env: ENV });
 };
 const cargo = (...args) => run("cargo", ...args);
 

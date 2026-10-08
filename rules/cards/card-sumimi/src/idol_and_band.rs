@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const IDOL_AND_BAND: CardDef = CardDef::new(
     "Sumimi:兼顾偶像与乐队",
-    &[On::Play(Some(cant_play), idol_and_band)],
+    &[On::Play(Some(cant_play), idol_and_band, "")],
 );
 
 /// 规则书: 「当你本回合未进行过赎回操作时可打出」 -- the redeem step records

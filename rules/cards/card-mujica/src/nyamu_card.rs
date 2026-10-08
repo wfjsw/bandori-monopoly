@@ -20,12 +20,13 @@ const WAS_DOWN: &str = "nyamu.wasDown";
 pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
-        On::Play(None, nyamu_card),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, watch_flips),
+        On::Play(None, nyamu_card, ""),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], None, watch_flips, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

@@ -16,8 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RANDOM_STAR: CardDef = CardDef::new(
     "PPP:仓库里的Random Star",
     &[
-        On::Play(None, random_star),
-        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Play(None, random_star, ""),
+        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
     ],
 );
 
@@ -91,7 +91,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_stop_at(ryuseido);
     ctx::plan::set_resolve(true);
     // 规则书（2）: 「使用2星星贴纸」 -- C# `H.AddTok(Seat, "星星贴纸", -2)`.
-    ctx::add_tok(player_id, "星星贴纸", -2, i32::MAX);
+    ctx::add_tok(player_id, "星星贴纸", -2, i32::MAX)?;
     ctx::log(
         player_id,
         &Msg::new(key!("random_star_stop"))

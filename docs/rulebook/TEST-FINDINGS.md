@@ -277,7 +277,7 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * 冰川日菜 (2) never rolls 1d4 nor borrows a skill (`skill.hinaLottery`
     stays -1).
   * 安可 doesn't counter 重叠的声音's self-teleport.
-  * PP band (2) overflow crystals: a passive 「X大于拥有数时」 reaction to a
+  * PP band (2) overflow crystals: a passive 「X大于拥有数时」 hook on a
     fan-flip effect, and there is no flip-effect trigger to observe (§6).
 * **roselia** (5)
   * 凑友希那 (3) stop-pot offers no prompt when a player [经过]s (two tests,
@@ -449,7 +449,7 @@ rulings above.
 6. **Tomorrow's Door (3) on a co-owned 星之鼓动山丘.** Does the co-owned hill
    count as 「[拥有者]拥有的格子」? Test: `rb_cross_tiles::t22_hill_coownership`
    (RULING, record-only).
-7. **Drawing a card several effects react to.** Is a drawn effect card
+7. **Drawing a card several effects respond to.** Is a drawn effect card
    captured by one effect, or auto-played? Test:
    `rb_cross_long::l06_one_draw_several_effects` (RULING, record-only).
 8. **Multi-activation selection.** A card with several `On::Play` entries
@@ -551,7 +551,7 @@ rulings above.
   Sheet HINT (`新卡组卡` `C3` 「任意掷骰结算前…使结果增加1d4」) says additive
   before the roll is finalised, but not the order against other adders.
 * **Fan-flip trigger.** PP band (2) is a passive 「你因任意原因受到将X个
-  反面[P✽P粉丝]变正的效果且X大于拥有数时」 reaction to a fan-*flip*.
+  反面[P✽P粉丝]变正的效果且X大于拥有数时」 hook on a fan-*flip*.
   There is no flip-effect trigger to observe, so the X>owned overflow never
   becomes crystals. Ruling: is a fan-flip its own timing, or is this folded
   into the fan-spend / fan-gain points?
@@ -737,3 +737,217 @@ change (black-box side).
 * `discard_card` is only the over-hand-limit discard.
 * There is no token setter or crystal setter. Use `world_mut()`.
 * `place_raw` skips the play body.
+
+## Purchase surface (`docs/PURCHASE.md`, 2026-10-07)
+
+**Implemented (P0–P5):** quote / commit pipeline (`purchase.rs`), `BuyGate`
+(every kind, Force included), `BuyAdd` / `BuyMul` / `BuySet` stages,
+`BuyAssign`, `assign_deed`, `st.buy_price` / `st.build_cost` previews,
+`MatchPrompt.price` / `prices[]`, agent colour set with `ANY_COLOR` /
+`colorFor:`, force-buy keeps the mortgage, auction `BuyGate` filters bidders,
+`ctx::acquire`, `linger` (turn-scoped instances), SAVE_VERSION 3 → 4.
+
+**Rulings left as `TODO(规则书)`:**
+
+* **Ruling 3** (mortgage to fund a buy): engine refuses today; unchanged.
+* **Ruling 4** (agent pick: full [结算] or direct buy/build; 「玩家拥有的」
+  includes others?): today's behaviour kept — a direct buy / build, and
+  「玩家拥有的」 means the picking player's own tiles.
+* **Ruling 5** (soyo 「所有颜色」 toward half-charge; per-player 「视为live
+  house」 widen the agent set?): today's behaviour kept — `ANY_COLOR` joins
+  the set for buy offers but is never buildable; the half-charge set is the
+  plain `group` match.
+* **Ruling 6** (is 强制购买 a 「购买」 for 「购买…时」 listeners?): no hooks
+  today — `bought` / `buyAfter` do not fire on force-buy.
+* **Ruling 7** (auction win a 「购买格子」 for discounts? auction [消耗] through
+  the pipeline?): money stays direct; `bought` fires but `buyAfter` does not.
+* **Ruling 8** (巴's 「常规收购价一半」 base): `ctx::acquire` takes the price
+  from the caller; the base is undecided.
+* **Ruling 10** (「本回合」 linger in an extra turn / another player's turn?):
+  linger expires at the next turn start (one turn), matching the old flags.
+
+**Ruling 1** (add → mul → set) and **Ruling 2** (buy [消耗] runs the pay
+pipeline) are implemented as proposed (the stage order in `apply_stages`, and
+`buy()` still calls `money()`).
+
+**Ruling 9** (raze + Afterglow free house): raze first, so 1 house remains —
+implemented (raze clears houses before the `bought` hook).
+
+**P5 deferred work, now done (2026-10-07):**
+
+* The three cards using `TurnCtx` flags (`@Tsugu ycm`, `Roselia band`,
+  `迷宫般的仓库`) are ported to `ctx::linger` + `BuyAdd` −1500 / `BuyMul` ½ /
+  `BuySet` 0 + `BuyAssign` houses 0. The flags, their `set_*` APIs, the retired
+  `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` props are **deleted** (ABI 41).
+* `WasmRules::buy_quote` (the hook-aware override) is wired: `BuyGate` /
+  `BuyAdd` → `BuyMul` → `BuySet` run in pure guard mode against a world copy
+  (the `cant_play` shape) only when a hooking instance exists; the commit
+  re-quotes, so quote == charge. Gates / view / AI / autopilot read it.
+* `st.tile_colors` / `key::EXTRA_COLOR` are **deleted**; the four skills
+  (`asahi_aim`, `roselia`, `guerrilla`, `soyo_clear`) write the `colorFor:<p>`
+  tile prop, and （soyo）混合的颜色 writes `prop::ANY_COLOR`.
+* Poppin (3)'s hill lock moved from `BuyBefore` to `BuyGate`, so it covers
+  Force too (「不可被抵押双倍支付购买」).
+* rana_parking's 「该次传送不可进行地契购买」 is a native gate reading
+  `plan.no_buy` on the Land offer — the flag was written but never read.
+* 学生会的检查's 「本回合无法加盖房屋」 is a linger instance carrying
+  `prop::NO_BUILD`; the per-player `noBuild` scratch key is gone.
+* 巴's 收购 runs through `ctx::acquire` (pipeline pay → assign → `bought` →
+  `buyAfter`) instead of `transfer` + `set_owner` + `raise_bought`.
+
+**Flag-internal tests, rewritten to assert the same behaviour:**
+
+* `rb_ras::lock_skill_colors_the_first_deed_like_a_live_house` asserted
+  `extraColor:1`; it now asserts the observable consequence (the bought deed
+  counts as a Live House for that player). The `t.owner(SHOPPING)` assertion
+  (rulebook behaviour) is unchanged.
+* `q4/snap.rs` / `q4/expiry.rs` recorded `turn.buy_discount` etc.; they now
+  record `turn.lingering` — the mechanism those flags became — and treat it as
+  turn-scoped, which is what 「本回合」 requires.
+* `q4/names.rs`'s `extraColor:` filter goes with the key.
+
+**Still open (unchanged, `TODO(规则书)` kept):** rulings 3, 4, 5, 6, 7, 8, 10.
+Note that the quote's price stages now run for **every** `BuyKind`, so a
+lingering 「本回合购买格子…」 discount also shapes a Force / Acquire / Auction
+quote; before the migration the flags only applied to `buy()`. Whether those
+kinds are 「购买」 for those clauses is rulings 6 / 7 and is **not decided**.
+
+**Gate results (2026-10-07):** `cargo test -p game-core -p game-rules -p server`
+979 passed / 0 failed / 97 ignored (baseline 976/0/97). `fuzz_interactions`
+9/9. i18n 4 (baseline), rulebook check 0. `tsc --noEmit` clean, `autopilot.test`
+20/20. Sim 50×4×200: buy 2899 / forcebuy 392 / auctions 255 — identical to the
+baseline, ~303 ms/game (StubRules unchanged; the wall clock on this box swings
+247–445 ms/game with desktop load, so the **event counts** are the reliable
+signal). `bot_cost` 5×4×200 real rules: the hook-aware `buy_quote` measured at
+≈1 % of wall (17 425 ms/game with the hooks short-circuited vs 17 667 with
+them), i.e. not a meaningful cost; the absolute figure moves ±50 % with machine
+load while the module-instantiation and world-clone counts stay put.
+
+---
+
+## Pipeline-audit batch (2026-10-07)
+
+Nine new black-box tests for the decided `PIPELINE-AUDIT` items (see
+`PIPELINE-AUDIT.md` §7 for the per-item status and citations).
+
+| Test | Item |
+|---|---|
+| `rb_money::card_shortfall_raises_funds_then_bankrupts` | Q1 / B1 |
+| `rb_money::card_shortfall_may_be_funded_by_mortgage` | Q1 / B1 |
+| `rb_money::pre_split_modifier_shapes_the_total_not_each_leg` | Q2 |
+| `rb_money::self_payment_leaves_money_unchanged_when_affordable` | Q4 |
+| `rb_money::self_payment_may_be_funded_by_mortgage` | Q4 |
+| `rb_money::self_payment_shortfall_raises_funds_then_bankrupts` | Q4 |
+| `rb_rulebook::bankruptcy_stops_field_effects` | B2 |
+| `rb_rulebook::bankrupt_before_sees_a_dead_player` | B3 |
+| `rb_rulebook::auction_winner_may_mortgage_to_fund_the_bid` | B4 |
+
+New `TEST:*` fixtures in `rules/fixtures/test-cards/src/lib.rs`:
+`TEST:totalCut` (a `payTotalAdd` probe that cuts the command total by 500),
+`TEST:deadPay` (a `bankruptBefore` probe that tries to move the dying seat's
+money), `TEST:selfCharge` (「A[支付]A」 5000), `TEST:payAddAny` (a `payAdd`
+probe that boosts every payment by 100).
+
+### One pinned behaviour read against the ruling's wording
+
+**B2 「tokens」 vs `rb_pp::shanyao_counter_on_short_payment`.** The ruling says
+`remove_from_game` clears "field cards / tokens / skill effects". 规则书 L81's
+removal list is 棋子 / 角色卡 / 乐队卡 / 手卡 plus 「正在生效的卡，技能效果」;
+「标志物解释」 (火罐 / 奇迹水晶 / P✽P粉丝 ...) is a separate vocabulary and L81
+does not sweep the markers. `shanyao_counter_on_short_payment` pins the
+consequence: 再次闪耀's rescue grants a P✽P fan and then the owner goes under on
+the same rent, and the test reads the fan afterwards. Clearing `s.tokens` drops
+it to 0 and the pin fails. **Markers are kept**; field cards and skill effects
+are cleared as the ruling asks. Flip it and the pin moves with it.
+
+### Gate results (2026-10-07)
+
+`cargo test -p game-core -p game-rules -p server -p bot-core -p bot-service -p
+rules-cond --no-fail-fast` **1041 passed / 0 failed / 96 ignored** (baseline
+1032/0/96 — the +9 are the new tests). `fuzz_interactions_invariants` 9/9 (it
+runs inside the suite). `python tools/i18n/check.py` 4 (baseline).
+`python tools/rulebook/check.py` 0. `node tools/build-ruleset.mjs` 285 cards.
+`node tools/build-glue.mjs` clean. `npx tsc --noEmit` clean.
+`node --test src/game/autopilot.test.ts` 20/20.
+
+Sim `50 4 200`: **248.0 ms/game** (≤ 323), `avg rounds 196.3`,
+`end reasons {"last": 11, "settle": 39}`,
+
+```
+prompts     {"auction": 255, "choice": 6414, "mortgage": 1068, "tile": 3922}
+event kinds {"bankrupt": 96, "build": 4669, "buy": 2899, "draw": 2320,
+              "event": 1187, "forcebuy": 392, "lose": 7313, "mortgage": 2245,
+              "move": 5347, "overlap": 1517, "pass": 5909, "play": 2709,
+              "redeem": 1517, "rent": 19567, "roll": 34398, "text": 55654,
+              "turn": 34437}
+details     {"agent half rent": 4218, "auction won": 255, "circle money": 5909,
+              "force buy": 392}
+```
+
+Seed-stable (two runs identical). An A/B with the Q5 `buy_hook_instances` sort
+disabled produced **identical counts**, so the ordering key is a no-op on
+today's behaviour. The counts above are the post-batch shape: B1 (card payments
+may now bankrupt) and B4 (a short bidder may 抵押 rather than void) are the
+legitimate movers of `bankrupt` / `mortgage` / `auction`, and the pre-split
+stage is a no-op with no `payTotal*` card in the sim pool. The purchase-surface
+baseline quoted above (buy 2899 / forcebuy 392 / auctions 255) is **unchanged**.
+
+## Settle/move stage model (2026-10-07, ABI 43)
+
+Re-homed per `docs/rulebook/SETTLE-STAGES.md` §4 and the user rulings of
+2026-10-07. New hooks `moveBefore` / `moveAfter`; Q7 ruled and implemented
+(the `TODO(规则书) PIPELINE-AUDIT Q7` marker is removed). ABI 42 → 43.
+
+Tests: `crates/game-rules/tests/rb_settle_stages.rs` (7 cases, all green):
+
+* `m1_no_settle_move_still_grants_the_move_after_fire` — 儿时玩伴's 「移动后」
+  pot fires on a 「不触发结算」 move (R1).
+* `m2_body_replace_skips_the_settle_time_clause` /
+  `m2_settle_time_clause_runs_without_a_body_replace` — a 「[结算]时」 clause
+  (哪怕这旅程没有终点 (2)) dies with a Parking Space body replace and runs
+  without one (M2).
+* `m4_a_pass_by_not_an_overlap_triggers_kaoru` — 薰 (1) 「被[经过]」 fires on
+  a mid-route pass (M4).
+* `m4_kokoro_force_stop_stops_a_passer` — 凑友希那 (3) 「强制停下」 actually
+  stops a passer (M4's latent bug: the old `passPlayer` guard was dead).
+* `m6a_no_settle_teleport_fires_overlap_at_the_destination` — a
+  「不[触发结算]」 teleport raises [重叠] at its destination (R2 / M6a).
+* `q7_settle_before_relocation_settles_at_the_new_tile` — a settleBefore
+  relocation redirects the settle (Q7).
+
+Excluded pending rulings (left with `TODO(规则书)` markers): `want_to_grab`
+(2) (R5), `Sumimi:no_breakup` (R3).
+
+Known failures at time of writing (need investigation, possibly pre-existing
+from the in-flight batch): `rb_card_paths` 4 cases —
+`mutsumi_never_2_runs_the_band_skill_2`,
+`mutsumi_never_2_runs_the_band_skill_2_on_a_crystal_shortfall`,
+`mutsumi_never_2_band_2_removes_the_crychic_cards`,
+`pareo_far_triggers_the_pareo_skill_offer`.
+
+---
+
+## Late 2026-10-07 batch (Q3 / V1 / V2 / V4 / V5 / markers / est-cost)
+
+New `rb_money` cases (all green at time of writing):
+
+* Q3 reversal: `two_sided_negative_final_reverses_the_payment`,
+  `one_sided_negative_gain_becomes_a_loss`,
+  `one_sided_negative_loss_becomes_a_gain`,
+  `reversal_shortfall_raises_funds_then_bankrupts`. The old
+  `negative_final_amount_clamps_to_zero` is renamed
+  `negative_gain_modifier_shrinks_the_gain` (its scenario nets positive).
+* V2 no activation costs: `gacha10_playable_while_short_then_bankrupts`,
+  `fire_bird_playable_while_short_then_mortgages`,
+  `crimson_soul_playable_while_short_then_bankrupts`,
+  `believe_you_playable_while_short_then_bankrupts`,
+  `kokoro_circle_playable_while_short_then_bankrupts`,
+  `starry_night_playable_while_short_then_bankrupts`.
+* Markers: `marker_spend_window_cancels_the_spend`,
+  `bankruptcy_clears_owned_markers_wherever_they_sit`,
+  `misaki_may_counteract_with_zero_fire`.
+* `rb_pp::shanyao_counter_on_short_payment` now expects the P✽P fan to be
+  **cleared** with the bankruptcy (reversing the keep-tokens deviation).
+
+Open items unchanged: N3 (effect-level atomicity), N4 (「取消所有受到的效果」
+refunds), N5 (`Negation::Activation` returns the counteraction card to hand).

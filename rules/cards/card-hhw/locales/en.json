@@ -18,6 +18,7 @@
   "believe_you_shuffled": "{{who}} shuffled their draw pile",
   "believe_you_title": "Because I Always Believed in You",
   "black_suits_circle": "Supply: landing on {{tile}} drew 1 like CiRCLE",
+  "black_suits_attach": "The tile gains all of CiRCLE's effects while it has a miracle crystal",
   "black_suits_crystal": "Miracle crystal",
   "black_suits_crystal_note": "While it has a miracle crystal this tile gains all of CiRCLE's effects",
   "black_suits_placed": "{{who}} put a [Miracle crystal] on {{tile}} (Black Suits Supply)",

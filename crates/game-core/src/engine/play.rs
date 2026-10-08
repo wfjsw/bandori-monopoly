@@ -14,7 +14,7 @@ use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
 
 /// The purchase surface (`docs/PURCHASE.md`): quote / deal / assign.
-pub(crate) mod purchase;
+pub mod purchase;
 
 /// Safety cap on nested money pipelines. The rulebook (「[支付]时可以打出」)
 /// has no depth limit, so nested money movements past any reasonable depth
@@ -23,6 +23,100 @@ pub(crate) mod purchase;
 /// this is the runaway guard behind it and **traps loudly** rather than
 /// settling silently. See `docs/ENGINE.md`.
 pub(crate) const MAX_MONEY_DEPTH: u32 = 32;
+
+/// Q3 (PIPELINE-AUDIT, user ruling 2026-10-07): how many times a payment may
+/// flip direction. A negative final amount settles the original at 0 and
+/// starts a **new** payment with the participants swapped; if that reverse
+/// payment is itself driven negative it reverses again. Cap the flip-flop
+/// here and settle the leftover as nothing (logged).
+pub(crate) const MAX_PAY_REVERSALS: u8 = 8;
+
+/// Q7 (`SETTLE-STAGES.md` §7, user ruling 2026-10-07): how many times a
+/// settlement may be re-targeted by a relocation during `moveAfter` /
+/// `settleBefore`. Each redirect re-raises `settleBefore` at the new tile;
+/// after this many the settle runs where the mover is standing (and logs).
+/// Same spirit as the engine's other loop caps.
+pub(crate) const MAX_SETTLE_REDIRECTS: u32 = 8;
+
+/// Fold the plan's **shape** writes into the running move -- but only the ones
+/// the `moveBefore` window (or any earlier writer) actually changed.
+///
+/// `turn.plan` is what cards write (`plan::set_*`) and what later stages read
+/// (`scale_settle_payment` and kin); `m` is the in-flight move the engine has
+/// already stamped with its run fields (roll / path / `player_id` / …). The
+/// plan is never reset between moves, so a blanket copy would leak one move's
+/// `no_buy` / `can_build` / `pay_factor` into every later one. Compare against
+/// the plan as it stood before the window and apply only the delta -- and
+/// **never** copy `m` over the plan (that wipes the earlier writes).
+fn fold_plan_delta(m: &mut Move, before: &Move, plan: &Move) {
+    if plan.kind != before.kind {
+        m.kind = plan.kind;
+    }
+    if plan.teleport_to != before.teleport_to && plan.teleport_to >= 0 {
+        m.teleport_to = plan.teleport_to;
+    }
+    if plan.resolve != before.resolve {
+        m.resolve = plan.resolve;
+    }
+    if plan.base != before.base {
+        m.base = plan.base.clone();
+    }
+    if plan.dice != before.dice {
+        m.dice = plan.dice.clone();
+    }
+    if plan.min_roll != before.min_roll {
+        m.min_roll = plan.min_roll;
+    }
+    if plan.signed != before.signed {
+        m.signed = plan.signed;
+    }
+    if plan.steps != before.steps && plan.steps >= 0 {
+        m.steps = plan.steps;
+    }
+    if plan.extra_steps != before.extra_steps {
+        m.extra_steps = plan.extra_steps;
+    }
+    if plan.start != before.start && plan.start >= 0 {
+        m.start = plan.start;
+        m.start_why = plan.start_why.clone();
+    }
+    if plan.reverse != before.reverse {
+        m.reverse = plan.reverse;
+    }
+    if plan.stop_at != before.stop_at && plan.stop_at >= 0 {
+        m.stop_at = plan.stop_at;
+    }
+    if plan.parity != before.parity && plan.parity >= 0 {
+        m.parity = plan.parity;
+    }
+    if plan.settle_tile != before.settle_tile && plan.settle_tile >= 0 {
+        m.settle_tile = plan.settle_tile;
+    }
+    if plan.pay_factor != before.pay_factor {
+        m.pay_factor = plan.pay_factor;
+    }
+    if plan.rent_factor != before.rent_factor {
+        m.rent_factor = plan.rent_factor;
+    }
+    if plan.settle_as_agent != before.settle_as_agent {
+        m.settle_as_agent = plan.settle_as_agent;
+    }
+    if plan.can_build != before.can_build {
+        m.can_build = plan.can_build;
+    }
+    if plan.more_steps != before.more_steps {
+        m.more_steps = plan.more_steps;
+    }
+    if plan.no_buy != before.no_buy {
+        m.no_buy = plan.no_buy;
+    }
+    if plan.cancelled != before.cancelled {
+        m.cancelled = plan.cancelled;
+    }
+    if plan.tags != before.tags {
+        m.tags = plan.tags.clone();
+    }
+}
 
 /// A payment (C# `PayCtx`, the fields the shell uses).
 ///
@@ -57,6 +151,17 @@ pub struct Pay {
     /// the payment is board-driven (rent, buy, build). Stamped onto the `pay` /
     /// `paid` triggers so `H.HitByOtherCard` can tell the two apart.
     pub by_card: Option<i32>,
+    /// Run the command-wide **pre-split** stage (`payTotalAdd` → `payTotalMul`
+    /// → `payTotalCancel`) on this payment's amount. `true` for every ordinary
+    /// payment: a single-pair payment's command total *is* its amount. A
+    /// 「[分摊]」 leg sets it `false` -- the card body has already shaped the
+    /// command total through [`Cx::pay_total`] before dividing it into shares
+    /// (`PIPELINE-AUDIT` Q2).
+    pub total_stage: bool,
+    /// Q3 (PIPELINE-AUDIT, user ruling 2026-10-07): how many times this
+    /// payment has already reversed direction. A reverse child starts at
+    /// `parent + 1` and is refused past [`MAX_PAY_REVERSALS`].
+    pub reverse_depth: u8,
 }
 
 impl Pay {
@@ -73,6 +178,8 @@ impl Pay {
             source: "",
             reason: None,
             by_card: None,
+            total_stage: true,
+            reverse_depth: 0,
         }
     }
 }
@@ -310,6 +417,11 @@ impl Cx<'_> {
         // again at the turn-start boundary so a world carried across a card's
         // run cannot leave a stale hit behind.
         self.w.turn.abnormal.clear();
+        // `linger` instances expire at turn start (`docs/PURCHASE.md`).
+        // TODO(规则书) ruling 10: 「本回合」 linger effects in an extra turn or
+        // another player's turn -- today they last exactly one turn.
+        let round = self.w.st.round;
+        self.w.turn.lingering.retain(|l| l.expires > round);
         // `turnStartBefore` -- before any exile/stun status ticks resolve, so a
         // counteraction sees the turn exactly as it was left last turn.
         raise!(self, "turnStartBefore", i, tile = self.w.st.players[i].pos)?;
@@ -610,12 +722,14 @@ impl Cx<'_> {
 
     /// `H.BuyRoutine` -- the purchase itself. No tile-kind guard beyond the
     /// engine's own: a card that says 「必须购买」 has already decided the tile is
-    /// buyable.
-    pub fn card_buy(&mut self, player_id: usize, tile: usize) -> Flow<()> {
+    /// buyable. `kind` is a [`purchase::BuyKind`] as `i32` (the legacy
+    /// `card_buy` passes `BuyKind::Card`).
+    pub fn card_buy(&mut self, player_id: usize, tile: usize, kind: i32) -> Flow<()> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
         }
-        self.buy(player_id, tile)
+        let kind = purchase::BuyKind::from_i32(kind).unwrap_or(purchase::BuyKind::Card);
+        self.buy(player_id, tile, kind)
     }
 
     /// C# `f.Bought(i, t)` -- a card handed a deed over outside the buy routine
@@ -625,7 +739,7 @@ impl Cx<'_> {
     ///
     /// 1. **The transfer is committed first.** The card's own `set_owner` is a
     ///    write on its world *copy*; this runs against the live world the hook
-    ///    chain sees, and 「购买」 reactions build on the tile (Afterglow
+    ///    chain sees, and 「购买」 hooks build on the tile (Afterglow
     ///    「自动免费在上面加盖一栋房子」 calls `card_build`, which refuses with
     ///    `err.build_not_own` while the old owner is still live). C# has no
     ///    copy -- `H.State.owners[t] = i` is immediate -- so the hand-over is
@@ -641,7 +755,7 @@ impl Cx<'_> {
     ///    hands」). Every 「购买地契」 listener therefore hears a hand-over the
     ///    rulebook counts as a purchase, whichever of the two it sits on.
     ///
-    /// `by` is the cause (`t.ByCard`, 「购买」 reactions key 「来自你以外」 on it).
+    /// `by` is the cause (`t.ByCard`, 「购买」 hooks key 「来自你以外」 on it).
     pub fn card_raise_bought(&mut self, player_id: usize, tile: usize, by: usize) -> Flow<()> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
@@ -659,6 +773,115 @@ impl Cx<'_> {
         let mut t = Trigger::new("buyAfter", player_id);
         t.tile = tile as i32;
         t.by_card = Some(by as i32);
+        self.raise(t)?;
+        Ok(())
+    }
+
+    /// `ctx::linger` (`docs/PURCHASE.md` P5) -- bind the running card's own def
+    /// as a turn-scoped instance in `TurnCtx.lingering`. `card` is the running
+    /// card's id (the `CardDef` the instance binds) and `props` are the
+    /// instance's props (e.g. `prop::NO_BUILD`), which is the hand-card home
+    /// for a per-turn veto.
+    pub fn card_linger(
+        &mut self,
+        player_id: usize,
+        expires: i32,
+        card: &str,
+        props: std::collections::BTreeMap<String, i32>,
+    ) {
+        let round = self.w.st.round;
+        let entry = super::world::Lingering {
+            card: card.to_string(),
+            owner: player_id as i32,
+            expires: if expires > 0 { round + expires } else { round },
+            props,
+        };
+        if !self.w.turn.lingering.iter().any(|l| l == &entry) {
+            self.w.turn.lingering.push(entry);
+        }
+    }
+
+    /// 「收购」 (`docs/PURCHASE.md` P3) -- take `tile` from `from` at `price`:
+    /// pipeline pay, then assign → `bought` → `buyAfter`. Replaces the manual
+    /// `set_owner` + `raise_bought` pair (tomoe_savior's port target).
+    /// TODO(规则书) ruling 8: 巴's 「常规收购价一半」 base is undecided; the
+    /// caller passes the price.
+    pub fn card_acquire(&mut self, player_id: usize, from: usize, tile: usize, price: i32) -> Flow<()> {
+        if self.out(player_id) || !self.playing() {
+            return Ok(());
+        }
+        if self.w.st.owners.get(tile).copied().unwrap_or(-1) != from as i32 {
+            return Ok(());
+        }
+        // `BuyGate` -- the same gate every other buy kind runs.
+        let gate = raise!(
+            self,
+            "buyGate",
+            player_id,
+            tile = tile as i32,
+            buy_kind = purchase::BuyKind::Acquire as i32,
+            seller = from as i32,
+            price = price
+        )?;
+        if gate.is_cancelled() {
+            return Ok(());
+        }
+        let price = price.max(0);
+        if price > 0 {
+            let mut p = Pay::new(price, "buy");
+            p.from = Some(player_id);
+            p.to = Some(from);
+            p.typ = Some("lose");
+            p.tile = Some(tile);
+            p.source = "src.buy";
+            p.text = Some(
+                Msg::new("log.paid_for")
+                    .player_id("who", player_id)
+                    .tile("tile", tile),
+            );
+            let paid = self.money(p)?;
+            if !paid.paid {
+                return Ok(());
+            }
+        }
+        // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
+        // one ownership write (`docs/PURCHASE.md`).
+        let mut deal = purchase::default_deal(
+            self.data,
+            &self.w.st,
+            tile,
+            player_id,
+            purchase::BuyKind::Acquire,
+            price,
+            true,
+        );
+        let at = raise!(
+            self,
+            "buyAssign",
+            player_id,
+            tile = tile as i32,
+            buy_kind = purchase::BuyKind::Acquire as i32,
+            seller = from as i32,
+            price = price,
+            deal_owner = deal.owner_after,
+            deal_houses = deal.houses_after,
+            deal_mortgaged = deal.mortgaged_after
+        )?;
+        deal.owner_after = at.deal_owner;
+        deal.houses_after = at.deal_houses;
+        deal.mortgaged_after = at.deal_mortgaged;
+        purchase::assign_deed(&mut self.w, tile, deal.owner_after, deal.houses_after, deal.mortgaged_after);
+        let mut t = Trigger::new("bought", player_id);
+        t.tile = tile as i32;
+        t.buy_kind = purchase::BuyKind::Acquire as i32;
+        t.seller = from as i32;
+        t.price = price;
+        self.raise(t)?;
+        let mut t = Trigger::new("buyAfter", player_id);
+        t.tile = tile as i32;
+        t.buy_kind = purchase::BuyKind::Acquire as i32;
+        t.seller = from as i32;
+        t.price = price;
         self.raise(t)?;
         Ok(())
     }
@@ -904,6 +1127,28 @@ impl Cx<'_> {
             m.from = self.w.st.players[i].pos;
         }
         self.move_start = m.from;
+        // `moveBefore` (`SETTLE-STAGES.md` §7 「移动前」, ABI v43) -- the move's
+        // plan is fixed and nothing has been walked yet. Every move raises it:
+        // walk or teleport, main or card-driven, settling or not. A counteraction
+        // that cancels the move abandons it here (no tail at all); one that
+        // alters it writes the plan (`plan::set_stop_at` / `set_steps` / …) and
+        // the walk pulls the write in below.
+        //
+        // The plan (`turn.plan`) is the authoritative move *shape* -- cards
+        // write it both before the walk (a `moveRoll` counteraction's
+        // `set_pay_factor`) and inside this window. Fold the window's writes
+        // into the running move; do **not** copy `m` over the plan, which would
+        // wipe the earlier ones (`scale_settle_payment` reads the plan's
+        // factors), and do **not** blanket-copy the plan back (it is never
+        // reset between moves, so stale fields would leak in).
+        let plan_before = self.w.turn.plan.clone();
+        let t = raise!(self, "moveBefore", i, @m m, tile = m.from)?;
+        if t.is_cancelled() || self.out(i) || !self.playing() {
+            // The move was cancelled before its first step: it never happened,
+            // so there is no move tail (`moveAfter` / `moveResolved`) either.
+            return Ok(());
+        }
+        fold_plan_delta(m, &plan_before, &self.w.turn.plan);
         // C# `WalkMoveSteps`: `steps = (m.Steps >= 0 ? m.Steps : m.Roll)`.
         let steps = if m.steps >= 0 { m.steps } else { m.roll };
         // Snapshot the log-line fields: the loop below writes `m.total` /
@@ -947,7 +1192,12 @@ impl Cx<'_> {
             if self.out(i) || !self.playing() {
                 return Ok(());
             }
-            return self.after_walk(m);
+            self.move_after(m)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            self.after_walk(m)?;
+            return self.move_resolved(m);
         }
         let (mut seg_from, mut seg_steps, mut first) = (pos, 0, true);
         // C# `WalkMoveSteps` bounds the walk by `steps + m.ExtraSteps`, re-read
@@ -1049,7 +1299,12 @@ impl Cx<'_> {
                 return Ok(());
             }
         }
-        self.after_walk(m)
+        self.move_after(m)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        self.after_walk(m)?;
+        self.move_resolved(m)
     }
 
     /// `TeleportMove` / `Teleport`.
@@ -1084,7 +1339,6 @@ impl Cx<'_> {
             return Ok(());
         }
         let from = self.w.st.players[i].pos;
-        self.w.st.players[i].pos = to as i32;
         let mut m = Move::new(i);
         m.main = main;
         m.resolve = resolve;
@@ -1094,6 +1348,26 @@ impl Cx<'_> {
         m.path = vec![to as i32];
         m.total = 1;
         self.move_start = from;
+        // `moveBefore` (`SETTLE-STAGES.md` §7 「移动前」, ABI v43) -- the
+        // teleport's destination is fixed and nothing has moved yet. A
+        // counteraction that cancels the move abandons it here; one that alters
+        // it rewrites `teleport_to` on the plan and the teleport follows.
+        let plan_before = self.w.turn.plan.clone();
+        let t = raise!(self, "moveBefore", i, @m m, tile = from)?;
+        if t.is_cancelled() || self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        fold_plan_delta(&mut m, &plan_before, &self.w.turn.plan);
+        let to = if m.teleport_to >= 0 {
+            m.teleport_to as usize
+        } else {
+            to
+        };
+        if to >= self.data.tiles.len() {
+            return Ok(());
+        }
+        let resolve = m.resolve;
+        self.w.st.players[i].pos = to as i32;
         let text = Msg::new("log.teleport")
             .player_id("who", i)
             .tile("to", to)
@@ -1103,17 +1377,13 @@ impl Cx<'_> {
         e.from = from;
         e.to = to as i32;
         self.wait(0.5);
-        if !resolve {
-            m.to = to as i32;
-            // C# 24371: a teleport that does not settle still raises Teleported.
-            if !self.out(i) && self.playing() {
-                raise!(self, "teleported", i, @m m, tile = to as i32)?;
-            }
-            return Ok(());
-        }
-        // B41: 「依次触发[经过],[重叠],和[结算]」 at the target -- [经过]
-        // (`passTile`) first, then [重叠] (`passPlayer`), then [结算]
-        // (`after_walk`). Same order for a teleport onto its own tile.
+        // R2 / M6a (`SETTLE-STAGES.md` §6): 专名词 9 gives a teleport a [路径]
+        // of just the endpoint, and B41 fires [经过],[重叠],[结算] at that
+        // endpoint in that order. 其他规则注意事项 1.2 then removes only the
+        // [结算] -- so a 「不[触发结算]」 teleport still raises `passTile`
+        // ([经过]) and `passPlayer` ([重叠]) at its destination, never mid-route
+        // squares. The old "a teleport with resolve clear resolves nothing"
+        // reading over-read 「是否[结算]」.
         raise!(self, "passTile", i, @m m, tile = to as i32)?;
         if self.out(i) || !self.playing() {
             return Ok(());
@@ -1125,16 +1395,38 @@ impl Cx<'_> {
         if self.tile(to).kind == "circle" {
             // Same fallback shape as the walk's: `tile:circle`'s Pass entry
             // rode the `passTile` raise above. With no instance bound the
-            // built-in reward runs here instead.
+            // built-in reward runs here instead. `landing` mirrors `resolve`:
+            // a settling teleport arrives (the landed wording), a no-settle one
+            // is a pure [经过] of the endpoint.
             if self.w.tile_rule_instances(to as i32).is_empty() {
-                self.circle_reward(i, true, from)?;
+                self.circle_reward(i, resolve, from)?;
             }
         }
         m.to = self.w.st.players[i].pos as i32;
-        self.after_walk(&mut m)?;
-        // C# 24390: `Teleported` after the settlement.
+        // `moveAfter` (行动阶段 13 「移动后」/「主要移动结束时」) -- after
+        // [重叠], before the settle stages, for every completed move including
+        // a 「不[触发结算]」 one (`SETTLE-STAGES.md` §7, ruling R1).
+        self.move_after(&mut m)?;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        // The settle stages (14–15) run only when the move settles (其他规则
+        // 注意事项 1.2: 「是否[结算]」 gates only the settle).
+        if resolve {
+            self.after_walk(&mut m)?;
+        }
+        // C# 24390: `Teleported` after the settlement (or at once when the move
+        // does not settle).
         if !self.out(i) && self.playing() {
             raise!(self, "teleported", i, @m m, tile = m.to)?;
+        }
+        // `moveResolved` (Q6) -- the move tail's terminal, strictly last
+        // (`SETTLE-STAGES.md` §7: 「final, after any settle」). Fires for a
+        // 「不[触发结算]」 move too: the movement completed, it just settled to
+        // nothing. Not raised when the mover went out mid-walk (the move is
+        // abandoned, not resolved).
+        if !self.out(i) && self.playing() {
+            raise!(self, "moveResolved", i, @m m, tile = self.w.st.players[i].pos)?;
         }
         Ok(())
     }
@@ -1164,20 +1456,94 @@ impl Cx<'_> {
         Ok(())
     }
 
-    /// `AfterWalk`
+    /// `moveAfter` (行动阶段 13 「移动后」/「主要移动结束时」, ABI v43) -- the
+    /// move-end point, after `passPlayer` ([重叠]) and before `settleBefore`.
+    /// Fires for **every** completed move: walk or teleport, main or
+    /// card-driven, settling or not (ruling R1 / 其他规则注意事项 1.2 -- 「是否
+    /// [结算]」 gates only the settle stages 14–15). 「移动后」 / 「主要移动结束
+    /// 时」 / 「[移动终点]」 clauses land here. A relocation during this window
+    /// redirects the settle (Q7): `after_walk` reads the position fresh.
+    fn move_after(&mut self, m: &mut Move) -> Flow<()> {
+        let i = m.player_id;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        m.to = self.w.st.players[i].pos as i32;
+        raise!(self, "moveAfter", i, @m m, tile = m.to)?;
+        Ok(())
+    }
+
+    /// `moveResolved` (Q6) -- the move tail's terminal, strictly after any
+    /// settle (`SETTLE-STAGES.md` §7). Fires for a 「不[触发结算]」 move too:
+    /// the movement completed, it just settled to nothing. Not raised when the
+    /// mover went out mid-walk (the move is abandoned, not resolved).
+    fn move_resolved(&mut self, m: &Move) -> Flow<()> {
+        let i = m.player_id;
+        if self.out(i) || !self.playing() {
+            return Ok(());
+        }
+        raise!(self, "moveResolved", i, @m m, tile = self.w.st.players[i].pos)?;
+        Ok(())
+    }
+
+    /// `AfterWalk` -- the settle stages (行动阶段 14–15) for a move that settles.
+    /// The move tail (`moveAfter` before this, `moveResolved` after) is raised
+    /// by the walk / teleport themselves, so a 「不[触发结算]」 move runs the
+    /// tail and skips only this.
     fn after_walk(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         if self.out(i) || !self.playing() || !m.resolve {
             return Ok(());
         }
-        raise!(self, "settleBefore", i, @m m, tile = self.w.st.players[i].pos)?;
-        if self.out(i) {
-            return Ok(());
+        // Q7 (`SETTLE-STAGES.md` §7, user ruling 2026-10-07): a relocation
+        // during `moveAfter` or `settleBefore` means the settle did not happen
+        // at the old tile and proceeds at the new tile, and the new tile gets
+        // its own `settleBefore` window. Re-raise `settleBefore` only if the
+        // position actually changed during the previous window; at most
+        // [`MAX_SETTLE_REDIRECTS`] redirects per settlement (log and settle
+        // where standing after that). A relocation during `settle` /
+        // `settleBody` / `settleAfter` does **not** re-target -- the landed
+        // tile finishes (`settle_at` threads one `at`).
+        let mut redirects = 0;
+        loop {
+            let at = self.w.st.players[i].pos as usize;
+            raise!(self, "settleBefore", i, @m m, tile = at as i32)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            let now = self.w.st.players[i].pos as usize;
+            if now == at {
+                break;
+            }
+            redirects += 1;
+            if redirects > MAX_SETTLE_REDIRECTS {
+                // Log and settle where standing: the loop cap has spoken.
+                self.w.log(
+                    "text",
+                    i as i32,
+                    Msg::new("log.settle_redirect_cap")
+                        .player_id("who", i)
+                        .i("n", MAX_SETTLE_REDIRECTS as i64),
+                );
+                break;
+            }
+            // else: the new tile gets its own `settleBefore` window
         }
-        self.settle(i, m)
+        if !self.out(i) && self.playing() {
+            self.settle(i, m)?;
+        }
+        Ok(())
     }
 
     /// `Settle` -> `Land` on the tile the player is standing on.
+    ///
+    /// Q7 (settled, `SETTLE-STAGES.md` §7, user ruling 2026-10-07): a
+    /// relocation during `moveAfter` / `settleBefore` redirects the settle and
+    /// re-runs `settleBefore` at the new tile (loop-capped at
+    /// [`MAX_SETTLE_REDIRECTS`]) -- that loop lives in [`Self::after_walk`].
+    /// A relocation inside `settle` / `settleBody` / `settleAfter` does **not**
+    /// re-target: `pos` is read **once**, here, and the landed tile finishes
+    /// (行动阶段 15 「触发地块/落点效果」).
     fn settle(&mut self, i: usize, m: &Move) -> Flow<()> {
         let at = self.w.st.players[i].pos as usize;
         self.settle_at(i, at, m)
@@ -1191,6 +1557,10 @@ impl Cx<'_> {
         let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
         // C# 24448: a cancelled settle ends here -- no Land, no SettleAfter.
         if self.out(i) || t.is_cancelled() {
+            // `tileResolved` (Q6) still fires: the settlement is complete as
+            // nothing. (The spec's `TileResolved` is the terminal of the whole
+            // lifecycle, cancelled or not.)
+            raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
             return Ok(());
         }
         // `settleBody` (Fx) -- C# `SettleBody`: the first field card that
@@ -1207,12 +1577,17 @@ impl Cx<'_> {
         }
         // C# 24493: SettleAfter only while the player is in and the match plays.
         if self.out(i) || !self.playing() {
+            raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
             return Ok(());
         }
         // `settleAfter` -- the landed tile is fully resolved. (Not raised when
         // `land` halts on an unanswered prompt; it fires on the successful
         // replay instead, alongside the rest of the routine.)
         raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
+        // `tileResolved` (Q6 / the spec's `TileResolved`) -- the terminal,
+        // strictly after `settleAfter`. Distinct from it on purpose: a
+        // 「结算完成时」 card wants the terminal, not the After.
+        raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
         Ok(())
     }
 
@@ -1494,12 +1869,43 @@ impl Cx<'_> {
         Ok(())
     }
 
+    /// The agent's 同色 set (`docs/PURCHASE.md`): own `group` + `ANY_COLOR` +
+    /// per-player `colorFor:<p>`. An `ANY_COLOR`-only member is never buildable
+    /// (soyo 「该格本身不可因自有以外的颜色的地产商盖房」).
+    pub(crate) fn agent_colour_set(&self, i: usize, agent: usize) -> Vec<(usize, bool)> {
+        let g = self.tile(agent).group;
+        let mut out = Vec::new();
+        for t in 0..self.data.tiles.len() {
+            if !self.tile(t).is_buyable() {
+                continue;
+            }
+            let tg = self.tile(t).group;
+            let any = self.w.tile_prop(t as i32, crate::state::prop::ANY_COLOR) != 0;
+            let color_for = self.w.tile_prop(
+                t as i32,
+                &format!("{}{}", crate::state::prop::COLOR_FOR_PREFIX, i),
+            );
+            let in_group = tg == g
+                || any
+                || color_for == g
+                || color_for == crate::state::prop::ALL_COLORS
+                || tg == crate::state::prop::ALL_COLORS;
+            if !in_group {
+                continue;
+            }
+            // An `ANY_COLOR`-only member (not the agent's own group) is offered
+            // for Buy but never for Build (soyo 「该格本身不可因自有以外的颜色的
+            // 地产商盖房」).
+            let buildable = tg == g;
+            out.push((t, buildable));
+        }
+        out
+    }
+
     /// `AgentLanding` -- buy or build once in the agent's colour group.
     pub fn agent_landing(&mut self, i: usize, agent: usize) -> Flow<()> {
-        let g = self.tile(agent).group;
-        let same: Vec<usize> = (0..self.data.tiles.len())
-            .filter(|&t| self.tile(t).is_buyable() && self.tile(t).group == g)
-            .collect();
+        let set = self.agent_colour_set(i, agent);
+        let same: Vec<usize> = set.iter().map(|&(t, _)| t).collect();
         if same.is_empty() {
             self.w.log(
                 "text",
@@ -1534,15 +1940,19 @@ impl Cx<'_> {
         let money = self.w.st.players[i].money;
         let mut options = vec![];
         let mut labels = vec![];
-        for &t in &same {
+        let mut prices: Vec<i32> = vec![];
+        for &(t, buildable) in &set {
             if self.w.st.owners[t] < 0 {
-                if self.can_pay(i) && money >= self.buy_price(t) {
+                let quote = self.buy_quote_for(i, t, purchase::BuyKind::Agent);
+                let price = quote.price.max(0);
+                if self.can_pay(i) && money >= price {
                     let houses = self.w.st.houses[t];
                     options.push(t);
+                    prices.push(price);
                     labels.push(
                         Msg::new("ask.agent.buy")
                             .tile("tile", t)
-                            .n("price", self.buy_price(t))
+                            .n("price", price)
                             .opt(
                                 "extra",
                                 (houses > 0)
@@ -1551,10 +1961,12 @@ impl Cx<'_> {
                     );
                 }
             } else if self.w.st.owners[t] as usize == i
+                && buildable
                 && self.why_not_build_on(i, t).is_none()
                 && money >= self.build_cost(t)
             {
                 options.push(t);
+                prices.push(self.build_cost(t));
                 labels.push(
                     Msg::new("ask.agent.build")
                         .tile("tile", t)
@@ -1574,7 +1986,7 @@ impl Cx<'_> {
             return Ok(());
         }
         let ai = self.ai_agent_choice(i, &options);
-        let ask = Ask::tile(
+        let mut ask = Ask::tile(
             i,
             Msg::new("ask.agent.title").tile("agent", agent),
             Msg::new("ask.agent.text").player_id("who", i),
@@ -1582,6 +1994,7 @@ impl Cx<'_> {
             labels,
         )
         .with_ai(|_| ai);
+        ask.view.prices = prices;
         let pick = self.ask(ask)?.of(i);
         let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
             self.w.log(
@@ -1592,8 +2005,9 @@ impl Cx<'_> {
             return Ok(());
         };
         if self.w.st.owners[t] < 0 {
-            if self.can_pay(i) && self.w.st.players[i].money >= self.buy_price(t) {
-                self.buy(i, t)?;
+            let quote = self.buy_quote_for(i, t, purchase::BuyKind::Agent);
+            if self.can_pay(i) && self.w.st.players[i].money >= quote.price.max(0) {
+                self.buy(i, t, purchase::BuyKind::Agent)?;
             }
         } else if self.w.st.owners[t] as usize == i
             && self.why_not_build_on(i, t).is_none()
@@ -1766,14 +2180,39 @@ impl Cx<'_> {
         if (f - 1.0).abs() <= f64::EPSILON {
             return amount;
         }
-        ((amount as f64 * f) as i32).max(0)
+        // Q3: adjustments compose freely -- no floor here. A scaled negative
+        // stays negative and is reversed after the chain resolves.
+        (amount as f64 * f) as i32
     }
 
     /// `OfferForceBuy` -- mortgaged land charges no rent but may be bought out at
-    /// twice its value.
+    /// twice its value (`docs/PURCHASE.md` P3). The `BuyGate` hook runs first
+    /// (Poppin's hill lock covers Force too); the price is `FORCE_MULT` × the
+    /// deed value (default ×2); `FORCE_STAYS_MORTGAGED` keeps the mortgage.
+    /// TODO(规则书) ruling 6: no `bought` / `buyAfter` hooks until it is decided
+    /// whether 强制购买 is a 「购买」.
     fn offer_force_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         let owner = self.w.st.owners[t] as usize;
-        let price = self.force_buy_price(t);
+        // `BuyGate` -- every kind, Force included (Poppin's hill lock covers
+        // 「不可被抵押双倍支付购买」). Re-quoted below, so quote == charge.
+        let gate = raise!(
+            self,
+            "buyGate",
+            i,
+            tile = t as i32,
+            buy_kind = purchase::BuyKind::Force as i32,
+            seller = owner as i32
+        )?;
+        if gate.is_cancelled() {
+            return Ok(());
+        }
+        // The quoted Force price: 2×(land + houses) as the base, then whatever
+        // `BuyAdd` / `BuyMul` / `BuySet` hooks make of it (`docs/PURCHASE.md`).
+        let quote = self.buy_quote_for(i, t, purchase::BuyKind::Force);
+        if !quote.eligible || quote.price < 0 {
+            return Ok(());
+        }
+        let price = quote.price.max(0);
         if !self.can_pay(i) || self.w.st.players[i].money < price {
             self.w.log(
                 "text",
@@ -1811,15 +2250,47 @@ impl Cx<'_> {
             }
         })
         .with_tile(t);
+        let mut ask = ask;
+        ask.view.price = price;
         if self.ask(ask)?.of(i) == 0
             && self.w.st.owners[t] == owner as i32
             && !self.out(owner)
             && !self.out(i)
             && self.w.st.players[i].money >= price
         {
+            // Direct transfer: 「此次购买的价格不受任何资金变动效果影响，收款方
+            // 无论处于何种状态都可正常收款」. The pay pipeline does not see it.
             self.w.st.players[i].money -= price;
             self.w.st.players[owner].money += price;
-            self.w.st.owners[t] = i as i32;
+            // The deal: `BuyAssign` rewrites owner / houses / mortgage before
+            // the one ownership write (`docs/PURCHASE.md`). The rulebook default
+            // is 「获得的地契仍为抵押状态」; TODO(规则书): `FORCE_STAYS_MORTGAGED`
+            // (`= 0` clears) is not distinguishable from "absent" through
+            // `tile_prop`, so the native default holds unconditionally.
+            let mut deal =
+                purchase::default_deal(self.data, &self.w.st, t, i, purchase::BuyKind::Force, price, true);
+            let at = raise!(
+                self,
+                "buyAssign",
+                i,
+                tile = t as i32,
+                buy_kind = purchase::BuyKind::Force as i32,
+                seller = owner as i32,
+                price = price,
+                deal_owner = deal.owner_after,
+                deal_houses = deal.houses_after,
+                deal_mortgaged = deal.mortgaged_after
+            )?;
+            deal.owner_after = at.deal_owner;
+            deal.houses_after = at.deal_houses;
+            deal.mortgaged_after = at.deal_mortgaged;
+            purchase::assign_deed(
+                &mut self.w,
+                t,
+                deal.owner_after,
+                deal.houses_after,
+                deal.mortgaged_after,
+            );
             let text = Msg::new("log.force_buy")
                 .player_id("who", i)
                 .player_id("owner", owner)
@@ -1836,7 +2307,8 @@ impl Cx<'_> {
 
     /// `OfferBuy` (when a non-main move lands on unowned land).
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
-        let price = self.buy_price(t);
+        let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
+        let price = quote.price.max(0);
         if !self.can_pay(i) || self.w.st.players[i].money < price {
             self.w.log(
                 "text",
@@ -1849,7 +2321,7 @@ impl Cx<'_> {
         }
         let houses = self.w.st.houses[t];
         let wants = self.ai_wants_buy(i, t);
-        let ask = Ask::choice(
+        let mut ask = Ask::choice(
             vec![i],
             Msg::new("ask.buy.title"),
             Msg::new("ask.buy.text")
@@ -1866,12 +2338,13 @@ impl Cx<'_> {
         )
         .with_ai(|_| if wants { 0 } else { 1 })
         .with_tile(t);
+        ask.view.price = price;
         if self.ask(ask)?.of(i) == 0
             && self.w.st.owners[t] < 0
-            && self.w.st.players[i].money >= self.buy_price(t)
+            && self.w.st.players[i].money >= price
             && !self.out(i)
         {
-            self.buy(i, t)?;
+            self.buy(i, t, purchase::BuyKind::Land)?;
         }
         Ok(())
     }
@@ -1936,11 +2409,6 @@ impl Cx<'_> {
         (self.tile(t).price as f64 * 0.6).round_ties_even() as i32
     }
 
-    fn force_buy_price(&self, t: usize) -> i32 {
-        let tile = self.tile(t);
-        2 * (tile.price + self.w.st.houses[t] * tile.house)
-    }
-
     fn count_rings(&self, player_id: usize) -> i32 {
         (0..self.data.tiles.len())
             .filter(|&t| self.tile(t).kind == "ring" && self.w.st.owners[t] == player_id as i32)
@@ -1995,8 +2463,9 @@ impl Cx<'_> {
         out
     }
 
-    /// `BuyableHere` -- after a main move onto unowned land, before buying.
-    pub(crate) fn buyable_here(&self, i: usize) -> bool {
+    /// The shape of "a buy is on the table here": the turn / step / position /
+    /// ownership preconditions, before any gate or price.
+    fn buyable_shape(&self, i: usize) -> bool {
         let st = &self.w.st;
         let pos = st.players[i].pos;
         st.step == stage::END
@@ -2012,9 +2481,31 @@ impl Cx<'_> {
             && self.can_pay(i)
     }
 
+    /// `BuyableHere` -- after a main move onto unowned land, before buying.
+    pub(crate) fn buyable_here(&self, i: usize) -> bool {
+        if !self.buyable_shape(i) {
+            return false;
+        }
+        let pos = self.w.st.players[i].pos;
+        // rana_parking's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
+        // plan's no-buy flag bars the ordinary Land offer.
+        if self.w.turn.plan.no_buy {
+            return false;
+        }
+        // The rules crate's gate (`docs/PURCHASE.md`): a `BuyGate` hook that
+        // refuses makes the tile unbuyable here, not merely unaffordable.
+        self.buy_quote_for(i, pos as usize, purchase::BuyKind::Land)
+            .eligible
+    }
+
     pub(crate) fn can_buy_here(&self, i: usize) -> bool {
-        self.buyable_here(i)
-            && self.w.st.players[i].money >= self.buy_price(self.w.st.players[i].pos as usize)
+        // One quote answers both halves: the gate (`eligible`) and the price.
+        if !self.buyable_shape(i) {
+            return false;
+        }
+        let t = self.w.st.players[i].pos as usize;
+        let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
+        quote.eligible && quote.price >= 0 && self.w.st.players[i].money >= quote.price.max(0)
     }
 
     pub(crate) fn can_build_here(&self, i: usize) -> bool {
@@ -2055,26 +2546,74 @@ impl Cx<'_> {
         self.w.why_not_build_on(self.data, i as i32, t as i32)
     }
 
+    /// The quoted price for one tile, through the rules crate's `buy_quote`
+    /// (`docs/PURCHASE.md`). For `StubRules` this is `quote_native` -- the
+    /// plain rulebook formula -- so the sim's behaviour is unchanged.
+    pub(crate) fn buy_quote_for(&self, i: usize, t: usize, kind: purchase::BuyKind) -> purchase::Quote {
+        // Force-buy and 收购 name the owner as the payee; every other kind buys
+        // from the bank (`docs/PURCHASE.md`).
+        let seller = match kind {
+            purchase::BuyKind::Force | purchase::BuyKind::Acquire => {
+                self.w.st.owners.get(t).copied().unwrap_or(-1)
+            }
+            _ => -1,
+        };
+        purchase::quote_for(self.rules(), &self.w, self.data, i, kind, &[(t, seller)])
+            .into_iter()
+            .next()
+            .unwrap_or(purchase::Quote {
+                price: -1,
+                eligible: false,
+            })
+    }
+
     /// `BuyRoutine`
-    pub(crate) fn buy(&mut self, i: usize, t: usize) -> Flow<()> {
+    pub(crate) fn buy(&mut self, i: usize, t: usize, kind: purchase::BuyKind) -> Flow<()> {
+        // `BuyGate` -- may this player buy this tile at all? Every kind, Force
+        // included (Poppin's hill lock covers 「不可被抵押双倍支付购买」).
+        let gate = raise!(
+            self,
+            "buyGate",
+            i,
+            tile = t as i32,
+            buy_kind = kind as i32,
+            seller = -1
+        )?;
+        if gate.is_cancelled() {
+            return Ok(());
+        }
+        // rana_parking's 「该次传送不可进行地契购买」 (`docs/PURCHASE.md`) -- the
+        // plan's no-buy flag is a **native** gate on the ordinary Land offer,
+        // the same shape as `buyable_here`. TODO(规则书) ruling 6: whether it
+        // also bars a card-driven (`BuyKind::Card`) buy is undecided; today it
+        // does not, matching the flag being about the turn's own landing.
+        if kind == purchase::BuyKind::Land && self.w.turn.plan.no_buy {
+            return Ok(());
+        }
         // `buyBefore` -- before any guard, so it is a real pre-hook (fires even
-        // on the no-op/already-owned path).
-        raise!(self, "buyBefore", i, tile = t as i32)?;
+        // on the no-op/already-owned path). A hook that claims it with
+        // `set_cancelled` vetoes the buy outright (Poppin's hill lock).
+        let bt = raise!(self, "buyBefore", i, tile = t as i32)?;
+        if bt.is_cancelled() {
+            return Ok(());
+        }
         if self.out(i) || !self.playing() {
             return Ok(());
         }
         if self.w.st.owners[t] >= 0 {
             return Ok(());
         }
-        let mut price = self.buy_price(t);
-        let houses = self.w.st.houses[t];
-        // 「本回合购买格子时[消耗]资金时降低N（最低0）」
-        let discount = self.w.turn.buy_discount.max(0);
-        if discount > 0 {
-            price = (price - discount).max(0);
+        // The quoted price (the rules crate's `buy_quote`, re-quoted here at
+        // commit so quote == charge). For `StubRules` this is the plain
+        // rulebook formula; the `BuyAdd` / `BuyMul` / `BuySet` stages ride on
+        // top of it in the rules crate.
+        let quote = self.buy_quote_for(i, t, kind);
+        if quote.price < 0 {
+            return Ok(());
         }
-        // 「本回合购买格子不[消耗]资金」 -- the money simply does not move.
-        if price > 0 && !self.w.turn.free_buy {
+        let mut price = quote.price.max(0);
+        let houses = self.w.st.houses[t];
+        if price > 0 {
             let mut p = Pay::new(price, "buy");
             p.from = Some(i);
             p.typ = Some("lose");
@@ -2087,12 +2626,33 @@ impl Cx<'_> {
             }
             price = paid.loss;
         }
-        self.w.st.owners[t] = i as i32;
-        self.w.st.mortgaged[t] = false;
-        // 「如果购买则拆除那个格子上的所有房屋」
-        if self.w.turn.raze_on_buy {
-            self.w.st.houses[t] = 0;
-        }
+        // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
+        // one ownership write (`docs/PURCHASE.md`). A land buy clears the
+        // mortgage; 迷宫般的仓库's 「拆除那个格子上的所有房屋」 is a `BuyAssign`
+        // rewrite of `deal_houses`, not an engine flag.
+        let mut deal = purchase::default_deal(self.data, &self.w.st, t, i, kind, price, true);
+        let at = raise!(
+            self,
+            "buyAssign",
+            i,
+            tile = t as i32,
+            buy_kind = kind as i32,
+            seller = deal.seller,
+            price = price,
+            deal_owner = deal.owner_after,
+            deal_houses = deal.houses_after,
+            deal_mortgaged = deal.mortgaged_after
+        )?;
+        deal.owner_after = at.deal_owner;
+        deal.houses_after = at.deal_houses;
+        deal.mortgaged_after = at.deal_mortgaged;
+        purchase::assign_deed(
+            &mut self.w,
+            t,
+            deal.owner_after,
+            deal.houses_after,
+            deal.mortgaged_after,
+        );
         let text = Msg::new("log.buy")
             .player_id("who", i)
             .tile("tile", t)
@@ -2370,7 +2930,12 @@ impl Cx<'_> {
                 MAX_MONEY_DEPTH, depth, p
             );
         }
-        if p.amount <= 0 || (p.from.is_some() && p.from == p.to) {
+        // Q4 (PIPELINE-AUDIT P16/K17): a self-payment 「A[支付]A」 is **not** a
+        // no-op. The counteraction windows run as normal (a counteraction may
+        // redirect the payee) and the affordability / raise-funds / bankruptcy
+        // path below applies exactly as to any other payment; only the net
+        // balance effect is zero when the pair settles.
+        if p.amount <= 0 {
             return Ok(Paid::default());
         }
         if p.from.is_some_and(|f| self.out(f)) || p.to.is_some_and(|t| self.out(t)) {
@@ -2467,15 +3032,62 @@ impl Cx<'_> {
                 )?;
                 return Ok(Paid::default());
             }
-            amount = t.value.max(0);
+            // Q3: adjustments compose freely -- no floor. A negative here is
+            // still an in-flight figure later stages may reshape; the reverse
+            // decision happens only after the whole chain has resolved.
+            amount = t.value;
             to = (t.target >= 0).then_some(t.target as usize);
+        }
+        // ---- pre-split (command-wide) ------------------------------------
+        // `PIPELINE-AUDIT` Q2: `payTotalAdd` → `payTotalMul` → `payTotalCancel`
+        // shape the **command total** -- the figure a 「[分摊]」 will divide --
+        // before any per-share stage touches a leg. A single-pair payment's
+        // command total is its own amount, so the same three stages run here.
+        // A 「[分摊]」 leg (`Pay::total_stage == false`) skips them: the card
+        // body has already shaped the total through [`Self::pay_total`].
+        //
+        // They run *after* the `effect` declaration, so a counter still hears
+        // the **declared** amount (`docs/ENGINE.md` 「Effect vs settlement」) --
+        // the same position the per-share `payAdd` occupies, one level up.
+        if p.total_stage {
+            let mut to_slot = to;
+            match self.pay_total_stages(
+                side,
+                payer,
+                &mut to_slot,
+                amount,
+                p.by_card,
+                rent,
+                p.tile,
+            )? {
+                // `payTotalCancel` dropped the whole command.
+                None => {
+                    raise!(
+                        self,
+                        "payAfter",
+                        side,
+                        player_id = payer,
+                        target = to.map_or(-1, |t| t as i32),
+                        value = 0,
+                        by_card = p.by_card,
+                        pay_is_rent = rent,
+                        tile = p.tile.map_or(-1, |t| t as i32)
+                    )?;
+                    return Ok(Paid::default());
+                }
+                Some(shaped) => {
+                    amount = shaped;
+                    to = to_slot;
+                }
+            }
         }
         // ---- settlement -------------------------------------------------
         // Modifiers run now, against the amount the effect settled on.
+        // Q3: adjustments compose freely -- the stages do **not** clamp and do
+        // **not** stop at zero. A figure driven negative is still in flight;
+        // later stages may bring it back, and only the post-chain sign decides
+        // between settle / nothing / reverse.
         for kind in ["payAdd", "payMul", "payChoose", "payAt"] {
-            if amount <= 0 {
-                break;
-            }
             let t = raise!(
                 self,
                 kind,
@@ -2487,7 +3099,7 @@ impl Cx<'_> {
                 pay_is_rent = rent,
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
-            amount = t.value.max(0);
+            amount = t.value;
             // A stage may redirect the payee (`set_pay_target`, e.g. 无路矢's
             // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」) or the
             // payer; the payload's payer/payee is per-entry and each stage may
@@ -2506,7 +3118,12 @@ impl Cx<'_> {
         // `pay` is a settlement hook now: what the payment actually was. It
         // fires after the chain, so it can no longer be used to reconstruct
         // 「被…效果影响」 -- that is `effect`'s job.
-        if amount > 0 {
+        //
+        // V5 (`NEGATION-AUDIT`): the settlement window honours
+        // `set_cancelled()` -- a counter body that cancels the `pay` link stops
+        // the payment outright (it used to be ignored unless the body also
+        // zeroed the figure).
+        if amount != 0 {
             let t = raise!(
                 self,
                 "pay",
@@ -2518,12 +3135,78 @@ impl Cx<'_> {
                 pay_is_rent = rent,
                 tile = p.tile.map_or(-1, |t| t as i32)
             )?;
-            amount = t.value.max(0);
-            to = (t.target >= 0).then_some(t.target as usize);
+            if t.is_cancelled() {
+                amount = 0;
+            } else {
+                amount = t.value;
+                to = (t.target >= 0).then_some(t.target as usize);
+            }
         }
-        // Cancelled: nothing moves and it is not paid (C# 25164 -- PayAfter
-        // still runs, with `p.paid == false`).
-        if amount <= 0 {
+        // Q3 (PIPELINE-AUDIT, user ruling 2026-10-07): adjustments compose
+        // freely and there is no floor between stages. When the counteraction
+        // chain has resolved and the **final** amount is negative, the original
+        // payment is adjusted to 0 and a **new** payment starts with the
+        // participants swapped and the absolute value. That child runs the
+        // full pipeline (its own modifiers, counteraction windows, Q1
+        // shortfall → mortgage → bankruptcy). Applies to one-sided movements
+        // too: a negative 「[获得]」 (bank→A) becomes A losing |x| 「[消耗]」, and
+        // a negative 「[消耗]」 becomes a gain. A child that is itself driven
+        // negative reverses again, capped at [`MAX_PAY_REVERSALS`].
+        if amount < 0 {
+            // The original settles as 0.
+            raise!(
+                self,
+                "payAfter",
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = 0,
+                by_card = p.by_card,
+                pay_is_rent = rent,
+                tile = p.tile.map_or(-1, |t| t as i32)
+            )?;
+            if p.reverse_depth >= MAX_PAY_REVERSALS {
+                self.w.log(
+                    "text",
+                    side as i32,
+                    Msg::new("log.pay_reversal_capped")
+                        .player_id("who", side)
+                        .n("amount", amount),
+                );
+                return Ok(Paid::default());
+            }
+            let rev_amount = -amount;
+            self.w.log(
+                "text",
+                side as i32,
+                Msg::new("log.pay_reversed")
+                    .player_id("who", side)
+                    .n("amount", rev_amount),
+            );
+            let mut rev = Pay::new(rev_amount, p.kind);
+            // Participants swapped. For a one-sided movement this flips the
+            // bank leg: a negative 「[获得]」 becomes a 「[消耗]」 and vice versa.
+            rev.from = to;
+            rev.to = p.from;
+            rev.tile = p.tile;
+            rev.must = true;
+            rev.reason = p.reason.clone();
+            rev.by_card = p.by_card;
+            rev.total_stage = true;
+            rev.reverse_depth = p.reverse_depth + 1;
+            let _ = self.money(rev)?;
+            return Ok(Paid::default());
+        }
+        // Cancelled / zero: nothing moves and it is not paid (C# 25164 --
+        // PayAfter still runs, with `p.paid == false`).
+        //
+        // Q4 (`PIPELINE-AUDIT` P16/K17): a self-payment 「A[支付]A」 is not a
+        // no-op and is not short-circuited here. The counteraction windows above
+        // have run in full (a counteraction may have redirected the payee), and
+        // the affordability / raise-funds / bankruptcy path below applies
+        // exactly as to any other payment. Only the **net balance effect** is
+        // zero when the pair settles: the debit and the credit cancel.
+        if amount == 0 {
             raise!(
                 self,
                 "payAfter",
@@ -2593,6 +3276,82 @@ impl Cx<'_> {
             loss,
             gain,
         })
+    }
+
+    /// The command-wide **pre-split** stage (`PIPELINE-AUDIT` Q2):
+    /// `payTotalAdd` → `payTotalMul` → `payTotalCancel`, composing, on `total`.
+    ///
+    /// Returns the shaped total, or `None` when a `payTotalCancel` hook dropped
+    /// the whole command. This is the 「分摊前」 figure: a 「[分摊][支付]2000」
+    /// divides *this*, not the raw 2000, into shares (规则书 支付阶段 2/4/5
+    /// applied to the command rather than to one pair). A pre-split hook may
+    /// also redirect the payee; `to` is updated in place the same way the
+    /// per-share stages do it.
+    ///
+    /// Q3: the stages do not clamp -- a total driven negative is returned as
+    /// such so the caller can reverse after the chain resolves.
+    fn pay_total_stages(
+        &mut self,
+        side: usize,
+        payer: i32,
+        to: &mut Option<usize>,
+        total: i32,
+        by_card: Option<i32>,
+        rent: bool,
+        tile: Option<usize>,
+    ) -> Flow<Option<i32>> {
+        let mut amount = total;
+        for kind in ["payTotalAdd", "payTotalMul", "payTotalCancel"] {
+            let t = raise!(
+                self,
+                kind,
+                side,
+                player_id = payer,
+                target = to.map_or(-1, |t| t as i32),
+                value = amount,
+                by_card = by_card,
+                pay_is_rent = rent,
+                tile = tile.map_or(-1, |t| t as i32)
+            )?;
+            if kind == "payTotalCancel" && t.is_cancelled() {
+                return Ok(None);
+            }
+            amount = t.value;
+            if t.target >= 0 {
+                *to = Some(t.target as usize);
+            }
+        }
+        Ok(Some(amount))
+    }
+
+    /// `Cx::pay_total` -- the public face of [`Self::pay_total_stages`]. A card
+    /// body that is about to 「[分摊]」 a figure calls this first, so the
+    /// command-wide stage shapes the **total**, then divides the result and
+    /// runs each share through [`Self::money`] with `Pay::total_stage = false`
+    /// (`ctx::split_pay` / `ctx::transfer_leg`).
+    ///
+    /// Returns the shaped total, or `None` when the command was cancelled.
+    pub fn pay_total(
+        &mut self,
+        from: Option<usize>,
+        to: Option<usize>,
+        total: i32,
+        by_card: Option<i32>,
+    ) -> Flow<Option<i32>> {
+        if total <= 0 {
+            return Ok(None);
+        }
+        if from.is_some_and(|f| self.out(f)) || to.is_some_and(|t| self.out(t)) {
+            return Ok(None);
+        }
+        let mut to = to;
+        let side = from.or(to).expect("a payment has a side");
+        let payer = from.map_or(-1, |f| f as i32);
+        let shaped = self.pay_total_stages(side, payer, &mut to, total, by_card, false, None)?;
+        // A cancelled command is `None`. A non-positive shaped total is nothing
+        // to divide -- the per-leg `money()` calls (and their Q3 reversal) live
+        // on the shares, not here.
+        Ok(shaped.filter(|&s| s > 0))
     }
 
     /// `LogMoney`
@@ -2704,10 +3463,23 @@ impl Cx<'_> {
 
     /// `Bankrupt` -- everything is cashed in and handed to the creditor.
     fn bankrupt(&mut self, i: usize, creditor: Option<usize>, amount: i32) -> Flow<()> {
+        if self.out(i) {
+            return Ok(());
+        }
+        // B3 (`PIPELINE-AUDIT` K2): mark the seat dead **before** the
+        // `bankruptBefore` window, so the dying player's own effect sources
+        // cannot join it. 规则书 L16 defines 破产 as the state entered when the
+        // payment fails, L81 「所有其正在生效的卡，技能效果停止生效」 is what
+        // entering that state does, and L17 excludes 破产 from [存活]. Other
+        // players' `bankruptBefore` hooks still fire and may inspect the
+        // remaining state (K5) -- the cash-in below has not run yet.
+        self.w.st.players[i].bankrupt = true;
+        self.w.out_count += 1;
+        self.w.st.players[i].out_order = self.w.out_count;
         // `bankruptBefore` -- before any asset cash-in; the post half below
         // fires after cash-in but before `remove_from_game`.
         raise!(self, "bankruptBefore", i, value = amount)?;
-        if self.out(i) {
+        if !self.playing() {
             return Ok(());
         }
         let mut cashed = 0;
@@ -2722,9 +3494,6 @@ impl Cx<'_> {
         if let Some(c) = creditor {
             self.w.st.players[c].money += all;
         }
-        self.w.st.players[i].bankrupt = true;
-        self.w.out_count += 1;
-        self.w.st.players[i].out_order = self.w.out_count;
         let text = Msg::new("log.bankrupt")
             .player_id("who", i)
             .n("amount", amount)
@@ -2748,10 +3517,19 @@ impl Cx<'_> {
         // `beforeOut` (Fx) -- C# `BeforeOut`, before the player is cleared.
         raise!(self, "beforeOut", i)?;
         let deeds = self.remove_from_game(i);
-        if self.check_game_over() {
+        // `bankruptResolved` (Q6 / K11) -- the terminal: cash-in done, the seat
+        // cleared, the leftover auctions finished. Nothing else observes
+        // "cleanup + auctions finished", so this is the point a 「结算完成时」
+        // card would hook.
+        let ended = self.check_game_over();
+        if !ended {
+            self.auction_leftovers(deeds)?;
+        }
+        raise!(self, "bankruptResolved", i)?;
+        if ended {
             return Err(Halt::ended());
         }
-        self.auction_leftovers(deeds)
+        Ok(())
     }
 
     /// `Forfeit` -- leaving mid-match counts as going out.
@@ -2788,6 +3566,14 @@ impl Cx<'_> {
 
     /// `RemoveFromGame` -- clear the player; its land returns to the bank.
     fn remove_from_game(&mut self, i: usize) -> Vec<usize> {
+        // Collect the rule ids this seat's field carries **before** the clear
+        // below: markers those rules own leave the game with them (user ruling
+        // 2026-10-07), wherever the copies sit.
+        let owned_rules: Vec<String> = self.w.st.players[i]
+            .field
+            .iter()
+            .map(|f| f.card.clone())
+            .collect();
         let s = &mut self.w.st.players[i];
         s.ai = true;
         s.money = 0;
@@ -2804,7 +3590,27 @@ impl Cx<'_> {
         }
         s.state_set(key::EXILE_TO, -1);
         self.w.hidden[i].hand.clear();
+        // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81: 「将其控制的所有棋子，角色卡，
+        // 乐队卡，和手卡移出游戏。所有其正在生效的卡，技能效果停止生效。」 The
+        // field holds the character cards, band cards and every 「[持续]」 card
+        // (including the bound `skill:*` instances); `actions` are the armed
+        // skill offers. Both leave the game with the seat, so no hook of theirs
+        // can run again. (The hook dispatch also skips `out()` seats -- belt and
+        // braces for any instance a later path re-places.)
+        //
+        // Markers (user ruling 2026-10-07, reversing the previous batch's
+        // keep-tokens deviation): bankruptcy clears **everything the player
+        // holds** -- 火罐 / 奇迹水晶 / P✽P粉丝 / tokens / statuses -- plus every
+        // marker **owned by one of their rules** wherever that copy sits
+        // (another player's counter, a tile). Neutral board marks ([CP点],
+        // `owner == -1`) are not player-held and stay. `rb_pp::
+        // shanyao_counter_on_short_payment` pins the fan being cleared.
+        s.tokens.clear();
+        s.field.clear();
+        s.actions.clear();
         self.w.extra_turns.retain(|&x| x != i);
+        // Drop every marker an exiting rule owned, wherever its copies sit.
+        self.purge_markers_owned_by(&owned_rules);
         let deeds: Vec<usize> = (0..self.data.tiles.len())
             .filter(|&t| self.w.st.owners[t] == i as i32)
             .collect();
@@ -2826,6 +3632,31 @@ impl Cx<'_> {
             );
         }
         deeds
+    }
+
+    /// User ruling 2026-10-07 (marker ownership): drop every marker whose
+    /// owning rule is in `rules`, wherever its copies sit -- every player's
+    /// counter, and every tile mark of that kind. Neutral board marks
+    /// ([CP点], `owner == -1`) are never player-rule-owned and stay.
+    fn purge_markers_owned_by(&mut self, rules: &[String]) {
+        if rules.is_empty() {
+            return;
+        }
+        let doomed: Vec<String> = self
+            .w
+            .marker_owner
+            .iter()
+            .filter(|(_, owner)| rules.iter().any(|r| r == *owner))
+            .map(|(name, _)| name.clone())
+            .collect();
+        for name in doomed {
+            for p in self.w.st.players.iter_mut() {
+                p.tokens.retain(|t| t.name != name);
+            }
+            self.w.st.marks.retain(|m| {
+                m.is_cp() || m.owner == crate::state::BOARD_OWNER || m.kind != name
+            });
+        }
     }
 
     /// `AuctionLeftovers` -- auction up to 3 random deeds of a player who went out.
@@ -2865,17 +3696,32 @@ impl Cx<'_> {
 
     /// `AuctionTile`
     fn auction_tile(&mut self, t: usize, from: usize) -> Flow<()> {
-        let players: Vec<usize> = self
-            .present_from(from)
-            .into_iter()
-            .filter(|&s| self.can_pay(s))
-            .collect();
+        // `BuyGate` filters bidders (`docs/PURCHASE.md` P4): a player the gate
+        // refuses cannot bid.
+        let mut players: Vec<usize> = Vec::new();
+        for s in self.present_from(from) {
+            if !self.can_pay(s) {
+                continue;
+            }
+            let gate = raise!(
+                self,
+                "buyGate",
+                s,
+                tile = t as i32,
+                buy_kind = purchase::BuyKind::Auction as i32,
+                seller = -1
+            )?;
+            if !gate.is_cancelled() {
+                players.push(s);
+            }
+        }
         if players.is_empty() {
             self.w
                 .log("text", -1, Msg::new("log.auction_nobody").tile("tile", t));
             return Ok(());
         }
-        let base = self.buy_price(t);
+        // The quote base sets AI worth (`docs/PURCHASE.md` P4).
+        let base = purchase::quote_native(self.data, &self.w.st, t).max(0);
         // Per-seat ceiling, from the seat's own policy (standard randomises
         // around the price; chaos spends down to `CHAOS_RESERVE`).
         let mut worth: Vec<i32> = Vec::with_capacity(players.len());
@@ -2903,7 +3749,7 @@ impl Cx<'_> {
             return Ok(());
         }
         let (b, bid) = (r.a.bidder as usize, r.a.bid);
-        if self.w.st.owners[t] >= 0 || !self.can_pay(b) || self.w.st.players[b].money < bid {
+        if self.w.st.owners[t] >= 0 || !self.can_pay(b) {
             self.w.log(
                 "text",
                 b as i32,
@@ -2911,9 +3757,50 @@ impl Cx<'_> {
             );
             return Ok(());
         }
+        // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76: 「[支付]或[消耗]资金且资金不足
+        // 时可以选择抵押拥有的地契」. A short bidder is offered the mortgage path
+        // to fund the bid; only a bidder who cannot raise it (and therefore goes
+        // out) voids the auction. L20 「[消耗]同等资金」 keeps the bid itself a
+        // direct delete (ruling 7, TODO(规则书) ruling 7).
+        if self.w.st.players[b].money < bid {
+            self.raise_funds(b, bid, None)?;
+            if self.out(b) || self.w.st.players[b].money < bid {
+                self.w.log(
+                    "text",
+                    b as i32,
+                    Msg::new("log.auction_void").player_id("who", b),
+                );
+                return Ok(());
+            }
+        }
+        // Money stays direct until ruling 7 (TODO(规则书) ruling 7).
         self.w.st.players[b].money -= bid;
-        self.w.st.owners[t] = b as i32;
-        self.w.st.mortgaged[t] = false;
+        // The deal: `BuyAssign` rewrites owner / houses / mortgage before the
+        // one ownership write (`docs/PURCHASE.md`).
+        let mut deal =
+            purchase::default_deal(self.data, &self.w.st, t, b, purchase::BuyKind::Auction, bid, true);
+        let at = raise!(
+            self,
+            "buyAssign",
+            b,
+            tile = t as i32,
+            buy_kind = purchase::BuyKind::Auction as i32,
+            seller = -1,
+            price = bid,
+            deal_owner = deal.owner_after,
+            deal_houses = deal.houses_after,
+            deal_mortgaged = deal.mortgaged_after
+        )?;
+        deal.owner_after = at.deal_owner;
+        deal.houses_after = at.deal_houses;
+        deal.mortgaged_after = at.deal_mortgaged;
+        purchase::assign_deed(
+            &mut self.w,
+            t,
+            deal.owner_after,
+            deal.houses_after,
+            deal.mortgaged_after,
+        );
         let text = Msg::new("log.auction_won")
             .player_id("who", b)
             .n("bid", bid)
@@ -2926,7 +3813,14 @@ impl Cx<'_> {
         e.value = bid;
         e.to = t as i32;
         // `bought` (Fx) -- C# AuctionTile 23276.
-        raise!(self, "bought", b, tile = t as i32)?;
+        raise!(
+            self,
+            "bought",
+            b,
+            tile = t as i32,
+            buy_kind = purchase::BuyKind::Auction as i32,
+            price = bid
+        )?;
         self.wait(1.0);
         Ok(())
     }

@@ -25,9 +25,9 @@ through **engine flags** -- side channels the rulebook never names:
 |---|---|---|---|
 | ~~`no_circle_reward`~~ | ~~`MoveCtx.plan` + `state::key::NO_CIRCLE_REWARD`~~ | detour, PPP band (2), PP band (3), 凑友希那 (1), 赤音, tsugumi | **done** -- `prop::NO_REWARD` on the rule instance |
 | `rent_factor` / `pay_factor` | `MoveCtx.plan` | studio_storm, kasumi_love_all, council_check / sakiko_lead, saki_move, rana_funny, taki_serious, repaint, kaede_support | **moved** -- the read is the money pipeline's `payMul` stage (`scale_settle_payment`), so it covers the payment as card effects shape it; the arming is still `plan::set_*_factor` for a hand card (see [Left short](#left-short)) |
-| `buy_discount` / `free_buy` / `raze_on_buy` | `TurnCtx` | tsugu_ycm, roselia band (1) / maze_warehouse | **not done** |
-| `extraColor:<tile>` | per-player state | soyo_colors, asahi_aim, roselia band (1) | **not done** |
-| `noBuild` | per-player state | dream_ahead, council_check | **partial** -- `prop::NO_BUILD` on the instance for placed cards (poppin, dream_ahead); a play-from-hand card still uses the per-player scratch |
+| ~~`buy_discount` / `free_buy` / `raze_on_buy`~~ | ~~`TurnCtx`~~ | tsugu_ycm, roselia band (1) / maze_warehouse | **done** -- `ctx::linger` + `BuyAdd` −1500 / `BuyMul` ½ / `BuySet` 0 + `BuyAssign` houses 0 (`docs/PURCHASE.md`) |
+| ~~`extraColor:<tile>` / `st.tile_colors`~~ | ~~per-player state / `MatchState`~~ | soyo_colors, asahi_aim, roselia band (1), guerrilla, soyo_clear | **done** -- tile props `colorFor:<p>` (per player) and `prop::ANY_COLOR` (「该格获得所有颜色」); `is_color` / `is_live_house_for` read them |
+| ~~`noBuild` (play-from-hand)~~ | ~~per-player state~~ | council_check | **done** -- a `ctx::linger` instance carrying `prop::NO_BUILD`, which `why_not_build_on` reads |
 | ~~`settleAtEnd`~~ | ~~per-player state~~ | rinne_rain, tomori_crychic | **done** -- `ctx::before_turn_end` + `On::AtEnd` whose body calls `ctx::settle` |
 | ~~`settleInstead`~~ | ~~`HookKind`~~ | ~~parking_space, smile_parade~~ | **done** -- `HookKind::SettleBody`; hey_kids moved to `ChainKind::SettleBody` |
 
@@ -298,9 +298,9 @@ with `player_id = -1`.
 
 | card | today | new |
 |---|---|---|
-| 黑衣人的补给 | a 「黑衣人的补给」 tile mark + `CircleLike` special case | **attaches a `tile:circle` instance to 弦卷集团** while it carries the crystal; passing/landing runs it alongside `tile:agent`. 「获得CiRCLE格子的全部效果」 is additive. |
+| 黑衣人的补给 | ~~a 「黑衣人的补给」 tile mark + `CircleLike` special case~~ **done** | **attaches a `tile:circle` instance to 弦卷集团** while it carries the crystal (`place_card_on(BOARD_OWNER, tile, "tile:circle")`); passing/landing runs it alongside `tile:agent`. 「获得CiRCLE格子的全部效果」 is additive. No card hook draws. |
 | 笑容大游行 | `settleInstead` + tile-position rewrite | **swaps the two tiles' instances** (「那格视为与"弦卷集团"格子交换位置」); the move's endpoint borrows 弦卷集团's `tile:agent` instance for that one settle |
-| （kkr）前往笑容集结的地方！ | a `settleAfter` hook on a field stand-in | **adds a collect rule instance on CiRCLE** -- 「视为格子的收款」 is the instance's settle-body entry, not a card hook |
+| （kkr）前往笑容集结的地方！ | ~~a `settleAfter` hook on a field stand-in~~ moved to `settleBody` | 「视为格子的收款」 is an entry in the tile's settle effect list (`SETTLE-STAGES.md` §4 M3), skipped when a field card replaces the body. Long-term home: a collect rule instance on CiRCLE. |
 | Parking Space | `HookKind::SettleInstead` | **replaces the body in the chain** (a `settleBody` instance on the Space tile) |
 | Hey Kids | `HookKind::SettleInstead` | same |
 | （soyo）色彩 | `ctx::set_tile_color` / `ALL_COLORS` | **sets the tile instance's `group` prop** (`ALL_COLORS`) |
@@ -326,10 +326,10 @@ Every flag in the table at the top leaves the engine. The home for each:
 | `NO_CIRCLE_REWARD` (state) | same. The "held as data on the source" idiom moves to "held as a prop on the tile" -- the source still owns the arming/disarming, but the reader is the tile instance, not a per-player latch. |
 | `rent_factor` | prop `rentFactor` (milli) on the tile instance; `settle_rent` applies it |
 | `pay_factor` | prop `payFactor` (milli) on the tile instance; `settle_rent` applies it. (Today both are `MoveCtx.plan` scalars read only in `pay_rent`.) |
-| `buy_discount` | prop `buyDiscount` on the tile instance, **plus** a `buyPrice` chain value so a turn-scoped 「本回合…降低N」 (tsugu_ycm, roselia band (1)) can reshape any buy's price from a field hook without knowing which tile will be bought. The turn scope is the card's own expiry (`state::set_expires`), not a `TurnCtx` field. |
-| `free_buy` | `buyPrice` chain value = 0 from the same hook (maze_warehouse) |
-| `raze_on_buy` | the existing `bought` hook (maze_warehouse razes there) -- no new surface |
-| `extraColor:` | props `group` / `ALL_COLORS` on the tile instance |
+| ~~`buy_discount`~~ | **done** -- a `ctx::linger` instance whose def hooks `BuyAdd` (tsugu_ycm −1500, roselia band (1) is `BuyMul` ½ instead). The hook rewrites the running quote price, so it covers any tile the player buys. |
+| ~~`free_buy`~~ | **done** -- the same instance hooks `BuySet` 0 (maze_warehouse) |
+| ~~`raze_on_buy`~~ | **done** -- the same instance hooks `BuyAssign` and rewrites `deal_houses` to 0 |
+| ~~`extraColor:` / `st.tile_colors`~~ | **done** -- `prop::ANY_COLOR` (tile-wide 「该格获得所有颜色」) and `colorFor:<p>` (per player) on the tile's rule instance |
 | `noBuild` | prop `noBuild` on the tile instance; `why_not_build_on` reads it |
 | `settleAtEnd` | a scheduled turn-end rule op (`On::AtEnd`) whose body calls `ctx::settle` -- 「并在回合结束时触发结算」 is a scheduling clause, not a tile fact (rinne_rain, tomori_crychic) |
 | `settleInstead` | **done** -- renamed `HookKind::SettleBody`, the body-replace gesture on the tile's rule instances |
@@ -340,13 +340,18 @@ a price retunes the instance -- the same surface the end-step actions use.
 
 ## Buying and building
 
-Unchanged as player actions in the end step (`buyable_here` / `can_build_here`
-/ `buy` / `build`). What changes is where the *policy* lives:
+Routed through the purchase surface (`docs/PURCHASE.md`, `engine/play/purchase.rs`):
 
-* **allowed?** the tile rule's props (`buyable`, `noBuild`, `buildMax`, mortgaged
-  state) -- not `TileData::is_buyable` + a `TurnCtx` latch;
-* **price?** the instance's `price` / `house` / `buyDiscount` / `freeBuy`,
-  reshaped by the `buyPrice` chain.
+* **allowed?** `BuyGate` (every `BuyKind`, Force included) + the tile prop
+  `BUYABLE` (「可购买格子」, stamped at bind time from `TileData::is_buyable`).
+* **price?** `CardRules::buy_quote` → `base_quote` (land + houses; 2× for
+  `Force`), then the stages `BuyAdd` → `BuyMul` → `BuySet` (each floored at 0).
+  `WasmRules` runs those hooks in pure guard mode against a world copy, only
+  when a hooking instance exists, and the commit re-quotes so quote == charge.
+* **deal?** `assign_deed` (owner / houses / mortgage in one write);
+  `BuyAssign` hooks rewrite before commit.
+* **preview?** `st.buy_price` / `st.build_cost` at END, `MatchPrompt.price` /
+  `prices[]` on the prompts.
 
 The rulebook's 「可选择」 offers stay prompts in `settle_buy` / `settle_build`;
 the end step re-offers after a main move. 「非写明可选择的效果在可发动时必须
@@ -398,8 +403,8 @@ instantiation per tile body, the same cost a field hook already pays.
 
 ## ABI and SAVE_VERSION
 
-Checked: `card_sdk::abi::ABI_VERSION = 32`,
-`game_core::engine::mod::SAVE_VERSION = 3` (the match save),
+Checked: `card_sdk::abi::ABI_VERSION = 40`,
+`game_core::engine::mod::SAVE_VERSION = 4` (the match save),
 `game_core::profile::SAVE_VERSION = 3` (the player profile -- untouched here).
 
 | bump | when | why |
@@ -437,7 +442,7 @@ report it.
 | 4 | `tile:agent` | `settle_agent` | **done** -- `ctx::agent_landing` |
 | 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `payMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
-| 7 | flags | card migrations | **partial** -- `settleInstead` → `HookKind::SettleBody`, `settleAtEnd` → `On::AtEnd`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` (placed cards) → `prop::NO_BUILD`; `buy_*` / `extraColor` not |
+| 7 | flags | card migrations | **done** -- `settleInstead` → `HookKind::SettleBody`, `settleAtEnd` → `On::AtEnd`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
 | 8 | docs + perf | ENGINE.md, CARDS.md, this doc | **done** |
 | 9 | Phase 3 (engine-fix batch) | the flag removal + card migrations | **mostly done** -- see [Left short](#left-short) |
 
@@ -478,22 +483,24 @@ than the only path. Phase 3 landed the following (2026-10-06):
 
 Concretely still short:
 
-* **`buy_discount` / `free_buy` / `raze_on_buy` are still `TurnCtx` fields.**
-  The tile-prop home (`prop::BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY`) exists,
-  but a turn-scoped 「本回合购买格子时[消耗]资金时降低1500」 (tsugu_ycm,
-  roselia band (1)) applies to *any* tile and so cannot live on one instance --
-  it needs the `buyPrice` chain value the design names, which is not built yet.
-  TODO(规则书): the `buyPrice` chain surface.
-* **`extraColor:` is still per-player state.** `prop::GROUP` on the tile
-  instance is the design's home, but the clauses split: （soyo） 「该格获得所有
-  颜色」 is tile-wide (`set_tile_color`), while 朝日六花 / Roselia band (1) are
-  per-player (`set_extra_color`). TODO(规则书): which of the two 「颜色」
-  clauses are tile-wide and which are per-player.
-* **`noBuild` is half-migrated.** `why_not_build_on` reads `prop::NO_BUILD` on
-  the player's field instances and on the tile's rule instance; poppin (4) and
-  梦在前方 write the prop. 学生会的检查 is played from hand and has no field
-  instance to carry a prop, so it still arms the per-player `noBuild` scratch.
-  TODO(规则书): the hand-card home for a per-player veto.
+* ~~**`buy_discount` / `free_buy` / `raze_on_buy` are still `TurnCtx` fields.**~~
+  **Done.** The three flags and their setters are gone (ABI 41). A turn-scoped
+  「本回合购买格子时[消耗]资金时降低1500」 is a `ctx::linger` instance whose def
+  carries a `BuyAdd` hook (`docs/PURCHASE.md`) -- it applies to *any* tile the
+  player buys, which is exactly why it cannot live on one tile instance. Same
+  for 「不[消耗]资金」 (`BuySet` 0) and 「拆除那个格子上的所有房屋」
+  (`BuyAssign` houses 0).
+* ~~**`extraColor:` is still per-player state.**~~ **Done.** The clause split
+  is now the two props: （soyo） 「该格获得所有颜色」 is `prop::ANY_COLOR` on the
+  tile (tile-wide), while 朝日六花 / Roselia band (1) / 游击演出 / soyo_clear are
+  per-player `colorFor:<p>`. `is_color` / `is_live_house_for` read both, the
+  same way `agent_colour_set` does. TODO(规则书) ruling 5: whether 「所有颜色」
+  and the per-player 「视为live house」 widen the agent's 同色 set is unchanged
+  and still open.
+* ~~**`noBuild` is half-migrated.**~~ **Done.** `why_not_build_on` reads
+  `prop::NO_BUILD` on the player's field instances, on the tile's rule
+  instance, and on a **lingering** instance (`TurnCtx.lingering`) -- the
+  hand-card home 学生会的检查 uses. The per-player `noBuild` scratch key is gone.
 * **`rent_factor` / `pay_factor` still arm through `plan::set_*_factor`.** The
   *read* moved into the `payMul` stage, but a hand card (祥，移动, Repaint,
   （立希）…) leaves the field and cannot leave a hook behind, so the move plan

@@ -1249,8 +1249,30 @@ fn lock_skill_colors_the_first_deed_like_a_live_house() {
     t.buy(0).unwrap();
     drain(&mut t);
     assert_eq!(t.owner(SHOPPING), Some(0));
-    // 「Live House」的颜色 is group 6; observable as the per-player extra colour.
-    assert_eq!(t.state(0, "extraColor:1"), 6, "extra colour = group 6");
+    // 「Live House」的颜色 is group 6: the bought tile now counts as a Live
+    // House for player 0. Observed through a later `is_live_house_for`-driven
+    // decision, not an implementation key: 「成为最强」's 「若你没有Livehouse
+    // 格子，传送到"Live House"」 branch fires only when the player owns no Live
+    // House, so a player holding a Live-House-counting deed takes the 1d10
+    // table instead. The suite already pins the fallback side in
+    // `become_strongest_without_livehouses_goes_to_live_house`.
+    t.begin_turn(0);
+    drain(&mut t);
+    t.dice(&[1]); // the card's 1d10 -> the 1st table livehouse (RiNG 1)
+    t.give_play(0, "RAS:成为最强").unwrap();
+    drain(&mut t);
+    // Roll 1 -> RiNG 1. The 「没有Livehouse」 fallback would be LIVE_HOUSE.
+    assert_eq!(
+        t.pos(0),
+        RING1,
+        "购物中心 counts as a Live House for player 0 (events: {:?})",
+        t.recent_keys(12)
+    );
+    assert!(
+        !t.recent_keys(32).iter().any(|k| k == "be_strongest_none"),
+        "the 「若你没有Livehouse格子」 fallback did not fire: {:?}",
+        t.recent_keys(12)
+    );
 }
 
 #[test]

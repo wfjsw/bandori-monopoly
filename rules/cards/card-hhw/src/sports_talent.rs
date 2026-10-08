@@ -14,18 +14,10 @@ const ID: &str = "HHW:运动的天赋";
 pub const SPORTS_TALENT: CardDef = CardDef::new(
     "HHW:运动的天赋",
     &[
-        On::Play(None, play),
-        On::Hook(
-            &[HookKind::TurnEnd, HookKind::RollAfter],
-            counteract_guard,
-            counteract,
-        ),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], Some(counteract_guard), counteract, ""),
         On::RollPlan(roll_plan),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
 );
 
@@ -66,7 +58,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if trigger::player_id() != player_id {
                 return Ok(());
             }
-            ctx::decay();
+            ctx::decay()?;
         }
         // 规则书: 「此卡位于场上时，每次掷骰获得一次资金，起始为700，每次减少100，奖励下限为100」
         // -- C# `CardSportsTalent.RollAfter` (`m.Seat == Seat && m.Main &&

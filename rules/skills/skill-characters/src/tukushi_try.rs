@@ -27,20 +27,17 @@ const SPELL: &str = "skill.tukushiTry.spell";
 pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            at_start,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::RollAfter], paired, on_roll),
-        On::Hook(&[HookKind::PayChoose], paired, on_pay),
-        On::Hook(&[HookKind::HouseAdded], partner, on_built),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollAfter], Some(paired), on_roll, ""),
+        On::Hook(&[HookKind::PayChoose], Some(paired), on_pay, ""),
+        On::Hook(&[HookKind::HouseAdded], Some(partner), on_built, ""),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -75,7 +72,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("tukushi_try_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("tukushi_try_gain")))?;
     Ok(())
 }
 
@@ -110,7 +107,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&who) = others.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tukushi_try_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tukushi_try_spend")))? {
         return Ok(());
     }
     state::set(player_id, PARTNER, who);

@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const HABINEL: CardDef = CardDef::new("event:前往哈比内尔王国旅游", &[On::Play(None, play)]);
+pub const HABINEL: CardDef = CardDef::new("event:前往哈比内尔王国旅游", &[On::Play(None, play, "")]);
 
 /// 规则书: 「每个玩家获得X层[除外]…X=1d2（每个玩家独立投掷1d2）」 -- each player
 /// rolls their own bare 1d2 and gains that many [除外] layers.

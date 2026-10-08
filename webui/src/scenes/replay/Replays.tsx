@@ -28,7 +28,8 @@ import { ask } from "../../ui/Modal";
 import s from "./Replay.module.css";
 import { t as tr } from "../../i18n/t";
 
-const mentalityName = (m: string) => (m === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard"));
+const mentalityName = (m: string) =>
+  m === "chaos" ? tr("solo.mentalityChaos") : m === "advanced" ? tr("solo.mentalityAdvanced") : tr("solo.mentalityStandard");
 
 function seatsText(h: RecordHeader): string {
   return h.seats

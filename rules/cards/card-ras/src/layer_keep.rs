@@ -15,15 +15,26 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LAYER_KEEP: CardDef = CardDef::new(
     "RAS:（和奏瑞依）寄于指尖的执念",
     &[
-        On::Play(None, play),
-        On::Play(Some(can_use), use_die),
-        On::Hook(&[HookKind::RollAfter], roll_after_guard, roll_after),
+        On::Play(None, play, ""),
+        On::Play(Some(can_use), use_die, ""),
+        On::Hook(&[HookKind::RollAfter], Some(roll_after_guard), roll_after, ""),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::FIRE` (「使用火罐进行掷骰」).
-        On::Counteract(&[ChainKind::Roll], can_counter_fire, counter_fire),
+        On::Counteract(
+            &[ChainKind::Roll],
+            None,
+            counter_fire,
+            "actor == owner && roll_source == 1",
+        ),
     ],
-);
+)
+.legacy(&[(3, legacy_can_counter_fire)]);
+
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counter_fire(player_id: i32) -> bool {
+    trigger::player_id() == player_id && trigger::roll_source() == roll_source::FIRE
+}
 
 const ID: &str = "RAS:（和奏瑞依）寄于指尖的执念";
 
@@ -64,9 +75,8 @@ fn roll_after_guard(player_id: i32) -> bool {
 
 /// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
 /// source is `roll_source::FIRE` (the fire-pot reroll).
-fn can_counter_fire(player_id: i32) -> bool {
-    trigger::player_id() == player_id && trigger::roll_source() == roll_source::FIRE
-}
+// (the live guard is the `pre` on the Counteract entry; `legacy_can_counter_fire`
+// above is the G4 audit oracle)
 
 /// 规则书 [反击]: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
 /// is played from hand; its `play` body places it on the field. The unchosen
@@ -147,7 +157,7 @@ fn use_die(player_id: i32) -> card_sdk::Asked {
     let Some(&die) = vals.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("layer_keep_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("layer_keep_spend")))? {
         return Ok(());
     }
     // 「删去该骰点」 -- compact the slot list.

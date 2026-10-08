@@ -16,8 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
     "PPP:（香澄）大家我都喜欢哦",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
     ],
 );
 

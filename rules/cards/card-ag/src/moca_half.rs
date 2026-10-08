@@ -16,15 +16,11 @@ const ID: &str = "AG:（摩卡）0.5倍速";
 pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-        On::Hook(&[HookKind::RollAfter], |_| true, roll_after),
-        On::Hook(&[HookKind::PayMul], |_| true, pay_mul),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
+        On::Hook(&[HookKind::RollAfter], None, roll_after, ""),
+        On::Hook(&[HookKind::PayMul], None, pay_mul, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
 );
 
@@ -52,7 +48,7 @@ fn turn_end_guard(player_id: i32) -> bool {
 }
 
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    ctx::decay();
+    ctx::decay()?;
     Ok(())
 }
 

@@ -12,10 +12,16 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     "CRYCHIC:主唱太拼命了",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        None,
+        counteract,
+        "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「一次性向其他玩家支付5000以上资金时」 -- C#
     // `t.Kind == "pay" && t.Pay.from == seat && t.Pay.PayToOther && t.Pay.amount >= 5000`.
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {

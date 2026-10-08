@@ -20,8 +20,8 @@ const ID: &str = "PPP:（有咲）等等等一下";
 pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
-        On::Play(None, arisa_wait),
-        On::Hook(&[HookKind::EventAfter], event_after_guard, event_after),
+        On::Play(None, arisa_wait, ""),
+        On::Hook(&[HookKind::EventAfter], Some(event_after_guard), event_after, ""),
     ],
 );
 
@@ -55,7 +55,7 @@ fn event_after(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（1）: 「任何非因为此卡导致的事件结算时为此卡添加1个[奇迹水晶]。」
     // C# `by != Title` filters out this card's own deferred releases; while
     // Defer (2) is held there are none, so every `eventAfter` is foreign.
-    ctx::add_crystals(1, 0);
+    ctx::add_crystals(1, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("arisa_wait_crystal"))

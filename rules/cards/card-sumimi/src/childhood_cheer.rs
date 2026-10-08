@@ -10,24 +10,23 @@
 //! places this card as the `AfterMoveFireFx` stand-in and files it to the
 //! discard pile when the effect finishes (or at turn end, C#
 //! `AfterMoveFireFx.TurnEndAfter`).
+//!
+//! 「移动后」 is 行动阶段 13 (`SETTLE-STAGES.md` §4 M1): it fires when the move
+//! ends **whether or not it settles** (其他规则注意事项 1.2 gates only the
+//! settle), so this is a single `moveAfter` hook -- not the old
+//! `settleBefore`+`settleAfter`+`teleported` triple that missed a
+//! 「不触发结算」 walk.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
     &[
-        On::Play(Some(cant_play), childhood_cheer),
-        On::Hook(
-            &[
-                HookKind::SettleBefore,
-                HookKind::SettleAfter,
-                HookKind::Teleported,
-            ],
-            after_move_guard,
-            after_move,
-        ),
+        On::Play(Some(cant_play), childhood_cheer, ""),
+        // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
+        On::Hook(&[HookKind::MoveAfter], Some(after_move_guard), after_move, ""),
         On::AtEnd(at_end),
     ],
 );
@@ -66,44 +65,22 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
 }
 
 /// C# `AfterMoveFireFx.Arrive` -- after the owner's main move, +1 fire and drop.
-/// Runs through the Fx hook dispatch (`settleAfter`), so this is a field effect,
+/// Runs through the Fx hook dispatch (`moveAfter`), so this is a field effect,
 /// not a [反击].
 /// Pure guard for [`after_move`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn after_move_guard(player_id: i32) -> bool {
+fn after_move_guard(_player_id: i32) -> bool {
     ctx::is_placed()
 }
 
 fn after_move(player_id: i32) -> card_sdk::Asked {
-    let k = trigger::kind();
-    // C# `AfterMoveFireFx.Arrive` fires when the walk *arrives* -- before the
-    // settle, and on a move that does not settle. `settleBefore` is the first
-    // half; `settleAfter` and `teleported` catch the two landing shapes.
-    if !matches!(
-        k,
-        TriggerKind::SettleBefore | TriggerKind::SettleAfter | TriggerKind::Teleported
-    ) {
-        return Ok(());
-    }
     // C# `if (m.Seat != Player || !m.Main) return null`.
     if trigger::player_id() != player_id || !trigger::move_is_main() {
         return Ok(());
     }
-    if k == TriggerKind::SettleAfter || k == TriggerKind::Teleported {
-        // already spent at the arrive half
-        if ctx::slot(player_id, "childhood_cheer.fired") == 0 {
-            return Ok(());
-        }
-        ctx::set_slot(player_id, "childhood_cheer.fired", 0);
-        ctx::set_dest(ctx::Dest::Graveyard);
-        return Ok(());
-    }
-    if ctx::slot(player_id, "childhood_cheer.fired") != 0 {
-        return Ok(());
-    }
-    ctx::set_slot(player_id, "childhood_cheer.fired", 1);
-    // 规则书: 「并在移动后获得一个火罐」
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("childhood_cheer_fire")));
+    // 规则书: 「并在移动后获得一个火罐」 -- 行动阶段 13, after [重叠] and
+    // before any settle. Fires for a 「不触发结算」 move too.
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

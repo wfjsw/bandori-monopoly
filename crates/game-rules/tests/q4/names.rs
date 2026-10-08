@@ -180,10 +180,9 @@ fn is_engine_key(name: &str) -> bool {
             | "bought"
             | "redeemed"
             | "mortgaged"
-            | "noBuild"
             | "noCircleReward"
             | "lastWalk"
-    ) || k.starts_with("extraColor:")
+    )
 }
 
 /// Near-duplicate spellings among *name keys* (not snapshot paths): `state:foo`

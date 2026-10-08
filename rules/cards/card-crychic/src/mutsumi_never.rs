@@ -20,7 +20,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const MUTSUMI_NEVER: CardDef = CardDef::new(
     "CRYCHIC:（睦）从没有觉得...",
-    &[On::Play(None, mutsumi_never)],
+    &[On::Play(None, mutsumi_never, "")],
 );
 
 fn mutsumi_never(player_id: i32) -> card_sdk::Asked {

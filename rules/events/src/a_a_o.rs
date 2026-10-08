@@ -16,7 +16,7 @@ const DRAWER: &str = "drawer";
 pub const A_A_O: CardDef = CardDef::new(
     "event:A！A！O！",
     &[
-        On::Play(None, play),
+        On::Play(None, play, ""),
         On::AtEnd(expire_at_end),
     ],
 );

@@ -28,8 +28,8 @@ const X: &str = "skill.yuriCrit.x";
 pub const YURI_CRIT: CardDef = CardDef::new(
     "skill:八潮瑠唯:正论暴击",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, declare),
-        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+        On::Hook(&[HookKind::TurnStartBefore], None, declare, ""),
+        On::Hook(&[HookKind::PayChoose], Some(mine), on_pay, ""),
     ],
 );
 

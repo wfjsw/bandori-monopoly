@@ -25,13 +25,14 @@ mod setup;
 mod world;
 
 pub use ai::{
-    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_redeem, wants_buy, wants_build,
-    wants_redeem, BUY_RESERVE, BUILD_RESERVE, CHAOS_COUNTER_CHANCE, CHAOS_RESERVE,
-    FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN, PLAY_CARD_CHANCE, REDEEM_RESERVE,
+    bot_wants_build, bot_wants_buy, bot_wants_force_buy, bot_wants_play_card, bot_wants_redeem,
+    wants_buy, wants_build, wants_redeem, BUY_RESERVE, BUILD_RESERVE, CHAOS_COUNTER_CHANCE,
+    CHAOS_RESERVE, FORCE_BUY_RESERVE, MAX_PLAYS_PER_TURN, PLAY_CARD_CHANCE, REDEEM_RESERVE,
 };
-pub use cx::{Answered, Ask, Cx, Flow, Halt, Reply, AI_UNSET};
+pub use cx::{Answered, AnswerProvider, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay};
+pub use play::purchase;
 pub use rules::{CardRules, Dest, StubRules, Trigger};
 pub use world::{Hidden, Scheduled, TurnCtx, World};
 
@@ -166,9 +167,10 @@ struct Saved {
 
 /// Bumped whenever [`Saved`] changes shape; older saves are rejected.
 /// v2: `FieldCard.hand_limit_delta` became the generic `FieldCard.props` map.
+/// v5: `World.marker_owner` (marker ownership, user ruling 2026-10-07).
 /// Public so a match record's [`crate::record::EngineStamp`] can name the save
 /// format it was written against (see `docs/REPLAY.md`).
-pub const SAVE_VERSION: u32 = 3;
+pub const SAVE_VERSION: u32 = 5;
 
 /// The `TileMark.kind` a [CP点] wore before it had a category of its own
 /// (`card-general`'s `key!("clear_cp_mark")`). [`Match::restore`] re-reads one
@@ -194,6 +196,17 @@ pub struct Match {
     deferred: Vec<Deferred>,
     seq: i32,
     changed: bool,
+    /// Simulation-mode answers (`docs/BOT.md` §3.2). `None` on a live match:
+    /// the halt/replay model is what recordings and the server protocol ride.
+    /// A fork installs one so every prompt is answered inline -- one forward
+    /// pass per routine instead of one per prompt.
+    provider: Option<Box<dyn AnswerProvider>>,
+    /// Every [`Answered`] [`Match::complete_prompt`] committed, in order. The
+    /// simulation-equivalence tests replay these through an
+    /// [`AnswerProvider`] and demand identical checkpoints (B2's gate);
+    /// drained with [`Match::take_prompt_log`]. Small enough to keep live
+    /// (one entry per prompt).
+    prompt_log: Vec<Answered>,
 }
 
 impl Match {
@@ -226,6 +239,23 @@ impl Match {
     ) -> Result<Self, Msg> {
         let s: Saved = serde_json::from_str(json)
             .map_err(|e| Msg::new("err.save_corrupt").text("detail", e.to_string()))?;
+        Self::restore_saved(data, rules, s)
+    }
+
+    /// [`Match::restore`] over an already-parsed save document -- the bot's
+    /// fork materialisation, which builds the value in memory and must not pay
+    /// for a string round trip (`docs/BOT.md` B4).
+    pub fn restore_value(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        v: serde_json::Value,
+    ) -> Result<Self, Msg> {
+        let s: Saved = serde_json::from_value(v)
+            .map_err(|e| Msg::new("err.save_corrupt").text("detail", e.to_string()))?;
+        Self::restore_saved(data, rules, s)
+    }
+
+    fn restore_saved(data: Arc<GameData>, rules: Arc<dyn CardRules>, s: Saved) -> Result<Self, Msg> {
         if s.version != SAVE_VERSION {
             return Err(Msg::new("err.save_version"));
         }
@@ -262,6 +292,8 @@ impl Match {
             deferred: s.deferred,
             seq: s.seq,
             changed: true,
+            provider: None,
+            prompt_log: Vec::new(),
         })
     }
 
@@ -301,7 +333,16 @@ impl Match {
                     member: m.id,
                     player: m.player.clone(),
                     bot: m.bot,
-                    ai: m.bot,
+                    // `ai` = the engine drives this seat. An Advanced bot is
+                    // driven by the server's `bot-service` instead
+                    // (`docs/BOT.md` B5) and starts held; Solo never has a
+                    // service, so it falls back to the engine there. An online
+                    // room with no service attached rewrites the mentality to
+                    // Standard before `new_match`, so this never parks a seat
+                    // the server will not answer.
+                    ai: m.bot
+                        && (m.mentality != crate::state::BotMentality::Advanced
+                            || mode == MatchMode::Solo),
                     mentality: m.mentality,
                     // Carries through `roll_order`, so the seat that rolls high
                     // keeps the character its member was given.
@@ -337,6 +378,8 @@ impl Match {
             deferred: vec![],
             seq: 0,
             changed: true,
+            provider: None,
+            prompt_log: Vec::new(),
         };
         m.direct(|cx| cx.roll_order());
         if preset {
@@ -387,6 +430,47 @@ impl Match {
             st.prompt = Default::default();
         }
         if st.phase == "play" && st.turn >= 0 {
+            // `st.buy_price` / `st.build_cost` view previews (`docs/PURCHASE.md`):
+            // the quoted price at the player's position when a buy/build is on
+            // the table, `-1` otherwise.
+            let ti = st.turn as usize;
+            let pos = st.players.get(ti).map(|p| p.pos).unwrap_or(-1);
+            st.buy_price = -1;
+            st.build_cost = -1;
+            if st.step == stage::END
+                && !st.bought
+                && pos >= 0
+                && st.landed == pos
+                && st.owners.get(pos as usize).copied().unwrap_or(-1) < 0
+            {
+                // The **quoted** price (`docs/PURCHASE.md`) -- the rules crate's
+                // `buy_quote`, so a hook-aware discount shows in the view -- and
+                // `-1` when the gate refuses the buy outright.
+                let q = purchase::quote_for(
+                    self.rules.as_ref(),
+                    &self.world,
+                    &self.data,
+                    ti,
+                    purchase::BuyKind::Land,
+                    &[(pos as usize, -1)],
+                );
+                st.buy_price = q.first().filter(|q| q.eligible).map_or(-1, |q| q.price);
+            }
+            if st.step == stage::END && !st.built && !st.bought && pos >= 0 && st.landed == pos {
+                // Only preview a build cost when a build is actually possible
+                // (owned, not mortgaged, under the cap).
+                let t = pos as usize;
+                if st.owners.get(t).copied().unwrap_or(-1) == st.turn
+                    && !st.mortgaged.get(t).copied().unwrap_or(false)
+                {
+                    if let Some(tile) = self.data.tiles.get(t) {
+                        let houses = st.houses.get(t).copied().unwrap_or(0);
+                        if houses < tile.rent.len().saturating_sub(1) as i32 {
+                            st.build_cost = tile.house.max(0);
+                        }
+                    }
+                }
+            }
             let bank = self.bank.get(st.turn as usize).copied().unwrap_or(0.0);
             st.shield = self.shield;
             st.bank = bank;
@@ -519,12 +603,15 @@ impl Match {
     /// * `playable` -- parallel to [`Match::hand_of`]: would `cant_play` allow
     ///   each card right now? Recomputed from the world, so the client does not
     ///   have to re-derive the phase / exclusive / status gates.
+    /// * `estCost` -- parallel to `playable`: the card's bot-only **estimated
+    ///   execution cost** (`prop::EST_COST`, user ruling 2026-10-07). Bots and
+    ///   the autopilot read it as a reserve check; it is never legality.
     ///
     /// Both view builders (`web-glue` and `rules-worker`) merge this into the
     /// match frame.
     pub fn view_extra(&self, member: i32) -> serde_json::Value {
         let Some(i) = self.player_index(member) else {
-            return serde_json::json!({ "aiAnswer": null, "playable": [] });
+            return serde_json::json!({ "aiAnswer": null, "playable": [], "estCost": [] });
         };
         let ai_answer = self.pending.as_ref().and_then(|p| {
             let l = &p.live;
@@ -539,12 +626,64 @@ impl Match {
             }))
         });
         let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
-        let playable = self.world.hidden[i]
-            .hand
-            .iter()
-            .map(|c| cx.cant_play(i, c, false).is_none())
-            .collect::<Vec<_>>();
-        serde_json::json!({ "aiAnswer": ai_answer, "playable": playable })
+        let mut playable = Vec::new();
+        let mut est_cost = Vec::new();
+        for c in &self.world.hidden[i].hand {
+            playable.push(cx.cant_play(i, c, false).is_none());
+            est_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
+        }
+        serde_json::json!({ "aiAnswer": ai_answer, "playable": playable, "estCost": est_cost })
+    }
+
+    // ------------------------------------------------------- simulation fork
+
+    /// Cheap in-memory fork of the whole match -- the simulation's unit of
+    /// work (`docs/BOT.md` §3.2 / B4). A `World` clone is refcount bumps plus
+    /// the players / piles / board (~6 µs mid-game), versus the ~10 ms a
+    /// save-JSON -> restore round trip cost. The provider is **not** carried
+    /// over: a fork is policy-free until [`Match::set_provider`] installs one.
+    pub fn fork(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            rules: self.rules.clone(),
+            mode: self.mode,
+            world: self.world.clone(),
+            pending: self.pending.clone(),
+            live_rng: self.live_rng.clone(),
+            wait: self.wait,
+            bank: self.bank.clone(),
+            shield: self.shield,
+            timed_out: self.timed_out,
+            vote: self.vote.clone(),
+            vote_seq: self.vote_seq,
+            vote_cooldown: self.vote_cooldown,
+            deferred: self.deferred.clone(),
+            seq: self.seq,
+            changed: self.changed,
+            provider: None,
+            prompt_log: Vec::new(),
+        }
+    }
+
+    /// Install a simulation answer provider (`docs/BOT.md` §3.2). Every
+    /// [`Cx::ask`] whose replay-log entry is missing calls it instead of
+    /// halting, so a routine runs once per simulation. Returns the previous
+    /// provider, if any. Never installed on a live match.
+    pub fn set_provider(
+        &mut self,
+        p: Option<Box<dyn AnswerProvider>>,
+    ) -> Option<Box<dyn AnswerProvider>> {
+        std::mem::replace(&mut self.provider, p)
+    }
+
+    /// The shared game data a fork's caller already holds (cheap clone).
+    pub fn data(&self) -> Arc<GameData> {
+        self.data.clone()
+    }
+
+    /// The card rules a fork's caller already holds (cheap clone).
+    pub fn rules(&self) -> Arc<dyn CardRules> {
+        self.rules.clone()
     }
 
     // ---------------------------------------------------------------- running routines
@@ -572,10 +711,20 @@ impl Match {
 
     fn execute(&mut self, routine: Routine, snapshot: World, answers: Vec<Answered>) {
         let (data, rules) = (self.data.clone(), self.rules.clone());
-        let mut cx = Cx::new(snapshot.clone(), &data, &*rules, &answers);
-        let res = run(&mut cx, &routine);
-        let delay = cx.delay;
-        let mut w = cx.w;
+        // Simulation mode: answer inline through the installed provider
+        // (`docs/BOT.md` §3.2). With none installed this is the halt/replay
+        // path, unchanged.
+        let mut prov = self.provider.take();
+        let (res, delay, mut w) = {
+            let mut cx = Cx::new(snapshot.clone(), &data, &*rules, &answers);
+            let mut cx = match prov.as_mut() {
+                Some(p) => cx.with_provider(&mut **p),
+                None => cx,
+            };
+            let res = run(&mut cx, &routine);
+            (res, cx.delay, cx.w)
+        };
+        self.provider = prov;
         self.changed = true;
         self.seq += 1;
         match res {
@@ -622,9 +771,18 @@ impl Match {
             bid: p.live.bid,
             bidder: p.live.bidder,
         };
+        self.prompt_log.push(a.clone());
         let mut answers = p.answers;
         answers.push(a);
         self.execute(p.routine, p.snapshot, answers);
+    }
+
+    /// Every [`Answered`] committed so far, in order (`docs/BOT.md` §3.2's
+    /// equivalence gate). Drains the log; a simulation replays these through
+    /// an [`AnswerProvider`] and must reproduce the same checkpoints.
+    #[doc(hidden)]
+    pub fn take_prompt_log(&mut self) -> Vec<Answered> {
+        std::mem::take(&mut self.prompt_log)
     }
 
     /// Host-side log line; deferred while a routine is pending.
@@ -717,14 +875,14 @@ impl Match {
                     .st
                     .players
                     .iter()
-                    .any(|p| !p.deck_ready && (!solo || p.ai));
+                    .any(|p| !p.deck_ready && (!solo || p.auto_setup()));
                 if round_up {
                     self.direct(|cx| {
                         for i in 0..cx.w.player_count() {
                             let p = &cx.w.st.players[i];
-                            // Only bots are rounded up in solo -- the human is
-                            // waited for, however long that takes.
-                            if !p.deck_ready && (!solo || p.ai) {
+                            // Only machine seats are rounded up in solo -- the
+                            // human is waited for, however long that takes.
+                            if !p.deck_ready && (!solo || p.auto_setup()) {
                                 cx.submit_deck(i, None);
                             }
                         }
@@ -739,7 +897,9 @@ impl Match {
         let Some(cur) = self.world.st.current() else {
             return;
         };
-        let due = if cur.ai {
+        // Setup is engine-side for every bot, Advanced included (B5): the
+        // server only holds the seat during play.
+        let due = if cur.auto_setup() {
             self.wait <= 0.0
         } else {
             !solo && self.world.st.time_left <= 0.0
@@ -754,7 +914,9 @@ impl Match {
                 // bans something if anything is left. A human seat (time-out)
                 // never bans.
                 let chaos = cx.is_chaos(turn);
-                let pick = if cx.w.st.players[turn].ai && (chaos || cx.w.rng.chance(0.5)) {
+                let pick = if cx.w.st.players[turn].auto_setup()
+                    && (chaos || cx.w.rng.chance(0.5))
+                {
                     cx.random_character(false)
                 } else {
                     String::new()
@@ -1136,11 +1298,24 @@ impl Match {
                     if m.value < min {
                         return Err(Msg::new("err.bid_min").n("min", min));
                     }
-                    if m.value > money {
-                        return Err(Msg::new("err.poor"));
-                    }
                     if !can_pay {
                         return Err(Msg::new("err.cannot_bid"));
+                    }
+                    // B4 (`PIPELINE-AUDIT` K10b) -- 规则书 L76 「需[支付]或[消耗]
+                    // 资金且资金不足时可以选择抵押拥有的地契」: a bid may be funded
+                    // by 抵押, so eligibility is cash **plus** what the seat could
+                    // raise, not cash alone. The old `m.value > money` gate let a
+                    // short bidder not even bid. (`auction_tile` runs
+                    // `raise_funds` on the winner and only voids if they go out.)
+                    let raiseable: i32 = (0..self.data.tiles.len())
+                        .filter(|&t| {
+                            self.world.st.owners.get(t).copied().unwrap_or(-1) == i as i32
+                                && !self.world.st.mortgaged.get(t).copied().unwrap_or(false)
+                        })
+                        .map(|t| self.data.tiles[t].price / 2)
+                        .sum();
+                    if m.value > money + raiseable {
+                        return Err(Msg::new("err.poor"));
                     }
                     l.place_bid(i, m.value / 100 * 100);
                 }
@@ -1433,7 +1608,7 @@ fn run(cx: &mut Cx, r: &Routine) -> Flow<()> {
                 }
                 "buy" => {
                     cx.w.st.bought = true;
-                    cx.buy(i, pos)
+                    cx.buy(i, pos, purchase::BuyKind::Land)
                 }
                 "build" => {
                     cx.w.st.built = true;
@@ -1508,7 +1683,13 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if !cx.buyable_here(i) {
                 return Some(Msg::new("err.cannot_buy"));
             }
-            if st.players[i].money < cx.buy_price(pos as usize) {
+            // The quoted price, not the base (`docs/PURCHASE.md`): a player who
+            // can afford only the discounted price is no longer refused.
+            let quote = cx.buy_quote_for(i, pos as usize, purchase::BuyKind::Land);
+            if quote.price < 0 {
+                return Some(Msg::new("err.cannot_buy"));
+            }
+            if st.players[i].money < quote.price.max(0) {
                 return Some(Msg::new("err.buy_poor"));
             }
             None

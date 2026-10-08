@@ -23,13 +23,14 @@ const FAN: &str = "P✽P粉丝(反)";
 pub const PASTEL: CardDef = CardDef::new(
     "skill:Pastel✽Palettes:与偶像一起",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Play(Some(can_flip), flip),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Play(Some(can_flip), flip, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -48,7 +49,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
         if ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
         }
-        ctx::add_tok(p, FAN, 1, i32::MAX);
+        ctx::add_tok(p, FAN, 1, i32::MAX)?;
     }
     Ok(())
 }
@@ -60,7 +61,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// tracks the card's presence.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     ctx::set_prop(card_sdk::abi::prop::NO_REWARD, 1);
-    ctx::add_crystals(1, i32::MAX);
+    ctx::add_crystals(1, i32::MAX)?;
     if ctx::crystals() < 5 {
         return Ok(());
     }
@@ -71,7 +72,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_crystals(-5, i32::MAX);
+    ctx::add_crystals(-5, i32::MAX)?;
     ctx::draw(player_id, 1)?;
     Ok(())
 }
@@ -89,7 +90,7 @@ fn can_flip(player_id: i32) -> Option<Msg> {
 }
 
 fn flip(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id);
+    crate::spend_copy_sticker(player_id)?;
     let have = ctx::tok(player_id, FAN);
     let want = ctx::ask_number(
         player_id,
@@ -101,11 +102,11 @@ fn flip(player_id: i32) -> card_sdk::Asked {
     if want <= 0 {
         return Ok(());
     }
-    ctx::add_tok(player_id, FAN, -want, i32::MAX);
+    ctx::add_tok(player_id, FAN, -want, i32::MAX)?;
     // 「X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）」
     let over = (want - have).max(0);
     if over > 0 {
-        ctx::add_crystals(over, 10);
+        ctx::add_crystals(over, 10)?;
         ctx::log(
             player_id,
             &Msg::new(key!("pastel_over")).i("n", over as i64),

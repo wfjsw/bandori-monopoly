@@ -52,8 +52,9 @@
 //!
 //! * **Trigger.** Any player's [结算] on a tile that actually carries a
 //!   [CP点]. The bare 「[结算]时」 is board-generic -- it does not say 「自己
-//!   [结算]时」 -- so this instance's `SettleAfter` hears every settle and
-//!   checks the tile.
+//!   [结算]时」 -- so this instance's `SettleBody` entry hears every settle and
+//!   checks the tile. 行动阶段 15 (`SETTLE-STAGES.md` §4 M2): 「[结算]时」 is
+//!   an entry in the settle's effect list, not the 「[触发结算]后」 window.
 //! * **「格子上的个[CP点]」** is the tile mark (the sheet dropped the numeral;
 //!   read as 「1个」, one per [结算], matching C# `tileMark.count--`).
 //! * **「自己[场上]1个[CP点]」** is the **on-card** [CP点] of the 该清CP了 card
@@ -78,7 +79,7 @@ use card_sdk::{CardDef, Msg, On};
 /// single tile (`tile = -1`): [CP点] is a board-wide category, not a tile kind.
 /// Registered next to the `tile:*` rules in [`crate::CARDS`]; `bind_tiles`
 /// places it (see `docs/TILES.md`).
-pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::SettleAfter], lands_on_cp, on_land)]);
+pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::SettleBody], Some(lands_on_cp), on_land, "")]);
 
 /// 规则书: 「在拥有[CP]点的格子上[结算]时」 -- the tile must actually carry a
 /// [CP点], and 「自己[场上]1个[CP点]」 -- the on-card [CP点] of the card the
@@ -90,6 +91,11 @@ pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::Sett
 /// rule is [`BOARD_OWNER`] (`-1`) -- the settler is `trigger::player_id()`, the
 /// same shape as `tile:circle`'s Pass entry.
 fn lands_on_cp(_owner: i32) -> bool {
+    // A field card that replaced the settle body (「将该次结算改为…」) skips
+    // this entry like every other (`SETTLE-STAGES.md` §4 M2).
+    if trigger::cancelled() {
+        return false;
+    }
     let seat = trigger::player_id();
     let tile = trigger::tile();
     if seat < 0 || tile < 0 || ctx::count_cp(tile) <= 0 {

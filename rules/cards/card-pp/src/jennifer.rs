@@ -21,8 +21,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const JENNIFER: CardDef = CardDef::new(
     "PP:找回珍妮弗",
     &[
-        On::Play(Some(cant_play), jennifer),
-        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
+        On::Play(Some(cant_play), jennifer, ""),
+        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
     ],
 );
 
@@ -96,14 +96,14 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书[持续]2: 「[使用者]获得1个正面的[P✽P粉丝]」 -- C# `H.GainFans(user, 1, up: true)`.
     if user >= 0 && !ctx::player_out(user) {
-        ctx::add_tok(user, "P✽P粉丝(正)", 1, i32::MAX);
+        ctx::add_tok(user, "P✽P粉丝(正)", 1, i32::MAX)?;
     }
     // 规则书[持续]2: 「[拥有者]将一个[P✽P粉丝]变为正面」 -- C# `H.FlipUp(owner, 1)`.
     let down = ctx::tok(player_id, "P✽P粉丝(反)");
     let flip = down.min(1);
     if flip > 0 {
-        ctx::add_tok(player_id, "P✽P粉丝(反)", -flip, i32::MAX);
-        ctx::add_tok(player_id, "P✽P粉丝(正)", flip, i32::MAX);
+        ctx::add_tok(player_id, "P✽P粉丝(反)", -flip, i32::MAX)?;
+        ctx::add_tok(player_id, "P✽P粉丝(正)", flip, i32::MAX)?;
         let overflow = 1 - flip;
         if overflow > 0 && ctx::in_band(player_id, "Pastel✽Palettes") {
             ctx::add_band_crystals(player_id, overflow, 10);

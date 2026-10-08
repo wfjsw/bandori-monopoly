@@ -25,8 +25,8 @@ const DONE: &str = "skill.kasumiGroup.start";
 pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_start),
-        On::Hook(&[HookKind::Pass], |_| true, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_start, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, ""),
     ],
 );
 

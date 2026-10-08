@@ -27,18 +27,15 @@ const FLIPPED: &str = "skill.mumei.flipped";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::PayAdd], in_one, on_pay_add),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end_exit),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::PayAdd], Some(in_one), on_pay_add, ""),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end_exit, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -60,7 +57,7 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「你立即获得1火罐」 first, so X counts it.
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("mumei_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     // 「使那次支付的金额提高X*100，X为你拥有的火罐数」
     let x = state::get(player_id, state_key::FIRE);
     let amount = ctx::trigger::value();

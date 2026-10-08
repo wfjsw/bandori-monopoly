@@ -34,13 +34,14 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::TurnStartBefore], mine, roll),
-        On::Hook(&[HookKind::TurnStart], mine, expire),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, roll, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStart], None, expire, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -52,7 +53,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     if !ctx::in_band(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;

@@ -9,7 +9,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play(None, pipopa)]);
+pub const PIPOPA: CardDef = CardDef::new("PPP:[衍生]Pipopa", &[On::Play(None, pipopa, "")]);
 
 fn pipopa(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Banished);

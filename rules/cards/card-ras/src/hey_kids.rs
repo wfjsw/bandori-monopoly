@@ -18,7 +18,7 @@ pub const HEY_KIDS: CardDef = CardDef::new(
     // is a **body replacement**, so it answers the body link and `settleAfter`
     // still runs. Answering the outer `settle` would mean 「the settle never
     // happened」.
-    &[On::Counteract(&[ChainKind::SettleBody], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::SettleBody], Some(can_counteract), counteract, "")],
 );
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
@@ -38,9 +38,6 @@ fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
 /// my square, not my own. A non-rent payment (a card's [支付] that is not a
 /// tile [结算]) does not open the window.
 fn can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != TriggerKind::SettleBody {
-        return false;
-    }
     // The settler is someone else -- the window is on *their* rent landing.
     let settler = trigger::player_id();
     if settler == player_id {

@@ -1,0 +1,32 @@
+[package]
+name = "bot-service"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Advanced-bot decision service (docs/BOT.md B5): ISMCTS over one seat's view, asked by the game server. Advisory only."
+
+[lib]
+name = "bot_service"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bot-service"
+path = "src/main.rs"
+
+[dependencies]
+bot-core = { path = "../bot-core" }
+game-core = { path = "../game-core" }
+game-rules = { path = "../game-rules" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+# Simulations run the card rules as plain native Rust (`rules-native`,
+# docs/BOT.md B1) instead of the sandboxed `WasmRules`. Off by default while
+# the drift check has an open divergence -- the sandbox stays authoritative
+# and the flag only makes the bot's search cheaper, never the match wrong.
+native-rules = ["dep:rules-native"]
+
+[dependencies.rules-native]
+path = "../rules-native"
+optional = true

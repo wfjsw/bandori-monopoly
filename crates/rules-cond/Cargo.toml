@@ -1,0 +1,51 @@
+[package]
+name = "rules-cond"
+version.workspace = true
+edition.workspace = true
+description = "G1 guard prefilter condition language (docs/GUARDS.md): compile CEL conditions once, evaluate them natively against a window/candidate context, no wasm instantiate."
+
+[lib]
+# rlib for the host; the size spike builds a throwaway cdylib example.
+crate-type = ["rlib"]
+
+[dependencies]
+# Optional features OFF (no regex/chrono/json/ext_encoders) -- see GUARDS.md
+# §4.1. Verified wasm32-clean in the G1 spike; size notes live in that doc.
+# `cel` is the vendored fork (root `[patch.crates-io]`): runtime-only builds
+# drop the parser, see third_party/cel-rust/FORK.md.
+cel = { version = "0.15.0", default-features = false }
+# The serialized compiled form is postcard of the cel AST (the same format as
+# the ruleset manifest). Only needed on the `wire` feature.
+postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
+
+[features]
+# Host default: compile source AND emit the serialized form (G2 caches it
+# per guarded entry). The browser build is
+# `--no-default-features --features runtime-only`.
+default = ["compile", "wire"]
+# Host side: parse + lint + rewrite a condition source string. Pulls in the
+# cel parser (antlr4rust) -- do NOT enable this in the browser build.
+compile = ["cel/parser"]
+# Emit/load the serialized form (`Cond::to_bytes` / `Cond::from_bytes`).
+wire = ["cel/serde-ast", "dep:postcard"]
+# The browser-side build: `cargo build -p rules-cond --no-default-features
+# --features runtime-only --target wasm32-unknown-unknown`. Loads a compiled
+# condition from postcard bytes and evaluates it; no parser in the binary.
+runtime-only = ["wire"]
+
+[dev-dependencies]
+
+[[example]]
+name = "size_spike"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "size_baseline"
+crate-type = ["cdylib"]
+
+# Same export shape as the others, but loads a serialized condition instead of
+# parsing one. Build with `--no-default-features --features runtime-only` for
+# the runtime-only size measurement (GUARDS.md §8).
+[[example]]
+name = "size_wire"
+crate-type = ["cdylib"]

@@ -987,7 +987,7 @@ observe it. Don't assert only the end state.
 * **RULING:** whether the link's extra half applies inside the scaled
   settlement.
 
-### L5. One skill use, several reactions
+### L5. One skill use, several counteractions
 * **Players:** 4.
 * **Setup:**
   * P0 is 户山香澄 with 1 fire and owns tile 10.
@@ -996,7 +996,7 @@ observe it. Don't assert only the end state.
   * P3 is 花园多惠 with 4 fire.
 * **Chain:**
   1. P0 uses (2): a teleport to its own tile.
-  2. The reaction opportunities go in clause-89 order, P1 → P2 → P3:
+  2. The counteraction opportunities go in clause-89 order, P1 → P2 → P3:
      * P1's (2): pay 1 fire for a 香澄 character mark.
      * P2's (2): spend 1 fire to teleport to P0's tile, without settling.
      * P3's (2): spend 4 fire to cancel the use.

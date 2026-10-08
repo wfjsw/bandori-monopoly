@@ -14,10 +14,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const CIRCLE_STAFF: CardDef = CardDef::new(
     "skill:CiRCLE:后勤人员的努力",
-    &[On::Hook(&[HookKind::CardPlayed], mine, on_played)],
-);
+    &[On::Hook(&[HookKind::CardPlayed], None, on_played, card_sdk::pre::MINE)],
+)
+    .legacy(&[(0, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

@@ -13,10 +13,16 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const ENCORE: CardDef = CardDef::new(
     "通用:安可",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        None,
+        counteract,
+        "target == owner && effect.has(Abnormal)",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[使用者]即将因任何原因受到[异常移动效果]影响时」
     // C# `CardEncore.CanCounteract`: `t.Kind == "abnormal" && t.Target == seat`.
     //

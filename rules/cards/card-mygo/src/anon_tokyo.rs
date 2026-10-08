@@ -22,8 +22,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
-        On::Play(Some(cant_play), anon_tokyo),
-        On::Hook(&[HookKind::PayAdd], link_guard, link_rent),
+        On::Play(Some(cant_play), anon_tokyo, ""),
+        On::Hook(&[HookKind::PayAdd], Some(link_guard), link_rent, ""),
     ],
 );
 

@@ -263,6 +263,44 @@ fn rollouts(
     (secs / iters as f64, rounds / iters as f64)
 }
 
+/// The B2 path (`docs/BOT.md` §3.2): fork the mid-game match with a cheap
+/// [`Match::fork`] clone and run bots `depth` more rounds with the answer
+/// provider installed, so every prompt is answered inline and each routine /
+/// card body runs once instead of once per pause.
+fn rollouts_inline(
+    base: &Match,
+    start_round: i32,
+    depth: i32,
+    iters: u32,
+) -> (f64, f64) {
+    use game_core::engine::HeuristicProvider;
+    let mut secs = 0.0;
+    let mut rounds = 0.0;
+    for _ in 0..iters {
+        let t0 = Instant::now();
+        let mut m = base.fork();
+        m.set_provider(Some(Box::new(HeuristicProvider)));
+        let fork = t0.elapsed().as_secs_f64();
+        let t1 = Instant::now();
+        let mut played = 0.0;
+        let mut last = m.world().st.round;
+        while !m.ended() {
+            m.tick(0.25);
+            let r = m.world().st.round;
+            if r != last {
+                played += (r - last) as f64;
+                last = r;
+            }
+            if m.world().st.round >= start_round + depth {
+                m.finish();
+            }
+        }
+        secs += fork + t1.elapsed().as_secs_f64();
+        rounds += played;
+    }
+    (secs / iters as f64, rounds / iters as f64)
+}
+
 /// Run one game, cloning the world at rounds 10 / 50 / 150 on the way.
 fn clone_at_stages(data: &Arc<GameData>, rules: Arc<dyn CardRules>, members: &[RoomMember], seed: u64) {
     let mut m = Match::new(
@@ -493,6 +531,27 @@ fn main() {
                 depth,
                 iters,
             );
+            let us = secs * 1e6;
+            print!(
+                "N={depth}: {:.0} µs ({:.0}/s, {:.1} rounds) ",
+                us,
+                1.0 / secs.max(1e-9),
+                played
+            );
+        }
+        println!();
+        // ---- 5. B2: the answer-provider path (`docs/BOT.md` §3.2) --------
+        // Same mid-game state, but forked with `Match::fork` and played with
+        // the provider installed -- every prompt answered inline, one forward
+        // pass per routine instead of one per pause.
+        let mut base = Match::restore(data.clone(), rules.clone(), &snap).expect("restore");
+        base.set_provider(Some(Box::new(game_core::engine::HeuristicProvider)));
+        // (the provider is installed per fork inside `rollouts_inline`; drop
+        // the one on the base so the forks start clean)
+        base.set_provider(None);
+        print!("  {label} inline (fork + provider): ");
+        for depth in [1, 2, 3, 5, 10] {
+            let (secs, played) = rollouts_inline(&base, start_round, depth, iters);
             let us = secs * 1e6;
             print!(
                 "N={depth}: {:.0} µs ({:.0}/s, {:.1} rounds) ",

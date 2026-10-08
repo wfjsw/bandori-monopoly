@@ -73,8 +73,9 @@ pub const CARDS: &[CardDef] = &[
 ];
 
 /// Spend the 「星星贴纸」 「使用因此卡获得的团卡的主动效果时需要支付」.
-pub fn spend_copy_sticker(player_id: i32) {
+pub fn spend_copy_sticker(player_id: i32) -> card_sdk::Asked {
     if card_sdk::ctx::tok(player_id, "returns.copied") > 0 {
-        card_sdk::ctx::add_tok(player_id, "星星贴纸", -1, i32::MAX);
+        card_sdk::ctx::add_tok(player_id, "星星贴纸", -1, i32::MAX)?;
     }
+    Ok(())
 }

@@ -86,7 +86,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
               {x.bot && (
                 <span
                   className={cx(s.bot, x.mentality === "chaos" && s.chaos)}
-                  title={x.mentality === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard")}
+                  title={x.mentality === "chaos" ? tr("solo.mentalityChaos") : x.mentality === "advanced" ? tr("solo.mentalityAdvanced") : tr("solo.mentalityStandard")}
                 >
                   <Icon name={x.mentality === "chaos" ? "cyclone" : "smart_toy"} />
                 </span>

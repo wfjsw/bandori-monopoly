@@ -19,8 +19,8 @@ const TURNS: &str = "turns";
 pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::TurnStartBefore], always, on_turn_start),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
     ],
 );
 
@@ -51,9 +51,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// mid-turn when the card is drawn, so their current turn is already the 1st;
 /// the 3rd turn start is the **2nd** one after the draw.
 fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnStartBefore {
-        return Ok(());
-    }
     if trigger::player_id() != ctx::prop(DRAWER) {
         return Ok(());
     }

@@ -50,6 +50,7 @@ fn stamp() -> EngineStamp {
         data_sha256: "data-test".into(),
         engine: "game-core".into(),
         build: "test".into(),
+        bundle: String::new(),
     }
 }
 
@@ -390,8 +391,10 @@ fn stamp_mismatch_is_reported_refused_and_forcible() {
     bad.header.engine.data_sha256 = "other-data".into();
     bad.header.engine.abi += 1;
 
-    // compat reports exactly what differs.
-    let mis = compat(&stamp(), &bad.header.engine);
+    // compat reports exactly what differs (`want` = record, `got` = engine).
+    let mis = compat(&bad.header.engine, &stamp());
+    assert_eq!(mis[0].want, (bad.header.engine.abi).to_string());
+    assert_eq!(mis[0].got, stamp().abi.to_string());
     let fields: Vec<&str> = mis.iter().map(|m| m.field.as_str()).collect();
     assert_eq!(fields, ["abi", "data_sha256"], "{mis:?}");
     assert!(mis[0].fatal, "abi mismatch is fatal");
@@ -795,6 +798,111 @@ fn origin_and_header_fields_survive() {
     assert!(h.total_ticks > 0);
     assert_eq!(h.seats[0].player, "P1");
     assert!(h.seats.iter().all(|s| s.bot));
+}
+
+// ---------------------------------------------------------------- solo preset
+
+/// `Match::new`'s solo preset path (a character already on every seat, so the
+/// timed ban / pick is skipped and the match opens in the deck phase) is the
+/// path `SoloSession.start` takes. It runs inside `Match::new`, so it is part
+/// of `Init::Seed` and must reproduce identically on the replayer -- including
+/// the `do_pick` / `submit_deck` / `begin_play` side effects it triggers.
+#[test]
+fn solo_preset_characters_round_trip() {
+    let d = data();
+    let chars: Vec<String> = d
+        .characters
+        .iter()
+        .take(4)
+        .map(|c| c.name.clone())
+        .collect();
+    assert!(chars.len() >= 2, "need at least two characters in data");
+    for seed in [1u64, 42, 999, 31337] {
+        for n in 2..=4usize {
+            let members: Vec<RoomMember> = (0..n)
+                .map(|i| RoomMember {
+                    id: i as i32 + 1,
+                    player: format!("P{}", i + 1),
+                    character: chars[i % chars.len()].clone(),
+                    bot: true,
+                    mentality: if i % 2 == 0 {
+                        BotMentality::Standard
+                    } else {
+                        BotMentality::Chaos
+                    },
+                    ..Default::default()
+                })
+                .collect();
+            let mut rm = RecordedMatch::new(
+                d.clone(),
+                rules(),
+                setup(members.clone(), seed),
+                MatchMode::Solo,
+            );
+            // The preset path drops us straight into `deck` (or `play` when
+            // every seat is already deck-ready) -- no pick phase.
+            let phase = rm.inner().state().phase;
+            assert!(
+                phase == "deck" || phase == "play",
+                "seed {seed} n {n}: preset must skip ban/pick, got {phase}"
+            );
+            let mut steps = 0u32;
+            let mut events: Vec<MatchEvent> = Vec::new();
+            let mut last_id = 0;
+            drain(rm.inner(), &mut last_id, &mut events);
+            while !rm.inner().ended() && rm.inner().state().round < 3 {
+                rm.tick_steps(1 + (steps % 3) as u8);
+                steps += 1;
+                drain(rm.inner(), &mut last_id, &mut events);
+                assert!(steps < 50_000, "seed {seed} n {n}: no progress");
+            }
+            let file = rm.export(stamp(), "x");
+            let label = format!("solo-preset seed {seed} n {n}");
+            assert_round_trip(&file, &events, &label);
+        }
+    }
+}
+
+/// A record sealed under one ruleset and replayed under another diverges at
+/// the first checkpoint -- the stamp must name it (`ruleset_sha256`), and the
+/// mismatch must be a **warning** (the UI warns, then verifies checkpoints),
+/// not silent.
+#[test]
+fn ruleset_mismatch_is_named_and_non_fatal() {
+    let d = data();
+    let chars: Vec<String> = d.characters.iter().take(2).map(|c| c.name.clone()).collect();
+    let members: Vec<RoomMember> = (0..2)
+        .map(|i| RoomMember {
+            id: i as i32 + 1,
+            player: format!("P{}", i + 1),
+            character: chars[i].clone(),
+            bot: true,
+            mentality: BotMentality::Standard,
+            ..Default::default()
+        })
+        .collect();
+    let mut rm = RecordedMatch::new(d.clone(), rules(), setup(members, 7), MatchMode::Solo);
+    while !rm.inner().ended() && rm.inner().state().round < 2 {
+        rm.tick_steps(2);
+    }
+    let mut file = rm.export(stamp(), "x");
+    // Pretend the record was written under a real ruleset build.
+    file.header.engine.ruleset_sha256 = "49a58b82416cca44f11a1a45986ac651a2052ab59704989470789439d914911c".into();
+    seal(&mut file);
+
+    // `want` is the record's stamp, `got` is this engine's (StubRules -> "stub").
+    let mis = compat(&file.header.engine, &stamp());
+    let hit = mis.iter().find(|m| m.field == "ruleset_sha256").unwrap();
+    assert_eq!(hit.want, file.header.engine.ruleset_sha256);
+    assert_eq!(hit.got, stamp().ruleset_sha256);
+    assert!(!hit.fatal, "ruleset drift warns, it does not refuse");
+    // `Replayer::new` (which only knows the two format versions) does not
+    // report it -- `new_with_stamp` does.
+    assert!(Replayer::new(d.clone(), rules(), &file, false).is_ok());
+    assert!(matches!(
+        Replayer::new_with_stamp(d.clone(), rules(), &file, &stamp(), false).err(),
+        Some(ReplayError::Incompatible(_))
+    ));
 }
 
 // ---------------------------------------------------------------- big

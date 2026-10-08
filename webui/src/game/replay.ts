@@ -1,14 +1,31 @@
 // Replay playback: a read-only `GameSession` that drives the unchanged Board
-// through `ReplayMatch`. The record itself travels as raw `.bdrec` bytes here
-// (the IndexedDB side is `game/record.ts`); the engine decodes any framing --
-// zstd today, gzip / plain JSON from older recordings. The player scene owns
-// the compat dialog and the transport controls.
+// through the engine that **wrote** the record (`docs/REPLAY.md` §9). A record
+// names its engine bundle; the loader plays it with the page's own wasm when
+// that is the same build, and otherwise boots the archived bundle in a worker
+// (`game/replayEngine.ts`). Stamp mismatch is no longer "warn and diverge" --
+// it is "load the other bundle"; a bundle the archive does not hold is an
+// error naming the id, never a silent re-simulation with a different engine.
+//
+// The record itself travels as raw `.bdrec` bytes here (the IndexedDB side is
+// `game/record.ts`); the engine decodes any framing -- zstd today, gzip /
+// plain JSON from older recordings.
 
-import { rules } from "../core/data";
-import type { Command, MatchEvent, MatchView } from "../core/types";
+import type { Command, MatchEvent } from "../core/types";
 import type { Msg } from "../i18n/msg";
 import { t as tr } from "../i18n/t";
 import { GameSession } from "./session";
+import { rules } from "../core/data";
+import {
+  archiveIndex,
+  missingBundleMessage,
+  resolveBundle,
+  type BundleChoice,
+} from "./engineBundle";
+import {
+  currentStamp,
+  openOnOwnEngine,
+  type ReplayHandle,
+} from "./replayEngine";
 import type {
   EngineStamp,
   IndexStatus,
@@ -17,8 +34,6 @@ import type {
   ReplayStatus,
   TurnMark,
 } from "./record";
-
-type ReplayMatch = InstanceType<typeof rules.ReplayMatch>;
 
 /** `TurnMark` with the u64 tick already converted to a number. */
 export interface Turn {
@@ -53,21 +68,13 @@ export function queueReplayBytes(bytes: Uint8Array, id = ""): void {
   setPendingReplay(bytes, id);
 }
 
-/** What would block a replay right now, from a `ReplayMatch` built with `force`. */
-export function compatOf(m: ReplayMatch): Mismatch[] {
-  try {
-    const list: Mismatch[] = JSON.parse(m.compat());
-    return Array.isArray(list) ? list : [];
-  } catch {
-    return [];
-  }
-}
-
 /**
- * The same table as `game_core::record::compat` / `ReplayMatch::compat`, but
- * over the current [`engine_stamp`] and a record header only -- so the replay
- * list can badge a row without building a `ReplayMatch` for it. The player
- * still gates playback on the engine's own `compat()`.
+ * The same table as `game_core::record::compat`, but over the current
+ * [`engine_stamp`] and a record header only -- so the replay list can badge a
+ * row without opening anything. A non-empty list means the record was written
+ * by a different build; the player then loads that build's bundle instead of
+ * forcing this one to approximate it. `fatal` still means "refuse outright"
+ * (a newer format, or a different card ABI).
  */
 export function stampMismatches(header: RecordHeader): Mismatch[] {
   let now: EngineStamp;
@@ -93,18 +100,11 @@ export function stampMismatches(header: RecordHeader): Mismatch[] {
 }
 
 /**
- * Build a `ReplayMatch` from `.bdrec` bytes. `force` plays through a stamp
- * mismatch; the caller is expected to have shown [`compatOf`] first and to
- * refuse the `fatal` rows itself. The engine accepts zstd (current), gzip and
- * plain JSON here.
- */
-export function openReplayMatch(bytes: Uint8Array, force: boolean): ReplayMatch {
-  return rules.ReplayMatch.from_record_bytes(bytes, force);
-}
-
-/**
  * A match played back from a record. Read-only (`readOnly` locks every input
  * surface the 托管 toggle would), `recorded` so it pays no profile rewards.
+ * The engine lives behind {@link ReplayHandle}: the page's own wasm for a
+ * record made by this build, or a worker running the archived bundle that
+ * wrote it.
  */
 export class ReplaySession extends GameSession {
   readonly kind = "replay" as const;
@@ -125,35 +125,65 @@ export class ReplaySession extends GameSession {
   totalTicks = 0;
   /** Where the first checkpoint mismatch landed; auto-pauses the transport. */
   divergence: { round: number; turn: number } | null = null;
+  /** Stamp differences vs the **current** engine. Empty when the replay runs
+   *  on the bundle that wrote it (the normal case); carried only when the
+   *  record is being forced through a foreign engine. */
+  stampMismatches: Mismatch[] = [];
   indexStatus: IndexStatus | null = null;
+  /** Which engine is playing: the page's own wasm, or an archived bundle. */
+  readonly engineKind: "page" | "worker";
+  readonly engineBundle: string;
 
-  private m: ReplayMatch;
+  private h: ReplayHandle;
+  /** Serializes engine calls (a worker answers one at a time anyway). */
+  private q: Promise<unknown> = Promise.resolve();
+  private lastStatus: ReplayStatus = { tick: "0", ended: false, diverged: false };
   private timer: number;
   private lastAt = performance.now();
   private acc = 0;
   private lastEventId = 0;
   private idleRun = 0;
   private closed = false;
+  private busy = false;
   private indexing = false;
 
-  constructor(m: ReplayMatch, id = "") {
+  private constructor(h: ReplayHandle, header: RecordHeader, turns: Turn[], totalTicks: number, id: string) {
     super();
-    this.m = m;
+    this.h = h;
     this.id = id || "replay";
-    this.header = JSON.parse(m.header());
-    this.turns = (JSON.parse(m.turns()) as TurnMark[]).map((t) => ({ round: t.round, turn: t.turn, tick: Number(t.tick) }));
-    this.totalTicks = m.total_ticks();
-    this.perspective = (this.header.seats.find((x) => !x.bot) ?? this.header.seats[0])?.member ?? 0;
+    this.header = header;
+    this.turns = turns;
+    this.totalTicks = totalTicks;
+    this.engineKind = h.kind;
+    this.engineBundle = h.bundleId;
+    this.perspective = (header.seats.find((x) => !x.bot) ?? header.seats[0])?.member ?? 0;
     this.you = this.perspective;
-    this.timer = window.setInterval(() => this.tick(), 50);
+    this.timer = window.setInterval(() => void this.tick(), 50);
     this.runIndex();
-    this.pump();
+    void this.pump();
   }
 
-  /** The `Status` without advancing (the scrub bar reads this). */
+  /** Build the session on an opened handle (whatever engine runs it). */
+  static async create(h: ReplayHandle, id = ""): Promise<ReplaySession> {
+    const header = await h.header();
+    const turns = (await h.turns()).map((t: TurnMark) => ({ round: t.round, turn: t.turn, tick: Number(t.tick) }));
+    const totalTicks = await h.totalTicks();
+    const s = new ReplaySession(h, header, turns, totalTicks, id);
+    s.lastStatus = await h.status();
+    return s;
+  }
+
+  /** One engine call, in order. */
+  private run<T>(f: (h: ReplayHandle) => Promise<T>): Promise<T> {
+    const p = this.q.then(() => (this.closed ? Promise.reject(new Error("replay closed")) : f(this.h)));
+    this.q = p.catch(() => undefined);
+    return p;
+  }
+
+  /** The `Status` without advancing (the scrub bar reads this). It is the
+   *  last status the engine returned -- the session is the only writer. */
   status(): ReplayStatus {
-    if (this.closed) return { tick: "0", ended: true, diverged: this.divergence != null };
-    return JSON.parse(this.m.status()) as ReplayStatus;
+    return this.lastStatus;
   }
 
   /** Current tick, as a number (the wire value is a u64 string). */
@@ -161,8 +191,8 @@ export class ReplaySession extends GameSession {
     return Number(this.status().tick) || 0;
   }
 
-  private tick(): void {
-    if (this.closed || document.hidden) {
+  private async tick(): Promise<void> {
+    if (this.closed || document.hidden || this.busy) {
       this.lastAt = performance.now();
       return;
     }
@@ -179,24 +209,34 @@ export class ReplaySession extends GameSession {
     // free. Skip-idle multiplies the stride while nothing is happening, so a
     // bot's thinking time does not eat the wall clock.
     const idle = this.skipIdle && this.idleRun > 4;
-    const st = JSON.parse(this.m.step(k * this.speed * (idle ? 10 : 1))) as ReplayStatus;
-    this.pump();
-    if (st.diverged && !this.divergence) {
-      const v = this.view;
-      this.divergence = { round: v?.state.round ?? 0, turn: v?.state.turn ?? 0 };
+    this.busy = true;
+    try {
+      const st = await this.run((h) => h.step(k * this.speed * (idle ? 10 : 1)));
+      this.lastStatus = st;
+      await this.pump();
+      if (st.diverged && !this.divergence) {
+        const v = this.view;
+        this.divergence = { round: v?.state.round ?? 0, turn: v?.state.turn ?? 0 };
+        this.playing = false;
+        this.emitOther();
+        return;
+      }
+      if (st.ended) {
+        this.playing = false;
+        this.emitOther();
+      }
+    } catch (e) {
+      console.warn("replay step failed:", e);
       this.playing = false;
       this.emitOther();
-      return;
-    }
-    if (st.ended) {
-      this.playing = false;
-      this.emitOther();
+    } finally {
+      this.busy = false;
     }
   }
 
-  private pump(): void {
-    const evs: MatchEvent[] = JSON.parse(this.m.events_since(this.lastEventId));
-    for (const e of evs) {
+  private async pump(): Promise<void> {
+    const evs = await this.run((h) => h.eventsSince(this.lastEventId));
+    for (const e of evs as MatchEvent[]) {
       this.lastEventId = e.id;
       this.emitEvent(e);
     }
@@ -204,8 +244,9 @@ export class ReplaySession extends GameSession {
     // stretch skip-idle jumps over.
     if (evs.length || this.view?.state.busy) this.idleRun = 0;
     else this.idleRun++;
-    if (this.m.take_changed() || !this.view) {
-      this.emitView(JSON.parse(this.m.view(this.perspective)) as MatchView);
+    const changed = await this.run((h) => h.takeChanged());
+    if (changed || !this.view) {
+      this.emitView(await this.run((h) => h.view(this.perspective)));
     }
   }
 
@@ -215,15 +256,17 @@ export class ReplaySession extends GameSession {
     this.indexing = true;
     const step = () => {
       if (this.closed) return;
-      try {
-        this.indexStatus = JSON.parse(this.m.index(250)) as IndexStatus;
-        this.emitOther();
-        if (!this.indexStatus.done) window.setTimeout(step, 16);
-        else this.indexing = false;
-      } catch (e) {
-        console.warn("replay index failed:", e);
-        this.indexing = false;
-      }
+      void this.run((h) => h.index(250))
+        .then((st) => {
+          this.indexStatus = st;
+          this.emitOther();
+          if (!st.done && !this.closed) window.setTimeout(step, 16);
+          else this.indexing = false;
+        })
+        .catch((e) => {
+          console.warn("replay index failed:", e);
+          this.indexing = false;
+        });
     };
     window.setTimeout(step, 0);
   }
@@ -262,27 +305,27 @@ export class ReplaySession extends GameSession {
     if (this.closed || this.perspective === member) return;
     this.perspective = member;
     this.you = member;
-    this.emitView(JSON.parse(this.m.view(member)) as MatchView);
+    void this.run((h) => h.view(member))
+      .then((v) => this.emitView(v))
+      .catch((e) => console.warn("replay view failed:", e));
     this.emitOther();
   }
 
   /** Jump to `tick` (clamped). Bumps `epoch` so the Board remounts. */
   seek(tick: number): void {
     if (this.closed) return;
-    try {
-      JSON.parse(this.m.seek(Math.max(0, Math.round(tick))));
-    } catch (e) {
-      console.warn("replay seek failed:", e);
-    }
-    // The Board's event log is re-seeded from the state's tail on remount, so
-    // the collected-stream cursor moves to that tail's last id.
-    const v = JSON.parse(this.m.view(this.perspective)) as MatchView;
-    const tail = v.state.events ?? [];
-    this.lastEventId = tail.length ? tail[tail.length - 1].id : 0;
-    this.idleRun = 0;
-    this.epoch++;
-    this.emitView(v);
-    this.emitOther();
+    void this.run(async (h) => {
+      this.lastStatus = await h.seek(Math.max(0, Math.round(tick)));
+      // The Board's event log is re-seeded from the state's tail on remount,
+      // so the collected-stream cursor moves to that tail's last id.
+      const v = await h.view(this.perspective);
+      const tail = v.state.events ?? [];
+      this.lastEventId = tail.length ? tail[tail.length - 1].id : 0;
+      this.idleRun = 0;
+      this.epoch++;
+      this.emitView(v);
+      this.emitOther();
+    }).catch((e) => console.warn("replay seek failed:", e));
   }
 
   /** The mark at or after `tick` (next) / before it (previous). */
@@ -328,11 +371,7 @@ export class ReplaySession extends GameSession {
   leave(): void {
     this.closed = true;
     clearInterval(this.timer);
-    try {
-      this.m.free();
-    } catch {
-      /* already freed */
-    }
+    void this.h.free().catch(() => undefined);
   }
 }
 
@@ -341,16 +380,19 @@ export class ReplaySession extends GameSession {
  *  `free()` on that first unmount would kill the match under the second mount. */
 let current: ReplaySession | null = null;
 
-export function startReplay(m: ReplayMatch, id = ""): ReplaySession {
+export function startReplay(rs: ReplaySession): ReplaySession {
   endReplay();
-  current = new ReplaySession(m, id);
+  current = rs;
   return current;
 }
 
 export function endReplay(): void {
   const old = current;
   current = null;
-  if (pending) opened.delete(pending);
+  // Drop the memoized open only when it produced this session -- a mid-boot
+  // unmount (StrictMode, or the user backing out while a worker starts) must
+  // not orphan the in-flight open and start a second engine on remount.
+  if (old) opened.delete(pending as { bytes: Uint8Array; id: string });
   // Free on the next tick: the exiting board still reads `status()` / `view()`
   // during its last render, and a wasm trap there would take the app down.
   if (old) window.setTimeout(() => old.leave(), 0);
@@ -359,38 +401,64 @@ export function endReplay(): void {
 /** What [`openPending`] produced. */
 export type Opened =
   | { phase: "error"; message: string }
-  /** Non-fatal stamp mismatch: the UI offers "continue anyway". */
-  | { phase: "warn"; mismatches: Mismatch[]; m: ReplayMatch }
   | { phase: "ready"; rs: ReplaySession };
 
-const opened = new WeakMap<{ bytes: Uint8Array; id: string }, Opened>();
-
 /**
- * Build the replay for the queued record: `force` so `compat()` can name any
- * stamp differences, then refuse the `fatal` ones. Memoized on the pending
- * entry, so StrictMode's double-invoked initializer gets the same instance.
+ * Open the queued record on the engine that wrote it. Memoized on the pending
+ * entry (StrictMode double-invoked initializers share the one open), and
+ * async because an archived bundle boots in a worker.
  */
-export function openPending(): Opened | null {
+export function openPending(): Promise<Opened> | null {
   const p = pending;
   if (!p) return null;
-  const hit = opened.get(p);
-  if (hit) return hit;
-  let out: Opened;
+  let hit = opened.get(p);
+  if (!hit) {
+    hit = openRecord(p);
+    opened.set(p, hit);
+  }
+  return hit;
+}
+
+const opened = new WeakMap<{ bytes: Uint8Array; id: string }, Promise<Opened>>();
+
+/** Bundle resolution + engine boot + the fatal compat gate. */
+async function openRecord(p: { bytes: Uint8Array; id: string }): Promise<Opened> {
   try {
-    const m = openReplayMatch(p.bytes, true);
-    const mis = compatOf(m);
-    const fatal = mis.filter((x) => x.fatal);
-    if (fatal.length) {
-      m.free();
-      out = { phase: "error", message: `${tr("replay.compatFatalText")} (${fatal.map((x) => x.field).join(", ")})` };
-    } else if (mis.length) {
-      out = { phase: "warn", mismatches: mis, m };
-    } else {
-      out = { phase: "ready", rs: startReplay(m, p.id) };
+    const header = JSON.parse(rules.record_header_bytes(p.bytes)) as RecordHeader;
+    const choice: BundleChoice = resolveBundle(header, await archiveIndex(), currentStamp());
+    if (pending !== p) return { phase: "error", message: tr("replay.noReplay") };
+    if (choice.kind === "missing") {
+      return { phase: "error", message: missingBundleMessage(choice.bundle) };
+    }
+    if (choice.kind === "unknown") {
+      return { phase: "error", message: choice.reason };
+    }
+    // `force` is false: the engine was chosen to match the record, so a stamp
+    // difference here is a bug in the archive, not something to play through.
+    const h = await openOnOwnEngine(choice, p.bytes, false);
+    try {
+      if (pending !== p) {
+        await h.free();
+        return { phase: "error", message: tr("replay.noReplay") };
+      }
+      const mis = await h.compat();
+      const fatal = mis.filter((x) => x.fatal);
+      if (fatal.length) {
+        await h.free();
+        return {
+          phase: "error",
+          message: `${tr("replay.compatFatalText")} (${fatal.map((x) => x.field).join(", ")})`,
+        };
+      }
+      const rs = await ReplaySession.create(h, p.id);
+      rs.stampMismatches = mis;
+      startReplay(rs);
+      return { phase: "ready", rs };
+    } catch (e) {
+      await h.free().catch(() => undefined);
+      throw e;
     }
   } catch (e) {
-    out = { phase: "error", message: e instanceof Error ? e.message : String(e) };
+    return { phase: "error", message: e instanceof Error ? e.message : String(e) };
   }
-  opened.set(p, out);
-  return out;
 }

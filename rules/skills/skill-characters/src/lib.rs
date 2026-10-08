@@ -19,7 +19,7 @@
 //!
 //! - **Started by the user** -- a skill button (C# `SkillAction` on
 //!   `MatchPlayer.actions`). The player presses it, the effect runs. That is
-//!   [`On::Play`], gate and effect: `On::Play(Some(why_not), run)` where the
+//!   [`On::Play`], gate and effect: `On::Play(Some(why_not), run, "")` where the
 //!   gate is the "can I press this right now?" query (C# `Card.WhyNot`) and
 //!   `run` is what the press does.
 //! - **Called by a field event** -- the skill is a field card on the player
@@ -57,7 +57,7 @@ use card_sdk::CardDef;
 /// Hook this from both `TurnStartBefore` (so the cap holds from the first turn
 /// even when the skill is placed mid-game) and `DeckAtGameStart` (where
 /// 「初始N」 is created), e.g.
-/// `On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], |_| true, declare_cap)`.
+/// `On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, "")`.
 ///
 /// The cap is written **only when unset** (0), so a later `add_fire_max`
 /// (「火罐上限加1」, e.g. `PPP:[衍生]拍卖撤下来了`) survives the per-turn
@@ -108,8 +108,8 @@ use rinko_1cm::RINKO_1CM;
 use tae_police::TAE_POLICE;
 pub mod asahi_aim;
 use asahi_aim::ASAHI_AIM;
-pub mod diana_idol;
-use diana_idol::DIANA_IDOL;
+pub mod uika_idol;
+use uika_idol::UIKA_IDOL;
 pub mod hagumi_homerun;
 use hagumi_homerun::HAGUMI_HOMERUN;
 pub mod hina_lottery;
@@ -141,9 +141,9 @@ use sato_red::SATO_RED;
 pub mod taki_meeting;
 use taki_meeting::TAKI_MEETING;
 pub mod chisato_frank;
-pub mod diana_imprisoned;
+pub mod uika_imprisoned;
 use chisato_frank::CHISATO_FRANK;
-use diana_imprisoned::DIANA_IMPRISONED;
+use uika_imprisoned::UIKA_IMPRISONED;
 pub mod eve_unify;
 use eve_unify::EVE_UNIFY;
 pub mod extraordinary_star;
@@ -199,8 +199,8 @@ pub const CARDS: &[CardDef] = &[
     ASAHI_AIM,
     AYA_WITH,
     CHISATO_FRANK,
-    DIANA_IDOL,
-    DIANA_IMPRISONED,
+    UIKA_IDOL,
+    UIKA_IMPRISONED,
     EVE_UNIFY,
     EXTRAORDINARY_STAR,
     KASUMI_GROUP,

@@ -27,15 +27,16 @@ pub const KANON_LOST: CardDef = CardDef::new(
     &[
         // (1) is a starting square: the before-match-start point decides start
         // positions.
-        On::Hook(&[HookKind::DeckBeforeGame], |_| true, at_start),
-        On::Hook(&[HookKind::RollAfter], mine, on_roll),
-        On::Hook(&[HookKind::CircleAffected], mine, on_circle),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-        On::Hook(&[HookKind::RollPlan], mine, on_plan),
+        On::Hook(&[HookKind::DeckBeforeGame], None, at_start, ""),
+        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::CircleAffected], None, on_circle, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollPlan], None, on_plan, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine), (4, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

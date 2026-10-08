@@ -13,12 +13,18 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
-        On::Play(None, play),
-        On::Counteract(&[ChainKind::Counteracted], can_counteract, counteract),
+        On::Play(None, play, ""),
+        On::Counteract(
+            &[ChainKind::Counteracted],
+            None,
+            counteract,
+            "target == owner && actor != owner",
+        ),
     ],
-);
+)
+    .legacy(&[(1, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「此卡可作为[反击]在有玩家对你使用[反击]后立即使用」 -- C#
     // `t.Kind == "counteracted" && t.Target == seat && t.Seat != seat`.
     trigger::kind() == TriggerKind::Counteracted

@@ -20,15 +20,16 @@ const PAREO: &str = "PAREO标记";
 pub const NUMAZU_MAID: CardDef = CardDef::new(
     "skill:鳰原令王那:梦幻可爱♪女仆",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::HouseAdded], mine, on_built),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::HouseAdded], None, on_built, card_sdk::pre::MINE),
         // （2）'s offer is also a press, so a card can run it out of turn
         // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
-        On::Play(None, offer),
+        On::Play(None, offer, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -38,10 +39,10 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     // 规则书（2）: 「失去1PAREO标记（初始1，上限3）」 -- the mark exists from
     // match start, one deep. Written before the (1) loop so the early return
     // there cannot skip it.
-    ctx::add_tok(player_id, PAREO, 1, 3);
+    ctx::add_tok(player_id, PAREO, 1, 3)?;
     for p in 0..ctx::player_count() {
         if p != player_id && !ctx::player_out(p) && ctx::in_band(p, "Pastel✽Palettes") {
-            ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX);
+            ctx::add_tok(player_id, "P✽P粉丝(正)", 1, i32::MAX)?;
             return Ok(());
         }
     }
@@ -85,7 +86,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    ctx::add_tok(player_id, PAREO, -1, i32::MAX);
+    ctx::add_tok(player_id, PAREO, -1, i32::MAX)?;
     // 「所有非自己的玩家分摊支付你…四分之一的资金」.
     let pot = best / 4;
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
@@ -94,10 +95,16 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     if others.is_empty() {
         return Ok(());
     }
-    let per = (pot + others.len() as i32 - 1) / others.len() as i32;
+    // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes `pot`
+    // before it divides (the 「分摊前」 figure).
+    let why = Msg::new(key!("numazu_maid_why"));
+    let Some(shaped) = ctx::pay_total(others[0], player_id, pot, &why)? else {
+        return Ok(());
+    };
+    let per = (shaped + others.len() as i32 - 1) / others.len() as i32;
     let share = ((per + 9) / 10) * 10;
     for p in others {
-        ctx::transfer(p, player_id, share, &Msg::new(key!("numazu_maid_why")))?;
+        ctx::pay_leg(p, player_id, share, &why)?;
     }
     ctx::log(
         player_id,

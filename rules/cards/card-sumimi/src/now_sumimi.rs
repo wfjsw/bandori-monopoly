@@ -12,7 +12,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(
     "Sumimi:现在她是Sumimi的小初啦",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, "")],
 );
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's
@@ -45,9 +45,6 @@ fn price_tag(player_id: i32) -> i32 {
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当…失去资金的总额即将超过你所在格子的[收费标价]时打出此卡」
     // C# `t.Kind == "pay" && t.Pay.from == seat && t.Pay.amount > 0 && !t.Pay.cancel`
-    if trigger::kind() != ChainKind::Effect {
-        return false;
-    }
     // 规则书[反击]: 「失去资金」 -- the `pay` effect entry. The causer's own
     // `abnormal` also rides an `effect` link with `player_id` = the causer and
     // `value` = its `AbKind` (> 0); that is not a money loss and must not open

@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play(None, play)]);
+pub const NEVER_ENDS: CardDef = CardDef::new("event:一切不会结束", &[On::Play(None, play, "")]);
 
 /// 规则书: 「抽出此卡的玩家投掷1d4，所有玩家[传送]到对应数字的RiNG」 -- the
 /// drawer rolls 1d4 and everyone teleports to RiNG 1..4 (board names in

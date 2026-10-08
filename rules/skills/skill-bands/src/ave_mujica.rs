@@ -29,14 +29,15 @@ const WAS: &str = "skill.aveMujica.was";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play(Some(can_halve), halve),
-        On::Hook(&[HookKind::TurnStartBefore], |_| true, at_turn_start),
-        On::Hook(&[HookKind::PayMul], in_two, bend),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Play(Some(can_halve), halve, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, ""),
+        On::Hook(&[HookKind::PayMul], Some(in_two), bend, ""),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -64,7 +65,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     // 「处于状态2的第三回合开始时为此卡添加一个奇迹水晶」 -- a *band-card*
     // crystal: this rule's own instance, the same pool `band_crystals` reads.
     if n == 3 {
-        ctx::add_crystals(1, i32::MAX);
+        ctx::add_crystals(1, i32::MAX)?;
         ctx::log(player_id, &Msg::new(key!("ave_mujica_crystal")));
     }
     Ok(())
@@ -125,7 +126,7 @@ fn can_halve(player_id: i32) -> Option<Msg> {
 }
 
 fn halve(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id);
+    crate::spend_copy_sticker(player_id)?;
     let mut n = 1;
     // 「每当乐队技能需要移除[奇迹水晶]时，可移除「#L11」上的一个[奇迹水晶]代替」
     if let Some(uid) = ctx::find_card(player_id, "Sumimi:#L11") {
@@ -138,7 +139,7 @@ fn halve(player_id: i32) -> card_sdk::Asked {
         if ctx::crystals() < n {
             return Ok(());
         }
-        ctx::add_crystals(-n, i32::MAX);
+        ctx::add_crystals(-n, i32::MAX)?;
     }
     ctx::log(player_id, &Msg::new(key!("ave_mujica_halved")));
     Ok(())
@@ -158,7 +159,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     }
     let have = state::get(player_id, state_key::FIRE);
     if have > 0 {
-        ctx::spend_fire(player_id, 1, &Msg::new(key!("ave_mujica_burn")));
+        ctx::spend_fire(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
     }
     // 「回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐」
     if state::get(player_id, state_key::FIRE) == 0 {
@@ -166,7 +167,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, IN_TWO, 0);
         let left = state::get(player_id, state_key::FIRE);
         if left > 0 {
-            ctx::spend_fire(player_id, left, &Msg::new(key!("ave_mujica_exit")));
+            ctx::spend_fire(player_id, left, &Msg::new(key!("ave_mujica_exit")))?;
         }
         ctx::log(player_id, &Msg::new(key!("ave_mujica_left")));
     }

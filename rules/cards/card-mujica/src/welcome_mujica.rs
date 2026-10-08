@@ -17,10 +17,11 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WELCOME_MUJICA: CardDef = CardDef::new(
     "Mujica:欢迎来到ave mujica的世界",
     &[
-        On::Play(None, play),
-        On::Counteract(&[ChainKind::State], can_counteract, counteract),
+        On::Play(None, play, ""),
+        On::Counteract(&[ChainKind::State], None, counteract, "actor != owner"),
     ],
-);
+)
+    .legacy(&[(1, legacy_can_counteract)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「选择以下效果其一发动：转换任意一名玩家的状态」
@@ -64,7 +65,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书（2）[反击]: 「当有其他玩家切换状态时」 -- C# `t.Kind == "state" &&
     // t.Seat != player`.
     trigger::kind() == TriggerKind::State && trigger::player_id() != player_id

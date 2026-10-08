@@ -11,12 +11,8 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const NO_ROAD: CardDef = CardDef::new(
     "MyGO:无路矢",
     &[
-        On::Hook(
-            &[card_sdk::abi::HookKind::PayAdd],
-            |player_id| ctx::is_placed(),
-            redirect,
-        ),
-        On::Play(Some(cant_play), no_road),
+        On::Hook(&[card_sdk::abi::HookKind::PayAdd], Some(|player_id| ctx::is_placed()), redirect, ""),
+        On::Play(Some(cant_play), no_road, ""),
     ],
 );
 

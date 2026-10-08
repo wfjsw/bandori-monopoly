@@ -17,9 +17,9 @@ const FIX_NOTE: &str = "修复公告";
 pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::Event], always, on_event),
-        On::Hook(&[HookKind::BuildBefore], always, before_build),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::Event], Some(always), on_event, ""),
+        On::Hook(&[HookKind::BuildBefore], Some(always), before_build, ""),
     ],
 );
 
@@ -49,9 +49,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// the 修复公告 just seeded) files this one away. The `event` raise for our own
 /// draw happens before we are bound, so this hook sees only later draws.
 fn on_event(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::Event {
-        return Ok(());
-    }
     expire(ID);
     Ok(())
 }
@@ -59,9 +56,6 @@ fn on_event(_owner: i32) -> card_sdk::Asked {
 /// 规则书: 「此卡在场时不可在造价1500及以上的格子上加盖房屋」 -- refuse the build
 /// outright when the tile's house cost is 1500 or more.
 fn before_build(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::BuildBefore {
-        return Ok(());
-    }
     let t = trigger::tile();
     if t < 0 {
         return Ok(());

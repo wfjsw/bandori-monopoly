@@ -18,15 +18,11 @@ const ID: &str = "HHW:（薰）怪盗hello happy";
 pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
-        On::Play(Some(cant_play), play),
-        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-        On::Hook(&[HookKind::PassPlayer], pass_player_guard, pass_player),
+        On::Play(Some(cant_play), play, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
+        On::Hook(&[HookKind::PassPlayer], Some(pass_player_guard), pass_player, ""),
         On::RollPlan(roll_plan),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
 );
 
@@ -62,7 +58,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「向一名玩家场上放置一个怪盗标记」 -- C# `if (r.index >= 0)` gates the
     // mark on the gate's answer (the player actually hit, after any redirect).
     if let Some(who) = hit {
-        ctx::add_tok(who, key!("kaoru_thief_tok"), 1, i32::MAX);
+        ctx::add_tok(who, key!("kaoru_thief_tok"), 1, i32::MAX)?;
         // C# `card.Mem["marked"] = r.index; card.Mem["turn"] = H.TurnKey` -- the
         // PassPlayer force-stop only works on the turn the mark was placed.
         ctx::set_slot(player_id, "kaoru_thief_marked", who);
@@ -134,7 +130,7 @@ fn turn_end_guard(player_id: i32) -> bool {
 }
 
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
-    ctx::decay();
+    ctx::decay()?;
     Ok(())
 }
 

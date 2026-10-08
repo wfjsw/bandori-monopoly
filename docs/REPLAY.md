@@ -4,7 +4,9 @@ Status: P1 (core), P2 (web-glue), P3 (solo UI) and P4 (server + rules-worker)
 implemented 2026-10-07; P5 remains. The same day, storage and download moved
 from gzip to **zstd** (see "Framing and codec"): one shared codec in
 `game-core`, the server seals compressed, and the loader still reads gzip and
-plain JSON.
+plain JSON. Later that day the **engine archive** landed (§9): a record is
+replayed by the engine bundle that wrote it, so later engine / rules / data
+changes cannot make old records diverge.
 Line numbers were taken from the 2026-10-07 working tree and drift.
 
 **Implemented:** `crates/game-core/src/record.rs` (schema, `RecordedMatch`,
@@ -118,18 +120,20 @@ endpoint policy, and the deviations below.
     the post-match Results 「下载回放」 / 「观看回放」; and the Room scene's
     "download last replay".
 * **Version stamp.** `EngineStamp{format, save_version, abi, ruleset_sha256,
-  data_sha256, engine, build}`.
+  data_sha256, engine, build, bundle}`.
 
   | Case | Policy |
   |---|---|
   | `format` newer than supported | Refuse. |
   | ABI differs, or a card used in the record is missing | Refuse full replay. Offer the log-only view (header plus bundled events). |
-  | ruleset, data or save_version differs | Warn, then replay with checkpoint verification. |
-  | Everything matches | Play. |
+  | The record's engine **bundle** is not the running build | Load that bundle from the engine archive and play there (`§9`). Mismatch is routing information, not a warning. |
+  | The record's bundle is missing from the archive | Refuse, naming the bundle id. Never silently re-simulate with a different engine. |
+  | Everything matches | Play on the running engine. |
 
   At the first checkpoint mismatch, auto-pause and show 「Replay diverged at
   round R, turn T」. The user can continue (flagged inaccurate) or switch to the
-  log view.
+  log view. With the matching bundle loaded, a checkpoint mismatch means the
+  record itself is damaged -- not "a different build".
 * **Storage.**
   * The last 10 solo records go in IndexedDB (`bm.replays`), as the zstd
     bytes. A record is saved automatically once when a solo match ends. Older
@@ -193,7 +197,7 @@ A `.bdrec` is a **zstd-framed `RecordFile` JSON**. The codec lives in
 pub const RECORD_VERSION: u32 = 1;
 pub const STEP: f32 = 0.05;
 pub struct RecordFile { magic: String /*"bdrec"*/, header: RecordHeader, body: RecordBody, check: String }
-pub struct EngineStamp { format: u32, save_version: u32, abi: u32, ruleset_sha256: String /*"stub"*/, data_sha256: String, engine: String, build: String }
+pub struct EngineStamp { format: u32, save_version: u32, abi: u32, ruleset_sha256: String /*"stub"*/, data_sha256: String, engine: String, build: String, bundle: String }
 pub struct SeatInfo { member: i32, player: String, bot: bool, mentality: BotMentality, character: String, rank: i32, score: i32 }
 pub enum Origin { Solo, Online { room: String } }
 pub struct RecordHeader { engine: EngineStamp, mode: MatchMode, step: f32, origin: Origin, created: String,
@@ -381,7 +385,8 @@ design — all of them forced by something the design already says:
 ## 8. Risks
 
 * **Silent logic drift.** Caught by checkpoints and the divergence UI. The
-  bundled events keep a log view working.
+  bundled events keep a log view working. The engine archive (§9) removes the
+  usual cause -- replaying with a build the record never saw.
 * **Cross-backend wasm float NaN.** Test it.
 * **Server restart** loses up to 100 buffered ticks. Set a `gaps` flag and mark
   the record unverifiable.
@@ -390,3 +395,313 @@ design — all of them forced by something the design already says:
 * **Privacy.** A full record is intended; it is post-match and
   participants-only.
 * **Old solo saves** give partial records.
+
+## 9. Engine archive: versioned bundles (2026-10-07)
+
+Every record produced from now on must replay **exactly**, no matter how the
+engine, card rules (ABI / ruleset), game data or save format change later.
+Re-simulation stays the replay method -- it is exact and checkpoint-verified --
+but a record is always played back by **the engine build that wrote it**, not
+by whatever engine is current. That build is kept in a versioned **engine
+archive**.
+
+### 9.1 Bundle identity
+
+A **bundle** is one replay engine plus the inputs its stamp hashed:
+
+* the glue (`webui/src/wasm/glue.js` + `glue_bg.wasm`);
+* the ruleset index and its content-addressed modules;
+* the game tables (`DATA_FILES`);
+* the record format / save format versions and the card ABI.
+
+The id is a sha256 over those identities -- one recipe, in
+`game_core::record::bundle_id` and its JS twin `tools/engine-bundle.mjs`:
+
+```text
+bundle = sha256_hex("bdre-bundle-v1\n"
+                    "<glue_sha256>\n<ruleset_sha256>\n<data_sha256>\n"
+                    "<format>\n<save_version>\n<abi>\n")
+```
+
+`glue_sha256` is sha256 over the glue's `glue.js` bytes followed by its
+`glue_bg.wasm` bytes. It is computed by `tools/build-glue.mjs` and written to
+`webui/src/wasm/engine_id.json`; the webui hands it to `set_glue_sha` at boot,
+and `engine_stamp()` then carries the derived `bundle` in every record it
+seals. An empty `glue_sha256` yields `""` -- an unknown bundle, never a wrong
+one. `tools/test-replay-archive.mjs` pins the JS recipe and the engine's
+`bundle_id` against a real glue build; `crates/game-core/tests/bundle_id.rs`
+pins a known vector.
+
+The same recipe applies to the **server**: `rules-worker` fills `bundle` from
+the deployed glue identity (`BD_GLUE_SHA`, or the `glueSha256` in
+`BD_ENGINE_ID`, default `webui/src/wasm/engine_id.json`) plus its own ruleset
+and data hashes, so a server-made record and a browser-made record of the same
+deploy seal the **same** stamp and resolve to the same bundle.
+
+### 9.2 Archive layout
+
+`tools/archive-engine.mjs` freezes the build being deployed and copies it into
+the served site. The **index** is versioned in git; the **bytes** are not (the
+user does not want wasm in git). Two identities per bundle, deliberately
+separate:
+
+* **`id`** (and the `bundle` field of every `EngineStamp`) is the **byte**
+  identity -- sha256 over the glue js+wasm, the ruleset module hashes, the
+  data hashes and format/save/abi (`tools/engine-bundle.mjs`). This is what a
+  record stamps, so it must stay stable. It also changes when something that
+  does not affect game behaviour changes: rustc version, wasm-bindgen version,
+  whether `rust-src` is installed, absolute paths in panic strings.
+* **`source_id`** is the **behaviour** identity -- sha256 over the inputs that
+  change how a record replays, and nothing else (`tools/engine-source.mjs`).
+  Two builds with the same `source_id` are the same engine.
+
+`source_id` covers (git tree/blob object ids when the tree is clean, sha256 of
+the same file set's contents when it is dirty):
+
+```text
+crates/game-core, crates/game-rules, crates/web-glue, crates/rules-cond,
+third_party/cel-rust,                       (the whole trees)
+rules/**,                                   (card-sdk, cards, skills, tiles,
+                                             events, fixtures, both locks)
+Cargo.lock, rules/Cargo.lock,               (dependency resolution)
+Cargo.toml, rules/Cargo.toml,               (the build graph: members, the cel patch)
+the DATA_FILES the bundle hashes,           (the game tables)
+format / save_version / abi                 (the record schema)
+```
+
+and excludes, on purpose: rustc / cargo / wasm-bindgen versions, build flags
+and recipes (`tools/*.mjs`), paths, timestamps, webui, docs, bots.
+
+Layout:
+
+```text
+archive/engine/
+  index.json                  VERSIONED -- bundle id -> stamp + provenance
+  refs/<bundle>.bdrec         VERSIONED -- short seeded match per bundle,
+                              the behaviour check every rebuild must pass
+data/engine-archive/          persistent store, outside git (backup this!)
+  modules/<sha256>.wasm       content-addressed card modules, shared
+  <bundle>/…                  the engine + the tables it hashed
+data/engine-cache/            tools/rebuild-engine.mjs output (outside git)
+webui/dist/assets/engine/     served copy of index + store + cache
+  replay-worker.js            the frozen-API driver (webui/public/... copy)
+```
+
+Only what replay needs is kept: no audio, no live2d, no UI. Size on the
+2026-10-07 build: **5.9 MiB bundle + 0.4 MiB shared modules ≈ 6.2 MiB**. The
+modules pool is content-addressed -- filenames are their sha256 -- so bundles
+share it. Each reference record is a few kB of input log (two bots, seed 7).
+
+Each index entry records how the bytes can be reproduced:
+
+| Field | Meaning |
+|---|---|
+| `source_id` | behaviour-level identity (see above) |
+| `ref` / `ref_sha256` | the reference record every rebuild must replay clean |
+| `commit` | full sha the build ran on; null when unknown |
+| `dirty` | the input paths differed from `commit` at seal time |
+| `rebuild` | `tools/rebuild-engine.mjs <id>` may regenerate this bundle |
+| `toolchain` | `rustc` / `cargo` / `wasm-bindgen` versions (informational) |
+| `files` | `{relpath: sha256}` -- what `--check` verifies |
+| `aliases` | byte-id -> serve-id, when a rebuild's bytes hashed differently |
+| `rebuilt` | set by a verified rebuild: its byte id, source_id, ref, toolchain |
+
+`rebuild: false` means the source cannot be regenerated (sealed from a dirty
+tree or a snapshot). Keep those in `data/engine-archive/` and back that
+directory up.
+
+**Never hardlink a build output into the store.** `webui/src/wasm/glue_bg.wasm`
+is rewritten in place by every `tools/build-glue.mjs` run; on NTFS that write
+goes through a hardlink and destroys the archived bytes. This happened to
+bundle `e4e20956…` on 2026-10-08 (its `glue_bg.wasm` is unrecoverable from
+this machine; the entry is flagged `damaged` and `--check` refuses the deploy
+until the bytes are restored from a `--backup`). `tools/archive-engine.mjs`'s
+`copyOrLink` now hardlinks only between frozen trees (store <-> dist) and
+copies everything else.
+
+Usage:
+
+```bash
+node tools/archive-engine.mjs                       # this repo's build
+node tools/archive-engine.mjs --from <deployed-dir> # a snapshot (glue/ + data/ + dist/assets/rules/)
+node tools/archive-engine.mjs --check               # fail unless store + refs cover every entry
+node tools/archive-engine.mjs --backup <dir>        # copy the store aside (never uploads)
+node tools/rebuild-engine.mjs <commit|bundle-id>    # regenerate + behaviour-verify
+```
+
+`--no-dist` skips the site copy; `--not-current` archives without moving the
+`current` pointer. `--check` is the deploy gate: a bundle that is neither in
+the store nor rebuildable, or whose reference record is missing / hash-broken,
+fails the run.
+
+### 9.3 Stable replay API (frozen)
+
+Every archived bundle exposes the same driver surface -- **v1** is exactly the
+`ReplayMatch` / `record_header*` methods web-glue has shipped since P2
+(`replay_api_version()` returns 1 and is optional on bundles that predate it):
+
+```text
+record_header_bytes(bytes) -> RecordHeader JSON
+ReplayMatch.from_record_bytes(bytes, force) -> handle
+  header() / compat() / status() / step(n) / seek(tick) / index(budget)
+  turns() / total_ticks() / view(seat|0) / events_since(id) / take_changed()
+  ended() / next_input() / free()
+```
+
+The UI may only drive engines through `webui/src/game/replayEngine.ts`
+(`ReplayHandle`), which speaks this set to either the page's wasm or
+`webui/public/assets/engine/replay-worker.js` (a module worker that loads an
+archived bundle's glue as its own wasm instance and posts view JSON back --
+the worker plumbing `docs/BOT.md` §3.6 wants, reused there later).
+
+**MatchState JSON compatibility.** A frame from an older bundle must render in
+the current UI. The rule: *`MatchState` changes are additive* -- new fields get
+defaults and old frames keep playing. Anything else needs a TS-side migration
+keyed by bundle id. `normalizeMatchView` in `replayEngine.ts` fills the fields
+that have grown since (prompt prices, per-player keyed state, tile marks,
+movement plan, ...) so a v1 frame reaches the Board whole.
+
+### 9.4 Loader policy (replaces "warn, then diverge")
+
+`resolveBundle` (`webui/src/game/engineBundle.ts`) picks the engine:
+
+| Case | Policy |
+|---|---|
+| `format` newer than supported | Refuse. |
+| ABI differs | Refuse full replay. |
+| record `bundle` == the running build's bundle | Play on the page's engine (no worker). |
+| record `bundle` is in `index.json` | Boot that bundle in the worker and play there. |
+| record `bundle` is missing | Refuse, naming the id and the path `/assets/engine/<id>/`. |
+| record has no `bundle` (written before §9) | Match the stamp's identity fields (`format`, `save_version`, `abi`, `ruleset_sha256`, `data_sha256`) against the archive and the running engine; prefer the running engine when it matches, else the archived build that does. |
+| no match at all | Refuse: written by a build that was never archived, not reproducible exactly. |
+
+A stamp mismatch is therefore **routing information** ("load the other
+bundle"), not a "continue anyway?" prompt. The old warn-then-diverge path is
+gone; the divergence banner remains for genuine checkpoint mismatches on the
+matching engine (a damaged record).
+
+### 9.5 Records made before this change
+
+The first archived bundle is the build deployed 2026-10-07, frozen from
+`target/scratch/deployed-20261007/` as bundle
+`3a5ac017eec465fb0cb5fc0c8476ac8ef47b3fa926425dd777520c14937c41cf`. Records
+made that day have no `bundle` field and resolve to it through the stamp-field
+fallback (they were written by that exact build). Records from **earlier**
+builds have no archived engine and cannot be reproduced exactly -- the loader
+says so instead of approximating. Do not attempt git archaeology to rebuild
+them.
+
+Both bundles sealed on 2026-10-07 (`3a5ac017…` and `e4e20956…`) came from
+**uncommitted** trees and are therefore `rebuild: false`. Their bytes live in
+`data/engine-archive/`; copy that directory, do not try to regenerate them.
+
+### 9.5.1 Rebuilding from source (option C)
+
+A bundle whose index entry has `rebuild: true` is regenerated from its
+`commit` with
+
+```bash
+node tools/rebuild-engine.mjs <bundle-id>     # or a commit
+node tools/rebuild-engine.mjs --verify        # every rebuildable entry
+```
+
+The tool makes a temporary `git worktree` at the commit **in `os.tmpdir()`**
+(outside the repo, so no parent `rust-toolchain.toml` / `.cargo/config.toml`
+can leak into the build), runs **that commit's own** `tools/build-glue.mjs` and
+`tools/build-ruleset.mjs`, assembles the bundle, and decides whether the result
+is the same engine -- by **source identity and behaviour**, not by bytes:
+
+1. **`source_id` must match the seal.** The behaviour-relevant inputs (the
+   trees in §9.2) are the same. Compiler / wasm-bindgen version, `rust-src`
+   presence and paths are not part of this and may differ freely. Toolchain
+   differences are a **warning**, never a failure.
+2. **The stored reference record must replay clean.** `archive/engine/refs/<id>.bdrec`
+   is a short seeded match (two bots, seed 7) sealed beside the index at
+   archive time. The rebuild loads it through the rebuilt glue with `force`
+   (the rebuilt stamp names its own bundle id) and steps it to the end: every
+   per-turn checkpoint hash must match, `diverged` must stay false. A
+   checkpoint mismatch means the rebuilt engine *behaves* differently and the
+   rebuild is rejected.
+
+On a byte-id mismatch (the usual case across rustc installs) the rebuilt bytes
+are kept under their own byte-id in `data/engine-cache/`, also installed at the
+seal's id so a plain `/assets/engine/<seal>/` fetch works, and the index entry
+gains
+
+```json
+"aliases":  { "<seal-id>": "<rebuilt-byte-id>", "<rebuilt-byte-id>": "<rebuilt-byte-id>" },
+"rebuilt":  { "byte_id": "<rebuilt-byte-id>", "source_id": "…", "verified": true,
+              "ref": "refs/<seal-id>.bdrec", "toolchain": { … } }
+```
+
+Records stamped with the seal's id still resolve: `webui/src/game/engineBundle.ts`
+walks `aliases` (and `rebuilt.byte_id`) when looking a record's bundle up, and
+serves the directory the alias names.
+
+#### What the byte-level id is for
+
+The byte id (`tools/engine-bundle.mjs`) is what a record stamps, so it stays
+the stable handle a record can name. It is **not** a behaviour claim. The
+2026-10-08 spike measured exactly what moves it without moving behaviour:
+
+* **Directory / path length / non-ASCII**: no effect. Two HEAD worktrees at
+  `D:\tmp\bdetA` (12 chars) and `D:\tmp\bdetB-longer-directory-name-20261008`
+  (40 chars) produced **byte-identical** glue, rules modules and ruleset
+  index. Workspace crates already get relative `file!()` paths
+  (`crates\game-core\src\record.rs`), so the checkout's absolute path --
+  including this repo's `大富翁` -- never reaches the bytes. The rules profile
+  is `strip = true` + `panic = "abort"` + `codegen-units = 1`, so card modules
+  carry no path strings at all. Generators sort their inputs.
+* **Machine / `CARGO_HOME` / sysroot**: panic `Location` strings from registry
+  crates and std name those absolute paths. `tools/build-glue.mjs` and
+  `build-ruleset.mjs` set `CARGO_INCREMENTAL=0` and `--remap-path-prefix`
+  (via `CARGO_ENCODED_RUSTFLAGS`, so the repo's spaces and non-ASCII path
+  survive) to rewrite them to `/.cargo/…` and `/rustc/sysroot/…`. Verified:
+  a remapped glue carries **zero** occurrences of the user name, the home
+  directory or the repo path.
+* **rustc install, including `rust-src` presence**: the same rustc version can
+  be two rustup installs. `stable` with `rust-src` records std paths as
+  `C:\Users\<you>\.rustup\toolchains\<name>\lib/rustlib/src/rust\library\…`;
+  an install without it records `/rustc/<commit>/library/…`. Different bytes,
+  same behaviour. The spike hit this the hard way -- see below.
+
+**Do not add a `rust-toolchain.toml` to this repo.** It is not harmless here:
+`stable` and a pinned `1.96.1` are different rustup installs with different
+components, and a pin silently changes every build under the repo (including a
+rebuild worktree placed under `target/`, because rustup walks up and finds the
+file). That is what the `os.tmpdir()` worktree is for. The index records
+`rustc -V` / `wasm-bindgen -V` as informational metadata only.
+
+### 9.6 Deploy steps
+
+1. `node tools/build-glue.mjs` (part of `npm run build`) -- writes
+   `webui/src/wasm/engine_id.json` with the glue sha **and** the commit /
+   dirty flag / toolchain of the bytes just built.
+2. `npm run build` -- the UI, with `webui/public/assets/engine/replay-worker.js`.
+3. **`node tools/archive-engine.mjs`** -- archive the build, then copy the
+   store into `webui/dist/assets/engine/`. **Run this before the new dist
+   goes live.** The run ends with `--check` semantics: every previously indexed
+   bundle must still be servable (in the store with matching hashes, or
+   `rebuild: true`) or the deploy fails. Never delete old bundle directories
+   from `data/engine-archive/` -- for `rebuild: false` entries they are the
+   only copy. (The site copy under `webui/dist` is disposable -- the next
+   archive run restores it from the store.)
+4. `node tools/archive-engine.mjs --check` -- optional repeat of the gate.
+5. `node tools/archive-engine.mjs --backup <dir>` -- copy the store to your
+   backup target. This command never uploads anything.
+6. Server: no extra step beyond the same repo build; `rules-worker` picks the
+   glue identity up from `webui/src/wasm/engine_id.json` (or `BD_GLUE_SHA` /
+   `BD_ENGINE_ID`).
+
+### 9.7 Tests
+
+* `node --test tools/test-replay-archive.mjs` -- JS recipe == engine
+  `bundle_id`; `archive-engine.mjs` produces a loadable bundle whose frozen
+  engine reports exactly the index's stamp; a record sealed by build A plays
+  clean on archived A while the current engine is a trivially different build
+  B (a one-event data override), B refuses it, and B under `force` diverges at
+  the first checkpoint.
+* `node --test webui/src/game/engineBundle.test.ts` -- the routing table.
+* `cargo test -p game-core --test bundle_id` -- the recipe known vector and
+  the serde default for pre-bundle records.
+* `crates/game-core/tests/record.rs` / `record_codec.rs` stay green.

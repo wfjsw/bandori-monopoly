@@ -12,10 +12,17 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     "CRYCHIC:（立希）即便比不上...",
-    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::MoveRoll],
+        None,
+        counteract,
+        "actor == owner && move.roll != null",
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「进入移动阶段后，触发结算前可打出」
     trigger::kind() == TriggerKind::MoveRoll
         && trigger::player_id() == player_id

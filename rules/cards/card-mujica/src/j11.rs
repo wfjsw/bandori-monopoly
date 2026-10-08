@@ -16,19 +16,11 @@ const ID: &str = "Mujica:#J11";
 pub const J11: CardDef = CardDef::new(
     "Mujica:#J11",
     &[
-        On::Play(None, play),
+        On::Play(None, play, ""),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.PayChoose` +
         // `CardJ11.Targeted` -- all field hooks, not [反击]s.
-        On::Hook(
-            &[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted],
-            |_| true,
-            counteract,
-        ),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted], None, counteract, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
 );
 
@@ -79,7 +71,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             }
             // C# `AddCrystals(-1, ...)`; the `if (Crystals <= 0) Unplace(discard)`
             // half is [`on_crystals_changed`] (`Empty` is a no-op for `CardJ11`).
-            ctx::decay();
+            ctx::decay()?;
         }
         // C# `CardJ11.PayChoose` (MatchHost.cs:5895-5901): about to pay money
         // -> may discard; the stun then cancels the payment (C# `p.cancel =

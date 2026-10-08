@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const LOST_CHASE: CardDef = CardDef::new("event:迷子的追逐", &[On::Play(None, play)]);
+pub const LOST_CHASE: CardDef = CardDef::new("event:迷子的追逐", &[On::Play(None, play, "")]);
 
 /// 规则书: 「所有玩家各投5d20」 -- one bare 5d20 per player (no [反击] window).
 /// 「如果抽到此卡的玩家的点数严格大于所有其他玩家的点数则将一张

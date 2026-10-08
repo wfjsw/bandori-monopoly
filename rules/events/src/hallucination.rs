@@ -19,9 +19,9 @@ const TURNS: &str = "turns";
 pub const HALLUCINATION: CardDef = CardDef::new(
     "event:幻觉来了",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::RollPlan], always, on_plan),
-        On::Hook(&[HookKind::TurnStartBefore], always, on_turn_start),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::RollPlan], Some(always), on_plan, ""),
+        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
     ],
 );
 
@@ -64,9 +64,6 @@ fn prev_player(p: i32) -> i32 {
 /// modifiers key off them), which is what `plan::set_roller` does: the log line
 /// shows 「by」, `t.Move.Main` / the mover are unchanged.
 fn on_plan(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::RollPlan {
-        return Ok(());
-    }
     let who = trigger::player_id();
     if who < 0 {
         return Ok(());
@@ -89,9 +86,6 @@ fn on_plan(_owner: i32) -> card_sdk::Asked {
 /// 规则书: 「抽到的玩家的下回合开始时放入事件弃牌」 -- count the drawer's own
 /// turn starts and expire on the first (their next turn).
 fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnStartBefore {
-        return Ok(());
-    }
     if trigger::player_id() != ctx::prop(DRAWER) {
         return Ok(());
     }

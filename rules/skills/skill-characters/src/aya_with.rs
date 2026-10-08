@@ -28,8 +28,12 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const AYA_WITH: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::PayChoose], mine, on_pay),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
+        // (「分摊前」), so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the
+        // per-share `payChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
+        // it divides, not 500 off each share.
+        On::Hook(&[HookKind::PayTotalAdd], Some(mine), on_pay, ""),
     ],
 );
 
@@ -52,7 +56,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     if !ctx::in_band(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     // 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- a grant is the skill
     // rule placed on the grantee's field. `bind_skills` already puts a player's
     // own two there; this adds a third. The body runs for whoever presses it,
@@ -93,16 +97,16 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「将自己Y个正面[P✽P粉丝]变反」
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
+    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
     // 「此次支付的分摊前资金减少Y×100（最少0）」
     ctx::trigger::set_pay_amount((amount - y * 100).max(0));
     // 「如果自己是Pastel✽Palettes角色则将Y个其他乐队玩家拥有的反面[P✽P粉丝]
     // 变正，否则将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]」变正」
     if ctx::in_band(player_id, "Pastel✽Palettes") {
-        flip_others(player_id, y);
+        flip_others(player_id, y)?;
     } else {
-        flip_all_pp();
+        flip_all_pp()?;
     }
     ctx::log(player_id, &Msg::new(key!("aya_with_done")).i("n", y as i64));
     Ok(())
@@ -110,7 +114,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 
 /// 「将Y个其他乐队玩家拥有的反面[P✽P粉丝]变正」 -- spread Y flips across the
 /// other players who hold face-down fans.
-fn flip_others(player_id: i32, mut y: i32) {
+fn flip_others(player_id: i32, mut y: i32) -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         if y <= 0 {
             break;
@@ -120,22 +124,24 @@ fn flip_others(player_id: i32, mut y: i32) {
         }
         let down = ctx::tok(p, FANS_DOWN).min(y);
         if down > 0 {
-            ctx::add_tok(p, FANS_DOWN, -down, i32::MAX);
-            ctx::add_tok(p, FANS_UP, down, i32::MAX);
+            ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
+            ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
             y -= down;
         }
     }
+    Ok(())
 }
 
 /// 「将所有Pastel✽Palettes角色的1个反面[P✽P粉丝]变正」.
-fn flip_all_pp() {
+fn flip_all_pp() -> card_sdk::Asked {
     for p in 0..ctx::player_count() {
         if ctx::player_out(p) || !ctx::in_band(p, "Pastel✽Palettes") {
             continue;
         }
         if ctx::tok(p, FANS_DOWN) > 0 {
-            ctx::add_tok(p, FANS_DOWN, -1, i32::MAX);
-            ctx::add_tok(p, FANS_UP, 1, i32::MAX);
+            ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
+            ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
         }
     }
+    Ok(())
 }

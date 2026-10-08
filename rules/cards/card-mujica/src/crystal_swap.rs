@@ -16,7 +16,7 @@ use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const CRYSTAL_SWAP: CardDef =
-    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play(None, crystal_swap)]);
+    CardDef::new("Mujica:会被骗着买水晶的人", &[On::Play(None, crystal_swap, "")]);
 
 /// One pool entry: a card instance on some player's field.
 ///

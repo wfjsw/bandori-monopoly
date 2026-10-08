@@ -173,7 +173,8 @@ impl DeckBook {
     ///
     /// * `me` -- own character.
     /// * `seat` -- own seat (turn order index).
-    /// * `opponents` -- the other seats' characters in seat order.
+    /// * `opponents` -- the other seats' characters in seat order (ascending
+    ///   seat index, excluding `me`).
     /// * `ruleset_sha256` -- the running ruleset's hash
     ///   ([`crate::engine::CardRules::ruleset_sha256`], `"stub"` when unknown).
     pub fn lookup(

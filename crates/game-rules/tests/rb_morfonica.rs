@@ -680,18 +680,19 @@ fn again_spent_card_goes_to_discard() {
 fn wing_teleports_20_without_settling() {
     // 规则书: 「传送到移动方向20格后（不触发结算），立刻进行移动掷骰」
     let mut t = Table::vanilla(2);
-    t.own(1, &[25]); // a tile 20 ahead must NOT be settled
+    t.own(1, &[25]); // the jump destination must NOT be settled
     t.set_pos(0, 5);
     t.dice(&[3]);
     t.give_play(0, "Mor:纯真振翅").unwrap();
-    assert_eq!(t.pos(0), 25);
+    // The jump lands on 25 and settles nothing (no rent there); 「立刻进行
+    // 移动掷骰」 then rolls 3 and walks on from 25 to 28.
+    assert_eq!(t.pos(0), 5 + 20 + 3, "keys={:?}", t.recent_keys(16));
     // no settlement at the teleport destination: no rent was paid
     assert_eq!(t.money(0), 10_000);
     assert_eq!(t.money(1), 10_000);
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book then immediately performs the movement dice roll (5+20 then +3 = 28); engine consumes the main move on the teleport and never rolls (stays 25, dice queue untouched, roll refused)"]
 fn wing_then_rolls_the_movement_dice() {
     // 规则书: 「…（不触发结算），立刻进行移动掷骰」
     let mut t = Table::vanilla(2);

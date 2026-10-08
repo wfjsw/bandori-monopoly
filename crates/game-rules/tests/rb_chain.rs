@@ -45,8 +45,9 @@ fn events(t: &Table, name: &str) -> Vec<MatchEvent> {
     let full = ev(name);
     t.st()
         .events
-        .into_iter()
+        .iter()
         .filter(|e| e.msg.key() == full)
+        .cloned()
         .collect()
 }
 

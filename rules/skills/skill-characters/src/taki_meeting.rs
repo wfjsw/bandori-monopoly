@@ -22,18 +22,15 @@ const USED: &str = "skill.takiMeeting.used";
 pub const TAKI_MEETING: CardDef = CardDef::new(
     "skill:椎名立希:决定练习日的会议",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Abnormal], |_| true, on_abnormal),
-        On::Hook(&[HookKind::TurnStartBefore], mine, reset),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Abnormal], None, on_abnormal, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, reset, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -55,7 +52,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     if trigger::abnormal_kind() != Some(AbKind::Stay) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("taki_meeting_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("taki_meeting_gain")))?;
     Ok(())
 }
 
@@ -95,7 +92,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&(uid, ref card)) = field.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("taki_meeting_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("taki_meeting_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

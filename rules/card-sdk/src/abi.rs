@@ -145,7 +145,8 @@ use alloc::{string::String, vec::Vec};
 ///      `prop::RENT_FACTOR` / `PAY_FACTOR` replace `rent_factor` / `pay_factor`,
 ///      `prop::BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` replace the turn-ctx
 ///      buy knobs, `prop::NO_BUILD` replaces the `noBuild` state key, and
-///      `prop::GROUP` replaces `extraColor:`. Board-owned instances now hear
+///      `prop::ANY_COLOR` / `prop::COLOR_FOR_PREFIX` replace the old per-player
+///      colour override key. Board-owned instances now hear
 ///      the field hooks they declare (`passTile` &c.).
 /// v33: `roll_ask` (a card-/skill-driven roll that raises the `Roll` chain
 ///      link -- the 「掷骰结算前」 [反击] window -- with the roller, the face and
@@ -216,8 +217,51 @@ use alloc::{string::String, vec::Vec};
 ///      `colorFor:` prefix. `ctx::buy_quotes` / `ctx::buy` / `ctx::acquire` /
 ///      `ctx::agent_offer` / `ctx::linger`. The retired props
 ///      `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` stay for one ABI (P5
-///      deletes them and the `TurnCtx` flags together).
-pub const ABI_VERSION: i32 = 40;
+///      deletes them and the `TurnCtx` flags together). SAVE_VERSION 3 → 4
+///      (the `TurnCtx.lingering` field enters the save).
+/// v41: the **removals**. `ctx::set_buy_discount` / `ctx::set_free_buy` /
+///      `ctx::set_raze_on_buy` and the `TurnCtx` fields they wrote are gone,
+///      replaced by `ctx::linger` + the `BuyAdd` / `BuyMul` / `BuySet` /
+///      `BuyAssign` hooks. The old global / per-player colour writers and
+///      their state key are gone, replaced by the `prop::ANY_COLOR` /
+///      `prop::COLOR_FOR_PREFIX` tile
+///      props. The retired props `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY`
+///      go with them.
+/// v42: the payment command's **pre-split** stage and the terminal hooks
+///      (`PIPELINE-AUDIT` Q2 / Q6). `TriggerKind`s `PayTotalAdd` / `PayTotalMul`
+///      / `PayTotalCancel` (wire names `payTotalAdd` / `payTotalMul` /
+///      `payTotalCancel`) run command-wide on the figure **before** any
+///      「[分摊]」 divides it -- 「分摊前」 -- alongside the existing per-share
+///      `PayAdd` / `PayMul` / `PayChoose` / `PayAt`. `ctx::pay_total` /
+///      `ctx::split_pay` / `ctx::transfer_leg` drive them. Terminal
+///      `<thing>Resolved` hooks: `tileResolved` (after `settleAfter`),
+///      `moveResolved` (after a move and its settle), `bankruptResolved` (after
+///      the leftover auctions). `HostRequest::Pay` carries `total_stage`, and
+///      `HostRequest::PayTotal` is new. SAVE_VERSION unchanged (no save field).
+/// v43: the **move-head / move-tail** pair (`SETTLE-STAGES.md` §7). `TriggerKind`s
+///      `MoveBefore` / `MoveAfter` (wire names `moveBefore` / `moveAfter`).
+///      `moveBefore` fires for every move -- walk or teleport, main or
+///      card-driven, settling or not -- once its plan is fixed and before the
+///      first step / the teleport; counteractions that cancel or alter the move
+///      belong here (so it is a [`ChainKind`] too). `moveAfter` fires after
+///      `passPlayer`, before `settleBefore`, for every completed move --
+///      including a 「不触发结算」 one (only the settle stages are skipped);
+///      「移动后」/「主要移动结束时」/「[移动终点]」 clauses land here. The
+///      roll-specific `rollPlan` / `moveRoll` and the teleport-specific
+///      `teleport` / `teleported` stay where they are; `moveResolved` stays the
+///      final terminal after any settle. SAVE_VERSION unchanged.
+/// v45: guard **condition** per guarded entry (docs/GUARDS.md G0). `On::Play` /
+///      `On::Counteract` / `On::Hook` gain a trailing `pre: &'static str`
+///      (`""` = none) and `ManifestOn` gains `pre: Option<String>` (the CEL
+///      source, compiled host-side at ruleset build). No behavioural change
+///      while no entry declares one. SAVE_VERSION unchanged (no save field).
+/// v46: deleted guards + legacy audit (GUARDS.md G3/G4). `On::Counteract` /
+///      `On::Hook` guards become `Option<fn>` (`None` = G4-deleted residual);
+///      `ManifestOn` gains `has_guard` / `has_legacy`; `CardDef` gains a
+///      `legacy` table and `export::OP_LEGACY_GUARD` (= 2) returns the
+///      pre-migration guard for the `guard-audit` equivalence check. SAVE_VERSION
+///      unchanged (no save field).
+pub const ABI_VERSION: i32 = 46;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -229,12 +273,17 @@ pub mod export {
     pub const MANIFEST: &str = "bandori_manifest";
     /// `(card: i32, entry: i32, op: i32, player_id: i32) -> i64` -- call entry
     /// `entry` (an index into the card's manifest `on` list). `op` is
-    /// [`OP_RUN`] or, for a `Counteract` entry, [`OP_GUARD`]. Returns 0, the guard's
+    /// [`OP_RUN`], [`OP_GUARD`] or [`OP_LEGACY_GUARD`]. Returns 0, the guard's
     /// 0/1, or (for a `Play` gate) a packed `(ptr << 32) | len` postcard `Msg`
     /// reason with 0 meaning "playable".
     pub const ON: &str = "bandori_on";
     pub const OP_RUN: i32 = 0;
     pub const OP_GUARD: i32 = 1;
+    /// G3 migration audit (GUARDS.md §5.1): the card's pre-migration
+    /// `legacy_*` guard. Only present while `ManifestOn::has_legacy`; the
+    /// `guard-audit` host compares it against `pre ∧ guard` and panics on any
+    /// mismatch. Traps / a missing entry mean "no legacy" and skip the check.
+    pub const OP_LEGACY_GUARD: i32 = 2;
     pub const MEMORY: &str = "memory";
 }
 
@@ -271,10 +320,11 @@ pub mod state_key {
     pub const START_HAND: &str = "startHand";
     /// Skill-system scratch.
     pub const SKILL_STATE: &str = "skillState";
-    /// 「[拥有者]不可盖房」 -- `why_not_build_on` refuses while this is set.
-    pub const NO_BUILD: &str = "noBuild";
-    // 「无法获取[CiRCLE奖励]」 is no longer a per-player state latch: it is
-    // `prop::NO_REWARD` on the source's rule instance (`docs/TILES.md`).
+    // 「[拥有者]不可盖房」 is no longer a per-player state latch: it is
+    // `prop::NO_BUILD` on a rule instance -- a placed card's own instance, or a
+    // `ctx::linger` instance for a hand card (`docs/PURCHASE.md`).
+    // 「无法获取[CiRCLE奖励]」 is likewise `prop::NO_REWARD` on the source's
+    // rule instance (`docs/TILES.md`).
 }
 
 /// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
@@ -313,6 +363,12 @@ pub mod prop {
     /// stun gate when played from hand. The exile and no-hand gates have no
     /// such exception in the pool. Default `0` (blocked by stun).
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
+    /// Bot-only **estimated execution cost** (user ruling 2026-10-07): what
+    /// activating this card is expected to cost the player, in 资金. Read
+    /// **only** by bots / autopilot as a reserve check -- never by legality.
+    /// Constant for now; an X-dependent cost may later become a `rules-cond`
+    /// expression. `0` (the default) means "unknown / assume free".
+    pub const EST_COST: &str = "estCost";
     /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
     /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
     /// 所有的效果」. The named set is the play's **other living players** (the
@@ -364,12 +420,6 @@ pub mod prop {
     pub const RENT_FACTOR: &str = "rentFactor";
     /// Payment scale in milli-units (500 = x0.5). Replaces `pay_factor`.
     pub const PAY_FACTOR: &str = "payFactor";
-    /// 「购买格子时[消耗]资金降低N（最低0）」. Replaces `buy_discount`.
-    pub const BUY_DISCOUNT: &str = "buyDiscount";
-    /// 「购买格子不[消耗]资金」. Replaces `free_buy`.
-    pub const FREE_BUY: &str = "freeBuy";
-    /// 「如果购买则拆除那个格子上的所有房屋」. Replaces `raze_on_buy`.
-    pub const RAZE_ON_BUY: &str = "razeOnBuy";
     /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
     /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
@@ -379,8 +429,7 @@ pub mod prop {
 
     // ------------------------------------------------------ purchase surface
     // v40 (`docs/PURCHASE.md`). Tile props that decide eligibility, price and
-    // the deal. The retired `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` above
-    // stay one ABI and are deleted at P5 together with the `TurnCtx` flags.
+    // the deal.
 
     /// 「可购买格子」 (`data/rules.txt` line 19) -- `1` = this tile can be bought
     /// at all. Stamped from `TileData::is_buyable` at bind time; a rule
@@ -406,8 +455,7 @@ pub mod prop {
     /// tile prop rather than a `group` value.
     pub const ANY_COLOR: &str = "anyColor";
     /// Per-player colour override prefix: `colorFor:<p>` = the group tile `p`
-    /// treats this tile as (`-1` clears, `-2` = all colours). Replaces the
-    /// `extraColor:` player-state key and `st.tile_colors`.
+    /// treats this tile as (`-1` clears, `-2` = all colours).
     pub const COLOR_FOR_PREFIX: &str = "colorFor:";
 }
 
@@ -868,6 +916,63 @@ pub enum TriggerKind {
     /// `Fx.BuyAssign` -- the deal is committing, before the `bought` hook.
     /// Rewrites `deal_owner` / `deal_houses` / `deal_mortgaged`.
     BuyAssign = 83,
+
+    // v42: the command-wide **pre-split** payment stage (`PIPELINE-AUDIT` Q2)
+    // and the terminal `<thing>Resolved` hooks (Q6).
+    /// `Fx.PayTotalAdd` -- the payment command's **pre-split** fixed ± stage
+    /// (「分摊前资金减少/增加」, 规则书 支付阶段 2 applied to the command total).
+    /// Runs once per payment command, on the figure **before** any 「[分摊]」
+    /// divides it into shares; a single-pair payment's command total is its own
+    /// amount. `t.value` / `set_pay_amount` rewrite the total. Composes with
+    /// [`Self::PayTotalMul`] and [`Self::PayTotalCancel`] (add → mul → cancel).
+    /// The per-share counterparts are [`Self::PayAdd`] / [`Self::PayMul`] /
+    /// [`Self::PayChoose`] / [`Self::PayAt`], which run on each settled leg.
+    PayTotalAdd = 84,
+    /// `Fx.PayTotalMul` -- the pre-split × stage (规则书 支付阶段 4), after
+    /// [`Self::PayTotalAdd`]. `t.value` / `set_pay_amount`.
+    PayTotalMul = 85,
+    /// `Fx.PayTotalCancel` -- the pre-split cancel (规则书 支付阶段 5's
+    /// 「取消支付」 on the command rather than on one pair), after
+    /// [`Self::PayTotalMul`]. `trigger::set_cancelled()` drops the whole
+    /// command: no leg runs and nothing moves.
+    PayTotalCancel = 86,
+    /// Terminal: the tile's settlement is fully resolved (after
+    /// [`Self::SettleAfter`], including when the settle was cancelled -- the
+    /// resolution is complete as nothing). `PIPELINE-AUDIT` Q6 / the spec's
+    /// `TileResolved`.
+    TileResolved = 87,
+    /// Terminal: the move (and any settlement it asked for) is fully resolved.
+    /// Fires at the end of a walk / teleport, after the settle pipeline.
+    MoveResolved = 88,
+    /// Terminal: the bankruptcy is fully resolved -- cash-in done, the seat
+    /// cleared, the leftover auctions finished. `PIPELINE-AUDIT` K11.
+    BankruptResolved = 89,
+
+    // v43: the move-head / move-tail pair (`SETTLE-STAGES.md` §7).
+    /// **Before any move** -- walk or teleport, main or card-driven, settling or
+    /// not -- once the move's plan is fixed and before the first step / the
+    /// teleport. This is where a counteraction cancels or alters the move
+    /// (`SETTLE-STAGES.md` §7 「移动前」). The roll-specific `rollPlan` /
+    /// `moveRoll` and the teleport-specific `teleport` stay inside a main move's
+    /// own head; this is the generic move point.
+    MoveBefore = 90,
+    /// **After a completed move** -- 「移动后」/「主要移动结束时」 and the
+    /// 「[移动终点]」 condition anchor. Fires after `passPlayer`, before
+    /// `settleBefore`, for every completed move -- including a 「不触发结算」
+    /// one (其他规则注意事项 1.2: 「是否[结算]」 gates only the settle). The
+    /// teleport-specific `teleported` and the final `moveResolved` stay where
+    /// they are; this is the move-end point the tail effects belong on.
+    MoveAfter = 91,
+
+    // v44: marker spend / gain counteraction windows (user ruling 2026-10-07).
+    /// **Before a marker spend** (火罐 / 奇迹水晶 / P✽P粉丝 / any token) moves.
+    /// A counteraction here cancels the spend; nothing is spent if the link is
+    /// negated. Marker *costs* keep today's timing otherwise: they are spent as
+    /// the effect resolves and a whole-effect negation before the body already
+    /// prevents them.
+    MarkerSpend = 92,
+    /// **Before a marker gain** moves. Same window shape as [`Self::MarkerSpend`].
+    MarkerGain = 93,
 }
 
 impl TriggerKind {
@@ -956,6 +1061,16 @@ impl TriggerKind {
             81 => Self::BuyMul,
             82 => Self::BuySet,
             83 => Self::BuyAssign,
+            84 => Self::PayTotalAdd,
+            85 => Self::PayTotalMul,
+            86 => Self::PayTotalCancel,
+            87 => Self::TileResolved,
+            88 => Self::MoveResolved,
+            89 => Self::BankruptResolved,
+            90 => Self::MoveBefore,
+            91 => Self::MoveAfter,
+            92 => Self::MarkerSpend,
+            93 => Self::MarkerGain,
             _ => Self::None,
         }
     }
@@ -1047,6 +1162,16 @@ impl TriggerKind {
             Self::BuyMul => "buyMul",
             Self::BuySet => "buySet",
             Self::BuyAssign => "buyAssign",
+            Self::PayTotalAdd => "payTotalAdd",
+            Self::PayTotalMul => "payTotalMul",
+            Self::PayTotalCancel => "payTotalCancel",
+            Self::TileResolved => "tileResolved",
+            Self::MoveResolved => "moveResolved",
+            Self::BankruptResolved => "bankruptResolved",
+            Self::MoveBefore => "moveBefore",
+            Self::MoveAfter => "moveAfter",
+            Self::MarkerSpend => "markerSpend",
+            Self::MarkerGain => "markerGain",
         }
     }
 
@@ -1136,6 +1261,16 @@ impl TriggerKind {
             "buyMul" => Self::BuyMul,
             "buySet" => Self::BuySet,
             "buyAssign" => Self::BuyAssign,
+            "payTotalAdd" => Self::PayTotalAdd,
+            "payTotalMul" => Self::PayTotalMul,
+            "payTotalCancel" => Self::PayTotalCancel,
+            "tileResolved" => Self::TileResolved,
+            "moveResolved" => Self::MoveResolved,
+            "bankruptResolved" => Self::BankruptResolved,
+            "moveBefore" => Self::MoveBefore,
+            "moveAfter" => Self::MoveAfter,
+            "markerSpend" => Self::MarkerSpend,
+            "markerGain" => Self::MarkerGain,
             _ => Self::None,
         }
     }
@@ -1277,6 +1412,24 @@ declare_kinds! {
         HouseAdded = 75,
         FireSpent = 73,
         SkillUsed = 74,
+        /// v43: the move head (`SETTLE-STAGES.md` §7 「移动前」) -- a counteraction
+        /// that cancels or alters the move answers here, once the plan is fixed
+        /// and before the first step / the teleport.
+        MoveBefore = 90,
+        /// v43: the move tail (行动阶段 13 「移动后」/「主要移动结束时」) --
+        /// after `passPlayer`, before `settleBefore`, for every completed move.
+        MoveAfter = 91,
+        /// v43: one [经过] step (`SETTLE-STAGES.md` §4 M4) -- the chain
+        /// counterpart of [`TriggerKind::PassTile`], so a [反击] that answers
+        /// 「当你经过…时」 can target a mid-route pass rather than the end-tile
+        /// [重叠]. Same moment as [`Self::Pass`]; `PassBefore` is the pre-half.
+        PassTile = 47,
+        /// v44: a marker spend (user ruling 2026-10-07) -- its own [反击]
+        /// window, opened **before** the markers move. No shipped card listens
+        /// yet; a fixture in `rules/fixtures/test-cards` pins the shape.
+        MarkerSpend = 92,
+        /// v44: a marker gain, same window shape as [`Self::MarkerSpend`].
+        MarkerGain = 93,
     }
 }
 
@@ -1379,6 +1532,28 @@ declare_kinds! {
         /// v40: the deal is committing (before `bought`); rewrite
         /// `deal_owner` / `deal_houses` / `deal_mortgaged`.
         BuyAssign = 83,
+        /// v42: the payment command's **pre-split** stages -- see
+        /// [`TriggerKind::PayTotalAdd`] etc. Command-wide, on the total before
+        /// any 「[分摊]」 divides it; the per-share stages are `PayAdd` /
+        /// `PayMul` / `PayChoose` / `PayAt`.
+        PayTotalAdd = 84,
+        PayTotalMul = 85,
+        PayTotalCancel = 86,
+        /// v42: terminal `<thing>Resolved` hooks (see [`TriggerKind`]).
+        TileResolved = 87,
+        MoveResolved = 88,
+        BankruptResolved = 89,
+        /// v43: the move head (`SETTLE-STAGES.md` §7 「移动前」) -- every move
+        /// (walk or teleport, main or card-driven, settling or not) once its
+        /// plan is fixed and before the first step / the teleport. Also a
+        /// [`ChainKind`]: counteractions that cancel or alter the move go here.
+        MoveBefore = 90,
+        /// v43: the move tail (行动阶段 13 「移动后」/「主要移动结束时」) --
+        /// after `passPlayer`, before `settleBefore`, for every completed move
+        /// including a 「不触发结算」 one. Also a [`ChainKind`].
+        MoveAfter = 91,
+        // PassTile (47) was already a HookKind; v43 makes it a [`ChainKind`]
+        // too (see ChainKind).
     }
 }
 
@@ -1448,6 +1623,23 @@ pub struct ManifestOn {
     pub kind: i32,
     /// `TriggerKind`s as `i32`.
     pub triggers: Vec<i32>,
+    /// Guard **condition** source (docs/GUARDS.md §4.3), CEL over the §4.2
+    /// window/candidate vocabulary. `None` = no condition (the guard alone
+    /// decides). Compiled once at ruleset build (`RuleError::BadPre` on any
+    /// parse / unknown-var / float error); the compiled lean form
+    /// (`Cond::to_bytes(false)`) is what the runtime-only browser path loads.
+    /// Never `skip_serializing_if`: postcard is not self-describing and would
+    /// misalign the next field.
+    pub pre: Option<String>,
+    /// Does the residual wasm guard exist? G4 deletes a guard whose whole body
+    /// moved into `pre`; the host then skips the `OP_GUARD` instantiation
+    /// (`admits_pre`). `true` for every pre-G4 entry.
+    pub has_guard: bool,
+    /// Does this entry keep a `legacy_*` audit guard (G3, docs/GUARDS.md §5.1)?
+    /// The `guard-audit` host feature calls [`export::OP_LEGACY_GUARD`] and
+    /// panics on any mismatch with `pre ∧ guard`. Deleted once the card's audit
+    /// is clean.
+    pub has_legacy: bool,
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).

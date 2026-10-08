@@ -3,7 +3,9 @@
 
 import { settings } from "./store";
 import init, * as glue from "../wasm/glue";
+import engineId from "../wasm/engine_id.json";
 import { t as tr } from "../i18n/t";
+import { toast } from "../ui/Toast";
 import type { BandData, CardData, CharacterData, EventData, TileData, VoiceLine } from "./types";
 
 export interface GameData {
@@ -26,31 +28,54 @@ export interface GameData {
 export let D: GameData;
 export const rules = glue;
 
+/** True once `loadRuleset` has produced a live `WasmRules`; `false` means every
+ *  solo match (and every local replay) is running on the engine's `StubRules`
+ *  -- no card, skill or tile effects. A record sealed under one and replayed
+ *  under the other diverges at the first checkpoint (`docs/REPLAY.md`), so the
+ *  UI reads this to explain a divergence instead of showing it as engine drift. */
+export let rulesetLoaded = false;
+
 /** The card / skill / tile rule modules `tools/build-ruleset.mjs` copies to
  *  `/assets/rules/`. Without them every solo match runs on the engine's
  *  `StubRules` (plain-Monopoly tiles, no card or skill effects), so this has to
  *  run after `load_data` (the ruleset binds to the game data) and before any
  *  `SoloMatch` is built. Online play runs the rules on the server, so a failure
- *  here is logged rather than fatal. */
+ *  here is not fatal -- but it **is** shown, because a match recorded without
+ *  card rules and replayed with them (or the other way round) diverges at the
+ *  first checkpoint and looks like engine drift. */
 async function loadRuleset(): Promise<void> {
   try {
     const r = await fetch("/assets/rules/index.json");
     if (!r.ok) throw new Error(`index.json: HTTP ${r.status}`);
-    const index: { modules: { file: string }[] } = await r.json();
+    // An SPA dev server answers unknown paths with `index.html` and HTTP 200;
+    // `r.json()` then throws a SyntaxError with no path in it. Say what failed.
+    const text = await r.text();
+    if (text.trimStart().startsWith("<")) {
+      throw new Error("index.json: got HTML (the ruleset was not built -- run tools/build-ruleset.mjs)");
+    }
+    const index: { modules: { file: string }[] } = JSON.parse(text);
     for (const m of index.modules) {
       const w = await fetch("/assets/rules/" + m.file);
       if (!w.ok) throw new Error(`${m.file}: HTTP ${w.status}`);
       glue.ruleset_add(new Uint8Array(await w.arrayBuffer()));
     }
     const n = glue.ruleset_build();
+    rulesetLoaded = true;
     console.info(`[rules] ${n} card module(s) loaded`);
   } catch (e) {
     console.error("[rules] card modules failed to load; solo matches will run without card, skill or tile rules", e);
+    toast(tr("boot.rulesError", { detail: e instanceof Error ? e.message : String(e) }), "error");
   }
 }
 
 export async function loadGameData(progress: (p: number) => void): Promise<void> {
   await init();
+  // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): every
+  // record this build seals names the bundle that can replay it. Comes from
+  // `tools/build-glue.mjs`; empty only if a glue was built without it.
+  if (typeof glue.set_glue_sha === "function" && engineId?.glueSha256) {
+    glue.set_glue_sha(engineId.glueSha256);
+  }
   const names: string[] = JSON.parse(glue.data_files());
   const files: Record<string, string> = {};
   let done = 0;

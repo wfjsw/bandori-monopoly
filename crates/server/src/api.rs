@@ -179,6 +179,9 @@ pub async fn create_room(
         s.engine.clone(),
         s.store.clone(),
     );
+    // Advanced bots need the bot-service; without one they play as standard
+    // (`docs/BOT.md` B5, `Room::start`).
+    room.bot_search = s.bots.is_some();
     let who = NewMember {
         token: &sess.token,
         player: &sess.player,

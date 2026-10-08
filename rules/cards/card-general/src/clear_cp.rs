@@ -32,13 +32,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CLEAR_CP: CardDef = CardDef::new(
     "通用:该清CP了",
     &[
-        On::Play(Some(cant_play), clear_cp),
+        On::Play(Some(cant_play), clear_cp, ""),
         // （1）: the spread runs at the [使用者]'s turn starts for 2 of them.
-        On::Hook(&[HookKind::TurnStart], spread_guard, spread),
+        On::Hook(&[HookKind::TurnStart], Some(spread_guard), spread, ""),
         // User ruling 2026-10-07: the card leaves for the discard as soon as
         // its attached [CP点] is empty -- an event handler on the count, not a
         // check at each spend site.
-        On::Hook(&[HookKind::CpChanged], cp_empty_guard, on_cp_empty),
+        On::Hook(&[HookKind::CpChanged], Some(cp_empty_guard), on_cp_empty, ""),
     ],
 );
 

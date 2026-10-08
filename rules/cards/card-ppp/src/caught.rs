@@ -9,7 +9,7 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play(Some(cant_play), play)]);
+pub const CAUGHT: CardDef = CardDef::new("PPP:抓到了", &[On::Play(Some(cant_play), play, "")]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardCaught.WhyNot`: `H.MoveWhyNot` first (main move still available),

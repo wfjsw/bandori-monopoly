@@ -19,16 +19,36 @@
 //! See `docs/P0-FINDINGS.md` for why this replaced the CEL + Lua design.
 
 mod host;
+pub mod hostfns;
+pub mod inline;
+/// The `bandori_*` host-import shims (native only). Lives here, not in
+/// `rules-native`, so every native binary that links `card-sdk` with `guest`
+/// on -- including a server test binary in a unified `cargo test` -- resolves
+/// the symbols (`docs/BOT.md` B1, the `LNK2019` fix).
+#[cfg(not(target_arch = "wasm32"))]
+pub mod native_shims;
 mod wasm_rules;
 mod world;
 
+/// G0/G2 guard prefilter (docs/GUARDS.md): the serialized condition per
+/// guarded entry and the one shared `admits()` every guard call site goes
+/// through.
+pub mod cond_pre;
+
 pub use card_sdk::abi::{AbKind, CardPile, MoveKind, PromptKind, TriggerKind, ABI_VERSION};
+pub use cond_pre::{admits, admits_gate, admits_pre, CompiledPre};
 pub use game_core::msg::Msg;
 pub use host::{
-    Call, CardInfo, HostRequest, Outcome, Prompt, PromptOption, RuleError, Ruleset, RulesetBuilder,
+    Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,
+    HostState, Outcome, Prompt, PromptOption, RuleError, Ruleset, RulesetBuilder, RulesHandle,
     MAX_NESTING,
 };
-pub use wasm_rules::WasmRules;
+/// Simulation-mode inline answers (`docs/BOT.md` §3.2).
+pub use inline::{with_inline_host, InlineHost};
+/// Shared with `rules-native`: the engine-side `Msg` decoder and the per-run
+/// fuel budget the nested-call plumbing shares.
+pub use host::{engine_msg, DEFAULT_FUEL};
+pub use wasm_rules::{RulesBridge, Run, WasmRules};
 pub use world::{CardWorld, Trigger};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0); see `host::bot_cost`.

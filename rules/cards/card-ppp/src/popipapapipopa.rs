@@ -20,8 +20,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
     "PPP:[衍生]Popipapapipopa",
     &[
-        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
-        On::Hook(&[HookKind::PayChoose], pay_choose_guard, pay_choose),
+        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
+        On::Hook(&[HookKind::PayChoose], Some(pay_choose_guard), pay_choose, ""),
     ],
 );
 
@@ -66,7 +66,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let before = ctx::crystals();
-    let after = ctx::add_crystals(1, MAX_CRYSTALS);
+    let after = ctx::add_crystals(1, MAX_CRYSTALS)?;
     if after > before {
         ctx::log(
             player_id,
@@ -116,7 +116,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     if n <= 0 {
         return Ok(());
     }
-    ctx::add_crystals(-n, 0);
+    ctx::add_crystals(-n, 0)?;
     let cut = 150 * n;
     // C# `p.amount = Math.Max(0, p.amount - 150 * r.value)`.
     trigger::set_pay_amount((amount - cut).max(0));

@@ -123,6 +123,66 @@ pub struct EngineStamp {
     pub engine: String,
     /// Build identity (package version, git hash, ...).
     pub build: String,
+    /// The engine **bundle** this stamp names (`docs/REPLAY.md` §9). A stable
+    /// id for the exact engine build (glue wasm + glue js) plus the ruleset
+    /// and data it runs, so a record can be replayed by the very bundle that
+    /// wrote it instead of whatever engine is current. Empty for a record
+    /// written before bundles, or by a host that cannot see the glue identity;
+    /// [`compat`] skips it and the loader falls back to matching the other
+    /// fields. Computed by [`bundle_id`].
+    pub bundle: String,
+}
+
+/// The version tag baked into every [`bundle_id`] hash. Bump when the recipe
+/// below changes; an id from another recipe is simply a different id.
+pub const BUNDLE_ID_VERSION: &str = "bdre-bundle-v1";
+
+/// The engine bundle id for `glue_sha256` plus the stamp's own identity
+/// fields: the recipe `tools/engine-bundle.mjs` and the archive step run
+/// (`docs/REPLAY.md` §9).
+///
+/// `glue_sha256` is sha256 over the glue's `glue.js` bytes followed by its
+/// `glue_bg.wasm` bytes (hex). An empty `glue_sha256` means the host cannot
+/// see the glue identity (a pre-bundle build, or the in-process server
+/// fallback) and the result is `""` -- an unknown bundle, never a wrong one.
+///
+/// ```text
+/// sha256_hex("bdre-bundle-v1\n"
+///            "<glue_sha256>\n<ruleset_sha256>\n<data_sha256>\n"
+///            "<format>\n<save_version>\n<abi>\n")
+/// ```
+pub fn bundle_id(glue_sha256: &str, s: &EngineStamp) -> String {
+    use sha2::Digest;
+    if glue_sha256.is_empty() {
+        return String::new();
+    }
+    let nums = [
+        s.format.to_string(),
+        s.save_version.to_string(),
+        s.abi.to_string(),
+    ];
+    let mut buf: Vec<u8> = Vec::new();
+    for part in [
+        BUNDLE_ID_VERSION,
+        glue_sha256,
+        s.ruleset_sha256.as_str(),
+        s.data_sha256.as_str(),
+    ]
+    .into_iter()
+    .chain(nums.iter().map(String::as_str))
+    {
+        buf.extend_from_slice(part.as_bytes());
+        buf.push(b'\n');
+    }
+    hex(&sha2::Sha256::digest(&buf))
+}
+
+fn hex(bytes: &[u8]) -> String {
+    let mut s = String::with_capacity(bytes.len() * 2);
+    for b in bytes {
+        s.push_str(&format!("{b:02x}"));
+    }
+    s
 }
 
 impl EngineStamp {
@@ -361,9 +421,10 @@ pub struct Mismatch {
     pub fatal: bool,
 }
 
-/// Compare two stamps. Empty / zero fields mean "unknown" and are skipped, so
-/// a partial stamp (see [`EngineStamp::current`]) only reports what it knows.
-/// `engine` and `build` are informational and never reported.
+/// Compare two stamps: `want` is what the **record** was written against,
+/// `got` is what **this** engine has. Empty / zero fields mean "unknown" and
+/// are skipped, so a partial stamp (see [`EngineStamp::current`]) only reports
+/// what it knows. `engine` and `build` are informational and never reported.
 ///
 /// | Case | `fatal` |
 /// |---|---|
@@ -371,6 +432,9 @@ pub struct Mismatch {
 /// | `abi` differs | true |
 /// | `save_version`, `ruleset_sha256`, `data_sha256` differ | false |
 pub fn compat(a: &EngineStamp, b: &EngineStamp) -> Vec<Mismatch> {
+    // `a` is the record's stamp, `b` is the engine's -- the same order
+    // `stampMismatches` in the webui uses, so the warn dialog reads the same
+    // way in both places.
     let mut out = Vec::new();
     fn num(out: &mut Vec<Mismatch>, field: &str, x: u32, y: u32, fatal: bool) {
         if x != 0 && y != 0 && x != y {
@@ -1155,7 +1219,7 @@ impl Replayer {
                 rec.check, want
             )));
         }
-        let mis = compat(stamp, &rec.header.engine);
+        let mis = compat(&rec.header.engine, stamp);
         if !mis.is_empty() && !force {
             return Err(ReplayError::Incompatible(mis));
         }

@@ -401,16 +401,16 @@ fn l04_forced_move_into_remote_settle() {
 }
 
 // =====================================================================
-// L5. One skill use, several reactions
+// L5. One skill use, several counteractions
 // =====================================================================
 
-// 规则书: clause-89 order for reactions to one skill use (ruling 2026-10-07:
+// 规则书: clause-89 order for counteractions to one skill use (ruling 2026-10-07:
 // the ring starts with the initial user of the skill use).
 // RULING: whether P1 still gets the mark and P2 still teleports when the use
 // is cancelled; whether P0's fire is refunded.
 #[ignore = "DISCREPANCY: 花园多惠 (2) cancel window never opens; P0's teleport resolves (pos 10 not 5)"]
 #[test]
-fn l05_one_skill_several_reactions() {
+fn l05_one_skill_several_counteractions() {
     let mut t = Table::new(&["户山香澄", "广町七深", "青叶摩卡", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
@@ -422,7 +422,7 @@ fn l05_one_skill_several_reactions() {
     t.set_pos(0, 5);
     let sid = t.skill_id(0, "非凡之星");
     t.skill(0, &sid).unwrap();
-    // Reactions: P1 (2) mark, P2 (2) teleport, P3 (2) cancel.
+    // Counteractions: P1 (2) mark, P2 (2) teleport, P3 (2) cancel.
     let mut seen = vec![];
     loop {
         let Some(_) = t.prompt() else { break };
@@ -442,7 +442,7 @@ fn l05_one_skill_several_reactions() {
         }
     }
     eprintln!(
-        "l05 record (RULING: reactions survive cancel?): pos0 = {} (want 5), money0 = {} (+2000), money3 = {} (+500), pos2 = {} (want 5), fire = {}/{}/{}/{}",
+        "l05 record (RULING: counteractions survive cancel?): pos0 = {} (want 5), money0 = {} (+2000), money3 = {} (+500), pos2 = {} (want 5), fire = {}/{}/{}/{}",
         t.pos(0),
         t.money(0),
         t.money(3),

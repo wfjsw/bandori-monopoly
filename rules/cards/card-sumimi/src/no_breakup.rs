@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
-    &[On::Play(Some(cant_play), no_breakup)],
+    &[On::Play(Some(cant_play), no_breakup, "")],
 );
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?
@@ -112,10 +112,13 @@ fn no_breakup(player_id: i32) -> card_sdk::Asked {
     // -- C# snapshots pos / stay / stun / exile / every player's money / owners /
     // houses / mortgaged before the move and restores them all when
     // `!RepeatedDigits(money) && !H.Out(i)` after the settle.
-    // TODO(规则书)[judgement]: the revert half -- a world-snapshot / restore (C#
-    //   the clause under-specifies -- see the note above it
-    // `CardNoBreakup.Play`); the teleport now settles and consumes the main
-    // move, but nothing rolls the world back when the money still lacks a
-    // repeated digit.
+    // TODO(规则书) R3 (`SETTLE-STAGES.md` §9) [judgement]: is 「触发结算后」
+    //   `settleAfter` or the `tileResolved` terminal? "取消所有受到的效果"
+    //   (undo everything the settle did) is easier at `tileResolved`
+    //   (complete-as-nothing) than after the body has run. And the revert half
+    //   itself -- a world-snapshot / restore (C# `CardNoBreakup.Play`) -- is
+    //   not wired: the teleport now settles and consumes the main move, but
+    //   nothing rolls the world back when the money still lacks a repeated
+    //   digit. Left as-is pending the ruling.
     Ok(())
 }

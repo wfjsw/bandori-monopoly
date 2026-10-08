@@ -47,6 +47,8 @@
   "one_of_us_note": "和 {{who}} 平分 {{a}} / {{b}} 的收益",
   "one_of_us_paired": "{{who}} 和 {{partner}} 平分 {{a}} 和 {{b}} 的收益（ONE OF US）",
   "one_of_us_partner": "和哪名玩家一起分钱？",
+  "one_of_us_share": "ONE OF US 平分结算收益",
+  "one_of_us_shared": "{{who}} 获得 {{tile}} 结算收益的一半 {{money}}（ONE OF US）",
   "one_of_us_theirs": "[指定] {{who}} 的哪块地契？（有商店街格子时必须选商店街）",
   "one_of_us_title": "ONE OF US",
   "one_of_us_transferred": "{{tile}} 的地契转给了 {{who}}（ONE OF US：{{out}} 出局了）",

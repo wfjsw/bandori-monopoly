@@ -1099,7 +1099,7 @@ fn c24_hanae_cancels_a_hand_effect() {
     t.give_play(0, "通用:登上武道馆").unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        // 花园多惠's (2) is a skill reaction.
+        // 花园多惠's (2) is a skill counteraction.
         let k = t.option("花园多惠").or_else(|| t.option("cancel")).or_else(|| t.option("抵消"));
         if let Some(k) = k {
             t.answer(1, k).unwrap();

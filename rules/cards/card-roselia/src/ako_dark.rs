@@ -13,11 +13,17 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKO_DARK: CardDef = CardDef::new(
     "R:（亚子）黑暗大魔姬亚子",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        None,
+        counteract,
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
 /// 规则书（1）[反击]: 「[反击] 当你即将向其他玩家支付资金时可打出此卡」
-fn can_counteract(player_id: i32) -> bool {
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「当你即将向其他玩家支付资金时」 -- C# `t.Kind == "pay" &&
     // t.Pay.from == player && t.Pay.PayToOther`.
     if trigger::kind() != ChainKind::Effect || trigger::player_id() != player_id {

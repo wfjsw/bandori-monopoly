@@ -97,9 +97,6 @@ pub fn snapshot(w: &World) -> Snap {
         if t < w.st.embers.len() {
             m.insert(format!("ember:T{t}"), w.st.embers[t].to_string());
         }
-        if t < w.st.tile_colors.len() {
-            m.insert(format!("tcolor:T{t}"), w.st.tile_colors[t].to_string());
-        }
     }
     for (i, mk) in w.st.marks.iter().enumerate() {
         m.insert(
@@ -137,10 +134,7 @@ pub fn snapshot(w: &World) -> Snap {
     m.insert("turn.abnormal".into(), format!("{:?}", t.abnormal));
     m.insert("turn.extreme".into(), t.extreme.to_string());
     m.insert("turn.play_from_hand".into(), t.play_from_hand.to_string());
-    m.insert("turn.buy_discount".into(), t.buy_discount.to_string());
     m.insert("turn.paid_in_settle".into(), t.paid_in_settle.to_string());
-    m.insert("turn.free_buy".into(), t.free_buy.to_string());
-    m.insert("turn.raze_on_buy".into(), t.raze_on_buy.to_string());
     m.insert("turn.turn_start_pos".into(), format!("{:?}", t.turn_start_pos));
     m.insert("turn.turn_snap".into(), format!("{:?}", t.turn_snap));
     m.insert("turn.turn_rolls".into(), format!("{:?}", t.turn_rolls));
@@ -150,6 +144,22 @@ pub fn snapshot(w: &World) -> Snap {
         t.build_discount_layers.to_string(),
     );
     m.insert("turn.build_cost_pct".into(), t.build_cost_pct.to_string());
+    // The lingering instances (docs/PURCHASE.md P5) are the home the retired
+    // `turn.buy_discount` / `turn.free_buy` / `turn.raze_on_buy` flags moved
+    // to, so the snapshot tracks them where those flags used to sit.
+    m.insert(
+        "turn.lingering".into(),
+        t.lingering
+            .iter()
+            .map(|l| {
+                format!(
+                    "{}@{}:{}:{:?}",
+                    l.card, l.owner, l.expires, l.props
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("|"),
+    );
 
     m.insert("extra_turns".into(), format!("{:?}", w.extra_turns));
     m.insert("ring_bonus".into(), w.ring_bonus.to_string());
@@ -334,9 +344,6 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
         if p.contains(":rentFactor") || p.contains(":payFactor") {
             return Some("tile.rent");
         }
-        if p.contains(":buyDiscount") || p.contains(":freeBuy") || p.contains(":razeOnBuy") {
-            return Some("tile.buy");
-        }
         if p.contains(":noBuild") {
             return Some("build");
         }
@@ -366,7 +373,6 @@ pub fn surface_of(path: &str) -> Option<&'static str> {
     if p.starts_with("turn.") {
         return Some(match p {
             "turn.extra" => "turn.extra",
-            "turn.buy_discount" | "turn.free_buy" | "turn.raze_on_buy" => "tile.buy",
             "turn.build_discount" | "turn.build_discount_layers" | "turn.build_cost_pct" => {
                 "build"
             }

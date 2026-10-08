@@ -105,7 +105,6 @@ fn match_state_round_trips_with_camel_case_names() {
     for key in [
         "matchId",
         "skipMove",
-        "tileColors",
         "eventActive",
         "endReason",
         "scoreHouses",

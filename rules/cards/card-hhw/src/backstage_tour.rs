@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const BACKSTAGE_TOUR: CardDef =
-    CardDef::new("HHW:出发！后台之旅！", &[On::Play(Some(cant_play), play)]);
+    CardDef::new("HHW:出发！后台之旅！", &[On::Play(Some(cant_play), play, "")]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBackstageTour.WhyNot` refuses the play when the draw pile and the

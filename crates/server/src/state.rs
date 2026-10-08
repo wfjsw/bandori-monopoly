@@ -46,6 +46,20 @@ pub struct Server {
     pub presence_timeout: Duration,
     /// Game clock speed (1.0 in production; tests run faster).
     pub time_scale: f32,
+    /// The advanced-bot decision service (`docs/BOT.md` B5). `None` = no
+    /// `--bot-service`: advanced bots then play as standard and the match
+    /// never asks this process for anything.
+    pub bots: Option<Arc<crate::botsvc::BotService>>,
+    /// Seats with a decision request in flight, and when to next probe each
+    /// seat (idle throttle). Keyed `(room, member)`.
+    pub bot_drive: Mutex<crate::botsvc::Drive>,
+    /// Test knobs: force the search budget / outer deadline / ponder budget
+    /// instead of the production defaults. `None` = compute from the prompt
+    /// clock ([`crate::botsvc::budget_ms`]),
+    /// [`crate::botsvc::ask_timeout`], and [`crate::botsvc::PONDER_BUDGET_MS`].
+    pub bot_budget_ms: Option<u64>,
+    pub bot_ask_timeout: Option<Duration>,
+    pub bot_ponder_budget_ms: Option<u64>,
 }
 
 impl Server {
@@ -63,6 +77,11 @@ impl Server {
             rooms: Mutex::new(HashMap::new()),
             presence_timeout: PRESENCE_TIMEOUT,
             time_scale: 1.0,
+            bots: None,
+            bot_drive: Mutex::new(crate::botsvc::Drive::default()),
+            bot_budget_ms: None,
+            bot_ask_timeout: None,
+            bot_ponder_budget_ms: None,
         })
     }
 
@@ -105,6 +124,7 @@ impl Server {
         for rec in recs {
             let id = rec.info.id.clone();
             let mut r = Room::from_record(rec, self.engine.clone(), self.store.clone());
+            r.bot_search = self.bots.is_some();
             r.restore_game();
             eprintln!(
                 "restored room {id} (match: {})",

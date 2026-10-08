@@ -8,7 +8,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const NOBLE_BLUE: CardDef =
-    CardDef::new("Mor:高贵的微蓝", &[On::Play(Some(cant_play), noble_blue)]);
+    CardDef::new("Mor:高贵的微蓝", &[On::Play(Some(cant_play), noble_blue, "")]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「当你位于一块地契价值大于等于2200的地块时，可以打出此卡」

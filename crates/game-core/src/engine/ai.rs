@@ -50,18 +50,36 @@ pub fn wants_redeem(money: i32, cost: i32) -> bool {
 }
 
 /// Mentality-aware buy test: standard keeps [`BUY_RESERVE`], chaos only
-/// [`CHAOS_RESERVE`].
+/// [`CHAOS_RESERVE`]. Advanced is standard here -- it is the same policy
+/// whenever the engine is the one driving the seat (`docs/BOT.md` B5).
 pub fn bot_wants_buy(m: BotMentality, money: i32, price: i32) -> bool {
     match m {
-        BotMentality::Standard => wants_buy(money, price),
+        BotMentality::Standard | BotMentality::Advanced => wants_buy(money, price),
         BotMentality::Chaos => money - price >= CHAOS_RESERVE,
+    }
+}
+
+/// Mentality-aware card-play reserve check against the card's bot-only
+/// **estimated execution cost** (`prop::EST_COST`, user ruling 2026-10-07).
+///
+/// This is a *bot policy*, never legality: a human (and `cant_play`) may still
+/// play the card and take the Q1 shortfall path. Standard keeps
+/// [`BUY_RESERVE`]; chaos keeps its own [`CHAOS_RESERVE`]. A cost of `0`
+/// (unknown / assume free) always passes.
+pub fn bot_wants_play_card(m: BotMentality, money: i32, est_cost: i32) -> bool {
+    if est_cost <= 0 {
+        return true;
+    }
+    match m {
+        BotMentality::Standard | BotMentality::Advanced => money - est_cost >= BUY_RESERVE,
+        BotMentality::Chaos => money - est_cost >= CHAOS_RESERVE,
     }
 }
 
 /// Mentality-aware build test.
 pub fn bot_wants_build(m: BotMentality, money: i32, cost: i32) -> bool {
     match m {
-        BotMentality::Standard => wants_build(money, cost),
+        BotMentality::Standard | BotMentality::Advanced => wants_build(money, cost),
         BotMentality::Chaos => money - cost >= CHAOS_RESERVE,
     }
 }
@@ -69,7 +87,7 @@ pub fn bot_wants_build(m: BotMentality, money: i32, cost: i32) -> bool {
 /// Mentality-aware redeem test.
 pub fn bot_wants_redeem(m: BotMentality, money: i32, cost: i32) -> bool {
     match m {
-        BotMentality::Standard => wants_redeem(money, cost),
+        BotMentality::Standard | BotMentality::Advanced => wants_redeem(money, cost),
         BotMentality::Chaos => money - cost >= CHAOS_RESERVE,
     }
 }
@@ -77,7 +95,7 @@ pub fn bot_wants_redeem(m: BotMentality, money: i32, cost: i32) -> bool {
 /// Mentality-aware 「可选择[支付]…两倍…强行购买」 test.
 pub fn bot_wants_force_buy(m: BotMentality, money: i32, price: i32) -> bool {
     match m {
-        BotMentality::Standard => money - price >= FORCE_BUY_RESERVE,
+        BotMentality::Standard | BotMentality::Advanced => money - price >= FORCE_BUY_RESERVE,
         BotMentality::Chaos => money - price >= CHAOS_RESERVE,
     }
 }
@@ -105,13 +123,20 @@ impl Cx<'_> {
         p.bot && p.mentality == BotMentality::Chaos
     }
 
-    /// `AiWantsBuy`.
+    /// `AiWantsBuy`. Uses the quoted price (`docs/PURCHASE.md`), so the AI
+    /// decides on the figure a hook-aware ruleset would actually charge; for
+    /// `StubRules` the quote is the plain rulebook formula.
     #[inline]
     pub(crate) fn ai_wants_buy(&self, i: usize, t: usize) -> bool {
+        let quote = self.buy_quote_for(i, t, super::purchase::BuyKind::Land);
+        if !quote.eligible {
+            return false;
+        }
+        let price = quote.price.max(0);
         if self.is_chaos(i) {
-            self.w.st.players[i].money - self.buy_price(t) >= CHAOS_RESERVE
+            self.w.st.players[i].money - price >= CHAOS_RESERVE
         } else {
-            wants_buy(self.w.st.players[i].money, self.buy_price(t))
+            wants_buy(self.w.st.players[i].money, price)
         }
     }
 
@@ -145,10 +170,13 @@ impl Cx<'_> {
                 n => ok[self.w.rng.below(n)] as i32,
             };
         }
-        if let Some(k) = options
-            .iter()
-            .position(|&t| self.w.st.owners[t] < 0 && wants_buy(self.w.st.players[p].money, self.buy_price(t)))
-        {
+        if let Some(k) = options.iter().position(|&t| {
+            if self.w.st.owners[t] >= 0 {
+                return false;
+            }
+            let quote = self.buy_quote_for(p, t, super::purchase::BuyKind::Agent);
+            quote.eligible && wants_buy(self.w.st.players[p].money, quote.price.max(0))
+        }) {
             return k as i32;
         }
         if let Some(k) = options.iter().position(|&t| {
@@ -191,15 +219,28 @@ impl Cx<'_> {
     /// cards from hand) and only asks `cant_play`.
     fn ai_card_choice(&mut self, i: usize) -> Option<String> {
         let chaos = self.is_chaos(i);
+        let mentality = self.bot_mentality(i);
+        let money = self.w.st.players[i].money;
         let mut hand = self.w.hidden[i].hand.clone();
         hand.dedup();
+        // Bot-only reserve check against the card's estimated execution cost
+        // (`prop::EST_COST`, user ruling 2026-10-07). Never legality -- `cant_play`
+        // is the only gate for that.
+        let affordable = |id: &str| {
+            let est = self.rules.card_prop(id, crate::state::prop::EST_COST);
+            bot_wants_play_card(mentality, money, est)
+        };
         let ok: Vec<String> = if chaos {
             hand.into_iter()
-                .filter(|id| self.cant_play(i, id, false).is_none())
+                .filter(|id| self.cant_play(i, id, false).is_none() && affordable(id))
                 .collect()
         } else {
             hand.into_iter()
-                .filter(|id| self.cant_play(i, id, false).is_none() && self.rules.ai_play(self, i, id))
+                .filter(|id| {
+                    self.cant_play(i, id, false).is_none()
+                        && self.rules.ai_play(self, i, id)
+                        && affordable(id)
+                })
                 .collect()
         };
         if ok.is_empty() {
@@ -305,7 +346,7 @@ impl Cx<'_> {
         let pos = self.w.st.players[i].pos as usize;
         if bot && self.can_buy_here(i) && self.ai_wants_buy(i, pos) {
             self.w.st.bought = true;
-            self.buy(i, pos)?;
+            self.buy(i, pos, super::purchase::BuyKind::Land)?;
             self.wait(1.2);
         } else if bot && self.can_build_here(i) && self.ai_wants_build(i, pos) {
             self.w.st.built = true;

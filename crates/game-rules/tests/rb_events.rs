@@ -71,7 +71,12 @@ fn until_turn(t: &mut Table, who: usize) {
 /// rolls, after the 1-step landing face this helper prepends. Prompts are left
 /// open for the caller.
 fn draw_event_card(t: &mut Table, who: usize, event: &str, faces: &[i32]) {
-    t.set_event_deck(&[event]);
+    // On top of the rest of the deck, so the draw does not empty it (an
+    // emptied deck takes the discard back once the draw resolves).
+    let mut deck: Vec<String> = t.event_deck().into_iter().filter(|e| e != event).collect();
+    deck.insert(0, event.to_string());
+    let deck: Vec<&str> = deck.iter().map(String::as_str).collect();
+    t.set_event_deck(&deck);
     until_turn(t, who);
     let corner = tile("CiRCLE 咖啡厅");
     t.set_pos(who, (corner + 59) % 60);

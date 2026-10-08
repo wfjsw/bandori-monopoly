@@ -15,12 +15,15 @@ pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
         &[ChainKind::CircleAffected],
-        can_counteract,
+        None,
         counteract,
+        card_sdk::pre::MINE,
     )],
-);
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「[使用者][经过]#1格子且#1格子受到其他效果影响时」
     // C# `CardMarinaWork.CanCounteract`: `t.Kind == "circleAffected" && t.Seat == seat`.
     trigger::kind() == TriggerKind::CircleAffected && trigger::player_id() == player_id

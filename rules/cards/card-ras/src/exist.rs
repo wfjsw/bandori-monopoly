@@ -12,9 +12,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EXIST: CardDef = CardDef::new(
     "RAS:EXIST",
     &[
-        On::Play(None, exist),
+        On::Play(None, exist, ""),
         On::Gate(&[GateKind::Redirect], redirect),
-        On::Hook(&[HookKind::TurnStart], turn_start_guard, turn_start),
+        On::Hook(&[HookKind::TurnStart], Some(turn_start_guard), turn_start, ""),
     ],
 );
 

@@ -29,17 +29,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LISA_GODDESS: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -54,7 +51,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("lisa_goddess_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("lisa_goddess_gain")))?;
     Ok(())
 }
 
@@ -89,7 +86,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
         return Ok(());
     }
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
@@ -118,7 +115,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("lisa_goddess_spend")))? {
         return Ok(());
     }
     // 「若你这样做，此次传送不触发任何结算」

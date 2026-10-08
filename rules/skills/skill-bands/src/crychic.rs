@@ -24,16 +24,17 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::Drawn], mine, on_drawn),
-        On::Hook(&[HookKind::TurnEndBefore], mine, at_turn_end),
-        On::Hook(&[HookKind::PayChoose], in_lock, lock_pay),
-        On::Hook(&[HookKind::CircleAffected], in_lock, force_card),
-        On::Play(Some(can_transform), transform_now),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Drawn], None, on_drawn, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEndBefore], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayChoose], Some(in_lock), lock_pay, ""),
+        On::Hook(&[HookKind::CircleAffected], Some(in_lock), force_card, ""),
+        On::Play(Some(can_transform), transform_now, ""),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -62,7 +63,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     let now = ctx::hand_size(player_id);
     state::set(player_id, SEEN, now);
     if before == 4 && now >= 5 {
-        ctx::add_crystals(1, 10);
+        ctx::add_crystals(1, 10)?;
         ctx::log(player_id, &Msg::new(key!("crychic_crystal")));
     }
     Ok(())
@@ -89,7 +90,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
             x * 500,
             &Msg::new(key!("crychic_cash_out")).i("n", (x * 500) as i64),
         )?;
-        ctx::add_crystals(-x, 10);
+        ctx::add_crystals(-x, 10)?;
     }
     // 规则书（2）: 「移除此卡与你所有区域的所有"CRYCHIC"卡」 -- every zone.
     // 「移除」 is the out-of-game keyword (`apply_dest`'s Banished = "just
@@ -188,7 +189,7 @@ fn can_transform(player_id: i32) -> Option<Msg> {
 }
 
 fn transform_now(player_id: i32) -> card_sdk::Asked {
-    crate::spend_copy_sticker(player_id);
+    crate::spend_copy_sticker(player_id)?;
     if ctx::deck_count(player_id) > 0 || ctx::discard_size(player_id) > 0 {
         return Ok(());
     }

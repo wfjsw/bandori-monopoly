@@ -39,8 +39,9 @@ export const MAX_PLAYS_PER_TURN = 2;
 /**
  * `chaos` still keeps a coin reserve so the seat does not die instantly.
  * Every voluntary spend (buy / build / redeem / auction bid / an optional paid
- * prompt choice) must leave at least this much. Card plays and counteracts are
- * unrestricted -- the view carries no visible card cost to check against it.
+ * prompt choice / a card play whose **estimated execution cost** would dip
+ * below the reserve) must leave at least this much. Counteracts stay
+ * unrestricted -- answering is not a spend.
  */
 export const CHAOS_RESERVE = 1000;
 
@@ -56,9 +57,12 @@ export const wantsBuy = (money: number, price: number) => money - price >= BUY_R
 export const wantsBuild = (money: number, cost: number) => money - cost >= BUILD_RESERVE;
 export const wantsRedeem = (money: number, cost: number) => money - cost >= REDEEM_RESERVE;
 
-/** `BuyPrice` -- land price plus the houses already standing on it. */
-export const buyPrice = (S: MatchState, tiles: TileData[], t: number) =>
-  tiles[t].price + (S.houses[t] ?? 0) * tiles[t].house;
+/** `BuyPrice` -- the quoted price. Prefers the engine's `S.buyPrice` preview
+ * when it covers this tile; falls back to the formula (land + houses). */
+export const buyPrice = (S: MatchState, tiles: TileData[], t: number) => {
+  if (S.buyPrice >= 0 && S.landed === t && S.owners[t] < 0) return S.buyPrice;
+  return tiles[t].price + (S.houses[t] ?? 0) * tiles[t].house;
+};
 /** `BuildCost` -- one more house. */
 export const buildCost = (tiles: TileData[], t: number) => Math.max(0, tiles[t].house);
 /** `MortgageValue` -- half the land price. */
@@ -167,12 +171,15 @@ function redeemable(S: MatchState, tiles: TileData[], me: number, reserve: numbe
   return deeds;
 }
 
-/** `AiAgentChoice` -- first affordable purchase, else first build, else none. */
-function agentChoice(S: MatchState, tiles: TileData[], me: number, options: number[]): number {
+/** `AiAgentChoice` -- first affordable purchase, else first build, else none.
+ * `prices` (parallel to `options`) carries the quoted prices from the prompt. */
+function agentChoice(S: MatchState, tiles: TileData[], me: number, options: number[], prices?: number[]): number {
   const money = S.players[me].money;
   for (let k = 0; k < options.length; k++) {
     const t = options[k];
-    if (S.owners[t] < 0 && wantsBuy(money, buyPrice(S, tiles, t))) return k;
+    const quoted = prices?.[k];
+    const price = quoted != null && quoted >= 0 ? quoted : buyPrice(S, tiles, t);
+    if (S.owners[t] < 0 && wantsBuy(money, price)) return k;
   }
   for (let k = 0; k < options.length; k++) {
     const t = options[k];
@@ -252,17 +259,21 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
       return { act: "answer", prompt: p.id, cards: p.items.slice(0, Math.max(0, p.count)) };
     case "tile": {
       const t = p.items.map(Number);
-      const pickIdx = (p.title.k ?? "") === "ask.agent.title" ? agentChoice(view.state, tiles, me, t) : p.fallback;
+      const pickIdx = (p.title.k ?? "") === "ask.agent.title" ? agentChoice(view.state, tiles, me, t, p.prices) : p.fallback;
       return { act: "answer", prompt: p.id, value: clampAnswer(p, pickIdx) };
     }
     default: {
       switch (offerKind(p)) {
-        case "buy":
-          return { act: "answer", prompt: p.id, value: wantsBuy(money, buyPrice(view.state, tiles, p.tile)) ? 0 : 1 };
+        case "buy": {
+          const price = p.price >= 0 ? p.price : buyPrice(view.state, tiles, p.tile);
+          return { act: "answer", prompt: p.id, value: wantsBuy(money, price) ? 0 : 1 };
+        }
         case "build":
           return { act: "answer", prompt: p.id, value: wantsBuild(money, buildCost(tiles, p.tile)) ? 0 : 1 };
-        case "force_buy":
-          return { act: "answer", prompt: p.id, value: money - 2 * buyPrice(view.state, tiles, p.tile) < FORCE_BUY_RESERVE ? 1 : 0 };
+        case "force_buy": {
+          const price = p.price >= 0 ? p.price : 2 * buyPrice(view.state, tiles, p.tile);
+          return { act: "answer", prompt: p.id, value: money - price < FORCE_BUY_RESERVE ? 1 : 0 };
+        }
         default:
           // mulligan (keep), circle (money), counteract (skip), card-rule
           // prompts: the engine's AI answer *is* the fallback.
@@ -307,13 +318,16 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
     }
     default: {
       switch (offerKind(p)) {
-        case "buy":
-          return { act: "answer", prompt: p.id, value: money - buyPrice(view.state, tiles, p.tile) >= CHAOS_RESERVE ? 0 : 1 };
+        case "buy": {
+          const price = p.price >= 0 ? p.price : buyPrice(view.state, tiles, p.tile);
+          return { act: "answer", prompt: p.id, value: money - price >= CHAOS_RESERVE ? 0 : 1 };
+        }
         case "build":
           return { act: "answer", prompt: p.id, value: money - buildCost(tiles, p.tile) >= CHAOS_RESERVE ? 0 : 1 };
-        case "force_buy":
-          // Accept a forced purchase only while the reserve is kept.
-          return { act: "answer", prompt: p.id, value: money - 2 * buyPrice(view.state, tiles, p.tile) >= CHAOS_RESERVE ? 0 : 1 };
+        case "force_buy": {
+          const price = p.price >= 0 ? p.price : 2 * buyPrice(view.state, tiles, p.tile);
+          return { act: "answer", prompt: p.id, value: money - price >= CHAOS_RESERVE ? 0 : 1 };
+        }
         default: {
           const n = p.options.length;
           // [反击] offer: counter only on CHAOS_COUNTER_CHANCE, else skip
@@ -372,11 +386,20 @@ export interface Policy {
   turn(view: MatchView, ctx: AutopilotCtx): Command[];
 }
 
-/** Hand cards the engine would let `me` play right now (from `view.playable`). */
-function playableCards(view: MatchView): string[] {
+/**
+ * Cards legal to play **and** affordable against the seat's reserve, using the
+ * bot-only estimated execution cost (`view.estCost`, user ruling 2026-10-07).
+ * Never legality -- a human may still play the card and take the Q1 shortfall
+ * path. Mirrors `ai.rs` `bot_wants_play_card`.
+ */
+function affordableCards(view: MatchView, reserve: number): string[] {
+  const money = view.state.players[view.playerId]?.money ?? 0;
   const ok: string[] = [];
   for (let i = 0; i < view.hand.length; i++) {
-    if (view.playable ? view.playable[i] : true) ok.push(view.hand[i]);
+    if (view.playable && !view.playable[i]) continue;
+    const est = view.estCost?.[i] ?? 0;
+    if (est > 0 && money - est < reserve) continue;
+    ok.push(view.hand[i]);
   }
   return ok;
 }
@@ -433,7 +456,7 @@ export const policies: Record<PolicyName, Policy> = {
           if (r !== null) return [{ act: "redeem", value: r }];
           if (S.skipMove) return [{ act: "end" }];
           if (ctx.playedThisTurn < MAX_PLAYS_PER_TURN && ctx.random() < PLAY_CARD_CHANCE) {
-            const card = pick(playableCards(view), ctx.random);
+            const card = pick(affordableCards(view, BUY_RESERVE), ctx.random);
             if (card) out.push({ act: "play", card });
           }
         }
@@ -492,9 +515,11 @@ export const policies: Record<PolicyName, Policy> = {
       const out: Command[] = [];
       if (S.step === 2) {
         if (myTurn) {
-          if (S.skipMove && !playableCards(view).length && !usableSkills(view).length) return [{ act: "end" }];
+          if (S.skipMove && !affordableCards(view, CHAOS_RESERVE).length && !usableSkills(view).length) return [{ act: "end" }];
           // Every playable card first (100%, no cap) -- keep making things happen.
-          for (const card of playableCards(view).sort(() => ctx.random() - 0.5)) {
+          // The only filter is chaos's own coin reserve against the card's
+          // estimated execution cost (`view.estCost`).
+          for (const card of affordableCards(view, CHAOS_RESERVE).sort(() => ctx.random() - 0.5)) {
             out.push({ act: "play", card });
           }
           // Then every enabled skill (character + band).

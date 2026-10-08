@@ -83,21 +83,36 @@ fn clear_held(player_id: i32) {
 pub const HERE_THE_WORLD: CardDef = CardDef::new(
     "Sumimi:Here the world",
     &[
-        On::Counteract(&[ChainKind::TwoCards], can_counteract, counteract),
+        On::Counteract(
+            &[ChainKind::TwoCards],
+            Some(can_counteract),
+            counteract,
+            "actor != owner",
+        ),
         // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-        On::Hook(&[HookKind::Drew], |_| true, drew),
+        On::Hook(&[HookKind::Drew], None, drew, "actor == owner && card.placed"),
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-        On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
+        On::Hook(&[HookKind::TurnStart], None, turn_start, "actor == owner && card.placed"),
     ],
-);
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书（1）[反击]: 「当有人同一回合内打出两张卡时」 -- C# `t.Kind == "twoCards" && t.Seat != seat`.
     if trigger::kind() != TriggerKind::TwoCards {
         return false;
     }
     let them = trigger::player_id();
     them != player_id && !ctx::player_out(them)
+}
+
+/// Residual the condition cannot express: the actor is still in the game
+/// (`actor != owner` is the `pre`).
+fn can_counteract(player_id: i32) -> bool {
+    let them = trigger::player_id();
+    let _ = player_id;
+    !ctx::player_out(them)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -121,13 +136,8 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// watches the owner's draw batch (`Fx.Drew`, `t.value` = count) and holds the
 /// first card face-down with 3 miracle crystals.
 fn drew(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::Drew {
-        return Ok(());
-    }
-    // C# `if (player_id != Player || ...)` -- only the owner's own draws.
-    if trigger::player_id() != player_id || !ctx::is_placed() {
-        return Ok(());
-    }
+    // The `pre` already filters to the owner's own draws on a placed copy
+    // (`actor == owner && card.placed`); the category owns `HookKind::Drew`.
     // C# `if (... || Mem.ContainsKey("held"))` -- already holding one.
     if ctx::slot(player_id, SLOT_HELD_LEN) > 0 {
         return Ok(());
@@ -160,18 +170,13 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 /// 加入手牌，并使此卡使用者抽一张卡。」 -- C# `CardHereTheWorld.TurnStart` -> `Tick`
 /// (MatchHost.cs:11375-11406).
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnStart {
-        return Ok(());
-    }
-    // C# `if (turn != Player || !Mem.ContainsKey("held") || !H._placed.Contains(this))`.
-    if trigger::player_id() != player_id || !ctx::is_placed() {
-        return Ok(());
-    }
+    // The `pre` already filters to the owner's own turn start on a placed copy
+    // (`actor == owner && card.placed`); the category owns `HookKind::TurnStart`.
     if ctx::slot(player_id, SLOT_HELD_LEN) <= 0 {
         return Ok(());
     }
     // C# `AddCrystals(-1, "回合开始")`.
-    let left = ctx::add_crystals(-1, 0);
+    let left = ctx::add_crystals(-1, 0)?;
     if left > 0 {
         return Ok(());
     }

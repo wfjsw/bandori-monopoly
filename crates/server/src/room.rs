@@ -446,6 +446,11 @@ pub struct Room {
     pub tx: broadcast::Sender<Note>,
     presence: HashMap<i32, Presence>,
     pub dissolved: Option<Msg>,
+    /// Does this server have a `bot-service` to drive Advanced bots
+    /// (`docs/BOT.md` B5)? When false, [`Room::start`] rewrites those seats to
+    /// Standard before the match is built, so they play as ordinary engine
+    /// bots instead of waiting on answers nobody will send.
+    pub bot_search: bool,
 }
 
 pub struct NewMember<'a> {
@@ -493,6 +498,7 @@ impl Room {
             tx,
             presence: HashMap::new(),
             dissolved: None,
+            bot_search: false,
         }
     }
 
@@ -545,6 +551,7 @@ impl Room {
             tx,
             presence,
             dissolved: None,
+            bot_search: false,
         }
     }
 
@@ -802,16 +809,28 @@ impl Room {
             }
         }
         let mode = self.info.mode();
+        // Advanced bots are answered by the server's `bot-service`
+        // (`docs/BOT.md` B5). With no service attached they play as standard
+        // engine bots instead -- the rewrite covers both the match and its
+        // record, so a replay starts the same table.
+        let mut members = self.info.members.clone();
+        if !self.bot_search {
+            for m in &mut members {
+                if m.bot && m.mentality == game_core::state::BotMentality::Advanced {
+                    m.mentality = game_core::state::BotMentality::Standard;
+                }
+            }
+        }
         let blob = self
             .engine
-            .new_match(&self.info.members, seed, mode as i32, &self.info.weights)
+            .new_match(&members, seed, mode as i32, &self.info.weights)
             .map_err(|e| ApiError::bad(e.as_str()))?;
         // The record starts from the same inputs `new_match` got, plus the
         // engine's own identity (`docs/REPLAY.md` §4).
         let stamp = self.engine.info().map_err(|e| ApiError::bad(e.as_str()))?;
         let head = RecordHead {
             init: Init::Seed(MatchSetup {
-                members: self.info.members.clone(),
+                members,
                 seed,
                 weights: self.info.weights.clone(),
             }),

@@ -12,8 +12,8 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const SOYO_COLORS: CardDef = CardDef::new(
     "MyGO:（soyo）混合的颜色",
     &[
-        On::Play(Some(cant_play), soyo_colors),
-        On::Hook(&[card_sdk::abi::HookKind::PayMul], on_rent, half_again),
+        On::Play(Some(cant_play), soyo_colors, ""),
+        On::Hook(&[card_sdk::abi::HookKind::PayMul], Some(on_rent), half_again, ""),
     ],
 );
 
@@ -91,11 +91,12 @@ fn soyo_colors(player_id: i32) -> card_sdk::Asked {
             .tile("tile", tile)
             .player_id("who", player_id),
     );
-    // 规则书: 「该格获得所有颜色」 -- `ALL_COLORS` is exactly that: `is_color`
-    // answers true for every group. (The parenthetical -- the tile itself may
-    // only be built through a matching-colour agent -- is `why_not_build_on`,
+    // 规则书: 「该格获得所有颜色」 -- the `anyColor` tile prop is exactly that:
+    // `is_color` answers true for every group. (The parenthetical -- 「该格本身
+    // 不可因自有以外的颜色的地产商盖房」, the tile itself may only be built through
+    // a matching-colour agent -- is `agent_colour_set`'s `buildable = tg == g`,
     // which reads the tile's *own* group and so already refuses.)
-    ctx::set_tile_color(tile, ctx::ALL_COLORS);
+    ctx::set_tile_prop(tile, card_sdk::abi::prop::ANY_COLOR, 1);
     // 「因该效果从在其他颜色的地产商格子触发结算的玩家处收费时，收费在地产商的
     // 减半收费基础上额外减半」 -- the agent group is the group of the tile being
     // settled; 「其他颜色」 is that group differing from this tile's.

@@ -17,13 +17,17 @@ export interface EngineStamp {
   data_sha256: string;
   engine: string;
   build: string;
+  /** The engine bundle that can replay this record (`docs/REPLAY.md` §9).
+   *  Empty on records written before bundles existed -- the loader then
+   *  matches the stamp's identity fields against the archive. */
+  bundle?: string;
 }
 
 export interface SeatInfo {
   member: number;
   player: string;
   bot: boolean;
-  mentality: "standard" | "chaos";
+  mentality: "standard" | "chaos" | "advanced";
   character: string;
   rank: number;
   score: number;

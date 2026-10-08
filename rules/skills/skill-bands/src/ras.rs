@@ -23,13 +23,14 @@ const ON_HOUSE: &str = "skill.ras.onHouse";
 pub const RAS: CardDef = CardDef::new(
     "skill:RAISE A SUILEN:UNSTOPPABLE",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::Abnormal], mine, on_abnormal),
-        On::Hook(&[HookKind::Settle], mine, on_settle),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Abnormal], None, on_abnormal, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Settle], None, on_settle, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

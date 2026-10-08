@@ -25,15 +25,16 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::BuildBefore], mine, before_build),
-        On::Hook(&[card_sdk::abi::HookKind::BuildAfter], mine, after_build),
-        On::Play(None, trainee_guide),
-        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
+        On::Hook(&[card_sdk::abi::HookKind::BuildBefore], None, before_build, card_sdk::pre::MINE),
+        On::Hook(&[card_sdk::abi::HookKind::BuildAfter], None, after_build, card_sdk::pre::MINE),
+        On::Play(None, trainee_guide, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
 // (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
-.props(&[(prop::HAND_LIMIT_DELTA, -1)]);
+.props(&[(prop::HAND_LIMIT_DELTA, -1)])
+    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
 
 fn trainee_guide(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「为[使用者]的Pastel✽Palettes乐队卡添加3个[奇迹水晶]」
@@ -95,7 +96,7 @@ fn turn_end_guard(player_id: i32) -> bool {
 
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书[持续]（2）: 「回合结束时添加1个[奇迹水晶]」 -- C# `AddCrystals(1, "回合结束")`.
-    ctx::add_crystals(1, 0);
+    ctx::add_crystals(1, 0)?;
     // [持续]（3）「此卡拥有至少5个[奇迹水晶]时根据此卡上的标记进行一下操作
     // 随后进入弃卡区」 -- the marks are the `trainee_guide.mono` / `.dual` slots
     // the reveal above wrote.
@@ -108,8 +109,8 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
     if dual > 0 {
         let down = ctx::tok(player_id, "P✨P粉丝(反)");
         if down > 0 {
-            ctx::add_tok(player_id, "P✨P粉丝(反)", -down, i32::MAX);
-            ctx::add_tok(player_id, "P✨P粉丝(正)", down, i32::MAX);
+            ctx::add_tok(player_id, "P✨P粉丝(反)", -down, i32::MAX)?;
+            ctx::add_tok(player_id, "P✨P粉丝(正)", down, i32::MAX)?;
             ctx::log(
                 player_id,
                 &Msg::new(key!("trainee_guide_flipped")).i("n", down as i64),
@@ -147,6 +148,6 @@ fn after_build(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }

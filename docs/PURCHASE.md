@@ -1,8 +1,19 @@
 # Purchasing in the rules crates — design (2026-10-07)
 
-Status: designed; implementation starts once the CP-marks, event-rules and
-zstd agents have landed. Take the ABI / SAVE numbers at that point (the plan
-assumed ABI v38 after the event-rules v37, and SAVE 3 → 4 at P5).
+Status: **P0–P5 implemented, including the P5 deferred work** (2026-10-07).
+ABI 39 → 40 (surface) → 41 (removals). SAVE_VERSION 3 → 4.
+
+* The hook-aware `WasmRules::buy_quote` is wired: it runs `BuyGate` /
+  `BuyAdd` → `BuyMul` → `BuySet` in **pure guard mode** against a world copy
+  (the `cant_play` shape — no mutation, no prompt) only when a hooking instance
+  exists; the commit re-quotes, so quote == charge. Gates (`buyable_here`,
+  `why_not_act "buy"`), the view (`st.buy_price`), the AI (`ai_wants_buy` /
+  `ai_agent_choice`) and the autopilot all read that quote.
+* The three cards that used the `TurnCtx` flags are ported — see §Card
+  migrations. `buy_discount` / `free_buy` / `raze_on_buy` and their `set_*`
+  APIs, `st.tile_colors` and `key::EXTRA_COLOR` are **deleted** (ABI 41).
+* The colour skills (朝日六花 / Roselia (1) / 游击演出 / soyo_clear / （soyo）
+  混合的颜色) write the `colorFor:<p>` / `ANY_COLOR` tile props.
 
 User request: tile purchasing and agent purchasing — what can pay, how much,
 how ownership is assigned — are handled by the `rules/` crates.
@@ -79,7 +90,10 @@ StubRules and the sim run.
 * **`BuyKind`:** `{ Land, Agent, Card, Force, Acquire, Auction }`.
 * **New props:** `BUYABLE`, `BUY_HOUSES`, `FORCE_MULT` (milli), `FORCE_FIXED`,
   `FORCE_STAYS_MORTGAGED`, `ANY_COLOR`, and the prefix `colorFor:`.
-* **Retired props:** `BUY_DISCOUNT`, `FREE_BUY`, `RAZE_ON_BUY`.
+* **Retired props (deleted at ABI 41):** `BUY_DISCOUNT`, `FREE_BUY`,
+  `RAZE_ON_BUY`. The `TurnCtx` flags `buy_discount` / `free_buy` /
+  `raze_on_buy` and their `set_*` APIs, `st.tile_colors` and `key::EXTRA_COLOR`
+  go with them.
 * **Trigger payload:** `buy_kind`, `seller`, `price` / `set_price`,
   `deal_owner` / `set_deal_owner`, `deal_houses` / `set_deal_houses`,
   `deal_mortgaged` / `set_deal_mortgaged`. `BuyGate` uses `set_cancelled` plus
@@ -93,26 +107,34 @@ StubRules and the sim run.
   * `linger(player, expires)` — binds the running card's own def as a
     turn-scoped instance in `TurnCtx.lingering`. It is cleared at turn start
     and carried across NeedHost by `adopt_turn_policy`. It is the hand-card
-    home that closes `buy_discount` / `free_buy` / `raze_on_buy` and noBuild.
+    home for 「本回合」 effects: the def's own `BuyAdd` / `BuyMul` / `BuySet` /
+    `BuyAssign` hooks reach the buy pipeline, and a `ctx::set_prop` made before
+    the call lands on the instance's props (e.g. `prop::NO_BUILD`). The
+    lingering instances hear the same field-hook dispatch as placed cards and
+    board rules. It replaces the retired `buy_discount` / `free_buy` /
+    `raze_on_buy` flags and the per-player `noBuild` scratch key.
   * `ctx::buy_price(t)` stays as the deed's base value.
-* **`CardRules::buy_quote(&self, cx: &Cx, q) -> Quote`:** `WasmRules` clones
-  the world only when a hooking instance exists, and runs the hooks in pure
-  guard mode, like `cant_play`. The commit re-quotes, so quote == charge.
+* **`CardRules::buy_quote(&self, w: &World, data: &GameData, q) -> Quote`:**
+  `WasmRules` clones the world only when a hooking instance exists, and runs
+  the hooks in pure guard mode, like `cant_play` (a throwaway copy — no world
+  mutation, and a hook that would prompt contributes nothing to the preview).
+  The commit re-quotes, so quote == charge. Takes the world by reference so the
+  view's `st.buy_price` preview asks without cloning.
 
 ## Card migrations
 
-| source | new |
-|---|---|
-| @Tsugu ycm (3) | linger + `BuyAdd` −1500 |
-| Roselia band (1)/(2) | `BuyMul` ½ (live-house / first non-LH); `Bought` one-shot unchanged |
-| 迷宫般的仓库 | linger + `BuySet` 0 + `BuyAssign` houses 0 |
-| Poppin (3) hill lock | `BuyGate`, every kind, Force included |
-| rana_parking | native gate reads `plan.no_buy` for Land |
-| 学生会的检查 noBuild | a linger instance carrying `prop::NO_BUILD` |
-| （soyo）混合的颜色 | tile prop `ANY_COLOR` |
-| 朝日六花 / Roselia (1) / 游击演出 / soyo_clear | tile prop `colorFor:<p>`; remove `st.tile_colors` and `key::EXTRA_COLOR` |
-| 巴 收购 | `ctx::acquire` |
-| Afterglow / chuchu / asahi | `Bought`, unchanged |
+| source | new | status |
+|---|---|---|
+| @Tsugu ycm (3) | linger + `BuyAdd` −1500 | **done** |
+| Roselia band (1)/(2) | `BuyMul` ½ (live-house / first non-LH); `Bought` one-shot unchanged | **done** |
+| 迷宫般的仓库 | linger + `BuySet` 0 + `BuyAssign` houses 0 | **done** |
+| Poppin (3) hill lock | `BuyGate`, every kind, Force included | **done** |
+| rana_parking | native gate reads `plan.no_buy` for Land | **done** |
+| 学生会的检查 noBuild | a linger instance carrying `prop::NO_BUILD` | **done** |
+| （soyo）混合的颜色 | tile prop `ANY_COLOR` | **done** |
+| 朝日六花 / Roselia (1) / 游击演出 / soyo_clear | tile prop `colorFor:<p>`; remove `st.tile_colors` and `key::EXTRA_COLOR` | **done** |
+| 巴 收购 | `ctx::acquire` | **done** |
+| Afterglow / chuchu / asahi | `Bought`, unchanged | unchanged |
 
 ## AI and autopilot
 
@@ -159,11 +181,21 @@ StubRules and the sim run.
 * **Replay.** `st.buy_price` and the prompt fields enter `save()`, so old
   recordings fail compat on ABI / format; that is acceptable.
 * **`linger`** must cross `adopt_turn_policy`.
-* **Flag-internal tests to report, not rewrite:**
-  * `rb_ras::lock_skill_colors_the_first_deed_like_a_live_house` (asserts
-    `extraColor:1`);
-  * `q4/snap.rs`, `q4/expiry.rs` (`turn.buy_discount` etc.);
-  * `q4/names.rs` (the `extraColor:` filter).
+* **Flag-internal tests, rewritten to assert behaviour:**
+  * `rb_ras::lock_skill_colors_the_first_deed_like_a_live_house` asserted
+    `extraColor:1`; it now asserts the observable consequence (the deed counts
+    as a Live House for that player).
+  * `q4/snap.rs`, `q4/expiry.rs` recorded `turn.buy_discount` etc.; they now
+    record `turn.lingering` (the mechanism those flags became) and treat it as
+    turn-scoped.
+  * `q4/names.rs`'s `extraColor:` filter goes with the key.
+* **The price stages run for every `BuyKind`.** `BuyAdd` / `BuyMul` / `BuySet`
+  are the engine's generic quote stages, so a lingering 「本回合购买格子…」
+  discount also shapes a Force / Acquire / Auction quote. Before the migration
+  the flags only applied to `buy()`. Whether 强制购买 / an auction win is a
+  「购买」 for those clauses is rulings 6 / 7 — **not decided here**; if a ruling
+  says they are not, the cards' hooks must scope on `trigger::buy_kind()`.
+  `bought` / `buyAfter` still do not fire for Force or Auction (unchanged).
 
 ## Rulings (proposed defaults in brackets)
 

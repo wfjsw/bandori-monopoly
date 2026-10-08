@@ -17,21 +17,14 @@ const ID: &str = "HHW:笑容大游行";
 pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
     &[
-        On::Hook(
-            &[card_sdk::abi::HookKind::SettleBody],
-            mine,
-            settle_instead,
-        ),
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], mine, move_after),
-        On::Counteract(&[ChainKind::Pass], can_counteract, counteract),
-        On::Hook(&[HookKind::TurnEnd], turn_end_guard, turn_end),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        On::Hook(&[card_sdk::abi::HookKind::SettleBody], None, settle_instead, card_sdk::pre::MINE),
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], None, move_after, card_sdk::pre::MINE),
+        On::Counteract(&[ChainKind::Pass], Some(can_counteract), counteract, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
 
 /// C# `CardSmileParade.Group` -- `H.TsurumakiAgent` = tile 弦卷集团 (#29).
 fn group_tile() -> i32 {
@@ -91,7 +84,7 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
     if !on_group() {
         return Ok(());
     }
-    ctx::decay();
+    ctx::decay()?;
     Ok(())
 }
 
@@ -176,7 +169,7 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
     ctx::set_self_tile(to);
     let n = ctx::crystals();
     if n > 0 {
-        ctx::add_crystals(-n, i32::MAX);
+        ctx::add_crystals(-n, i32::MAX)?;
     }
     ctx::log(
         player_id,
@@ -192,11 +185,11 @@ fn move_after(player_id: i32) -> card_sdk::Asked {
 //   任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」 -- the swap is a board
 //   *position* exchange (「交换位置」), not a colour or an effect copy: settling on
 //   the card's tile has to resolve as if the mover landed on 弦卷集团, with the two
-//   tiles' rents and ownership reads exchanged for that settle. `set_tile_color`
-//   and `SettleBody` are the wrong axes -- one re-colours, the other replaces
+//   tiles' rents and ownership reads exchanged for that settle. A colour
+//   override and `SettleBody` are the wrong axes -- one re-colours, the other replaces
 //   one landing with another. The discard half (`unplace` + `to_discard` on that
 //   settle) is expressible and waits on the swap.
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }

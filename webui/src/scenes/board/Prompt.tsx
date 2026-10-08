@@ -3,22 +3,25 @@
 // when it is answered or replaced.
 
 import { useEffect, useState } from "react";
+import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D } from "../../core/data";
+import { D, cardTitle } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
-import { CardFace, showCard } from "../../ui/Card";
+import { CardFace, showCard, TagChip } from "../../ui/Card";
+import { bandColor } from "../../ui/Character";
+import { SkillBody } from "../../ui/SkillBody";
 import { TextInput } from "../../ui/Form";
 import { Icon } from "../../ui/Icon";
 import { openModal } from "../../ui/Modal";
 import { act } from "./model";
 import s from "./Prompt.module.css";
 import { t as tr } from "../../i18n/t";
-import { fmtMsg } from "../../i18n/msg";
+import { fmtMsg, type Msg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 
 /** Is this prompt waiting on `playerId`? */
@@ -66,7 +69,8 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
           {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? view.state.players[p.bidder]?.player ?? "" : ""} answer={answer} auto={auto} />}
-          {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && p.options.map((o, i) => (
+          {p.kind !== "pick" && isCardChoice(p) && <CardChoice p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
+          {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && !isCardChoice(p) && p.options.map((o, i) => (
             <Btn key={i} kind={i === 0 ? "pink" : "white"} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, namesOf(view.state))}</Btn>
           ))}
         </div>
@@ -110,13 +114,83 @@ function MortgageOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; 
 }
 
 function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto: boolean }) {
-  const [picked, setPicked] = useState<string[]>([]);
-  const toggle = (id: string) => setPicked(picked.includes(id) ? picked.filter((x) => x !== id) : picked.length < p.count ? [...picked, id] : picked);
+  const [picked, setPicked] = useState<number[]>([]);
+  const toggle = (k: number) => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : picked.length < p.count ? [...picked, k] : picked);
   return (
     <>
-      <div className={s.pick}>{p.items.map((id) => <CardFace key={id} id={id} size="mid" on={picked.includes(id)} onClick={() => !auto && toggle(id)} />)}</div>
-      <Btn kind="pink" className={s.opt} disabled={auto || picked.length !== p.count} onClick={() => void answer({ cards: picked })}>{tr("prompt.pickCards", { n: picked.length, total: p.count })}</Btn>
+      <CardGrid ids={p.items} picked={picked} onPick={(k) => !auto && toggle(k)} />
+      <Btn kind="pink" className={s.opt} disabled={auto || picked.length !== p.count} onClick={() => void answer({ cards: picked.map((k) => p.items[k]) })}>{tr("prompt.pickCards", { n: picked.length, total: p.count })}</Btn>
     </>
+  );
+}
+
+/** The card an option names (`ask.cardOption` and any other `{{card}}`-only label). */
+function optionCard(o: Msg): string | null {
+  const a = o.a ?? {};
+  const keys = Object.keys(a);
+  const v = keys.length === 1 ? a[keys[0]] : undefined;
+  return v && "card" in v ? v.card : null;
+}
+
+/** Prompts whose options are cards: render them as cards, not as text buttons. */
+export function isCardChoice(p: MatchPrompt): boolean {
+  return p.kind === "pick" || (p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "auction" && p.options.some((o) => optionCard(o) !== null));
+}
+
+/** Single choice among cards: click selects (and pins the detail), confirm answers.
+ *  Options that are not cards (e.g. 「不选」) stay buttons below. */
+function CardChoice({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
+  const [sel, setSel] = useState<number | null>(null);
+  const cards = p.options.map(optionCard);
+  const ids = cards.filter((c): c is string => c !== null);
+  const idx = cards.flatMap((c, i) => (c !== null ? [i] : []));
+  const rest = cards.flatMap((c, i) => (c === null ? [i] : []));
+  return (
+    <>
+      <CardGrid ids={ids} picked={sel === null ? [] : [sel]} onPick={(k) => !auto && setSel(k)} onConfirm={(k) => !auto && void answer({ value: idx[k] })} />
+      <Btn kind="pink" className={s.opt} disabled={auto || sel === null} onClick={() => sel !== null && void answer({ value: idx[sel] })}>
+        {sel === null ? tr("prompt.pickOne") : tr("prompt.pickThis", { card: cardTitle(ids[sel]) })}
+      </Btn>
+      {rest.map((i) => <Btn key={i} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(p.options[i], names)}</Btn>)}
+    </>
+  );
+}
+
+/** Cards laid out like the hand, but larger, with a detail panel: hovering
+ *  previews a card, clicking selects it and keeps it in the panel. */
+function CardGrid({ ids, picked, onPick, onConfirm }: { ids: string[]; picked: number[]; onPick: (k: number) => void; onConfirm?: (k: number) => void }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const focus = hover ?? picked[picked.length - 1] ?? null;
+  const id = focus === null ? null : ids[focus];
+  const c = id ? D.card(id) : undefined;
+  return (
+    <div className={s.cardChoice}>
+      <div className={s.cardGrid}>
+        {ids.map((cid, k) => (
+          <CardFace
+            key={`${cid}:${k}`}
+            id={cid}
+            size="hand"
+            className={s.choiceCard}
+            on={picked.includes(k)}
+            onClick={() => onPick(k)}
+            onMouseEnter={() => setHover(k)}
+            onMouseLeave={() => setHover(null)}
+          />
+        ))}
+      </div>
+      <div className={s.detail} onDoubleClick={() => focus !== null && onConfirm?.(focus)}>
+        {id && c ? (
+          <>
+            <div className={s.dArt} style={{ borderColor: bandColor(c.band) }}><img src={cardArt(id)} alt="" /></div>
+            <div className={s.dTitle}>{cardTitle(id)}</div>
+            {!!c.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
+            <div className={s.dText}><SkillBody text={c.text} /></div>
+            <button type="button" className={s.dMore} onClick={() => showCard(id)}>{tr("prompt.cardDetail")}</button>
+          </>
+        ) : <div className={s.dEmpty}>{tr("prompt.cardHover")}</div>}
+      </div>
+    </div>
   );
 }
 
@@ -139,5 +213,5 @@ function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; pl
 }
 
 export function openPrompt(sess: GameSession, p: MatchPrompt): void {
-  openModal(fmtMsg(p.title, namesOf(sess.view?.state)) || tr("prompt.title"), (close) => <Prompt sess={sess} id={p.id} close={close} />, { closable: false, key: "prompt" });
+  openModal(fmtMsg(p.title, namesOf(sess.view?.state)) || tr("prompt.title"), (close) => <Prompt sess={sess} id={p.id} close={close} />, { closable: false, key: "prompt", ...(isCardChoice(p) ? { size: "wide" as const } : {}) });
 }

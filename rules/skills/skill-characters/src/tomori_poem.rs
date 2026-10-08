@@ -27,19 +27,16 @@ const DUE: &str = "skill.tomoriPoem.due";
 pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::SettleBefore], |_| true, before_settle),
-        On::Hook(&[HookKind::PayMul], half, on_pay),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::SettleBefore], None, before_settle, ""),
+        On::Hook(&[HookKind::PayMul], Some(half), on_pay, ""),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (4, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -60,7 +57,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_ring(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_poem_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_poem_gain")))?;
     Ok(())
 }
 
@@ -96,7 +93,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, cost, &Msg::new(key!("tomori_poem_spend"))) {
+    if !ctx::spend_fire(player_id, cost, &Msg::new(key!("tomori_poem_spend")))? {
         return Ok(());
     }
     if !ctx::gate(mover, AbKind::Teleport) {

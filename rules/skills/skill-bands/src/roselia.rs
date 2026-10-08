@@ -21,32 +21,38 @@ const LIVE: i32 = 6;
 pub const ROSELIA: CardDef = CardDef::new(
     "skill:Roselia:对音乐的纯粹",
     &[
-        On::Hook(&[HookKind::BuyBefore], mine, before_buy),
-        On::Hook(&[HookKind::Bought], mine, on_bought),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        // （2）/（1）'s 「购买价格减半」 is the buy price's `BuyMul` stage
+        // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
+        On::Hook(&[HookKind::BuyMul], None, half_price, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Bought], None, on_bought, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
 /// （2）「购买任何Live House格子的地契时购买价格减半」, and （1）'s one-shot.
-fn before_buy(player_id: i32) -> card_sdk::Asked {
+///
+/// `BuyMul` is the × stage (`docs/PURCHASE.md`), so the hook halves the running
+/// price the previous stages produced.
+fn half_price(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if t < 0 {
         return Ok(());
     }
     if ctx::is_live_house_for(player_id, t) {
         // （2） -- always, for a Live House.
-        ctx::set_buy_discount(ctx::buy_price(t) / 2);
+        ctx::trigger::set_price(ctx::trigger::price() / 2);
         return Ok(());
     }
     // （1）「本局游戏购买的第一个非Live House格子购买价格减半」
     if state::get(player_id, DONE) != 0 {
         return Ok(());
     }
-    ctx::set_buy_discount(ctx::buy_price(t) / 2);
+    ctx::trigger::set_price(ctx::trigger::price() / 2);
     Ok(())
 }
 
@@ -83,7 +89,13 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         }
     }
     if let Some(t) = ctx::owned_tiles(player_id).into_iter().next() {
-        ctx::set_extra_color(player_id, t, LIVE);
+        // 「那个格子对你视为Live House」 -- the `colorFor:<player_id>` tile prop
+        // on the tile's board instance.
+        ctx::set_tile_prop(
+            t,
+            &alloc::format!("{}{}", card_sdk::abi::prop::COLOR_FOR_PREFIX, player_id),
+            LIVE,
+        );
     }
     Ok(())
 }

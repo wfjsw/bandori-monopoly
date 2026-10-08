@@ -15,8 +15,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SOYO_BACK: CardDef = CardDef::new(
     "CRYCHIC:（soyo）回到曾经",
     &[
-        On::Play(None, soyo_back),
-        On::Hook(&[HookKind::Drawn], |_| true, on_drawn),
+        On::Play(None, soyo_back, ""),
+        On::Hook(&[HookKind::Drawn], None, on_drawn, ""),
     ],
 );
 

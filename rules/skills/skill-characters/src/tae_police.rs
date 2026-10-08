@@ -25,18 +25,15 @@ const RABBIT: &str = "多惠兔子";
 pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::CircleAffected], mine, on_circle),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], can_negate, negate),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::CircleAffected], None, on_circle, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], Some(can_negate), negate, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -77,7 +74,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     ctx::remove_marks(t, RABBIT, -2);
-    ctx::gain_fire(player_id, n, &Msg::new(key!("tae_police_gain")));
+    ctx::gain_fire(player_id, n, &Msg::new(key!("tae_police_gain")))?;
     Ok(())
 }
 
@@ -103,7 +100,7 @@ fn negate(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 4, &Msg::new(key!("tae_police_spend"))) {
+    if !ctx::spend_fire(player_id, 4, &Msg::new(key!("tae_police_spend")))? {
         return Ok(());
     }
     trigger::set_cancelled();

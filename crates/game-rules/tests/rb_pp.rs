@@ -124,7 +124,16 @@ fn shanyao_counter_on_short_payment() {
         }
     }
     assert!(saw, "再次闪耀 counter window");
-    assert_eq!(fans(&t, 0).0, 1, "1 positive P✽P fan");
+    // User ruling 2026-10-07 (bankruptcy clears every marker the player holds):
+    // the fan the rescue granted is **cleared** when this seat's bankruptcy
+    // follows -- reversing the previous batch's keep-tokens deviation (the
+    // old expectation was `== 1`, "a P✽P fan the rescue granted survives the
+    // bankruptcy that follows"). 规则书 专有名词 6 [破产] + 81: 「将其控制的
+    // 所有棋子…移出游戏」, extended by the ruling to the markers they hold.
+    // The 50-cash rent shortfall bankrupts P0 after the rescue, so the fan is
+    // swept. Pin that: the ruling is the sweep, not the survival.
+    assert!(t.p(0).bankrupt, "P0 is out: {:?}", t.recent_keys(10));
+    assert_eq!(fans(&t, 0), (0, 0), "the fan is cleared with the bankruptcy");
 }
 
 // ============================================================ PP:同一个梦想
@@ -865,7 +874,7 @@ fn band_skill_turn_start_crystal_and_draw() {
 
 /// 规则书: 「（2）…X大于拥有的反面的[P✽P粉丝]时可为此卡添加等量溢出的[奇迹水晶]（最多10个）。」
 #[test]
-#[ignore = "DISCREPANCY: band skill (2) is a passive 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 reaction to a flip effect, not a press; there is no flip-effect trigger to observe, so 有你与我在这里共度's X>owned overflow never becomes crystals"]
+#[ignore = "DISCREPANCY: band skill (2) is a passive 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 hook on a flip effect, not a press; there is no flip-effect trigger to observe, so 有你与我在这里共度's X>owned overflow never becomes crystals"]
 fn band_skill_overflow_to_crystals() {
     let mut t = Table::vanilla(2);
     t.set_character_raw(0, "丸山彩");

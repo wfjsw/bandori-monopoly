@@ -19,9 +19,9 @@ const TURNS: &str = "turns";
 pub const MARINA_BOX: CardDef = CardDef::new(
     "event:麻里奈小姐的礼物箱",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::PassTile], always, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], always, on_turn_start),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PassTile], Some(always), on_pass, ""),
+        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
     ],
 );
 
@@ -47,9 +47,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金」
 /// -- the passer is asked whether to spend; only a 「yes」 pays 500 and rolls.
 fn on_pass(_player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile {
-        return Ok(());
-    }
     let who = trigger::player_id();
     if who < 0 {
         return Ok(());
@@ -98,9 +95,6 @@ fn on_pass(_player_id: i32) -> card_sdk::Asked {
 /// current turn is already the 1st. The 3rd turn start is the **2nd** one after
 /// the draw: count drawer turn starts and expire on the second.
 fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnStartBefore {
-        return Ok(());
-    }
     if trigger::player_id() != ctx::prop(DRAWER) {
         return Ok(());
     }

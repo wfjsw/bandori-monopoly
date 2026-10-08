@@ -16,13 +16,19 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        On::Play(Some(can_go), go),
-        On::Counteract(&[ChainKind::Effect], can_counteract, counteract),
+        On::Play(Some(can_go), go, ""),
+        On::Counteract(
+            &[ChainKind::Effect],
+            None,
+            counteract,
+            "by != owner && by >= 0 && effect.hits(owner)",
+        ),
     ],
-);
+)
+.legacy(&[(1, legacy_can_counteract)]);
 
-/// 规则书[反击]（1）: 「当你被其他人的卡的效果影响时」 -- C# `H.HitByOtherCard`.
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // C# `H.HitByOtherCard(t, seat)` = `t.ByCard >= 0 && t.ByCard != seat` and
     // (kind "target"/"abnormal" -> `t.Target == seat`, kind "pay" -> `t.Pay.from == seat`).
     if !trigger::by_card().is_some_and(|by| by != player_id) {

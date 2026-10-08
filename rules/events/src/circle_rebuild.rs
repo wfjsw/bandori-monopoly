@@ -17,9 +17,9 @@ const CAFE: &str = "CiRCLE 咖啡厅";
 pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::PassTile], always, on_pass),
-        On::Hook(&[HookKind::SettleBody], always, on_settle_body),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PassTile], Some(always), on_pass, ""),
+        On::Hook(&[HookKind::SettleBody], Some(always), on_settle_body, ""),
     ],
 );
 
@@ -54,9 +54,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// `prop::NO_REWARD`; re-arm it here because that step consumes it), and the
 /// reward is paid out on a pass of the cafe instead.
 fn on_pass(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile {
-        return Ok(());
-    }
     let at = trigger::tile();
     if at < 0 {
         return Ok(());
@@ -66,7 +63,7 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
         // CiRCLE is silent too.
         ctx::set_tile_prop(at, prop::NO_REWARD, 1);
         // 「移除一个」 -- `ctx::decay` burns one crystal of this instance.
-        let left = ctx::decay();
+        let left = ctx::decay()?;
         // 「为0时放入事件弃牌」
         if left <= 0 {
             expire(ID);
@@ -100,9 +97,6 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
 /// -- the engine runs hook instances in placement order, not by priority, so a
 /// replacement that claims the body first still wins (the `cancelled` bail).
 fn on_settle_body(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::SettleBody {
-        return Ok(());
-    }
     let at = trigger::tile();
     if at < 0 {
         return Ok(());

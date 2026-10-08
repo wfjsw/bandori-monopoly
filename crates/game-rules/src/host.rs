@@ -25,6 +25,7 @@ use be::{
 };
 use be::{Caller, Engine, Error, Linker, Module, Store};
 
+use crate::hostfns;
 use crate::world::CardWorld;
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
@@ -48,7 +49,7 @@ pub mod bot_cost {
 /// Fuel per top-level effect run, shared by any nested `play_card` calls. Plenty
 /// for straight-line card logic; stops runaway loops at the same instruction on
 /// every machine.
-const DEFAULT_FUEL: u64 = 5_000_000;
+pub const DEFAULT_FUEL: u64 = 5_000_000;
 
 /// Maximum `play_card` nesting (card A plays B plays C ...).
 pub const MAX_NESTING: u32 = 8;
@@ -193,6 +194,24 @@ pub enum HostRequest {
         to: i32,
         amount: i32,
         src: Option<crate::Msg>,
+        /// Run the command-wide **pre-split** stage (`payTotalAdd` /
+        /// `payTotalMul` / `payTotalCancel`) on this payment's amount. `true`
+        /// for every ordinary payment; a 「[分摊]」 leg sets it `false` because
+        /// the card body has already shaped the command total through
+        /// [`Self::PayTotal`] before dividing (`PIPELINE-AUDIT` Q2).
+        total_stage: bool,
+    },
+    /// The command-wide **pre-split** stage alone (`PIPELINE-AUDIT` Q2): the
+    /// engine runs `payTotalAdd` → `payTotalMul` → `payTotalCancel` on `total`
+    /// and answers with the shaped figure, or `-1` when a `payTotalCancel`
+    /// hook dropped the whole command. No money moves here -- the card body
+    /// divides the answer and runs each share through [`Self::Pay`] with
+    /// `total_stage: false`.
+    PayTotal {
+        from: i32,
+        to: i32,
+        amount: i32,
+        src: Option<crate::Msg>,
     },
     /// An abnormal effect about to hit `player_id`: the engine runs the C#
     /// `AbnormalGate` and answers 1 (it goes through) or 0 (blocked).
@@ -214,6 +233,14 @@ pub enum HostRequest {
         player_id: i32,
         plan: game_core::engine::MoveCtx,
     },
+    /// C# `H.ForceTeleport(..., resolve: false)` / a bare `pos` write: move a
+    /// player with no settle and no move bookkeeping. The engine runs the
+    /// `AbnormalGate` and applies the write to the **live** world, so a move
+    /// that follows in the same effect starts at the destination -- and the
+    /// replay skips the call (an answer is logged), so it cannot re-teleport
+    /// over a move that already ran. Answers 1 (it went through) or 0 (the
+    /// gate blocked it).
+    Teleport { player_id: i32, tile: i32 },
     /// C# `H.AgentLanding`: the player lands on `agent` as a 「星光代理」 (the
     /// buy-or-pay-rent routine). Runs engine-side; the effect replays past it.
     AgentLanding { player_id: i32, agent: i32 },
@@ -225,7 +252,12 @@ pub enum HostRequest {
         main: bool,
     },
     /// C# `H.BuyRoutine`: the purchase itself.
-    Buy { player_id: i32, tile: i32 },
+    Buy {
+        player_id: i32,
+        tile: i32,
+        /// A [`card_sdk::abi::BuyKind`] as `i32` (`0` = land).
+        kind: i32,
+    },
     /// v40: batched purchase quote (`docs/PURCHASE.md`).
     BuyQuotes {
         player_id: i32,
@@ -308,6 +340,21 @@ pub enum HostRequest {
     /// with `by_card` = the run's own player. `buy()` raises the same hook
     /// itself after an ordinary purchase; this is the card-driven half.
     RaiseBought { player_id: i32, tile: i32 },
+    /// Marker spend / gain (user ruling 2026-10-07): the engine raises
+    /// `markerSpend` / `markerGain` -- the marker's own [反击] window --
+    /// **before** the markers move. Answers `1` (the move goes through) or `0`
+    /// (a counteraction cancelled it, nothing moves). Marker *costs* otherwise
+    /// keep today's timing: they are spent as the effect resolves and a
+    /// whole-effect negation before the body already prevents them.
+    Marker {
+        player_id: i32,
+        /// Marker name (「火罐」/「奇迹水晶」/「P✽P粉丝」/…). `fire` is the
+        /// 火罐 pot shorthand (`key::FIRE`).
+        name: String,
+        /// Signed delta. Negative = spend (raises `markerSpend`), positive =
+        /// gain (raises `markerGain`).
+        delta: i32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -322,6 +369,16 @@ pub enum RuleError {
     Trap(String),
     /// A guard (`can_counteract`) tried to prompt. Guards must be pure queries.
     GuardPrompted,
+    /// A guard **condition** (docs/GUARDS.md §4.3) failed to compile: parse
+    /// error, unknown variable/function, or a float literal (int-only). Fail
+    /// closed at build -- never "treat as true"; the clauses the condition
+    /// carries are gone from the guard.
+    BadPre {
+        card: String,
+        entry: i32,
+        source: String,
+        err: String,
+    },
 }
 
 impl fmt::Display for RuleError {
@@ -332,6 +389,12 @@ impl fmt::Display for RuleError {
             Self::NoSuchCard(c) => write!(f, "no card with handle {c}"),
             Self::Trap(m) => write!(f, "card effect failed: {m}"),
             Self::GuardPrompted => write!(f, "can_counteract tried to prompt a player"),
+            Self::BadPre {
+                card,
+                entry,
+                source,
+                err,
+            } => write!(f, "card {card:?} entry {entry}: bad condition {source:?}: {err}"),
         }
     }
 }
@@ -347,7 +410,7 @@ pub enum Outcome<W> {
     NeedInput(Prompt),
     /// Blocked on a host routine (buy/build/mortgage/move/pay/...) with no
     /// answer yet. The run's world rides along so the host can read the
-    /// turn-ctx policy the card set up (`build_discount`, `buy_discount`, ...)
+    /// turn-ctx policy the card set up (`build_discount`, `lingering`, ...)
     /// before the routine runs against the live world -- the routine is not
     /// replayed, so those writes have to cross now.
     NeedHost(HostRequest, W),
@@ -376,7 +439,7 @@ struct Slot {
     local: i32,
 }
 
-struct Inner {
+pub(crate) struct Inner {
     /// Unique across the process. Caches keyed on a set of modules must not
     /// survive one `Inner` into another that lands at the same address, so they
     /// key on this rather than on a pointer.
@@ -384,6 +447,11 @@ struct Inner {
     engine: Engine,
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
+    /// Compiled guard **conditions** (docs/GUARDS.md G0), parallel to
+    /// `cards[i].on[j]`. `None` = no condition (the guard alone decides).
+    /// Built once in [`RulesetBuilder::build`]; every guard call site reads
+    /// this through [`crate::cond_pre::admits`].
+    pre: Vec<Vec<Option<crate::cond_pre::CompiledPre>>>,
     slots: Vec<Slot>,
     by_id: HashMap<String, i32>,
     sha256: String,
@@ -391,6 +459,14 @@ struct Inner {
     /// whole bridge when nothing in the set listens. `TriggerKind` values fit in
     /// 0..128, so this is one word and costs no allocation.
     declared: u128,
+    /// Cached counteraction index (BOT-RESEARCH.md #1 / GUARDS.md G3): per-card
+    /// bitmask of trigger kinds its `On::Counteract` entries answer. The offer
+    /// loop tests one shift instead of scanning the entry table per probe.
+    counteract_mask: Vec<u128>,
+    /// Per-card bitmask of trigger kinds its hook/gate entries answer. Same
+    /// shape as `counteract_mask`; the hook dispatch uses it to skip cards that
+    /// can never fire at a kind.
+    hook_mask: Vec<u128>,
 }
 
 /// Builds a [`Ruleset`] from any number of card modules (normally one per card).
@@ -399,6 +475,11 @@ pub struct RulesetBuilder {
     modules: Vec<LoadedModule>,
     cards: Vec<CardInfo>,
     slots: Vec<Slot>,
+    /// Lean compiled condition blobs (`Cond::to_bytes(false)`), keyed by
+    /// `(card id, entry index)`. The runtime-only (browser) path fills these
+    /// from the ruleset index instead of compiling -- see
+    /// [`RulesetBuilder::precompiled`].
+    precompiled: HashMap<(String, i32), Vec<u8>>,
 }
 
 impl RulesetBuilder {
@@ -422,6 +503,14 @@ impl RulesetBuilder {
         Ok(sha256)
     }
 
+    /// Hand the builder a precompiled condition blob (`Cond::to_bytes(false)`)
+    /// for `card`'s `entry`, for the runtime-only (browser) path where the
+    /// `cel` parser is not linked. The host compile path ignores these and
+    /// compiles the manifest's `pre` source itself.
+    pub fn precompiled(&mut self, card: &str, entry: i32, blob: Vec<u8>) {
+        self.precompiled.insert((card.to_string(), entry), blob);
+    }
+
     pub fn build(self) -> Result<Ruleset, RuleError> {
         let mut by_id = HashMap::new();
         for (i, c) in self.cards.iter().enumerate() {
@@ -434,14 +523,58 @@ impl RulesetBuilder {
         hashes.sort_unstable();
         let sha256 = hex_sha256(hashes.join("\n").as_bytes());
         let mut declared = 0u128;
+        let mut counteract_mask = Vec::with_capacity(self.cards.len());
+        let mut hook_mask = Vec::with_capacity(self.cards.len());
         for c in &self.cards {
+            let mut cm = 0u128;
+            let mut hm = 0u128;
             for o in &c.on {
+                let ok = OnKind::from_i32(o.kind);
                 for &k in &o.triggers {
                     if (0..128).contains(&k) {
                         declared |= 1u128 << k;
+                        match ok {
+                            Some(OnKind::Counteract) => cm |= 1u128 << k,
+                            Some(OnKind::Hook) | Some(OnKind::Gate) => hm |= 1u128 << k,
+                            _ => {}
+                        }
                     }
                 }
             }
+            counteract_mask.push(cm);
+            hook_mask.push(hm);
+        }
+        // Compile every condition once (docs/GUARDS.md §4.3). Fail-closed: a
+        // parse / unknown-var / float error is a build error, never "treat as
+        // true".
+        let mut pre = Vec::with_capacity(self.cards.len());
+        for c in &self.cards {
+            let mut row = Vec::with_capacity(c.on.len());
+            for (ei, o) in c.on.iter().enumerate() {
+                let compiled = match &o.pre {
+                    Some(src) => Some(compile_pre(
+                        &c.id,
+                        ei as i32,
+                        src,
+                        self.precompiled.get(&(c.id.clone(), ei as i32)),
+                    )?),
+                    None => match self.precompiled.get(&(c.id.clone(), ei as i32)) {
+                        Some(blob) => Some(
+                            crate::cond_pre::CompiledPre::from_bytes(blob).map_err(|e| {
+                                RuleError::BadPre {
+                                    card: c.id.clone(),
+                                    entry: ei as i32,
+                                    source: String::new(),
+                                    err: e.to_string(),
+                                }
+                            })?,
+                        ),
+                        None => None,
+                    },
+                };
+                row.push(compiled);
+            }
+            pre.push(row);
         }
         Ok(Ruleset {
             inner: Arc::new(Inner {
@@ -449,13 +582,55 @@ impl RulesetBuilder {
                 engine: self.engine,
                 modules: self.modules,
                 cards: self.cards,
+                pre,
                 slots: self.slots,
                 by_id,
                 sha256,
                 declared,
+                counteract_mask,
+                hook_mask,
             }),
             fuel: DEFAULT_FUEL,
         })
+    }
+}
+
+/// Compile one condition source (host `compile` path) or load a precompiled
+/// blob (runtime-only path). Both end at the same `CompiledPre`, so the
+/// browser evaluates exactly what the host compiled.
+fn compile_pre(
+    card: &str,
+    entry: i32,
+    src: &str,
+    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))] precompiled: Option<
+        &Vec<u8>,
+    >,
+) -> Result<crate::cond_pre::CompiledPre, RuleError> {
+    let bad = |err: String| RuleError::BadPre {
+        card: card.to_string(),
+        entry,
+        source: src.to_string(),
+        err,
+    };
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        // Prefer the source (authoritative); a supplied blob is ignored here.
+        crate::cond_pre::CompiledPre::compile(src).map_err(|e| bad(e.to_string()))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        // No parser in the browser build (docs/GUARDS.md §8.3): the compiled
+        // form must arrive via `RulesetBuilder::precompiled`.
+        match precompiled {
+            Some(blob) => {
+                crate::cond_pre::CompiledPre::from_bytes(blob).map_err(|e| bad(e.to_string()))
+            }
+            None => Err(bad(
+                "browser build cannot compile a condition source; supply a precompiled blob \
+                 (RulesetBuilder::precompiled) -- see docs/GUARDS.md §8.2"
+                    .into(),
+            )),
+        }
     }
 }
 
@@ -473,6 +648,7 @@ impl Ruleset {
             modules: vec![],
             cards: vec![],
             slots: vec![],
+            precompiled: HashMap::new(),
         }
     }
 
@@ -516,6 +692,31 @@ impl Ruleset {
     pub fn declares(&self, kind: crate::TriggerKind) -> bool {
         let v = kind as i32;
         (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
+    }
+
+    /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
+    /// a [反击] at `kind`? One shift of the per-card bitmask -- the offer loop
+    /// never scans the entry table and never builds a `Run` for a card that
+    /// cannot answer.
+    pub fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        let v = kind as i32;
+        (0..128).contains(&v)
+            && self
+                .inner
+                .counteract_mask
+                .get(card as usize)
+                .is_some_and(|m| (m >> v) & 1 != 0)
+    }
+
+    /// Hook/gate twin of [`Self::counteracts_to`].
+    pub fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        let v = kind as i32;
+        (0..128).contains(&v)
+            && self
+                .inner
+                .hook_mask
+                .get(card as usize)
+                .is_some_and(|m| (m >> v) & 1 != 0)
     }
 
     /// Handle for a card id from `cards.json`, e.g. `"AG:Y.O.L.O"`.
@@ -582,10 +783,12 @@ impl Ruleset {
     /// **single** instantiation, so a fired hook costs one fire-up and one world
     /// copy rather than the two a separate guard query + [`Self::run`] cost.
     ///
-    /// Returns `Ok(None)` when the card is not activated at all (its guard
-    /// refused, or it has no entry at this kind). [`HookRun::announced`] is the
-    /// "a guard existed and passed" moment -- the one time the card shows
-    /// itself; a gate, which has no guard, runs without announcing.
+    /// Returns `Ok(None)` when the card is not activated at all (its condition
+    /// rejected, its guard refused, or it has no entry at this kind).
+    /// [`HookRun::announced`] is the "a guard existed and passed" moment -- the
+    /// one time the card shows itself; a gate, which has no guard, runs without
+    /// announcing. The guard step goes through [`crate::cond_pre::admits`]
+    /// (docs/GUARDS.md §4.4 item 2).
     pub fn run_hook<W: CardWorld>(
         &self,
         world: &W,
@@ -604,19 +807,52 @@ impl Ruleset {
         // `On::Hook` entries carry a guard; `On::Gate` entries are questions and
         // have none, so they run unasked.
         if let Some(guard) = info.entry(OnKind::Hook, Some(kind)) {
-            match call_card(
-                &self.inner,
-                &mut store,
-                card,
-                guard,
-                export::OP_GUARD,
-                player_id,
-            ) {
-                Ok(0) => return Ok(None),
-                Ok(_) => announced = true,
-                // A trap or a prompting guard: fail closed, the card does not
-                // fire -- the contract `can_hook` + `hook_guard` had.
-                Err(_) => return Ok(None),
+            let pre = self
+                .inner
+                .pre
+                .get(card as usize)
+                .and_then(|r| r.get(guard as usize))
+                .and_then(|p| p.as_ref());
+            let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+            let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, true);
+            #[cfg(feature = "guard-audit")]
+            let audit = self.legacy_probe(world, card, guard, player_id);
+            let admitted = if self.guard_is_none(card, guard) {
+                // G4 deleted the residual: the condition alone decides.
+                crate::cond_pre::admits_pre(pre, &scope, &cand)
+            } else {
+                // A guard is a pure query: refuse inline answers (a nested drive's
+                // host must not answer a question nobody asked -- see
+                // `crate::inline::Deny`). A prompting guard fails closed, as below.
+                let asked: Result<bool, ()> = crate::cond_pre::admits(pre, &scope, &cand, || {
+                    match crate::inline::with_no_inline(|| {
+                        call_card(&self.inner, &mut store, card, guard, export::OP_GUARD, player_id)
+                    }) {
+                        Ok(0) => Ok(false),
+                        Ok(_) => Ok(true),
+                        // A trap or a prompting guard: fail closed -- the contract
+                        // `can_hook` + `hook_guard` had.
+                        Err(_) => Ok(false),
+                    }
+                });
+                matches!(asked, Ok(true))
+            };
+            #[cfg(feature = "guard-audit")]
+            if let Some(legacy) = audit {
+                crate::cond_pre::legacy_audit(
+                    &info.id,
+                    guard,
+                    Some(legacy),
+                    admitted,
+                    &trigger_dump(&world.trigger()),
+                );
+            }
+            if admitted {
+                announced = true;
+            } else {
+                // Condition rejected, guard refused, or a trap: the card does
+                // not fire.
+                return Ok(None);
             }
         }
         let res = call_card(
@@ -633,13 +869,44 @@ impl Ruleset {
         }))
     }
 
+    /// The compiled condition of one guarded entry, if it declares one
+    /// (docs/GUARDS.md G0). `None` = no condition.
+    pub fn pre_of(
+        &self,
+        card: i32,
+        kind: OnKind,
+        trigger: Option<crate::TriggerKind>,
+    ) -> Option<&crate::cond_pre::CompiledPre> {
+        let c = self.inner.cards.get(card as usize)?;
+        let e = c.entry(kind, trigger)?;
+        self.inner.pre.get(card as usize)?.get(e as usize)?.as_ref()
+    }
+
     /// `Card.CanCounteract` against the current trigger. Runs on a throwaway copy, so it
     /// cannot change the world even if the card calls a mutating function.
+    ///
+    /// Goes through [`crate::cond_pre::admits`] (docs/GUARDS.md §4.4): the
+    /// entry's condition is evaluated first and a rejecting one skips the wasm
+    /// guard entirely.
     pub fn can_counteract<W: CardWorld>(
         &self,
         world: &W,
         card: i32,
         player_id: i32,
+    ) -> Result<bool, RuleError> {
+        let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+        self.can_counteract_scoped(world, card, player_id, &scope)
+    }
+
+    /// [`Self::can_counteract`] with a window scope built once per trigger /
+    /// chain window and reused across every candidate probe in that window
+    /// (docs/GUARDS.md §4.2/§4.4 item 1 -- the 48 900-call path).
+    pub fn can_counteract_scoped<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
     ) -> Result<bool, RuleError> {
         self.check(card)?;
         // Only a card that declared a [反击] at this kind is ever asked.
@@ -648,18 +915,124 @@ impl Ruleset {
         else {
             return Ok(false);
         };
-        let mut store = self.store(world.clone(), &[])?;
-        match call_card(
-            &self.inner,
-            &mut store,
-            card,
-            entry,
-            export::OP_GUARD,
+        let pre = self
+            .inner
+            .pre
+            .get(card as usize)
+            .and_then(|r| r.get(entry as usize))
+            .and_then(|p| p.as_ref());
+        let cand = crate::cond_pre::fill_candidate(
+            world,
             player_id,
-        ) {
-            Ok(v) => Ok(v != 0),
-            Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
-            Err(e) => Err(trap(e)),
+            &self.inner.cards[card as usize].id,
+            false,
+        );
+        #[cfg(feature = "guard-audit")]
+        let audit = self.legacy_probe(world, card, entry, player_id);
+        let ok = if self.guard_is_none(card, entry) {
+            // G4 deleted the residual: the condition alone decides.
+            crate::cond_pre::admits_pre(pre, scope, &cand)
+        } else {
+            crate::cond_pre::admits(pre, scope, &cand, || {
+                let mut store = self.store(world.clone(), &[])?;
+                match crate::inline::with_no_inline(|| {
+                    call_card(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id)
+                }) {
+                    Ok(v) => Ok(v != 0),
+                    Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
+                    Err(e) => Err(trap(e)),
+                }
+            })?
+        };
+        #[cfg(feature = "guard-audit")]
+        if let Some(legacy) = audit {
+            crate::cond_pre::legacy_audit(
+                &self.inner.cards[card as usize].id,
+                entry,
+                Some(legacy),
+                ok,
+                &trigger_dump(&world.trigger()),
+            );
+        }
+        Ok(ok)
+    }
+
+    /// Condition-only pre-filter (BOT-RESEARCH.md #1): evaluate the entry's
+    /// condition for `(card, seat)` against a shared window scope **without**
+    /// building a `Run` or instantiating the guard. `Some(entry)` when the
+    /// condition admits (or the entry has none) and the residual guard must be
+    /// asked; `None` when the card has no [反击] at this kind or the condition
+    /// rejects it. The offer loop calls this first and only builds the `Run`
+    /// for the survivors.
+    pub fn counteract_pre_allows<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
+    ) -> Option<i32> {
+        let kind = world.trigger().kind;
+        if !self.counteracts_to(card, kind) {
+            return None;
+        }
+        let entry = self.inner.cards[card as usize].entry(OnKind::Counteract, Some(kind))?;
+        let pre = self
+            .inner
+            .pre
+            .get(card as usize)
+            .and_then(|r| r.get(entry as usize))
+            .and_then(|p| p.as_ref());
+        let cand = crate::cond_pre::fill_candidate(
+            world,
+            player_id,
+            &self.inner.cards[card as usize].id,
+            false,
+        );
+        if crate::cond_pre::condition_allows(pre, scope, &cand) {
+            Some(entry)
+        } else {
+            None
+        }
+    }
+
+    /// Is the residual wasm guard deleted (G4: `On::*` guard is `None`)? The
+    /// host skips the `OP_GUARD` instantiation when the condition alone decides.
+    fn guard_is_none(&self, card: i32, entry: i32) -> bool {
+        self.inner
+            .cards
+            .get(card as usize)
+            .and_then(|c| c.on.get(entry as usize))
+            .is_some_and(|o| !o.has_guard)
+    }
+
+    /// G3 migration audit: ask the guest for the entry's `legacy_*` guard
+    /// (`export::OP_LEGACY_GUARD`). `None` when the entry has no legacy copy.
+    #[cfg(feature = "guard-audit")]
+    fn legacy_probe<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        entry: i32,
+        player_id: i32,
+    ) -> Option<bool> {
+        let info = self.inner.cards.get(card as usize)?;
+        if !info.on.get(entry as usize)?.has_legacy {
+            return None;
+        }
+        let mut store = self.store(world.clone(), &[]).ok()?;
+        match crate::inline::with_no_inline(|| {
+            call_card(
+                &self.inner,
+                &mut store,
+                card,
+                entry,
+                export::OP_LEGACY_GUARD,
+                player_id,
+            )
+        }) {
+            // rt.rs returns -1 for "no legacy copy".
+            Ok(v) if v >= 0 => Some(v != 0),
+            _ => None,
         }
     }
 
@@ -668,6 +1041,10 @@ impl Ruleset {
     /// [`RuleError::GuardPrompted`]). This is the `Play` **gate**
     /// (`Option<fn(i32) -> Option<Msg>>`), so it runs under
     /// [`export::OP_GUARD`] -- the effect body does not run here.
+    ///
+    /// Goes through [`crate::cond_pre::admits_gate`] (docs/GUARDS.md §4.4 item
+    /// 3): a rejecting condition **is** a block (`err.play_pre`) and the gate
+    /// is skipped. The play-gate window has no `Trigger` (`kind` absent).
     pub fn cant_play<W: CardWorld>(
         &self,
         world: &W,
@@ -678,19 +1055,66 @@ impl Ruleset {
         let Some(entry) = self.inner.cards[card as usize].entry(OnKind::Play, None) else {
             return Ok(None);
         };
-        let mut store = self.store(world.clone(), &[])?;
-        match call_card_msg(
-            &self.inner,
-            &mut store,
-            card,
-            entry,
-            export::OP_GUARD,
+        let pre = self
+            .inner
+            .pre
+            .get(card as usize)
+            .and_then(|r| r.get(entry as usize))
+            .and_then(|p| p.as_ref());
+        let scope =
+            crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(world, player_id));
+        let cand = crate::cond_pre::fill_candidate(
+            world,
             player_id,
-        ) {
-            Ok(v) => Ok(v),
-            Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
-            Err(e) => Err(trap(e)),
+            &self.inner.cards[card as usize].id,
+            false,
+        );
+        #[cfg(feature = "guard-audit")]
+        let audit = self.legacy_probe(world, card, entry, player_id);
+        let why = if self.guard_is_none(card, entry) {
+            // G4 deleted the gate: the condition alone decides. A rejecting
+            // condition is still a block; an admitting one is playable.
+            if crate::cond_pre::condition_allows(pre, &scope, &cand) {
+                None
+            } else {
+                Some(crate::Msg::new("err.play_pre"))
+            }
+        } else {
+            crate::cond_pre::admits_gate(
+                pre,
+                &scope,
+                &cand,
+                || crate::Msg::new("err.play_pre"),
+                || {
+                    let mut store = self.store(world.clone(), &[])?;
+                    match crate::inline::with_no_inline(|| {
+                        call_card_msg(
+                            &self.inner,
+                            &mut store,
+                            card,
+                            entry,
+                            export::OP_GUARD,
+                            player_id,
+                        )
+                    }) {
+                        Ok(v) => Ok(v),
+                        Err(e) if is_need_input(&e) => Err(RuleError::GuardPrompted),
+                        Err(e) => Err(trap(e)),
+                    }
+                },
+            )?
+        };
+        #[cfg(feature = "guard-audit")]
+        if let Some(legacy) = audit {
+            crate::cond_pre::legacy_audit(
+                &self.inner.cards[card as usize].id,
+                entry,
+                Some(legacy),
+                why.is_none(),
+                &format!("cant_play player={player_id}"),
+            );
         }
+        Ok(why)
     }
 
     fn check(&self, card: i32) -> Result<(), RuleError> {
@@ -719,6 +1143,24 @@ impl Ruleset {
         );
         Ok(store)
     }
+}
+
+/// One-line dump of a trigger for the G3 audit panic message.
+fn trigger_dump(t: &crate::Trigger) -> String {
+    format!(
+        "kind={:?} actor={} target={} tile={} value={} step={} by={} pay_is_rent={} move_roll={:?} move_kind={:?} abnormal={}",
+        t.kind,
+        t.player_id,
+        t.target,
+        t.tile,
+        t.value,
+        t.step,
+        t.by_card.unwrap_or(-1),
+        t.pay_is_rent,
+        t.move_roll,
+        t.move_kind,
+        matches!(t.kind, crate::TriggerKind::Abnormal),
+    )
 }
 
 fn trap(e: Error) -> RuleError {
@@ -768,21 +1210,306 @@ fn hex_sha256(bytes: &[u8]) -> String {
         .collect()
 }
 
+// ---------------------------------------------------------------------------
+// `CardModules`: what the `CardRules` bridge needs from a loaded card set.
+// `Ruleset` is the sandbox implementation; `rules-native` provides its own
+// over the linked `RULESET` tables. See `docs/BOT.md` §3.1 (B1).
+// ---------------------------------------------------------------------------
+
+/// The loaded card set, in the shape [`crate::WasmRules`] (the `CardRules`
+/// bridge) consumes. Split out of [`Ruleset`] so the native backend can
+/// implement it over statically linked tables without a wasm engine.
+pub trait CardModules: Clone + Send + Sync + 'static {
+    fn cards(&self) -> &[CardInfo];
+    fn card(&self, id: &str) -> Option<i32>;
+    fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32>;
+    fn card_prop(&self, id: &str, key: &str) -> i32;
+    fn declares(&self, kind: crate::TriggerKind) -> bool;
+    /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
+    /// a [反击] at `kind`? Default scans the entry table; [`Ruleset`] uses the
+    /// per-card kind bitmask.
+    fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        self.cards()
+            .get(card as usize)
+            .is_some_and(|c| c.counteracts_to(kind))
+    }
+    /// Condition pre-filter (BOT-RESEARCH.md #1): `Some(entry)` when the
+    /// card's [反击] at this window's kind exists and its condition admits.
+    /// `None` skips the `Run` / guard entirely. Default builds the candidate
+    /// from the world and evaluates the condition; [`Ruleset`] overrides with
+    /// the same shape.
+    fn counteract_pre_allows(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
+    ) -> Option<i32> {
+        let kind = world.trigger().kind;
+        if !self.counteracts_to(card, kind) {
+            return None;
+        }
+        let info = self.cards().get(card as usize)?;
+        let entry = info.entry(OnKind::Counteract, Some(kind))?;
+        let pre = self.pre(card, entry);
+        let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, false);
+        if crate::cond_pre::condition_allows(pre, scope, &cand) {
+            Some(entry)
+        } else {
+            None
+        }
+    }
+    /// The compiled condition of one guarded entry, if any (G0).
+    fn pre(&self, card: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre>;
+    /// Content hash of the loaded set; `None` when there is no module image
+    /// (the native build -- the cards are compiled in).
+    fn sha256(&self) -> Option<&str>;
+    fn module_sha256(&self, card: i32) -> Option<&str>;
+    fn run(
+        &self,
+        world: &crate::Run,
+        call: Call,
+        answers: &[i32],
+    ) -> Result<Outcome<crate::Run>, RuleError>;
+    fn run_hook(
+        &self,
+        world: &crate::Run,
+        call: Call,
+        answers: &[i32],
+    ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
+    fn can_counteract(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+    ) -> Result<bool, RuleError>;
+    /// [`Self::can_counteract`] with a window scope built once per trigger /
+    /// chain window and reused across every candidate probe (docs/GUARDS.md
+    /// §4.4 item 1). Default falls back to the unscoped form.
+    fn can_counteract_scoped(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
+    ) -> Result<bool, RuleError> {
+        let _ = scope;
+        self.can_counteract(world, card, player_id)
+    }
+    /// The `Play` gate (`Card.WhyNot`): `Some(reason)` when the card is blocked.
+    fn cant_play(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+    ) -> Result<Option<crate::Msg>, RuleError>;
+}
+
+impl CardModules for Ruleset {
+    fn cards(&self) -> &[CardInfo] {
+        Ruleset::cards(self)
+    }
+    fn card(&self, id: &str) -> Option<i32> {
+        Ruleset::card(self, id)
+    }
+    fn card_props(&self, id: &str) -> std::collections::BTreeMap<String, i32> {
+        Ruleset::card_props(self, id)
+    }
+    fn card_prop(&self, id: &str, key: &str) -> i32 {
+        Ruleset::card_prop(self, id, key)
+    }
+    fn declares(&self, kind: crate::TriggerKind) -> bool {
+        Ruleset::declares(self, kind)
+    }
+    fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        Ruleset::counteracts_to(self, card, kind)
+    }
+    fn counteract_pre_allows(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
+    ) -> Option<i32> {
+        Ruleset::counteract_pre_allows(self, world, card, player_id, scope)
+    }
+    fn pre(&self, card: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
+        self.inner
+            .pre
+            .get(card as usize)?
+            .get(entry as usize)?
+            .as_ref()
+    }
+    fn sha256(&self) -> Option<&str> {
+        Some(Ruleset::sha256(self))
+    }
+    fn module_sha256(&self, card: i32) -> Option<&str> {
+        Ruleset::module_sha256(self, card)
+    }
+    fn run(
+        &self,
+        world: &crate::Run,
+        call: Call,
+        answers: &[i32],
+    ) -> Result<Outcome<crate::Run>, RuleError> {
+        Ruleset::run::<crate::Run>(self, world, call, answers)
+    }
+    fn run_hook(
+        &self,
+        world: &crate::Run,
+        call: Call,
+        answers: &[i32],
+    ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
+        Ruleset::run_hook::<crate::Run>(self, world, call, answers)
+    }
+    fn can_counteract(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+    ) -> Result<bool, RuleError> {
+        Ruleset::can_counteract::<crate::Run>(self, world, card, player_id)
+    }
+    fn can_counteract_scoped(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
+    ) -> Result<bool, RuleError> {
+        Ruleset::can_counteract_scoped::<crate::Run>(self, world, card, player_id, scope)
+    }
+    fn cant_play(
+        &self,
+        world: &crate::Run,
+        card: i32,
+        player_id: i32,
+    ) -> Result<Option<crate::Msg>, RuleError> {
+        Ruleset::cant_play::<crate::Run>(self, world, card, player_id)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Backend-neutral host surface (`hostfns` + native). See `hostfns.rs`.
+// ---------------------------------------------------------------------------
+
+/// A host import failed. Backend-neutral on purpose: `hostfns` never names a
+/// wasm engine's error type, so the native backend can produce the same two
+/// outcomes the sandbox does.
+#[derive(Debug, Clone)]
+pub enum HostErr {
+    /// The run stopped at a prompt / host request. The sandbox raises its
+    /// `need_input` trap; the native backend unwinds with this and the entry
+    /// point folds it into `EXIT_NEED_INPUT`.
+    NeedInput,
+    /// "this card is out" -- the sandbox trap contract.
+    Trap(String),
+}
+
+impl HostErr {
+    pub fn trap(msg: impl Into<String>) -> Self {
+        HostErr::Trap(msg.into())
+    }
+
+    pub fn is_need_input(&self) -> bool {
+        matches!(self, HostErr::NeedInput)
+    }
+
+    /// Convert to the wasm-engine error at the sandbox boundary.
+    pub fn into_err(self) -> be::Error {
+        match self {
+            HostErr::NeedInput => be::need_input(),
+            HostErr::Trap(m) => be::err(m),
+        }
+    }
+}
+
+/// What a nested card call returns when the caller asked for the gate's `Msg`
+/// (the `Play` / `cant_play` shape) instead of a plain code.
+pub enum CallOut {
+    Code(i64),
+    Msg(Option<crate::Msg>),
+}
+
+/// The card table a host run can look cards up in. `Arc<Inner>` on the sandbox
+/// side; `rules-native` provides its own over the linked `RULESET` tables.
+pub trait RulesHandle: Clone + Send + Sync + 'static {
+    fn by_id(&self, id: &str) -> Option<i32>;
+    fn card(&self, i: i32) -> Option<&CardInfo>;
+    /// The compiled condition of card `i`'s `entry` (docs/GUARDS.md G0), if
+    /// any. Default `None` (no condition) so a stub handle need not care.
+    fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
+        let _ = (i, entry);
+        None
+    }
+}
+
+impl RulesHandle for Arc<Inner> {
+    fn by_id(&self, id: &str) -> Option<i32> {
+        self.by_id.get(id).copied()
+    }
+    fn card(&self, i: i32) -> Option<&CardInfo> {
+        self.cards.get(i as usize)
+    }
+    fn pre(&self, i: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
+        self.pre.get(i as usize)?.get(entry as usize)?.as_ref()
+    }
+}
+
+/// The plumbing a host import needs that differs between the sandbox and the
+/// native build: guest memory (wasm linear memory vs the native arena) and
+/// fuel (store fuel vs a plain counter). Everything else lives on [`HostState`].
+pub trait HostCtx {
+    type World: CardWorld;
+    type Rules: RulesHandle;
+
+    fn st(&self) -> &HostState<Self::World, Self::Rules>;
+    fn st_mut(&mut self) -> &mut HostState<Self::World, Self::Rules>;
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr>;
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr>;
+    fn fuel(&mut self) -> Result<u64, HostErr>;
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr>;
+    /// Run `card`'s `entry` against `nested`. Returns the call result, the
+    /// nested state (world / answers / prompts) and the fuel left. The sandbox
+    /// builds a fresh `Store`; the native backend swaps the thread-local host.
+    #[allow(clippy::type_complexity)]
+    fn call_entry(
+        &mut self,
+        nested: HostState<Self::World, Self::Rules>,
+        card: i32,
+        entry: i32,
+        op: i32,
+        player_id: i32,
+        want_msg: bool,
+    ) -> (
+        Result<CallOut, HostErr>,
+        HostState<Self::World, Self::Rules>,
+        u64,
+    );
+}
+
+/// Guest memory access. Implemented over wasmtime/wasmi linear memory on the
+/// sandbox path and over `card_sdk::native`'s arena on the native path.
+pub trait GuestMem {
+    fn read(&self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr>;
+    fn write(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr>;
+}
+
 /// Per-run store data. `world` is `None` only while a nested `play_card` has
 /// borrowed it (the outer guest is suspended inside the host call at that time).
-struct HostState<W> {
-    rules: Option<Arc<Inner>>,
-    world: Option<W>,
-    answers: Vec<i32>,
-    next_answer: usize,
-    options: Vec<PromptOption>,
-    asked: Option<Prompt>,
-    host_request: Option<HostRequest>,
-    depth: u32,
+pub struct HostState<W, R = Arc<Inner>> {
+    pub rules: Option<R>,
+    pub world: Option<W>,
+    pub answers: Vec<i32>,
+    pub next_answer: usize,
+    pub options: Vec<PromptOption>,
+    pub asked: Option<Prompt>,
+    pub host_request: Option<HostRequest>,
+    pub depth: u32,
     /// Per-instance resource ceiling. Installed on the store by [`new_store`];
     /// lives in the store data because that is where `Store::limiter` wants its
-    /// resource limiter to come from.
-    limits: be::StoreLimits,
+    /// resource limiter to come from. Unused on the native backend.
+    pub limits: be::StoreLimits,
 }
 
 /// The per-instance memory ceiling, as a fresh [`be::StoreLimits`]. One per
@@ -800,8 +1527,8 @@ fn new_store<W>(engine: &Engine, state: HostState<W>) -> Store<HostState<W>> {
     store
 }
 
-impl<W> HostState<W> {
-    fn new(rules: Arc<Inner>, world: W, answers: Vec<i32>, depth: u32) -> Self {
+impl<W, R: RulesHandle> HostState<W, R> {
+    pub fn new(rules: R, world: W, answers: Vec<i32>, depth: u32) -> Self {
         Self {
             rules: Some(rules),
             world: Some(world),
@@ -815,16 +1542,87 @@ impl<W> HostState<W> {
         }
     }
 
-    fn w(&mut self) -> &mut W {
+    pub fn w(&mut self) -> &mut W {
         self.world
             .as_mut()
             .expect("world borrowed by a nested call")
     }
 
-    fn wr(&self) -> &W {
+    pub fn wr(&self) -> &W {
         self.world
             .as_ref()
             .expect("world borrowed by a nested call")
+    }
+}
+
+/// The sandbox's [`HostCtx`]: a wasmi/wasmtime `Caller` over a `HostState`.
+impl<'a, W: CardWorld> HostCtx for Caller<'a, HostState<W>> {
+    type World = W;
+    type Rules = Arc<Inner>;
+
+    fn st(&self) -> &HostState<W> {
+        self.data()
+    }
+    fn st_mut(&mut self) -> &mut HostState<W> {
+        self.data_mut()
+    }
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr> {
+        be::read_guest(self, ptr, len).map_err(|e| HostErr::trap(be::error_text(&e)))
+    }
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr> {
+        be::write_guest(self, ptr, bytes).map_err(|e| HostErr::trap(be::error_text(&e)))
+    }
+    fn fuel(&mut self) -> Result<u64, HostErr> {
+        self.get_fuel().map_err(|e| HostErr::trap(be::error_text(&e)))
+    }
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
+        Caller::set_fuel(self, v).map_err(|e| HostErr::trap(be::error_text(&e)))
+    }
+    #[allow(clippy::type_complexity)]
+    fn call_entry(
+        &mut self,
+        nested: HostState<W>,
+        card: i32,
+        entry: i32,
+        op: i32,
+        player_id: i32,
+        want_msg: bool,
+    ) -> (Result<CallOut, HostErr>, HostState<W>, u64) {
+        let rules = match nested.rules.clone() {
+            Some(r) => r,
+            None => {
+                return (
+                    Err(HostErr::trap("call_entry without rules")),
+                    nested,
+                    0,
+                )
+            }
+        };
+        // Share the remaining fuel with the nested run (the same contract
+        // `play_card` had when it built the store inline): a runaway nest
+        // exhausts one budget, and the leftover is handed back to the caller.
+        let fuel = self.fuel().unwrap_or(0);
+        let mut store = new_store(&rules.engine, nested);
+        if let Err(e) = store.set_fuel(fuel).map_err(|e| HostErr::trap(be::error_text(&e))) {
+            let inner = store.into_data();
+            return (Err(e), inner, fuel);
+        }
+        let res = if want_msg {
+            match call_card_msg(&rules, &mut store, card, entry, op, player_id) {
+                Ok(m) => Ok(CallOut::Msg(m)),
+                Err(e) if be::is_need_input(&e) => Err(HostErr::NeedInput),
+                Err(e) => Err(HostErr::trap(be::error_text(&e))),
+            }
+        } else {
+            match call_card(&rules, &mut store, card, entry, op, player_id) {
+                Ok(v) => Ok(CallOut::Code(v)),
+                Err(e) if be::is_need_input(&e) => Err(HostErr::NeedInput),
+                Err(e) => Err(HostErr::trap(be::error_text(&e))),
+            }
+        };
+        let left = store.get_fuel().unwrap_or(0);
+        let inner = store.into_data();
+        (res, inner, left)
     }
 }
 
@@ -1024,7 +1822,7 @@ fn guest_msg<W: CardWorld>(
 
 /// Guest `Msg` -> engine `Msg`. An exhaustive match: a new argument kind on either
 /// side has to be mapped here on purpose.
-fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
+pub fn engine_msg(m: card_sdk::msg::Msg) -> crate::Msg {
     use card_sdk::msg::Arg as G;
     use game_core::msg::Arg as E;
     let mut out = crate::Msg::new(m.k.as_str());
@@ -1121,2100 +1919,2059 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     let m = IMPORT_MODULE;
     type C<'a, W> = Caller<'a, HostState<W>>;
 
+    // Thin wrappers over `hostfns` -- the bodies live there so the native
+    // backend (`rules-native`) can call the exact same logic.
     l.func_wrap(
         m,
         "roll",
         |mut c: C<W>, player_id: i32, count: i32, sides: i32| -> Result<i32, Error> {
-            if !(1..=100).contains(&count) || !(1..=1000).contains(&sides) {
-                return Err(err(format!("roll({count}d{sides}) out of range")));
-            }
-            Ok(c.data_mut().w().roll(player_id, count, sides))
+            hostfns::roll(&mut c, player_id, count, sides).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "log",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-            let msg = guest_msg(&mut c, p, n)?;
-            c.data_mut().w().log(player_id, msg);
-            Ok(())
+            hostfns::log(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    // `H.Effect` -- announce which effect a card just applied, the line the
-    // client's effect popup is built from. Same wire shape as `log` (a `Msg`);
-    // the world decides how it differs from a plain log line.
     l.func_wrap(
         m,
         "effect",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-            let msg = guest_msg(&mut c, p, n)?;
-            c.data_mut().w().effect(player_id, msg);
-            Ok(())
+            hostfns::effect(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "tile_count", |c: C<W>| c.data().wr().tile_count())?;
+    l.func_wrap(
+        m,
+        "tile_count",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::tile_count(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "add_mark",
-        |mut c: C<W>,
-         tile: i32,
-         player_id: i32,
-         kp: i32,
-         kl: i32,
-         p: i32,
-         n: i32|
-         -> Result<(), Error> {
-            let kind = guest_str(&mut c, kp, kl)?;
-            let note = guest_msg(&mut c, p, n)?;
-            c.data_mut().w().add_mark(tile, player_id, &kind, note);
-            Ok(())
+        |mut c: C<W>, tile: i32, player_id: i32, kp: i32, kl: i32, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::add_mark(&mut c, tile, player_id, kp, kl, p, n).map_err(HostErr::into_err)
         },
     )?;
-    // [CP点] -- the two kinds (user ruling 2026-10-07). Tile marks are the
-    // `mark:cp` owner's small API (`rules/tiles/src/cp.rs`); `place_cp` takes no
-    // note: the label comes from the mark's category (「CP点」) and the provenance
-    // from `TileMark.src` / `TileMark.card`, so there is no per-call text to
-    // carry. `cp_src_at` is that provenance (the instance a tile's mark is
-    // attached to). The on-card count (`cp_attached` / `add_cp` / `cp_at` /
-    // `add_cp_at`) is `FieldCard::cp` -- the CP points attached to the card.
-    l.func_wrap(m, "place_cp", |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-        Ok(c.data_mut().w().place_cp(tile, crate::Msg::default()))
-    })?;
-    l.func_wrap(m, "count_cp", |c: C<W>, tile: i32| c.data().wr().count_cp(tile))?;
-    l.func_wrap(m, "count_cp_from", |c: C<W>, tile: i32| {
-        c.data().wr().count_cp_from(tile)
-    })?;
-    l.func_wrap(m, "clear_cp", |mut c: C<W>, tile: i32| c.data_mut().w().clear_cp(tile))?;
-    l.func_wrap(m, "cp_src_at", |c: C<W>, tile: i32| c.data().wr().cp_src_at(tile))?;
-    l.func_wrap(m, "cp_attached", |c: C<W>| c.data().wr().cp_attached())?;
-    l.func_wrap(m, "add_cp", |mut c: C<W>, n: i32, max: i32| {
-        c.data_mut().w().add_cp(n, max)
-    })?;
-    l.func_wrap(m, "cp_at", |c: C<W>, uid: i32| c.data().wr().cp_at(uid))?;
+    l.func_wrap(
+        m,
+        "place_cp",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::place_cp(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "count_cp",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::count_cp(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "count_cp_from",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::count_cp_from(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "clear_cp",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::clear_cp(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "cp_src_at",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::cp_src_at(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "cp_attached",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::cp_attached(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_cp",
+        |mut c: C<W>, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_cp(&mut c, n, max).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "cp_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::cp_at(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "add_cp_at",
-        |mut c: C<W>, uid: i32, n: i32, max: i32| c.data_mut().w().add_cp_at(uid, n, max),
+        |mut c: C<W>, uid: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_cp_at(&mut c, uid, n, max).map_err(HostErr::into_err)
+        },
     )?;
-    l.func_wrap(m, "money", |c: C<W>, player_id: i32| {
-        c.data().wr().money(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "money",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::money(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "gain",
         |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let src = guest_msg(&mut c, p, n)?;
-            let st = c.data_mut();
-            // A card-driven gain runs the same `Money` pipeline as a payment --
-            // print (game -> player) -- so PayAdd / PayChoose / the `effect`
-            // [反击] window all see it. The pause/resume is the same as `pay`:
-            // the engine answers with the amount that actually moved.
-            if let Some(&final_amount) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                // The engine-side money move already ran (the pipeline printed
-                // it); this only answers the guest with what moved.
-                return Ok(final_amount);
-            }
-            st.host_request = Some(HostRequest::Pay {
-                from: -1,
-                to: player_id,
-                amount,
-                src: Some(src),
-            });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::gain(&mut c, player_id, amount, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "pay",
         |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let src = guest_msg(&mut c, p, n)?;
-            let st = c.data_mut();
-            // A card-driven payment is paused so the engine can raise a `pay`
-            // trigger (and the [反击] window) before the money moves. The answer is
-            // the final amount to move -- 0 cancels the payment outright.
-            //
-            // The pause is the sentinel **as the return value**, not a trap:
-            // `ctx::pay` reads it through `asked()` and hands the card
-            // `Err(Prompt)`. Trapping here would tear the stack before the card
-            // ever saw a `Result`.
-            if let Some(&final_amount) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                // The engine-side money move already ran (the pipeline deleted
-                // it); this only answers the guest with what moved.
-                return Ok(final_amount);
-            }
-            st.host_request = Some(HostRequest::Pay {
-                from: player_id,
-                to: -1,
-                amount,
-                src: Some(src),
-            });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::pay(&mut c, player_id, amount, p, n).map_err(HostErr::into_err)
         },
     )?;
-    // `H.PayR` to a named payee (player -> player) -- one pipeline entry, so
-    // the `effect` declaration carries both the payer and the payee and （小白）
-    // sees 「向其他玩家支付」. The pause/resume is the same as `pay`.
     l.func_wrap(
         m,
         "pay_to",
         |mut c: C<W>, from: i32, to: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let src = guest_msg(&mut c, p, n)?;
-            let st = c.data_mut();
-            if let Some(&final_amount) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                // The engine-side money move already ran (the pipeline credited
-                // the payee); this only answers the guest with what moved.
-                return Ok(final_amount);
-            }
-            st.host_request = Some(HostRequest::Pay {
-                from,
-                to,
-                amount,
-                src: Some(src),
-            });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::pay_to(&mut c, from, to, amount, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "player_count", |c: C<W>| c.data().wr().player_count())?;
-    l.func_wrap(m, "player_out", |c: C<W>, player_id: i32| {
-        c.data().wr().player_out(player_id)
-    })?;
-    l.func_wrap(m, "others_count", |c: C<W>, player_id: i32| {
-        c.data().wr().others_count(player_id)
-    })?;
-    l.func_wrap(m, "others_at", |c: C<W>, player_id: i32, index: i32| {
-        c.data().wr().others_at(player_id, index)
-    })?;
+    l.func_wrap(
+        m,
+        "pay_total",
+        |mut c: C<W>, from: i32, to: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::pay_total(&mut c, from, to, amount, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "pay_leg",
+        |mut c: C<W>, from: i32, to: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::pay_leg(&mut c, from, to, amount, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "player_count",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::player_count(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "player_out",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::player_out(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "others_count",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::others_count(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "others_at",
+        |mut c: C<W>, player_id: i32, index: i32| -> Result<i32, Error> {
+            hostfns::others_at(&mut c, player_id, index).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "tile_named",
         |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-            let name = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().tile_named(&name))
+            hostfns::tile_named(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "tile_owner", |c: C<W>, tile: i32| {
-        c.data().wr().tile_owner(tile)
-    })?;
-    l.func_wrap(m, "player_pos", |c: C<W>, player_id: i32| {
-        c.data().wr().player_pos(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "tile_owner",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_owner(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "player_pos",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::player_pos(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "tile_steps_ahead",
-        |c: C<W>, player_id: i32, steps: i32| c.data().wr().tile_steps_ahead(player_id, steps),
+        |mut c: C<W>, player_id: i32, steps: i32| -> Result<i32, Error> {
+            hostfns::tile_steps_ahead(&mut c, player_id, steps).map_err(HostErr::into_err)
+        },
     )?;
-    l.func_wrap(m, "rent_of", |c: C<W>, tile: i32| {
-        c.data().wr().rent_of(tile)
-    })?;
-    l.func_wrap(m, "buy_price", |c: C<W>, tile: i32| {
-        c.data().wr().buy_price(tile)
-    })?;
-    l.func_wrap(m, "build_cost", |c: C<W>, tile: i32| {
-        c.data().wr().build_cost(tile)
-    })?;
-    l.func_wrap(m, "mortgage_value", |c: C<W>, tile: i32| {
-        c.data().wr().mortgage_value(tile)
-    })?;
-    l.func_wrap(m, "owned_count", |c: C<W>, player_id: i32| {
-        c.data().wr().owned_count(player_id)
-    })?;
-    l.func_wrap(m, "owned_at", |c: C<W>, player_id: i32, index: i32| {
-        c.data().wr().owned_at(player_id, index)
-    })?;
-    l.func_wrap(m, "is_buyable", |c: C<W>, tile: i32| {
-        c.data().wr().is_buyable(tile)
-    })?;
-    l.func_wrap(m, "is_shop", |c: C<W>, tile: i32| {
-        c.data().wr().is_shop(tile)
-    })?;
-    l.func_wrap(m, "is_ring", |c: C<W>, tile: i32| {
-        c.data().wr().is_ring(tile)
-    })?;
-    l.func_wrap(m, "is_circle", |c: C<W>, tile: i32| {
-        c.data().wr().is_circle(tile)
-    })?;
-    l.func_wrap(m, "set_tile_color", |mut c: C<W>, tile: i32, group: i32| {
-        c.data_mut().w().set_tile_color(tile, group);
-        Ok(())
-    })?;
     l.func_wrap(
         m,
-        "set_extra_color",
-        |mut c: C<W>, player_id: i32, tile: i32, group: i32| {
-            c.data_mut().w().set_extra_color(player_id, tile, group);
-            Ok(())
+        "rent_of",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::rent_of(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "buy_price",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::buy_price(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "build_cost",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::build_cost(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "mortgage_value",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::mortgage_value(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "owned_count",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::owned_count(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "owned_at",
+        |mut c: C<W>, player_id: i32, index: i32| -> Result<i32, Error> {
+            hostfns::owned_at(&mut c, player_id, index).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_buyable",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::is_buyable(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_shop",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::is_shop(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_ring",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::is_ring(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_circle",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::is_circle(&mut c, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "is_color",
-        |c: C<W>, player_id: i32, tile: i32, group: i32| {
-            c.data().wr().is_color(player_id, tile, group) as i32
+        |mut c: C<W>, player_id: i32, tile: i32, group: i32| -> Result<i32, Error> {
+            hostfns::is_color(&mut c, player_id, tile, group).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "is_live_house_for",
-        |c: C<W>, player_id: i32, tile: i32| c.data().wr().is_live_house_for(player_id, tile),
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::is_live_house_for(&mut c, player_id, tile).map_err(HostErr::into_err)
+        },
     )?;
-    l.func_wrap(m, "set_buy_discount", |mut c: C<W>, n: i32| {
-        c.data_mut().w().set_buy_discount(n);
-        Ok(())
-    })?;
-    l.func_wrap(m, "paid_in_settle", |c: C<W>| {
-        c.data().wr().paid_in_settle()
-    })?;
-    l.func_wrap(m, "set_free_buy", |mut c: C<W>, on: i32| {
-        c.data_mut().w().set_free_buy(on != 0);
-        Ok(())
-    })?;
+    l.func_wrap(
+        m,
+        "paid_in_settle",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::paid_in_settle(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "turn_rolls",
         |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
-            let rolls = c.data().wr().turn_rolls();
-            let bytes = postcard::to_allocvec(&rolls)
-                .map_err(|e| err(format!("turn_rolls encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::turn_rolls(&mut c, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "field_instances",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let inst = c.data().wr().field_instances(player_id);
-            let bytes = postcard::to_allocvec(&inst)
-                .map_err(|e| err(format!("field_instances encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::field_instances(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "crystals_at", |c: C<W>, uid: i32| {
-        c.data().wr().crystals_at(uid)
-    })?;
+    l.func_wrap(
+        m,
+        "crystals_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::crystals_at(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "add_crystals_at",
-        |mut c: C<W>, uid: i32, n: i32, max: i32| c.data_mut().w().add_crystals_at(uid, n, max),
+        |mut c: C<W>, uid: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_crystals_at(&mut c, uid, n, max).map_err(HostErr::into_err)
+        },
     )?;
-    l.func_wrap(m, "unplace_at", |mut c: C<W>, uid: i32| {
-        c.data_mut().w().unplace_at(uid)
-    })?;
-    l.func_wrap(m, "tile_at", |c: C<W>, uid: i32| c.data().wr().tile_at(uid))?;
-    l.func_wrap(m, "set_tile_at", |mut c: C<W>, uid: i32, tile: i32| {
-        c.data_mut().w().set_tile_at(uid, tile) as i32
-    })?;
-    l.func_wrap(m, "is_face_down_at", |c: C<W>, uid: i32| {
-        c.data().wr().is_face_down_at(uid) as i32
-    })?;
-    l.func_wrap(m, "set_face_down_at", |mut c: C<W>, uid: i32, on: i32| {
-        c.data_mut().w().set_face_down_at(uid, on != 0) as i32
-    })?;
-    l.func_wrap(m, "is_immune_at", |c: C<W>, uid: i32| {
-        c.data().wr().is_immune_at(uid) as i32
-    })?;
-    l.func_wrap(m, "set_immune_at", |mut c: C<W>, uid: i32, on: i32| {
-        c.data_mut().w().set_immune_at(uid, on != 0) as i32
-    })?;
+    l.func_wrap(
+        m,
+        "unplace_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::unplace_at(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::tile_at(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_tile_at",
+        |mut c: C<W>, uid: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::set_tile_at(&mut c, uid, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_face_down_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::is_face_down_at(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_face_down_at",
+        |mut c: C<W>, uid: i32, on: i32| -> Result<i32, Error> {
+            hostfns::set_face_down_at(&mut c, uid, on).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_immune_at",
+        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
+            hostfns::is_immune_at(&mut c, uid).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_immune_at",
+        |mut c: C<W>, uid: i32, on: i32| -> Result<i32, Error> {
+            hostfns::set_immune_at(&mut c, uid, on).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_build_discount",
-        |mut c: C<W>, n: i32, layers: i32| {
-            c.data_mut().w().set_build_discount(n, layers);
-            Ok(())
+        |mut c: C<W>, n: i32, layers: i32| -> Result<(), Error> {
+            hostfns::set_build_discount(&mut c, n, layers).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "set_build_cost_pct", |mut c: C<W>, pct: i32| {
-        c.data_mut().w().set_build_cost_pct(pct);
-        Ok(())
-    })?;
-    l.func_wrap(m, "turn_start_pos", |c: C<W>, player_id: i32| {
-        c.data().wr().turn_start_pos(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "set_build_cost_pct",
+        |mut c: C<W>, pct: i32| -> Result<(), Error> {
+            hostfns::set_build_cost_pct(&mut c, pct).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "turn_start_pos",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::turn_start_pos(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "turn_snap",
         |mut c: C<W>, player_id: i32, buf: i32| -> Result<i32, Error> {
-            let (pos, stay, stun, exile) = c.data().wr().turn_snap(player_id);
-            let mut out = [0u8; 16];
-            for (i, v) in [pos, stay, stun, exile].into_iter().enumerate() {
-                out[i * 4..i * 4 + 4].copy_from_slice(&v.to_le_bytes());
-            }
-            write_guest(&mut c, buf, &out)?;
-            Ok(16)
+            hostfns::turn_snap(&mut c, player_id, buf).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "set_raze_on_buy", |mut c: C<W>, on: i32| {
-        c.data_mut().w().set_raze_on_buy(on != 0);
-        Ok(())
-    })?;
-    l.func_wrap(m, "is_agent", |c: C<W>, tile: i32| {
-        c.data().wr().is_agent(tile)
-    })?;
-    l.func_wrap(m, "is_live_house", |c: C<W>, tile: i32| {
-        c.data().wr().is_live_house(tile)
-    })?;
-    l.func_wrap(m, "tile_group", |c: C<W>, tile: i32| {
-        c.data().wr().tile_group(tile)
-    })?;
-    l.func_wrap(m, "tile_price", |c: C<W>, tile: i32| {
-        c.data().wr().tile_price(tile)
-    })?;
-    l.func_wrap(m, "houses_of", |c: C<W>, tile: i32| {
-        c.data().wr().houses_of(tile)
-    })?;
-    l.func_wrap(m, "rent_houses_of", |c: C<W>, tile: i32| {
-        c.data().wr().rent_houses_of(tile)
-    })?;
-    l.func_wrap(m, "set_houses", |mut c: C<W>, tile: i32, n: i32| {
-        c.data_mut().w().set_houses(tile, n);
-        Ok(())
-    })?;
-    l.func_wrap(m, "add_house", |mut c: C<W>, tile: i32, n: i32| {
-        c.data_mut().w().add_house(tile, n)
-    })?;
-    l.func_wrap(m, "mortgaged_of", |c: C<W>, tile: i32| {
-        c.data().wr().mortgaged_of(tile)
-    })?;
-    l.func_wrap(m, "set_mortgaged", |mut c: C<W>, tile: i32, v: i32| {
-        c.data_mut().w().set_mortgaged(tile, v);
-        Ok(())
-    })?;
-    l.func_wrap(m, "set_owner", |mut c: C<W>, tile: i32, player_id: i32| {
-        c.data_mut().w().set_owner(tile, player_id);
-        Ok(())
-    })?;
-    l.func_wrap(m, "dist", |c: C<W>, a: i32, b: i32| {
-        c.data().wr().dist(a, b)
-    })?;
-    l.func_wrap(m, "tile_forward", |c: C<W>, a: i32, b: i32| {
-        c.data().wr().tile_forward(a, b)
-    })?;
-    l.func_wrap(m, "neighbor", |c: C<W>, player_id: i32, dir: i32| {
-        c.data().wr().neighbor(player_id, dir)
-    })?;
-    l.func_wrap(m, "players_on_count", |c: C<W>, tile: i32, except: i32| {
-        c.data().wr().players_on_count(tile, except)
-    })?;
+    l.func_wrap(
+        m,
+        "is_agent",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::is_agent(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "is_live_house",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::is_live_house(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_group",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_group(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_price",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::tile_price(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "houses_of",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::houses_of(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "rent_houses_of",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::rent_houses_of(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_houses",
+        |mut c: C<W>, tile: i32, n: i32| -> Result<(), Error> {
+            hostfns::set_houses(&mut c, tile, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_house",
+        |mut c: C<W>, tile: i32, n: i32| -> Result<i32, Error> {
+            hostfns::add_house(&mut c, tile, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "mortgaged_of",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::mortgaged_of(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_mortgaged",
+        |mut c: C<W>, tile: i32, v: i32| -> Result<(), Error> {
+            hostfns::set_mortgaged(&mut c, tile, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_owner",
+        |mut c: C<W>, tile: i32, player_id: i32| -> Result<(), Error> {
+            hostfns::set_owner(&mut c, tile, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "dist",
+        |mut c: C<W>, a: i32, b: i32| -> Result<i32, Error> {
+            hostfns::dist(&mut c, a, b).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "tile_forward",
+        |mut c: C<W>, a: i32, b: i32| -> Result<i32, Error> {
+            hostfns::tile_forward(&mut c, a, b).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "neighbor",
+        |mut c: C<W>, player_id: i32, dir: i32| -> Result<i32, Error> {
+            hostfns::neighbor(&mut c, player_id, dir).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "players_on_count",
+        |mut c: C<W>, tile: i32, except: i32| -> Result<i32, Error> {
+            hostfns::players_on_count(&mut c, tile, except).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "players_on_at",
-        |c: C<W>, tile: i32, except: i32, index: i32| {
-            c.data().wr().players_on_at(tile, except, index)
+        |mut c: C<W>, tile: i32, except: i32, index: i32| -> Result<i32, Error> {
+            hostfns::players_on_at(&mut c, tile, except, index).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "draw",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            // A card-driven draw is paused so the engine can raise the per-card
-            // `drewBefore` point (and so a hook may replace a card of it) before
-            // the cards move. The engine adjudicates; **this** run then moves
-            // the plain cards on its own world copy -- the same shape as `pay`,
-            // where the engine runs the Money pipeline and the effect applies
-            // the payment. The answer is how many of the `n` are plain draws.
-            if let Some(&plain) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                let plain = plain.clamp(0, n);
-                return Ok(st.w().draw(player_id, plain));
-            }
-            st.host_request = Some(HostRequest::Draw { player_id, n });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::draw(&mut c, player_id, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "draw_event",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ans) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ans);
-            }
-            st.host_request = Some(HostRequest::DrawEvent { player_id });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::draw_event(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "pay_rent",
         |mut c: C<W>, player_id: i32, tile: i32, half: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ans) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ans);
-            }
-            st.host_request = Some(HostRequest::PayRent {
-                player_id,
-                tile,
-                half: half != 0,
-            });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::pay_rent(&mut c, player_id, tile, half).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "offer_buy",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ans) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ans);
-            }
-            st.host_request = Some(HostRequest::OfferBuy { player_id, tile });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::offer_buy(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "offer_force_buy",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ans) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ans);
-            }
-            st.host_request = Some(HostRequest::OfferForceBuy { player_id, tile });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::offer_force_buy(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "offer_build",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ans) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ans);
-            }
-            st.host_request = Some(HostRequest::OfferBuildOne { player_id, tile });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::offer_build(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_to_hand",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-            let card = guest_str(&mut c, p, n)?;
-            c.data_mut().w().add_to_hand(player_id, &card);
-            Ok(())
+            hostfns::add_to_hand(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_to_deck",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, shuffle: i32| -> Result<(), Error> {
-            let card = guest_str(&mut c, p, n)?;
-            c.data_mut().w().add_to_deck(player_id, &card, shuffle != 0);
-            Ok(())
+            hostfns::add_to_deck(&mut c, player_id, p, n, shuffle).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_to_deck_at",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, pos: i32| -> Result<(), Error> {
-            let card = guest_str(&mut c, p, n)?;
-            c.data_mut().w().add_to_deck_at(player_id, &card, pos);
-            Ok(())
+            hostfns::add_to_deck_at(&mut c, player_id, p, n, pos).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "take_card",
         |mut c: C<W>, player_id: i32, pile: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let pile = crate::CardPile::from_i32(pile)
-                .ok_or_else(|| err(format!("bad card pile {pile}")))?;
-            let id = guest_str(&mut c, p, n)?;
-            Ok(c.data_mut().w().take_card(player_id, pile, &id) as i32)
+            hostfns::take_card(&mut c, player_id, pile, p, n).map_err(HostErr::into_err)
         },
     )?;
-    // Host->guest list: the guest passes its own buffer; the host writes the
-    // postcard bytes only if they fit and always returns the length needed.
     l.func_wrap(
         m,
         "cards_in",
         |mut c: C<W>, player_id: i32, pile: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let pile = crate::CardPile::from_i32(pile)
-                .ok_or_else(|| err(format!("bad card pile {pile}")))?;
-            let list = c.data().wr().cards_in(player_id, pile);
-            let bytes =
-                postcard::to_allocvec(&list).map_err(|e| err(format!("cards_in encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::cards_in(&mut c, player_id, pile, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "to_discard",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<(), Error> {
-            let card = guest_str(&mut c, p, n)?;
-            c.data_mut().w().to_discard(player_id, &card);
-            Ok(())
+            hostfns::to_discard(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "hand_count",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().hand_count(player_id, &card))
+            hostfns::hand_count(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "discard_count",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().discard_count(player_id, &card))
+            hostfns::discard_count(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "hand_size", |c: C<W>, player_id: i32| {
-        c.data().wr().hand_size(player_id)
-    })?;
-    l.func_wrap(m, "deck_count", |c: C<W>, player_id: i32| {
-        c.data().wr().deck_count(player_id)
-    })?;
-    l.func_wrap(m, "discard_size", |c: C<W>, player_id: i32| {
-        c.data().wr().discard_size(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "hand_size",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::hand_size(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "deck_count",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::deck_count(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "discard_size",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::discard_size(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "discard_from_hand",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, p, n)?;
-            Ok(c.data_mut().w().discard_from_hand(player_id, &card))
+            hostfns::discard_from_hand(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "shuffle_into_deck",
-        |mut c: C<W>, player_id: i32, hand: i32, discard: i32| {
-            c.data_mut()
-                .w()
-                .shuffle_into_deck(player_id, hand != 0, discard != 0)
+        |mut c: C<W>, player_id: i32, hand: i32, discard: i32| -> Result<i32, Error> {
+            hostfns::shuffle_into_deck(&mut c, player_id, hand, discard).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "unplace_card", |mut c: C<W>| {
-        c.data_mut().w().unplace_card()
-    })?;
-    // Active events (`docs/EVENTS.md`) -- the rule body's handles on the
-    // engine's event deck and active list.
+    l.func_wrap(
+        m,
+        "unplace_card",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::unplace_card(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "event_expire",
         |mut c: C<W>, ip: i32, il: i32, removed: i32| -> Result<(), Error> {
-            let id = guest_str(&mut c, ip, il)?;
-            c.data_mut().w().event_expire(&id, removed != 0);
-            Ok(())
+            hostfns::event_expire(&mut c, ip, il, removed).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "event_is_active",
         |mut c: C<W>, ip: i32, il: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, ip, il)?;
-            Ok(c.data().wr().event_is_active(&id) as i32)
+            hostfns::event_is_active(&mut c, ip, il).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "event_deck_push",
         |mut c: C<W>, ip: i32, il: i32, face_down: i32| -> Result<(), Error> {
-            let id = guest_str(&mut c, ip, il)?;
-            c.data_mut().w().event_deck_push(&id, face_down != 0);
-            Ok(())
+            hostfns::event_deck_push(&mut c, ip, il, face_down).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "event_banish",
         |mut c: C<W>, ip: i32, il: i32| -> Result<(), Error> {
-            let id = guest_str(&mut c, ip, il)?;
-            c.data_mut().w().event_banish(&id);
-            Ok(())
+            hostfns::event_banish(&mut c, ip, il).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "placed_cards",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let names = c.data().wr().placed_cards(player_id);
-            let bytes = postcard::to_allocvec(&names)
-                .map_err(|e| err(format!("placed_cards encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::placed_cards(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_text_mentions",
         |mut c: C<W>, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            let needle = guest_str(&mut c, np, nl)?;
-            Ok(c.data().wr().card_text_mentions(&card, &needle) as i32)
+            hostfns::card_text_mentions(&mut c, cp, cl, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_crystals",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data().wr().card_crystals(player_id, &card))
+            hostfns::card_crystals(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_card_crystals",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32, n: i32, max: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data_mut().w().add_card_crystals(player_id, &card, n, max))
+            hostfns::add_card_crystals(&mut c, player_id, cp, cl, n, max).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "is_placed", |c: C<W>| c.data().wr().is_placed())?;
-    l.func_wrap(m, "self_tile", |c: C<W>| c.data().wr().self_tile())?;
-    l.func_wrap(m, "set_self_tile", |mut c: C<W>, tile: i32| {
-        c.data_mut().w().set_self_tile(tile) as i32
-    })?;
-    l.func_wrap(m, "self_face_down", |c: C<W>| {
-        c.data().wr().self_face_down() as i32
-    })?;
-    l.func_wrap(m, "set_self_face_down", |mut c: C<W>, on: i32| {
-        c.data_mut().w().set_self_face_down(on != 0) as i32
-    })?;
-    l.func_wrap(m, "self_immune", |c: C<W>| {
-        c.data().wr().self_immune() as i32
-    })?;
-    l.func_wrap(m, "set_self_immune", |mut c: C<W>, on: i32| {
-        c.data_mut().w().set_self_immune(on != 0) as i32
-    })?;
-    l.func_wrap(m, "crystals", |c: C<W>| c.data().wr().crystals())?;
-    l.func_wrap(m, "set_crystals", |mut c: C<W>, n: i32| {
-        c.data_mut().w().set_crystals(n)
-    })?;
-    l.func_wrap(m, "add_crystals", |mut c: C<W>, n: i32, max: i32| {
-        c.data_mut().w().add_crystals(n, max)
-    })?;
+    l.func_wrap(
+        m,
+        "is_placed",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::is_placed(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "self_tile",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::self_tile(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_self_tile",
+        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
+            hostfns::set_self_tile(&mut c, tile).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "self_face_down",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::self_face_down(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_self_face_down",
+        |mut c: C<W>, on: i32| -> Result<i32, Error> {
+            hostfns::set_self_face_down(&mut c, on).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "self_immune",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::self_immune(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_self_immune",
+        |mut c: C<W>, on: i32| -> Result<i32, Error> {
+            hostfns::set_self_immune(&mut c, on).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "crystals",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::crystals(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_crystals",
+        |mut c: C<W>, n: i32| -> Result<i32, Error> {
+            hostfns::set_crystals(&mut c, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_crystals",
+        |mut c: C<W>, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_crystals(&mut c, n, max).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "self_prop",
         |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, kp, kl)?;
-            Ok(c.data().wr().self_prop(&key))
+            hostfns::self_prop(&mut c, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_self_prop",
         |mut c: C<W>, kp: i32, kl: i32, v: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, kp, kl)?;
-            Ok(c.data_mut().w().set_self_prop(&key, v))
+            hostfns::set_self_prop(&mut c, kp, kl, v).map_err(HostErr::into_err)
         },
     )?;
-    // `docs/TILES.md`: a card that bends a tile writes the tile instance's props
-    // instead of an engine flag. `prop::NO_REWARD` on the CiRCLE tile's
-    // `tile:circle` instance is 「无法获取[CiRCLE奖励]」; `prop::GROUP` is
-    // 「该格获得所有颜色」; and so on.
     l.func_wrap(
         m,
         "tile_prop",
         |mut c: C<W>, tile: i32, kp: i32, kl: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, kp, kl)?;
-            Ok(c.data().wr().tile_prop(tile, &key))
+            hostfns::tile_prop(&mut c, tile, kp, kl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_tile_prop",
         |mut c: C<W>, tile: i32, kp: i32, kl: i32, v: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, kp, kl)?;
-            Ok(c.data_mut().w().set_tile_prop(tile, &key, v))
+            hostfns::set_tile_prop(&mut c, tile, kp, kl, v).map_err(HostErr::into_err)
         },
     )?;
-    // `docs/TILES.md`'s `ctx::settle_circle_reward` -- the [经过] CiRCLE reward,
-    // `tile:circle`'s Pass entry. Prompts, so it is a host request.
     l.func_wrap(
         m,
         "settle_circle_reward",
         |mut c: C<W>, player_id: i32, landing: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ans) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ans);
-            }
-            st.host_request = Some(HostRequest::CircleReward {
-                player_id,
-                landing: landing != 0,
-            });
-            Ok(abi::EXIT_NEED_INPUT)
+            hostfns::settle_circle_reward(&mut c, player_id, landing).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "count_marks",
         |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
-            let kind = guest_str(&mut c, kp, kl)?;
-            Ok(c.data().wr().count_marks(tile, &kind, owner))
+            hostfns::count_marks(&mut c, tile, kp, kl, owner).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "remove_marks",
         |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
-            let kind = guest_str(&mut c, kp, kl)?;
-            Ok(c.data_mut().w().remove_marks(tile, &kind, owner))
+            hostfns::remove_marks(&mut c, tile, kp, kl, owner).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "tok",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let name = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().tok(player_id, &name))
+            hostfns::tok(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_tok",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-            let name = guest_str(&mut c, p, n)?;
-            c.data_mut().w().set_tok(player_id, &name, v);
-            Ok(())
+            hostfns::set_tok(&mut c, player_id, p, n, v).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_tok",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32, max: i32| -> Result<i32, Error> {
-            let name = guest_str(&mut c, p, n)?;
-            Ok(c.data_mut().w().add_tok(player_id, &name, by, max))
+            hostfns::add_tok(&mut c, player_id, p, n, by, max).map_err(HostErr::into_err)
         },
     )?;
-    // Keyed state: `{value, min, max, expires}` items. `field` selects the
-    // column (0 = value, 1 = min, 2 = max, 3 = expires: 0 none / 1 turn-start /
-    // 2 turn-end). The engine holds these and enforces nothing.
     l.func_wrap(
         m,
         "state_get",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, field: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, p, n)?;
-            Ok(match field {
-                1 => c.data().wr().state_min(player_id, &key),
-                2 => c.data().wr().state_max(player_id, &key),
-                3 => match c.data().wr().state_expires(player_id, &key) {
-                    None => 0,
-                    Some(game_core::state::Tick::TurnStart) => 1,
-                    Some(game_core::state::Tick::TurnEnd) => 2,
-                },
-                _ => c.data().wr().state_get(player_id, &key),
-            })
+            hostfns::state_get(&mut c, player_id, p, n, field).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "state_set",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, field: i32, v: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, p, n)?;
-            Ok(match field {
-                1 => {
-                    let max = c.data().wr().state_max(player_id, &key);
-                    c.data_mut().w().state_set_bounds(player_id, &key, v, max);
-                    v
-                }
-                2 => {
-                    let min = c.data().wr().state_min(player_id, &key);
-                    c.data_mut().w().state_set_bounds(player_id, &key, min, v);
-                    v
-                }
-                3 => {
-                    let e = match v {
-                        1 => Some(game_core::state::Tick::TurnStart),
-                        2 => Some(game_core::state::Tick::TurnEnd),
-                        _ => None,
-                    };
-                    c.data_mut().w().state_set_expires(player_id, &key, e);
-                    v
-                }
-                _ => c.data_mut().w().state_set(player_id, &key, v),
-            })
+            hostfns::state_set(&mut c, player_id, p, n, field, v).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "state_add",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, delta: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, p, n)?;
-            Ok(c.data_mut().w().state_add(player_id, &key, delta))
+            hostfns::state_add(&mut c, player_id, p, n, delta).map_err(HostErr::into_err)
         },
     )?;
-
     l.func_wrap(
         m,
         "slot",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().slot(player_id, &key))
+            hostfns::slot(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_slot",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-            let key = guest_str(&mut c, p, n)?;
-            c.data_mut().w().set_slot(player_id, &key, v);
-            Ok(())
+            hostfns::set_slot(&mut c, player_id, p, n, v).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "inc_slot",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, p, n)?;
-            Ok(c.data_mut().w().inc_slot(player_id, &key, by))
+            hostfns::inc_slot(&mut c, player_id, p, n, by).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "band_crystals", |c: C<W>, player_id: i32| {
-        c.data().wr().band_crystals(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "band_crystals",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::band_crystals(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "add_band_crystals",
-        |mut c: C<W>, player_id: i32, n: i32, max: i32| {
-            c.data_mut().w().add_band_crystals(player_id, n, max)
+        |mut c: C<W>, player_id: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_band_crystals(&mut c, player_id, n, max).map_err(HostErr::into_err)
         },
     )?;
-    // v35: the skill / band-skill attachment surface (C# `H._fx[i].bands` /
-    // `.skill`) and the skill invoke. `band_skill` / `character_skill` answer a
-    // postcard `String` (empty = none); `band_skills` answers a postcard
-    // `Vec<(uid, id, extra)>`.
     l.func_wrap(
         m,
         "band_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let s = c.data().wr().band_skill_id(player_id).unwrap_or_default();
-            let bytes =
-                postcard::to_allocvec(&s).map_err(|e| err(format!("band_skill encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::band_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "character_skill",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let s = c
-                .data()
-                .wr()
-                .character_skill_id(player_id)
-                .unwrap_or_default();
-            let bytes = postcard::to_allocvec(&s)
-                .map_err(|e| err(format!("character_skill encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::character_skill(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "band_skills",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let list = c.data().wr().band_skills(player_id);
-            let bytes = postcard::to_allocvec(&list)
-                .map_err(|e| err(format!("band_skills encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::band_skills(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_band_skill",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, extra: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, p, n)?;
-            Ok(c.data_mut().w().add_band_skill(player_id, &id, extra != 0))
+            hostfns::add_band_skill(&mut c, player_id, p, n, extra).map_err(HostErr::into_err)
         },
     )?;
-    // Run a skill rule's press entry (`On::Play`) for a player. Same nested-run
-    // shape as `play_card` below; the id is expected to be a `skill:` rule.
     l.func_wrap(
         m,
         "invoke_skill",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, p, n)?;
-            let rules = c
-                .data()
-                .rules
-                .clone()
-                .ok_or_else(|| err("invoke_skill unavailable here"))?;
-            let card = *rules
-                .by_id
-                .get(&id)
-                .ok_or_else(|| err(format!("invoke_skill: unknown skill {id:?}")))?;
-            if c.data().depth >= MAX_NESTING {
-                return Err(err(format!(
-                    "invoke_skill nested deeper than {MAX_NESTING}"
-                )));
-            }
-            let fuel = c.get_fuel()?;
-            let st = c.data_mut();
-            let saved = st.w().enter_card(&id);
-            let was_from_hand = st.w().play_from_hand();
-            st.w().set_play_from_hand(false);
-            let mut nested = HostState::new(
-                rules.clone(),
-                st.world.take().expect("world present"),
-                std::mem::take(&mut st.answers),
-                st.depth + 1,
-            );
-            nested.next_answer = st.next_answer;
-            let mut store = new_store(&rules.engine, nested);
-            store.set_fuel(fuel)?;
-            let res = match rules.cards[card as usize].entry(OnKind::Play, None) {
-                Some(entry) => {
-                    call_card(&rules, &mut store, card, entry, export::OP_RUN, player_id)
-                        .map(|_| ())
-                }
-                None => Ok(()),
-            };
-            let left = store.get_fuel().unwrap_or(0);
-            let inner = store.into_data();
-            let st = c.data_mut();
-            st.world = inner.world;
-            if let Some(w) = st.world.as_mut() {
-                w.set_play_from_hand(was_from_hand);
-            }
-            st.answers = inner.answers;
-            st.next_answer = inner.next_answer;
-            if inner.asked.is_some() {
-                st.asked = inner.asked;
-            }
-            if inner.host_request.is_some() {
-                st.host_request = inner.host_request;
-            }
-            let dest = st.w().leave_card(saved);
-            c.set_fuel(left)?;
-            match res {
-                Ok(()) => Ok(dest),
-                Err(e) if is_need_input(&e) => Ok(abi::EXIT_NEED_INPUT),
-                Err(e) => Err(e),
-            }
+            hostfns::invoke_skill(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    // C# `f.Bought(i, t)` -- the engine raises the `bought` hook chain.
     l.func_wrap(
         m,
         "raise_bought",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::RaiseBought { player_id, tile });
-            Err(need_input())
+            hostfns::raise_bought(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "fire", |c: C<W>, player_id: i32| {
-        c.data().wr().fire(player_id)
-    })?;
-    l.func_wrap(m, "fire_max", |c: C<W>, player_id: i32| {
-        c.data().wr().fire_max(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "fire",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::fire(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "fire_max",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::fire_max(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "gain_fire",
         |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            let why = guest_msg(&mut c, p, l)?;
-            Ok(c.data_mut().w().gain_fire(player_id, n, why))
+            hostfns::gain_fire(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
         },
     )?;
-    // Abnormal effects pass the C# `AbnormalGate` first (C# `GiveStay` /
-    // `GiveStun` / `GiveExile` / `ForceTeleport` all run it): a blocked one
-    // does nothing. Stripping layers (`n < 0`, 「清除」) is not applying an
-    // abnormal status and bypasses the gate.
     l.func_wrap(
         m,
         "give_stay",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-            if n < 0 {
-                c.data_mut().w().give_stay(player_id, n);
-            } else if n > 0 && gate(&mut c, player_id, AbKind::Stay)? {
-                c.data_mut().w().give_stay(player_id, n);
-            }
-            Ok(())
+            hostfns::give_stay(&mut c, player_id, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "give_stun",
         |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
-            if n < 0 {
-                c.data_mut().w().give_stun(player_id, n);
-            } else if n > 0 && gate(&mut c, player_id, AbKind::Stun)? {
-                c.data_mut().w().give_stun(player_id, n);
-            }
-            Ok(())
+            hostfns::give_stun(&mut c, player_id, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "give_exile",
         |mut c: C<W>, player_id: i32, n: i32, to: i32| -> Result<(), Error> {
-            if n > 0 && gate(&mut c, player_id, AbKind::Exile)? {
-                c.data_mut().w().give_exile(player_id, n, to);
-            }
-            Ok(())
+            hostfns::give_exile(&mut c, player_id, n, to).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "give_extra_turn", |mut c: C<W>, player_id: i32| {
-        c.data_mut().w().give_extra_turn(player_id);
-        Ok(())
-    })?;
-    l.func_wrap(m, "can_pay", |c: C<W>, player_id: i32| {
-        c.data().wr().can_pay(player_id)
-    })?;
-    l.func_wrap(m, "cant_move", |c: C<W>, player_id: i32| {
-        c.data().wr().cant_move(player_id)
-    })?;
+    l.func_wrap(
+        m,
+        "give_extra_turn",
+        |mut c: C<W>, player_id: i32| -> Result<(), Error> {
+            hostfns::give_extra_turn(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "can_pay",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::can_pay(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "cant_move",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::cant_move(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "spend_fire",
         |mut c: C<W>, player_id: i32, n: i32, p: i32, l: i32| -> Result<i32, Error> {
-            let why = guest_msg(&mut c, p, l)?;
-            Ok(c.data_mut().w().spend_fire(player_id, n, why))
+            hostfns::spend_fire(&mut c, player_id, n, p, l).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "stay_of", |c: C<W>, player_id: i32| {
-        c.data().wr().stay_of(player_id)
-    })?;
-    l.func_wrap(m, "stun_of", |c: C<W>, player_id: i32| {
-        c.data().wr().stun_of(player_id)
-    })?;
-    l.func_wrap(m, "turn_player", |c: C<W>| c.data().wr().turn_player())?;
-    l.func_wrap(m, "round_no", |c: C<W>| c.data().wr().round_no())?;
-    l.func_wrap(m, "turn_key", |c: C<W>| c.data().wr().turn_key())?;
+    l.func_wrap(
+        m,
+        "stay_of",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::stay_of(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "stun_of",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::stun_of(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "turn_player",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::turn_player(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "round_no",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::round_no(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "turn_key",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::turn_key(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "character_is",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let name = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().character_is(player_id, &name))
+            hostfns::character_is(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "in_band",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let name = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().in_band(player_id, &name))
+            hostfns::in_band(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "bump_mark",
         |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32, delta: i32| -> Result<i32, Error> {
-            let kind = guest_str(&mut c, kp, kl)?;
-            Ok(c.data_mut().w().bump_mark(tile, &kind, owner, delta))
+            hostfns::bump_mark(&mut c, tile, kp, kl, owner, delta).map_err(HostErr::into_err)
         },
     )?;
-    // `H.DoMoveRoll` -- plain, like `roll`: no prompts and no raise points (the
-    // caller is usually *inside* `moveRoll`), so there is nothing to pause for.
     l.func_wrap(
         m,
         "do_move_roll",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            Ok(c.data_mut().w().do_move_roll(player_id))
+            hostfns::do_move_roll(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "tok_names",
         |mut c: C<W>, player_id: i32, p: i32, n: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let prefix = guest_str(&mut c, p, n)?;
-            let names = c.data().wr().tok_names(player_id, &prefix);
-            let bytes =
-                postcard::to_allocvec(&names).map_err(|e| err(format!("tok_names encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::tok_names(&mut c, player_id, p, n, buf, cap).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "unplace_card_named",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data_mut().w().unplace_card_named(player_id, &card) as i32)
+            hostfns::unplace_card_named(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "can_build_on", |c: C<W>, player_id: i32, tile: i32| {
-        c.data().wr().can_build_on(player_id, tile) as i32
-    })?;
+    l.func_wrap(
+        m,
+        "can_build_on",
+        |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
+            hostfns::can_build_on(&mut c, player_id, tile).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "card_face_down",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data().wr().card_face_down(player_id, &card) as i32)
+            hostfns::card_face_down(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "extreme", |c: C<W>| c.data().wr().extreme())?;
-    l.func_wrap(m, "set_extreme", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_extreme(v)
-    })?;
-    l.func_wrap(m, "play_from_hand", |c: C<W>| {
-        c.data().wr().play_from_hand() as i32
-    })?;
+    l.func_wrap(
+        m,
+        "extreme",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::extreme(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_extreme",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_extreme(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "play_from_hand",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::play_from_hand(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "gain_fixed",
         |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let why = guest_msg(&mut c, p, n)?;
-            Ok(c.data_mut().w().gain_fixed(player_id, amount, why))
+            hostfns::gain_fixed(&mut c, player_id, amount, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_card_face_down",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32, down: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data_mut()
-                .w()
-                .set_card_face_down(player_id, &card, down != 0) as i32)
+            hostfns::set_card_face_down(&mut c, player_id, cp, cl, down).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "clear_dice", |mut c: C<W>| -> Result<(), Error> {
-        c.data_mut().w().clear_dice();
-        Ok(())
-    })?;
+    l.func_wrap(
+        m,
+        "clear_dice",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::clear_dice(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_card_immune",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32, on: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data_mut().w().set_card_immune(player_id, &card, on != 0) as i32)
+            hostfns::set_card_immune(&mut c, player_id, cp, cl, on).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_immune",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data().wr().card_immune(player_id, &card) as i32)
+            hostfns::card_immune(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_card_tile",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32, tile: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            Ok(c.data_mut().w().set_card_tile(player_id, &card, tile) as i32)
+            hostfns::set_card_tile(&mut c, player_id, cp, cl, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_card_on",
-        |mut c: C<W>,
-         player_id: i32,
-         tile: i32,
-         cp: i32,
-         cl: i32,
-         p: i32,
-         n: i32|
-         -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            let note = guest_msg(&mut c, p, n)?;
-            Ok(c.data_mut().w().place_card_on(player_id, tile, &card, note))
+        |mut c: C<W>, player_id: i32, tile: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::place_card_on(&mut c, player_id, tile, cp, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "place_card_at",
         |mut c: C<W>, player_id: i32, cp: i32, cl: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let card = guest_str(&mut c, cp, cl)?;
-            let note = guest_msg(&mut c, p, n)?;
-            Ok(c.data_mut().w().place_card(player_id, &card, note))
+            hostfns::place_card_at(&mut c, player_id, cp, cl, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "set_dest", |mut c: C<W>, dest: i32| {
-        c.data_mut().w().set_dest(dest);
-        Ok(())
-    })?;
+    l.func_wrap(
+        m,
+        "set_dest",
+        |mut c: C<W>, dest: i32| -> Result<(), Error> {
+            hostfns::set_dest(&mut c, dest).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_transfer_to_dest",
-        |mut c: C<W>, to: i32, dest: i32| {
-            c.data_mut().w().set_transfer_to_dest(to, dest);
-            Ok(())
+        |mut c: C<W>, to: i32, dest: i32| -> Result<(), Error> {
+            hostfns::set_transfer_to_dest(&mut c, to, dest).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "send_to_dest", |mut c: C<W>, dest: i32| {
-        Ok(c.data_mut().w().send_to_dest(dest).unwrap_or(-1))
-    })?;
-    l.func_wrap(m, "transfer_to_dest", |mut c: C<W>, to: i32, dest: i32| {
-        Ok(c.data_mut().w().transfer_to_dest(to, dest).unwrap_or(-1))
-    })?;
-    l.func_wrap(m, "ring_multiplier", |c: C<W>| {
-        c.data().wr().ring_multiplier()
-    })?;
-    l.func_wrap(m, "add_ring_bonus", |mut c: C<W>, n: i32| {
-        c.data_mut().w().add_ring_bonus(n)
-    })?;
+    l.func_wrap(
+        m,
+        "send_to_dest",
+        |mut c: C<W>, dest: i32| -> Result<i32, Error> {
+            hostfns::send_to_dest(&mut c, dest).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "transfer_to_dest",
+        |mut c: C<W>, to: i32, dest: i32| -> Result<i32, Error> {
+            hostfns::transfer_to_dest(&mut c, to, dest).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "ring_multiplier",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::ring_multiplier(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_ring_bonus",
+        |mut c: C<W>, n: i32| -> Result<i32, Error> {
+            hostfns::add_ring_bonus(&mut c, n).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "teleport_to",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<(), Error> {
-            if gate(&mut c, player_id, AbKind::Teleport)? {
-                c.data_mut().w().teleport_to(player_id, tile);
-            }
-            Ok(())
+            hostfns::teleport_to(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
-    // The C# `H.AbnormalGate` -- the helper above has been here since the
-    // `Gate` request landed, but never got a linker entry, so no card could
-    // open the path. This is the entry.
     l.func_wrap(
         m,
         "gate",
         |mut c: C<W>, player_id: i32, kind: i32| -> Result<i32, Error> {
-            let Some(kind) = crate::AbKind::from_i32(kind) else {
-                return Err(err(format!("gate: unknown abnormal kind {kind}")));
-            };
-            Ok(gate(&mut c, player_id, kind)? as i32)
+            hostfns::gate(&mut c, player_id, kind).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "abnormal_count", |c: C<W>, player_id: i32| {
-        c.data().wr().abnormal_count(player_id)
-    })?;
-    l.func_wrap(m, "targeted_count", |c: C<W>, player_id: i32| {
-        c.data().wr().targeted_count(player_id)
-    })?;
-    l.func_wrap(m, "gains_this_turn", |c: C<W>, player_id: i32| {
-        c.data().wr().gains_this_turn(player_id)
-    })?;
-    // The static targeting query + per-pair cancel (C# `H.Db.Card(id).Targeting`
-    // / `play.Tags["immune"+seat]`).
+    l.func_wrap(
+        m,
+        "abnormal_count",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::abnormal_count(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "targeted_count",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::targeted_count(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "gains_this_turn",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::gains_this_turn(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "designations",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
-            let list = c.data().wr().designations(player_id);
-            let bytes = postcard::to_allocvec(&list)
-                .map_err(|e| err(format!("designations encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::designations(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "cancel_designation", |mut c: C<W>, seat: i32| -> Result<(), Error> {
-        c.data_mut().w().cancel_designation(seat);
-        Ok(())
-    })?;
-    l.func_wrap(m, "designation_cancelled", |c: C<W>, seat: i32| {
-        c.data().wr().designation_cancelled(seat) as i32
-    })?;
+    l.func_wrap(
+        m,
+        "cancel_designation",
+        |mut c: C<W>, seat: i32| -> Result<(), Error> {
+            hostfns::cancel_designation(&mut c, seat).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "designation_cancelled",
+        |mut c: C<W>, seat: i32| -> Result<i32, Error> {
+            hostfns::designation_cancelled(&mut c, seat).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "target",
         |mut c: C<W>, player_id: i32, tile: i32, single: i32| -> Result<i32, Error> {
-            // Paused like `gate`: the engine runs the targeting pipeline (it
-            // raises hooks and opens the `target` [反击] window) and the replay
-            // reads its answer.
-            let st = c.data_mut();
-            if let Some(&got) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(got);
-            }
-            st.host_request = Some(HostRequest::Target {
-                player_id,
-                tile,
-                single: single != 0,
-            });
-            Err(need_input())
+            hostfns::target(&mut c, player_id, tile, single).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_move",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
-            // C# `H.CardMove(c, m)` -- the card shaped the plan and wants the move
-            // to run *now*. Paused like the others: the engine runs `Cx::card_move`
-            // (which may prompt) and the replay reads the answer. The plan is
-            // captured here because the run's world copy is discarded on pause.
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            let plan = st.w().move_plan();
-            st.host_request = Some(HostRequest::Move { player_id, plan });
-            Err(need_input())
+            hostfns::card_move(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
-    // `ctx::roll_ask` / `ctx::do_move_roll_ask` -- a card- or skill-driven dice
-    // roll. The engine rolls and raises the `Roll` chain link (the 「掷骰结算前」
-    // [反击] window) with the roller, the face and `source`; the answer is the
-    // face a counteraction left. `sides == 0` is the `do_move_roll` shape.
     l.func_wrap(
         m,
         "roll_ask",
-        |mut c: C<W>,
-         player_id: i32,
-         count: i32,
-         sides: i32,
-         source: i32|
-         -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&face) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(face);
-            }
-            st.host_request = Some(HostRequest::Roll {
-                player_id,
-                count,
-                sides,
-                source,
-            });
-            Err(need_input())
+        |mut c: C<W>, player_id: i32, count: i32, sides: i32, source: i32| -> Result<i32, Error> {
+            hostfns::roll_ask(&mut c, player_id, count, sides, source).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "agent_landing",
         |mut c: C<W>, player_id: i32, agent: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::AgentLanding { player_id, agent });
-            Err(need_input())
+            hostfns::agent_landing(&mut c, player_id, agent).map_err(HostErr::into_err)
         },
     )?;
-    // The rest of the routine family, same shape as `card_move`: the card asks,
-    // the run pauses, the engine runs the real routine, the effect replays past.
-    // These pause by trapping (see `gate` above) -- their guest wrappers return
-    // `bool`, so a sentinel would read as "it worked".
     l.func_wrap(
         m,
         "card_settle_at",
         |mut c: C<W>, player_id: i32, tile: i32, main: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::SettleAt {
-                player_id,
-                tile,
-                main: main != 0,
-            });
-            Err(need_input())
+            hostfns::card_settle_at(&mut c, player_id, tile, main).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_buy",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::Buy { player_id, tile });
-            Err(need_input())
+            hostfns::card_buy(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
-    // v40 purchase surface (`docs/PURCHASE.md`). P0 registers the ABI; the
-    // engine-side dispatch lands with P1 (property buy) / P2 (agent) /
-    // P3 (force & acquire) / P5 (linger).
     l.func_wrap(
         m,
         "buy",
-        |mut c: C<W>, player_id: i32, tile: i32, _kind: i32| -> Result<i32, Error> {
-            // P0: same as `card_buy`; the kind selects the pipeline shape at P1+.
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::Buy { player_id, tile });
-            Err(need_input())
+        |mut c: C<W>, player_id: i32, tile: i32, kind: i32| -> Result<i32, Error> {
+            hostfns::buy(&mut c, player_id, tile, kind).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "buy_quotes",
-        |mut c: C<W>,
-         player_id: i32,
-         kind: i32,
-         buf: i32,
-         n: i32,
-         out: i32|
-         -> Result<i32, Error> {
-            let bytes = read_guest(&mut c, buf, n)?;
-            let tiles: Vec<i32> = bytes
-                .chunks_exact(4)
-                .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                .collect();
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::BuyQuotes {
-                player_id,
-                kind,
-                tiles,
-                out,
-            });
-            Err(need_input())
+        |mut c: C<W>, player_id: i32, kind: i32, buf: i32, n: i32, out: i32| -> Result<i32, Error> {
+            hostfns::buy_quotes(&mut c, player_id, kind, buf, n, out).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "acquire",
         |mut c: C<W>, player_id: i32, from: i32, tile: i32, price: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::Acquire {
-                player_id,
-                from,
-                tile,
-                price,
-            });
-            Err(need_input())
+            hostfns::acquire(&mut c, player_id, from, tile, price).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "agent_offer",
         |mut c: C<W>, player_id: i32, agent: i32, tile: i32, kind: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::AgentOffer {
-                player_id,
-                agent,
-                tile,
-                kind,
-            });
-            Err(need_input())
+            hostfns::agent_offer(&mut c, player_id, agent, tile, kind).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "linger",
         |mut c: C<W>, player_id: i32, expires: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::Linger {
-                player_id,
-                expires,
-            });
-            Err(need_input())
+            hostfns::linger(&mut c, player_id, expires).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_build",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::Build { player_id, tile });
-            Err(need_input())
+            hostfns::card_build(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_offer_build",
         |mut c: C<W>, player_id: i32, buf: i32, n: i32| -> Result<i32, Error> {
-            let bytes = read_guest(&mut c, buf, n)?;
-            let tiles: Vec<i32> = bytes
-                .chunks_exact(4)
-                .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                .collect();
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::OfferBuild { player_id, tiles });
-            Err(need_input())
+            hostfns::card_offer_build(&mut c, player_id, buf, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "card_mortgage",
         |mut c: C<W>, player_id: i32, tile: i32| -> Result<i32, Error> {
-            let st = c.data_mut();
-            if let Some(&ok) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(ok);
-            }
-            st.host_request = Some(HostRequest::Mortgage { player_id, tile });
-            Err(need_input())
+            hostfns::card_mortgage(&mut c, player_id, tile).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "placed_tile",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().placed_tile(player_id, &id))
+            hostfns::placed_tile(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "play_doubled", |c: C<W>| c.data().wr().play_doubled())?;
+    l.func_wrap(
+        m,
+        "play_doubled",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::play_doubled(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_play_doubled",
         |mut c: C<W>, n: i32| -> Result<(), Error> {
-            c.data_mut().w().set_play_doubled(n);
-            Ok(())
+            hostfns::set_play_doubled(&mut c, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "trig_cards",
         |mut c: C<W>, buf: i32, cap: i32| -> Result<i32, Error> {
-            let list = c.data().wr().trigger().cards;
-            let bytes =
-                postcard::to_allocvec(&list).map_err(|e| err(format!("trig_cards encode: {e}")))?;
-            if bytes.len() as i32 <= cap {
-                write_guest(&mut c, buf, &bytes)?;
-            }
-            Ok(bytes.len() as i32)
+            hostfns::trig_cards(&mut c, buf, cap).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "opt_int", |mut c: C<W>, v: i32| {
-        c.data_mut().options.push(PromptOption::Int(v))
-    })?;
+    l.func_wrap(
+        m,
+        "opt_int",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::opt_int(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "opt_str",
         |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
-            let s = guest_msg(&mut c, p, n)?;
-            c.data_mut().options.push(PromptOption::Str(s));
-            Ok(())
+            hostfns::opt_str(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "ask",
-        |mut c: C<W>,
-         kind: i32,
-         player_id: i32,
-         tp: i32,
-         tl: i32,
-         xp: i32,
-         xl: i32|
-         -> Result<i32, Error> {
-            let kind =
-                PromptKind::from_i32(kind).ok_or_else(|| err(format!("bad prompt kind {kind}")))?;
-            let title = guest_msg(&mut c, tp, tl)?;
-            let text = guest_msg(&mut c, xp, xl)?;
-            let st = c.data_mut();
-            let options = std::mem::take(&mut st.options);
-            if kind != PromptKind::YesNo && options.is_empty() {
-                return Err(err(format!("{} prompt with no options", kind.as_str())));
-            }
-            if let Some(&a) = st.answers.get(st.next_answer) {
-                st.next_answer += 1;
-                return Ok(a);
-            }
-            st.asked = Some(Prompt {
-                kind,
-                player_id,
-                title,
-                text,
-                options,
-                answer_slot: st.next_answer,
-            });
-            // Like `pay`: the pause is the sentinel as the return value, so
-            // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
-            Ok(abi::EXIT_NEED_INPUT)
+        |mut c: C<W>, kind: i32, player_id: i32, tp: i32, tl: i32, xp: i32, xl: i32| -> Result<i32, Error> {
+            hostfns::ask(&mut c, kind, player_id, tp, tl, xp, xl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "trig_kind", |c: C<W>| {
-        c.data().wr().trigger().kind as i32
-    })?;
-    l.func_wrap(m, "trig_player", |c: C<W>| {
-        c.data().wr().trigger().player_id
-    })?;
-    l.func_wrap(m, "trig_target", |c: C<W>| c.data().wr().trigger().target)?;
-    l.func_wrap(m, "trig_tile", |c: C<W>| c.data().wr().trigger().tile)?;
-    l.func_wrap(m, "trig_value", |c: C<W>| c.data().wr().trigger().value)?;
-    l.func_wrap(m, "trig_step", |c: C<W>| c.data().wr().trigger().step)?;
-    l.func_wrap(m, "trig_by_card", |c: C<W>| {
-        c.data().wr().trigger().by_card.unwrap_or(-1)
-    })?;
-    l.func_wrap(m, "trig_pay_is_rent", |c: C<W>| {
-        c.data().wr().trigger().pay_is_rent as i32
-    })?;
-    l.func_wrap(m, "trig_move_kind", |c: C<W>| {
-        c.data().wr().trigger().move_kind.map_or(-1, |k| k as i32)
-    })?;
-    l.func_wrap(m, "trig_move_resolve", |c: C<W>| {
-        c.data().wr().trigger().move_resolve as i32
-    })?;
+    l.func_wrap(
+        m,
+        "trig_kind",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_kind(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_player",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_player(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_target",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_target(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_tile",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_tile(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_value",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_value(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_step",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_step(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_by_card",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_by_card(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_pay_is_rent",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_pay_is_rent(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_kind",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_kind(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_resolve",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_resolve(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "trig_move_tag",
         |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, p, n)?;
-            Ok(c.data()
-                .wr()
-                .trigger()
-                .move_tags
-                .iter()
-                .find(|(k, _)| *k == key)
-                .map_or(0, |(_, v)| *v))
+            hostfns::trig_move_tag(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "trig_move_main", |c: C<W>| {
-        c.data().wr().trigger().move_main as i32
-    })?;
-    l.func_wrap(m, "trig_move_dir", |c: C<W>| {
-        c.data().wr().trigger().move_dir
-    })?;
-    l.func_wrap(m, "trig_move_remaining", |c: C<W>| {
-        c.data().wr().trigger().move_remaining
-    })?;
-    l.func_wrap(m, "trig_move_total", |c: C<W>| {
-        c.data().wr().trigger().move_total
-    })?;
-    l.func_wrap(m, "trig_move_roll", |c: C<W>| {
-        c.data().wr().trigger().move_roll.unwrap_or(-1)
-    })?;
-    l.func_wrap(m, "trig_roll_source", |c: C<W>| {
-        c.data().wr().trigger().roll_source
-    })?;
-    // v40 purchase payload (`docs/PURCHASE.md`)
-    l.func_wrap(m, "trig_buy_kind", |c: C<W>| {
-        c.data().wr().trigger().buy_kind
-    })?;
-    l.func_wrap(m, "trig_seller", |c: C<W>| c.data().wr().trigger().seller)?;
-    l.func_wrap(m, "trig_price", |c: C<W>| c.data().wr().trigger().price)?;
-    l.func_wrap(m, "trig_set_price", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_price(v)
-    })?;
-    l.func_wrap(m, "trig_deal_owner", |c: C<W>| {
-        c.data().wr().trigger().deal_owner
-    })?;
-    l.func_wrap(m, "trig_set_deal_owner", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_deal_owner(v)
-    })?;
-    l.func_wrap(m, "trig_deal_houses", |c: C<W>| {
-        c.data().wr().trigger().deal_houses
-    })?;
-    l.func_wrap(m, "trig_set_deal_houses", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_deal_houses(v)
-    })?;
-    l.func_wrap(m, "trig_deal_mortgaged", |c: C<W>| {
-        c.data().wr().trigger().deal_mortgaged as i32
-    })?;
-    l.func_wrap(m, "trig_set_deal_mortgaged", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_deal_mortgaged(v)
-    })?;
-    l.func_wrap(m, "trig_set_reason", |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
-        let reason = guest_str(&mut c, p, n)?;
-        c.data_mut().w().set_trigger_reason(&reason);
-        Ok(())
-    })?;
-    l.func_wrap(m, "trig_set_move_roll", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_move_roll(v)
-    })?;
-    l.func_wrap(m, "trig_set_pay_amount", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_value(v)
-    })?;
-    l.func_wrap(m, "trig_set_pay_target", |mut c: C<W>, to: i32| {
-        c.data_mut().w().set_trigger_target(to)
-    })?;
-    l.func_wrap(m, "trig_set_cancelled", |mut c: C<W>| {
-        c.data_mut().w().set_trigger_cancelled()
-    })?;
-    l.func_wrap(m, "trig_set_negate_effect", |mut c: C<W>| {
-        c.data_mut().w().set_trigger_negate_effect()
-    })?;
-    l.func_wrap(m, "trig_set_spare", |mut c: C<W>, seat: i32| {
-        c.data_mut().w().set_trigger_spare(seat)
-    })?;
-    l.func_wrap(m, "trig_cancelled", |c: C<W>| {
-        c.data().wr().trigger().is_cancelled() as i32
-    })?;
-    l.func_wrap(m, "trig_seq", |c: C<W>| c.data().wr().trigger().seq as i32)?;
-    l.func_wrap(m, "trig_answers", |c: C<W>| {
-        c.data().wr().trigger().answers as i32
-    })?;
-    l.func_wrap(m, "trig_effect_count", |c: C<W>| {
-        c.data().wr().trigger().effects.len() as i32
-    })?;
-    l.func_wrap(m, "trig_effect_kind", |c: C<W>, i: i32| -> i32 {
-        let t = c.data().wr().trigger();
-        t.effects
-            .get(i.max(0) as usize)
-            .map_or(-1, |e| crate::TriggerKind::from_str(e.kind) as i32)
-    })?;
-    l.func_wrap(m, "trig_effect_target", |c: C<W>, i: i32| -> i32 {
-        c.data()
-            .wr()
-            .trigger()
-            .effects
-            .get(i.max(0) as usize)
-            .map_or(-1, |e| e.target)
-    })?;
-    l.func_wrap(m, "trig_effect_from", |c: C<W>, i: i32| -> i32 {
-        c.data()
-            .wr()
-            .trigger()
-            .effects
-            .get(i.max(0) as usize)
-            .map_or(-1, |e| e.from)
-    })?;
-    l.func_wrap(m, "trig_effect_tile", |c: C<W>, i: i32| -> i32 {
-        c.data()
-            .wr()
-            .trigger()
-            .effects
-            .get(i.max(0) as usize)
-            .map_or(-1, |e| e.tile)
-    })?;
-    l.func_wrap(m, "trig_effect_value", |c: C<W>, i: i32| -> i32 {
-        c.data()
-            .wr()
-            .trigger()
-            .effects
-            .get(i.max(0) as usize)
-            .map_or(0, |e| e.value)
-    })?;
+    l.func_wrap(
+        m,
+        "trig_move_main",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_main(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_dir",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_dir(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_remaining",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_remaining(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_total",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_total(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_roll",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_roll(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_roll_source",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_roll_source(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_buy_kind",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_buy_kind(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_seller",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_seller(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_price",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_price(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_price",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::trig_set_price(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_deal_owner",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_deal_owner(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_deal_owner",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::trig_set_deal_owner(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_deal_houses",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_deal_houses(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_deal_houses",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::trig_set_deal_houses(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_deal_mortgaged",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_deal_mortgaged(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_deal_mortgaged",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::trig_set_deal_mortgaged(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_reason",
+        |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
+            hostfns::trig_set_reason(&mut c, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_move_roll",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::trig_set_move_roll(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_pay_amount",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::trig_set_pay_amount(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_pay_target",
+        |mut c: C<W>, to: i32| -> Result<(), Error> {
+            hostfns::trig_set_pay_target(&mut c, to).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_cancelled",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::trig_set_cancelled(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_negate_effect",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::trig_set_negate_effect(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_set_spare",
+        |mut c: C<W>, seat: i32| -> Result<(), Error> {
+            hostfns::trig_set_spare(&mut c, seat).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_cancelled",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_cancelled(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_seq",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_seq(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_answers",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_answers(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_effect_count",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_effect_count(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_effect_kind",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_kind(&mut c, i).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_effect_target",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_target(&mut c, i).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_effect_from",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_from(&mut c, i).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_effect_tile",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_tile(&mut c, i).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_effect_value",
+        |mut c: C<W>, i: i32| -> Result<i32, Error> {
+            hostfns::trig_effect_value(&mut c, i).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "declare_effect",
-        |mut c: C<W>, kind: i32, target: i32, from: i32, tile: i32, value: i32| {
-            c.data_mut()
-                .w()
-                .declare_trigger_effect(kind, target, from, tile, value)
+        |mut c: C<W>, kind: i32, target: i32, from: i32, tile: i32, value: i32| -> Result<(), Error> {
+            hostfns::declare_effect(&mut c, kind, target, from, tile, value).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "trig_card_is",
         |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, p, n)?;
-            Ok(c.data().wr().trig_card_is(&id))
+            hostfns::trig_card_is(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
-
-    // Cross-module call: run another card's `play` inside this run. The world, the
-    // answer log position and the remaining fuel move into a nested store and back,
-    // so a prompt raised by the inner card aborts (and later replays) the outer run.
     l.func_wrap(
         m,
         "play_card",
         |mut c: C<W>, p: i32, n: i32, player_id: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, p, n)?;
-            let rules = c
-                .data()
-                .rules
-                .clone()
-                .ok_or_else(|| err("play_card unavailable here"))?;
-            let card = *rules
-                .by_id
-                .get(&id)
-                .ok_or_else(|| err(format!("play_card: unknown card {id:?}")))?;
-            if c.data().depth >= MAX_NESTING {
-                return Err(err(format!("play_card nested deeper than {MAX_NESTING}")));
-            }
-            let fuel = c.get_fuel()?;
-            let st = c.data_mut();
-            // The inner card runs as itself: its own id for place/crystals and its
-            // own `Dest`, which must not overwrite the outer card's.
-            let saved = st.w().enter_card(&id);
-            // `PlayCtx.FromDeck` -- a card run through `play_card` did not come out
-            // of a hand (「从手牌以外的地方打出」). Restored after so the outer card
-            // still sees its own origin.
-            let was_from_hand = st.w().play_from_hand();
-            st.w().set_play_from_hand(false);
-            let mut nested = HostState::new(
-                rules.clone(),
-                st.world.take().expect("world present"),
-                std::mem::take(&mut st.answers),
-                st.depth + 1,
-            );
-            nested.next_answer = st.next_answer;
-            let mut store = new_store(&rules.engine, nested);
-            store.set_fuel(fuel)?;
-            let res = match rules.cards[card as usize].entry(OnKind::Play, None) {
-                Some(entry) => {
-                    call_card(&rules, &mut store, card, entry, export::OP_RUN, player_id)
-                        .map(|_| ())
-                }
-                None => Ok(()),
-            };
-            let left = store.get_fuel().unwrap_or(0);
-            let inner = store.into_data();
-            let st = c.data_mut();
-            st.world = inner.world;
-            if let Some(w) = st.world.as_mut() {
-                w.set_play_from_hand(was_from_hand);
-            }
-            st.answers = inner.answers;
-            st.next_answer = inner.next_answer;
-            if inner.asked.is_some() {
-                st.asked = inner.asked;
-            }
-            if inner.host_request.is_some() {
-                st.host_request = inner.host_request;
-            }
-            let dest = st.w().leave_card(saved);
-            c.set_fuel(left)?;
-            // A nested card that stopped for a prompt hands the pause to the
-            // *outer* card as the sentinel, so `ctx::play_card` returns
-            // `Err(Prompt)` and the outer run can `?` it. The nested question
-            // (`inner.asked` / `inner.host_request`) is already merged into the
-            // outer state above -- that is what the outer `call_card` reads once
-            // it folds this sentinel back. `dest` is a `Dest` discriminant
-            // (small), so it cannot collide with the sentinel; the guest checks
-            // the sentinel before `Dest::from_i32` too.
-            match res {
-                Ok(()) => Ok(dest),
-                Err(e) if is_need_input(&e) => Ok(abi::EXIT_NEED_INPUT),
-                Err(e) => Err(e),
-            }
+            hostfns::play_card(&mut c, p, n, player_id).map_err(HostErr::into_err)
         },
     )?;
-
-    // `H.CanReplay` -- could `player_id` play card `id` now? A pure query: the card's
-    // `cant_play` runs on a throwaway copy of the world. A card with no `play`
-    // effect is never replayable; a guard that prompts or traps counts as "no".
     l.func_wrap(
         m,
         "card_replayable",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            let id = guest_str(&mut c, p, n)?;
-            let rules = c
-                .data()
-                .rules
-                .clone()
-                .ok_or_else(|| err("card_replayable unavailable here"))?;
-            let Some(&card) = rules.by_id.get(&id) else {
-                return Ok(0);
-            };
-            if !rules.cards[card as usize].has_play() || c.data().depth >= MAX_NESTING {
-                return Ok(0);
-            }
-            let Some(entry) = rules.cards[card as usize].entry(OnKind::Play, None) else {
-                return Ok(1);
-            };
-            let fuel = c.get_fuel()?;
-            let mut world = c.data().wr().clone();
-            world.enter_card(&id);
-            let depth = c.data().depth + 1;
-            let mut store = new_store(
-                &rules.engine,
-                HostState::new(rules.clone(), world, vec![], depth),
-            );
-            store.set_fuel(fuel)?;
-            // The `Play` gate again, on a throwaway copy: `OP_GUARD`, not the
-            // effect. A gate that prompts or traps lands in `res` as an `Err`
-            // and counts as "no", which is what this query wants.
-            let res = call_card_msg(&rules, &mut store, card, entry, export::OP_GUARD, player_id);
-            let left = store.get_fuel().unwrap_or(0);
-            c.set_fuel(left)?;
-            Ok(matches!(res, Ok(None)) as i32)
+            hostfns::card_replayable(&mut c, player_id, p, n).map_err(HostErr::into_err)
         },
     )?;
-    // `mode`: bit 1 = the end of `player_id`'s next turn, bit 2 = before the wear-off.
     l.func_wrap(
         m,
         "schedule_turn_end",
-        |mut c: C<W>, player_id: i32, mode: i32| {
-            c.data_mut()
-                .w()
-                .schedule_turn_end(player_id, mode & 1 != 0, mode & 2 != 0)
+        |mut c: C<W>, player_id: i32, mode: i32| -> Result<(), Error> {
+            hostfns::schedule_turn_end(&mut c, player_id, mode).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "set_no_money_loss", |mut c: C<W>, player_id: i32| {
-        c.data_mut().w().set_no_money_loss(player_id)
-    })?;
-    l.func_wrap(m, "set_fixed_roll", |mut c: C<W>, n: i32| {
-        c.data_mut().w().set_fixed_roll(n)
-    })?;
-    l.func_wrap(m, "fixed_roll", |c: C<W>| c.data().wr().fixed_roll())?;
+    l.func_wrap(
+        m,
+        "set_no_money_loss",
+        |mut c: C<W>, player_id: i32| -> Result<(), Error> {
+            hostfns::set_no_money_loss(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_fixed_roll",
+        |mut c: C<W>, n: i32| -> Result<(), Error> {
+            hostfns::set_fixed_roll(&mut c, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "fixed_roll",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::fixed_roll(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_next_steps",
-        |mut c: C<W>, player_id: i32, n: i32| c.data_mut().w().set_next_steps(player_id, n),
+        |mut c: C<W>, player_id: i32, n: i32| -> Result<(), Error> {
+            hostfns::set_next_steps(&mut c, player_id, n).map_err(HostErr::into_err)
+        },
     )?;
-    l.func_wrap(m, "turn_main_steps", |c: C<W>| {
-        c.data().wr().turn_main_steps()
-    })?;
-    l.func_wrap(m, "add_fire_max", |mut c: C<W>, player_id: i32, n: i32| {
-        c.data_mut().w().add_fire_max(player_id, n)
-    })?;
-    // movement shaping: the move being planned (TurnCtx.plan)
-    l.func_wrap(m, "set_roller", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_roller(v)
-    })?;
-    l.func_wrap(m, "set_steps", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_steps(v)
-    })?;
-    l.func_wrap(m, "set_reverse", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_reverse(v != 0)
-    })?;
-    l.func_wrap(m, "set_signed", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_signed(v != 0)
-    })?;
-    l.func_wrap(m, "set_stop_at", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_stop_at(v)
-    })?;
-    l.func_wrap(m, "set_parity", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_parity(v)
-    })?;
-    l.func_wrap(m, "set_resolve", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_resolve(v != 0)
-    })?;
-    l.func_wrap(m, "set_no_buy", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_no_buy(v != 0)
-    })?;
-    l.func_wrap(m, "set_kind", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_kind(v)
-    })?;
-    l.func_wrap(m, "set_trigger_target", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_trigger_target(v)
-    })?;
-    l.func_wrap(m, "set_trigger_cancelled", |mut c: C<W>| {
-        c.data_mut().w().set_trigger_cancelled()
-    })?;
-    l.func_wrap(m, "set_teleport_to", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_teleport_to(v)
-    })?;
+    l.func_wrap(
+        m,
+        "turn_main_steps",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::turn_main_steps(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_fire_max",
+        |mut c: C<W>, player_id: i32, n: i32| -> Result<i32, Error> {
+            hostfns::add_fire_max(&mut c, player_id, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_roller",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_roller(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_steps",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_steps(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_reverse",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_reverse(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_signed",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_signed(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_stop_at",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_stop_at(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_parity",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_parity(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_resolve",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_resolve(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_no_buy",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_no_buy(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_kind",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_kind(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_trigger_target",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_trigger_target(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_trigger_cancelled",
+        |mut c: C<W>| -> Result<(), Error> {
+            hostfns::set_trigger_cancelled(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_teleport_to",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_teleport_to(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "set_start",
         |mut c: C<W>, t: i32, p: i32, n: i32| -> Result<(), Error> {
-            let why = guest_str(&mut c, p, n)?;
-            c.data_mut().w().set_start(t, &why);
-            Ok(())
+            hostfns::set_start(&mut c, t, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_base_dice",
         |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
-            let why = guest_str(&mut c, p, n)?;
-            c.data_mut().w().set_base_dice(count, sides, &why);
-            Ok(())
+            hostfns::set_base_dice(&mut c, count, sides, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_base_dice",
         |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
-            let why = guest_str(&mut c, p, n)?;
-            c.data_mut().w().add_base_dice(count, sides, &why);
-            Ok(())
+            hostfns::add_base_dice(&mut c, count, sides, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "add_extra_dice",
         |mut c: C<W>, count: i32, sides: i32, p: i32, n: i32| -> Result<(), Error> {
-            let why = guest_str(&mut c, p, n)?;
-            c.data_mut().w().add_extra_dice(count, sides, &why);
-            Ok(())
+            hostfns::add_extra_dice(&mut c, count, sides, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
         "set_tag",
         |mut c: C<W>, kp: i32, kl: i32, v: i32| -> Result<(), Error> {
-            let key = guest_str(&mut c, kp, kl)?;
-            c.data_mut().w().set_tag(&key, v);
-            Ok(())
+            hostfns::set_tag(&mut c, kp, kl, v).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "set_min_roll", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_min_roll(v)
-    })?;
-    l.func_wrap(m, "set_extra_steps", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_extra_steps(v)
-    })?;
+    l.func_wrap(
+        m,
+        "set_min_roll",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_min_roll(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_extra_steps",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_extra_steps(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
     l.func_wrap(
         m,
         "move_tag",
         |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
-            let key = guest_str(&mut c, kp, kl)?;
-            Ok(c.data().wr().move_tag(&key))
+            hostfns::move_tag(&mut c, kp, kl).map_err(HostErr::into_err)
         },
     )?;
-    l.func_wrap(m, "set_settle_tile", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_settle_tile(v)
-    })?;
-    l.func_wrap(m, "set_pay_factor", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_pay_factor(v)
-    })?;
-    l.func_wrap(m, "set_rent_factor", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_rent_factor(v)
-    })?;
-    l.func_wrap(m, "set_can_build", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_can_build(v != 0)
-    })?;
-    l.func_wrap(m, "set_settle_as_agent", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_settle_as_agent(v != 0)
-    })?;
-    // v35: 「使你的下次主要移动结果对那些玩家一起执行」 -- the follower list on
-    // the move being planned (C# `LeadFx.Who`).
-    l.func_wrap(m, "plan_add_follower", |mut c: C<W>, v: i32| {
-        c.data_mut().w().plan_add_follower(v)
-    })?;
-    l.func_wrap(m, "set_more_steps", |mut c: C<W>, v: i32| {
-        c.data_mut().w().set_more_steps(v)
-    })?;
-    l.func_wrap(m, "move_stop_at", |c: C<W>| c.data().wr().move_stop_at())?;
-    l.func_wrap(m, "move_stopped", |c: C<W>| {
-        c.data().wr().move_stopped() as i32
-    })?;
-    l.func_wrap(m, "move_parity", |c: C<W>| c.data().wr().move_parity())?;
-    l.func_wrap(m, "move_resolve", |c: C<W>| {
-        c.data().wr().move_resolve() as i32
-    })?;
-    l.func_wrap(m, "move_kind", |c: C<W>| c.data().wr().move_kind())?;
-    l.func_wrap(m, "move_steps", |c: C<W>| c.data().wr().move_steps())?;
-    l.func_wrap(m, "move_remaining", |c: C<W>| {
-        c.data().wr().move_remaining()
-    })?;
-    l.func_wrap(m, "move_total", |c: C<W>| c.data().wr().move_total())?;
-    l.func_wrap(m, "move_dir", |c: C<W>| c.data().wr().move_dir())?;
+    l.func_wrap(
+        m,
+        "set_settle_tile",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_settle_tile(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_pay_factor",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_pay_factor(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_rent_factor",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_rent_factor(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_can_build",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_can_build(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_settle_as_agent",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_settle_as_agent(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "plan_add_follower",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::plan_add_follower(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_more_steps",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::set_more_steps(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_stop_at",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_stop_at(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_stopped",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_stopped(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_parity",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_parity(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_resolve",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_resolve(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_kind",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_kind(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_steps",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_steps(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_remaining",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_remaining(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_total",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_total(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_dir",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::move_dir(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
 
     Ok(l)
 }

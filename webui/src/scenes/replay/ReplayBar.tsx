@@ -78,7 +78,7 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
               <option key={x.member} value={x.member}>
                 {x.player}
                 {x.character ? ` · ${D.character(x.character)?.display ?? x.character}` : ""}
-                {x.bot ? ` (${x.mentality === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard")})` : ""}
+                {x.bot ? ` (${x.mentality === "chaos" ? tr("solo.mentalityChaos") : x.mentality === "advanced" ? tr("solo.mentalityAdvanced") : tr("solo.mentalityStandard")})` : ""}
               </option>
             ))}
           </select>

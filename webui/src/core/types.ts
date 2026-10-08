@@ -74,6 +74,10 @@ export interface MatchPrompt {
   id: number; kind: string; title: Msg; text: Msg; card: string; options: Msg[];
   fallback: number; players: number[]; answers: number[]; timeLeft: number; tile: number;
   bid: number; bidder: number; items: string[]; count: number;
+  /** The quoted price on a buy / force_buy prompt; -1 when not a purchase. */
+  price: number;
+  /** Per-option prices on an agent prompt, parallel to `options`. */
+  prices: number[];
 }
 export interface MatchVote { id: number; by: number; players: number[]; answers: number[]; timeLeft: number }
 export interface MatchEvent {
@@ -101,7 +105,7 @@ export interface MatchState {
   plan: MovePlan;
   timeLeft: number; shield: number; bank: number;
   bought: boolean; built: boolean; players: MatchPlayer[]; bans: string[]; owners: number[]; houses: number[];
-  mortgaged: boolean[]; embers: number[]; marks: TileMark[]; tileColors: number[];
+  mortgaged: boolean[]; embers: number[]; marks: TileMark[];
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
   endReason: string; winner: number; scoreMoney: number; scoreProperty: number; scoreHouses: number;
 }
@@ -123,15 +127,25 @@ export interface MatchView {
   aiAnswer?: { answer: number; picked: string[]; worth: number } | null;
   /** Parallel to `hand`: would the engine allow each card right now? */
   playable?: boolean[];
+  /**
+   * Parallel to `hand`: the card's bot-only **estimated execution cost**
+   * (`prop::EST_COST`, user ruling 2026-10-07). Only bots / autopilot read it,
+   * as a reserve check -- never legality. `0` = unknown / assume free.
+   */
+  estCost?: number[];
 }
 
 export interface ScoreWeights { money: number; property: number; houses: number }
 /**
  * Bot decision policy: `standard` is the ported C# bot, `chaos` is legal but
- * maximally disruptive. Serde-defaults to `standard` on the wire, so a missing
- * field is standard. Only meaningful on a `bot` member.
+ * maximally disruptive, `advanced` is the server-side search bot
+ * (`docs/BOT.md` B5 -- online rooms only; solo stays standard / chaos until
+ * the browser bundle lands). Serde-defaults to `standard` on the wire, so a
+ * missing field is standard. Only meaningful on a `bot` member. With no
+ * `bot-service` attached the server rewrites `advanced` to `standard` when
+ * the match starts.
  */
-export type BotMentality = "standard" | "chaos";
+export type BotMentality = "standard" | "chaos" | "advanced";
 export interface RoomMember {
   id: number; player: string; character: string; cnId: string;
   ready: boolean; host: boolean; bot: boolean; away: boolean;

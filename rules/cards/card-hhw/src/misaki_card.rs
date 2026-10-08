@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MISAKI_CARD: CardDef = CardDef::new(
     "HHW:（美咲）",
-    &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::MoveRoll], Some(can_counteract), counteract, "")],
 );
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
@@ -68,7 +68,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「消耗所有火罐」 -- C# `H.SpendFire(i, H.Fire(i), "（美咲）")`.
     let fire = ctx::fire(player_id);
     if fire > 0 {
-        ctx::spend_fire(player_id, fire, &Msg::new(key!("misaki_card_pay")));
+        ctx::spend_fire(player_id, fire, &Msg::new(key!("misaki_card_pay")))?;
     }
     // 规则书[反击]: 「传送至...玩家所在的格子并触发结算」
     let to = ctx::player_pos(who);

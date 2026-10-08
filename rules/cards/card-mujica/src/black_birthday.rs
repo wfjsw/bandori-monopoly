@@ -11,7 +11,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BLACK_BIRTHDAY: CardDef = CardDef::new(
     "Mujica:黑色生日",
-    &[On::Play(Some(cant_play), black_birthday)],
+    &[On::Play(Some(cant_play), black_birthday, "")],
 );
 
 /// C# `CardBlackBirthday.WhyNot` -- 「没有别的玩家」 when `H.Others` is empty.

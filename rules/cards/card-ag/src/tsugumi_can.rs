@@ -14,8 +14,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
-        On::Play(Some(cant_play), play),
-        On::Counteract(&[ChainKind::Card], can_counteract, counteract),
+        On::Play(Some(cant_play), play, ""),
+        On::Counteract(&[ChainKind::Card], Some(can_counteract), counteract, ""),
     ],
 );
 
@@ -30,9 +30,6 @@ fn can_counteract(player_id: i32) -> bool {
     // 规则书（1）【反击】: 「时机合适时打出此卡，使任意结果只有数字区间的效果以理论最大值或最小值结算」
     // -- C# counteracts while another `RangeCard` play is resolving
     // (`t.Kind == "card" && t.Play.Def.RangeCard && t.Play.Extreme == 0`).
-    if trigger::kind() != TriggerKind::Card {
-        return false;
-    }
     let _ = player_id;
     // 规则书（1）: 「除@Tsugu ycm以外」 -- the exclusion reads the play's card id
     // off the trigger (C# `t.Play.Id` / `t.Card`).

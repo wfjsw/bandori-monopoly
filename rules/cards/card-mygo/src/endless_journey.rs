@@ -15,14 +15,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
     "MyGO:哪怕这旅程没有终点",
     &[
-        On::Play(None, endless_journey),
-        On::Hook(&[HookKind::TurnEnd], |_| true, turn_end),
-        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        On::Play(None, endless_journey, ""),
+        On::Hook(&[HookKind::TurnEnd], None, turn_end, ""),
+        // （2）「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect
+        // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
+        // field card that replaces the body skips this entry.
+        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
 );
 
@@ -49,19 +48,17 @@ fn endless_journey(player_id: i32) -> card_sdk::Asked {
 /// C# `CardEndlessJourney.TurnEnd` -- when the owner's main move walked more
 /// than 6 steps, burn one miracle crystal; at 0 the card is discarded.
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnEnd
-        || trigger::player_id() != player_id
-        || !ctx::is_placed()
-    {
+        if trigger::player_id() != player_id
+        || !ctx::is_placed() {
         return Ok(());
-    }
+        }
     // 规则书[手]: 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹
     // 水晶数量为0时，将此卡置入弃牌堆。」 -- C# `H._turnCtx.LastMain > 6` ->
     // `AddCrystals(-1)` and `H.Unplace(this, "discard", ...)` at 0.
     if ctx::turn_main_steps() <= 6 {
         return Ok(());
     }
-    ctx::decay();
+    ctx::decay()?;
     Ok(())
 }
 
@@ -94,8 +91,11 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardEndlessJourney.SettleAfter` -- when the owner settles off their own
 /// main move, pay out 60 per tile that walk passed.
-fn settle_after(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::SettleAfter || !ctx::is_placed() {
+/// 规则书（2）: 「[持续] 触发结算时，获得X*60资金」 -- 行动阶段 15
+/// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
+/// replace (`trigger::cancelled()`) skips it.
+fn settle_body(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::SettleBody || trigger::cancelled() || !ctx::is_placed() {
         return Ok(());
     }
     // C# `m.Seat != Seat || !m.Main || m.Path.Count == 0` -- only the owner's

@@ -47,6 +47,8 @@
   "one_of_us_note": "Shares {{a}} / {{b}} income with {{who}}",
   "one_of_us_paired": "{{who}} and {{partner}} share the income of {{a}} and {{b}} (ONE OF US)",
   "one_of_us_partner": "Share income with which player?",
+  "one_of_us_share": "ONE OF US splits the settlement income",
+  "one_of_us_shared": "{{who}} got {{money}} of {{tile}}'s settlement income (ONE OF US)",
   "one_of_us_theirs": "[Designate] which of {{who}}'s deeds? (must pick a shop-street tile if they have one)",
   "one_of_us_title": "ONE OF US",
   "one_of_us_transferred": "{{tile}}'s deed went to {{who}} (ONE OF US: {{out}} is out)",

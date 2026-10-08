@@ -24,18 +24,15 @@ const HALF: &str = "skill.manaDonut.half";
 pub const MANA_DONUT: CardDef = CardDef::new(
     "skill:纯田真奈:甜甜圈爱好者",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::PayChoose], half, on_pay),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayChoose], Some(half), on_pay, ""),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -54,7 +51,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if ctx::is_circle(t) {
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("mana_donut_gain")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("mana_donut_gain")))?;
         return Ok(());
     }
     // （2）「经过"购物中心"，…时，在触发结算前可选择消耗一个火罐并向对应格子
@@ -75,7 +72,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("mana_donut_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("mana_donut_spend")))? {
         return Ok(());
     }
     // 「可向抵押格子正常支付其原本收费，若为无主格子则为消耗对应收费资金」 --

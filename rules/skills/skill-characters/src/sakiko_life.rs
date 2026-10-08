@@ -26,24 +26,29 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::PassPlayer], in_one, on_pass_player),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
+        // M4): the step onto a tile another player stands on, not the end-tile
+        // [重叠]. The "other player" is read off the tile, not `target`.
+        On::Hook(&[HookKind::PassTile], Some(in_one), on_pass_player, ""),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Hook(&[HookKind::Abnormal], im_hit, on_abnormal),
+        On::Hook(&[HookKind::Abnormal], Some(im_hit), on_abnormal, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
+}
+
+/// G4: kept as a callable alias for in-body uses of the old guard.
+fn mine(player_id: i32) -> bool {
+    legacy_mine(player_id)
 }
 
 fn in_one(player_id: i32) -> bool {
@@ -94,14 +99,21 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 
 /// 「经过其他玩家时，可将其所有层数的停留，眩晕转移至自己身上（仍正常完成本次
 /// 移动），若如此做，每获得一层停留，眩晕，你获得1500资金」.
+///
+/// `SETTLE-STAGES.md` §4 M4: 「经过其他玩家」 is the passer's step onto a tile
+/// another player stands on (行动阶段 12 [经过]). The other player is read off
+/// the tile -- a `passTile` payload has no `target`. (It used to sit on
+/// `passPlayer` and read `trigger::player_id()` as "the other", which is the
+/// mover -- the guard already pinned that to `player_id`, so the body bailed at
+/// its own first line and the clause never fired.)
 fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     if !ctx::trigger::move_is_main() {
         return Ok(());
     }
-    let other = ctx::trigger::player_id();
-    if other == player_id {
+    let at = ctx::trigger::tile();
+    let Some(&other) = ctx::players_on(at, player_id).first() else {
         return Ok(());
-    }
+    };
     let stay = ctx::stay_of(other);
     let stun = ctx::stun_of(other);
     if stay + stun <= 0 {
@@ -154,7 +166,7 @@ fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     ) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("sakiko_life_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("sakiko_life_gain")))?;
     Ok(())
 }
 

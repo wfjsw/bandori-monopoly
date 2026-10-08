@@ -5,7 +5,7 @@
 //! > （2）在你有初始"Live House"格子时你拥有的"旭汤澡堂"格子获得"Live House"的颜色
 //!
 //! Both halves are a re-colour, and the vocabulary already has the write
-//! (`Fx.ExtraColor` is `set_extra_color`, per player). (1) is a one-shot on the
+//! (the `colorFor:<p>` tile prop, per player). (1) is a one-shot on the
 //! first qualifying purchase; (2) is restated while the condition holds, the
 //! same way the fire-cap skills restate their bound -- a standing claim, not a
 //! one-time grant.
@@ -13,11 +13,19 @@
 //! 「非"旭汤澡堂"或任意"Live House"」 reads as: the tile is neither 旭汤澡堂 nor
 //! already a Live House. A tile that is already group 6 needs no recolour.
 
-use card_sdk::abi::HookKind;
+use alloc::format;
+use alloc::string::String;
+
+use card_sdk::abi::{prop, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
 const DONE: &str = "skill.asahiAim.first";
+
+/// The `colorFor:<p>` tile prop key -- the group `player_id` treats this tile as.
+fn color_for(player_id: i32) -> String {
+    format!("{}{}", prop::COLOR_FOR_PREFIX, player_id)
+}
 
 /// The tile the clause names out.
 fn is_bathhouse(t: i32) -> bool {
@@ -27,12 +35,13 @@ fn is_bathhouse(t: i32) -> bool {
 pub const ASAHI_AIM: CardDef = CardDef::new(
     "skill:朝日六花:瞄准目标",
     &[
-        On::Hook(&[HookKind::Bought], mine, on_bought),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Hook(&[HookKind::Bought], None, on_bought, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -46,7 +55,9 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, DONE, 1);
-    ctx::set_extra_color(player_id, t, 6);
+    // 「获得"Live House"的颜色」 -- the `colorFor:<p>` tile prop on the tile's
+    // board instance: group 6 for this player.
+    ctx::set_tile_prop(t, &color_for(player_id), 6);
     ctx::log(
         player_id,
         &Msg::new(key!("asahi_aim_first")).tile("tile", t),
@@ -67,7 +78,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     {
         return Ok(());
     }
-    ctx::set_extra_color(player_id, bath, 6);
+    ctx::set_tile_prop(bath, &color_for(player_id), 6);
     Ok(())
 }
 

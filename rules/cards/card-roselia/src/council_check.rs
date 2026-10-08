@@ -17,10 +17,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",
     &[
-        On::Counteract(&[ChainKind::SettleBefore], can_counteract, counteract),
-        On::Hook(&[HookKind::PassTile], |_| true, pass_tile),
-        On::Hook(&[HookKind::PayAfter], |_| true, pay_after),
-        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+        On::Counteract(&[ChainKind::SettleBefore], Some(can_counteract), counteract, ""),
+        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
+        On::Hook(&[HookKind::PayAfter], None, pay_after, ""),
+        On::Hook(&[HookKind::SettleAfter], None, settle_after, ""),
     ],
 );
 
@@ -58,10 +58,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             .card("card", "R:[衍生] 觉悟"),
     );
     // 规则书[反击]: 「本回合无法加盖房屋」 -- C# `H._turnCtx.NoBuild = true; H.State.built = true`.
-    // 规则书[反击]: 「本回合无法加盖房屋」 -- a turn-wide flag the build gate reads.
-    // 「本回合」 is the point: it expires at the turn end rather than lingering.
-    ctx::state::set(player_id, "noBuild", 1);
-    ctx::state::set_expires(player_id, "noBuild", ctx::state::TURN_END);
+    // 规则书[反击]: 「本回合无法加盖房屋」 -- a turn-scoped instance carrying
+    // `prop::NO_BUILD` (`docs/PURCHASE.md`), the hand-card home that replaces
+    // the old per-player `noBuild` scratch key. 「本回合」 is the point: it
+    // expires at the turn end rather than lingering.
+    ctx::set_prop(card_sdk::abi::prop::NO_BUILD, 1);
+    ctx::linger(player_id, 0);
     // 规则书[反击]: 「但可支付那格一层房屋的建造价格一半将此卡放于那个格子上」 -- only
     // near deeds with a house build cost (C# `H._tiles[t].house > 0`).
     let spots: Vec<i32> = near(player_id)

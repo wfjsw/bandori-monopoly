@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const RIMI_CHOCO: CardDef = CardDef::new(
     "PPP:（里美）我的心就像巧克力螺",
-    &[On::Play(Some(cant_play), play)],
+    &[On::Play(Some(cant_play), play, "")],
 );
 
 /// C# `CardRimiChoco.WhyNot` = `H.MoveWhyNot(seat)`.

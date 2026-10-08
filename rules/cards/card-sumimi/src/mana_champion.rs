@@ -12,10 +12,17 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MANA_CHAMPION: CardDef = CardDef::new(
     "Sumimi:（真奈）歌唱大赛5连冠",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        None,
+        counteract,
+        "by != owner && by >= 0 && effect.hits(owner)",
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「当你或你的格子即将受到来自你以外的效果影响时打出此卡」
     // C# `H.HitByOtherCard(t, seat)` (MatchHost.cs:19235-19255) =
     // `t.ByCard >= 0 && t.ByCard != seat` and (kind "target"/"abnormal" ->

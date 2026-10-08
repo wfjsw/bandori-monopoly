@@ -10,9 +10,9 @@
 //! > 回合开始前移除的[除外]。
 //!
 //! （1）'s second half is a *standing re-classification* of one tile: 「弦卷集团」
-//! counts as CiRCLE for this player until it is next passed. That is `set_extra_color`
-//! in spirit but the axis here is tile *kind*, not colour -- and the vocabulary
-//! has a colour override, not a kind one. See the TODO below.
+//! counts as CiRCLE for this player until it is next passed. That is a per-player
+//! tile re-classification in spirit but the axis here is tile *kind*, not colour
+//! -- and the vocabulary has a colour override, not a kind one. See the TODO below.
 //!
 //! （2） 「你的移动视为[传送]」 is the plan's kind; 「额外获得一个1d10」 rides on
 //! the dice table.
@@ -29,18 +29,15 @@ const GROUP: &str = "skill.misakiOther.group";
 pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
-        On::Play(Some(can_use_exile), use_exile),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
+        On::Play(Some(can_use_exile), use_exile, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -55,7 +52,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::tile() != ctx::tile_named("弦卷集团") {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 2, &Msg::new(key!("misaki_other_gain")));
+    ctx::gain_fire(player_id, 2, &Msg::new(key!("misaki_other_gain")))?;
     state::set(player_id, GROUP, 0);
     Ok(())
 }
@@ -73,7 +70,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("misaki_other_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("misaki_other_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(1, 10, "另一个我");
@@ -96,7 +93,7 @@ fn can_use_exile(player_id: i32) -> Option<Msg> {
 /// （3）「获得一层在你的下回合开始前移除的[除外]」 -- the exile wears off at the
 /// next turn start, which is what `expires: TurnStart` says.
 fn use_exile(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("misaki_other_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("misaki_other_spend")))? {
         return Ok(());
     }
     ctx::give_exile(player_id, 1, -1);

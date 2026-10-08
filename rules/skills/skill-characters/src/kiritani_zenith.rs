@@ -24,18 +24,15 @@ const USED: &str = "skill.kiritani.used";
 pub const KIRITANI_ZENITH: CardDef = CardDef::new(
     "skill:桐谷透子:天上天下，唯我独尊",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], mine, reset),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], None, reset, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -55,7 +52,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("kiritani_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("kiritani_gain")))?;
     Ok(())
 }
 
@@ -112,7 +109,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         );
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kiritani_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("kiritani_spend")))? {
         return Ok(());
     }
     state::set(player_id, USED, 1);

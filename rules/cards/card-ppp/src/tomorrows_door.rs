@@ -20,12 +20,16 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::PassTile], pass_tile_guard, pass_tile),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
         // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
         // so a 「支付减半」 scaler sees the shaped total.
-        On::Hook(&[HookKind::PayAdd], pay_add_guard, pay_add),
-        On::Hook(&[HookKind::SettleAfter], settle_after_guard, settle_after),
+        On::Hook(&[HookKind::PayAdd], Some(pay_add_guard), pay_add, ""),
+        // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
+        // -- an entry in the settle's effect list, for the shapes no rent
+        // payment carries (梦开始的地方, a mortgaged owner tile). A field card
+        // that replaces the body skips this entry.
+        On::Hook(&[HookKind::SettleBody], Some(settle_body_guard), settle_body, ""),
     ],
 );
 
@@ -156,14 +160,17 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// `Fx.SettleAfter` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
+/// `Fx.SettleBody` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
 /// a mortgaged owner tile, where no rent payment exists to carry the add) still
-/// owes `houses(星之鼓动山丘) × 100`.
-fn settle_after_guard(player_id: i32) -> bool {
+/// owes `houses(星之鼓动山丘) × 100`. 行动阶段 15 (`SETTLE-STAGES.md` §4 M2).
+fn settle_body_guard(player_id: i32) -> bool {
     ctx::is_placed()
 }
 
-fn settle_after(player_id: i32) -> card_sdk::Asked {
+fn settle_body(player_id: i32) -> card_sdk::Asked {
+    if trigger::cancelled() {
+        return Ok(());
+    }
     if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
         return Ok(());
     }

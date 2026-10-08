@@ -7,7 +7,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play(None, pure_wings)]);
+pub const PURE_WINGS: CardDef = CardDef::new("Mor:纯真振翅", &[On::Play(None, pure_wings, "")]);
 
 fn pure_wings(player_id: i32) -> card_sdk::Asked {
     let n = ctx::tile_count();
@@ -23,22 +23,23 @@ fn pure_wings(player_id: i32) -> card_sdk::Asked {
     if to < 0 {
         return Ok(());
     }
-    // 规则书: 「（不触发结算）」 -- C# `H.ForceTeleport(i, to, resolve: false, ...)`
-    //   = `set_kind(Teleport)` + `set_teleport_to(to)` + `set_resolve(false)` +
-    //   `card_move(player_id)`.
-    ctx::plan::set_kind(card_sdk::abi::MoveKind::Teleport);
-    ctx::plan::set_teleport_to(to);
-    ctx::plan::set_resolve(false);
-    ctx::card_move(player_id);
+    // 规则书: 「（不触发结算）」 -- C# `H.ForceTeleport(i, to, resolve: false, ...)`:
+    // a raw position write (no settle, no move bookkeeping). The jump is not
+    // 「视为你的主要移动」, so it must leave the main move free for the roll
+    // below -- `card_move` (`H.CardMove` / MainMoveAs) would consume it.
+    ctx::teleport_to(player_id, to);
     if ctx::player_out(player_id) {
         return Ok(());
     }
-    // 规则书: 「立刻进行移动掷骰」 -- C# `H.MainMove(i, ...)` when `!MainMoved`.
-    // A `card_move` with no fixed step count rolls the plan's dice and walks
-    // that far; the teleport above did not settle, so this is the movement.
-    // It consumes the turn's main move, which is what 「主要移动」 means.
+    // 规则书: 「立刻进行移动掷骰」 -- C# `H.MainMove(i, ...)`: the turn's main
+    // move roll, walking from the jump's destination (not from where the card
+    // was played). A `card_move` with no fixed step count rolls the plan's dice
+    // and walks that far; the landing settles (the default). Clear the plan's
+    // destination so this is a walk, not another jump -- and leave `steps` at
+    // its -1 "roll it" default (`set_steps(-1)` would clamp to 0).
     ctx::plan::set_kind(card_sdk::abi::MoveKind::Walk);
-    ctx::plan::set_steps(-1);
+    ctx::plan::set_teleport_to(-1);
+    ctx::plan::set_resolve(true);
     ctx::card_move(player_id);
     ctx::log(
         player_id,

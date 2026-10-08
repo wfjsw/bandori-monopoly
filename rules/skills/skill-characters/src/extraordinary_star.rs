@@ -35,13 +35,9 @@ fn hill() -> i32 {
 pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Settle], |_| true, on_settle),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Settle], None, on_settle, ""),
     ],
 );
 
@@ -63,7 +59,7 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::tile() != hill() {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("extraordinary_star.gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("extraordinary_star.gain")))?;
     Ok(())
 }
 
@@ -85,7 +81,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// is all-or-nothing; the destination is a choice among the tiles this player
 /// owns; 「可选择盖房」 is the move being allowed to build where it lands.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("extraordinary_star.spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("extraordinary_star.spend")))? {
         return Ok(());
     }
     let owned = ctx::owned_tiles(player_id);

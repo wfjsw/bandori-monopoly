@@ -11,10 +11,11 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
-        On::Play(None, l11),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], mine, sweep),
+        On::Play(None, l11, ""),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], None, sweep, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
 fn l11(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「将此卡置于自身场上」 -- C# `H.PlaceFromPlay(c, -1, -1, 2)`.
@@ -36,7 +37,7 @@ fn l11(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

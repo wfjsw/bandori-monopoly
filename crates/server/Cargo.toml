@@ -12,6 +12,7 @@ name = "server"
 path = "src/main.rs"
 
 [dependencies]
+bot-service = { path = "../bot-service" }
 game-core = { path = "../game-core" }
 game-rules = { path = "../game-rules" }
 rules-worker = { path = "../rules-worker" }
@@ -29,3 +30,4 @@ redis = { version = "1.7.1", default-features = false, features = ["tokio-comp"]
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }
 tower = { version = "0.5", features = ["util"] }
 bytes = "1"
+

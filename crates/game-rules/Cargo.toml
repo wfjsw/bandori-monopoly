@@ -13,12 +13,22 @@ sha2 = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# Guard prefilter conditions (docs/GUARDS.md G0/G2). Host builds compile from
+# source (the `cel` parser); the wasm32 (browser glue) build loads the lean
+# compiled form with `runtime-only` and never ships the parser (§8.3).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rules-cond = { path = "../rules-cond" }
+wasmtime = "37"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rules-cond = { path = "../rules-cond", default-features = false, features = ["runtime-only"] }
+
 [features]
 # Run the interpreter even natively (the tests then cover both backends).
 wasmi-native = []
 # Measurement counters for docs/BOT.md §5 (B0). Off by default; zero
 # behavioural difference -- a few `AtomicU64` bumps around each card run.
 bot-cost = ["game-core/bot-cost"]
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-wasmtime = "37"
+# G3 (docs/GUARDS.md §5.1): the `legacy_*` migration-audit hook. The hook point
+# already exists in `cond_pre::admits`; the feature turns on the comparison.
+guard-audit = []

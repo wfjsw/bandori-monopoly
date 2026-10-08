@@ -21,18 +21,15 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Event], other, on_event),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Event], Some(other), on_event, ""),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -51,7 +48,7 @@ fn on_event(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::tile() != station() {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_gain")))?;
     Ok(())
 }
 
@@ -75,7 +72,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     // 「抽取一个视为在"流星堂"抽取的事件」 -- the draw is tagged as the
     // station's, which is what the `event` hook above reads.
     ctx::draw(player_id, 1)?;
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_end")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_end")))?;
     Ok(())
 }
 
@@ -99,7 +96,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if ctx::spend_fire(player_id, 2, &Msg::new(key!("arisa_bonsai_spend"))) {
+    if ctx::spend_fire(player_id, 2, &Msg::new(key!("arisa_bonsai_spend")))? {
         ctx::add_band_crystals(player_id, 1, i32::MAX);
         ctx::log(player_id, &Msg::new(key!("arisa_bonsai_crystal")));
     }

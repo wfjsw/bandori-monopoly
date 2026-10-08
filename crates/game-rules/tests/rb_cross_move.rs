@@ -1141,7 +1141,6 @@ fn m27_sakiko_leads() {
 
 // 规则书: 是我自己的问题: 「主要移动结束时…远离绝对距离最近的玩家一格」.
 // Variant: 「若受到[异常移动效果]影响，此卡不生效」.
-#[ignore = "DISCREPANCY: 是我自己的问题 does not move P0 one tile further from the nearest player"]
 #[test]
 fn m28a_my_own_problem() {
     let mut t = Table::vanilla(2);

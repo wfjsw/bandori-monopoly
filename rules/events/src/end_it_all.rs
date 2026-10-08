@@ -40,7 +40,7 @@ const NON_DERIVED: &[&str] = &[
     "火种燃尽之后会怎么样呢？",
 ];
 
-pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play(None, play)]);
+pub const END_IT_ALL: CardDef = CardDef::new("event:让我来结束一切", &[On::Play(None, play, "")]);
 
 /// 规则书: 「触发事件的玩家从所有非衍生事件中选择3个移除」 -- the drawer picks
 /// three distinct non-derived event ids and each is banished for good.

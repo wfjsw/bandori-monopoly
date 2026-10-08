@@ -11,24 +11,25 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     "AG:（绯玛丽）如果并非没问题",
+    // G4: kind (Roll|MoveRoll) is the category; `mine` + the roll threshold
+    // are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::Roll, ChainKind::MoveRoll],
-        can_counteract,
+        None,
         counteract,
+        "actor == owner && move.roll != null && move.roll < 6",
     )],
-);
+)
+    .legacy(&[(0, legacy_can_counteract)]);
 
-/// 规则书: 「【反击】当你的一次掷骰小于6时，你可以打出此卡」 -- counteraction-only.
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书: 「【反击】当你的一次掷骰」 -- a roll window, not a hand play.
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     if !matches!(trigger::kind(), TriggerKind::Roll | TriggerKind::MoveRoll) {
         return false;
     }
-    // 规则书: 「你的一次掷骰」 -- only the roller's own roll.
     if trigger::player_id() != player_id {
         return false;
     }
-    // 规则书: 「小于6时」
     matches!(trigger::move_roll(), Some(r) if r < 6)
 }
 

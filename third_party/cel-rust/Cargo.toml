@@ -1,0 +1,85 @@
+[package]
+name = "cel"
+description = "A parser and interpreter for the Common Expression Language (CEL)"
+repository = "https://github.com/cel-rust/cel-rust"
+version = "0.15.0"
+authors = ["Clark McCauley <me@clarkmccauley.com>", "Alex Snaps <alex@wcgw.dev>"]
+edition = "2021"
+rust-version = "1.86.0"
+license = "MIT"
+categories = ["compilers"]
+# Vendored fork of cel-rust 0.15.0 -- see FORK.md for the purpose and the
+# diff summary. Wire this in with `[patch.crates-io]` in the workspace root.
+# Standalone workspace so it can be tested feature-by-feature without joining
+# the host workspace's feature unification:
+#   cargo build --manifest-path third_party/cel-rust/Cargo.toml \
+#     --no-default-features --features serde-ast
+[workspace]
+
+[dependencies]
+# Parser (antlr4rust backend) and its helpers: optional, behind `parser`.
+antlr4rust = { version = "0.6.0", optional = true }
+lazy_static = { version = "1.5.0", optional = true }
+# nom parses `duration(...)` literals in `src/duration.rs`, which is behind
+# `chrono`. It is NOT used by the expression parser (that is antlr4rust, plus
+# a hand-rolled string/bytes literal scanner in `parser/parse.rs`).
+nom = { version = "7.1.3", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["alloc", "serde", "clock"], optional = true }
+chrono-tz = { version = "0.10", default-features = false, optional = true }
+regex = { version = "1.10.5", optional = true }
+serde = "1.0"
+serde_json = { version = "1.0", optional = true }
+base64 = { version = "0.22.1", optional = true }
+bytes = { version = "1", optional = true }
+
+thiserror = "2"
+pastey = "0.2.1"
+
+[dev-dependencies]
+criterion = { version = "0.5.1", features = ["html_reports"] }
+serde_bytes = "0.11.14"
+dhat = { version = "0.3.3" }
+# The serialized compiled form is postcard of the native AST.
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+
+[[bench]]
+name = "runtime"
+harness = false
+
+[[bench]]
+name = "parser"
+harness = false
+
+[[test]]
+name = "macros"
+path = "tests/macros.rs"
+required-features = ["parser"]
+
+[[test]]
+name = "wire"
+path = "tests/wire.rs"
+required-features = ["parser", "serde-ast"]
+
+[features]
+default = ["regex", "chrono", "ext_encoders", "parser"]
+# ---- fork additions -------------------------------------------------------
+# `parser` (default ON): the expression parser. Gates antlr4rust, the
+# `parser` backends (`gen`/`parse`/`parser`/`pratt_parser`), the macro
+# expander, `Program::compile`, `Env::compile` / `Env::parser` /
+# `Env::add_macro`. Without it the crate is a pure interpreter: build an AST
+# by hand or deserialize one (`Program::from_ast` / `wire::Compiled`).
+parser = ["dep:antlr4rust", "dep:lazy_static"]
+# `serde-ast`: the serialized compiled form. `Serialize`/`Deserialize` on the
+# native AST plus the versioned [`wire::Compiled`] wrapper (see
+# `src/wire.rs`). Consumed here via postcard (dev-dependency); any serde
+# format works. This is the primary compiled form -- there is no protobuf
+# support (see FORK.md).
+serde-ast = ["serde/derive"]
+# ---- upstream features ----------------------------------------------------
+parser_pratt = ["parser"]
+bytes = ["dep:bytes"]
+json = ["dep:serde_json", "dep:base64"]
+regex = ["dep:regex"]
+chrono = ["dep:chrono", "dep:chrono-tz", "dep:nom"]
+ext_encoders = ["dep:base64"]
+dhat-heap = [] # if you are doing heap profiling

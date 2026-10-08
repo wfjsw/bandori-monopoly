@@ -95,7 +95,6 @@ function state(over: Partial<MatchState> = {}): MatchState {
     mortgaged: [false, false, false, false],
     embers: [0, 0, 0, 0],
     marks: [],
-    tileColors: [0, 0, 0, 0],
     eventDeck: 0,
     eventTop: [],
     eventDiscard: [],

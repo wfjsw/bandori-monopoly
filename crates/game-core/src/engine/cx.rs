@@ -5,6 +5,12 @@
 //! log, `ask` returns it; otherwise it halts the routine with [`Halt::Ask`]. The host
 //! then shows the prompt, collects the answer, and re-runs the routine from the same
 //! snapshot with the longer log -- deterministic replay instead of coroutines.
+//!
+//! **Simulation mode** ([`AnswerProvider`]): with a provider installed and the
+//! replay log exhausted, `ask` calls the provider and returns the answer at
+//! once instead of halting -- one forward pass per routine, no replay
+//! amplification (`docs/BOT.md` §3.2). The live match keeps the halt/replay
+//! model; the default (no provider) path is byte-identical.
 
 use serde::{Deserialize, Serialize};
 
@@ -192,6 +198,117 @@ impl Reply {
     }
 }
 
+/// Simulation-mode answer source (`docs/BOT.md` §3.2). Installed on a [`Cx`];
+/// every [`Cx::ask`] whose replay-log entry is missing calls it instead of
+/// halting the routine.
+///
+/// The live match never installs one (the halt/replay model is what recordings
+/// and the server protocol ride). A simulation installs the ISMCTS tree policy
+/// during descent and the rollout policy afterwards; both answer inline, so a
+/// routine runs once per simulation instead of once per prompt.
+pub trait AnswerProvider {
+    /// Answer `ask` inline. `ask.ai` / `ask.ai_picked` / `ask.worth` are
+    /// already filled in ([`Cx::fill_ai`]), so the default answer is the seat
+    /// heuristic -- exactly what the engine's bot schedule would have applied.
+    ///
+    /// Returning `None` keeps the default halt path (the host shows the prompt
+    /// and the routine replays with the answer appended). Use it for the
+    /// handful of prompts the tree wants to branch on; everything else should
+    /// be answered inline.
+    fn answer(&mut self, ask: &Ask) -> Option<Answered>;
+}
+
+/// A provider that always answers with the seat heuristic already on the
+/// [`Ask`] (`ai` / `ai_picked` / `worth`, i.e. what `tick_live` would apply on
+/// the bot schedule). The rollout policy; also the right default for every
+/// seat the tree does not abstract.
+pub struct HeuristicProvider;
+
+impl AnswerProvider for HeuristicProvider {
+    fn answer(&mut self, ask: &Ask) -> Option<Answered> {
+        Some(heuristic_answer(ask))
+    }
+}
+
+/// The answer the engine's bot schedule would land on for `ask` -- the
+/// standard seat's `tick_live` fill, with the auction's bidding loop resolved
+/// in one shot (each seat nudges the minimum once; the last bidder wins).
+pub fn heuristic_answer(ask: &Ask) -> Answered {
+    let players = &ask.view.players;
+    let n = players.len();
+    if ask.view.kind == "auction" {
+        return heuristic_auction(ask);
+    }
+    let picks = matches!(ask.view.kind.as_str(), "pick" | "mortgage");
+    let max = if ask.view.kind == "tile" {
+        ask.view.items.len() as i32
+    } else {
+        ask.view.options.len() as i32 - 1
+    };
+    let mut answers = Vec::with_capacity(n);
+    for k in 0..n {
+        if picks {
+            answers.push(0);
+        } else {
+            let v = ask.ai.get(k).copied().unwrap_or(AI_UNSET);
+            answers.push(if v == AI_UNSET {
+                ask.view.fallback
+            } else {
+                v.clamp(0, max.max(0))
+            });
+        }
+    }
+    let picked = ask
+        .ai_picked
+        .iter()
+        .take(n)
+        .find(|p| !p.is_empty())
+        .cloned()
+        .unwrap_or_default();
+    Answered {
+        answers,
+        picked,
+        bid: 0,
+        bidder: -1,
+    }
+}
+
+/// One-shot the auction's bid loop: each seat still in raises the minimum once
+/// (the standard bot's `min + 100` middle of its `+0..=+200` nudge) while that
+/// stays under its ceiling, and passes otherwise. The last bidder wins at the
+/// bid it made -- the shape `auction_tile` reads (`r.a.bidder` / `r.a.bid`).
+fn heuristic_auction(ask: &Ask) -> Answered {
+    let players = &ask.view.players;
+    let n = players.len();
+    let mut answers = vec![0i32; n];
+    let mut bid = 0i32;
+    let mut bidder = -1i32;
+    let mut changed = true;
+    while changed {
+        changed = false;
+        for k in 0..n {
+            if answers[k] != 0 || bidder == players[k] {
+                continue;
+            }
+            let min = if bid <= 0 { 100 } else { bid + 100 };
+            let cap = ask.worth.get(k).copied().unwrap_or(0);
+            if min > cap {
+                answers[k] = 1;
+            } else {
+                bid = cap.min(min);
+                bidder = players[k];
+            }
+            changed = true;
+        }
+    }
+    Answered {
+        answers,
+        picked: vec![],
+        bid,
+        bidder,
+    }
+}
+
 /// Routine context: the world being mutated, read-only game data, card rules, and
 /// the replay cursor.
 pub struct Cx<'a> {
@@ -200,6 +317,8 @@ pub struct Cx<'a> {
     pub(crate) rules: &'a dyn CardRules,
     answers: &'a [Answered],
     cursor: usize,
+    /// Simulation-mode answers (see [`AnswerProvider`]). `None` = halt/replay.
+    provider: Option<&'a mut dyn AnswerProvider>,
     /// Seconds of presentation time requested since the last answered prompt; the
     /// host waits this long before the next automatic step.
     pub(crate) delay: f32,
@@ -262,6 +381,13 @@ impl<'a> Cx<'a> {
         std::mem::replace(&mut self.w, w)
     }
 
+    /// Swap the live world with `other` in place -- zero-copy, for the
+    /// card-rules inline host (`docs/BOT.md` §3.2) which runs a host request
+    /// against the guest's own world copy and hands it back afterwards.
+    pub fn swap_world_ref(&mut self, other: &mut World) {
+        std::mem::swap(&mut self.w, other);
+    }
+
     /// Adopt the turn-ctx **policy** another world set up (build/buy discounts,
     /// free buy, fixed roll, ...) without taking its progress counters. A host
     /// routine runs against the live world and is not replayed, so a card's
@@ -273,9 +399,14 @@ impl<'a> Cx<'a> {
         t.build_discount = f.build_discount;
         t.build_discount_layers = f.build_discount_layers;
         t.build_cost_pct = f.build_cost_pct;
-        t.buy_discount = f.buy_discount;
-        t.free_buy = f.free_buy;
-        t.raze_on_buy = f.raze_on_buy;
+        // `linger` must cross `adopt_turn_policy` (`docs/PURCHASE.md`).
+        if !f.lingering.is_empty() {
+            for l in &f.lingering {
+                if !t.lingering.iter().any(|x| x == l) {
+                    t.lingering.push(l.clone());
+                }
+            }
+        }
         t.fixed_roll = f.fixed_roll;
         t.extreme = f.extreme;
         t.play_from_hand = f.play_from_hand;
@@ -424,12 +555,27 @@ impl<'a> Cx<'a> {
             rules,
             answers,
             cursor: 0,
+            provider: None,
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
             move_start: -1,
             guest_overlays: Vec::new(),
         }
+    }
+
+    /// Simulation mode: answer every prompt through `p` instead of halting
+    /// (`docs/BOT.md` §3.2). The default path (no provider) is unchanged.
+    pub fn with_provider(mut self, p: &'a mut dyn AnswerProvider) -> Self {
+        self.provider = Some(p);
+        self
+    }
+
+    /// Is a provider installed? The card-rules bridge only runs its inline
+    /// ask / host-request path when this is true, so the live match's
+    /// halt/replay is byte-identical.
+    pub fn has_provider(&self) -> bool {
+        self.provider.is_some()
     }
 
     /// Raise a prompt. Returns the logged answer, or halts the routine.
@@ -440,6 +586,11 @@ impl<'a> Cx<'a> {
     /// the host's bot schedule (`tick_live`) just reads them. The fill runs on
     /// the replay too (the ask is rebuilt from the same snapshot), so the world
     /// RNG advances identically on both passes.
+    ///
+    /// Order: the replay log first (a re-run must reproduce the recorded
+    /// answers exactly), then the [`AnswerProvider`] if one is installed, and
+    /// only then the halt. A provider that returns `None` falls through to the
+    /// halt, so the tree can still branch on the prompts it cares about.
     pub fn ask(&mut self, mut ask: Ask) -> Flow<Reply> {
         self.w.ask_seq += 1;
         ask.view.id = self.w.ask_seq;
@@ -452,6 +603,16 @@ impl<'a> Cx<'a> {
                 fallback: ask.view.fallback,
                 a: a.clone(),
             });
+        }
+        if let Some(p) = self.provider.as_mut() {
+            if let Some(a) = p.answer(&ask) {
+                self.delay = 0.0;
+                return Ok(Reply {
+                    players: ask.view.players,
+                    fallback: ask.view.fallback,
+                    a,
+                });
+            }
         }
         self.w.st.prompt = ask.view.clone();
         Err(Halt(HaltKind::Ask(Box::new(ask))))

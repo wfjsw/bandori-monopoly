@@ -29,10 +29,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
-        On::Play(Some(can_buy), buy_one),
-        On::Hook(&[HookKind::DeckBeforeGame], |_| true, deck_before_game),
-        On::Hook(&[HookKind::Drew], drew_guard, drew),
-        On::Hook(&[HookKind::SettleAfter], |_| true, settle_after),
+        On::Play(Some(can_buy), buy_one, ""),
+        On::Hook(&[HookKind::DeckBeforeGame], None, deck_before_game, ""),
+        On::Hook(&[HookKind::Drew], Some(drew_guard), drew, ""),
+        // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
+        // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
+        // window. A field card that replaces the body skips this entry.
+        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
     ],
 )
 // 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous
@@ -90,7 +93,7 @@ fn drew_guard(player_id: i32) -> bool {
 /// 「每次抽牌时」 is one crystal per raise.
 fn drew(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() < 5 {
-        ctx::add_crystals(1, 5);
+        ctx::add_crystals(1, 5)?;
     } else {
         ctx::inc_slot(player_id, SLOT_X, 1);
         ctx::log(
@@ -106,8 +109,11 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardDreamAhead.SettleAfter`: someone else settles on an owned deed --
 /// they pay the owner `fans × X + min(X×30, 300)`.
-fn settle_after(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::SettleAfter || !ctx::is_placed() {
+/// 规则书[持续]（3）: 「…[结算]时额外[支付]」 -- 行动阶段 15
+/// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
+/// replace (`trigger::cancelled()`) skips it.
+fn settle_body(player_id: i32) -> card_sdk::Asked {
+    if trigger::kind() != TriggerKind::SettleBody || trigger::cancelled() || !ctx::is_placed() {
         return Ok(());
     }
     let mover = trigger::player_id();
@@ -189,7 +195,7 @@ fn buy_one(player_id: i32) -> card_sdk::Asked {
     if !ctx::card_buy(player_id, t) {
         return Ok(());
     }
-    ctx::add_crystals(-3, 0);
+    ctx::add_crystals(-3, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("dream_ahead_bought")).tile("tile", t),

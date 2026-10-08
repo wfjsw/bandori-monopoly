@@ -21,8 +21,11 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const CHISATO_FRANK: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
-        On::Hook(&[HookKind::PayChoose], mine, on_gain),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
+        // so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the per-share
+        // `payChoose`.
+        On::Hook(&[HookKind::PayTotalAdd], Some(mine), on_gain, ""),
     ],
 );
 
@@ -44,7 +47,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     if !ctx::in_band(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
@@ -79,8 +82,8 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
     if y < 1 {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
+    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
     // 「此次获得的分摊前数量增加Y×100」
     ctx::trigger::set_pay_amount(amount + y * 100);
     if ctx::in_band(player_id, "Pastel✽Palettes") {
@@ -93,8 +96,8 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
             }
             let down = ctx::tok(p, FANS_DOWN).min(y);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX);
-                ctx::add_tok(p, FANS_UP, down, i32::MAX);
+                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
+                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
                 y -= down;
             }
         }
@@ -104,8 +107,8 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
                 continue;
             }
             if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX);
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX);
+                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
+                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
             }
         }
     }

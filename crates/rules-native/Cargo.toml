@@ -1,0 +1,40 @@
+[package]
+name = "rules-native"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "The card ruleset linked as plain native Rust for the bot's simulations (docs/BOT.md B1). Advisory only -- the sandboxed WasmRules stays authoritative for real matches."
+
+[dependencies]
+game-core = { path = "../game-core" }
+game-rules = { path = "../game-rules" }
+card-sdk = { workspace = true, features = ["guest"] }
+postcard = { version = "1", default-features = false, features = ["alloc"] }
+sha2 = { workspace = true }
+# The shipped ruleset as an rlib (same crates the wasm module links).
+# The shipped ruleset, crate by crate (same list `card-all` aggregates for the
+# wasm module -- kept explicit here so the native link does not depend on the
+# cdylib's crate-type dance).
+card-ag = { path = "../../rules/cards/card-ag" }
+card-crychic = { path = "../../rules/cards/card-crychic" }
+card-general = { path = "../../rules/cards/card-general" }
+card-hhw = { path = "../../rules/cards/card-hhw" }
+card-morfonica = { path = "../../rules/cards/card-morfonica" }
+card-mujica = { path = "../../rules/cards/card-mujica" }
+card-mygo = { path = "../../rules/cards/card-mygo" }
+card-pp = { path = "../../rules/cards/card-pp" }
+card-ppp = { path = "../../rules/cards/card-ppp" }
+card-ras = { path = "../../rules/cards/card-ras" }
+card-roselia = { path = "../../rules/cards/card-roselia" }
+card-sumimi = { path = "../../rules/cards/card-sumimi" }
+skill-bands = { path = "../../rules/skills/skill-bands" }
+skill-characters = { path = "../../rules/skills/skill-characters" }
+rules-tiles = { path = "../../rules/tiles" }
+rules-events = { path = "../../rules/events" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[features]
+# Measurement counters, same shape as game-rules' `bot-cost`.
+bot-cost = ["game-rules/bot-cost"]

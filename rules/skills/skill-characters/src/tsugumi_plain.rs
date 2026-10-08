@@ -27,22 +27,19 @@ const OWED: &str = "skill.tsugumiPlain.owed";
 pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
-        On::Hook(&[HookKind::RollPlan], mine, on_plan),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(afterglow), tick, ""),
+        On::Hook(&[HookKind::RollPlan], None, on_plan, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(3, legacy_mine)]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")
 }
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -61,7 +58,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     }
     Ok(())
 }
@@ -97,7 +94,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「使本次移动反向」 + arm the deferred half.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tsugumi_plain_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tsugumi_plain_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

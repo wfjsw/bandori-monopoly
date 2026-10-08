@@ -19,9 +19,9 @@ const TURNS: &str = "turns";
 pub const SURPRISE_DUEL: CardDef = CardDef::new(
     "event:意外的对邦",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::RollPlan], always, on_plan),
-        On::Hook(&[HookKind::TurnStartBefore], always, on_turn_start),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::RollPlan], Some(always), on_plan, ""),
+        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
     ],
 );
 

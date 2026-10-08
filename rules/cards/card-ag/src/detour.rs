@@ -16,12 +16,23 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play(Some(cant_play), play),
-        On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract),
+        On::Play(Some(cant_play), play, ""),
+        // G4: kind (MoveRoll) is the category; `mine` + move fields are the
+        // condition. Residual guard deleted -- nothing left.
+        On::Counteract(&[ChainKind::MoveRoll], None, counteract, "actor == owner && move.roll != null && move.kind != Teleport"),
         On::RollPlan(next_roll),
         On::AtEnd(clear_no_reward),
     ],
-);
+)
+    .legacy(&[(1, legacy_can_counteract)]);
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
+    trigger::kind() == TriggerKind::MoveRoll
+        && trigger::player_id() == player_id
+        && trigger::move_roll().is_some()
+        && trigger::move_kind() != Some(MoveKind::Teleport)
+}
 
 /// C# `CardDetour.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -29,15 +40,6 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // move, so the C# `H.MoveWhyNot` gate applies (own turn, main move still
     // available, turn's move not skipped).
     ctx::cant_move(player_id)
-}
-
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书(1): 「此卡可作为反击使用」 -- C# counteracts on the player's own non-teleport
-    // move roll (`t.Kind == "moveRoll" && t.Seat == seat && !t.Move.Teleport`).
-    trigger::kind() == TriggerKind::MoveRoll
-        && trigger::player_id() == player_id
-        && trigger::move_roll().is_some()
-        && trigger::move_kind() != Some(MoveKind::Teleport)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {

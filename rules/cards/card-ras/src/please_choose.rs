@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::Counteract(&[ChainKind::Settle], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::Settle], Some(can_counteract), counteract, "")],
 );
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a

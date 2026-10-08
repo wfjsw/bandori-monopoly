@@ -98,8 +98,13 @@ pub struct MoveCtx {
     pub teleport_to: i32,
     /// Does the move settle where it lands (`settleBefore` -> `settle` -> `land`
     /// -> `settleAfter`)? Clear it to prevent settle at all -- the player still
-    /// moves. A walk still [经过]-resolves the tiles it travels; a teleport with
-    /// this clear resolves nothing.
+    /// moves. 其他规则注意事项 1.2: 「是否[结算]」 gates **only** the settle
+    /// stages (14–15). A walk still [经过]-resolves the tiles it travels, and
+    /// (R2 / M6a, `SETTLE-STAGES.md` §6) a teleport still raises `passTile` +
+    /// `passPlayer` at its destination -- 专名词 9 gives the teleport a [路径]
+    /// of just the endpoint, and B41 fires [经过],[重叠] there before the
+    /// (gated) [结算]. The movement tail (`moveAfter` / `moveResolved`) runs
+    /// either way.
     pub resolve: bool,
 
     // -- the dice ------------------------------------------------------------

@@ -12,7 +12,7 @@ use card_sdk::abi::MoveKind;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TO_YOU_FAR_AWAY: CardDef =
-    CardDef::new("PPP:献给远方的你", &[On::Play(Some(cant_play), play)]);
+    CardDef::new("PPP:献给远方的你", &[On::Play(Some(cant_play), play, "")]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardToYouFarAway.WhyNot`: refuses with 「没有别的玩家」 when `H.Others` is

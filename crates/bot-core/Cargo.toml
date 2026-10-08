@@ -1,0 +1,12 @@
+[package]
+name = "bot-core"
+version.workspace = true
+edition.workspace = true
+description = "Target-independent bot core (docs/BOT.md B4): hidden-state determinizer + ISMCTS over the public Match view. Never reads a World/seed/other hands."
+
+[dependencies]
+game-core = { path = "../game-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]

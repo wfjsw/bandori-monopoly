@@ -28,6 +28,9 @@ structured-zstd = { version = "0.0.58", default-features = false, features = ["h
 # also builds for wasm32. Encode here too -- the size-comparison test and the
 # gzip sniffing round trip need it.
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+# The engine-bundle id recipe (`record::bundle_id`, `docs/REPLAY.md` §9) --
+# one sha256 implementation for every host that stamps a record.
+sha2 = { workspace = true }
 
 # Native encode: the reference binding at level 1, the strictest witness
 # available for the "standard zstd frames" claim. Off on wasm32 --

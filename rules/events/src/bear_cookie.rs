@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::Play(None, play)]);
+pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::Play(None, play, "")]);
 
 /// 「技能中含有火罐」 -- the player's character or band skill text mentions 「火罐」.
 fn skill_mentions_fire_pot(p: i32) -> bool {
@@ -52,7 +52,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             continue;
         }
         // 「补充X个火罐」
-        ctx::gain_fire(p, x, &Msg::new("log.event.bear_cookie_fill"));
+        ctx::gain_fire(p, x, &Msg::new("log.event.bear_cookie_fill"))?;
         // 「并支付X次1000资金」 -- X lots of 1000, i.e. X*1000.
         ctx::pay(p, x * 1000, &Msg::new("log.event.bear_cookie_pay"))?;
         ctx::log(

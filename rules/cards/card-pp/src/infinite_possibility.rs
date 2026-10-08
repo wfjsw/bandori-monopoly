@@ -22,8 +22,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",
     &[
-        On::Play(Some(can_swap), swap),
-        On::Hook(&[HookKind::Drew], drew_guard, drew),
+        On::Play(Some(can_swap), swap, ""),
+        On::Hook(&[HookKind::Drew], Some(drew_guard), drew, ""),
     ],
 );
 
@@ -48,10 +48,10 @@ fn drew(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     if ctx::crystals() < 4 {
-        ctx::add_crystals(1, 4);
+        ctx::add_crystals(1, 4)?;
     } else {
         let c = ctx::crystals();
-        ctx::add_crystals(-c, 0);
+        ctx::add_crystals(-c, 0)?;
         ctx::add_band_crystals(player_id, 1, i32::MAX);
         ctx::log(
             player_id,

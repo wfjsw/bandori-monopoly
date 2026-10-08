@@ -20,17 +20,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::RollAfter], mine, on_roll),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -45,7 +42,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("raise_effort_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("raise_effort_gain")))?;
     Ok(())
 }
 
@@ -65,7 +62,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("raise_effort_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("raise_effort_spend")))? {
         return Ok(());
     }
     // 「使用火罐进行掷骰」 -- the reroll is fire-funded, so `roll_ask` with

@@ -22,9 +22,9 @@ const REMAIN: &str = "remain";
 pub const FIX_NOTE: CardDef = CardDef::new(
     "event:修复公告",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::BuildBefore], always, before_build),
-        On::Hook(&[HookKind::BuildAfter], always, after_build),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::BuildBefore], Some(always), before_build, ""),
+        On::Hook(&[HookKind::BuildAfter], Some(always), after_build, ""),
     ],
 );
 
@@ -88,9 +88,6 @@ fn is_target(t: i32) -> bool {
 /// charged against this build (`ctx::set_build_discount`, the same surface
 /// 「加盖房屋时半价」 uses).
 fn before_build(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::BuildBefore {
-        return Ok(());
-    }
     let t = trigger::tile();
     if !is_target(t) {
         return Ok(());
@@ -110,9 +107,6 @@ fn before_build(_owner: i32) -> card_sdk::Asked {
 /// 规则书: 「累计在上述格子上加盖后将此卡移除」 -- each committed build on a
 /// designated tile counts down; at zero the card leaves.
 fn after_build(_owner: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::BuildAfter {
-        return Ok(());
-    }
     let t = trigger::tile();
     if !is_target(t) {
         return Ok(());

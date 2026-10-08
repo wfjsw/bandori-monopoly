@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const TEARS: CardDef = CardDef::new("event:泪水的含义", &[On::Play(None, play)]);
+pub const TEARS: CardDef = CardDef::new("event:泪水的含义", &[On::Play(None, play, "")]);
 
 /// 「同色」 -- the two players share a colour group on their deeds.
 /// TODO(规则书): 「同色地契」 is one colour in common, or the same single deed

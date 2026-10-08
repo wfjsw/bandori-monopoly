@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const YOUR_LIGHT: CardDef = CardDef::new(
     "Mor:你的光芒将照亮前路",
-    &[On::Play(Some(cant_play), your_light)],
+    &[On::Play(Some(cant_play), your_light, "")],
 );
 
 fn cant_play(player_id: i32) -> Option<Msg> {

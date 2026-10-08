@@ -18,9 +18,9 @@ const SLOT_BLOCKED: &str = "summer_camp_blocked";
 pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
-        On::Play(None, summer_camp),
+        On::Play(None, summer_camp, ""),
         On::Gate(&[GateKind::Untargetable], untargetable),
-        On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
+        On::Hook(&[HookKind::TurnStart], None, turn_start, ""),
     ],
 );
 
@@ -63,12 +63,10 @@ fn untargetable(player_id: i32) -> card_sdk::Asked {
 /// `Fx.TurnStart` (C# `CardSummerCamp.TurnStart` -> `End`): the effect ends at
 /// the owner's next turn start; draw 1 when nothing was negated.
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::TurnStart
-        || trigger::player_id() != player_id
-        || !ctx::is_placed()
-    {
+        if trigger::player_id() != player_id
+        || !ctx::is_placed() {
         return Ok(());
-    }
+        }
     // 规则书: 「当此卡效果结束」 -- C# `H.Unplace(this, "discard", "效果结束了")`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

@@ -16,7 +16,10 @@
   the logged answer, or halts the routine; the host shows the prompt and later re-runs
   the routine from its starting snapshot with the answer appended. Card effects
   (`ruleset.wasm`) use the same model, so engine prompts and card prompts are one
-  mechanism.
+  mechanism. **Simulation mode** (`docs/BOT.md` §3.2) installs an
+  `AnswerProvider` on the `Cx`: every ask whose log entry is missing is answered
+  inline instead of halting, so a routine runs once per simulation. The live match
+  never installs one.
 
 ## Structure
 
@@ -29,6 +32,15 @@
 | `ai.rs` | bot decisions: the standard policy (same thresholds as the C#) and the chaos one |
 | `setup.rs` | turn order, ban (Ranked), pick, deck (bots take the deck book entry) |
 | `rules.rs` | `CardRules` — where card/event content plugs in; `StubRules` = no effects |
+
+The card content itself lives in `game-rules`: `wasm_rules.rs` is the
+`CardRules` bridge (`RulesBridge<M>`, with `WasmRules = RulesBridge<Ruleset>`
+for the sandboxed modules and `rules-native`'s `NativeRules` for the bot's
+sandbox-free simulations — `docs/BOT.md` §3.1). The `bandori` host imports
+are backend-neutral functions in `game-rules/src/hostfns.rs` over a
+`HostCtx` (guest memory + fuel + nested calls); `host.rs`'s linker and
+`rules-native`'s `#[no_mangle]` shims both call them, so the two cannot
+drift in behaviour.
 
 Routines: `Opening`, `NextTurn`, `Ai(player_id)`, `Act(player_id, command)`, `Leftovers(deeds)`.
 
@@ -120,6 +132,28 @@ disconnects, time-outs) while a routine is paused would steal an id the replay l
 hands to a different event. Those changes are queued and applied once the routine
 commits.
 
+### Negative finals reverse (Q3, 2026-10-07)
+
+Adjustments compose freely -- the per-stage `max(0)` clamps are gone. When the
+counteraction chain has resolved and the final amount is **negative**, the
+original payment is adjusted to 0 and a **new** payment starts with the
+participants swapped and the absolute value, running the full pipeline
+(its own modifiers, counteraction windows, Q1 shortfall → mortgage →
+bankruptcy). Applies to one-sided movements too: a negative 「[获得]」 becomes
+a 「[消耗]」 and vice versa. A child that is itself driven negative reverses
+again, capped at `MAX_PAY_REVERSALS = 8` (logged). The `pay` settlement window
+honours `set_cancelled()` (V5).
+
+### Marker windows and ownership (2026-10-07)
+
+`markerSpend` / `markerGain` (TriggerKind 92/93) open **before** the markers
+move; a cancelled link moves nothing. Marker costs otherwise keep today's
+timing (spent as the effect resolves; nothing spent if the effect is negated).
+A marker is owned by the **rule that creates it**, wherever its copies sit
+(`World::marker_owner`) -- `skill:要乐奈` owns every 抹茶芭菲. Bankruptcy
+clears everything the player holds plus every marker their rules own,
+wherever it sits; neutral board marks ([CP点], owner -1) stay.
+
 ### Money pipeline depth
 
 The rulebook (「[支付]时可以打出」) opens a [反击] window for every payment with
@@ -129,6 +163,107 @@ that a hook cannot re-trigger on its own movement: while card X's hook is
 running, nested money pipelines skip X (`Cx::reentrant_hooks`). A safety cap
 (`MAX_MONEY_DEPTH = 32`) exists only to catch genuine runaway recursion and
 **traps loudly** (panics) rather than settling silently.
+
+### The pre-split stage (「分摊前」)
+
+A payment **command** runs a command-wide modifier stage on its total before
+any 「[分摊]」 divides it into shares: `payTotalAdd` -> `payTotalMul` ->
+`payTotalCancel`, composing (`PIPELINE-AUDIT` Q2). This is the 「分摊前」 figure
+of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)) and 「此次获得的分摊前数量
+增加Y×100」 (白鹭千圣 (2)); both hook `payTotalAdd`. The per-share stages
+(`payAdd` / `payMul` / `payChoose` / `payAt`) still run on each settled leg.
+
+A single-pair payment's command total *is* its amount, so the same three stages
+run inside `money_inner` -- after the `effect` declaration (a counter still
+hears the **declared** amount) and before the per-share stages. A 「[分摊]」 body
+calls `ctx::pay_total` first, divides the answer, and runs each share through
+`ctx::pay_leg` (`Pay::total_stage = false`, so the legs do not re-run the total
+stage). `ctx::split_pay` is the 「[分摊][支付]」 convenience (ceil10 share).
+
+### Self-payment 「A[支付]A」
+
+Not a no-op (`PIPELINE-AUDIT` Q4). The counteraction windows run in full -- a
+counteraction may redirect the payee -- and the affordability / raise-funds /
+bankruptcy path applies exactly as to any other payment (规则书 L16 「当玩家
+无法支付某笔支出时（包括抵押）」). Only the **net balance effect** is zero when
+the pair settles: the debit and the credit cancel. Pinned by
+`rb_money::self_payment_*`.
+
+### Effect ordering (the lookup-group key)
+
+Two effect sources answering the same window are ordered by an explicit
+deterministic key -- `(lookup group, source order, declaration order)`
+(`PIPELINE-AUDIT` Q5, `game-rules/src/wasm_rules.rs` `effect_order_key`):
+
+* **lookup group** -- `status` -> `band` -> `character` -> `field` -> `hand` ->
+  `discard` -> `deck` -> `removed` (`LookupGroup`; `Board` for our neutral
+  `tile:*` / `event:*` / `mark:*` rules, after the player groups).
+* **source order** -- the candidate's index in that group's authoritative state
+  list: player-major then placement order for the field-ish groups
+  (`players[p].field`), the hand `Vec` index for `hand`.
+* **declaration order** -- the entry index within the source's manifest `on`
+  list.
+
+No `HashMap` iteration, no clock: the key is a pure function of the
+authoritative state lists and the manifest. Field hooks before the hand
+counteraction ring is already group `Band`/`Character`/`Field` < `Hand`, so the
+dispatch's phase split is the key's own order and wiring it changes nothing
+(the sim's event counts are identical with and without the sort -- see
+`PIPELINE-AUDIT` §7 Q5). One recorded deviation: `bind_skills` places a
+player's character skill before their band skill, so within one player's field
+the source order is character -> band while the group order says band ->
+character; the key classifies them correctly and the stable sort leaves the
+outcome alone.
+
+### Move / settle stage model (`SETTLE-STAGES.md` §7, ABI v43)
+
+Every move -- walk or teleport, main or card-driven, settling or not -- runs
+the same tail. The plan (`turn.plan`) is the authoritative move *shape*; the
+running `MoveCtx` carries the engine's run fields. `moveBefore` folds only the
+window's plan writes into the run (`fold_plan_delta`), never the other way
+round (a blanket copy would wipe a `moveRoll` counteraction's `pay_factor`).
+
+```
+moveBefore         「移动前」  plan fixed, nothing walked. Counteractions that
+                               cancel or alter the move go here.
+passBefore/passTile/pass       行动阶段 12 「[经过]」   (per step / endpoint)
+passPlayer                     行动阶段 13 「[重叠]」   (end tile only)
+moveAfter          「移动后」/「主要移动结束时」/「[移动终点]」
+                               after 重叠, before the settle stages, for every
+                               completed move including 「不触发结算」 (R1).
+settleBefore       行动阶段 14  「[触发结算]前」. Q7: a relocation here redirects
+                               the settle and re-runs this window at the new
+                               tile, capped at MAX_SETTLE_REDIRECTS = 8.
+settle/settleBody/settleAfter/tileResolved   行动阶段 15–16 (only if the move
+                               settles). A relocation inside these does NOT
+                               re-target -- the landed tile finishes.
+moveResolved       行动阶段 16  「主要移动阶段后」 (always, strictly last).
+teleported         teleport-specific, after the settle (or at once if none).
+```
+
+A 「不[触发结算]」 teleport still fires `passTile` + `passPlayer` at its
+destination (R2 / M6a): 专名词 9 gives the teleport a [路径] of just the
+endpoint, B41 fires [经过],[重叠],[结算] there, and 其他规则注意事项 1.2 removes
+only the [结算].
+
+### Terminal `<thing>Resolved` hooks
+
+`tileResolved` (after `settleAfter`, and after a cancelled settle),
+`moveResolved` (after a move and any settle it asked for) and `bankruptResolved`
+(after the leftover auctions) are the terminal points a 「结算完成时」 card
+hooks (`PIPELINE-AUDIT` Q6). `payAfter` / `buyAfter`+`bought` / `eventAfter`
+are already the terminals of their pipelines and get no `<thing>Resolved`
+companion.
+
+### Bankruptcy retires the seat (B2 / B3)
+
+`remove_from_game` clears the seat's `field` (角色卡 / 乐队卡 / every 「[持续]」
+card, the bound `skill:*` instances included) and `actions` -- 规则书 L81
+「所有其正在生效的卡，技能效果停止生效」 -- and the hook / buy-hook dispatch
+skips `out()` seats. The 「标志物」 (`s.tokens`: 火罐 / 奇迹水晶 / P✽P粉丝 ...) stay:
+L81's removal list is cards and skill effects, not the marker vocabulary. The
+seat is marked dead **before** `bankruptBefore`, so the dying player's own
+sources cannot join that window (L16/L17/L81 read together).
 
 ### 「支付减半」 rides `payMul`
 
@@ -143,6 +278,41 @@ hand card that shapes a settle and then leaves the field). A purchase
 (`buy` / `build`), a forced purchase (rulebook 「此次购买的价格不受任何资金变动
 效果影响」) and a print (`gain`) are never scaled. See
 [TILES.md](TILES.md) 「支付减半」 wording comparison.
+
+### The purchase surface (`docs/PURCHASE.md`)
+
+Eligibility, price and the deal are decided by the rules crate; the engine keeps
+the generic mechanics (`purchase.rs`):
+
+* **Quote.** `CardRules::buy_quote(w, data, q)` returns `base_quote` (land +
+  houses; 2× for `Force`) for `StubRules`. `WasmRules` overrides it and runs the
+  `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` hooks in **pure guard mode**
+  against a world copy -- the `cant_play` shape, so a quote never mutates the
+  match and never prompts -- but only when a hooking instance exists. The
+  commit re-quotes, so quote == charge. It takes the world by reference, so the
+  view's `st.buy_price` preview asks without cloning.
+* **Gate.** `BuyGate` runs for every `BuyKind` (Land / Agent / Card / Force /
+  Acquire / Auction); a `set_cancelled` refuses the buy. `buyBefore` cancel is
+  also honoured. rana_parking's 「该次传送不可进行地契购买」 is a **native** gate
+  on the Land offer: `plan.no_buy`.
+* **Assign.** `assign_deed` writes owner / houses / mortgage in one place;
+  `BuyAssign` hooks rewrite the deal before commit, on every kind (land,
+  agent, card, force, acquire, auction). Force-buy keeps the mortgage
+  (「获得的地契仍为抵押状态」).
+* **Preview.** `st.buy_price` / `st.build_cost` are written from the quote at
+  the END step, `-1` otherwise. `MatchPrompt.price` / `prices[]` carry the
+  quoted prices on buy / force_buy / agent prompts. The gates (`buyable_here`,
+  `why_not_act "buy"`) and the AI (`ai_wants_buy` / `ai_agent_choice`) read the
+  same quote, so a player who can afford only the discounted price is no longer
+  refused.
+* **`linger`.** A hand card binds a turn-scoped instance in `TurnCtx.lingering`
+  (cleared at turn start, carried by `adopt_turn_policy`). It is the hand-card
+  home for 「本回合」 effects: the def's own `BuyAdd` / `BuyMul` / `BuySet` /
+  `BuyAssign` hooks reach the buy pipeline, and a `set_prop` made before
+  `ctx::linger` lands on the instance's props (`prop::NO_BUILD`). The lingering
+  instances hear the same field-hook dispatch as placed cards and board rules.
+  It replaces the retired `TurnCtx` flags (`buy_discount` / `free_buy` /
+  `raze_on_buy`) and the per-player `noBuild` scratch key.
 
 ### The guest's pending state, overlaid (not persisted)
 

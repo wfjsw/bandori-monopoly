@@ -28,13 +28,14 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], |_| true, at_start),
+        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
         // （2） replaces the draw, so it runs at the per-card **before** point.
-        On::Hook(&[HookKind::DrewBefore], mine, on_draw),
+        On::Hook(&[HookKind::DrewBefore], None, on_draw, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -46,7 +47,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     if !ctx::in_band(player_id, "Pastel✽Palettes") {
         return Ok(());
     }
-    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
             continue;
@@ -78,8 +79,8 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let mut y = y;
-    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX);
-    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX);
+    ctx::add_tok(player_id, FANS_UP, -y, i32::MAX)?;
+    ctx::add_tok(player_id, FANS_DOWN, y, i32::MAX)?;
     // 「观看卡组顶端Y+1张卡（卡组数量不足Y+1则观看全部卡组）」
     let deck = ctx::cards_in(player_id, CardPile::Deck);
     let n = deck.len().min((y + 1) as usize);
@@ -122,8 +123,8 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
             }
             let down = ctx::tok(p, FANS_DOWN).min(y);
             if down > 0 {
-                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX);
-                ctx::add_tok(p, FANS_UP, down, i32::MAX);
+                ctx::add_tok(p, FANS_DOWN, -down, i32::MAX)?;
+                ctx::add_tok(p, FANS_UP, down, i32::MAX)?;
                 y -= down;
             }
         }
@@ -133,8 +134,8 @@ fn on_draw(player_id: i32) -> card_sdk::Asked {
                 continue;
             }
             if ctx::tok(p, FANS_DOWN) > 0 {
-                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX);
-                ctx::add_tok(p, FANS_UP, 1, i32::MAX);
+                ctx::add_tok(p, FANS_DOWN, -1, i32::MAX)?;
+                ctx::add_tok(p, FANS_UP, 1, i32::MAX)?;
             }
         }
     }

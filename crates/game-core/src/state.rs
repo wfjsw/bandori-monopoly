@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::msg::Msg;
 
@@ -107,7 +108,6 @@ pub struct MatchState {
     pub mortgaged: Vec<bool>,
     pub embers: Vec<i32>,
     pub marks: Vec<TileMark>,
-    pub tile_colors: Vec<i32>,
     pub event_deck: i32,
     pub event_top: Vec<String>,
     pub event_discard: Vec<String>,
@@ -115,7 +115,11 @@ pub struct MatchState {
     pub event_active: Vec<ActiveEvent>,
     pub prompt: MatchPrompt,
     pub vote: MatchVote,
-    pub events: Vec<MatchEvent>,
+    /// The recent-event window (last [`crate::engine::world::STATE_EVENTS`]).
+    /// `Arc` so a `state()` poll whose window has not changed is a refcount
+    /// bump rather than 80 event clones -- the view builder is on the sim's
+    /// per-tick loop and the server's broadcast path.
+    pub events: Arc<Vec<MatchEvent>>,
     pub end_reason: String,
     pub winner: i32,
     pub score_money: f32,
@@ -156,7 +160,6 @@ impl Default for MatchState {
             mortgaged: vec![],
             embers: vec![],
             marks: vec![],
-            tile_colors: vec![],
             event_deck: 0,
             event_top: vec![],
             event_discard: vec![],
@@ -164,7 +167,7 @@ impl Default for MatchState {
             event_active: vec![],
             prompt: MatchPrompt::default(),
             vote: MatchVote::default(),
-            events: vec![],
+            events: Arc::default(),
             end_reason: String::new(),
             winner: -1,
             score_money: 1.0,
@@ -292,11 +295,6 @@ pub mod key {
     pub const START_HAND: &str = "startHand";
     /// Skill-system scratch (C# `MatchSeat.skill_state`).
     pub const SKILL_STATE: &str = "skillState";
-    /// Per-player `Fx.ExtraColor`: `extraColor:<tile>` = the group that tile
-    /// counts as **for this player** (`-1` clears).
-    pub const EXTRA_COLOR: &str = "extraColor:";
-    /// The `tile_colors` / `extraColor` value that means 「该格获得所有颜色」.
-    pub const ALL_COLORS: i32 = -2;
     /// This player has built this turn (set by the build step).
     pub const BUILT: &str = "built";
     /// This player has bought this turn (set by the buy step).
@@ -318,7 +316,7 @@ pub mod key {
             STAY | STUN | STUN_START | EXILE | EXILE_TO | FIRE | NO_HAND | UNSTOPPABLE
                 | HAND_LIMIT | START_HAND | SKILL_STATE | BUILT | BOUGHT | REDEEMED | MORTGAGED
                 | NO_BUILD
-        ) || key.starts_with(EXTRA_COLOR)
+        )
             // `skill.*` is skill scratch -- a hook writes it and the hook's own
             // `swap_world` commits it; it must not be pulled back off a stale
             // body copy at a pause.
@@ -341,6 +339,10 @@ pub mod prop {
     /// 「可在眩晕时打出」 (C# `Card.PlayableStunned`): `1` = the card skips the
     /// stun gate when played from hand.
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
+    /// Bot-only **estimated execution cost**. Mirrors
+    /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
+    /// reserve check -- never by legality. `0` = unknown / assume free.
+    pub const EST_COST: &str = "estCost";
     /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
     /// recipients (the play's other living players). Mirrors
     /// `card_sdk::abi::prop::DESIGNATES`.
@@ -384,12 +386,6 @@ pub mod prop {
     pub const RENT_FACTOR: &str = "rentFactor";
     /// Payment scale in milli-units (500 = x0.5). Replaces `pay_factor`.
     pub const PAY_FACTOR: &str = "payFactor";
-    /// 「购买格子时[消耗]资金降低N（最低0）」. Replaces `buy_discount`.
-    pub const BUY_DISCOUNT: &str = "buyDiscount";
-    /// 「购买格子不[消耗]资金」. Replaces `free_buy`.
-    pub const FREE_BUY: &str = "freeBuy";
-    /// 「如果购买则拆除那个格子上的所有房屋」. Replaces `raze_on_buy`.
-    pub const RAZE_ON_BUY: &str = "razeOnBuy";
     /// 「[拥有者]不可盖房」. Replaces the `noBuild` state key.
     pub const NO_BUILD: &str = "noBuild";
     /// 「不可在造价N及以上的格子上加盖房屋」 (卡池BUG) -- `why_not_build_on`
@@ -413,7 +409,7 @@ pub mod prop {
     /// 「该格获得所有颜色」 / soyo 「所有颜色」.
     pub const ANY_COLOR: &str = "anyColor";
     /// Per-player colour override prefix: `colorFor:<p>` = the group tile `p`
-    /// treats this tile as. Replaces `key::EXTRA_COLOR`.
+    /// treats this tile as.
     pub const COLOR_FOR_PREFIX: &str = "colorFor:";
 }
 
@@ -446,6 +442,15 @@ pub enum BotMentality {
     /// Legal but maximally disruptive: play everything, take every offer, spend
     /// down to [`crate::engine::CHAOS_RESERVE`].
     Chaos,
+    /// Search bot driven by the server's `bot-service` (`docs/BOT.md` B5).
+    /// Inside the engine this is [`Self::Standard`]: the heuristic plays the
+    /// seat exactly like a standard bot whenever the engine is the one driving
+    /// it (Solo, or an online room with no service attached -- the server
+    /// rewrites the mentality to Standard before `Match::new` in that case).
+    /// With a service attached the server holds the seat (`ai` starts off) and
+    /// answers every play-phase decision itself; setup (ban / pick / deck)
+    /// stays engine-side.
+    Advanced,
 }
 
 impl BotMentality {
@@ -453,6 +458,7 @@ impl BotMentality {
         match self {
             BotMentality::Standard => "standard",
             BotMentality::Chaos => "chaos",
+            BotMentality::Advanced => "advanced",
         }
     }
 
@@ -460,6 +466,7 @@ impl BotMentality {
         match s {
             "standard" | "" => Some(BotMentality::Standard),
             "chaos" => Some(BotMentality::Chaos),
+            "advanced" => Some(BotMentality::Advanced),
             _ => None,
         }
     }
@@ -568,6 +575,15 @@ impl Default for MatchPlayer {
 }
 
 impl MatchPlayer {
+    /// Does the machine handle this seat's **setup** (ban / pick / deck) without
+    /// waiting on a human or the server? True for every engine-driven seat
+    /// (`ai`) and for an Advanced bot: its play-phase decisions belong to the
+    /// server's `bot-service` (`docs/BOT.md` B5), but setup stays engine-side
+    /// and runs the standard policy, exactly like a standard bot.
+    pub fn auto_setup(&self) -> bool {
+        self.ai || (self.bot && self.mentality == BotMentality::Advanced)
+    }
+
     // ---------------------------------------------------------- keyed state
     // Dumb storage. The engine holds `{value, min, max}` items and enforces
     // none of it -- see [`StateVar`]. Everything below that looks like a rule

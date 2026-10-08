@@ -17,9 +17,9 @@ const ID: &str = "Mor:离心力，不为所动";
 pub const CENTRIFUGAL: CardDef = CardDef::new(
     "Mor:离心力，不为所动",
     &[
-        On::Counteract(&[ChainKind::Effect], can_counteract, counteract),
+        On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, ""),
         On::Gate(&[GateKind::ImmuneAll], immune_all),
-        On::Hook(&[HookKind::TurnStart], |_| true, turn_start),
+        On::Hook(&[HookKind::TurnStart], None, turn_start, ""),
     ],
 );
 
@@ -28,9 +28,6 @@ fn can_counteract(player_id: i32) -> bool {
     // C# `t.Kind == "target" && t.Target == seat && t.ByCard >= 0 && t.ByCard != seat`
     //   and `H._targeted[player_id] >= 2` (the counter is bumped on every target raise
     //   between the player's turns, `MatchHost.cs:19138` / reset at `:25775`).
-    if trigger::kind() != ChainKind::Effect {
-        return false;
-    }
     // 规则书[反击]: 「成为其他角色技能或卡牌的目标」 -- the `target` effect entry
     // (the designation), not just any effect aimed at the player. The money
     // pipeline declares a `pay` effect on every [支付]/[获得] and must not open

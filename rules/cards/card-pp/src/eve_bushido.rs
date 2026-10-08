@@ -23,9 +23,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVE_BUSHIDO: CardDef = CardDef::new(
     "PP:[若宫伊芙]属于我的武士道！",
     &[
-        On::Play(None, eve_bushido),
-        On::Hook(&[HookKind::Drew], drew_guard, drew),
-        On::Hook(&[HookKind::SettleBefore], |_| true, settle_before),
+        On::Play(None, eve_bushido, ""),
+        On::Hook(&[HookKind::Drew], Some(drew_guard), drew, ""),
+        On::Hook(&[HookKind::SettleBefore], None, settle_before, ""),
     ],
 );
 
@@ -60,7 +60,7 @@ fn drew(_player_id: i32) -> card_sdk::Asked {
     if trigger::value() <= 0 {
         return Ok(());
     }
-    ctx::add_crystals(1, 3);
+    ctx::add_crystals(1, 3)?;
     Ok(())
 }
 
@@ -82,7 +82,7 @@ fn settle_before(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 规则书[持续]（2）: 「使用1个[奇迹水晶]」
-    ctx::add_crystals(-1, 0);
+    ctx::add_crystals(-1, 0)?;
     // 规则书[持续]（2）1: 「地契主人投掷1d6」
     let a = ctx::roll(owner, 1, 6);
     // 规则书[持续]（2）2: 「[拥有者]投掷3d4」

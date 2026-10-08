@@ -41,6 +41,7 @@ fn stamp() -> EngineStamp {
         data_sha256: "data-test".into(),
         engine: "game-core".into(),
         build: "test".into(),
+        bundle: String::new(),
     }
 }
 

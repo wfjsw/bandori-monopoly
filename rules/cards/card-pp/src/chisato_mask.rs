@@ -22,8 +22,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CHISATO_MASK: CardDef = CardDef::new(
     "PP:[白鹭千圣]微笑的铁假面",
     &[
-        On::Play(None, chisato_mask),
-        On::Hook(&[HookKind::Reshuffled], reshuffled_guard, reshuffled),
+        On::Play(None, chisato_mask, ""),
+        On::Hook(&[HookKind::Reshuffled], Some(reshuffled_guard), reshuffled, ""),
     ],
 )
 // 规则书[手]: 「其他玩家[分摊][支付][使用者]2000资金」 -- the payers are the
@@ -78,6 +78,11 @@ fn reshuffled(player_id: i32) -> card_sdk::Asked {
 }
 
 /// `H.SplitPay` -- every payer covers `ceil(ceil(total / n) / 10) * 10`.
+///
+/// `PIPELINE-AUDIT` Q2: the command-wide **pre-split** stage (`payTotalAdd` /
+/// `payTotalMul` / `payTotalCancel`) shapes `total` before it divides -- the
+/// 「分摊前」 figure of 「此次支付的分摊前资金减少Y×100」 (丸山彩 (2)). Each share
+/// then runs the per-share pipeline through `ctx::pay_leg`.
 fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked {
     let list: Vec<i32> = payers
         .iter()
@@ -87,7 +92,11 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
     if list.is_empty() || total <= 0 {
         return Ok(());
     }
-    let per = (total + list.len() as i32 - 1) / list.len() as i32;
+    // The command-wide pre-split stage on the **total**, before any division.
+    let Some(shaped) = ctx::pay_total(list[0], to, total, why)? else {
+        return Ok(());
+    };
+    let per = (shaped + list.len() as i32 - 1) / list.len() as i32;
     let share = (per + 9) / 10 * 10;
     for p in list {
         // 「取消其对目标之一的[指定]」 -- a per-pair cancel drops one leg of the
@@ -95,7 +104,7 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
         if ctx::designation_cancelled(p) {
             continue;
         }
-        ctx::transfer(p, to, share, why)?;
+        ctx::pay_leg(p, to, share, why)?;
     }
     Ok(())
 }

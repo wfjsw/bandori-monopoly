@@ -12,8 +12,34 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const PROUD_LIGHT: CardDef = CardDef::new(
     "AG:刻入天穹傲岸的烈光",
-    &[On::Counteract(&[ChainKind::PassPlayer], can_counteract, counteract)],
-);
+    // 规则书[反击]: 「当你经过一名角色时」 -- 行动阶段 12 [经过]
+    // (`SETTLE-STAGES.md` §4 M4), a mid-route pass of a tile a character stands
+    // on -- not the end-tile [重叠]. `ChainKind::PassTile` is the [反击] key
+    // for one [经过] step (ABI v43).
+    // G4: kind (PassTile) is the category; `mine` is the condition. The
+    // "someone stands on the tile" check is a derived list (GUARDS.md §6) and
+    // stays in the residual guard.
+    &[On::Counteract(
+        &[ChainKind::PassTile],
+        Some(can_counteract),
+        counteract,
+        card_sdk::pre::MINE,
+    )],
+)
+    .legacy(&[(0, legacy_can_counteract)]);
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
+    if trigger::kind() != TriggerKind::PassTile {
+        return false;
+    }
+    if trigger::player_id() != player_id {
+        return false;
+    }
+    ctx::players_on(trigger::tile(), player_id)
+        .into_iter()
+        .any(|o| o >= 0 && !ctx::player_out(o))
+}
 
 /// The player's most expensive deed's base purchase price (C# `CardProudLight.Best`).
 fn best_price(player_id: i32) -> i32 {
@@ -27,23 +53,24 @@ fn best_price(player_id: i32) -> i32 {
 }
 
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「当你经过一名角色时，你可以打出此卡」
-    if trigger::kind() != TriggerKind::PassPlayer {
-        return false;
-    }
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    let o = trigger::target();
-    // C# `t.Target >= 0 && !H.Out(t.Target)`.
-    o >= 0 && !ctx::player_out(o)
+    // 规则书[反击]: 「当你经过一名角色时」 -- the actor rel is the condition
+    // (`pre::MINE`); 「一名角色」 is a derived list (GUARDS.md §6) and stays here.
+    let _ = player_id;
+    // 「一名角色」 -- a player standing on the tile being entered.
+    ctx::players_on(trigger::tile(), player_id)
+        .into_iter()
+        .any(|o| o >= 0 && !ctx::player_out(o))
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    let o = trigger::target();
-    if o < 0 {
+    // 「对方」 -- the character being passed (the first present player on the
+    // tile). A `passTile` payload has no `target`; the tile's occupants are it.
+    let Some(o) = ctx::players_on(trigger::tile(), player_id)
+        .into_iter()
+        .find(|&o| o >= 0 && !ctx::player_out(o))
+    else {
         return Ok(());
-    }
+    };
     // 规则书[反击]: 「你从对方处获得等于对方最贵格子基础购买价格一半数额的资金」
     let from_them = best_price(o) / 2;
     if from_them > 0 {

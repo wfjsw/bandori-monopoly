@@ -208,9 +208,6 @@ fn is_turn_scoped(path: &str) -> bool {
     matches!(
         path,
         "turn.extra"
-            | "turn.buy_discount"
-            | "turn.free_buy"
-            | "turn.raze_on_buy"
             | "turn.build_discount"
             | "turn.build_discount_layers"
             | "turn.build_cost_pct"
@@ -219,6 +216,10 @@ fn is_turn_scoped(path: &str) -> bool {
             | "turn.paid_in_settle"
             | "turn.no_money_loss"
             | "turn.fixed_roll"
+            // The lingering instances (docs/PURCHASE.md P5) take the place of
+            // the retired `turn.buy_discount` / `turn.free_buy` /
+            // `turn.raze_on_buy` flags, and 「本回合」 must not outlive the turn.
+            | "turn.lingering"
             | "extra_turns"
             | "ring_bonus"
     )

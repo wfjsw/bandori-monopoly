@@ -20,24 +20,15 @@ const ID: &str = "Mor:蝴蝶飞舞的星月夜";
 pub const STARRY_NIGHT: CardDef = CardDef::new(
     "Mor:蝴蝶飞舞的星月夜",
     &[
-        On::Play(Some(cant_play), starry_night),
-        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], |_| true, hook),
-        On::Hook(
-            &[HookKind::CrystalsChanged],
-            crystals_changed_guard,
-            on_crystals_changed,
-        ),
+        // TODO(规则书) NEGATION-AUDIT V2: no activation cost. The 「支付X次1000
+        // 的资金」 is effect content (rulebook L13-14), so there is no
+        // `money >= 1000` play gate -- an unaffordable in-body payment takes
+        // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
+        On::Play(None, starry_night, ""),
+        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], None, hook, ""),
+        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
     ],
-);
-
-fn cant_play(player_id: i32) -> Option<Msg> {
-    // C# `CardStarryNight.WhyNot` refuses the play with less than 1,000
-    // (`资金不够 1,000`).
-    if ctx::money_of(player_id) < 1000 {
-        return Some(Msg::new(key!("starry_night_why_not")));
-    }
-    None
-}
+).props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
 
 fn starry_night(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「支付X次1000的的资金」 -- C# `H.AskNumber(..., 1, max)` with
@@ -75,7 +66,7 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
         ID,
         &Msg::new(key!("starry_night_note")).i("n", x as i64),
     );
-    ctx::add_crystals(x, 0);
+    ctx::add_crystals(x, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("starry_night_placed"))
@@ -91,8 +82,9 @@ fn starry_night(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardStarryNight.Remove` -- burn one crystal. The payout and the
 /// discard ride the write: [`on_crystals_changed`] is 规则书（3） and（1）.
-fn remove_crystal(_player_id: i32) {
-    ctx::decay();
+fn remove_crystal(_player_id: i32) -> card_sdk::Asked {
+    ctx::decay()?;
+    Ok(())
 }
 
 /// 规则书（3）: 「此卡上的每个[奇迹水晶]移除时此卡拥有者获得1000资金」, and
@@ -158,7 +150,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
                     player_id,
                     &Msg::new(key!("starry_night_circle")).player_id("who", player_id),
                 );
-                remove_crystal(player_id);
+                remove_crystal(player_id)?;
             }
         }
         _ => {}
@@ -211,7 +203,7 @@ fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
         &Msg::new(key!("starry_night_attack_pay")).player_id("who", roller),
     )?;
     if paid >= 1000 {
-        remove_crystal(player_id);
+        remove_crystal(player_id)?;
         ctx::log(
             player_id,
             &Msg::new(key!("starry_night_attack_done"))

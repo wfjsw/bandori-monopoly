@@ -60,6 +60,12 @@ fn until_turn(t: &mut Table, who: usize) {
             drain(t);
             continue;
         }
+        // A seat that went out on its own turn cannot act; nudge the turn on.
+        if t.p(cur).out() {
+            t.m.world_mut().next_turn_pending = true;
+            t.settle();
+            continue;
+        }
         pass(t, cur);
     }
     panic!("never reached turn {who} (at {})", t.turn());
@@ -891,4 +897,161 @@ fn p01_pay_mul_halves_a_settle_rent() {
     settle_on(&mut t, 0, land);
     drain(&mut t);
     assert_eq!(t.money(0), 10_000 - 150, "300 halved at 支付前");
+}
+// 规则书 游戏流程 9 -- bankruptcy retires the seat's effects (PIPELINE-AUDIT B2)
+// =====================================================================
+
+// 规则书 游戏流程 9.1 (red): 「将其控制的所有棋子，角色卡，乐队卡，和手卡移出
+// 游戏。所有其正在生效的卡，技能效果停止生效。」 A bankrupt seat's placed cards
+// must leave the field and stop answering -- before the fix they kept running
+// buy / pay hooks for the rest of the match.
+#[test]
+fn bankruptcy_stops_field_effects() {
+    let mut t = Table::vanilla(3);
+    let rent_land = tile("购物中心");
+    t.own(2, &[rent_land]);
+    t.set_houses(rent_land, 3);
+    // P1 holds a `payAdd` probe that would boost **every** payment by 100.
+    t.place_raw(1, "TEST:payAddAny");
+    assert!(!t.field(1).is_empty(), "the probe is on P1's field");
+    // P1 goes under on the rent (0 cash, nothing raiseable).
+    t.set_money(1, 0);
+    settle_on(&mut t, 1, rent_land);
+    drain(&mut t);
+    assert!(t.p(1).bankrupt, "P1 is out");
+    assert!(
+        t.field(1).is_empty(),
+        "the bankrupt seat's field is empty: {:?}",
+        t.field_ids(1)
+    );
+    // P0 then gains money: the dead seat's probe must not boost it.
+    until_turn(&mut t, 0);
+    let before = t.money(0);
+    let mark = t.mark();
+    t.give_play(0, "通用:GREAT").unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.money(0),
+        before + 2_000,
+        "no boost from the dead seat (events {:?})",
+        t.keys_since(mark)
+    );
+}
+
+// 规则书 游戏流程 9 + 专有名词 6 -- the seat is dead before `bankruptBefore`
+// (PIPELINE-AUDIT B3 / BANKRUPTCY K2)
+// =====================================================================
+
+// 规则书 专有名词 6 [破产]: the state is entered when the payment fails, and
+// 游戏流程 9.1 「所有其正在生效的卡，技能效果停止生效」 is what entering it does;
+// 专有名词 5 [存活] excludes 破产. So the seat is marked out **before** the
+// `bankruptBefore` window, and a hook in that window cannot move their money.
+#[test]
+fn bankrupt_before_sees_a_dead_player() {
+    let mut t = Table::vanilla(3);
+    let rent_land = tile("购物中心");
+    t.own(2, &[rent_land]);
+    t.set_houses(rent_land, 3);
+    // A `bankruptBefore` probe on P1: it tries to pull 1 from the dying seat.
+    t.place_raw(1, "TEST:deadPay");
+    let mark = t.mark();
+    // P0 goes under on the rent (0 cash, nothing raiseable).
+    t.set_money(0, 0);
+    settle_on(&mut t, 0, rent_land);
+    drain(&mut t);
+    assert!(t.p(0).bankrupt, "P0 is out");
+    let keys = t.keys_since(mark);
+    assert!(
+        keys.iter().any(|k| k.contains("dead_pay")),
+        "the probe ran in the window: {keys:?}"
+    );
+    // The dying seat was already out, so the transfer was refused.
+    assert_eq!(
+        t.money(1),
+        10_000,
+        "the probe could not move the dead seat's money"
+    );
+}
+
+// 规则书 专有名词 10 [拍卖] + 游戏流程 5 -- a short bidder may 抵押 to fund the
+// bid (PIPELINE-AUDIT B4 / BANKRUPTCY K10b)
+// =====================================================================
+
+// 规则书 游戏流程 5 (bold): 「需[支付]或[消耗]资金且资金不足时可以选择抵押拥有的
+// 地契」, and 专有名词 10 [拍卖] 「[消耗]同等资金并获得地契」. A winning bidder
+// short on cash is offered the 抵抵押 path to fund the bid; only a bidder who
+// cannot raise it (and therefore goes out) voids the auction.
+#[test]
+fn auction_winner_may_mortgage_to_fund_the_bid() {
+    let mut t = Table::vanilla(3);
+    let rent_land = tile("购物中心");
+    t.own(2, &[rent_land]);
+    t.set_houses(rent_land, 3);
+    // P0 is going under: four deeds, nothing raiseable.
+    let mine = [
+        tile("天文馆"),
+        tile("水族馆"),
+        tile("富士见坂"),
+        tile("成为人类桥"),
+    ];
+    t.own(0, &mine);
+    for &x in &mine {
+        t.set_mortgaged(x, true);
+    }
+    t.set_money(0, 0);
+    // P1 is the bidder: 50 cash and one mortgageable deed (小豆岛, 抵押 500).
+    let fund = tile("小豆岛");
+    t.own(1, &[fund]);
+    t.set_money(1, 50);
+    settle_on(&mut t, 0, rent_land);
+    // The leftover auction prompt is open -- do not drain it away.
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "auction", "a live auction: {}", t.dump_prompt());
+    assert!(
+        t.asked().contains(&1),
+        "P1 is a bidder: {:?}",
+        t.asked()
+    );
+    // P1 bids 100 even though they hold 50 -- 抵押 funds the difference.
+    assert!(t.answer(1, 100).is_ok(), "the short bid is accepted");
+    // P2 passes; the auction closes on P1's 100. (`value < 0` is a pass.)
+    if t.prompt().is_some() {
+        for who in t.asked() {
+            let _ = t.m.act(
+                who as i32 + 1,
+                &game_core::net::NetMessage {
+                    prompt: t.expect_prompt().id,
+                    value: -1,
+                    ..game_core::net::NetMessage::act("answer")
+                },
+            );
+        }
+        t.settle();
+    }
+    // The mortgage offer funds the bid.
+    let mp = t.prompt();
+    assert_eq!(
+        mp.as_ref().map(|p| p.kind.as_str()),
+        Some("mortgage"),
+        "the bid is funded by 抵押: {}",
+        t.dump_prompt()
+    );
+    t.answer_items(1, &[&fund.to_string()]).unwrap();
+    drain(&mut t);
+    // The pool is shuffled and capped at 3 of the four, so assert on any of
+    // them landing with P1 rather than on one specific deed.
+    let won: Vec<usize> = mine
+        .iter()
+        .copied()
+        .filter(|&x| t.owner(x) == Some(1))
+        .collect();
+    assert_eq!(
+        won.len(),
+        1,
+        "exactly one auctioned deed is awarded to the bidder: owners {:?}",
+        mine.iter().map(|&x| (data().tiles[x].name.clone(), t.owner(x))).collect::<Vec<_>>()
+    );
+    assert!(t.mortgaged(fund), "the funding deed is mortgaged");
+    // 50 + 500 (抵押) - 100 (bid) = 450.
+    assert_eq!(t.money(1), 450, "the bid was funded and paid");
 }

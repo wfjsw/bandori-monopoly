@@ -5,6 +5,9 @@
 ```sh
 cargo run -p server --release -- --port 8080 --data data --static webui/dist
 # env: PORT, BM_DATA, BM_STATIC
+# optional advanced-bot decisions (docs/BOT.md B5) -- see "Enabling it in a deploy":
+#   --bot-service <path> / BM_BOT_SERVICE, --bot-threads N / BOT_THREADS,
+#   --bot-search-threads N / BOT_SEARCH_THREADS
 ```
 
 Serves `/api/*`, the game data at `/data/*` (e.g. `/data/board.json`), and the web
@@ -104,16 +107,82 @@ above is the same gap.
 ### Bot mentality (engine bots)
 
 The auto-play takeover above is a *human* seat driven by the browser. A **bot**
-member is driven by the engine, and it carries the same two policies as a
-`BotMentality` on the seat (`standard` / `chaos`, see
-[ENGINE.md](ENGINE.md#bot-ai-mentalities)). `POST /api/rooms/{id}/bots` takes
-`mentality` on `op: "add"` (default `standard`); it is stored on the room
-member, shown as a tag in the lobby, and copied onto the seat when the match
-starts. Solo's setup screen offers the same choice (one for all bots, with a
-per-bot override).
+member is driven by the engine, and it carries a `BotMentality` on the seat
+(`standard` / `chaos` / `advanced`, see
+[ENGINE.md](ENGINE.md#bot-ai-mentalities) and [BOT.md](BOT.md)). `POST
+/api/rooms/{id}/bots` takes `mentality` on `op: "add"` (default `standard`);
+it is stored on the room member, shown as a tag in the lobby, and copied onto
+the seat when the match starts. Solo's setup screen offers `standard` /
+`chaos` (one for all bots, with a per-bot override); the browser has no
+search yet (BOT.md B6).
 
-The two are meant to play alike: a chaos bot and a chaos-托管 human follow the
-same policy over the same options, differing only in what they can see.
+The first two are meant to play alike: a chaos bot and a chaos-托管 human
+follow the same policy over the same options, differing only in what they can
+see.
+
+**`advanced`** is the server-side search bot (BOT.md B5, `crates/bot-service`).
+It is an **online** option only.
+
+### Enabling it in a deploy
+
+The server **spawns `bot-service` as a child** — one process, its own CPU
+budget, the match workers and the 20 Hz tick untouched. Build both bins, then
+point the server at the service binary:
+
+```sh
+# one-time (release):
+cargo build -p bot-service --release
+cargo build -p server --release
+
+# run (the server starts the child itself):
+./target/release/server --port 18080 --data data --static webui/dist \
+  --bot-service ./target/release/bot-service \
+  --bot-threads 4 --bot-search-threads 4 \
+  --rules dist/cards
+```
+
+| flag | env | default | meaning |
+|---|---|---|---|
+| `--bot-service <path>` | `BM_BOT_SERVICE` | *(none)* | the `bot-service` binary to spawn; absent = advanced bots play as standard (logged once at startup) |
+| `--bot-threads N` | `BOT_THREADS` | 4 | request workers **inside** the child (`bot-service --threads`) |
+| `--bot-search-threads N` | `BOT_SEARCH_THREADS` | = `--bot-threads` | root-parallel searches **per decision** (`bot-service --search-threads`); 1 is the conservative choice on a shared box |
+| `--data` | `BM_DATA` | `data` | forwarded to the child (`bot-service --data`) |
+| `--rules` | `BM_RULES` | `dist/cards` | forwarded to the child (`bot-service --rules`) |
+
+`bot-service`'s own flags (for running it standalone, or for A/B) are
+documented in `docs/BOT.md` §3.5: `--threads` / `--search-threads` /
+`--data` / `--rules` / `--bias-weight` / `--eval-weight` / `--horizon` /
+`--legacy` / `--no-reuse` / `--no-ponder`. The server only forwards
+`--data` / `--rules` / `--threads` / `--search-threads`; anything else is a
+standalone concern.
+
+**Budgets.** Per decision the server sends `budget_ms = min(1000 ms, prompt
+time left − 200 ms)`, or 800 ms on the turn surface (no prompt clock). The
+outer deadline is `budget + 1.5 s` capped at 3 s
+(`server::botsvc::ask_timeout`) — sized so a real-ruleset search iteration
+(0.4–1.3 s at 1–4 search threads) that finishes *after* the budget still
+lands inside the deadline. Do not shrink the margin below one iteration
+overrun: that is exactly what makes the server fall back to the heuristic
+routinely (`docs/BOT.md` §5 B7).
+
+**Ponder.** While an advanced seat is idle (another seat's turn or prompt)
+the server sends that seat's view as `bot-service`'s `op: "ponder"` —
+non-blocking, one in flight per seat, rate-limited to the 200 ms idle probe
+cadence, cancelled when the seat's own decision arrives. The service caches
+the result by information-set key and a later `decide` for the same key
+answers from that cache. `bot-service --no-ponder` turns the whole path off.
+
+* When the service is attached, the server holds the seat (the engine does not
+  auto-play it) and asks for one seat's view when that seat must act — an open
+  prompt or its turn decision. The answer is applied through the ordinary
+  `POST …/act` path.
+* On timeout, crash or a bad reply the engine's own heuristic (`aiAnswer`)
+  answers that decision and the match keeps moving — a match never stalls on
+  the service. The engine's turn clock is the last-resort takeover. A wedged
+  child costs at most one probe per seat and never the tick.
+* Setup (ban / pick / deck) stays engine-side and runs the standard policy.
+* The service sees exactly one seat's view — the same frame the client gets.
+  It only proposes answers; the sandboxed engine stays authoritative.
 
 ## Auth
 

@@ -46,6 +46,39 @@ thread_local! {
     /// `Ruleset::sha256()` of the last [`ruleset_build`]; `"stub"` when the
     /// page runs without card modules.
     static RULESET_SHA: RefCell<String> = const { RefCell::new(String::new()) };
+    /// sha256 of this build's `glue.js` + `glue_bg.wasm` (hex), pushed by
+    /// [`set_glue_sha`] from `webui/src/wasm/engine_id.json`. The last input
+    /// of the engine-bundle id (`game_core::record::bundle_id`); empty means
+    /// "no bundle identity" and the stamp's `bundle` stays empty.
+    static GLUE_SHA: RefCell<String> = const { RefCell::new(String::new()) };
+}
+
+/// The stable replay interface every archived engine bundle exposes
+/// (`docs/REPLAY.md` §9). Bump only when the frozen surface below changes in
+/// a way an older driver would notice; additive methods do not bump it.
+pub const REPLAY_API_VERSION: u32 = 1;
+
+/// The frozen replay surface (v1): `ReplayMatch::{from_record,
+/// from_record_bytes, header, compat, step, next_input, index, seek, turns,
+/// total_ticks, view, events_since, take_changed, ended, status}` plus
+/// `record_header` / `record_header_bytes`. The current UI drives any
+/// archived bundle through exactly this set.
+#[wasm_bindgen]
+pub fn replay_api_version() -> u32 {
+    REPLAY_API_VERSION
+}
+
+/// Record the glue identity for [`engine_stamp`] / record export: the hex
+/// sha256 of this build's `glue.js` bytes followed by its `glue_bg.wasm`
+/// bytes. The webui reads it from `webui/src/wasm/engine_id.json` (written by
+/// `tools/build-glue.mjs`) once, before any match is recorded.
+#[wasm_bindgen]
+pub fn set_glue_sha(sha: &str) {
+    GLUE_SHA.with(|s| *s.borrow_mut() = sha.to_string());
+}
+
+fn glue_sha() -> String {
+    GLUE_SHA.with(|s| s.borrow().clone())
 }
 
 fn data() -> Result<Arc<GameData>, JsError> {
@@ -114,9 +147,12 @@ fn ruleset_sha() -> String {
 /// The [`EngineStamp`] of the engine that is running right now: format
 /// versions from game-core, the ABI from `card-sdk` via game-rules, and the
 /// data / ruleset hashes captured by [`load_data`] and [`ruleset_build`].
+/// `bundle` is the engine-bundle id (`game_core::record::bundle_id`) once
+/// [`set_glue_sha`] has run -- what a record needs in order to name the
+/// archived bundle that can replay it (`docs/REPLAY.md` §9).
 #[wasm_bindgen]
 pub fn engine_stamp() -> String {
-    json(&EngineStamp {
+    let stamp = EngineStamp {
         format: RECORD_VERSION,
         save_version: SAVE_VERSION,
         abi: game_rules::ABI_VERSION as u32,
@@ -124,7 +160,10 @@ pub fn engine_stamp() -> String {
         data_sha256: data_sha(),
         engine: "game-core".into(),
         build: env!("CARGO_PKG_VERSION").into(),
-    })
+        bundle: String::new(),
+    };
+    let bundle = game_core::record::bundle_id(&glue_sha(), &stamp);
+    json(&EngineStamp { bundle, ..stamp })
 }
 
 fn stamp() -> EngineStamp {
@@ -386,8 +425,15 @@ pub fn ruleset_build() -> Result<usize, JsError> {
             .ok_or_else(|| JsError::new("ruleset_add was never called"))?;
         let set = built.build().map_err(|e| JsError::new(&format!("{e:?}")))?;
         let n = set.module_count();
-        RULESET_SHA.with(|s| *s.borrow_mut() = set.sha256().to_string());
+        let sha = set.sha256().to_string();
+        // `data()` first: if it fails, `RULES` stays empty (StubRules) and the
+        // stamp must say `"stub"` too. Writing the hash before this point would
+        // make `engine_stamp` claim a ruleset the engine is not actually running,
+        // so a record sealed here would pass `compat` against a later session
+        // that really does run those rules -- and then diverge at the first
+        // checkpoint with no stamp warning. See `docs/REPLAY.md`.
         let rules = WasmRules::new(set, data()?);
+        RULESET_SHA.with(|s| *s.borrow_mut() = sha);
         RULES.with(|r| *r.borrow_mut() = Some(Arc::new(rules)));
         Ok(n)
     })
@@ -515,6 +561,7 @@ impl SoloMatch {
             "playerId": player_id,
             "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
             "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
+            "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
         }))
     }
 
@@ -606,9 +653,13 @@ impl ReplayMatch {
     }
 
     /// What would block this replay right now: the [`Mismatch`] list as JSON
-    /// (empty array = play).
+    /// (empty array = play). `want` is the record's stamp, `got` is this
+    /// engine's.
     pub fn compat(&self) -> String {
-        json(&game_core::record::compat(&stamp(), &self.rp.header().engine))
+        json(&game_core::record::compat(
+            &self.rp.header().engine,
+            &stamp(),
+        ))
     }
 
     /// Advance at most `n` tick quanta. Returns the `Status` JSON
@@ -662,6 +713,7 @@ impl ReplayMatch {
                 "playerId": -1,
                 "aiAnswer": serde_json::Value::Null,
                 "playable": serde_json::Value::Null,
+                "estCost": serde_json::Value::Null,
             }));
         }
         let player_id = state.player_of(member);
@@ -675,6 +727,7 @@ impl ReplayMatch {
             "playerId": player_id,
             "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
             "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
+            "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
         }))
     }
 

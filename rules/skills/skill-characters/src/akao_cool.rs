@@ -23,10 +23,11 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const AKAO_COOL: CardDef = CardDef::new(
     "skill:宇田川亚子:对帅气的憧憬",
-    &[On::Hook(&[HookKind::CircleAffected], mine, on_circle)],
-);
+    &[On::Hook(&[HookKind::CircleAffected], None, on_circle, card_sdk::pre::MINE)],
+).props(&[(card_sdk::abi::prop::EST_COST, 500)])
+    .legacy(&[(0, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 

@@ -18,10 +18,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
-        On::Play(None, miracle),
-        On::Hook(&[HookKind::BuildBefore], mine, before_build),
-        On::Hook(&[HookKind::BuildAfter], mine, after_build),
-        On::Hook(&[HookKind::PassPlayer], |_| true, pass_player),
+        On::Play(None, miracle, ""),
+        On::Hook(&[HookKind::BuildBefore], Some(mine), before_build, ""),
+        On::Hook(&[HookKind::BuildAfter], Some(mine), after_build, ""),
+        // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
+        // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
+        // counts, not only the end-tile [重叠].
+        On::Hook(&[HookKind::PassTile], None, pass_player, ""),
     ],
 );
 
@@ -74,35 +77,38 @@ fn after_build(player_id: i32) -> card_sdk::Asked {
     if ctx::crystals() < 1 {
         return Ok(());
     }
-    ctx::add_crystals(-1, i32::MAX);
+    ctx::add_crystals(-1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("miracle_built")));
     Ok(())
 }
 
 /// C# `CardMiracle.PassSeat` -- remember each player [经过], and when every
 /// other player has been passed once, collect the closest rival's purse.
+/// 规则书（2）: 「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12
+/// (`SETTLE-STAGES.md` §4 M4): every player standing on a tile the move steps
+/// onto counts as [经过], mid-route and at the endpoint alike.
 fn pass_player(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassPlayer
-        || trigger::player_id() != player_id
-        || !ctx::is_placed()
-    {
+        if trigger::player_id() != player_id
+        || !ctx::is_placed() {
         return Ok(());
-    }
-    let other = trigger::target();
-    if other < 0 {
-        return Ok(());
-    }
+        }
     // C# `HashSet<int> _passed` over `H.Others(Seat)`; a slot bitset stands in.
     let key = "miracle_passed";
-    let mask = ctx::slot(player_id, key);
-    let bit = 1i32 << other;
-    if mask & bit != 0 {
+    let mut mask = ctx::slot(player_id, key);
+    for other in ctx::players_on(trigger::tile(), player_id) {
+        if other < 0 {
+            continue;
+        }
+        let bit = 1i32 << other;
+        mask |= bit;
+    }
+    if mask == ctx::slot(player_id, key) {
         return Ok(());
     }
-    ctx::set_slot(player_id, key, mask | bit);
+    ctx::set_slot(player_id, key, mask);
     let others = ctx::others(player_id);
     let all = others.iter().fold(0i32, |m, &o| m | (1i32 << o));
-    if all == 0 || ctx::slot(player_id, key) & all != all {
+    if all == 0 || mask & all != all {
         return Ok(());
     }
     // 规则书（2）: 「获得相当于场上奇迹水晶数与你最相近的玩家资金后三位的资金，然后此卡

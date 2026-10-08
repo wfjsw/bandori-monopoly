@@ -23,6 +23,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod botsvc;
 pub mod error;
 pub mod pool;
 pub mod room;
@@ -127,6 +128,7 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
     let mut dead = vec![];
     let mut jobs = Vec::with_capacity(rooms.len());
     for (id, room) in rooms {
+        let server = server.clone();
         jobs.push(tokio::task::spawn_blocking(move || {
             // 1. presence and check-out -- the room lock is held only here.
             let (m, playing, dropped, removed) = {
@@ -139,6 +141,9 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
             // 2. the round-trips, with no lock held.
             let mut changed = false;
             let mut ended = false;
+            // Advanced seats the bot service should be asked about (claimed,
+            // so the next tick does not double-schedule them).
+            let mut drive: Vec<i32> = Vec::new();
             if let Some(m) = &m {
                 for d in &dropped {
                     if let Err(e) = m.member_left(*d, true) {
@@ -152,6 +157,7 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
                         Err(e) => eprintln!("room {id} tick failed: {e}"),
                     }
                     ended = m.ended().unwrap_or(false);
+                    drive = claim_advanced(&server, &id);
                 }
             }
             // 3. bookkeeping -- short lock again.
@@ -159,19 +165,27 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
             if ended {
                 r.info.playing = false;
                 changed = true;
+                server.bot_drive.lock().unwrap().forget_room(&id);
             }
             if changed {
                 r.notify();
             }
-            (id, removed, r.dissolved.is_some())
+            (id, removed, r.dissolved.is_some(), drive, m)
         }));
     }
     for job in jobs {
         match job.await {
-            Ok((id, removed, dissolved)) => {
+            Ok((id, removed, dissolved, drive, m)) => {
                 cleared.extend(removed);
                 if dissolved {
-                    dead.push(id);
+                    server.bot_drive.lock().unwrap().forget_room(&id);
+                    dead.push(id.clone());
+                }
+                // 4. ask the bot service -- its own tasks, never the tick.
+                if let (Some(bots), Some(m)) = (server.bots.clone(), m) {
+                    for member in drive {
+                        spawn_probe(server.clone(), bots.clone(), id.clone(), member, m.clone());
+                    }
                 }
             }
             Err(e) => eprintln!("tick task failed: {e}"),
@@ -221,4 +235,216 @@ pub fn spawn_ticker(server: Arc<Server>) -> tokio::task::JoinHandle<()> {
             tick_all(&server, k as f32 * step, k).await;
         }
     })
+}
+
+// ------------------------------------------------------- advanced bots (B5)
+
+/// Members of `room` that the bot service drives: bot seats tagged
+/// [`BotMentality::Advanced`]. Claims each one whose probe time is due, so a
+/// seat is only ever asked about once (`docs/BOT.md` B5).
+fn claim_advanced(server: &Arc<Server>, room_id: &str) -> Vec<i32> {
+    if server.bots.is_none() {
+        return Vec::new();
+    }
+    let members: Vec<i32> = {
+        let Some(room) = server.room(room_id) else {
+            return Vec::new();
+        };
+        let r = room.lock().unwrap();
+        r.info
+            .members
+            .iter()
+            .filter(|m| m.bot && m.mentality == game_core::state::BotMentality::Advanced)
+            .map(|m| m.id)
+            .collect()
+    };
+    if members.is_empty() {
+        return Vec::new();
+    }
+    let now = Instant::now();
+    let mut drive = server.bot_drive.lock().unwrap();
+    members
+        .into_iter()
+        .filter(|&m| drive.claim(room_id, m, now))
+        .collect()
+}
+
+/// One decision probe: look at the seat's view, and if it must act, ask the
+/// bot service and apply the answer (or the heuristic on failure). Runs as
+/// its own task -- the tick loop is already on to the next room.
+fn spawn_probe(
+    server: Arc<Server>,
+    bots: Arc<botsvc::BotService>,
+    room_id: String,
+    member: i32,
+    m: Arc<room::MatchHandle>,
+) {
+    tokio::spawn(async move {
+        let acted = probe_one(&server, &bots, &room_id, member, &m).await;
+        server
+            .bot_drive
+            .lock()
+            .unwrap()
+            .release(&room_id, member, acted);
+    });
+}
+
+async fn probe_one(
+    server: &Arc<Server>,
+    bots: &Arc<botsvc::BotService>,
+    room_id: &str,
+    member: i32,
+    m: &Arc<room::MatchHandle>,
+) -> bool {
+    // The view is the exact frame the client gets (`MatchHandle::view`), so
+    // the service never sees anything a player would not (§1).
+    let view = {
+        let m = m.clone();
+        match tokio::task::spawn_blocking(move || m.view(member)).await {
+            Ok(Ok(v)) => v,
+            Ok(Err(e)) => {
+                eprintln!("room {room_id} bot view failed: {e}");
+                return false;
+            }
+            Err(e) => {
+                eprintln!("room {room_id} bot view task: {e}");
+                return false;
+            }
+        }
+    };
+    let Ok(seat) = serde_json::from_value::<bot_service::BotSeatView>(view.clone()) else {
+        return false;
+    };
+    let state = &seat.state;
+    let Some(prompt_id) = botsvc::decision_at(state, seat.player_id) else {
+        // Nothing this seat must answer right now -- another seat's turn or
+        // prompt. Speculate on the view instead (BOT-RESEARCH #5): non-blocking
+        // and rate-limited by the idle probe cadence, one in flight per seat,
+        // cancelled when this seat's own decision arrives.
+        if state.phase == "play" {
+            spawn_ponder(server, bots, room_id, member, view, state.seq);
+        }
+        return false;
+    };
+    // The seat's own decision supersedes any speculative search in flight.
+    server.bot_drive.lock().unwrap().cancel_ponder(room_id, member);
+    let budget = server
+        .bot_budget_ms
+        .unwrap_or_else(|| botsvc::budget_ms(state, prompt_id));
+    // Search-side seed: derived from the public decision identity, never the
+    // match RNG (§1).
+    let seed = decision_seed(room_id, member, state.seq, prompt_id);
+    // Outer deadline: the search budget plus room for one iteration overrun
+    // and queue / apply (`docs/BOT.md` §5 B7 -- a real-ruleset iteration
+    // finishes after the budget and must still land inside here).
+    let timeout = server
+        .bot_ask_timeout
+        .unwrap_or_else(|| botsvc::ask_timeout(budget));
+    let answer = match bots
+        .decide(room_id, member, &view, prompt_id, budget, seed, timeout)
+        .await
+    {
+        Ok(a) => {
+            eprintln!(
+                "room {room_id} bot {member}: {} iters {} ms (budget {budget}, reused {})",
+                a.iterations, a.elapsed_ms, a.reused
+            );
+            a.answer
+        }
+        Err(e) => {
+            // Timeout / crash / bad reply: the engine's own heuristic answers
+            // this decision and the match keeps moving (§1).
+            eprintln!("room {room_id} bot {member}: {e} -- falling back to heuristic");
+            bot_service::heuristic_message_view(&server.data, &seat)
+        }
+    };
+    let applied = {
+        let m = m.clone();
+        tokio::task::spawn_blocking(move || m.act(member, &answer)).await
+    };
+    match applied {
+        Ok(Ok(None)) => true,
+        Ok(Ok(Some(msg))) => {
+            // The engine refused (the decision moved on while we searched).
+            // Not a failure -- the next probe sees the new state.
+            eprintln!("room {room_id} bot {member}: act refused: {msg:?}");
+            false
+        }
+        Ok(Err(e)) => {
+            eprintln!("room {room_id} bot {member}: act failed: {e}");
+            false
+        }
+        Err(e) => {
+            eprintln!("room {room_id} bot {member}: act task: {e}");
+            false
+        }
+    }
+}
+
+/// Fire-and-forget `op: "ponder"` for an idle advanced seat (BOT-RESEARCH #5).
+/// The tick / probe returns immediately -- the search runs on its own task and
+/// only lands in the service's cache. One in flight per seat; when the seat's
+/// own decision arrives the slot is cancelled / ignored and the real `decide`
+/// is what counts (it then hits the service's cache when the decision key
+/// matches).
+fn spawn_ponder(
+    server: &Arc<Server>,
+    bots: &Arc<botsvc::BotService>,
+    room_id: &str,
+    member: i32,
+    view: serde_json::Value,
+    seq: i32,
+) {
+    let token = {
+        let mut drive = server.bot_drive.lock().unwrap();
+        match drive.claim_ponder(room_id, member) {
+            Some(t) => t,
+            None => return, // one in flight per seat
+        }
+    };
+    let server = server.clone();
+    let bots = bots.clone();
+    let room_id = room_id.to_string();
+    tokio::spawn(async move {
+        let budget = server
+            .bot_ponder_budget_ms
+            .unwrap_or(botsvc::PONDER_BUDGET_MS);
+        let seed = decision_seed(&room_id, member, seq, -1);
+        // Nobody waits on this; the timeout only bounds the task's lifetime.
+        let timeout = botsvc::ask_timeout(budget);
+        match bots
+            .ponder(&room_id, member, &view, budget, seed, timeout)
+            .await
+        {
+            Ok(reused) => {
+                if reused {
+                    eprintln!("room {room_id} bot {member}: ponder hit the cache");
+                }
+            }
+            // A ponder is speculative: a slow / missing reply is never a
+            // match failure, so it is not logged as one.
+            Err(_) => {}
+        }
+        server
+            .bot_drive
+            .lock()
+            .unwrap()
+            .release_ponder(&room_id, member, token);
+    });
+}
+
+/// A stable search-side seed. Mixes the public decision identity with a
+/// counter so two identical decisions in one match still get different
+/// samples; never derived from the match's RNG.
+fn decision_seed(room: &str, member: i32, seq: i32, prompt_id: i32) -> u64 {
+    use std::hash::{Hash, Hasher};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(1);
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    room.hash(&mut h);
+    member.hash(&mut h);
+    seq.hash(&mut h);
+    prompt_id.hash(&mut h);
+    N.fetch_add(1, Ordering::Relaxed).hash(&mut h);
+    h.finish()
 }

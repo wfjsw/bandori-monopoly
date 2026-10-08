@@ -24,18 +24,15 @@ const PASSED: &str = "skill.rimiResolve.passed";
 pub const RIMI_RESOLVE: CardDef = CardDef::new(
     "skill:牛込里美:里美的决心",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -62,7 +59,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, PASSED, 0);
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("rimi_resolve_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("rimi_resolve_gain")))?;
     Ok(())
 }
 
@@ -109,7 +106,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&to) = far.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rimi_resolve_spend"))) {
+    if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rimi_resolve_spend")))? {
         return Ok(());
     }
     // 「[传送]…并[结算]」 -- a teleport that settles.

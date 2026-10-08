@@ -1,8 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/bot-core",
+    "crates/bot-service",
     "crates/game-core",
     "crates/game-rules",
+    "crates/rules-cond",
+    "crates/rules-native",
     "crates/rules-worker",
     "crates/server",
     "crates/web-glue",
@@ -28,6 +32,11 @@ bitflags = { version = "2", default-features = false }
 [profile.release]
 opt-level = 3
 lto = "thin"
+
+# cel-rust fork: evaluate a pre-compiled CEL AST without the parser.
+# See third_party/cel-rust/FORK.md and docs/GUARDS.md §8.
+[patch.crates-io]
+cel = { path = "third_party/cel-rust" }
 
 [profile.dev]
 debug = true

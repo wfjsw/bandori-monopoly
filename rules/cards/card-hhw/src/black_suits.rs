@@ -5,21 +5,26 @@
 //! > [反击] 经过“CiRCLE”格子（#1）时可打出此卡，在“弦卷集团”（#29格）格子上放置一个奇迹水晶，该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果。你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。
 //!
 //! CiRCLE, drop a crystal on 弦卷集团 so that tile borrows CiRCLE's effect.
+//!
+//! `SETTLE-STAGES.md` §4 M3 / `docs/TILES.md`: 「该格获得"CiRCLE"格子的全部
+//! 效果」 is the tile **gaining CiRCLE's effect-list entry** -- a card attaching
+//! a `tile:circle` rule instance to 弦卷集团, additive alongside its own
+//! `tile:agent` body. It is not an after-hook: a body replace must not leave a
+//! borrowed draw running. The instance lives exactly while the crystal does.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
+
+/// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
+/// (C# `H.AddMark(..., "黑衣人的补给", ...)`).
+const MARK: &str = "黑衣人的补给";
 
 pub const BLACK_SUITS: CardDef = CardDef::new(
     "HHW:黑衣人的补给",
     &[
-        On::Hook(
-            &[card_sdk::abi::HookKind::SettleAfter],
-            |_| true,
-            settle_after,
-        ),
-        On::Hook(&[card_sdk::abi::HookKind::PassTile], |_| true, pass_tile),
-        On::Counteract(&[ChainKind::PassBefore], can_counteract, counteract),
+        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
+        On::Counteract(&[ChainKind::PassBefore], Some(can_counteract), counteract, ""),
     ],
 );
 
@@ -44,7 +49,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         ctx::add_mark(
             group,
             player_id,
-            key!("black_suits_crystal"),
+            MARK,
             &Msg::new(key!("black_suits_crystal_note")),
         );
         ctx::log(
@@ -53,45 +58,50 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
                 .player_id("who", player_id)
                 .tile("tile", group),
         );
+        // 「该格上拥有奇迹水晶时，该格获得"CiRCLE"格子的全部效果」 --
+        // `docs/TILES.md` / `SETTLE-STAGES.md` §4 M3: attach a `tile:circle`
+        // rule instance to 弦卷集团, additive next to its `tile:agent` body.
+        // The instance's own `On::Settle` (landing draw) and Pass entry (the
+        // [经过] reward) are what 「全部效果」 means; no card hook draws.
+        sync_circle_instance(group);
     }
-    // 规则书[反击]: 「该格上拥有奇迹水晶时，该格获得“CiRCLE”格子的全部效果」 -- C#
-    // landing on a tile with a 「黑衣人的补给」 mark draws 1 card like CiRCLE
-    // (`MatchHost` landing, `CountMarks(at, "黑衣人的补给") > 0` -> `H.DrawR(i, 1)`),
-    // and `CircleLike` folds it into the CiRCLE pass-reward path.
-    // The landing / pass halves are the two hooks below; this card is placed,
-    // so its own `settleAfter` / `passTile` entries are the dispatch.
-    // 规则书[反击]: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- C#
-    // `BlackSuitFx.PassTile` decrements the owner's mark and drops it at 0.
-    // 规则书[反击]: 「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶」 -- C#
-    // `BlackSuitFx.PassTile` is an `H.ExtraOf` player attachment (the hook surface
-    // only dispatches to *placed* cards) and its `mark.count--` removes one
-    // crystal; `ctx::remove_marks` clears every matching mark at once.
     Ok(())
 }
 
-/// 「该格上拥有奇迹水晶时，该格获得"CiRCLE"格子的全部效果」 -- landing on a tile
-/// with a 「黑衣人的补给」 mark draws 1 like CiRCLE.
-fn settle_after(_player_id: i32) -> card_sdk::Asked {
-    let t = ctx::trigger::tile();
-    let mover = ctx::trigger::player_id();
-    if t < 0 || ctx::count_marks(t, "黑衣人的补给", -2) <= 0 {
-        return Ok(());
+/// Attach or drop the borrowed `tile:circle` instance so it exists exactly
+/// while 弦卷集团 carries a crystal.
+fn sync_circle_instance(group: i32) {
+    let has = ctx::count_marks(group, MARK, -2) > 0;
+    // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a tile"
+    // gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The board
+    // field is `field_instances(-1)`; a borrowed `tile:circle` on *this* tile
+    // is one whose `tile_at` is the group (the real CiRCLE's own instance
+    // governs the CiRCLE square and is left alone).
+    let borrowed = ctx::field_instances(-1)
+        .into_iter()
+        .find(|(uid, id)| id == "tile:circle" && ctx::tile_at(*uid) == Some(group))
+        .map(|(uid, _)| uid);
+    if has && borrowed.is_none() {
+        ctx::place_card_on(-1, group, "tile:circle", &Msg::new(key!("black_suits_attach")));
+    } else if !has {
+        if let Some(uid) = borrowed {
+            ctx::unplace_at(uid);
+        }
     }
-    ctx::draw(mover, 1)?;
-    ctx::log(mover, &Msg::new(key!("black_suits_circle")).tile("tile", t));
-    Ok(())
 }
 
 /// 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
-/// `mark.count--`, which is `bump_mark`'s single-tick form.
+/// `mark.count--`, which is `bump_mark`'s single-tick form. Dropping the last
+/// crystal takes the borrowed `tile:circle` instance with it.
 fn pass_tile(_player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     if t < 0 {
         return Ok(());
     }
-    if ctx::count_marks(t, "黑衣人的补给", -2) <= 0 {
+    if ctx::count_marks(t, MARK, -2) <= 0 {
         return Ok(());
     }
-    ctx::bump_mark(t, "黑衣人的补给", -2, -1);
+    ctx::bump_mark(t, MARK, -2, -1);
+    sync_circle_instance(t);
     Ok(())
 }

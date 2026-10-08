@@ -14,8 +14,8 @@ const ID: &str = "Forbidden Moca";
 pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
-        On::Play(None, play),
-        On::Hook(&[HookKind::RollAfter], always, halve),
+        On::Play(None, play, ""),
+        On::Hook(&[HookKind::RollAfter], Some(always), halve, ""),
         On::AtEnd(expire),
     ],
 );

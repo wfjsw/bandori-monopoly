@@ -14,10 +14,16 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TWO_IN_ONE: CardDef = CardDef::new(
     "Sumimi:Sumimi是二人一体的",
     &[
-        On::Play(None, play),
-        On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract),
+        On::Play(None, play, ""),
+        On::Counteract(
+            &[ChainKind::MoveRoll],
+            None,
+            counteract,
+            "actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))",
+        ),
     ],
-);
+)
+.legacy(&[(1, legacy_can_counteract)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「打出此卡，将自己的角色卡替换为sumimi的另一名角色及其初始火罐数」
@@ -25,7 +31,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn can_counteract(player_id: i32) -> bool {
+/// G4 audit oracle (docs/GUARDS.md §5.1).
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书（2）: 「此卡可在你的移动掷骰后作为[反击]使用」 -- C#
     // `t.Kind == "moveRoll" && t.Seat == seat` (and the player's character is a
     // Sumimi one).

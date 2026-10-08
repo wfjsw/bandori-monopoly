@@ -20,6 +20,19 @@
 .sum b { color: var(--tag-red); }
 .sum b.ok { color: var(--green); }
 .pick { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+/* Card choices: the hand's compact face, scaled up, beside a detail panel. */
+.cardChoice { width: 100%; display: flex; gap: 14px; align-items: stretch; }
+.cardGrid { flex: 1; display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; max-height: 420px; overflow: auto; padding: 8px 4px; }
+.cardGrid .choiceCard { width: 96px; cursor: pointer; }
+.cardGrid .choiceCard [class*="title"] { font-size: 12px; height: 32px; }
+.detail { width: 250px; flex: none; background: var(--light-pill); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 4px; max-height: 436px; }
+.dArt { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
+.dArt img { width: 100%; display: block; }
+.dTitle { font-size: 17px; font-weight: 700; margin: 4px 2px 0; }
+.dTags { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 2px; }
+.dText { font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow: auto; flex: 1; min-height: 0; }
+.dMore { align-self: flex-end; border: none; background: none; color: var(--pink); font-size: 13px; cursor: pointer; padding: 2px 4px; }
+.dEmpty { margin: auto; font-size: 14px; color: var(--sub); text-align: center; }
 .auction { width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: center; }
 .auctionTop { font-size: 20px; }
 .auctionTop b { color: var(--pink); font-size: 26px; }

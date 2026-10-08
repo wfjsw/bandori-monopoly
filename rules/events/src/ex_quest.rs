@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const EX_QUEST: CardDef = CardDef::new("event:EX任务挑战", &[On::Play(None, play)]);
+pub const EX_QUEST: CardDef = CardDef::new("event:EX任务挑战", &[On::Play(None, play, "")]);
 
 /// 规则书: 「抽出此卡的玩家投掷1d4并记录结果和26相加为X」 -- X = 26 + 1d4
 /// (27..=30), rolled by the drawer as a bare `ctx::roll` (no [反击] window).

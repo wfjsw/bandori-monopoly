@@ -21,17 +21,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::SettleBefore], any, before_settle),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::SettleBefore], Some(any), before_settle, ""),
     ],
-);
+)
+    .legacy(&[(1, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -50,11 +47,17 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("saki_crychic_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("saki_crychic_gain")))?;
     Ok(())
 }
 
 /// （2） / （3） -- the landing is within five tiles of the other party.
+///
+/// `SETTLE-STAGES.md` §4 M1: the anchor is 「主要移动结束时」 (行动阶段 13) but
+/// the window is 「[触发结算]前」 (行动阶段 14), so this stays on `settleBefore`
+/// and reads "the move ended" as a **fact** -- `move_is_main()` -- not as "a
+/// settle is happening". It runs for any completed main move's settle window;
+/// a 「不触发结算」 move has no such window and so never reaches here.
 fn before_settle(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
     let landing = ctx::trigger::tile();
@@ -78,7 +81,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         )? {
             return Ok(());
         }
-        if !ctx::spend_fire(player_id, 1, &Msg::new(key!("saki_crychic_spend"))) {
+        if !ctx::spend_fire(player_id, 1, &Msg::new(key!("saki_crychic_spend")))? {
             return Ok(());
         }
         nudge(player_id, at);

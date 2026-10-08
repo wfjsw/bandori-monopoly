@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(
     "HHW:梦幻的回礼",
-    &[On::Counteract(&[ChainKind::Effect], can_counteract, counteract)],
+    &[On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, "")],
 );
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
@@ -41,9 +41,6 @@ fn can_counteract(player_id: i32) -> bool {
     // `CanCounteract`: `t.Kind == "pay" && t.Pay != null && t.Pay.IsRent &&
     // t.Pay.from >= 0 && t.Pay.from != player && t.Pay.to != player &&
     // Targets(player).Count > 0 && H.CanPay(player)`.
-    if trigger::kind() != ChainKind::Effect {
-        return false;
-    }
     // On pay triggers `t.Seat == t.Pay.from` and `t.Target == t.Pay.to`.
     let from = trigger::player_id();
     let to = trigger::target();

@@ -27,18 +27,15 @@ const THEIRS: &str = "skill.mutsumiCrychic.theirs";
 pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            at_start,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::RollAfter], other, latch),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::RollAfter], Some(other), latch, ""),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -82,7 +79,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     if !ctx::is_circle(ctx::trigger::tile()) {
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_gain")))?;
     Ok(())
 }
 
@@ -113,7 +110,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     if face < 0 {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("mutsumi_crychic_spend")))? {
         return Ok(());
     }
     ctx::set_fixed_roll(face);

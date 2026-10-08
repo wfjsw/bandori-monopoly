@@ -16,12 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const L12: CardDef = CardDef::new(
     "Sumimi:#L12",
     &[
-        On::Play(None, l12),
-        On::Hook(
-            &[card_sdk::abi::HookKind::FireSpent],
-            fire_spent_guard,
-            fire_spent,
-        ),
+        On::Play(None, l12, ""),
+        On::Hook(&[card_sdk::abi::HookKind::FireSpent], Some(fire_spent_guard), fire_spent, ""),
     ],
 )
 // 规则书[持续]（1）: 「[拥有者]手卡上限数量减1。」 -- the `handLimitDelta`
@@ -105,7 +101,7 @@ fn fire_spent(player_id: i32) -> card_sdk::Asked {
     if n == 0 {
         return Ok(());
     }
-    ctx::add_crystals(n, 0);
+    ctx::add_crystals(n, 0)?;
     ctx::log(
         player_id,
         &Msg::new(key!("l12_fire_spent"))

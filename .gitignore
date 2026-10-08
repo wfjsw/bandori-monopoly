@@ -25,6 +25,17 @@
 /webui/public/assets/rules/
 /webui/public/assets/i18n/
 
+# Engine-bundle bytes (`docs/REPLAY.md` §9). Only `archive/engine/index.json`
+# and the small reference records under `archive/engine/refs/` are versioned --
+# the bundles themselves are rebuildable from the commit the index records
+# (`tools/rebuild-engine.mjs`) or, when sealed from a dirty tree, live in the
+# persistent store outside git. Never commit wasm.
+/archive/engine/*
+!/archive/engine/index.json
+!/archive/engine/refs/
+/data/engine-archive/
+/data/engine-cache/
+
 # Browser verification screenshots.
 /tmp-shots/
 

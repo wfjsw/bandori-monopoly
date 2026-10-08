@@ -18,13 +18,9 @@ use crate::want_human::SLOT_X;
 pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:（灯）内心的呐喊",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], mine, pull),
-        On::Hook(
-            &[card_sdk::abi::HookKind::TurnEndBefore],
-            empty_piles,
-            shuffle_in,
-        ),
-        On::Play(None, tomori_inner_shout),
+        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], Some(mine), pull, ""),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], Some(empty_piles), shuffle_in, ""),
+        On::Play(None, tomori_inner_shout, ""),
     ],
 );
 
@@ -123,7 +119,7 @@ fn pull(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomori_inner_shout_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomori_inner_shout_spend")))? {
         return Ok(());
     }
     // `H.ForceTeleport(other, tile, resolve: false)` -- a plain position write,

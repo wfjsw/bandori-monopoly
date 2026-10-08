@@ -32,13 +32,9 @@ fn shop() -> i32 {
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::TurnEnd], afterglow, tick),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::TurnEnd], Some(afterglow), tick, ""),
     ],
 );
 
@@ -58,7 +54,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     }
     Ok(())
 }
@@ -95,7 +91,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     } else {
         back
     };
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_spend"))) {
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);
@@ -106,7 +102,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let before = ctx::dist(here, shop);
     let after = ctx::dist(toward, shop);
     if after > before {
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_refund")));
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("tomoe_ramen_refund")))?;
     }
     ctx::log(
         player_id,

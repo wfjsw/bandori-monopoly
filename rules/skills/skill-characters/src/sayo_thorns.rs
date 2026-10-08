@@ -22,18 +22,18 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAYO_THORNS: CardDef = CardDef::new(
     "skill:冰川纱夜:踏上荆棘之路的觉悟",
     &[
-        On::Play(Some(can_use), use_skill),
-        On::Hook(
-            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
-            |_| true,
-            declare_cap,
-        ),
-        On::Hook(&[HookKind::Pass], mine, on_pass),
-        On::Hook(&[HookKind::PassPlayer], mine, on_passed),
+        On::Play(Some(can_use), use_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
+        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
+        // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
+        // tile -- not the end-tile [重叠].
+        On::Hook(&[HookKind::PassTile], Some(passed_by), on_passed, ""),
     ],
-);
+)
+    .legacy(&[(2, legacy_mine)]);
 
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
@@ -64,16 +64,19 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         player_id,
         circle_gain(),
         &Msg::new(key!("sayo_thorns_gain")),
-    );
+    )?;
     Ok(())
+}
+
+/// 「被别的玩家[经过]」 -- another player's step onto **my** tile (行动阶段 12,
+/// `SETTLE-STAGES.md` §4 M4).
+fn passed_by(player_id: i32) -> bool {
+    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == ctx::player_pos(player_id)
 }
 
 /// （1）「每次被别的玩家[经过]时获得1个[火罐]」 -- someone passed *this* player.
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::target() != player_id {
-        return Ok(());
-    }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("sayo_thorns_passed")));
+    ctx::gain_fire(player_id, 1, &Msg::new(key!("sayo_thorns_passed")))?;
     Ok(())
 }
 
@@ -103,7 +106,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         ],
     )?;
     let n = if add == 1 { 2 } else { 1 };
-    if !ctx::spend_fire(player_id, 6, &Msg::new(key!("sayo_thorns_spend"))) {
+    if !ctx::spend_fire(player_id, 6, &Msg::new(key!("sayo_thorns_spend")))? {
         return Ok(());
     }
     plan::add_extra_dice(n, 0, "踏上荆棘之路的觉悟");

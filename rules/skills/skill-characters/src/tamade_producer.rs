@@ -23,14 +23,15 @@ const BUILT_THIS: &str = "skill.tamade.builtThis";
 pub const TAMADE_PRODUCER: CardDef = CardDef::new(
     "skill:珠手知由:天才制作人",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], mine, at_turn_start),
-        On::Hook(&[HookKind::HouseAdded], mine, on_built),
-        On::Hook(&[HookKind::TurnEnd], mine, at_turn_end),
+        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::HouseAdded], None, on_built, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
     ],
-);
+)
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
 
 /// Only this player's own business -- the skill is theirs, not the table's.
-fn mine(player_id: i32) -> bool {
+fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
