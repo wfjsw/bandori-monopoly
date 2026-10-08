@@ -2,7 +2,7 @@
 // board), mortgage, pick cards, auction. Reads the live prompt; closes itself
 // when it is answered or replaced.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
@@ -21,8 +21,10 @@ import { openModal } from "../../ui/Modal";
 import { act } from "./model";
 import s from "./Prompt.module.css";
 import { t as tr } from "../../i18n/t";
-import { fmtMsg, type Msg } from "../../i18n/msg";
+import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
+import { toast } from "../../ui/Toast";
+import { optionCard, returnsPickCount, returnsPickNumber, submitReturnsSelection } from "./returnsSelection";
 
 /** Is this prompt waiting on `playerId`? */
 export function waitingOn(p: MatchPrompt, playerId: number): boolean {
@@ -35,7 +37,10 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   useTick(500);
   const auto = useAutoplay(sess); // 托管: answers are read-only
   const p = view?.state.prompt;
-  const live = !!view && !!p && p.id === id && waitingOn(p, view.playerId);
+  // Keep one modal mounted through Returns' setup sequence. The player sees
+  // one checklist and one confirmation, while the session advances its asks.
+  const returnsGroup = useRef(returnsPickNumber(p) !== null).current;
+  const live = !!view && !!p && (p.id === id || (returnsGroup && returnsPickNumber(p) !== null)) && waitingOn(p, view.playerId);
   useEffect(() => {
     if (!live) close();
   }, [live, close]);
@@ -63,13 +68,14 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
         {sess.kind === "online" && (
           <div className={s.timer}><Icon name="timer" /><b>{left}</b>{tr("common.unitSec")}</div>
         )}
-        <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>
+        {!returnsGroup && <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>}
         <div className={s.options}>
+          {returnsGroup && <ReturnsOptions p={p} sess={sess} auto={auto} />}
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
           {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? view.state.players[p.bidder]?.player ?? "" : ""} answer={answer} auto={auto} />}
-          {p.kind !== "pick" && isCardChoice(p) && <CardChoice p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
+          {!returnsGroup && p.kind !== "pick" && isCardChoice(p) && <CardChoice p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
           {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && !isCardChoice(p) && p.options.map((o, i) => (
             <Btn key={i} kind={i === 0 ? "pink" : "white"} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, namesOf(view.state))}</Btn>
           ))}
@@ -80,6 +86,60 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
 }
 
 type Answer = (extra: Partial<Command>) => Promise<boolean>;
+
+function ReturnsOptions({ p, sess, auto }: { p: MatchPrompt; sess: GameSession; auto: boolean }) {
+  const seed = (prompt: MatchPrompt) => ({
+    ids: prompt.options.map(optionCard).filter((c): c is string => c !== null),
+    count: returnsPickCount(prompt),
+  });
+  const [pool, setPool] = useState(() => seed(p));
+  const [picked, setPicked] = useState<number[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState(0);
+  const sending = useRef(false);
+  const toggle = (k: number) => {
+    if (auto || sending.current) return;
+    setPicked((xs) => xs.includes(k) ? xs.filter((x) => x !== k) : xs.length < pool.count ? [...xs, k] : xs);
+  };
+  const submit = async () => {
+    if (auto || sending.current || picked.length !== pool.count) return;
+    sending.current = true;
+    setBusy(true);
+    setSent(0);
+    try {
+      const ok = await submitReturnsSelection({
+        current: () => sess.view?.state.prompt,
+        answer: (prompt, value) => act(sess, { act: "answer", prompt, value }),
+        subscribe: (changed) => sess.subscribe(changed),
+      }, picked.map((k) => pool.ids[k]), setSent);
+      if (!ok) {
+        const now = sess.view?.state.prompt;
+        if (now && returnsPickNumber(now) !== null) {
+          setPool(seed(now));
+          setPicked([]);
+          toast(tr("prompt.pickRetry"));
+        }
+      }
+    } catch {
+      toast(tr("prompt.pickRetry"), "error");
+      const now = sess.view?.state.prompt;
+      if (now && returnsPickNumber(now) !== null) {
+        setPool(seed(now));
+        setPicked([]);
+      }
+    } finally {
+      sending.current = false;
+      setBusy(false);
+    }
+  };
+  return <>
+    <div className={s.text}>{tr("prompt.addToDraw", { n: pool.count })}</div>
+    <CardGrid ids={pool.ids} picked={picked} onPick={toggle} multiple disabled={auto || busy} />
+    <Btn kind="pink" className={cx(s.opt, s.cardConfirm)} disabled={auto || busy || picked.length !== pool.count} onClick={() => void submit()}>
+      <span className={s.confirmLabel}>{busy ? tr("prompt.addingToDraw", { n: sent, total: pool.count }) : tr("prompt.confirmDraw", { n: picked.length, total: pool.count })}</span>
+    </Btn>
+  </>;
+}
 
 function TileOptions({ p, answer, names, auto }: { p: MatchPrompt; answer: Answer; names: Names; auto: boolean }) {
   return (
@@ -118,18 +178,10 @@ function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto
   const toggle = (k: number) => setPicked(picked.includes(k) ? picked.filter((x) => x !== k) : picked.length < p.count ? [...picked, k] : picked);
   return (
     <>
-      <CardGrid ids={p.items} picked={picked} onPick={(k) => !auto && toggle(k)} />
+      <CardGrid ids={p.items} picked={picked} onPick={(k) => !auto && toggle(k)} multiple disabled={auto} />
       <Btn kind="pink" className={s.opt} disabled={auto || picked.length !== p.count} onClick={() => void answer({ cards: picked.map((k) => p.items[k]) })}>{tr("prompt.pickCards", { n: picked.length, total: p.count })}</Btn>
     </>
   );
-}
-
-/** The card an option names (`ask.cardOption` and any other `{{card}}`-only label). */
-function optionCard(o: Msg): string | null {
-  const a = o.a ?? {};
-  const keys = Object.keys(a);
-  const v = keys.length === 1 ? a[keys[0]] : undefined;
-  return v && "card" in v ? v.card : null;
 }
 
 /** Prompts whose options are cards: render them as cards, not as text buttons. */
@@ -148,8 +200,8 @@ function CardChoice({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer
   return (
     <>
       <CardGrid ids={ids} picked={sel === null ? [] : [sel]} onPick={(k) => !auto && setSel(k)} onConfirm={(k) => !auto && void answer({ value: idx[k] })} />
-      <Btn kind="pink" className={s.opt} disabled={auto || sel === null} onClick={() => sel !== null && void answer({ value: idx[sel] })}>
-        {sel === null ? tr("prompt.pickOne") : tr("prompt.pickThis", { card: cardTitle(ids[sel]) })}
+      <Btn kind="pink" className={cx(s.opt, s.cardConfirm)} disabled={auto || sel === null} onClick={() => sel !== null && void answer({ value: idx[sel] })}>
+        <span className={s.confirmLabel}>{sel === null ? tr("prompt.pickOne") : tr("prompt.pickThis", { card: cardTitle(ids[sel]) })}</span>
       </Btn>
       {rest.map((i) => <Btn key={i} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(p.options[i], names)}</Btn>)}
     </>
@@ -158,7 +210,7 @@ function CardChoice({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer
 
 /** Cards laid out like the hand, but larger, with a detail panel: hovering
  *  previews a card, clicking selects it and keeps it in the panel. */
-function CardGrid({ ids, picked, onPick, onConfirm }: { ids: string[]; picked: number[]; onPick: (k: number) => void; onConfirm?: (k: number) => void }) {
+function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled = false }: { ids: string[]; picked: number[]; onPick: (k: number) => void; onConfirm?: (k: number) => void; multiple?: boolean; disabled?: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   const focus = hover ?? picked[picked.length - 1] ?? null;
   const id = focus === null ? null : ids[focus];
@@ -176,7 +228,9 @@ function CardGrid({ ids, picked, onPick, onConfirm }: { ids: string[]; picked: n
             onClick={() => onPick(k)}
             onMouseEnter={() => setHover(k)}
             onMouseLeave={() => setHover(null)}
-          />
+          >
+            {multiple && <input type="checkbox" className={s.choiceCheck} aria-label={cardTitle(cid)} checked={picked.includes(k)} disabled={disabled} onChange={() => onPick(k)} onClick={(e) => e.stopPropagation()} onFocus={() => setHover(k)} onBlur={() => setHover(null)} />}
+          </CardFace>
         ))}
       </div>
       <div className={s.detail} onDoubleClick={() => focus !== null && onConfirm?.(focus)}>
