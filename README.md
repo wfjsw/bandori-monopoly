@@ -2,6 +2,6 @@
 
 ## Reference
 
-Ideas & Game mechanics @ileuxali
+Ideas & Game mechanics [@ileuxali](https://github.com/ileuxali)
 
 Rule book: TBD
