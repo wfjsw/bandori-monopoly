@@ -1231,12 +1231,11 @@ impl Cx<'_> {
             }
             self.w.st.players[i].pos = next;
             m.path.push(next);
-            // `passTile` (Fx) -- the player has stepped onto this tile.
-            raise!(self, "passTile", i, @m m, tile = next)?;
-            if self.out(i) || !self.playing() {
-                return Ok(());
-            }
             if passes_circle || last {
+                // Publish the approach before `passTile`: CiRCLE's rule can
+                // halt there for its reward choice. The client must walk to
+                // the tile before showing that choice, then continue from it
+                // after the reward resolves, without snapping back to `from`.
                 let text = if first {
                     head(false)
                 } else {
@@ -1253,16 +1252,19 @@ impl Cx<'_> {
                 first = false;
                 seg_from = next;
                 seg_steps = 0;
-                if passes_circle {
-                    // The [经过] CiRCLE reward is `tile:circle`'s **Pass entry**
-                    // (`docs/TILES.md`), dispatched through the `passTile` hook
-                    // the raise above already fired. With no rule instance bound
-                    // on this tile (`StubRules`, or a kind not migrated) the
-                    // built-in reward runs here instead -- the same fallback
-                    // shape as `CardRules::settle_tile` -> `land_at_built_in`.
-                    if self.w.tile_rule_instances(at as i32).is_empty() {
-                        self.circle_reward(i, m.resolve && last, m.from)?;
-                    }
+            }
+            // `passTile` (Fx) -- the player has stepped onto this tile.
+            raise!(self, "passTile", i, @m m, tile = next)?;
+            if self.out(i) || !self.playing() {
+                return Ok(());
+            }
+            if passes_circle {
+                // The [经过] CiRCLE reward is `tile:circle`'s **Pass entry**
+                // (`docs/TILES.md`), dispatched through the `passTile` hook
+                // above. With no rule instance bound on this tile (`StubRules`,
+                // or a kind not migrated) the built-in reward runs here instead.
+                if self.w.tile_rule_instances(at as i32).is_empty() {
+                    self.circle_reward(i, m.resolve && last, m.from)?;
                 }
             }
             // `pass` -- every traversed tile, like `passBefore` / `passTile`
