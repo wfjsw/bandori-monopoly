@@ -143,7 +143,17 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
 export const GENERAL_BAND = "通用";
 
 export function cardTitle(id: string): string {
-  return D.card(id)?.name || tr("common.unnamed");
+  const name = D.card(id)?.name;
+  if (name) return name;
+  // Skills use card-typed message arguments too, but their names live in
+  // bands.json / characters.json. Match the engine's skill:<owner>:<skill> id.
+  if (id.startsWith("skill:")) {
+    const band = D.bands.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
+    if (band) return band.skill;
+    const character = D.characters.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
+    if (character) return character.skill;
+  }
+  return tr("common.unnamed");
 }
 
 /** C# `SkillText.Of(c)`: the simplified skill text when the setting is on. */
