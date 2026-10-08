@@ -299,6 +299,11 @@ clear the display or export a `.log` file. The in-memory tail holds 500 entries,
 with each entry capped at 12,000 characters; neither logs nor history write to
 the profile or match save.
 
+Run the console unit tests with `npm --prefix webui run test:console` (Node 24+).
+The keyboard, command validation and browser log capture tests use Node's
+built-in test runner. Engine cheat persistence and replay checks run with
+`cargo test -p game-core --test debug`.
+
 ## SSE stream
 
 | `event:` | `id:` | `data:` |

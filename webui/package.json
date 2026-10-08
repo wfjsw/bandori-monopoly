@@ -8,6 +8,7 @@
     "prebuild": "node ../tools/live2d/build.mjs && node ../tools/build-glue.mjs",
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
+    "test:console": "node --test src/console/*.test.ts",
     "preview": "rsbuild preview"
   },
   "devDependencies": {

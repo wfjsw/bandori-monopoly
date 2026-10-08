@@ -1,12 +1,11 @@
 import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { useLangVersion } from "../core/hooks";
 import { t as tr } from "../i18n/t";
-import { COMMANDS } from "./commands";
+import { acceptsInputKey, completeCommand, isConsoleShortcut, recallCommand, rememberCommand } from "./input";
 import { getLogs, subscribeLogs, clearLogs, type LogSource } from "./log";
 import { runConsoleCommand } from "./runtime";
 import s from "./Console.module.css";
 
-const HISTORY_LIMIT = 100;
 // Session-only history survives scene and language changes; no save mutations.
 const history: string[] = [];
 
@@ -28,11 +27,7 @@ export function Console() {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.isComposing || e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-      const target = e.target as HTMLElement | null;
-      const editable = target?.isContentEditable || (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName));
-      const toggle = e.code === "Backquote" || ["`", "~", "～", "·"].includes(e.key);
-      if ((toggle && (open || !editable)) || (open && e.key === "Escape")) {
+      if (isConsoleShortcut(e, open, e.target as HTMLElement | null)) {
         e.preventDefault();
         e.stopImmediatePropagation();
         setOpen((v) => !v);
@@ -59,10 +54,7 @@ export function Console() {
     e.preventDefault();
     const line = input.trim();
     if (!line || busy) return;
-    if (history.at(-1) !== line) {
-      history.push(line);
-      if (history.length > HISTORY_LIMIT) history.shift();
-    }
+    rememberCommand(history, line);
     historyIndex.current = history.length;
     draft.current = "";
     setInput("");
@@ -72,17 +64,17 @@ export function Console() {
   };
 
   const inputKey = (e: ReactKeyboardEvent<HTMLInputElement>) => {
-    if (e.nativeEvent.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!acceptsInputKey(e.nativeEvent)) return;
     if (e.key === "ArrowUp" || e.key === "ArrowDown") {
       e.preventDefault();
-      if (historyIndex.current === history.length) draft.current = input;
-      const index = Math.max(0, Math.min(history.length, historyIndex.current + (e.key === "ArrowUp" ? -1 : 1)));
-      historyIndex.current = index;
-      setInput(index === history.length ? draft.current : history[index] ?? "");
+      const recalled = recallCommand(history, historyIndex.current, draft.current, input, e.key === "ArrowUp" ? "up" : "down");
+      historyIndex.current = recalled.index;
+      draft.current = recalled.draft;
+      setInput(recalled.input);
     }
-    if (e.key === "Tab" && input.trim() && !/\s/.test(input.trim())) {
-      const matches = COMMANDS.filter((cmd) => cmd.startsWith(input.trim().toLowerCase()));
-      if (matches.length === 1) { e.preventDefault(); setInput(matches[0] + " "); }
+    if (e.key === "Tab") {
+      const completed = completeCommand(input);
+      if (completed !== null) { e.preventDefault(); setInput(completed); }
     }
   };
 

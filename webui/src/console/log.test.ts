@@ -38,3 +38,44 @@ test("listeners are deferred and batched, and can detach", async () => {
   await new Promise<void>((resolve) => queueMicrotask(resolve));
   assert.equal(called, 1);
 });
+
+test("log snapshots stay stable while IDs remain unique across clearing", () => {
+  clearLogs();
+  const empty = getLogs();
+  assert.equal(getLogs(), empty);
+  appendLog("command", "console", "> status");
+  const first = getLogs();
+  assert.equal(empty.length, 0);
+  assert.equal(getLogs(), first);
+  appendLog("result", "console", { round: 2 });
+  assert.equal(first.length, 1);
+  assert.equal(getLogs().length, 2);
+  const lastId = getLogs().at(-1)!.id;
+  clearLogs();
+  assert.deepEqual(getLogs(), []);
+  assert.equal(first[0].text, "> status");
+  appendLog("info", "game", "new scene");
+  assert.ok(getLogs()[0].id > lastId);
+});
+
+test("the bounded log retains exactly the newest entries in order", () => {
+  clearLogs();
+  for (let index = 0; index < LOG_LIMIT + 3; index++) appendLog("info", "game", index);
+  assert.deepEqual(getLogs().map((entry) => entry.text), Array.from({ length: LOG_LIMIT }, (_, index) => String(index + 3)));
+  const ids = getLogs().map((entry) => entry.id);
+  assert.equal(new Set(ids).size, LOG_LIMIT);
+  assert.ok(ids.every((id, index) => index === 0 || id > ids[index - 1]));
+});
+
+test("formatting preserves primitive values and marks truncated text", () => {
+  for (const [value, expected] of [[null, "null"], [false, "false"], [0, "0"], [1n, '"1n"'], [Symbol("test"), "Symbol(test)"]] as const) {
+    assert.equal(formatValue(value), expected);
+  }
+  clearLogs();
+  appendLog("log", "browser", "a".repeat(12_000));
+  assert.equal(getLogs()[0].text, "a".repeat(12_000));
+  appendLog("log", "browser", "b".repeat(12_001));
+  assert.equal(getLogs()[1].text, "b".repeat(12_000) + "\n…");
+  appendLog("log", "browser", "value", 0, false, null);
+  assert.equal(getLogs()[2].text, "value 0 false null");
+});
