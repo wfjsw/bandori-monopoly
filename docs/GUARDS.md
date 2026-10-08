@@ -704,3 +704,16 @@ the `skill_blocked` / once-flag play gates (their *expression* can move into
 `pre`; marker press checks stay as gates per the user's ruling), and the
 geometry / derived-list residuals GUARDS.md §6 lists (`meet_again` `next_dist`,
 `repaint` `on_path`, `secret_rainbow` grades, …).
+
+### 11.6 Fuzz soak finding (2026-10-08)
+
+`FUZZ_ITERS=2000 cargo test -p game-rules --test fuzz_interactions` (the
+default suite runs 900 and is green) finds **one** new finding at
+`seed=10174556463119430459`: `drain_prompts: prompts never stopped` — a
+`choice` prompt storm around `cards:card-ppp.returns_title` (PPP:Returns).
+The prompt loop caps at 400 iterations in the fuzz driver. Reproduces in ~22 s
+via `fuzz::one_iter(seed, 4)`. **Not from this batch**: it still reproduces
+with `SLOT_NAMES` reduced to the pre-fix list, and neither the kind-re-check
+strips nor the migrated entries touch `card-ppp`. Filed here as a new finding
+to add to `KNOWN_FINDINGS` / `rb_fuzz_found.rs` alongside the existing
+`money_ledger_gap` / `settle_loop_stuck` entries.

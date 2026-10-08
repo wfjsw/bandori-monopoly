@@ -27,7 +27,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「获得500*X资金，X为返回卡的总数」 -- X is `hidden.discard.Count`
     // before the shuffle (C# `CardCookieTime.Play`).
     let x = ctx::discard_size(player_id);
-    // The hook sweeps hand + discard (there is no `hand: false` flag on
+    // TODO(ABI): The hook sweeps hand + discard (there is no `hand: false` flag on
     // `sweep_to_deck`); X stays the discard size the rule names.
     ctx::sweep_to_deck(player_id);
     ctx::log(
