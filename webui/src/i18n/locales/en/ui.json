@@ -524,5 +524,9 @@
   "board.continueTurn": "Continue",
   "board.logStage": "Phase: {{stage}}",
   "board.leaveSettleTitle": "Settle this match?",
-  "board.leaveVoteTitle": "Vote to settle before leaving?"
+  "board.leaveVoteTitle": "Vote to settle before leaving?",
+  "prompt.addToDraw": "Select {{n}} cards to add to the draw pile together",
+  "prompt.confirmDraw": "Add to draw pile ({{n}}/{{total}})",
+  "prompt.addingToDraw": "Adding to draw pile ({{n}}/{{total}})",
+  "prompt.pickRetry": "The selection was not completed. Choose the remaining cards and retry."
 }

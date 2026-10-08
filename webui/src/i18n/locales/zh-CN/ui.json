@@ -524,5 +524,9 @@
   "board.continueTurn": "继续",
   "board.logStage": "阶段：{{stage}}",
   "board.leaveSettleTitle": "要结算本局吗？",
-  "board.leaveVoteTitle": "离开前发起结算投票？"
+  "board.leaveVoteTitle": "离开前发起结算投票？",
+  "prompt.addToDraw": "勾选 {{n}} 张卡，一次加入抽卡区",
+  "prompt.confirmDraw": "确认加入抽卡区（{{n}}/{{total}}）",
+  "prompt.addingToDraw": "正在加入抽卡区（{{n}}/{{total}}）",
+  "prompt.pickRetry": "提交未完成，请选择剩余的卡牌重试"
 }
