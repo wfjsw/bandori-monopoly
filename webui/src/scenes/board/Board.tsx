@@ -1,6 +1,6 @@
-// The match board (BoardDemoController). Left: players + log. Center: the ring
-// with the field panel and the event deck inside. Right: turn card, steps, d20,
-// actions, end turn, and the hand with your draw pile.
+// The match board (BoardDemoController). Left: players. Center: the ring
+// with the field panel and the event deck inside, and the collapsed hand
+// underneath. Controls sit below the players; the right is a full match log.
 
 import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";
@@ -18,7 +18,8 @@ import { openDeed, showLeave } from "./Popups";
 import { openPrompt, waitingOn } from "./Prompt";
 import { showResults } from "./Results";
 import { Ring } from "./Ring";
-import { Side } from "./Side";
+import { Hand, SettleVote, Side } from "./Side";
+import { shouldFinishTurn } from "./turnFlow";
 import s from "./Board.module.css";
 
 export function Board({ sess }: { sess: GameSession }) {
@@ -30,6 +31,7 @@ export function Board({ sess }: { sess: GameSession }) {
   useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
   const promptFor = useRef(0);
   const autoDeed = useRef(-1);
+  const autoEnd = useRef(-1);
   const resultsShown = useRef(false);
 
   const exit = () => {
@@ -46,8 +48,15 @@ export function Board({ sess }: { sess: GameSession }) {
   // While 托管 is on the prompt modal is not opened at all (it would block the
   // board) and the landing deed is left alone -- the autopilot answers both.
   useEffect(() => {
-    if (!m || anim.animating) return;
+    if (!m) return;
     const S = m.S;
+    // An extra turn may keep the same round and player. Re-arm when the
+    // engine leaves settlement, before waiting for its animation to finish.
+    if (S.step !== 4) {
+      autoDeed.current = -1;
+      autoEnd.current = -1;
+    }
+    if (anim.animating) return;
     if (!auto && waitingOn(S.prompt, m.playerId) && promptFor.current !== S.prompt.id && !isModalOpen("prompt")) {
       promptFor.current = S.prompt.id;
       sfx("prompt");
@@ -55,10 +64,21 @@ export function Board({ sess }: { sess: GameSession }) {
     }
     if (!auto && m.myTurn && S.step === 4 && !S.busy && !m.asking && S.landed >= 0) {
       const key = S.round * 100 + S.turn;
-      if (autoDeed.current !== key && !isModalOpen("deed") && (buyable(m, S.landed) || canBuildOn(m, S.landed))) {
+      if (autoDeed.current !== key && !isModalOpen() && (buyable(m, S.landed) || canBuildOn(m, S.landed))) {
         autoDeed.current = key;
         openDeed(sess, S.landed);
+        return;
       }
+    }
+    const key = S.round * 100 + S.turn;
+    if (autoEnd.current !== key && shouldFinishTurn(m, {
+      auto, animating: anim.animating, readOnly: sess.readOnly,
+      connected: sess.connected, modalOpen: isModalOpen(),
+    })) {
+      autoEnd.current = key;
+      void act(sess, { act: "end" }).then((ok) => {
+        if (!ok && autoEnd.current === key) autoEnd.current = -1;
+      });
     }
     if (S.phase === "ended" && !resultsShown.current) {
       resultsShown.current = true;
@@ -85,11 +105,16 @@ export function Board({ sess }: { sess: GameSession }) {
       <div className={s.body}>
         <div className={s.left}>
           <Players m={m} solo={sess.kind !== "online"} elapsed={(performance.now() - at) / 1000} />
-          <Log lines={anim.log} />
-        </div>
-        <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
-        <div className={s.right}>
           <Side m={m} sess={sess} anim={anim} />
+        </div>
+        <div className={s.middle}>
+          <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+        </div>
+        <div className={s.right}>
+          <div className={s.logSlot}>
+            <Log lines={anim.log}><SettleVote m={m} sess={sess} /></Log>
+            <Hand m={m} sess={sess} busy={anim.animating} />
+          </div>
         </div>
       </div>
     </>

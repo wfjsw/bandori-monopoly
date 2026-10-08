@@ -1,65 +1,54 @@
-/* Your own status (avatar, money, fire, status chips) and the 托管 pill.
-   Whose turn it is and its clock live on the player panels. */
-.turnCard { position: absolute; left: 0; right: 0; top: 20px; width: 300px; height: 96px; box-sizing: border-box; background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 96px 0 10px; border: 3px solid transparent; }
-/* The 托管 pill's slot: over the turn card's right end (card top 20 + (96 - 30) / 2). */
-.autoSlot { right: 10px; top: 53px; }
-.myTurn { border-color: var(--pink); background: #fff7f9; }
-.tcMid { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.tcTop { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.tcName { font-size: 18px; font-weight: 700; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.tcTag { flex: none; background: var(--pink); color: #fff; border-radius: 9px; font-size: 11px; line-height: 17px; padding: 0 8px; }
-.tcMoney { display: flex; align-items: center; gap: 5px; font-size: 20px; font-weight: 700; line-height: 1.2; }
-.tcMoney img { width: 22px; }
-.tcStats { display: flex; align-items: center; gap: 6px; font-size: 14px; flex-wrap: wrap; min-height: 18px; }
-.tcFire { display: flex; align-items: center; gap: 2px; }
-.tcFire img { width: 17px; }
-.tcStatus { font-size: 11px; padding: 0 6px; border-radius: 8px; background: var(--purple); color: #fff; line-height: 17px; }
-
-.steps { position: absolute; left: -10px; top: 129px; width: 316px; display: flex; gap: 6px; padding: 3px; box-sizing: border-box; }
-.step { flex: 1; min-width: 0; height: 37px; line-height: 37px; text-align: center; border-radius: 19px; background: #fff; font-size: 18px; font-weight: 700; white-space: nowrap; overflow: hidden; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); }
-.stepDone { background: var(--pink-pale); color: var(--pink); }
-.stepOn { background: var(--pink); color: #fff; box-shadow: 0 2px 8px rgba(229, 71, 118, 0.35); }
-
-.dice { position: absolute; left: 0; right: 0; top: 181px; width: 300px; height: 245px; border-radius: 14px; background: #fff; box-shadow: var(--shadow); cursor: default; }
-.dice::before { content: ""; position: absolute; inset: 6px; border-radius: 10px; background: linear-gradient(#ef5a80, #e64671); }
-.diceImg { position: absolute; left: 92px; top: 28px; width: 116px; transition: transform 0.1s; }
-.diceNum { position: absolute; left: 92px; top: 31px; width: 116px; height: 116px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700; color: var(--pink); -webkit-text-stroke: 1px #fff; }
-.diceHint { position: absolute; left: 40px; right: 40px; top: 160px; height: 28px; line-height: 28px; border-radius: 14px; background: #fff; color: var(--pink); font-size: 15px; font-weight: 700; text-align: center; white-space: nowrap; overflow: hidden; }
-.diceCap { position: absolute; left: 0; right: 0; top: 196px; text-align: center; color: #fff; font-size: 26px; font-weight: 700; }
-.diceCap small { font-size: 18px; }
-.star { position: absolute; width: 16px; opacity: 0.8; filter: sepia(1) saturate(5) hue-rotate(5deg); }
-.starA { left: 44px; top: 44px; }
-.note { right: 30px; top: 22px; width: 18px; filter: none; opacity: 0.95; }
+/* Four equally sized controls, anchored below the player column. */
+.actions { position: absolute; left: 0; right: 0; bottom: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.act { height: 64px; min-height: 64px; padding: 0 8px; font-size: 18px; gap: 6px; }
+.dim { opacity: 0.75; }
+.dice { position: relative; min-width: 0; height: 64px; border-radius: 12px; background: linear-gradient(#ef5a80, #e64671); color: #fff; box-shadow: var(--shadow); cursor: default; text-align: left; }
+.diceImg { position: absolute; left: 10px; top: 12px; width: 40px; transition: transform 0.1s; }
+.diceNum { position: absolute; left: 10px; top: 13px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--pink); -webkit-text-stroke: 1px #fff; }
+.advanceIcon { position: absolute; left: 15px; top: 17px; width: 30px; height: 30px; color: #fff; }
+.diceCap { position: absolute; left: 60px; right: 8px; top: 11px; font-size: 16px; font-weight: 700; white-space: nowrap; }
+.diceCap small { font-size: 11px; font-weight: 400; }
+.diceHint { position: absolute; left: 60px; right: 8px; top: 35px; line-height: 16px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
 .can { cursor: pointer; }
-.can::after { content: ""; position: absolute; inset: 6px; border-radius: 10px; box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.7); animation: ready 1s ease-in-out infinite alternate; }
-@keyframes ready { to { box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.1); } }
+.can::after { content: ""; position: absolute; inset: 4px; border-radius: 9px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7); animation: ready 1s ease-in-out infinite alternate; }
+@keyframes ready { to { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1); } }
 .can:hover .diceImg { transform: rotate(-8deg) scale(1.05); }
-/* Same inert look as Btn:disabled (the end-turn button): the dice is already
-   `disabled` unless `canRoll`, so it dims whenever it is not yours to roll. */
 .dice:disabled { opacity: 0.5; }
 .rolling .diceImg { animation: shake 0.11s linear infinite; }
 @keyframes shake { 50% { transform: rotate(12deg) scale(1.06); } }
+/* Active settlement votes are part of the log, not a second right-side panel. */
+.vote { flex: none; align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; font-size: 14px; background: var(--light-pill); border-radius: 8px; padding: 8px; }
+.voteActions { display: flex; gap: 8px; }
+.voteActions > button { flex: 1; }
 
-.actions { position: absolute; left: 0; right: 0; top: 443px; width: 300px; display: grid; grid-template-columns: 145px 145px; gap: 12px 10px; }
-.act { min-height: 52px; padding: 0 8px; font-size: 18px; gap: 6px; }
-.dim { opacity: 0.75; }
-.end { position: absolute; left: 0; right: 0; top: 573px; width: 300px; height: 56px; font-size: 22px; }
-
-.hand { position: absolute; left: 0; right: 0; top: 646px; width: 300px; height: 169px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 10px 8px; }
-.handHead { display: flex; align-items: center; gap: 8px; }
+/* The hand docks at the bottom of the right column's log slot -- the square
+   tile ring fills the stage height, so there is no strip beneath the board
+   (the PR's under-the-ring dock assumes a 6:5 map). Only title tabs are
+   visible at rest; the full card appears above them on hover or focus. */
+.hand { position: relative; flex: none; width: 100%; }
+.handHead { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+/* No stacking context on the hand: the auto switch must stay above modals. */
+.handTools { position: relative; flex: none; display: flex; align-items: center; min-height: 30px; }
+.handTools.withAuto { padding-right: 86px; }
+.autoSlot { right: 0; top: 0; }
+.thinkingSlot { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 41; pointer-events: none; white-space: nowrap; }
 .handHead > span:first-child { height: 28px; font-size: 15px; }
 /* Shares the row with the draw pile, so the longer hints (over the hand limit)
    wrap to a second line inside the tab's 28px instead of pushing it out. */
-.handHint { flex: 1; min-width: 0; font-size: 12px; line-height: 1.15; color: var(--sub); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.handHint { flex: 1; min-width: 0; font-size: 12px; line-height: 1.15; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 /* Your draw pile: the same card-back-and-count chip as each player's graveyard. */
-.deck { flex: none; display: flex; align-items: center; gap: 4px; padding: 0 2px; cursor: pointer; }
+.deck { flex: none; display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 9px; background: var(--panel); cursor: pointer; }
 .deck img { width: 18px; height: 24px; object-fit: cover; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.12s; }
 .deck:hover img { transform: translateY(-2px); }
 .deck b { font-size: 16px; }
 .warn { color: var(--tag-red); font-weight: 700; }
-.cards { display: flex; gap: 5px; margin-top: 8px; }
+.cards { display: flex; justify-content: center; gap: 8px; margin-top: 8px; min-height: 44px; }
+.handCard { position: relative; flex: 1; min-width: 0; max-width: 168px; height: 44px; padding: 4px 9px; border-top: 4px solid var(--band); border-radius: 7px; background: #fff; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.16); text-align: center; transition: transform 0.12s, box-shadow 0.12s; }
+.handCard span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 16px; font-weight: 700; }
+.handCard:hover, .handCard:focus-visible { transform: translateY(-6px); box-shadow: 0 0 0 2px var(--band), 0 6px 16px rgba(80, 40, 60, 0.2); }
+.handCard:focus-visible { outline: 2px solid var(--pink); outline-offset: 3px; }
 
-.preview { position: absolute; right: 312px; top: 441px; width: 240px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
+.preview { position: absolute; right: 0; bottom: 116px; width: 260px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
 .previewOn { opacity: 1; transform: none; }
 .pArt { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
 .pArt img { width: 100%; display: block; }
@@ -68,10 +57,9 @@
 .pText { font-size: 13px; line-height: 1.6; max-height: 190px; overflow: hidden; white-space: pre-wrap; }
 .pNote { font-size: 12px; color: var(--note); margin-top: 4px; }
 
-/* Draw-pile peek: beside the column like the card preview, but bottom-aligned
-   with the hand panel (top 675 + 140) so it grows upward from the pile. */
-.peek { position: absolute; right: 312px; top: 815px; width: 240px; max-height: 760px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translate(10px, -100%); transition: opacity 0.12s, transform 0.12s; }
-.peekOn { opacity: 1; transform: translate(0, -100%); }
+/* Draw-pile peek grows upward above the hand dock. */
+.peek { position: absolute; right: 0; bottom: 116px; width: 260px; max-height: 740px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
+.peekOn { opacity: 1; transform: none; }
 .peekHead { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; margin: 2px 4px 6px; }
 .peekHead b { color: var(--pink); }
 .peekRow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 13px; }
@@ -79,7 +67,3 @@
 .peekRow img { flex: none; width: 26px; height: 26px; object-fit: cover; border-radius: 3px; }
 .peekRow span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .peekEmpty { font-size: 13px; color: var(--sub); padding: 4px; }
-
-.extra { position: absolute; left: 0; right: 0; top: 828px; width: 300px; display: flex; gap: 8px; }
-.extra > button { flex: 1; padding: 0 6px; font-size: 14px; }
-.vote { flex: 1.4; display: flex; align-items: center; gap: 6px; font-size: 13px; background: #fff; border-radius: 9px; padding: 0 6px; }

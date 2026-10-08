@@ -61,9 +61,9 @@
   "board.graveyardPile": "Graveyard",
   "board.hand": "Hand {{n}}/{{max}}",
   "board.leaveForfeit": "Leave (forfeit)",
-  "board.leaveOnlineText": "Leaving counts as going out (like a bankruptcy). You can also vote to end the match first.",
-  "board.leaveSoloText": "The match is saved automatically and can be continued from Solo on the home screen.\nYou can also settle by score now, or leave and forfeit.",
-  "board.leaveStay": "Leave for now",
+  "board.leaveOnlineText": "You can vote to settle this match by the current scores.\nLeaving directly counts as going out (like a bankruptcy).",
+  "board.leaveSoloText": "You can settle this match by the current scores.\nOr leave for now: the match is saved automatically and can be continued from Solo.",
+  "board.leaveStay": "Leave without settling",
   "board.leaveTitle": "Leave match",
   "board.markCp": "CP point",
   "board.markFrom": "From: {{card}}",
@@ -553,5 +553,10 @@
   "console.invalidJson": "act requires a valid command JSON, e.g. act {\"act\":\"roll\"}.",
   "console.cardNotFound": "No unique card for {{card}}. Search with cards and use its ID.",
   "console.unknown": "Unknown command: {{command}}. Enter help for commands.",
-  "console.help": "Inspect and debug\n  help                         Show help\n  clear                        Clear logs\n  status                       Session, phase, turn, prompt, cheat flag\n  players                      Seat numbers, money, positions\n  hand                         Your hand card IDs\n  inspect [state|prompt|profile|engine]\n  inspect player [seat]        Player and state counters\n  cards [query]                Find card IDs / names / bands; first 100 results\n  tiles                        Tile numbers\n  auto off|bot|chaos|advanced   Change your autopilot\n  act {\"act\":\"roll\"}            Send command JSON (normal game rules apply)\n\nSolo cheats (debug builds only; play phase, no pending prompt)\n  money <amount> [seat]        Set money, 0–100000000\n  tp <tile> [seat]             Teleport without passing / landing effects\n  give <card ID or name> [count] [seat]\n  draw <count> [seat]          Draw from the deck\n  state <key> <value> [seat]   Set an existing counter, honoring its cap;\n                               inspect player lists the keys\n  Examples: money 50000 / tp 10 / draw 2 / state fire 5\n\nSeats start at 0; omitted seat means yourself. Quote names with spaces.\nCount is 1–100. Cheats are saved and recorded, and set the cheated flag.\nThe game keeps running. ↑↓ history, Tab completes command names."
+  "console.help": "Inspect and debug\n  help                         Show help\n  clear                        Clear logs\n  status                       Session, phase, turn, prompt, cheat flag\n  players                      Seat numbers, money, positions\n  hand                         Your hand card IDs\n  inspect [state|prompt|profile|engine]\n  inspect player [seat]        Player and state counters\n  cards [query]                Find card IDs / names / bands; first 100 results\n  tiles                        Tile numbers\n  auto off|bot|chaos|advanced   Change your autopilot\n  act {\"act\":\"roll\"}            Send command JSON (normal game rules apply)\n\nSolo cheats (debug builds only; play phase, no pending prompt)\n  money <amount> [seat]        Set money, 0–100000000\n  tp <tile> [seat]             Teleport without passing / landing effects\n  give <card ID or name> [count] [seat]\n  draw <count> [seat]          Draw from the deck\n  state <key> <value> [seat]   Set an existing counter, honoring its cap;\n                               inspect player lists the keys\n  Examples: money 50000 / tp 10 / draw 2 / state fire 5\n\nSeats start at 0; omitted seat means yourself. Quote names with spaces.\nCount is 1–100. Cheats are saved and recorded, and set the cheated flag.\nThe game keeps running. ↑↓ history, Tab completes command names.",
+  "board.skipMovement": "Skip movement",
+  "board.continueTurn": "Continue",
+  "board.logStage": "Phase: {{stage}}",
+  "board.leaveSettleTitle": "Settle this match?",
+  "board.leaveVoteTitle": "Vote to settle before leaving?"
 }

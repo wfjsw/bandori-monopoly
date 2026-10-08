@@ -1,153 +1,82 @@
-// Right column: current turn card with the turn timer, phase steps, the d20,
-// action buttons, end turn, and the hand (with a full-size hover preview) and
-// your draw pile.
+// Compact turn controls at the bottom left; the Hand is docked below the map.
 
 import { useEffect, useRef, useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
-import { n0 } from "../../core/format";
 import { useAutoplay } from "../../core/hooks";
 import type { GameSession } from "../../game/session";
-import { SoloSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
-import { type CardAction, CardFace, showCard, TagChip } from "../../ui/Card";
-import { Avatar, bandColor } from "../../ui/Character";
+import { type CardAction, showCard, TagChip } from "../../ui/Card";
+import { bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
+import { Icon } from "../../ui/Icon";
 import { SkillBody } from "../../ui/SkillBody";
-import { showScoreWeights } from "../../ui/ScoreWeights";
-import { toast } from "../../ui/Toast";
 import type { Animator } from "./anim";
-import { act, canBuildOn, type Model } from "./model";
-import { byTitle, openDeed, showDeck, showDeedList, showSettle, showSkills } from "./Popups";
+import { act, type Model } from "./model";
+import { byTitle, showDeck, showDeedList, showSkills } from "./Popups";
+import { movementControl } from "./turnFlow";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
-import { namesOf, stateMax, stateOf } from "../../core/names";
-import { statusChips } from "./Players";
-
-/** The turn stages, by the game's own names (开始 / 运营 / 移动 / 结束) -- the
- *  sweep effect that announces them is separate and unchanged. */
-
-const phases = () => [tr("common.start"), tr("board.stepOps"), tr("board.stepMove"), tr("board.stepEnd")];
+import { namesOf, stateOf } from "../../core/names";
 
 export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Animator }) {
-  const auto = useAutoplay(sess); // 托管: every input here is locked
+  const auto = useAutoplay(sess);
   const S = m.S;
   const cur = S.players[S.turn];
-  const myChar = m.charOf(m.playerId);
-  // The rulebook's four stages are 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`)
-  // and `phases()` lists them in that order. The engine's `step` carries the
-  // rulebook's own stage number (0 before a turn, 1..4 after), so `step - 1`
-  // indexes the labels. Off by one here and 运营 -- the stage players spend
-  // their turn in -- reads as 开始.
-  //
-  // While events play, the marker follows the animation (`anim.stage`), not
-  // the state: one roll comes back as dice + walk + `step = 结束` together, and
-  // the state alone would name 结束 before the dice land. Once the queue drains
-  // it follows `S.step` again, with no lag of its own -- `canRoll` and
-  // everything else read the real step, so a marker held behind it reads as
-  // "stuck in 开始" while the dice are already live.
-  const shown = S.phase !== "play" ? -1 : Math.min(3, Math.max(0, (anim.stage ?? S.step) - 1));
-  const animating = anim.animating;
-  const canRoll = S.phase === "play" && S.roller === m.playerId && S.step === 2 && !S.skipMove && !S.busy && !m.asking && !animating && !auto;
-  const can = m.myTurn && !S.busy && !m.asking && !animating && !auto;
+  const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+  const can = control !== null;
+  const advance = control === "end";
 
   let hint: string;
   if (S.phase !== "play") hint = "";
   else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
   else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
-  else if (S.busy || animating) hint = tr("board.settling");
+  else if (S.busy || anim.animating) hint = tr("board.settling");
   else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
   else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
+  else if (advance) hint = tr("board.moved");
   else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: S.players[S.roller].player });
   else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
   else hint = tr("board.waiting", { who: cur?.player ?? "", bot: cur?.bot ? tr("board.botSuffix") : "" });
 
-  const buildFromButton = () => {
-    if (!m.myTurn) return toast(tr("board.buildOwnOnly"));
-    const p = m.me.pos;
-    if (!canBuildOn(m, p)) return toast(S.owners[p] === m.playerId ? tr("board.buildOnlySettling") : tr("board.buildNotOnOwn"));
-    openDeed(sess, p);
-  };
   const hasSkill = m.me.actions?.some((a) => a.enabled);
-  const weights = sess instanceof SoloSession ? sess.weights : sess.room?.weights ?? { money: 1, property: 1, houses: 1 };
-  const vote = S.vote;
-  const k = vote.players.indexOf(m.playerId);
-
+  const caption = advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice");
   return (
-    <>
-      {/* Your own status only -- whose turn it is, and its clock, live on the
-          player panels (Players.tsx). */}
-      <div className={cx(s.turnCard, m.myTurn && s.myTurn)}>
-        <Avatar c={myChar} size={64} />
-        <div className={s.tcMid}>
-          <div className={s.tcTop}>
-            <span className={s.tcName}>{myChar?.display ?? m.me.player}</span>
-            {m.myTurn && <span className={s.tcTag}>{tr("board.turn")}</span>}
-          </div>
-          <div className={s.tcMoney}><img src={sceneImg("icon_coin")} alt="" />{n0(m.me.money)}</div>
-          <div className={s.tcStats}>
-            <span className={s.tcFire}><img src={sceneImg("icon_fire")} alt="" />{stateOf(m.me, "fire")}/{stateMax(m.me, "fire")}</span>
-            {statusChips(m.me).map((x) => <span key={x} className={s.tcStatus}>{x}</span>)}
-          </div>
-        </div>
-      </div>
-      {/* 托管 / 混沌 / 进阶: your own seat's mode. Drawn over the card's right end but
-          outside it, so it can sit above any open modal -- it has to be
-          clickable at any time. The 进阶 search's "thinking…" pill sits beside it. */}
-      <div className={cx(autoFloat, s.autoSlot)}>
-        <ThinkingPill sess={sess} />
-        <AutoToggle sess={sess} compact />
-      </div>
-
-      <div className={s.steps}>
-        {phases().map((label, i) => <span key={label} className={cx(s.step, i === shown ? s.stepOn : i < shown && s.stepDone)}>{label}</span>)}
-      </div>
-
-      <button type="button" className={cx(s.dice, canRoll && s.can, anim.rolling && s.rolling)} disabled={!canRoll} onClick={() => void act(sess, { act: "roll" })}>
-        <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />
-        <div className={s.diceNum}>{anim.dice || ""}</div>
+    <div className={s.actions}>
+      <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} disabled={auto} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
+      <button type="button" className={cx(s.dice, can && s.can, anim.rolling && s.rolling)} title={hint} disabled={!can} onClick={() => control && void act(sess, { act: control })}>
+        {advance ? <Icon name="arrow_forward" className={s.advanceIcon} /> : <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />}
+        {!advance && <div className={s.diceNum}>{anim.dice || ""}</div>}
+        <div className={s.diceCap}>{caption}{!advance && <small>{" "}1d20</small>}</div>
         <div className={s.diceHint}>{hint}</div>
-        <div className={s.diceCap}>{tr("board.dice")}<small>{" "}1d20</small></div>
-        <img className={cx(s.star, s.starA)} src={sceneImg("star5")} alt="" />
-        <img className={cx(s.star, s.note)} src={sceneImg("ic_music_note")} alt="" />
       </button>
-
-      <div className={s.actions}>
-        <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} disabled={auto} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
-        <Btn icon="construction" className={s.act} disabled={auto} onClick={buildFromButton}>{tr("board.build")}</Btn>
-        <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
-        <Btn icon="redo" className={s.act} disabled={auto} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
-      </div>
-      {/* Matches `why_not_act`'s "end": legal anywhere the player's turn is
-          theirs and quiet, except 运营 with a move still owed (roll first) and
-          移动 (the walk is still running). The old gate demanded 结束 outright,
-          which left the button dead through 开始 and through a [停留] 运营. */}
-      <Btn kind="blue" icon="check" className={s.end} disabled={!(can && S.step !== 3 && (S.step !== 2 || S.skipMove) && !m.overHand)} onClick={() => void act(sess, { act: "end" })}>
-        {m.myTurn && S.step === 2 && S.skipMove ? tr("board.endTurnSkip") : tr("board.endTurn")}
-      </Btn>
-
-      <Hand m={m} sess={sess} busy={animating} />
-
-      <div className={s.extra}>
-        {vote.id ? (
-          <div className={s.vote}>
-            <span>{tr("board.voteStatus", { n: vote.answers.filter((a) => a === 1).length, total: vote.players.length })}</span>
-            {k >= 0 && vote.answers[k] < 0 && <Btn kind="pink" size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 1 })}>{tr("board.voteFor")}</Btn>}
-            {k >= 0 && vote.answers[k] < 0 && <Btn size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>}
-          </div>
-        ) : (
-          <Btn size="small" icon="leaderboard" disabled={S.phase !== "play" || m.out || auto} onClick={() => showSettle(sess)}>{sess.kind !== "online" ? tr("board.settle") : tr("board.voteEnd")}</Btn>
-        )}
-        <Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(weights, false, undefined, tr("board.scoreRulesLocked"))}>{tr("solo.scoreRules")}</Btn>
-      </div>
-    </>
+      <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
+      <Btn icon="redo" className={s.act} disabled={auto} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
+    </div>
   );
 }
 
-function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
+/** Only appears when somebody has already requested an online settlement. */
+export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
+  const auto = useAutoplay(sess);
+  const vote = m.S.vote;
+  const k = vote.players.indexOf(m.playerId);
+  if (!vote.id) return null;
+  return (
+    <div className={s.vote}>
+      <span>{tr("board.voteStatus", { n: vote.answers.filter((a) => a === 1).length, total: vote.players.length })}</span>
+      {k >= 0 && vote.answers[k] < 0 && <div className={s.voteActions}>
+        <Btn kind="pink" size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 1 })}>{tr("board.voteFor")}</Btn>
+        <Btn size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>
+      </div>}
+    </div>
+  );
+}
+
+export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   const [hover, setHover] = useState<{ id: string; note: string } | null>(null);
   const [peek, setPeek] = useState(false);
   const auto = useAutoplay(sess); // 托管: play / discard are locked (inspect stays)
@@ -211,17 +140,34 @@ function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean })
           <span className={cx(s.handHint, m.overHand && s.warn)}>{m.overHand ? tr("board.overHand") : canPlay ? tr("board.canPlay") : tr("board.tapCard")}</span>
           {/* Your draw pile, at the head of the hand it feeds (it used to sit in
               the board centre). Hover lists what is left; click opens the cards. */}
-          <button type="button" className={s.deck} title={tr("board.drawPile")} onMouseEnter={() => setPeek(true)} onMouseLeave={() => setPeek(false)} onClick={() => { setPeek(false); showDeck(m); }}>
-            <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
-          </button>
+          <div className={cx(s.handTools, !sess.readOnly && s.withAuto)}>
+            <button type="button" className={s.deck} title={tr("board.drawPile")} onMouseEnter={() => setPeek(true)} onMouseLeave={() => setPeek(false)} onFocus={() => setPeek(true)} onBlur={() => setPeek(false)} onClick={() => { setPeek(false); showDeck(m); }}>
+              <img src={sceneImg("card_back")} alt="" /><b>{m.me.draw}</b>
+            </button>
+            <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} compact /></div>
+            <div className={s.thinkingSlot}><ThinkingPill sess={sess} /></div>
+          </div>
         </div>
         <div className={s.cards} ref={cardsRef}>
           {m.v.hand.map((id, k) => (
-            <CardFace key={`${id}:${k}`} id={id} size="hand" onClick={() => detail(id, k)} onMouseEnter={() => setHover({ id, note: fmtMsg(m.v.handNotes[k], namesOf(m.S)) })} onMouseLeave={() => setHover(null)} />
+            <button
+              key={`${id}:${k}`}
+              type="button"
+              className={s.handCard}
+              style={{ ["--band" as string]: bandColor(D.card(id)?.band ?? "") }}
+              title={cardTitle(id)}
+              onClick={() => detail(id, k)}
+              onMouseEnter={() => setHover({ id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
+              onMouseLeave={() => setHover(null)}
+              onFocus={() => setHover({ id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
+              onBlur={() => setHover(null)}
+            >
+              <span>{cardTitle(id)}</span>
+            </button>
           ))}
         </div>
       </div>
-      {/* Card-game improvement: hovering a hand card shows it full size next to the hand. */}
+      {/* Hovering or focusing a title reveals the full card above the bottom dock. */}
       <div className={cx(s.preview, hover && s.previewOn)}>
         {hover && (
           <>

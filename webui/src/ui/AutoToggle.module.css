@@ -24,7 +24,7 @@
   box-shadow: var(--shadow);
   white-space: nowrap;
 }
-/* The board's turn card: a small pill under the timer. */
+/* The board's hand header: a small pill beside the draw pile. */
 .compact {
   height: 30px;
   padding: 0 10px;
