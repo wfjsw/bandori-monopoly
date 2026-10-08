@@ -12,7 +12,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play(None, same_dream, "")]);
+pub const SAME_DREAM: CardDef = CardDef::new("PP:同一个梦想", &[On::Play("", None, same_dream)]);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";

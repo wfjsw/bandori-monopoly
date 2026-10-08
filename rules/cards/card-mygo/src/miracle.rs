@@ -11,20 +11,20 @@
 //! instead of money when building; after passing every other player once,
 //! collect the "last three digits" purse of the crystal-closest rival.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
-        On::Play(None, miracle, ""),
-        On::Hook(&[HookKind::BuildBefore], Some(mine), before_build, ""),
-        On::Hook(&[HookKind::BuildAfter], Some(mine), after_build, ""),
+        On::Play("", None, miracle),
+        On::Hook(&[HookKind::BuildBefore], "", Some(mine), before_build),
+        On::Hook(&[HookKind::BuildAfter], "", Some(mine), after_build),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠].
-        On::Hook(&[HookKind::PassTile], None, pass_player, ""),
+        On::Hook(&[HookKind::PassTile], "", None, pass_player),
     ],
 );
 

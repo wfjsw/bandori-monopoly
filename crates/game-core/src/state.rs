@@ -80,6 +80,29 @@ pub struct MatchState {
     pub buy_price: i32,
     /// `State.buildCost` -- the same preview for building (`-1` = cannot build).
     pub build_cost: i32,
+    /// `State.canBuyHere` -- would `act {act:"buy"}` be accepted at the turn's
+    /// position right now? The engine's own gate (`why_not_act`'s buy branch =
+    /// `buyable_here` + the quoted funds check): buyable shape, the plan's
+    /// no-buy flag, the quote's `eligible` gate, and the money. Together with
+    /// [`Self::buy_price`] this is the view's why-not information for a buy --
+    /// the bot action abstraction gates Buy on it instead of re-implementing
+    /// the check. `false` when nothing is buyable, and when the engine would
+    /// refuse (`err.cannot_buy` / `err.buy_poor`).
+    pub can_buy_here: bool,
+    /// `State.canBuildHere` -- the same for `act {act:"build"}`
+    /// (`why_not_build` + the funds half of `why_not_act`'s build branch).
+    /// `false` when the engine would refuse (`err.build_*` / `err.poor`).
+    pub can_build_here: bool,
+    /// `State.canRollHere` -- would `act {act:"roll"}` be accepted
+    /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
+    /// `main_moved` flag, and the roller).
+    pub can_roll_here: bool,
+    /// `State.canEndHere` -- the same for `act {act:"end"}` (the end branch:
+    /// `roll_first` while a main move is still owed, `moving`, `over_hand`).
+    /// The public [`Self::skip_move`] re-derives from stay / exile and can
+    /// disagree with this gate (unstoppable, mid-turn [停留], [除外]) -- a bot
+    /// that trusted it sent `end` into `err.roll_first`.
+    pub can_end_here: bool,
     /// `State.plan` -- the movement this turn is taking.
     pub plan: MovePlan,
     pub time_left: f32,
@@ -145,6 +168,10 @@ impl Default for MatchState {
             think_time: 0,
             buy_price: -1,
             build_cost: -1,
+            can_buy_here: false,
+            can_build_here: false,
+            can_roll_here: false,
+            can_end_here: false,
             plan: MovePlan::default(),
             time_left: 0.0,
             shield: 0.0,

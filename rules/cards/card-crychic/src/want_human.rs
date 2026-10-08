@@ -16,8 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
-        On::Play(None, want_human, ""),
-        On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], Some(counteract_guard), counteract, ""),
+        On::Play("", None, want_human),
+        On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], "", Some(counteract_guard), counteract),
     ],
 );
 

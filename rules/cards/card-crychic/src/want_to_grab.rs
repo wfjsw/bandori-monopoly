@@ -25,13 +25,13 @@ const PASSER: &str = "want_to_grab_passer";
 pub const WANT_TO_GRAB: CardDef = CardDef::new(
     "CRYCHIC:想要抓住...",
     &[
-        On::Play(None, want_to_grab, ""),
+        On::Play("", None, want_to_grab),
         // TODO(规则书) R5 (`SETTLE-STAGES.md` §9): 「当第一位其他玩家经过你」 is
         // 经过 (行动阶段 12, a mid-route pass of my tile) or 重叠 (`passPlayer`,
         // the end-tile overlap)? The C# `GrabFx` used `PassPlayer`; the text
         // says 「经过」. Pending ruling -- left as `PassPlayer` (C#-carried).
-        On::Hook(&[HookKind::PassPlayer], None, on_pass, ""),
-        On::Hook(&[HookKind::SettleBefore], None, grab, ""),
+        On::Hook(&[HookKind::PassPlayer], "", None, on_pass),
+        On::Hook(&[HookKind::SettleBefore], "", None, grab),
     ],
 );
 

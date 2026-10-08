@@ -7,16 +7,16 @@
 //! Sheet 2026-10-06: every threshold is inclusive (「至少为」), and the
 //! ineffective branch is 「小于10」. So 10 builds, 15 draws, 20 places.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const HANEOKA: CardDef = CardDef::new(
     "MyGO:羽丘的不可思议女孩",
     &[
-        On::Play(Some(cant_play), haneoka, ""),
+        On::Play("", Some(cant_play), haneoka),
         // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-        On::Hook(&[HookKind::PayChoose], None, pay_choose, ""),
+        On::Hook(&[HookKind::PayChoose], "", None, pay_choose),
     ],
 );
 

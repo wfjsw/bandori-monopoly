@@ -11,3 +11,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 card-sdk = { path = "../card-sdk", features = ["guest"] }
+
+[build-dependencies]
+# build.rs reads data/schools.json into the 上学时间 table.
+serde_json = "1"

@@ -22,7 +22,8 @@ path that is not a file is answered with `index.html`; missing files still 404.
 out on a fixed 1600 × 900 stage scaled to the window, like the original.
 
 ```sh
-node tools/build-glue.mjs          # wasm rules -> webui/src/wasm/
+node tools/build-ruleset.mjs      # card modules + precompiled conds -> dist/cards, webui/public/assets/rules
+node tools/build-glue.mjs         # wasm glue -> webui/src/wasm/
 cd webui && npm run dev           # :5173, proxies /api and /data to :8080
 cd webui && npm run build         # dist/, served by --static (prebuild: tools/live2d/build.mjs)
 ```
@@ -30,6 +31,33 @@ cd webui && npm run build         # dist/, served by --static (prebuild: tools/l
 `npm run build` compiles the Live2D models first (`prebuild` ->
 `tools/live2d/build.mjs`, see [LIVE2D.md](LIVE2D.md)); a model whose assets are
 already up to date is skipped.
+
+### Deploy gate
+
+The client's card rules are only live if the **whole** chain runs: the modules
+and their compiled guard conditions reach the browser glue (`docs/GUARDS.md`
+§8.2). Run these before a deploy; any failure blocks it.
+
+```sh
+node tools/build-ruleset.mjs
+node tools/build-glue.mjs
+node --test webui/src/game/ruleset.test.ts      # real ruleset into the real glue (CONDS gate)
+node --test webui/src/game/autopilot.test.ts webui/src/game/record.test.ts webui/src/game/engineBundle.test.ts
+node --test webui/src/game/botBudget.test.ts webui/src/game/botDrive.test.ts webui/src/game/botPool.test.ts
+# ...and `node tools/build-bot-glue.mjs` first: the advanced-bot worker bundle
+# (docs/BOT.md B6). Lazy-loaded; the deploy ships it beside
+# webui/public/assets/engine/bot-worker.js. The archive / replay path does not
+# need it (replays never run the bot).
+cargo test -p game-rules -p rules-cond -j 2
+cd webui && npx tsc --noEmit
+```
+
+`ruleset.test.ts` is the one that would have caught G4's breakage: it loads
+`webui/public/assets/rules` (or `dist/cards`) through the same
+`loadRulesetInto` sequence the page uses and asserts zero load errors, that a
+card with a `pre` evaluates, and that a missing precompiled blob fails loudly
+instead of treating the condition as true. `cargo test -p game-rules` pins the
+shipped `conds-*.bin` against a fresh host compile of every `pre`.
 
 Localization is documented in [I18N.md](I18N.md): the server sends message
 keys (`Msg`), the client renders them per player.

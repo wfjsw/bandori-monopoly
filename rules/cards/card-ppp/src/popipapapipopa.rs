@@ -20,8 +20,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
     "PPP:[衍生]Popipapapipopa",
     &[
-        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
-        On::Hook(&[HookKind::PayChoose], Some(pay_choose_guard), pay_choose, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
+        On::Hook(&[HookKind::PayChoose], "", Some(pay_choose_guard), pay_choose),
     ],
 );
 

@@ -29,9 +29,9 @@ const USED: &str = "skill.takiCrychic.used";
 pub const TAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:椎名立希（CRYCHIC）:克服劣等感",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollAfter], None, on_roll, ""),
-        On::Hook(&[HookKind::SkillUsed], None, on_skill_used, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::RollAfter], "", None, on_roll),
+        On::Hook(&[HookKind::SkillUsed], card_sdk::pre::MINE, None, on_skill_used),
     ],
 )
     .legacy(&[(0, legacy_mine), (2, legacy_mine)]);

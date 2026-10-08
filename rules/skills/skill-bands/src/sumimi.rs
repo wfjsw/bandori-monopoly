@@ -21,9 +21,9 @@ const GOT: &str = "skill.sumimi.got";
 pub const SUMIMI: CardDef = CardDef::new(
     "skill:Sumimi:人气偶像组合",
     &[
-        On::Hook(&[HookKind::PayAfter], None, after_pay, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::PayMul], None, bend, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnEndBefore], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, None, after_pay),
+        On::Hook(&[HookKind::PayMul], card_sdk::pre::MINE, None, bend),
+        On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);

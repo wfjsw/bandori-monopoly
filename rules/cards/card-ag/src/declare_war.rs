@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DECLARE_WAR: CardDef = CardDef::new(
     "AG:宣战布告",
-    &[On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
 );
 
 fn can_counteract(player_id: i32) -> bool {

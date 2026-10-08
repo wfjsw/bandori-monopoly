@@ -11,7 +11,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play(None, great, "")]);
+pub const GREAT: CardDef = CardDef::new("通用:GREAT", &[On::Play("", None, great)]);
 
 fn great(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「1. [移除]此卡」

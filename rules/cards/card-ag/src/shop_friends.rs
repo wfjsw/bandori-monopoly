@@ -13,7 +13,7 @@ use card_sdk::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SHOP_FRIENDS: CardDef =
-    CardDef::new("AG:商店街的青梅竹马", &[On::Play(Some(cant_play), play, "")]);
+    CardDef::new("AG:商店街的青梅竹马", &[On::Play("", Some(cant_play), play)]);
 
 /// C# `CardShopFriends.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {

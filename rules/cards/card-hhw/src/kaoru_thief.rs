@@ -18,11 +18,11 @@ const ID: &str = "HHW:（薰）怪盗hello happy";
 pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
-        On::Play(Some(cant_play), play, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
-        On::Hook(&[HookKind::PassPlayer], Some(pass_player_guard), pass_player, ""),
+        On::Play("", Some(cant_play), play),
+        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        On::Hook(&[HookKind::PassPlayer], "", Some(pass_player_guard), pass_player),
         On::RollPlan(roll_plan),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 

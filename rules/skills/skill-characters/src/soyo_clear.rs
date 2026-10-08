@@ -29,10 +29,10 @@ const PENALTY: &str = "skill.soyoClear.penalty";
 pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollAfter], None, offer, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Settle], None, on_settle, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, offer),
+        On::Hook(&[HookKind::Settle], card_sdk::pre::MINE, None, on_settle),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]);

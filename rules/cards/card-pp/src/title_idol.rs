@@ -12,7 +12,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play(None, title_idol, "")]);
+pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)]);
 
 fn title_idol(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]1: 「为[使用者]的Pastel✽Palettes乐队卡添加2个[奇迹水晶]」

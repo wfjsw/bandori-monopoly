@@ -14,9 +14,9 @@ pub const VOCAL_TOO_HARD: CardDef = CardDef::new(
     "CRYCHIC:主唱太拼命了",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
         None,
         counteract,
-        "actor == owner && effect.has(Pay) && target >= 0 && value >= 5000",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

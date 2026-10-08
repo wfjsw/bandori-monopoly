@@ -27,10 +27,10 @@ const OWED: &str = "skill.tsugumiPlain.owed";
 pub const TSUGUMI_PLAIN: CardDef = CardDef::new(
     "skill:羽泽鸫:伟大的平凡",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(afterglow), tick, ""),
-        On::Hook(&[HookKind::RollPlan], None, on_plan, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, None, on_plan),
     ],
 )
     .legacy(&[(3, legacy_mine)]);

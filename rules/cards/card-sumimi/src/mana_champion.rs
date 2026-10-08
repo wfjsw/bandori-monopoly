@@ -6,7 +6,7 @@
 //!
 //! [反击] that lets the other players counteract as if they were the target.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -14,9 +14,9 @@ pub const MANA_CHAMPION: CardDef = CardDef::new(
     "Sumimi:（真奈）歌唱大赛5连冠",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "by != owner && by >= 0 && effect.hits(owner)",
         None,
         counteract,
-        "by != owner && by >= 0 && effect.hits(owner)",
     )],
 )
 .legacy(&[(0, legacy_can_counteract)]);

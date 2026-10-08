@@ -32,9 +32,9 @@ fn shop() -> i32 {
 pub const TOMOE_RAMEN: CardDef = CardDef::new(
     "skill:宇田川巴:豚骨酱油拉面大姐",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(afterglow), tick, ""),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
     ],
 );
 

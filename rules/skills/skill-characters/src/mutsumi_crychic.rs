@@ -27,10 +27,10 @@ const THEIRS: &str = "skill.mutsumiCrychic.theirs";
 pub const MUTSUMI_CRYCHIC: CardDef = CardDef::new(
     "skill:若叶睦（CRYCHIC）:精致的人偶",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, at_start, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollAfter], Some(other), latch, ""),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::RollAfter], "", Some(other), latch),
     ],
 )
     .legacy(&[(2, legacy_mine)]);

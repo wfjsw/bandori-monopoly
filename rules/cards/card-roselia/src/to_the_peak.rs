@@ -10,7 +10,7 @@ use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play(Some(cant_play), play, "")]);
+pub const TO_THE_PEAK: CardDef = CardDef::new("R:向着顶点", &[On::Play("", Some(cant_play), play)]);
 
 /// The buyable Livehouse deeds (C# `H.LiveHouses`: `IsBuyable && IsColor(6)`),
 /// where `IsColor` sees both the `anyColor` tile prop and this player's

@@ -18,8 +18,8 @@ const TAKEN: &str = "skill.morfonica.moneyTaken";
 pub const MORFONICA: CardDef = CardDef::new(
     "skill:Morfonica:振翅高飞的练习曲",
     &[
-        On::Hook(&[HookKind::PayAfter], None, after_pay, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::CircleAffected], None, on_circle, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, None, after_pay),
+        On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);

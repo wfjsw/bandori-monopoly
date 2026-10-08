@@ -16,9 +16,9 @@ const JELLY: &str = "水母标记";
 pub const KANON_MARCH: CardDef = CardDef::new(
     "HHW:（花音）Wacha Mocha 啪嗒进行曲",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Play(Some(can_jump), jump, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Play("", Some(can_jump), jump),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "HHW:因为我一直相信着你";
 
 pub const BELIEVE_YOU: CardDef =
-    CardDef::new("HHW:因为我一直相信着你", &[On::Play(Some(cant_play), play, "")])
+    CardDef::new("HHW:因为我一直相信着你", &[On::Play("", Some(cant_play), play)])
         .props(&[(card_sdk::abi::prop::EST_COST, 800)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {

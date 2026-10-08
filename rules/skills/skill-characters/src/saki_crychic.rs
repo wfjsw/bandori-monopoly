@@ -21,9 +21,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     "skill:丰川祥子（CRYCHIC）:你愿意和我组建乐队吗？",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::SettleBefore], Some(any), before_settle, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::SettleBefore], "", Some(any), before_settle),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

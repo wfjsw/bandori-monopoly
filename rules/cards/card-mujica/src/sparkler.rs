@@ -6,7 +6,7 @@
 //!
 //! with 2 miracle crystals; each turn end burns one for an extra turn.
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -15,12 +15,12 @@ const ID: &str = "Mujica:燃尽前的线香花火";
 pub const SPARKLER: CardDef = CardDef::new(
     "Mujica:燃尽前的线香花火",
     &[
-        On::Play(None, sparkler, ""),
+        On::Play("", None, sparkler),
         // C# `CardSparkler.TurnEndAfter` -> `Burn` -- a field hook on the card's own
         // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
         // matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Hook(&[HookKind::TurnEndAfter], None, turn_end, ""),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Hook(&[HookKind::TurnEndAfter], "", None, turn_end),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 

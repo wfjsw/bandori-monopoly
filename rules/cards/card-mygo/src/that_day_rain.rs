@@ -16,10 +16,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const THAT_DAY_RAIN: CardDef = CardDef::new(
     "MyGO:那天的雨",
     &[
-        On::Play(None, that_day_rain, ""),
+        On::Play("", None, that_day_rain),
         // C# `CardThatDayRain : DecayCard` (TurnEnd burn) and `TurnStart` -> `Rain`.
-        On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], Some(hook_guard), hook, ""),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Hook(&[HookKind::TurnStart, HookKind::TurnEnd], "", Some(hook_guard), hook),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 

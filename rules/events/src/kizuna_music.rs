@@ -9,7 +9,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const KIZUNA_MUSIC: CardDef = CardDef::new("event:Kizuna Music", &[On::Play(None, play, "")]);
+pub const KIZUNA_MUSIC: CardDef = CardDef::new("event:Kizuna Music", &[On::Play("", None, play)]);
 
 /// Song-title card rule ids (`data/cards.json` `id`, for every title in
 /// `data/song_cards.json`).

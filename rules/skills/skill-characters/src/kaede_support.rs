@@ -37,12 +37,12 @@ const SPLIT: &str = "skill.kaedeSupport.split.";
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::TurnStartBefore], Some(other_turn), offer_support, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
-        On::Play(Some(can_enter_two), enter_two, ""),
-        On::Hook(&[HookKind::PayMul], Some(splitting), split_rent, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::TurnStartBefore], "", Some(other_turn), offer_support),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Play("", Some(can_enter_two), enter_two),
+        On::Hook(&[HookKind::PayMul], "", Some(splitting), split_rent),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);

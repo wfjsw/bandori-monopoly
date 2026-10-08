@@ -8,7 +8,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play(None, rui_devil, "")]);
+pub const RUI_DEVIL: CardDef = CardDef::new("Mor:（Rui）正论恶魔", &[On::Play("", None, rui_devil)]);
 
 /// The Rui character skill's X counter (`skill:八潮瑠唯:正论恶魔`).
 const X: &str = "skill.yuriCrit.x";

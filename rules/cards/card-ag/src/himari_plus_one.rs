@@ -15,9 +15,9 @@ pub const HIMARI_PLUS_ONE: CardDef = CardDef::new(
     // are the condition. Residual guard deleted.
     &[On::Counteract(
         &[ChainKind::Roll, ChainKind::MoveRoll],
+        "actor == owner && move.roll != null && move.roll < 6",
         None,
         counteract,
-        "actor == owner && move.roll != null && move.roll < 6",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

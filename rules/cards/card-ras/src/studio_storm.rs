@@ -16,14 +16,14 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const STUDIO_STORM: CardDef = CardDef::new(
     "RAS:练习室里的风暴",
     &[
-        On::Play(Some(cant_play), play, ""),
-        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
+        On::Play("", Some(cant_play), play),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
         // `docs/TILES.md` names the long-term home as a remote-settle rule
         // instance on this card's tile; the `settleBody` hook is the same list
         // entry for now and is skipped when a field card replaces the body.
-        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
+        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
     ],
 );
 

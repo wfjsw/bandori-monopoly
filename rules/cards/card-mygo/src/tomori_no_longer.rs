@@ -13,19 +13,19 @@
 use alloc::vec::Vec;
 
 use alloc::string::String;
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger, CardPile};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     "MyGO:（灯）不再迷茫",
     &[
-        On::Play(None, tomori_no_longer, ""),
-        On::Hook(&[HookKind::TurnEnd], None, sweep, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::FireSpent], None, cover, card_sdk::pre::MINE),
+        On::Play("", None, tomori_no_longer),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, sweep),
+        On::Hook(&[HookKind::FireSpent], card_sdk::pre::MINE, None, cover),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
         // 获得等同于减少量的[奇迹水晶]」.
-        On::Hook(&[HookKind::CrystalsChanged], None, refill, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::CrystalsChanged], card_sdk::pre::MINE, None, refill),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]);

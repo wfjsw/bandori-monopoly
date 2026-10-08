@@ -25,8 +25,8 @@ const TOKEN_PREFIX: &str = "角色标记:";
 pub const NANAMI_EFFORT: CardDef = CardDef::new(
     "Mor:（NNM）稍微努力了一下",
     &[
-        On::Play(Some(can_use_skill), use_skill, ""),
-        On::Play(None, nanami_effort, ""),
+        On::Play("", Some(can_use_skill), use_skill),
+        On::Play("", None, nanami_effort),
         On::AtEnd(discard_down_to_five),
     ],
 );

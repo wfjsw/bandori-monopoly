@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play(None, play, "")]);
+pub const LULU: CardDef = CardDef::new("event:很噜的感觉", &[On::Play("", None, play)]);
 
 /// 规则书: 「所有玩家可选择[传送]至快餐店（不触发场地效果）」 -- each player in
 /// turn order is asked; `teleport_to` jumps with no settle (「不触发场地效果」).

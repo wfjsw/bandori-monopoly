@@ -188,6 +188,16 @@ pub struct Reply {
     pub a: Answered,
 }
 
+/// The card id a prompt option declares (`Arg::Card` on the option's label).
+/// Used by the [反击] offer, whose options are `ask.counteract.play` messages
+/// naming the card each would declare.
+fn option_card(m: &Msg) -> Option<String> {
+    m.a.get("card").and_then(|a| match a {
+        crate::msg::Arg::Card(id) => Some(id.clone()),
+        _ => None,
+    })
+}
+
 impl Reply {
     /// `Ask.Answer(seat)`.
     pub fn of(&self, player_id: usize) -> i32 {
@@ -222,22 +232,59 @@ pub trait AnswerProvider {
 /// [`Ask`] (`ai` / `ai_picked` / `worth`, i.e. what `tick_live` would apply on
 /// the bot schedule). The rollout policy; also the right default for every
 /// seat the tree does not abstract.
-pub struct HeuristicProvider;
+///
+/// `params` (indexed by player index) carries the seats' resolved
+/// [`crate::strategy::StrategyParams`] (`docs/BOT.md` §3.8) so the one-shot
+/// auction solver uses each seat's bid step; empty = every seat plays the
+/// default parameters, which is the old behaviour exactly.
+#[derive(Default, Clone)]
+pub struct HeuristicProvider {
+    pub params: Vec<crate::strategy::StrategyParams>,
+}
+
+impl HeuristicProvider {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_params(params: Vec<crate::strategy::StrategyParams>) -> Self {
+        Self { params }
+    }
+
+    /// Resolved params for player index `seat` (defaults when absent).
+    pub fn params_of(&self, seat: usize) -> crate::strategy::StrategyParams {
+        self.params.get(seat).cloned().unwrap_or_default()
+    }
+}
 
 impl AnswerProvider for HeuristicProvider {
     fn answer(&mut self, ask: &Ask) -> Option<Answered> {
-        Some(heuristic_answer(ask))
+        let p = self.params.clone();
+        Some(heuristic_answer_with(ask, &move |seat: usize| {
+            p.get(seat).cloned().unwrap_or_default()
+        }))
     }
 }
 
 /// The answer the engine's bot schedule would land on for `ask` -- the
 /// standard seat's `tick_live` fill, with the auction's bidding loop resolved
 /// in one shot (each seat nudges the minimum once; the last bidder wins).
+/// Every seat plays the default [`crate::strategy::StrategyParams`].
 pub fn heuristic_answer(ask: &Ask) -> Answered {
+    heuristic_answer_with(ask, &|_seat| crate::strategy::StrategyParams::default())
+}
+
+/// [`heuristic_answer`] with a per-seat parameter lookup (player index →
+/// [`crate::strategy::StrategyParams`]). Only the auction solver reads it
+/// (the raise step); the other prompts just echo the precomputed `ai` fill.
+pub fn heuristic_answer_with(
+    ask: &Ask,
+    params: &dyn Fn(usize) -> crate::strategy::StrategyParams,
+) -> Answered {
     let players = &ask.view.players;
     let n = players.len();
     if ask.view.kind == "auction" {
-        return heuristic_auction(ask);
+        return heuristic_auction(ask, params);
     }
     let picks = matches!(ask.view.kind.as_str(), "pick" | "mortgage");
     let max = if ask.view.kind == "tile" {
@@ -277,7 +324,10 @@ pub fn heuristic_answer(ask: &Ask) -> Answered {
 /// (the standard bot's `min + 100` middle of its `+0..=+200` nudge) while that
 /// stays under its ceiling, and passes otherwise. The last bidder wins at the
 /// bid it made -- the shape `auction_tile` reads (`r.a.bidder` / `r.a.bid`).
-fn heuristic_auction(ask: &Ask) -> Answered {
+fn heuristic_auction(
+    ask: &Ask,
+    params: &dyn Fn(usize) -> crate::strategy::StrategyParams,
+) -> Answered {
     let players = &ask.view.players;
     let n = players.len();
     let mut answers = vec![0i32; n];
@@ -290,7 +340,8 @@ fn heuristic_auction(ask: &Ask) -> Answered {
             if answers[k] != 0 || bidder == players[k] {
                 continue;
             }
-            let min = if bid <= 0 { 100 } else { bid + 100 };
+            let p = params(players[k] as usize);
+            let min = p.bid_min(bid);
             let cap = ask.worth.get(k).copied().unwrap_or(0);
             if min > cap {
                 answers[k] = 1;
@@ -653,10 +704,40 @@ impl<'a> Cx<'a> {
                 } else {
                     self.chaos_pick(fallback, n)
                 }
+            } else if counteract {
+                // Standard: declare only on the seat's per-card propensity
+                // (`docs/BOT.md` §3.8 "counteraction"); default 0 = the old
+                // always-skip, with no RNG draw at all.
+                self.counteract_pick(seat, ask, fallback, n)
             } else {
                 fallback
             };
         }
+    }
+
+    /// Standard's [反击] answer: the first offered card whose
+    /// [`crate::strategy::CounterParams`] propensity fires, else `fallback`
+    /// (the skip). A zero propensity (the default) draws nothing and never
+    /// fires, so the old policy's RNG stream is untouched.
+    fn counteract_pick(&mut self, seat: usize, ask: &Ask, fallback: i32, n: i32) -> i32 {
+        let p = self.strategy_of(seat);
+        for i in 0..n {
+            if i == fallback {
+                continue;
+            }
+            let Some(id) = ask.view.options.get(i as usize).and_then(option_card) else {
+                continue;
+            };
+            let propensity = p.counteract_propensity(&id, None);
+            if propensity <= 0 {
+                continue;
+            }
+            let roll = self.w.rng.f64() * 1000.0;
+            if roll < propensity as f64 {
+                return i;
+            }
+        }
+        fallback
     }
 
     /// Uniform among `0..n` except `fallback`, falling back to `fallback` when

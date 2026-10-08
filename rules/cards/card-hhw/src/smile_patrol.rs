@@ -9,7 +9,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SMILE_PATROL: CardDef =
-    CardDef::new("HHW:微笑巡逻队", &[On::Play(Some(cant_play), play, "")]);
+    CardDef::new("HHW:微笑巡逻队", &[On::Play("", Some(cant_play), play)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardSmilePatrol.WhyNot`: refuses without a tile you can afford to

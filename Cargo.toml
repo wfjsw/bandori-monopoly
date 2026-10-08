@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/bot-core",
+    "crates/bot-glue",
     "crates/bot-service",
     "crates/game-core",
     "crates/game-rules",

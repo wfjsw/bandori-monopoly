@@ -358,24 +358,61 @@ async fn probe_one(
             bot_service::heuristic_message_view(&server.data, &seat)
         }
     };
-    let applied = {
+    let m = m.clone();
+    apply_bot_answer(bots, &server.data, &seat, member, answer, move |cmd| {
         let m = m.clone();
-        tokio::task::spawn_blocking(move || m.act(member, &answer)).await
-    };
-    match applied {
-        Ok(Ok(None)) => true,
-        Ok(Ok(Some(msg))) => {
-            // The engine refused (the decision moved on while we searched).
-            // Not a failure -- the next probe sees the new state.
-            eprintln!("room {room_id} bot {member}: act refused: {msg:?}");
-            false
+        async move {
+            match tokio::task::spawn_blocking(move || m.act(member, &cmd)).await {
+                Ok(r) => r,
+                Err(e) => Err(format!("act task: {e}")),
+            }
         }
-        Ok(Err(e)) => {
-            eprintln!("room {room_id} bot {member}: act failed: {e}");
-            false
+    })
+    .await
+}
+
+/// Apply the service's answer to one seat. On an engine refusal, drop the
+/// cached answer for this decision and apply the heuristic instead -- the
+/// drive must never re-ask after a refusal (`docs/BOT.md` §5 B6). Without the
+/// fallback the next probe re-sent the same cached refusal every 200 ms until
+/// the turn bank expired (bot_cpu §6, 45–54% stall). Returns whether the seat
+/// ended up acting.
+///
+/// `act` applies one command and returns the engine's refusal (`Ok(Some)`),
+/// success (`Ok(None)`) or a failure. It runs at most twice: the service's
+/// answer, then -- only on a refusal -- the heuristic.
+pub async fn apply_bot_answer<F, Fut>(
+    bots: &botsvc::BotService,
+    data: &Arc<game_core::data::GameData>,
+    seat: &bot_service::BotSeatView,
+    member: i32,
+    answer: game_core::net::NetMessage,
+    mut act: F,
+) -> bool
+where
+    F: FnMut(game_core::net::NetMessage) -> Fut,
+    Fut: std::future::Future<Output = Result<Option<game_core::msg::Msg>, String>>,
+{
+    match act(answer).await {
+        Ok(None) => true,
+        Ok(Some(msg)) => {
+            eprintln!("bot {member}: act refused: {msg:?}");
+            bots.invalidate(seat.decision_key()).await;
+            let fallback = bot_service::heuristic_message_view(data, seat);
+            match act(fallback).await {
+                Ok(None) => true,
+                Ok(Some(msg2)) => {
+                    eprintln!("bot {member}: heuristic refused too: {msg2:?}");
+                    false
+                }
+                Err(e) => {
+                    eprintln!("bot {member}: fallback act failed: {e}");
+                    false
+                }
+            }
         }
         Err(e) => {
-            eprintln!("room {room_id} bot {member}: act task: {e}");
+            eprintln!("bot {member}: act failed: {e}");
             false
         }
     }

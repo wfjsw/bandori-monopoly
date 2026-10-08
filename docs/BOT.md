@@ -11,9 +11,14 @@ the `advanced` match option; §5 has the real-ruleset latency numbers),
 **B7 shipped** (BOT-RESEARCH #2/#3/#5: root-parallel ISMCTS, implicit-minimax
 eval backup + progressive bias, tree reuse + the `ponder` request; §5 "B7"
 has the numbers and the B4-iteration-regression triage; the server-side
-`ponder` polls and the `budget + 1.5 s` deadline policy are wired too, §3.5).
+`ponder` polls and the `budget + 1.5 s` deadline policy are wired too, §3.5),
+**B6 shipped** (the browser worker bundle `crates/bot-glue` + the page's
+root-parallel pool + the 进阶 solo / 托管 policy; §5 "B6" has the bundle size
+and the 1-vs-4-worker iterations, and §3.6 documents the as-built split from
+the rules-compiled-into-the-module idea -- rules still run in wasmi, see the
+follow-up at the end of §3.6).
 B3 waits on B2 profiling (the [反击] window bookkeeping is now the dominant
-cost); B6 waits for B1+B2.
+cost).
 
 Goal: a bot that plays well while seeing only what an ordinary player sees.
 Method: Information Set Monte Carlo Tree Search over determinizations,
@@ -204,10 +209,35 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
 * **Action abstraction** ([`action::Action`]): card plays, buy / build /
   force-buy offers, a few auction bid levels (min / min+100 / ¾·quote /
   quote / money−1000), counteract offers, agent / tile picks, mortgage
-  subsets in the heuristic's order. Trivial prompts (≤1 option, mulligan) and
+  subsets in the heuristic's order, and a **decline** (`act: "end"` at 结束)
+  so the search can pass on a buy. Trivial prompts (≤1 option, mulligan) and
   everything else (roll, end, discard) are delegated to the heuristic — the
   engine's `aiAnswer` for prompts, an `ai_step`-shaped policy for the turn
   surface.
+  * **Legality gate (2026-10-08).** Buy / Build / roll / end ride the engine's
+    own `why_not_act` predicates, computed into the view as
+    `MatchState::can_buy_here` / `can_build_here` / `can_roll_here` /
+    `can_end_here` (buyable shape + the plan's no-buy flag + the quote's
+    `eligible` gate + the funds; `why_not_build` + funds for a build; the live
+    `skip_move` latch / `main_moved` / `over_hand` for roll and end). The
+    abstraction never offers a command the engine would refuse — before this,
+    an unaffordable Buy was proposed at 结束, the engine refused it
+    (`err.buy_poor` / `err.cannot_buy` / `err.poor`), and the service replayed
+    the cached refusal every 200 ms until the turn bank expired (45–54% of
+    match time, `bot_cpu` §6). The public `skip_move` re-derives from stay /
+    exile and can disagree with the end gate (unstoppable, mid-turn [停留],
+    [除外]); trusting it sent `end` into `err.roll_first` — the heuristic's
+    运营 branch now picks roll vs end by `can_roll_here` / `can_end_here`.
+  * **Trivial decisions (2026-10-08).**
+    [`action::trivial_decision`] skips the search when the root has exactly
+    one legal action (it is forced) or when no candidate moves money,
+    ownership or cards (a pure decline / auction pass / [反击] skip menu).
+    The "all priors identical" alternative is deliberately not used on its
+    own — two equal-prior card plays still differ tactically. Buys, builds,
+    force-buy offers, auctions with a real bid, [反击] declarations, card
+    plays, agent picks, tile choices and mortgages always keep the full
+    search. Answered as `heuristic: true, iterations: 0`. This was 27–34% of
+    searched bot CPU.
 * **Rollout**: the engine's own heuristic bot (`ai.rs`) plays every seat to
   the horizon (2 rounds by default) — all seats in a fork are bots.
 * **Evaluation** ([`eval::relative_worth`]): net worth (cash + deeds at
@@ -351,6 +381,16 @@ thresholds (`wants_buy` / `wants_build` / …).
   one in flight per seat, rate-limited by the probe cadence, and cancelled /
   ignored when that seat's own decision arrives (the real `decide` then hits
   the cache when the decision key matches).
+* **Invalidate (2026-10-08).** `op: "invalidate"` with the reply's
+  `decisionKey` drops that cached answer, so a refused one is never replayed:
+
+  ```json
+  {"id":9,"op":"invalidate","decisionKey":"a1b2c3d4e5f60718"}
+  {"id":9,"ok":true,"dropped":true}
+  ```
+
+  Applied by the drive on an `act` refusal (below) and by the browser driver
+  (`botDrive.ts` / `botPool.ts` → `bot-glue`'s `invalidate`).
 * **Threads.** `--threads N` (env `BOT_THREADS`, default 4) request workers
   inside one process. `--search-threads N` (env `BOT_SEARCH_THREADS`,
   default = `--threads`): root-parallel searches **per decision** — one
@@ -383,39 +423,127 @@ thresholds (`wants_buy` / `wants_build` / …).
   Setup (ban / pick / deck) stays engine-side and runs the standard policy
   (`MatchPlayer::auto_setup`). On timeout / crash / bad reply the server
   applies the engine's own heuristic (`aiAnswer` / `heuristic_message_view`)
-  for that decision and the match moves on. The engine's turn clock is the
-  last-resort safety net (a held seat is taken over after its bank runs out).
+  for that decision and the match moves on. **On an `act` refusal of the
+  service's answer the drive does not re-ask** (2026-10-08, `apply_bot_answer`):
+  it drops the cached answer for that decision (`op: "invalidate"`) and applies
+  the heuristic immediately, so a refused answer is never replayed every 200 ms
+  until the turn bank expires (the forced-buy stall of `bot_cpu` §6). The
+  browser driver (`botDrive.ts`) already did the fallback half; it now also
+  drops the worker cache. The engine's turn clock is the last-resort safety net
+  (a held seat is taken over after its bank runs out).
 * **Option.** `advanced` is a bot level next to standard / chaos
   (`BotMentality::Advanced`, `POST /api/rooms/{id}/bots` `mentality`), for
   **online** rooms only. Inside the engine it is Standard — the heuristic
   plays it whenever the engine is the one driving the seat (Solo, or an
   online room with no service: the server rewrites the mentality to
   Standard before `Match::new`, so the seat is never parked on answers
-  nobody will send). Browser 托管 / solo stay standard / chaos (B6).
+  nobody will send). Browser 托管 / solo now have 进阶 too (B6, §3.6) — a Web
+  Worker pool, not this service.
 * **What the search sees.** Only the view frame (§1). Determinization
   samples every hidden zone; forks are materialised through the engine's
   save format and driven on copies. The live match's RNG is never touched —
   recordings are unchanged because the answers are what get recorded.
 
-### 3.6 Browser: worker bundle
+### 3.6 Browser: worker bundle — shipped (B6)
 
-* The same crates compiled to one wasm32 module run in a Web Worker:
-  `postMessage(view, prompt, budget)` → decision. The rules compile into the
-  module itself instead of running in wasmi, so card runs get the browser's
-  JIT.
-* Loaded lazily, only when the advanced 托管 policy is chosen (and for
-  advanced solo bots). The heuristic autopilot stays the default.
+* **One wasm32 module per worker** (`crates/bot-glue`): `game-core` +
+  `game-rules` (the **wasmi** backend, the same sandbox the page's `web-glue`
+  runs) + `bot-core`, exposed via `wasm-bindgen`. The main page's glue is a
+  separate crate and its bytes do not change -- the bot bundle is lazy-loaded
+  only when an advanced seat / 进阶 托管 is in use (`ensureBotPool`).
+  * Output: `webui/public/assets/engine/bot-glue/{glue.js,glue_bg.wasm}`,
+    built by `tools/build-bot-glue.mjs` (same determinism rules as
+    `tools/build-glue.mjs`; its own `CARGO_TARGET_DIR=target/` so a
+    `target/coord` caller cannot redirect it).
+  * Worker: `webui/public/assets/engine/bot-worker.js` -- a plain ES module
+    (the `replay-worker.js` pattern), dynamically imports the glue and the
+    shared ruleset-load sequence. The node gate runs the **same**
+    `webui/src/core/rulesetLoad.ts` contract against the real built ruleset
+    (`webui/src/game/botPool.test.ts`), so the inlined worker copy and the
+    page's loader cannot drift.
+* **API** (JSON strings, the `bot-service` wire shapes):
+  * `decide(view_json, budget_ms, seed) -> {answer, iterations, elapsed_ms,
+    heuristic, reused, decisionKey, rootStats}`.
+  * `ponder(view_json, budget_ms, seed)` -- speculative, cached by
+    `SeatView::decision_key`; a later `decide` on the same key answers
+    `reused: true` (BOT-RESEARCH #5).
+  * `rootStats[]` carries `{answer, visits, valueSum, mean, evalMax, evalSum,
+    evalVisits}` per abstracted action, each `answer` already turned into the
+    public `NetMessage` -- the page merges and picks.
+  * `seed_for_thread(seed, i)` is exported so the page's derivation and
+    `bot_core::seed_for_thread` stay bit-identical (pinned by
+    `botBudget.test.ts`).
+* **Information boundary** (`docs/BOT.md` §1): the worker receives ONE seat's
+  view -- the same frame the page renders for that seat
+  (`SoloMatch::view(member)` / the server's `match` frame). Never a `World`, a
+  match seed, or another seat's hand / deck order / `aiAnswer`. The `seed` is
+  the **search** RNG's, derived from the public decision identity
+  (`decisionSeed(room, member, seq, promptId)`), never the match's.
+* **Root-parallel across workers** (not inside one): `std::thread` is
+  unavailable on wasm32 and each worker is already its own wasm instance +
+  determinization stream. The page's pool is
+  `clamp(navigator.hardwareConcurrency − 1, 1, 4)` workers (fewer on phones /
+  low `navigator.deviceMemory`), each with `seed_for_thread(seed, i)`; the
+  page merges the root statistics (`mergeRootStats`, a port of
+  `bot_core::merge_stats`) and sends the winner through the ordinary `act`
+  path. Tree reuse is per worker per seat (each worker keeps its own
+  subtree); the ponder cache is per worker and the pool fires a `ponder` at
+  every worker so any of them can answer a later `decide` from cache.
 * **Budget (user, 2026-10-07): the browser may give the advanced bot much more
-  time than the server, as long as it stays within the turn limit.** Per
-  decision: use the prompt's / turn's remaining time minus a safety margin
-  (answer before the deadline, never let the timeout fallback fire); in solo,
-  where prompts have no deadline, a generous configurable cap (seconds, not
-  200 ms) so play still feels responsive. Spread the turn's budget over its
-  expected decisions rather than spending it all on the first one.
-* Root-parallel in the browser too: up to `navigator.hardwareConcurrency − 1`
-  workers (each its own wasm instance and determinization stream), merged at
-  the root; phones get fewer workers.
-* The solo match itself keeps the sandboxed rules (recording parity).
+  time than the server, as long as it stays within the turn limit.**
+  (`webui/src/game/botBudget.ts`, pinned by `botBudget.test.ts`.)
+  * **Timed** (online 托管): `min(prompt clock, turn clock) − 500 ms`, spread
+    over the turn's expected remaining decisions (`EXPECTED_DECISIONS_PER_TURN`
+    = 3) so the first one does not eat the whole clock. Clamped to
+    100 ms .. 12 s. Outer deadline `budget + 2 s` (one wasmi iteration
+    overrun) -- the timeout fallback is the heuristic, and inside the deadline
+    the search is anytime and returns whatever it has.
+  * **Solo** (no deadline): a generous configurable cap, default **3 s** per
+    searched decision (`bm.botSoloCapMs`, a slider in the solo setup screen,
+    1–8 s). Play stays responsive; trivial prompts are answered instantly by
+    the heuristic.
+* **Who answers.** An Advanced seat is held by the engine (`Match::new` sets
+  `ai: m.bot && m.mentality != Advanced` -- **including Solo now**, the old
+  Solo exception is gone) so the driver is the one applying answers through
+  the normal `act` path. Setup (ban / pick / deck) stays engine-side
+  (`MatchPlayer::auto_setup`). Solo's driver is `SoloSession.driveAdvancedBots`
+  (`webui/src/game/botDrive.ts`); 进阶 托管 is the same driver on the player's
+  own seat. On worker error / timeout / a refused answer the existing bot
+  policy (`autopilot.ts` `plan(..., "bot")` / the view's `aiAnswer`) answers
+  and the match moves on -- a match never stalls (§1). A small "thinking…"
+  pill shows while a search runs.
+* **Recordings.** Bot answers are inputs, so replays stay exact. Pinned by
+  `webui/src/game/botPool.test.ts::a solo match with an Advanced bot records
+  and replays clean` (the `record.test` shape: drive via `act`, export
+  `.bdrec`, replay, compare public state).
+* **Lazy.** Nothing downloads until an advanced seat / 进阶 托管 is in use.
+  The archive / replay path does **not** need the worker bundle -- replays
+  never run the bot (`docs/REPLAY.md`).
+
+**Follow-up: rules compiled into the module (not done here).** Today the
+worker runs the same wasmi-interpreted card modules the page's `web-glue` runs
+(~3–5× slower per BOT.md B0; §5 "B6" shows 3.3 iterations at 1 s / 1 worker on
+the real ruleset). §3.6's original idea -- `game-rules` linked **natively** into
+the wasm32 module so card runs get the browser's JIT -- needs:
+1. `card-sdk`'s **native** mode on wasm32. Its `mod sys` imports are
+   `cfg(target_arch = "wasm32")`-gated to the `bandori_*` wasm exports today;
+   the native mode is `cfg_attr(not(target_arch = "wasm32"), link_name = ...)`.
+   A third configuration ("wasm32 host, native guest") has to compile the
+   guest as plain Rust and resolve the `bandori_*` shims inside the module.
+2. The **rules-native drift** closed (`crates/rules-native/tests/drift.rs`'s
+   known divergence, §5 B1). A bot that drifts from the sandbox is weaker
+   (§1), but a *worker* whose rules disagree with the page's live engine makes
+   the search's forks diverge from the match it is advising -- still advisory
+   only, but the strength hit would be silent.
+3. A wasm32 build of `rules-native`'s `HostCtx` (a plain `GuestMem` arena
+   instead of a wasmi `Caller`) and the `catch_unwind` / `extern "C-unwind"`
+   shim ABI checked on wasm32 (panic unwinding across the "guest" is all
+   inside one module there, so the traps have to become plain `Result`s).
+
+Not needed for the follow-up: the page's glue, the worker protocol, the pool,
+the budget policy, the solo / 托管 drivers, or the tests -- all of that is
+backend-agnostic and would keep working once `rules()` returns a native
+`CardRules` instead of `WasmRules`.
 
 ### 3.7 Deck book (offline)
 
@@ -541,6 +669,61 @@ placeholder until the post-purchasing full run.
   the derivation from the measured ms/game above, not the 200-round B0
   number: capped games cost ~12 s each, not 75 ms/round × 40.
 
+### 3.8 Strategy book (offline, per character)
+
+Status: designed 2026-10-08 (user request). S1 started.
+
+**Why.** Outcomes are dominated by dice, and each character's real choices are few and recurring: which colour groups to buy, how much cash to hold, how hard to bid, when to play each card, when to press each skill, when to counteract. A small set of **tuned parameters per character** captures much of the advantage at near-zero runtime cost. It also improves everything built on the heuristic:
+- the standard bot and 托管 play it directly;
+- the ISMCTS rollouts use it as their policy (better rollouts → fewer needed);
+- the search uses it as its progressive-bias prior (§3.4).
+
+**Parameter set** (`StrategyParams`: a flat, versioned, serde struct of integers / milli-fractions; every field has a default equal to today's constant in `engine/ai.rs` / `bot-core`, so the default book changes nothing):
+
+| family | parameters (illustrative) |
+|---|---|
+| buying | per-colour-group priority weights; set-completion bonus; cash reserve by game phase (early / mid / late, by round); max price-to-cash ratio |
+| building | per-group build priority; target houses per group; build reserve |
+| auctions / force-buy | bid ceiling as a fraction of quoted worth, by group and phase; force-buy appetite |
+| card play | per card: `play_weight`, `hold_for_counteract` flag, min/max round, min cash after `estCost` |
+| skills | per skill entry: press threshold (e.g. fire / crystals in hand, phase), keep-reserve of markers |
+| counteraction | per card: response propensity (0..1000 ‰) by window kind |
+| mortgage / redeem | mortgage order weights; redeem cash threshold |
+| deck | optional link to the deck-book entry the parameters were tuned with (§3.7) |
+
+Per-card and per-skill entries are sparse maps (absent = default).
+
+**Book** (`data/strategy_book.json`, versioned like the deck book):
+- **Header:** `version`, `ruleset_sha256`, `policy` (standard), `generated_at`, `params_version`.
+- **Entries keyed by public information only**, with back-off, first hit wins:
+  1. `(character, opponents' bands multiset)`;
+  2. `(character)`;
+  3. `(band)`;
+  4. defaults.
+- **Validation:** a stale ruleset hash, policy or `params_version` ignores the book (warned once). Unknown fields are ignored; missing fields take defaults.
+- **Not in `data_sha256`**, like `deck_book.json`, so replay stamps don't move with it.
+- **Joint with the deck book:** character and deck are chosen together, so the derivation tunes them as a pair. An entry may name the deck it was tuned with; mismatched pairs fall back to the character's defaults.
+
+**Consumers:**
+- **Engine heuristic:** `engine/ai.rs` (standard mentality; chaos unchanged).
+- **Search:** `bot-core` rollout policy + `action_priors`; `bot-service` and `bot-glue` load the book with the ruleset.
+- **托管 autopilot:** `webui/src/game/autopilot.ts` gets the seat's resolved params from the glue (one source of truth, like `deck_suggest`).
+- **Information boundary:** keys and parameters are public / static. Nothing reads hidden state.
+
+**Derivation (offline):** extend the D2 tool (`crates/game-rules/examples/deckbook.rs`) into a joint deck + strategy tuner:
+- **Optimiser:** CMA-ES or coordinate / racing search over the per-character parameter vector (start with the ~10–20 highest-impact scalars: reserves, group weights, bid fraction, counteract propensity), then the sparse per-card weights for that character's deck.
+- **Evaluation:** common random numbers, match score at a round cap (as D2), successive halving, fictitious-play rounds with opponents on the current book, held-out seeds for acceptance (must beat defaults by a margin).
+- **Order:** band level first (≈10 bands, cheap), then characters. Popular characters first if budget-limited.
+- **Cost:** real-ruleset games (~12 s each today). It gets much cheaper with the engine work (B1/B2, window optimisations, profile fixes). Schedule the full run after those.
+
+**Phases:**
+
+| phase | content | gate |
+|---|---|---|
+| S1 | `StrategyParams` + defaults equal to today's constants; plumb into `ai.rs`, bot-core rollout policy and priors, autopilot; book format + loader + back-off lookup (empty book) | byte-identical behaviour with the empty book (sim counts, seeded real-rules checkpoints); lookup tests |
+| S2 | derivation: extend `deckbook.rs` to tune params (+ joint deck); band-level trial run | tuned band params beat defaults on held-out seeds |
+| S3 | full per-character run (after the engine speedups); ship `data/strategy_book.json` | held-out win rate / score vs defaults; advanced-bot strength vs standard with and without the book |
+
 ## 4. Phases
 
 | phase | content | gate |
@@ -552,9 +735,10 @@ placeholder until the post-purchasing full run.
 | B4 | `bot-core`: determinizer, ISMCTS, bid abstraction, evaluation — **done** (StubRules smoke; engine-API gaps in §3.4) | determinizer consistency tests; win rate vs standard bot |
 | B5 | `bot-service` + server protocol / budget / fallback + match option — **done** (server tests green; real-ruleset latency in §5) | server tests, latency under load |
 | B7 | BOT-RESEARCH #2/#3/#5: root-parallel ISMCTS, implicit-minimax eval + progressive bias, tree reuse + `ponder` — **done** (§5 B7; server wiring of the ponder polls + the deadline policy is landed too, §3.5) | determinism / N=1 tests; iterations/decision 1 vs 4 threads; old-vs-new strength at fixed budget |
-| B6 | Web Worker bundle + advanced 托管 policy | bundle size, phone budget |
+| B6 | Web Worker bundle + advanced 托管 policy + 进阶 solo bots — **done** (§3.6 as-built; §5 B6 has the bundle size and the 1-vs-4-worker iterations; rules still run in wasmi, follow-up at the end of §3.6) | bundle size, phone budget |
 | D1 | deck book format + loader + back-off lookup; bots / 托管 use it — **done** (empty book until D2) | lookup tests; preset when missing / stale |
 | D2 | offline derivation tool (candidates, CRN eval, racing, fictitious play) — **tool done**; book itself waits for the post-purchasing ruleset (§3.7 trial + estimate) | book beats preset in a held-out sim |
+| S1–S3 | strategy book (§3.8): params + plumbing (S1), tuner + band trial (S2), full run (S3) | §3.8 phase table |
 
 ## 5. Measurements
 
@@ -1066,6 +1250,70 @@ Score variance is large (± 1.3 k on a 12 k mean at n = 24), which is why the
 real run wants 300–1 000 games per candidate and a held-out margin check.
 Full-run wall estimates for 54 characters on 16 threads are in §3.7 (~11 /
 ~22 days at 300 / 1 000 games per candidate, 12 s/game, 2 greedy rounds).
+
+### B6: browser worker bundle (2026-10-08)
+
+Same machine as B0. The bundle is `crates/bot-glue` built by
+`tools/build-bot-glue.mjs` into `webui/public/assets/engine/bot-glue/`; the
+measurement harness is `tools/measure-bot-workers.mjs` (node `worker_threads`,
+one `bot-glue` wasm instance each, the real built ruleset `dist/cards` /
+`webui/public/assets/rules`, views taken from a live solo match at the
+searched surfaces only). The main page's glue (`webui/src/wasm/glue_bg.wasm`)
+is unchanged.
+
+```
+node tools/measure-bot-workers.mjs
+```
+
+**Bundle size** (lazy: downloaded only when an advanced seat / 进阶 托管 is in
+use):
+
+| | bytes | |
+|---|---|---|
+| `bot-glue/glue_bg.wasm` | **5 929 030** | 5.65 MiB |
+| `bot-glue/glue.js` | 15 249 | 14.9 KiB |
+| main page `glue_bg.wasm` | 6 585 567 | unchanged |
+
+**Iterations per decision, real ruleset, wasmi** (3 searched surfaces per
+cell, `budget` = the search budget each worker gets -- they run in parallel):
+
+| workers | budget | iters/decision | wall ms (mean) | scale-up |
+|---|---|---|---|---|
+| 1 | 1 000 ms | **3.3** | 1 482 | 1.00x |
+| 4 | 1 000 ms | **12.3** | 1 574 | **3.70x** |
+| 1 | 3 000 ms | **6.3** | 3 249 | 1.00x |
+| 4 | 3 000 ms | **22.3** | 3 643 | **3.53x** |
+
+Root-parallel is near-linear, as on the server (§5 B7). The wall clock
+overruns the budget by one iteration (the ISMCTS loop finishes the one it is
+in) -- the same shape as B4/B5/B7, and the reason the outer deadline is
+`budget + 2 s` (`botBudget.ts::outerDeadlineMs`). wasmi is the expected 3–5×
+slower than the server's wasmtime (§3.6 follow-up): 3.3 iterations at 1 s
+where the service's `latency` harness shows 2.1 on the real ruleset at the
+same budget with 1 search thread is the same order of magnitude as the B0
+wasmi/wasmtime split, not a regression.
+
+**What landed** (the gate):
+
+* `cargo test -p game-core -p game-rules -p bot-core -p bot-service -j 2`.
+* Node: `botBudget.test.ts` (16), `botDrive.test.ts` (10),
+  `botPool.test.ts` (11, including the real-ruleset `decide` range, the
+  seat-view-only boundary, seed determinism, the ponder cache, and
+  **a solo match with an Advanced bot records and replays clean**) plus the
+  existing `ruleset` / `autopilot` / `record` / `engineBundle` suites --
+  76 passing.
+* `tsc --noEmit` clean; a temp-outDir rsbuild build is green (the main glue
+  is 6 585.6 kB, unchanged).
+* `webui/src/game/botBudget.ts` / `botPool.ts` / `botDrive.ts` are the page
+  side; `webui/public/assets/engine/bot-worker.js` is the plain module
+  worker; `crates/bot-glue` is the wasm32 bundle.
+
+**Deploy notes.** `node tools/build-bot-glue.mjs` next to
+`tools/build-glue.mjs` (the prebuild can call both); the output
+`webui/public/assets/engine/bot-glue/` is a static asset directory the
+worker imports -- it is NOT part of the engine bundle and the archive /
+replay path does not need it (`docs/REPLAY.md`). The solo 想考时间 slider
+persists as `bm.botSoloCapMs` (ms, default 3 000).
 
 ## 6. Risks
 

@@ -10,7 +10,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TOGETHER_HERE: CardDef =
-    CardDef::new("PP:有你与我在这里共度", &[On::Play(None, together_here, "")]);
+    CardDef::new("PP:有你与我在这里共度", &[On::Play("", None, together_here)]);
 
 /// The C# `H.FansUp` / `H.FansDown` token names (`P✽P粉丝` faces).
 const FANS_UP: &str = "P✽P粉丝(正)";

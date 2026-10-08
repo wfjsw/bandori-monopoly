@@ -14,12 +14,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TWO_IN_ONE: CardDef = CardDef::new(
     "Sumimi:Sumimi是二人一体的",
     &[
-        On::Play(None, play, ""),
+        On::Play("", None, play),
         On::Counteract(
             &[ChainKind::MoveRoll],
+            "actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))",
             None,
             counteract,
-            "actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))",
         ),
     ],
 )

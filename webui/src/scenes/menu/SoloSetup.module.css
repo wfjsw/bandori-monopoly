@@ -20,6 +20,7 @@
 .mentalityOn { background: var(--pink); color: #fff; }
 .mentalityTag { cursor: pointer; border: none; background: var(--light-pill); border-radius: 13px; line-height: 26px; height: 28px; font-weight: 700; }
 .mentalityTagChaos { background: var(--pink); color: #fff; }
+.mentalityTagAdvanced { background: var(--blue, #4a7dff); color: #fff; }
 .youTag { background: var(--pink); color: #fff; border-radius: 13px; line-height: 26px; }
 .x, .xSpace { width: 34px; height: 34px; flex: none; }
 .x { border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; border: none; cursor: pointer; }

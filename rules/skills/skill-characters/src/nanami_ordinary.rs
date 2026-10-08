@@ -45,11 +45,11 @@ fn cd_key(id: &str) -> alloc::string::String {
 pub const NANAMI_ORDINARY: CardDef = CardDef::new(
     "skill:广町七深:这是很普通的事吧？",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::SkillUsed], Some(any), on_skill, ""),
-        On::Hook(&[HookKind::TurnEnd], None, tick, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::SkillUsed], "", Some(any), on_skill),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
     .legacy(&[(2, legacy_mine), (4, legacy_mine)]);

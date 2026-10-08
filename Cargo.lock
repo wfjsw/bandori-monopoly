@@ -218,8 +218,23 @@ name = "bot-core"
 version = "0.1.0"
 dependencies = [
  "game-core",
+ "js-sys",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "bot-glue"
+version = "0.1.0"
+dependencies = [
+ "bot-core",
+ "game-core",
+ "game-rules",
+ "js-sys",
+ "serde",
+ "serde_json",
+ "talc",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -1631,6 +1646,7 @@ version = "0.1.0"
 dependencies = [
  "cel",
  "postcard",
+ "serde",
 ]
 
 [[package]]
@@ -1638,6 +1654,7 @@ name = "rules-events"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "serde_json",
 ]
 
 [[package]]
@@ -1828,6 +1845,7 @@ name = "server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "bot-core",
  "bot-service",
  "bytes",
  "futures-util",

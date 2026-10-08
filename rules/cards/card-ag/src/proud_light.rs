@@ -21,9 +21,9 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
     // stays in the residual guard.
     &[On::Counteract(
         &[ChainKind::PassTile],
+        card_sdk::pre::MINE,
         Some(can_counteract),
         counteract,
-        card_sdk::pre::MINE,
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

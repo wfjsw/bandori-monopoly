@@ -29,10 +29,10 @@ const GROUP: &str = "skill.misakiOther.group";
 pub const MISAKI_OTHER: CardDef = CardDef::new(
     "skill:奥泽美咲:另一个我",
     &[
-        On::Play(Some(can_use_exile), use_exile, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Play("", Some(can_use_exile), use_exile),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);

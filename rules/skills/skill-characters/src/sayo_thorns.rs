@@ -22,13 +22,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const SAYO_THORNS: CardDef = CardDef::new(
     "skill:冰川纱夜:踏上荆棘之路的觉悟",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
-        On::Hook(&[HookKind::PassTile], Some(passed_by), on_passed, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
     ],
 )
     .legacy(&[(2, legacy_mine)]);

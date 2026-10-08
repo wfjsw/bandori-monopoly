@@ -29,13 +29,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DREAM_AHEAD: CardDef = CardDef::new(
     "PP:梦在前方，结彩当下",
     &[
-        On::Play(Some(can_buy), buy_one, ""),
-        On::Hook(&[HookKind::DeckBeforeGame], None, deck_before_game, ""),
-        On::Hook(&[HookKind::Drew], Some(drew_guard), drew, ""),
+        On::Play("", Some(can_buy), buy_one),
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
+        On::Hook(&[HookKind::Drew], "", Some(drew_guard), drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
-        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
+        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
     ],
 )
 // 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous

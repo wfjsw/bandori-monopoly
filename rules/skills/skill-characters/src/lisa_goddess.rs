@@ -29,9 +29,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LISA_GODDESS: CardDef = CardDef::new(
     "skill:今井莉莎:慈爱女神",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
     ],
 )
     .legacy(&[(2, legacy_mine)]);

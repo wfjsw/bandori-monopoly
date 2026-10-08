@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,7 +18,7 @@ pub const HEY_KIDS: CardDef = CardDef::new(
     // is a **body replacement**, so it answers the body link and `settleAfter`
     // still runs. Answering the outer `settle` would mean 「the settle never
     // happened」.
-    &[On::Counteract(&[ChainKind::SettleBody], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::SettleBody], "", Some(can_counteract), counteract)],
 );
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`

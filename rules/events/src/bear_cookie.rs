@@ -8,7 +8,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::Play(None, play, "")]);
+pub const BEAR_COOKIE: CardDef = CardDef::new("event:发送熊饼表情", &[On::Play("", None, play)]);
 
 /// 「技能中含有火罐」 -- the player's character or band skill text mentions 「火罐」.
 fn skill_mentions_fire_pot(p: i32) -> bool {

@@ -9,13 +9,13 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TRAJECTORY: CardDef = CardDef::new(
     "R:轨迹",
-    &[On::Counteract(&[ChainKind::Bankrupt], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Bankrupt], "", Some(can_counteract), counteract)],
 );
 
 /// 规则书（1）[反击]: 「在场上有玩家破产时，展示此卡」

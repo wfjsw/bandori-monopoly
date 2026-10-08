@@ -30,4 +30,7 @@ redis = { version = "1.7.1", default-features = false, features = ["tokio-comp"]
 reqwest = { version = "0.13", default-features = false, features = ["json", "stream"] }
 tower = { version = "0.5", features = ["util"] }
 bytes = "1"
+# Only for the measurement examples (`bot_cpu`): the search-anatomy pass drives
+# `bot_core::Ismcts` directly with `SearchConfig::profile` on.
+bot-core = { path = "../bot-core" }
 

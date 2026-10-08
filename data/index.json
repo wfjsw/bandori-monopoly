@@ -1,36 +1,36 @@
-{
- "bands": [
-  {
-   "key": "001",
-   "band": "Poppin'Party"
-  },
-  {
-   "key": "002",
-   "band": "Afterglow"
-  },
-  {
-   "key": "003",
-   "band": "Hello, Happy World!"
-  },
-  {
-   "key": "004",
-   "band": "Pastel✽Palettes"
-  },
-  {
-   "key": "005",
-   "band": "Roselia"
-  },
-  {
-   "key": "018",
-   "band": "RAISE A SUILEN"
-  },
-  {
-   "key": "021",
-   "band": "Morfonica"
-  },
-  {
-   "key": "045",
-   "band": "MyGO!!!!!"
-  }
- ]
+{
+ "bands": [
+  {
+   "key": "001",
+   "band": "Poppin'Party"
+  },
+  {
+   "key": "002",
+   "band": "Afterglow"
+  },
+  {
+   "key": "003",
+   "band": "Hello, Happy World!"
+  },
+  {
+   "key": "004",
+   "band": "Pastel✽Palettes"
+  },
+  {
+   "key": "005",
+   "band": "Roselia"
+  },
+  {
+   "key": "018",
+   "band": "RAISE A SUILEN"
+  },
+  {
+   "key": "021",
+   "band": "Morfonica"
+  },
+  {
+   "key": "045",
+   "band": "MyGO!!!!!"
+  }
+ ]
 }

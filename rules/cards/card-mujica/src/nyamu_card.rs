@@ -20,8 +20,8 @@ const WAS_DOWN: &str = "nyamu.wasDown";
 pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
-        On::Play(None, nyamu_card, ""),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], None, watch_flips, card_sdk::pre::MINE),
+        On::Play("", None, nyamu_card),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], card_sdk::pre::MINE, None, watch_flips),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

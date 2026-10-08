@@ -14,8 +14,8 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const STAR_BEAT: CardDef = CardDef::new(
     "PPP:STAR BEAT!",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], None, after_settle, card_sdk::pre::MINE),
-        On::Play(Some(cant_play), play, ""),
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], card_sdk::pre::MINE, None, after_settle),
+        On::Play("", Some(cant_play), play),
     ],
 )
     .legacy(&[(0, legacy_mine)]);

@@ -15,9 +15,9 @@ pub const ENCORE: CardDef = CardDef::new(
     "通用:安可",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "target == owner && effect.has(Abnormal)",
         None,
         counteract,
-        "target == owner && effect.has(Abnormal)",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

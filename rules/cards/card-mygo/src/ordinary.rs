@@ -15,9 +15,9 @@ pub const ORDINARY: CardDef = CardDef::new(
     "MyGO:普通与理所当然",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
         None,
         counteract,
-        "target == owner && effect.has(Abnormal) && slot('lastWalk') > 0",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

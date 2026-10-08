@@ -15,17 +15,17 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LAYER_KEEP: CardDef = CardDef::new(
     "RAS:（和奏瑞依）寄于指尖的执念",
     &[
-        On::Play(None, play, ""),
-        On::Play(Some(can_use), use_die, ""),
-        On::Hook(&[HookKind::RollAfter], Some(roll_after_guard), roll_after, ""),
+        On::Play("", None, play),
+        On::Play("", Some(can_use), use_die),
+        On::Hook(&[HookKind::RollAfter], "", Some(roll_after_guard), roll_after),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::FIRE` (「使用火罐进行掷骰」).
         On::Counteract(
             &[ChainKind::Roll],
+            "actor == owner && roll_source == 1",
             None,
             counter_fire,
-            "actor == owner && roll_source == 1",
         ),
     ],
 )

@@ -17,9 +17,9 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
     // residual guard.
     &[On::Counteract(
         &[ChainKind::Mortgage],
+        "actor == owner || owner.money >= tile.price / 2",
         Some(can_counteract),
         counteract,
-        "actor == owner || owner.money >= tile.price / 2",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

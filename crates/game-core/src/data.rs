@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::deck_book::{DeckBook, DECK_BOOK_FILE};
+use crate::strategy::{StrategyBook, STRATEGY_BOOK_FILE};
 
 /// `TileData.cs`
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -330,6 +331,12 @@ pub struct GameData {
     /// bots then keep using [`crate::deck::preset`]. Not part of
     /// [`DATA_FILES`] / the data hash: it tunes bots, not the match.
     pub deck_book: DeckBook,
+    /// Bot strategy book (`docs/BOT.md` §3.8) from the optional
+    /// `data/strategy_book.json`. Empty when the file is absent or unparsable
+    /// -- bots then keep using the default [`crate::strategy::StrategyParams`]
+    /// (today's constants). Not part of [`DATA_FILES`] / the data hash, like
+    /// [`Self::deck_book`].
+    pub strategy_book: StrategyBook,
     card_by_id: HashMap<String, usize>,
 }
 
@@ -404,6 +411,7 @@ impl GameData {
             rules_text: get("rules.txt")?.trim_start_matches('\u{feff}').to_string(),
             rules_version: RULES_VERSION,
             deck_book: DeckBook::default(),
+            strategy_book: StrategyBook::default(),
             card_by_id: HashMap::new(),
         };
         // First card wins on duplicate ids, like the C# GroupBy(...).First().
@@ -417,6 +425,11 @@ impl GameData {
         // preset decks.
         if let Ok(text) = read(DECK_BOOK_FILE) {
             d.deck_book = DeckBook::parse_or_empty(&text);
+        }
+        // Same for the strategy book (`docs/BOT.md` §3.8): absent / unparsable
+        // = default parameters = today's heuristics.
+        if let Ok(text) = read(STRATEGY_BOOK_FILE) {
+            d.strategy_book = StrategyBook::parse_or_empty(&text);
         }
         Ok(d)
     }

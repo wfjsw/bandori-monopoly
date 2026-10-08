@@ -320,6 +320,10 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         // `decide` that matches it.
         "ponder" => ponder(ctx, req),
 
+        // Drop a cached answer after the engine refused it, so a refused one
+        // is never replayed (`docs/BOT.md` §5 B6).
+        "invalidate" => invalidate(ctx, req),
+
         _ => Err(format!("unknown op {op:?}")),
     }
 }
@@ -351,16 +355,32 @@ fn decide(ctx: &Ctx, req: &Value) -> Result<Value, String> {
     // the engine's own policy answers it -- same as the B4 harness.
     let searched =
         action::legal_actions_with_cost(&ctx.data, &st, &view.hand, &view.playable, &view.est_cost, seat);
-    if searched.is_empty() {
-        let msg = heuristic_message_view(&ctx.data, &view);
-        return Ok(json!({
-            "ok": true,
-            "answer": msg,
-            "iterations": 0,
-            "elapsed_ms": started.elapsed().as_millis() as u64,
-            "heuristic": true,
-            "reused": false,
-        }));
+    // Trivial root (`docs/BOT.md` §3.4): one forced action, or a free menu.
+    // Answer without searching -- this was 27–34% of searched bot CPU.
+    match action::trivial_decision(&searched) {
+        Some(action::Trivial::Forced(a)) => {
+            let msg = action::to_net_message(&a, &st, seat);
+            return Ok(json!({
+                "ok": true,
+                "answer": msg,
+                "iterations": 0,
+                "elapsed_ms": started.elapsed().as_millis() as u64,
+                "heuristic": true,
+                "reused": false,
+            }));
+        }
+        Some(action::Trivial::LowStakes) => {
+            let msg = heuristic_message_view(&ctx.data, &view);
+            return Ok(json!({
+                "ok": true,
+                "answer": msg,
+                "iterations": 0,
+                "elapsed_ms": started.elapsed().as_millis() as u64,
+                "heuristic": true,
+                "reused": false,
+            }));
+        }
+        None => {}
     }
 
     // Ponder cache hit: the same information set was already searched while
@@ -464,7 +484,7 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
     let st = view.state.clone();
     let searched =
         action::legal_actions_with_cost(&ctx.data, &st, &view.hand, &view.playable, &view.est_cost, seat);
-    if searched.is_empty() {
+    if action::trivial_decision(&searched).is_some() {
         return Ok(json!({
             "ok": true,
             "reused": false,
@@ -503,6 +523,34 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         // is what a later `decide` reuses).
         "answer": msg,
     }))
+}
+
+/// `{decisionKey}` -> `{ok}`. Drop a cached answer after the engine refused
+/// it, so the next probe re-decides instead of replaying the refused one
+/// (`docs/BOT.md` §5 B6). The key is the reply's `decisionKey` (hex) or the
+/// raw u64 a caller computed from the same view.
+fn invalidate(ctx: &Ctx, req: &Value) -> Result<Value, String> {
+    let key = req
+        .get("decisionKey")
+        .and_then(Value::as_u64)
+        .or_else(|| {
+            req.get("decisionKey")
+                .and_then(Value::as_str)
+                .and_then(|s| u64::from_str_radix(s.trim_start_matches("0x"), 16).ok())
+        })
+        .or_else(|| req.get("key").and_then(Value::as_u64))
+        .ok_or_else(|| "missing decisionKey".to_string())?;
+    ctx.forget(key);
+    Ok(json!({"ok": true, "dropped": true}))
+}
+
+impl Ctx {
+    /// Drop any cached answer / nothing else for this information-set key.
+    /// Called when the engine refused the answer, so a refused one is never
+    /// replayed from the ponder/decide cache.
+    pub fn forget(&self, decision_key: u64) {
+        self.cache.lock().unwrap().results.remove(&decision_key);
+    }
 }
 
 /// Run the (possibly root-parallel) search for one decision, reusing the
@@ -595,6 +643,16 @@ pub fn ponder_request(id: u64, room: &str, seat: i32, view: &Value, budget_ms: u
         "view": view,
         "budget_ms": budget_ms,
         "seed": seed,
+    })
+}
+
+/// Build an `invalidate` request: drop the cached answer for one decision key
+/// after the engine refused it (`docs/BOT.md` §5 B6).
+pub fn invalidate_request(id: u64, decision_key: u64) -> Value {
+    json!({
+        "id": id,
+        "op": "invalidate",
+        "decisionKey": format!("{decision_key:016x}"),
     })
 }
 

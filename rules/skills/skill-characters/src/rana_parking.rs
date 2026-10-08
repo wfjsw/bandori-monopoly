@@ -33,17 +33,17 @@ const HELD: &str = "抹茶芭菲";
 pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （2）「免除付款」 -- a payment-stage cancel (R4). The 「并抽1张卡」
         // rides the settle's effect list below.
-        On::Hook(&[HookKind::PayTotalCancel], Some(any), exempt_pay, ""),
+        On::Hook(&[HookKind::PayTotalCancel], "", Some(any), exempt_pay),
         // （2）「将该次结算改为在space格子上添加一个"抹茶芭菲"」 -- the
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
-        On::Hook(&[HookKind::SettleBody], Some(any), replace_body, ""),
-        On::Hook(&[HookKind::PassPlayer], None, on_overlap, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::SettleBody], "", Some(any), replace_body),
+        On::Hook(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
     ],
 )
     .legacy(&[(2, legacy_mine), (5, legacy_mine)]);

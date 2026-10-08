@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
-    &[On::Counteract(&[ChainKind::MoveRoll], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)],
 );
 
 /// Distance in the direction of travel to the nearest other player who can be

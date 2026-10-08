@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RAN_AS_USUAL: CardDef = CardDef::new(
     "AG:(兰) 像往常一样",
     &[
-        On::Play(None, play, ""),
+        On::Play("", None, play),
         // G4: kind (Effect) is the category. The condition carries the whole
         // guard body: target rel + `effect.has(Abnormal)` + the once-per-turn
         // slot. Residual guard deleted.
@@ -30,9 +30,9 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
         //   place (it narrows, never broadens) until the book rules on it.
         On::Counteract(
             &[ChainKind::Effect],
+            "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key",
             None,
             counteract,
-            "target == owner && effect.has(Abnormal) && slot('asUsualTurn') != turn_key",
         ),
         On::AtEnd(at_end),
     ],

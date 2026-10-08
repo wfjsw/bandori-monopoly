@@ -13,12 +13,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const MAZE_WAREHOUSE: CardDef = CardDef::new(
     "PPP:迷宫般的仓库",
     &[
-        On::Play(Some(cant_play), play, ""),
+        On::Play("", Some(cant_play), play),
         // 「本回合购买格子不[消耗]资金，如果购买则拆除那个格子上的所有房屋」 --
         // a `BuySet` 0 (free) and a `BuyAssign` raze, riding a `ctx::linger`
         // instance for the turn (`docs/PURCHASE.md`).
-        On::Hook(&[HookKind::BuySet], None, free_buy, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::BuyAssign], None, raze, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::BuySet], card_sdk::pre::MINE, None, free_buy),
+        On::Hook(&[HookKind::BuyAssign], card_sdk::pre::MINE, None, raze),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 6000)])
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

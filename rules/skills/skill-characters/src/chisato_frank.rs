@@ -21,11 +21,11 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const CHISATO_FRANK: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
         // so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the per-share
         // `payChoose`.
-        On::Hook(&[HookKind::PayTotalAdd], Some(mine), on_gain, ""),
+        On::Hook(&[HookKind::PayTotalAdd], "", Some(mine), on_gain),
     ],
 );
 

@@ -20,8 +20,8 @@ const OWED: &str = "skill.soyoCrychic.owed";
 pub const SOYO_CRYCHIC: CardDef = CardDef::new(
     "skill:长崎素世（CRYCHIC）:雨中祈晴",
     &[
-        On::Hook(&[HookKind::PayChoose], None, on_pay, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollPlan], None, on_plan, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, None, on_pay),
+        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, None, on_plan),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);

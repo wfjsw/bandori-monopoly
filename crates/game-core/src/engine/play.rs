@@ -2227,6 +2227,13 @@ impl Cx<'_> {
         }
         let money = self.w.st.players[i].money;
         let m = self.bot_mentality(i);
+        // Standard reads `StrategyParams::force_buy_reserve` (default ==
+        // `FORCE_BUY_RESERVE`); chaos keeps its own `CHAOS_RESERVE`.
+        let wants_force = if self.is_chaos(i) {
+            super::ai::bot_wants_force_buy(m, money, price)
+        } else {
+            self.strategy_of(i).wants_force_buy(money, price)
+        };
         let ask = Ask::choice(
             vec![i],
             Msg::new("ask.force_buy.title"),
@@ -2242,13 +2249,7 @@ impl Cx<'_> {
             1,
             15.0,
         )
-        .with_ai(|_| {
-            if super::ai::bot_wants_force_buy(m, money, price) {
-                0
-            } else {
-                1
-            }
-        })
+        .with_ai(|_| if wants_force { 0 } else { 1 })
         .with_tile(t);
         let mut ask = ask;
         ask.view.price = price;
@@ -2427,17 +2428,21 @@ impl Cx<'_> {
             .collect()
     }
 
-    /// `MortgageOrder` -- bare land first, cheapest first.
-    fn mortgage_order(&self, mut deeds: Vec<usize>) -> Vec<usize> {
-        deeds.sort_by_key(|&t| (self.w.st.houses[t] > 0, self.tile(t).price, t));
+    /// `MortgageOrder` -- bare land first, cheapest first at the default
+    /// [`crate::strategy::StrategyParams`] keys (the sort key is
+    /// `(has_houses · house_key + price · price_key, tile)`, which with both
+    /// keys at `1000` is exactly the old `(houses > 0, price, t)` order).
+    fn mortgage_order(&self, mut deeds: Vec<usize>, p: &crate::strategy::StrategyParams) -> Vec<usize> {
+        deeds.sort_by_key(|&t| p.mortgage_key(self.w.st.houses[t], self.tile(t).price, t));
         deeds
     }
 
     /// `AutoMortgage` -- the AI's (and the time-out) selection.
     ///
     /// Standard: bare land first, cheapest first, until `need` is covered (the
-    /// order the C# uses). Chaos: a random subset that covers `need` -- at
-    /// least one deed, never a tidy little list.
+    /// order the C# uses, under the seat's [`crate::strategy::StrategyParams`]).
+    /// Chaos: a random subset that covers `need` -- at least one deed, never a
+    /// tidy little list.
     fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
         if self.is_chaos(player_id) {
             let mut rest = self.mortgageable(player_id);
@@ -2451,9 +2456,10 @@ impl Cx<'_> {
             }
             return out;
         }
+        let p = self.strategy_of(player_id);
         let mut got = 0;
         let mut out = vec![];
-        for t in self.mortgage_order(self.mortgageable(player_id)) {
+        for t in self.mortgage_order(self.mortgageable(player_id), &p) {
             if got >= need {
                 break;
             }
@@ -3449,7 +3455,13 @@ impl Cx<'_> {
             }
         }
         while self.w.st.players[i].money < amount {
-            let Some(&t) = self.mortgage_order(self.mortgageable(i)).first() else {
+            // Chaos keeps the default order (its policy is not parameterised).
+            let p = if self.is_chaos(i) {
+                crate::strategy::StrategyParams::default()
+            } else {
+                self.strategy_of(i)
+            };
+            let Some(&t) = self.mortgage_order(self.mortgageable(i), &p).first() else {
                 break;
             };
             self.do_mortgage(i, t, Some(Msg::new("src.raise_funds")));

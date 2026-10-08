@@ -9,7 +9,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TSUKUSHI_GARDEN: CardDef = CardDef::new(
     "Mor:（筑紫）迷茫的庭园",
-    &[On::Play(Some(cant_play), tsukushi_garden, "")],
+    &[On::Play("", Some(cant_play), tsukushi_garden)],
 );
 
 /// C# `CardTsukushiGarden.WhyNot` = `H.MoveWhyNot(seat)`.

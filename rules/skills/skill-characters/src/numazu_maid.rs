@@ -20,11 +20,11 @@ const PAREO: &str = "PAREO标记";
 pub const NUMAZU_MAID: CardDef = CardDef::new(
     "skill:鳰原令王那:梦幻可爱♪女仆",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
-        On::Hook(&[HookKind::HouseAdded], None, on_built, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(&[HookKind::HouseAdded], card_sdk::pre::MINE, None, on_built),
         // （2）'s offer is also a press, so a card can run it out of turn
         // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
-        On::Play(None, offer, ""),
+        On::Play("", None, offer),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

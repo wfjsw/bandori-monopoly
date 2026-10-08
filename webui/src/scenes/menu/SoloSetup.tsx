@@ -8,7 +8,7 @@ import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
 import { getProfile } from "../../core/store";
 import type { BotMentality, CharacterData, ScoreWeights } from "../../core/types";
-import { SoloSession, discardSolo, resumeSolo, startSolo } from "../../game/session";
+import { SoloSession, botSoloCapMs, discardSolo, resumeSolo, setBotSoloCapMs, startSolo } from "../../game/session";
 import { Btn } from "../../ui/Button";
 import { Avatar, CharCard, inTab, tabLabels } from "../../ui/Character";
 import { Chips } from "../../ui/Chips";
@@ -29,17 +29,25 @@ function botNames(player: string, n: number): string[] {
   return out;
 }
 
-const label = (m: BotMentality) => (m === "chaos" ? tr("solo.mentalityChaos") : tr("solo.mentalityStandard"));
-const other = (m: BotMentality): BotMentality => (m === "chaos" ? "standard" : "chaos");
+const MENTALITIES = ["standard", "chaos", "advanced"] as const;
+const label = (m: BotMentality) =>
+  m === "chaos" ? tr("solo.mentalityChaos") : m === "advanced" ? tr("solo.mentalityAdvanced") : tr("solo.mentalityStandard");
+const other = (m: BotMentality): BotMentality => {
+  const i = MENTALITIES.indexOf(m as (typeof MENTALITIES)[number]);
+  return MENTALITIES[(i + 1) % MENTALITIES.length];
+};
 
 function SoloSetup({ close }: { close: () => void }) {
   const player = getProfile().playerName;
   const [bots, setBots] = useState(() => Math.min(9, Math.max(2, Number(localStorage.getItem(BOTS_KEY) ?? 3) || 3)));
   const [weights, setWeights] = useState<ScoreWeights>({ ...DEFAULT_WEIGHTS });
   /** The "all bots" default; a per-name `overrides` entry beats it. */
-  const [mentality, setMentality] = useState<BotMentality>(() =>
-    localStorage.getItem(MENT_KEY) === "chaos" ? "chaos" : "standard"
-  );
+  const [mentality, setMentality] = useState<BotMentality>(() => {
+    const raw = localStorage.getItem(MENT_KEY);
+    return raw === "chaos" || raw === "advanced" ? raw : "standard";
+  });
+  /** 进阶 per-decision search cap, seconds (`docs/BOT.md` §3.6 user ruling). */
+  const [capSec, setCapSec] = useState(() => Math.round(botSoloCapMs() / 1000));
   const [overrides, setOverrides] = useState<Record<string, BotMentality>>({});
   /**
    * One character per seat, seat 0 first: a name, or `""` for 随机. Bots start
@@ -128,7 +136,7 @@ function SoloSetup({ close }: { close: () => void }) {
       </div>
       <div className={s.mentalityRow}>
         <span className={s.mentalityLabel}>{tr("solo.mentality")}</span>
-        {(["standard", "chaos"] as const).map((m) => (
+        {MENTALITIES.map((m) => (
           <button
             key={m}
             type="button"
@@ -140,6 +148,25 @@ function SoloSetup({ close }: { close: () => void }) {
           </button>
         ))}
       </div>
+      {mentality === "advanced" || Object.values(overrides).includes("advanced") ? (
+        <div className={s.mentalityRow}>
+          <span className={s.mentalityLabel}>{tr("solo.botCap")}</span>
+          <input
+            type="range"
+            min={1}
+            max={8}
+            step={1}
+            value={capSec}
+            onChange={(e) => {
+              const sec = Math.min(8, Math.max(1, Number(e.target.value) || 3));
+              setCapSec(sec);
+              setBotSoloCapMs(sec * 1000);
+            }}
+            title={tr("solo.botCapHint")}
+          />
+          <span className={s.mentalityLabel}>{tr("solo.botCapSeconds", { n: capSec })}</span>
+        </div>
+      ) : null}
       <div className={s.rows}>
         <SeatRow
           name={player}
@@ -210,7 +237,7 @@ function SeatRow({
       ) : (
         <button
           type="button"
-          className={`${s.tag} ${s.mentalityTag} ${mentality === "chaos" ? s.mentalityTagChaos : ""}`}
+          className={`${s.tag} ${s.mentalityTag} ${mentality === "chaos" ? s.mentalityTagChaos : ""} ${mentality === "advanced" ? s.mentalityTagAdvanced : ""}`}
           title={tr("solo.mentalityHint")}
           onClick={onMentality}
         >

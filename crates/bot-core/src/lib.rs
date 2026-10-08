@@ -20,6 +20,7 @@
 //! on forks.
 
 pub mod action;
+pub mod clock;
 pub mod determinize;
 pub mod eval;
 pub mod ismcts;
@@ -27,7 +28,9 @@ pub mod saved;
 pub mod sim;
 pub mod view;
 
-pub use action::{action_priors, Action, Surface};
+pub use clock::Instant;
+
+pub use action::{action_priors, trivial_decision, Action, Surface, Trivial};
 pub use determinize::{determinize, determinize_json, DeterminizeError, DeterminizerRng, SampleReport};
 pub use eval::{net_worth, relative_worth, terminal_value};
 pub use ismcts::{

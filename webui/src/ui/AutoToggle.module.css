@@ -55,6 +55,27 @@
   background: #ff7a1a;
   border-color: #ff7a1a;
 }
+/* 进阶: a cooler accent (the worker-pool search, docs/BOT.md B6). */
+.on.advanced {
+  background: #4a7dff;
+  border-color: #4a7dff;
+}
+
+/* The "thinking…" pill while a 进阶 search runs. Small, transient. */
+.thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: rgba(74, 125, 255, 0.12);
+  color: #4a7dff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  animation: autoPulse 1.2s ease-in-out infinite;
+}
 
 .banner {
   position: absolute;

@@ -23,9 +23,9 @@ const FAN: &str = "P✽P粉丝(反)";
 pub const PASTEL: CardDef = CardDef::new(
     "skill:Pastel✽Palettes:与偶像一起",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Play(Some(can_flip), flip, ""),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Play("", Some(can_flip), flip),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

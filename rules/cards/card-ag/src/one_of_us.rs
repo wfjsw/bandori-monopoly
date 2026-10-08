@@ -15,15 +15,15 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
-        On::Play(Some(cant_play), play, ""),
-        On::Hook(&[HookKind::BeforeOut], None, before_out, ""),
+        On::Play("", Some(cant_play), play),
+        On::Hook(&[HookKind::BeforeOut], "", None, before_out),
         // 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle
         // runs to completion at the original owner (`tileResolved`, the
         // 「结算完成时」 terminal, `SETTLE-STAGES.md` §4 M5) and only then does
         // the partner's share land. `PayAfter` just measures the rent income
         // the settle produced; the split is the terminal's job.
-        On::Hook(&[HookKind::PayAfter], None, measure_rent, ""),
-        On::Hook(&[HookKind::TileResolved], None, share_at_resolved, ""),
+        On::Hook(&[HookKind::PayAfter], "", None, measure_rent),
+        On::Hook(&[HookKind::TileResolved], "", None, share_at_resolved),
     ],
 );
 
@@ -142,7 +142,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // the owner keeps the full rent and the partner is topped up, or the two
     // split the rent itself, is the same shape either way at half.
     // 规则书: 「当其中一方破产时，将两张被指定地契放置在该卡上并转移到存活方的游戏区，该方视为拥有次地契」
-    // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], Some(...), "")` below
+    // -- the deed hand-over is `On::Hook(&[HookKind::BeforeOut], "", Some(...))` below
     // (C# `CardOneOfUs.BeforeOut`).
     Ok(())
 }

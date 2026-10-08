@@ -17,13 +17,18 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const HARUHIKAGE: CardDef = CardDef::new(
     "CRYCHIC:春日影",
     &[
-        On::Play(None, play, ""),
-        On::Counteract(&[
+        On::Play("", None, play),
+        On::Counteract(
+            &[
                 ChainKind::Effect,
                 ChainKind::MoveRoll,
                 ChainKind::SettleBefore,
-            ], Some(can_counteract), counteract, ""),
-        On::Hook(&[HookKind::Drawn], None, on_drawn, ""),
+            ],
+            "",
+            Some(can_counteract),
+            counteract
+        ),
+        On::Hook(&[HookKind::Drawn], "", None, on_drawn),
     ],
 );
 

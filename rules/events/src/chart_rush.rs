@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const CHART_RUSH: CardDef = CardDef::new("event:冲榜", &[On::Play(None, play, "")]);
+pub const CHART_RUSH: CardDef = CardDef::new("event:冲榜", &[On::Play("", None, play)]);
 
 /// 规则书: 「所有人失去所有[火罐]并且投掷Xd20，X为失去的指示物数量加一」 --
 /// every player loses every fire pot and rolls (lost + 1) d20. One-shot: the

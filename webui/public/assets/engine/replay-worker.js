@@ -45,11 +45,23 @@ async function init(base) {
     if (r.ok) files[name] = await r.text();
   }
   glue.load_data(JSON.stringify(files));
-  const index = await (await fetch(new URL(L.rulesIndex, base))).json();
+  const indexUrl = new URL(L.rulesIndex, base);
+  const index = await (await fetch(indexUrl)).json();
   for (const m of index.modules ?? []) {
     const w = await fetch(new URL(`${L.modulesDir}/${m.file}`, base));
     if (!w.ok) throw new Error(`${m.file}: HTTP ${w.status}`);
     glue.ruleset_add(new Uint8Array(await w.arrayBuffer()));
+  }
+  // Precompiled guard conditions (docs/GUARDS.md §8.2): the bundle keeps
+  // `conds-<sha>.bin` beside its rules index. Bundles from before conditions
+  // existed carry neither the blob nor a `pre` -- nothing to load, unchanged.
+  if (index.conds?.file) {
+    if (typeof glue.ruleset_precompiled !== "function") {
+      throw new Error("bundle ships precompiled conditions but its glue cannot load them");
+    }
+    const c = await fetch(new URL(index.conds.file, indexUrl));
+    if (!c.ok) throw new Error(`${index.conds.file}: HTTP ${c.status}`);
+    glue.ruleset_precompiled(new Uint8Array(await c.arrayBuffer()));
   }
   glue.ruleset_build();
   return {

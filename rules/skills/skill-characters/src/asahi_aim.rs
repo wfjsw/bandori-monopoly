@@ -35,8 +35,8 @@ fn is_bathhouse(t: i32) -> bool {
 pub const ASAHI_AIM: CardDef = CardDef::new(
     "skill:朝日六花:瞄准目标",
     &[
-        On::Hook(&[HookKind::Bought], None, on_bought, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);

@@ -13,12 +13,12 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CANT_LOOK_AWAY: CardDef = CardDef::new(
     "Mujica:无法将视线移开",
     &[
-        On::Play(None, play, ""),
+        On::Play("", None, play),
         On::Counteract(
             &[ChainKind::Counteracted],
+            "target == owner && actor != owner",
             None,
             counteract,
-            "target == owner && actor != owner",
         ),
     ],
 )

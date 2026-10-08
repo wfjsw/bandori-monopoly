@@ -9,7 +9,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BE_STRONGEST: CardDef =
-    CardDef::new("RAS:成为最强", &[On::Play(Some(cant_play), be_strongest, "")]);
+    CardDef::new("RAS:成为最强", &[On::Play("", Some(cant_play), be_strongest)]);
 
 /// C# `CardBeStrongest.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.

@@ -11,7 +11,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const RINNE_RAIN: CardDef = CardDef::new(
     "MyGO:轮符雨",
     &[
-        On::Play(None, rinne_rain, ""),
+        On::Play("", None, rinne_rain),
         // 「并在回合结束时额外进行一次[触发结算]」 is a **scheduling** clause
         // (`docs/TILES.md`), not a tile fact: `On::AtEnd` runs it at the turn
         // end, and its body is a plain `ctx::settle`.

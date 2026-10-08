@@ -17,9 +17,9 @@ const ID: &str = "Mor:离心力，不为所动";
 pub const CENTRIFUGAL: CardDef = CardDef::new(
     "Mor:离心力，不为所动",
     &[
-        On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, ""),
+        On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract),
         On::Gate(&[GateKind::ImmuneAll], immune_all),
-        On::Hook(&[HookKind::TurnStart], None, turn_start, ""),
+        On::Hook(&[HookKind::TurnStart], "", None, turn_start),
     ],
 );
 

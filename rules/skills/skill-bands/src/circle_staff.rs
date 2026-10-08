@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const CIRCLE_STAFF: CardDef = CardDef::new(
     "skill:CiRCLE:后勤人员的努力",
-    &[On::Hook(&[HookKind::CardPlayed], None, on_played, card_sdk::pre::MINE)],
+    &[On::Hook(&[HookKind::CardPlayed], card_sdk::pre::MINE, None, on_played)],
 )
     .legacy(&[(0, legacy_mine)]);
 

@@ -18,9 +18,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ANON_RESTART: CardDef = CardDef::new(
     "skill:千早爱音:重新开始",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Abnormal], None, on_abnormal, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Abnormal], card_sdk::pre::MINE, None, on_abnormal),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

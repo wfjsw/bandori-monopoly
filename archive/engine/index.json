@@ -1,7 +1,55 @@
 {
  "version": 1,
- "current": "e4e20956c75115229a44af9406c876b23907573b3df49bf2cdf2b3f6f02a22fe",
+ "current": "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db",
  "bundles": [
+  {
+   "id": "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db",
+   "created": "2026-10-08T08:13:16.565Z",
+   "glueSha256": "52dc2f7579c8155b5db489d072dfa928b976bc66fb593d553e221cd53f0cb1f0",
+   "bytes": 7024184,
+   "stamp": {
+    "format": 1,
+    "save_version": 5,
+    "abi": 46,
+    "ruleset_sha256": "39fd368607743a40da1c5d658f39383d65c9e7d8315edbec743e71d25f14dfb6",
+    "data_sha256": "0a27d497c21e6b994476c5ce35091e37c1bd85f338b70eec422e65a3472662bb",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db"
+   },
+   "key": "1|5|46|39fd368607743a40da1c5d658f39383d65c9e7d8315edbec743e71d25f14dfb6|0a27d497c21e6b994476c5ce35091e37c1bd85f338b70eec422e65a3472662bb",
+   "source_id": "e6df247eb21e5c187f5816955da583b49c334363500865ff12a4be1256242e6e",
+   "ref": "refs/1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db.bdrec",
+   "ref_sha256": "4d42ed5df6fe4b1d843d9c97dc5b55eee50e84b1d462266ec6b34bed7de8a40f",
+   "commit": null,
+   "dirty": true,
+   "rebuild": false,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/bundle.json": "a90cffab40689bdddf9e68ba91529b82d22fa5989e2a7ef976e9bfa22a6d06e0",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/bands.json": "bfd0e6c7c948c2f6010e13af6a0bae94b9954c21ccb9d2bd6e28841b485efd37",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/board.json": "5fd32b8bb8a201514e0e62324783ff0749ce4f2a15703a6f44b6297db2f39cc1",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/cards.json": "df0a5ac0769bbebdf91eb563f34681974c2e4f3d7b4582ed90b45edf7339aaa8",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/characters.json": "1765d5489c593fdbf14ba529d32215662b7468ec2e24e410de4a84d5de27067d",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/events.json": "7284a93d60bc4b340ea28fb2f495c1f49cf416db258431c17ad0c270ff64039e",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/home_lines.json": "335065509025c1b11f013e4a05f9608e995e6c721f252fb591a723eb313ea7aa",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/match_rules.json": "b3233e5216089587c47e9f3f1b666e5b4d8b0e2a0d3570cb9174543607c5ada8",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/rules.txt": "340a4d82f727ca4b2a78a233884fef8c172b21331dfc42240aae43475bf6da2d",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/schools.json": "9c7796fb8252d66ae6140de2c1c7cecbc43f0d57c7ffd6f91eef4300a3457ed6",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/skill_simple.json": "78f4a1461054c37c66d5ab1d589058d14ac6508eb501650872abbf39d44745ea",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/song_cards.json": "0154d62cd351f1456754e9cd98408ee77acf9d6596b7c17cf4b6530f7b1870e2",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/data/voice_lines.json": "0f98324863124465e85c30634bb5309b453ce04dc9130a27210cf21ed98ad62b",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/glue.js": "8824ad9f6d99b9ee2fc8fe8928ba74b13124d572d728e2436ff884e75eaac3e2",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/glue_bg.wasm": "5625608257026b02c1c96508a2882fae1281262f321cc49b8b6129f105a72e38",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/rules/conds-69208fc983991b7575b11c878bc6e51d80bb8d0ea2c80b10a7af7e3113ece287.bin": "69208fc983991b7575b11c878bc6e51d80bb8d0ea2c80b10a7af7e3113ece287",
+    "1d775d024caae9cfc56fd04632bd10b416252f9ff2a796b3d58acabb77efd3db/rules/index.json": "efcdb151614c27bd261dabde745c82a3abf1a89e2a6034d5fb3c6e72c08c30f3",
+    "modules/f4e7fe7e80a4834f0983b1722c6ab8a4a49e3bb62c40d920f100f39b0a08fd6f.wasm": "f4e7fe7e80a4834f0983b1722c6ab8a4a49e3bb62c40d920f100f39b0a08fd6f"
+   }
+  },
   {
    "id": "6245e6cec4f23e444b7325684c1cbff1a250d7c8cf2688edc7594d5f1fda00cf",
    "created": "2026-10-08T02:57:37.175Z",
@@ -93,7 +141,9 @@
     "wasm_bindgen": "unknown"
    },
    "damaged_at": "2026-10-08T22:02:56Z",
-   "restored_note": "glue_bg.wasm restored 2026-10-07 from the live webui/dist/static/wasm/6a6f1175e8.module.wasm; verified: sha256(glue.js||glue_bg.wasm) == glueSha256 recorded at build time."
+   "restored_note": "glue_bg.wasm restored 2026-10-07 from the live webui/dist/static/wasm/6a6f1175e8.module.wasm; verified: sha256(glue.js||glue_bg.wasm) == glueSha256 recorded at build time.",
+   "damaged": true,
+   "damaged_note": "glue.js was overwritten 2026-10-08 by an NTFS hardlink write-through from webui/src/wasm/glue.js (build-glue rewrote it in place). The original (sha256 5dbc4d05e554…) is not on this machine; glue_bg.wasm is intact. Restore glue.js from a backup and clear this flag. Records sealed by this bundle cannot be replayed until then."
   },
   {
    "id": "3a5ac017eec465fb0cb5fc0c8476ac8ef47b3fa926425dd777520c14937c41cf",

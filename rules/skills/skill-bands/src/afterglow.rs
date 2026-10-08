@@ -12,7 +12,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const AFTERGLOW: CardDef = CardDef::new(
     "skill:Afterglow:商店街的宠儿",
-    &[On::Hook(&[HookKind::Bought], None, on_bought, card_sdk::pre::MINE)],
+    &[On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought)],
 )
     .legacy(&[(0, legacy_mine)]);
 

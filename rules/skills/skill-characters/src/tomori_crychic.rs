@@ -19,10 +19,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
     "skill:高松灯（CRYCHIC）:跌跌撞撞...",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
         On::AtEnd(settle_now),
     ],
 )

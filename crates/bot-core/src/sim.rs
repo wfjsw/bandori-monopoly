@@ -9,7 +9,9 @@
 //! so the heuristic drives it too.
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+use crate::clock::Instant;
 
 use game_core::data::GameData;
 use game_core::engine::{wants_buy, CardRules, HeuristicProvider, Match};
@@ -474,7 +476,11 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
         }
     }
     if st.step == stage::OPS {
-        if st.skip_move {
+        // `end` only where the engine accepts it (`why_not_act`'s end branch).
+        // The public `skip_move` re-derives from stay / exile and can disagree
+        // with the gate (unstoppable / mid-turn [停留] / [除外]) -- trusting it
+        // sent `end` into `err.roll_first` and stalled the seat (bot_cpu §6).
+        if st.can_end_here && !st.can_roll_here {
             return NetMessage::act("end");
         }
         return NetMessage::act("roll");

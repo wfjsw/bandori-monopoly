@@ -16,8 +16,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RANDOM_STAR: CardDef = CardDef::new(
     "PPP:仓库里的Random Star",
     &[
-        On::Play(None, random_star, ""),
-        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
+        On::Play("", None, random_star),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
     ],
 );
 

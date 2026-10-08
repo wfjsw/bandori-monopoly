@@ -17,8 +17,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const WELCOME_MUJICA: CardDef = CardDef::new(
     "Mujica:欢迎来到ave mujica的世界",
     &[
-        On::Play(None, play, ""),
-        On::Counteract(&[ChainKind::State], None, counteract, "actor != owner"),
+        On::Play("", None, play),
+        On::Counteract(&[ChainKind::State], "actor != owner", None, counteract),
     ],
 )
     .legacy(&[(1, legacy_can_counteract)]);

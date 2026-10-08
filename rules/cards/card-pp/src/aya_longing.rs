@@ -17,15 +17,15 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{CardPile, HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
-        On::Play(None, aya_longing, ""),
-        On::Hook(&[HookKind::PayAdd], None, pay_add, ""),
+        On::Play("", None, aya_longing),
+        On::Hook(&[HookKind::PayAdd], "", None, pay_add),
     ],
 );
 

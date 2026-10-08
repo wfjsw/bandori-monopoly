@@ -17,11 +17,11 @@ const ID: &str = "HHW:笑容大游行";
 pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleBody], None, settle_instead, card_sdk::pre::MINE),
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], None, move_after, card_sdk::pre::MINE),
-        On::Counteract(&[ChainKind::Pass], Some(can_counteract), counteract, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Hook(&[card_sdk::abi::HookKind::SettleBody], card_sdk::pre::MINE, None, settle_instead),
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], card_sdk::pre::MINE, None, move_after),
+        On::Counteract(&[ChainKind::Pass], "", Some(can_counteract), counteract),
+        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);

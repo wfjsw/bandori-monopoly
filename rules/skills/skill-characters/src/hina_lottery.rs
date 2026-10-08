@@ -34,9 +34,9 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, roll, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnStart], None, expire, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, roll),
+        On::Hook(&[HookKind::TurnStart], card_sdk::pre::MINE, None, expire),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

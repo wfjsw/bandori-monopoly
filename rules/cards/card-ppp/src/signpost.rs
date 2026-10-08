@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SIGNPOST: CardDef = CardDef::new(
     "PPP:向着未来的路标",
-    &[On::Play(Some(cant_play), play, ""), On::AtEnd(at_end)],
+    &[On::Play("", Some(cant_play), play), On::AtEnd(at_end)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.

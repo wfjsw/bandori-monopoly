@@ -42,10 +42,18 @@ async function loadGlue({ glueJs, glueWasm, dataDir, tag, glueSha, rules }) {
   g.load_data(JSON.stringify(files));
   if (rules) {
     // `rules: { index, modulesDir }` -- an archived bundle keeps the index in
-    // the bundle and the content-addressed modules in the shared pool.
+    // the bundle and the content-addressed modules in the shared pool. The
+    // precompiled guard conditions (`conds-<sha>.bin`, docs/GUARDS.md §8.2)
+    // ride beside the index in the bundle; older bundles have neither.
     const index = JSON.parse(readFileSync(rules.index, "utf8"));
     for (const m of index.modules ?? []) {
       g.ruleset_add(new Uint8Array(readFileSync(join(rules.modulesDir, m.file))));
+    }
+    if (index.conds?.file) {
+      const beside = join(dirname(rules.index), index.conds.file);
+      const cp = existsSync(beside) ? beside : join(rules.modulesDir, index.conds.file);
+      if (!existsSync(cp)) throw new Error(`precompiled conds blob missing: ${cp}`);
+      g.ruleset_precompiled(new Uint8Array(readFileSync(cp)));
     }
     g.ruleset_build();
   }

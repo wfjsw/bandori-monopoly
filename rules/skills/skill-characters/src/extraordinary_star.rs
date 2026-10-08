@@ -35,9 +35,9 @@ fn hill() -> i32 {
 pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     "skill:户山香澄:非凡之星",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Settle], None, on_settle, ""),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Settle], "", None, on_settle),
     ],
 );
 

@@ -19,7 +19,7 @@ const STAR: &str = "PPP:仓库里的Random Star";
 
 pub const AUCTION_PULLED: CardDef = CardDef::new(
     ID,
-    &[On::Hook(&[HookKind::Drawn, HookKind::TurnStart], None, hook, "")],
+    &[On::Hook(&[HookKind::Drawn, HookKind::TurnStart], "", None, hook)],
 ).props(&[(card_sdk::abi::prop::EST_COST, 540)]);
 
 /// `Fx.Drawn` (C# `CardAuctionPulled.Drawn`) -- pull the card out of the hand

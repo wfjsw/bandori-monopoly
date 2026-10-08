@@ -11,7 +11,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const BANG_DREAM: CardDef =
-    CardDef::new("PPP:Bang Dream!", &[On::Play(Some(cant_play), bang_dream, "")]);
+    CardDef::new("PPP:Bang Dream!", &[On::Play("", Some(cant_play), bang_dream)]);
 
 fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardBangDream.WhyNot`: refuses with 「你还没有地」 when the player owns no tile.

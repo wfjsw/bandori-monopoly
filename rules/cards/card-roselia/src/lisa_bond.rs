@@ -14,7 +14,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
     "R:必然的联系（莉莎）",
-    &[On::Counteract(&[ChainKind::SkillTeleport], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::SkillTeleport], "", Some(can_counteract), counteract)],
 );
 
 /// 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」

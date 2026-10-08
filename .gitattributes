@@ -1,0 +1,47 @@
+# Every text file is stored with LF line endings, whatever the platform.
+* text=auto eol=lf
+
+# Text the auto-detection can misjudge: always text, always LF.
+*.json text eol=lf
+*.txt text eol=lf
+*.md text eol=lf
+*.rs text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.toml text eol=lf
+*.py text eol=lf
+*.sh text eol=lf
+*.csv text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Windows scripts keep CRLF.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary: never touch line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.wasm binary
+*.bin binary
+*.ogg binary
+*.opus binary
+*.mp3 binary
+*.wav binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.moc3 binary
+*.zst binary
+*.gz binary
+*.bdrec binary

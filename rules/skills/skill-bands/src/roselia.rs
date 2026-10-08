@@ -23,9 +23,9 @@ pub const ROSELIA: CardDef = CardDef::new(
     &[
         // （2）/（1）'s 「购买价格减半」 is the buy price's `BuyMul` stage
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
-        On::Hook(&[HookKind::BuyMul], None, half_price, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Bought], None, on_bought, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::BuyMul], card_sdk::pre::MINE, None, half_price),
+        On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);

@@ -8,7 +8,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const COURAGE_WINGS: CardDef =
-    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play(None, courage_wings, "")]);
+    CardDef::new("Mor:勇气展翅高飞之时", &[On::Play("", None, courage_wings)]);
 
 fn courage_wings(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「掷骰3d20，结果对应序号格子」 -- `ctx::roll` honours a forced

@@ -29,10 +29,10 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 /// C# `CardPress` -- 压: gain 1,000.
 pub const PRESS: CardDef = CardDef::new("R:[衍生] 压", &[
-    On::Play(press),
-    // On::CantPlay(cant_play),                       // C# `Card.WhyNot`
-    // On::Counteract(&[TriggerKind::Pay], guard, counteract),  // [反击]: kinds + guard + effect
-    // On::Hook(&[TriggerKind::TurnEnd], decay),      // field hooks, auto-run in play
+    On::Play("", None, press),
+    // On::Play("", Some(cant_play), press),          // C# `Card.WhyNot` gate
+    // On::Counteract(&[ChainKind::Pay], "", guard, counteract),  // [反击]: kinds + condition + guard + effect
+    // On::Hook(&[HookKind::TurnEnd], "", guard, decay),          // field hooks, auto-run in play
     // On::AtEnd(at_end),                             // scheduled turn-end body
     // On::RollPlan(roll_plan),                       // shapes the main move
     // On::Settle(settle),                            // a tile rule's settle body (docs/TILES.md)
@@ -43,10 +43,10 @@ fn press(player_id: i32) {
 ```
 
 Every handler is a `fn(player_id: i32)` (the player the card is placed at for hooks);
-`On::Counteract` carries its [反击] trigger kinds + a pure `bool` guard + the effect,
-`On::Hook` the field-hook kinds (`passTile`, `payAdd`, `drawn`, `turnEnd`, ...
--- the kind names ARE the C# `Fx.*` names). An empty kind list is never
-dispatched.
+`On::Counteract` carries its [反击] trigger kinds + the condition + a pure `bool`
+guard + the effect, `On::Hook` the field-hook kinds (`passTile`, `payAdd`,
+`drawn`, `turnEnd`, ... -- the kind names ARE the C# `Fx.*` names) in the same
+shape. An empty kind list is never dispatched.
 
 * `id` is the **data** card id from `data/cards.json` (Chinese; an identifier,
   not display text).
@@ -62,23 +62,25 @@ dispatched.
 ## Authoring a condition (`pre`, ABI v45)
 
 A guarded entry (`On::Counteract`, `On::Hook`, `On::Play` gates) carries a
-trailing **condition** string -- docs/[GUARDS.md](GUARDS.md) §4.3. `""` = no
-condition. The condition is a CEL expression over the §4.2 window/candidate
-vocabulary; it is compiled **once** at ruleset build and evaluated natively
-before the wasm guard is ever instantiated.
+**condition** string immediately before the residual guard -- category →
+condition → guard → body, the three-layer model of
+docs/[GUARDS.md](GUARDS.md) §4.3. `""` = no condition. The condition is a CEL
+expression over the §4.2 window/candidate vocabulary; it is compiled **once**
+at ruleset build and evaluated natively before the wasm guard is ever
+instantiated.
 
 ```rust
 use card_sdk::{pre, On};
 
-// trailing `pre: &'static str`
-On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract,
-               "actor == owner && move.roll != null"),
+// condition (`pre: &'static str`) before the guard
+On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null",
+               can_counteract, counteract),
 
 // sugar: `pre::MINE` = `actor == owner`
-On::Hook(&[HookKind::TurnEnd], guard, decay, pre::MINE),
+On::Hook(&[HookKind::TurnEnd], pre::MINE, guard, decay),
 
 // or the const builder
-On::Play(Some(cant_play), play, "").pre("owner.money >= 1500"),
+On::Play("", Some(cant_play), play).pre("owner.money >= 1500"),
 ```
 
 **Distinct layers (nothing is rejected twice).** The category filter (the
@@ -106,7 +108,7 @@ expression. Declare it with `CardDef::new(...).props(&[(prop::EST_COST, N)])`.
 `0` (the default) means unknown / assume free.
 
 ```rust
-pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play(None, gacha10)])
+pub const GACHA10: CardDef = CardDef::new("通用:10次招募（1回限定）", &[On::Play("", None, gacha10)])
     .props(&[(card_sdk::abi::prop::EST_COST, 1500)]);
 ```
 

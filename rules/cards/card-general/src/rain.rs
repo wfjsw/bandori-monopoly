@@ -10,7 +10,7 @@
 use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play(None, rain, "")]);
+pub const RAIN: CardDef = CardDef::new("通用:雨啊，快点来吧", &[On::Play("", None, rain)]);
 
 fn rain(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「投掷2d2并记录结果为X」

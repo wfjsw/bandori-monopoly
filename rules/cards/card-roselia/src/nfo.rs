@@ -10,16 +10,16 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{CardPile, HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const NFO: CardDef = CardDef::new(
     "R:NFO",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::PayChoose], Some(gain_guard), gain_bump, ""),
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PayAt], None, counteract, ""),
+        On::Hook(&[card_sdk::abi::HookKind::PayChoose], "", Some(gain_guard), gain_bump),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PayAt], "", None, counteract),
         On::AtEnd(at_end),
     ],
 );

@@ -14,8 +14,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RANA_FUNNY: CardDef = CardDef::new(
     "MyGO:（乐奈）有趣的女人",
     &[
-        On::Play(None, rana_funny, ""),
-        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
+        On::Play("", None, rana_funny),
+        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
     ],
 );
 

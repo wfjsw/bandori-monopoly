@@ -23,8 +23,8 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
-        On::Hook(&[HookKind::RollAfter], Some(mine), on_roll, ""),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(&[HookKind::RollAfter], "", Some(mine), on_roll),
     ],
 );
 

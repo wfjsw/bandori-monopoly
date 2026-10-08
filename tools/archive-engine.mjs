@@ -198,20 +198,13 @@ function sha256File(p) {
  * is unrecoverable from this machine.) When in doubt, copy.
  */
 function copyOrLink(src, dst) {
+  // Always a real copy. Hardlinks were tried twice and both times a live file
+  // (webui/src/wasm/glue*, data/*.json) ended up sharing an inode with an
+  // archived bundle, so an in-place rebuild destroyed archived bytes
+  // (e4e20956…'s glue_bg.wasm, then its glue.js, 2026-10-08). The archive is
+  // small; the disk cost of copies is worth never aliasing a frozen file.
   mkdirSync(dirname(dst), { recursive: true });
   if (existsSync(dst)) return;
-  const frozen = (p) => {
-    const s = p.replace(/\\/g, "/");
-    return s.includes("/data/engine-archive/") || s.includes("/data/engine-cache/") || s.includes("/assets/engine/");
-  };
-  if (frozen(src) && frozen(dst)) {
-    try {
-      linkSync(src, dst);
-      return;
-    } catch {
-      /* cross-volume or permissions: fall through to a real copy */
-    }
-  }
   copyFileSync(src, dst);
 }
 
@@ -345,6 +338,16 @@ async function probeGlue(glueDir, dataDir, rulesDir, gsha, wantEngine) {
         if (existsSync(pool)) g.ruleset_add(new Uint8Array(readFileSync(pool)));
       }
     }
+    // Precompiled guard conditions (docs/GUARDS.md §8.2), beside the index.
+    // Absent = a set with no `pre` (older bundles): nothing to load.
+    if (rulesIndex.conds?.file) {
+      const cp = join(rulesDir, rulesIndex.conds.file);
+      if (!existsSync(cp)) throw new Error(`precompiled conds blob missing: ${cp}`);
+      if (typeof g.ruleset_precompiled !== "function") {
+        throw new Error("ruleset ships precompiled conditions but this glue cannot load them");
+      }
+      g.ruleset_precompiled(new Uint8Array(readFileSync(cp)));
+    }
     g.ruleset_build();
   }
   if (typeof g.set_glue_sha === "function" && gsha) g.set_glue_sha(gsha);
@@ -366,8 +369,12 @@ function dataSha256Hex(dataDir, dataFiles) {
 
 /** Every indexed bundle must be in the store with the recorded hashes -- or,
  *  when `rebuild`, we only warn (tools/rebuild-engine.mjs can fill it in).
- *  `files` keys are store-relative (`<id>/glue.js`, `modules/<sha>.wasm`). */
-function checkStore(index, store, cache) {
+ *  `files` keys are store-relative (`<id>/glue.js`, `modules/<sha>.wasm`).
+ *  `archive` is the index's own directory: the reference record is written
+ *  beside it (`<archive>/refs/<id>.bdrec`) and looked up there too -- a
+ *  `--archive` override must check the archive it just wrote, not the live
+ *  `archive/engine/` default. */
+function checkStore(index, archive, store, cache) {
   let missing = 0;
   let corrupt = 0;
   let rebuildable = 0;
@@ -375,7 +382,7 @@ function checkStore(index, store, cache) {
     // Reference record: the behaviour check every rebuild must pass. Small
     // and versioned beside the index (`archive/engine/refs/`).
     if (e.ref) {
-      const rp = join(ROOT, "archive", "engine", e.ref);
+      const rp = join(archive, e.ref);
       if (!existsSync(rp)) {
         console.error(`FAIL  ${e.id.slice(0, 12)}…  missing reference record ${e.ref}`);
         missing++;
@@ -464,7 +471,7 @@ async function main() {
   index.version = 1;
 
   if (a.check) {
-    const bad = checkStore(index, a.store, a.cache);
+    const bad = checkStore(index, a.archive, a.store, a.cache);
     if (bad) process.exit(1);
     return;
   }
@@ -547,6 +554,14 @@ async function main() {
   // The index only *names* the modules; the bytes live in ../modules. Keep a
   // verbatim copy of the index so a bundle lists exactly the modules it ran.
   writeFileSync(join(bundleDir, "rules", "index.json"), JSON.stringify(rulesIndex));
+  // The precompiled guard conditions ride in the bundle's `rules/` dir (they
+  // are small and per-set, not worth a shared pool). Bundles from before
+  // conditions existed have no `conds` entry -- nothing to copy.
+  if (rulesIndex.conds?.file) {
+    const srcP = join(src.rules, rulesIndex.conds.file);
+    if (!existsSync(srcP)) throw new Error(`precompiled conds blob missing: ${srcP}`);
+    copyOrLink(srcP, join(bundleDir, "rules", rulesIndex.conds.file));
+  }
 
   const bundleJson = {
     id,
@@ -657,7 +672,7 @@ async function main() {
   if (a.dist) console.log(`  dist         ${join(a.dist, "assets", "engine")}`);
 
   // Deploy gate: every previously indexed bundle must still be servable.
-  const bad = checkStore(index, store, a.cache);
+  const bad = checkStore(index, a.archive, store, a.cache);
   if (bad) {
     console.error(`archive-engine: ${bad} problem(s) in the store -- fix before going live`);
     process.exit(1);

@@ -87,8 +87,8 @@ pub fn on(
         panic!("bad entry {entry} on card {idx}")
     };
     match (*o, op) {
-        (On::Counteract(_, guard, _, _), export::OP_GUARD)
-        | (On::Hook(_, guard, _, _), export::OP_GUARD) => match guard {
+        (On::Counteract(_, _, guard, _), export::OP_GUARD)
+        | (On::Hook(_, _, guard, _), export::OP_GUARD) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
             // the residual admits.
@@ -110,16 +110,16 @@ pub fn on(
                 None => -1,
             }
         }
-        (On::Play(why, _, _), export::OP_GUARD) => match why {
+        (On::Play(_, why, _), export::OP_GUARD) => match why {
             Some(why) => match why(player_id) {
                 None => 0,
                 Some(reason) => leak(postcard::to_allocvec(&reason).unwrap_or_default()),
             },
             None => 0,
         },
-        (On::Counteract(_, _, run, _), _)
-        | (On::Play(_, run, _), _)
-        | (On::Hook(_, _, run, _), _)
+        (On::Counteract(_, _, _, run), _)
+        | (On::Play(_, _, run), _)
+        | (On::Hook(_, _, _, run), _)
         | (On::Gate(_, run), _)
         | (On::AtEnd(run), _)
         | (On::Settle(run), _)
@@ -190,7 +190,7 @@ macro_rules! bandori_ruleset {
 /// Exports for a module holding exactly one card (the normal layout).
 ///
 /// ```ignore
-/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::MoveRoll], can_counteract, counteract)]);
+/// pub const CARD: CardDef = CardDef::new("AG:Y.O.L.O", &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)]);
 /// card_sdk::bandori_card!(CARD);
 /// ```
 #[macro_export]

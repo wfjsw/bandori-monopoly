@@ -543,9 +543,13 @@ impl World {
         // `st.buy_price` / `st.build_cost` are view previews (`docs/PURCHASE.md`):
         // the quoted price at the player's position when a buy/build is on the
         // table, `-1` otherwise. Written on the public copy; the live fields are
-        // refreshed by `Cx::refresh_buy_preview` at the END step.
+        // refreshed by `Cx::refresh_buy_preview` at the END step. The matching
+        // `can_buy_here` / `can_build_here` act-legality flags are recomputed
+        // alongside them in `Match::state`.
         st.buy_price = -1;
         st.build_cost = -1;
+        st.can_buy_here = false;
+        st.can_build_here = false;
         for (player_id, h) in st.players.iter_mut().zip(&self.hidden) {
             player_id.hand = h.hand.len() as i32;
             player_id.draw = h.draw.len() as i32;

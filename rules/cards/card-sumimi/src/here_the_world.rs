@@ -85,14 +85,14 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::TwoCards],
+            "actor != owner",
             Some(can_counteract),
             counteract,
-            "actor != owner",
         ),
         // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-        On::Hook(&[HookKind::Drew], None, drew, "actor == owner && card.placed"),
+        On::Hook(&[HookKind::Drew], "actor == owner && card.placed", None, drew),
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-        On::Hook(&[HookKind::TurnStart], None, turn_start, "actor == owner && card.placed"),
+        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 )
 .legacy(&[(0, legacy_can_counteract)]);

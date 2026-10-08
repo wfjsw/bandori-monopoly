@@ -12,7 +12,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
-    &[On::Play(Some(cant_play), no_breakup, "")],
+    &[On::Play("", Some(cant_play), no_breakup)],
 );
 
 /// C# `RepeatedDigits` -- does `|money|`'s decimal form repeat a digit?

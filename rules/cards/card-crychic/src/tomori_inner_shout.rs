@@ -18,9 +18,9 @@ use crate::want_human::SLOT_X;
 pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:（灯）内心的呐喊",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], Some(mine), pull, ""),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], Some(empty_piles), shuffle_in, ""),
-        On::Play(None, tomori_inner_shout, ""),
+        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], "", Some(mine), pull),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], "", Some(empty_piles), shuffle_in),
+        On::Play("", None, tomori_inner_shout),
     ],
 );
 

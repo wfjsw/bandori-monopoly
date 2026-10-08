@@ -1,8 +1,9 @@
-// 托管 / 混沌 mode selector: hands this seat to a browser-side autopilot.
-// Stays clickable in every state, so the player can always take the controls
-// back. On the board it sits in the turn card (`compact`); on character select
-// it is in the TopBar `right` slot. The banner strip is rendered by the match
-// screens.
+// 托管 / 混沌 / 进阶 mode selector: hands this seat to a browser-side
+// autopilot. Stays clickable in every state, so the player can always take the
+// controls back. On the board it sits in the turn card (`compact`); on
+// character select it is in the TopBar `right` slot. The banner strip is
+// rendered by the match screens. 进阶 is the worker-pool search
+// (`docs/BOT.md` B6), lazy-loaded; it falls back to 托管 on any failure.
 
 import { useEffect, useState } from "react";
 import { useAutoMode } from "../core/hooks";
@@ -13,8 +14,9 @@ import { Icon } from "./Icon";
 import s from "./AutoToggle.module.css";
 import { t as tr } from "../i18n/t";
 
-const NEXT: Record<AutoMode, AutoMode> = { off: "bot", bot: "chaos", chaos: "off" };
-const LABEL = (m: AutoMode) => (m === "bot" ? tr("board.afk") : m === "chaos" ? tr("board.chaos") : tr("board.autoOff"));
+const NEXT: Record<AutoMode, AutoMode> = { off: "bot", bot: "chaos", chaos: "advanced", advanced: "off" };
+const LABEL = (m: AutoMode) =>
+  m === "bot" ? tr("board.afk") : m === "chaos" ? tr("board.chaos") : m === "advanced" ? tr("board.advanced") : tr("board.autoOff");
 
 /** Class for a wrapper that lifts the pill above modals (see the CSS). */
 export const autoFloat = s.float;
@@ -30,14 +32,31 @@ export function AutoToggle({ sess, className, compact }: { sess: GameSession; cl
   return (
     <button
       type="button"
-      className={cx(s.toggle, compact && s.compact, mode !== "off" && s.on, mode === "chaos" && s.chaos, className)}
+      className={cx(s.toggle, compact && s.compact, mode !== "off" && s.on, mode === "chaos" && s.chaos, mode === "advanced" && s.advanced, className)}
       onClick={() => sess.setAutoMode(NEXT[mode])}
       title={tr("board.autoplayHint")}
       aria-label={tr("board.autoplayHint")}
     >
-      <Icon name={mode === "chaos" ? "cyclone" : "smart_toy"} />
+      <Icon name={mode === "chaos" ? "cyclone" : mode === "advanced" ? "psychology" : "smart_toy"} />
       <span>{LABEL(mode)}</span>
     </button>
+  );
+}
+
+/**
+ * The "thinking…" pill: shown while a seat's 进阶 search is running
+ * (`docs/BOT.md` B6). Small, transient, never blocks input.
+ */
+export function ThinkingPill({ sess, member }: { sess: GameSession; member?: number }) {
+  const [, tick] = useState(0);
+  useEffect(() => sess.subscribeThinking(() => tick((n) => n + 1)), [sess]);
+  const who = member ?? sess.you;
+  if (!sess.isThinking(who)) return null;
+  return (
+    <div className={s.thinking} role="status" aria-live="polite">
+      <Icon name="psychology" />
+      <span>{tr("board.thinking")}</span>
+    </div>
   );
 }
 

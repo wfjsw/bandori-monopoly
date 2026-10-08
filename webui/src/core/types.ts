@@ -101,6 +101,14 @@ export interface MatchState {
   buyPrice: number;
   /** The same preview for building; -1 = cannot build. */
   buildCost: number;
+  /** Would `act {act:"buy"}` be accepted now (`why_not_act`'s buy branch). */
+  canBuyHere: boolean;
+  /** Would `act {act:"build"}` be accepted now (`why_not_act`'s build branch). */
+  canBuildHere: boolean;
+  /** Would `act {act:"roll"}` be accepted now (`why_not_act`'s roll branch). */
+  canRollHere: boolean;
+  /** Would `act {act:"end"}` be accepted now (`why_not_act`'s end branch). */
+  canEndHere: boolean;
   /** The movement this turn is taking. */
   plan: MovePlan;
   timeLeft: number; shield: number; bank: number;

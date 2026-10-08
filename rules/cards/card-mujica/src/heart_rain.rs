@@ -10,7 +10,7 @@
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play(None, heart_rain, "")]);
+pub const HEART_RAIN: CardDef = CardDef::new("Mujica:心の雨", &[On::Play("", None, heart_rain)]);
 
 fn heart_rain(player_id: i32) -> card_sdk::Asked {
     let me = ctx::player_pos(player_id);

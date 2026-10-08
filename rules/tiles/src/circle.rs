@@ -37,7 +37,7 @@ pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
         On::Settle(settle),
-        On::Hook(&[HookKind::PassTile], Some(passes_here), on_pass, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(passes_here), on_pass),
     ],
 );
 

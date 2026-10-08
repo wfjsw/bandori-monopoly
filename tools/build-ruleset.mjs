@@ -98,13 +98,16 @@ cargo("run", "-q", "-p", "game-rules", "--example", "ruleset_index",
       "--", join(stage, "fixtures"), "dist/fixtures");
 
 // Drop module drafts the current index.json does not reference: builds that
-// change content address leave the old .wasm behind (we deliberately never
-// delete dist/ wholesale -- see above), so prune against the index instead.
+// change content address leave the old .wasm (and conds-*.bin) behind (we
+// deliberately never delete dist/ wholesale -- see above), so prune against
+// the index instead. A set with no guard conditions has no `conds` entry at
+// all (docs/GUARDS.md §8.2) and must not grow one.
 for (const out of ["dist/cards", "dist/fixtures"]) {
   const idx = JSON.parse(readFileSync(join(ROOT, out, "index.json"), "utf8"));
   const keep = new Set([...idx.modules.map((m) => m.file), "index.json"]);
+  if (idx.conds?.file) keep.add(idx.conds.file);
   for (const f of readdirSync(join(ROOT, out))) {
-    if (f.endsWith(".wasm") && !keep.has(f)) unlinkSync(join(ROOT, out, f));
+    if ((f.endsWith(".wasm") || /^conds-.*\.bin$/.test(f)) && !keep.has(f)) unlinkSync(join(ROOT, out, f));
   }
 }
 
@@ -120,16 +123,19 @@ for (const f of readdirSync(join(ROOT, "dist", "cards", "locales"))) {
   if (f.endsWith(".json")) copyFileSync(join(ROOT, "dist", "cards", "locales", f), join(i18n, `cards-${f}`));
 }
 
-// ...and the modules themselves, to feed the solo match's ruleset.
+// ...and the modules themselves (plus the precompiled-condition blob, when
+// the set has guard conditions -- docs/GUARDS.md §8.2), to feed the solo
+// match's ruleset.
 const rules = join(ROOT, "webui", "public", "assets", "rules");
 mkdirSync(rules, { recursive: true });
 copyFileSync(join(ROOT, "dist", "cards", "index.json"), join(rules, "index.json"));
 for (const f of readdirSync(join(ROOT, "dist", "cards"))) {
-  if (f.endsWith(".wasm")) copyFileSync(join(ROOT, "dist", "cards", f), join(rules, f));
+  if (f.endsWith(".wasm") || /^conds-.*\.bin$/.test(f)) copyFileSync(join(ROOT, "dist", "cards", f), join(rules, f));
 }
 
 rmSync(stage, { recursive: true, force: true });
 const idx = JSON.parse(readFileSync(join(ROOT, "dist", "cards", "index.json"), "utf8"));
 const cards = idx.modules.reduce((n, m) => n + m.cards.length, 0);
 const total = idx.modules.reduce((n, m) => n + m.bytes, 0);
-console.log(`dist/cards: ${idx.modules.length} module(s), ${cards} cards, ${total} bytes`);
+const conds = idx.conds ? `, ${idx.conds.entries} conds (${idx.conds.bytes} B)` : "";
+console.log(`dist/cards: ${idx.modules.length} module(s), ${cards} cards, ${total} bytes${conds}`);

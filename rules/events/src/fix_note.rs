@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `修复公告`）:
 //! > 前2个房屋造价为2000的格子和前1个房屋造价为1500的格子的加盖金额减半，且累计在上述格子上加盖后将此卡移除。
 
-use card_sdk::abi::{prop, HookKind, TriggerKind};
+use card_sdk::abi::{prop, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -22,9 +22,9 @@ const REMAIN: &str = "remain";
 pub const FIX_NOTE: CardDef = CardDef::new(
     "event:修复公告",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::BuildBefore], Some(always), before_build, ""),
-        On::Hook(&[HookKind::BuildAfter], Some(always), after_build, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::BuildBefore], "", Some(always), before_build),
+        On::Hook(&[HookKind::BuildAfter], "", Some(always), after_build),
     ],
 );
 

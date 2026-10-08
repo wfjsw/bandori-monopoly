@@ -8,7 +8,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger, CardPile};
 use card_sdk::{CardDef, On};
 
@@ -16,9 +16,9 @@ pub const RIOT: CardDef = CardDef::new(
     "RAS:R. I. O. T.",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "by >= 0 && by != owner && effect.hits(owner)",
         None,
         counteract,
-        "by >= 0 && by != owner && effect.hits(owner)",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

@@ -400,7 +400,7 @@ pub fn bot_name(taken_json: &str) -> Result<String, JsError> {
 
 thread_local! {
     /// Modules the page fetched (`/assets/rules/*.wasm`), then built once.
-    static RULES: std::cell::RefCell<Option<Arc<dyn CardRules>>> = const { std::cell::RefCell::new(None) };
+    static RULES: std::cell::RefCell<Option<Arc<game_rules::WasmRules>>> = const { std::cell::RefCell::new(None) };
     static PENDING: std::cell::RefCell<Option<game_rules::RulesetBuilder>> = const { std::cell::RefCell::new(None) };
 }
 
@@ -411,6 +411,26 @@ pub fn ruleset_add(bytes: &[u8]) -> Result<(), JsError> {
         let mut p = p.borrow_mut();
         let b = p.get_or_insert_with(game_rules::Ruleset::builder);
         b.add(bytes).map_err(|e| JsError::new(&format!("{e:?}")))?;
+        Ok(())
+    })
+}
+
+/// Feed the precompiled-condition blob (`conds-<sha>.bin`, postcard) that
+/// `tools/build-ruleset.mjs` ships beside `index.json` (`docs/GUARDS.md` §8.2).
+/// Required whenever any loaded card declares a `pre`: this build links
+/// `rules-cond` with `runtime-only` (no CEL parser, §8.3), so a source-only
+/// condition is a loud `ruleset_build` error and never "treat as true".
+/// Call after `ruleset_add`, before `ruleset_build`.
+#[wasm_bindgen]
+pub fn ruleset_precompiled(bytes: &[u8]) -> Result<(), JsError> {
+    let conds = game_rules::PrecompiledConds::from_bytes(bytes)
+        .map_err(|e| JsError::new(&e.to_string()))?;
+    PENDING.with(|p| {
+        let mut p = p.borrow_mut();
+        let b = p.get_or_insert_with(game_rules::Ruleset::builder);
+        for e in conds.entries {
+            b.precompiled(&e.card, e.entry, e.blob);
+        }
         Ok(())
     })
 }
@@ -439,10 +459,45 @@ pub fn ruleset_build() -> Result<usize, JsError> {
     })
 }
 
-fn rules() -> Result<Arc<dyn CardRules>, JsError> {
-    Ok(RULES
+/// Evaluate the compiled guard condition of `card`'s guarded `entry` against
+/// JSON `WindowCtx` / `CandidateCtx` snapshots (missing fields default).
+///
+/// A test seam for `webui/src/game/ruleset.test.ts`: it proves the shipped
+/// precompiled blob does not merely *load* in this runtime-only build but
+/// actually evaluates -- the thing that broke when cards first gained `pre`s
+/// and nothing shipped the compiled form. Throws when the entry declares no
+/// condition, so a card with a `pre` can be asserted to be present and live.
+#[wasm_bindgen]
+pub fn ruleset_pre_eval(
+    card: &str,
+    entry: i32,
+    window_json: &str,
+    candidate_json: &str,
+) -> Result<bool, JsError> {
+    use game_rules::cond_pre::{CandidateCtx, WindowCtx};
+    let win: WindowCtx = serde_json::from_str(window_json)
+        .map_err(|e| JsError::new(&format!("window: {e}")))?;
+    let cand: CandidateCtx = serde_json::from_str(candidate_json)
+        .map_err(|e| JsError::new(&format!("candidate: {e}")))?;
+    let set = RULES
         .with(|r| r.borrow().clone())
-        .unwrap_or_else(|| Arc::new(StubRules) as Arc<dyn CardRules>))
+        .ok_or_else(|| JsError::new("ruleset_build was never called"))?;
+    let handle = set
+        .ruleset()
+        .card(card)
+        .ok_or_else(|| JsError::new(&format!("no card {card:?}")))?;
+    let pre = set
+        .ruleset()
+        .pre_at(handle, entry)
+        .ok_or_else(|| JsError::new(&format!("card {card:?} entry {entry} declares no condition")))?;
+    Ok(pre.eval(&win, &cand))
+}
+
+fn rules() -> Result<Arc<dyn CardRules>, JsError> {
+    Ok(match RULES.with(|r| r.borrow().clone()) {
+        Some(w) => w as Arc<dyn CardRules>,
+        None => Arc::new(StubRules) as Arc<dyn CardRules>,
+    })
 }
 
 // ------------------------------------------------------------------ solo match

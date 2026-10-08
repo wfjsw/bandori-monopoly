@@ -12,7 +12,9 @@
 //! parser); the browser glue loads the blob with `rules-cond`'s `runtime-only`
 //! feature and never ships the parser.
 
-use rules_cond::{CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope};
+pub use rules_cond::{
+    CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope,
+};
 
 use crate::world::CardWorld;
 
@@ -54,6 +56,111 @@ impl CompiledPre {
 
     pub fn eval(&self, win: &WindowCtx, cand: &CandidateCtx) -> bool {
         self.cond.eval(win, cand)
+    }
+}
+
+// ---------------------------------------------------------------- precompiled blob
+
+/// Envelope format version of [`PrecompiledConds`]. First byte on the wire
+/// (postcard is not self-describing); bump on any layout change so older
+/// blobs fail loudly instead of decoding into garbage.
+pub const PRECOMPILED_CONDS_VERSION: u8 = 1;
+
+/// One guarded entry's lean compiled condition, keyed the way
+/// [`crate::RulesetBuilder::precompiled`] wants it.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct PrecompiledCond {
+    /// Card id (`CardInfo.id`), e.g. `AG:回家的路上绕个道`.
+    pub card: String,
+    /// Index into that card's `on` list.
+    pub entry: i32,
+    /// `rules_cond::Cond::to_bytes(false)` -- the runtime-only wire form.
+    pub blob: Vec<u8>,
+}
+
+/// The shipped precompiled-condition blob (`docs/GUARDS.md` §8.2): every
+/// guarded entry's [`CompiledPre`], postcard in a versioned envelope.
+///
+/// `tools/build-ruleset.mjs` writes this next to the ruleset index as
+/// `conds-<sha256>.bin`; the browser glue feeds it to
+/// [`crate::RulesetBuilder::precompiled`] because its `rules-cond` build is
+/// `runtime-only` (no CEL parser, §8.3). Native hosts compile the same
+/// sources themselves and use this only to check agreement.
+///
+/// Entries are kept sorted by `(card, entry)` so the encoding -- and the
+/// content hash -- is deterministic.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct PrecompiledConds {
+    pub version: u8,
+    pub entries: Vec<PrecompiledCond>,
+}
+
+impl PrecompiledConds {
+    /// Collect every compiled condition of a built set, in canonical order.
+    pub fn collect(cards: &[crate::CardInfo], pre: &[Vec<Option<CompiledPre>>]) -> Self {
+        let mut entries = Vec::new();
+        for (c, row) in cards.iter().zip(pre) {
+            for (ei, p) in row.iter().enumerate() {
+                if let Some(p) = p {
+                    entries.push(PrecompiledCond {
+                        card: c.id.clone(),
+                        entry: ei as i32,
+                        blob: p.blob.clone(),
+                    });
+                }
+            }
+        }
+        entries.sort_by(|a, b| a.card.cmp(&b.card).then(a.entry.cmp(&b.entry)));
+        Self {
+            version: PRECOMPILED_CONDS_VERSION,
+            entries,
+        }
+    }
+
+    /// Postcard envelope. Deterministic (sorted entries).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        postcard::to_allocvec(self).expect("PrecompiledConds is plain data")
+    }
+
+    /// Decode the envelope; rejects a wrong [`PRECOMPILED_CONDS_VERSION`] --
+    /// no migration (same policy as `Cond::from_bytes`).
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::RuleError> {
+        let bad = |m: String| crate::RuleError::Load(format!("precompiled conds blob: {m}"));
+        let v: Self = postcard::from_bytes(bytes).map_err(|e| bad(e.to_string()))?;
+        if v.version != PRECOMPILED_CONDS_VERSION {
+            return Err(bad(format!(
+                "wire version {}, this build reads {}",
+                v.version, PRECOMPILED_CONDS_VERSION
+            )));
+        }
+        Ok(v)
+    }
+
+    /// sha256 of the canonical envelope, hex. What `conds-<sha>.bin` is named
+    /// after and what the index lists.
+    pub fn sha256(&self) -> String {
+        crate::host::hex_sha256(&self.to_bytes())
+    }
+
+    /// The ruleset-identity contribution (docs/GUARDS.md §8.2): one
+    /// `card + entry + blob-hash` line per entry, sorted. Mixed into
+    /// [`crate::Ruleset::sha256`] so record stamps / bundle ids change with
+    /// the compiled conditions, not only with the module bytes.
+    pub fn identity_lines(&self) -> Vec<String> {
+        let mut lines: Vec<String> = self
+            .entries
+            .iter()
+            .map(|e| {
+                format!(
+                    "{}\u{1f}{}\u{1f}{}",
+                    e.card,
+                    e.entry,
+                    crate::host::hex_sha256(&e.blob)
+                )
+            })
+            .collect();
+        lines.sort();
+        lines
     }
 }
 

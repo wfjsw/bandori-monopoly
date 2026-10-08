@@ -15,13 +15,13 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
     "MyGO:哪怕这旅程没有终点",
     &[
-        On::Play(None, endless_journey, ""),
-        On::Hook(&[HookKind::TurnEnd], None, turn_end, ""),
+        On::Play("", None, endless_journey),
+        On::Hook(&[HookKind::TurnEnd], "", None, turn_end),
         // （2）「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect
         // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
         // field card that replaces the body skips this entry.
-        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 

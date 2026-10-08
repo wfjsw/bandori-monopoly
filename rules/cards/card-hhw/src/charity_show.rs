@@ -32,8 +32,8 @@ const PROP_EXTRA: &str = "charity.extra";
 pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], Some(hook_guard), hook, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], "", Some(hook_guard), hook),
     ],
 );
 

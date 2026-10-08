@@ -15,9 +15,9 @@ pub const AKO_DARK: CardDef = CardDef::new(
     "R:（亚子）黑暗大魔姬亚子",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
         None,
         counteract,
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

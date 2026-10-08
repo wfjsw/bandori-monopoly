@@ -79,7 +79,7 @@ use card_sdk::{CardDef, Msg, On};
 /// single tile (`tile = -1`): [CP点] is a board-wide category, not a tile kind.
 /// Registered next to the `tile:*` rules in [`crate::CARDS`]; `bind_tiles`
 /// places it (see `docs/TILES.md`).
-pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::SettleBody], Some(lands_on_cp), on_land, "")]);
+pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land)]);
 
 /// 规则书: 「在拥有[CP]点的格子上[结算]时」 -- the tile must actually carry a
 /// [CP点], and 「自己[场上]1个[CP点]」 -- the on-card [CP点] of the card the

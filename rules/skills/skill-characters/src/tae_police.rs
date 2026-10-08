@@ -25,10 +25,10 @@ const RABBIT: &str = "多惠兔子";
 pub const TAE_POLICE: CardDef = CardDef::new(
     "skill:花园多惠:花园警察，出警！",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::CircleAffected], None, on_circle, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], Some(can_negate), negate, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], "", Some(can_negate), negate),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

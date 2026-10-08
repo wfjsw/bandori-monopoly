@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play(None, play, "")]);
+pub const DUI_BANG: CardDef = CardDef::new("event:对邦", &[On::Play("", None, play)]);
 
 /// 规则书: 「所有人立刻进行一次1d20骰子拼点」 -- one 1d20 per player, no
 /// [反击] window (the text says 立刻, not 掷骰结算前).

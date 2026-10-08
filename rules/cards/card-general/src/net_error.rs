@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const NET_ERROR: CardDef = CardDef::new(
     "通用:网络链接异常",
-    &[On::Counteract(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Effect, ChainKind::Card, ChainKind::Event], "", Some(can_counteract), counteract)],
 );
 
 fn can_counteract(player_id: i32) -> bool {

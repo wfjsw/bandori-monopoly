@@ -23,11 +23,11 @@ pub const MYGO: CardDef = CardDef::new(
     &[
         // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
         // position: the before-match-start point decides those.
-        On::Hook(&[HookKind::DeckBeforeGame], None, at_start, ""),
-        On::Hook(&[HookKind::RollAfter], None, after_roll, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Discarded], None, on_discarded, card_sdk::pre::MINE),
-        On::Play(Some(can_step), step_one, ""),
-        On::Play(Some(can_draw), draw_two, ""),
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, after_roll),
+        On::Hook(&[HookKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
+        On::Play("", Some(can_step), step_one),
+        On::Play("", Some(can_draw), draw_two),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

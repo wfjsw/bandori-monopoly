@@ -11,7 +11,7 @@ use card_sdk::{CardDef, Msg, On};
 use crate::util::{all_players, roll};
 
 pub const TSURUMAKI_ESTATE: CardDef =
-    CardDef::new("event:弦卷集团地产开发", &[On::Play(None, play, "")]);
+    CardDef::new("event:弦卷集团地产开发", &[On::Play("", None, play)]);
 
 /// 规则书: 「随机指定一个可购买格子（如果有）」 -- one unowned buyable tile,
 /// chosen uniformly by a bare 1dN. 「如果有」 is the empty-pool no-op below.

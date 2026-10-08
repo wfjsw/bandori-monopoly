@@ -11,7 +11,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::all_players;
 
-pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play(None, play, "")]);
+pub const PICO_SWAP: CardDef = CardDef::new("event:PICO灵魂交换", &[On::Play("", None, play)]);
 
 /// 规则书: 「所有未[除外]玩家[传送]到行动顺序的下一位未[除外]玩家的位置」 --
 /// every player whose [除外] layer count is 0, rotated onto the next such

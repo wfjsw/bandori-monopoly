@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play(Some(cant_play), play, "")]);
+pub const BLUE_ROSE: CardDef = CardDef::new("R:蓝玫瑰的骄傲", &[On::Play("", Some(cant_play), play)]);
 
 /// The buyable Livehouse deeds (C# `H.IsLiveHouse`: `IsColor(player_id, t, 6)`, and
 /// `H.LiveHouses` also wants `IsBuyable`).

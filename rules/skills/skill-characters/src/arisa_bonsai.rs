@@ -21,10 +21,10 @@ fn station() -> i32 {
 pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Event], Some(other), on_event, ""),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Event], "", Some(other), on_event),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);

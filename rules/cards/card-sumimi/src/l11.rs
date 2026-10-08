@@ -11,8 +11,8 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
-        On::Play(None, l11, ""),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], None, sweep, card_sdk::pre::MINE),
+        On::Play("", None, l11),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], card_sdk::pre::MINE, None, sweep),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

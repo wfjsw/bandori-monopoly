@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const UIKA_FEARLESS: CardDef = CardDef::new(
     "Mujica:（初华）我，无畏悲伤",
-    &[On::Play(None, uika_fearless, "")],
+    &[On::Play("", None, uika_fearless)],
 );
 
 fn uika_fearless(player_id: i32) -> card_sdk::Asked {

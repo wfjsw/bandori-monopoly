@@ -18,10 +18,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LOCK_DREAM: CardDef = CardDef::new(
     "RAS:（LOCK）追逐梦想的步伐",
     &[
-        On::Hook(&[HookKind::DeckBeforeGame], None, deck_before_game, ""),
-        On::Hook(&[HookKind::DeckAtGameStart], Some(deck_at_game_start_guard), deck_at_game_start, ""),
-        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
-        On::Hook(&[HookKind::SettleBefore], None, settle_before, ""),
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
+        On::Hook(&[HookKind::DeckAtGameStart], "", Some(deck_at_game_start_guard), deck_at_game_start),
+        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
+        On::Hook(&[HookKind::SettleBefore], "", None, settle_before),
     ],
 );
 

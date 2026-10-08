@@ -21,8 +21,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const JENNIFER: CardDef = CardDef::new(
     "PP:找回珍妮弗",
     &[
-        On::Play(Some(cant_play), jennifer, ""),
-        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
+        On::Play("", Some(cant_play), jennifer),
+        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
     ],
 );
 

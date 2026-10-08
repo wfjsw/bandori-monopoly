@@ -30,10 +30,10 @@ fn used_key(src: i32) -> alloc::string::String {
 pub const MOCA_SELF: CardDef = CardDef::new(
     "skill:青叶摩卡:我行我素",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(afterglow), tick, ""),
-        On::Hook(&[HookKind::CardPlayed], Some(other), on_card, ""),
-        On::Hook(&[HookKind::SkillUsed], Some(other), on_skill, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
+        On::Hook(&[HookKind::CardPlayed], "", Some(other), on_card),
+        On::Hook(&[HookKind::SkillUsed], "", Some(other), on_skill),
     ],
 );
 

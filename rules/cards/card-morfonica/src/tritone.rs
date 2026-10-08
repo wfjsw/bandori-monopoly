@@ -17,11 +17,11 @@ pub const TRITONE: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Effect],
+            "actor == owner && effect.has(Pay) && value > 0",
             None,
             counteract,
-            "actor == owner && effect.has(Pay) && value > 0",
         ),
-        On::Hook(&[HookKind::TurnEnd], None, counteract, ""),
+        On::Hook(&[HookKind::TurnEnd], "", None, counteract),
     ],
 )
     .legacy(&[(0, legacy_can_counteract)]);

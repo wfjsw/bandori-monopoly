@@ -25,10 +25,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TRAINEE_GUIDE: CardDef = CardDef::new(
     "PP:练习生解密指南",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::BuildBefore], None, before_build, card_sdk::pre::MINE),
-        On::Hook(&[card_sdk::abi::HookKind::BuildAfter], None, after_build, card_sdk::pre::MINE),
-        On::Play(None, trainee_guide, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
+        On::Hook(&[card_sdk::abi::HookKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
+        On::Hook(&[card_sdk::abi::HookKind::BuildAfter], card_sdk::pre::MINE, None, after_build),
+        On::Play("", None, trainee_guide),
+        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property

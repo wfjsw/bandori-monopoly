@@ -19,10 +19,10 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // is effect content (rulebook L13-14), so there is no `money >= 1600`
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::TurnEnd], Some(turn_end_guard), turn_end, ""),
-        On::Hook(&[HookKind::PayMul], Some(pay_mul_guard), pay_mul, ""),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
+        On::Hook(&[HookKind::PayMul], "", Some(pay_mul_guard), pay_mul),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600)]);
 

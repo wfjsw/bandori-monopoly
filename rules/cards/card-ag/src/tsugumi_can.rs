@@ -7,15 +7,15 @@
 //!
 //! play as @Tsugu ycm, or counteract to force a range-card's dice to max/min.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const TSUGUMI_CAN: CardDef = CardDef::new(
     "AG:（鸫）微小的『能做到』的事",
     &[
-        On::Play(Some(cant_play), play, ""),
-        On::Counteract(&[ChainKind::Card], Some(can_counteract), counteract, ""),
+        On::Play("", Some(cant_play), play),
+        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract),
     ],
 );
 

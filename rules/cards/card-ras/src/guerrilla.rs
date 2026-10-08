@@ -10,14 +10,14 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{CardPile, ChainKind, TriggerKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
     &[
-        On::Counteract(&[ChainKind::Paid], Some(can_counteract), counteract, ""),
+        On::Counteract(&[ChainKind::Paid], "", Some(can_counteract), counteract),
         On::AtEnd(check),
     ],
 );

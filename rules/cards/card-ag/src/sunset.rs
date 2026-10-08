@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
-pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play(Some(cant_play), play, "")]);
+pub const SUNSET: CardDef = CardDef::new("AG:即使夕阳落山", &[On::Play("", Some(cant_play), play)]);
 
 /// Owned tiles with at least one house (C# `CardSunset.Built`).
 fn built(player_id: i32) -> Vec<i32> {

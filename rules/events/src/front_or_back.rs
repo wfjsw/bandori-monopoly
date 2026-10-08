@@ -10,7 +10,7 @@ use card_sdk::{CardDef, Msg, On};
 
 use crate::util::{all_players, roll};
 
-pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play(None, play, "")]);
+pub const FRONT_OR_BACK: CardDef = CardDef::new("event:前场队还是后场队？", &[On::Play("", None, play)]);
 
 /// 规则书: 「所有玩家各投掷1d20，然后将站在格子序号1到30的玩家的投掷结果相加
 /// 定位X且站在格子序号31到60的玩家的投掷结果相加定位Y」 -- one bare 1d20 each.

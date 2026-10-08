@@ -7,13 +7,13 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(
     "HHW:梦幻的回礼",
-    &[On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
 );
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living

@@ -7,9 +7,17 @@
 
 use std::collections::BTreeMap;
 
+use serde::{Deserialize, Serialize};
+
 /// One link of the effect chain a window is answering (`effect::*` in the
 /// guest imports, `chain.*` in GUARDS.md §4.2 -- same flat list).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+///
+/// All snapshots here derive `Serialize`/`Deserialize` with
+/// `#[serde(default)]`: a host (or a test) may fill any subset of the fields
+/// from JSON and the rest take [`Default`] -- the web-glue `ruleset_pre_eval`
+/// seam is built on that.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct ChainLink {
     /// Trigger / chain kind wire value (see [`crate::kinds`]).
     pub kind: i64,
@@ -22,7 +30,8 @@ pub struct ChainLink {
 /// Snapshot of one seat's stats, indexed by seat id. Used by the `money(p)` /
 /// `fire(p)` / `character_is(p, …)` family so a condition can talk about a
 /// seat that is not the candidate's owner.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PlayerSnap {
     pub money: i64,
     pub fire: i64,
@@ -43,7 +52,8 @@ pub struct PlayerSnap {
 }
 
 /// The tile the trigger is about. Field access is `tile.owner`, `tile.houses`, …
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TileSnap {
     pub id: i64,
     /// Owning seat (`-1` = unowned / bank).
@@ -55,7 +65,8 @@ pub struct TileSnap {
 }
 
 /// The move a window is answering (`move.*`).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct MoveSnap {
     /// Face shown, if any. `None` binds CEL `null` (`move.roll != null`).
     pub roll: Option<i64>,
@@ -67,7 +78,8 @@ pub struct MoveSnap {
 /// Built **once per trigger / chain window** (the `declare_one` / `run_hook`
 /// call) and reused by every candidate probe in that window. This is where
 /// the savings of G1 live: 48 900 counteract probes share ~250 windows.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct WindowCtx {
     /// Trigger / chain kind wire value of this window (see [`crate::kinds`]);
     /// `kind` in conditions (`trigger.kind` is an alias).
@@ -115,7 +127,8 @@ impl WindowCtx {
 /// Per-candidate overlay: the card + seat being probed. Built per (card, seat)
 /// inside a window -- much cheaper than a window, so it is allowed to be a
 /// fresh value each time.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
 pub struct CandidateCtx {
     /// Seat that owns the candidate (`player_id` arg of the host probe).
     pub owner: i64,

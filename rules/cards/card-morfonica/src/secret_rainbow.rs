@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(
     "Mor:秘密与青春的虹彩",
-    &[On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
 );
 
 // ============ NORMALIZED GRADE ORDINALS ================================

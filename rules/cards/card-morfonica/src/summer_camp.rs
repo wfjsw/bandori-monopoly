@@ -6,7 +6,7 @@
 //!
 //! by others until your next turn, then draw if nothing was blocked.
 
-use card_sdk::abi::{GateKind, HookKind, TriggerKind};
+use card_sdk::abi::{GateKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -18,9 +18,9 @@ const SLOT_BLOCKED: &str = "summer_camp_blocked";
 pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
-        On::Play(None, summer_camp, ""),
+        On::Play("", None, summer_camp),
         On::Gate(&[GateKind::Untargetable], untargetable),
-        On::Hook(&[HookKind::TurnStart], None, turn_start, ""),
+        On::Hook(&[HookKind::TurnStart], "", None, turn_start),
     ],
 );
 

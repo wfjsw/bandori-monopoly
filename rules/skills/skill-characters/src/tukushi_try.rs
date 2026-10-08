@@ -27,12 +27,12 @@ const SPELL: &str = "skill.tukushiTry.spell";
 pub const TUKUSHI_TRY: CardDef = CardDef::new(
     "skill:都筑诗船:尽力了吗",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, at_start, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollAfter], Some(paired), on_roll, ""),
-        On::Hook(&[HookKind::PayChoose], Some(paired), on_pay, ""),
-        On::Hook(&[HookKind::HouseAdded], Some(partner), on_built, ""),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::RollAfter], "", Some(paired), on_roll),
+        On::Hook(&[HookKind::PayChoose], "", Some(paired), on_pay),
+        On::Hook(&[HookKind::HouseAdded], "", Some(partner), on_built),
     ],
 )
     .legacy(&[(2, legacy_mine)]);

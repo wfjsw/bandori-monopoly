@@ -36,7 +36,10 @@ mod world;
 pub mod cond_pre;
 
 pub use card_sdk::abi::{AbKind, CardPile, MoveKind, PromptKind, TriggerKind, ABI_VERSION};
-pub use cond_pre::{admits, admits_gate, admits_pre, CompiledPre};
+pub use cond_pre::{
+    admits, admits_gate, admits_pre, CompiledPre, PrecompiledCond, PrecompiledConds,
+    PRECOMPILED_CONDS_VERSION,
+};
 pub use game_core::msg::Msg;
 pub use host::{
     Call, CallOut, CardInfo, CardModules, GuestMem, HookRun, HostCtx, HostErr, HostRequest,

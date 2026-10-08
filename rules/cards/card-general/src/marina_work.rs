@@ -15,9 +15,9 @@ pub const MARINA_WORK: CardDef = CardDef::new(
     "通用:[月岛麻里奈]今天也要加油工作喔",
     &[On::Counteract(
         &[ChainKind::CircleAffected],
+        card_sdk::pre::MINE,
         None,
         counteract,
-        card_sdk::pre::MINE,
     )],
 )
 .legacy(&[(0, legacy_can_counteract)]);

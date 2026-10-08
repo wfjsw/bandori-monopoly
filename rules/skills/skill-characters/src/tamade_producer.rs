@@ -23,9 +23,9 @@ const BUILT_THIS: &str = "skill.tamade.builtThis";
 pub const TAMADE_PRODUCER: CardDef = CardDef::new(
     "skill:珠手知由:天才制作人",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::HouseAdded], None, on_built, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::HouseAdded], card_sdk::pre::MINE, None, on_built),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);

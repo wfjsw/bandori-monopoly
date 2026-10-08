@@ -40,7 +40,7 @@ use game_core::engine::CardRules;
 use serde_json::Value;
 use tokio::sync::oneshot;
 
-pub use bot_service::{decide_request, ponder_request, BotAnswer};
+pub use bot_service::{decide_request, invalidate_request, ponder_request, BotAnswer};
 
 /// Extra wall-clock on top of the search budget, sized to absorb **one
 /// iteration overrun** (`docs/BOT.md` §5 B7: the ISMCTS loop is anytime
@@ -376,6 +376,20 @@ impl BotService {
     /// Counters for tests and the fallback-rate measurement.
     pub fn stats(&self) -> BotStats {
         self.stats.snapshot()
+    }
+
+    /// Drop the service's cached answer for one decision key after the engine
+    /// refused it, so the refused answer is never replayed (`docs/BOT.md` §5
+    /// B6). Best-effort: a dead service has nothing cached to drop.
+    pub async fn invalidate(&self, decision_key: u64) {
+        let id = match &self.backend {
+            Backend::Child { next, .. } | Backend::Local { next, .. } => {
+                next.fetch_add(1, Ordering::Relaxed)
+            }
+        };
+        let req = invalidate_request(id, decision_key);
+        let deadline = Instant::now() + Duration::from_millis(500);
+        let _ = self.call(id, req, deadline).await;
     }
 
     /// Test knob: sleep this long before dispatching every request, so a test

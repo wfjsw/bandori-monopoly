@@ -20,8 +20,8 @@ const ID: &str = "PPP:（有咲）等等等一下";
 pub const ARISA_WAIT: CardDef = CardDef::new(
     "PPP:（有咲）等等等一下",
     &[
-        On::Play(None, arisa_wait, ""),
-        On::Hook(&[HookKind::EventAfter], Some(event_after_guard), event_after, ""),
+        On::Play("", None, arisa_wait),
+        On::Hook(&[HookKind::EventAfter], "", Some(event_after_guard), event_after),
     ],
 );
 

@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `元祖！邦多利酱`）:
 //! > 将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家的回合免费时间变为5秒，且回合恢复时间变为0秒。
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -19,8 +19,8 @@ const TURNS: &str = "turns";
 pub const BANGDREAM_CHAN: CardDef = CardDef::new(
     "event:元祖！邦多利酱",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
     ],
 );
 

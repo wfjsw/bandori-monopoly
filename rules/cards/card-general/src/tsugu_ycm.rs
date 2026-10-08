@@ -19,11 +19,11 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const TSUGU_YCM: CardDef = CardDef::new(
     "通用:@Tsugu ycm",
     &[
-        On::Play(Some(cant_play), play, ""),
+        On::Play("", Some(cant_play), play),
         // （3）「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- a `BuyAdd`
         // stage on the buy price, riding a `ctx::linger` instance for the turn
         // (`docs/PURCHASE.md`). The engine floors the stage at 0.
-        On::Hook(&[HookKind::BuyAdd], None, buy_add_1500, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::BuyAdd], card_sdk::pre::MINE, None, buy_add_1500),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

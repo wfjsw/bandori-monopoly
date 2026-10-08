@@ -14,7 +14,7 @@
 //! *placed* cards, so the play body places this card as the `HagumiMarkFx`
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::abi::{ChainKind, HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -23,9 +23,9 @@ const ID: &str = "HHW:（育美）";
 pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PassTile], Some(hook_guard), hook, ""),
-        On::Counteract(&[ChainKind::EndTurnAfter], Some(can_counteract2), counteract2, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PassTile], "", Some(hook_guard), hook),
+        On::Counteract(&[ChainKind::EndTurnAfter], "", Some(can_counteract2), counteract2),
     ],
 );
 

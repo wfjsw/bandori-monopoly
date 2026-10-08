@@ -19,11 +19,11 @@ const ID: &str = "Mujica:骰子已经掷下";
 pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
-        On::Play(Some(cant_play), play, ""),
-        On::Counteract(&[ChainKind::Card], Some(can_counteract), counteract, ""),
+        On::Play("", Some(cant_play), play),
+        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Hook(&[HookKind::TurnEndAfter], None, turn_end, ""),
+        On::Hook(&[HookKind::TurnEndAfter], "", None, turn_end),
     ],
 );
 

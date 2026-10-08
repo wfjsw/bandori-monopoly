@@ -12,7 +12,7 @@ use crate::util::{all_players, roll};
 // TODO(规则书): the sheet's B12 lists a derived 「迷子的追逐」; the text does not
 // say drawing this event triggers it. The main clause only is implemented.
 
-pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play(None, play, "")]);
+pub const ASUKAYAMA: CardDef = CardDef::new("event:飞鸟山之战", &[On::Play("", None, play)]);
 
 /// 规则书: 「所有玩家[传送]到飞鸟山公园」 -- everyone onto the park, no settle
 /// on the jump itself.

@@ -8,13 +8,13 @@
 //!
 //! [反击] the settler picks a forced play at you, or you teleport onto them.
 
-use card_sdk::abi::{CardPile, ChainKind, TriggerKind};
+use card_sdk::abi::{ChainKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const PLEASE_CHOOSE: CardDef = CardDef::new(
     "RAS:PLEASE CHOOSE",
-    &[On::Counteract(&[ChainKind::Settle], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Settle], "", Some(can_counteract), counteract)],
 );
 
 /// C# `H.IsLiveHouse(t.Seat, t.Tile) && H._tiles[t.Tile].IsBuyable` -- a

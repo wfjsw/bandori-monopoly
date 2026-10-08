@@ -22,8 +22,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",
     &[
-        On::Play(Some(can_swap), swap, ""),
-        On::Hook(&[HookKind::Drew], Some(drew_guard), drew, ""),
+        On::Play("", Some(can_swap), swap),
+        On::Hook(&[HookKind::Drew], "", Some(drew_guard), drew),
     ],
 );
 

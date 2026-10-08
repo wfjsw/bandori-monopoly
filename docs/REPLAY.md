@@ -470,7 +470,11 @@ format / save_version / abi                 (the record schema)
 ```
 
 and excludes, on purpose: rustc / cargo / wasm-bindgen versions, build flags
-and recipes (`tools/*.mjs`), paths, timestamps, webui, docs, bots.
+and recipes (`tools/*.mjs`), paths, timestamps, webui, docs, bots. The
+advanced-bot worker bundle (`crates/bot-glue` /
+`webui/public/assets/engine/bot-glue/`, `docs/BOT.md` B6) is excluded too: a
+record stores the bot's **answers** as inputs and replays never run the bot,
+so the archive does not need those bytes.
 
 Layout:
 
@@ -701,7 +705,19 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
   clean on archived A while the current engine is a trivially different build
   B (a one-event data override), B refuses it, and B under `force` diverges at
   the first checkpoint.
+* `node --test webui/src/game/ruleset.test.ts` -- the **conds gate**
+  (`docs/GUARDS.md` §8.2): the real built ruleset (modules + the
+  `conds-*.bin` precompiled guard conditions) loads into the real browser glue
+  through the same `loadRulesetInto` sequence the page uses, with zero load
+  errors; a card with a `pre` evaluates; a card with a `pre` and no blob fails
+  loudly (`BadPre`) rather than treating the condition as true. Needs
+  `tools/build-ruleset.mjs` + `tools/build-glue.mjs` first. Without this, the
+  silent failure mode is a solo match running on `StubRules` while a record
+  sealed elsewhere names a ruleset the player never actually played.
 * `node --test webui/src/game/engineBundle.test.ts` -- the routing table.
 * `cargo test -p game-core --test bundle_id` -- the recipe known vector and
   the serde default for pre-bundle records.
+* `cargo test -p game-rules --test pre_conditions` -- the shipped `conds-*.bin`
+  is exactly the host compile of every `pre` (`shipped_precompiled_blobs_match_host_compile`),
+  and a mismatched / stale blob is a build error.
 * `crates/game-core/tests/record.rs` / `record_codec.rs` stay green.

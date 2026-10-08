@@ -334,15 +334,16 @@ impl Match {
                     player: m.player.clone(),
                     bot: m.bot,
                     // `ai` = the engine drives this seat. An Advanced bot is
-                    // driven by the server's `bot-service` instead
-                    // (`docs/BOT.md` B5) and starts held; Solo never has a
-                    // service, so it falls back to the engine there. An online
-                    // room with no service attached rewrites the mentality to
-                    // Standard before `new_match`, so this never parks a seat
-                    // the server will not answer.
-                    ai: m.bot
-                        && (m.mentality != crate::state::BotMentality::Advanced
-                            || mode == MatchMode::Solo),
+                    // driven by an external search -- the server's `bot-service`
+                    // (`docs/BOT.md` B5) online, the browser worker pool
+                    // (`docs/BOT.md` B6) in Solo -- and starts held. Setup
+                    // (ban / pick / deck) stays engine-side
+                    // (`MatchPlayer::auto_setup`). An online room with no
+                    // service attached rewrites the mentality to Standard
+                    // before `new_match`; Solo's driver answers through the
+                    // ordinary `act` path and falls back to the heuristic, so
+                    // a seat is never parked on answers nobody will send.
+                    ai: m.bot && m.mentality != crate::state::BotMentality::Advanced,
                     mentality: m.mentality,
                     // Carries through `roll_order`, so the seat that rolls high
                     // keeps the character its member was given.
@@ -432,11 +433,26 @@ impl Match {
         if st.phase == "play" && st.turn >= 0 {
             // `st.buy_price` / `st.build_cost` view previews (`docs/PURCHASE.md`):
             // the quoted price at the player's position when a buy/build is on
-            // the table, `-1` otherwise.
+            // the table, `-1` otherwise. `st.can_buy_here` / `st.can_build_here`
+            // are the matching act-legality flags (`why_not_act`), so a client
+            // -- or the bot's action abstraction -- never offers a command the
+            // engine would refuse (`err.buy_poor` / `err.cannot_buy` / `err.poor`).
             let ti = st.turn as usize;
             let pos = st.players.get(ti).map(|p| p.pos).unwrap_or(-1);
             st.buy_price = -1;
             st.build_cost = -1;
+            st.can_buy_here = false;
+            st.can_build_here = false;
+            st.can_roll_here = false;
+            st.can_end_here = false;
+            let money = st.players.get(ti).map(|p| p.money).unwrap_or(0);
+            // `Cx::can_pay` (not out / stunned / exiled), without building a Cx
+            // (which would clone the world -- this runs inside rollouts).
+            let can_pay = st
+                .players
+                .get(ti)
+                .map(|p| !p.out() && !p.stunned() && p.exile() == 0)
+                .unwrap_or(false);
             if st.step == stage::END
                 && !st.bought
                 && pos >= 0
@@ -455,6 +471,19 @@ impl Match {
                     &[(pos as usize, -1)],
                 );
                 st.buy_price = q.first().filter(|q| q.eligible).map_or(-1, |q| q.price);
+                // `why_not_act`'s buy branch: `buyable_here` (shape + the
+                // plan's no-buy flag + `eligible`) plus the quoted funds check.
+                // The shape / `eligible` halves are what `buy_price >= 0`
+                // already answered above.
+                st.can_buy_here = st.buy_price >= 0
+                    && self
+                        .data
+                        .tiles
+                        .get(pos as usize)
+                        .is_some_and(|t| t.is_buyable())
+                    && !self.world.turn.plan.no_buy
+                    && can_pay
+                    && money >= st.buy_price.max(0);
             }
             if st.step == stage::END && !st.built && !st.bought && pos >= 0 && st.landed == pos {
                 // Only preview a build cost when a build is actually possible
@@ -470,11 +499,50 @@ impl Match {
                         }
                     }
                 }
+                // `why_not_act`'s build branch: `why_not_build` (the plan's
+                // `can_build` flag and `why_not_build_on`'s NO_BUILD vetoes,
+                // the halves the cost preview does not carry) plus the funds.
+                st.can_build_here = st.build_cost >= 0
+                    && st.plan.can_build
+                    && self
+                        .world
+                        .why_not_build_on(&self.data, ti as i32, pos)
+                        .is_none()
+                    && money >= st.build_cost.max(0);
             }
             let bank = self.bank.get(st.turn as usize).copied().unwrap_or(0.0);
             st.shield = self.shield;
             st.bank = bank;
             st.time_left = self.shield + bank;
+            // `why_not_act`'s roll / end branches, from the **live** fields the
+            // gate reads (`w.st.skip_move`'s latch, `w.turn.main_moved`, the
+            // hidden hand). The public `skip_move` below re-derives from
+            // stay / exile and can disagree (unstoppable, mid-turn [停留],
+            // [除外]); a bot that trusted it sent `end` into `err.roll_first`.
+            {
+                let live_skip = self.world.st.skip_move;
+                let main_moved = self.world.turn.main_moved;
+                let over_hand = self
+                    .world
+                    .hidden
+                    .get(ti)
+                    .map(|h| h.hand.len() as i32)
+                    .unwrap_or(0)
+                    > st.players.get(ti).map(|p| p.hand_limit()).unwrap_or(5);
+                let my_turn = st.turn == ti as i32;
+                let owes_roll = st.step == stage::OPS && !live_skip && !main_moved;
+                st.can_roll_here = my_turn
+                    && st.step == stage::OPS
+                    && !st.busy
+                    && !live_skip
+                    && !main_moved
+                    && st.roller == st.turn;
+                st.can_end_here = my_turn
+                    && !st.busy
+                    && st.step != stage::MOVE
+                    && !owes_roll
+                    && !over_hand;
+            }
             if st.step == stage::OPS && !st.busy {
                 if let Some(s) = st.current() {
                     st.skip_move = s.stay() > 0 || s.exile() > 0;
@@ -1050,6 +1118,20 @@ impl Match {
                 !x.out() && !x.stunned() && x.exile() == 0
             })
             .collect();
+        // Standard's bid step / nudge read the seat's `StrategyParams`
+        // (`docs/BOT.md` §3.8). Chaos keeps the literals. Resolved up front so
+        // the `live` / `live_rng` borrows below stay disjoint.
+        let strat: Vec<crate::strategy::StrategyParams> = players
+            .iter()
+            .map(|&s| {
+                crate::strategy::for_seat_sha(
+                    &self.data,
+                    &self.world.st,
+                    s,
+                    Some(self.rules.ruleset_sha256().unwrap_or("stub")),
+                )
+            })
+            .collect();
         let solo = self.mode == MatchMode::Solo;
         let rng = &mut self.live_rng;
         let p = self.pending.as_mut().expect("checked above");
@@ -1071,26 +1153,42 @@ impl Match {
                     None => l.ai_at[k] = Some(l.time_left - (0.6 + rng.f64() as f32 * 1.4)),
                     Some(at) if l.time_left <= at => {
                         l.ai_at[k] = None;
-                        let min = if l.bid <= 0 { 100 } else { l.bid + 100 };
+                        let seat = players[k];
+                        let chaos = {
+                            let x = &self.world.st.players[seat];
+                            x.bot && x.mentality == crate::state::BotMentality::Chaos
+                        };
+                        // Standard's raise step / nudge come from the seat's
+                        // `StrategyParams` (defaults == the old `100` /
+                        // `below(3)` formula). Chaos keeps the literals.
+                        let min = if chaos {
+                            if l.bid <= 0 {
+                                100
+                            } else {
+                                l.bid + 100
+                            }
+                        } else {
+                            strat[k].bid_min(l.bid)
+                        };
                         let cap = l.ask.worth[k].min(money[k]);
                         if min > cap || !can_pay[k] {
                             l.answers[k] = 1;
                         } else {
-                            // Standard nudges the minimum (up to +200) -- the
-                            // original formula, untouched. Chaos raises anywhere
-                            // up to its ceiling, which `Ask::worth` already
-                            // capped at money - `CHAOS_RESERVE`. A human seat is
-                            // never chaos: a time-out keeps the standard policy.
-                            let seat = players[k];
-                            let chaos = {
-                                let x = &self.world.st.players[seat];
-                                x.bot && x.mentality == crate::state::BotMentality::Chaos
-                            };
+                            // Standard nudges the minimum (up to +200 at the
+                            // default `bid_nudge_steps`) -- the original
+                            // formula, untouched at the defaults. Chaos raises
+                            // anywhere up to its ceiling, which `Ask::worth`
+                            // already capped at money - `CHAOS_RESERVE`. A
+                            // human seat is never chaos: a time-out keeps the
+                            // standard policy.
                             let bid = if chaos {
                                 let steps = ((cap - min) / 100 + 1).max(1) as usize;
                                 min + 100 * rng.below(steps) as i32
                             } else {
-                                cap.min(min + 100 * rng.below(3) as i32)
+                                let p = &strat[k];
+                                let step = p.bid_step;
+                                let nudge = p.bid_nudge_steps.max(1) as usize;
+                                cap.min(min + step * rng.below(nudge) as i32)
                             };
                             l.place_bid(seat, bid);
                         }

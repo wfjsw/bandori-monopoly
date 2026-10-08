@@ -152,11 +152,13 @@ semantics beyond a `blocked(band)` int mirror.
 * Manifest: `ManifestOn { kind, triggers, pre: Option<String> }` (postcard,
   abi.rs:1446). No `exact` flag: a fully expressed guard is simply removed, so
   "condition only" is `pre: Some(..)` + no guard.
-* `On::*` gains a trailing `pre: &'static str` (`""` = none), or a const
-  `.pre(..)` builder; ~490 declaration sites. Sugar consts `pre::MINE`
-  (`actor == owner`) replaces the 118 `mine` guards outright; the 19 `always`
-  guards are deleted. The condition sits beside the (now residual) guard fn, and
-  each clause lives in exactly one of the two.
+* `On::*` gains a `pre: &'static str` (`""` = none) immediately before the
+  residual guard -- the declaration reads category → condition → guard → body,
+  matching the three layers above; or a const `.pre(..)` builder. ~490
+  declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
+  118 `mine` guards outright; the 19 `always` guards are deleted. The condition
+  sits beside the (now residual) guard fn, and each clause lives in exactly one
+  of the two.
 * Load time: `RulesetBuilder::build` parses + compiles every `pre` once
   (TypeRegistry with the §4.2 vars); parse/unknown-var/int-literal errors are
   `RuleError::BadPre` and fail the build-ruleset check.
@@ -281,6 +283,24 @@ AST is smaller and already in the dependency set.
 `rules-cond` features: default `compile + wire` (host); the browser build is
 `--no-default-features --features runtime-only` (= `wire`).
 
+**Shipping the compiled form.** `tools/build-ruleset.mjs` compiles every
+shipped `pre` on the host (fail-closed) and publishes one postcard envelope,
+`PrecompiledConds { version: u8, entries: Vec<{card, entry, blob}> }` (entries
+sorted by `(card, entry)`), as the content-addressed `conds-<sha256>.bin`
+listed in `dist/cards/index.json` (`"conds": {file, sha256, bytes, entries}`);
+the set identity mixes each entry's blob hash into `Ruleset::sha256`, so
+record stamps and bundle ids change with the conditions, not only with the
+module bytes. The page (`webui/src/core/rulesetLoad.ts`, shared with the node
+gate) fetches it with the modules and feeds it through
+`RulesetBuilder::precompiled` before `ruleset_build`; `index.json` with no
+`conds` entry means no entry has a condition, and older bundles keep working.
+A `pre` with no blob on that path is a loud `BadPre` — never "treat as true" —
+and a blob for an entry that declares no condition (or a blob that disagrees
+with the host compile, checked whenever a native build is handed one) is
+refused the same way. Server / `rules-worker` / `rules-native` keep compiling
+the sources themselves; `cargo test -p game-rules --test pre_conditions` pins
+the shipped blob to that compile.
+
 ### 8.3 Binary size impact (browser glue)
 
 Throwaway cdylib examples, `wasm32-unknown-unknown`, vs `size_baseline`
@@ -390,7 +410,9 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 ### 9.1 What landed
 
 **G0 — surface.** `On::Counteract` / `On::Hook` / `On::Play` (the guarded
-entries) carry a trailing `pre: &'static str` (`""` = none); `On::pre(..)` is
+entries) carry a `pre: &'static str` condition immediately before the residual
+guard (`On::Counteract(kinds, pre, guard, body)`, `On::Hook(kinds, pre, guard,
+body)`, `On::Play(pre, gate, body)`); `""` = none. `On::pre(..)` is
 the const builder and `card_sdk::pre::MINE` (`actor == owner`) the sugar.
 `ManifestOn` gains `pre: Option<String>` (the CEL source) and `ABI_VERSION`
 goes **44 → 45**. `rt::manifest` serialises it (postcard; never
@@ -463,9 +485,10 @@ unaffected either way.
 
 ### 9.4 Files
 
-* `rules/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` trailing `pre`, `pre::MINE`,
-  `On::pre()` builder, `ManifestOn.pre`, `ABI_VERSION = 45`.
-* `crates/game-rules/src/cond_pre.rs` (new) — `CompiledPre`, `admits` /
+* `rules/card-sdk/src/{lib.rs,rt.rs,abi.rs}` — `On` `pre` before the guard,
+  `pre::MINE`, `On::pre()` builder, `ManifestOn.pre`, `ABI_VERSION = 45`.
+* `crates/game-rules/src/cond_pre.rs` (new) — `CompiledPre`, `PrecompiledConds`
+  (the shipped `conds-*.bin` envelope, §8.2), `admits` /
   `admits_gate` / `admits_pre`, `fill_window` / `fill_window_ambient` /
   `fill_candidate`, `guard_cost`, `legacy_audit` hook point.
 * `crates/game-rules/src/{host.rs,hostfns.rs,wasm_rules.rs,lib.rs}` —
@@ -474,6 +497,13 @@ unaffected either way.
   `admits`, `declare_one`'s shared `WindowScope`.
 * `crates/rules-native/src/lib.rs` — same conditions from the linked table,
   the three guard methods through `admits`.
+* Shipping the compiled form (G4 fix): `crates/game-rules/examples/ruleset_index.rs`
+  (emits `conds-<sha>.bin` + the `conds` index entry),
+  `crates/web-glue/src/lib.rs` (`ruleset_precompiled`, `ruleset_pre_eval`),
+  `webui/src/core/rulesetLoad.ts` (shared load sequence),
+  `webui/src/game/ruleset.test.ts` (the node gate),
+  `tools/build-ruleset.mjs` / `archive-engine.mjs` / `rebuild-engine.mjs` /
+  `webui/public/assets/engine/replay-worker.js` (carry the blob).
 * `rules/fixtures/test-cards` — `TEST:preReject` / `preAccept` / `prePlay` /
   `preHook`.
 * `crates/game-rules/tests/ruleset.rs` — `pre_*` fixtures tests (reject skips

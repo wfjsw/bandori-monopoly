@@ -22,7 +22,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MARINA_GIFTS: CardDef = CardDef::new(
     "skill:月岛麻里奈:礼物还有好多好多哟",
-    &[On::Hook(&[HookKind::Pass], None, on_pass, "")],
+    &[On::Hook(&[HookKind::Pass], "", None, on_pass)],
 );
 
 /// The cost of the offer, named in the clause.

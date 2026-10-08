@@ -14,9 +14,9 @@ pub const TAKI_EVEN_IF: CardDef = CardDef::new(
     "CRYCHIC:（立希）即便比不上...",
     &[On::Counteract(
         &[ChainKind::MoveRoll],
+        "actor == owner && move.roll != null",
         None,
         counteract,
-        "actor == owner && move.roll != null",
     )],
 )
 .legacy(&[(0, legacy_can_counteract)]);

@@ -6,6 +6,7 @@ import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
+import { loadRulesetInto } from "./rulesetLoad";
 import type { BandData, CardData, CharacterData, EventData, TileData, VoiceLine } from "./types";
 
 export interface GameData {
@@ -45,21 +46,15 @@ export let rulesetLoaded = false;
  *  first checkpoint and looks like engine drift. */
 async function loadRuleset(): Promise<void> {
   try {
-    const r = await fetch("/assets/rules/index.json");
-    if (!r.ok) throw new Error(`index.json: HTTP ${r.status}`);
-    // An SPA dev server answers unknown paths with `index.html` and HTTP 200;
-    // `r.json()` then throws a SyntaxError with no path in it. Say what failed.
-    const text = await r.text();
-    if (text.trimStart().startsWith("<")) {
-      throw new Error("index.json: got HTML (the ruleset was not built -- run tools/build-ruleset.mjs)");
-    }
-    const index: { modules: { file: string }[] } = JSON.parse(text);
-    for (const m of index.modules) {
-      const w = await fetch("/assets/rules/" + m.file);
-      if (!w.ok) throw new Error(`${m.file}: HTTP ${w.status}`);
-      glue.ruleset_add(new Uint8Array(await w.arrayBuffer()));
-    }
-    const n = glue.ruleset_build();
+    // The sequence lives in `rulesetLoad.ts` and is shared with the node gate
+    // (`webui/src/game/ruleset.test.ts`): index.json -> modules -> the
+    // precompiled-condition blob (`conds-*.bin`, docs/GUARDS.md §8.2) ->
+    // `ruleset_build`.
+    const n = await loadRulesetInto(glue, async (rel) => {
+      const r = await fetch("/assets/rules/" + rel);
+      if (!r.ok) throw new Error(`${rel}: HTTP ${r.status}`);
+      return new Uint8Array(await r.arrayBuffer());
+    });
     rulesetLoaded = true;
     console.info(`[rules] ${n} card module(s) loaded`);
   } catch (e) {

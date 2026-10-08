@@ -10,7 +10,7 @@ import { n0 } from "../../core/format";
 import { useAutoplay } from "../../core/hooks";
 import type { GameSession } from "../../game/session";
 import { SoloSession } from "../../game/session";
-import { AutoToggle, autoFloat } from "../../ui/AutoToggle";
+import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
 import { type CardAction, CardFace, showCard, TagChip } from "../../ui/Card";
 import { Avatar, bandColor } from "../../ui/Character";
@@ -94,10 +94,13 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
           </div>
         </div>
       </div>
-      {/* 托管 / 混沌: your own seat's mode. Drawn over the card's right end but
+      {/* 托管 / 混沌 / 进阶: your own seat's mode. Drawn over the card's right end but
           outside it, so it can sit above any open modal -- it has to be
-          clickable at any time. */}
-      <div className={cx(autoFloat, s.autoSlot)}><AutoToggle sess={sess} compact /></div>
+          clickable at any time. The 进阶 search's "thinking…" pill sits beside it. */}
+      <div className={cx(autoFloat, s.autoSlot)}>
+        <ThinkingPill sess={sess} />
+        <AutoToggle sess={sess} compact />
+      </div>
 
       <div className={s.steps}>
         {phases().map((label, i) => <span key={label} className={cx(s.step, i === shown ? s.stepOn : i < shown && s.stepDone)}>{label}</span>)}

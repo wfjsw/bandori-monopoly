@@ -22,14 +22,14 @@ const SPREAD: &str = "spread";
 pub const EMBERS: CardDef = CardDef::new(
     "event:火种燃尽之后会怎么样呢？",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
         // 「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect list
         // (`SETTLE-STAGES.md` §4 M2), not a pre-settle write and not an after
         // hook. `settleBody` is the list; a field card that replaces the body
         // (`trigger::cancelled()`) skips this entry like every other.
-        On::Hook(&[HookKind::SettleBody], Some(always), on_settle, ""),
-        On::Hook(&[HookKind::Exile, HookKind::Bankrupt, HookKind::Abnormal], Some(always), on_out, ""),
+        On::Hook(&[HookKind::SettleBody], "", Some(always), on_settle),
+        On::Hook(&[HookKind::Exile, HookKind::Bankrupt, HookKind::Abnormal], "", Some(always), on_out),
     ],
 );
 

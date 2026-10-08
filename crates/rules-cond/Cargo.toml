@@ -14,6 +14,10 @@ crate-type = ["rlib"]
 # `cel` is the vendored fork (root `[patch.crates-io]`): runtime-only builds
 # drop the parser, see third_party/cel-rust/FORK.md.
 cel = { version = "0.15.0", default-features = false }
+# The window/candidate snapshots derive Serialize/Deserialize so a host can
+# fill them from JSON (web-glue's `ruleset_pre_eval` test seam, fuzz drivers).
+# Independent of the `wire` feature -- that one is the condition AST.
+serde = { workspace = true }
 # The serialized compiled form is postcard of the cel AST (the same format as
 # the ruleset manifest). Only needed on the `wire` feature.
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }

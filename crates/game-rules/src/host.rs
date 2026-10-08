@@ -518,10 +518,6 @@ impl RulesetBuilder {
                 return Err(RuleError::DuplicateCard(c.id.clone()));
             }
         }
-        // Order-independent identity of the whole set.
-        let mut hashes: Vec<&str> = self.modules.iter().map(|m| m.sha256.as_str()).collect();
-        hashes.sort_unstable();
-        let sha256 = hex_sha256(hashes.join("\n").as_bytes());
         let mut declared = 0u128;
         let mut counteract_mask = Vec::with_capacity(self.cards.len());
         let mut hook_mask = Vec::with_capacity(self.cards.len());
@@ -546,36 +542,67 @@ impl RulesetBuilder {
         }
         // Compile every condition once (docs/GUARDS.md §4.3). Fail-closed: a
         // parse / unknown-var / float error is a build error, never "treat as
-        // true".
+        // true". On the runtime-only (browser) path a source `pre` without a
+        // precompiled blob is a build error for the same reason. A precompiled
+        // blob maps 1:1 onto a declared `pre` -- a blob for an entry that
+        // declares no condition (or does not exist) is a mismatched blob and
+        // refused, so a stale `conds-*.bin` cannot ride along silently.
         let mut pre = Vec::with_capacity(self.cards.len());
+        let mut used_precompiled = 0usize;
         for c in &self.cards {
             let mut row = Vec::with_capacity(c.on.len());
             for (ei, o) in c.on.iter().enumerate() {
+                let supplied = self.precompiled.get(&(c.id.clone(), ei as i32));
                 let compiled = match &o.pre {
-                    Some(src) => Some(compile_pre(
-                        &c.id,
-                        ei as i32,
-                        src,
-                        self.precompiled.get(&(c.id.clone(), ei as i32)),
-                    )?),
-                    None => match self.precompiled.get(&(c.id.clone(), ei as i32)) {
-                        Some(blob) => Some(
-                            crate::cond_pre::CompiledPre::from_bytes(blob).map_err(|e| {
-                                RuleError::BadPre {
-                                    card: c.id.clone(),
-                                    entry: ei as i32,
-                                    source: String::new(),
-                                    err: e.to_string(),
-                                }
-                            })?,
-                        ),
-                        None => None,
-                    },
+                    Some(src) => {
+                        // The only kind of entry a blob is consumed by.
+                        if supplied.is_some() {
+                            used_precompiled += 1;
+                        }
+                        Some(compile_pre(&c.id, ei as i32, src, supplied)?)
+                    }
+                    None => None,
                 };
                 row.push(compiled);
             }
             pre.push(row);
         }
+        if used_precompiled != self.precompiled.len() {
+            let mut stale: Vec<String> = self
+                .precompiled
+                .keys()
+                .filter(|(card, ei)| {
+                    !by_id
+                        .get(card)
+                        .and_then(|&ci| self.cards.get(ci as usize))
+                        .and_then(|c| c.on.get(*ei as usize))
+                        .map_or(false, |o| o.pre.is_some())
+                })
+                .map(|(card, ei)| format!("{card}/{ei}"))
+                .collect();
+            stale.sort();
+            return Err(RuleError::Load(format!(
+                "precompiled conds blob lists entries with no condition in the modules: {}",
+                stale.join(", ")
+            )));
+        }
+        // Order-independent identity of the whole set, and of the compiled
+        // conditions (docs/GUARDS.md §8.2): a change in any lean `Cond` blob
+        // must change the ruleset sha, so record stamps / bundle ids follow.
+        // Sets without conditions keep the plain module-hash recipe.
+        let mut parts: Vec<String> = self
+            .modules
+            .iter()
+            .map(|m| m.sha256.clone())
+            .collect();
+        parts.sort_unstable();
+        let conds = crate::cond_pre::PrecompiledConds::collect(&self.cards, &pre);
+        let cond_lines = conds.identity_lines();
+        if !cond_lines.is_empty() {
+            parts.push("conds".to_string());
+            parts.extend(cond_lines);
+        }
+        let sha256 = hex_sha256(parts.join("\n").as_bytes());
         Ok(Ruleset {
             inner: Arc::new(Inner {
                 id: next_inner_id(),
@@ -598,13 +625,16 @@ impl RulesetBuilder {
 /// Compile one condition source (host `compile` path) or load a precompiled
 /// blob (runtime-only path). Both end at the same `CompiledPre`, so the
 /// browser evaluates exactly what the host compiled.
+///
+/// Native hosts compile the source (authoritative). When a blob is supplied
+/// alongside it (the shipped `conds-*.bin`, or a test), it must be byte-equal
+/// to the host compile -- that is the sha check that a shipped blob agrees
+/// with what this build would have produced.
 fn compile_pre(
     card: &str,
     entry: i32,
     src: &str,
-    #[cfg_attr(not(target_arch = "wasm32"), allow(unused_variables))] precompiled: Option<
-        &Vec<u8>,
-    >,
+    precompiled: Option<&Vec<u8>>,
 ) -> Result<crate::cond_pre::CompiledPre, RuleError> {
     let bad = |err: String| RuleError::BadPre {
         card: card.to_string(),
@@ -614,8 +644,16 @@ fn compile_pre(
     };
     #[cfg(not(target_arch = "wasm32"))]
     {
-        // Prefer the source (authoritative); a supplied blob is ignored here.
-        crate::cond_pre::CompiledPre::compile(src).map_err(|e| bad(e.to_string()))
+        let compiled = crate::cond_pre::CompiledPre::compile(src).map_err(|e| bad(e.to_string()))?;
+        if let Some(blob) = precompiled {
+            if compiled.blob != *blob {
+                return Err(bad(
+                    "precompiled blob does not match the host compile of this condition source"
+                        .into(),
+                ));
+            }
+        }
+        Ok(compiled)
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -880,6 +918,19 @@ impl Ruleset {
         let c = self.inner.cards.get(card as usize)?;
         let e = c.entry(kind, trigger)?;
         self.inner.pre.get(card as usize)?.get(e as usize)?.as_ref()
+    }
+
+    /// The compiled condition of `cards[card].on[entry]`, if it declares one.
+    pub fn pre_at(&self, card: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre> {
+        self.inner.pre.get(card as usize)?.get(entry as usize)?.as_ref()
+    }
+
+    /// Every compiled guard condition of this set, keyed by `(card id, entry
+    /// index)` and sorted -- the `conds-<sha>.bin` blob `tools/build-ruleset.mjs`
+    /// ships for the browser glue (`docs/GUARDS.md` §8.2). The bytes are this
+    /// host compile's lean `Cond::to_bytes(false)`.
+    pub fn precompiled_conds(&self) -> crate::cond_pre::PrecompiledConds {
+        crate::cond_pre::PrecompiledConds::collect(&self.inner.cards, &self.inner.pre)
     }
 
     /// `Card.CanCounteract` against the current trigger. Runs on a throwaway copy, so it
@@ -1203,7 +1254,7 @@ fn finish<W>(store: Store<HostState<W>>, res: Result<i64, Error>) -> Result<Outc
     }
 }
 
-fn hex_sha256(bytes: &[u8]) -> String {
+pub(crate) fn hex_sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|b| format!("{b:02x}"))

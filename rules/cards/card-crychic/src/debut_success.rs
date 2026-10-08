@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const DEBUT_SUCCESS: CardDef = CardDef::new(
     "CRYCHIC:初演大成功",
-    &[On::Play(None, debut_success, ""), On::AtEnd(at_end)],
+    &[On::Play("", None, debut_success), On::AtEnd(at_end)],
 );
 
 fn debut_success(player_id: i32) -> card_sdk::Asked {

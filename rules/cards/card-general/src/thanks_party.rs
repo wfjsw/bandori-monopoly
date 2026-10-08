@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const THANKS_PARTY: CardDef =
-    CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play(None, thanks_party, "")])
+    CardDef::new("通用:CiRCLE THANKS PARTY!", &[On::Play("", None, thanks_party)])
         .props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 fn thanks_party(player_id: i32) -> card_sdk::Asked {

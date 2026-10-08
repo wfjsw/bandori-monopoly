@@ -24,9 +24,9 @@ const SAVED: &str = "skill.hhw.saved";
 pub const HHW: CardDef = CardDef::new(
     "skill:Hello, Happy World!:传播笑容",
     &[
-        On::Hook(&[HookKind::PayChoose], None, on_pay_choose, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::PayAfter], None, after_pay, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::BuildBefore], None, before_build, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, None, on_pay_choose),
+        On::Hook(&[HookKind::PayAfter], card_sdk::pre::MINE, None, after_pay),
+        On::Hook(&[HookKind::BuildBefore], card_sdk::pre::MINE, None, before_build),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);

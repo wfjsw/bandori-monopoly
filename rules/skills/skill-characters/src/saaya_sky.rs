@@ -22,10 +22,10 @@ const MARK: &str = "saaya标记";
 pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::PayAfter], Some(other), on_pay_after, ""),
-        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::PayChoose], None, on_pay, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::PayAfter], "", Some(other), on_pay_after),
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
+        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, None, on_pay),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);

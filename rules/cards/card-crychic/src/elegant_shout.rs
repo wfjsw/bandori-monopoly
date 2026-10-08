@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
-        On::Counteract(&[ChainKind::DrawOut], None, counteract, card_sdk::pre::MINE),
+        On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract),
         On::AtEnd(at_end),
     ],
 )

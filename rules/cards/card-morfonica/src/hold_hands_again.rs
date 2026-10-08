@@ -22,11 +22,11 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Paid],
+            "actor != owner && actor == neighbor(owner, -1) && value > 0",
             None,
             counteract,
-            "actor != owner && actor == neighbor(owner, -1) && value > 0",
         ),
-        On::Hook(&[HookKind::PayAt], None, pay_at, ""),
+        On::Hook(&[HookKind::PayAt], "", None, pay_at),
     ],
 )
 .legacy(&[(0, legacy_can_counteract)]);

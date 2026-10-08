@@ -27,11 +27,11 @@ const USED: &str = "skill.poppin.used";
 pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::SettleBefore], Some(any), before_settle, ""),
-        On::Play(Some(can_crystal), to_crystal, ""),
-        On::Play(Some(can_cash), cash, ""),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::SettleBefore], "", Some(any), before_settle),
+        On::Play("", Some(can_crystal), to_crystal),
+        On::Play("", Some(can_cash), cash),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」

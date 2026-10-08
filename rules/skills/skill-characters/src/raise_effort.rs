@@ -20,9 +20,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RAISE_EFFORT: CardDef = CardDef::new(
     "skill:和奏瑞依:一次又一次竭尽全力",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

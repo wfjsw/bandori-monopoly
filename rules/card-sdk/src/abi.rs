@@ -693,43 +693,129 @@ impl CardPile {
 pub const REWARD_MONEY: i32 = 0;
 pub const REWARD_CARD: i32 = 1;
 
-/// Trigger kinds a counteraction can be checked against (C# `Trigger.Kind`).
+/// Trigger kinds a counteraction can be checked against.
 ///
-/// The values are a wire enum: the host fills them at the same points the C#
-/// raises its `Trigger`s. Kinds the engine does not raise yet still exist here
-/// so a card's `can_counteract` can state its real condition; it simply never sees
-/// that kind until the engine raises it (TODO in `game-core`).
+/// The values are a wire enum: the host fills them at the same points the
+/// engine raises its `Trigger`s. Kinds the engine does not raise yet still exist
+/// here so a card's `can_counteract` can state its real condition; it simply
+/// never sees that kind until the engine raises it (TODO in `game-core`).
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum TriggerKind {
     #[default]
+    /// Unset. `from_str`'s fallback and the `Default` -- never raised.
     None = 0,
+    /// The main move's pre-roll point (行动阶段 8 「移动掷骰前」) -- raised before
+    /// the d20 is cast, with `value = -1` as a "no roll yet" sentinel so a
+    /// counter matching [`Self::Roll`] / [`Self::MoveRoll`] stays dormant before
+    /// the dice exist. Payload: `@m` the move.
     Roll = 1,
+    /// The move roll resolved (行动阶段 9–10 「移动掷骰时/后」) -- after the dice,
+    /// before the walk. `value` is the face; a counteraction may reroll it with
+    /// `set_move_roll` (`t.value` is read back). Payload: `@m` the move.
     MoveRoll = 2,
+    /// A turn begins (行动阶段 2 「回合开始时」) -- after the exile/stun status
+    /// ticks, so a hook sees the turn as it opens. `turnStartBefore` is the
+    /// pre-half. Payload: `tile` = the player's position.
     TurnStart = 3,
+    /// One tile stepped over during a move (行动阶段 12 「[经过]」) -- raised after
+    /// the player arrives on `tile`, for **every** path tile (CiRCLE and the
+    /// destination), not just the end. `passBefore` is the pre-half;
+    /// [`Self::PassTile`] is the Fx hook for the same step.
     Pass = 4,
+    /// End-tile [重叠] (行动阶段 13) -- one raise per other player sharing the
+    /// landing tile. `target` = that player. Raised at the move's end, never
+    /// mid-walk (a mid-route pass is [`Self::PassTile`]).
     PassPlayer = 5,
+    /// 行动阶段 14 「[触发结算]前」/「[移动终点]」 -- the pre-settle window. A
+    /// relocation here redirects the settle (it re-runs this window at the new
+    /// tile, `SETTLE-STAGES.md` §7 Q7). Payload: `tile` = the tile about to settle.
     SettleBefore = 6,
+    /// 行动阶段 15 opening 「触发结算」/「[结算]时」 -- the settle's declaration
+    /// and [反击] window. `set_cancelled()` = 「本次结算」 never happened: no
+    /// body, no `settleAfter`; [`Self::TileResolved`] still fires. `target` =
+    /// the tile's owner (-1 = the bank).
     Settle = 7,
+    /// A deed was just mortgaged, after it applied (运营阶段 「抵押地契」).
+    /// `mortgageBefore` is the pre-half that can block. Payload: `tile` = the deed.
     Mortgage = 8,
+    /// A payment's settlement hook -- what the payment actually is, after the
+    /// [反击] chain and the modifier stages, before any money moves (规则书
+    /// 支付阶段 5). `player_id` = payer, `target` = payee (-1 = the bank),
+    /// `value` = amount. `set_cancelled()` stops the payment outright (`NEGATION-AUDIT`
+    /// V5). The [反击] key for a payment is [`Self::Effect`] (`kind: "pay"`).
     Pay = 9,
+    /// Money left a player (规则书 支付阶段 6–7) -- after the deduction commits.
+    /// `player_id` = payer, `target` = payee, `value` = what moved. The [反击]
+    /// window 「[消耗]或[支付]」/「被…收取资金」 opens here, on a payer-side loss
+    /// only -- a print (`gain`) raises [`Self::PayAfter`] alone.
     Paid = 10,
+    /// A bankruptcy's asset cash-in is done, before the seat is cleared.
+    /// `bankruptBefore` is the pre-half (before cash-in); [`Self::BankruptResolved`]
+    /// the terminal. The seat is already marked dead before `bankruptBefore` (B3).
     Bankrupt = 11,
+    /// A card is being played from hand -- before its `play` body. `card` = the
+    /// card id, `by_card` = its player. `set_cancelled()` negates the play: the
+    /// card still goes to its `Dest`, but the body does not run. Also the kind of
+    /// every declared [反击] link (`seq` / `answers` say which link it is).
     Card = 12,
+    /// An event was drawn and revealed -- before it resolves. `card` = the event
+    /// id. `set_cancelled()` negates the draw: the effect never resolves and the
+    /// card is filed away. `eventAfter` is the post-half.
     Event = 13,
+    /// An abnormal effect settled on `target` (`t.value` is the [`AbKind`]).
+    /// The declaration gates are [`GateKind::AbnormalGuard`] + the [`Self::Effect`]
+    /// [反击]; this hook reports what actually landed, self-applied included.
     Abnormal = 14,
+    /// A single-target effect settled on `target`. Now a settlement hook: the
+    /// [反击] key for 「被…效果影响」 is [`Self::Effect`]. Declaration-side gates:
+    /// [`GateKind::Untargetable`] / [`GateKind::Redirect`].
     Target = 15,
+    /// Wire name `stop`: a player was forced to stop (「强制停下」,
+    /// [`AbKind::Stop`]). Not raised by the current engine; kept for wire
+    /// compatibility.
     Stop = 16,
+    /// Wire name `teleport`: a teleport was performed. Not raised by the current
+    /// engine; kept for wire compatibility. The teleport-specific points today
+    /// are [`Self::MoveBefore`] (before) and [`Self::Teleported`] (after).
     Teleport = 17,
+    /// Wire name `skillTeleport`: 「当你使用技能进行传送后」 (R:必然的联系（莉莎）).
+    /// Not raised by the current engine; kept for wire compatibility.
     SkillTeleport = 18,
+    /// Wire name `stun`: a [晕眩] layer landed. Not raised by the current engine
+    /// (the landing reports as [`Self::Abnormal`] with `t.value` = [`AbKind::Stun`]);
+    /// kept for wire compatibility.
     Stun = 19,
+    /// Wire name `stay`: a [停留] layer landed. Not raised by the current engine
+    /// (see [`Self::Stun`]); kept for wire compatibility.
     Stay = 20,
+    /// Wire name `exile`: 「任意玩家获得[除外]…时」 -- an [除外] layer was granted
+    /// by any path (火种燃尽之后会怎么样呢？ listens here). Raised from the grant
+    /// log, `value = 1`. Distinct from [`Self::Abnormal`], which is the landing
+    /// itself.
     Exile = 21,
+    /// Wire name `forced`: a [强制移动] landed. Not raised by the current engine
+    /// (see [`Self::Stun`]); kept for wire compatibility.
     Forced = 22,
+    /// Wire name `state`: 「当有其他玩家切换状态时」 -- a player toggled skill
+    /// state (Mujica:欢迎来到ave mujica的世界). Not raised by the current
+    /// engine; kept for wire compatibility.
     State = 23,
+    /// Wire name `counteracted`: 「有玩家对你使用[反击]后」 -- a [反击] was
+    /// declared against `target` by `player_id` (Mujica:无法将视线移开). Not
+    /// raised by the current engine; kept for wire compatibility.
     Counteracted = 24,
+    /// Wire name `drawOut`: 「回合外受到抽卡效果时」 -- a draw hit you outside
+    /// your own turn (CRYCHIC:优雅的呐喊). Not raised by the current engine;
+    /// kept for wire compatibility. The per-draw points today are
+    /// [`Self::DrewBefore`] / [`Self::Drawn`] / [`Self::Drew`].
     DrawOut = 25,
+    /// The CiRCLE reward was picked but not paid out (「[获得]资金」 vs the card).
+    /// `value` = which half ([`REWARD_MONEY`] / [`REWARD_CARD`]); the stunned
+    /// path forces the card. `set_cancelled()` skips the payout.
     CircleAffected = 26,
+    /// Wire name `twoCards`: 「当有人同一回合内打出两张卡时」 (Sumimi:Here the
+    /// world). Not raised by the current engine; kept for wire compatibility.
     TwoCards = 27,
     /// v10: the missing pre-half of `TurnStart`.
     TurnStartBefore = 28,
@@ -746,9 +832,9 @@ pub enum TriggerKind {
     /// v10: the missing post-half of `SettleBefore`/`Settle` (fires after
     /// `land()` resolves).
     SettleAfter = 34,
-    /// v10: new action hook -- before `Card.Buy` resolves.
+    /// v10: new action hook -- before a buy resolves.
     BuyBefore = 35,
-    /// v10: new action hook -- after `Card.Buy` resolves.
+    /// v10: new action hook -- after a buy resolves.
     BuyAfter = 36,
     /// v10: new action hook -- before building a house resolves.
     BuildBefore = 37,
@@ -767,87 +853,91 @@ pub enum TriggerKind {
     /// v10: new action hook -- after a player forfeits.
     LeaveAfter = 44,
 
-    // v17: field-card (`Fx`) hook points. These are NOT [反击] points -- the
+    // v17: field-card hook points. These are NOT [反击] points -- the
     // engine runs every placed card's `counteract` against them automatically. They
     // are distinct kinds from the counteraction kinds above so a card can tell a
     // field effect from a hand counteraction by its kind alone.
-    /// `Fx.TurnEnd` -- a turn just ended (any player's).
+    /// A turn just ended (any player's).
     TurnEnd = 45,
-    /// `Fx.Drawn` -- **one card was drawn** (per single card; `t.card` names it,
-    /// still in hand). This is the drawn card's *own* hook (C# `AfterDraw`);
-    /// the per-draw field-card points are [`Self::DrewBefore`] / [`Self::Drew`].
+    /// **One card was drawn** (per single card; `t.card` names it, still in
+    /// hand). This is the drawn card's *own* hook; the per-draw field-card
+    /// points are [`Self::DrewBefore`] / [`Self::Drew`].
     Drawn = 46,
-    /// `Fx.PassTile` -- the player passed/stopped on a tile during a move.
+    /// The player passed/stopped on a tile during a move (行动阶段 12 「[经过]」).
     PassTile = 47,
-    /// `Fx.PayAfter` -- a payment settled.
+    /// A payment settled (规则书 支付阶段 6–7 「资金变动」).
     PayAfter = 48,
-    /// `Fx.RollAfter` -- a move roll resolved.
+    /// A move roll resolved (行动阶段 10 「移动掷骰后」).
     RollAfter = 49,
-    /// `Fx.CardPlayed` -- a card's hand effect resolved.
+    /// A card's hand effect resolved.
     CardPlayed = 50,
-    /// `Fx.Targeted` -- the player was targeted.
+    /// The player was targeted.
     Targeted = 51,
-    /// `Fx.PayChoose` -- the player is about to pay (may modify/decline).
+    /// The player is about to pay (may modify/decline).
     PayChoose = 52,
-    /// v23: C# `Fx.TurnEndBefore` -- first step of a turn end, before the `AtEnd` callbacks and the status wear-off.
+    /// v23: first step of a turn end (结束阶段前), before the `On::AtEnd`
+    /// callbacks and the status wear-off.
     TurnEndBefore = 53,
-    /// v23: C# `Fx.TurnEndAfter` -- after `TurnEnd`; the `AfterEnd` callbacks run here.
+    /// v23: after [`Self::TurnEnd`]; the scheduled turn-end callbacks run here.
     TurnEndAfter = 54,
-    /// v23: C# `Fx.PayAdd` -- a payment's amount, first modifier pass (before any money moves).
+    /// v23: a payment's amount, first modifier pass (规则书 支付阶段 2, before
+    /// any money moves).
     PayAdd = 55,
-    /// v23: C# `Fx.PayMul` -- second modifier pass, after `PayAdd`.
+    /// v23: second modifier pass (规则书 支付阶段 4), after [`Self::PayAdd`].
     PayMul = 56,
-    /// v23: C# `Fx.PayAt` -- after `PayChoose`, before the `pay` [反击] window.
+    /// v23: after [`Self::PayChoose`], before the `pay` [反击] window
+    /// (规则书 支付阶段 5).
     PayAt = 57,
-    /// v23: C# `Card.OnDiscarded` -- this card (named on `t.card`) just went to the discard pile.
+    /// v23: this card (named on `t.card`) just went to the discard pile.
     Discarded = 58,
-    /// v23: **before match start** (C# `Card.DeckBeforeGame`) -- raised once per
+    /// v23: **before match start** (「游戏开始前」) -- raised once per
     /// player before the opening hands are drawn, and dispatched to *every*
     /// effect source: field cards including skills (per player, in field order)
     /// and the card ids in that player's piles/hands. Start positions and the
     /// authoritative initial hand size are decided here.
     DeckBeforeGame = 59,
-    /// v23: **after match start** (C# `Card.DeckAtGameStart`) -- raised once per
+    /// v23: **after match start** (「游戏开始时」) -- raised once per
     /// player after the opening draw and mulligan, dispatched to every effect
     /// source as [`Self::DeckBeforeGame`] is. Initial tokens/resources (fire
     /// pots 「初始N」, P✽P fans) are created here.
     DeckAtGameStart = 60,
-    /// v23: C# `Fx.Drew` -- **after one card was drawn** (per single card; an
+    /// v23: **after one card was drawn** (per single card; an
     /// N-card draw raises this N times, each payload naming one card). This is
     /// the per-draw field-card point; the drawn card's own hook is
     /// [`Self::Drawn`].
     Drew = 61,
-    /// v23: C# `Fx.Reshuffled` -- a player's discard pile was shuffled back into its deck.
+    /// v23: a player's discard pile was shuffled back into its deck.
     Reshuffled = 62,
-    /// v23: C# `Fx.Bought` -- a player became the owner of `t.tile` (buy or auction).
+    /// v23: a player became the owner of `t.tile` (buy or auction).
     Bought = 63,
     /// v23/31: the **settle body** point -- a field card placed on the tile may
     /// replace the tile's rule instances' effect: do it and call
-    /// `trigger::set_cancelled()`. Was `SettleInstead` (C# `Fx.SettleInstead`);
-    /// renamed when the body became the tile's rule instances (`docs/TILES.md`).
+    /// `trigger::set_cancelled()`. Was `SettleInstead`; renamed when the body
+    /// became the tile's rule instances (`docs/TILES.md`).
     SettleBody = 64,
-    /// v23: C# `Fx.BeforeOut` -- a player is about to leave the game (bankrupt or forfeit).
+    /// v23: a player is about to leave the game (bankrupt or forfeit).
     BeforeOut = 65,
-    /// v23: C# `Teleported` -- a teleport finished (after its settlement, or at once if it does not settle).
+    /// v23: a teleport finished (after its settlement, or at once if it does not
+    /// settle).
     Teleported = 66,
-    /// v23: C# `RollMove`'s `RollPlan` pass -- before the main move's dice are
-    /// rolled. The host runs every placed card's `On::RollPlan` here.
+    /// v23: the main move's `RollPlan` pass (行动阶段 8, before the dice are
+    /// rolled). The host runs every placed card's `On::RollPlan` here.
     RollPlan = 67,
-    /// v25: C# `IAbnormalGuard.Guard` -- an abnormal effect is about to hit
+    /// v25: an abnormal effect is about to hit
     /// `t.target` (`trigger::abnormal_kind()` says which). A field card blocks it
     /// with `trigger::set_cancelled()`. Then, if someone else caused it, the
-    /// `abnormal` [反击] window opens.
+    /// `effect` [反击] window opens on the declaration; a landing is reported by
+    /// [`Self::Abnormal`].
     AbnormalGuard = 68,
-    /// v26: C# `Fx.ImmuneAll` -- is `t.player_id` untouchable by `t.by_card`'s
+    /// v26: is `t.player_id` untouchable by `t.by_card`'s
     /// effects? A field card claims it with `trigger::set_cancelled()`. Asked
     /// before targeting `t.player_id`, before an abnormal effect, and before a
     /// card-driven payment from/to `t.player_id`.
     ImmuneAll = 69,
-    /// v26: C# `Fx.Untargetable(seat, by)` -- `t.by_card`'s card is about to
-    /// target `t.player_id` (after the `_targeted` counter). Block with
-    /// `trigger::set_cancelled()`.
+    /// v26: `t.by_card`'s card is about to
+    /// target `t.player_id`. Block with `trigger::set_cancelled()`.
     Untargetable = 70,
-    /// v26: C# `IRedirect.Redirects` -- a single-target card is about to target
+    /// v26: a single-target card is about to target
     /// `t.target`; a field card takes the hit with `trigger::set_target(player_id)`.
     Redirect = 71,
     /// v27: **a card effect is declared at someone**. This is the [反击] key for
@@ -860,13 +950,13 @@ pub enum TriggerKind {
     /// clause. A counter that means "an effect hit me" listens here and asks
     /// `effect::`; one that means "a payment settled" listens at [`HookKind::PayAfter`].
     Effect = 72,
-    /// v28: C# `Fx.Built` / `HouseAdded` -- a house was just added to
+    /// v28: a house was just added to
     /// `t.tile` (now `t.value` houses) by `t.player_id`.
     HouseAdded = 75,
-    /// v28: C# `Fx.FireSpent` -- `t.player_id` just spent `t.value` fire
+    /// v28: `t.player_id` just spent `t.value` fire
     /// (「每当你消耗火罐时」). Fires after the spend commits.
     FireSpent = 73,
-    /// v28: C# `Fx.SkillUsed` -- `t.player_id` just used their character skill
+    /// v28: `t.player_id` just used their character skill
     /// (「使用自己原有的技能（2）时」). `t.card` is the skill rule's id.
     SkillUsed = 74,
     /// v29: a placed card's [奇迹水晶] count was just written (set or add).
@@ -901,25 +991,25 @@ pub enum TriggerKind {
     CpChanged = 78,
 
     // v40: the purchase surface (`docs/PURCHASE.md`).
-    /// `Fx.BuyGate` -- may `t.player_id` buy `t.tile` at all? A placed card
+    /// May `t.player_id` buy `t.tile` at all? A placed card
     /// refuses with `trigger::set_cancelled()` plus a reason. Runs for every
     /// [`BuyKind`], Force included (Poppin's hill lock).
     BuyGate = 79,
-    /// `Fx.BuyAdd` -- the buy price's first modifier stage (fixed ±), before
+    /// The buy price's first modifier stage (fixed ±), before
     /// [`Self::BuyMul`] and [`Self::BuySet`]. `t.value` / `set_price`.
     BuyAdd = 80,
-    /// `Fx.BuyMul` -- second modifier stage (×), after [`Self::BuyAdd`].
+    /// Second modifier stage (×), after [`Self::BuyAdd`].
     BuyMul = 81,
-    /// `Fx.BuySet` -- third modifier stage (free / fixed price), after
+    /// Third modifier stage (free / fixed price), after
     /// [`Self::BuyMul`]. Each stage floors the price at 0.
     BuySet = 82,
-    /// `Fx.BuyAssign` -- the deal is committing, before the `bought` hook.
+    /// The deal is committing, before the `bought` hook.
     /// Rewrites `deal_owner` / `deal_houses` / `deal_mortgaged`.
     BuyAssign = 83,
 
     // v42: the command-wide **pre-split** payment stage (`PIPELINE-AUDIT` Q2)
     // and the terminal `<thing>Resolved` hooks (Q6).
-    /// `Fx.PayTotalAdd` -- the payment command's **pre-split** fixed ± stage
+    /// The payment command's **pre-split** fixed ± stage
     /// (「分摊前资金减少/增加」, 规则书 支付阶段 2 applied to the command total).
     /// Runs once per payment command, on the figure **before** any 「[分摊]」
     /// divides it into shares; a single-pair payment's command total is its own
@@ -928,18 +1018,17 @@ pub enum TriggerKind {
     /// The per-share counterparts are [`Self::PayAdd`] / [`Self::PayMul`] /
     /// [`Self::PayChoose`] / [`Self::PayAt`], which run on each settled leg.
     PayTotalAdd = 84,
-    /// `Fx.PayTotalMul` -- the pre-split × stage (规则书 支付阶段 4), after
+    /// The pre-split × stage (规则书 支付阶段 4), after
     /// [`Self::PayTotalAdd`]. `t.value` / `set_pay_amount`.
     PayTotalMul = 85,
-    /// `Fx.PayTotalCancel` -- the pre-split cancel (规则书 支付阶段 5's
+    /// The pre-split cancel (规则书 支付阶段 5's
     /// 「取消支付」 on the command rather than on one pair), after
     /// [`Self::PayTotalMul`]. `trigger::set_cancelled()` drops the whole
     /// command: no leg runs and nothing moves.
     PayTotalCancel = 86,
     /// Terminal: the tile's settlement is fully resolved (after
     /// [`Self::SettleAfter`], including when the settle was cancelled -- the
-    /// resolution is complete as nothing). `PIPELINE-AUDIT` Q6 / the spec's
-    /// `TileResolved`.
+    /// resolution is complete as nothing). `PIPELINE-AUDIT` Q6.
     TileResolved = 87,
     /// Terminal: the move (and any settlement it asked for) is fully resolved.
     /// Fires at the end of a walk / teleport, after the settle pipeline.
@@ -1360,12 +1449,27 @@ declare_kinds! {
     /// having settled. [`HookKind`] and [`GateKind`] values are deliberately
     /// absent: a counteraction cannot be offered at a settlement hook or at a gate.
     ChainKind {
+        /// See [`TriggerKind::Roll`] -- as a chain link a counter may block the
+        /// roll (the dice are not cast yet).
         Roll = 1,
+        /// See [`TriggerKind::MoveRoll`] -- the [反击] that rerolls the dice
+        /// (`set_move_roll`) answers here.
         MoveRoll = 2,
+        /// See [`TriggerKind::TurnStart`] -- a counter at the turn's opening
+        /// (after the status ticks).
         TurnStart = 3,
+        /// See [`TriggerKind::Pass`] -- a counter to 「当你经过…时」 at each
+        /// traversed tile (the mid-route counterpart of [`Self::PassTile`]).
         Pass = 4,
+        /// See [`TriggerKind::PassPlayer`] -- the end-tile [重叠] [反击]
+        /// (`target` = the player overlapped).
         PassPlayer = 5,
+        /// See [`TriggerKind::SettleBefore`] -- the 「[触发结算]前」 counter
+        /// (行动阶段 14).
         SettleBefore = 6,
+        /// See [`TriggerKind::Settle`] -- 「[结算]时」 (行动阶段 15 opening).
+        /// `set_cancelled()` = the settle never happened (no body, no
+        /// `settleAfter`); `tileResolved` still fires.
         Settle = 7,
         /// v32: the settle **body** is its own chain link (`docs/TILES.md`), so
         /// 「replace the body」 (「将本次结算改为…」) and 「the settle never
@@ -1373,44 +1477,107 @@ declare_kinds! {
         /// the body *and* `settleAfter`; cancelling `SettleBody` skips only the
         /// body and `settleAfter` still runs.
         SettleBody = 64,
+        /// See [`TriggerKind::Mortgage`] -- a counter after the mortgage applied.
         Mortgage = 8,
+        /// See [`TriggerKind::Paid`] -- 「[消耗]或[支付]」/「被…收取资金」: the
+        /// window opens on a payer-side loss, after the money moved.
         Paid = 10,
+        /// See [`TriggerKind::Bankrupt`] -- a counter after the cash-in, before
+        /// the seat is cleared.
         Bankrupt = 11,
+        /// See [`TriggerKind::Card`] -- the play's [反击] window; also the kind of
+        /// every declared counter link (a counter to a counter is answered here).
         Card = 12,
+        /// See [`TriggerKind::Event`] -- a counter to the event draw, before it
+        /// resolves.
         Event = 13,
+        /// See [`TriggerKind::Stop`] -- wire name `stop`; not raised by the
+        /// current engine, kept for wire compatibility.
         Stop = 16,
+        /// See [`TriggerKind::Teleport`] -- not raised by the current engine;
+        /// kept for wire compatibility.
         Teleport = 17,
+        /// See [`TriggerKind::SkillTeleport`] -- 「当你使用技能进行传送后」;
+        /// not raised by the current engine, kept for wire compatibility.
         SkillTeleport = 18,
+        /// See [`TriggerKind::Stun`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Stun = 19,
+        /// See [`TriggerKind::Stay`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Stay = 20,
+        /// See [`TriggerKind::Exile`] -- 「任意玩家获得[除外]…时」, raised from
+        /// the grant log (not the landing, which is [`TriggerKind::Abnormal`]).
         Exile = 21,
+        /// See [`TriggerKind::Forced`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Forced = 22,
+        /// See [`TriggerKind::State`] -- 「当有其他玩家切换状态时」; not raised
+        /// by the current engine, kept for wire compatibility.
         State = 23,
+        /// See [`TriggerKind::Counteracted`] -- 「有玩家对你使用[反击]后」; not
+        /// raised by the current engine, kept for wire compatibility.
         Counteracted = 24,
+        /// See [`TriggerKind::DrawOut`] -- 「回合外受到抽卡效果时」; not raised
+        /// by the current engine, kept for wire compatibility.
         DrawOut = 25,
+        /// See [`TriggerKind::CircleAffected`] -- a counter to the CiRCLE reward
+        /// pick, before the payout.
         CircleAffected = 26,
+        /// See [`TriggerKind::TwoCards`] -- 「当有人同一回合内打出两张卡时」; not
+        /// raised by the current engine, kept for wire compatibility.
         TwoCards = 27,
+        /// See [`TriggerKind::TurnStartBefore`] -- the 「回合开始前」 half
+        /// (行动阶段 1), before the status ticks.
         TurnStartBefore = 28,
+        /// See [`TriggerKind::PassBefore`] -- the pre-half of each [经过] step
+        /// (行动阶段 12), before the player arrives.
         PassBefore = 29,
+        /// See [`TriggerKind::MortgageBefore`] -- a counter that blocks the
+        /// mortgage, before any guard.
         MortgageBefore = 30,
+        /// See [`TriggerKind::BankruptBefore`] -- a counter before the asset
+        /// cash-in (the seat is already dead -- B3).
         BankruptBefore = 31,
+        /// See [`TriggerKind::CardAfter`] -- a counter after the play's `Dest`
+        /// handling. No [反击] key of its own for 「被…效果影响」: that is
+        /// [`Self::Effect`].
         CardAfter = 32,
+        /// See [`TriggerKind::EventAfter`] -- a counter after the event is filed
+        /// away.
         EventAfter = 33,
+        /// See [`TriggerKind::SettleAfter`] -- 「[结算]后」/「[触发结算]后」
+        /// (行动阶段 16's 「结算后」 half).
         SettleAfter = 34,
+        /// See [`TriggerKind::BuyBefore`] -- a counter before a buy resolves
+        /// (`docs/PURCHASE.md`).
         BuyBefore = 35,
+        /// See [`TriggerKind::BuyAfter`] -- a counter after the deed changes hands.
         BuyAfter = 36,
+        /// See [`TriggerKind::BuildBefore`] -- a counter before a house build pays.
         BuildBefore = 37,
+        /// See [`TriggerKind::BuildAfter`] -- a counter after the house commits.
         BuildAfter = 38,
+        /// See [`TriggerKind::DiscardBefore`] -- a counter before a hand discard.
         DiscardBefore = 39,
+        /// See [`TriggerKind::DiscardAfter`] -- a counter after the card is in the pile.
         DiscardAfter = 40,
+        /// See [`TriggerKind::EndTurnBefore`] -- a counter at the player's
+        /// end-turn command (auto-skips raise only [`Self::EndTurnAfter`]).
         EndTurnBefore = 41,
+        /// See [`TriggerKind::EndTurnAfter`] -- a counter on any turn end.
         EndTurnAfter = 42,
+        /// See [`TriggerKind::LeaveBefore`] -- a counter before a forfeit.
         LeaveBefore = 43,
+        /// See [`TriggerKind::LeaveAfter`] -- a counter after the player is cleared.
         LeaveAfter = 44,
         /// The effect declaration itself -- the [反击] key for 「被…效果影响」.
         Effect = 72,
+        /// See [`TriggerKind::HouseAdded`] -- 「盖房」, after the house count is written.
         HouseAdded = 75,
+        /// See [`TriggerKind::FireSpent`] -- 「每当你消耗火罐时」, after the spend commits.
         FireSpent = 73,
+        /// See [`TriggerKind::SkillUsed`] -- 「使用自己原有的技能（2）时」, after the press.
         SkillUsed = 74,
         /// v43: the move head (`SETTLE-STAGES.md` §7 「移动前」) -- a counteraction
         /// that cancels or alters the move answers here, once the plan is fixed
@@ -1444,104 +1611,227 @@ declare_kinds! {
     /// can be played *and* a field card can counteract -- and the two declarations
     /// are distinct entries (`On::Counteract` vs `On::Hook`). The engine's dispatch
     /// has always worked this way; the types now say so. Kinds that are *only*
-    /// hooks (most of `Fx`) simply have no [`ChainKind`] counterpart.
+    /// hooks (the settlement / field-card points) simply have no [`ChainKind`]
+    /// counterpart.
     HookKind {
+        /// See [`TriggerKind::Roll`] -- a field card runs here automatically.
         Roll = 1,
+        /// See [`TriggerKind::MoveRoll`].
         MoveRoll = 2,
+        /// See [`TriggerKind::TurnStart`].
         TurnStart = 3,
+        /// See [`TriggerKind::Pass`] -- each [经过] step.
         Pass = 4,
+        /// See [`TriggerKind::PassPlayer`] -- the end-tile [重叠].
         PassPlayer = 5,
+        /// See [`TriggerKind::SettleBefore`] -- 「[触发结算]前」 (行动阶段 14).
         SettleBefore = 6,
+        /// See [`TriggerKind::Settle`] -- 「[结算]时」 (行动阶段 15 opening).
         Settle = 7,
+        /// See [`TriggerKind::Mortgage`].
         Mortgage = 8,
+        /// See [`TriggerKind::Pay`] -- settlement hook only; a counteraction
+        /// cannot be offered here (the payment's [反击] key is
+        /// [`TriggerKind::Effect`]).
         Pay = 9,
+        /// See [`TriggerKind::Paid`].
         Paid = 10,
+        /// See [`TriggerKind::Bankrupt`].
         Bankrupt = 11,
+        /// See [`TriggerKind::Card`].
         Card = 12,
+        /// See [`TriggerKind::Event`].
         Event = 13,
+        /// See [`TriggerKind::Abnormal`] -- settlement hook only (the [反击]
+        /// key is [`TriggerKind::Effect`] with `kind: "abnormal"`).
         Abnormal = 14,
+        /// See [`TriggerKind::Target`] -- settlement hook only (same: the [反击]
+        /// key is [`TriggerKind::Effect`]).
         Target = 15,
+        /// See [`TriggerKind::Stop`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Stop = 16,
+        /// See [`TriggerKind::Teleport`] -- not raised by the current engine;
+        /// kept for wire compatibility.
         Teleport = 17,
+        /// See [`TriggerKind::SkillTeleport`] -- not raised by the current
+        /// engine; kept for wire compatibility.
         SkillTeleport = 18,
+        /// See [`TriggerKind::Stun`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Stun = 19,
+        /// See [`TriggerKind::Stay`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Stay = 20,
+        /// See [`TriggerKind::Exile`] -- 「任意玩家获得[除外]…时」.
         Exile = 21,
+        /// See [`TriggerKind::Forced`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         Forced = 22,
+        /// See [`TriggerKind::State`] -- not raised by the current engine; kept
+        /// for wire compatibility.
         State = 23,
+        /// See [`TriggerKind::Counteracted`] -- not raised by the current
+        /// engine; kept for wire compatibility.
         Counteracted = 24,
+        /// See [`TriggerKind::DrawOut`] -- not raised by the current engine;
+        /// kept for wire compatibility.
         DrawOut = 25,
+        /// See [`TriggerKind::CircleAffected`].
         CircleAffected = 26,
+        /// See [`TriggerKind::TwoCards`] -- not raised by the current engine;
+        /// kept for wire compatibility.
         TwoCards = 27,
+        /// See [`TriggerKind::TurnStartBefore`] -- 「回合开始前」 (行动阶段 1).
         TurnStartBefore = 28,
+        /// See [`TriggerKind::PassBefore`].
         PassBefore = 29,
+        /// See [`TriggerKind::MortgageBefore`].
         MortgageBefore = 30,
+        /// See [`TriggerKind::BankruptBefore`].
         BankruptBefore = 31,
+        /// See [`TriggerKind::CardAfter`].
         CardAfter = 32,
+        /// See [`TriggerKind::EventAfter`].
         EventAfter = 33,
+        /// See [`TriggerKind::SettleAfter`] -- 「[结算]后」/「[触发结算]后」.
         SettleAfter = 34,
+        /// See [`TriggerKind::BuyBefore`].
         BuyBefore = 35,
+        /// See [`TriggerKind::BuyAfter`].
         BuyAfter = 36,
+        /// See [`TriggerKind::BuildBefore`].
         BuildBefore = 37,
+        /// See [`TriggerKind::BuildAfter`].
         BuildAfter = 38,
+        /// See [`TriggerKind::DiscardBefore`].
         DiscardBefore = 39,
+        /// See [`TriggerKind::DiscardAfter`].
         DiscardAfter = 40,
+        /// See [`TriggerKind::EndTurnBefore`].
         EndTurnBefore = 41,
+        /// See [`TriggerKind::EndTurnAfter`].
         EndTurnAfter = 42,
+        /// See [`TriggerKind::LeaveBefore`].
         LeaveBefore = 43,
+        /// See [`TriggerKind::LeaveAfter`].
         LeaveAfter = 44,
+        /// See [`TriggerKind::TurnEnd`] -- a turn just ended
+        /// (any player's). Hook-only: no [`ChainKind`] counterpart.
         TurnEnd = 45,
+        /// See [`TriggerKind::Drawn`] -- the drawn card's own hook (it is still
+        /// in hand, named on `t.card`). Hook-only.
         Drawn = 46,
+        /// See [`TriggerKind::PassTile`] -- the [经过] step (行动阶段 12).
+        /// Also a [`ChainKind`] (v43).
         PassTile = 47,
+        /// See [`TriggerKind::PayAfter`] -- the 「资金变动」 hook (规则书 支付阶段 7).
+        /// Hook-only.
         PayAfter = 48,
+        /// See [`TriggerKind::RollAfter`] -- a hook that may
+        /// rewrite the face (`set_move_roll`). Hook-only.
         RollAfter = 49,
+        /// See [`TriggerKind::CardPlayed`] -- a card's hand
+        /// effect resolved. Hook-only.
         CardPlayed = 50,
+        /// See [`TriggerKind::Targeted`] -- the player was named.
+        /// Hook-only.
         Targeted = 51,
+        /// See [`TriggerKind::PayChoose`] -- may modify/decline
+        /// the payment. Hook-only.
         PayChoose = 52,
+        /// See [`TriggerKind::TurnEndBefore`] -- first step of a turn end,
+        /// before the `On::AtEnd` callbacks and the status wear-off. Hook-only.
         TurnEndBefore = 53,
+        /// See [`TriggerKind::TurnEndAfter`] -- the scheduled turn-end callbacks
+        /// run here. Hook-only.
         TurnEndAfter = 54,
+        /// See [`TriggerKind::PayAdd`] -- 支付阶段 2, fixed ± on each share.
+        /// Hook-only.
         PayAdd = 55,
+        /// See [`TriggerKind::PayMul`] -- 支付阶段 4, × on each share. Hook-only.
         PayMul = 56,
+        /// See [`TriggerKind::PayAt`] -- after `PayChoose`, before the `pay`
+        /// [反击] window. Hook-only.
         PayAt = 57,
+        /// See [`TriggerKind::Discarded`] -- this card (on
+        /// `t.card`) just went to the discard pile. Hook-only.
         Discarded = 58,
+        /// See [`TriggerKind::DeckBeforeGame`] -- 「游戏开始前」, dispatched to
+        /// every effect source. Hook-only.
         DeckBeforeGame = 59,
+        /// See [`TriggerKind::DeckAtGameStart`] -- 「游戏开始时」. Hook-only.
         DeckAtGameStart = 60,
+        /// See [`TriggerKind::Drew`] -- the per-draw field-card point (one raise
+        /// per single card). Hook-only.
         Drew = 61,
+        /// See [`TriggerKind::Reshuffled`] -- a discard pile was shuffled back.
+        /// Hook-only.
         Reshuffled = 62,
+        /// See [`TriggerKind::Bought`] -- a player became the owner
+        /// of `t.tile` (buy or auction). Hook-only.
         Bought = 63,
         /// The settle **body** (`docs/TILES.md`) -- a field card placed on the
         /// tile may `set_cancelled()` here to *replace* the body (Parking Space,
         /// 笑容大游行). The same kind is also a [`ChainKind`] (v32), so a hand
         /// card may [反击] the body as its own link.
         SettleBody = 64,
+        /// See [`TriggerKind::BeforeOut`] -- a player is about to leave the game.
+        /// Hook-only.
         BeforeOut = 65,
+        /// See [`TriggerKind::Teleported`] -- a teleport finished. Hook-only
+        /// (the teleport's [反击] key is [`TriggerKind::MoveBefore`]).
         Teleported = 66,
+        /// See [`TriggerKind::RollPlan`] -- the main-move `RollPlan` pass, before
+        /// the dice. Hook-only (`On::RollPlan` is its own entry).
         RollPlan = 67,
+        /// See [`TriggerKind::FireSpent`] -- 「每当你消耗火罐时」.
         FireSpent = 73,
+        /// See [`TriggerKind::SkillUsed`] -- 「使用自己原有的技能（2）时」.
         SkillUsed = 74,
+        /// See [`TriggerKind::HouseAdded`] -- a house was just added to `t.tile`.
         HouseAdded = 75,
+        /// See [`TriggerKind::CrystalsChanged`] -- a placed card's [奇迹水晶]
+        /// count was just written. Hook-only.
         CrystalsChanged = 76,
+        /// See [`TriggerKind::DrewBefore`] -- the per-draw *replacement* point
+        /// (「此次加手视为抽卡动作」). Hook-only.
         DrewBefore = 77,
+        /// See [`TriggerKind::CpChanged`] -- a card instance's on-card [CP点]
+        /// count was just written. Hook-only.
         CpChanged = 78,
-        /// v40: the buy price's modifier stages (`docs/PURCHASE.md`) --
-        /// `BuyAdd` (fixed ±) → `BuyMul` (×) → `BuySet` (free / fixed), each
-        /// floored at 0. `t.value` / `set_price` on the run.
+        /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
+        /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
+        /// `set_price` on the run; each stage floors the price at 0.
         BuyAdd = 80,
+        /// v40: the buy price's × stage, after [`Self::BuyAdd`].
         BuyMul = 81,
+        /// v40: the buy price's free / fixed stage, after [`Self::BuyMul`].
         BuySet = 82,
         /// v40: the deal is committing (before `bought`); rewrite
         /// `deal_owner` / `deal_houses` / `deal_mortgaged`.
         BuyAssign = 83,
-        /// v42: the payment command's **pre-split** stages -- see
-        /// [`TriggerKind::PayTotalAdd`] etc. Command-wide, on the total before
-        /// any 「[分摊]」 divides it; the per-share stages are `PayAdd` /
-        /// `PayMul` / `PayChoose` / `PayAt`.
+        /// v42: the payment command's **pre-split** fixed ± stage (「分摊前」,
+        /// 规则书 支付阶段 2 on the command total) -- see
+        /// [`TriggerKind::PayTotalAdd`]. Command-wide, before any 「[分摊]」
+        /// divides it; the per-share stages are `PayAdd` / `PayMul` /
+        /// `PayChoose` / `PayAt`.
         PayTotalAdd = 84,
+        /// v42: the pre-split × stage (规则书 支付阶段 4), after
+        /// [`Self::PayTotalAdd`].
         PayTotalMul = 85,
+        /// v42: the pre-split cancel (规则书 支付阶段 5's 「取消支付」 on the
+        /// command), after [`Self::PayTotalMul`]; `set_cancelled()` drops the
+        /// whole command.
         PayTotalCancel = 86,
-        /// v42: terminal `<thing>Resolved` hooks (see [`TriggerKind`]).
+        /// v42: terminal -- the tile's settlement is fully resolved (also when
+        /// it was cancelled). See [`TriggerKind::TileResolved`].
         TileResolved = 87,
+        /// v42: terminal -- the move (and any settle it asked for) is done.
+        /// See [`TriggerKind::MoveResolved`].
         MoveResolved = 88,
+        /// v42: terminal -- the bankruptcy is fully resolved. See
+        /// [`TriggerKind::BankruptResolved`].
         BankruptResolved = 89,
         /// v43: the move head (`SETTLE-STAGES.md` §7 「移动前」) -- every move
         /// (walk or teleport, main or card-driven, settling or not) once its
@@ -1566,8 +1856,10 @@ declare_kinds! {
     /// lands on them.
     GateKind {
         /// An abnormal effect is about to hit `t.target`; block with
-        /// `trigger::set_cancelled()`. Then, if someone else caused it, the
-        /// `abnormal` [反击] window opens.
+        /// `trigger::set_cancelled()`. Then the `effect` [反击] window opens on
+        /// the declaration (if someone else caused it), and a landing is
+        /// reported by the [`TriggerKind::Abnormal`] hook -- that hook is the
+        /// outcome and cannot be [反击]'d.
         AbnormalGuard = 68,
         /// Is `t.player_id` untouchable by `t.by_card`'s effects? Asked at
         /// **resolution** -- the effect is named, the chain forms, and it lands
@@ -1643,19 +1935,47 @@ pub struct ManifestOn {
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).
+///
+/// The wire mirror of `card_sdk::On`: each variant is one manifest entry
+/// (`ManifestOn::kind`), and the entry's other fields carry its arguments.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OnKind {
+    /// `On::Play(cond, gate, body)` -- play this card from hand (or press it as
+    /// a skill via `invoke_skill`). `cond` is the gate's CEL condition, `gate`
+    /// is the playability query (a pure `Option<Msg>`; `None` = playable,
+    /// `Some(why)` = blocked with a reason), `body` is the effect. The host
+    /// calls it between the [`TriggerKind::Card`] raise and `cardAfter`.
     Play = 0,
     // 1 was `CantPlay`, folded into `Play`'s gate.
+    /// `On::Counteract(kinds, cond, guard, body)` -- a [反击] at those
+    /// [`ChainKind`]s. `cond` (CEL) and `guard` (the residual pure `bool` query,
+    /// `None` once G4 folded the whole body into `cond`) decide whether the card
+    /// is offered in the hand window; `body` resolves against the answered link.
+    /// Called at the counteraction offer, then again at LIFO resolution.
     Counteract = 2,
+    /// `On::Hook(kinds, cond, guard, body)` -- a field-card (`Fx`) hook at those
+    /// [`HookKind`]s. Same `cond`/`guard`/`body` shape as [`Self::Counteract`].
+    /// The host calls it **automatically** for every placed card (placement
+    /// order per player) whenever one of the kinds is raised -- no window.
     Hook = 3,
+    /// `On::AtEnd(body)` -- what `ctx::at_turn_end` / `ctx::at_next_turn_end`
+    /// schedules: `body` runs once at that turn end. `cond`/`guard` are carried
+    /// by the scheduling call, not by the entry.
     AtEnd = 4,
+    /// `On::RollPlan(body)` -- this card has a movement routine.
+    /// The host calls it on the main-move [`TriggerKind::RollPlan`] pass, before
+    /// the dice, so `body` can shape `turn.plan`.
     RollPlan = 5,
+    /// `On::Gate(kinds, body)` -- a question at those [`GateKind`]s. Not guarded:
+    /// no `cond`/`guard` fields. `body` answers with `set_cancelled` /
+    /// `set_target` / `set_reason`; the host asks every placed card at
+    /// declaration or at resolution, per the kind.
     Gate = 6,
-    /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle`. Tile
+    /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(body)`. Tile
     /// rules (`tile:*`) are one per board tile kind and this is what runs when
-    /// that tile is [结算]d.
+    /// that tile is [结算]d, inside the settle chain (a [`TriggerKind::SettleBody`]
+    /// cancel replaces it).
     Settle = 7,
 }
 

@@ -12,7 +12,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const NOW_SUMIMI: CardDef = CardDef::new(
     "Sumimi:现在她是Sumimi的小初啦",
-    &[On::Counteract(&[ChainKind::Effect], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
 );
 
 /// C# `TileData.kind == "ring"` -- the ABI has no `tile_kind`, but the board's

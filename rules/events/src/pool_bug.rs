@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `卡池BUG`）:
 //! > 将此卡放置于场地中央并将一张“[衍生]修复公告”背面朝上放置于事件牌堆顶部，下次触发事件时将此卡放入事件弃牌。此卡在场时不可在造价1500及以上的格子上加盖房屋。
 
-use card_sdk::abi::{prop, HookKind, TriggerKind};
+use card_sdk::abi::{prop, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -17,9 +17,9 @@ const FIX_NOTE: &str = "修复公告";
 pub const POOL_BUG: CardDef = CardDef::new(
     "event:卡池BUG",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::Event], Some(always), on_event, ""),
-        On::Hook(&[HookKind::BuildBefore], Some(always), before_build, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::Event], "", Some(always), on_event),
+        On::Hook(&[HookKind::BuildBefore], "", Some(always), before_build),
     ],
 );
 

@@ -27,10 +27,10 @@ const FLIPPED: &str = "skill.mumei.flipped";
 pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::PayAdd], Some(in_one), on_pay_add, ""),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end_exit, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::PayAdd], "", Some(in_one), on_pay_add),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end_exit),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);

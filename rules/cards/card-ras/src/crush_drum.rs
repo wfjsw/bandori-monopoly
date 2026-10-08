@@ -13,7 +13,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const CRUSH_DRUM: CardDef = CardDef::new(
     "RAS:（MASKING）CRUSH ON THE DRUM!!!",
-    &[On::Play(Some(cant_play), play, "")],
+    &[On::Play("", Some(cant_play), play)],
 );
 
 /// C# `CardCrushDrum.WhyNot` = `H.MoveWhyNot(seat)`.

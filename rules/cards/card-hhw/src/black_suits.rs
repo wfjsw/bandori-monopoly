@@ -23,8 +23,8 @@ const MARK: &str = "黑衣人的补给";
 pub const BLACK_SUITS: CardDef = CardDef::new(
     "HHW:黑衣人的补给",
     &[
-        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
-        On::Counteract(&[ChainKind::PassBefore], Some(can_counteract), counteract, ""),
+        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
+        On::Counteract(&[ChainKind::PassBefore], "", Some(can_counteract), counteract),
     ],
 );
 

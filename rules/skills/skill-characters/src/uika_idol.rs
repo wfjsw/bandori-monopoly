@@ -20,10 +20,10 @@ const POT: &str = "skill.uikaIdol.pot";
 pub const UIKA_IDOL: CardDef = CardDef::new(
     "skill:三角初华（Sumimi）:成为偶像",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::PassTile], Some(any), on_pass_tile, ""),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::PassTile], "", Some(any), on_pass_tile),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);

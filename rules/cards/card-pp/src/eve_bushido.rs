@@ -23,9 +23,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const EVE_BUSHIDO: CardDef = CardDef::new(
     "PP:[若宫伊芙]属于我的武士道！",
     &[
-        On::Play(None, eve_bushido, ""),
-        On::Hook(&[HookKind::Drew], Some(drew_guard), drew, ""),
-        On::Hook(&[HookKind::SettleBefore], None, settle_before, ""),
+        On::Play("", None, eve_bushido),
+        On::Hook(&[HookKind::Drew], "", Some(drew_guard), drew),
+        On::Hook(&[HookKind::SettleBefore], "", None, settle_before),
     ],
 );
 

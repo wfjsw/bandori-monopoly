@@ -19,8 +19,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PayAfter], Some(pay_after_guard), pay_after, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_guard), pay_after),
     ],
 );
 

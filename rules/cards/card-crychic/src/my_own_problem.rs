@@ -16,7 +16,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     "CRYCHIC:是我自己的问题",
-    &[On::Counteract(&[ChainKind::SettleBefore], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::SettleBefore], "", Some(can_counteract), counteract)],
 );
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.

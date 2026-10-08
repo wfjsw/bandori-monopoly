@@ -9,7 +9,7 @@
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
-pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play(Some(cant_play), play, "")]);
+pub const COOKIE_TIME: CardDef = CardDef::new("R:曲奇时间", &[On::Play("", Some(cant_play), play)]);
 
 /// C# `CardCookieTime.WhyNot`: 「弃卡区没有卡」.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -41,7 +41,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: the C# also fires `H.Each((Fx f) => f.Reshuffled(i))` on the player.
     // v25: `sweep_to_deck` now raises `reshuffled` from the host (the C# card
     // body calls `H.Each(Reshuffled)` itself; the host folds that into the
-    // sweep's commit). Listener cards declare `On::Hook(&[HookKind::Reshuffled], Some(...), "")`
+    // sweep's commit). Listener cards declare `On::Hook(&[HookKind::Reshuffled], "", Some(...))`
     // and get the notification without any card-side raise.
     Ok(())
 }

@@ -12,7 +12,7 @@ use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const ANY_COLOR_SUNSET: CardDef =
-    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play(None, play, "")]);
+    CardDef::new("AG:无论是何种颜色的夕阳", &[On::Play("", None, play)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「投掷1d6并根据结果获得对应效果」; 「若结果严格大于6，则从1开始重新计数」

@@ -16,10 +16,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const DETOUR: CardDef = CardDef::new(
     "AG:回家的路上绕个道",
     &[
-        On::Play(Some(cant_play), play, ""),
+        On::Play("", Some(cant_play), play),
         // G4: kind (MoveRoll) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
-        On::Counteract(&[ChainKind::MoveRoll], None, counteract, "actor == owner && move.roll != null && move.kind != Teleport"),
+        On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
         On::RollPlan(next_roll),
         On::AtEnd(clear_no_reward),
     ],

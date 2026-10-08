@@ -29,10 +29,10 @@ const WAS: &str = "skill.aveMujica.was";
 pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
-        On::Play(Some(can_halve), halve, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, ""),
-        On::Hook(&[HookKind::PayMul], Some(in_two), bend, ""),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Play("", Some(can_halve), halve),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, at_turn_start),
+        On::Hook(&[HookKind::PayMul], "", Some(in_two), bend),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .legacy(&[(3, legacy_mine)]);

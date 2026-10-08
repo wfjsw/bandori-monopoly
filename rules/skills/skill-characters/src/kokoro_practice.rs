@@ -34,16 +34,16 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
     &[
         // （1）'s starting square and deed: the before-match-start point decides
         // start positions.
-        On::Hook(&[HookKind::DeckBeforeGame], None, at_start, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
-        On::Hook(&[HookKind::PassTile], Some(passed_by), on_passed, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
         // （3）「移动终点为任意"RiNG"时，获得一个火罐」 -- 行动阶段 13
         // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
         // settle, for every completed move including a 「不触发结算」 one.
-        On::Hook(&[HookKind::MoveAfter], None, on_move_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::MoveAfter], card_sdk::pre::MINE, None, on_move_end),
     ],
 )
     .legacy(&[(1, legacy_mine), (3, legacy_mine)]);

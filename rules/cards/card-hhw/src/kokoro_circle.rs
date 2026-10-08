@@ -14,14 +14,14 @@ const ID: &str = "HHW:（kkr）前往笑容集结的地方！";
 pub const KOKORO_CIRCLE: CardDef = CardDef::new(
     "HHW:（kkr）前往笑容集结的地方！",
     &[
-        On::Play(Some(cant_play), play, ""),
+        On::Play("", Some(cant_play), play),
         // 「若其他玩家在该格[触发结算]则向所有者支付6000资金，视为格子的收款」
         // -- 行动阶段 15 (`SETTLE-STAGES.md` §4 M3): 「视为格子的收款」 is an
         // entry in the tile's settle effect list, not an after-hook. A field
         // card that replaces the body skips this entry. `docs/TILES.md` names
         // the long-term home as a collect rule instance on CiRCLE; the
         // `settleBody` hook is the same list entry for now.
-        On::Hook(&[HookKind::SettleBody], None, settle_body, ""),
+        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 10000)]);
 

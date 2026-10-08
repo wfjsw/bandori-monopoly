@@ -10,6 +10,8 @@ import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember
 import { api, ensureSession, openStream } from "../net/api";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
+import { SOLO_CAP_MS } from "./botBudget";
+import { advancedSeats, driveSeat, decisionAt, type DriveHooks } from "./botDrive";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 
 type ViewCb = (v: MatchView) => void;
@@ -45,6 +47,8 @@ class Autopilot {
   private played = 0;
   private turnKey = "";
   private off: (() => void) | null = null;
+  /** Set while the 进阶 search is running for this seat (the thinking pill). */
+  private searching = false;
 
   constructor(private sess: GameSession) {}
 
@@ -68,6 +72,7 @@ class Autopilot {
     this.inFlight = false;
     this.seq = -1;
     this.tried.clear();
+    this.setSearching(false);
     this.off?.();
     this.off = null;
   }
@@ -79,6 +84,10 @@ class Autopilot {
   }
 
   private delay(): number {
+    // The 进阶 search needs no human beat -- it is the one that "thinks".
+    if (this.sess.autoMode === "advanced") {
+      return Math.max(0, this.armedAt - performance.now());
+    }
     return Math.max(400 + Math.random() * 600, this.armedAt - performance.now());
   }
 
@@ -124,6 +133,12 @@ class Autopilot {
     return JSON.stringify(cmd);
   }
 
+  private setSearching(on: boolean): void {
+    if (this.searching === on) return;
+    this.searching = on;
+    this.sess.setBotThinking(this.sess.you, on);
+  }
+
   private step(): void {
     this.timer = 0;
     const s = this.sess;
@@ -138,6 +153,7 @@ class Autopilot {
       this.seq = at;
       this.tried.clear();
     }
+    if (mode === "advanced") return void this.stepAdvanced(v, at);
     const cmd = plan(v, this.ctx(), mode).find((c) => !this.tried.has(Autopilot.key(c)));
     if (!cmd) return;
     this.tried.add(Autopilot.key(cmd));
@@ -161,6 +177,79 @@ class Autopilot {
         if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== this.seq) this.schedule();
       });
   }
+
+  /**
+   * 进阶 托管 (`docs/BOT.md` B6): the worker pool answers play-phase decisions;
+   * setup / trivial surfaces still go through the standard policy below. On
+   * any search failure the existing bot policy answers instead -- a match
+   * never stalls (§1).
+   */
+  private stepAdvanced(v: MatchView, at: number): void {
+    const s = this.sess;
+    // Setup / discard / vote: the search does not cover them (and the server
+    // keeps an Advanced seat's setup engine-side). Same policy as `bot`.
+    if (decisionAt(v.state, v.playerId) == null) {
+      const cmd = plan(v, this.ctx(), "advanced").find((c) => !this.tried.has(Autopilot.key(c)));
+      if (!cmd) return;
+      this.tried.add(Autopilot.key(cmd));
+      this.inFlight = true;
+      Promise.resolve(s.act(cmd))
+        .then((err) => {
+          if (err) {
+            console.warn("advanced: command refused", cmd, err);
+            this.schedule();
+          } else if (cmd.act === "play") this.played++;
+        })
+        .finally(() => {
+          this.inFlight = false;
+          const now = s.view;
+          if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== at) this.schedule();
+        });
+      return;
+    }
+    // A searched surface: one ask per state, through the pool.
+    const key = "search";
+    if (this.tried.has(key)) return;
+    this.tried.add(key);
+    this.inFlight = true;
+    const hooks: DriveHooks = {
+      ctx: this.ctx(),
+      room: s.id,
+      timed: s.kind !== "solo",
+      soloCapMs: botSoloCapMs(),
+      decisionsThisTurn: this.played,
+      onThinking: (_m, on) => this.setSearching(on),
+    };
+    void driveSeat(
+      (_member, cmd) => {
+        if (cmd.act === "play") this.played++;
+        return s.act(cmd);
+      },
+      () => s.view,
+      s.you,
+      hooks,
+    )
+      .catch((e) => console.warn("advanced: drive failed", e))
+      .finally(() => {
+        this.inFlight = false;
+        this.setSearching(false);
+        const now = s.view;
+        if (isAuto(s.autoMode) && now && now.state.seq * 100000 + Math.max(0, now.state.prompt?.id ?? 0) !== at) this.schedule();
+      });
+  }
+}
+
+/** Solo's per-decision search cap (`docs/BOT.md` §3.6, user ruling). Kept in
+ *  localStorage so it survives a refresh; the solo setup screen edits it. */
+const SOLO_BOT_CAP_KEY = "bm.botSoloCapMs";
+
+export function botSoloCapMs(): number {
+  const raw = Number(localStorage.getItem(SOLO_BOT_CAP_KEY));
+  return Number.isFinite(raw) && raw >= 200 ? Math.min(12_000, raw) : SOLO_CAP_MS;
+}
+
+export function setBotSoloCapMs(ms: number): void {
+  localStorage.setItem(SOLO_BOT_CAP_KEY, String(Math.round(ms)));
 }
 
 export abstract class GameSession {
@@ -178,10 +267,14 @@ export abstract class GameSession {
   /** Animation speed the board's `Animator` follows (1 / 2 / 4). */
   animSpeed = 1;
   /**
-   * Auto-play mode for this seat: `off` (you), `bot` (托管), `chaos` (混沌).
+   * Auto-play mode for this seat: `off` (you), `bot` (托管), `chaos` (混沌),
+   * `advanced` (进阶 -- the worker-pool search, `docs/BOT.md` B6).
    * Per-session, not persisted. Any non-`off` value locks the user's inputs.
    */
   autoMode: AutoMode = "off";
+  /** Seats whose 进阶 search is running right now (the "thinking…" pill). */
+  private thinking = new Set<number>();
+  private thinkCbs = new Set<() => void>();
   private autoCbs = new Set<() => void>();
   private autopilot: Autopilot | null = null;
   protected views = new Set<ViewCb>();
@@ -201,7 +294,7 @@ export abstract class GameSession {
     };
   }
 
-  /** Set 托管 / 混沌 / off. Off takes effect immediately (mid-command
+  /** Set 托管 / 混沌 / 进阶 / off. Off takes effect immediately (mid-command
    *  included); turning a mode on, or switching modes, starts the
    *  [`AUTO_COOLDOWN_MS`] cooldown before the first command. */
   setAutoMode(mode: AutoMode): void {
@@ -226,6 +319,25 @@ export abstract class GameSession {
   subscribeAutoMode(cb: () => void): () => void {
     this.autoCbs.add(cb);
     return () => this.autoCbs.delete(cb);
+  }
+
+  /** Is the 进阶 search running for `member`? (the "thinking…" indicator). */
+  isThinking(member: number): boolean {
+    return this.thinking.has(member);
+  }
+
+  /** Re-render when a search starts / stops. Returns unsubscribe. */
+  subscribeThinking(cb: () => void): () => void {
+    this.thinkCbs.add(cb);
+    return () => this.thinkCbs.delete(cb);
+  }
+
+  /** Mark `member` as searching / done (called by the drivers). */
+  setBotThinking(member: number, on: boolean): void {
+    const had = this.thinking.has(member);
+    if (on) this.thinking.add(member);
+    else this.thinking.delete(member);
+    if (had !== on) this.thinkCbs.forEach((cb) => cb());
   }
 
   protected emitView(v: MatchView): void {
@@ -308,6 +420,11 @@ export class SoloSession extends GameSession {
   private savedAt = 0;
   private closed = false;
   private exportStarted = false;
+  /** Seats the 进阶 driver is currently searching for (one ask at a time). */
+  private botInFlight = new Set<number>();
+  /** Per-seat decisions already spent this turn (the budget spread). */
+  private botTurnKey = "";
+  private botPlayed = new Map<number, number>();
   private onHide = () => this.persist(true);
 
   private constructor(m: InstanceType<typeof rules.SoloMatch>, weights: ScoreWeights, last = 0, replayId: string | null = null) {
@@ -402,6 +519,85 @@ export class SoloSession extends GameSession {
       this.emitView(JSON.parse(this.m.view(this.you)));
     }
     if (this.m.ended()) this.exportReplay();
+    else this.driveAdvancedBots();
+  }
+
+  /**
+   * Keep every Advanced bot seat moving (`docs/BOT.md` B6). The engine holds
+   * their `ai` off (`Match::new`), exactly like the server does for online
+   * Advanced seats -- so this driver is the one applying answers through the
+   * normal `act` path. Setup (ban / pick / deck) stays engine-side
+   * (`MatchPlayer::auto_setup`). Fallback to the existing bot policy on any
+   * search failure so a match never stalls (§1).
+   */
+  private driveAdvancedBots(): void {
+    const v0 = this.view;
+    if (!v0 || v0.state.phase !== "play") return;
+    // One turn key per (round, turn) for the budget spread.
+    const turnKey = `${v0.state.round}:${v0.state.turn}`;
+    if (turnKey !== this.botTurnKey) {
+      this.botTurnKey = turnKey;
+      this.botPlayed.clear();
+    }
+    for (const member of advancedSeats(v0)) {
+      if (this.botInFlight.has(member)) continue;
+      const v = JSON.parse(this.m.view(member)) as MatchView;
+      if (decisionAt(v.state, v.playerId) == null) continue;
+      this.botInFlight.add(member);
+      const played = this.botPlayed.get(member) ?? 0;
+      void driveSeat(
+        async (m, cmd) => {
+          const err = this.actAs(m, cmd);
+          if (!err && cmd.act === "play") this.botPlayed.set(m, (this.botPlayed.get(m) ?? 0) + 1);
+          return err;
+        },
+        (m) => (m === member ? v : (JSON.parse(this.m.view(m)) as MatchView)),
+        member,
+        {
+          ctx: this.autopilotCtx(),
+          room: this.id,
+          // Solo prompts have no deadline (`docs/BOT.md` §3.6 user ruling):
+          // a generous configurable cap instead of the room clock.
+          timed: false,
+          soloCapMs: botSoloCapMs(),
+          decisionsThisTurn: played,
+          onThinking: (m, on) => this.setBotThinking(m, on),
+        },
+      ).finally(() => {
+        this.botInFlight.delete(member);
+        // A search can span several ticks; catch up on the next decision.
+        if (!this.closed) this.driveAdvancedBots();
+      });
+    }
+  }
+
+  /** `act` as any member (the 进阶 driver's seat, not just the human's). */
+  private actAs(member: number, cmd: Command): Msg | null {
+    const raw = this.m.act(member, JSON.stringify(cmd));
+    this.pump();
+    this.persist(true);
+    return raw ? (JSON.parse(raw) as Msg) : null;
+  }
+
+  /** The shared fallback-policy inputs (the same context `Autopilot` builds). */
+  private autopilotCtx(): AutopilotCtx {
+    return {
+      tiles: D.tiles,
+      characters: D.characters,
+      playedThisTurn: 0,
+      deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
+      deckSuggest: (c, seat, opponents) =>
+        JSON.parse(rules.deck_suggest(c, seat, JSON.stringify(opponents))),
+      deckRandom: (c) => {
+        const pool: string[] = JSON.parse(rules.deck_pool(c));
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        return JSON.parse(rules.deck_clean(c, JSON.stringify(pool)));
+      },
+      random: Math.random,
+    };
   }
 
   /** Save at most once a second (and always when the page is hidden). The

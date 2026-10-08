@@ -24,12 +24,12 @@ const SEEN: &str = "skill.crychic.seen";
 pub const CRYCHIC: CardDef = CardDef::new(
     "skill:CRYCHIC:美好的往日幻影",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Drawn], None, on_drawn, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnEndBefore], None, at_turn_end, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::PayChoose], Some(in_lock), lock_pay, ""),
-        On::Hook(&[HookKind::CircleAffected], Some(in_lock), force_card, ""),
-        On::Play(Some(can_transform), transform_now, ""),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::Drawn], card_sdk::pre::MINE, None, on_drawn),
+        On::Hook(&[HookKind::TurnEndBefore], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(&[HookKind::PayChoose], "", Some(in_lock), lock_pay),
+        On::Hook(&[HookKind::CircleAffected], "", Some(in_lock), force_card),
+        On::Play("", Some(can_transform), transform_now),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);

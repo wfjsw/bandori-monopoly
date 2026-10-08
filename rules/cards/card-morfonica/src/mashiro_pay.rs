@@ -16,9 +16,9 @@ pub const MASHIRO_PAY: CardDef = CardDef::new(
     "Mor:（小白）",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
         None,
         counteract,
-        "actor == owner && effect.has(Pay) && target >= 0 && target != owner && value > 0",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

@@ -23,6 +23,10 @@ pub enum Action {
     Buy { tile: usize },
     /// Build one more house on the landed tile.
     Build { tile: usize },
+    /// End the turn without buying / building (`act: "end"` at 结束). Always
+    /// offered where the engine accepts `end`, so the search can pass on a
+    /// buy instead of being forced into one.
+    Decline,
     /// A buy / build / force-buy offer prompt: option index.
     Offer { index: i32 },
     /// An auction bid (`amount < 0` = pass).
@@ -159,6 +163,16 @@ fn turn_actions(
                 out.push(Action::Build { tile: t });
             }
         }
+        // Decline -- "end the turn without buying" -- wherever the engine
+        // accepts `act: "end"`. Without it the search is forced into Buy /
+        // Build even when passing is right, and an unaffordable forced Buy is
+        // refused forever (the 2026-10-08 stall). The gate is
+        // `MatchState::can_end_here` (`why_not_act`'s end branch): refused
+        // while over the hand limit (`err.over_hand`) or while a main move is
+        // still owed (`err.roll_first`).
+        if st.can_end_here {
+            out.push(Action::Decline);
+        }
     }
     out
 }
@@ -280,6 +294,12 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
 }
 
 /// `BuyableHere` (autopilot.ts / `why_not_act`'s buy gate).
+///
+/// The shape half is re-checked here; the engine's own eligibility half --
+/// the plan's no-buy flag, the quote's `BuyGate`, and the funds -- is
+/// [`MatchState::can_buy_here`], computed inside `Match::state` from the same
+/// predicates `why_not_act` uses. Never offer a Buy the engine would refuse
+/// (`err.cannot_buy` / `err.buy_poor`).
 pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool {
     let Some(t) = data.tiles.get(i) else {
         return false;
@@ -293,9 +313,12 @@ pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool 
         && st.landed == i as i32
         && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
         && st.owners.get(i).copied().unwrap_or(-1) < 0
+        && st.can_buy_here
 }
 
-/// `CanBuildHere` (autopilot.ts).
+/// `CanBuildHere` (autopilot.ts). Gated on [`MatchState::can_build_here`] --
+/// `why_not_build` (the plan's `can_build` flag, the NO_BUILD vetoes) plus the
+/// funds half of `why_not_act`'s build branch.
 pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool {
     let Some(t) = data.tiles.get(i) else {
         return false;
@@ -313,6 +336,7 @@ pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> boo
         && t.rent.len() > 1
         && !st.mortgaged.get(i).copied().unwrap_or(false)
         && st.houses.get(i).copied().unwrap_or(0) < t.rent.len() as i32 - 1
+        && st.can_build_here
 }
 
 /// Hand cards the engine would let `seat` play right now (from the view's
@@ -344,6 +368,7 @@ pub fn to_net_message(action: &Action, st: &MatchState, seat: usize) -> game_cor
             value: *tile as i32,
             ..Default::default()
         },
+        Action::Decline => NetMessage::act("end"),
         Action::Offer { index } => NetMessage {
             act: "answer".into(),
             prompt: st.prompt.id,
@@ -478,6 +503,15 @@ pub fn action_priors(
                         0.2
                     }
                 }
+                Action::Decline => {
+                    // The heuristic's default at 结束 when it would not buy or
+                    // build; below a paid option when it would.
+                    if preferred.is_none() {
+                        1.0
+                    } else {
+                        0.3
+                    }
+                }
                 Action::Play { card } => {
                     // `ai_picked` / `aiAnswer.picked` marks the heuristic's
                     // preferred cards; cheaper execution cost is better.
@@ -583,6 +617,64 @@ fn heuristic_preferred(
                 return Some(Action::Build { tile: t });
             }
         }
+        return Some(Action::Decline);
     }
     None
+}
+
+/// What to answer without searching (`docs/BOT.md` §3.4, "trivial decisions").
+#[derive(Debug, Clone, PartialEq)]
+pub enum Trivial {
+    /// Exactly one legal action -- it is forced, so the search cannot improve
+    /// on it. Answer it directly.
+    Forced(Action),
+    /// A low-stakes menu (see [`is_low_stakes`]); the engine's heuristic
+    /// answers, same as an empty action list.
+    LowStakes,
+}
+
+/// Should the search skip this root entirely? Conservative importance test
+/// (`docs/BOT.md` §3.4):
+///
+/// * **one legal action** -- the choice is forced; searching only re-discovers
+///   it. This alone is 27–34% of searched bot CPU (`bot_cpu` §6).
+/// * **no money / ownership / card-cost consequence** -- every candidate is a
+///   decline / auction pass / [反击] skip. The search cannot buy anything the
+///   heuristic does not already know. (The "all priors identical" alternative
+///   is deliberately *not* used on its own: two equal-prior card plays still
+///   differ tactically, so it is only a skip when the menu is already free.)
+///
+/// Always keeps the full search for buys / builds / force-buy offers /
+/// auctions with a real bid / [反击] declarations / card plays / agent picks /
+/// tile choices / mortgages -- anything that moves money, ownership or cards.
+pub fn trivial_decision(actions: &[Action]) -> Option<Trivial> {
+    match actions.len() {
+        0 => Some(Trivial::LowStakes), // caller answers with the heuristic
+        1 => Some(Trivial::Forced(actions[0].clone())),
+        _ if is_low_stakes(actions) => Some(Trivial::LowStakes),
+        _ => None,
+    }
+}
+
+/// Does this abstracted action move money, ownership, or spend a card?
+fn has_stakes(a: &Action) -> bool {
+    match a {
+        Action::Decline => false,
+        Action::Bid { amount } => *amount > 0,
+        Action::Counteract { card: None } => false,
+        Action::Counteract { card: Some(_) } => true,
+        // Offers (force-buy / buy / build) commit money on the non-fallback
+        // option; treat any offer as staked -- the fallback alone would have
+        // been a 1-action root.
+        Action::Offer { .. } => true,
+        // Agent picks and tile choices are searched by design.
+        Action::Pick { .. } => true,
+        // A card play moves the board even at estCost 0.
+        Action::Play { .. } => true,
+        Action::Buy { .. } | Action::Build { .. } | Action::Mortgage { .. } => true,
+    }
+}
+
+fn is_low_stakes(actions: &[Action]) -> bool {
+    !actions.is_empty() && actions.iter().all(|a| !has_stakes(a))
 }

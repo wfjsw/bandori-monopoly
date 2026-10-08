@@ -39,10 +39,10 @@ const PROP_BAND: &str = "returns.band";
 pub const RETURNS: CardDef = CardDef::new(
     "PPP:Returns",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::CardPlayed], None, on_played, card_sdk::pre::MINE),
-        On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], None, choose_band, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::DeckBeforeGame], None, deck_before_game, ""),
-        On::Hook(&[HookKind::DeckAtGameStart], None, deck_at_game_start, ""),
+        On::Hook(&[card_sdk::abi::HookKind::CardPlayed], card_sdk::pre::MINE, None, on_played),
+        On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], card_sdk::pre::MINE, None, choose_band),
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, deck_at_game_start),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);

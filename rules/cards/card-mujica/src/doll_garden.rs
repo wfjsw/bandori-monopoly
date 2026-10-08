@@ -11,7 +11,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const DOLL_GARDEN: CardDef = CardDef::new(
     "Mujica:人偶的箱庭",
-    &[On::Play(Some(cant_play), doll_garden, "")],
+    &[On::Play("", Some(cant_play), doll_garden)],
 );
 
 /// C# `CardDollGarden.WhyNot` = `H.MoveWhyNot(seat)`.

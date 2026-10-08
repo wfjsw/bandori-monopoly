@@ -20,16 +20,16 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
         // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
         // so a 「支付减半」 scaler sees the shaped total.
-        On::Hook(&[HookKind::PayAdd], Some(pay_add_guard), pay_add, ""),
+        On::Hook(&[HookKind::PayAdd], "", Some(pay_add_guard), pay_add),
         // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
-        On::Hook(&[HookKind::SettleBody], Some(settle_body_guard), settle_body, ""),
+        On::Hook(&[HookKind::SettleBody], "", Some(settle_body_guard), settle_body),
     ],
 );
 

@@ -25,12 +25,12 @@ const USER_KEY: &str = "umiri_user";
 pub const UMIRI_CARD: CardDef = CardDef::new(
     "Mujica:（海铃）",
     &[
-        On::Play(Some(cant_play), umiri_card, ""),
+        On::Play("", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Hook(&[HookKind::TurnStart], None, turn_start, ""),
+        On::Hook(&[HookKind::TurnStart], "", None, turn_start),
         // 规则书（3）: the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
-        On::Hook(&[HookKind::TurnEnd], None, turn_end, ""),
+        On::Hook(&[HookKind::TurnEnd], "", None, turn_end),
     ],
 );
 

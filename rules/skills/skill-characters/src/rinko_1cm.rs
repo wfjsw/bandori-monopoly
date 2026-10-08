@@ -24,9 +24,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const RINKO_1CM: CardDef = CardDef::new(
     "skill:白金燐子:即使1cm也要前进",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
     ],
 )
     .legacy(&[(2, legacy_mine)]);

@@ -16,9 +16,9 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
     "R:（纱夜）弹奏弹奏弹奏，继续弹奏",
     &[On::Counteract(
         &[ChainKind::MoveRoll],
+        "actor == owner && move.kind == Walk && move.roll != null",
         None,
         counteract,
-        "actor == owner && move.kind == Walk && move.roll != null",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

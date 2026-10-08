@@ -11,7 +11,7 @@
 mod testworld;
 use testworld::*;
 
-use game_rules::{CardWorld, Ruleset, Trigger, TriggerKind};
+use game_rules::{Ruleset, Trigger, TriggerKind};
 
 // ------------------------------------------------ docs/GUARDS.md G0/G2 --
 // Guard **condition** per guarded entry. The condition is layer 1 (the
@@ -155,4 +155,179 @@ fn pre_runtime_only_matches_host() {
             "host and runtime-only disagree for owner={owner}"
         );
     }
+}
+
+// ------------------------------------------- shipped precompiled blob (G4) --
+
+/// The `conds-*.bin` `tools/build-ruleset.mjs` publishes is exactly this host
+/// compile of every shipped `pre`, and a ruleset built the browser way (from
+/// those blobs via `RulesetBuilder::precompiled`) answers every window the
+/// host-compiled one does. This is the invariant that makes a solo match in
+/// the browser agree with the server: the glue has no CEL parser
+/// (docs/GUARDS.md §8.3) and evaluates only what this blob carries.
+#[test]
+fn shipped_precompiled_blobs_match_host_compile() {
+    let dir = dist("cards");
+    let text = std::fs::read_to_string(dir.join("index.json"))
+        .unwrap_or_else(|e| panic!("{}: {e} -- run tools/build-ruleset.mjs", dir.join("index.json").display()));
+    let index: serde_json::Value = serde_json::from_str(&text).unwrap();
+    let conds_meta = index
+        .get("conds")
+        .and_then(|c| c.get("file"))
+        .and_then(|f| f.as_str())
+        .expect("a shipped set with guard conditions must publish a conds blob");
+    let blob_path = dir.join(conds_meta);
+    let bytes = std::fs::read(&blob_path).unwrap_or_else(|e| panic!("{}: {e}", blob_path.display()));
+    let shipped =
+        game_rules::PrecompiledConds::from_bytes(&bytes).expect("shipped blob must decode");
+
+    // Host compile (what the server / rules-worker do): modules only.
+    let host = load(&["cards"]);
+    // The browser path: same modules + the shipped blobs.
+    let mut b = Ruleset::builder();
+    for m in modules("cards") {
+        b.add(&m).expect("module should load");
+    }
+    for e in &shipped.entries {
+        b.precompiled(&e.card, e.entry, e.blob.clone());
+    }
+    let runtime = b.build().expect("precompiled path must build");
+
+    // 1. Blob for blob, the shipped file is this build's compile.
+    let fresh = host.precompiled_conds();
+    assert_eq!(
+        fresh.entries.len(),
+        shipped.entries.len(),
+        "every shipped entry is a host compile and vice versa"
+    );
+    for (f, s) in fresh.entries.iter().zip(&shipped.entries) {
+        assert_eq!(f.card, s.card, "entries are in the same canonical order");
+        assert_eq!(f.entry, s.entry);
+        assert_eq!(
+            f.blob, s.blob,
+            "shipped blob for {}/{} is not this build's compile -- rebuild with tools/build-ruleset.mjs",
+            f.card, f.entry
+        );
+    }
+
+    // 2. Same entries carry a condition in both builds, and every probe
+    //    agrees -- the precompiled path *is* the host compile, behaviourally.
+    for (ci, c) in host.cards().iter().enumerate() {
+        for ei in 0..c.on.len() {
+            let h = host.pre_at(ci as i32, ei as i32);
+            let r = runtime.pre_at(ci as i32, ei as i32);
+            assert_eq!(h.is_some(), r.is_some(), "{}/{}: condition presence", c.id, ei);
+            let (Some(h), Some(r)) = (h, r) else { continue };
+            for (actor, owner) in [(0, 0), (1, 0), (0, 1), (2, 2)] {
+                for value in [0, 5000] {
+                    let mut w = effect_window(actor, value);
+                    w.money = vec![1000, 2000, 3000, 4000];
+                    let win = cond_pre::fill_window(&w);
+                    let cand = cond_pre::fill_candidate(&w, owner, &c.id, false);
+                    assert_eq!(
+                        h.eval(&win, &cand),
+                        r.eval(&win, &cand),
+                        "{}/{e} disagrees for actor={actor} owner={owner} value={value}",
+                        c.id,
+                        e = ei
+                    );
+                }
+            }
+        }
+    }
+
+    // 3. The set identity covers the compiled conditions, not just the module
+    //    bytes (docs/GUARDS.md §8.2): the documented recipe -- sorted module
+    //    hashes + a `conds` marker + one blob hash per entry -- reproduces
+    //    `Ruleset::sha256`, and the plain module-only recipe does not.
+    use sha2::{Digest, Sha256};
+    let hex = |b: &[u8]| b.iter().map(|x| format!("{x:02x}")).collect::<String>();
+    let mut parts: Vec<String> = index["modules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["sha256"].as_str().unwrap().to_string())
+        .collect();
+    parts.sort_unstable();
+    let module_only = hex(&Sha256::digest(parts.join("\n").as_bytes()));
+    assert_ne!(
+        host.sha256(),
+        module_only,
+        "the ruleset sha must change when the conditions change"
+    );
+    parts.push("conds".to_string());
+    parts.extend(fresh.identity_lines());
+    assert_eq!(
+        host.sha256(),
+        hex(&Sha256::digest(parts.join("\n").as_bytes())),
+        "sha256 == hash(sorted module hashes + conds identity lines)"
+    );
+    assert_eq!(
+        runtime.sha256(),
+        host.sha256(),
+        "the browser path and the host compile stamp the same identity"
+    );
+}
+
+/// Fail-closed, browser side: a card with a `pre` and no precompiled entry is
+/// a build error -- never "treat as true". And a blob that disagrees with the
+/// source is refused rather than silently preferred.
+#[test]
+fn precompiled_missing_or_mismatched_is_a_build_error() {
+    let card = "AG:回家的路上绕个道";
+    let entry = 1;
+    let host = load(&["cards"]);
+    let want = host
+        .pre_at(
+            host.card(card).expect("shipped card present"),
+            entry,
+        )
+        .expect("reported entry declares a condition");
+    let blob = want.blob.clone();
+
+    // Native compile has the source, so a missing blob is not an error here --
+    // it is the wasm32 (browser) build that cannot compile it (that arm is
+    // `compile_pre`'s `None` case; the node gate
+    // `webui/src/game/ruleset.test.ts` drives it through the real glue). What
+    // IS visible natively is that a *wrong* blob is refused:
+    let mut wrong = Ruleset::builder();
+    for m in modules("cards") {
+        wrong.add(&m).unwrap();
+    }
+    let mut tampered = blob.clone();
+    tampered.push(0);
+    wrong.precompiled(card, entry, tampered);
+    let err = wrong.build().err().expect("mismatched blob must not build");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("does not match") || msg.contains("bad condition"),
+        "loud, not ignored: {msg}"
+    );
+
+    // A blob for an entry that declares no condition is a stale blob: refused.
+    let mut stale = Ruleset::builder();
+    for m in modules("cards") {
+        stale.add(&m).unwrap();
+    }
+    stale.precompiled("AG:回家的路上绕个道", 0, blob);
+    let err = stale.build().err().expect("stale blob entry must not build");
+    assert!(
+        err.to_string().contains("no condition"),
+        "loud, not ignored: {err}"
+    );
+
+    // And a blob with the wrong envelope version fails loudly (no migration).
+    let mut envelope = game_rules::PrecompiledConds {
+        version: game_rules::PRECOMPILED_CONDS_VERSION + 1,
+        entries: vec![],
+    };
+    envelope.entries.push(game_rules::PrecompiledCond {
+        card: card.to_string(),
+        entry,
+        blob: want.blob.clone(),
+    });
+    assert!(
+        game_rules::PrecompiledConds::from_bytes(&envelope.to_bytes()).is_err(),
+        "a foreign envelope version must not decode"
+    );
 }

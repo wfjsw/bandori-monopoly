@@ -29,11 +29,11 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // 「[消耗]1到5次500资金」 is effect content (rulebook L13-14), so there
         // is no `money >= 500` play gate -- an unaffordable in-body payment
         // takes the Q1 shortfall path. C# `CardCrimsonSoul.WhyNot` had one.
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PayChoose], Some(pay_choose_guard), pay_choose, ""),
-        On::Hook(&[HookKind::PayAfter], Some(pay_after_guard), pay_after, ""),
-        On::Hook(&[HookKind::SkillUsed], Some(skill_used_guard), skill_used, ""),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PayChoose], "", Some(pay_choose_guard), pay_choose),
+        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_guard), pay_after),
+        On::Hook(&[HookKind::SkillUsed], "", Some(skill_used_guard), skill_used),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 

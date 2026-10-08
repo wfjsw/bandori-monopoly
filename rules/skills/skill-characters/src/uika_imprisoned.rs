@@ -35,15 +35,15 @@ const BONUS: &str = "skill.uikaImprisoned.bonus";
 pub const UIKA_IMPRISONED: CardDef = CardDef::new(
     "skill:三角初华:Imprisoned XII",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollPlan], Some(in_one), on_plan, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::Settle], Some(any), on_settle, ""),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::RollPlan], "", Some(in_one), on_plan),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Settle], "", Some(any), on_settle),
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
-        On::Hook(&[HookKind::PassTile], Some(in_two), on_pass_player, ""),
-        On::Hook(&[HookKind::SettleBefore], Some(in_two), before_settle, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(in_two), on_pass_player),
+        On::Hook(&[HookKind::SettleBefore], "", Some(in_two), before_settle),
     ],
 )
     .legacy(&[(0, legacy_mine), (2, legacy_mine)]);

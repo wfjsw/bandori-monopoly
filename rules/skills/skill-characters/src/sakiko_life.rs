@@ -26,18 +26,18 @@ const BOUNTY: i32 = 1500;
 pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, at_turn_start, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
-        On::Hook(&[HookKind::PassTile], Some(in_one), on_pass_player, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(in_one), on_pass_player),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Hook(&[HookKind::Abnormal], Some(im_hit), on_abnormal, ""),
+        On::Hook(&[HookKind::Abnormal], "", Some(im_hit), on_abnormal),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

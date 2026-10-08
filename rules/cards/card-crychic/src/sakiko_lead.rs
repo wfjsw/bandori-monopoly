@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SAKIKO_LEAD: CardDef = CardDef::new(
     "CRYCHIC:（祥子）带领着大家",
-    &[On::Play(Some(cant_play), sakiko_lead, "")],
+    &[On::Play("", Some(cant_play), sakiko_lead)],
 );
 
 fn cant_play(player_id: i32) -> Option<Msg> {

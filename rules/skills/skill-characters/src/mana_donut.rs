@@ -24,10 +24,10 @@ const HALF: &str = "skill.manaDonut.half";
 pub const MANA_DONUT: CardDef = CardDef::new(
     "skill:纯田真奈:甜甜圈爱好者",
     &[
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::PayChoose], Some(half), on_pay, ""),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::PayChoose], "", Some(half), on_pay),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
     .legacy(&[(1, legacy_mine), (3, legacy_mine)]);

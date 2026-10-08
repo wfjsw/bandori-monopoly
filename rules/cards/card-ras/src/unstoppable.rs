@@ -8,7 +8,7 @@
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const UNSTOPPABLE: CardDef =
-    CardDef::new("RAS:UNSTOPPABLE", &[On::Play(Some(cant_play), unstoppable, "")]);
+    CardDef::new("RAS:UNSTOPPABLE", &[On::Play("", Some(cant_play), unstoppable)]);
 
 /// C# `CardUnstoppable.WhyNot` = `H.MoveWhyNot(seat)` -- the teleport is the
 /// turn's main move.

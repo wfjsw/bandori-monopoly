@@ -14,10 +14,10 @@ const ID: &str = "HHW:运动的天赋";
 pub const SPORTS_TALENT: CardDef = CardDef::new(
     "HHW:运动的天赋",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], Some(counteract_guard), counteract, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], "", Some(counteract_guard), counteract),
         On::RollPlan(roll_plan),
-        On::Hook(&[HookKind::CrystalsChanged], Some(crystals_changed_guard), on_crystals_changed, ""),
+        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 

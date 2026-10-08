@@ -15,9 +15,9 @@ pub const OWN_STAGE: CardDef = CardDef::new(
     "R:选择自己的舞台",
     &[On::Counteract(
         &[ChainKind::Effect],
+        "target == owner",
         Some(can_counteract),
         counteract,
-        "target == owner",
     )],
 )
     .legacy(&[(0, legacy_can_counteract)]);

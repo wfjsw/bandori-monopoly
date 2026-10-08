@@ -35,10 +35,10 @@ const RATE: &str = "skill.tsugushi.rate";
 pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     "skill:二叶筑紫:交给班长吧",
     &[
-        On::Play(Some(can_cash), cash, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, declare, ""),
-        On::Hook(&[HookKind::PayChoose], Some(mine), on_gain, ""),
-        On::Hook(&[HookKind::PayChoose], Some(other), on_theirs, ""),
+        On::Play("", Some(can_cash), cash),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, declare),
+        On::Hook(&[HookKind::PayChoose], "", Some(mine), on_gain),
+        On::Hook(&[HookKind::PayChoose], "", Some(other), on_theirs),
     ],
 );
 

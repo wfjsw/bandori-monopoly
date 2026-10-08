@@ -9,4 +9,10 @@ game-core = { path = "../game-core" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
+# The anytime budget needs a wall clock. `std::time::Instant` is unsupported on
+# wasm32-unknown-unknown (docs/BOT.md B6); `js-sys::Date::now` is the default
+# source there and the glue may install `performance.now` via `clock::set_clock`.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
+
 [dev-dependencies]

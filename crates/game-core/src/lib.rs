@@ -19,6 +19,7 @@ pub mod record;
 pub mod rng;
 pub mod scoring;
 pub mod state;
+pub mod strategy;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 

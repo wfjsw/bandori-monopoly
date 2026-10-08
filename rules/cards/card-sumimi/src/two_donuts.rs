@@ -23,8 +23,8 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
-        On::Play(None, two_donuts, ""),
-        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], Some(fx_guard), fx, ""),
+        On::Play("", None, two_donuts),
+        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], "", Some(fx_guard), fx),
     ],
 );
 

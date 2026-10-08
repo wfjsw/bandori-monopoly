@@ -33,9 +33,10 @@
 //!   information-set hash), so consecutive decisions of one seat start warm.
 
 use std::collections::{HashMap, HashSet};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::action::Action;
+use crate::clock::Instant;
 use crate::determinize::DeterminizerRng;
 use crate::sim::{Advance, Horizon, Simulator};
 
@@ -425,6 +426,49 @@ impl Ismcts {
                 root_key: 0,
             };
         }
+        // Trivial root (docs/BOT.md §3.4): one legal action is forced, and a
+        // menu with no money / ownership / card-cost consequence cannot be
+        // improved on. Answer it without a single iteration -- 27–34% of
+        // searched bot CPU was spent re-discovering forced moves (`bot_cpu` §6).
+        // The forced action is still reported as root statistics so the
+        // root-parallel merge keeps it.
+        match crate::action::trivial_decision(&root_actions) {
+            Some(crate::action::Trivial::Forced(a)) => {
+                let stat = ActionStats {
+                    action: a.clone(),
+                    visits: 1,
+                    value_sum: 0.0,
+                    eval_max: 0.0,
+                    eval_sum: 0.0,
+                    eval_visits: 0,
+                };
+                return SearchOutcome {
+                    action: a,
+                    iterations: 0,
+                    elapsed: started.elapsed(),
+                    root_stats: vec![(stat.action.clone(), 0.0, 1)],
+                    heuristic: false,
+                    root_stats_full: vec![stat],
+                    reused_nodes: 0,
+                    timings: None,
+                    root_key: 0,
+                };
+            }
+            Some(crate::action::Trivial::LowStakes) => {
+                return SearchOutcome {
+                    action: Action::Bid { amount: -1 },
+                    iterations: 0,
+                    elapsed: started.elapsed(),
+                    root_stats: Vec::new(),
+                    heuristic: true,
+                    root_stats_full: Vec::new(),
+                    reused_nodes: 0,
+                    timings: None,
+                    root_key: 0,
+                };
+            }
+            None => {}
+        }
         let t0 = Instant::now();
         let root_key = sim.decision_key(&probe, seat);
         mark(cfg.profile, t0, &mut times.key);
@@ -811,10 +855,11 @@ fn ordered(a: &Action) -> u8 {
         Action::Play { .. } => 0,
         Action::Buy { .. } => 1,
         Action::Build { .. } => 2,
-        Action::Offer { .. } => 3,
-        Action::Bid { .. } => 4,
-        Action::Counteract { .. } => 5,
-        Action::Pick { .. } => 6,
-        Action::Mortgage { .. } => 7,
+        Action::Decline => 3,
+        Action::Offer { .. } => 4,
+        Action::Bid { .. } => 5,
+        Action::Counteract { .. } => 6,
+        Action::Pick { .. } => 7,
+        Action::Mortgage { .. } => 8,
     }
 }

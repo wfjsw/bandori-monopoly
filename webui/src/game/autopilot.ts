@@ -50,7 +50,14 @@ export const CHAOS_RESERVE = 1000;
  *  engine's chaos bots (`ai.rs`). */
 export const CHAOS_COUNTER_CHANCE = 0.3;
 
-export type AutoMode = "off" | "bot" | "chaos";
+/**
+ * `advanced` (进阶, `docs/BOT.md` B6): the same search the server's
+ * `bot-service` runs, in a Web Worker pool -- ISMCTS over determinizations of
+ * the public view. Lazy-loaded; falls back to `bot` on any failure. Like
+ * `bot` / `chaos`, it never uses hidden information and answers through the
+ * ordinary `act` path.
+ */
+export type AutoMode = "off" | "bot" | "chaos" | "advanced";
 export type PolicyName = Exclude<AutoMode, "off">;
 
 export const wantsBuy = (money: number, price: number) => money - price >= BUY_RESERVE;
@@ -545,7 +552,19 @@ export const policies: Record<PolicyName, Policy> = {
       return out;
     },
   },
+
+  /**
+   * `advanced` is the worker-pool search (`docs/BOT.md` B6) for play-phase
+   * decisions; setup (ban / pick / deck) and the fallback after a failed
+   * search run the standard policy, exactly like the server holds an Advanced
+   * seat's setup engine-side (`MatchPlayer::auto_setup`). The search itself
+   * lives in `botDrive.ts` / `botPool.ts`; this alias exists so [`plan`] can
+   * take `mode` uniformly.
+   */
+  advanced: {} as Policy,
 };
+
+policies.advanced = policies.bot;
 
 // ---------------------------------------------------------------- plan
 
@@ -596,3 +615,6 @@ export function suggest(view: MatchView, ctx: AutopilotCtx, mode: PolicyName = "
 
 /** Guard shared by the UI: is this seat under either auto mode? */
 export const isAuto = (mode: AutoMode): mode is PolicyName => mode !== "off";
+
+/** The 托管 policy a non-search fallback uses when `advanced` fails. */
+export const FALLBACK_POLICY: PolicyName = "bot";

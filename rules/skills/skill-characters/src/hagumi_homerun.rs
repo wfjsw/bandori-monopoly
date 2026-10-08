@@ -29,9 +29,9 @@ const HELD: &str = "可乐饼";
 pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
-        On::Hook(&[HookKind::TurnEnd], None, spawn, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, ""),
-        On::Hook(&[HookKind::RollPlan], Some(any), on_plan, ""),
+        On::Hook(&[HookKind::TurnEnd], "", None, spawn),
+        On::Hook(&[HookKind::Pass], "", None, on_pass),
+        On::Hook(&[HookKind::RollPlan], "", Some(any), on_plan),
     ],
 );
 

@@ -24,9 +24,9 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励",
     &[
-        On::Play(Some(cant_play), childhood_cheer, ""),
+        On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
-        On::Hook(&[HookKind::MoveAfter], Some(after_move_guard), after_move, ""),
+        On::Hook(&[HookKind::MoveAfter], "", Some(after_move_guard), after_move),
         On::AtEnd(at_end),
     ],
 );

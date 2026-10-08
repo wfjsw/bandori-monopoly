@@ -1,989 +1,989 @@
-{
- "tiles": [
-  {
-   "index": 1,
-   "name": "CiRCLE",
-   "shortName": "CiRCLE",
-   "kind": "circle",
-   "group": 0,
-   "color": "#FFFFFF",
-   "tier": 0,
-   "area": "004",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 2,
-   "name": "购物中心",
-   "shortName": "购物\n中心",
-   "kind": "property",
-   "group": 1,
-   "color": "#4682B7",
-   "tier": 13,
-   "area": "005",
-   "price": 3000,
-   "house": 2000,
-   "rent": [
-    300,
-    1360,
-    3220,
-    6680
-   ]
-  },
-  {
-   "index": 3,
-   "name": "天文馆",
-   "shortName": "天文馆",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 11,
-   "area": "016",
-   "price": 2600,
-   "house": 1500,
-   "rent": [
-    260,
-    1080,
-    2500,
-    5120
-   ]
-  },
-  {
-   "index": 4,
-   "name": "水族馆",
-   "shortName": "水族馆",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 14,
-   "area": "",
-   "price": 3200,
-   "house": 2000,
-   "rent": [
-    320,
-    1400,
-    3280,
-    6760
-   ]
-  },
-  {
-   "index": 5,
-   "name": "主要街道",
-   "shortName": "主要\n街道",
-   "kind": "agent",
-   "group": 1,
-   "color": "#4682B7",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 6,
-   "name": "偶像经纪公司",
-   "shortName": "偶像\n事务所",
-   "kind": "property",
-   "group": 1,
-   "color": "#4682B7",
-   "tier": 6,
-   "area": "",
-   "price": 1600,
-   "house": 1000,
-   "rent": [
-    160,
-    680,
-    1600,
-    3320
-   ]
-  },
-  {
-   "index": 7,
-   "name": "星空齿科",
-   "shortName": "星空\n齿科",
-   "kind": "property",
-   "group": 1,
-   "color": "#4682B7",
-   "tier": 6,
-   "area": "",
-   "price": 1600,
-   "house": 1000,
-   "rent": [
-    160,
-    680,
-    1600,
-    3320
-   ]
-  },
-  {
-   "index": 8,
-   "name": "江户川公园",
-   "shortName": "江户川\n公园",
-   "kind": "property",
-   "group": 1,
-   "color": "#4682B7",
-   "tier": 5,
-   "area": "015",
-   "price": 1400,
-   "house": 1000,
-   "rent": [
-    140,
-    640,
-    1540,
-    3240
-   ]
-  },
-  {
-   "index": 9,
-   "name": "RiNG 1",
-   "shortName": "RiNG",
-   "kind": "ring",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 3,
-   "area": "022",
-   "price": 1000,
-   "house": 500,
-   "rent": []
-  },
-  {
-   "index": 10,
-   "name": "花咲川女子学院",
-   "shortName": "花咲川",
-   "kind": "property",
-   "group": 2,
-   "color": "#88E788",
-   "tier": 7,
-   "area": "009",
-   "price": 1800,
-   "house": 1000,
-   "rent": [
-    180,
-    720,
-    1660,
-    3400
-   ]
-  },
-  {
-   "index": 11,
-   "name": "羽丘女子学院",
-   "shortName": "羽丘",
-   "kind": "property",
-   "group": 2,
-   "color": "#88E789",
-   "tier": 9,
-   "area": "009",
-   "price": 2200,
-   "house": 1500,
-   "rent": [
-    220,
-    1000,
-    2380,
-    4960
-   ]
-  },
-  {
-   "index": 12,
-   "name": "富士见坂",
-   "shortName": "富士\n见坂",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 1,
-   "area": "",
-   "price": 600,
-   "house": 500,
-   "rent": [
-    60,
-    280,
-    700,
-    1520
-   ]
-  },
-  {
-   "index": 13,
-   "name": "中心学区",
-   "shortName": "中心\n学区",
-   "kind": "agent",
-   "group": 2,
-   "color": "#88E789",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 14,
-   "name": "月之森女子学院",
-   "shortName": "月之森",
-   "kind": "property",
-   "group": 2,
-   "color": "#88E789",
-   "tier": 14,
-   "area": "009",
-   "price": 3200,
-   "house": 2000,
-   "rent": [
-    320,
-    1400,
-    3280,
-    6760
-   ]
-  },
-  {
-   "index": 15,
-   "name": "成为人类桥",
-   "shortName": "成为\n人类桥",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 2,
-   "area": "",
-   "price": 800,
-   "house": 500,
-   "rent": [
-    80,
-    320,
-    760,
-    1600
-   ]
-  },
-  {
-   "index": 16,
-   "name": "CiRCLE 咖啡厅",
-   "shortName": "CiRCLE\n咖啡厅",
-   "kind": "cafe",
-   "group": 0,
-   "color": "#FFFFFF",
-   "tier": 0,
-   "area": "001",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 17,
-   "name": "RiNG 2",
-   "shortName": "RiNG",
-   "kind": "ring",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 3,
-   "area": "022",
-   "price": 1000,
-   "house": 500,
-   "rent": []
-  },
-  {
-   "index": 18,
-   "name": "周边学区",
-   "shortName": "周边\n学区",
-   "kind": "agent",
-   "group": 3,
-   "color": "#0BA715",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 19,
-   "name": "白雪学园",
-   "shortName": "白雪\n学园",
-   "kind": "property",
-   "group": 3,
-   "color": "#0BA715",
-   "tier": 12,
-   "area": "",
-   "price": 2800,
-   "house": 1500,
-   "rent": [
-    280,
-    1120,
-    2560,
-    5200
-   ]
-  },
-  {
-   "index": 20,
-   "name": "艺术学院高中",
-   "shortName": "艺术学院\n高中",
-   "kind": "property",
-   "group": 3,
-   "color": "#0BA715",
-   "tier": 6,
-   "area": "",
-   "price": 1600,
-   "house": 1000,
-   "rent": [
-    160,
-    680,
-    1600,
-    3320
-   ]
-  },
-  {
-   "index": 21,
-   "name": "瑟罗希亚国际学校",
-   "shortName": "瑟罗希亚\n国际",
-   "kind": "property",
-   "group": 3,
-   "color": "#0BA715",
-   "tier": 13,
-   "area": "",
-   "price": 3000,
-   "house": 2000,
-   "rent": [
-    300,
-    1360,
-    3220,
-    6680
-   ]
-  },
-  {
-   "index": 22,
-   "name": "DUB MUSIC EXPERIMENT",
-   "shortName": "dub",
-   "kind": "property",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 10,
-   "area": "",
-   "price": 2400,
-   "house": 1500,
-   "rent": [
-    240,
-    1040,
-    2440,
-    5040
-   ]
-  },
-  {
-   "index": 23,
-   "name": "加茂川中央中学",
-   "shortName": "加茂川\n中学",
-   "kind": "property",
-   "group": 3,
-   "color": "#0BA715",
-   "tier": 4,
-   "area": "",
-   "price": 1200,
-   "house": 500,
-   "rent": [
-    120,
-    400,
-    880,
-    1760
-   ]
-  },
-  {
-   "index": 24,
-   "name": "东京外",
-   "shortName": "东京外",
-   "kind": "agent",
-   "group": 4,
-   "color": "#A45ACD",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 25,
-   "name": "大阪中之岛公园",
-   "shortName": "中之岛\n公园",
-   "kind": "property",
-   "group": 4,
-   "color": "#A45ACD",
-   "tier": 10,
-   "area": "",
-   "price": 2400,
-   "house": 1500,
-   "rent": [
-    240,
-    1040,
-    2440,
-    5040
-   ]
-  },
-  {
-   "index": 26,
-   "name": "小豆岛",
-   "shortName": "小豆岛",
-   "kind": "property",
-   "group": 4,
-   "color": "#A45ACD",
-   "tier": 3,
-   "area": "",
-   "price": 1000,
-   "house": 500,
-   "rent": [
-    100,
-    360,
-    820,
-    1680
-   ]
-  },
-  {
-   "index": 27,
-   "name": "微笑号",
-   "shortName": "微笑号",
-   "kind": "property",
-   "group": 5,
-   "color": "#FFDE21",
-   "tier": 13,
-   "area": "",
-   "price": 3000,
-   "house": 2000,
-   "rent": [
-    300,
-    1360,
-    3220,
-    6680
-   ]
-  },
-  {
-   "index": 28,
-   "name": "米歇尔公园",
-   "shortName": "米歇尔\n公园",
-   "kind": "property",
-   "group": 5,
-   "color": "#FFDE22",
-   "tier": 7,
-   "area": "015",
-   "price": 1800,
-   "house": 1000,
-   "rent": [
-    180,
-    720,
-    1660,
-    3400
-   ]
-  },
-  {
-   "index": 29,
-   "name": "弦卷集团",
-   "shortName": "弦卷\n集团",
-   "kind": "agent",
-   "group": 5,
-   "color": "#FFDE23",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 30,
-   "name": "弦卷豪宅",
-   "shortName": "弦卷\n豪宅",
-   "kind": "property",
-   "group": 5,
-   "color": "#FFDE24",
-   "tier": 16,
-   "area": "",
-   "price": 3600,
-   "house": 2000,
-   "rent": [
-    360,
-    1480,
-    3400,
-    6920
-   ]
-  },
-  {
-   "index": 31,
-   "name": "江户川乐器店",
-   "shortName": "江户川\n乐器店",
-   "kind": "edogawa",
-   "group": 0,
-   "color": "#FFFFFF",
-   "tier": 0,
-   "area": "003",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 32,
-   "name": "Live House",
-   "shortName": "Live\nHouse",
-   "kind": "agent",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 0,
-   "area": "017",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 33,
-   "name": "便利店",
-   "shortName": "便利店",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 4,
-   "area": "",
-   "price": 1200,
-   "house": 500,
-   "rent": [
-    120,
-    400,
-    880,
-    1760
-   ]
-  },
-  {
-   "index": 34,
-   "name": "快餐店",
-   "shortName": "快餐店",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 10,
-   "area": "",
-   "price": 2400,
-   "house": 1500,
-   "rent": [
-    240,
-    1040,
-    2440,
-    5040
-   ]
-  },
-  {
-   "index": 35,
-   "name": "周边精选",
-   "shortName": "周边\n精选",
-   "kind": "agent",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 36,
-   "name": "Bandori车站",
-   "shortName": "Bandori\n车站",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 2,
-   "area": "023",
-   "price": 800,
-   "house": 500,
-   "rent": [
-    80,
-    320,
-    760,
-    1600
-   ]
-  },
-  {
-   "index": 37,
-   "name": "RiNG 3",
-   "shortName": "RiNG",
-   "kind": "ring",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 3,
-   "area": "022",
-   "price": 1000,
-   "house": 500,
-   "rent": []
-  },
-  {
-   "index": 38,
-   "name": "庆鹏女子大学",
-   "shortName": "庆鹏\n女大",
-   "kind": "property",
-   "group": 8,
-   "color": "#F7D9BC",
-   "tier": 12,
-   "area": "",
-   "price": 2800,
-   "house": 1500,
-   "rent": [
-    280,
-    1120,
-    2560,
-    5200
-   ]
-  },
-  {
-   "index": 39,
-   "name": "四叶女子大学",
-   "shortName": "四叶\n女大",
-   "kind": "property",
-   "group": 8,
-   "color": "#F7D9BC",
-   "tier": 12,
-   "area": "",
-   "price": 2800,
-   "house": 1500,
-   "rent": [
-    280,
-    1120,
-    2560,
-    5200
-   ]
-  },
-  {
-   "index": 40,
-   "name": "大学路",
-   "shortName": "大学路",
-   "kind": "agent",
-   "group": 8,
-   "color": "#F7D9BC",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 41,
-   "name": "武道馆",
-   "shortName": "武道馆",
-   "kind": "property",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 15,
-   "area": "",
-   "price": 3400,
-   "house": 2000,
-   "rent": [
-    340,
-    1440,
-    3340,
-    6840
-   ]
-  },
-  {
-   "index": 42,
-   "name": "梦开始的地方",
-   "shortName": "梦开始\n的地方",
-   "kind": "agent",
-   "group": 9,
-   "color": "#FF5522",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 43,
-   "name": "Space",
-   "shortName": "Space",
-   "kind": "property",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 4,
-   "area": "",
-   "price": 1200,
-   "house": 500,
-   "rent": [
-    120,
-    400,
-    880,
-    1760
-   ]
-  },
-  {
-   "index": 44,
-   "name": "星星小巷",
-   "shortName": "星星\n小巷",
-   "kind": "property",
-   "group": 9,
-   "color": "#FF5522",
-   "tier": 5,
-   "area": "",
-   "price": 1400,
-   "house": 1000,
-   "rent": [
-    140,
-    640,
-    1540,
-    3240
-   ]
-  },
-  {
-   "index": 45,
-   "name": "星之鼓动山丘",
-   "shortName": "星之鼓动\n山丘",
-   "kind": "property",
-   "group": 9,
-   "color": "#FF5522",
-   "tier": 1,
-   "area": "",
-   "price": 600,
-   "house": 500,
-   "rent": [
-    60,
-    280,
-    700,
-    1520
-   ]
-  },
-  {
-   "index": 46,
-   "name": "流星堂",
-   "shortName": "流星堂",
-   "kind": "ryuseido",
-   "group": 0,
-   "color": "#FFFFFF",
-   "tier": 0,
-   "area": "002",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 47,
-   "name": "商店街",
-   "shortName": "商店街",
-   "kind": "agent",
-   "group": 10,
-   "color": "#778190",
-   "tier": 0,
-   "area": "008",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  },
-  {
-   "index": 48,
-   "name": "羽泽咖啡厅",
-   "shortName": "羽泽\n咖啡厅",
-   "kind": "property",
-   "group": 10,
-   "color": "#778188",
-   "tier": 9,
-   "area": "006",
-   "price": 2200,
-   "house": 1500,
-   "rent": [
-    220,
-    1000,
-    2380,
-    4960
-   ]
-  },
-  {
-   "index": 49,
-   "name": "山吹面包房",
-   "shortName": "山吹\n面包房",
-   "kind": "property",
-   "group": 10,
-   "color": "#778189",
-   "tier": 8,
-   "area": "",
-   "price": 2000,
-   "house": 1000,
-   "rent": [
-    200,
-    760,
-    1720,
-    3480
-   ]
-  },
-  {
-   "index": 50,
-   "name": "银河拉面馆",
-   "shortName": "银河\n拉面馆",
-   "kind": "property",
-   "group": 10,
-   "color": "#778191",
-   "tier": 8,
-   "area": "",
-   "price": 2000,
-   "house": 1000,
-   "rent": [
-    200,
-    760,
-    1720,
-    3480
-   ]
-  },
-  {
-   "index": 51,
-   "name": "Live House Galaxy",
-   "shortName": "Galaxy",
-   "kind": "property",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 5,
-   "area": "017",
-   "price": 1400,
-   "house": 1000,
-   "rent": [
-    140,
-    640,
-    1540,
-    3240
-   ]
-  },
-  {
-   "index": 52,
-   "name": "北泽精肉店",
-   "shortName": "北泽\n精肉店",
-   "kind": "property",
-   "group": 10,
-   "color": "#778190",
-   "tier": 8,
-   "area": "",
-   "price": 2000,
-   "house": 1000,
-   "rent": [
-    200,
-    760,
-    1720,
-    3480
-   ]
-  },
-  {
-   "index": 53,
-   "name": "旭汤澡堂",
-   "shortName": "旭汤\n澡堂",
-   "kind": "property",
-   "group": 10,
-   "color": "#778190",
-   "tier": 7,
-   "area": "",
-   "price": 1800,
-   "house": 1000,
-   "rent": [
-    180,
-    720,
-    1660,
-    3400
-   ]
-  },
-  {
-   "index": 54,
-   "name": "RiNG 4",
-   "shortName": "RiNG",
-   "kind": "ring",
-   "group": 6,
-   "color": "#CD1146",
-   "tier": 3,
-   "area": "022",
-   "price": 1000,
-   "house": 500,
-   "rent": []
-  },
-  {
-   "index": 55,
-   "name": "六本木大厦",
-   "shortName": "六本木\n大厦",
-   "kind": "property",
-   "group": 11,
-   "color": "#FFB5C0",
-   "tier": 9,
-   "area": "",
-   "price": 2200,
-   "house": 1500,
-   "rent": [
-    220,
-    1000,
-    2380,
-    4960
-   ]
-  },
-  {
-   "index": 56,
-   "name": "CHUCHU的公寓",
-   "shortName": "CHU²\n的公寓",
-   "kind": "property",
-   "group": 11,
-   "color": "#FFB5C0",
-   "tier": 11,
-   "area": "",
-   "price": 2600,
-   "house": 1500,
-   "rent": [
-    260,
-    1080,
-    2500,
-    5120
-   ]
-  },
-  {
-   "index": 57,
-   "name": "飞鸟山公园",
-   "shortName": "飞鸟山\n公园",
-   "kind": "property",
-   "group": 7,
-   "color": "#90D5FF",
-   "tier": 3,
-   "area": "015",
-   "price": 1000,
-   "house": 500,
-   "rent": [
-    100,
-    360,
-    820,
-    1680
-   ]
-  },
-  {
-   "index": 58,
-   "name": "旧古河庭园",
-   "shortName": "旧古河\n庭园",
-   "kind": "property",
-   "group": 11,
-   "color": "#FFB5C0",
-   "tier": 15,
-   "area": "",
-   "price": 3400,
-   "house": 2000,
-   "rent": [
-    340,
-    1440,
-    3340,
-    6840
-   ]
-  },
-  {
-   "index": 59,
-   "name": "广町家画室",
-   "shortName": "广町家\n画室",
-   "kind": "property",
-   "group": 11,
-   "color": "#FFB5C1",
-   "tier": 11,
-   "area": "",
-   "price": 2600,
-   "house": 1500,
-   "rent": [
-    260,
-    1080,
-    2500,
-    5120
-   ]
-  },
-  {
-   "index": 60,
-   "name": "高级住宅区",
-   "shortName": "高级\n住宅区",
-   "kind": "agent",
-   "group": 11,
-   "color": "#FFB5C2",
-   "tier": 0,
-   "area": "",
-   "price": 0,
-   "house": 0,
-   "rent": []
-  }
- ]
+{
+ "tiles": [
+  {
+   "index": 1,
+   "name": "CiRCLE",
+   "shortName": "CiRCLE",
+   "kind": "circle",
+   "group": 0,
+   "color": "#FFFFFF",
+   "tier": 0,
+   "area": "004",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 2,
+   "name": "购物中心",
+   "shortName": "购物\n中心",
+   "kind": "property",
+   "group": 1,
+   "color": "#4682B7",
+   "tier": 13,
+   "area": "005",
+   "price": 3000,
+   "house": 2000,
+   "rent": [
+    300,
+    1360,
+    3220,
+    6680
+   ]
+  },
+  {
+   "index": 3,
+   "name": "天文馆",
+   "shortName": "天文馆",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 11,
+   "area": "016",
+   "price": 2600,
+   "house": 1500,
+   "rent": [
+    260,
+    1080,
+    2500,
+    5120
+   ]
+  },
+  {
+   "index": 4,
+   "name": "水族馆",
+   "shortName": "水族馆",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 14,
+   "area": "",
+   "price": 3200,
+   "house": 2000,
+   "rent": [
+    320,
+    1400,
+    3280,
+    6760
+   ]
+  },
+  {
+   "index": 5,
+   "name": "主要街道",
+   "shortName": "主要\n街道",
+   "kind": "agent",
+   "group": 1,
+   "color": "#4682B7",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 6,
+   "name": "偶像经纪公司",
+   "shortName": "偶像\n事务所",
+   "kind": "property",
+   "group": 1,
+   "color": "#4682B7",
+   "tier": 6,
+   "area": "",
+   "price": 1600,
+   "house": 1000,
+   "rent": [
+    160,
+    680,
+    1600,
+    3320
+   ]
+  },
+  {
+   "index": 7,
+   "name": "星空齿科",
+   "shortName": "星空\n齿科",
+   "kind": "property",
+   "group": 1,
+   "color": "#4682B7",
+   "tier": 6,
+   "area": "",
+   "price": 1600,
+   "house": 1000,
+   "rent": [
+    160,
+    680,
+    1600,
+    3320
+   ]
+  },
+  {
+   "index": 8,
+   "name": "江户川公园",
+   "shortName": "江户川\n公园",
+   "kind": "property",
+   "group": 1,
+   "color": "#4682B7",
+   "tier": 5,
+   "area": "015",
+   "price": 1400,
+   "house": 1000,
+   "rent": [
+    140,
+    640,
+    1540,
+    3240
+   ]
+  },
+  {
+   "index": 9,
+   "name": "RiNG 1",
+   "shortName": "RiNG",
+   "kind": "ring",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 3,
+   "area": "022",
+   "price": 1000,
+   "house": 500,
+   "rent": []
+  },
+  {
+   "index": 10,
+   "name": "花咲川女子学院",
+   "shortName": "花咲川",
+   "kind": "property",
+   "group": 2,
+   "color": "#88E788",
+   "tier": 7,
+   "area": "009",
+   "price": 1800,
+   "house": 1000,
+   "rent": [
+    180,
+    720,
+    1660,
+    3400
+   ]
+  },
+  {
+   "index": 11,
+   "name": "羽丘女子学院",
+   "shortName": "羽丘",
+   "kind": "property",
+   "group": 2,
+   "color": "#88E789",
+   "tier": 9,
+   "area": "009",
+   "price": 2200,
+   "house": 1500,
+   "rent": [
+    220,
+    1000,
+    2380,
+    4960
+   ]
+  },
+  {
+   "index": 12,
+   "name": "富士见坂",
+   "shortName": "富士\n见坂",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 1,
+   "area": "",
+   "price": 600,
+   "house": 500,
+   "rent": [
+    60,
+    280,
+    700,
+    1520
+   ]
+  },
+  {
+   "index": 13,
+   "name": "中心学区",
+   "shortName": "中心\n学区",
+   "kind": "agent",
+   "group": 2,
+   "color": "#88E789",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 14,
+   "name": "月之森女子学院",
+   "shortName": "月之森",
+   "kind": "property",
+   "group": 2,
+   "color": "#88E789",
+   "tier": 14,
+   "area": "009",
+   "price": 3200,
+   "house": 2000,
+   "rent": [
+    320,
+    1400,
+    3280,
+    6760
+   ]
+  },
+  {
+   "index": 15,
+   "name": "成为人类桥",
+   "shortName": "成为\n人类桥",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 2,
+   "area": "",
+   "price": 800,
+   "house": 500,
+   "rent": [
+    80,
+    320,
+    760,
+    1600
+   ]
+  },
+  {
+   "index": 16,
+   "name": "CiRCLE 咖啡厅",
+   "shortName": "CiRCLE\n咖啡厅",
+   "kind": "cafe",
+   "group": 0,
+   "color": "#FFFFFF",
+   "tier": 0,
+   "area": "001",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 17,
+   "name": "RiNG 2",
+   "shortName": "RiNG",
+   "kind": "ring",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 3,
+   "area": "022",
+   "price": 1000,
+   "house": 500,
+   "rent": []
+  },
+  {
+   "index": 18,
+   "name": "周边学区",
+   "shortName": "周边\n学区",
+   "kind": "agent",
+   "group": 3,
+   "color": "#0BA715",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 19,
+   "name": "白雪学园",
+   "shortName": "白雪\n学园",
+   "kind": "property",
+   "group": 3,
+   "color": "#0BA715",
+   "tier": 12,
+   "area": "",
+   "price": 2800,
+   "house": 1500,
+   "rent": [
+    280,
+    1120,
+    2560,
+    5200
+   ]
+  },
+  {
+   "index": 20,
+   "name": "艺术学院高中",
+   "shortName": "艺术学院\n高中",
+   "kind": "property",
+   "group": 3,
+   "color": "#0BA715",
+   "tier": 6,
+   "area": "",
+   "price": 1600,
+   "house": 1000,
+   "rent": [
+    160,
+    680,
+    1600,
+    3320
+   ]
+  },
+  {
+   "index": 21,
+   "name": "瑟罗希亚国际学校",
+   "shortName": "瑟罗希亚\n国际",
+   "kind": "property",
+   "group": 3,
+   "color": "#0BA715",
+   "tier": 13,
+   "area": "",
+   "price": 3000,
+   "house": 2000,
+   "rent": [
+    300,
+    1360,
+    3220,
+    6680
+   ]
+  },
+  {
+   "index": 22,
+   "name": "DUB MUSIC EXPERIMENT",
+   "shortName": "dub",
+   "kind": "property",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 10,
+   "area": "",
+   "price": 2400,
+   "house": 1500,
+   "rent": [
+    240,
+    1040,
+    2440,
+    5040
+   ]
+  },
+  {
+   "index": 23,
+   "name": "加茂川中央中学",
+   "shortName": "加茂川\n中学",
+   "kind": "property",
+   "group": 3,
+   "color": "#0BA715",
+   "tier": 4,
+   "area": "",
+   "price": 1200,
+   "house": 500,
+   "rent": [
+    120,
+    400,
+    880,
+    1760
+   ]
+  },
+  {
+   "index": 24,
+   "name": "东京外",
+   "shortName": "东京外",
+   "kind": "agent",
+   "group": 4,
+   "color": "#A45ACD",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 25,
+   "name": "大阪中之岛公园",
+   "shortName": "中之岛\n公园",
+   "kind": "property",
+   "group": 4,
+   "color": "#A45ACD",
+   "tier": 10,
+   "area": "",
+   "price": 2400,
+   "house": 1500,
+   "rent": [
+    240,
+    1040,
+    2440,
+    5040
+   ]
+  },
+  {
+   "index": 26,
+   "name": "小豆岛",
+   "shortName": "小豆岛",
+   "kind": "property",
+   "group": 4,
+   "color": "#A45ACD",
+   "tier": 3,
+   "area": "",
+   "price": 1000,
+   "house": 500,
+   "rent": [
+    100,
+    360,
+    820,
+    1680
+   ]
+  },
+  {
+   "index": 27,
+   "name": "微笑号",
+   "shortName": "微笑号",
+   "kind": "property",
+   "group": 5,
+   "color": "#FFDE21",
+   "tier": 13,
+   "area": "",
+   "price": 3000,
+   "house": 2000,
+   "rent": [
+    300,
+    1360,
+    3220,
+    6680
+   ]
+  },
+  {
+   "index": 28,
+   "name": "米歇尔公园",
+   "shortName": "米歇尔\n公园",
+   "kind": "property",
+   "group": 5,
+   "color": "#FFDE22",
+   "tier": 7,
+   "area": "015",
+   "price": 1800,
+   "house": 1000,
+   "rent": [
+    180,
+    720,
+    1660,
+    3400
+   ]
+  },
+  {
+   "index": 29,
+   "name": "弦卷集团",
+   "shortName": "弦卷\n集团",
+   "kind": "agent",
+   "group": 5,
+   "color": "#FFDE23",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 30,
+   "name": "弦卷豪宅",
+   "shortName": "弦卷\n豪宅",
+   "kind": "property",
+   "group": 5,
+   "color": "#FFDE24",
+   "tier": 16,
+   "area": "",
+   "price": 3600,
+   "house": 2000,
+   "rent": [
+    360,
+    1480,
+    3400,
+    6920
+   ]
+  },
+  {
+   "index": 31,
+   "name": "江户川乐器店",
+   "shortName": "江户川\n乐器店",
+   "kind": "edogawa",
+   "group": 0,
+   "color": "#FFFFFF",
+   "tier": 0,
+   "area": "003",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 32,
+   "name": "Live House",
+   "shortName": "Live\nHouse",
+   "kind": "agent",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 0,
+   "area": "017",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 33,
+   "name": "便利店",
+   "shortName": "便利店",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 4,
+   "area": "",
+   "price": 1200,
+   "house": 500,
+   "rent": [
+    120,
+    400,
+    880,
+    1760
+   ]
+  },
+  {
+   "index": 34,
+   "name": "快餐店",
+   "shortName": "快餐店",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 10,
+   "area": "",
+   "price": 2400,
+   "house": 1500,
+   "rent": [
+    240,
+    1040,
+    2440,
+    5040
+   ]
+  },
+  {
+   "index": 35,
+   "name": "周边精选",
+   "shortName": "周边\n精选",
+   "kind": "agent",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 36,
+   "name": "Bandori车站",
+   "shortName": "Bandori\n车站",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 2,
+   "area": "023",
+   "price": 800,
+   "house": 500,
+   "rent": [
+    80,
+    320,
+    760,
+    1600
+   ]
+  },
+  {
+   "index": 37,
+   "name": "RiNG 3",
+   "shortName": "RiNG",
+   "kind": "ring",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 3,
+   "area": "022",
+   "price": 1000,
+   "house": 500,
+   "rent": []
+  },
+  {
+   "index": 38,
+   "name": "庆鹏女子大学",
+   "shortName": "庆鹏\n女大",
+   "kind": "property",
+   "group": 8,
+   "color": "#F7D9BC",
+   "tier": 12,
+   "area": "",
+   "price": 2800,
+   "house": 1500,
+   "rent": [
+    280,
+    1120,
+    2560,
+    5200
+   ]
+  },
+  {
+   "index": 39,
+   "name": "四叶女子大学",
+   "shortName": "四叶\n女大",
+   "kind": "property",
+   "group": 8,
+   "color": "#F7D9BC",
+   "tier": 12,
+   "area": "",
+   "price": 2800,
+   "house": 1500,
+   "rent": [
+    280,
+    1120,
+    2560,
+    5200
+   ]
+  },
+  {
+   "index": 40,
+   "name": "大学路",
+   "shortName": "大学路",
+   "kind": "agent",
+   "group": 8,
+   "color": "#F7D9BC",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 41,
+   "name": "武道馆",
+   "shortName": "武道馆",
+   "kind": "property",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 15,
+   "area": "",
+   "price": 3400,
+   "house": 2000,
+   "rent": [
+    340,
+    1440,
+    3340,
+    6840
+   ]
+  },
+  {
+   "index": 42,
+   "name": "梦开始的地方",
+   "shortName": "梦开始\n的地方",
+   "kind": "agent",
+   "group": 9,
+   "color": "#FF5522",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 43,
+   "name": "Space",
+   "shortName": "Space",
+   "kind": "property",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 4,
+   "area": "",
+   "price": 1200,
+   "house": 500,
+   "rent": [
+    120,
+    400,
+    880,
+    1760
+   ]
+  },
+  {
+   "index": 44,
+   "name": "星星小巷",
+   "shortName": "星星\n小巷",
+   "kind": "property",
+   "group": 9,
+   "color": "#FF5522",
+   "tier": 5,
+   "area": "",
+   "price": 1400,
+   "house": 1000,
+   "rent": [
+    140,
+    640,
+    1540,
+    3240
+   ]
+  },
+  {
+   "index": 45,
+   "name": "星之鼓动山丘",
+   "shortName": "星之鼓动\n山丘",
+   "kind": "property",
+   "group": 9,
+   "color": "#FF5522",
+   "tier": 1,
+   "area": "",
+   "price": 600,
+   "house": 500,
+   "rent": [
+    60,
+    280,
+    700,
+    1520
+   ]
+  },
+  {
+   "index": 46,
+   "name": "流星堂",
+   "shortName": "流星堂",
+   "kind": "ryuseido",
+   "group": 0,
+   "color": "#FFFFFF",
+   "tier": 0,
+   "area": "002",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 47,
+   "name": "商店街",
+   "shortName": "商店街",
+   "kind": "agent",
+   "group": 10,
+   "color": "#778190",
+   "tier": 0,
+   "area": "008",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  },
+  {
+   "index": 48,
+   "name": "羽泽咖啡厅",
+   "shortName": "羽泽\n咖啡厅",
+   "kind": "property",
+   "group": 10,
+   "color": "#778188",
+   "tier": 9,
+   "area": "006",
+   "price": 2200,
+   "house": 1500,
+   "rent": [
+    220,
+    1000,
+    2380,
+    4960
+   ]
+  },
+  {
+   "index": 49,
+   "name": "山吹面包房",
+   "shortName": "山吹\n面包房",
+   "kind": "property",
+   "group": 10,
+   "color": "#778189",
+   "tier": 8,
+   "area": "",
+   "price": 2000,
+   "house": 1000,
+   "rent": [
+    200,
+    760,
+    1720,
+    3480
+   ]
+  },
+  {
+   "index": 50,
+   "name": "银河拉面馆",
+   "shortName": "银河\n拉面馆",
+   "kind": "property",
+   "group": 10,
+   "color": "#778191",
+   "tier": 8,
+   "area": "",
+   "price": 2000,
+   "house": 1000,
+   "rent": [
+    200,
+    760,
+    1720,
+    3480
+   ]
+  },
+  {
+   "index": 51,
+   "name": "Live House Galaxy",
+   "shortName": "Galaxy",
+   "kind": "property",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 5,
+   "area": "017",
+   "price": 1400,
+   "house": 1000,
+   "rent": [
+    140,
+    640,
+    1540,
+    3240
+   ]
+  },
+  {
+   "index": 52,
+   "name": "北泽精肉店",
+   "shortName": "北泽\n精肉店",
+   "kind": "property",
+   "group": 10,
+   "color": "#778190",
+   "tier": 8,
+   "area": "",
+   "price": 2000,
+   "house": 1000,
+   "rent": [
+    200,
+    760,
+    1720,
+    3480
+   ]
+  },
+  {
+   "index": 53,
+   "name": "旭汤澡堂",
+   "shortName": "旭汤\n澡堂",
+   "kind": "property",
+   "group": 10,
+   "color": "#778190",
+   "tier": 7,
+   "area": "",
+   "price": 1800,
+   "house": 1000,
+   "rent": [
+    180,
+    720,
+    1660,
+    3400
+   ]
+  },
+  {
+   "index": 54,
+   "name": "RiNG 4",
+   "shortName": "RiNG",
+   "kind": "ring",
+   "group": 6,
+   "color": "#CD1146",
+   "tier": 3,
+   "area": "022",
+   "price": 1000,
+   "house": 500,
+   "rent": []
+  },
+  {
+   "index": 55,
+   "name": "六本木大厦",
+   "shortName": "六本木\n大厦",
+   "kind": "property",
+   "group": 11,
+   "color": "#FFB5C0",
+   "tier": 9,
+   "area": "",
+   "price": 2200,
+   "house": 1500,
+   "rent": [
+    220,
+    1000,
+    2380,
+    4960
+   ]
+  },
+  {
+   "index": 56,
+   "name": "CHUCHU的公寓",
+   "shortName": "CHU²\n的公寓",
+   "kind": "property",
+   "group": 11,
+   "color": "#FFB5C0",
+   "tier": 11,
+   "area": "",
+   "price": 2600,
+   "house": 1500,
+   "rent": [
+    260,
+    1080,
+    2500,
+    5120
+   ]
+  },
+  {
+   "index": 57,
+   "name": "飞鸟山公园",
+   "shortName": "飞鸟山\n公园",
+   "kind": "property",
+   "group": 7,
+   "color": "#90D5FF",
+   "tier": 3,
+   "area": "015",
+   "price": 1000,
+   "house": 500,
+   "rent": [
+    100,
+    360,
+    820,
+    1680
+   ]
+  },
+  {
+   "index": 58,
+   "name": "旧古河庭园",
+   "shortName": "旧古河\n庭园",
+   "kind": "property",
+   "group": 11,
+   "color": "#FFB5C0",
+   "tier": 15,
+   "area": "",
+   "price": 3400,
+   "house": 2000,
+   "rent": [
+    340,
+    1440,
+    3340,
+    6840
+   ]
+  },
+  {
+   "index": 59,
+   "name": "广町家画室",
+   "shortName": "广町家\n画室",
+   "kind": "property",
+   "group": 11,
+   "color": "#FFB5C1",
+   "tier": 11,
+   "area": "",
+   "price": 2600,
+   "house": 1500,
+   "rent": [
+    260,
+    1080,
+    2500,
+    5120
+   ]
+  },
+  {
+   "index": 60,
+   "name": "高级住宅区",
+   "shortName": "高级\n住宅区",
+   "kind": "agent",
+   "group": 11,
+   "color": "#FFB5C2",
+   "tier": 0,
+   "area": "",
+   "price": 0,
+   "house": 0,
+   "rent": []
+  }
+ ]
 }

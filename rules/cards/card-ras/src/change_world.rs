@@ -15,10 +15,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const CHANGE_WORLD: CardDef = CardDef::new(
     "RAS:Change the world",
     &[
-        On::Play(Some(cant_play), play, ""),
-        On::Hook(&[HookKind::PassTile], Some(pass_tile_guard), pass_tile, ""),
-        On::Hook(&[HookKind::PayAdd], None, pay_choose, ""),
-        On::Hook(&[HookKind::PayAfter], Some(pay_after_guard), pay_after, ""),
+        On::Play("", Some(cant_play), play),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
+        On::Hook(&[HookKind::PayAdd], "", None, pay_choose),
+        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_guard), pay_after),
     ],
 );
 

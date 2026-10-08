@@ -28,9 +28,9 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], None, at_start, ""),
+        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
         // （2） replaces the draw, so it runs at the per-card **before** point.
-        On::Hook(&[HookKind::DrewBefore], None, on_draw, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::DrewBefore], card_sdk::pre::MINE, None, on_draw),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

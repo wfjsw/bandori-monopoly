@@ -28,14 +28,14 @@ const THIEF: &str = "怪盗标记";
 pub const KAORU_PRINCE: CardDef = CardDef::new(
     "skill:濑田薰:梦幻的王子殿下",
     &[
-        On::Play(Some(can_use), use_skill, ""),
-        On::Hook(&[HookKind::TurnStartBefore], None, declare_cap, ""),
-        On::Hook(&[HookKind::Pass], None, on_pass, ""),
+        On::Play("", Some(can_use), use_skill),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, declare_cap),
+        On::Hook(&[HookKind::Pass], "", None, on_pass),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4), the passer's step onto this player's tile -- not the end-tile
         // [重叠]. `target` is not on a `passTile` payload, so the guard reads
         // the tile being entered.
-        On::Hook(&[HookKind::PassTile], Some(passed_by), on_passed, ""),
+        On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
     ],
 );
 

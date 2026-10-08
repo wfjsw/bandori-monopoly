@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `麻里奈小姐的礼物箱`）:
 //! > 将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌。所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金。
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -19,9 +19,9 @@ const TURNS: &str = "turns";
 pub const MARINA_BOX: CardDef = CardDef::new(
     "event:麻里奈小姐的礼物箱",
     &[
-        On::Play(None, play, ""),
-        On::Hook(&[HookKind::PassTile], Some(always), on_pass, ""),
-        On::Hook(&[HookKind::TurnStartBefore], Some(always), on_turn_start, ""),
+        On::Play("", None, play),
+        On::Hook(&[HookKind::PassTile], "", Some(always), on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
     ],
 );
 

@@ -265,6 +265,15 @@ function assemble(worktree, out) {
     if (existsSync(p)) copyFileSync(p, join(bundleDir, "data", name));
   }
   writeFileSync(join(bundleDir, "rules", "index.json"), JSON.stringify(rulesIndex));
+  // Precompiled guard conditions (docs/GUARDS.md §8.2) ride in the bundle's
+  // `rules/` dir next to the index. A commit from before conditions existed
+  // has no `conds` entry -- nothing to copy, and its glue has no
+  // `ruleset_precompiled` either.
+  if (rulesIndex.conds?.file) {
+    const srcP = join(rulesDir, rulesIndex.conds.file);
+    if (!existsSync(srcP)) fail(`precompiled conds blob missing: ${srcP}`);
+    copyFileSync(srcP, join(bundleDir, "rules", rulesIndex.conds.file));
+  }
   writeFileSync(
     join(bundleDir, "bundle.json"),
     JSON.stringify(

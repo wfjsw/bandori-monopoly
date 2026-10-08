@@ -9,19 +9,19 @@
 //! this card in play when another player's card hits you; a placed action later
 //! discards it to move as many tiles as your hand size.
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const EVEN_LOST: CardDef = CardDef::new(
     "MyGO:即使迷茫着",
     &[
-        On::Play(Some(can_go), go, ""),
+        On::Play("", Some(can_go), go),
         On::Counteract(
             &[ChainKind::Effect],
+            "by != owner && by >= 0 && effect.hits(owner)",
             None,
             counteract,
-            "by != owner && by >= 0 && effect.hits(owner)",
         ),
     ],
 )

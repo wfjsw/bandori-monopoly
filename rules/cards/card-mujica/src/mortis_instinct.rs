@@ -10,7 +10,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const MORTIS_INSTINCT: CardDef = CardDef::new(
     "Mujica:（睦/mortis）表演的本能",
-    &[On::Play(None, play, ""), On::Counteract(&[], Some(can_counteract), counteract, "")],
+    &[On::Play("", None, play), On::Counteract(&[], "", Some(can_counteract), counteract)],
 );
 
 fn play(player_id: i32) -> card_sdk::Asked {

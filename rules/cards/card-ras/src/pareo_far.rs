@@ -19,7 +19,7 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 const PAREO: &str = "PAREO标记";
 
 pub const PAREO_FAR: CardDef =
-    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play(None, pareo_far, "")]);
+    CardDef::new("RAS:（PAREO）渐渐远去的你", &[On::Play("", None, pareo_far)]);
 
 fn pareo_far(player_id: i32) -> card_sdk::Asked {
     let got = ctx::add_tok(player_id, PAREO, 2, 3)?;

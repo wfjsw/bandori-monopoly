@@ -17,10 +17,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",
     &[
-        On::Counteract(&[ChainKind::SettleBefore], Some(can_counteract), counteract, ""),
-        On::Hook(&[HookKind::PassTile], None, pass_tile, ""),
-        On::Hook(&[HookKind::PayAfter], None, pay_after, ""),
-        On::Hook(&[HookKind::SettleAfter], None, settle_after, ""),
+        On::Counteract(&[ChainKind::SettleBefore], "", Some(can_counteract), counteract),
+        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
+        On::Hook(&[HookKind::PayAfter], "", None, pay_after),
+        On::Hook(&[HookKind::SettleAfter], "", None, settle_after),
     ],
 );
 

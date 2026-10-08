@@ -28,13 +28,13 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- the hand play. The
         // [共鸣] branch (2) is offered from the `PayChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
-        On::Play(None, shine_again, ""),
-        On::Hook(&[HookKind::PayChoose], None, pay_choose, ""),
+        On::Play("", None, shine_again),
+        On::Hook(&[HookKind::PayChoose], "", None, pay_choose),
         // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Hook(&[HookKind::TurnStart], None, offer_resonance, ""),
+        On::Hook(&[HookKind::TurnStart], "", None, offer_resonance),
     ],
 );
 

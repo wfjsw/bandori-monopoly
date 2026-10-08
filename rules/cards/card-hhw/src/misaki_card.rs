@@ -13,7 +13,7 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MISAKI_CARD: CardDef = CardDef::new(
     "HHW:（美咲）",
-    &[On::Counteract(&[ChainKind::MoveRoll], Some(can_counteract), counteract, "")],
+    &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)],
 );
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,

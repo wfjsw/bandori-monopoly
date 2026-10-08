@@ -27,11 +27,11 @@ pub const KANON_LOST: CardDef = CardDef::new(
     &[
         // (1) is a starting square: the before-match-start point decides start
         // positions.
-        On::Hook(&[HookKind::DeckBeforeGame], None, at_start, ""),
-        On::Hook(&[HookKind::RollAfter], None, on_roll, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::CircleAffected], None, on_circle, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::TurnEnd], None, at_turn_end, card_sdk::pre::MINE),
-        On::Hook(&[HookKind::RollPlan], None, on_plan, card_sdk::pre::MINE),
+        On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
+        On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
+        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, None, on_plan),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine), (4, legacy_mine)]);
