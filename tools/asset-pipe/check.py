@@ -6,7 +6,7 @@ Verifies that the extracted assets cover everything the original game loads:
   * every card / character / band in game data has its art
   * every voice line, BGM track, SFX, boot image and animated background the C#
     code requests resolves through manifest["resources"]
-  * every Live2D model compiles to model.json + its textures (tools/live2d/build.sh)
+  * every Live2D model compiles to model.json + its textures (tools/live2d/build.mjs)
 
 Keys are copied from the decompiled C# (file:line in comments). Exit status 1 on
 any hard failure; warnings are printed but do not fail.
@@ -120,7 +120,7 @@ def main() -> int:
                 n_songs += 1
                 need_res(f"bandorisongs/{clip}", "CardSongs")
 
-    # 4. Live2D (compiled by tools/live2d/build.sh; see docs/LIVE2D.md)
+    # 4. Live2D (compiled by tools/live2d/build.mjs; see docs/LIVE2D.md)
     l2d = ASSETS / "live2d"
     catalog = load(l2d / "catalog.json")["models"]
     framing = {f["id"] for f in load(l2d / "framing.json")["models"]}
@@ -129,14 +129,14 @@ def main() -> int:
         d = l2d / mid
         model = d / "model.json"
         if not model.is_file():
-            errors.append(f"live2d {mid}: missing model.json (run tools/live2d/build.sh)")
+            errors.append(f"live2d {mid}: missing model.json (run node tools/live2d/build.mjs)")
             continue
         for tex in load(model).get("textures", []):
             if not (d / tex).is_file():
                 errors.append(f"live2d {mid}: missing {tex}")
         for stray in d.iterdir():
-            if stray.name != "model.json" and not re.fullmatch(r"texture_\d+\.png", stray.name):
-                errors.append(f"live2d {mid}: unexpected {stray.name} (only model.json + textures may ship)")
+            if stray.name not in ("model.json", "physics.json") and not re.fullmatch(r"texture_\d+\.png|.+\.mtn", stray.name):
+                errors.append(f"live2d {mid}: unexpected {stray.name} (only model, textures, motions and physics may ship)")
     warnings += [f"framing.json entry {i} has no catalog model" for i in sorted(framing - ids)]
 
     # report

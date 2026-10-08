@@ -20,6 +20,7 @@
 //   FORCE=1 CHECK=1 node tools/live2d/build.mjs
 //
 // Environment:
+//   PYTHON=<path>        opt-in interpreter override (default: python)
 //   FORCE=1              rebuild every model regardless of timestamps
 //   CHECK=1              self-check every model instead of only rebuilt ones
 //   GAME_LIVE2D=<path>   StreamingAssets/BandoriLive2D override (default: next
@@ -37,9 +38,10 @@ const SRC = join(ROOT, "live2d-src");
 const GAME_LIVE2D = resolve(ROOT, process.env.GAME_LIVE2D
   ?? "../BandoriMonopoly_Data/StreamingAssets/BandoriLive2D");
 
+const PYTHON = process.env.PYTHON ?? "python";
 const py = (...args) => {
-  console.log("+", "python", args.join(" "));
-  execFileSync("python", args, { cwd: ROOT, stdio: "inherit" });
+  console.log("+", PYTHON, args.join(" "));
+  execFileSync(PYTHON, args, { cwd: ROOT, stdio: "inherit" });
 };
 
 /** Unpack is due when the archive is newer than its raw extract; convert when

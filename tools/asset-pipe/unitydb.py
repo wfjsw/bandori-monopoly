@@ -82,16 +82,31 @@ CHAR_SPRITES = ["stand", "kv", "sd", "sdHappy", "namePlate"]
 FX_FIELDS = ["tapRing", "tapLight", "tapStar", "tapSparkle"]
 
 
+# Newer player builds insert additional text assets and an sdJoy sprite.
+# Keep the original public field lists and legacy result shape unchanged.
+EXTENDED_TEXT_FIELDS = [*TEXT_FIELDS[:7], "cardLinesJson", "emotesJson", *TEXT_FIELDS[7:], "skillSimpleJson"]
+EXTENDED_CHAR_SPRITES = [*CHAR_SPRITES[:4], "sdJoy", *CHAR_SPRITES[4:]]
+
+
 def read_database(raw: bytes, big_endian: bool = False) -> tuple[str, Database]:
+    for texts, sprites in ((TEXT_FIELDS, CHAR_SPRITES), (EXTENDED_TEXT_FIELDS, EXTENDED_CHAR_SPRITES)):
+        try:
+            return _read_database(raw, big_endian, texts, sprites)
+        except (ValueError, IndexError, struct.error):
+            continue
+    raise ValueError(f"BandoriDatabase layout mismatch: no supported layout matches {len(raw)} bytes")
+
+
+def _read_database(raw: bytes, big_endian: bool, text_fields: list[str], char_sprites: list[str]) -> tuple[str, Database]:
     r = _Reader(raw, ">" if big_endian else "<")
     # MonoBehaviour base
     r.pptr()          # m_GameObject
     r.u8(); r.align() # m_Enabled
     r.pptr()          # m_Script
     name = r.string() # m_Name
-    texts = {f: r.pptr() for f in TEXT_FIELDS}
+    texts = {f: r.pptr() for f in text_fields}
     db = Database(text_assets=texts, rules_version=r.i32())
-    db.character_art = r.array(lambda: {"id": r.string(), **{k: r.pptr() for k in CHAR_SPRITES}})
+    db.character_art = r.array(lambda: {"id": r.string(), **{k: r.pptr() for k in char_sprites}})
     db.band_art = r.array(lambda: {"band": r.string(), "logo": r.pptr()})
     db.room_art = r.array(lambda: {"band": r.string(), "card": r.pptr()})
     db.card_art = r.array(lambda: {"id": r.string(), "art": r.pptr()})

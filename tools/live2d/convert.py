@@ -35,6 +35,7 @@ reflectX, reflectY]` rows for rotation deformers.  `grid` maps
 Floats are rounded to 4 decimals and the file is minified JSON.
 """
 
+import os
 import json
 import re
 import shutil
@@ -48,7 +49,7 @@ OUT = ROOT / "webui" / "public" / "assets" / "live2d"
 # the shipped game keeps the original Cubism 2 textures; used only when a
 # .cxx3 archive is missing one of the PNGs its XML references (27 of the 55
 # models reference a second texture that the archive does not embed).
-GAME = ROOT.parent / "BandoriMonopoly_Data" / "StreamingAssets" / "BandoriLive2D"
+GAME = ROOT / os.environ.get("GAME_LIVE2D", "../BandoriMonopoly_Data/StreamingAssets/BandoriLive2D")
 
 BLEND = {"NORMAL": 0, "MULTIPLY": 1, "ADD": 2, "ADDITIVE": 2, "SCREEN": 3}
 NUM = re.compile(r"[-+0-9.eE]+")

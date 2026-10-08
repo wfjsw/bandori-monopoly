@@ -24,6 +24,7 @@ Usage:
   python tools/live2d/unpack.py 001        # just one model
 """
 
+import os
 import re
 import struct
 import sys
@@ -33,7 +34,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 IN = ROOT / "live2d"
 OUT = ROOT / "live2d-src"
-GAME = ROOT.parent / "BandoriMonopoly_Data" / "StreamingAssets" / "BandoriLive2D"
+GAME = ROOT / os.environ.get("GAME_LIVE2D", "../BandoriMonopoly_Data/StreamingAssets/BandoriLive2D")
 
 MAGIC = b"CAFF"
 HEADER_SIZE = 0x3A

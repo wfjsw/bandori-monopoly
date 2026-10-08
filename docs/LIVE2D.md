@@ -59,6 +59,30 @@ and physics the original plays per id (`motion` = the idle, `reactions` = the
 tap set, `physics` = the hair/clothes springs); the web renderer plays them
 through the ported `Live2DPortrait.RenderFrame` (below).
 
+### Preparing missing archives
+
+If `live2d/<id>.cxx3` archives are unavailable, create them explicitly from the
+game's `model.moc` files with [Quadrism](https://codeberg.org/Podimium/Quadrism).
+This optional step is not part of `build.mjs` or the npm prebuild. Existing
+archives are kept even when the game's source files are newer; `FORCE=1` opts
+into replacing them.
+
+The following Quadrism revision was verified locally. Its wildcard quick-xml
+dependency needs the documented 0.41 version pinned. From the repository root:
+
+```sh
+git clone https://codeberg.org/Podimium/Quadrism.git /tmp/bandori-assets-quadrism
+git -C /tmp/bandori-assets-quadrism checkout cb3f8557bdb2ebfd98c685c23ec47400d767423d5f2f3b4e45e889f3d369a60c
+CARGO_HOME=/tmp/bandori-assets-cargo cargo update --manifest-path /tmp/bandori-assets-quadrism/Cargo.toml -p quick-xml --precise 0.41.0
+CARGO_HOME=/tmp/bandori-assets-cargo cargo build --manifest-path /tmp/bandori-assets-quadrism/Cargo.toml --profile fast-release --workspace --locked
+GAME_LIVE2D=../BandoriMonopoly_Data/StreamingAssets/BandoriLive2D QUADRISM=/tmp/bandori-assets-quadrism/target/fast-release/quadexec node tools/live2d/prepare.mjs
+```
+
+Preparation passes every `texture_<n>.png` with `--tex atlas`. Afterwards run
+the usual `build.mjs`; set `PYTHON=/path/to/python` if needed (the default remains
+`python`). `GAME_LIVE2D` is shared by preparation, texture fallback and motion
+copying. Catalog/framing metadata still comes from `extract.py`.
+
 ## Renderer
 
 `webui/src/live2d/` is a Cubism 2 renderer over WebGL: it fetches `model.json`,

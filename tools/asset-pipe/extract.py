@@ -26,7 +26,6 @@ import hashlib
 import io
 import os
 import json
-import os
 import shutil
 import struct
 import subprocess
@@ -47,7 +46,7 @@ from unitydb import CHAR_SPRITES, Resolver, read_database  # noqa: E402
 # The game build to extract from; the upstream ships a dated folder
 # ("BanG Dream 大富翁10-04") alongside the old one -- override with GAME_DATA_DIR.
 BUILD = Path(os.environ.get("GAME_DATA_DIR", r"D:/BanG Dream 大富翁/BanG Dream 大富翁10-04/BandoriMonopoly_Data"))
-GAME_DATA = Path(r"D:/BanG Dream 大富翁/源码导出_SourceExport/game-data")
+GAME_DATA = Path(os.environ.get("GAME_JSON_DIR", r"D:/BanG Dream 大富翁/源码导出_SourceExport/game-data"))
 WEB = Path(__file__).resolve().parents[2]
 OUT_DEFAULT = WEB / "webui" / "public" / "assets"
 DATA_OUT = WEB / "data"
@@ -71,6 +70,8 @@ SKIP_IMAGE_PREFIXES = ("Splash Screen", "UnitySplash", "Font Texture", "Default-
 
 
 def find_ffmpeg() -> str:
+    if override := os.environ.get("FFMPEG"):
+        return override
     exe = shutil.which("ffmpeg")
     if exe:
         return exe
@@ -127,6 +128,7 @@ class Pipeline:
         }
         self.done: set[tuple[str, int]] = set()  # objects already exported
         self.written: dict[str, str] = {}        # rel path -> content hash (dedup scene names)
+        self.scheduled: set[str] = set()        # destinations already queued for encoding
 
     # -- scheduling ---------------------------------------------------------------
     def submit(self, fn, *args):
@@ -143,6 +145,11 @@ class Pipeline:
                 self.stats.error(str(e))
 
     def want(self, rel: str) -> bool:
+        # Duplicate ResourceManager entries must not race on one temporary file.
+        # Keep the original path spelling and scene-name allocation unchanged.
+        if rel in self.scheduled:
+            return False
+        self.scheduled.add(rel)
         p = self.out / rel
         if p.exists() and not self.force:
             self.stats.skipped += 1
@@ -349,9 +356,9 @@ def run(args) -> int:
             p.manifest["fonts"][d.m_Name] = rel
 
     # 5) Live2D -- catalog/framing metadata only. The models are compiled from
-    # web/live2d/<id>.cxx3 by tools/live2d/build.sh into out/live2d/<id>/
-    # {model.json,texture_<n>.png} and never copied raw (model.moc, physics and
-    # motions are not web assets and main.xml is ~5 MB per model).
+    # live2d/<id>.cxx3 by tools/live2d/build.mjs into out/live2d/<id>/
+    # {model.json,texture_<n>.png,*.mtn,physics.json}. Raw model.moc and
+    # main.xml (~5 MB per model) are build inputs, never browser assets.
     if "live2d" in only:
         src = BUILD / "StreamingAssets" / "BandoriLive2D"
         dst = out / "live2d"
@@ -362,7 +369,7 @@ def run(args) -> int:
         p.stats.counts["live2d"] = sum(1 for _ in dst.rglob("*") if _.is_file())
         p.stats.bytes["live2d"] = sum(f.stat().st_size for f in dst.rglob("*") if f.is_file())
         if not any(dst.glob("*/model.json")):
-            print("   live2d: no compiled models yet -- run tools/live2d/build.sh")
+            print("   live2d: no compiled models yet -- run node tools/live2d/build.mjs")
 
     # 6) game data for server / game-core
     if "data" in only:
