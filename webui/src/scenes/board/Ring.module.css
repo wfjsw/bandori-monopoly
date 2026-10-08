@@ -53,7 +53,7 @@
 
 .banner { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); z-index: 20; min-width: 360px; max-width: 600px; pointer-events: none; background: rgba(255, 255, 255, 0.96); border-radius: 14px; box-shadow: 0 10px 30px rgba(80, 30, 50, 0.25); padding: 12px 26px; text-align: center; display: flex; flex-direction: column; gap: 4px; border-top: 6px solid var(--pink); animation: banner 2.2s ease forwards; }
 @keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 8%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
-/* Stage transition (Master Duel-like): a wide light bar sweeps the phase name
+/* New-turn announcement: a wide light bar sweeps the player's turn label
    across the board centre -- in once, shine pass, out. */
 .phaseFlash { position: absolute; left: 50%; top: 178px; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.5s ease forwards; }
 .phaseFlash span { display: block; font-size: 34px; font-weight: 800; letter-spacing: 0.14em; white-space: nowrap; background: linear-gradient(90deg, var(--pink) 0%, #c23a7c 48%, var(--pink) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }

@@ -154,10 +154,10 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
             {anim.banner.body && <span>{anim.banner.body}</span>}
           </div>
         )}
-        {anim.phase && (
-          <div key={anim.phase.id} className={s.phaseFlash}>
+        {anim.turnAnnouncement && (
+          <div key={anim.turnAnnouncement.id} className={s.phaseFlash}>
             <i className={s.link} /><i className={s.link} /><i className={s.link} /><i className={s.link} />
-            <span>{anim.phase.label ?? tr(anim.phase.key)}</span>
+            <span>{anim.turnAnnouncement.label}</span>
           </div>
         )}
         {anim.reveal && <div className={cx(s.reveal, anim.reveal.out && s.revealOut)}><CardFace id={anim.reveal.card} size="big" /></div>}
