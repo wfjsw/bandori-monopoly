@@ -44,10 +44,11 @@
 .compact .sub { font-size: 13px; gap: 8px; }
 .compact .n { width: 18px; height: 18px; line-height: 18px; font-size: 11px; left: 2px; top: 2px; }
 
-.log { position: absolute; left: 0; top: 665px; width: 100%; height: 210px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px 8px; display: flex; flex-direction: column; align-items: flex-start; }
-.lines { flex: 1; align-self: stretch; overflow: auto; margin-top: 8px; font-size: 15px; line-height: 1.55; }
+.log { position: relative; flex: 1; min-height: 0; width: 100%; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px 8px; display: flex; flex-direction: column; align-items: flex-start; }
+.lines { flex: 1; align-self: stretch; overflow: auto; margin-top: 8px; font-size: 14px; line-height: 1.55; }
 .lines::-webkit-scrollbar { width: 5px; }
 .turnLine { color: var(--pink); font-weight: 700; margin-top: 4px; }
+.stageLine { color: var(--sub); font-size: 12px; margin: 5px 0 2px; }
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
 
 .clock { width: 30px; height: 30px; line-height: 30px; left: 2px; top: 2px; font-size: 13px; font-weight: 700; color: var(--pink); background: radial-gradient(#fff 56%, transparent 59%), conic-gradient(var(--pink) calc(var(--frac) * 360deg), var(--light-pill) 0); }

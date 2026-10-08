@@ -61,8 +61,8 @@ export function closeAllModals(): void {
   old.forEach((e) => e.onClose?.());
 }
 
-export function isModalOpen(key: string): boolean {
-  return entries.some((e) => e.key === key);
+export function isModalOpen(key?: string): boolean {
+  return key === undefined ? entries.length > 0 : entries.some((e) => e.key === key);
 }
 
 /** A yes / no question. */

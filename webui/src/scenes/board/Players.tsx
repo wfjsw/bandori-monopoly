@@ -1,7 +1,7 @@
-// Left column: player panels (PlayerPanelView) and the match log.
+// Player panels on the left; the match log is placed in the right column.
 
 import { stateOf, stateMax } from "../../core/names";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cardTitle } from "../../core/data";
 import { cx } from "../../core/cx";
@@ -125,7 +125,7 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   );
 }
 
-export function Log({ lines }: { lines: LogLine[] }) {
+export function Log({ lines, children }: { lines: LogLine[]; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
@@ -134,8 +134,9 @@ export function Log({ lines }: { lines: LogLine[] }) {
   return (
     <div className={s.log}>
       <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>
+      {children}
       <div className={s.lines} ref={ref}>
-        {lines.map((l) => <div key={l.id} className={cx(l.turn && s.turnLine)}>{l.text}</div>)}
+        {lines.map((l) => <div key={l.id} className={cx(l.turn && s.turnLine, l.stage && s.stageLine)}>{l.text}</div>)}
       </div>
     </div>
   );

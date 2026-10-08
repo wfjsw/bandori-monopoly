@@ -317,25 +317,6 @@ export function showDeck(m: Model): void {
   ) : <div className={s.empty}>{tr("board.drawPileEmpty")}</div>, { size: "wide" });
 }
 
-function SettleConfirm({ sess, close }: { sess: GameSession; close: () => void }) {
-  const auto = useAutoplay(sess); // 托管
-  const solo = sess.kind !== "online";
-  return (
-    <div className={s.confirm}>
-      <p>{solo ? tr("board.settleAsk") : tr("board.voteAsk")}</p>
-      <div className={s.btns}>
-        <Btn onClick={close}>{tr("common.cancel")}</Btn>
-        <Btn kind="pink" disabled={auto} onClick={async () => { if (await act(sess, { act: "vote", value: 1 })) close(); }}>{solo ? tr("board.settleOk") : tr("board.voteStart")}</Btn>
-      </div>
-    </div>
-  );
-}
-
-export function showSettle(sess: GameSession): void {
-  const solo = sess.kind !== "online";
-  openModal(solo ? tr("board.settle") : tr("board.voteTitle"), (close) => <SettleConfirm sess={sess} close={close} />, { size: "small" });
-}
-
 function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => void; exit: () => void }) {
   const auto = useAutoplay(sess); // 托管: settle / forfeit are locked
   const solo = sess.kind !== "online";
@@ -344,7 +325,7 @@ function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => v
       <p>{solo ? tr("board.leaveSoloText") : tr("board.leaveOnlineText")}</p>
       <div className={s.btns}>
         {solo ? <Btn onClick={() => { close(); exit(); }}>{tr("board.leaveStay")}</Btn> : <Btn onClick={close}>{tr("board.continue")}</Btn>}
-        <Btn kind="blue" disabled={auto} onClick={() => { close(); showSettle(sess); }}>{solo ? tr("board.settle") : tr("board.voteEnd")}</Btn>
+        <Btn kind="blue" disabled={auto} onClick={async () => { if (await act(sess, { act: "vote", value: 1 })) close(); }}>{solo ? tr("board.settleOk") : tr("board.voteStart")}</Btn>
         <Btn kind="pink" disabled={auto} onClick={async () => { close(); await act(sess, { act: "leave" }); exit(); }}>{tr("board.leaveForfeit")}</Btn>
       </div>
     </div>
@@ -352,5 +333,5 @@ function LeaveConfirm({ sess, close, exit }: { sess: GameSession; close: () => v
 }
 
 export function showLeave(sess: GameSession, exit: () => void): void {
-  openModal(tr("board.leaveTitle"), (close) => <LeaveConfirm sess={sess} close={close} exit={exit} />, { size: "mid" });
+  openModal(tr(sess.kind === "online" ? "board.leaveVoteTitle" : "board.leaveSettleTitle"), (close) => <LeaveConfirm sess={sess} close={close} exit={exit} />, { size: "mid", key: "leave" });
 }

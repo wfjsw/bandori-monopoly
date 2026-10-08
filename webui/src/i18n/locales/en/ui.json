@@ -61,9 +61,9 @@
   "board.graveyardPile": "Graveyard",
   "board.hand": "Hand {{n}}/{{max}}",
   "board.leaveForfeit": "Leave (forfeit)",
-  "board.leaveOnlineText": "Leaving counts as going out (like a bankruptcy). You can also vote to end the match first.",
-  "board.leaveSoloText": "The match is saved automatically and can be continued from Solo on the home screen.\nYou can also settle by score now, or leave and forfeit.",
-  "board.leaveStay": "Leave for now",
+  "board.leaveOnlineText": "You can vote to settle this match by the current scores.\nLeaving directly counts as going out (like a bankruptcy).",
+  "board.leaveSoloText": "You can settle this match by the current scores.\nOr leave for now: the match is saved automatically and can be continued from Solo.",
+  "board.leaveStay": "Leave without settling",
   "board.leaveTitle": "Leave match",
   "board.markCp": "CP point",
   "board.markFrom": "From: {{card}}",
@@ -519,5 +519,10 @@
   "topbar.rulesTitle": "Game rules",
   "topbar.stars": "Stars",
   "topbar.starsInfo": "You earn stars for every finished match.",
-  "topbar.stats": "{{games}} matches · solo {{solo}} · casual {{casual}} · ranked {{ranked}} (1st place {{wins}})"
+  "topbar.stats": "{{games}} matches · solo {{solo}} · casual {{casual}} · ranked {{ranked}} (1st place {{wins}})",
+  "board.skipMovement": "Skip movement",
+  "board.continueTurn": "Continue",
+  "board.logStage": "Phase: {{stage}}",
+  "board.leaveSettleTitle": "Settle this match?",
+  "board.leaveVoteTitle": "Vote to settle before leaving?"
 }

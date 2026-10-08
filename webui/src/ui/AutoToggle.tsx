@@ -1,6 +1,6 @@
 // 托管 / 混沌 / 进阶 mode selector: hands this seat to a browser-side
 // autopilot. Stays clickable in every state, so the player can always take the
-// controls back. On the board it sits in the turn card (`compact`); on
+// controls back. On the board it sits at the hand header (`compact`); on
 // character select it is in the TopBar `right` slot. The banner strip is
 // rendered by the match screens. 进阶 is the worker-pool search
 // (`docs/BOT.md` B6), lazy-loaded; it falls back to 托管 on any failure.
@@ -61,7 +61,7 @@ export function ThinkingPill({ sess, member }: { sess: GameSession; member?: num
 }
 
 /** How long the strip stays after the cooldown ends (it is transient: the
- *  pill in the turn card is the standing indicator). */
+ *  pill at the hand header is the standing indicator). */
 const BANNER_HOLD_MS = 2000;
 const BANNER_FADE_MS = 400;
 

@@ -29,7 +29,7 @@ const EVENT_SFX: Record<string, string> = {
   gain: "coin_gain", pass: "bonus", lose: "coin_pay", draw: "draw", mulligan: "draw", discard: "card_play",
 };
 
-export interface LogLine { id: number; text: string; turn: boolean }
+export interface LogLine { id: number; text: string; turn: boolean; stage?: boolean }
 
 /** A turn-stage change, queued behind the events that led to it. `step` is the
  *  engine's stage number (1..4 = 开始 / 运营 / 移动 / 结束). */
@@ -75,6 +75,7 @@ export class Animator {
    *  takes the fast path and nothing waits at all. */
   speed = 1;
   private seq = 0;
+  private localLogId = 0;
   private bannerTimer = 0;
   private phaseTimer = 0;
   private disposed = false;
@@ -176,6 +177,9 @@ export class Animator {
    *  chain links snap in across the banner, then it resolves. The effect runs
    *  for 1.5s; the marker does not wait for it (see `stage`). */
   showPhase(key: string, label?: string): void {
+    if (!label) this.log = [...this.log.slice(-199), {
+      id: --this.localLogId, text: tr("board.logStage", { stage: tr(key) }), turn: false, stage: true,
+    }];
     this.phase = { key, label, id: ++this.seq };
     clearTimeout(this.phaseTimer);
     this.phaseTimer = window.setTimeout(() => {
@@ -394,8 +398,8 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
         // Stage transition: every turn-stage change sweeps the
         // stage name across the board. The rulebook's four stages are
         // 开始 / 运营 / 移动 / 结束 (`rulebook.txt:2957`) and the engine's `step`
-        // is 0 before a turn and 1..4 for those, so `step - 1` indexes the
-        // label list (`Side.tsx`'s `phases()`).
+        // is 0 before a turn and 1..4 for those. The sweep also records the
+        // stage in the match log.
         const now = v.state;
         if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
           const newTurn = prev.turn !== now.turn;
