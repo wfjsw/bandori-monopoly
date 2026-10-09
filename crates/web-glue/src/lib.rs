@@ -1012,24 +1012,19 @@ pub fn fair_canon_settings(
     Ok(game_core::fair::CanonSettings::new(mode, step, &weights, &members).canon())
 }
 
-/// `commit = SHA-256(...)` (`docs/FAIRNESS.md`). All inputs hex / text.
+/// `commit = SHA-256(...)` (`docs/FAIRNESS.md` §1.1): the openings plus the
+/// engine identity. Drawn before any nonce exists; the room settings and the
+/// participant list are bound by the record header instead.
 #[wasm_bindgen]
 pub fn fair_commit(
     seed_hex: &str,
     salt_hex: &str,
     bundle: &str,
     ruleset_sha256: &str,
-    settings: &str,
 ) -> Result<String, JsError> {
     let seed = game_core::fair::unhex32(seed_hex).map_err(|e| JsError::new(&e))?;
     let salt = game_core::fair::unhex32(salt_hex).map_err(|e| JsError::new(&e))?;
-    Ok(game_core::fair::commit_hex(
-        &seed,
-        &salt,
-        bundle,
-        ruleset_sha256,
-        settings,
-    ))
+    Ok(game_core::fair::commit_hex(&seed, &salt, bundle, ruleset_sha256))
 }
 
 /// The derived match seed: `SHA-256(seed, sorted nonces)`

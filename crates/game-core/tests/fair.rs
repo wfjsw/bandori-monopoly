@@ -9,8 +9,8 @@ use std::sync::Arc;
 use game_core::data::GameData;
 use game_core::engine::{CardRules, Match, StubRules, SAVE_VERSION};
 use game_core::fair::{
-    commit_hex, derive_match_seed, hex32, live_seed, unhex32, verify, verify_replay, CanonSettings,
-    Fairness, NonceEntry, FAIR_VERSION,
+    commit_hex, commit_hex_v1, derive_match_seed, hex32, live_seed, unhex32, verify, verify_replay,
+    CanonSettings, Fairness, NonceEntry, FAIR_VERSION,
 };
 use game_core::net::RoomMember;
 use game_core::record::{
@@ -100,18 +100,30 @@ fn settings_of(members: &[RoomMember]) -> String {
 }
 
 /// Build the commit + derived seed the server would produce, run a short bot
-/// game on that seed, and seal it with the full [`Fairness`].
+/// game on that seed, and seal it with the full [`Fairness`]. The commitment
+/// is the v2 one -- drawn at room creation over the openings and the engine
+/// identity only (`docs/FAIRNESS.md` §1.1).
 fn seeded_record(o: &Openings) -> game_core::record::RecordFile {
+    seeded_record_v(o, FAIR_VERSION)
+}
+
+/// [`seeded_record`] under an explicit scheme version, so a v1 record (the
+/// 2026-10-08 recipe) can be built and checked against its own recipe.
+fn seeded_record_v(o: &Openings, v: u32) -> game_core::record::RecordFile {
     let members = members();
     let settings = settings_of(&members);
     let st = stamp();
-    let commit = commit_hex(
-        &o.seed,
-        &o.salt,
-        &st.bundle,
-        &st.ruleset_sha256,
-        &settings,
-    );
+    let commit = if v == 1 {
+        commit_hex_v1(
+            &o.seed,
+            &o.salt,
+            &st.bundle,
+            &st.ruleset_sha256,
+            &settings,
+        )
+    } else {
+        commit_hex(&o.seed, &o.salt, &st.bundle, &st.ruleset_sha256)
+    };
     let derived = derive_match_seed(&o.seed, &o.nonces);
     let setup = MatchSetup {
         members: members.clone(),
@@ -121,7 +133,7 @@ fn seeded_record(o: &Openings) -> game_core::record::RecordFile {
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
     rm.set_fair(Fairness {
-        v: FAIR_VERSION,
+        v,
         commit,
         seed: hex32(&o.seed),
         salt: hex32(&o.salt),
@@ -156,7 +168,16 @@ fn commit_reveal_round_trip_verifies() {
     assert!(rep.ok, "{:?}", rep.steps);
     // Every named step is there and green.
     let names: Vec<&str> = rep.steps.iter().map(|s| s.step.as_str()).collect();
-    for want in ["settings", "commit", "bundle", "ruleset", "derived_seed", "initial_rng", "replay"] {
+    for want in [
+        "settings",
+        "nonces",
+        "commit",
+        "bundle",
+        "ruleset",
+        "derived_seed",
+        "initial_rng",
+        "replay",
+    ] {
         assert!(names.contains(&want), "missing step {want}: {names:?}");
     }
 }
@@ -236,6 +257,78 @@ fn tampered_settings_fails() {
     let rep = verify(&file);
     assert!(!rep.ok);
     // The rebuilt canonical string from the record's own setup disagrees.
+    // Under v2 the commitment no longer folds the settings in (it is drawn at
+    // room creation, before the roster is fixed), so this is the step that
+    // covers the edit -- the commitment itself still opens.
+    let settings = rep.steps.iter().find(|s| s.step == "settings").unwrap();
+    assert!(!settings.ok, "{:?}", rep.steps);
+    let commit = rep.steps.iter().find(|s| s.step == "commit").unwrap();
+    assert!(commit.ok, "{:?}", rep.steps);
+}
+
+#[test]
+fn a_nonce_from_a_non_participant_fails() {
+    // The record only mixes in the nonces of the members who sat down; a
+    // nonce smuggled in for someone else must not verify (`docs/FAIRNESS.md`
+    // -- nonces are dropped for anyone outside the match).
+    let o = openings();
+    let mut file = seeded_record(&o);
+    let mut fair = file.header.fair.clone().unwrap();
+    fair.nonces.push(NonceEntry {
+        member: 99,
+        nonce: hex32(&[0x77; 32]),
+    });
+    file.header.fair = Some(fair);
+    let rep = verify(&file);
+    assert!(!rep.ok, "{:?}", rep.steps);
+    let nonces = rep.steps.iter().find(|s| s.step == "nonces").unwrap();
+    assert!(!nonces.ok, "{:?}", rep.steps);
+}
+
+#[test]
+fn a_v1_record_still_verifies_under_the_v1_recipe() {
+    // Records written 2026-10-08 carry `v: 1` and a commitment that folded
+    // the canonical settings in. They keep verifying -- against *their*
+    // recorded scheme version, not the current one.
+    let o = openings();
+    let file = seeded_record_v(&o, 1);
+    let fair = file.header.fair.as_ref().unwrap();
+    assert_eq!(fair.v, 1);
+    let rep = verify(&file);
+    assert!(rep.ok, "{:?}", rep.steps);
+    let rep = verify_replay(&file, data(), rules());
+    assert!(rep.ok, "{:?}", rep.steps);
+    // ...and the v1 recipe is still the one that opens it: swapping in the v2
+    // hash fails.
+    let mut tampered = file.clone();
+    let mut f = tampered.header.fair.clone().unwrap();
+    f.commit = commit_hex(&o.seed, &o.salt, &stamp().bundle, &stamp().ruleset_sha256);
+    tampered.header.fair = Some(f);
+    assert!(!verify(&tampered).ok);
+}
+
+#[test]
+fn a_v2_commit_covers_the_openings_and_the_engine_only() {
+    // The creation-time commitment pins seed/salt/engine identity. What it
+    // deliberately does not pin (the roster and the settings can still change
+    // before the start) is covered by the header checks instead.
+    let o = openings();
+    let file = seeded_record(&o);
+    let fair = file.header.fair.clone().unwrap();
+    assert_eq!(fair.v, FAIR_VERSION);
+    assert_eq!(
+        fair.commit,
+        commit_hex(&o.seed, &o.salt, &stamp().bundle, &stamp().ruleset_sha256)
+    );
+    // A different roster with the same openings re-derives a different
+    // settings string -- and the `settings` step is what catches it.
+    let mut swapped = file.clone();
+    if let Init::Seed(setup) = &mut swapped.body.init {
+        setup.members[0].player = "Mallory".into();
+    }
+    game_core::record::seal(&mut swapped);
+    let rep = verify(&swapped);
+    assert!(!rep.ok, "{:?}", rep.steps);
     let settings = rep.steps.iter().find(|s| s.step == "settings").unwrap();
     assert!(!settings.ok, "{:?}", rep.steps);
 }

@@ -69,6 +69,12 @@ impl Server {
         engine: Arc<Pool>,
         store: Arc<dyn CrossState>,
     ) -> Arc<Self> {
+        // Prime the engine-stamp cache: the commit-reveal slot binds it and
+        // rolls under a room lock, where a worker round-trip must not happen
+        // (`docs/FAIRNESS.md` §1.1).
+        if let Err(e) = engine.info() {
+            eprintln!("engine stamp unavailable at startup: {e}");
+        }
         Arc::new(Self {
             data,
             rules,

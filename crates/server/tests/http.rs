@@ -34,11 +34,24 @@ async fn spawn_scaled(presence_timeout: Duration, time_scale: f32) -> (String, A
 /// [`spawn_scaled`] plus a tuning hook that runs before the ticker starts
 /// (the [`Server`] is inside an [`Arc`] by then). Tests that need a
 /// `bot-service` or a non-default bot budget hang it here.
+/// Give the in-process worker a glue identity so its `EngineStamp` names an
+/// engine bundle (`rules-worker`'s `deployed_glue_sha`: `BD_GLUE_SHA`, or the
+/// `glueSha256` of `BD_ENGINE_ID`). A record whose stamp names no bundle is
+/// refused by the fairness verifier's `bundle` step (`docs/FAIRNESS.md` §2),
+/// and a real deploy always has one. Set once: the identity is cached
+/// process-wide.
+fn test_glue_identity() {
+    use std::sync::Once;
+    static ONCE: Once = Once::new();
+    ONCE.call_once(|| std::env::set_var("BD_GLUE_SHA", "test-glue-sha"));
+}
+
 async fn spawn_tuned(
     presence_timeout: Duration,
     time_scale: f32,
     tune: impl FnOnce(&mut Server),
 ) -> (String, Arc<Server>) {
+    test_glue_identity();
     let d = data();
     let rules: Arc<dyn game_core::engine::CardRules> = Arc::new(StubRules);
     // In-process engine: the tests exercise the server, not the worker pool.
@@ -127,10 +140,10 @@ impl Client {
         (status, r.bytes().await.unwrap(), headers)
     }
 
-    /// Post this seat's commit-reveal nonce (`docs/FAIRNESS.md`). The window
-    /// closes and the match is created once every human has posted (or
-    /// `server::room::NONCE_WINDOW` elapses).
-    async fn fair_nonce(&self, id: &str) {
+    /// Post this seat's commit-reveal nonce (`docs/FAIRNESS.md`): the client
+    /// does this as it enters the room, before any start. A nonce that never
+    /// arrives is simply absent. Returns the `RoomInfo` the endpoint answers.
+    async fn fair_nonce(&self, id: &str) -> Value {
         // Any 32 bytes as hex; distinct per seat so the derived seed differs
         // from a no-nonce run.
         let nonce = format!(
@@ -141,7 +154,7 @@ impl Client {
                 | 1
         );
         self.ok(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": nonce }))
-            .await;
+            .await
     }
 
     async fn ok(&self, path: &str, body: Value) -> Value {
@@ -484,9 +497,9 @@ async fn a_match_over_http_and_sse() {
         ("hello", Some(me as i64))
     );
 
+    a.fair_nonce(&id).await;
     a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
-    a.fair_nonce(&id).await;
     // Play until it's our move: phase play, our turn, 运营 stage (step 2), nothing pending.
     let frames = drive(&a, &id, &mut sse, &d, |v| {
         let st = &v["state"];
@@ -571,10 +584,10 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
     let joined = b.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
     let b_member = joined["you"].as_i64().unwrap();
     let _keep_b = b.stream(&id, None).await; // B present while the match starts
-    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
-        .await;
     a.fair_nonce(&id).await;
     b.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
     drop(_keep_b);
 
     // B has no stream now: after the time-out the AI takes the player.
@@ -730,6 +743,10 @@ async fn a_restart_restores_the_room_and_its_match() {
         password: "pw".into(),
         next_member: 2,
         tokens: vec![(1, "tok-A".into())],
+        // A record from before the slot was persisted: `restore_game` rolls a
+        // fresh commitment before anybody can post a nonce against it
+        // (`docs/FAIRNESS.md` §6).
+        fair: None,
     };
     store.room_put(&rec).unwrap();
     store.match_put("RESTORE", "{\"version\":1}").unwrap();
@@ -746,6 +763,7 @@ async fn a_restart_restores_the_room_and_its_match() {
         .unwrap();
 
     // A fresh Server over the same store = the process coming back up.
+    test_glue_identity();
     let server = Server::new(d.clone(), rules, engine, store);
     server.restore_rooms();
 
@@ -818,11 +836,11 @@ async fn adding_a_chaos_bot_round_trips() {
     assert_eq!(v["error"]["k"], "err.bad_mentality");
 
     // Start (force -- only the host is here) and the seat carries the tag.
+    a.fair_nonce(&id).await;
     let started = a
         .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
     assert_eq!(started["playing"], true);
-    a.fair_nonce(&id).await;
     let (s, state) = a.get(&format!("/api/rooms/{id}/state")).await;
     assert_eq!(s, StatusCode::OK, "{state}");
     // `RoomState` serialises the view under `"match"`.
@@ -878,9 +896,9 @@ async fn the_record_endpoint_serves_the_last_finished_match() {
     .await;
     a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
         .await;
+    a.fair_nonce(&id).await;
     a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
-    a.fair_nonce(&id).await;
 
     // Skip pick / deck so the match is in play immediately -- and so the log
     // carries a `QuickStart`.
@@ -1033,11 +1051,11 @@ async fn advanced_room(server: &Arc<Server>, who: &Client, bots: usize) -> Strin
         )
         .await;
     }
+    who.fair_nonce(&id).await;
     let started = who
         .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
         .await;
     assert_eq!(started["playing"], true, "{started}");
-    who.fair_nonce(&id).await;
     let handle = {
         let room = server.room(&id).unwrap();
         let r = room.lock().unwrap();
@@ -1480,31 +1498,22 @@ async fn a_decide_after_a_ponder_for_the_same_key_is_answered_from_cache() {
 }
 
 /// The commit-reveal openings must never appear in any client-facing payload
-/// while the match runs (`docs/FAIRNESS.md` threat model): not in the start
-/// reply, not in `RoomState`, not in an SSE frame, not in a seat view -- and
-/// the same frame is what the bot service gets. The sealed record, served
-/// after the match to participants, is where the reveal lives.
+/// (`docs/FAIRNESS.md` threat model): not in the create / join replies, not
+/// in a room view **before** the start, not in the start reply, not in
+/// `RoomState`, not in an SSE frame, not in a seat view -- and the same frame
+/// is what the bot service gets. The sealed record, served after the match to
+/// participants, is where the reveal lives.
 #[tokio::test]
 async fn the_openings_never_reach_a_client_payload() {
     let (base, server) = spawn(Duration::from_secs(30)).await;
     let a = Client::new(&base, "Host").await;
     let made = a.ok("/api/rooms", json!({})).await;
     let id = made["room"]["id"].as_str().unwrap().to_string();
-    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
-        .await;
-    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
-        .await;
-    let mut sse = a.stream(&id, None).await;
-    let _hello = sse.next(Duration::from_secs(5)).await.unwrap();
-
-    // Start: the commitment is public the moment the room starts.
-    let started = a
-        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
-        .await;
-    assert_eq!(started["playing"], true, "{started}");
-    let commit = started["fair"]["commit"].as_str().expect("commit public");
+    let commit = made["room"]["fair"]["commit"]
+        .as_str()
+        .expect("commit public from room creation")
+        .to_string();
     assert_eq!(commit.len(), 64, "{commit}");
-    assert_eq!(started["fair"]["collecting"], true, "{started}");
 
     let (seed_hex, salt_hex) = {
         let room = server.room(&id).unwrap();
@@ -1514,15 +1523,48 @@ async fn the_openings_never_reach_a_client_payload() {
     assert_eq!(seed_hex.len(), 64);
     assert_eq!(salt_hex.len(), 64);
 
-    let mut payloads: Vec<String> = vec![started.to_string()];
+    // Every client-facing payload, **including the room views before the
+    // start** (the commit is already up there).
+    let mut payloads: Vec<String> = vec![made.to_string()];
 
-    // The nonce exchange and the match that follows.
-    a.fair_nonce(&id).await;
+    payloads.push(
+        a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+            .await
+            .to_string(),
+    );
+    payloads.push(
+        a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+            .await
+            .to_string(),
+    );
+    let b = Client::new(&base, "Guest").await;
+    let joined = b.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
+    payloads.push(joined.to_string());
+    // Nonces go in as the members enter -- before any start.
+    payloads.push(a.fair_nonce(&id).await.to_string());
+    payloads.push(b.fair_nonce(&id).await.to_string());
     {
         let (s, v) = a.get(&format!("/api/rooms/{id}/state")).await;
         assert_eq!(s, StatusCode::OK, "{v}");
-        assert_eq!(v["room"]["fair"]["collecting"], false, "{v}");
+        assert_eq!(v["room"]["fair"]["commit"], commit.as_str(), "{v}");
         payloads.push(v.to_string());
+    }
+
+    let mut sse = a.stream(&id, None).await;
+    let hello = sse.next(Duration::from_secs(5)).await.unwrap();
+    payloads.push(serde_json::to_string(&hello.data).unwrap());
+
+    // Start: the match exists immediately -- no window, no wait.
+    let started = a
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["playing"], true, "{started}");
+    assert_eq!(started["fair"]["commit"], commit.as_str(), "{started}");
+    payloads.push(started.to_string());
+    {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        assert!(r.game.as_ref().is_some(), "the match exists the moment start returns");
     }
 
     // Drink the live SSE stream (room + match frames).
@@ -1579,16 +1621,18 @@ async fn the_openings_never_reach_a_client_payload() {
     let text = String::from_utf8_lossy(&json).to_string();
     assert!(text.contains(&seed_hex), "the reveal carries the seed");
     assert!(text.contains(&salt_hex), "the reveal carries the salt");
-    assert!(text.contains(commit), "the record repeats the commitment");
+    assert!(text.contains(commit.as_str()), "the record repeats the commitment");
     // And the derived seed in the setup is what the openings produce.
     let file = game_core::record::decode_record(&body).expect("record parses");
     let fair = file.header.fair.as_ref().expect("fairness material");
+    assert_eq!(fair.v, game_core::fair::FAIR_VERSION);
     let seed = game_core::fair::unhex32(&fair.seed).unwrap();
     let nonces: Vec<(i32, [u8; 32])> = fair
         .nonces
         .iter()
         .filter_map(|n| game_core::fair::unhex32(&n.nonce).ok().map(|b| (n.member, b)))
         .collect();
+    assert_eq!(nonces.len(), 2, "both seated humans contributed: {:?}", fair.nonces);
     let derived = game_core::fair::derive_match_seed(&seed, &nonces);
     match &file.body.init {
         game_core::record::Init::Seed(setup) => {
@@ -1596,4 +1640,150 @@ async fn the_openings_never_reach_a_client_payload() {
         }
         other => panic!("expected a seeded record: {other:?}"),
     }
+    // The hash-only verifier agrees the record opens -- every step, including
+    // the one that requires the stamp to name an engine bundle (the spawn
+    // helper gives the test worker a glue identity, `docs/REPLAY.md` §9).
+    let rep = game_core::fair::verify(&file);
+    assert!(rep.ok, "{:?}", rep.steps);
+}
+
+/// The commitment is drawn at **room creation** -- before anybody can post a
+/// nonce -- and a start does not redraw it (`docs/FAIRNESS.md` §1.1).
+#[tokio::test]
+async fn the_commit_is_published_when_the_room_is_created() {
+    let (base, _server) = spawn(Duration::from_secs(30)).await;
+    let a = Client::new(&base, "Host").await;
+    let made = a.ok("/api/rooms", json!({})).await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    let commit = made["room"]["fair"]["commit"].as_str().unwrap().to_string();
+    assert_eq!(commit.len(), 64, "{made}");
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    // The commitment is already up before any nonce can exist...
+    a.fair_nonce(&id).await;
+    // ...and the start reuses it.
+    let started = a
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["fair"]["commit"], commit.as_str(), "{started}");
+}
+
+/// A nonce is collected as its member enters the room and dropped if that
+/// member never sits down for the match -- and the start never waits on
+/// anybody (`docs/FAIRNESS.md` §1.2).
+#[tokio::test]
+async fn nonces_of_non_participants_are_dropped_and_the_start_never_waits() {
+    let (base, server) = spawn(Duration::from_secs(30)).await;
+    let a = Client::new(&base, "Host").await;
+    let b = Client::new(&base, "Leaver").await;
+    let made = a.ok("/api/rooms", json!({})).await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    b.ok(&format!("/api/rooms/{id}/join"), json!({})).await;
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.fair_nonce(&id).await;
+    b.fair_nonce(&id).await;
+
+    // B walks away before the start: their nonce goes with them.
+    b.ok(&format!("/api/rooms/{id}/leave"), json!({})).await;
+
+    // Start with no sleep anywhere: the match is created in the same call.
+    let t0 = Instant::now();
+    let started = a
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["playing"], true, "{started}");
+    assert!(
+        t0.elapsed() < Duration::from_secs(2),
+        "start must not wait on nonces (took {:?})",
+        t0.elapsed()
+    );
+    {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        assert!(r.game.as_ref().is_some(), "match created immediately");
+    }
+
+    // The record carries exactly the nonces of the members who sat down.
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().unwrap().clone()
+    };
+    handle.quick_start().unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    handle.finish().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+        assert_eq!(s, StatusCode::OK, "{st}");
+        if st["room"]["playing"] == false {
+            break;
+        }
+        assert!(Instant::now() < deadline, "match did not end");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    let (s, body, _) = a.get_bytes(&format!("/api/rooms/{id}/record")).await;
+    assert_eq!(s, StatusCode::OK);
+    let file = game_core::record::decode_record(&body).expect("record parses");
+    let fair = file.header.fair.as_ref().expect("fairness material");
+    let members: Vec<i32> = fair.nonces.iter().map(|n| n.member).collect();
+    assert_eq!(members.len(), 1, "only the seated human's nonce: {:?}", fair.nonces);
+    assert!(!members.contains(&2), "the leaver's nonce was dropped: {:?}", fair.nonces);
+    assert!(game_core::fair::verify(&file).ok);
+}
+
+/// After a match the room rolls a fresh slot: a new commitment, nonces
+/// accepted again -- and the next start still does not wait
+/// (`docs/FAIRNESS.md` "rematch").
+#[tokio::test]
+async fn a_finished_match_rolls_a_fresh_commit_and_takes_nonces_again() {
+    let (base, server) = spawn(Duration::from_secs(30)).await;
+    let a = Client::new(&base, "Host").await;
+    let made = a.ok("/api/rooms", json!({})).await;
+    let id = made["room"]["id"].as_str().unwrap().to_string();
+    let commit1 = made["room"]["fair"]["commit"].as_str().unwrap().to_string();
+    a.ok(&format!("/api/rooms/{id}/bots"), json!({ "op": "add" }))
+        .await;
+    a.fair_nonce(&id).await;
+    a.ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    // Mid-match the slot is consumed: a nonce is refused, the commit stands.
+    let (s, _) = a
+        .post(&format!("/api/rooms/{id}/nonce"), json!({ "nonce": "00".repeat(32) }))
+        .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "nonce refused mid-match");
+
+    let handle = {
+        let room = server.room(&id).unwrap();
+        let r = room.lock().unwrap();
+        r.game.as_ref().unwrap().clone()
+    };
+    handle.quick_start().unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    handle.finish().unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+        assert_eq!(s, StatusCode::OK, "{st}");
+        if st["room"]["playing"] == false {
+            break;
+        }
+        assert!(Instant::now() < deadline, "match did not end");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // The next slot is already up the moment the room stops playing.
+    let (s, st) = a.get(&format!("/api/rooms/{id}/state")).await;
+    assert_eq!(s, StatusCode::OK, "{st}");
+    let commit2 = st["room"]["fair"]["commit"].as_str().unwrap();
+    assert_ne!(commit2, commit1.as_str(), "a fresh commitment per match: {st}");
+    assert_eq!(commit2.len(), 64);
+    // And a nonce for the next match is accepted again, no waiting.
+    a.fair_nonce(&id).await;
+    let started = a
+        .ok(&format!("/api/rooms/{id}/start"), json!({ "force": true }))
+        .await;
+    assert_eq!(started["playing"], true, "{started}");
+    assert_eq!(started["fair"]["commit"], commit2, "{started}");
 }

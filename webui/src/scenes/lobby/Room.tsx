@@ -1,7 +1,7 @@
 // Waiting room (RoomPanelView). Reached by /room/<id>; after a refresh it
 // re-attaches to the player through the server session.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { navigate } from "../../app/router";
 import { charArt } from "../../core/assets";
 import { sfx } from "../../core/audio";
@@ -11,6 +11,7 @@ import { useSessionOther } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { BotMentality } from "../../core/types";
 import { downloadRecordPrompt } from "../../game/downloadPrompt";
+import { submitRoomNonce } from "../../game/nonce";
 import { endSession, matchScene, OnlineSession, resumeOnline } from "../../game/session";
 import { api } from "../../net/api";
 import { fmtMsg, type Msg } from "../../i18n/msg";
@@ -45,26 +46,18 @@ export function useOnline(id: string): OnlineSession | null {
     };
   }, [id]);
   useSessionOther(sess);
-  // Dissolved by the host / server.
-  // Commit-reveal (`docs/FAIRNESS.md`): contribute our nonce as soon as the
-  // commitment appears. One post per start; a missing nonce is simply absent,
-  // so a silent client can never stall the match.
-  const nonceSent = useRef<string | null>(null);
+  // Commit-reveal (`docs/FAIRNESS.md`): contribute our nonce as we enter the
+  // room -- and again whenever the room shows a new commitment (the slot the
+  // server rolls after every match). No window, no wait: a nonce that never
+  // arrives is simply absent from the derived seed.
+  const commit = sess?.room?.fair?.commit ?? "";
   useEffect(() => {
-    const f = sess?.room?.fair;
-    if (!sess?.room || !f?.collecting) return;
-    const me = sess.room.members.find((m) => m.id === sess.you);
+    const r = sess?.room;
+    if (!r || !commit || r.playing) return;
+    const me = r.members.find((m) => m.id === sess!.you);
     if (!me || me.bot) return;
-    const key = `${sess.room.id}:${f.commit}`;
-    if (nonceSent.current === key) return;
-    nonceSent.current = key;
-    const nonce = Array.from(crypto.getRandomValues(new Uint8Array(32)), (x) =>
-      x.toString(16).padStart(2, "0"),
-    ).join("");
-    void api.nonce(sess.room.id, nonce).then((res) => {
-      if (!res.ok) toast(fmtMsg(res.error!), "error");
-    });
-  }, [sess]);
+    submitRoomNonce(r.id, commit);
+  }, [sess, commit]);
 
   useEffect(() => {
     if (sess?.dissolved) {
@@ -121,7 +114,6 @@ export function Room({ id }: { id: string }) {
         <span>{tr("room.players", { n: r.members.length, max: r.maxPlayers, hint: r.ranked ? tr("lobby.playersHintRanked") : tr("solo.playersHint"), locked: r.locked ? tr("room.locked") : "" })}</span>
         {!sess.connected && <span className={s.warn}>{tr("room.reconnecting")}</span>}
         {r.fair && <CommitChip commit={r.fair.commit} />}
-        {r.fair?.collecting && <span className={s.warn}>{tr("room.collecting")}</span>}
         <span className={s.spacer} />
         <Btn size="small" icon="leaderboard" onClick={() => showScoreWeights(r.weights, isHost && !r.playing, async (w) => report(await api.weights(r.id, w)))}>{tr("solo.scoreRules")}</Btn>
         <Btn size="small" icon="person_add" onClick={() => { void navigator.clipboard?.writeText(r.id); toast(tr("room.copied", { id: r.id })); }}>{tr("room.invite")}</Btn>

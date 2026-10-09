@@ -66,8 +66,25 @@ impl Ctx {
         );
         let mut hasher = Sha256::new();
         for name in DATA_FILES {
-            if let Some((_, text)) = contents.iter().find(|(f, _)| f == name) {
-                // Same recipe as web-glue's `load_data`: a leading BOM is not content.
+            // Same recipe as web-glue's `load_data`: every `DATA_FILES` entry
+            // in order (missing entries are skipped), a leading BOM is not
+            // content. `GameData::load` does not ask for all of them
+            // (`skill_simple.json` is display-only and the engine never reads
+            // it), so read the ones it skipped -- otherwise this hash disagrees
+            // with the browser's and the record names an engine bundle the
+            // replay loader has never seen.
+            let owned;
+            let text: Option<&str> = match contents.iter().find(|(f, _)| f == name) {
+                Some((_, text)) => Some(text),
+                None => match std::fs::read_to_string(data_dir.join(name)) {
+                    Ok(t) => {
+                        owned = t;
+                        Some(owned.as_str())
+                    }
+                    Err(_) => None,
+                },
+            };
+            if let Some(text) = text {
                 hasher.update(text.strip_prefix('\u{feff}').unwrap_or(text).as_bytes());
             }
         }
