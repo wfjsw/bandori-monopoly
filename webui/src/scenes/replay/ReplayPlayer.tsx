@@ -5,9 +5,10 @@
 // wrote the record (`docs/REPLAY.md` §9): the page's own wasm for a record
 // made by this build, otherwise the archived bundle, booted in a worker.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { navigate } from "../../app/router";
 import { useSessionOther } from "../../core/hooks";
+import { useMountEffect } from "../../hooks/mount";
 import { cx } from "../../core/cx";
 import {
   clearPendingReplay,
@@ -22,14 +23,14 @@ import { ReplayBar } from "./ReplayBar";
 import s from "./Replay.module.css";
 import { t as tr } from "../../i18n/t";
 import type { VerifyReport } from "../../game/record";
-import { bindConsoleSession } from "../../console/context";
+import { useConsoleSession } from "../../console/context";
 
 export function ReplayPlayer() {
   // `openPending` is memoized on the queued record and async (an archived
   // bundle boots in a worker), so this is a loading state first.
   const [loaded, setLoaded] = useState<Opened | { phase: "loading" }>({ phase: "loading" });
 
-  useEffect(() => {
+  useMountEffect(() => {
     const p = openPending();
     if (!p) {
       setLoaded({ phase: "error", message: tr("replay.noReplay") });
@@ -42,7 +43,7 @@ export function ReplayPlayer() {
     return () => {
       live = false;
     };
-  }, []);
+  });
 
   const back = () => {
     clearPendingReplay();
@@ -71,7 +72,7 @@ export function ReplayPlayer() {
 }
 
 function PlayerLive({ rs }: { rs: ReplaySession }) {
-  useEffect(() => bindConsoleSession(rs), [rs, bindConsoleSession]);
+  useConsoleSession(rs);
   useSessionOther(rs);
   // The fairness check (`docs/FAIRNESS.md`): recompute the commitment, derive
   // the match seed and re-run the record on this very engine.

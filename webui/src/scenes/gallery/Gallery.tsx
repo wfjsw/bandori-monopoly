@@ -1,9 +1,10 @@
 // Character gallery (CharacterGalleryController + CharacterDetailView).
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { navigate } from "../../app/router";
 import { charArt } from "../../core/assets";
 import { skillText } from "../../core/data";
+import { useMountEffect } from "../../hooks/mount";
 import { SkillBody } from "../../ui/SkillBody";
 import { SkillTextToggle } from "../../ui/SkillTextToggle";
 import { Live2DStand } from "../../ui/Live2DStand";
@@ -25,7 +26,7 @@ import s from "./Gallery.module.css";
 import { t as tr } from "../../i18n/t";
 
 export function Gallery() {
-  useEffect(() => markSeen("gallery"), []);
+  useMountEffect(() => markSeen("gallery"));
   const p = useProfile()!;
   const [tab, setTab] = useState<string>(tr("common.all"));
   const list = D.characters.filter((c) => inTab(c, tab));
