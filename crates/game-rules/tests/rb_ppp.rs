@@ -7,6 +7,7 @@
 
 mod common;
 use common::*;
+use game_core::msg::Arg;
 
 // Tile indices (engine = rulebook 「#N格」 − 1).
 const CIRCLE: usize = 0;
@@ -172,6 +173,59 @@ fn returns_placed_at_start_and_borrows_band() {
     assert!(
         ids.iter().any(|c| c.contains("Poppin") || c.contains("星之鼓动")),
         "the Poppin' Party band card is still on the field: {ids:?}"
+    );
+}
+
+// 规则书: 「获得一个其他存活玩家的团卡」 / [持续]（2）「选择一个其他存活玩家的
+// 团卡」 -- the prompt is about a card, so each option carries that player's 团卡
+// (never a bare player name). Answering an option still selects the player.
+#[test]
+fn returns_borrow_options_carry_band_cards() {
+    // Three seats so the pick has two options and the choice is observable.
+    let mut t = Table::new(&["户山香澄", "美竹兰", "丸山彩"]);
+    assert!(t.on_field(0, "PPP:Returns"), "field {:?}", t.field_ids(0));
+    t.begin_turn(0);
+    // [持续]（2): 「[拥有者]每回合开始时选择一个其他存活玩家的团卡」.
+    let p = t.expect_prompt();
+    assert_eq!(
+        p.title.k.as_ref(),
+        "cards:card-ppp.returns_title",
+        "{}",
+        t.dump_prompt()
+    );
+    assert_eq!(p.options.len(), 2, "two other players: {}", t.dump_prompt());
+    let mut seen = 0;
+    for (i, opt) in p.options.iter().enumerate() {
+        let who = opt.a.values().find_map(|a| match a {
+            Arg::PlayerId(x) => Some(*x),
+            _ => None,
+        });
+        let card = opt.a.values().find_map(|a| match a {
+            Arg::Card(c) => Some(c.clone()),
+            _ => None,
+        });
+        // The option names the player...
+        assert_eq!(who, Some(i as i32 + 1), "option {i} names its player: {opt:?}");
+        // ...and shows that player's 团卡 (the band-skill stand-in).
+        let card = card.unwrap_or_else(|| panic!("option {i} carries a card: {opt:?}"));
+        assert!(
+            card.starts_with("skill:"),
+            "option {i} shows the 团卡, not a bare name: {card}"
+        );
+        assert!(
+            card.contains("Afterglow") || card.contains("Pastel"),
+            "option {i} shows that player's own band: {card}"
+        );
+        seen += 1;
+    }
+    assert_eq!(seen, 2);
+    // Answering the second option still selects the second player (丸山彩 /
+    // Pastel✽Palettes), so the borrowed band follows the answer.
+    t.answer_one(1).unwrap();
+    let ids = t.field_ids(0);
+    assert!(
+        ids.iter().any(|c| c.contains("Pastel") || c.contains("与偶像一起")),
+        "answering option 1 borrows that player's band: {ids:?}"
     );
 }
 

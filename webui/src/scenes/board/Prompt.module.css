@@ -3,7 +3,7 @@
    options as outline pill buttons that wrap. Card-grid prompts keep the wide
    overlay but share this look. */
 
-.prompt { display: flex; gap: 18px; }
+.prompt { position: relative; display: flex; gap: 18px; }
 .withSide { gap: 22px; }
 .side { width: 220px; flex: none; background: var(--light-pill); border-radius: 12px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
 .sideTitle { font-size: 17px; font-weight: 700; }
@@ -29,6 +29,22 @@
 /* An option pill may lead with a thumbnail (tile / card preview). */
 .opt img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; flex: none; }
 .opt i { width: 6px; height: 20px; border-radius: 3px; flex: none; }
+/* Card options: a row of uniform tiles (the standard 96px prompt card, the
+   same width the multi-select grid uses). The face previews on hover and
+   inspects on click; the caption beneath is the option itself. */
+.cardRow { width: 100%; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.cardOpt { display: flex; flex-direction: column; gap: 4px; width: 96px; }
+.cardOptFace { width: 96px; cursor: zoom-in; }
+.cardOptFace:hover { transform: translateY(-3px); }
+.cardOptCap {
+  width: 100%; min-height: 32px; padding: 4px 6px; border-radius: 999px;
+  border: 2px solid var(--pink-pale); background: #fff; color: var(--text);
+  font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.cardOptCap:hover:not(:disabled) { border-color: var(--pink); background: var(--pink-pale); color: var(--pink-deep); }
+.cardOptCap:disabled { opacity: 0.5; }
+.sideCardWrap { display: flex; flex-direction: column; gap: 4px; }
 .sub { width: 100%; font-size: 14px; color: var(--sub); }
 /* Outline pill: every choice reads as an equal option (「不选」 included). */
 .opt {

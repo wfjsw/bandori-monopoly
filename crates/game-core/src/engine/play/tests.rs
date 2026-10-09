@@ -56,8 +56,8 @@ type Run = (World, Option<MatchPrompt>);
 fn run(d: &GameData, w: &World, answers: &[Answered], f: impl FnOnce(&mut Cx) -> Flow<()>) -> Run {
     let mut cx = Cx::new(w.clone(), d, &StubRules, answers);
     match f(&mut cx) {
-        Ok(()) | Err(Halt(HaltKind::Ended)) => (cx.w, None),
-        Err(Halt(HaltKind::Ask(a))) => (cx.w, Some(a.view)),
+        Ok(()) | Err(Halt(HaltKind::Ended)) => (cx.into_world(), None),
+        Err(Halt(HaltKind::Ask(a))) => (cx.into_world(), Some(a.view)),
     }
 }
 

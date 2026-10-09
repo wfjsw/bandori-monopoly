@@ -80,7 +80,6 @@
   "err.debug_argument": "作弊参数无效：请检查数值、卡牌 ID 或已有状态键",
   "err.debug_busy": "请先完成当前提示或移动，再使用作弊命令",
   "err.debug_play_only": "请在正式游戏阶段使用作弊命令",
-  "err.debug_solo_only": "作弊仅限单机对局",
   "err.debug_target": "目标玩家不存在或已出局",
   "err.deck_band": "这是 {{band}} 的卡，只有这个乐队的角色能带",
   "err.deck_derived": "衍生卡不能放进初始卡组，对局中由别的卡产生",

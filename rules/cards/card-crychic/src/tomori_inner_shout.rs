@@ -36,7 +36,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
         let x = ctx::ask_number(
             player_id,
             &Msg::new(key!("tomori_inner_shout_title")),
-            &Msg::new(key!("tomori_inner_shout_ask")).i("n", old as i64),
+            &Msg::new(key!("tomori_inner_shout_ask")).i("n", old as i64).card("card", "CRYCHIC:想要成为人类"),
             1,
             20,
         )?;

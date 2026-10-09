@@ -24,6 +24,10 @@ import { namesOf, stateOf } from "../../core/names";
 
 export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Animator }) {
   const auto = useAutoplay(sess);
+  // A replay is read-only: every action control (skill, roll / continue,
+  // mortgage, redeem) is hidden, not disabled, and the grid collapses away --
+  // the left column is just the players. Inspection (tiles, cards, log) stays.
+  if (sess.readOnly) return null;
   const S = m.S;
   const cur = S.players[S.turn];
   const names = namesOf(S);
@@ -69,7 +73,8 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
   return (
     <div className={s.vote}>
       <span>{tr("board.voteStatus", { n: vote.answers.filter((a) => a === 1).length, total: vote.players.length })}</span>
-      {k >= 0 && vote.answers[k] < 0 && <div className={s.voteActions}>
+      {/* Replay keeps the tally as read-out and drops the buttons. */}
+      {!sess.readOnly && k >= 0 && vote.answers[k] < 0 && <div className={s.voteActions}>
         <Btn kind="pink" size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 1 })}>{tr("board.voteFor")}</Btn>
         <Btn size="small" disabled={auto} onClick={() => void act(sess, { act: "vote", value: 0 })}>{tr("board.voteAgainst")}</Btn>
       </div>}
@@ -86,10 +91,13 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
   const detail = (id: string, k: number) => {
     setHover(null);
+    const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
+    // Replay: the sheet is inspection only -- no play / discard buttons.
+    if (sess.readOnly) return void showCard(id, [], note);
     const acts: CardAction[] = [];
     if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: !auto, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
     acts.push({ label: canPlay ? tr("board.play") : tr("board.playOnlyOps"), enabled: canPlay, run: () => act(sess, { act: "play", card: id }) });
-    showCard(id, acts, fmtMsg(m.v.handNotes[k], namesOf(m.S)));
+    showCard(id, acts, note);
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);

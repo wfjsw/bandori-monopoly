@@ -28,8 +28,9 @@ cd webui && npm run dev           # :5173, proxies /api and /data to :8080 (pred
 cd webui && npm run build         # dist/, served by --static (prebuild: live2d + release glue)
 ```
 
-`npm run build` compiles the Live2D models first (`prebuild` ->
-`tools/live2d/build.mjs`, see [LIVE2D.md](LIVE2D.md)); a model whose assets are
+`npm run build` compiles the Live2D models first when the local-only
+`tools/live2d/build.mjs` is present (`prebuild`; the Live2D tooling and its
+docs are not versioned); a model whose assets are
 already up to date is skipped. It also builds the wasm glue in **release**
 (the `prebuild` lifecycle always is), so a deployed site carries no console
 cheats; `npm run dev` builds the debug glue instead. See "In-game console".
@@ -263,7 +264,7 @@ The body is the original `NetMessage` shape; only the fields the command uses ma
 | `answer` | `prompt` = prompt id; `value`, or `cards` for `mortgage` / `pick` prompts; auction: `value` = bid, `-1` = pass | a prompt is waiting for you |
 | `vote` | `value` 1 = yes, 0 = no | start or answer the end-match vote |
 | `leave` | | forfeit |
-| `debug` | `debug` = money / tp / give / draw / state; `value`; `target` = player index (-1 = sender); `card` for give; `character` = state key | **debug builds only**, solo play only, no pending routine or movement; always rejected online |
+| `debug` | `debug` = money / tp / give / draw / state; `value`; `target` = player index (-1 = sender); `card` for give; `character` = state key | **debug builds only**, no pending routine or movement; a release server rejects it as `err.unknown_act` |
 
 ### In-game console
 
@@ -278,7 +279,7 @@ sends an ordinary engine command; `auto off` returns the seat from autopilot
 before manual commands. Replays allow inspection only. Up/Down recalls the
 last 100 commands; Tab completes an unambiguous command name.
 
-Solo cheats use zero-based player indices (omit the index for yourself):
+Cheats use zero-based player indices (omit the index for yourself):
 
 ```text
 money 50000          # set your money
@@ -302,9 +303,12 @@ checkpoints) is the record's mark that a cheat was used.
 
 * a `--release` server / binary and the production browser glue carry no cheat
   code at all -- a `debug` act is refused as an unknown command (`err.unknown_act`);
-* online rooms refuse `debug` acts at the HTTP boundary in **every** build
-  (`crates/server/src/api.rs`), and the engine itself is solo-only, so a forged
-  message can neither change the world nor enter a ranked/casual record;
+* a release server also refuses `debug` acts at the HTTP boundary
+  (`crates/server/src/api.rs`) so a forged message reaches neither its engine
+  nor the record log (which keeps even refused inputs). A debug-built server
+  forwards them instead: cheats run online in debug builds (Solo / Casual /
+  Ranked alike) and the engine marks the match (`MatchState.debugOpen`) so the
+  record shows the cheat use;
 * the browser console only offers the cheat commands when the loaded engine
   reports `cheats_enabled()` (a `wasm-bindgen` export that answers
   `cfg!(debug_assertions)`), and rejects them otherwise with "cheats are not
@@ -318,7 +322,7 @@ dead-code elimination uses (`tools/build-glue.mjs`,
 |---|---|---|
 | `NODE_ENV=production node tools/build-glue.mjs` | `--release` | no |
 | `npm run build` (deploy; its `prebuild` runs build-glue) | `--release` | no |
-| `npm run dev` (its `predev` runs build-glue), `NODE_ENV` unset / `development` | debug | yes (solo) |
+| `npm run dev` (its `predev` runs build-glue), `NODE_ENV` unset / `development` | debug | yes |
 | `tools/rebuild-engine.mjs` (archive rebuild) | forced `--release` | no |
 
 A debug wasm is much larger and slower than the release one -- never ship it.

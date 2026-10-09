@@ -61,6 +61,9 @@ const MAX_COUNTERACT_PER_VISIT: u32 = 16;
 /// Piles, randomness and their log at a host boundary. Replaying a card starts
 /// from the pre-draw piles, then adopts each completed request at its original
 /// statement. A discard/redraw effect cannot discard its freshly drawn hand.
+///
+/// A **snapshot** (deep copy at construction): the checkpoint outlives the
+/// mutations that follow the boundary, so it cannot share the live handle.
 #[derive(Clone)]
 struct PileCheckpoint {
     world: Arc<game_core::engine::World>,
@@ -81,7 +84,12 @@ impl PileCheckpoint {
 
 #[derive(Clone)]
 pub struct Run {
-    world: game_core::engine::World,
+    /// The world this run reads and writes. A [`SharedWorld`] (fix B): the
+    /// drive's per-iteration copy and every pure check share the live world
+    /// handle, and a body that writes detaches a private copy
+    /// (`Arc::make_mut`) -- so a check whose body never writes never clones.
+    /// Cloning a `Run` into a rules store is a refcount bump, not a deep copy.
+    world: game_core::engine::SharedWorld,
     pile_checkpoints: Arc<std::collections::BTreeMap<usize, PileCheckpoint>>,
     data: Arc<GameData>,
     /// Declared static properties (`card_props`) of every card in the loaded
@@ -413,16 +421,19 @@ impl CardWorld for Run {
     fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32) {
         // C# `H.AddToDeck(seat, card, where)`: "top" = draw.Add (the end of the
         // vec is the top), "bottom" = Insert(0), anything else = add + shuffle.
-        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
+        let idx = player_id.max(0) as usize;
+        if self.world.hidden.get(idx).is_none() {
             return;
-        };
+        }
         match pos {
-            1 => h.draw.insert(0, card.to_string()),
+            1 => self.world.hidden[idx].draw.insert(0, card.to_string()),
             2 => {
-                h.draw.push(card.to_string());
-                self.world.rng.shuffle(&mut h.draw);
+                self.world.hidden[idx].draw.push(card.to_string());
+                let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+                self.world.rng.shuffle(&mut draw);
+                self.world.hidden[idx].draw = draw;
             }
-            _ => h.draw.push(card.to_string()),
+            _ => self.world.hidden[idx].draw.push(card.to_string()),
         }
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
@@ -1088,19 +1099,22 @@ impl CardWorld for Run {
     }
     fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32 {
         // C# `H.ShuffleAllIntoDeck(seat, hand, discard)`.
-        let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
+        let idx = player_id.max(0) as usize;
+        if self.world.hidden.get(idx).is_none() {
             return 0;
-        };
+        }
         let mut moved: Vec<String> = Vec::new();
         if hand {
-            moved.append(&mut h.hand);
+            moved.append(&mut self.world.hidden[idx].hand);
         }
         if discard {
-            moved.append(&mut h.discard);
+            moved.append(&mut self.world.hidden[idx].discard);
         }
         let n = moved.len() as i32;
-        h.draw.append(&mut moved);
-        self.world.rng.shuffle(&mut h.draw);
+        self.world.hidden[idx].draw.append(&mut moved);
+        let mut draw = std::mem::take(&mut self.world.hidden[idx].draw);
+        self.world.rng.shuffle(&mut draw);
+        self.world.hidden[idx].draw = draw;
         self.reshuffle_log.push(player_id);
         n
     }
@@ -1808,7 +1822,9 @@ impl<M: CardModules> RulesBridge<M> {
         let overlay_base = cx.guest_overlay_depth();
         loop {
             cx.restore_guests_to(overlay_base);
-            let mut world = cx.world_copy();
+            // Share the live world (fix B): the body's writes detach a private
+            // copy; a body that never writes and has no pile base never clones.
+            let mut world = cx.share_world();
             if let Some(base) = &pile_base {
                 base.apply(&mut world);
             }
@@ -1910,7 +1926,7 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         return self.commit_after(cx, after, call, card_id, trigger);
                     }
-                    let mut world = cx.world_copy();
+                    let mut world = cx.share_world();
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
                     }
@@ -2004,7 +2020,7 @@ impl<M: CardModules> RulesBridge<M> {
                         // Replay reconstructs the prefix from pile_base, then skips
                         // already-applied writes by adopting these checkpoints.
                         let mut w = cx.world_copy();
-                        PileCheckpoint::new(run.world.clone()).apply(&mut w);
+                        PileCheckpoint::new(run.world.deep_clone()).apply(&mut w);
                         cx.swap_world(w);
                         for &player in &run.reshuffle_log {
                             self.raise_core(cx, "reshuffled", player, |_| {})?;
@@ -2409,7 +2425,7 @@ impl<M: CardModules> RulesBridge<M> {
     ) -> Flow<i32> {
             let dest = after.dest;
             *trigger = after.trigger;
-            cx.swap_world(after.world);
+            cx.swap_shared(after.world);
             // Empty-deck maintenance precedes all settlement after-hooks.
             for player_id in after.reshuffle_log {
                 self.raise_core(cx, "reshuffled", player_id, |_| {})?;
@@ -2630,7 +2646,7 @@ impl<M: CardModules> RulesBridge<M> {
         let Ok(s) = usize::try_from(player_id) else {
             return Ok(false);
         };
-        if s >= cx.state().players.len() || cx.world_copy().out(s) {
+        if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(false);
         }
         // `unstoppable` (「不可阻挡」) is a blanket bypass for the *movement*
@@ -2719,12 +2735,12 @@ impl<M: CardModules> RulesBridge<M> {
         let Ok(s) = usize::try_from(p) else {
             return Ok(-1);
         };
-        if s >= cx.state().players.len() || cx.world_copy().out(s) {
+        if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(-1);
         }
         // Per-pair cancel (「取消其对目标之一的[指定]」, C# `play.Tags["immune"+
         // seat]`): this designation was cancelled; the rest still land.
-        if cx.world_copy().turn.cancelled_designations.contains(&p) {
+        if cx.world().turn.cancelled_designations.contains(&p) {
             return Ok(-1);
         }
         if p == by {
@@ -2754,7 +2770,7 @@ impl<M: CardModules> RulesBridge<M> {
             })?;
             let to = r.target;
             let live = usize::try_from(to)
-                .is_ok_and(|x| x < cx.state().players.len() && !cx.world_copy().out(x));
+                .is_ok_and(|x| x < cx.state().players.len() && !cx.world().out(x));
             if to != p && to != by && live {
                 cx.log(
                     to,
@@ -2809,7 +2825,7 @@ impl<M: CardModules> RulesBridge<M> {
         else {
             return Ok(-1);
         };
-        let live = usize::try_from(owner).is_ok_and(|o| !cx.world_copy().out(o));
+        let live = usize::try_from(owner).is_ok_and(|o| !cx.world().out(o));
         if owner >= 0 && owner != by && live {
             // Chain first: the owner answers the declaration. Then resolution.
             if !self.target_window(cx, owner, tile, by, card)? {
@@ -3235,13 +3251,14 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
-    /// The throwaway `Run` a residual wasm guard probe fires up: one world
-    /// copy, the answered link as the trigger. Built **only** for a candidate
-    /// whose condition already admitted and whose entry still carries a guard
-    /// (G4 deleted the rest) -- the single remaining per-probe allocation.
+    /// The throwaway `Run` a residual wasm guard probe fires up: a shared
+    /// handle to the live world (fix B -- the probe is a pure check; its body
+    /// copies only if it writes), the answered link as the trigger. Built
+    /// **only** for a candidate whose condition already admitted and whose
+    /// entry still carries a guard (G4 deleted the rest).
     fn probe_run(&self, cx: &Cx, top: &Trigger, card: &str) -> Run {
         Run {
-            world: cx.world_copy(),
+            world: cx.share_world(),
             pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
@@ -3372,7 +3389,7 @@ impl<M: CardModules> RulesBridge<M> {
         // the `examples/ckpt_equiv.rs` A/B's this against the fast path.
         if counteract_slow_path() {
             let win_run = Run {
-                world: cx.world_copy(),
+                world: cx.share_world(),
                 pile_checkpoints: Default::default(),
                 data: self.data.clone(),
                 props: self.modules_props(),
@@ -4041,11 +4058,17 @@ impl<M: CardModules> RulesBridge<M> {
     /// empty (the `cant_play` shape: nothing is instantiated for a question
     /// nobody answers).
     fn buy_hook_instances(&self, world: &game_core::engine::World) -> Vec<(i32, i32, String)> {
+        // Fix C: the manifest's declared kinds first. No card in the set hooks
+        // a buy kind -> no live instance can either, so skip the walk.
+        if !self.ruleset.declares_buy() {
+            return Vec::new();
+        }
         let declares = |id: &str| {
-            self.ruleset
-                .card(id)
-                .is_some_and(|i| self.ruleset.cards()[i as usize].hooks(TriggerKind::BuyGate)
-                    || BUY_STAGES.iter().any(|&k| self.ruleset.cards()[i as usize].hooks(k)))
+            self.ruleset.card(id).is_some_and(|i| {
+                crate::host::BUY_HOOK_KINDS
+                    .iter()
+                    .any(|&k| self.ruleset.hooks_to(i, k))
+            })
         };
         let mut keyed: Vec<((u8, u32, u32), (i32, i32, String))> = Vec::new();
         let mut push = |key: (u8, u32, u32), item: (i32, i32, String), out: &mut Vec<_>| {
@@ -4105,7 +4128,7 @@ impl<M: CardModules> RulesBridge<M> {
         let Some(idx) = self.ruleset.card(card) else {
             return;
         };
-        if !self.ruleset.cards()[idx as usize].hooks(kind) {
+        if !self.ruleset.hooks_to(idx, kind) {
             return;
         }
         // The run is a throwaway: only the trigger it rewrote is read back, and
@@ -4152,7 +4175,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         tile: usize,
         main: bool,
     ) -> Flow<()> {
-        let instances = cx.world_copy().tile_rule_instances(tile as i32);
+        let instances = cx.world().tile_rule_instances(tile as i32);
         if instances.is_empty() {
             return cx.land_at_built_in(player_id, tile, main);
         }
@@ -4219,20 +4242,29 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     }
 
     fn cant_play(&self, cx: &Cx, player_id: usize, card: &str) -> Option<Msg> {
-        // A pure query on a throwaway copy (C# `Card.WhyNot`): a guard that
-        // prompts, or a module that fails, never blocks play.
+        // A pure query (C# `Card.WhyNot`): a guard that prompts, or a module
+        // that fails, never blocks play. Fix B -- the probe shares the live
+        // world handle (`share_world`, no copy); the gate body detaches a
+        // private copy only if it writes.
         let idx = self.ruleset.card(card)?;
+        // Fix A cheap pre-filter: no `On::Play` entry, or G4-deleted gate with
+        // no condition -- the verdict is always "playable". Skip the uid
+        // lookup, the `Run` and the CEL scope entirely (the condition-only /
+        // declares-bitmask shape REPORT.md's A asks for).
+        if self.ruleset.play_gate_vanishes(idx) {
+            return None;
+        }
         // Bind the instance when the card is already on the field (a skill
         // press), so `is_placed` / `crystals` answer for it and not for a void
-        // `current_uid = -1`.
+        // `current_uid = -1`. A read of the live world -- no copy.
         let uid = cx
-            .world_copy()
+            .world()
             .field_instances(player_id as i32)
             .into_iter()
             .find(|(_, id)| id == card)
             .map_or(-1, |(uid, _)| uid);
         let run = Run {
-            world: cx.world_copy(),
+            world: cx.share_world(),
             pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
@@ -4243,7 +4275,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             dest_to: None,
             paid_log: vec![],
             discard_log: vec![],
-                draw_log: vec![],
+            draw_log: vec![],
             reshuffle_log: vec![],
             fire_spent_log: vec![],
             house_log: vec![],
@@ -4251,7 +4283,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             cp_log: vec![],
             exile_log: vec![],
             doubled: -1,
-                linger_props: Default::default(),
+            linger_props: Default::default(),
             wrap_effect: false,
         };
         self.ruleset
@@ -4284,6 +4316,12 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 eligible: price >= 0,
             }
         };
+        // Cheap path (fix C): the manifest's declared kinds say no card in the
+        // set hooks a buy kind, so no live instance can either -- the quote is
+        // the native formula and neither the instance walk nor a module runs.
+        if !self.ruleset.declares_buy() {
+            return q.tiles.iter().map(|&t| native(t)).collect();
+        }
         // Cheap path: no live instance declares a buy hook, so the quote is the
         // native formula and no module is fired up.
         let instances = self.buy_hook_instances(w);
@@ -4291,20 +4329,20 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             return q.tiles.iter().map(|&t| native(t)).collect();
         }
         // Only the stages somebody actually declares are run -- a `BuySet`
-        // nobody hooks is a no-op that would cost a fire-up per tile.
+        // nobody hooks is a no-op that would cost a fire-up per tile. The
+        // per-card `hook_mask` shift (fix C), not an entry-table scan.
         let declares = |kind: TriggerKind| {
-            instances.iter().any(|(_, _, card)| {
-                self.ruleset
-                    .card(card)
-                    .is_some_and(|i| self.ruleset.cards()[i as usize].hooks(kind))
-            })
+            instances
+                .iter()
+                .any(|(_, _, card)| self.ruleset.card(card).is_some_and(|i| self.ruleset.hooks_to(i, kind)))
         };
         let gate_decl = declares(TriggerKind::BuyGate);
-        // One throwaway run for the whole quote: the world it carries is read
-        // by the hooks and the world they produce is dropped. `run_hook` clones
-        // per hook run, so this is the quote's single world clone.
+        // One throwaway run for the whole quote (fix B): the world it carries
+        // is a COW handle to `w` (one deep copy per quote batch, not per hook);
+        // `run_hook`'s per-hook store clone is a refcount bump, and a hook body
+        // that writes detaches its own copy which is then dropped.
         let mut run = Run {
-            world: w.clone(),
+            world: game_core::engine::SharedWorld::new(w.clone()),
             pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
@@ -4379,7 +4417,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // the instance so `is_placed` / `crystals` read it and not a void
         // `current_uid = -1`. A hand play has no instance yet (uid -1).
         let uid = cx
-            .world_copy()
+            .world()
             .field_instances(player_id as i32)
             .into_iter()
             .find(|(_, id)| id == card)
@@ -4444,7 +4482,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             return Ok(false);
         };
         let uid = cx
-            .world_copy()
+            .world()
             .event_rule_instances()
             .into_iter()
             .find(|(_, c)| c == &rid)
@@ -4899,15 +4937,17 @@ fn source_group(world: &game_core::engine::World, uid: i32) -> LookupGroup {
 /// kind alone.
 /// Hook points that are *only* field-card points: no [反击] window opens at
 /// them. (`turnStart` / `settleAfter` are both, so they are not in here.)
-/// Besides keeping the semantics clean this matters for cost -- `passTile` fires
-/// on every tile walked, and a window instantiates a module per hand card.
+///
+/// `PassTile` / `PassPlayer` are **not** in here: ABI v43 made them
+/// [`ChainKind`]s too (「当你经过一名角色时」 -- `AG:刻入天穹傲岸的烈光`),
+/// so the hand [反击] window opens at them. The valid-option-first pre-scan
+/// skips the whole ring when no seat holds a card that answers, which is the
+/// common case on a `passTile` (it fires on every tile walked).
 fn is_hook_only(kind: &str) -> bool {
     matches!(
         trigger_kind(kind),
         TriggerKind::TurnEnd
             | TriggerKind::Drawn
-            | TriggerKind::PassTile
-            | TriggerKind::PassPlayer
             | TriggerKind::PayAfter
             | TriggerKind::RollAfter
             | TriggerKind::CardPlayed

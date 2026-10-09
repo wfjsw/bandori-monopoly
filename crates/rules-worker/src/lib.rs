@@ -67,7 +67,8 @@ impl Ctx {
         let mut hasher = Sha256::new();
         for name in DATA_FILES {
             if let Some((_, text)) = contents.iter().find(|(f, _)| f == name) {
-                hasher.update(text.as_bytes());
+                // Same recipe as web-glue's `load_data`: a leading BOM is not content.
+                hasher.update(text.strip_prefix('\u{feff}').unwrap_or(text).as_bytes());
             }
         }
         let data_sha256 = hex(&hasher.finalize());

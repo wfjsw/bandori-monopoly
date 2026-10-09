@@ -37,9 +37,9 @@ fn mutsumi_never(player_id: i32) -> card_sdk::Asked {
         .any(|&(_, _, extra)| extra == 0);
     let mut options: Vec<Msg> = Vec::new();
     if has_band {
-        options.push(Msg::new(key!("mutsumi_never_opt2")));
+        options.push(Msg::new(key!("mutsumi_never_opt2")).card("card", "CRYCHIC:（睦）从没有觉得..."));
     }
-    options.push(Msg::new(key!("mutsumi_never_opt3")));
+    options.push(Msg::new(key!("mutsumi_never_opt3")).card("card", "CRYCHIC:（睦）从没有觉得..."));
     let pick = ctx::ask_pick(
         player_id,
         &Msg::new(key!("mutsumi_never_title")),

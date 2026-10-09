@@ -27,6 +27,7 @@ fn thanks_party(player_id: i32) -> card_sdk::Asked {
         }
         let title = Msg::new(key!("thanks_party_join_title"));
         let text = Msg::new(key!("thanks_party_join_text"))
+            .card("card", "通用:CiRCLE THANKS PARTY!")
             .player_id("who", player_id)
             .n("prize", 1500);
         if ctx::ask_yes(p, &title, &text)? {

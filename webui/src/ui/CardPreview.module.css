@@ -1,0 +1,29 @@
+/* The shared hover preview (the hand's, the field cards', the prompts').
+   `pointer-events: none` -- it floats over the board and must not take the
+   hover it is describing. */
+
+.preview {
+  position: absolute;
+  left: calc(100% + 14px);
+  top: 0;
+  width: 260px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28);
+  padding: 8px;
+  z-index: 30;
+  pointer-events: none;
+  animation: fade 0.12s ease-out;
+}
+@keyframes fade { from { opacity: 0; transform: translateX(-6px); } }
+/* Near the stage's right edge, flip to the other side of the anchor. */
+.left { left: auto; right: calc(100% + 14px); animation-name: fadeLeft; }
+@keyframes fadeLeft { from { opacity: 0; transform: translateX(6px); } }
+.auto { }
+
+.art { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; background: #eee; }
+.art img { width: 100%; display: block; }
+.title { font-size: 17px; font-weight: 700; margin: 6px 2px 2px; }
+.tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 4px; }
+.text { font-size: 13px; line-height: 1.6; max-height: 240px; overflow: hidden; white-space: pre-wrap; }
+.note { margin-top: 4px; font-size: 12px; color: var(--sub); }

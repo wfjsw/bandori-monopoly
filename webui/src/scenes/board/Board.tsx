@@ -4,6 +4,7 @@
 
 import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";
+import { useStageFill } from "../../app/Stage";
 import { t as tr } from "../../i18n/t";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
@@ -26,6 +27,9 @@ export function Board({ sess }: { sess: GameSession }) {
   const { view, at, anim } = useBoardSession(sess);
   useTick(500); // turn timer
   const auto = useAutoplay(sess); // 托管 -- one shared input-lock
+  // The match screen is the one scene that fills the window: no top / bottom
+  // letterbox, so the columns stretch and the ring centres in the middle one.
+  useStageFill();
   // Screen stays on during a live match only -- not in a replay (which also
   // renders this Board) and not once the match has ended.
   useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
@@ -108,12 +112,14 @@ export function Board({ sess }: { sess: GameSession }) {
           <Side m={m} sess={sess} anim={anim} />
         </div>
         <div className={s.middle}>
-          <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+          <div className={s.mapSlot}>
+            <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+          </div>
+          <Hand m={m} sess={sess} busy={anim.animating} />
         </div>
         <div className={s.right}>
           <div className={s.logSlot}>
             <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
-            <Hand m={m} sess={sess} busy={anim.animating} />
           </div>
         </div>
       </div>

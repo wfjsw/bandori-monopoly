@@ -1,4 +1,9 @@
-.players { position: absolute; left: 0; top: 107px; width: 100%; height: 548px; display: flex; flex-direction: column; }
+/* The seat list fills the left column between the header and the action
+   buttons (the match stage stretches to the window height, so this used to be
+   a fixed 548px). Rows keep their computed heights and stack from the top --
+   the graveyard peek lines up by `row * (height + gap)`, so the rows must stay
+   packed -- and the list scrolls when a full table overflows. */
+.players { position: absolute; left: 0; top: 107px; bottom: 160px; width: 100%; display: flex; flex-direction: column; overflow: auto; }
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
    holds both without spilling. */

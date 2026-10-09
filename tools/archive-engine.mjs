@@ -360,7 +360,10 @@ function dataSha256Hex(dataDir, dataFiles) {
   const hasher = createHash("sha256");
   for (const name of dataFiles) {
     const p = join(dataDir, name);
-    if (existsSync(p)) hasher.update(readFileSync(p));
+    if (!existsSync(p)) continue;
+    // A leading UTF-8 BOM is not content (the engine hashes without it).
+    const b = readFileSync(p);
+    hasher.update(b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf ? b.subarray(3) : b);
   }
   return hasher.digest("hex");
 }

@@ -130,6 +130,10 @@ export class Live2DRenderer {
     gl.disable(gl.DEPTH_TEST);
     gl.disable(gl.CULL_FACE);
     gl.enable(gl.BLEND);
+    // Textures are straight-alpha lossy WebP (colorbled under transparent
+    // pixels, lossless alpha -- see tools/live2d/convert.py). Premultiply on
+    // upload so any residual RGB under alpha=0 contributes nothing and the
+    // premultiplied blend functions below see consistent colour.
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.useProgram(this.program);

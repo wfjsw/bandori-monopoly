@@ -39,7 +39,9 @@
 .promptWin .x i { width: 18px; height: 18px; }
 .promptWin .minus { width: 16px; height: 3px; }
 .promptWin .x:hover { background: #ffd0dc; }
-.promptWin .body { padding: 0; }
+/* The prompt body is not a scroll box: the card hover preview floats out of
+   the panel (CardPreview) and must not be clipped. */
+.promptWin .body { padding: 0; overflow: visible; }
 .ask { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
 .ask p { font-size: 19px; white-space: pre-wrap; }
 .row { display: flex; gap: 14px; justify-content: center; }

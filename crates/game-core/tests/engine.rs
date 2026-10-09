@@ -421,7 +421,11 @@ fn unanimous_vote_ends_the_match() {
         },
     )
     .unwrap();
-    assert_eq!(m.state().vote.players.len(), 2, "only humans still in vote");
+    assert_eq!(
+        m.state().vote.players.len(),
+        3,
+        "every seat still in the match votes (bots by the engine)"
+    );
     assert_eq!(
         m.act(
             1,
@@ -479,10 +483,71 @@ fn unanimous_vote_ends_the_match() {
         },
     )
     .unwrap();
+    // The bot seat's vote is cast by the engine (user ruling 2026-10-09) on
+    // the next tick -- the drivers have no vote path.
+    m.tick(0.25);
     let st = m.state();
     assert_eq!(
         (st.phase.as_str(), st.end_reason.as_str()),
         ("ended", "vote")
+    );
+}
+
+/// An 进阶 (Advanced) bot seat is held for its external driver (`ai` off), but
+/// the drivers never answer a vote surface and a solo vote never expires. The
+/// engine must cast the seat's vote (user ruling 2026-10-09: "have the engine
+/// vote for advanced bot seats") so the vote resolves with no external answer.
+#[test]
+fn an_advanced_bot_seat_gets_its_vote_cast_by_the_engine() {
+    let mut members = [member(1, false), member(2, true), member(3, true)];
+    members[1].mentality = game_core::state::BotMentality::Advanced;
+    members[2].mentality = game_core::state::BotMentality::Advanced;
+    let mut m = new_match(&members, 5, MatchMode::Solo);
+    m.quick_start();
+    while m.state().busy || m.state().turn < 0 {
+        m.tick(0.25);
+        answer_first(&mut m, 1);
+        answer_first(&mut m, 2);
+        answer_first(&mut m, 3);
+    }
+    // The advanced seats are `ai = false` (held for the driver) but still bots.
+    let st = m.state();
+    let advanced: Vec<_> = st
+        .players
+        .iter()
+        .filter(|p| p.bot && p.mentality == game_core::state::BotMentality::Advanced)
+        .collect();
+    assert!(!advanced.is_empty(), "the advanced seats are present");
+    assert!(
+        advanced.iter().all(|p| !p.ai),
+        "advanced seats are held for their driver: {:?}",
+        advanced.iter().map(|p| p.ai).collect::<Vec<_>>()
+    );
+
+    // The human starts the end-match vote. Solo: the vote never expires, so
+    // without the engine's vote for the advanced seats this would hang.
+    m.act(
+        1,
+        &NetMessage {
+            value: 1,
+            ..NetMessage::act("vote")
+        },
+    )
+    .unwrap();
+    assert_eq!(m.state().vote.id, 1, "the vote is open: {:?}", m.state().vote);
+    assert_eq!(
+        m.state().vote.players.len(),
+        3,
+        "every seat votes -- humans by hand, bots by the engine"
+    );
+    // One tick: `tick_vote` casts the bot seats' votes.
+    m.tick(0.25);
+    let st = m.state();
+    assert_eq!(
+        (st.phase.as_str(), st.end_reason.as_str()),
+        ("ended", "vote"),
+        "the vote resolved with no external answer: {:?}",
+        st.vote
     );
 }
 

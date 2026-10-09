@@ -74,7 +74,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let title = Msg::new(key!("council_check_ask_title"));
-    let text = Msg::new(key!("council_check_ask_text"));
+    let text = Msg::new(key!("council_check_ask_text")).card("card", "R:学生会的检查");
     // C# `H.AskTileOf(..., allowNone: true)` -- a yes/no stands in for allowNone.
     if !ctx::ask_yes(player_id, &title, &text)? {
         return Ok(());

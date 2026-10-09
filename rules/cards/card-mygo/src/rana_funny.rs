@@ -93,7 +93,7 @@ fn trap(owner: i32, who: i32, tile: i32) -> card_sdk::Asked {
         let lose = ctx::ask_yes(
             who,
             &Msg::new(key!("rana_funny_trap_title")),
-            &Msg::new(key!("rana_funny_trap_ask")),
+            &Msg::new(key!("rana_funny_trap_ask")).card("card", ID),
         )?;
         if lose {
             // 规则书: 「失去一个"抹茶芭菲"」 -- C# `H.AddTok(who, "抹茶芭菲", -1)`

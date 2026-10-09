@@ -28,15 +28,17 @@ export function useBackdrop(name: string | null): void {
 
 /**
  * The uniform scale that fits the 1600 x 900 design in the window, plus the
- * stage width that fills the window at that scale (in design px). The width
- * grows past 1600 so a wide monitor isn't left with letterbox bars; the height
- * stays at the design's 900 (a taller window letterboxes instead of stranding
- * the top-anchored UI at the top of a very tall stage).
+ * stage size that fills the window at that scale (in design px). The width
+ * grows past 1600 so a wide monitor isn't left with letterbox bars. The height
+ * stays at the design's 900 by default (a taller window letterboxes instead of
+ * stranding the top-anchored UI at the top of a very tall stage); the match
+ * screen opts into `useStageFill` and takes the full height instead, so its
+ * columns stretch and the tile board has no bars above or below.
  */
-function useStage(): { scale: number; w: number } {
+function useStage(): { scale: number; w: number; h: number } {
   const calc = () => {
     const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
-    return { scale, w: window.innerWidth / scale };
+    return { scale, w: window.innerWidth / scale, h: window.innerHeight / scale };
   };
   const [box, set] = useState(calc);
   useEffect(() => {
@@ -47,8 +49,27 @@ function useStage(): { scale: number; w: number } {
   return box;
 }
 
+let fill = false;
+const fillListeners = new Set<() => void>();
+
+/** Fill the window's full height (no top / bottom letterbox) while on. */
+export function setStageFill(on: boolean): void {
+  if (fill === on) return;
+  fill = on;
+  fillListeners.forEach((cb) => cb());
+}
+
+/** Opt the current scene into the full-height stage. Only the match screen
+ *  (the board) does: every other scene keeps the 900-tall letterboxed stage. */
+export function useStageFill(on = true): void {
+  useEffect(() => {
+    setStageFill(on);
+    return () => setStageFill(false);
+  }, [on]);
+}
+
 export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
-  const { scale, w } = useStage();
+  const { scale, w, h } = useStage();
   const bg = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
@@ -56,13 +77,20 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
     },
     () => backdrop,
   );
+  const tall = useSyncExternalStore(
+    (cb) => {
+      fillListeners.add(cb);
+      return () => fillListeners.delete(cb);
+    },
+    () => fill,
+  );
   const src = bg ? sceneImg(bg) : "";
   return (
     <>
       <div className={s.backdrop} style={{ backgroundImage: src ? `url("${src}")` : undefined }} />
       <div
         className={s.stage}
-        style={{ width: w, height: STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }}
+        style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }}
       >
         {children}
         <div className={fading ? `${s.fader} ${s.on}` : s.fader} />

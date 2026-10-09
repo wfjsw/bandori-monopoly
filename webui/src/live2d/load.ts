@@ -69,6 +69,12 @@ async function fetchJson(id: string): Promise<ModelJson> {
   return data as ModelJson;
 }
 
+/**
+ * Decode one texture named by `model.json` (lossy `.webp` atlases emitted by
+ * `tools/live2d/convert.py`; alpha is lossless in those files). `createImageBitmap`
+ * and `Image.decode` both handle WebP in every target browser, so there is no
+ * PNG fallback -- the build serves WebP only.
+ */
 async function fetchTexture(url: string): Promise<TexImageSource> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
