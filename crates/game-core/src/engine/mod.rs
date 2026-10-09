@@ -65,7 +65,6 @@ pub mod bot_cost {
 /// timed site; nothing behavioural. `reset` / `snapshot` from the harness.
 pub mod rtimer {
     use std::sync::atomic::{AtomicU64, Ordering};
-    use std::time::Instant;
 
     pub static STATE_NS: AtomicU64 = AtomicU64::new(0);
     pub static VIEW_EXTRA_NS: AtomicU64 = AtomicU64::new(0);
@@ -74,19 +73,36 @@ pub mod rtimer {
     pub static TICK_NS: AtomicU64 = AtomicU64::new(0);
     pub static ACT_NS: AtomicU64 = AtomicU64::new(0);
 
-    pub fn add(stat: &AtomicU64, t0: Instant) {
+    /// A start time. `wasm32-unknown-unknown` has no clock -- `Instant::now()`
+    /// panics there -- so the browser engine times nothing.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub type Stamp = std::time::Instant;
+    #[cfg(target_arch = "wasm32")]
+    pub type Stamp = ();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn now() -> Stamp {
+        std::time::Instant::now()
+    }
+    #[cfg(target_arch = "wasm32")]
+    pub fn now() -> Stamp {}
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn add(stat: &AtomicU64, t0: Stamp) {
         stat.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
     }
+    #[cfg(target_arch = "wasm32")]
+    pub fn add(_stat: &AtomicU64, _t0: Stamp) {}
 
     /// Drop-guard so early returns still record.
-    pub struct Guard(pub &'static AtomicU64, pub Instant);
+    pub struct Guard(pub &'static AtomicU64, pub Stamp);
     impl Drop for Guard {
         fn drop(&mut self) {
             add(self.0, self.1);
         }
     }
     pub fn guard(stat: &'static AtomicU64) -> Guard {
-        Guard(stat, Instant::now())
+        Guard(stat, now())
     }
 
     pub fn reset() {
@@ -562,7 +578,7 @@ impl Match {
 
     /// The public state, with the live prompt, vote and clocks filled in.
     pub fn state(&self) -> MatchState {
-        let t0 = std::time::Instant::now();
+        let t0 = rtimer::now();
         let st = self.state_inner();
         rtimer::add(&rtimer::STATE_NS, t0);
         st
@@ -896,7 +912,7 @@ impl Match {
     /// Both view builders (`web-glue` and `rules-worker`) merge this into the
     /// match frame.
     pub fn view_extra(&self, member: i32) -> serde_json::Value {
-        let t0 = std::time::Instant::now();
+        let t0 = rtimer::now();
         let v = self.view_extra_inner(member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
         v
@@ -905,7 +921,7 @@ impl Match {
     /// Typed twin of [`Match::view_extra`] for in-process callers (the bot's
     /// rollout / action abstraction). Same fields, no JSON round trip.
     pub fn view_extra_typed(&self, member: i32) -> ViewExtra {
-        let t0 = std::time::Instant::now();
+        let t0 = rtimer::now();
         let v = self.view_extra_parts(member);
         rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
         v
