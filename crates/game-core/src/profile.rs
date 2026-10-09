@@ -15,9 +15,21 @@ use crate::progression::{
 };
 use crate::MatchMode;
 
-pub const SAVE_VERSION: i32 = 3;
+pub const SAVE_VERSION: i32 = 4;
 /// Match history entries kept on the profile.
 pub const HISTORY_CAP: usize = 30;
+/// Deck name cap in **characters** (not bytes), so CJK names count as one each.
+pub const DECK_NAME_MAX: usize = 24;
+
+/// Trim and cap a user-entered deck name. Empty means "auto" -- the UI shows
+/// the localized 「卡组 n」/"Deck n" from the deck's id. Duplicates are allowed.
+pub fn sanitize_deck_name(name: &str) -> String {
+    let t = name.trim();
+    if t.is_empty() {
+        return String::new();
+    }
+    t.chars().take(DECK_NAME_MAX).collect()
+}
 
 /// `PlayerProfile.cs` -- `profile.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -113,12 +125,23 @@ pub struct CharacterStat {
     pub firsts: i32,
 }
 
-/// `SavedDeck.cs`
+/// `SavedDeck.cs` -- one named deck of one character.
+///
+/// `slot` is the stable deck id within the character (it used to be the fixed
+/// 1..=3 slot index; profiles from that era keep their numbers as ids). It is
+/// what [`DeckChoice`] remembers. Display order is the order of
+/// [`PlayerProfile::decks`] itself, so reordering swaps entries without
+/// renumbering anyone.
+///
+/// `name` is user-editable UI metadata: empty means "auto" and the client
+/// renders the localized 「卡组 n」/"Deck n" from the id. Never enters match
+/// state or records.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SavedDeck {
     pub character: String,
     pub slot: i32,
+    pub name: String,
     pub cards: Vec<String>,
 }
 
@@ -177,6 +200,36 @@ impl PlayerProfile {
         }
         if self.save_version < 3 {
             self.save_version = 3;
+        }
+        if self.save_version < 4 {
+            // v3 and earlier saved three fixed slots per character and no deck
+            // names. The slot numbers become the stable deck ids; `name` stays
+            // empty ("auto", displayed as 「卡组 n」/"Deck n" from the id), so
+            // slot n reads exactly as it used to. Sort per character by slot so
+            // the old 1,2,3 order is the display order.
+            self.decks
+                .sort_by(|a, b| (&a.character, a.slot).cmp(&(&b.character, b.slot)));
+            self.save_version = 4;
+        }
+        self.repair_decks();
+    }
+
+    /// Unique positive deck ids per character and sanitized names, on every
+    /// load (hand-edited JSON included).
+    fn repair_decks(&mut self) {
+        use std::collections::{BTreeSet, HashMap};
+        let mut used: HashMap<String, BTreeSet<i32>> = HashMap::new();
+        for d in &mut self.decks {
+            d.name = sanitize_deck_name(&d.name);
+            let set = used.entry(d.character.clone()).or_default();
+            if d.slot > 0 && set.insert(d.slot) {
+                continue;
+            }
+            let mut n = set.iter().next_back().copied().unwrap_or(0) + 1;
+            while !set.insert(n) {
+                n += 1;
+            }
+            d.slot = n;
         }
     }
 
