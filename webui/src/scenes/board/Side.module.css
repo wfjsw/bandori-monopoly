@@ -21,10 +21,9 @@
 .voteActions { display: flex; gap: 8px; }
 .voteActions > button { flex: 1; }
 
-/* The hand docks at the bottom of the right column's log slot -- the square
-   tile ring fills the stage height, so there is no strip beneath the board
-   (the PR's under-the-ring dock assumes a 6:5 map). Only title tabs are
-   visible at rest; the full card appears above them on hover or focus. */
+/* The hand sits beneath the 6:5 board, at the bottom of the centre column
+   (the PR's composition). Only title tabs are visible at rest; the full card
+   appears above them on hover or keyboard focus. */
 .hand { position: relative; flex: none; width: 100%; }
 .handHead { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
 /* No stacking context on the hand: the auto switch must stay above modals. */

@@ -112,12 +112,14 @@ export function Board({ sess }: { sess: GameSession }) {
           <Side m={m} sess={sess} anim={anim} />
         </div>
         <div className={s.middle}>
-          <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+          <div className={s.mapSlot}>
+            <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+          </div>
+          <Hand m={m} sess={sess} busy={anim.animating} />
         </div>
         <div className={s.right}>
           <div className={s.logSlot}>
             <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
-            <Hand m={m} sess={sess} busy={anim.animating} />
           </div>
         </div>
       </div>
