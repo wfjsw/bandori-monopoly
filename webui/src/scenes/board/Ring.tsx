@@ -2,7 +2,8 @@
 
 import { cardArt, charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
 import { plain } from "../../core/format";
@@ -91,7 +92,6 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
   const vp = useBoardViewport();
   const wrapRef = vp.wrapRef;
   const [tip, setTip] = useState<MarkTip | null>(null);
-  const [tipBox, setTipBox] = useState({ w: 0, h: 0 });
   const tipRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<FieldHover | null>(null);
   // Markers sit inside a tile (which clips), so their popup is drawn on the
@@ -110,16 +110,10 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
   // The tip is content-sized (`width: max-content`, max 220px) and the wrap
   // clips the panned board, so keep it inside the board box: clamp x by its
   // measured width and flip it below the marker near the top edge.
-  useLayoutEffect(() => {
-    const el = tipRef.current;
-    if (!el || !tip) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    if (w !== tipBox.w || h !== tipBox.h) setTipBox({ w, h });
-  }, [tip, tipBox.w, tipBox.h]);
-  const half = Math.min(tipBox.w || 220, 220) / 2;
+  const tipBox = useLayoutSize(tipRef, tip);
+  const half = Math.min(tipBox.width || 220, 220) / 2;
   const tipX = tip ? Math.min(Math.max(tip.x, half + 8), vp.box.width - half - 8) : 0;
-  const tipUp = tip ? tip.y - (tipBox.h || 90) - 12 >= 0 : true;
+  const tipUp = tip ? tip.y - (tipBox.height || 90) - 12 >= 0 : true;
   return (
     <div
       className={s.wrap}

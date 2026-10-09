@@ -11,11 +11,13 @@
 // up to `OVERPAN` of a window past any edge.
 
 import {
-  useCallback, useEffect, useRef, useState,
+  useCallback, useRef, useState,
   type CSSProperties, type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent, type RefObject,
 } from "react";
+import { useEventListener } from "../../hooks/dom.ts";
+import { useResizeObserver } from "../../hooks/measure.ts";
 
 /** Smallest board window (stage px) the map is ever laid out at. */
 export const MIN_BOARD = 240;
@@ -175,24 +177,19 @@ export function useBoardViewport(): ViewportApi {
   // The board window: the map slot's rectangle held to MIN_RATIO..MAX_RATIO
   // (`boardRect`; the tiles stretch to fill it). Measured in JS --
   // `container-type: size` was unreliable here -- and board pixels are those
-  // stage pixels 1:1.
+  // stage pixels 1:1. A new rect keeps the user's zoom and re-clamps the pan
+  // to it: the ResizeObserver callback is the one place the two change
+  // together, so there is no effect mirroring `box` into `v`.
   const [box, setBox] = useState({ width: MIN_BOARD, height: MIN_BOARD });
   const boxRef = useRef(box);
   boxRef.current = box;
-  useEffect(() => {
-    const el = wrapRef.current;
-    const slot = el?.parentElement;
-    if (!el || !slot) return;
-    const measure = () => setBox(boardRect(slot.clientWidth, slot.clientHeight));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(slot);
-    return () => ro.disconnect();
-  }, []);
-  // A new rect keeps the user's zoom and re-clamps the pan to it.
-  useEffect(() => {
-    setV((cur) => clampPan(cur, box.width, box.height));
-  }, [box.width, box.height]);
+  useResizeObserver(() => wrapRef.current?.parentElement ?? null, () => {
+    const slot = wrapRef.current?.parentElement;
+    if (!slot) return;
+    const next = boardRect(slot.clientWidth, slot.clientHeight);
+    setBox(next);
+    setV((cur) => clampPan(cur, next.width, next.height));
+  });
 
   const zoomAt = useCallback((dir: 1 | -1) => {
     const { width: w, height: h } = boxRef.current;
@@ -204,24 +201,21 @@ export function useBoardViewport(): ViewportApi {
 
   // Wheel needs a non-passive listener: React's synthetic wheel is passive, so
   // `preventDefault` there would not stop the browser's own ctrl+wheel zoom.
-  useEffect(() => {
+  useEventListener(wrapRef, "wheel", (e) => {
     const el = wrapRef.current;
     if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      // A scrollable pocket (the field-card list) keeps its own wheel, but only
-      // when it can actually scroll -- over a short list the wheel zooms.
-      const t = e.target as Element | null;
-      const scroller = t && typeof t.closest === "function" ? t.closest("[data-vp-scroll]") : null;
-      if (scroller instanceof HTMLElement && scroller.scrollHeight > scroller.clientHeight + 1) return;
-      e.preventDefault();
-      const p = toLocal(el, e.clientX, e.clientY);
-      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
-      const { width: w, height: h } = boxRef.current;
-      setV((cur) => wheelZoom(cur, p.x, p.y, dy, w, h));
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+    const ev = e as WheelEvent;
+    // A scrollable pocket (the field-card list) keeps its own wheel, but only
+    // when it can actually scroll -- over a short list the wheel zooms.
+    const t = ev.target as Element | null;
+    const scroller = t && typeof t.closest === "function" ? t.closest("[data-vp-scroll]") : null;
+    if (scroller instanceof HTMLElement && scroller.scrollHeight > scroller.clientHeight + 1) return;
+    ev.preventDefault();
+    const p = toLocal(el, ev.clientX, ev.clientY);
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaMode === 2 ? ev.deltaY * 400 : ev.deltaY;
+    const { width: w, height: h } = boxRef.current;
+    setV((cur) => wheelZoom(cur, p.x, p.y, dy, w, h));
+  }, { passive: false });
 
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     const g = gesture.current;

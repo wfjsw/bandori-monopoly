@@ -4,12 +4,13 @@
 // title, body, a thin timer bar, and outline pill options. Compact prompts sit
 // inline over the board centre; the big card grids keep a wide overlay.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, cardText, cardColor } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
+import { useCloseWhen } from "../../hooks/mount";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
@@ -55,9 +56,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   // one checklist and one confirmation, while the session advances its asks.
   const returnsGroup = useRef(returnsPickNumber(p) !== null).current;
   const live = !!view && !!p && (p.id === id || (returnsGroup && returnsPickNumber(p) !== null)) && waitingOn(p, view.playerId);
-  useEffect(() => {
-    if (!live) close();
-  }, [live, close]);
+  useCloseWhen(!live, close);
   // The deadline is measured against the time the prompt was first shown.
   const total = useRef(0);
   if (!live || !view || !p) return null;
@@ -379,7 +378,13 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
 function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; playerId: number; bidderName: string; answer: Answer; auto: boolean }) {
   const min = p.bid <= 0 ? 100 : p.bid + 100;
   const [bid, setBid] = useState(min);
-  useEffect(() => setBid((b) => Math.max(b, min)), [min]);
+  // The engine's minimum is a floor: when the standing bid rises, the field
+  // snaps up to it (a user's own lower typing is left alone).
+  const [seenMin, setSeenMin] = useState(min);
+  if (seenMin !== min) {
+    setSeenMin(min);
+    setBid((b) => Math.max(b, min));
+  }
   return (
     <div className={s.auction}>
       <div className={s.auctionTop}>{p.bidder >= 0 ? <>{tr("prompt.bidTop")}<b>{n0(p.bid)}</b>{tr("prompt.bidderOf", { who: bidderName })}</> : tr("prompt.noBids")}</div>
