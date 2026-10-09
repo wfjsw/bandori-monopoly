@@ -964,8 +964,34 @@ pub fn record_header(json_str: &str) -> Result<String, JsError> {
 }
 
 /// [`record_header`] over raw `.bdrec` bytes -- zstd, gzip or plain JSON.
+///
+/// Portable files (`docs/REPLAY.md` §10) work unchanged: the codec stops at
+/// the end of the record frame and ignores the appended engine section, so a
+/// portable file lists exactly like the plain record it wraps.
 #[wasm_bindgen]
 pub fn record_header_bytes(bytes: &[u8]) -> Result<String, JsError> {
     let h = parse_header_bytes(bytes).map_err(|e| JsError::new(&e.to_string()))?;
     Ok(json(&h))
+}
+
+// ---------------------------------------------------------------- portable codec
+//
+// The portable record extension (`docs/REPLAY.md` §10) embeds an engine bundle
+// in a zstd frame. Packing and unpacking happen on the page (and in
+// `tools/bdrec-portable.mjs`), and both need the same codec the record framing
+// uses -- the browser has no other zstd. These are **not** part of the frozen
+// replay API v1: only the page's own engine is asked for them, never an
+// archived bundle.
+
+/// zstd-compress `bytes` into one standard frame (portable-record packing).
+#[wasm_bindgen]
+pub fn zst_compress(bytes: &[u8]) -> Vec<u8> {
+    game_core::record::zst_encode(bytes)
+}
+
+/// zstd-decompress one standard frame, refusing to grow past `max_out` bytes
+/// (portable-record unpacking; the cap is the decompression-bomb limit).
+#[wasm_bindgen]
+pub fn zst_decompress(bytes: &[u8], max_out: u32) -> Result<Vec<u8>, JsError> {
+    game_core::record::zst_decode(bytes, max_out as usize).map_err(|e| JsError::new(&e.to_string()))
 }

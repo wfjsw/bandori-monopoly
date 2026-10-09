@@ -154,7 +154,13 @@ function rustFlagList() {
 const release =
   process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "prebuild";
 const profile = release ? "release" : "debug";
-const profileDir = join(ROOT, "target", "wasm32-unknown-unknown", profile);
+// Honour `CARGO_TARGET_DIR` (cargo reads it too), so a build can put its
+// scratch artifacts on another disk. The bytes are unaffected: the sources are
+// already path-remapped and the target dir never reaches them.
+const targetDir = process.env.CARGO_TARGET_DIR
+  ? resolve(process.env.CARGO_TARGET_DIR)
+  : join(ROOT, "target");
+const profileDir = join(targetDir, "wasm32-unknown-unknown", profile);
 console.log(`build-glue: profile ${profile} (NODE_ENV=${process.env.NODE_ENV ?? "<unset>"})`);
 
 const bindgen = checkBindgen();

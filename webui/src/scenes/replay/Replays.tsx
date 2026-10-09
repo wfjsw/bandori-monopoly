@@ -9,7 +9,6 @@ import { D } from "../../core/data";
 import { cx } from "../../core/cx";
 import {
   deleteReplay,
-  downloadRecord,
   getReplay,
   readRecordFile,
   type Mismatch,
@@ -18,6 +17,7 @@ import {
   listReplays,
   REPLAY_KEEP,
 } from "../../game/record";
+import { downloadRecordPrompt } from "../../game/downloadPrompt";
 import { queueReplayBytes, stampMismatches } from "../../game/replay";
 import { modeName } from "../board/model";
 import { Btn } from "../../ui/Button";
@@ -149,7 +149,7 @@ export function Replays() {
                 })()}
                 onDownload={() => void (async () => {
                   const bytes = await getReplay(e.id);
-                  if (bytes) downloadRecord(bytes, `bdrec-${e.id}.bdrec`);
+                  if (bytes) downloadRecordPrompt(bytes, `bdrec-${e.id}.bdrec`);
                   else toast(tr("replay.loadFailed"), "error");
                 })()}
                 onDelete={() => void (async () => {

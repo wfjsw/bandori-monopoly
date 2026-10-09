@@ -671,6 +671,18 @@ async function main() {
     if (existsSync(modulesDir)) copyTree(modulesDir, join(into, "modules"));
     const cacheMods = join(a.cache, "modules");
     if (existsSync(cacheMods)) copyTree(cacheMods, join(into, "modules"));
+    // Trusted glue loaders for portable records (`docs/REPLAY.md` §10). A
+    // portable `.bdrec` may embed any indexed engine; the page must never
+    // execute the file's own `glue.js` -- it hashes that, checks the hash is
+    // one we know, and imports **this** copy instead. One small copy per glue
+    // identity, so a deployment can replay a record whose engine bundle it
+    // does not host.
+    for (const b of index.bundles) {
+      if (!b.glueSha256) continue;
+      const candidates = [join(store, b.id, "glue.js"), join(a.cache, b.id, "glue.js")];
+      const from = candidates.find((p) => existsSync(p));
+      if (from) copyOrLink(from, join(into, "loaders", b.glueSha256, "glue.js"));
+    }
     // The worker driver rides along: the frozen API talks to any bundle, and
     // dist must serve it even before the next UI build copies webui/public.
     const worker = join(ROOT, "webui", "public", "assets", "engine", "replay-worker.js");

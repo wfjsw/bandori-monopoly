@@ -84,6 +84,13 @@ function PlayerLive({ rs }: { rs: ReplaySession }) {
       {/* Remount the Board on every seek: the animator's log and token
           positions are re-seeded from the restored frame. */}
       <Board key={rs.epoch} sess={rs} />
+      {/* A portable record carries its own engine -- say so, rather than
+          leaving the user to wonder which build is playing. */}
+      {rs.engineSource === "embedded" && (
+        <div className={s.banner} role="note">
+          <span>{tr("replay.embeddedEngine", { bundle: rs.engineBundle.slice(0, 12) })}</span>
+        </div>
+      )}
       {rs.divergence && (
         <div className={cx(s.banner, s.diverge)} role="alert">
           <span>
