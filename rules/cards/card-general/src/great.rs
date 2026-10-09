@@ -22,7 +22,9 @@ fn great(player_id: i32) -> card_sdk::Asked {
         player_id,
         &Msg::new(key!("great_added")).player_id("who", player_id),
     );
-    // 规则书[手]: 「3. [获得]2000资金」
-    ctx::gain(player_id, 2000, &Msg::new(key!("great_why")))?;
+    // 规则书[手]: 「3. [获得]2000资金」 -- `ctx::n(1, …)` so
+    // 「后勤人员的努力」 (「将打出的那张卡[手]效果中的一个数字变为两倍」)
+    // can double it. Index 1 is this effect's only tagged number.
+    ctx::gain(player_id, ctx::n(1, 2000), &Msg::new(key!("great_why")))?;
     Ok(())
 }

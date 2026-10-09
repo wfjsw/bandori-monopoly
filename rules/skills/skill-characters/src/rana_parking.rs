@@ -108,6 +108,10 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     plan::set_resolve(true);
     // 「该次传送不可进行地契购买」 -- the plan's no-buy flag.
     plan::set_no_buy(true);
+    // 「传送至space代替本回合的移动」 -- the press *is* the main move. Setting
+    // the plan alone leaves the piece put; `card_move` executes it (and marks
+    // `MainMoved`, so no further main move this turn).
+    ctx::card_move(player_id);
     ctx::log(
         player_id,
         &Msg::new(key!("rana_parking_moved")).tile("tile", space),

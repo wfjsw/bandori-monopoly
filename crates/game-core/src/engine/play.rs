@@ -4140,6 +4140,8 @@ impl Cx<'_> {
         // `play.Tags["immune"+seat]` -- per-pair designations cancelled on the
         // previous play must not leak into this one.
         self.w.turn.cancelled_designations.clear();
+        // `PlayCtx.Doubled` is scoped to one play.
+        self.w.turn.play_doubled = -1;
         self.w
             .log(
                 "play",
@@ -4156,6 +4158,7 @@ impl Cx<'_> {
             "card",
             i,
             card = id.to_string(),
+            cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
         let rules = self.rules;

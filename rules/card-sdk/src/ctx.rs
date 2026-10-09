@@ -2257,6 +2257,9 @@ pub fn set_play_doubled(n: i32) {
 /// bare literal for the numbers a doubling effect can target.
 pub fn n(k: i32, value: i32) -> i32 {
     if unsafe { sys::play_doubled() } == k {
+        // One-shot: 「将…一个数字变为两倍」 doubles a single tagged number,
+        // then the flag is spent so a later `n` on the same play stays put.
+        unsafe { sys::set_play_doubled(-1) };
         value * 2
     } else {
         value
