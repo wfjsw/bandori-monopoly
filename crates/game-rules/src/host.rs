@@ -44,6 +44,18 @@ pub mod bot_cost {
     pub static GUEST_NS: AtomicU64 = AtomicU64::new(0);
     /// `World` clones at the card-host boundary (one per store built).
     pub static HOST_WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
+    /// [反击] window opens: `hand_counteractions` rings that passed the
+    /// valid-option-first pre-scan (at least one candidate survived the kind
+    /// bitmask + seat eligibility + condition).
+    pub static COUNTERACT_WINDOWS: AtomicU64 = AtomicU64::new(0);
+    /// [反击] windows skipped whole because no candidate could respond.
+    pub static COUNTERACT_WINDOWS_SKIPPED: AtomicU64 = AtomicU64::new(0);
+    /// Per-candidate counteraction probes (condition / guard evaluations).
+    pub static COUNTERACT_PROBES: AtomicU64 = AtomicU64::new(0);
+    /// Probes answered from the per-window processed set (no re-evaluation).
+    pub static COUNTERACT_PROBE_MEMO_HITS: AtomicU64 = AtomicU64::new(0);
+    /// [反击] cards actually declared (left a hand for a counter link).
+    pub static COUNTERACT_DECLARED: AtomicU64 = AtomicU64::new(0);
 }
 
 /// Fuel per top-level effect run, shared by any nested `play_card` calls. Plenty
@@ -857,12 +869,12 @@ impl Ruleset {
             let audit = self.legacy_probe(world, card, guard, player_id);
             let admitted = if self.guard_is_none(card, guard) {
                 // G4 deleted the residual: the condition alone decides.
-                crate::cond_pre::admits_pre(pre, &scope, &cand)
+                crate::cond_pre::admits_pre(pre, Some(&scope), &cand)
             } else {
                 // A guard is a pure query: refuse inline answers (a nested drive's
                 // host must not answer a question nobody asked -- see
                 // `crate::inline::Deny`). A prompting guard fails closed, as below.
-                let asked: Result<bool, ()> = crate::cond_pre::admits(pre, &scope, &cand, || {
+                let asked: Result<bool, ()> = crate::cond_pre::admits(pre, Some(&scope), &cand, || {
                     match crate::inline::with_no_inline(|| {
                         call_card(&self.inner, &mut store, card, guard, export::OP_GUARD, player_id)
                     }) {
@@ -982,9 +994,9 @@ impl Ruleset {
         let audit = self.legacy_probe(world, card, entry, player_id);
         let ok = if self.guard_is_none(card, entry) {
             // G4 deleted the residual: the condition alone decides.
-            crate::cond_pre::admits_pre(pre, scope, &cand)
+            crate::cond_pre::admits_pre(pre, Some(scope), &cand)
         } else {
-            crate::cond_pre::admits(pre, scope, &cand, || {
+            crate::cond_pre::admits(pre, Some(scope), &cand, || {
                 let mut store = self.store(world.clone(), &[])?;
                 match crate::inline::with_no_inline(|| {
                     call_card(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id)
@@ -1039,7 +1051,7 @@ impl Ruleset {
             &self.inner.cards[card as usize].id,
             false,
         );
-        if crate::cond_pre::condition_allows(pre, scope, &cand) {
+        if crate::cond_pre::condition_allows(pre, Some(scope), &cand) {
             Some(entry)
         } else {
             None
@@ -1112,8 +1124,18 @@ impl Ruleset {
             .get(card as usize)
             .and_then(|r| r.get(entry as usize))
             .and_then(|p| p.as_ref());
-        let scope =
-            crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(world, player_id));
+        // The CEL scope is only read when a condition exists -- with `pre ==
+        // None` nothing evaluates it, so skip the build. That is the
+        // `cant_play` hot path (ai_step / view extras ask it per hand card).
+        let scope;
+        let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
+            scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+                world, player_id,
+            ));
+            Some(&scope)
+        } else {
+            None
+        };
         let cand = crate::cond_pre::fill_candidate(
             world,
             player_id,
@@ -1125,7 +1147,7 @@ impl Ruleset {
         let why = if self.guard_is_none(card, entry) {
             // G4 deleted the gate: the condition alone decides. A rejecting
             // condition is still a block; an admitting one is playable.
-            if crate::cond_pre::condition_allows(pre, &scope, &cand) {
+            if crate::cond_pre::condition_allows(pre, scope, &cand) {
                 None
             } else {
                 Some(crate::Msg::new("err.play_pre"))
@@ -1133,7 +1155,7 @@ impl Ruleset {
         } else {
             crate::cond_pre::admits_gate(
                 pre,
-                &scope,
+                scope,
                 &cand,
                 || crate::Msg::new("err.play_pre"),
                 || {
@@ -1304,7 +1326,7 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         let entry = info.entry(OnKind::Counteract, Some(kind))?;
         let pre = self.pre(card, entry);
         let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, false);
-        if crate::cond_pre::condition_allows(pre, scope, &cand) {
+        if crate::cond_pre::condition_allows(pre, Some(scope), &cand) {
             Some(entry)
         } else {
             None
@@ -1312,6 +1334,13 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     }
     /// The compiled condition of one guarded entry, if any (G0).
     fn pre(&self, card: i32, entry: i32) -> Option<&crate::cond_pre::CompiledPre>;
+    /// G4: is the residual wasm guard deleted, leaving the condition alone to
+    /// decide? `true` skips the guard instantiation entirely.
+    /// Default `false` (conservative: assume a guard and run it). [`Ruleset`]
+    /// overrides from its manifest.
+    fn entry_guard_is_none(&self, _card: i32, _entry: i32) -> bool {
+        false
+    }
     /// Content hash of the loaded set; `None` when there is no module image
     /// (the native build -- the cards are compiled in).
     fn sha256(&self) -> Option<&str>;
@@ -1390,6 +1419,9 @@ impl CardModules for Ruleset {
             .get(card as usize)?
             .get(entry as usize)?
             .as_ref()
+    }
+    fn entry_guard_is_none(&self, card: i32, entry: i32) -> bool {
+        Ruleset::guard_is_none(self, card, entry)
     }
     fn sha256(&self) -> Option<&str> {
         Some(Ruleset::sha256(self))

@@ -4,7 +4,7 @@
 
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { suggest, plan, CHAOS_RESERVE, type AutopilotCtx } from "./autopilot.ts";
+import { suggest, plan, CHAOS_RESERVE, DEFAULT_STRATEGY, type AutopilotCtx } from "./autopilot.ts";
 import type { MatchPlayer, MatchState, MatchView, TileData } from "../core/types.ts";
 
 // ---------------------------------------------------------------- fixtures
@@ -526,4 +526,63 @@ test("chaos still picks a random deck, not the book", () => {
   );
   assert.deepEqual(cmd, { act: "deck", cards: ["r1", "r2", "r3"] });
   assert.equal(asked, false);
+});
+
+// ---------------------------------------------------------------- strategy book
+
+test("autopilot reads the glue's strategy params instead of hard-coded thresholds", () => {
+  const prompt = {
+    id: 3,
+    kind: "choice",
+    title: { k: "ask.buy.title" },
+    text: { k: "ask.buy.text" },
+    card: "",
+    options: [{ k: "ask.buy.yes" }, { k: "ask.no_buy" }],
+    fallback: 1,
+    players: [0],
+    answers: [-1],
+    timeLeft: 15,
+    tile: 1,
+    bid: 0,
+    bidder: -1,
+    items: [],
+    count: 0,
+  };
+  const v = view({ state: state({ busy: true, prompt, players: [player({ money: 10000 })] }) });
+  // Defaults: 10000 - 1000 >= 2000 -> buy.
+  assert.deepEqual(suggest(v, ctx()), { act: "answer", prompt: 3, value: 0 });
+  // The same table under a glued reserve of 9 999: decline.
+  const rich = suggest(
+    v,
+    ctx({
+      strategyFor: () => ({ ...DEFAULT_STRATEGY, buy_reserve: 9999 }),
+    }),
+  );
+  assert.deepEqual(rich, { act: "answer", prompt: 3, value: 1 });
+});
+
+test("strategyFor is asked for the seat's public table key", () => {
+  const v = view({
+    playerId: 1,
+    state: state({
+      step: 4,
+      turn: 1,
+      landed: 1,
+      bought: false,
+      players: [player({ character: "A", pos: 0 }), player({ character: "B", pos: 1, money: 10000 })],
+    }),
+  });
+  let got: [string, number, string[]] | null = null;
+  suggest(
+    v,
+    ctx({
+      strategyFor: (c, seat, opponents) => {
+        got = [c, seat, opponents];
+        return DEFAULT_STRATEGY;
+      },
+    }),
+  );
+  // The key is public: own character, own seat, the other seats' characters
+  // in seat order -- never an opponent's hand or the deck.
+  assert.deepEqual(got, ["B", 1, ["A"]]);
 });

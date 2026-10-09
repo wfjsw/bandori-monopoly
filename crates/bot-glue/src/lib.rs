@@ -78,6 +78,9 @@ struct SearchOpts {
     horizon_rounds: u32,
     reuse_trees: bool,
     accept_ponder: bool,
+    /// Stop before the budget when the best root action cannot be overtaken
+    /// (`docs/BOT.md` §3.4). On by default -- the worker is a production path.
+    early_stop: bool,
     cache_cap: usize,
 }
 
@@ -90,6 +93,7 @@ impl Default for SearchOpts {
             horizon_rounds: 2,
             reuse_trees: true,
             accept_ponder: true,
+            early_stop: true,
             cache_cap: 256,
         }
     }
@@ -109,6 +113,10 @@ struct Cache {
     results: HashMap<u64, CachedDecision>,
     result_order: VecDeque<u64>,
     trees: HashMap<i32, Ismcts>,
+    /// Last public turn `(round, turn)` each seat ran a speculative
+    /// (predicted) search for -- one searching ponder per seat per turn
+    /// (`docs/BOT.md` §3.5), so the idle probes stay cheap no-ops.
+    speculative_at: HashMap<i32, (i32, i32)>,
 }
 
 impl Cache {
@@ -238,8 +246,9 @@ pub fn ruleset_build() -> Result<usize, JsError> {
 // ------------------------------------------------------------------ config
 
 /// `{"bias_weight":0.4,"eval_weight":0.3,"implicit_minimax":true,
-///   "horizon_rounds":2,"reuse_trees":true,"accept_ponder":true,"cache_cap":256}`.
-/// Missing fields keep their current value.
+///   "horizon_rounds":2,"reuse_trees":true,"accept_ponder":true,
+///   "early_stop":true,"cache_cap":256}`. Missing fields keep their current
+/// value.
 #[wasm_bindgen]
 pub fn set_search(opts_json: &str) -> Result<(), JsError> {
     #[derive(serde::Deserialize, Default)]
@@ -251,6 +260,7 @@ pub fn set_search(opts_json: &str) -> Result<(), JsError> {
         horizon_rounds: Option<u32>,
         reuse_trees: Option<bool>,
         accept_ponder: Option<bool>,
+        early_stop: Option<bool>,
         cache_cap: Option<usize>,
     }
     let p: Patch = parse("opts", opts_json)?;
@@ -273,6 +283,9 @@ pub fn set_search(opts_json: &str) -> Result<(), JsError> {
         }
         if let Some(v) = p.accept_ponder {
             o.accept_ponder = v;
+        }
+        if let Some(v) = p.early_stop {
+            o.early_stop = v;
         }
         if let Some(v) = p.cache_cap {
             o.cache_cap = v;
@@ -326,6 +339,7 @@ pub fn info() -> String {
         "horizon_rounds": opts.horizon_rounds,
         "reuse_trees": opts.reuse_trees,
         "ponder": opts.accept_ponder,
+        "early_stop": opts.early_stop,
     }))
 }
 
@@ -441,7 +455,7 @@ pub fn decide(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
 
     let st = view.state.clone();
     let fallback = heuristic_message_view(&d, &view);
-    let out = run_search(&view, seat, member, budget, seed as u64, &opts);
+    let out = run_search(&view, seat, member, budget, seed as u64, &opts, false);
     let msg: NetMessage = if out.heuristic {
         fallback
     } else {
@@ -481,6 +495,12 @@ pub fn decide(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
 
 /// Speculative search while the other seats act (BOT-RESEARCH #5). Same view
 /// frame as [`decide`]; the result is cached by the information-set key.
+///
+/// When the incoming view is idle, the **next own decision** is predicted
+/// (`bot_core::predict_upcoming_view`, `docs/BOT.md` §3.5) and that turn-start
+/// 运营 surface is what gets searched -- an idle view has no searchable
+/// surface. Nothing is searched (and nothing cached) when the next decision
+/// is not near.
 #[wasm_bindgen]
 pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsError> {
     let started = bot_core::clock::Instant::now();
@@ -495,7 +515,28 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
         return Err(JsError::new(&format!("seat {seat} out of range")));
     }
     let member = view.you;
-    let key = view.decision_key();
+    // What to search: the view itself when it is already a decision the
+    // search would branch on, else the predicted turn-start surface, else
+    // nothing (a cheap no-op).
+    let idle = action::surface(&view.state, seat).is_none();
+    let target = if idle {
+        match bot_core::predict_upcoming_view(&view) {
+            Some(v) => v,
+            None => {
+                return Ok(json(&serde_json::json!({
+                    "ok": true,
+                    "reused": false,
+                    "iterations": 0,
+                    "elapsedMs": started.elapsed().as_millis() as u64,
+                    "heuristic": true,
+                    "noop": true,
+                })));
+            }
+        }
+    } else {
+        view.clone()
+    };
+    let key = target.decision_key();
     if let Some(c) = CACHE.with(|c| c.borrow().live(key).cloned()) {
         return Ok(json(&serde_json::json!({
             "ok": true,
@@ -509,10 +550,10 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
     let d = data()?;
     let searched = action::legal_actions_with_cost(
         &d,
-        &view.state,
-        &view.hand,
-        &view.playable,
-        &view.est_cost,
+        &target.state,
+        &target.hand,
+        &target.playable,
+        &target.est_cost,
         seat,
     );
     if action::trivial_decision(&searched).is_some() {
@@ -525,10 +566,35 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
             "decisionKey": format!("{key:016x}"),
         })));
     }
-    let st = view.state.clone();
-    let out = run_search(&view, seat, member, budget, seed as u64, &opts);
+    // One searching ponder per seat per public turn (the idle probe fires
+    // every 200 ms while the "next turn is near" gate holds).
+    if idle {
+        let turn_id = (view.state.round, view.state.turn);
+        let mut skip = false;
+        CACHE.with(|c| {
+            let mut c = c.borrow_mut();
+            if c.speculative_at.get(&member) == Some(&turn_id) {
+                skip = true;
+            } else {
+                c.speculative_at.insert(member, turn_id);
+            }
+        });
+        if skip {
+            return Ok(json(&serde_json::json!({
+                "ok": true,
+                "reused": false,
+                "iterations": 0,
+                "elapsedMs": started.elapsed().as_millis() as u64,
+                "heuristic": true,
+                "noop": true,
+                "reason": "already-pondered-this-turn",
+            })));
+        }
+    }
+    let st = target.state.clone();
+    let out = run_search(&target, seat, member, budget, seed as u64, &opts, true);
     let msg = if out.heuristic {
-        heuristic_message_view(&d, &view)
+        heuristic_message_view(&d, &target)
     } else {
         action::to_net_message(&out.action, &st, seat)
     };
@@ -552,6 +618,7 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
         "elapsedMs": started.elapsed().as_millis() as u64,
         "heuristic": out.heuristic,
         "decisionKey": format!("{key:016x}"),
+        "speculative": idle,
         "answer": msg,
     })))
 }
@@ -561,6 +628,9 @@ pub fn ponder(view_json: &str, budget_ms: u32, seed: u32) -> Result<String, JsEr
 /// played action. Root-parallel across workers is the page's job (`docs/BOT.md`
 /// §3.6): `std::thread` is unavailable on wasm32, and each worker already owns
 /// its own stream via `seed_for_thread(seed, index)`.
+///
+/// `keep_whole_tree` (a speculative `ponder`) keeps every explored node; a
+/// decide keeps only the subtree under the action it just played.
 fn run_search(
     view: &SeatView,
     seat: usize,
@@ -568,6 +638,7 @@ fn run_search(
     budget: Duration,
     seed: u64,
     opts: &SearchOpts,
+    keep_whole_tree: bool,
 ) -> SearchOutcome {
     let cfg = SearchConfig {
         budget,
@@ -576,6 +647,7 @@ fn run_search(
         eval_weight: opts.eval_weight,
         implicit_minimax: opts.implicit_minimax,
         bias_weight: opts.bias_weight,
+        early_stop: opts.early_stop,
         ..Default::default()
     };
     let mut tree = if opts.reuse_trees {
@@ -586,7 +658,9 @@ fn run_search(
     let mut sim = MatchSim::new(data().expect("load_data"), rules().expect("rules"), view.clone(), seat, member);
     let out = tree.search(&mut sim, seat, cfg);
     if opts.reuse_trees && !out.heuristic {
-        tree.retain_after(out.root_key, &out.action);
+        if !keep_whole_tree {
+            tree.retain_after(out.root_key, &out.action);
+        }
         CACHE.with(|c| {
             let mut c = c.borrow_mut();
             c.trees.insert(member, tree);

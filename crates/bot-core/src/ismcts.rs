@@ -68,6 +68,22 @@ pub struct SearchConfig {
     /// Record a fork / descent / rollout / eval / key timing breakdown in
     /// [`SearchOutcome::timings`]. Off by default.
     pub profile: bool,
+    /// Stop before the budget when the best root action cannot be overtaken
+    /// (time management; `docs/BOT.md` §3.4 "Early stopping"). **Off by
+    /// default** so tests and the iteration-cap determinism mode stay
+    /// bit-identical; the production paths (`bot-service`, `bot-glue`) turn
+    /// it on. See [`SearchConfig::deterministic`].
+    pub early_stop: bool,
+    /// Minimum completed iterations before an early stop may fire. 4 is
+    /// enough for a visit lead to exist at all and is below the real
+    /// ruleset's ~4-iteration floor (one wasmtime rollout is hundreds of ms),
+    /// so the rule can fire there too -- the all-root-actions-tried guard
+    /// below is the real protection against an unexpanded-action artifact.
+    pub min_iterations: u64,
+    /// Second, optional early-stop rule: stop when the leader's value
+    /// confidence interval dominates the runner-up's (`docs/BOT.md` §3.4).
+    /// Off by default -- the visit-lead rule alone is the strength-safe one.
+    pub early_stop_ci: bool,
 }
 
 impl Default for SearchConfig {
@@ -83,6 +99,9 @@ impl Default for SearchConfig {
             implicit_minimax: true,
             bias_weight: 0.4,
             profile: false,
+            early_stop: false,
+            min_iterations: 4,
+            early_stop_ci: false,
         }
     }
 }
@@ -97,6 +116,26 @@ impl SearchConfig {
             ..Self::default()
         }
     }
+
+    /// Deterministic mode: no wall-clock early stop, so the only stop
+    /// conditions are the iteration cap and the budget. Tests that pin
+    /// seed+threads reproducibility use this (or just leave `early_stop`
+    /// off, which is the default).
+    pub fn deterministic() -> Self {
+        Self {
+            early_stop: false,
+            ..Self::default()
+        }
+    }
+
+    /// Production search: the default selection plus early stopping
+    /// (`docs/BOT.md` §3.4).
+    pub fn anytime() -> Self {
+        Self {
+            early_stop: true,
+            ..Self::default()
+        }
+    }
 }
 
 /// Per-action statistics at one information set.
@@ -105,6 +144,9 @@ struct Edge {
     /// Simulation outcomes (terminal win/score, or the cutoff value).
     visits: u64,
     value_sum: f64,
+    /// Σ x² of the simulation outcomes -- the second moment the optional
+    /// confidence-interval early-stop rule needs (`early_stop_ci`).
+    value_sq_sum: f64,
     /// Heuristic evaluations -- a *separate* statistic (Lanctot et al.).
     eval_visits: u64,
     eval_sum: f64,
@@ -222,6 +264,11 @@ pub struct SearchOutcome {
     /// True when the heuristic had to answer (no legal abstracted actions,
     /// or the search never completed an iteration).
     pub heuristic: bool,
+    /// True when the search stopped before the budget because the best root
+    /// action could not be overtaken (`SearchConfig::early_stop`). The
+    /// budget / iteration cap are still honoured; this only reports that the
+    /// new rule fired. Root-parallel: true when **any** thread early-stopped.
+    pub early_stopped: bool,
     /// Full root statistics (visits + value sums + heuristic evals), sorted
     /// like [`Self::root_stats`].
     pub root_stats_full: Vec<ActionStats>,
@@ -360,6 +407,7 @@ impl Ismcts {
                 let m = mine.edges.entry(a).or_default();
                 m.visits += e.visits;
                 m.value_sum += e.value_sum;
+                m.value_sq_sum += e.value_sq_sum;
                 m.eval_visits += e.eval_visits;
                 m.eval_sum += e.eval_sum;
                 m.eval_max = m.eval_max.max(e.eval_max);
@@ -400,6 +448,7 @@ impl Ismcts {
                     elapsed: started.elapsed(),
                     root_stats: Vec::new(),
                     heuristic: true,
+                    early_stopped: false,
                     root_stats_full: Vec::new(),
                     reused_nodes: 0,
                     timings: None,
@@ -420,6 +469,7 @@ impl Ismcts {
                 elapsed: started.elapsed(),
                 root_stats: Vec::new(),
                 heuristic: true,
+                early_stopped: false,
                 root_stats_full: Vec::new(),
                 reused_nodes: 0,
                 timings: None,
@@ -448,6 +498,7 @@ impl Ismcts {
                     elapsed: started.elapsed(),
                     root_stats: vec![(stat.action.clone(), 0.0, 1)],
                     heuristic: false,
+                    early_stopped: false,
                     root_stats_full: vec![stat],
                     reused_nodes: 0,
                     timings: None,
@@ -461,6 +512,7 @@ impl Ismcts {
                     elapsed: started.elapsed(),
                     root_stats: Vec::new(),
                     heuristic: true,
+                    early_stopped: false,
                     root_stats_full: Vec::new(),
                     reused_nodes: 0,
                     timings: None,
@@ -483,12 +535,14 @@ impl Ismcts {
         }
         drop(probe);
         let reused_nodes = self.tree.len();
-        let deadline = Instant::now() + cfg.budget;
+        let loop_started = Instant::now();
+        let deadline = loop_started + cfg.budget;
         let horizon = Horizon {
             rounds: cfg.horizon_rounds,
         };
 
         let mut iterations = 0u64;
+        let mut early_stopped = false;
         // Always complete at least one iteration (the budget covers extra
         // ones), so a tight budget still returns a searched answer.
         loop {
@@ -620,6 +674,7 @@ impl Ismcts {
                     let e = node.edges.entry(action.clone()).or_default();
                     e.visits += 1;
                     e.value_sum += v;
+                    e.value_sq_sum += v * v;
                     e.eval_visits += 1;
                     e.eval_sum += h;
                     // Implicit minimax: every node on the path is the
@@ -638,6 +693,23 @@ impl Ismcts {
                 }
             }
             iterations += 1;
+            // Early stopping (time management, `docs/BOT.md` §3.4): once the
+            // best root action's visit lead exceeds the most visits the
+            // runner-up could still gain in the remaining time, stop.
+            if cfg.early_stop
+                && early_stop_should_break(
+                    self.tree.get(&root_key),
+                    &root_actions,
+                    iterations,
+                    loop_started.elapsed(),
+                    deadline.duration_since(Instant::now()),
+                    cfg.min_iterations,
+                    cfg.early_stop_ci,
+                )
+            {
+                early_stopped = true;
+                break;
+            }
         }
 
         // Pick the most-visited root action (mean as tiebreak, then the
@@ -705,6 +777,7 @@ impl Ismcts {
             elapsed: started.elapsed(),
             root_stats,
             heuristic: iterations == 0,
+            early_stopped,
             root_stats_full: full,
             reused_nodes,
             timings: if cfg.profile { Some(times) } else { None },
@@ -778,6 +851,7 @@ impl Ismcts {
             .map(|s| s.action.clone())
             .unwrap_or(Action::Bid { amount: -1 });
         let heuristic = outcomes.iter().all(|o| o.heuristic);
+        let early_stopped = outcomes.iter().any(|o| o.early_stopped);
         let root_key = outcomes.first().map(|o| o.root_key).unwrap_or(0);
         let reused_nodes = outcomes.first().map(|o| o.reused_nodes).unwrap_or(0);
         let timings = if cfg.profile {
@@ -802,6 +876,7 @@ impl Ismcts {
                 elapsed: started.elapsed(),
                 root_stats: Vec::new(),
                 heuristic: true,
+                early_stopped,
                 root_stats_full: Vec::new(),
                 reused_nodes,
                 timings,
@@ -817,6 +892,7 @@ impl Ismcts {
             elapsed: started.elapsed(),
             root_stats,
             heuristic,
+            early_stopped,
             root_stats_full: full,
             reused_nodes,
             timings,
@@ -845,6 +921,120 @@ fn selection_score(e: &Edge, total: u64, prior: f64, cfg: &SearchConfig) -> f64 
         0.0
     };
     mix + explore + bias
+}
+
+/// Early stopping (`docs/BOT.md` §3.4): can the best root action still be
+/// overtaken on **visits** (the pick's primary key) before the budget expires?
+///
+/// * **Visit-lead rule (primary).** Each further iteration adds at most one
+///   visit to any single root edge, so the runner-up can gain at most
+///   `iters_left` visits. When `leader.visits - runner_up.visits > iters_left`
+///   the pick is settled. `iters_left` is estimated from the measured
+///   per-iteration rate and **inflated 1.3×** (plus a +1 margin), because an
+///   underestimated remainder would stop while a catch-up is still possible
+///   (strength risk) while an overestimate only costs a little CPU.
+/// * **Guards.** At least `min_iterations` (default 4) iterations, and every
+///   root action tried at least once (otherwise an unexpanded action is not
+///   yet in the running and the "leader" is an artifact of expansion order).
+/// * **CI rule (optional, `early_stop_ci`).** Also stop when the leader's
+///   value mean's 95 % normal-approximation lower bound exceeds the
+///   runner-up's upper bound (`mean ± 1.96·se`, `se = sqrt((E[x²]−mean²)/n)`
+///   from the tracked second moment). Documented and off by default: the
+///   visit-lead rule alone is what the strength A/B kept at parity.
+fn early_stop_should_break(
+    root: Option<&Node>,
+    root_actions: &[Action],
+    iterations: u64,
+    loop_elapsed: Duration,
+    remaining: Duration,
+    min_iterations: u64,
+    ci_rule: bool,
+) -> bool {
+    if iterations < min_iterations.max(1) {
+        return false;
+    }
+    let Some(node) = root else {
+        return false;
+    };
+    // Every root action must have been tried; an untried one is not yet in
+    // the running and the lead below would be meaningless.
+    if root_actions.iter().any(|a| {
+        node.edges
+            .get(a)
+            .map(|e| e.visits == 0)
+            .unwrap_or(true)
+    }) {
+        return false;
+    }
+    // Two best edges by visits (the pick's primary key).
+    let mut best: Option<&Edge> = None;
+    let mut second: Option<&Edge> = None;
+    for a in root_actions {
+        let Some(e) = node.edges.get(a) else { continue };
+        match best {
+            None => best = Some(e),
+            Some(b) if e.visits > b.visits => {
+                second = Some(b);
+                best = Some(e);
+            }
+            Some(_) => {
+                if second.map(|s| e.visits > s.visits).unwrap_or(true) {
+                    second = Some(e);
+                }
+            }
+        }
+    }
+    let (Some(leader), Some(runner)) = (best, second) else {
+        // 0 or 1 tried root actions: with one there is nothing to overtake,
+        // but the trivial-decision path already covers the forced case, so
+        // do not early-stop here (a single expanded action can still be
+        // losing to an untried one the guard above caught).
+        return false;
+    };
+    if leader.visits <= runner.visits {
+        return false;
+    }
+    // Measured rate: iterations per second over the search loop. A zero /
+    // sub-millisecond loop cannot estimate a rate -- don't stop.
+    let elapsed_s = loop_elapsed.as_secs_f64();
+    if elapsed_s <= 0.0 {
+        return false;
+    }
+    let rate = iterations as f64 / elapsed_s; // iterations / second
+    let remaining_s = remaining.as_secs_f64();
+    // Inflated remainder (1.3×) plus a +1 margin. `min_iterations` is the
+    // *guard* above, not part of the margin -- folding it in (as an earlier
+    // draft did) made the rule unable to fire on the real ruleset at all,
+    // where one thread completes only ~4 iterations per decision. 1.3× is
+    // enough headroom for a cheaper-next-iteration rate error; the strength
+    // A/B (§5 C2) is the gate on whether it is enough.
+    let iters_left = (rate * remaining_s * 1.3) as u64 + 1;
+    let lead = leader.visits - runner.visits;
+    if lead > iters_left {
+        return true;
+    }
+    if ci_rule {
+        if let (Some(l), Some(r)) = (ci_bounds(leader), ci_bounds(runner)) {
+            if l.0 > r.1 {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// `(lower, upper)` 95 % normal-approximation bounds on an edge's mean value,
+/// from its tracked first and second moments. `None` when there is no
+/// variance estimate yet (`visits < 2`).
+fn ci_bounds(e: &Edge) -> Option<(f64, f64)> {
+    if e.visits < 2 {
+        return None;
+    }
+    let n = e.visits as f64;
+    let mean = e.value_sum / n;
+    let var = (e.value_sq_sum / n - mean * mean).max(0.0);
+    let se = (var / n).sqrt();
+    Some((mean - 1.96 * se, mean + 1.96 * se))
 }
 
 /// Stable order key for action tiebreaks (`Action: Ord` is the same order;

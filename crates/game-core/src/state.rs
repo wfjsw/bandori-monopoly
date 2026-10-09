@@ -455,6 +455,19 @@ fn is_status_key(key: &str) -> bool {
     )
 }
 
+/// The tick the rulebook names for a timed status counter (规则书:
+/// [停留]/[晕眩] 「玩家的每回合结束时移除一层」; `stunStart` is the layer that
+/// starts counting next turn, `Tick::TurnStart`). `state_set` stamps this on
+/// any write whose item has no tick, so the book's wear-off holds no matter
+/// which writer landed the layer.
+fn default_expiry(key: &str) -> Option<Tick> {
+    match key {
+        key::STAY | key::STUN => Some(Tick::TurnEnd),
+        key::STUN_START => Some(Tick::TurnStart),
+        _ => None,
+    }
+}
+
 /// How a bot player decides. Serde-defaults to [`Self::Standard`] so older
 /// saves and room records load unchanged.
 ///
@@ -640,8 +653,19 @@ impl MatchPlayer {
     /// and a declared `max > 0` is a real cap (fire pots 「上限M」). `max == 0`
     /// still means "uncapped". A consumer that wants a different policy (e.g.
     /// `gain_fire`'s partial gain + log) does its own arithmetic first.
+    ///
+    /// A **fresh** stay / stun / stunStart item also picks up the rulebook's
+    /// wear-off tick (see [`default_expiry`]): 「每回合结束时移除一层」 is a
+    /// property of the status, not of whichever writer happened to land the
+    /// layer, so a raw `state_set("stun", n)` cannot leave a permanent stun
+    /// that skips every later turn. The tick is re-asserted whenever it has
+    /// been cleared (`state_set_expires(..., None)`) -- the book has no
+    /// non-ticking [晕眩] -- but a non-default tick the writer asked for stays.
     pub fn state_set(&mut self, key: &str, value: i32) -> i32 {
         let e = self.state.entry(key.to_string()).or_default();
+        if e.expires.is_none() {
+            e.expires = default_expiry(key);
+        }
         let mut v = value;
         // Status counters cannot go negative -- clearing floors at 0.
         if is_status_key(key) {
@@ -1099,4 +1123,45 @@ pub struct SkillAction {
     pub text: Msg,
     pub enabled: bool,
     pub reason: Msg,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 规则书 [停留]/[晕眩] 「玩家的每回合结束时移除一层」 and `stunStart`'s
+    /// turn-start tick are properties of the status: a write that names no
+    /// expiry still wears off. (Fuzz soak iter 1517 -- a raw `state_set("stun",
+    /// 1)` left a permanent stun that skipped every later turn and turned
+    /// PPP:Returns' turn-start ask into a prompt storm.)
+    #[test]
+    fn status_writes_carry_the_books_tick() {
+        let mut p = MatchPlayer::default();
+        p.state_set(key::STAY, 1);
+        p.state_set(key::STUN, 1);
+        p.state_set(key::STUN_START, 1);
+        assert_eq!(p.state.get(key::STAY).unwrap().expires, Some(Tick::TurnEnd));
+        assert_eq!(p.state.get(key::STUN).unwrap().expires, Some(Tick::TurnEnd));
+        assert_eq!(
+            p.state.get(key::STUN_START).unwrap().expires,
+            Some(Tick::TurnStart)
+        );
+        // The tick actually moves the counter.
+        p.tick_state(Tick::TurnEnd);
+        assert_eq!(p.stay(), 0);
+        assert_eq!(p.stun(), 0);
+        assert_eq!(p.stun_start(), 1, "stunStart waits for its own tick");
+        p.tick_state(Tick::TurnStart);
+        assert_eq!(p.stun_start(), 0);
+    }
+
+    /// An explicit non-default tick the writer asked for stays.
+    #[test]
+    fn explicit_expiry_is_not_overridden() {
+        let mut p = MatchPlayer::default();
+        p.state_set(key::STUN, 1);
+        p.state_set_expires(key::STUN, Some(Tick::TurnStart));
+        p.state_set(key::STUN, 2);
+        assert_eq!(p.state.get(key::STUN).unwrap().expires, Some(Tick::TurnStart));
+    }
 }

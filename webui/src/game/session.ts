@@ -11,7 +11,7 @@ import { api, ensureSession, openStream } from "../net/api";
 import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
-import { advancedSeats, driveSeat, decisionAt, type DriveHooks } from "./botDrive";
+import { advancedSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks } from "./botDrive";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 
 type ViewCb = (v: MatchView) => void;
@@ -117,6 +117,10 @@ class Autopilot {
       // (`docs/BOT.md` §3.7); the lookup itself lives in game-core.
       deckSuggest: (c, seat, opponents) =>
         JSON.parse(rules.deck_suggest(c, seat, JSON.stringify(opponents))),
+      // Strategy book entry for the public table, else the defaults (today's
+      // constants) (`docs/BOT.md` §3.8) -- one source of truth with the engine.
+      strategyFor: (c, seat, opponents) =>
+        JSON.parse(rules.strategy_for(c, seat, JSON.stringify(opponents))),
       deckRandom: (c) => {
         const pool: string[] = JSON.parse(rules.deck_pool(c));
         for (let i = pool.length - 1; i > 0; i--) {
@@ -425,6 +429,10 @@ export class SoloSession extends GameSession {
   /** Per-seat decisions already spent this turn (the budget spread). */
   private botTurnKey = "";
   private botPlayed = new Map<number, number>();
+  /** Speculative `ponder` bookkeeping: one in flight per seat, rate-limited
+   *  (`docs/BOT.md` §3.5 -- the same shape as the server's `spawn_ponder`). */
+  private botPonderInFlight = new Set<number>();
+  private botPonderAt = new Map<number, number>();
   private onHide = () => this.persist(true);
 
   private constructor(m: InstanceType<typeof rules.SoloMatch>, weights: ScoreWeights, last = 0, replayId: string | null = null) {
@@ -542,7 +550,39 @@ export class SoloSession extends GameSession {
     for (const member of advancedSeats(v0)) {
       if (this.botInFlight.has(member)) continue;
       const v = JSON.parse(this.m.view(member)) as MatchView;
-      if (decisionAt(v.state, v.playerId) == null) continue;
+      if (decisionAt(v.state, v.playerId) == null) {
+        // Nothing to answer right now. Speculate on the seat's **next own
+        // decision** when it is near (BOT-RESEARCH #5, `docs/BOT.md` §3.5) --
+        // rate-limited like the server's idle probe, one in flight per seat.
+        // An idle view has no searchable surface; `ponderUpcoming` gates on
+        // `nextTurnNear` and the worker predicts the turn-start 运营 view.
+        const now = performance.now();
+        if (
+          !this.botPonderInFlight.has(member) &&
+          now >= (this.botPonderAt.get(member) ?? 0)
+        ) {
+          this.botPonderInFlight.add(member);
+          this.botPonderAt.set(member, now + 200);
+          ponderUpcoming(
+            (m) => (m === member ? v : (JSON.parse(this.m.view(m)) as MatchView)),
+            member,
+            {
+              room: this.id,
+              timed: false,
+              soloCapMs: botSoloCapMs(),
+            },
+          );
+          // `ponderUpcoming` is fire-and-forget; release the slot after the
+          // worker's own outer deadline so the next probe can speculate again.
+          const release = window.setTimeout(() => {
+            this.botPonderInFlight.delete(member);
+          }, 3_500);
+          void release;
+        }
+        continue;
+      }
+      // A live decision supersedes any speculative search in flight.
+      this.botPonderInFlight.delete(member);
       this.botInFlight.add(member);
       const played = this.botPlayed.get(member) ?? 0;
       void driveSeat(
@@ -588,6 +628,10 @@ export class SoloSession extends GameSession {
       deckPreset: (c) => JSON.parse(rules.deck_preset(c)),
       deckSuggest: (c, seat, opponents) =>
         JSON.parse(rules.deck_suggest(c, seat, JSON.stringify(opponents))),
+      // Strategy book entry for the public table, else the defaults (today's
+      // constants) (`docs/BOT.md` §3.8) -- one source of truth with the engine.
+      strategyFor: (c, seat, opponents) =>
+        JSON.parse(rules.strategy_for(c, seat, JSON.stringify(opponents))),
       deckRandom: (c) => {
         const pool: string[] = JSON.parse(rules.deck_pool(c));
         for (let i = pool.length - 1; i > 0; i--) {

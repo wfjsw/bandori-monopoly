@@ -14,7 +14,9 @@ import {
   decisionAt,
   decisionSeed,
   decideBudgetMs,
+  nextTurnNear,
   outerDeadlineMs,
+  ponderBudgetMs,
   seedForThread,
 } from "./botBudget.ts";
 
@@ -106,6 +108,45 @@ test("decisionAt: the turn surface on 运营 / 结束", () => {
   assert.equal(decisionAt(mid, 1), null, "移动 is running");
   const busy = { phase: "play", busy: true, turn: 1, step: 2, prompt: prompt(0, [], []) };
   assert.equal(decisionAt(busy, 1), null, "mid-routine");
+});
+
+// ------------------------------------------------------- nextTurnNear / ponder
+
+const seat = (bankrupt = false, left = false) => ({ bankrupt, left });
+
+test("nextTurnNear: our turn is always near (the next surface is ours)", () => {
+  const st = { phase: "play", busy: false, turn: 1, step: 2, prompt: prompt(0, [], []), players: [seat(), seat(), seat()] };
+  assert.equal(nextTurnNear(st, 1), true);
+  const mid = { ...st, busy: true, step: 3 };
+  assert.equal(nextTurnNear(mid, 1), true, "mid-routine on our turn");
+});
+
+test("nextTurnNear: the current player's turn ending makes ours next", () => {
+  const st = { phase: "play", busy: false, turn: 0, step: 4, prompt: prompt(0, [], []), players: [seat(), seat(), seat()] };
+  assert.equal(nextTurnNear(st, 1), true, "结束 -- about to hand over");
+  assert.equal(nextTurnNear(st, 2), true, "also near for the seat after us");
+});
+
+test("nextTurnNear: the next active seat in the ring", () => {
+  const st = { phase: "play", busy: false, turn: 0, step: 2, prompt: prompt(0, [], []), players: [seat(), seat(), seat()] };
+  assert.equal(nextTurnNear(st, 1), true, "we are next");
+  assert.equal(nextTurnNear(st, 2), false, "two seats away -- not near");
+  // Out seats are skipped in the ring.
+  const withOut = { ...st, players: [seat(), seat(true), seat()] };
+  assert.equal(nextTurnNear(withOut, 2), true, "the out seat is skipped, so 2 is next");
+});
+
+test("nextTurnNear: setup phases and a dead match are never near", () => {
+  const st = { phase: "deck", busy: false, turn: 1, step: 2, prompt: prompt(0, [], []), players: [seat(), seat(), seat()] };
+  assert.equal(nextTurnNear(st, 1), false);
+});
+
+test("ponderBudgetMs is a slice of the decision budget, never a runaway", () => {
+  const solo = ponderBudgetMs({ timed: false });
+  assert.equal(solo, Math.round(SOLO_CAP_MS / 3));
+  assert.ok(ponderBudgetMs({ timed: false, soloCapMs: 8_000 }) <= 1_000, "capped");
+  assert.ok(ponderBudgetMs({ timed: true, promptTimeLeft: 1, turnTimeLeft: 1 }) >= MIN_BUDGET_MS);
+  assert.ok(ponderBudgetMs({ timed: true }) <= 1_000, "the server's speculative slice");
 });
 
 // ---------------------------------------------------------------- seeds

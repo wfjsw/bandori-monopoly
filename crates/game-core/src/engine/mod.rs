@@ -696,8 +696,14 @@ impl Match {
         let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         let mut playable = Vec::new();
         let mut est_cost = Vec::new();
+        // One `cant_play` per distinct card id: a hand may hold duplicates and
+        // the answer is a pure query of the (unchanged) state within this loop.
+        let mut memo: std::collections::HashMap<&str, bool> = std::collections::HashMap::new();
         for c in &self.world.hidden[i].hand {
-            playable.push(cx.cant_play(i, c, false).is_none());
+            let ok = *memo.entry(c.as_str()).or_insert_with(|| {
+                cx.cant_play(i, c, false).is_none()
+            });
+            playable.push(ok);
             est_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
         serde_json::json!({ "aiAnswer": ai_answer, "playable": playable, "estCost": est_cost })

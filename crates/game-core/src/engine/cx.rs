@@ -427,6 +427,13 @@ impl<'a> Cx<'a> {
         self.w.clone()
     }
 
+    /// Immutable view of the live world -- **no clone**. Read-only queries
+    /// (`out`, `hand_of`, the counteract pre-filter's window snapshot) go
+    /// through this instead of [`Self::world_copy`].
+    pub fn world(&self) -> &World {
+        &self.w
+    }
+
     /// Swap in the world a rules host produced; returns the previous one.
     pub fn swap_world(&mut self, w: World) -> World {
         std::mem::replace(&mut self.w, w)
@@ -676,11 +683,15 @@ impl<'a> Cx<'a> {
     /// while an alternative exists -- and a tile prompt gets a random target
     /// rather than "none".
     ///
-    /// A [反击] offer is the one exception: chaos declares on only
+    /// A [反击] offer is the one exception -- and for both policies it is a
+    /// real decision, not a pass (user ruling 2026-10-08, "bots must be able
+    /// to counteract"): chaos declares on
     /// [`CHAOS_COUNTER_CHANCE`](super::CHAOS_COUNTER_CHANCE) of the offers it
     /// gets (a random offered card) and passes the rest, rolled here from the
-    /// world RNG so it replays. The prompt is identified by its title key --
-    /// the same marker the client's 托管 chaos policy reads
+    /// world RNG so it replays; standard declares per
+    /// [`crate::strategy::StrategyParams::counteract_propensity`] (default
+    /// 600‰ per offered card). The prompt is identified by its title key --
+    /// the same marker the client's 托管 policies read
     /// (`autopilot.ts`'s `ask.counteract.title`).
     fn fill_ai(&mut self, ask: &mut Ask) {
         let fallback = ask.view.fallback;
@@ -705,9 +716,9 @@ impl<'a> Cx<'a> {
                     self.chaos_pick(fallback, n)
                 }
             } else if counteract {
-                // Standard: declare only on the seat's per-card propensity
-                // (`docs/BOT.md` §3.8 "counteraction"); default 0 = the old
-                // always-skip, with no RNG draw at all.
+                // Standard: declare on the seat's per-card propensity
+                // (`docs/BOT.md` §3.8 "counteraction"; default 600‰, user
+                // ruling 2026-10-08). `CounterParams` 0 holds a card back.
                 self.counteract_pick(seat, ask, fallback, n)
             } else {
                 fallback
@@ -717,8 +728,12 @@ impl<'a> Cx<'a> {
 
     /// Standard's [反击] answer: the first offered card whose
     /// [`crate::strategy::CounterParams`] propensity fires, else `fallback`
-    /// (the skip). A zero propensity (the default) draws nothing and never
-    /// fires, so the old policy's RNG stream is untouched.
+    /// (the skip). Each candidate draws from the world RNG (so it replays) --
+    /// one draw per offered card until one fires, so with `k` offered cards
+    /// the per-offer declare rate is `1 - (1 - p)^k` on a uniform per-card
+    /// propensity `p` (600‰ default: 60 % for one card, 84 % for two). A
+    /// zero propensity draws nothing and never fires, which is how a book
+    /// holds a card back.
     fn counteract_pick(&mut self, seat: usize, ask: &Ask, fallback: i32, n: i32) -> i32 {
         let p = self.strategy_of(seat);
         for i in 0..n {

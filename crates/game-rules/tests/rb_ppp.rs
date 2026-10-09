@@ -308,6 +308,39 @@ fn returns_grants_sticker_after_general_card() {
     );
 }
 
+// 规则书 [晕眩]: 「玩家的每回合结束时移除一层」 — the tick is a property of the
+// status, so a layer written by a raw `state_set` (the fuzzer's arrange, a card
+// that forgets the expiry) still wears off. Without it both seats stay stunned
+// forever: every turn is skipped, and Returns' [持续]（2）
+// 「[拥有者]每回合开始时选择一个其他存活玩家的团卡」 asks once per skipped
+// turn -- an unbounded prompt storm (fuzz soak iter 1517).
+#[test]
+fn returns_turn_start_ask_survives_stun_skip() {
+    let mut t = Table::new(&["户山香澄", "美竹兰"]);
+    assert!(t.on_field(0, "PPP:Returns"), "field {:?}", t.field_ids(0));
+    // Raw writer, no expiry named -- exactly what `Table::set_state` does.
+    t.set_state(0, "stun", 1);
+    t.set_state(1, "stun", 1);
+    t.begin_turn(0);
+    // The turn-start borrow ask is open (the turn does begin, even if 晕眩
+    // then skips the rest of it). Answer it; the storm was one prompt per
+    // skipped turn forever, so bound the loop hard.
+    let mut prompts = 0u32;
+    while t.prompt().is_some() {
+        prompts += 1;
+        assert!(
+            prompts < 16,
+            "prompt storm around Returns' turn-start ask: {}",
+            t.dump_prompt()
+        );
+        t.decline();
+    }
+    // 规则书: 「玩家的每回合结束时移除一层」 — both layers ticked, so the next
+    // pair of turns is not skipped and the ask cannot repeat forever.
+    assert_eq!(t.state(0, "stun"), 0, "P0 stun must tick at turn end");
+    assert_eq!(t.state(1, "stun"), 0, "P1 stun must tick at turn end");
+}
+
 // =====================================================================
 // PPP:Tomorrow's Door
 // =====================================================================

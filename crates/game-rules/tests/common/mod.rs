@@ -95,6 +95,31 @@ impl Table {
     }
 
     pub fn with_seed(chars: &[&str], seed: u64) -> Self {
+        Self::with_data(data(), chars, seed, MatchMode::Solo)
+    }
+
+    /// [`Table::with_seed`] on a private `GameData` clone carrying an
+    /// in-memory strategy book (the shared `data()` stays untouched). The
+    /// book's `ruleset_sha256` is filled in from the running ruleset when it
+    /// is empty, so a test only names the entries it cares about.
+    pub fn with_book(
+        chars: &[&str],
+        mut book: game_core::strategy::StrategyBook,
+        mode: MatchMode,
+    ) -> Self {
+        if book.ruleset_sha256.is_empty() {
+            book.ruleset_sha256 = rules().ruleset_sha256().unwrap_or("stub").into();
+        }
+        let mut d = (*data()).clone();
+        d.strategy_book = book;
+        Self::with_data(Arc::new(d), chars, SEED, mode)
+    }
+
+    /// The shared constructor: private `GameData`, seats `k` = player `k`,
+    /// opening run to P0's 运营. `mode` matters for prompt deadlines -- Solo
+    /// never forces a local seat's answer, Casual (online) times out to the
+    /// fallback after the prompt's clock + `REMOTE_GRACE`.
+    pub fn with_data(data: Arc<game_core::data::GameData>, chars: &[&str], seed: u64, mode: MatchMode) -> Self {
         let n = chars.len();
         assert!((2..=10).contains(&n), "2..=10 players");
         let members: Vec<RoomMember> = (1..=n as i32)
@@ -105,14 +130,7 @@ impl Table {
                 ..Default::default()
             })
             .collect();
-        let mut m = Match::new(
-            data(),
-            rules(),
-            &members,
-            seed,
-            MatchMode::Solo,
-            ScoreWeights::default(),
-        );
+        let mut m = Match::new(data, rules(), &members, seed, mode, ScoreWeights::default());
         // Undo the random seating so seat == player number.
         {
             let w = m.world_mut();
@@ -127,6 +145,30 @@ impl Table {
         let mut t = Table { m, n };
         t.settle_answering_defaults();
         t
+    }
+
+    /// Mark `who` as a bot seat under `mentality`. Standard / chaos flip `ai`
+    /// on (the engine's bot schedule answers, via `Cx::fill_ai`); Advanced
+    /// leaves `ai` off -- the seat is held for an external driver (bot-service
+    /// / the browser worker) and its prompts time out to the fallback.
+    pub fn make_bot(&mut self, who: usize, mentality: game_core::state::BotMentality) {
+        use game_core::state::BotMentality;
+        let p = &mut self.m.world_mut().st.players[who];
+        p.bot = true;
+        p.mentality = mentality;
+        p.ai = mentality != BotMentality::Advanced;
+    }
+
+    /// Tick the host clock until `pred` (or the tick budget runs out). Lets a
+    /// test wait for a bot seat's scheduled answer / a held seat's deadline.
+    pub fn tick_until(&mut self, what: &str, mut pred: impl FnMut(&mut Self) -> bool) {
+        for _ in 0..400 {
+            if pred(self) {
+                return;
+            }
+            self.m.tick(0.25);
+        }
+        panic!("tick_until: {what} never happened: {}", self.dump_prompt());
     }
 
     /// `n` players with no skills at all and a clean board -- the setting for a

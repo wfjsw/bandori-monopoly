@@ -17,6 +17,10 @@ root-parallel pool + the 进阶 solo / 托管 policy; §5 "B6" has the bundle si
 and the 1-vs-4-worker iterations, and §3.6 documents the as-built split from
 the rules-compiled-into-the-module idea -- rules still run in wasmi, see the
 follow-up at the end of §3.6).
+**C2 shipped** (early stopping + next-decision ponder; §3.4 "Early stopping",
+§3.5 "What gets pondered", §5 "C2" has the numbers -- CPU/match −10 % on the
+controlled `bot_cpu` pair, requests −35 %, and the StubRules strength A/B at
+the C1 record).
 B3 waits on B2 profiling (the [反击] window bookkeeping is now the dominant
 cost).
 
@@ -210,10 +214,16 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   force-buy offers, a few auction bid levels (min / min+100 / ¾·quote /
   quote / money−1000), counteract offers, agent / tile picks, mortgage
   subsets in the heuristic's order, and a **decline** (`act: "end"` at 结束)
-  so the search can pass on a buy. Trivial prompts (≤1 option, mulligan) and
-  everything else (roll, end, discard) are delegated to the heuristic — the
-  engine's `aiAnswer` for prompts, an `ai_step`-shaped policy for the turn
-  surface.
+  for a turn surface with no paid option left. Trivial prompts (≤1 option,
+  mulligan) and everything else (roll, end, discard) are delegated to the
+  heuristic — the engine's `aiAnswer` for prompts, an `ai_step`-shaped policy
+  for the turn surface.
+  * **Decline scope (post-bisect, 2026-10-08).** Decline is only on the menu
+    when the turn would otherwise have **no** action (an unaffordable /
+    gate-refused buy — the stall). A legal Buy/Build stays forced: the §5 C1
+    bisect showed that letting the search pass on a legal buy costs ~5 wins
+    on StubRules (`net_worth` is buy-neutral at the instant, so the tie goes
+    to the bias, which leans Decline below `BUY_RESERVE`). See §5 C1.
   * **Legality gate (2026-10-08).** Buy / Build / roll / end ride the engine's
     own `why_not_act` predicates, computed into the view as
     `MatchState::can_buy_here` / `can_build_here` / `can_roll_here` /
@@ -247,6 +257,42 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
 * **Anytime**: wall-clock budget per decision + iteration cap; at least one
   iteration always completes; the search's own RNG is seeded per decision
   (`DeterminizerRng`), never the match RNG. All work happens on forks.
+* **Early stopping (time management, 2026-10-08; BOT-RESEARCH §5).** Stop the
+  search before the budget when the best root action cannot be overtaken, so
+  easy decisions cost a fraction of the budget and hard ones keep all of it.
+  `SearchConfig::early_stop` (off by default so tests stay deterministic; on
+  in `bot-service` / `bot-glue`, `--no-early-stop` / `set_search
+  {"early_stop":false}` to disable). Rule, in [`early_stop_should_break`]:
+  * **Visit-lead rule (primary).** The pick is by root visits, and every further
+    iteration adds at most one visit to any single root edge -- so the
+    runner-up can gain at most `iters_left` visits before the deadline. When
+    `leader.visits − runner_up.visits > iters_left` the pick is settled and the
+    loop breaks. `iters_left` is estimated from the **measured** per-iteration
+    rate over the search loop and **inflated 1.3×** plus a +1 margin (an
+    underestimated remainder would stop while a catch-up is still possible =
+    a strength risk; an overestimate only costs a little CPU).
+  * **Guards.** At least `min_iterations` (default 4) iterations, and every
+    root action tried at least once -- otherwise an unexpanded action is not
+    yet in the running and the "leader" is an artifact of expansion order. 4
+    is below the real ruleset's ~4-iteration-per-thread floor (one wasmtime
+    rollout is hundreds of ms), so the rule can fire there too; the
+    all-tried guard is the real protection against an expansion-order
+    artifact.
+  * **Value-CI rule (optional, `early_stop_ci`, off by default).** Also stop
+    when the leader's value mean's 95 % normal-approximation lower bound
+    exceeds the runner-up's upper bound (`mean ± 1.96·se` with
+    `se = sqrt((E[x²]−mean²)/n)` from the tracked second moment). Documented
+    and left off: the visit-lead rule alone is what the strength A/B kept at
+    parity (§5 C2).
+  * **Determinism.** Wall-clock dependent by construction, so tests that pin
+    seed+threads reproducibility run in the **iteration-count mode**
+    (`SearchConfig::deterministic()` / `max_iterations` with a wide budget /
+    `early_stop: false`, which is the default) -- the iteration cap binds and
+    the result is a pure function of the seed and thread count
+    (`crates/bot-core/tests/root_parallel.rs`). Root-parallel: **each thread
+    early-stops on its own stats** (thread 0's stream is unchanged, so N=1 is
+    bit-identical to the single search); the merged outcome reports
+    `early_stopped` when any thread stopped early.
 * **Root-parallel search (B7, BOT-RESEARCH #2).**
   [`Ismcts::search_root_parallel`]: N independent searches of the same
   decision, one per thread, each with its own determinization stream
@@ -278,7 +324,10 @@ rules (`StubRules`) and the public `Match` API. No engine edits.
   [`Ismcts::retain_after`] keeps the subtree under the action actually
   played (the node keys each iteration reached under that root action) and
   drops the siblings, so consecutive decisions of one seat start warm.
-  `bot-service` keeps one such tree per `(room, seat)`.
+  `bot-service` keeps one such tree per `(room, seat)`. A speculative
+  `ponder` (§3.5) instead keeps the **whole** explored tree -- the real turn
+  has not chosen an action yet and a warm superset is what a later `decide`
+  re-attaches to.
 
 #### Engine APIs B4 still needs
 
@@ -360,8 +409,8 @@ thresholds (`wants_buy` / `wants_build` / …).
   prompts) come back as the engine's own `aiAnswer` with `heuristic: true`,
   `iterations: 0`. Replies add `reused: true` when the answer came from the
   ponder cache (B7).
-* **Ponder (B7, BOT-RESEARCH #5).** Optional `op: "ponder"` with the same
-  view frame (no `prompt_id` needed):
+* **Ponder (B7, BOT-RESEARCH #5; next-decision target, 2026-10-08).**
+  Optional `op: "ponder"` with the same view frame (no `prompt_id` needed):
 
   ```json
   {"id":8,"op":"ponder","room":"R","seat":1,"view":{...},"budget_ms":300,"seed":12345}
@@ -374,13 +423,39 @@ thresholds (`wants_buy` / `wants_build` / …).
   stripped) for 60 s; a following `op: "decide"` whose view maps to the same
   key answers from the cache (`"reused": true`) without spending its budget.
   A `ponder` for a key that is already cached returns `"reused": true`
-  immediately. `bot-service --no-ponder` disables the whole path. **Server
-  side is wired** (B7 server round): while an advanced seat is idle (another
-  seat's turn / prompt) the drive's 200 ms idle probe sends that seat's view
-  as `op: "ponder"` — non-blocking (its own tokio task, the tick never waits),
-  one in flight per seat, rate-limited by the probe cadence, and cancelled /
-  ignored when that seat's own decision arrives (the real `decide` then hits
-  the cache when the decision key matches).
+  immediately. `bot-service --no-ponder` disables the whole path.
+
+  **What gets pondered (2026-10-08).** An idle view has no searchable
+  surface -- the B7 polls searched **0 of ~14 k** ponders
+  (`target/scratch/profile/REPORT.md` §6). Instead of sending those, the
+  drive only ponders when the seat's **next own decision is near**
+  (`bot_core::view::next_turn_near`): it is already our turn (mid-routine /
+  just began), the current player's turn is at 结束, or we are the next active
+  seat in the ring. The service then searches the **predicted turn-start 运营
+  surface** (`bot_core::view::predict_upcoming_view`) -- a `SeatView` with
+  `turn = us`, `step = OPS`, the empty prompt, and exactly the turn-boundary
+  fields `next_turn` resets (`landed = -1`, `bought` / `built` / `skip_move`
+  cleared, `can_roll_here` on, `can_end_here` off) -- not the dead idle
+  frame. Everything else (own hand / draw composition, every other seat's
+  public record) is taken as-is. The prediction's decision key matches the
+  real turn-start decision when nothing else about the public state changes
+  before that turn begins; then the real `decide` answers `reused: true`
+  with zero search. Otherwise the pondered tree is still a warm start for
+  the seat's real search (tree reuse) and the CPU went to a real decision
+  surface. A `ponder` whose prediction fails (`"noop": true`) is a cheap
+  no-op -- no search, nothing cached. **One searching ponder per seat per
+  public turn** (`(round, turn)` of the incoming state): the "next turn is
+  near" gate alone still fires every 200 ms while it holds, and without this
+  bound the speculative search would cost more CPU than the decide it might
+  save; the rest of the idle probes are no-ops. **Server side**
+  (`server/src/lib.rs::spawn_ponder`): the 200 ms idle probe sends
+  `op: "ponder"` only when
+  `next_turn_near`, non-blocking (its own tokio task, the tick never waits),
+  one in flight per seat, cancelled / ignored when that seat's own decision
+  arrives. **Browser** (`botDrive.ts::ponderUpcoming` / `session.ts`): the
+  same gate and the same prediction inside `bot-glue`, one in flight per
+  seat, rate-limited to 200 ms, budget `ponderBudgetMs` (a slice of the §3.6
+  budget rules -- solo `cap/3` capped at 1 s, timed 300 ms).
 * **Invalidate (2026-10-08).** `op: "invalidate"` with the reply's
   `decisionKey` drops that cached answer, so a refused one is never replayed:
 
@@ -671,27 +746,46 @@ placeholder until the post-purchasing full run.
 
 ### 3.8 Strategy book (offline, per character)
 
-Status: designed 2026-10-08 (user request). S1 started.
+Status: designed 2026-10-08 (user request). **S1 shipped** (params + plumbing + book format / loader / back-off lookup, empty book; §3.8 S1 gate). S2 (derivation) next.
 
 **Why.** Outcomes are dominated by dice, and each character's real choices are few and recurring: which colour groups to buy, how much cash to hold, how hard to bid, when to play each card, when to press each skill, when to counteract. A small set of **tuned parameters per character** captures much of the advantage at near-zero runtime cost. It also improves everything built on the heuristic:
 - the standard bot and 托管 play it directly;
 - the ISMCTS rollouts use it as their policy (better rollouts → fewer needed);
 - the search uses it as its progressive-bias prior (§3.4).
 
-**Parameter set** (`StrategyParams`: a flat, versioned, serde struct of integers / milli-fractions; every field has a default equal to today's constant in `engine/ai.rs` / `bot-core`, so the default book changes nothing):
+**Parameter set** (`game-core/src/strategy.rs` `StrategyParams`: a flat, versioned, serde struct of integers / milli-fractions; every field has a default equal to today's constant in `engine/ai.rs` / `bot-core` / `autopilot.ts`, so the default book changes nothing). The inventory S1 wired up:
 
-| family | parameters (illustrative) |
-|---|---|
-| buying | per-colour-group priority weights; set-completion bonus; cash reserve by game phase (early / mid / late, by round); max price-to-cash ratio |
-| building | per-group build priority; target houses per group; build reserve |
-| auctions / force-buy | bid ceiling as a fraction of quoted worth, by group and phase; force-buy appetite |
-| card play | per card: `play_weight`, `hold_for_counteract` flag, min/max round, min cash after `estCost` |
-| skills | per skill entry: press threshold (e.g. fire / crystals in hand, phase), keep-reserve of markers |
-| counteraction | per card: response propensity (0..1000 ‰) by window kind |
-| mortgage / redeem | mortgage order weights; redeem cash threshold |
-| deck | optional link to the deck-book entry the parameters were tuned with (§3.7) |
+| family | parameter | default | today's constant / effect when neutral |
+|---|---|---|---|
+| buying | `buy_reserve` | 2 000 | `BUY_RESERVE` |
+| | `buy_reserve_mid` / `buy_reserve_late` | 2 000 / 2 000 | phase split from `phase_mid_round` (20) / `phase_late_round` (40); all equal = no phases |
+| | `buy_group_weight[g]` | empty = 1 000 each | per-`TileData::group` milli weight on the price; 1 000 = price unchanged |
+| | `set_complete_bonus_milli` | 0 | discount for a group-completing buy; 0 = off |
+| | `max_price_ratio_milli` | 0 | price / cash cap; 0 = off |
+| building | `build_reserve` | 3 500 | `BUILD_RESERVE` |
+| | `build_group_weight[g]` | empty = 1 000 | per-group milli weight on the cost |
+| | `target_houses[g]` | empty = ∞ | soft per-group house cap; absent = rulebook's only |
+| auctions / force-buy | `force_buy_reserve` | 4 000 | `FORCE_BUY_RESERVE` |
+| | `auction_worth_lo_milli` / `auction_worth_span_milli` | 600 / 700 | `0.6 + U(0, 0.7)` of the quoted worth |
+| | `auction_cash_margin` | 1 000 | `min(worth, money − 1000)` |
+| | `bid_step` / `bid_nudge_steps` | 100 / 3 | the `min + 100·U(0..2)` nudge (clamped to the auction's legal raise) |
+| | `bid_frac_milli` | 750 | the search abstraction's `base · 3/4` bid level |
+| card play | `play_card_chance_milli` | 700 | `PLAY_CARD_CHANCE` 0.7 (`700/1000.0 == 0.7` exactly) |
+| | `max_plays_per_turn` | 2 | `MAX_PLAYS_PER_TURN` |
+| | `play_card_reserve` | 2 000 | `bot_wants_play_card`'s `estCost` reserve (was `BUY_RESERVE`) |
+| | `cards[id]` | sparse, default neutral | `play_weight_milli` 1 000 (0 = never), `hold_for_counteract` false, `min_round` 0 / `max_round` ∞, `min_cash_after_est` null (= the global reserve) |
+| skills | `skills[id]` | sparse, default **never press** | `play_weight_milli` 0 (today's standard policy; 1 000 = always), round window; `min_fires` / `min_crystals` / `keep_markers` are tuner metadata in S1 |
+| counteraction | `counteract_propensity_milli` | **600** | base [反击] declare propensity for an unlisted card (user ruling 2026-10-08, "bots must be able to counteract"; the old default was 0 = never). Drawn per offer from the match RNG like chaos's `CHAOS_COUNTER_CHANCE` |
+| | `counteract[id]` | sparse; a listed card is its own spec | `propensity_milli` 0..=1000 (**0 = hold this card back**), plus `by_kind[window]` overrides. Unlisted cards take `counteract_propensity_milli` |
+| mortgage / redeem | `mortgage_house_key_milli` / `mortgage_price_key_milli` | 1 000 / 1 000 | the `(houses>0, price, t)` sort key; 1 000/1 000 = that order exactly, 0 = ignore that component, negative = flip |
+| | `redeem_reserve` | 4 000 | `REDEEM_RESERVE` |
+| search priors | `prior_buy_yes_milli` … `prior_counter_declare_milli` | 800 / 200 / 800 / 200 / 300 / 400 / 300 / 400 / 150 / 900 / 700 / 500 | `action_priors`' f64s (0.8 / 0.2 / …), `milli/1000.0` |
+| deck | `StrategyEntry.deck` | empty = any | link to the deck-book entry the params were tuned with (§3.7) |
 
-Per-card and per-skill entries are sparse maps (absent = default).
+Per-card and per-skill entries are sparse maps (absent = the default row). A
+per-counteract entry is the card's own spec (0 = hold it back); a card with no
+entry takes `counteract_propensity_milli`. Chaos is **not** parameterised: it
+keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE` as literals.
 
 **Book** (`data/strategy_book.json`, versioned like the deck book):
 - **Header:** `version`, `ruleset_sha256`, `policy` (standard), `generated_at`, `params_version`.
@@ -710,6 +804,10 @@ Per-card and per-skill entries are sparse maps (absent = default).
 - **托管 autopilot:** `webui/src/game/autopilot.ts` gets the seat's resolved params from the glue (one source of truth, like `deck_suggest`).
 - **Information boundary:** keys and parameters are public / static. Nothing reads hidden state.
 
+**Shipped (S1, 2026-10-08).** `data/strategy_book.json` (optional -- absent or empty = behaviour unchanged), loaded by `GameData::load` into `GameData::strategy_book` and resolved by `strategy::for_seat` / `StrategyBook::resolve` (`crates/game-core/src/strategy.rs`) from `engine/ai.rs` (`Cx::strategy_of`), `bot-core`'s `heuristic_message_view` / `action_priors` / `HeuristicProvider` and web-glue's `strategy_for` (which `autopilot.ts`'s `AutopilotCtx.strategyFor` reads). Not in `data_sha256`, like `deck_book.json`. Levels are `char_bands` / `me` / `band`; a stale ruleset hash, policy or `params_version` ignores the whole book (warned once). An entry's `params` is a partial object merged over the defaults (`#[serde(default)]` per field); a deck-tagged entry only applies to that deck (or when the deck is unknown).
+
+**S1 gate (2026-10-08).** With the shipped empty book: `cargo run -p game-core --release --example sim -- 50 4 200` counts identical to the pre-S1 baseline (avg rounds 196.3; end reasons `last 11 / settle 39`; `buy 2899`, `forcebuy 392`, `auction won 255`, `rent 19567`, `bankrupt 96`, …), and `cargo run -p game-rules --release --example ckpt_equiv -- 3 4 60` (real `WasmRules`, seeded games, `Match::save` hash at every turn boundary) is byte-identical before / after. Lookup tests: `crates/game-core/tests/strategy_book.rs` (back-off order, first-hit, stale hash / policy / `params_version` fallback, partial-params merge, deck-tagged entries, defaults == the old formulas incl. the auction float expression and the mortgage sort, and an in-memory book whose `buy_reserve` blocks every purchase -- the plumbing proof). `webui/src/game/autopilot.test.ts` pins that the policy reads the glue's params and asks `strategyFor` for the public key.
+
 **Derivation (offline):** extend the D2 tool (`crates/game-rules/examples/deckbook.rs`) into a joint deck + strategy tuner:
 - **Optimiser:** CMA-ES or coordinate / racing search over the per-character parameter vector (start with the ~10–20 highest-impact scalars: reserves, group weights, bid fraction, counteract propensity), then the sparse per-card weights for that character's deck.
 - **Evaluation:** common random numbers, match score at a round cap (as D2), successive halving, fictitious-play rounds with opponents on the current book, held-out seeds for acceptance (must beat defaults by a margin).
@@ -720,7 +818,7 @@ Per-card and per-skill entries are sparse maps (absent = default).
 
 | phase | content | gate |
 |---|---|---|
-| S1 | `StrategyParams` + defaults equal to today's constants; plumb into `ai.rs`, bot-core rollout policy and priors, autopilot; book format + loader + back-off lookup (empty book) | byte-identical behaviour with the empty book (sim counts, seeded real-rules checkpoints); lookup tests |
+| S1 | `StrategyParams` + defaults equal to today's constants; plumb into `ai.rs`, bot-core rollout policy and priors, autopilot; book format + loader + back-off lookup (empty book) — **done** (shipped `data/strategy_book.json` is the empty placeholder; §3.8 gate) | byte-identical behaviour with the empty book (sim counts, seeded real-rules checkpoints); lookup tests |
 | S2 | derivation: extend `deckbook.rs` to tune params (+ joint deck); band-level trial run | tuned band params beat defaults on held-out seeds |
 | S3 | full per-character run (after the engine speedups); ship `data/strategy_book.json` | held-out win rate / score vs defaults; advanced-bot strength vs standard with and without the book |
 
@@ -738,7 +836,7 @@ Per-card and per-skill entries are sparse maps (absent = default).
 | B6 | Web Worker bundle + advanced 托管 policy + 进阶 solo bots — **done** (§3.6 as-built; §5 B6 has the bundle size and the 1-vs-4-worker iterations; rules still run in wasmi, follow-up at the end of §3.6) | bundle size, phone budget |
 | D1 | deck book format + loader + back-off lookup; bots / 托管 use it — **done** (empty book until D2) | lookup tests; preset when missing / stale |
 | D2 | offline derivation tool (candidates, CRN eval, racing, fictitious play) — **tool done**; book itself waits for the post-purchasing ruleset (§3.7 trial + estimate) | book beats preset in a held-out sim |
-| S1–S3 | strategy book (§3.8): params + plumbing (S1), tuner + band trial (S2), full run (S3) | §3.8 phase table |
+| S1–S3 | strategy book (§3.8): params + plumbing (S1) — **done**; tuner + band trial (S2), full run (S3) | §3.8 phase table |
 
 ## 5. Measurements
 
@@ -973,6 +1071,97 @@ The 20–40 ms depth-2 target is still open: at N=2 a wasmtime inline rollout is
 [反击] window bookkeeping + halt/replay amplification), 10 % fire-up, 2 %
 guest. The remaining counteract/play-gate clause moves cut probes further, but
 the shell is the floor B2's write-journal rebase (§3.2) has to attack.
+
+### Counteract window fast path (2026-10-08)
+
+The live bot-service profile (`target/scratch/profile/REPORT.md`) put ~80 % of
+bot CPU under `RulesBridge::counteract`: per trigger it built a world copy, a
+CEL `WindowScope`, `can_counteract_now`, a `Trigger` and repeated `cant_play` /
+guard probes -- **even when nobody could respond**, and again on every lap of
+the ring. Two exact optimizations (docs/GUARDS.md §4.5, no behaviour change;
+`examples/ckpt_equiv.rs` A/B is byte-identical on standard and chaos seeds and
+the StubRules sim counts are unchanged):
+
+1. **Valid-option-first.** Before any per-window machinery, a pre-scan asks
+   whether any seat can respond (seat eligibility → per-card kind bitmask →
+   compiled conditions against a window context built straight from the live
+   world, no `Run` / `world_copy`). Zero survivors skips the whole ring. Offers
+   run lazily: a G4-deleted guard (condition alone decides) is eligible with
+   zero world copies; only a surviving entry that still carries a guard builds
+   a `Run`. The CEL scope is built only if some candidate has a condition, and
+   shared across the ring.
+2. **Per-window processed set.** Within one ring (across laps) each
+   `(seat, card)` probe's verdict is reused when the inputs it reads cannot
+   have changed -- the ring's only world change is a declaration removing a
+   card from a hand, so a verdict that reads no hand field is stable for the
+   window. `cant_play` in `view_extra` is likewise memoised per distinct card
+   id within one view, and `Ruleset::cant_play` skips the CEL scope entirely
+   when the entry has no condition.
+
+Measured with `bot-cost` (`cargo run -p game-rules --release --features
+bot-cost --example bot_cost -- 4 4 120`); the "slow" column is the **same
+binary** with `BGD_COUNTERACT_SLOW=1` (pre-scan never skips, processed set
+bypassed, `declare_one` builds the old per-offer `win_run` + per-candidate
+`Run`). 4 games × 4 standard bots, real `dist/cards`:
+
+| | slow (old path) | fast (new path) |
+|---|---|---|
+| [反击] windows/game | 22 403 opened | **0 opened, 22 403 skipped** |
+| counteract probes/game | (in `declare_one`) | 0 in this bench (see below) |
+| world clones/game | 121 889 | 121 889 |
+| ms/game (real ruleset) | 14 639 | **13 210** (−10 %) |
+| inline rollout N=1 / N=2 / N=3 | 36.2 / 90.9 / 132.9 ms | 36.4 / 89.6 / 131.9 ms (noise) |
+
+Every seat was an AI (`can_counteract_now` rejected AI seats -- C# parity), so
+`declare_one` never ran in an all-bot bench: the 22 403 windows were raises
+nobody could answer, and the win there was the pre-scan skipping the whole ring
+(answer-tree `Trigger` clone, `Priority`, the per-visit loop). Two changes land
+on top of that bench (both 2026-10-08): the AI exclusion is gone ("is a bot" is
+not a rulebook reason; out / [除外] / `CannotPlay` still are), and standard's
+default [反击] propensity moved from "never declare" to
+`DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ (user ruling *"bots must be able
+to counteract"*). Same bench (4 g × 4 standard bots, real `dist/cards`):
+
+| | AI seats excluded | bots offered, propensity 0 | bots offered, default 600‰ |
+|---|---|---|---|
+| [反击] windows/game | 0 opened, 22 403 skipped | 176 opened, 22 510 skipped | 141 opened, 22 263 skipped |
+| counteract probes/game | 0 | 180 | 142 |
+| **declared/game** | 0 | 0 | **5.2** |
+| prompts/game | 355.2 | 365.0 | 356.5 |
+| world clones/game | 121 889 | 123 845 | 124 595 |
+| ms/game (real ruleset) | 15 060 | 17 052 | 14 029–15 558 (2 reps) |
+
+The pre-scan still skips 99 % of raises: no seat (human or bot) holds a card
+whose kind bitmask + compiled condition admits. The opens are its known
+conservative gap (a condition survivor opens the ring; a card the residual
+guard would then reject contributes no option, exactly as a quiet lap -- see
+`docs/GUARDS.md` §4.5). **Standard bots declare 5.2 [反击] cards per game** at
+the default 600‰ (each offer draws from the match RNG, first fired card wins),
+and every game still finished normally (`end reasons {"settle": 4}`, the
+120-round cap). The window / probe counts shift run to run because the
+propensity draws move the RNG stream and therefore the game trajectories; wall
+time is ±10 % between reps of the *same* binary. StubRules sim counts are
+**bit-identical** across all three states (same prompts / events / rounds / end
+reasons) -- `StubRules` has no hand-counteraction window
+(`CardRules::counteract`'s default is a no-op), so bots cannot counteract
+there; its ms/game moved 175 → 188–203 on a busy machine, under the 323
+ms/game gate.
+
+Against the **original tree** (before this change *and* the concurrent engine work) the
+same bench showed the `can_counteract_now` world copy per visit going away too:
+
+| | original tree | new tree |
+|---|---|---|
+| cx `world_copy`/game | 159 790 | **73 480–80 892** (−50 %) |
+| total world clones/game | 193 258 | **107 405–121 889** (−37 %) |
+| ms/game | 14 407 | 11 255–13 210 (−10–22 %) |
+
+The `declare_one` machinery the live profile blamed (~80 % of bot CPU under
+`counteract`) is the per-offer `win_run` world copy + `WindowScope` +
+per-candidate `Run`/guard. In the mixed 1-human + 3-bot live case the human
+*can* respond, so the pre-scan's condition stage and the lazy offer path (G4:
+zero copies for a condition-only card) are what remove that cost. Exactness is
+unchanged either way -- see the `ckpt_equiv` A/B below.
 
 ### B4 harness (2026-10-07)
 
@@ -1314,6 +1503,233 @@ wasmi/wasmtime split, not a regression.
 worker imports -- it is NOT part of the engine bundle and the archive /
 replay path does not need it (`docs/REPLAY.md`). The solo 想考时间 slider
 persists as `bm.botSoloCapMs` (ms, default 3 000).
+
+### C1: forced-buy refusal loop + trivial decisions (2026-10-08)
+
+Two `bot_cpu` §6 findings, fixed together (they share the 结束 surface).
+
+**Correctness: the forced-buy refusal loop.** At `turn/end` the action set had
+no decline and `action::buyable` had no funds / eligibility gate, so an
+unaffordable Buy was proposed, refused (`err.buy_poor` / `err.cannot_buy` /
+`err.poor`), and the service replayed the cached refusal every 200 ms until
+the turn bank expired — **45–54% of match time stalled**, live matches
+included. Fixed by (a) `MatchState::can_buy_here` / `can_build_here` /
+`can_roll_here` / `can_end_here` (the engine's own `why_not_act` predicates,
+computed in `Match::state`), (b) `Action::Decline` (`act: "end"` at 结束)
+always on the menu where the engine accepts `end`, and (c) defence in depth:
+on an `act` refusal the drive drops the cached answer (`op: "invalidate"`)
+and applies the heuristic immediately, never re-asking
+(`server::apply_bot_answer`; `botDrive.ts` already fell back, now also drops
+the worker cache). The 运营 `err.roll_first` residue was the public
+`skip_move`'s stay/exile re-derivation disagreeing with the engine's latch
+(unstoppable / mid-turn [停留] / [除外]); the heuristic picks roll vs end by
+`can_roll_here` / `can_end_here` now.
+
+**CPU: don't search trivial decisions.** `action::trivial_decision` answers
+immediately (`heuristic: true`, `iterations: 0`) when the root has exactly one
+legal action (forced) or when no candidate moves money / ownership / cards
+(a pure decline / pass / skip menu). Buys, builds, force-buy offers, auctions
+with a real bid, [反击] declarations, card plays, agent picks, tile choices and
+mortgages always keep the full search. Lives in `Ismcts::search` and in both
+`decide` paths (`bot-service`, `bot-glue`), so the browser bot gets it too.
+
+**`bot_cpu`, 1 match, 30 rounds, 4 search threads, real `dist/cards`
+(the §6 baseline in parentheses):**
+
+| | before | after |
+|---|---|---|
+| stalled game time | **45–54%** | **0 s (0%)** |
+| `act` refused | thousands (`err.buy_poor` / `err.cannot_buy` / `err.poor`) | **0** |
+| searched decides with 1 legal action | 27–34% of searched CPU | **0 calls, 0 CPU-s** |
+| game time / requests | — | 510 s / 6 956 |
+| bot CPU / match | 735 s (4 threads) | 562 s |
+| searched decides | 97% of bot CPU | 97.7% (122 calls, 4.5 CPU-s each) |
+| idle ponders | 2.5% (0 of 14 540 searched) | 2.2% (0 of 6 658 searched) |
+| iterations / searched decide | 8.6 | 9.9 |
+
+The fast path absorbs every forced root (`one_action_calls: 0`); the 176
+delegated decides of 298 are the roll / end / discard surfaces plus the
+trivial ones. Wall time per decide still runs 131–146% of the budget (the
+last iteration overruns) — unchanged, out of scope here. Inside one search
+the split is now fork 0.4% / descent 9.7% / rollout 89.8% (§2's
+counteract / `cant_play` / buy-quote costs; the engine-efficiency items in
+§5's fix table are still open).
+
+**Gate:** `cargo test -p bot-core -p bot-service -p server -p game-core` all
+green (incl. `bot-core/tests/action_legality.rs` — an unaffordable tile
+offers decline, not Buy; and `server/tests/bot_drive.rs` — a refused service
+answer falls back without re-asking and the cache is dropped). Node
+`botDrive` / `botPool` / `botBudget` 37 passing; `tsc --noEmit` clean;
+`node tools/build-bot-glue.mjs` green.
+
+**Strength bisect (StubRules, n = 100, 200 ms/decision, 4 search threads,
+`ismcts_vs_bots -- 100 200 0 --threads 4`, same seeds, all cells sequential
+on one machine).** Measurement knobs (`action::ab_on`, env, never set in
+production): `BOT_STRENGTH_AB_NO_DECLINE`, `_NO_FASTPATH`, `_NO_LOWSTAKES`,
+`_NO_GATES`. The baseline cell is a `git worktree` of `7d67911` (the last
+commit before C1, which still has B7) built into its own `CARGO_TARGET_DIR`.
+
+| cell | wins | rank | score | rounds | searched | refused | wall |
+|---|---|---|---|---|---|---|---|
+| a **shipped** (decline + gates + fast path) | 23 | 2.54 | 56 543 | 175 | 8 168 | 16 | 658 s |
+| b fast path OFF entirely | 22 | 2.58 | 54 444 | 175 | 8 139 | 19 | 1 683 s |
+| c LowStakes OFF (Forced on) | 23 | 2.56 | 55 842 | 176 | 8 154 | 13 | 651 s |
+| **d decline OFF** | **27** | **2.41** | **65 751** | 180 | 3 663 | 10 | 468 s |
+| e `can_*_here` gates OFF | 23 | 2.57 | 57 508 | 175 | 8 230 | 14 | 682 s |
+| **f baseline `7d67911` (pre-C1)** | **28** | **2.41** | **63 264** | 178 | 3 828 | **217** | 804 s |
+| **g narrow decline (shipped after bisect)** | **30** | **2.41** | **65 808** | 178 | 8 908 | 8 | 456 s |
+| (B7 record, 10-07) | 30 | 2.44 | 64 261 | 178 | — | 8 % | — |
+
+**Cause: the Decline option next to a legal Buy/Build.** d and f land on top
+of each other (27–28 wins, rank 2.41, score 63–66 k) and on top of the B7
+record; a, b, c and e all sit at 22–23. The mechanism: at 结束 with an
+affordable buyable tile the root became `[Buy, Decline]`, and
+[`eval::net_worth`] counts a deed at its price — a buy is worth-neutral at
+the instant, and the 2-round rollout only sometimes sees the rent. The tie
+goes to the progressive bias, which leans Decline whenever
+`money − price < BUY_RESERVE` (2 000) — exactly the region where the old
+bot was forced to buy. Fewer deeds → less rent → ~9 k less score. The
+fast path (b), LowStakes (c) and the legality gates (e) are strength-neutral
+(within the ±4 pp binomial SE at n = 100); the gates are what cut refusals
+from f's 217 to a–e's 10–19.
+
+**Shipped default after the bisect:** Decline is offered only when the turn
+surface would otherwise have **no** action (the unaffordable / gate-refused
+buy of the stall). A paid option the engine accepts stays forced — the
+search cannot pass on a legal buy (that is the harmful half). The empty-menu
+Decline is strength-neutral by construction (its answer is the same `end`
+the heuristic gives) and keeps the stall fix and the
+`unaffordable_tile_offers_decline_not_buy` contract; the re-measured default
+(cell g) is **30 / 100, rank 2.41, score 65 808** — at the B7 record. If the
+pass-on-a-legal-buy choice is wanted back for the real ruleset, the tuning
+surfaces are `prior_buy_yes` / `prior_buy_no` (`docs/BOT.md` §3.8) or a
+narrower Decline (e.g. only when `wants_buy` is false) — both are search
+guidance, not legality.
+
+### C2: early stopping + next-decision ponder (2026-10-08)
+
+Two search-efficiency items (`docs/BOT-RESEARCH.md` §5 "time management" and
+"pondering"; `target/scratch/profile/REPORT.md` §5 fix I). Both cut CPU
+without touching play strength -- the A/B below is at parity with the C1
+default.
+
+**1. Early stopping (`bot-core::ismcts`).** The search stops before the
+budget when the best root action cannot be overtaken. Rule and guards in
+§3.4 "Early stopping"; `SearchConfig::early_stop` (off by default so the
+iteration-count determinism mode is unchanged; on in `bot-service` /
+`bot-glue`). Root-parallel: each thread stops on its own stats. Deterministic
+given seed + threads whenever the iteration cap binds
+(`crates/bot-core/tests/root_parallel.rs`).
+
+**2. Next-decision ponder (server `spawn_ponder` + browser `ponderUpcoming`).**
+Idle ponders used to send the seat's idle view, which has no searchable
+surface -- 0 of ~14 540 ever searched (`REPORT.md` §6). Now:
+
+* the drive only ponders when the seat's next own decision is **near**
+  (`next_turn_near`: our turn / the current turn is ending / we are next in
+  the ring);
+* the service searches the **predicted turn-start 运营 view**
+  (`predict_upcoming_view`) instead of the dead idle frame -- `playable` is
+  reset to all-true on the prediction (the live `cant_play` answers "no" for
+  every card while another seat acts, which is what made every speculative
+  root look empty);
+* **one searching ponder per seat per public turn**; the rest of the idle
+  probes are cheap no-ops (1.4 ms parse + hash). Without that bound the
+  "near" gate alone still fires every 200 ms and the speculative search would
+  cost more CPU than the decide it might save;
+* the result is cached by `decision_key` and the **whole** explored tree is
+  kept per `(room, seat)`, so a real `decide` on the same key answers
+  `reused: true` with zero search and any other decide starts from a warm
+  tree.
+
+**`bot_cpu`, 1 match, 30-round cap, 4 search threads, real `dist/cards`
+(`ruleset_sha256 39fd3686…`), same seed 1.** The two "this binary" rows are
+the clean comparison (identical code, only the knobs differ: `--no-early-stop
+--ponder-all` = the pre-C2 search + the pre-C1 "ponder every idle probe"
+traffic). The "C1 record" row is the §5 C1 number -- a **different game
+trajectory** (the bot's answers differ, so the surfaces it faces differ),
+given for scale, not as a controlled delta.
+
+| | C1 record | this binary, old knobs | **this binary, shipped** |
+|---|---|---|---|
+| bot CPU / match | 562 s | 380 s | **342 s** |
+| game time | 510 s | 444 s | 434 s |
+| requests | 6 956 | 6 332 | **4 098** |
+| searched decides | 122 | 99 | 84 |
+| CPU / searched decide | 4.5 s | 3.77 s | 4.02 s |
+| iterations / searched decide | 9.9 | 18.8 | 20.8 |
+| idle ponders | 6 658 | 6 049 | **3 810** |
+| of which searched | 0 | 20 | 9 |
+| ponder CPU | ~12 s (2.2 %) | 37.7 s | **17.0 s (5.0 %)** |
+| ponder hits (decides served from cache) | 0 | 0 | **0** |
+| `act` refused | 0 | 0 | **0** |
+| stalled game time | 0 s | 0 s | **0 s** |
+| would fall back | — | 0 | **0** |
+
+Reading:
+
+* **CPU/match −10 % on the controlled pair (380 → 342 s), −39 % vs the C1
+  record.** The request count is the bigger structural win: **−35 %** on the
+  controlled pair (6 332 → 4 098), **−41 %** vs C1. Almost all of the removed
+  traffic is idle probes that used to fire a `ponder` and now return without
+  one (`next_turn_near` is false for most of another seat's turn).
+* **Idle ponders −37 %** and their CPU **37.7 → 17.0 s**; the ones that
+  remain are 4.5 ms parse + hash no-ops, with **one searching ponder per
+  seat per turn** (9 in this match) on the predicted turn-start 运营 surface.
+* **Ponder hits: 0.** Honest number. The predicted decision key matches the
+  real one only when nothing about the public state changes before the turn
+  begins -- and in a 4-player game another seat's turn always moves money,
+  deeds or the event tail. The mechanism is in place and measured (the cache
+  contract is pinned by `bot-service/tests/protocol.rs` and
+  `server/tests/http.rs`), but on this ruleset the free-CPU window is better
+  spent on the engine-efficiency items in §5's fix table (A/B/C) than on
+  speculative search. The 9 speculative searches cost 21 CPU-s of the 17 s
+  ponder bill and bought 0 cache hits; the **gate** is what pays for itself.
+* **Early stopping is present but quiet on the real ruleset**: one thread
+  completes only ~4 iterations per decision there (a wasmtime rollout is
+  hundreds of ms), so the visit-lead rule fires mostly on blowouts. Its
+  strength effect is the StubRules A/B below; its CPU effect here is inside
+  the trajectory noise (84 searched × 4.02 s vs 99 × 3.77 s).
+* **Stall / refusals stay 0** in every row -- the C1 correctness fixes are
+  untouched.
+
+**Strength A/B (StubRules, `ismcts_vs_bots -- 100 200 0 --threads 4`, n = 100,
+same seeds, cells sequential on a quiet machine).** "old" = the C1 default
+shape (no early stop, no ponder); "early-stop" = `--early-stop`;
+"early-stop+ponder" = `--early-stop --ponder` (the harness models
+production's `op: "ponder"`: after each of seat 0's answers it predicts the
+next turn-start view, speculates on it, and answers a later decide from the
+cache when the key matches). The C1 record (cell g) is **30 / 100, rank 2.41,
+score 65 808**; the binomial SE on 26–30 wins at n = 100 is ~4.6 pp.
+
+| cell | wins | rank | score | rounds | iters/decide | ms/decide | ponder searches / hits | wall |
+|---|---|---|---|---|---|---|---|---|
+| old | 29 | 2.43 | 64 976 | 177 | 37.1 | 53.3 | — | 488 s |
+| **early-stop** | **30** | **2.41** | **66 314** | 178 | 39.8 | 48.7 | — | 452 s |
+| early-stop + ponder | 26 | 2.44 | 62 332 | 177 | 39.5 | 48.9 | 4 / **0** | 449 s |
+| early-stop + ponder (re-run) | 28 | 2.42 | 63 969 | 178 | 39.5 | 48.5 | 2 / **0** | 446 s |
+
+Reading:
+
+* **Early stopping does not cost strength.** The isolating cell is
+  "early-stop": **30 / 100, rank 2.41** -- exactly the C1 record, and the
+  best of the four runs. The visit-lead rule is strength-safe as shipped; no
+  tightening was needed. The spread across all four runs is 26–30 wins, i.e.
+  within one binomial SE of the record.
+* **Wall per decision drops** 53.3 → 48.7 ms with early stop (−9 %), and the
+  total search wall drops 464 → 434 s despite the cell facing more searched
+  decisions (8 698 → 8 922) -- the rule is cutting the long tail of obvious
+  decisions, which is the point.
+* **"early-stop + ponder" is within noise of the record** (26 and 28 on the
+  two runs vs 30 = 0.4–0.9 binomial SE; rank 2.42–2.44 vs 2.41). It differs
+  from the isolating cell only by the harness's 2–4 speculative searches
+  between decisions -- 0 cache hits on both runs -- so the gap is wall-clock
+  budget jitter under the extra load, not the ponder path.
+* **Ponder hits: 0 of 2–4** in the harness, matching the `bot_cpu` read: the
+  predicted decision key almost never matches the real one, because another
+  seat's turn always moves the public state. The mechanism is wired and
+  measured; the win from the ponder change is the **removal of dead traffic**
+  (the `bot_cpu` rows above), not speculative hits.
 
 ## 6. Risks
 

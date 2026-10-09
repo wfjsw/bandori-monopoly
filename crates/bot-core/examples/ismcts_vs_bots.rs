@@ -5,7 +5,8 @@
 //! # iterations/decision + strength at one setting:
 //! cargo run -p bot-core --release --example ismcts_vs_bots -- \
 //!     [games] [budget_ms] [baseline_games] [--threads T] [--horizon H] \
-//!     [--bias F] [--eval F] [--legacy] [--profile] [--compare] [--fixed-iters K]
+//!     [--bias F] [--eval F] [--legacy] [--profile] [--compare] [--fixed-iters K] \
+//!     [--early-stop] [--ponder]
 //! ```
 //!
 //! * `--threads T` -- root-parallel searches per decision (default 1).
@@ -78,6 +79,13 @@ struct Opts {
     profile: bool,
     compare: bool,
     fixed_iters: u64,
+    /// Time management: stop before the budget when the best root action
+    /// cannot be overtaken (`docs/BOT.md` §3.4). Off by default so the
+    /// harness's published cells stay comparable to the C1 record.
+    early_stop: bool,
+    /// Speculate on the seat's next own decision between its turns
+    /// (`docs/BOT.md` §3.5). Off by default.
+    ponder: bool,
 }
 
 fn parse_opts() -> Opts {
@@ -112,6 +120,8 @@ fn parse_opts() -> Opts {
         profile: false,
         compare: false,
         fixed_iters: 0,
+        early_stop: false,
+        ponder: false,
     };
     let mut i = 0;
     while i < raw.len() {
@@ -134,6 +144,8 @@ fn parse_opts() -> Opts {
             }
             "--profile" => o.profile = true,
             "--compare" => o.compare = true,
+            "--early-stop" => o.early_stop = true,
+            "--ponder" => o.ponder = true,
             _ => {}
         }
         i += 1;
@@ -155,6 +167,7 @@ fn search_cfg(o: &Opts, seed: u64) -> SearchConfig {
         implicit_minimax: !o.legacy && o.eval_w > 0.0,
         bias_weight: o.bias,
         profile: o.profile,
+        early_stop: o.early_stop,
         ..Default::default()
     }
 }
@@ -163,6 +176,10 @@ struct RunStats {
     decisions: u64,
     iterations: u64,
     elapsed_ms: f64,
+    /// Decides answered from a pondered cache entry (`--ponder`).
+    ponder_hits: u64,
+    /// Speculative searches actually run (`--ponder`).
+    ponders: u64,
     failbacks: u64,
     /// Failback sources, split for the regression triage.
     fb_delegated: u64,
@@ -186,6 +203,8 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
         decisions: 0,
         iterations: 0,
         elapsed_ms: 0.0,
+        ponder_hits: 0,
+        ponders: 0,
         failbacks: 0,
         fb_delegated: 0,
         fb_heuristic: 0,
@@ -215,6 +234,10 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
         m.quick_start();
         let member = 1; // seat 0
         let seat = 0usize;
+        // Speculative answers keyed by `decision_key` (`--ponder`, production's
+        // `op: "ponder"` cache). Cleared per game.
+        let mut ponder_cache: std::collections::HashMap<u64, bot_core::Action> =
+            std::collections::HashMap::new();
         let mut steps = 0u32;
         // Consecutive unanswerable surfaces (the heuristic act and the prompt
         // fallback are both refused): give up on the game instead of spinning
@@ -268,7 +291,34 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                     stuck = 0;
                 }
                 m.tick(0.25);
+                if o.ponder {
+                    ponder_next(&data, &rules, &m, member, seat, o, &mut ponder_cache, &mut s);
+                }
                 continue;
+            }
+            // Ponder cache hit: the same information set was already searched
+            // speculatively while the other seats acted -- answer from it
+            // without spending the decision's budget (`docs/BOT.md` §3.5).
+            let view_key = view.decision_key();
+            if o.ponder {
+                if let Some(a) = ponder_cache.remove(&view_key) {
+                    s.decisions += 1;
+                    s.ponder_hits += 1;
+                    let msg = bot_core::action::to_net_message(&a, &st, seat);
+                    if m.act(member, &msg).is_err() {
+                        s.failbacks += 1;
+                        s.fb_refused += 1;
+                        let msg = bot_core::heuristic_message_with(&data, &m, member, &st);
+                        if m.act(member, &msg).is_err() {
+                            let _ = m.act(member, &game_core::net::NetMessage::act("end"));
+                        }
+                    }
+                    m.tick(0.25);
+                    if o.ponder {
+                        ponder_next(&data, &rules, &m, member, seat, o, &mut ponder_cache, &mut s);
+                    }
+                    continue;
+                }
             }
             let cfg = search_cfg(o, seed.wrapping_mul(1_000_003) + steps as u64);
             let out: SearchOutcome = {
@@ -314,6 +364,9 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
                 }
             }
             m.tick(0.25);
+            if o.ponder {
+                ponder_next(&data, &rules, &m, member, seat, o, &mut ponder_cache, &mut s);
+            }
         }
         let (r, sc, rd) = end_summary(&m);
         s.rank += r.max(1) as f64;
@@ -329,6 +382,65 @@ fn run_ismcts(data: &Arc<GameData>, rules: Arc<dyn CardRules>, o: &Opts) -> RunS
     s.score /= n;
     s.rounds /= n;
     s
+}
+
+/// Speculate on `member`'s **next own decision** (`docs/BOT.md` §3.5): predict
+/// the turn-start 运营 view and search it, caching the answer under the
+/// predicted decision key. A later real `decide` whose key matches answers
+/// from the cache without spending its budget. This is the harness's model of
+/// production's `op: "ponder"` -- the same predicate, the same prediction, the
+/// same cache contract.
+fn ponder_next(
+    data: &Arc<GameData>,
+    rules: &Arc<dyn CardRules>,
+    m: &Match,
+    member: i32,
+    seat: usize,
+    o: &Opts,
+    cache: &mut std::collections::HashMap<u64, bot_core::Action>,
+    s: &mut RunStats,
+) {
+    let view = SeatView::from_match(m, member);
+    let Some(pred) = bot_core::predict_upcoming_view(&view) else {
+        return;
+    };
+    let key = pred.decision_key();
+    if cache.contains_key(&key) {
+        return;
+    }
+    let searched = bot_core::action::legal_actions(
+        data,
+        &pred.state,
+        &pred.hand,
+        &pred.playable,
+        seat,
+    );
+    if bot_core::action::trivial_decision(&searched).is_some() {
+        return;
+    }
+    let cfg = SearchConfig {
+        // Distinct stream from the real decide's (which hashes the game seed
+        // and step count).
+        seed: key ^ 0x9E37_79B9_7F4A_7C15,
+        ..search_cfg(o, key)
+    };
+    let out = {
+        let mut tree = Ismcts::new();
+        let rules = rules.clone();
+        let data = data.clone();
+        let pred = pred.clone();
+        tree.search_root_parallel(
+            move || MatchSim::new(data.clone(), rules.clone(), pred.clone(), seat, member),
+            seat,
+            cfg,
+            o.threads,
+        )
+    };
+    if out.heuristic {
+        return;
+    }
+    s.ponders += 1;
+    cache.insert(key, out.action);
 }
 
 fn print_run(label: &str, o: &Opts, s: &RunStats) {
@@ -378,6 +490,18 @@ fn print_run(label: &str, o: &Opts, s: &RunStats) {
         "  surfaces: delegated {}, searched {} | failbacks: delegated-act {}, search-heuristic {}, search-act-refused {}",
         s.delegated, s.decisions, s.fb_delegated, s.fb_heuristic, s.fb_refused
     );
+    if o.ponder {
+        println!(
+            "  ponder: {} speculative searches, {} decides served from the cache ({:.1}%)",
+            s.ponders,
+            s.ponder_hits,
+            if s.decisions > 0 {
+                100.0 * s.ponder_hits as f64 / s.decisions as f64
+            } else {
+                0.0
+            }
+        );
+    }
     if o.profile && s.decisions > 0 {
         let d = s.decisions as f64;
         let it = s.iterations.max(1) as f64;

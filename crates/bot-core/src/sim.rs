@@ -14,7 +14,7 @@ use std::time::Duration;
 use crate::clock::Instant;
 
 use game_core::data::GameData;
-use game_core::engine::{wants_buy, CardRules, HeuristicProvider, Match};
+use game_core::engine::{CardRules, HeuristicProvider, Match};
 use game_core::net::NetMessage;
 use game_core::state::{MatchState, stage};
 
@@ -226,7 +226,15 @@ impl Simulator for MatchSim {
         // which is the halt/replay path. The old path is `inline = false`.
         let install = self.inline && !intercept_seat;
         if install {
-            fork.set_provider(Some(Box::new(HeuristicProvider)));
+            // Each seat's resolved `StrategyParams` (`docs/BOT.md` §3.8) so
+            // the one-shot auction solver raises on the seat's step. Resolved
+            // from public state only; an empty book is the default params,
+            // which is the old behaviour exactly (`HeuristicProvider`'s doc).
+            let st = fork.state();
+            let params: Vec<game_core::strategy::StrategyParams> = (0..st.players.len())
+                .map(|s| game_core::strategy::for_seat(&self.data, &st, s))
+                .collect();
+            fork.set_provider(Some(Box::new(HeuristicProvider::with_params(params))));
         }
         let r = self.advance_inner(fork, seat, horizon, intercept_seat);
         if install {
@@ -421,13 +429,9 @@ pub fn ai_answer_to_action(st: &MatchState, a: &AiAnswer, seat: usize) -> Option
         }),
         "choice" => {
             if p.title.k.as_ref() == "ask.counteract.title" {
-                Some(Action::Counteract {
-                    card: if a.answer == p.fallback {
-                        None
-                    } else {
-                        Some(p.card.clone())
-                    },
-                })
+                // Counteract surface (`action.rs`): the offered card lives on
+                // the option label, not on `MatchPrompt::card` (the answered link).
+                Some(crate::action::counteract_action(p, a.answer))
             } else {
                 Some(Action::Offer {
                     index: a.answer.max(0),
@@ -480,6 +484,13 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
         // The public `skip_move` re-derives from stay / exile and can disagree
         // with the gate (unstoppable / mid-turn [停留] / [除外]) -- trusting it
         // sent `end` into `err.roll_first` and stalled the seat (bot_cpu §6).
+        // A/B: `BOT_STRENGTH_AB_NO_GATES` restores the old skip_move test.
+        if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {
+            if st.skip_move {
+                return NetMessage::act("end");
+            }
+            return NetMessage::act("roll");
+        }
         if st.can_end_here && !st.can_roll_here {
             return NetMessage::act("end");
         }
@@ -490,7 +501,15 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
         if t >= 0 {
             let t = t as usize;
             let money = st.players.get(me).map(|p| p.money).unwrap_or(0);
-            if action::buyable(data, st, me, t) && wants_buy(money, st.buy_price.max(0)) {
+            // The seat's `StrategyParams` (`docs/BOT.md` §3.8): the rollout
+            // policy is the same heuristic the engine plays, not a copy of its
+            // constants.
+            let params = game_core::strategy::for_seat(data, st, me);
+            let group = data.tiles.get(t).map(|x| x.group).unwrap_or(0);
+            let houses = st.houses.get(t).copied().unwrap_or(0);
+            if action::buyable(data, st, me, t)
+                && params.wants_buy_tile(money, st.buy_price.max(0), group, st.round, false)
+            {
                 return NetMessage {
                     act: "buy".into(),
                     value: t as i32,
@@ -498,7 +517,7 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
                 };
             }
             if action::can_build(data, st, me, t)
-                && game_core::engine::wants_build(money, st.build_cost.max(0))
+                && params.wants_build_tile(money, st.build_cost.max(0), group, houses)
             {
                 return NetMessage {
                     act: "build".into(),

@@ -182,6 +182,70 @@ semantics beyond a `blocked(band)` int mirror.
    directly — with clauses removed from the guards, skipping the condition
    would admit what it should reject.
 
+### 4.5 Window algorithm (2026-10-08) — valid-option-first + processed set
+
+The [反击] window (`hand_counteractions` / `build_round` / `declare_one`,
+wasm_rules.rs) runs in three stages. The exactness contract: **same offers, same
+order, same prompts, same settlements** as the naive ring — only the work done
+to decide "nobody can respond" shrinks. Verified by
+`examples/ckpt_equiv.rs` A/B (`BGD_COUNTERACT_SLOW=1` disables both stages):
+`Match::save()` checkpoints per turn are byte-identical on standard and chaos
+seeds, and the StubRules sim counts are unchanged.
+
+**Stage 0 — open the window only if someone can respond.** Before any per-window
+machinery (the answer-tree `Trigger` clone, `Priority`, per-visit offers), a
+pre-scan asks "could any seat answer this link at all?":
+
+1. seat eligibility (`can_counteract_now`: out / exiled / stunned /
+   no-hand — live state reads, **no** world copy; a bot seat is eligible,
+   it is a player);
+2. the per-card kind bitmask (`Ruleset::counteracts_to`) over each eligible
+   seat's distinct hand ids;
+3. the compiled condition against a window context built straight from the live
+   world (`LiveSnap`: `fill_window` / `fill_candidate` with **no** `Run`, **no**
+   `world_copy`). The CEL `WindowScope` is built only if some candidate actually
+   declares a condition.
+
+Zero survivors ⇒ the whole ring is skipped. That is every raise nobody answers
+(«the common case»): no chain clone, no `Priority`, no per-visit offers, no
+world copies, no guards. A single quiet lap would have closed the round
+identically, so the skip is exact — and if nothing's condition admits at
+window start, nothing can declare, so nothing can flip a condition mid-ring
+(a ring's only world change is a declaration removing a card from a hand).
+
+**Stage 1 — offer one seat (`declare_one`), lazily.** The bitmask scan runs
+first with no world access at all; a hand with nothing that answers this kind
+returns before any per-window machinery exists. Survivors then run their
+condition against the ring's shared scope (built lazily, see stage 2) using
+`LiveSnap`. A candidate whose condition admitted **and** whose residual wasm
+guard is deleted (G4, `entry_guard_is_none`) is eligible with **zero** world
+copies — no `Run`, no store, no instantiation. Only a surviving entry that
+still carries a guard builds the throwaway `Run` (`probe_run`, one world copy)
+and goes through `can_counteract_scoped` (the one shared `admits` gate).
+
+**Stage 2 — the per-window processed set (`ProbeMemo`).** Within one ring
+(one trigger's round, across its laps) each `(seat, card)` probe's verdict is
+remembered. The ring's only world change is a declaration removing a card from
+a hand (`build_round`), so:
+
+* a verdict that reads **no** hand field is stable for the whole window —
+  `cond_reads_hand` (the condition names `owner_hand` or calls `hand(p)`) and
+  any residual wasm guard (it may read anything) are the hand-sensitive ones;
+* only hand-sensitive verdicts are stamped with a `hand_gen` that bumps on
+  every declaration; the rest are reused on later laps and on the re-offer
+  after a seat declares;
+* the CEL scope's `_hand` table is rebuilt only when a probe calls `hand(p)`
+  and a declaration has moved the hands since it was built — `owner_hand` lives
+  in the candidate overlay, which is rebuilt per probe from the live world, so
+  a stale scope still answers it correctly.
+
+"Resolved" (declared) cards leave the hand and are never re-scanned; a second
+copy of the same id is a new offer (the `Distinct()` shape) and reuses the
+memoised verdict when the inputs are unchanged. A seat that **passed** is
+re-offered on a later lap (ruling 2026-10-07 «a later seat's declaration can
+re-open earlier seats») — the processed set caches the *evaluation*, never the
+prompt; the offer list is byte-identical to the naive ring's.
+
 ## 5. Soundness
 
 Invariant: **category ∧ condition ∧ residual guard ≡ the old guard.** Since
@@ -735,15 +799,38 @@ the `skill_blocked` / once-flag play gates (their *expression* can move into
 geometry / derived-list residuals GUARDS.md §6 lists (`meet_again` `next_dist`,
 `repaint` `on_path`, `secret_rainbow` grades, …).
 
-### 11.6 Fuzz soak finding (2026-10-08)
+### 11.6 Fuzz soak finding (2026-10-08) -- FIXED
 
 `FUZZ_ITERS=2000 cargo test -p game-rules --test fuzz_interactions` (the
-default suite runs 900 and is green) finds **one** new finding at
-`seed=10174556463119430459`: `drain_prompts: prompts never stopped` — a
-`choice` prompt storm around `cards:card-ppp.returns_title` (PPP:Returns).
-The prompt loop caps at 400 iterations in the fuzz driver. Reproduces in ~22 s
-via `fuzz::one_iter(seed, 4)`. **Not from this batch**: it still reproduces
-with `SLOT_NAMES` reduced to the pre-fix list, and neither the kind-re-check
-strips nor the migrated entries touch `card-ppp`. Filed here as a new finding
-to add to `KNOWN_FINDINGS` / `rb_fuzz_found.rs` alongside the existing
-`money_ledger_gap` / `settle_loop_stuck` entries.
+default suite runs 900 and is green) found **one** finding at
+`seed=10174556463119430459` (iter 1517): `drain_prompts: prompts never
+stopped` — a `choice` prompt storm around `cards:card-ppp.returns_title` /
+`returns_which_band` (PPP:Returns' [持续]（2） turn-start band borrow). The
+prompt loop caps at 400 iterations in the fuzz driver.
+
+**Root cause (not Returns).** The fuzz `arrange` wrote `[晕眩]` through the
+raw `Table::set_state` → `MatchPlayer::state_set("stun", 1)`, which named no
+`StateVar::expires`; `tick_state` only wears a counter down when the item
+says when it expires, so both seats stayed stunned forever. Every later turn
+was skipped (`log.stunned_skip` → `end_turn`), and Returns' 「[拥有者]每回合
+开始时选择一个其他存活玩家的团卡」 correctly raised one prompt per turn
+start *before* the stun skip -- one prompt per skipped turn, forever. The
+prompt history shows the tell: `turn` flipping 0↔1 every answer with
+`stun=1(None)` on both seats.
+
+**Fix (engine, `crates/game-core/src/state.rs`).** 规则书 [停留]/[晕眩]
+「玩家的每回合结束时移除一层」 (and `stunStart`'s turn-start tick) is a
+property of the *status*, not of whichever writer landed the layer:
+`MatchPlayer::state_set` now stamps `default_expiry(key)` on any stay / stun
+/ stunStart write whose item has no tick. An explicit non-default
+`state_set_expires` still wins. The card rule needed no change -- the ask is
+correct per 「每回合开始时」.
+
+**Regression:** `rb_ppp::returns_turn_start_ask_survives_stun_skip`,
+`rb_fuzz_found::returns_prompt_storm` (the seed), and
+`state::tests::status_writes_carry_the_books_tick` /
+`explicit_expiry_is_not_overridden`. Re-checked green at `FUZZ_ITERS=2000`
+(only the known `money_ledger_gap` trips). **No `KNOWN_FINDINGS` entry**:
+`drain_prompts: prompts never stopped` is an over-broad signature and the
+root cause is fixed -- a future prompt storm is a new finding and must fail
+the soak. See `docs/rulebook/TEST-FINDINGS.md`.

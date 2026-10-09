@@ -56,6 +56,18 @@ pub const STRATEGY_BOOK_FILE: &str = "strategy_book.json";
 /// behaviour.
 pub const NEUTRAL_WEIGHT: i32 = 1_000;
 
+/// Default [反击] declare propensity, in milli (`600` = 60 % per offered card
+/// per offer; see [`StrategyParams::counteract_propensity`]).
+///
+/// User ruling 2026-10-08: *"bots must be able to counteract"* -- the old
+/// default was `0` (never declare, the C# parity gap), which meant a standard
+/// bot held every [反击] card forever. The rules expose no per-card counteract
+/// usefulness value (`Card.AiPlay` is a play-window gate and `CardDef` has no
+/// `H.AiPlay` hook yet), so the policy is this propensity, drawn from the
+/// match RNG exactly like chaos's `CHAOS_COUNTER_CHANCE`. A card the book
+/// wants held back gets an explicit `propensity_milli: 0`.
+pub const DEFAULT_COUNTERACT_PROPENSITY_MILLI: i32 = 600;
+
 // ---------------------------------------------------------------------------
 // Parameters
 // ---------------------------------------------------------------------------
@@ -127,12 +139,15 @@ impl Default for SkillParams {
     }
 }
 
-/// Per-card [反击] response knobs (sparse map; absent = [`Self::default`]).
+/// Per-card [反击] response knobs (sparse map; absent = the seat's
+/// [`StrategyParams::counteract_propensity_milli`]). An entry is the card's
+/// own spec -- it does **not** inherit the base rate, so a card the book lists
+/// and wants held back writes `propensity_milli: 0` explicitly.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CounterParams {
     /// Propensity to declare this card on a counteract offer, 0..=1000
-    /// (0 = never -- today's standard policy takes the skip).
+    /// (`0` = never -- hold this card back).
     pub propensity_milli: i32,
     /// Propensity override per window kind (`"pay"`, `"move"`, `"turnEnd"`,
     /// ...). Consulted before [`Self::propensity_milli`] when the caller knows
@@ -144,6 +159,10 @@ pub struct CounterParams {
 impl Default for CounterParams {
     fn default() -> Self {
         Self {
+            // An entry that omits `propensity_milli` holds the card back at
+            // the base level (a `by_kind` override can still fire). Absent
+            // cards do not use this -- they take the seat's
+            // `counteract_propensity_milli`.
             propensity_milli: 0,
             by_kind: BTreeMap::new(),
         }
@@ -155,7 +174,10 @@ impl Default for CounterParams {
 /// Flat and versioned; integers / milli-fractions only (no floats in the
 /// file). **Every default equals today's constant** in `engine/ai.rs` /
 /// `bot-core` / `autopilot.ts`, so an empty book is byte-identical to the
-/// pre-book behaviour. Sparse maps (`cards`, `skills`, `counteract`) are
+/// pre-book behaviour -- with one ruling exception: the [反击] default moved
+/// from "never declare" to [`DEFAULT_COUNTERACT_PROPENSITY_MILLI`] (user
+/// 2026-10-08, "bots must be able to counteract"; `defaults_equal_todays_constants`
+/// pins the rest). Sparse maps (`cards`, `skills`, `counteract`) are
 /// absent = default.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -231,7 +253,13 @@ pub struct StrategyParams {
     pub skills: BTreeMap<String, SkillParams>,
 
     // -- counteraction -------------------------------------------------------
-    /// Per-card [反击] response propensity, sparse; absent = never declare.
+    /// Base [反击] declare propensity for a card with **no** `counteract[id]`
+    /// entry, 0..=1000 ([`DEFAULT_COUNTERACT_PROPENSITY_MILLI`] = 600). Drawn
+    /// per offer from the match RNG, like chaos's `CHAOS_COUNTER_CHANCE`.
+    pub counteract_propensity_milli: i32,
+    /// Per-card [反击] response propensity, sparse. A listed card is its own
+    /// spec (0 = hold back); an unlisted card takes
+    /// [`Self::counteract_propensity_milli`].
     pub counteract: BTreeMap<String, CounterParams>,
 
     // -- mortgage / redeem ---------------------------------------------------
@@ -311,6 +339,7 @@ impl Default for StrategyParams {
             // skills
             skills: BTreeMap::new(),
             // counteraction
+            counteract_propensity_milli: DEFAULT_COUNTERACT_PROPENSITY_MILLI,
             counteract: BTreeMap::new(),
             // mortgage / redeem
             mortgage_house_key_milli: NEUTRAL_WEIGHT,
@@ -474,9 +503,15 @@ impl StrategyParams {
     /// the trigger kind when the caller knows it (the engine's prompt does not
     /// carry it yet, so `None` is the common case and only the base
     /// propensity applies).
+    ///
+    /// A card with no `counteract[id]` entry takes the seat's
+    /// [`Self::counteract_propensity_milli`] (default
+    /// [`DEFAULT_COUNTERACT_PROPENSITY_MILLI`] = 600, user ruling 2026-10-08:
+    /// "bots must be able to counteract"). A listed card is its own spec:
+    /// `by_kind[window]` if set, else `propensity_milli` (`0` = hold it back).
     pub fn counteract_propensity(&self, card: &str, window_kind: Option<&str>) -> i32 {
         let Some(e) = self.counteract.get(card) else {
-            return 0;
+            return self.counteract_propensity_milli.clamp(0, NEUTRAL_WEIGHT);
         };
         if let Some(k) = window_kind {
             if let Some(&v) = e.by_kind.get(k) {
@@ -510,15 +545,18 @@ impl StrategyParams {
         }
     }
 
-    /// Mortgage sort key: `(has_houses · house_key + price · price_key, tile)`.
+    /// Mortgage sort key: `(has_houses · house_key, price · price_key, tile)`.
     ///
-    /// With both keys at [`NEUTRAL_WEIGHT`] this is exactly today's
-    /// `(houses > 0, price, t)` lexicographic order: the house component is
-    /// `1000` vs `0` (bare first) and `price * 1000 / 1000 == price`.
-    pub fn mortgage_key(&self, houses: i32, price: i32, tile: usize) -> (i64, usize) {
+    /// Lexicographic, like today's `(houses > 0, price, t)` -- with both keys
+    /// at [`NEUTRAL_WEIGHT`] it **is** that order exactly: the house component
+    /// is `1000` vs `0` (any bare deed before any housed one) and
+    /// `price * 1000 / 1000 == price`. The keys only turn each component up,
+    /// down or off (`0`); they do not trade one against the other, which would
+    /// change the order the rulebook's `MortgageOrder` fixes.
+    pub fn mortgage_key(&self, houses: i32, price: i32, tile: usize) -> (i64, i64, usize) {
         let house = i64::from(houses > 0) * i64::from(self.mortgage_house_key_milli);
         let price = i64::from(price) * i64::from(self.mortgage_price_key_milli) / 1000;
-        (house + price, tile)
+        (house, price, tile)
     }
 
     /// Redeem order key: most valuable first at the default price key

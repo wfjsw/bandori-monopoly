@@ -279,7 +279,7 @@ fn rollouts_inline(
     for _ in 0..iters {
         let t0 = Instant::now();
         let mut m = base.fork();
-        m.set_provider(Some(Box::new(HeuristicProvider)));
+        m.set_provider(Some(Box::new(HeuristicProvider::default())));
         let fork = t0.elapsed().as_secs_f64();
         let t1 = Instant::now();
         let mut played = 0.0;
@@ -390,6 +390,11 @@ fn main() {
         game_rules::bot_cost::STORE_NS.store(0, Ordering::Relaxed);
         game_rules::bot_cost::GUEST_NS.store(0, Ordering::Relaxed);
         game_rules::bot_cost::HOST_WORLD_CLONES.store(0, Ordering::Relaxed);
+        game_rules::bot_cost::COUNTERACT_WINDOWS.store(0, Ordering::Relaxed);
+        game_rules::bot_cost::COUNTERACT_WINDOWS_SKIPPED.store(0, Ordering::Relaxed);
+        game_rules::bot_cost::COUNTERACT_PROBES.store(0, Ordering::Relaxed);
+        game_rules::bot_cost::COUNTERACT_PROBE_MEMO_HITS.store(0, Ordering::Relaxed);
+        game_rules::bot_cost::COUNTERACT_DECLARED.store(0, Ordering::Relaxed);
         game_core::engine::bot_cost::WORLD_CLONES.store(0, Ordering::Relaxed);
     }
     counts.play.store(0, Ordering::Relaxed);
@@ -459,6 +464,19 @@ fn main() {
             cx_clones as f64 / n,
             host_clones as f64 / n,
             (cx_clones + host_clones) as f64 / n,
+        );
+        let wins = rules_c::COUNTERACT_WINDOWS.load(Ordering::Relaxed);
+        let wins_skip = rules_c::COUNTERACT_WINDOWS_SKIPPED.load(Ordering::Relaxed);
+        let probes = rules_c::COUNTERACT_PROBES.load(Ordering::Relaxed);
+        let memo_hits = rules_c::COUNTERACT_PROBE_MEMO_HITS.load(Ordering::Relaxed);
+        let declared = rules_c::COUNTERACT_DECLARED.load(Ordering::Relaxed);
+        println!(
+            "  [反击] windows/game: {:.0} opened, {:.0} skipped (valid-option-first); probes/game {:.0} ({:.0} memo hits); declared/game {:.1}",
+            wins as f64 / n,
+            wins_skip as f64 / n,
+            probes as f64 / n,
+            memo_hits as f64 / n,
+            declared as f64 / n,
         );
         println!(
             "  time share of {:.1}s wall: fire-up {:.2}s ({:.1}%) [store {:.2}s + instantiate {:.2}s], guest call {:.2}s ({:.1}%), engine shell {:.2}s ({:.1}%)",
@@ -545,7 +563,9 @@ fn main() {
         // the provider installed -- every prompt answered inline, one forward
         // pass per routine instead of one per pause.
         let mut base = Match::restore(data.clone(), rules.clone(), &snap).expect("restore");
-        base.set_provider(Some(Box::new(game_core::engine::HeuristicProvider)));
+        base.set_provider(Some(Box::new(
+            game_core::engine::HeuristicProvider::default(),
+        )));
         // (the provider is installed per fork inside `rollouts_inline`; drop
         // the one on the base so the forks start clean)
         base.set_provider(None);

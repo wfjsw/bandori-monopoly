@@ -483,6 +483,12 @@ impl CardModules for NativeModules {
     fn pre(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledPre> {
         self.index.pre(i, entry)
     }
+    fn entry_guard_is_none(&self, card: i32, entry: i32) -> bool {
+        self.cards()
+            .get(card as usize)
+            .and_then(|c| c.on.get(entry as usize))
+            .is_some_and(|o| !o.has_guard)
+    }
     fn sha256(&self) -> Option<&str> {
         Some(&self.sha)
     }
@@ -547,7 +553,7 @@ impl CardModules for NativeModules {
             let scope =
                 game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
             let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, true);
-            let asked: Result<bool, ()> = game_rules::cond_pre::admits(pre, &scope, &cand, || {
+            let asked: Result<bool, ()> = game_rules::cond_pre::admits(pre, Some(&scope), &cand, || {
                 let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
                 // A guard is a pure query: refuse inline answers (see
                 // `game_rules::inline`).
@@ -602,10 +608,49 @@ impl CardModules for NativeModules {
             return Ok(false);
         };
         // docs/GUARDS.md §4.4: condition first, guard second, one `admits`.
+        // Scope only when a condition exists (`pre == None` never reads it).
         let pre = self.index.pre(card, entry);
-        let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
+        let scope;
+        let scope: Option<&game_rules::cond_pre::WindowScope> = if pre.is_some() {
+            scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
+            Some(&scope)
+        } else {
+            None
+        };
         let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
-        game_rules::cond_pre::admits(pre, &scope, &cand, || {
+        game_rules::cond_pre::admits(pre, scope, &cand, || {
+            let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
+            let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
+                run_on(state, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
+            });
+            Ok(match res {
+                Ok(CallOut::Code(v)) => v != 0,
+                Ok(_) => true,
+                Err(_) => false,
+            })
+        })
+    }
+
+    /// [`Self::can_counteract`] with the window scope the caller built once per
+    /// trigger window (`docs/GUARDS.md` §4.4 item 1 / §4.5) and reused across
+    /// every candidate probe. Mirrors [`game_rules::host::Ruleset`].
+    fn can_counteract_scoped(
+        &self,
+        world: &Run,
+        card: i32,
+        player_id: i32,
+        scope: &game_rules::cond_pre::WindowScope,
+    ) -> Result<bool, RuleError> {
+        let info = self
+            .index
+            .card(card)
+            .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
+        let Some(entry) = info.entry(OnKind::Counteract, Some(world.trigger().kind)) else {
+            return Ok(false);
+        };
+        let pre = self.index.pre(card, entry);
+        let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
+        game_rules::cond_pre::admits(pre, Some(scope), &cand, || {
             let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
             let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
                 run_on(state, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
@@ -632,13 +677,21 @@ impl CardModules for NativeModules {
             return Ok(None);
         };
         let pre = self.index.pre(card, entry);
-        let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window_ambient(
-            world, player_id,
-        ));
+        // Scope only when a condition exists (`pre == None` never reads it) --
+        // the `cant_play` hot path (ai_step / view extras ask it per hand card).
+        let scope;
+        let scope: Option<&game_rules::cond_pre::WindowScope> = if pre.is_some() {
+            scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window_ambient(
+                world, player_id,
+            ));
+            Some(&scope)
+        } else {
+            None
+        };
         let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
         game_rules::cond_pre::admits_gate(
             pre,
-            &scope,
+            scope,
             &cand,
             || Msg::new("err.play_pre"),
             || {

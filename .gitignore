@@ -50,3 +50,6 @@ Thumbs.db
 
 
 docs/ui-ref
+
+# Built browser bot bundle (`node tools/build-bot-glue.mjs`)
+/webui/public/assets/engine/bot-glue/

@@ -61,6 +61,13 @@ async function init(base) {
   } catch {
     /* absent book is fine */
   }
+  // Optional strategy book (docs/BOT.md §3.8) -- absent = default params.
+  try {
+    const book = await fetch(new URL("../../../data/strategy_book.json", baseHref));
+    if (book.ok) files["strategy_book.json"] = await book.text();
+  } catch {
+    /* absent book is fine */
+  }
   glue.load_data(JSON.stringify(files));
   // The ruleset the page loads (`/assets/rules/`) -- same bytes, same sequence.
   const rulesBase = new URL("../../../assets/rules/", baseHref);

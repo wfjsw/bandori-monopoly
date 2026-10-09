@@ -50,6 +50,169 @@ export const CHAOS_RESERVE = 1000;
  *  engine's chaos bots (`ai.rs`). */
 export const CHAOS_COUNTER_CHANCE = 0.3;
 
+/** Standard's default [反击] declare propensity, in milli (600 = 60 % per
+ *  offered card per offer). Mirrors
+ *  `game_core::strategy::DEFAULT_COUNTERACT_PROPENSITY_MILLI` -- user ruling
+ *  2026-10-08, "bots must be able to counteract" (the old default was 0 =
+ *  never, which left every [反击] card dead in a bot's hand). */
+export const DEFAULT_COUNTERACT_PROPENSITY_MILLI = 600;
+
+// ---------------------------------------------------------------- strategy book
+// `bot` reads its thresholds from the seat's resolved **strategy parameters**
+// (`docs/BOT.md` §3.8) -- the same struct `rules.strategy_for` returns, one
+// source of truth with `engine/ai.rs`. The constants above are their defaults
+// (`DEFAULT_STRATEGY`), so an empty strategy book changes nothing. Chaos is
+// not parameterised: it keeps `CHAOS_RESERVE` / `CHAOS_COUNTER_CHANCE`.
+//
+// Field names are snake_case, like `data/strategy_book.json` and
+// `game_core::strategy::StrategyParams`.
+
+/** `game_core::strategy::StrategyParams` as the glue serialises it (snake_case). */
+export interface StrategyParams {
+  buy_reserve: number;
+  buy_reserve_mid: number;
+  buy_reserve_late: number;
+  phase_mid_round: number;
+  phase_late_round: number;
+  buy_group_weight: number[];
+  set_complete_bonus_milli: number;
+  max_price_ratio_milli: number;
+  build_reserve: number;
+  build_group_weight: number[];
+  target_houses: number[];
+  force_buy_reserve: number;
+  auction_worth_lo_milli: number;
+  auction_worth_span_milli: number;
+  auction_cash_margin: number;
+  bid_step: number;
+  bid_nudge_steps: number;
+  bid_frac_milli: number;
+  play_card_chance_milli: number;
+  max_plays_per_turn: number;
+  play_card_reserve: number;
+  cards: Record<string, CardPlayParams>;
+  skills: Record<string, SkillParams>;
+  counteract_propensity_milli: number;
+  counteract: Record<string, CounterParams>;
+  mortgage_house_key_milli: number;
+  mortgage_price_key_milli: number;
+  redeem_reserve: number;
+  prior_buy_yes_milli: number;
+  prior_buy_no_milli: number;
+  prior_build_yes_milli: number;
+  prior_build_no_milli: number;
+  prior_alt_milli: number;
+  prior_play_base_milli: number;
+  prior_play_bonus_milli: number;
+  prior_bid_neutral_milli: number;
+  prior_bid_floor_milli: number;
+  prior_bid_ceil_milli: number;
+  prior_counter_skip_milli: number;
+  prior_counter_declare_milli: number;
+}
+
+/** `game_core::strategy::CardPlayParams`. */
+export interface CardPlayParams {
+  play_weight_milli: number;
+  hold_for_counteract: boolean;
+  min_round: number;
+  max_round: number;
+  min_cash_after_est: number | null;
+}
+
+/** `game_core::strategy::SkillParams` (default: never press). */
+export interface SkillParams {
+  play_weight_milli: number;
+  min_fires: number;
+  min_crystals: number;
+  keep_markers: number;
+  min_round: number;
+  max_round: number;
+}
+
+/** `game_core::strategy::CounterParams` -- a listed card's own spec
+ *  (`0` = hold it back); an unlisted card takes `counteract_propensity_milli`. */
+export interface CounterParams {
+  propensity_milli: number;
+  by_kind: Record<string, number>;
+}
+
+/**
+ * Every field's default = today's constant. Mirrors
+ * `game_core::strategy::StrategyParams::default()`; the glue is the authority
+ * in a running match (`rules.strategy_for`), this table is the offline /
+ * test fallback.
+ */
+export const DEFAULT_STRATEGY: StrategyParams = {
+  buy_reserve: BUY_RESERVE,
+  buy_reserve_mid: BUY_RESERVE,
+  buy_reserve_late: BUY_RESERVE,
+  phase_mid_round: 20,
+  phase_late_round: 40,
+  buy_group_weight: [],
+  set_complete_bonus_milli: 0,
+  max_price_ratio_milli: 0,
+  build_reserve: BUILD_RESERVE,
+  build_group_weight: [],
+  target_houses: [],
+  force_buy_reserve: FORCE_BUY_RESERVE,
+  auction_worth_lo_milli: 600,
+  auction_worth_span_milli: 700,
+  auction_cash_margin: 1000,
+  bid_step: 100,
+  bid_nudge_steps: 3,
+  bid_frac_milli: 750,
+  play_card_chance_milli: 700,
+  max_plays_per_turn: MAX_PLAYS_PER_TURN,
+  play_card_reserve: BUY_RESERVE,
+  cards: {},
+  skills: {},
+  counteract_propensity_milli: DEFAULT_COUNTERACT_PROPENSITY_MILLI,
+  counteract: {},
+  mortgage_house_key_milli: 1000,
+  mortgage_price_key_milli: 1000,
+  redeem_reserve: REDEEM_RESERVE,
+  prior_buy_yes_milli: 800,
+  prior_buy_no_milli: 200,
+  prior_build_yes_milli: 800,
+  prior_build_no_milli: 200,
+  prior_alt_milli: 300,
+  prior_play_base_milli: 400,
+  prior_play_bonus_milli: 300,
+  prior_bid_neutral_milli: 400,
+  prior_bid_floor_milli: 150,
+  prior_bid_ceil_milli: 900,
+  prior_counter_skip_milli: 700,
+  prior_counter_declare_milli: 500,
+};
+
+/** `StrategyParams::buy_reserve_at` -- the phase split (all equal by default). */
+export function buyReserveAt(p: StrategyParams, round: number): number {
+  if (round >= p.phase_late_round) return p.buy_reserve_late;
+  if (round >= p.phase_mid_round) return p.buy_reserve_mid;
+  return p.buy_reserve;
+}
+
+/** `StrategyParams::wants_buy_tile` (no set-completion / ratio extras here). */
+export function wantsBuyP(p: StrategyParams, money: number, price: number, round = 0): boolean {
+  return money - price >= buyReserveAt(p, round);
+}
+
+/** `StrategyParams::wants_build`. */
+export function wantsBuildP(p: StrategyParams, money: number, cost: number): boolean {
+  return money - cost >= p.build_reserve;
+}
+
+/** `StrategyParams::wants_redeem`. */
+export function wantsRedeemP(p: StrategyParams, money: number, cost: number): boolean {
+  return money - cost >= p.redeem_reserve;
+}
+
+/** `StrategyParams::play_card_reserve_for`. */
+export function playCardReserveFor(p: StrategyParams, card: string): number {
+  return p.cards?.[card]?.min_cash_after_est ?? p.play_card_reserve;
+}
+
 /**
  * `advanced` (进阶, `docs/BOT.md` B6): the same search the server's
  * `bot-service` runs, in a Web Worker pool -- ISMCTS over determinizations of
@@ -139,8 +302,35 @@ export interface AutopilotCtx {
    * characters in seat order. Pure -- no RNG.
    */
   deckSuggest: (character: string, seat: number, opponents: string[]) => string[];
+  /**
+   * Strategy book lookup (`rules.strategy_for`, `docs/BOT.md` §3.8): the
+   * seat's resolved parameters for this public table, else
+   * [`DEFAULT_STRATEGY`] (today's constants). `seat` is own seat,
+   * `opponents` the other seats' characters in seat order. One source of
+   * truth with `engine/ai.rs` -- the policy below never hard-codes a
+   * threshold. Pure -- no RNG.
+   *
+   * Optional: a context that has no glue in hand (tests, offline) falls back
+   * to [`DEFAULT_STRATEGY`], which is exactly today's constants.
+   */
+  strategyFor?: (character: string, seat: number, opponents: string[]) => StrategyParams;
   /** Client RNG. Not the engine's -- a takeover does not need to be deterministic. */
   random: () => number;
+}
+
+/** The seat's resolved `StrategyParams` for this table (`ctx.strategyFor`). */
+export function botParams(view: MatchView, ctx: AutopilotCtx): StrategyParams {
+  const S = view.state;
+  const me = view.playerId;
+  const f = ctx.strategyFor;
+  if (!f) return DEFAULT_STRATEGY;
+  const opponents = S.players.filter((_, j) => j !== me).map((p) => p.character);
+  try {
+    const p = f(S.players[me]?.character ?? "", me, opponents);
+    return p && typeof p === "object" ? { ...DEFAULT_STRATEGY, ...p } : DEFAULT_STRATEGY;
+  } catch {
+    return DEFAULT_STRATEGY;
+  }
 }
 
 const pick = <T>(xs: T[], random: () => number): T | undefined =>
@@ -180,17 +370,24 @@ function redeemable(S: MatchState, tiles: TileData[], me: number, reserve: numbe
 
 /** `AiAgentChoice` -- first affordable purchase, else first build, else none.
  * `prices` (parallel to `options`) carries the quoted prices from the prompt. */
-function agentChoice(S: MatchState, tiles: TileData[], me: number, options: number[], prices?: number[]): number {
+function agentChoice(
+  S: MatchState,
+  tiles: TileData[],
+  me: number,
+  options: number[],
+  prices: number[] | undefined,
+  p: StrategyParams,
+): number {
   const money = S.players[me].money;
   for (let k = 0; k < options.length; k++) {
     const t = options[k];
     const quoted = prices?.[k];
     const price = quoted != null && quoted >= 0 ? quoted : buyPrice(S, tiles, t);
-    if (S.owners[t] < 0 && wantsBuy(money, price)) return k;
+    if (S.owners[t] < 0 && wantsBuyP(p, money, price, S.round)) return k;
   }
   for (let k = 0; k < options.length; k++) {
     const t = options[k];
-    if (S.owners[t] === me && wantsBuild(money, buildCost(tiles, t))) return k;
+    if (S.owners[t] === me && wantsBuildP(p, money, buildCost(tiles, t))) return k;
   }
   return options.length; // "none"
 }
@@ -242,6 +439,12 @@ function offerKind(p: MatchPrompt): "buy" | "build" | "force_buy" | "" {
 
 // ---------------------------------------------------------------- prompts
 
+/** The card id a prompt option declares (`Arg::Card` on the option label). */
+function optionCard(m: { k?: string; a?: Record<string, unknown> } | undefined): string {
+  const v = m?.a?.["card"];
+  return typeof v === "string" ? v : "";
+}
+
 /** `bot` prompt answer: the engine's `aiAnswer`, else the policy table. */
 function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command | null {
   const me = view.playerId;
@@ -250,41 +453,68 @@ function botPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Command 
   const tiles = ctx.tiles;
   const money = view.state.players[me]?.money ?? 0;
   const ai = view.aiAnswer ?? null;
+  const params = botParams(view, ctx);
 
   if (ai) {
     if (p.kind === "mortgage" || p.kind === "pick") return { act: "answer", prompt: p.id, cards: ai.picked };
-    if (p.kind === "auction") return auctionCommand(view, p, ai.worth, ctx, "bot");
+    if (p.kind === "auction") return auctionCommand(view, p, ai.worth, ctx, "bot", params);
     return { act: "answer", prompt: p.id, value: clampAnswer(p, ai.answer) };
   }
 
   switch (p.kind) {
     case "auction":
-      return auctionCommand(view, p, auctionWorth(view, ctx), ctx, "bot");
+      return auctionCommand(view, p, auctionWorth(view, ctx, params), ctx, "bot", params);
     case "mortgage":
       return { act: "answer", prompt: p.id, cards: autoMortgage(view.state, tiles, p.items, p.bid) };
     case "pick":
       return { act: "answer", prompt: p.id, cards: p.items.slice(0, Math.max(0, p.count)) };
     case "tile": {
       const t = p.items.map(Number);
-      const pickIdx = (p.title.k ?? "") === "ask.agent.title" ? agentChoice(view.state, tiles, me, t, p.prices) : p.fallback;
+      const pickIdx =
+        (p.title.k ?? "") === "ask.agent.title" ? agentChoice(view.state, tiles, me, t, p.prices, params) : p.fallback;
       return { act: "answer", prompt: p.id, value: clampAnswer(p, pickIdx) };
     }
     default: {
       switch (offerKind(p)) {
         case "buy": {
           const price = p.price >= 0 ? p.price : buyPrice(view.state, tiles, p.tile);
-          return { act: "answer", prompt: p.id, value: wantsBuy(money, price) ? 0 : 1 };
+          return { act: "answer", prompt: p.id, value: wantsBuyP(params, money, price, view.state.round) ? 0 : 1 };
         }
         case "build":
-          return { act: "answer", prompt: p.id, value: wantsBuild(money, buildCost(tiles, p.tile)) ? 0 : 1 };
+          return {
+            act: "answer",
+            prompt: p.id,
+            value: wantsBuildP(params, money, buildCost(tiles, p.tile)) ? 0 : 1,
+          };
         case "force_buy": {
           const price = p.price >= 0 ? p.price : 2 * buyPrice(view.state, tiles, p.tile);
-          return { act: "answer", prompt: p.id, value: money - price < FORCE_BUY_RESERVE ? 1 : 0 };
+          return { act: "answer", prompt: p.id, value: money - price < params.force_buy_reserve ? 1 : 0 };
         }
-        default:
-          // mulligan (keep), circle (money), counteract (skip), card-rule
-          // prompts: the engine's AI answer *is* the fallback.
+        default: {
+          // [反击] offer: declare on the seat's per-card propensity
+          // (`docs/BOT.md` §3.8 "counteraction"). An unlisted card takes the
+          // base rate `counteract_propensity_milli` (default 600‰ -- user
+          // ruling 2026-10-08, "bots must be able to counteract"); a listed
+          // entry is the card's own spec (`propensity_milli` 0 = hold it back).
+          if (p.title?.k === "ask.counteract.title") {
+            for (let i = 0; i < p.options.length; i++) {
+              if (i === p.fallback) continue;
+              const id = optionCard(p.options[i] as { a?: Record<string, unknown> });
+              if (!id) continue;
+              const entry = params.counteract?.[id];
+              const propensity = entry
+                ? (entry.propensity_milli ?? 0)
+                : (params.counteract_propensity_milli ?? DEFAULT_COUNTERACT_PROPENSITY_MILLI);
+              if (propensity > 0 && ctx.random() * 1000 < propensity) {
+                return { act: "answer", prompt: p.id, value: clampAnswer(p, i) };
+              }
+            }
+            return { act: "answer", prompt: p.id, value: clampAnswer(p, p.fallback) };
+          }
+          // mulligan (keep), circle (money), card-rule prompts: the engine's
+          // AI answer *is* the fallback.
           return { act: "answer", prompt: p.id, value: clampAnswer(p, p.fallback) };
+        }
       }
     }
   }
@@ -307,7 +537,7 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
   switch (p.kind) {
     case "auction":
       // Cap the ceiling at money - CHAOS_RESERVE so the seat keeps a float.
-      return auctionCommand(view, p, money - CHAOS_RESERVE, ctx, "chaos");
+      return auctionCommand(view, p, money - CHAOS_RESERVE, ctx, "chaos", DEFAULT_STRATEGY);
     case "mortgage":
       return { act: "answer", prompt: p.id, cards: randomMortgage(tiles, p.items, p.bid, random) };
     case "pick": {
@@ -354,17 +584,30 @@ function chaosPrompt(view: MatchView, ctx: AutopilotCtx, p: MatchPrompt): Comman
   }
 }
 
-/** `worth = ((base × U(0.6, 1.3)) / 100 | 0) × 100`, capped at money - 1000. */
-function auctionWorth(view: MatchView, ctx: AutopilotCtx): number {
+/** `worth = ((base × U(lo, lo+span)) / 100 | 0) × 100`, capped at money - margin.
+ *  The lo / span / margin are the seat's `StrategyParams` (defaults 0.6 / 0.7 /
+ *  1000, the old literals). */
+function auctionWorth(view: MatchView, ctx: AutopilotCtx, params: StrategyParams): number {
   const p = view.state.prompt;
   const me = view.playerId;
   const base = buyPrice(view.state, ctx.tiles, p.tile);
-  const v = Math.trunc((base * (0.6 + ctx.random() * 0.7)) / 100) * 100;
-  return Math.min(v, (view.state.players[me]?.money ?? 0) - 1000);
+  const lo = params.auction_worth_lo_milli / 1000;
+  const span = params.auction_worth_span_milli / 1000;
+  const v = Math.trunc((base * (lo + ctx.random() * span)) / 100) * 100;
+  return Math.min(v, (view.state.players[me]?.money ?? 0) - params.auction_cash_margin);
 }
 
-/** Bid inside the ceiling (bot: `min + 0..200`; chaos: anywhere up to money-1), else pass. */
-function auctionCommand(view: MatchView, p: MatchPrompt, worth: number, ctx: AutopilotCtx, mode: PolicyName): Command {
+/** Bid inside the ceiling (bot: `min + 0..(nudge-1)·step`; chaos: anywhere up
+ *  to the cap), else pass. The raise step / nudge are the seat's
+ *  `StrategyParams` for `bot` (defaults `100` / `3`, the old literals). */
+function auctionCommand(
+  view: MatchView,
+  p: MatchPrompt,
+  worth: number,
+  ctx: AutopilotCtx,
+  mode: PolicyName,
+  params: StrategyParams,
+): Command {
   const me = view.playerId;
   const money = view.state.players[me]?.money ?? 0;
   const st = view.state.players[me];
@@ -375,7 +618,11 @@ function auctionCommand(view: MatchView, p: MatchPrompt, worth: number, ctx: Aut
   const bid =
     mode === "chaos"
       ? min + 100 * (Math.floor(ctx.random() * (Math.floor((cap - min) / 100) + 1)) % (Math.floor((cap - min) / 100) + 1))
-      : Math.min(cap, min + 100 * (Math.floor(ctx.random() * 3) % 3));
+      : Math.min(
+          cap,
+          min +
+            params.bid_step * (Math.floor(ctx.random() * params.bid_nudge_steps) % Math.max(1, params.bid_nudge_steps)),
+        );
   return { act: "answer", prompt: p.id, value: bid };
 }
 
@@ -397,19 +644,49 @@ export interface Policy {
  * Cards legal to play **and** affordable against the seat's reserve, using the
  * bot-only estimated execution cost (`view.estCost`, user ruling 2026-10-07).
  * Never legality -- a human may still play the card and take the Q1 shortfall
- * path. Mirrors `ai.rs` `bot_wants_play_card`.
+ * path. Mirrors `ai.rs` `bot_wants_play_card`, under the seat's
+ * `StrategyParams` (the per-card `min_cash_after_est` floor, else
+ * `play_card_reserve`).
  */
-function affordableCards(view: MatchView, reserve: number): string[] {
+function affordableCards(view: MatchView, params: StrategyParams | number): string[] {
   const money = view.state.players[view.playerId]?.money ?? 0;
   const ok: string[] = [];
   for (let i = 0; i < view.hand.length; i++) {
     if (view.playable && !view.playable[i]) continue;
+    const card = view.hand[i];
     const est = view.estCost?.[i] ?? 0;
+    // A bare number is chaos's fixed `CHAOS_RESERVE`; the bot passes its
+    // per-card `StrategyParams`.
+    const reserve = typeof params === "number" ? params : playCardReserveFor(params, card);
     if (est > 0 && money - est < reserve) continue;
-    ok.push(view.hand[i]);
+    ok.push(card);
   }
   return ok;
 }
+
+/**
+ * The skill the standard policy would press, or null: a placed, enabled
+ * character / band skill whose per-skill `StrategyParams` say press
+ * (`docs/BOT.md` §3.8 "skills"). The default entry is "never" -- the old
+ * standard policy, which left skills to the player. Mirrors `ai.rs`
+ * `ai_skill_choice`; no RNG draw when nothing qualifies.
+ */
+function skillChoice(view: MatchView, ctx: AutopilotCtx, params: StrategyParams): string | null {
+  const S = view.state;
+  const round = S.round;
+  for (const id of usableSkills(view)) {
+    const sk = params.skills?.[id];
+    const weight = sk?.play_weight_milli ?? 0;
+    if (weight <= 0) continue;
+    if (round < (sk?.min_round ?? 0)) continue;
+    if (round > (sk?.max_round ?? i32max)) continue;
+    if (weight < 1000 && ctx.random() * 1000 >= weight) continue;
+    return id;
+  }
+  return null;
+}
+
+const i32max = 2147483647;
 
 /** Enabled character / band skills on `me`'s field. */
 function usableSkills(view: MatchView): string[] {
@@ -457,15 +734,21 @@ export const policies: Record<PolicyName, Policy> = {
       const mine = S.players[me];
       const myTurn = S.turn === me;
       const out: Command[] = [];
+      const params = botParams(view, ctx);
       if (S.step === 2) {
         if (myTurn) {
-          const r = redeemChoice(S, ctx.tiles, me, REDEEM_RESERVE);
+          const r = redeemChoice(S, ctx.tiles, me, params.redeem_reserve);
           if (r !== null) return [{ act: "redeem", value: r }];
           if (S.skipMove) return [{ act: "end" }];
-          if (ctx.playedThisTurn < MAX_PLAYS_PER_TURN && ctx.random() < PLAY_CARD_CHANCE) {
-            const card = pick(affordableCards(view, BUY_RESERVE), ctx.random);
+          if (ctx.playedThisTurn < params.max_plays_per_turn && ctx.random() < params.play_card_chance_milli / 1000) {
+            const card = pick(affordableCards(view, params), ctx.random);
             if (card) out.push({ act: "play", card });
           }
+          // A skill press only when the seat's per-skill entry asks for one
+          // (`docs/BOT.md` §3.8 "skills"); the default entry is "never", the
+          // old policy. No RNG draw otherwise.
+          const sk = skillChoice(view, ctx, params);
+          if (sk) out.push({ act: "skill", card: sk });
         }
         // A refused card must still let the turn move: roll (or end) is next.
         if (S.roller === me) out.push({ act: "roll" });
@@ -473,10 +756,10 @@ export const policies: Record<PolicyName, Policy> = {
       }
       if (S.step !== 4 || !myTurn) return out; // 开始 lifts itself; 移动 is running
       const t = S.landed;
-      if (t >= 0 && buyableHere(S, ctx.tiles, me, t) && wantsBuy(mine.money, buyPrice(S, ctx.tiles, t))) {
+      if (t >= 0 && buyableHere(S, ctx.tiles, me, t) && wantsBuyP(params, mine.money, buyPrice(S, ctx.tiles, t), S.round)) {
         out.push({ act: "buy", value: t });
       }
-      if (t >= 0 && canBuildHere(S, ctx.tiles, me, t) && wantsBuild(mine.money, buildCost(ctx.tiles, t))) {
+      if (t >= 0 && canBuildHere(S, ctx.tiles, me, t) && wantsBuildP(params, mine.money, buildCost(ctx.tiles, t))) {
         out.push({ act: "build", value: t });
       }
       out.push({ act: "end" });

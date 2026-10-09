@@ -2430,7 +2430,7 @@ impl Cx<'_> {
 
     /// `MortgageOrder` -- bare land first, cheapest first at the default
     /// [`crate::strategy::StrategyParams`] keys (the sort key is
-    /// `(has_houses · house_key + price · price_key, tile)`, which with both
+    /// `(has_houses · house_key, price · price_key, tile)`, which with both
     /// keys at `1000` is exactly the old `(houses > 0, price, t)` order).
     fn mortgage_order(&self, mut deeds: Vec<usize>, p: &crate::strategy::StrategyParams) -> Vec<usize> {
         deeds.sort_by_key(|&t| p.mortgage_key(self.w.st.houses[t], self.tile(t).price, t));

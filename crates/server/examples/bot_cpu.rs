@@ -337,6 +337,7 @@ fn run_match(
     budget_override: Option<u64>,
     ponder_budget_ms: u64,
     with_ponder: bool,
+    ponder_all: bool,
     anatomy: &mut Vec<AnatomySample>,
     anatomy_cap: usize,
 ) -> MatchStats {
@@ -433,8 +434,14 @@ fn run_match(
             let prompt_id = botsvc::decision_at(&seat.state, seat.player_id);
 
             let Some(pid) = prompt_id else {
-                // Nothing to decide: the live `spawn_ponder` path.
-                if seat.state.phase == "play" && with_ponder {
+                // Nothing to decide: the live `spawn_ponder` path. Gated on
+                // the seat's next own decision being near (`docs/BOT.md`
+                // §3.5) -- an idle view has no searchable surface, and the
+                // pre-C1 polls searched 0 of ~14 k ponders (`REPORT.md` §6).
+                // `--ponder-all` restores the old "every idle probe" traffic
+                // for a before/after from one binary.
+                let near = bot_service::next_turn_near(&seat.state, seat.player_id);
+                if seat.state.phase == "play" && with_ponder && (near || ponder_all) {
                     let req = ponder_request(req_id, "bench", member, &view, ponder_budget_ms, rng);
                     req_id += 1;
                     rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1);
@@ -647,21 +654,30 @@ fn main() {
         .parse()
         .unwrap_or(botsvc::PONDER_BUDGET_MS);
     let with_ponder = !flag("--no-ponder");
+    // `--ponder-all`: the pre-C1 behaviour -- a `ponder` on every idle probe,
+    // not only when the seat's next own decision is near. For a before/after
+    // from one binary.
+    let ponder_all = flag("--ponder-all");
+    // `--no-early-stop`: the pre-C2 search, always the full budget. For a
+    // before/after of the time-management rule from one binary.
+    let early_stop = !flag("--no-early-stop");
     let anatomy_cap: usize = arg("--anatomy", "8").parse().unwrap_or(8);
 
     let ctx = Ctx::load(&data_dir, &rules_dir).with_opts(SearchOpts {
         search_threads,
+        early_stop,
         ..SearchOpts::default()
     });
     let real = ctx.rules.ruleset_sha256().is_some();
     println!("=== bot-service CPU profile (measurement only) ===");
     println!(
-        "ruleset: {} ({}), search-threads {}, ponder {}, ponder-budget {} ms",
+        "ruleset: {} ({}), search-threads {}, ponder {}, ponder-budget {} ms, early-stop {}",
         ctx.rules.ruleset_sha256().unwrap_or("stub"),
         if real { "real WasmRules" } else { "STUB -- no effects" },
         search_threads,
         if with_ponder { "on" } else { "off" },
         ponder_budget_ms,
+        if early_stop { "on" } else { "off" },
     );
     println!(
         "table: 3 advanced + 1 standard bot, MatchMode::Casual; budget policy {}",
@@ -692,6 +708,7 @@ fn main() {
             budget_override,
             ponder_budget_ms,
             with_ponder,
+            ponder_all,
             &mut anatomy,
             anatomy_cap,
         );

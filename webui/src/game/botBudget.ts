@@ -114,6 +114,66 @@ export function decisionAt(
   return state.step === 2 || state.step === 4 ? 0 : null;
 }
 
+/** 结束 (`game-core/src/state.rs::stage::END`) -- the turn is about to end. */
+const STAGE_END = 4;
+
+/**
+ * Is this seat's **next own decision** near enough for a speculative `ponder`
+ * to be worth its CPU (`bot_core::view::next_turn_near` -- the browser port,
+ * `docs/BOT.md` §3.5)?
+ *
+ * True when the bot is about to face a surface of its own: it is already our
+ * turn (mid-routine / just began), the current player's turn is at 结束, or we
+ * are the next active seat in the ring. False for a long wait -- an idle view
+ * has no searchable surface and the pre-C1 polls searched 0 of ~14 k ponders.
+ */
+export function nextTurnNear(
+  state: {
+    phase: string;
+    busy: boolean;
+    turn: number;
+    step: number;
+    prompt: { id: number };
+    players: { bankrupt: boolean; left: boolean }[];
+  },
+  playerId: number,
+): boolean {
+  if (state.phase !== "play" || playerId < 0) return false;
+  const nextActive = (): number | null => {
+    const n = state.players.length;
+    if (n <= 0 || state.turn < 0) return null;
+    for (let k = 1; k <= n; k++) {
+      const c = (((state.turn + k) % n) + n) % n;
+      const p = state.players[c];
+      if (p && !p.bankrupt && !p.left) return c;
+    }
+    return null;
+  };
+  if (state.busy && state.turn !== playerId) {
+    return nextActive() === playerId || state.step === STAGE_END;
+  }
+  if (state.turn === playerId) return true;
+  if (state.turn < 0) return false;
+  return state.step === STAGE_END || nextActive() === playerId;
+}
+
+/**
+ * Speculative-search budget for a ponder (`docs/BOT.md` §3.6): a slice of the
+ * same budget rules, never more than a real decision would get. The ponder
+ * runs on idle CPU (other seats are acting), so this is free time -- but a
+ * runaway ponder would still contend with the next real decide.
+ */
+export function ponderBudgetMs(input: BudgetInput): number {
+  const cap = input.soloCapMs ?? SOLO_CAP_MS;
+  if (!input.timed) {
+    // Solo: a third of the configured cap, clamped like a decision.
+    return clamp(Math.round(cap / 3), MIN_BUDGET_MS, 1_000);
+  }
+  // Timed: the server's speculative slice -- 300 ms, never more than a
+  // decision share would be.
+  return clamp(300, MIN_BUDGET_MS, Math.max(MIN_BUDGET_MS, Math.round(cap / 3)));
+}
+
 /**
  * Search-side seed for one decision. Derived from the **public** decision
  * identity (never the match RNG, `docs/BOT.md` §1). Mirrors

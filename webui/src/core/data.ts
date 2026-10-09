@@ -92,6 +92,14 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
   } catch {
     /* absent book is fine */
   }
+  // Optional: the bot strategy book (`docs/BOT.md` §3.8). Missing = empty
+  // book = the default parameters (today's heuristic constants).
+  try {
+    const book = await fetch("/data/strategy_book.json");
+    if (book.ok) files["strategy_book.json"] = await book.text();
+  } catch {
+    /* absent book is fine */
+  }
   glue.load_data(JSON.stringify(files));
   await loadRuleset();
 

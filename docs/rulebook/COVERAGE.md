@@ -1358,6 +1358,22 @@ run stays green.
    2026-10-06 count -- concurrent work; the eight metamorphic / determinism
    / probe tests in the same file were green.
 
+6. ~~**`returns_prompt_storm`**~~ **Fixed (2026-10-08).** Fuzz soak iter 1517
+   (`seed=10174556463119430459`) hit `drain_prompts: prompts never stopped`
+   around PPP:Returns' 「[拥有者]每回合开始时选择一个其他存活玩家的团卡」.
+   Root cause was **not** the card: the fuzz arrange wrote `[晕眩]` through
+   the raw `state_set` (no `StateVar::expires`), `tick_state` only wears an
+   item down when it names its tick, so both seats stayed stunned forever --
+   every turn skipped, and the turn-start ask raised one prompt per skipped
+   turn. `MatchPlayer::state_set` now stamps the rulebook's tick
+   (「玩家的每回合结束时移除一层」; `stunStart` → turn start) on any stay /
+   stun / stunStart write that has none. No `KNOWN_FINDINGS` skip entry:
+   the fix is general and a future prompt storm is a new finding. Pinned by
+   `rb_fuzz_found::returns_prompt_storm`, `rb_ppp::
+   returns_turn_start_ask_survives_stun_skip`, and
+   `state::tests::status_writes_carry_the_books_tick`. See
+   [GUARDS.md](../GUARDS.md) §11.6.
+
 ### Metamorphic checks (all green at the default)
 
 | check | what it asserts |

@@ -40,4 +40,4 @@ pub use sim::{
     ai_answer_to_action, heuristic_message_view, heuristic_message_with, next_decision, Advance,
     Deadline, Horizon, MatchSim, SimError, Simulator,
 };
-pub use view::{AiAnswer, SeatView};
+pub use view::{next_turn_near, predict_upcoming_view, AiAnswer, SeatView};

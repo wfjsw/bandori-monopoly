@@ -16,7 +16,150 @@ pub use rules_cond::{
     CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope,
 };
 
-use crate::world::CardWorld;
+use crate::world::{CardWorld, Trigger};
+
+// ---------------------------------------------------------------------------
+// Snapshot sources (docs/GUARDS.md §4.2)
+// ---------------------------------------------------------------------------
+
+/// The reads [`fill_window`] / [`fill_candidate`] need. Blanket-implemented for
+/// every [`CardWorld`]; a live-world adapter (see
+/// [`crate::wasm_rules::LiveSnap`]) implements it over `(&World, &GameData,
+/// &Trigger)` so the counteract pre-filter builds a window context **without**
+/// cloning the world. Nothing here mutates.
+pub trait SnapSrc {
+    fn trigger(&self) -> Trigger;
+    fn tile_named(&self, name: &str) -> i32;
+    fn player_count(&self) -> i32;
+    fn money(&self, player_id: i32) -> i32;
+    fn fire(&self, player_id: i32) -> i32;
+    fn band_crystals(&self, player_id: i32) -> i32;
+    fn hand_size(&self, player_id: i32) -> i32;
+    fn player_pos(&self, player_id: i32) -> i32;
+    fn player_out(&self, player_id: i32) -> i32;
+    fn stay_of(&self, player_id: i32) -> i32;
+    fn stun_of(&self, player_id: i32) -> i32;
+    fn state_get(&self, player_id: i32, key: &str) -> i32;
+    fn character_skill_id(&self, player_id: i32) -> Option<String>;
+    fn band_skill_id(&self, player_id: i32) -> Option<String>;
+    fn owned_count(&self, player_id: i32) -> i32;
+    fn card_crystals(&self, player_id: i32, card: &str) -> i32;
+    fn tile_owner(&self, tile: i32) -> i32;
+    fn houses_of(&self, tile: i32) -> i32;
+    fn mortgaged_of(&self, tile: i32) -> i32;
+    fn tile_price(&self, tile: i32) -> i32;
+    fn turn_player(&self) -> i32;
+    fn turn_key(&self) -> i32;
+}
+
+impl<W: CardWorld> SnapSrc for W {
+    #[inline]
+    fn trigger(&self) -> Trigger {
+        CardWorld::trigger(self)
+    }
+    #[inline]
+    fn tile_named(&self, name: &str) -> i32 {
+        CardWorld::tile_named(self, name)
+    }
+    #[inline]
+    fn player_count(&self) -> i32 {
+        CardWorld::player_count(self)
+    }
+    #[inline]
+    fn money(&self, player_id: i32) -> i32 {
+        CardWorld::money(self, player_id)
+    }
+    #[inline]
+    fn fire(&self, player_id: i32) -> i32 {
+        CardWorld::fire(self, player_id)
+    }
+    #[inline]
+    fn band_crystals(&self, player_id: i32) -> i32 {
+        CardWorld::band_crystals(self, player_id)
+    }
+    #[inline]
+    fn hand_size(&self, player_id: i32) -> i32 {
+        CardWorld::hand_size(self, player_id)
+    }
+    #[inline]
+    fn player_pos(&self, player_id: i32) -> i32 {
+        CardWorld::player_pos(self, player_id)
+    }
+    #[inline]
+    fn player_out(&self, player_id: i32) -> i32 {
+        CardWorld::player_out(self, player_id)
+    }
+    #[inline]
+    fn stay_of(&self, player_id: i32) -> i32 {
+        CardWorld::stay_of(self, player_id)
+    }
+    #[inline]
+    fn stun_of(&self, player_id: i32) -> i32 {
+        CardWorld::stun_of(self, player_id)
+    }
+    #[inline]
+    fn state_get(&self, player_id: i32, key: &str) -> i32 {
+        CardWorld::state_get(self, player_id, key)
+    }
+    #[inline]
+    fn character_skill_id(&self, player_id: i32) -> Option<String> {
+        CardWorld::character_skill_id(self, player_id)
+    }
+    #[inline]
+    fn band_skill_id(&self, player_id: i32) -> Option<String> {
+        CardWorld::band_skill_id(self, player_id)
+    }
+    #[inline]
+    fn owned_count(&self, player_id: i32) -> i32 {
+        CardWorld::owned_count(self, player_id)
+    }
+    #[inline]
+    fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
+        CardWorld::card_crystals(self, player_id, card)
+    }
+    #[inline]
+    fn tile_owner(&self, tile: i32) -> i32 {
+        CardWorld::tile_owner(self, tile)
+    }
+    #[inline]
+    fn houses_of(&self, tile: i32) -> i32 {
+        CardWorld::houses_of(self, tile)
+    }
+    #[inline]
+    fn mortgaged_of(&self, tile: i32) -> i32 {
+        CardWorld::mortgaged_of(self, tile)
+    }
+    #[inline]
+    fn tile_price(&self, tile: i32) -> i32 {
+        CardWorld::tile_price(self, tile)
+    }
+    #[inline]
+    fn turn_player(&self) -> i32 {
+        CardWorld::turn_player(self)
+    }
+    #[inline]
+    fn turn_key(&self) -> i32 {
+        CardWorld::turn_key(self)
+    }
+}
+
+/// Does this condition's **verdict** depend on hand contents? A ring's only
+/// world change is declarations removing cards from hands (`build_round`), so
+/// a verdict that reads no hand field is stable for the whole window and can be
+/// memoised across laps. `owner_hand` is the candidate overlay's hand size;
+/// `hand(p)` is the window's per-seat hand-size table.
+pub fn cond_reads_hand(cond: &Cond) -> bool {
+    cond.used_vars().iter().any(|v| v == "owner_hand")
+        || cond.used_fns().iter().any(|f| f == "hand")
+}
+
+/// Does evaluating this condition read the window's hand table (`hand(p)`)?
+/// Only these need a **fresh** [`WindowScope`] after a declaration -- the
+/// candidate overlay (`owner_hand`) is rebuilt per probe from the live world,
+/// so a stale scope still answers it correctly.
+pub fn cond_reads_window_hand(cond: &Cond) -> bool {
+    cond.used_fns().iter().any(|f| f == "hand")
+}
 
 /// One guarded entry's compiled condition plus its lean wire bytes.
 #[derive(Clone, Debug)]
@@ -241,11 +384,20 @@ fn bump(stat: &std::sync::atomic::AtomicU64) {
 
 /// Evaluate the condition half of [`admits`]. `true` when the entry has no
 /// condition or its condition accepts the (window, candidate) pair.
+///
+/// `scope` may be `None` only when `pre` is `None` -- a condition needs a
+/// window scope to evaluate against. That shape lets a caller skip building
+/// the (expensive) CEL scope entirely for unconditioned entries.
 #[inline]
-pub fn condition_allows(pre: Option<&CompiledPre>, scope: &WindowScope, cand: &CandidateCtx) -> bool {
+pub fn condition_allows(
+    pre: Option<&CompiledPre>,
+    scope: Option<&WindowScope>,
+    cand: &CandidateCtx,
+) -> bool {
     let Some(pre) = pre else {
         return true;
     };
+    let scope = scope.expect("a condition evaluation needs a window scope");
     bump(&guard_cost::COND_EVALS);
     #[cfg(feature = "bot-cost")]
     let t0 = std::time::Instant::now();
@@ -271,7 +423,7 @@ pub fn condition_allows(pre: Option<&CompiledPre>, scope: &WindowScope, cand: &C
 #[inline]
 pub fn admits<E, F: FnOnce() -> Result<bool, E>>(
     pre: Option<&CompiledPre>,
-    scope: &WindowScope,
+    scope: Option<&WindowScope>,
     cand: &CandidateCtx,
     guard: F,
 ) -> Result<bool, E> {
@@ -291,7 +443,7 @@ pub fn admits<E, F: FnOnce() -> Result<bool, E>>(
 #[inline]
 pub fn admits_gate<T, E, F: FnOnce() -> Result<Option<T>, E>>(
     pre: Option<&CompiledPre>,
-    scope: &WindowScope,
+    scope: Option<&WindowScope>,
     cand: &CandidateCtx,
     blocked: impl FnOnce() -> T,
     gate: F,
@@ -308,7 +460,11 @@ pub fn admits_gate<T, E, F: FnOnce() -> Result<Option<T>, E>>(
 /// `admits` for a pure "does this entry apply" question with no residual
 /// guard at all (`pre` only). Used when the guard was deleted (`None`) in G4.
 #[inline]
-pub fn admits_pre(pre: Option<&CompiledPre>, scope: &WindowScope, cand: &CandidateCtx) -> bool {
+pub fn admits_pre(
+    pre: Option<&CompiledPre>,
+    scope: Option<&WindowScope>,
+    cand: &CandidateCtx,
+) -> bool {
     if !condition_allows(pre, scope, cand) {
         return false;
     }
@@ -337,7 +493,7 @@ pub fn id_of(name: &str) -> i64 {
 /// Build the window snapshot once per trigger / chain window and reuse it
 /// across every candidate probe in that window ([`WindowScope`]). This is
 /// where the G1 savings live: ~48 900 counteract probes share ~250 windows.
-pub fn fill_window<W: CardWorld>(world: &W) -> WindowCtx {
+pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let t = world.trigger();
     let mut tile_ids = std::collections::BTreeMap::new();
     // Best-effort: the schema only needs the names a condition actually
@@ -423,7 +579,7 @@ pub fn fill_window<W: CardWorld>(world: &W) -> WindowCtx {
 /// **no** `Trigger` to source a window from -- same schema with `kind` absent
 /// (`TriggerKind::None`). Everything else is ambient world state, actor = the
 /// player being asked. Built once per ask; reused across the cards of one view.
-pub fn fill_window_ambient<W: CardWorld>(world: &W, player_id: i32) -> WindowCtx {
+pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let mut tile_ids = std::collections::BTreeMap::new();
     for name in ["circle", "shop", "ring", "agent", "liveHouse"] {
         let id = world.tile_named(name);
@@ -479,8 +635,8 @@ pub fn fill_window_ambient<W: CardWorld>(world: &W, player_id: i32) -> WindowCtx
 
 /// Per-candidate overlay: the card + seat being probed. Built per (card, seat)
 /// inside a window -- much cheaper than a window, so a fresh value is fine.
-pub fn fill_candidate<W: CardWorld>(
-    world: &W,
+pub fn fill_candidate<S: SnapSrc>(
+    world: &S,
     owner: i32,
     card: &str,
     placed: bool,
@@ -522,8 +678,8 @@ const SLOT_NAMES: &[&str] = &["asUsualTurn", "lastWalk"];
 /// Fill the per-candidate slot / token tables a condition may read
 /// (`slot('asUsualTurn')`, `tok(kind)`). Only worth the copy when the
 /// condition actually names them -- the caller can pass `false` otherwise.
-pub fn fill_candidate_extras<W: CardWorld>(
-    world: &W,
+pub fn fill_candidate_extras<S: SnapSrc>(
+    world: &S,
     owner: i32,
     cand: &mut CandidateCtx,
     with_slots: bool,

@@ -231,6 +231,40 @@ pub fn deck_clean(character_name: &str, ids_json: &str) -> Result<String, JsErro
     Ok(json(&deck::clean(&d, character(&d, character_name)?, &ids)))
 }
 
+/// The standard seat's resolved **strategy parameters** for this public table
+/// (`docs/BOT.md` §3.8): the strategy book's entry when it has one, else
+/// [`game_core::strategy::StrategyParams::default`] (today's constants). One
+/// source of truth for the browser 托管 (`autopilot.ts`), exactly like
+/// [`deck_suggest`]. Pure -- no RNG.
+///
+/// * `seat` -- own seat (turn order index). The strategy key is public and
+///   seat-less (`(character, opponents' bands)` → `(character)` → `(band)`);
+///   the argument mirrors [`deck_suggest`]'s shape.
+/// * `opponents_json` -- the other seats' characters in seat order. Only
+///   their bands enter the key.
+///
+/// The book must match the running ruleset's hash, the `standard` policy and
+/// this build's `params_version`; otherwise the whole book is ignored and
+/// this is just the defaults.
+#[wasm_bindgen]
+pub fn strategy_for(
+    character_name: &str,
+    seat: i32,
+    opponents_json: &str,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let c = character(&d, character_name)?;
+    let opponents: Vec<String> = parse("opponents", opponents_json)?;
+    let _ = seat;
+    Ok(json(&d.strategy_book.resolve(
+        &d,
+        c,
+        &opponents,
+        None,
+        Some(&ruleset_sha()),
+    )))
+}
+
 /// Why `character` may not use `card` (a `Msg` as JSON), or `undefined`.
 #[wasm_bindgen]
 pub fn deck_why_not(character_name: &str, card: &str) -> Result<Option<String>, JsError> {

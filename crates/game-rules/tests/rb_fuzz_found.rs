@@ -269,3 +269,23 @@ fn money_depth_opens_windows() {
         }
     }
 }
+// =====================================================================
+// prompt storm: PPP:Returns turn-start ask under a permanent stun
+// =====================================================================
+
+/// Fuzz soak `FUZZ_ITERS=2000` iter 1517 (seed 10174556463119430459):
+/// `drain_prompts: prompts never stopped` around `cards:card-ppp.returns_title`
+/// / `returns_which_band`.
+///
+/// Root cause: the fuzz arrange wrote `stun` through the raw `state_set` (no
+/// `expires`), and `tick_state` only wears a counter down when the item names
+/// its tick -- so both seats stayed stunned forever, every turn was skipped,
+/// and Returns' [持续]（2） 「[拥有者]每回合开始时选择一个其他存活玩家的团卡」
+/// raised one prompt per skipped turn. Fixed (2026-10-08) in
+/// `MatchPlayer::state_set`: a stay / stun / stunStart item picks up the
+/// rulebook's tick (「玩家的每回合结束时移除一层」) whenever it has none.
+#[test]
+fn returns_prompt_storm() {
+    let seed = 10174556463119430459u64;
+    fuzz::one_iter(seed, 4).expect("PPP:Returns turn-start prompt storm");
+}

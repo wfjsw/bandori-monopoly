@@ -162,6 +162,8 @@ fn drain_prompts(
     tr: &mut Trace,
     replay: &mut Option<std::vec::IntoIter<AnswerRec>>,
 ) -> Result<(), String> {
+    // Ring of the last prompt keys seen, for the storm report.
+    let mut hist: std::collections::VecDeque<String> = std::collections::VecDeque::new();
     for _ in 0..400 {
         t.settle();
         let Some(p) = t.prompt() else { return Ok(()) };
@@ -172,6 +174,44 @@ fn drain_prompts(
         }
         for who in asked {
             tr.prompts += 1;
+            let st = t.st();
+            let statuses: Vec<String> = st
+                .players
+                .iter()
+                .enumerate()
+                .map(|(i, pl)| {
+                    let s = &pl.state;
+                    let get = |k: &str| s.get(k).map(|v| v.value).unwrap_or(0);
+                    let exp = |k: &str| s.get(k).map(|v| format!("{:?}", v.expires)).unwrap_or_else(|| "-".into());
+                    format!(
+                        "P{i}[stay={}({}) stun={}({}) stunStart={}({}) exile={} out={}]",
+                        get("stay"),
+                        exp("stay"),
+                        get("stun"),
+                        exp("stun"),
+                        get("stunStart"),
+                        exp("stunStart"),
+                        get("exile"),
+                        t.m.world().out(i)
+                    )
+                })
+                .collect();
+            hist.push_back(format!(
+                "{}|{}|opts={} kind={} who={} turn={} step={} phase={} pid={} {}",
+                p.title.key(),
+                p.text.key(),
+                p.options.len(),
+                p.kind,
+                who,
+                st.turn,
+                st.step,
+                st.phase,
+                p.id,
+                statuses.join(" "),
+            ));
+            while hist.len() > 24 {
+                hist.pop_front();
+            }
             let rec = match replay {
                 Some(it) => it
                     .next()
@@ -191,7 +231,12 @@ fn drain_prompts(
             tr.answers.push(rec);
         }
     }
-    Err("drain_prompts: prompts never stopped".into())
+    Err(format!(
+        "drain_prompts: prompts never stopped (last: {} / {}; hist: {:?})",
+        t.prompt().map(|p| p.title.key().to_string()).unwrap_or_default(),
+        t.prompt().map(|p| p.text.key().to_string()).unwrap_or_default(),
+        hist.into_iter().collect::<Vec<_>>(),
+    ))
 }
 
 /// A legal random answer for `who` on the open prompt.

@@ -317,11 +317,18 @@ async fn probe_one(
     };
     let state = &seat.state;
     let Some(prompt_id) = botsvc::decision_at(state, seat.player_id) else {
-        // Nothing this seat must answer right now -- another seat's turn or
-        // prompt. Speculate on the view instead (BOT-RESEARCH #5): non-blocking
-        // and rate-limited by the idle probe cadence, one in flight per seat,
-        // cancelled when this seat's own decision arrives.
-        if state.phase == "play" {
+        // Nothing this seat must answer right now. Speculate on its **next
+        // own decision** instead of the dead idle view (BOT-RESEARCH #5,
+        // `docs/BOT.md` §3.5): only when that decision is near (the seat is
+        // next in the ring / the current turn is ending / it is already our
+        // turn mid-routine) is a `ponder` sent -- and the service predicts
+        // the turn-start 运营 surface from it. An idle view has no searchable
+        // surface; the pre-C1 polls searched 0 of ~14 k ponders
+        // (`target/scratch/profile/REPORT.md` §6), so the rest of the idle
+        // probes are now free. Non-blocking and rate-limited by the idle
+        // probe cadence, one in flight per seat, cancelled when this seat's
+        // own decision arrives.
+        if state.phase == "play" && bot_service::next_turn_near(state, seat.player_id) {
             spawn_ponder(server, bots, room_id, member, view, state.seq);
         }
         return false;

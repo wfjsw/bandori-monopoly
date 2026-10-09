@@ -10,6 +10,31 @@ use game_core::data::GameData;
 use game_core::engine::purchase;
 use game_core::state::{MatchPrompt, MatchState, stage};
 
+// ------------------------------------------------------------ A/B knobs
+//
+// Measurement-only switches for the `ismcts_vs_bots` strength cells
+// (`docs/BOT.md` §5 C1). Read once, from the environment; the shipped
+// behaviour is whatever happens when they are absent. Never set in
+// production -- they exist so one piece of C1 can be isolated at a time.
+
+/// `BOT_STRENGTH_AB_*` knob: is this measurement switch on?
+pub fn ab_on(key: &str) -> bool {
+    use std::sync::OnceLock;
+    static ON: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+    ON.get_or_init(|| {
+        [
+            "BOT_STRENGTH_AB_NO_DECLINE",
+            "BOT_STRENGTH_AB_NO_FASTPATH",
+            "BOT_STRENGTH_AB_NO_LOWSTAKES",
+            "BOT_STRENGTH_AB_NO_GATES",
+        ]
+        .into_iter()
+        .filter(|k| std::env::var(k).is_ok())
+        .collect()
+    })
+    .contains(key)
+}
+
 /// One abstracted action at a decision.
 ///
 /// `Ord` is a stable total order used as the final tie-break when the search
@@ -140,12 +165,15 @@ fn turn_actions(
     if st.step == stage::OPS {
         // Card plays only; the roll / end is the heuristic's one sensible move.
         let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
+        // The seat's `StrategyParams` (`docs/BOT.md` §3.8): the card-play
+        // reserve is the default `BUY_RESERVE`, or the card's own floor.
+        let params = game_core::strategy::for_seat(data, st, seat);
         for (i, c) in hand.iter().enumerate() {
             if !playable.get(i).copied().unwrap_or(true) {
                 continue;
             }
             let est = est_cost.get(i).copied().unwrap_or(0);
-            if est > 0 && money - est < game_core::engine::BUY_RESERVE {
+            if est > 0 && money - est < params.play_card_reserve_for(c) {
                 continue;
             }
             out.push(Action::Play { card: c.clone() });
@@ -163,18 +191,73 @@ fn turn_actions(
                 out.push(Action::Build { tile: t });
             }
         }
-        // Decline -- "end the turn without buying" -- wherever the engine
-        // accepts `act: "end"`. Without it the search is forced into Buy /
-        // Build even when passing is right, and an unaffordable forced Buy is
-        // refused forever (the 2026-10-08 stall). The gate is
-        // `MatchState::can_end_here` (`why_not_act`'s end branch): refused
-        // while over the hand limit (`err.over_hand`) or while a main move is
-        // still owed (`err.roll_first`).
-        if st.can_end_here {
+        // Decline -- "end the turn without buying" -- only when the turn would
+        // otherwise have no action at all. The 2026-10-08 C1 bisect
+        // (`docs/BOT.md` §5 C1) proved that putting Decline on the menu next
+        // to a *legal* Buy/Build costs ~5 wins on StubRules: `net_worth` counts
+        // a deed at its price, so a buy is worth-neutral at the instant and
+        // the tie goes to the progressive bias, which leans Decline below
+        // `BUY_RESERVE` -- exactly where the old bot was forced to buy. So a
+        // paid option that the engine accepts stays forced (the search cannot
+        // pass on it); Decline covers the empty menu -- the unaffordable /
+        // gate-refused buy of the stall, where the alternative was a refused
+        // `Buy` replayed every 200 ms. Gated on `can_end_here`
+        // (`why_not_act`'s end branch: `err.over_hand` / `err.roll_first`).
+        //
+        // A/B: `BOT_STRENGTH_AB_NO_DECLINE` drops the option entirely;
+        // `BOT_STRENGTH_AB_NO_GATES` drops the `can_end_here` half of the gate
+        // (it also drops the buy/build/roll/end gates -- see [`ab_on`]).
+        if out.is_empty()
+            && !ab_on("BOT_STRENGTH_AB_NO_DECLINE")
+            && (st.can_end_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
+        {
             out.push(Action::Decline);
         }
     }
     out
+}
+
+/// The card id a [反击] offer option declares (`Arg::Card` on the option's
+/// `ask.counteract.play` label -- the same read `cx::option_card` makes).
+/// `MatchPrompt::card` is the *answered* link's card, not the offered one, so
+/// the per-option label is the only place an offered card id lives.
+pub fn option_card_id(m: &game_core::msg::Msg) -> Option<String> {
+    match m.a.get("card") {
+        Some(game_core::msg::Arg::Card(id)) => Some(id.clone()),
+        _ => None,
+    }
+}
+
+/// The abstracted action for a [反击] offer's option index (`None` = the
+/// fallback's skip). One action per offered card, so the search can branch on
+/// *which* card to declare.
+pub fn counteract_action(p: &MatchPrompt, index: i32) -> Action {
+    if index < 0 || index == p.fallback {
+        return Action::Counteract { card: None };
+    }
+    match p.options.get(index as usize).and_then(option_card_id) {
+        Some(id) => Action::Counteract { card: Some(id) },
+        // An option with no card id cannot name a declaration; treat it as the
+        // skip rather than inventing a card.
+        None => Action::Counteract { card: None },
+    }
+}
+
+/// The `act` option index for a [反击] declaration: the offer whose label names
+/// `card`, else the first non-fallback option, else the fallback.
+fn counteract_option_index(p: &MatchPrompt, card: &str) -> i32 {
+    if !card.is_empty() {
+        if let Some(i) = p
+            .options
+            .iter()
+            .position(|o| option_card_id(o).as_deref() == Some(card))
+        {
+            return i as i32;
+        }
+    }
+    (0..p.options.len() as i32)
+        .find(|&i| i != p.fallback)
+        .unwrap_or(p.fallback)
 }
 
 fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize) -> Vec<Action> {
@@ -196,7 +279,11 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
             // A few bid levels as fractions of the quoted worth / price
             // (`docs/BOT.md` §3.4). Own worth is hidden in `aiAnswer.worth`;
             // the quoted price is the public scale. The engine floors bids to
-            // 100 (`place_bid`), so generate round levels only.
+            // 100 (`place_bid`), so generate round levels only. The 3/4 level
+            // and the cash margin are the seat's `StrategyParams`
+            // (`docs/BOT.md` §3.8, defaults `750` / `1000` = the old literals).
+            let params = game_core::strategy::for_seat(data, st, seat);
+            let frac = params.bid_frac_milli as i64;
             let base = if p.tile >= 0 {
                 purchase::quote_native(data, st, p.tile as usize).max(0)
             } else {
@@ -205,9 +292,9 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
             for a in [
                 min,
                 min + 100,
-                (base * 3 / 4 / 100 * 100).max(min / 100 * 100),
+                ((base as i64 * frac / 1000) as i32 / 100 * 100).max(min / 100 * 100),
                 (base / 100 * 100).max(min / 100 * 100),
-                money.saturating_sub(1000),
+                money.saturating_sub(params.auction_cash_margin.max(0)),
             ] {
                 let a = (a / 100 * 100).max(min);
                 if a >= min && a <= money {
@@ -246,9 +333,10 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
                     }
                 }
             }
-            if out.is_empty() && !acc.is_empty() {
-                out.push(Action::Mortgage { tiles: acc });
-            }
+            // No subset reaches the need: offer nothing rather than a set the
+            // engine would refuse (`err.mortgage_short`) -- the heuristic /
+            // engine's auto-mortgage path handles a raise the deeds cannot
+            // cover.
         }
         "tile" => {
             // Agent picks (and plain tile picks): one action per item + none.
@@ -267,16 +355,11 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
         "choice" => {
             let title = p.title.k.as_ref();
             if title == "ask.counteract.title" {
-                // [反击] offer: every non-fallback option is a declaration;
-                // the fallback is the skip.
+                // [反击] offer: one declaration per offered card (the option
+                // label names it -- `MatchPrompt::card` is the answered link,
+                // not the offer), plus the fallback's skip.
                 for i in 0..p.options.len() {
-                    if i as i32 == p.fallback {
-                        out.push(Action::Counteract { card: None });
-                    } else {
-                        out.push(Action::Counteract {
-                            card: Some(p.card.clone()),
-                        });
-                    }
+                    out.push(counteract_action(p, i as i32));
                 }
                 if out.is_empty() {
                     out.push(Action::Counteract { card: None });
@@ -313,7 +396,7 @@ pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool 
         && st.landed == i as i32
         && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
         && st.owners.get(i).copied().unwrap_or(-1) < 0
-        && st.can_buy_here
+        && (st.can_buy_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
 }
 
 /// `CanBuildHere` (autopilot.ts). Gated on [`MatchState::can_build_here`] --
@@ -336,7 +419,7 @@ pub fn can_build(data: &GameData, st: &MatchState, seat: usize, i: usize) -> boo
         && t.rent.len() > 1
         && !st.mortgaged.get(i).copied().unwrap_or(false)
         && st.houses.get(i).copied().unwrap_or(0) < t.rent.len() as i32 - 1
-        && st.can_build_here
+        && (st.can_build_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
 }
 
 /// Hand cards the engine would let `seat` play right now (from the view's
@@ -385,10 +468,9 @@ pub fn to_net_message(action: &Action, st: &MatchState, seat: usize) -> game_cor
             let p = &st.prompt;
             let value = match card {
                 None => p.fallback,
-                Some(_) => (0..p.options.len())
-                    .map(|i| i as i32)
-                    .find(|&i| i != p.fallback)
-                    .unwrap_or(p.fallback),
+                // The offer whose label names this card -- never "whichever
+                // declaration happens to be first".
+                Some(id) => counteract_option_index(p, id),
             };
             NetMessage {
                 act: "answer".into(),
@@ -463,7 +545,11 @@ pub fn action_priors(
     seat: usize,
     actions: &[Action],
 ) -> Vec<f64> {
-    let preferred = heuristic_preferred(data, st, ai_answer, seat);
+    // The seat's `StrategyParams` (`docs/BOT.md` §3.8): the prior constants
+    // and the `wants_buy` / `wants_build` thresholds all read them. Defaults
+    // are the old f64s (`800/1000.0 == 0.8` exactly).
+    let params = game_core::strategy::for_seat(data, st, seat);
+    let preferred = heuristic_preferred(data, st, ai_answer, seat, &params);
     let est_of = |card: &str| -> Option<i32> {
         hand.iter()
             .position(|c| c == card)
@@ -485,22 +571,25 @@ pub fn action_priors(
                 return 1.0;
             }
             match a {
-                Action::Buy { .. } => {
+                Action::Buy { tile } => {
                     let price = st.buy_price.max(0);
                     let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-                    if game_core::engine::wants_buy(money, price) {
-                        0.8
+                    let group = data.tiles.get(*tile).map(|x| x.group).unwrap_or(0);
+                    if params.wants_buy_tile(money, price, group, st.round, false) {
+                        params.prior_buy_yes()
                     } else {
-                        0.2
+                        params.prior_buy_no()
                     }
                 }
-                Action::Build { .. } => {
+                Action::Build { tile } => {
                     let cost = st.build_cost.max(0);
                     let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-                    if game_core::engine::wants_build(money, cost) {
-                        0.8
+                    let group = data.tiles.get(*tile).map(|x| x.group).unwrap_or(0);
+                    let houses = st.houses.get(*tile).copied().unwrap_or(0);
+                    if params.wants_build_tile(money, cost, group, houses) {
+                        params.prior_build_yes()
                     } else {
-                        0.2
+                        params.prior_build_no()
                     }
                 }
                 Action::Decline => {
@@ -509,7 +598,7 @@ pub fn action_priors(
                     if preferred.is_none() {
                         1.0
                     } else {
-                        0.3
+                        params.prior_alt()
                     }
                 }
                 Action::Play { card } => {
@@ -521,11 +610,12 @@ pub fn action_priors(
                     {
                         return 1.0;
                     }
-                    let mut base = 0.4;
+                    let mut base = params.prior_play_base();
                     match (est_of(card), cheapest) {
-                        (Some(c), _) if c <= 0 => base += 0.3,
+                        (Some(c), _) if c <= 0 => base += params.prior_play_bonus(),
                         (Some(c), Some(best)) if best > 0 => {
-                            base += 0.3 * (1.0 - (c as f64 / best.max(c) as f64));
+                            base += params.prior_play_bonus()
+                                * (1.0 - (c as f64 / best.max(c) as f64));
                         }
                         _ => {}
                     }
@@ -535,23 +625,23 @@ pub fn action_priors(
                     if ai_answer.map(|a| a.answer) == Some(*index) {
                         1.0
                     } else {
-                        0.3
+                        params.prior_alt()
                     }
                 }
                 Action::Bid { amount } => {
                     // Closest to the heuristic's auction ceiling (`worth`).
                     let worth = ai_answer.map(|a| a.worth).unwrap_or(0);
                     if worth <= 0 {
-                        return 0.4;
+                        return params.prior_bid_neutral();
                     }
                     if *amount == worth {
                         return 1.0;
                     }
                     if *amount < 0 {
-                        return 0.3; // pass
+                        return params.prior_alt(); // pass
                     }
                     let d = (*amount - worth).abs() as f64 / (worth.abs() as f64).max(1.0);
-                    (1.0 - d).clamp(0.15, 0.9)
+                    (1.0 - d).clamp(params.prior_bid_floor(), params.prior_bid_ceil())
                 }
                 Action::Counteract { card } => match card {
                     // Skip is the heuristic default unless aiAnswer declares.
@@ -559,9 +649,9 @@ pub fn action_priors(
                         if ai_answer.is_none()
                             || ai_answer.map(|a| a.answer) == Some(st.prompt.fallback)
                         {
-                            0.7
+                            params.prior_counter_skip()
                         } else {
-                            0.3
+                            params.prior_alt()
                         }
                     }
                     Some(_) => {
@@ -571,7 +661,7 @@ pub fn action_priors(
                         {
                             1.0
                         } else {
-                            0.5
+                            params.prior_counter_declare()
                         }
                     }
                 },
@@ -582,7 +672,7 @@ pub fn action_priors(
                             return 1.0;
                         }
                     }
-                    0.3
+                    params.prior_alt()
                 }
             }
         })
@@ -597,9 +687,15 @@ fn heuristic_preferred(
     st: &MatchState,
     ai_answer: Option<&crate::view::AiAnswer>,
     seat: usize,
+    params: &game_core::strategy::StrategyParams,
 ) -> Option<Action> {
     if st.prompt.id > 0 && st.prompt.waiting(seat as i32) {
         let a = ai_answer?;
+        // A [反击] offer maps through the per-option card label; the generic
+        // path only sees `MatchPrompt::card` (the answered link).
+        if st.prompt.title.k.as_ref() == "ask.counteract.title" {
+            return Some(counteract_action(&st.prompt, a.answer));
+        }
         return crate::sim::ai_answer_to_action(st, a, seat);
     }
     if st.step == stage::END {
@@ -607,12 +703,15 @@ fn heuristic_preferred(
         if t >= 0 {
             let t = t as usize;
             let money = st.players.get(seat).map(|p| p.money).unwrap_or(0);
-            if buyable(data, st, seat, t) && game_core::engine::wants_buy(money, st.buy_price.max(0))
+            let group = data.tiles.get(t).map(|x| x.group).unwrap_or(0);
+            let houses = st.houses.get(t).copied().unwrap_or(0);
+            if buyable(data, st, seat, t)
+                && params.wants_buy_tile(money, st.buy_price.max(0), group, st.round, false)
             {
                 return Some(Action::Buy { tile: t });
             }
             if can_build(data, st, seat, t)
-                && game_core::engine::wants_build(money, st.build_cost.max(0))
+                && params.wants_build_tile(money, st.build_cost.max(0), group, houses)
             {
                 return Some(Action::Build { tile: t });
             }
@@ -648,10 +747,21 @@ pub enum Trivial {
 /// auctions with a real bid / [反击] declarations / card plays / agent picks /
 /// tile choices / mortgages -- anything that moves money, ownership or cards.
 pub fn trivial_decision(actions: &[Action]) -> Option<Trivial> {
+    // A/B: `BOT_STRENGTH_AB_NO_FASTPATH` turns the whole skip off (the pre-C1
+    // behaviour: every root with ≥1 action is searched);
+    // `BOT_STRENGTH_AB_NO_LOWSTAKES` keeps only the forced single-action skip.
+    if ab_on("BOT_STRENGTH_AB_NO_FASTPATH") {
+        return match actions.len() {
+            0 => Some(Trivial::LowStakes), // the empty list is not a search
+            _ => None,
+        };
+    }
     match actions.len() {
         0 => Some(Trivial::LowStakes), // caller answers with the heuristic
         1 => Some(Trivial::Forced(actions[0].clone())),
-        _ if is_low_stakes(actions) => Some(Trivial::LowStakes),
+        _ if !ab_on("BOT_STRENGTH_AB_NO_LOWSTAKES") && is_low_stakes(actions) => {
+            Some(Trivial::LowStakes)
+        }
         _ => None,
     }
 }

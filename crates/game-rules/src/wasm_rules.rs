@@ -27,6 +27,7 @@ use crate::inline::InlineHost;
 use crate::world::{CardWorld, Trigger};
 use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
+use rules_cond::WindowScope;
 
 
 /// Declared static properties of one card, from a [`Run`]'s snapshot.
@@ -2812,8 +2813,9 @@ impl<M: CardModules> RulesBridge<M> {
     /// initial user (`chain_starter`: the player whose card caused the link; a
     /// board-driven link -- rent, buy, build, turn flow -- is a system / tile
     /// event and starts at the active turn player) and runs forward in turn
-    /// order from there. Out / AI / exiled / stunned / no-hand players are
-    /// skipped (`can_counteract_now`), a seat with no eligible card is skipped
+    /// order from there. Out / exiled / stunned / no-hand players are
+    /// skipped (`can_counteract_now`) -- a bot seat is **not** skipped; it is
+    /// offered and answers through `Cx::fill_ai` -- and a seat with no eligible card is skipped
     /// without a prompt, and `can_counteract` is re-evaluated before every
     /// offer. Each visit, the responder declares every eligible hand card
     /// answering **X** it wants -- so several players may counter the same
@@ -2866,6 +2868,23 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(());
         }
 
+        // Valid-option-first (docs/GUARDS.md §4.5): open a [反击] window only
+        // when someone can respond. Cheap static index first (the per-card kind
+        // bitmask + seat eligibility), then the compiled conditions against a
+        // window context built straight from the live world -- no `Run`, no
+        // world copy, and the CEL scope only if a candidate actually declares a
+        // condition. Nothing qualifies => skip the whole ring: no chain clone,
+        // no `Priority`, no per-visit offers. That is every raise nobody
+        // answers, and one quiet lap today would close the round identically.
+        if !counteract_slow_path() && !self.any_counter_candidate(cx, trigger) {
+            #[cfg(feature = "bot-cost")]
+            crate::host::bot_cost::COUNTERACT_WINDOWS_SKIPPED
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            return Ok(());
+        }
+        #[cfg(feature = "bot-cost")]
+        crate::host::bot_cost::COUNTERACT_WINDOWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
         // The answer tree. Index 0 is L1, the effect declaration; every other
         // node is one declared counter.
         let mut chain = vec![ChainLink {
@@ -2914,6 +2933,10 @@ impl<M: CardModules> RulesBridge<M> {
         let mut priority = Priority::new(chain[timing].seat, n);
         // Counters this round collected, in declaration order.
         let mut round: Vec<usize> = Vec::new();
+        // One processed set per window (this ring, across its laps): a later
+        // lap reuses a probe's verdict when the inputs it reads cannot have
+        // changed (docs/GUARDS.md §4.5).
+        let mut memo = ProbeMemo::new();
         'visits: while *budget > 0 {
             let cursor = priority.seat();
             // Ruling 2026-10-07: the visit keeps the floor until this seat
@@ -2929,7 +2952,9 @@ impl<M: CardModules> RulesBridge<M> {
                         break 'visits;
                     }
                     *budget -= 1;
-                    let Some((id, idx)) = self.declare_one(cx, cursor, &chain[timing].link)? else {
+                    let Some((id, idx)) =
+                        self.declare_one(cx, cursor, &chain[timing].link, &mut memo)?
+                    else {
                         // Explicit pass, or nothing eligible left: the visit
                         // ends and priority advances.
                         break;
@@ -2940,6 +2965,9 @@ impl<M: CardModules> RulesBridge<M> {
                         w.hidden[cursor].hand.remove(pos);
                     }
                     cx.swap_world(w);
+                    // A hand changed: hand-sensitive probe verdicts and the
+                    // scope's `_hand` table are stale from here.
+                    memo.on_declaration();
                     let mut link = CoreTrigger::new("card", cursor);
                     link.card = id.clone();
                     link.step = cx.state().step;
@@ -2957,6 +2985,9 @@ impl<M: CardModules> RulesBridge<M> {
                         link: bridge_trigger(&link),
                         answers: Vec::new(),
                     });
+                    #[cfg(feature = "bot-cost")]
+                    crate::host::bot_cost::COUNTERACT_DECLARED
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     declared_any = true;
                 }
             }
@@ -3043,37 +3074,17 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
-    /// Offer one player a [反击] window answering `top`. Returns the card they
-    /// declared, if any. The prompt describes the **answered** link, so a
-    /// player answering a counter is told which counter they are answering.
-    fn declare_one(
-        &self,
-        cx: &mut Cx,
-        s: usize,
-        top: &Trigger,
-    ) -> Flow<Option<(String, i32)>> {
-        // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
-        // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
-        // index in the hand `Vec` (the authoritative state list), decl = 0 (one
-        // entry per card after the `Distinct` dedupe). The sort is stable and
-        // the source component *is* today's hand order, so the offer list is
-        // unchanged -- the key just makes the guarantee explicit.
-        let mut options: Vec<(String, i32)> = Vec::new();
-        let mut seen: Vec<String> = Vec::new();
-        let mut order: Vec<(u8, u32, u32)> = Vec::new();
-        // docs/GUARDS.md §4.2/§4.4 (1) + BOT-RESEARCH.md #1: build the window
-        // context **once** per trigger window and reuse it across every
-        // candidate probe in this offer. The per-card kind bitmask
-        // (`Ruleset::counteracts_to`) and the condition pre-filter
-        // (`counteract_pre_allows`) run **before** any `Run` / `world_copy`, so
-        // a card that cannot answer this kind -- or whose condition rejects --
-        // never instantiates the guard.
-        let win_run = Run {
+    /// The throwaway `Run` a residual wasm guard probe fires up: one world
+    /// copy, the answered link as the trigger. Built **only** for a candidate
+    /// whose condition already admitted and whose entry still carries a guard
+    /// (G4 deleted the rest) -- the single remaining per-probe allocation.
+    fn probe_run(&self, cx: &Cx, top: &Trigger, card: &str) -> Run {
+        Run {
             world: cx.world_copy(),
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: top.clone(),
-            current_card: String::new(),
+            current_card: card.to_string(),
             current_uid: -1,
             dest: DEST_UNSET,
             dest_to: None,
@@ -3088,36 +3099,121 @@ impl<M: CardModules> RulesBridge<M> {
             exile_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
+        }
+    }
+
+    /// Valid-option-first pre-scan (docs/GUARDS.md §4.5): could **any** seat
+    /// respond to `top` at all? Cheap static index first -- the per-card kind
+    /// bitmask and seat eligibility -- then the compiled conditions against a
+    /// window context built straight from the live world. The residual wasm
+    /// guards are not run here: a condition survivor is enough to open the
+    /// ring, and a card the guard would reject simply contributes no option
+    /// (exactly as today's quiet lap).
+    ///
+    /// When this returns `false`, `hand_counteractions` skips the whole
+    /// window -- no chain clone, no `Priority`, no per-visit offers, no world
+    /// copies. During the scan nothing mutates the world, so one shared CEL
+    /// scope answers every condition (and is only built if some candidate
+    /// declares one).
+    fn any_counter_candidate(&self, cx: &Cx, top: &Trigger) -> bool {
+        let n = cx.state().players.len();
+        let live = LiveSnap {
+            world: cx.world(),
+            data: &self.data,
+            trigger: top,
         };
-        let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
-        for (hand_pos, id) in hand_of(cx, s).into_iter().enumerate() {
-            if seen.contains(&id) {
+        let mut scope: Option<WindowScope> = None;
+        for s in 0..n {
+            if !can_counteract_now(cx, s) {
+                continue;
+            }
+            let mut seen: Vec<&str> = Vec::new();
+            for id in hand_of(cx, s) {
+                if seen.contains(&id.as_str()) {
+                    continue;
+                }
+                seen.push(id.as_str());
+                let Some(idx) = self.ruleset.card(id) else {
+                    continue;
+                };
+                // Cached counteraction index (BOT-RESEARCH.md #1): one shift of
+                // the per-card kind bitmask -- no entry-table scan, no `Run`.
+                if !self.ruleset.counteracts_to(idx, top.kind) {
+                    continue;
+                }
+                let Some(entry) = self.ruleset.cards()[idx as usize]
+                    .entry(card_sdk::abi::OnKind::Counteract, Some(top.kind))
+                else {
+                    continue;
+                };
+                let Some(pre) = self.ruleset.pre(idx, entry) else {
+                    // No condition: the card always offers (subject to the
+                    // guard, which the ring itself asks).
+                    return true;
+                };
+                let cand = crate::cond_pre::fill_candidate(&live, s as i32, id, false);
+                let sc = scope.get_or_insert_with(|| {
+                    crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&live))
+                });
+                if crate::cond_pre::condition_allows(Some(pre), Some(sc), &cand) {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Offer one player a [反击] window answering `top`. Returns the card they
+    /// declared, if any. The prompt describes the **answered** link, so a
+    /// player answering a counter is told which counter they are answering.
+    fn declare_one(
+        &self,
+        cx: &mut Cx,
+        s: usize,
+        top: &Trigger,
+        memo: &mut ProbeMemo,
+    ) -> Flow<Option<(String, i32)>> {
+        // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
+        // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
+        // index in the hand `Vec` (the authoritative state list), decl = 0 (one
+        // entry per card after the `Distinct` dedupe). The sort is stable and
+        // the source component *is* today's hand order, so the offer list is
+        // unchanged -- the key just makes the guarantee explicit.
+        //
+        // Stage 1 is the cheap static index (BOT-RESEARCH.md #1): the per-card
+        // kind bitmask, no world copy, no scope, no `Run`. A hand with nothing
+        // that answers this kind returns before any per-window machinery
+        // exists -- the common case for most seats of most raises.
+        let mut candidates: Vec<(usize, String, i32)> = Vec::new();
+        let mut seen: Vec<String> = Vec::new();
+        for (hand_pos, id) in hand_of(cx, s).iter().enumerate() {
+            if seen.contains(id) {
                 continue;
             }
             seen.push(id.clone());
-            let Some(idx) = self.ruleset.card(&id) else {
+            let Some(idx) = self.ruleset.card(id) else {
                 continue;
             };
-            // Cached counteraction index (BOT-RESEARCH.md #1): one shift of the
-            // per-card kind bitmask -- no entry-table scan, no `Run`.
             if !self.ruleset.counteracts_to(idx, top.kind) {
                 continue;
             }
-            // Condition pre-filter against the shared window scope. Rejects
-            // most probes before any sandbox / native run.
-            if self
-                .ruleset
-                .counteract_pre_allows(&win_run, idx, s as i32, &win_scope)
-                .is_none()
-            {
-                continue;
-            }
-            let run = Run {
+            candidates.push((hand_pos, id.clone(), idx));
+        }
+        if candidates.is_empty() {
+            return Ok(None);
+        }
+
+        // `BGD_COUNTERACT_SLOW=1` reproduces the pre-optimisation shape
+        // exactly (docs/GUARDS.md §4.5): a world copy + `Run` per offer for the
+        // window context, and a `Run` per condition survivor for the guard --
+        // the `examples/ckpt_equiv.rs` A/B's this against the fast path.
+        if counteract_slow_path() {
+            let win_run = Run {
                 world: cx.world_copy(),
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: top.clone(),
-                current_card: id.clone(),
+                current_card: String::new(),
                 current_uid: -1,
                 dest: DEST_UNSET,
                 dest_to: None,
@@ -3129,23 +3225,130 @@ impl<M: CardModules> RulesBridge<M> {
                 house_log: vec![],
                 crystals_log: vec![],
                 cp_log: vec![],
-            exile_log: vec![],
+                exile_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
             };
-            if self
-                .ruleset
-                .can_counteract_scoped(&run, idx, s as i32, &win_scope)
-                .unwrap_or(false)
-            {
-                order.push(effect_order_key(
-                    LookupGroup::Hand,
-                    hand_pos as u32,
-                    0,
-                ));
+            let win_scope =
+                crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
+            let mut options: Vec<(String, i32)> = Vec::new();
+            let mut order: Vec<(u8, u32, u32)> = Vec::new();
+            for (hand_pos, id, idx) in candidates {
+                if self
+                    .ruleset
+                    .counteract_pre_allows(&win_run, idx, s as i32, &win_scope)
+                    .is_none()
+                {
+                    continue;
+                }
+                let run = self.probe_run(cx, top, &id);
+                if self
+                    .ruleset
+                    .can_counteract_scoped(&run, idx, s as i32, &win_scope)
+                    .unwrap_or(false)
+                {
+                    order.push(effect_order_key(LookupGroup::Hand, hand_pos as u32, 0));
+                    options.push((id, idx));
+                }
+            }
+            return self.finish_offer(cx, s, top, order, options);
+        }
+
+        // Stage 2: the compiled conditions against a window context built
+        // straight from the live world (`LiveSnap`, no clone). The CEL scope is
+        // built lazily and only if some candidate actually declares a condition
+        // (docs/GUARDS.md §4.4 item 1); it is shared across the whole ring via
+        // `memo` and only rebuilt when a probe reads `hand(p)` after a
+        // declaration.
+        let live = LiveSnap {
+            world: cx.world(),
+            data: &self.data,
+            trigger: top,
+        };
+        let mut options: Vec<(String, i32)> = Vec::new();
+        let mut order: Vec<(u8, u32, u32)> = Vec::new();
+        for (hand_pos, id, idx) in candidates {
+            #[cfg(feature = "bot-cost")]
+            crate::host::bot_cost::COUNTERACT_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let Some(entry) = self.ruleset.cards()[idx as usize]
+                .entry(card_sdk::abi::OnKind::Counteract, Some(top.kind))
+            else {
+                continue;
+            };
+            let pre = self.ruleset.pre(idx, entry);
+            let guard_is_none = self.ruleset.entry_guard_is_none(idx, entry);
+            // A verdict is hand-sensitive when the residual wasm guard may read
+            // hands (it can read anything) or the condition names a hand field.
+            // Only those are stamped with `hand_gen`; the rest are stable for
+            // the whole window (a ring's only world change is a declaration).
+            let hand_sensitive = !guard_is_none
+                || pre.is_some_and(|p| crate::cond_pre::cond_reads_hand(&p.cond));
+            if let Some(&(gen, eligible, hs)) = memo.verdicts.get(&(s, id.clone())) {
+                if !counteract_slow_path() && (!hs || gen == memo.hand_gen) {
+                    #[cfg(feature = "bot-cost")]
+                    crate::host::bot_cost::COUNTERACT_PROBE_MEMO_HITS
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    if eligible {
+                        order.push(effect_order_key(LookupGroup::Hand, hand_pos as u32, 0));
+                        options.push((id, idx));
+                    }
+                    continue;
+                }
+            }
+            let eligible = match pre {
+                None => {
+                    if guard_is_none {
+                        // No condition, no guard: always answers this kind.
+                        true
+                    } else {
+                        // No condition but a residual guard: the only path that
+                        // still needs a `Run` (the guard's wasm store).
+                        let run = self.probe_run(cx, top, &id);
+                        let scope = memo.scope_for(&live, true);
+                        self.ruleset
+                            .can_counteract_scoped(&run, idx, s as i32, scope)
+                            .unwrap_or(false)
+                    }
+                }
+                Some(pre) => {
+                    let need_fresh = crate::cond_pre::cond_reads_window_hand(&pre.cond);
+                    let scope = memo.scope_for(&live, need_fresh);
+                    let cand = crate::cond_pre::fill_candidate(&live, s as i32, &id, false);
+                    if !crate::cond_pre::condition_allows(Some(pre), Some(scope), &cand) {
+                        false
+                    } else if guard_is_none {
+                        // G4: the condition alone decides -- no `Run`, no world
+                        // copy, no wasm instantiation.
+                        true
+                    } else {
+                        let run = self.probe_run(cx, top, &id);
+                        self.ruleset
+                            .can_counteract_scoped(&run, idx, s as i32, scope)
+                            .unwrap_or(false)
+                    }
+                }
+            };
+            memo.verdicts
+                .insert((s, id.clone()), (memo.hand_gen, eligible, hand_sensitive));
+            if eligible {
+                order.push(effect_order_key(LookupGroup::Hand, hand_pos as u32, 0));
                 options.push((id, idx));
             }
         }
+        self.finish_offer(cx, s, top, order, options)
+    }
+
+    /// The prompt half of [`Self::declare_one`]: order the offer list by the
+    /// Q5 key, show the [反击] prompt (options + 「不打」), and return the card
+    /// the seat declared (if any).
+    fn finish_offer(
+        &self,
+        cx: &mut Cx,
+        s: usize,
+        top: &Trigger,
+        order: Vec<(u8, u32, u32)>,
+        options: Vec<(String, i32)>,
+    ) -> Flow<Option<(String, i32)>> {
         if options.is_empty() {
             return Ok(None);
         }
@@ -3389,6 +3592,16 @@ impl Priority {
     }
 }
 
+/// Test seam for the [反击] window fast path (docs/GUARDS.md §4.5). When the
+/// environment variable `BGD_COUNTERACT_SLOW=1` is set, the valid-option-first
+/// pre-scan never skips a window and the per-window processed set is bypassed,
+/// reproducing the pre-optimisation control flow. The two paths must produce
+/// identical `Match::save()` checkpoints -- `examples/ckpt_equiv.rs` A/B's them.
+fn counteract_slow_path() -> bool {
+    static SLOW: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *SLOW.get_or_init(|| std::env::var("BGD_COUNTERACT_SLOW").is_ok_and(|v| v == "1"))
+}
+
 /// C# `MatchHost.CanCounteractNow(s, t)`: out / exiled players cannot declare a
 /// counteraction. (The C# also checks `CannotPlay` and a one-turn mute; neither has
 /// an engine field yet.)
@@ -3396,21 +3609,203 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     let Some(player_id) = cx.state().players.get(s) else {
         return false;
     };
-    // C# `CanCounteractNow`: out / AI / exiled players never open a window, and
-    // `CannotPlay` (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
+    // Rulebook eligibility only: out / [除外] cannot declare, and `CannotPlay`
+    // (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
     // `_noCounteractTurn` and Fx.CantPlayHand have no engine field yet (TODO).
-    !cx.world_copy().out(s)
-        && !player_id.ai
+    // The C# also rejected "AI" seats here; that is **not** a rulebook reason --
+    // a bot is still a player, so the window opens for every mentality and the
+    // seat answers through `Cx::fill_ai` (standard: `CounterParams` propensity,
+    // default never; chaos: `CHAOS_COUNTER_CHANCE`) exactly like a human's
+    // offer. Out / exiled remain skipped.
+    // `World::out` is `st.players[i].out()`, so the live state answers it --
+    // no world copy (this runs on every visit of every ring).
+    !player_id.out()
         && player_id.exile() == 0
         && !player_id.stunned()
         && player_id.no_hand() == 0
 }
 
 /// C# `_hidden[s].hand` -- the player's private hand (order preserved).
-fn hand_of(cx: &Cx, s: usize) -> Vec<String> {
-    match cx.world_copy().hidden.get(s) {
-        Some(h) => h.hand.clone(),
-        None => Vec::new(),
+fn hand_of<'a>(cx: &'a Cx, s: usize) -> &'a [String] {
+    cx.world()
+        .hidden
+        .get(s)
+        .map(|h| h.hand.as_slice())
+        .unwrap_or(&[])
+}
+
+/// The live-world snapshot source (docs/GUARDS.md §4.2): reads the engine
+/// `World` in place -- **no clone** -- so the counteract pre-filter can build a
+/// window / candidate context before any `Run` exists. Only the reads
+/// [`crate::cond_pre::fill_window`] / [`crate::cond_pre::fill_candidate`] make.
+pub struct LiveSnap<'a> {
+    pub world: &'a game_core::engine::World,
+    pub data: &'a GameData,
+    pub trigger: &'a Trigger,
+}
+
+impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
+    #[inline]
+    fn trigger(&self) -> Trigger {
+        self.trigger.clone()
+    }
+    #[inline]
+    fn tile_named(&self, name: &str) -> i32 {
+        self.world.tile_named(self.data, name)
+    }
+    #[inline]
+    fn player_count(&self) -> i32 {
+        self.world.st.players.len() as i32
+    }
+    #[inline]
+    fn money(&self, player_id: i32) -> i32 {
+        self.world.player_money(player_id)
+    }
+    #[inline]
+    fn fire(&self, player_id: i32) -> i32 {
+        self.world.fire(player_id)
+    }
+    #[inline]
+    fn band_crystals(&self, player_id: i32) -> i32 {
+        self.world.band_crystals(player_id)
+    }
+    #[inline]
+    fn hand_size(&self, player_id: i32) -> i32 {
+        self.world
+            .hidden
+            .get(player_id.max(0) as usize)
+            .map(|h| h.hand.len() as i32)
+            .unwrap_or(0)
+    }
+    #[inline]
+    fn player_pos(&self, player_id: i32) -> i32 {
+        self.world.player_pos(player_id)
+    }
+    #[inline]
+    fn player_out(&self, player_id: i32) -> i32 {
+        self.world.player_out(player_id) as i32
+    }
+    #[inline]
+    fn stay_of(&self, player_id: i32) -> i32 {
+        self.world.state_get(player_id, game_core::state::key::STAY)
+    }
+    #[inline]
+    fn stun_of(&self, player_id: i32) -> i32 {
+        self.world.state_get(player_id, game_core::state::key::STUN)
+    }
+    #[inline]
+    fn state_get(&self, player_id: i32, key: &str) -> i32 {
+        self.world.state_get(player_id, key)
+    }
+    #[inline]
+    fn character_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.character_skill_id(player_id)
+    }
+    #[inline]
+    fn band_skill_id(&self, player_id: i32) -> Option<String> {
+        self.world.band_skill_id(player_id)
+    }
+    #[inline]
+    fn owned_count(&self, player_id: i32) -> i32 {
+        self.world.owned_tiles(player_id).len() as i32
+    }
+    #[inline]
+    fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
+        self.world.card_crystals(player_id, card)
+    }
+    #[inline]
+    fn tile_owner(&self, tile: i32) -> i32 {
+        self.world.tile_owner(tile)
+    }
+    #[inline]
+    fn houses_of(&self, tile: i32) -> i32 {
+        self.world
+            .st
+            .houses
+            .get(tile.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }
+    #[inline]
+    fn mortgaged_of(&self, tile: i32) -> i32 {
+        self.world
+            .st
+            .mortgaged
+            .get(tile.max(0) as usize)
+            .copied()
+            .unwrap_or(false) as i32
+    }
+    #[inline]
+    fn tile_price(&self, tile: i32) -> i32 {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.price)
+            .unwrap_or(0)
+    }
+    #[inline]
+    fn turn_player(&self) -> i32 {
+        self.world.st.turn
+    }
+    #[inline]
+    fn turn_key(&self) -> i32 {
+        self.world.st.round * 100 + self.world.st.turn + 1
+    }
+}
+
+/// Per-window processed set (docs/GUARDS.md §4.5): one trigger's ring, across
+/// its laps. Remembers each `(seat, card)` probe's verdict so a later lap does
+/// not re-run its condition / guard when the inputs it reads cannot have
+/// changed.
+///
+/// The ring's only world change is a declaration removing a card from a hand
+/// (`build_round`); no resolving link runs until the whole answer tree is
+/// built. So a verdict that reads no hand field (`cond_reads_hand`, and any
+/// residual wasm guard -- it may read anything) is stable for the window, and
+/// only hand-sensitive verdicts are stamped with [`Self::hand_gen`].
+struct ProbeMemo {
+    /// Bumps whenever a declaration removes a card from a hand.
+    hand_gen: u64,
+    /// `(seat, card id) -> (hand_gen at probe, eligible, hand-sensitive)`.
+    verdicts: std::collections::HashMap<(usize, String), (u64, bool, bool)>,
+    /// Lazily built CEL scope, stamped with the `hand_gen` its `_hand` table
+    /// reflects. A probe that does not call `hand(p)` accepts a stale scope --
+    /// its window inputs are unchanged, and the candidate overlay is rebuilt
+    /// per probe from the live world.
+    scope: Option<(u64, WindowScope)>,
+}
+
+impl ProbeMemo {
+    fn new() -> Self {
+        Self {
+            hand_gen: 0,
+            verdicts: std::collections::HashMap::new(),
+            scope: None,
+        }
+    }
+
+    fn on_declaration(&mut self) {
+        self.hand_gen += 1;
+    }
+
+    /// The shared window scope, built only when some candidate actually has a
+    /// condition (docs/GUARDS.md §4.4 item 1). `need_fresh_hand` forces a
+    /// rebuild when the probe reads `hand(p)` and a declaration has moved the
+    /// hand table since the scope was built.
+    fn scope_for<S: crate::cond_pre::SnapSrc>(
+        &mut self,
+        world: &S,
+        need_fresh_hand: bool,
+    ) -> &WindowScope {
+        let fresh = self
+            .scope
+            .as_ref()
+            .is_some_and(|(g, _)| *g == self.hand_gen);
+        if self.scope.is_none() || (need_fresh_hand && !fresh) {
+            let win = crate::cond_pre::fill_window(world);
+            self.scope = Some((self.hand_gen, crate::cond_pre::window_scope(&win)));
+        }
+        &self.scope.as_ref().expect("just built").1
     }
 }
 

@@ -31,6 +31,8 @@
 //! * `--legacy` / `BOT_LEGACY=1` -- the pre-#3 search (no bias / eval mix /
 //!   tree reuse / ponder cache), for A/B.
 //! * `--no-reuse` / `--no-ponder` -- disable tree reuse / the ponder cache.
+//! * `--no-early-stop` -- search the full budget even when the best root
+//!   action cannot be overtaken (`docs/BOT.md` §3.4). On by default.
 //!
 //! Per-request hard deadline: the search is anytime and stops at
 //! `budget_ms` (capped at [`bot_service::MAX_BUDGET_MS`]); the server also
@@ -83,6 +85,7 @@ fn main() {
             horizon_rounds: arg("--horizon", "BOT_HORIZON", "2").parse().unwrap_or(2),
             reuse_trees: !flag("--no-reuse"),
             accept_ponder: !flag("--no-ponder"),
+            early_stop: !flag("--no-early-stop"),
             cache_cap: 256,
             ..SearchOpts::default()
         }
@@ -104,7 +107,7 @@ fn main() {
     let ctx = Arc::new(Ctx::load(&data_dir, &rules_dir).with_opts(opts.clone()));
     eprintln!(
         "bot-service: {} request thread(s), {} search thread(s)/decision, data {}, rules {}, \
-         bias {}, eval {}, horizon {}, reuse {}, ponder {}",
+         bias {}, eval {}, horizon {}, reuse {}, ponder {}, early-stop {}",
         threads,
         opts.search_threads,
         data_dir.display(),
@@ -114,6 +117,7 @@ fn main() {
         opts.horizon_rounds,
         opts.reuse_trees,
         opts.accept_ponder,
+        opts.early_stop,
     );
 
     // Responses are written in completion order, not request order; `id`

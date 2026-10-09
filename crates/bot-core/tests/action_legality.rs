@@ -93,16 +93,21 @@ fn unaffordable_tile_offers_decline_not_buy() {
 }
 
 #[test]
-fn affordable_tile_offers_buy_and_decline() {
+fn affordable_tile_offers_buy_forced() {
+    // The C1 bisect (`docs/BOT.md` §5 C1): a Decline next to a *legal* Buy
+    // costs ~5 wins (the eval is buy-neutral at the instant, so the tie goes
+    // to the bias and the bot passes on buys the old policy took). A paid
+    // option the engine accepts stays forced; Decline covers the empty menu.
     let data = data();
     let tile = some_property(&data);
     let (st, hand) = end_surface(&data, tile, 10_000, true);
     let acts = action::legal_actions(&data, &st, &hand, &[], 0);
     let ks = kinds(&acts);
     assert!(ks.contains(&"buy".to_string()), "{ks:?}");
-    assert!(
-        ks.contains(&"decline".to_string()),
-        "the search must be able to pass on a buy: {ks:?}"
+    assert_eq!(
+        ks,
+        vec!["buy".to_string()],
+        "a legal buy is forced -- no decline beside it: {ks:?}"
     );
 }
 

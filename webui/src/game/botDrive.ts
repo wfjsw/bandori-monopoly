@@ -17,7 +17,9 @@ import {
   decideBudgetMs,
   decisionAt,
   decisionSeed,
+  nextTurnNear,
   outerDeadlineMs,
+  ponderBudgetMs,
   type BudgetInput,
 } from "./botBudget.ts";
 import { ensureBotPool, type BotPool } from "./botPool.ts";
@@ -136,6 +138,37 @@ function firstPlan(v: MatchView, ctx: AutopilotCtx): Command | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Speculative search on the seat's **next own decision** while another seat
+ * acts (`docs/BOT.md` §3.5 / §3.6, BOT-RESEARCH #5). Fire-and-forget: the
+ * caller never waits, and the worker's ponder cache answers a later `decide`
+ * whose decision key matches.
+ *
+ * Cheap no-op when the next decision is not near (the pre-C1 idle polls
+ * searched 0 of ~14 k ponders -- an idle view has no searchable surface). The
+ * worker predicts the turn-start 运营 view from the idle frame
+ * (`bot_core::predict_upcoming_view`); here we only gate the call so the page
+ * does not pay a worker round-trip for a dead surface.
+ */
+export function ponderUpcoming(
+  getMemberView: (member: number) => MatchView | null,
+  member: number,
+  hooks: Pick<DriveHooks, "room" | "timed" | "soloCapMs" | "pool">,
+): void {
+  const v = getMemberView(member);
+  if (!v) return;
+  if (decisionAt(v.state, v.playerId) != null) return; // a live decision -- not a ponder
+  if (!nextTurnNear(v.state, v.playerId)) return;
+  const pool = hooks.pool ?? safePool();
+  if (!pool) return;
+  const budget = ponderBudgetMs({
+    timed: hooks.timed,
+    soloCapMs: hooks.soloCapMs,
+  });
+  const seed = decisionSeed(hooks.room, member, v.state.seq, -1);
+  void pool.ponder(v, budget, seed).catch(() => undefined);
 }
 
 function safePool(): BotPool | null {

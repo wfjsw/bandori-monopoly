@@ -52,6 +52,7 @@ use serde_json::{json, Value};
 // gone (`docs/BOT.md` §1).
 pub use bot_core::action as bot_action;
 pub use bot_core::heuristic_message_view;
+pub use bot_core::{next_turn_near, predict_upcoming_view};
 pub use bot_core::SeatView as BotSeatView;
 
 /// Hard cap on one request's search budget, whatever the caller asks for.
@@ -83,6 +84,11 @@ pub struct SearchOpts {
     pub reuse_trees: bool,
     /// Accept `op: "ponder"` and answer `decide` from the ponder cache.
     pub accept_ponder: bool,
+    /// Stop the search before the budget when the best root action cannot be
+    /// overtaken (`docs/BOT.md` §3.4 "Early stopping"). On by default here --
+    /// the service is the production path. `bot-service --no-early-stop`
+    /// restores the full-budget search for A/B.
+    pub early_stop: bool,
     /// Cap on cached decisions / trees (LRU-ish by insertion).
     pub cache_cap: usize,
 }
@@ -97,13 +103,15 @@ impl Default for SearchOpts {
             horizon_rounds: 2,
             reuse_trees: true,
             accept_ponder: true,
+            early_stop: true,
             cache_cap: 256,
         }
     }
 }
 
 impl SearchOpts {
-    /// The pre-#3 search, single-threaded, no tree reuse -- for A/B.
+    /// The pre-#3 search, single-threaded, no tree reuse, no early stop --
+    /// for A/B.
     pub fn legacy() -> Self {
         Self {
             search_threads: 1,
@@ -113,6 +121,7 @@ impl SearchOpts {
             horizon_rounds: 2,
             reuse_trees: false,
             accept_ponder: false,
+            early_stop: false,
             cache_cap: 0,
         }
     }
@@ -139,6 +148,12 @@ struct Cache {
     result_order: VecDeque<u64>,
     trees: HashMap<(String, i32), Ismcts>,
     tree_order: VecDeque<(String, i32)>,
+    /// The last public turn `(round, turn)` each seat ran a **speculative**
+    /// (predicted) search for. One searching ponder per seat per turn -- the
+    /// rest of the idle probes are cheap no-ops. Without this bound the
+    /// "next turn is near" gate still lets one through every 200 ms and the
+    /// speculative search would dominate the CPU it is meant to save.
+    speculative_at: HashMap<(String, i32), (i32, i32)>,
 }
 
 impl Cache {
@@ -311,6 +326,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
             "horizon_rounds": ctx.opts.horizon_rounds,
             "reuse_trees": ctx.opts.reuse_trees,
             "ponder": ctx.opts.accept_ponder,
+            "early_stop": ctx.opts.early_stop,
         })),
 
         "decide" => decide(ctx, req),
@@ -414,7 +430,7 @@ fn decide(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let out = run_search(ctx, &view, seat, member, budget_ms, seed, &room);
+    let out = run_search(ctx, &view, seat, member, budget_ms, seed, &room, false);
     let msg: NetMessage = if out.heuristic {
         fallback
     } else {
@@ -451,6 +467,16 @@ fn decide(ctx: &Ctx, req: &Value) -> Result<Value, String> {
 /// `{room, seat, view, budget_ms, seed}` -> `{iterations, elapsed_ms,
 /// answer?, decisionKey}`. Speculative: the answer is also cached, so a
 /// following `decide` on the same information set is free.
+///
+/// **What gets pondered (2026-10-08, `docs/BOT.md` §3.5).** An idle view has
+/// no searchable surface -- the pre-C1 idle polls searched 0 of ~14 k ponders
+/// (`target/scratch/profile/REPORT.md` §6). When the incoming view is idle
+/// but the seat's **next own decision is near**, this predicts the turn-start
+/// 运营 view ([`predict_upcoming_view`]) and searches *that* instead: the
+/// speculative answer is cached under the predicted decision key (a real
+/// `decide` that lands on the same key answers `reused: true` without
+/// spending its budget) and the tree is kept warm for the seat. Otherwise it
+/// is a cheap no-op -- no search, nothing cached.
 fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
     let started = Instant::now();
     if !ctx.opts.accept_ponder {
@@ -464,7 +490,31 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
     if seat >= view.state.players.len() {
         return Err(format!("seat {seat} out of range"));
     }
-    let key = view.decision_key();
+    // What to search: the view itself when it is already a decision the
+    // search would branch on, else the predicted turn-start surface when the
+    // seat's next turn is near, else nothing.
+    let idle = action::surface(&view.state, seat).is_none();
+    let target = if idle {
+        match bot_core::predict_upcoming_view(&view) {
+            Some(v) => v,
+            None => {
+                // Nothing searchable and nothing upcoming: a cheap no-op.
+                // This is the path that replaces the old "ponder the dead
+                // idle view" traffic.
+                return Ok(json!({
+                    "ok": true,
+                    "reused": false,
+                    "iterations": 0,
+                    "elapsed_ms": started.elapsed().as_millis() as u64,
+                    "heuristic": true,
+                    "noop": true,
+                }));
+            }
+        }
+    } else {
+        view.clone()
+    };
+    let key = target.decision_key();
     {
         let cache = ctx.cache.lock().unwrap();
         if let Some(c) = cache.results.get(&key) {
@@ -481,9 +531,15 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         }
     }
     // Only worth pondering a surface the search would branch on.
-    let st = view.state.clone();
-    let searched =
-        action::legal_actions_with_cost(&ctx.data, &st, &view.hand, &view.playable, &view.est_cost, seat);
+    let st = target.state.clone();
+    let searched = action::legal_actions_with_cost(
+        &ctx.data,
+        &st,
+        &target.hand,
+        &target.playable,
+        &target.est_cost,
+        seat,
+    );
     if action::trivial_decision(&searched).is_some() {
         return Ok(json!({
             "ok": true,
@@ -499,7 +555,30 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let out = run_search(ctx, &view, seat, member, budget_ms, seed, &room);
+    // One **searching** ponder per seat per public turn. The "next turn is
+    // near" gate alone still fires every 200 ms while it holds; without this
+    // bound the speculative search would cost more CPU than the decide it
+    // might save. Everything else on the idle probe is a cheap no-op.
+    if idle {
+        let turn_id = (view.state.round, view.state.turn);
+        let mut cache = ctx.cache.lock().unwrap();
+        if cache.speculative_at.get(&(room.clone(), member)) == Some(&turn_id) {
+            return Ok(json!({
+                "ok": true,
+                "reused": false,
+                "iterations": 0,
+                "elapsed_ms": started.elapsed().as_millis() as u64,
+                "heuristic": true,
+                "noop": true,
+                "reason": "already-pondered-this-turn",
+            }));
+        }
+        cache.speculative_at.insert((room.clone(), member), turn_id);
+    }
+    // `keep_whole_tree`: a speculative search does not know which action the
+    // real turn will play, so keep every explored node warm (the decide path
+    // keeps only the subtree under the action it just played).
+    let out = run_search(ctx, &target, seat, member, budget_ms, seed, &room, true);
     let msg = action::to_net_message(&out.action, &st, seat);
     ctx.cache.lock().unwrap().put_result(
         key,
@@ -519,6 +598,7 @@ fn ponder(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         "elapsed_ms": started.elapsed().as_millis() as u64,
         "heuristic": out.heuristic,
         "decisionKey": format!("{key:016x}"),
+        "speculative": idle,
         // The speculative answer; the server may ignore it (the cached entry
         // is what a later `decide` reuses).
         "answer": msg,
@@ -555,6 +635,11 @@ impl Ctx {
 
 /// Run the (possibly root-parallel) search for one decision, reusing the
 /// seat's kept subtree and storing the new one under the played action.
+///
+/// `keep_whole_tree` (a speculative `ponder`) keeps every explored node
+/// instead of only the subtree under the action it would have played -- the
+/// real turn has not chosen yet and a warm superset is what the later
+/// `decide` re-attaches to.
 fn run_search(
     ctx: &Ctx,
     view: &SeatView,
@@ -563,6 +648,7 @@ fn run_search(
     budget_ms: u64,
     seed: u64,
     room: &str,
+    keep_whole_tree: bool,
 ) -> SearchOutcome {
     let cfg = SearchConfig {
         budget: Duration::from_millis(budget_ms),
@@ -571,6 +657,7 @@ fn run_search(
         eval_weight: ctx.opts.eval_weight,
         implicit_minimax: ctx.opts.implicit_minimax,
         bias_weight: ctx.opts.bias_weight,
+        early_stop: ctx.opts.early_stop,
         ..Default::default()
     };
     let threads = ctx.opts.search_threads.max(1);
@@ -594,7 +681,9 @@ fn run_search(
     };
     let out = tree.search_root_parallel(factory, seat, cfg, threads);
     if ctx.opts.reuse_trees && !out.heuristic {
-        tree.retain_after(out.root_key, &out.action);
+        if !keep_whole_tree {
+            tree.retain_after(out.root_key, &out.action);
+        }
         ctx.cache.lock().unwrap().put_tree(
             (room.to_string(), member),
             tree,

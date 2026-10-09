@@ -178,8 +178,9 @@ impl game_core::engine::CardRules for PromptRules {
         Ok(false)
     }
 
-    /// A counteract window on every main-move roll: two options, fallback =
-    /// skip (the shape `ask.counteract.*` uses).
+    /// A counteract window on every main-move roll: one offered card plus the
+    /// skip (the shape `ask.counteract.*` uses -- the offered card id rides the
+    /// option label, as in the real ring).
     fn counteract(&self, cx: &mut Cx, t: &mut Trigger) -> Flow<()> {
         if t.kind != "roll" {
             return Ok(());
@@ -190,7 +191,7 @@ impl game_core::engine::CardRules for PromptRules {
             Msg::new("ask.counteract.title"),
             Msg::new("ask.counteract.text"),
             vec![
-                Msg::new("ask.counteract.play"),
+                Msg::new("ask.counteract.play").card("card", "TEST:counter"),
                 Msg::new("ask.counteract.skip"),
             ],
             1,
@@ -251,7 +252,7 @@ fn chaos_counters_only_on_chance() {
     );
 }
 
-/// Standard keeps the fallback on both prompt shapes.
+/// Standard keeps the fallback on an ordinary prompt (the card-body pick).
 #[test]
 fn standard_takes_the_prompt_fallback() {
     let rules = Arc::new(PromptRules::default());
@@ -260,11 +261,41 @@ fn standard_takes_the_prompt_fallback() {
     m.quick_start();
     play_out(&mut m, 25);
     assert_eq!(*rules.play_pick.lock().unwrap(), Some(0), "standard ignored the fallback");
-    let picks = rules.counteract_picks.lock().unwrap().clone();
-    assert!(!picks.is_empty(), "no counteract window");
+}
+
+/// A [反击] offer is a real decision for standard too -- user ruling 2026-10-08,
+/// *"bots must be able to counteract"*. The default propensity
+/// [`game_core::strategy::DEFAULT_COUNTERACT_PROPENSITY_MILLI`] (600‰ per
+/// offered card) declares on some offers and passes the rest; both branches
+/// must actually happen. (The old default was 0 = never, which left every
+/// [反击] card dead in a standard bot's hand.)
+#[test]
+fn standard_counters_at_the_default_propensity() {
+    let mut declared = 0usize;
+    let mut offered = 0usize;
+    for seed in 1..=8 {
+        let rules = Arc::new(PromptRules::default());
+        let members = [member(1, true, BotMentality::Standard), member(2, true, BotMentality::Standard)];
+        let mut m = new_match(&members, seed, rules.clone());
+        m.quick_start();
+        play_out(&mut m, 25);
+        let picks = rules.counteract_picks.lock().unwrap().clone();
+        assert!(!picks.is_empty(), "no counteract window on seed {seed}");
+        offered += picks.len();
+        declared += picks.iter().filter(|&&p| p != 1).count();
+    }
     assert!(
-        picks.iter().all(|&p| p == 1),
-        "standard declared a counteract: {picks:?}"
+        declared > 0,
+        "standard never declared a counteract in {offered} offers (ruling 2026-10-08: bots must be able to counteract)"
+    );
+    assert!(
+        declared < offered,
+        "standard declared every one of {offered} offers"
+    );
+    let rate = declared as f64 / offered as f64;
+    assert!(
+        (0.35..=0.85).contains(&rate),
+        "standard counter rate {rate:.2} ({declared}/{offered}) is nowhere near 0.6"
     );
 }
 

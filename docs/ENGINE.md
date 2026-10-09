@@ -124,6 +124,22 @@ flag -- "the link never happened", "it happened and settled to nothing", and
 `game-core/src/engine/rules.rs` and `game-rules/src/wasm_rules.rs`
 (`hand_counteractions`).
 
+**Window algorithm (2026-10-08, `docs/GUARDS.md` §4.5).** The ring above is the
+semantics; the implementation is **valid-option-first**: before any per-window
+machinery (answer-tree clone, `Priority`, per-visit offers, world copies, the
+CEL scope) a pre-scan asks whether any seat can respond at all -- seat
+eligibility, then the per-card kind bitmask, then the compiled conditions
+against a window context built straight from the live world. Zero survivors
+skips the whole ring (a quiet lap would have closed it identically). Offers
+themselves run lazily: a card whose condition admits and whose residual guard
+is deleted (G4) is eligible with no world copy at all; only a surviving entry
+that still carries a guard builds a `Run`. Within one ring a processed set
+remembers each `(seat, card)` probe's verdict and reuses it on later laps when
+the inputs it reads cannot have changed -- the ring's only world change is a
+declaration removing a card from a hand. Verified byte-identical
+(`Match::save()` per turn) against the naive ring by `examples/ckpt_equiv.rs`
+A/B.
+
 ### Why host events are deferred
 
 The world's event and prompt counters are re-derived on every replay, so ids stay
@@ -379,9 +395,14 @@ disconnects is always answered with the standard policy** (`ai` flips on,
 Two policies, one decision surface (`ai_step`, `tick_live`, `tick_choice`,
 `auto_mortgage`, and the precomputed `Ask::ai` / `ai_picked` / `worth`):
 
-**`standard`** is the ported C# bot. Constants live in `ai.rs` and are mirrored
-by the web client's 托管 autopilot (`webui/src/game/autopilot.ts`) -- keep the
-two in sync:
+**`standard`** is the ported C# bot. Its thresholds live in `ai.rs` as the
+**defaults of `game-core/src/strategy.rs`'s `StrategyParams`** (`docs/BOT.md`
+§3.8) and are mirrored by the web client's 托管 autopilot
+(`webui/src/game/autopilot.ts`) -- keep the two in sync. A seat's resolved
+params come from the strategy book (`data/strategy_book.json`, back-off lookup
+by public table key); an empty or absent book leaves every constant at the
+values below, which is the pre-book policy exactly. Chaos is not
+parameterised -- it keeps its own literals.
 
 | Constant | Value | Meaning |
 |---|---|---|
@@ -400,6 +421,14 @@ designer's preset (`deck::preset`). The book must match the running ruleset's
 hash and the `standard` policy, or it is ignored; every entry still has to
 clean down to a complete legal deck. Pure -- no RNG. Chaos never reads it.
 
+**Strategy params.** The same seats read their thresholds from the strategy
+book (`data/strategy_book.json`, `game-core/src/strategy.rs`, `docs/BOT.md`
+§3.8): `(character, opponents' bands)` → `(character)` → `(band)` → the
+defaults above. Stale ruleset hash / policy / `params_version` ignores the
+whole book. The browser 托管 gets the same resolved struct from web-glue's
+`strategy_for`, so there is one source of truth. Chaos keeps its own
+literals.
+
 **`chaos`** is legal but maximally disruptive and effect-heavy: it plays a card
 at every legal opportunity (no odds roll, no per-turn cap beyond the engine's
 own; the rule's `ai_play` heuristic is ignored, only `cant_play` counts), presses
@@ -411,6 +440,28 @@ exists. An offered [反击] is the one gate left: it declares on only
 and passes the rest, rolled per offer from the match RNG. Ban / pick / deck are
 random (the deck is a random legal one, `deck::random`), hand overflow discards
 at random, and it only ends the turn when nothing else is legal.
+
+**[反击] offers.** Every seat in the ring is offered the window, bot seats
+included -- "is a bot" is not a rulebook reason to skip one (out / [除外] /
+`CannotPlay` still are; `can_counteract_now` in `game-rules/src/wasm_rules.rs`).
+The offer is an ordinary prompt and is answered without stalling:
+
+* **standard / chaos** (`ai` on) answer inline through the precomputed `Ask::ai`
+  fill (`Cx::fill_ai` / `counteract_pick`), which `tick_live`'s bot schedule
+  applies: standard declares per [`CounterParams`] propensity
+  (`docs/BOT.md` §3.8; **default `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰
+  per offered card**, drawn from the match RNG -- user ruling 2026-10-08,
+  "bots must be able to counteract"; the old default was 0 = never, which left
+  every [反击] card dead in a standard bot's hand; a book entry at
+  `propensity_milli: 0` holds a card back), chaos on `CHAOS_COUNTER_CHANCE`.
+* **advanced** (`ai` off, held for `bot-service` / the browser worker) get the
+  offer as a prompt like any other decision; the driver answers it (search, or
+  the heuristic on its own timeout) and the engine's deadline applies the
+  fallback -- the 「不打」 skip -- so a window never stalls. Solo waits for the
+  local driver by design; online runs the prompt clock + `REMOTE_GRACE`.
+
+The ring, the exhaust-on-visit floor and the LIFO resolution are unchanged for
+humans (`hand_counteractions`, ruling 2026-10-07; `docs/ENGINE.md` above).
 
 Chaos still keeps a coin reserve, or it burns out in a few turns and stops
 being disruptive. **`CHAOS_RESERVE = 1,000`** is its only money gate: voluntary

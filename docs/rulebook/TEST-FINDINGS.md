@@ -34,7 +34,7 @@ Per group (`pass` / `open`):
 | group | pass | open |
 |---|---|---|
 | general (通用 + CiRCLE) | 64 | 1 |
-| ppp | 43 | 0 |
+| ppp | 44 | 0 |
 | ag | 36 | 0 |
 | pp | 53 | 4 |
 | roselia | 34 | 5 |
@@ -49,7 +49,7 @@ Per group (`pass` / `open`):
 | card paths (`rb_card_paths`) | 14 | 1 |
 
 The rest of the tree (same grep): `rb_cross_*` 111 tests / 40 open,
-`rb_gap_*` 32 / 14, `rb_fuzz_found` 13 / 8, `rb_chain` 13 / 1, `rb_guards`
+`rb_gap_*` 32 / 14, `rb_fuzz_found` 14 / 8, `rb_chain` 13 / 1, `rb_guards`
 10 / 0, `rb_harness` 6 / 0, `rb_money` 4 / 0, `ruleset` 12 / 0,
 `fuzz_interactions` 9 / 0, `live_match` 16 / 0, `q4_unintended` 3 / 2
 (soak + report generator, not discrepancies),
@@ -154,7 +154,11 @@ Landed themes only; the per-item history is gone from this file.
   scoping; all six `rb_unintended_found` repros green.
 * **Fuzz findings** -- `fire_over_cap`, `negative_status_leak`,
   `money_ledger_gap`, `settle_loop_stuck`, `money_depth_opens_windows`
-  (loud safety cap, `Cx::reentrant_hooks`).
+  (loud safety cap, `Cx::reentrant_hooks`), `returns_prompt_storm`
+  (2026-10-08: a raw `state_set("stun", n)` left a permanent [晕眩] that
+  skipped every later turn and turned PPP:Returns' turn-start band borrow
+  into a prompt storm -- `MatchPlayer::state_set` now stamps the rulebook's
+  tick on stay / stun / stunStart writes; see GUARDS.md §11.6).
 * **Sheet sync of 2026-10-06** -- 21 drifted cells into `cards-sheet.csv`;
   all landed except NNM's new (2) (card bug, §4).
 * **User rulings of 2026-10-06** -- implemented and green (see the Decided
@@ -164,6 +168,16 @@ Landed themes only; the per-item history is gone from this file.
   寄于指尖), Ringing Bloom / 椎名立希 (1) / 丰川祥子 (1) / CRYCHIC (2) /
   乐奈 tile lookup fixes.
 * **Rename:** [反击] is `counteract` throughout (ABI v28).
+* **Bot seats in the [反击] ring** (2026-10-08) -- `can_counteract_now`
+  (`wasm_rules.rs`) rejected `player_id.ai`, a C# carry-over ("out / AI /
+  exiled never open a window") that did **less than the book**: out / [除外] /
+  `CannotPlay` are the only eligibility cuts, and "is a bot" is not one. Bots
+  of every mentality are now offered like humans (answered through
+  `Cx::fill_ai`: standard `CounterParams` propensity, default
+  `DEFAULT_COUNTERACT_PROPENSITY_MILLI` = 600‰ per offered card -- user ruling
+  2026-10-08, "bots must be able to counteract"; a book entry at 0 holds a card
+  back; chaos `CHAOS_COUNTER_CHANCE`; advanced as an ordinary held prompt,
+  deadline fallback = the skip). Pinned by `tests/rb_chain_bot.rs`.
 
 ## Rulebook doc check (2026-10-06)
 
@@ -323,11 +337,16 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   g21 (祥子 (1) absorbs nothing), g23 ([不可阻挡] still gains [除外] from
   无路矢), g28 (Maya (2)'s kept card does not raise `drew`), g30 (t13's
   stack overflow).
-* **fuzz** (`rb_fuzz_found` 8): latent shapes the fuzzer found, filed with
-  minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz coverage".
-  Still open: `unknown_card_id`, `card_trap_reachable`, `determinism_break`,
-  `save_restore_break`, `negation_not_total`, `multiply_order_matters`,
-  `monotonicity_break`, `immunity_gap`.
+* **fuzz** (`rb_fuzz_found` 14 tests, 8 open): latent shapes the fuzzer
+  found, filed with minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz
+  coverage". Still open: `unknown_card_id`, `card_trap_reachable`,
+  `determinism_break`, `save_restore_break`, `negation_not_total`,
+  `multiply_order_matters`, `monotonicity_break`, `immunity_gap`.
+  `returns_prompt_storm` (2026-10-08) is fixed and live: a raw
+  `state_set("stun", …)` left a permanent [晕眩] that skipped every later
+  turn, and PPP:Returns' 「每回合开始时」 band borrow asked once per skipped
+  turn (GUARDS.md §11.6). `MatchPlayer::state_set` now stamps the rulebook's
+  tick (「每回合结束时移除一层」) on stay / stun / stunStart writes.
 
 ### 6. Ambiguities needing a ruling
 
