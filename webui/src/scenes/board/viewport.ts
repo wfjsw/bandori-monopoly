@@ -7,7 +7,8 @@
 // stretches to that width and height). The zoom layer inside the wrap carries
 // `translate(tx px, ty px) scale(z)` with `transform-origin: 0 0`: a board
 // point (x, y) lands at (x * z + tx, y * z + ty) in board pixels. `z = 1` is
-// "fit": the whole board fills the window, so the pan pins to zero.
+// "fit": the whole board fills the window at zero pan; dragging may still move it
+// up to `OVERPAN` of a window past any edge.
 
 import {
   useCallback, useEffect, useRef, useState,
@@ -18,6 +19,22 @@ import {
 
 /** Smallest board window (stage px) the map is ever laid out at. */
 export const MIN_BOARD = 240;
+
+/** The board's width : height stays within these. Never narrower than square;
+ *  never wider than 16:10 -- the 12 x 10 grid's cells are then 4:3 at most,
+ *  beyond which corner tiles turn into wide bars and names float in them. */
+export const MIN_RATIO = 1;
+export const MAX_RATIO = 1.6;
+
+/** The board rect for a map slot: the whole slot when its ratio is in range,
+ *  else the largest rect of the nearest allowed ratio (centred by the slot). */
+export function boardRect(slotW: number, slotH: number): { width: number; height: number } {
+  const w = Math.max(MIN_BOARD, slotW);
+  const h = Math.max(MIN_BOARD, slotH);
+  if (w > h * MAX_RATIO) return { width: Math.round(h * MAX_RATIO), height: h };
+  if (w < h * MIN_RATIO) return { width: w, height: Math.round(w / MIN_RATIO) };
+  return { width: w, height: h };
+}
 
 export interface Viewport {
   /** User zoom, 1 = fit. */
@@ -50,18 +67,22 @@ export function clampZoom(z: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 }
 
-/** Keep an `w x h` board scaled by `z` covering the `w x h` window: never a
- *  gap at the edges (so the board can't be dragged out of view). At `z = 1`
- *  the board exactly covers the window, which pins the pan to zero. The rect
- *  is the actual board size (any aspect): the math is per-axis. */
+/** How far past its edge the board may be dragged, as a fraction of the
+ *  window on that axis: half a window of overscroll on every side. */
+export const OVERPAN = 0.5;
+
+/** Keep an `w x h` board scaled by `z` within reach of the `w x h` window: its
+ *  edges may be dragged up to `OVERPAN` of the window past the window's edges
+ *  (so a corner tile can be brought to the middle), never further. The rect is
+ *  the actual board size (any aspect): the math is per-axis. */
 export function clampPan(v: Viewport, w: number, h: number): Viewport {
   const z = clampZoom(v.z);
-  const loX = w * (1 - z);
-  const loY = h * (1 - z);
+  const loX = w * (1 - z) - w * OVERPAN;
+  const loY = h * (1 - z) - h * OVERPAN;
   return {
     z,
-    tx: Math.min(0, Math.max(loX, v.tx)),
-    ty: Math.min(0, Math.max(loY, v.ty)),
+    tx: Math.min(w * OVERPAN, Math.max(loX, v.tx)),
+    ty: Math.min(h * OVERPAN, Math.max(loY, v.ty)),
   };
 }
 
@@ -69,6 +90,8 @@ export function clampPan(v: Viewport, w: number, h: number): Viewport {
  *  (wheel / pinch zooming around the cursor). */
 export function zoomAround(v: Viewport, px: number, py: number, z: number, w: number, h: number): Viewport {
   const z2 = clampZoom(z);
+  // Zooming all the way out lands on the fit view, overscroll and all.
+  if (z2 <= MIN_ZOOM) return fitViewport();
   const k = z2 / clampZoom(v.z);
   return clampPan({ z: z2, tx: px - (px - v.tx) * k, ty: py - (py - v.ty) * k }, w, h);
 }
@@ -149,9 +172,10 @@ export function useBoardViewport(): ViewportApi {
     pointers: new Map(), last: { x: 0, y: 0 }, moved: 0,
     dragging: false, dragged: false, pinch: null,
   });
-  // The board window: the map slot's whole rectangle (the tiles stretch to
-  // fill it). Measured in JS -- `container-type: size` was unreliable here --
-  // and board pixels are those stage pixels 1:1.
+  // The board window: the map slot's rectangle held to MIN_RATIO..MAX_RATIO
+  // (`boardRect`; the tiles stretch to fill it). Measured in JS --
+  // `container-type: size` was unreliable here -- and board pixels are those
+  // stage pixels 1:1.
   const [box, setBox] = useState({ width: MIN_BOARD, height: MIN_BOARD });
   const boxRef = useRef(box);
   boxRef.current = box;
@@ -159,12 +183,7 @@ export function useBoardViewport(): ViewportApi {
     const el = wrapRef.current;
     const slot = el?.parentElement;
     if (!el || !slot) return;
-    const measure = () => {
-      setBox({
-        width: Math.max(MIN_BOARD, slot.clientWidth),
-        height: Math.max(MIN_BOARD, slot.clientHeight),
-      });
-    };
+    const measure = () => setBox(boardRect(slot.clientWidth, slot.clientHeight));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(slot);

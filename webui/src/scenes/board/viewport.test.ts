@@ -1,12 +1,12 @@
 // Run with: node --test webui/src/scenes/board/viewport.test.ts
 // The pan/zoom math is pure: everything here checks that the board window
-// keeps covering the wrap and that zooming is anchored on the cursor point.
+// stays within the overscroll limits and that zooming is anchored on the cursor point.
 // The board rect is the map slot's rectangle (any aspect), so the checks use a
 // deliberately wide one -- the math is per-axis.
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
-  MAX_ZOOM, MIN_ZOOM,
+  MAX_RATIO, MAX_ZOOM, MIN_RATIO, MIN_ZOOM, OVERPAN, boardRect,
   clampPan, clampZoom, fitViewport, panBy, pinchAround, stepZoom, wheelZoom, zoomAround,
   type Viewport,
 } from "./viewport.ts";
@@ -30,17 +30,19 @@ test("clampZoom holds zoom between fit and 3x", () => {
   assert.deepEqual(fitViewport(), { z: 1, tx: 0, ty: 0 });
 });
 
-test("clampPan pins the fit view and never leaves a gap", () => {
-  // At fit the board exactly covers the window: no pan at all.
-  assert.deepEqual(clampPan({ z: 1, tx: 40, ty: -40 }, W, H), { z: 1, tx: 0, ty: 0 });
-  // At 2x the board is 2W x 2H wide, so it may slide at most W / H either way.
-  assert.deepEqual(clampPan({ z: 2, tx: 500, ty: -5000 }, W, H), { z: 2, tx: 0, ty: -H });
-  assert.deepEqual(clampPan({ z: 2, tx: -5000, ty: 500 }, W, H), { z: 2, tx: -W, ty: 0 });
-  // The board still covers the window at every extreme.
+test("clampPan allows half a window of overscroll past each edge", () => {
+  // At fit the board may slide half a window either way, no further.
+  assert.deepEqual(clampPan({ z: 1, tx: 40, ty: -40 }, W, H), { z: 1, tx: 40, ty: -40 });
+  assert.deepEqual(clampPan({ z: 1, tx: 1e4, ty: -1e4 }, W, H), { z: 1, tx: W * OVERPAN, ty: -H * OVERPAN });
+  // At 2x the board is 2W x 2H: it slides W / H plus the overscroll.
+  assert.deepEqual(clampPan({ z: 2, tx: 1e4, ty: -1e4 }, W, H), { z: 2, tx: W * OVERPAN, ty: -H - H * OVERPAN });
+  // Never more than the overscroll past either edge, at every zoom.
   for (const z of [1, 1.3, 2, 3]) {
-    const v = clampPan({ z, tx: 1e6, ty: -1e6 }, W, H);
-    assert.ok(v.tx <= 0 && v.tx >= W * (1 - z), `tx ${v.tx} covers at ${z}`);
-    assert.ok(v.ty <= 0 && v.ty >= H * (1 - z), `ty ${v.ty} covers at ${z}`);
+    for (const t of [1e6, -1e6]) {
+      const v = clampPan({ z, tx: t, ty: t }, W, H);
+      assert.ok(v.tx <= W * OVERPAN + 1e-9 && v.tx >= W * (1 - z) - W * OVERPAN - 1e-9, `tx ${v.tx} at ${z}`);
+      assert.ok(v.ty <= H * OVERPAN + 1e-9 && v.ty >= H * (1 - z) - H * OVERPAN - 1e-9, `ty ${v.ty} at ${z}`);
+    }
   }
 });
 
@@ -59,18 +61,18 @@ test("zoomAround keeps the point under the cursor fixed", () => {
 });
 
 test("zoomAround clamps pan while still hugging the cursor", () => {
-  // Zooming into the top-left corner at fit: the corner is already the limit.
+  // Zooming into the top-left corner at fit keeps the corner under the cursor.
   const z = zoomAround(fitViewport(), 0, 0, 3, W, H);
   assert.deepEqual(z, { z: 3, tx: 0, ty: 0 });
-  // From the opposite extreme, zooming out to fit recentres (clamp to zero).
+  // Zooming all the way out lands on the fit view, overscroll dropped.
   const v: Viewport = { z: 3, tx: W * (1 - 3), ty: H * (1 - 3) };
-  assert.deepEqual(zoomAround(v, W / 2, H / 2, 1, W, H), { z: 1, tx: 0, ty: 0 });
-  // Any anchor keeps coverage.
+  assert.deepEqual(zoomAround(v, W / 2, H / 2, 1, W, H), fitViewport());
+  // Any anchor stays within the overscroll limits.
   for (const px of [0, W / 2, W]) {
     for (const py of [0, H / 2, H]) {
       const t = zoomAround(v, px, py, 1.7, W, H);
-      assert.ok(t.tx <= 0 && t.tx >= W * (1 - t.z));
-      assert.ok(t.ty <= 0 && t.ty >= H * (1 - t.z));
+      assert.ok(t.tx <= W * OVERPAN && t.tx >= W * (1 - t.z) - W * OVERPAN);
+      assert.ok(t.ty <= H * OVERPAN && t.ty >= H * (1 - t.z) - H * OVERPAN);
     }
   }
 });
@@ -112,30 +114,44 @@ test("pinchAround scales on the moving midpoint", () => {
   // Pinch-out past the cap still covers the window.
   const huge = pinchAround(v0, mid0, { x: 0, y: 0 }, 10, W, H);
   assert.equal(huge.z, MAX_ZOOM);
-  assert.ok(huge.tx <= 0 && huge.tx >= W * (1 - huge.z));
+  assert.ok(huge.tx <= W * OVERPAN && huge.tx >= W * (1 - huge.z) - W * OVERPAN);
 });
 
 test("panBy moves the board and clamps at the window edge", () => {
-  const v = panBy(fitViewport(), 30, -30, W, H);
-  assert.deepEqual(v, fitViewport()); // nowhere to go at fit
+  // Even at fit the board drags, up to half a window.
+  assert.deepEqual(panBy(fitViewport(), 30, -30, W, H), { z: 1, tx: 30, ty: -30 });
+  assert.deepEqual(panBy(fitViewport(), 1e4, -1e4, W, H), { z: 1, tx: W * OVERPAN, ty: -H * OVERPAN });
   const zoomed = panBy({ z: 2, tx: -400, ty: -400 }, -100, 20, W, H);
   assert.deepEqual(zoomed, { z: 2, tx: -500, ty: -380 });
   const edge = panBy({ z: 2, tx: -500, ty: -500 }, -1e4, 1e4, W, H);
-  assert.deepEqual(edge, { z: 2, tx: -W, ty: 0 });
+  assert.deepEqual(edge, { z: 2, tx: -W - W * OVERPAN, ty: H * OVERPAN });
 });
 
-test("any board rect keeps covering its window under clamp and zoom", () => {
+test("any board rect stays within the overscroll limits under clamp and zoom", () => {
   // The map fills its slot, so the rect may be any aspect; the math is
   // per-axis and must hold for each one.
   for (const [bw, bh] of [[856, 856 * 10 / 12], [W, H], [600, 1100]] as const) {
     const v = clampPan({ z: 2, tx: 0, ty: 0 }, bw, bh);
     assert.deepEqual(v, { z: 2, tx: 0, ty: 0 });
     const slide = clampPan({ z: 2, tx: -1e4, ty: -1e4 }, bw, bh);
-    assert.deepEqual(slide, { z: 2, tx: -bw, ty: -bh });
+    assert.deepEqual(slide, { z: 2, tx: -bw - bw * OVERPAN, ty: -bh - bh * OVERPAN });
     const z = zoomAround({ z: 1, tx: 0, ty: 0 }, bw * 0.9, bh * 0.07, 2, bw, bh);
     assert.ok(Math.abs(under(z, bw * 0.9, bh * 0.07).x - bw * 0.9) < 1e-9);
     assert.ok(Math.abs(under(z, bw * 0.9, bh * 0.07).y - bh * 0.07) < 1e-9);
-    assert.ok(z.tx <= 0 && z.tx >= bw * (1 - z.z));
-    assert.ok(z.ty <= 0 && z.ty >= bh * (1 - z.z));
+    assert.ok(z.tx <= bw * OVERPAN && z.tx >= bw * (1 - z.z) - bw * OVERPAN);
+    assert.ok(z.ty <= bh * OVERPAN && z.ty >= bh * (1 - z.z) - bh * OVERPAN);
+  }
+});
+test("boardRect keeps the board between square and 16:10", () => {
+  // In range: the whole slot.
+  assert.deepEqual(boardRect(1200, 900), { width: 1200, height: 900 });
+  // Too wide (ultrawide): height-bound, width capped at 1.6x.
+  assert.deepEqual(boardRect(2000, 800), { width: 1280, height: 800 });
+  // Too tall (narrow window): never narrower than square.
+  assert.deepEqual(boardRect(700, 900), { width: 700, height: 700 });
+  for (const [w, h] of [[3000, 600], [600, 3000], [1000, 1000], [1600, 1000]]) {
+    const r = boardRect(w, h);
+    assert.ok(r.width / r.height >= MIN_RATIO - 1e-3 && r.width / r.height <= MAX_RATIO + 1e-3);
+    assert.ok(r.width <= w && r.height <= h);
   }
 });
