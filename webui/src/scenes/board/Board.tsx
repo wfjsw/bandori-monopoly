@@ -112,7 +112,7 @@ export function Board({ sess }: { sess: GameSession }) {
         </div>
         <div className={s.right}>
           <div className={s.logSlot}>
-            <Log lines={anim.log}><SettleVote m={m} sess={sess} /></Log>
+            <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
             <Hand m={m} sess={sess} busy={anim.animating} />
           </div>
         </div>

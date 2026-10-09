@@ -47,7 +47,10 @@
 .log { position: relative; flex: 1; min-height: 0; width: 100%; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px 8px; display: flex; flex-direction: column; align-items: flex-start; }
 .lines { flex: 1; align-self: stretch; overflow: auto; margin-top: 8px; font-size: 14px; line-height: 1.55; }
 .lines::-webkit-scrollbar { width: 5px; }
-.turnLine { color: var(--pink); font-weight: 700; margin-top: 4px; }
+/* A turn block: bold round/turn heading over that turn's entries, barred in
+   the player's colour. Setup lines before the first turn have neither. */
+.turnGroup { border-left: 4px solid var(--bar, var(--pink)); padding-left: 8px; margin: 10px 0 2px; }
+.groupHead { font-weight: 700; color: var(--text); margin-bottom: 2px; }
 .stageLine { color: var(--sub); font-size: 12px; margin: 5px 0 2px; }
 .foot { color: var(--pink); font-weight: 700; font-size: 15px; height: 22px; }
 

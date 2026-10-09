@@ -1,6 +1,8 @@
 // A prompt waiting on you (PromptView): choice, tile (also pickable on the
 // board), mortgage, pick cards, auction. Reads the live prompt; closes itself
-// when it is answered or replaced.
+// when it is answered or replaced. Rendered as the old prompt card: pink
+// title, body, a thin timer bar, and outline pill options. Compact prompts sit
+// inline over the board centre; the big card grids keep a wide overlay.
 
 import { useEffect, useRef, useState } from "react";
 import { cardArt } from "../../core/assets";
@@ -11,12 +13,10 @@ import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
-import { Btn } from "../../ui/Button";
 import { CardFace, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
 import { SkillBody } from "../../ui/SkillBody";
 import { TextInput } from "../../ui/Form";
-import { Icon } from "../../ui/Icon";
 import { openModal } from "../../ui/Modal";
 import { act } from "./model";
 import s from "./Prompt.module.css";
@@ -32,6 +32,15 @@ export function waitingOn(p: MatchPrompt, playerId: number): boolean {
   return p.id > 0 && k >= 0 && p.answers[k] < 0;
 }
 
+/**
+ * Compact prompts (agent picks, purchases, auctions, mortgage, yes/no and the
+ * like) sit inline over the board centre. The big card grids cannot: they keep
+ * the wide overlay, with the same card chrome.
+ */
+export function fitsInline(p: MatchPrompt): boolean {
+  return !isCardChoice(p) && returnsPickNumber(p) === null;
+}
+
 function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () => void }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
@@ -44,9 +53,12 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   useEffect(() => {
     if (!live) close();
   }, [live, close]);
+  // The deadline is measured against the time the prompt was first shown.
+  const total = useRef(0);
   if (!live || !view || !p) return null;
   const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
   const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
+  if (!total.current) total.current = Math.max(1, left);
 
   let side = null;
   if (p.card) side = <div className={s.side}><div className={s.sideTitle}>{tr("prompt.related")}</div><CardFace id={p.card} size="big" className={s.sideCard} onClick={() => showCard(p.card)} /></div>;
@@ -64,11 +76,16 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
     <div className={cx(s.prompt, side && s.withSide)}>
       {side}
       <div className={s.main}>
-        {/* Solo has no answer deadline, so the clock is not shown at all. */}
-        {sess.kind === "online" && (
-          <div className={s.timer}><Icon name="timer" /><b>{left}</b>{tr("common.unitSec")}</div>
-        )}
         {!returnsGroup && <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>}
+        {/* Solo has no answer deadline, so the bar is not shown at all. */}
+        {sess.kind === "online" && (
+          <div className={s.timerRow}>
+            <div className={s.timerBar} role="progressbar" aria-valuemin={0} aria-valuemax={total.current} aria-valuenow={left}>
+              <div className={s.timerFill} style={{ width: `${Math.min(1, left / total.current) * 100}%` }} />
+            </div>
+            <span className={s.timerNum}>{left}{tr("common.unitSec")}</span>
+          </div>
+        )}
         <div className={s.options}>
           {returnsGroup && <ReturnsOptions p={p} sess={sess} auto={auto} />}
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
@@ -76,9 +93,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? namesOf(view.state).playerId(p.bidder) : ""} answer={answer} auto={auto} />}
           {!returnsGroup && p.kind !== "pick" && isCardChoice(p) && <CardChoice p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
-          {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && !isCardChoice(p) && p.options.map((o, i) => (
-            <Btn key={i} kind={i === 0 ? "pink" : "white"} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, namesOf(view.state))}</Btn>
-          ))}
+          {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && !isCardChoice(p) && <Options p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
         </div>
       </div>
     </div>
@@ -86,6 +101,21 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
 }
 
 type Answer = (extra: Partial<Command>) => Promise<boolean>;
+
+/**
+ * The plain option list. Every entry is the same outline pill -- a primary
+ * choice, a 「不选」/「不买」 skip and a follow-up's 「返回」 all read as peers.
+ * (A multi-step prompt that wants a distinct confirm uses `.optMain`.)
+ */
+function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
+  return (
+    <>
+      {p.options.map((o, i) => (
+        <button key={i} type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, names)}</button>
+      ))}
+    </>
+  );
+}
 
 function ReturnsOptions({ p, sess, auto }: { p: MatchPrompt; sess: GameSession; auto: boolean }) {
   const seed = (prompt: MatchPrompt) => ({
@@ -135,9 +165,9 @@ function ReturnsOptions({ p, sess, auto }: { p: MatchPrompt; sess: GameSession; 
   return <>
     <div className={s.text}>{tr("prompt.addToDraw", { n: pool.count })}</div>
     <CardGrid ids={pool.ids} picked={picked} onPick={toggle} multiple disabled={auto || busy} />
-    <Btn kind="pink" className={cx(s.opt, s.cardConfirm)} disabled={auto || busy || picked.length !== pool.count} onClick={() => void submit()}>
+    <button type="button" className={cx(s.opt, s.optMain, s.cardConfirm)} disabled={auto || busy || picked.length !== pool.count} onClick={() => void submit()}>
       <span className={s.confirmLabel}>{busy ? tr("prompt.addingToDraw", { n: sent, total: pool.count }) : tr("prompt.confirmDraw", { n: picked.length, total: pool.count })}</span>
-    </Btn>
+    </button>
   </>;
 }
 
@@ -145,8 +175,10 @@ function TileOptions({ p, answer, names, auto }: { p: MatchPrompt; answer: Answe
   return (
     <>
       <p className={s.sub}>{tr("prompt.tapTiles")}</p>
-      {p.options.map((o, i) => <Btn key={i} kind={i === 0 ? "pink" : "white"} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, names)}</Btn>)}
-      <Btn className={s.opt} disabled={auto} onClick={() => void answer({ value: p.items.length })}>{tr("prompt.none")}</Btn>
+      {p.options.map((o, i) => (
+        <button key={i} type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, names)}</button>
+      ))}
+      <button type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: p.items.length })}>{tr("prompt.none")}</button>
     </>
   );
 }
@@ -169,8 +201,8 @@ function MortgageOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; 
         })}
       </div>
       <div className={s.sum}>{tr("prompt.selected")}<b className={sum >= p.bid ? s.ok : ""}>{n0(sum)}</b>{tr("prompt.need", { n: n0(p.bid) })}</div>
-      <Btn kind="pink" className={s.opt} disabled={auto || (cancellable && sum < p.bid)} onClick={() => void answer({ cards: picked })}>{tr("prompt.mortgage")}</Btn>
-      {cancellable && <Btn className={s.opt} disabled={auto} onClick={() => void answer({ value: 1 })}>{fmtMsg(p.options[0], namesOf())}</Btn>}
+      <button type="button" className={cx(s.opt, s.optMain)} disabled={auto || (cancellable && sum < p.bid)} onClick={() => void answer({ cards: picked })}>{tr("prompt.mortgage")}</button>
+      {cancellable && <button type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: 1 })}>{fmtMsg(p.options[0], namesOf())}</button>}
     </>
   );
 }
@@ -181,7 +213,9 @@ function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto
   return (
     <>
       <CardGrid ids={p.items} picked={picked} onPick={(k) => !auto && toggle(k)} multiple disabled={auto} />
-      <Btn kind="pink" className={s.opt} disabled={auto || picked.length !== p.count} onClick={() => void answer({ cards: picked.map((k) => p.items[k]) })}>{tr("prompt.pickCards", { n: picked.length, total: p.count })}</Btn>
+      <button type="button" className={cx(s.opt, s.optMain, s.cardConfirm)} disabled={auto || picked.length !== p.count} onClick={() => void answer({ cards: picked.map((k) => p.items[k]) })}>
+        <span className={s.confirmLabel}>{tr("prompt.pickCards", { n: picked.length, total: p.count })}</span>
+      </button>
     </>
   );
 }
@@ -202,10 +236,10 @@ function CardChoice({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer
   return (
     <>
       <CardGrid ids={ids} picked={sel === null ? [] : [sel]} onPick={(k) => !auto && setSel(k)} onConfirm={(k) => !auto && void answer({ value: idx[k] })} />
-      <Btn kind="pink" className={cx(s.opt, s.cardConfirm)} disabled={auto || sel === null} onClick={() => sel !== null && void answer({ value: idx[sel] })}>
+      <button type="button" className={cx(s.opt, s.optMain, s.cardConfirm)} disabled={auto || sel === null} onClick={() => sel !== null && void answer({ value: idx[sel] })}>
         <span className={s.confirmLabel}>{sel === null ? tr("prompt.pickOne") : tr("prompt.pickThis", { card: cardTitle(ids[sel]) })}</span>
-      </Btn>
-      {rest.map((i) => <Btn key={i} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(p.options[i], names)}</Btn>)}
+      </button>
+      {rest.map((i) => <button key={i} type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(p.options[i], names)}</button>)}
     </>
   );
 }
@@ -260,8 +294,8 @@ function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; pl
       {p.bidder === playerId ? <p className={s.sub}>{tr("prompt.topBidder")}</p> : (
         <div className={s.bidRow}>
           <TextInput type="number" min={min} step={100} value={bid} disabled={auto} onChange={(e) => setBid(Number(e.target.value))} className={s.bidInput} />
-          <Btn kind="pink" disabled={auto} onClick={() => void answer({ value: bid })}>{tr("prompt.bid")}</Btn>
-          <Btn disabled={auto} onClick={() => void answer({ value: -1 })}>{tr("prompt.pass")}</Btn>
+          <button type="button" className={cx(s.opt, s.optMain)} disabled={auto} onClick={() => void answer({ value: bid })}>{tr("prompt.bid")}</button>
+          <button type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: -1 })}>{tr("prompt.pass")}</button>
         </div>
       )}
     </div>
@@ -269,5 +303,12 @@ function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; pl
 }
 
 export function openPrompt(sess: GameSession, p: MatchPrompt): void {
-  openModal(fmtMsg(p.title, namesOf(sess.view?.state)) || tr("prompt.title"), (close) => <Prompt sess={sess} id={p.id} close={close} />, { closable: false, key: "prompt", ...(isCardChoice(p) ? { size: "wide" as const } : {}) });
+  const inline = fitsInline(p);
+  openModal(fmtMsg(p.title, namesOf(sess.view?.state)) || tr("prompt.title"), (close) => <Prompt sess={sess} id={p.id} close={close} />, {
+    closable: false,
+    key: "prompt",
+    chrome: "prompt",
+    placement: inline ? "inline" : "overlay",
+    size: inline ? "mid" : "wide",
+  });
 }
