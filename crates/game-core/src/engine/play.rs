@@ -1145,7 +1145,14 @@ impl Cx<'_> {
         // factors), and do **not** blanket-copy the plan back (it is never
         // reset between moves, so stale fields would leak in).
         let plan_before = self.w.turn.plan.clone();
-        let t = raise!(self, "moveBefore", i, @m m, tile = m.from)?;
+        // Expose the resolved distance before the first step: `value` is the
+        // base distance and Total/Remaining include existing extra steps.
+        // A post-roll skill can preview its landing and extend this move
+        // without rolling again or dropping an earlier movement modifier.
+        let base_steps = if m.steps >= 0 { m.steps } else { m.roll };
+        m.total = base_steps.max(0) + m.extra_steps.max(0);
+        m.remaining = m.total;
+        let t = raise!(self, "moveBefore", i, @m m, tile = m.from, value = base_steps)?;
         if t.is_cancelled() || self.out(i) || !self.playing() {
             // The move was cancelled before its first step: it never happened,
             // so there is no move tail (`moveAfter` / `moveResolved`) either.
