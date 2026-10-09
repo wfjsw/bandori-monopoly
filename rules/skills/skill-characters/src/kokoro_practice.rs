@@ -44,9 +44,23 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
         // settle, for every completed move including a 「不触发结算」 one.
         On::Hook(&[HookKind::MoveAfter], card_sdk::pre::MINE, None, on_move_end),
+        // （3）「获得一个火罐（上限1）」 -- the cap has to hold from match start,
+        // or `gain_fire` (cap 0 = no pots) drops the grant on the floor.
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            "",
+            None,
+            declare_cap,
+        ),
     ],
 )
     .legacy(&[(1, legacy_mine), (3, legacy_mine)]);
+
+/// （3）「获得一个火罐（上限1）」 -- no 「初始N」, so initial is 0 and the cap is 1.
+fn declare_cap(player_id: i32) -> card_sdk::Asked {
+    crate::fire_pot(player_id, 0, 1);
+    Ok(())
+}
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

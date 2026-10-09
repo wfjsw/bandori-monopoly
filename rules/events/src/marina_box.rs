@@ -57,13 +57,9 @@ fn on_pass(_player_id: i32) -> card_sdk::Asked {
     }
     // 「可[消耗]一次500资金」 -- optional, a player decision. The ask is the
     // missing `passTile` prompt surface filled in: the passer is prompted here.
-    // TODO(规则书): the prompt's default (the fallback) is 「消耗」 rather than
-    // 「不消耗」, because the black-box suite's `drain()` helper declines every
-    // prompt and two of the behaviour tests (`marina_box_pays_500_…`,
-    // `marina_box_no_gain_below_six`) are written against the pass paying. A
-    // default of 「不消耗」 is the truer reading of 「可」; flipping it needs those
-    // two expectations updated (and `marina_box_spend_is_optional`'s `10_000`
-    // to become `10_000 + 2_000` -- it forgets the [经过]CiRCLE reward).
+    // 「可」 means the spend is opt-in, so 「不消耗」 is the default (the choice
+    // prompt's fallback is index 0). The two behaviour tests answer 「消耗」
+    // explicitly; `drain()` (fallback) therefore declines.
     if ctx::money_of(who) < 500 {
         return Ok(());
     }
@@ -72,11 +68,11 @@ fn on_pass(_player_id: i32) -> card_sdk::Asked {
         &Msg::new("log.event.marina_box_title"),
         &Msg::new("log.event.marina_box_ask"),
         &[
-            Msg::new("log.event.marina_box_yes"),
             Msg::new("log.event.marina_box_no"),
+            Msg::new("log.event.marina_box_yes"),
         ],
     )?;
-    if pay != 0 {
+    if pay != 1 {
         return Ok(());
     }
     ctx::pay(who, 500, &Msg::new("log.event.marina_box_pay"))?;

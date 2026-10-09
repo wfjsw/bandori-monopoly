@@ -725,9 +725,20 @@ impl Cx<'_> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
         }
+        // Keep the plan's payment shaping (`pay_factor`, tags) but not its
+        // walk: a settle at an arbitrary tile is not the turn's move, and
+        // inheriting `from`/`to`/`steps` left the piece one tile past a
+        // `teleport_to` + `card_settle_at` (游击演出 ends on chosen+1).
         let mut m = self.w.turn.plan.clone();
         m.player_id = player_id;
         m.main = main;
+        m.kind = MoveKind::Teleport;
+        m.teleport_to = tile as i32;
+        m.from = tile as i32;
+        m.to = tile as i32;
+        m.steps = 0;
+        m.extra_steps = 0;
+        m.start = tile as i32;
         self.settle_at(player_id, tile, &m)?;
         self.wait(0.6);
         Ok(())
@@ -4149,6 +4160,8 @@ impl Cx<'_> {
         // `play.Tags["immune"+seat]` -- per-pair designations cancelled on the
         // previous play must not leak into this one.
         self.w.turn.cancelled_designations.clear();
+        // `PlayCtx.Doubled` is scoped to one play.
+        self.w.turn.play_doubled = -1;
         self.w
             .log(
                 "play",
@@ -4165,6 +4178,7 @@ impl Cx<'_> {
             "card",
             i,
             card = id.to_string(),
+            cards = vec![id.to_string()],
             by_card = Some(i as i32)
         )?;
         let rules = self.rules;

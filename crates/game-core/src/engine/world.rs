@@ -45,6 +45,10 @@ fn full_build_cost() -> i32 {
     100
 }
 
+fn no_play_doubled() -> i32 {
+    -1
+}
+
 /// One player's `_turnSnap[i]`: the status a turn-end undo restores to.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -100,6 +104,12 @@ pub struct TurnCtx {
     /// start of each play.
     #[serde(default)]
     pub cancelled_designations: Vec<i32>,
+    /// C# `PlayCtx.Doubled` -- which of the play's tagged `ctx::n` numbers the
+    /// CiRCLE band skill has doubled (-1 = none). Lives on the play, not on a
+    /// guest run, so a pre-effect hook can arm it for the body that follows.
+    /// Cleared at the start of each play.
+    #[serde(default = "no_play_doubled")]
+    pub play_doubled: i32,
     /// C# `TurnCtx.PaidInSettle` -- money paid to other players during this
     /// turn's [触发结算]s. 「本回合的[结算]向其他玩家支付了至少1000资金」.
     #[serde(default)]
@@ -165,6 +175,7 @@ impl Default for TurnCtx {
             extreme: 0,
             play_from_hand: false,
             cancelled_designations: Vec::new(),
+            play_doubled: no_play_doubled(),
             paid_in_settle: 0,
             turn_start_pos: Vec::new(),
             turn_snap: Vec::new(),

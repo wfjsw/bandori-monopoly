@@ -14,7 +14,10 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const CIRCLE_STAFF: CardDef = CardDef::new(
     "skill:CiRCLE:后勤人员的努力",
-    &[On::Hook(&[HookKind::CardPlayed], card_sdk::pre::MINE, None, on_played)],
+    // 「在你打出的"通用"卡生效时」 -- the pre-effect `card` hook, not the
+    // post-effect `cardPlayed`: `set_play_doubled` has to land before the
+    // card's body reads `ctx::n`.
+    &[On::Hook(&[HookKind::Card], card_sdk::pre::MINE, None, on_played)],
 )
     .legacy(&[(0, legacy_mine)]);
 

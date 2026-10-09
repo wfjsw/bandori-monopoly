@@ -715,15 +715,24 @@ fn asukayama_drawer_moves_1d20_after_the_teleport() {
 }
 
 // 「2层回合开始时减少一层的[眩晕]」 -- one layer per turn start of the owner.
+// A [眩晕] player's turn is auto-skipped past OPS (规则书 204) and may be
+// consumed inside another seat's `end()`, so `until_turn` (which waits for
+// OPS) loops until *both* layers have ticked. Observe at the first tick.
 #[test]
-#[ignore = "DISCREPANCY: 飞鸟山之战's 2 「回合开始时减少一层」 [眩晕] layers are both gone after a single turn start"]
 fn asukayama_stun_wears_off_a_layer_at_a_time() {
     let mut t = Table::vanilla(3);
     t.set_pos(1, 5);
     draw_event_quiet(&mut t, 1, "飞鸟山之战", &[3]);
     // 「回合开始时减少一层的[眩晕]」 -- P0's next start drops one layer.
     assert_eq!(t.state(0, "stun") + t.state(0, "stunStart"), 2);
-    until_turn(&mut t, 0);
+    // Advance until P0's turn-start tick has run once (the layer count drops).
+    for _ in 0..60 {
+        if t.state(0, "stun") + t.state(0, "stunStart") < 2 {
+            break;
+        }
+        let cur = t.turn();
+        pass(&mut t, cur);
+    }
     assert_eq!(
         t.state(0, "stun") + t.state(0, "stunStart"),
         1,
@@ -914,14 +923,22 @@ fn aao_blocks_hand_effects() {
 #[test]
 fn marina_box_pays_500_and_may_gain_1200_on_a_circle_pass() {
     let mut t = Table::vanilla(2);
-    // 1d10 = 8 ≥ 6 → the passer gains 1200. The 500 is the 「[消耗]」.
+    // 1d10 = 8 ≥ 6 → the passer gains 1200. The 500 is the 「[消耗]」 -- the
+    // 「可」 is opt-in, so take 「消耗」 explicitly (option 1).
     draw_event_quiet(&mut t, 0, "麻里奈小姐的礼物箱", &[]);
     assert!(t.event_in_play("麻里奈小姐的礼物箱"), "{:?}", t.st().event_active);
     until_turn(&mut t, 1);
     t.set_pos(1, (tile("CiRCLE") + 58) % 60);
     t.dice(&[2, 8]); // walk 2 past CiRCLE, then the 1d10
     t.roll(1).unwrap();
-    drain(&mut t);
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("marina_box") {
+            let _ = t.answer_one(1); // 「消耗」
+        } else {
+            t.decline();
+        }
+    }
     assert_eq!(
         t.money(1),
         10_000 + 2_000 - 500 + 1_200,
@@ -933,13 +950,20 @@ fn marina_box_pays_500_and_may_gain_1200_on_a_circle_pass() {
 #[test]
 fn marina_box_no_gain_below_six() {
     let mut t = Table::vanilla(2);
-    // 1d10 = 3 < 6 → no 1200.
+    // 1d10 = 3 < 6 → no 1200. Take 「消耗」 explicitly (the 「可」 is opt-in).
     draw_event_quiet(&mut t, 0, "麻里奈小姐的礼物箱", &[]);
     until_turn(&mut t, 1);
     t.set_pos(1, (tile("CiRCLE") + 58) % 60);
     t.dice(&[2, 3]);
     t.roll(1).unwrap();
-    drain(&mut t);
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("marina_box") {
+            let _ = t.answer_one(1); // 「消耗」
+        } else {
+            t.decline();
+        }
+    }
     assert_eq!(t.money(1), 10_000 + 2_000 - 500, "reward 2000, paid 500, rolled 3, no bonus");
 }
 
@@ -962,10 +986,9 @@ fn marina_box_expires_at_the_drawer_third_turn_start() {
     );
 }
 
-// 「可[消耗]一次500资金」 is a player choice; a body that pays for everyone who
-// can afford it takes the choice away.
+// 「可[消耗]一次500资金」 is a player choice; the default is 「不消耗」 and a
+// declined pass keeps the [经过]CiRCLE reward and pays nothing.
 #[test]
-#[ignore = "DISCREPANCY: 麻里奈小姐的礼物箱 「可[消耗]一次500资金」 is optional; the pass spends it unconditionally"]
 fn marina_box_spend_is_optional() {
     let mut t = Table::vanilla(2);
     draw_event_quiet(&mut t, 0, "麻里奈小姐的礼物箱", &[]);
@@ -973,9 +996,15 @@ fn marina_box_spend_is_optional() {
     t.set_pos(1, (tile("CiRCLE") + 58) % 60);
     t.dice(&[2, 8]);
     t.roll(1).unwrap();
-    // Decline whatever spend prompt opens; the pass must be free.
+    // `drain()` takes the prompt fallback, which is 「不消耗」 -- the pass is free
+    // and the CiRCLE reward still lands.
     drain(&mut t);
-    assert_eq!(t.money(1), 10_000, "declined the 500: money={}", t.money(1));
+    assert_eq!(
+        t.money(1),
+        10_000 + 2_000,
+        "declined the 500, kept the CiRCLE reward: money={}",
+        t.money(1)
+    );
 }
 
 // =====================================================================

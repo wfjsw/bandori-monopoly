@@ -1177,11 +1177,11 @@ impl CardWorld for Run {
             .map_or(-2, |f| f.tile.max(-1))
     }
     fn play_doubled(&self) -> i32 {
-        self.doubled
+        self.world.turn.play_doubled
     }
 
     fn set_play_doubled(&mut self, n: i32) {
-        self.doubled = n;
+        self.world.turn.play_doubled = n;
     }
 
     // status extensions -----------------------------------------------------
