@@ -22,9 +22,12 @@ serde_json = { workspace = true }
 
 [features]
 # Simulations run the card rules as plain native Rust (`rules-native`,
-# docs/BOT.md B1) instead of the sandboxed `WasmRules`. Off by default while
-# the drift check has an open divergence -- the sandbox stays authoritative
-# and the flag only makes the bot's search cheaper, never the match wrong.
+# docs/BOT.md B1) instead of the sandboxed `WasmRules`. On by default since the
+# drift check closed (rules-native/tests/drift.rs); the sandbox stays
+# authoritative and the flag only makes the bot's search cheaper, never the
+# match wrong. Native rules are compiled in, so the bot-service binary must be
+# built from the same commit as the deployed `dist/cards`.
+default = ["native-rules"]
 native-rules = ["dep:rules-native"]
 
 [dependencies.rules-native]

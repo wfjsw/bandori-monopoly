@@ -246,8 +246,9 @@ impl Ctx {
             // search's simulations run the card rules as plain native Rust --
             // no wasmtime Store per run. Advisory only: the match shell keeps
             // running the sandboxed modules, so a drift makes the bot weaker,
-            // never the match wrong. Off by default while the drift check has
-            // an open divergence (§5 B1).
+            // never the match wrong. On by default (the drift check is closed,
+            // rules-native/tests/drift.rs); `--no-default-features` restores
+            // the sandbox.
             #[cfg(feature = "native-rules")]
             {
                 let n = rules_native::native_rules(data.clone());
