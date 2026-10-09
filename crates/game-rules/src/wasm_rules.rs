@@ -239,7 +239,8 @@ impl CardWorld for Run {
     }
 
     fn effect(&mut self, player_id: i32, msg: Msg) {
-        self.world.log("effect", player_id, self.attribute(msg));
+        let msg = self.attribute(msg);
+        self.world.log("effect", player_id, msg);
     }
 
     fn extreme(&self) -> i32 {
@@ -276,7 +277,8 @@ impl CardWorld for Run {
     }
 
     fn log(&mut self, player_id: i32, msg: Msg) {
-        self.world.log("text", player_id, self.attribute(msg));
+        let msg = self.attribute(msg);
+        self.world.log("text", player_id, msg);
     }
 
     // board -----------------------------------------------------------------
