@@ -1,11 +1,19 @@
 // React bindings for the plain stores (profile, settings, game session).
+//
+// The generic building blocks (listeners, timers, measurement) live in
+// `webui/src/hooks/`; this module is the *domain* layer: what a profile, a
+// setting and a game session mean to a component. Effects stay inside these
+// hooks -- a screen asks for "the match view", not for a subscription.
 
-import { useEffect, useReducer, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useReducer, useState, useSyncExternalStore } from "react";
 import { langVersion, onLangChange } from "../i18n";
+import { useLatestRef } from "../hooks/latest";
 import { getProfile, hasProfile, onProfile, settings } from "./store";
 import type { MatchEvent, MatchView, PlayerProfile } from "./types";
 import type { GameSession } from "../game/session";
 import { isAuto, type AutoMode } from "../game/autopilot";
+
+export { useTick } from "../hooks/timers";
 
 const subscribeProfile = (cb: () => void) => onProfile(cb);
 let profileVersion = 0;
@@ -65,25 +73,14 @@ export function useWakeLock(active: boolean): void {
   }, [on]);
 }
 
-/** Re-render every `ms` (timers, countdowns). */
-export function useTick(ms: number): number {
-  const [n, bump] = useReducer((x: number) => x + 1, 0);
-  useEffect(() => {
-    const t = window.setInterval(bump, ms);
-    return () => clearInterval(t);
-  }, [ms]);
-  return n;
-}
-
 /** The session's current match view plus when it arrived (for local countdowns). */
 export function useMatchView(s: GameSession | null, onEvent?: (e: MatchEvent) => void): { view: MatchView | null; at: number } {
   const [state, set] = useState<{ view: MatchView | null; at: number }>(() => ({ view: s?.view ?? null, at: performance.now() }));
-  const evRef = useRef(onEvent);
-  evRef.current = onEvent;
+  const evRef = useLatestRef(onEvent);
   useEffect(() => {
     if (!s) return;
     return s.subscribe((v) => set({ view: v, at: performance.now() }), (e) => evRef.current?.(e));
-  }, [s]);
+  }, [s, evRef]);
   return state;
 }
 
@@ -109,6 +106,15 @@ export function useAutoMode(s: GameSession | null): AutoMode {
  *  read-only (a replay) -- the one input-lock every button reads. */
 export function useAutoplay(s: GameSession | null): boolean {
   return isAuto(useAutoMode(s)) || !!s?.readOnly;
+}
+
+/** Is this seat's 进阶 search running (`docs/BOT.md` B6)? Re-renders on the
+ *  session's thinking ticker. */
+export function useThinking(s: GameSession | null, member?: number): boolean {
+  const [, tick] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => (s ? s.subscribeThinking(tick) : undefined), [s]);
+  if (!s) return false;
+  return s.isThinking(member ?? s.you);
 }
 
 /** Re-render on language change (the shell keys its tree with this). */

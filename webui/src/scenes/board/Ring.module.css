@@ -1,8 +1,10 @@
 /* Generated TTS layout: 12 x 10 cells (the mod's Lua `pathXY`), drawn from
-   tile data -- no board texture. The map fills its slot: the cells stretch to
-   the available rectangle (column = width / 12, row = height / 10), so the
-   ring uses the whole width and the height above the hand. `.wrap` is that
-   rectangle and clips the zoomed layer.
+   tile data -- no board texture. The board fills its own rect (the map slot
+   held to 1..1.6, `viewport.ts` `boardRect`): the cells stretch to that
+   rectangle (column = width / 12, row = height / 10). `.wrap` is the whole
+   map slot -- the pan/zoom window -- and clips the zoomed board layer inside
+   it, so the visible range is 100% of the slot even on a wide screen where
+   the board itself stays narrower.
 
    Board colour only exists inside the ring -- the five pockets the tile path
    encloses (`.pocket`). The four side notches of the TTS board are outside the
@@ -13,12 +15,17 @@
    and holds the fixed overlays (hover details, zoom buttons), which stay out
    of the zoom so they keep their size and place. The banners and the card
    flash are match-screen chrome (Board.module.css), not map-sized. */
-.wrap { position: relative; flex: none; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+/* The wrap is the pan/zoom *window*: it fills the whole map slot (the CSS box
+   is the clip, so it can never be narrower or offset inside the column -- a
+   measured px size would lag the layout and clip a panned board early) and
+   clips the transformed board layer. */
+.wrap { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .wrap:focus-visible { outline: 2px solid var(--pink); outline-offset: -4px; }
-/* The zoomed layer: `translate(tx, ty) scale(z)` from the board's top-left
-   (viewport.ts). Board pixels are these wrap pixels. Only board content
-   (tiles, tokens, the interior) lives here. */
-.viewport { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+/* The zoomed layer: `translate(tx, ty) scale(z)` placing the board rect
+   (viewport.ts) in the window. Sized to the board, not the window -- on a
+   wide slot the board keeps its aspect and is centred at fit. Only board
+   content (tiles, tokens, the interior) lives here. */
+.viewport { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 /* Fixed overlays on the board window: never zoomed, never in the way. */
 .overlay { position: absolute; inset: 0; pointer-events: none; }
 .ring { position: relative; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
@@ -93,49 +100,32 @@
 .pileLabel { position: relative; height: 26px; padding: 0 12px; border-radius: 13px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 13px; font-weight: 700; line-height: 26px; white-space: nowrap; }
 .pileLabel b { color: var(--pink); margin-left: 6px; }
 .hint { position: absolute; left: 66.6667%; top: 70%; width: 25%; height: 20%; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: 15px; line-height: 1.5; pointer-events: none; }
+/* The die button, in the roll zone's centre band (cols 6-8 / rows 4-8 of the
+   12 x 10 interior grid). Die-styled to sit in the teal pocket: a white disc
+   with the d20 face, the running number over it and the caption beneath. */
+.rollDock { position: absolute; left: 41.6667%; top: 30%; width: 16.6667%; height: 40%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.roll {
+  position: relative; width: 118px; height: 118px; border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff, #f3e2e8 78%);
+  box-shadow: 0 8px 22px rgba(60, 20, 40, 0.22), inset 0 -3px 8px rgba(60, 20, 40, 0.1);
+  color: var(--pink); pointer-events: auto; cursor: default;
+}
+.roll.can { cursor: pointer; box-shadow: 0 8px 22px rgba(237, 78, 118, 0.32), inset 0 0 0 3px var(--pink); }
+.roll.can:hover { background: radial-gradient(circle at 32% 28%, #fff, var(--pink-pale) 78%); }
+.roll:disabled { opacity: 0.82; }
+.diceImg { position: absolute; left: 50%; top: 46%; width: 74px; height: 74px; transform: translate(-50%, -50%); transition: transform 0.12s; }
+.roll.can:hover .diceImg { transform: translate(-50%, -50%) rotate(-8deg) scale(1.05); }
+.diceNum { position: absolute; left: 0; right: 0; top: 40%; text-align: center; font-size: 22px; font-weight: 700; color: var(--pink); -webkit-text-stroke: 1px #fff; }
+.diceCap { position: absolute; left: 0; right: 0; bottom: 16px; text-align: center; font-size: 13px; font-weight: 700; color: var(--pink-deep); }
+.roll.rolling .diceImg { animation: rollShake 0.11s linear infinite; }
+@keyframes rollShake { 50% { transform: translate(-50%, -50%) rotate(12deg) scale(1.06); } }
 
 /* The turn / action banners and the card activation flash are match-screen
    chrome -- they live in Board.module.css over the centre column, detached
    from this map element (never clipped or sized by it). */
 
-/* 场上的卡 -- the central zone: compact card faces, one row per player (left
-   border = the player's colour), each with its live state. Covers the whole
-   roll pocket (cols 4-7 / rows 3-6) as fractions of the map: opaque, so the
-   zone labels under it never bleed through, and edge-to-edge so the flanking
-   dice-storage labels leave no sliver when the field is up. */
-.field { position: absolute; left: 33.3333%; top: 30%; width: 33.3333%; height: 40%; box-sizing: border-box; border-radius: 10px; background: #fff; box-shadow: var(--shadow); padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
-.fieldHead { display: flex; align-items: baseline; gap: 6px; text-align: left; }
-.fieldHead b { color: var(--pink); font-size: 15px; padding-left: 8px; border-left: 4px solid var(--pink); }
-.fieldHead small { color: var(--sub); font-size: 12px; }
-.fieldGrid { flex: 1; min-height: 0; overflow: auto; display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; padding: 3px; }
-/* Framed in the owner's colour (a ring and a bottom band). */
-.fieldCard { position: relative; box-shadow: 0 0 0 2px var(--own), 0 3px 8px rgba(80, 40, 60, 0.12); background: color-mix(in srgb, var(--own) 18%, #fff); }
-.fieldBack { border-radius: 4px; box-shadow: 0 0 0 2px var(--own); }
-.fieldBack img { width: 54px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; display: block; }
-.crystal { position: absolute; right: -3px; top: -3px; padding: 0 4px; border-radius: 8px; background: var(--purple); color: #fff; font-size: 10px; line-height: 15px; box-shadow: 0 0 0 1.5px #fff; }
-/* On-card [CP点] -- the field card's counter badge. */
-.cpBadge { position: absolute; right: -3px; bottom: -3px; padding: 0 4px; border-radius: 8px; background: var(--teal, #0a8f7c); color: #fff; font-size: 10px; line-height: 15px; box-shadow: 0 0 0 1.5px #fff; }
-.noteDot { position: absolute; left: -2px; top: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1.5px #fff; }
-/* Events in effect: the field's compact face, purple. */
-.eventRow { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 3px 0; border-top: 1px dashed var(--purple); }
-.eventFace { position: relative; width: 54px; padding: 2px; border-radius: 6px; background: #fff; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.12); cursor: pointer; transition: transform 0.12s; }
-.eventFace:hover { transform: translateY(-6px); }
-.eventArt { aspect-ratio: 1; overflow: hidden; border-radius: 3px; border-bottom: 3px solid var(--purple); }
-.eventArt img { width: 100%; height: 100%; object-fit: cover; display: block; filter: hue-rotate(250deg) saturate(0.8); }
-.eventTitle { font-size: 9px; font-weight: 700; line-height: 1.15; padding: 2px 1px 0; height: 24px; overflow: hidden; }
-.fpEvent { color: var(--purple); }
-
-/* Hovered field card at full size, over the right of the interior. On the
-   fixed overlay: sized in screen px (it never zooms), placed as a fraction of
-   the board window so it stays over the same board region at any fit size. */
-.fieldPreview { position: absolute; left: 67.17%; top: 30%; width: 230px; z-index: 30; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; pointer-events: none; opacity: 0; transform: translateX(-8px); transition: opacity 0.12s, transform 0.12s; }
-.fieldPreviewOn { opacity: 1; transform: none; }
-.fpArt { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
-.fpArt img { width: 100%; display: block; }
-.fpTitle { font-size: 16px; font-weight: 700; margin: 6px 2px 2px; }
-.fpOwner { display: flex; align-items: center; gap: 6px; margin: 2px 2px 4px; padding: 2px 8px 2px 2px; border-radius: 13px; background: color-mix(in srgb, var(--own) 20%, #fff); border-left: 4px solid var(--own); font-size: 12px; font-weight: 700; }
-.fpText { font-size: 13px; line-height: 1.6; max-height: 220px; overflow: hidden; white-space: pre-wrap; }
-.fpNote { font-size: 12px; color: var(--note); margin-top: 4px; }
+/* Cards in play moved to the board's top sheet (FieldSheet.module.css); the
+   roll pocket now carries the die (`.rollDock` below). */
 
 /* A tile marker's popup, on the fixed overlay above the zoom layer (tiles
    clip, and the popup must not scale with the board). `width: max-content`:

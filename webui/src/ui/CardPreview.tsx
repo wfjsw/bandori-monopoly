@@ -6,6 +6,7 @@
 // block) and `InspectPreviewHost` draws the panel inside the stage.
 
 import { useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
+import { useMountEffect } from "../hooks/mount";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { cardColor, cardText, cardTitle, D } from "../core/data";
@@ -69,6 +70,11 @@ interface Anchor {
 }
 
 let anchor: Anchor | null = null;
+/** The card the standing panel shows: set on hover, click and flash, and it
+ *  stays until another card replaces it (hover-out never clears it). */
+let stick: { id: string; note?: string } | null = null;
+/** The match screen prefers its standing panel to floating popups. */
+let standing = false;
 const listeners = new Set<() => void>();
 
 function emit(): void {
@@ -78,14 +84,39 @@ function emit(): void {
 /** Float the shared preview beside `el` (hover / keyboard focus). */
 export function previewFrom(el: HTMLElement, id: string, note?: string): void {
   anchor = { el, id, note };
+  stick = { id, note };
   emit();
 }
 
-/** Hide the shared preview (the pointer left the card). */
+/** Hide the floating preview (the pointer left the card). The standing panel
+ *  keeps showing the last card. */
 export function previewHide(): void {
   if (!anchor) return;
   anchor = null;
   emit();
+}
+
+/** Pin the standing card panel: a click, a card flash, a log reference. */
+export function stickCard(id: string, note = ""): void {
+  stick = { id, note };
+  emit();
+}
+
+/** Turn the floating hover popups off while a standing panel is on screen. */
+export function useStandingPreviewOn(): void {
+  useMountEffect(() => {
+    standing = true;
+    emit();
+    return () => {
+      standing = false;
+      emit();
+    };
+  });
+}
+
+/** True while the match screen's standing panel is up (floaters stay off). */
+export function useStandingMode(): boolean {
+  return useSyncExternalStore(subscribe, () => standing);
 }
 
 function subscribe(cb: () => void): () => void {
@@ -93,14 +124,25 @@ function subscribe(cb: () => void): () => void {
   return () => listeners.delete(cb);
 }
 
+/** The card the standing panel should show (sticky across hover-outs). */
+export function useStickyCard(): { id: string; note?: string } | null {
+  return useSyncExternalStore(subscribe, () => stick);
+}
+
+/** The docked variant of this panel (board `CardStand`): full-height, no
+ *  floating chrome. Exported here so it overrides this module's own layout. */
+export const cardStandClass: string = s.stand;
+
 /**
  * The preview host. Drawn inside the stage (so it scales with it) as an
  * absolutely positioned panel beside the hovered card -- `position: absolute`
  * on the stage, which is the containing block even under the stage's scale
- * transform, so the panel escapes any modal body's `overflow: auto`.
+ * transform, so the panel escapes any modal body's `overflow: auto`. The
+ * match screen turns it off: its standing panel (board `CardStand`) is the one
+ * card detail there.
  */
 export function InspectPreviewHost(): ReactElement | null {
-  const cur = useSyncExternalStore(subscribe, () => anchor);
+  const cur = useSyncExternalStore(subscribe, () => (standing ? null : anchor));
   if (!cur) return null;
   const host = cur.el.closest("[data-stage]") as HTMLElement | null;
   const place = host ? stagePlace(host, cur.el) : { left: 0, top: 0 };

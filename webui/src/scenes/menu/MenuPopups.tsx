@@ -1,7 +1,8 @@
 // Menu popups: match history, settings, fire per game.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { navigate } from "../../app/router";
+import { useMountEffect } from "../../hooks/mount";
 import { applyVolumes, sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
@@ -47,14 +48,14 @@ function History() {
   const rows = [...p.history].reverse();
   // Headers only, to decide per row whether a replay exists (and which one).
   const [replays, setReplays] = useState<ReplayEntry[] | null>(null);
-  useEffect(() => {
+  useMountEffect(() => {
     void listReplays()
       .then(setReplays)
       .catch((e) => {
         console.warn("replay list:", e);
         setReplays([]);
       });
-  }, []);
+  });
   return (
     <div className={s.history}>
       <div className={s.sum}>{tr("topbar.stats", { games: p.games, solo: p.soloGames, casual: p.casualGames, ranked: p.rankedGames, wins: p.rankedWins })}</div>

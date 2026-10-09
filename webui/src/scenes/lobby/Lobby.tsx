@@ -23,6 +23,37 @@ import { TopBar } from "../../ui/TopBar";
 import s from "./Lobby.module.css";
 import { t as tr } from "../../i18n/t";
 
+/**
+ * Connect this tab to the server (once), return to a room the browser's back
+ * button left us seated in, then keep the room list fresh every 3s until the
+ * lobby unmounts. The list is the lobby's only live data.
+ */
+function useRoomList(setStatus: (s: "connecting" | "ok" | "offline") => void, setRooms: (r: RoomInfo[]) => void, setError: (e: string) => void): void {
+  useEffect(() => {
+    let alive = true;
+    let t = 0;
+    void (async () => {
+      if (!(await connect())) return alive && setStatus("offline");
+      if (!alive) return;
+      // Still seated in a room (e.g. came back with the browser's back button): return to it.
+      if (session instanceof OnlineSession && !session.dissolved) return navigate({ name: "room", id: session.id }, { replace: true });
+      setStatus("ok");
+      const refresh = async () => {
+        const r = await api.rooms();
+        if (!alive) return;
+        setError(r.ok ? "" : fmtMsg(r.error ?? { k: "err.offline" }));
+        setRooms(r.data ?? []);
+      };
+      await refresh();
+      t = window.setInterval(refresh, 3000);
+    })();
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, []);
+}
+
 type LobbyFilter = "all" | "ranked" | "casual" | "joinable";
 const FILTERS: LobbyFilter[] = ["all", "ranked", "casual", "joinable"];
 const filterLabel = (f: LobbyFilter) => ({ all: tr("common.all"), ranked: tr("lobby.filterRanked"), casual: tr("lobby.filterCasual"), joinable: tr("lobby.filterJoinable") }[f]);
@@ -66,30 +97,7 @@ export function Lobby() {
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<LobbyFilter>("all");
   const [code, setCode] = useState("");
-
-  useEffect(() => {
-    let alive = true;
-    let t = 0;
-    void (async () => {
-      if (!(await connect())) return alive && setStatus("offline");
-      if (!alive) return;
-      // Still seated in a room (e.g. came back with the browser's back button): return to it.
-      if (session instanceof OnlineSession && !session.dissolved) return navigate({ name: "room", id: session.id }, { replace: true });
-      setStatus("ok");
-      const refresh = async () => {
-        const r = await api.rooms();
-        if (!alive) return;
-        setError(r.ok ? "" : fmtMsg(r.error ?? { k: "err.offline" }));
-        setRooms(r.data ?? []);
-      };
-      await refresh();
-      t = window.setInterval(refresh, 3000);
-    })();
-    return () => {
-      alive = false;
-      clearInterval(t);
-    };
-  }, []);
+  useRoomList(setStatus, setRooms, setError);
 
   const shown = rooms.filter((r) => filter === "all" || (filter === "ranked" ? r.ranked : filter === "casual" ? !r.ranked : joinable(r)));
   const quickJoin = () => {

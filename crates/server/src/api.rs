@@ -153,6 +153,10 @@ fn leave_current(s: &Server, sess: &Session) {
 }
 
 /// `POST /api/rooms` -- create a room and join it as host.
+///
+/// The room's commit-reveal slot is drawn here (`docs/FAIRNESS.md`): the
+/// commitment in the reply was sealed before this (or any) member could
+/// contribute a nonce.
 pub async fn create_room(
     State(s): S,
     Auth(sess): Auth,
@@ -169,26 +173,35 @@ pub async fn create_room(
     let name = req.name.trim().to_string();
     let defaults = rules_weights(&s);
     let weights = req.weights.unwrap_or(defaults).sanitized(defaults);
-    let mut room = Room::new(
-        id.clone(),
-        &name,
-        req.ranked,
-        req.max_players,
-        &req.password,
-        weights,
-        s.engine.clone(),
-        s.store.clone(),
+    let engine = s.engine.clone();
+    let store = s.store.clone();
+    let bot_search = s.bots.is_some();
+    let (token, player, character, cn_id) = (
+        sess.token.clone(),
+        sess.player.clone(),
+        sess.character.clone(),
+        sess.cn_id.clone(),
     );
-    // Advanced bots need the bot-service; without one they play as standard
-    // (`docs/BOT.md` B5, `Room::start`).
-    room.bot_search = s.bots.is_some();
-    let who = NewMember {
-        token: &sess.token,
-        player: &sess.player,
-        character: &sess.character,
-        cn_id: &sess.cn_id,
-    };
-    let you = room.join(who, &req.password, "")?;
+    // The slot roll reads the (cached) engine stamp; run it off the async
+    // runtime like every other engine touch.
+    let rid = id.clone();
+    let (room, you) = tokio::task::spawn_blocking(move || {
+        let mut room = Room::new(rid, &name, req.ranked, req.max_players, &req.password, weights, engine, store);
+        // Advanced bots need the bot-service; without one they play as standard
+        // (`docs/BOT.md` B5, `Room::start`).
+        room.bot_search = bot_search;
+        room.roll_fair().map_err(|e| ApiError::bad(e.as_str()))?;
+        let who = NewMember {
+            token: &token,
+            player: &player,
+            character: &character,
+            cn_id: &cn_id,
+        };
+        let you = room.join(who, &req.password, "")?;
+        Ok::<_, ApiError>((room, you))
+    })
+    .await
+    .map_err(|e| ApiError::bad(format!("create task: {e}").as_str()))??;
     let info = room.info.clone();
     s.rooms
         .lock()
@@ -334,9 +347,9 @@ pub async fn start(
     let step = crate::TICK_QUANTUM * s.time_scale;
     let info = tokio::task::spawn_blocking(move || {
         let mut r = room.lock().unwrap();
-        // Draws the secret seed + salt and publishes only their commitment;
-        // the match itself is created once the player nonces are in (or the
-        // window closes) -- `docs/FAIRNESS.md`.
+        // Creates the match immediately: the commitment was fixed at room
+        // creation and the player nonces are already in (`docs/FAIRNESS.md`).
+        // Nothing waits.
         r.start(me, req.force, step)?;
         Ok::<_, ApiError>(r.info.clone())
     })
@@ -353,9 +366,10 @@ pub struct NonceReq {
     pub nonce: String,
 }
 
-/// `POST /api/rooms/{id}/nonce` -- one human's entropy contribution, during
-/// the window [`crate::room::NONCE_WINDOW`] keeps open after `start`. A
-/// missing nonce is simply absent; this never blocks the match.
+/// `POST /api/rooms/{id}/nonce` -- one human's entropy contribution, posted as
+/// the player enters the room (and again whenever the room shows a new
+/// commitment after a match). Accepted until a match consumes the slot; a
+/// missing nonce is simply absent and nothing ever blocks on one.
 pub async fn nonce(
     State(s): S,
     Auth(sess): Auth,

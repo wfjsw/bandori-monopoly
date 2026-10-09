@@ -7,8 +7,9 @@
 // One dialog, used by the Results screen, the replay list and the room's
 // "last replay" button.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { rules } from "../core/data";
+import { useAsync } from "../hooks/async";
 import { Btn } from "../ui/Button";
 import { closeAllModals, openModal } from "../ui/Modal";
 import { toast } from "../ui/Toast";
@@ -36,6 +37,32 @@ export function downloadRecordPrompt(bytes: Uint8Array, filename: string): void 
   );
 }
 
+/**
+ * Build the portable (engine-embedded) form of the record -- lazily, only when
+ * the box is ticked. It hashes and compresses the engine bundle, which is
+ * ~7 MiB of work the plain path never needs. Cancellable: unticking the box
+ * (or closing the dialog) abandons the in-flight build.
+ */
+function usePortable(bytes: Uint8Array, header: RecordHeader | null, withEngine: boolean): {
+  busy: boolean;
+  portable: { bytes: Uint8Array; portableLen: number } | undefined;
+  whyNot: string | null;
+} {
+  const state = useAsync(async () => {
+    const out = await exportPortable(bytes, header!);
+    return { bytes: out.bytes, portableLen: out.portableLen };
+  }, [withEngine, bytes, header], withEngine && !!header);
+  return {
+    busy: state.loading,
+    portable: state.value,
+    whyNot: state.error == null
+      ? null
+      : state.error instanceof PortableError
+        ? state.error.message
+        : String(state.error instanceof Error ? state.error.message : state.error),
+  };
+}
+
 function DownloadDialog({
   bytes,
   name,
@@ -48,36 +75,7 @@ function DownloadDialog({
   close: () => void;
 }) {
   const [withEngine, setWithEngine] = useState(false);
-  const [portable, setPortable] = useState<{ bytes: Uint8Array; portableLen: number } | null>(null);
-  const [whyNot, setWhyNot] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  // Build the portable form lazily: only when the box is ticked. It hashes and
-  // compresses the engine bundle, which is ~7 MiB of work the plain path never
-  // needs.
-  useEffect(() => {
-    if (!withEngine || !header) return;
-    let alive = true;
-    setBusy(true);
-    setWhyNot(null);
-    setPortable(null);
-    void (async () => {
-      try {
-        const out = await exportPortable(bytes, header!);
-        if (!alive) return;
-        setPortable({ bytes: out.bytes, portableLen: out.portableLen });
-      } catch (e) {
-        if (!alive) return;
-        setPortable(null);
-        setWhyNot(e instanceof PortableError ? e.message : String(e instanceof Error ? e.message : e));
-      } finally {
-        if (alive) setBusy(false);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [withEngine, bytes, header]);
+  const { busy, portable, whyNot } = usePortable(bytes, header, withEngine);
 
   const canEmbed = !!header?.engine?.bundle || !!header;
   const doDownload = () => {

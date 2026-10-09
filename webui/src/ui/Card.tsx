@@ -12,7 +12,7 @@ import type { CardData } from "../core/types";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
 import { openModal } from "./Modal";
-import { previewFrom, previewHide } from "./CardPreview";
+import { previewFrom, previewHide, stickCard } from "./CardPreview";
 import { SkillBody } from "./SkillBody";
 import { t as tr } from "../i18n/t";
 
@@ -130,6 +130,8 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
 
 /** CardDetailView: big art, kind + tags, effect text, optional action buttons. */
 export function showCard(id: string, actions: CardAction[] = [], note = ""): () => void {
+  // The standing card panel (board) follows every card the user opens.
+  stickCard(id, note);
   return openModal(cardTitle(id), (close) => <CardDetail id={id} actions={actions} note={note} close={close} />, { size: "wide", key: "card" });
 }
 

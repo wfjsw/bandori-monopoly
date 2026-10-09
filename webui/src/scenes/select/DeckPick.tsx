@@ -1,12 +1,13 @@
 // tr("deckPick.title"): the preset or any of the character's named decks
 // (complete ones only). The name is profile-only -- the match gets the card list.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
 import { deckLabelWith, parseDeckList, type DeckEntry } from "../../core/deckNames";
 import { useAutoplay, useMatchView } from "../../core/hooks";
+import { useCloseWhen } from "../../hooks/mount";
 import { hasProfile, profileJson, updateProfile } from "../../core/store";
 import type { Command } from "../../core/types";
 import type { GameSession } from "../../game/session";
@@ -34,9 +35,7 @@ function DeckPick({ sess, character, act, close }: { sess: GameSession; characte
   });
   // Submitted (here, by the timer, or after a refresh elsewhere): close.
   const ready = view?.state.players[view.playerId]?.deckReady || view?.state.phase !== "deck";
-  useEffect(() => {
-    if (ready) close();
-  }, [ready, close]);
+  useCloseWhen(ready, close);
 
   return (
     <div className={s.pick}>

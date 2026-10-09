@@ -15,45 +15,41 @@ import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
 import { CardFace } from "../../ui/Card";
 import { TopBar } from "../../ui/TopBar";
-import { useBoardSession } from "./anim";
-import { act, buyable, canBuildOn, modeName, model } from "./model";
+import { useBoardSession, type Animator } from "./anim";
+import { act, buyable, canBuildOn, modeName, model, type Model } from "./model";
 import { Log, Players } from "./Players";
 import { openDeed, showLeave } from "./Popups";
 import { openPrompt, waitingOn } from "./Prompt";
 import { showResults } from "./Results";
 import { Ring } from "./Ring";
 import { Hand, SettleVote, Side } from "./Side";
-import { shouldFinishTurn } from "./turnFlow";
+import { shouldFinishTurn, movementControl } from "./turnFlow";
+import { FieldSheet } from "./FieldSheet";
+import { CardStand } from "./CardStand";
+import { useStandingPreviewOn } from "../../ui/CardPreview";
+import type { RollControl } from "./Ring";
 import s from "./Board.module.css";
 
-export function Board({ sess }: { sess: GameSession }) {
-  const { view, at, anim } = useBoardSession(sess);
-  useTick(500); // turn timer
-  const auto = useAutoplay(sess); // 托管 -- one shared input-lock
-  // The match screen is the one scene that fills the window: no top / bottom
-  // letterbox, so the columns stretch and the ring centres in the middle one.
-  useStageFill();
-  // Screen stays on during a live match only -- not in a replay (which also
-  // renders this Board) and not once the match has ended.
-  useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
+/**
+ * The match driver: opens the prompt / landing-deed popups and the results
+ * once the animation queue has caught up, and auto-ends a settled turn. Runs
+ * after every render on purpose -- `view`, `anim.animating` and the modal stack
+ * arrive from three different channels and either may land first. While 托管
+ * is on the prompt modal is not opened at all (it would block the board) and
+ * the landing deed is left alone -- the autopilot answers both.
+ */
+function useMatchDriver(opts: {
+  sess: GameSession;
+  m: Model | null;
+  anim: Animator;
+  auto: boolean;
+  exit: () => void;
+}): void {
+  const { sess, m, anim, auto, exit } = opts;
   const promptFor = useRef(0);
   const autoDeed = useRef(-1);
   const autoEnd = useRef(-1);
   const resultsShown = useRef(false);
-
-  const exit = () => {
-    if (sess.kind === "replay") navigate({ name: "replay" });
-    else if (sess.kind === "solo") {
-      endSession();
-      navigate({ name: "menu" });
-    } else navigate({ name: "room", id: sess.id });
-  };
-
-  const m = view ? model(view) : null;
-
-  // Prompts, the landing deed popup and the results open once the animation has caught up.
-  // While 托管 is on the prompt modal is not opened at all (it would block the
-  // board) and the landing deed is left alone -- the autopilot answers both.
   useEffect(() => {
     if (!m) return;
     const S = m.S;
@@ -92,6 +88,31 @@ export function Board({ sess }: { sess: GameSession }) {
       showResults(sess, m, exit);
     }
   });
+}
+
+export function Board({ sess }: { sess: GameSession }) {
+  const { view, at, anim } = useBoardSession(sess);
+  useTick(500); // turn timer
+  const auto = useAutoplay(sess); // 托管 -- one shared input-lock
+  // The match screen is the one scene that fills the window: no top / bottom
+  // letterbox, so the columns stretch and the ring centres in the middle one.
+  useStageFill();
+  // Screen stays on during a live match only -- not in a replay (which also
+  // renders this Board) and not once the match has ended.
+  useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
+  // The standing card panel replaces the floating hover popups on this screen.
+  useStandingPreviewOn();
+
+  const exit = () => {
+    if (sess.kind === "replay") navigate({ name: "replay" });
+    else if (sess.kind === "solo") {
+      endSession();
+      navigate({ name: "menu" });
+    } else navigate({ name: "room", id: sess.id });
+  };
+
+  const m = view ? model(view) : null;
+  useMatchDriver({ sess, m, anim, auto, exit });
 
   if (!m) return null;
   const S = m.S;
@@ -104,6 +125,15 @@ export function Board({ sess }: { sess: GameSession }) {
     openDeed(sess, i);
   };
   const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
+  // The die lives in the board's roll zone (Ring); replays hide it entirely.
+  const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+  const roll: RollControl | null = sess.readOnly ? null : {
+    enabled: control === "roll",
+    rolling: anim.rolling,
+    dice: anim.dice,
+    hint: control === "roll" ? tr("board.clickRoll") : "",
+    onClick: () => control === "roll" && void act(sess, { act: "roll" }),
+  };
 
   return (
     <>
@@ -122,8 +152,18 @@ export function Board({ sess }: { sess: GameSession }) {
           <Side m={m} sess={sess} anim={anim} />
         </div>
         <div className={s.middle}>
+          {/* The cards in play, as a fold-away strip at the top of this column
+              (under the FX layer). The board's roll-zone die takes the roll
+              action from the old side-column button. */}
+          <FieldSheet m={m} />
           <div className={s.mapSlot}>
-            <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+            <Ring
+              m={m}
+              anim={anim}
+              pickable={tilePick}
+              onTile={onTile}
+              roll={roll}
+            />
           </div>
           <Hand m={m} sess={sess} busy={anim.animating} />
           {/* Match-screen FX layer: the stage banner (new-turn announcement),
@@ -163,6 +203,11 @@ export function Board({ sess }: { sess: GameSession }) {
           </div>
         </div>
         <div className={s.right}>
+          {/* Half the sidebar: the standing card detail (hover / click / flash).
+              The log keeps the other half. */}
+          <div className={s.standSlot}>
+            <CardStand flash={anim.flash?.card} />
+          </div>
           <div className={s.logSlot}>
             <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
           </div>

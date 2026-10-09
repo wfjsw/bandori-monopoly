@@ -1,16 +1,17 @@
 // Player panels on the left; the match log is placed in the right column.
 
 import { stateOf, stateMax } from "../../core/names";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
-import { D, cardTitle, skillText } from "../../core/data";
+import { cardTitle } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
+import { useScrollFollow } from "../../hooks/measure";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
-import { CardFace, showCard } from "../../ui/Card";
-import { SkillBody } from "../../ui/SkillBody";
+import { showCard } from "../../ui/Card";
+import { stickCard } from "../../ui/CardPreview";
 import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
@@ -160,12 +161,10 @@ function CardRef({ card, text, onHover, onLeave }: { card: string; text: string;
 
 export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
-  // Hovered card reference: its details float beside the line that names it.
-  const [peek, setPeek] = useState<{ id: string; x: number; y: number } | null>(null);
+  // The log follows its own tail: re-pin only when new lines arrive, so a
+  // reader who scrolled up is not thrown back down by a hover re-render.
+  useScrollFollow(ref, [lines]);
+  // Hovered card reference: the standing card panel (right sidebar) shows it.
   const groups = turnGroups(lines);
   return (
     <div className={s.log}>
@@ -192,11 +191,8 @@ export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: 
                             key={k}
                             card={p.card}
                             text={p.text}
-                            onHover={(id, el) => {
-                              const r = el.getBoundingClientRect();
-                              setPeek({ id, x: r.left, y: r.bottom + 6 });
-                            }}
-                            onLeave={() => setPeek(null)}
+                            onHover={(id) => stickCard(id)}
+                            onLeave={() => undefined}
                           />
                         ))
                     : l.text}
@@ -206,17 +202,6 @@ export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: 
           );
         })}
       </div>
-      {peek && (
-        <div className={s.cardPeek} style={{ left: peek.x, top: peek.y }}>
-          <div className={s.cardPeekRow}>
-            <CardFace id={peek.id} size="mini" />
-            <div className={s.cardPeekHead}>
-              <b>{cardTitle(peek.id)}</b>
-              <SkillBody text={skillText(D.card(peek.id))} />
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

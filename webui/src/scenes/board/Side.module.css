@@ -1,5 +1,9 @@
-/* Four equally sized controls, anchored below the player column. */
+/* Four equally sized controls, anchored below the player column. The die
+   moved into the board's roll zone (Ring); what stays here are the skill and
+   deed buttons plus the occasional continue. Three controls leave the last
+   one alone on its row -- let it span, so the grid stays tidy either way. */
 .actions { position: absolute; left: 0; right: 0; bottom: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.actions > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
 .act { height: 64px; min-height: 64px; padding: 0 8px; font-size: 18px; gap: 6px; }
 .dim { opacity: 0.75; }
 .dice { position: relative; min-width: 0; height: 64px; border-radius: 12px; background: linear-gradient(#ef5a80, #e64671); color: #fff; box-shadow: var(--shadow); cursor: default; text-align: left; }
@@ -27,27 +31,42 @@
    takes pointer events -- only the visible card tops and the bar do -- so map
    clicks near the bottom pass through the gaps and the hidden part of the fan. */
 .dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column; align-items: stretch; pointer-events: none; }
-/* The fan: overlapping cards, anchored to the bottom. Retracted by default
-   (`translateY` drops all but the top 30px behind the bar); the raised state
-   slides the whole row up. The fan itself is click-through -- only the cards'
-   own boxes capture -- so the map stays clickable between and below them. */
+/* Over a retracted prompt sheet (its title strip, `--sheet-strip` 60px in
+   Modal.module.css, holds the bottom edge): the cards' peek rides above the
+   strip; the bar stays where it is. */
+.aboveSheet:not(.dockUp) .fan { transform: translateY(calc(100% - 30px - var(--fan-rise, 0px) - 60px)); }
+.aboveSheet:not(.dockUp) .skillAside { transform: translateY(calc(100% - 28px - 60px)); }
+/* The fan: overlapping cards, anchored to the bottom, arranged as a circular
+   sector (Master Duel's arc): each card is rotated a little around a pivot
+   below the hand (`--fan-a`), the outer ones lower and tilted outward, the
+   centre one highest (`--fan-y`). The spread adapts to the hand size through
+   `--fan-slot` (the step between card centres), so 1-10 cards read the same.
+   Retracted by default (`translateY` drops all but the top 30px of the arc --
+   the highest, centre card -- behind the bar); the raised state slides the
+   whole row up. The fan itself is click-through -- only the cards' own boxes
+   capture -- so the map stays clickable between and below them. */
 /* `align-items: stretch` + a flex `.fanCard`: every face in the hand takes the
    height of the tallest one (the longest name), so the row is one size. */
 .fan {
   display: flex; justify-content: center; align-items: stretch;
   pointer-events: none;
-  transform: translateY(calc(100% - 30px));
+  transform: translateY(calc(100% - 30px - var(--fan-rise, 0px)));
   transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
 }
 .dockUp .fan { transform: translateY(0); }
 .fanCard {
-  position: relative; flex: none; display: flex; margin: 0 -12px; pointer-events: auto;
+  position: relative; flex: none; display: flex;
+  margin: 0 calc((var(--fan-slot, 108px) - var(--card-w, 120px)) / 2);
+  transform: translateY(var(--fan-y, 0px)) rotate(var(--fan-a, 0deg));
+  transform-origin: 50% 100%;
+  pointer-events: auto;
   transition: transform 0.16s ease, filter 0.16s ease;
 }
 .fanCard:first-child { margin-left: 0; }
 .fanCard:last-child { margin-right: 0; }
+/* Hover straightens the card in place, lifts it and brings it to the front. */
 .fanCard:hover, .fanCard:focus-within {
-  transform: translateY(-12px);
+  transform: translateY(calc(var(--fan-y, 0px) - 12px)) rotate(0deg);
   z-index: 2;
   filter: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
 }
@@ -88,6 +107,27 @@
 .pTags { display: flex; gap: 4px; margin: 0 2px 4px; }
 .pText { font-size: 13px; line-height: 1.6; max-height: 190px; overflow: hidden; white-space: pre-wrap; }
 .pNote { font-size: 12px; color: var(--note); margin-top: 4px; }
+
+/* The skill aside: the player's pressable skills as cards, a separated strip
+   to the right of the hand fan that rises and retracts with it (only its
+   header peeks while down). */
+.skillAside {
+  position: absolute; right: 0; bottom: 40px; width: 150px;
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+  pointer-events: none;
+  transform: translateY(calc(100% - 28px));
+  transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
+}
+.dockUp .skillAside { transform: translateY(0); }
+.skillHead {
+  flex: none; pointer-events: auto; align-self: flex-end;
+  padding: 3px 10px; border-radius: 10px 10px 0 0;
+  background: var(--panel); border: 1.5px solid var(--line, #ddd); border-bottom: none;
+  color: var(--sub); font-size: 12px; font-weight: 700; white-space: nowrap;
+}
+.skillSlot { position: relative; pointer-events: auto; display: flex; justify-content: center; }
+.skillCard { cursor: pointer; }
+.skillOff { opacity: 0.55; filter: grayscale(0.6); }
 
 /* Draw-pile peek grows upward above the hand dock. */
 .peek { position: absolute; right: 0; bottom: 56px; width: 260px; max-height: 740px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 31; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }

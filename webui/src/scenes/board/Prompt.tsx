@@ -1,15 +1,18 @@
 // A prompt waiting on you (PromptView): choice, tile (also pickable on the
 // board), mortgage, pick cards, auction. Reads the live prompt; closes itself
 // when it is answered or replaced. Rendered as the old prompt card: pink
-// title, body, a thin timer bar, and outline pill options. Compact prompts sit
-// inline over the board centre; the big card grids keep a wide overlay.
+// title, body, a thin timer bar, and outline pill options -- presented as the
+// bottom sheet over the hand (Modal `chrome: "prompt"`): content-sized, up to
+// the centre column, retractable to its title strip.
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, cardText, cardColor } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
+import { useCloseWhen } from "../../hooks/mount";
+import { useTimeout } from "../../hooks/timers";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
@@ -18,7 +21,7 @@ import { previewFrom, previewHide } from "../../ui/CardPreview";
 import { bandColor } from "../../ui/Character";
 import { SkillBody } from "../../ui/SkillBody";
 import { TextInput } from "../../ui/Form";
-import { openModal } from "../../ui/Modal";
+import { openModal, useRaiseSheetOn } from "../../ui/Modal";
 import { act } from "./model";
 import s from "./Prompt.module.css";
 import { t as tr } from "../../i18n/t";
@@ -34,36 +37,64 @@ export function waitingOn(p: MatchPrompt, playerId: number): boolean {
 }
 
 /**
- * Compact prompts sit inline over the board centre: the option pills and a row
- * of standard-size card tiles both fit the ring. The multi-select card grids
- * (Returns' eight-pick, `pick`) need the wide overlay -- a checkbox grid plus a
- * detail column cannot fit the board centre without covering the ring tiles.
+ * Compact prompts keep the small sheet (`fit`); the multi-select card grids
+ * (Returns' eight-pick, `pick`) take the wide one -- a checkbox grid plus a
+ * detail column wants the sheet up to the centre column's width.
  */
 export function fitsInline(p: MatchPrompt): boolean {
   if (returnsPickNumber(p) !== null || p.kind === "pick") return false;
-  // A very long card row also goes to the overlay (8 tiles per row is the
-  // most the 856px ring can show beside the panel's padding).
+  // A very long card row also goes wide (8 tiles per row is the most the
+  // 856px column can show beside the panel's padding).
   return p.options.filter((o) => msgCards(o).length > 0).length <= 8;
 }
 
-function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () => void }) {
+/** True for `ms` after `on` drops: feeds the sheet's slide-down with content. */
+function useLinger(on: boolean, ms = 180): boolean {
+  const [held, setHeld] = useState(on);
+  if (on !== held && on) setHeld(true); // back on: re-arm the hold
+  useTimeout(() => setHeld(false), on ? null : ms);
+  return on || held;
+}
+
+/**
+ * The answer deadline, as the sheet strip's thin pink bar (online matches only;
+ * solo has no deadline). Lives in the title strip so it stays visible when the
+ * sheet is retracted -- and keeps running there.
+ */
+function PromptTimer({ sess }: { sess: GameSession }) {
   const { view, at } = useMatchView(sess);
   useTick(500);
+  // The deadline is measured against the time the prompt was first shown.
+  const total = useRef(0);
+  const p = view?.state.prompt;
+  if (sess.kind !== "online" || !view || !p) return null;
+  const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
+  if (!total.current) total.current = Math.max(1, left);
+  return (
+    <div className={s.timerRow}>
+      <div className={s.timerBar} role="progressbar" aria-valuemin={0} aria-valuemax={total.current} aria-valuenow={left}>
+        <div className={s.timerFill} style={{ width: `${Math.min(1, left / total.current) * 100}%` }} />
+      </div>
+      <span className={s.timerNum}>{left}{tr("common.unitSec")}</span>
+    </div>
+  );
+}
+
+function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () => void }) {
+  const { view } = useMatchView(sess);
   const auto = useAutoplay(sess); // 托管: answers are read-only
   const p = view?.state.prompt;
   // Keep one modal mounted through Returns' setup sequence. The player sees
   // one checklist and one confirmation, while the session advances its asks.
   const returnsGroup = useRef(returnsPickNumber(p) !== null).current;
   const live = !!view && !!p && (p.id === id || (returnsGroup && returnsPickNumber(p) !== null)) && waitingOn(p, view.playerId);
-  useEffect(() => {
-    if (!live) close();
-  }, [live, close]);
-  // The deadline is measured against the time the prompt was first shown.
-  const total = useRef(0);
-  if (!live || !view || !p) return null;
+  useCloseWhen(!live, close);
+  // A new question raises the sheet even mid-sequence (Returns' chained asks).
+  useRaiseSheetOn(live ? p?.id : id);
+  // Keep the panel's content through the close slide (the options go inert).
+  const showing = useLinger(live);
+  if (!showing || !view || !p) return null;
   const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
-  const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
-  if (!total.current) total.current = Math.max(1, left);
 
   const bodyCards = uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]);
 
@@ -122,15 +153,6 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
       {side}
       <div className={s.main}>
         {!returnsGroup && <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>}
-        {/* Solo has no answer deadline, so the bar is not shown at all. */}
-        {sess.kind === "online" && (
-          <div className={s.timerRow}>
-            <div className={s.timerBar} role="progressbar" aria-valuemin={0} aria-valuemax={total.current} aria-valuenow={left}>
-              <div className={s.timerFill} style={{ width: `${Math.min(1, left / total.current) * 100}%` }} />
-            </div>
-            <span className={s.timerNum}>{left}{tr("common.unitSec")}</span>
-          </div>
-        )}
         <div className={s.options}>
           {returnsGroup && <ReturnsOptions p={p} sess={sess} auto={auto} />}
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
@@ -379,7 +401,13 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
 function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; playerId: number; bidderName: string; answer: Answer; auto: boolean }) {
   const min = p.bid <= 0 ? 100 : p.bid + 100;
   const [bid, setBid] = useState(min);
-  useEffect(() => setBid((b) => Math.max(b, min)), [min]);
+  // The engine's minimum is a floor: when the standing bid rises, the field
+  // snaps up to it (a user's own lower typing is left alone).
+  const [seenMin, setSeenMin] = useState(min);
+  if (seenMin !== min) {
+    setSeenMin(min);
+    setBid((b) => Math.max(b, min));
+  }
   return (
     <div className={s.auction}>
       <div className={s.auctionTop}>{p.bidder >= 0 ? <>{tr("prompt.bidTop")}<b>{n0(p.bid)}</b>{tr("prompt.bidderOf", { who: bidderName })}</> : tr("prompt.noBids")}</div>
@@ -395,12 +423,13 @@ function Auction({ p, playerId, bidderName, answer, auto }: { p: MatchPrompt; pl
 }
 
 export function openPrompt(sess: GameSession, p: MatchPrompt): void {
-  const inline = fitsInline(p);
   openModal(fmtMsg(p.title, namesOf(sess.view?.state)) || tr("prompt.title"), (close) => <Prompt sess={sess} id={p.id} close={close} />, {
     closable: false,
     key: "prompt",
     chrome: "prompt",
-    placement: inline ? "inline" : "overlay",
-    size: inline ? "fit" : "wide",
+    size: fitsInline(p) ? "fit" : "wide",
+    // The countdown rides the retract strip (Modal head), so it stays visible
+    // while the sheet is down -- and keeps running there.
+    headExtra: <PromptTimer sess={sess} />,
   });
 }

@@ -35,16 +35,17 @@ export interface SeatInfo {
 
 /** Commit-reveal openings sealed into the header (`docs/FAIRNESS.md`). */
 export interface Fairness {
+  /** Scheme version of the recipe that produced these openings (1 or 2). */
   v: number;
-  /** The commitment shown at match start (hex). */
+  /** The commitment shown from the room's creation (hex). */
   commit: string;
   /** Server secret 256-bit seed (hex), revealed after the match. */
   seed: string;
   /** Server secret 256-bit salt (hex). */
   salt: string;
-  /** Human player nonces, ascending member id. */
+  /** Nonces of the members who sat in the match, ascending member id. */
   nonces: { member: number; nonce: string }[];
-  /** Canonical room settings string the commitment hashed. */
+  /** Canonical room settings string; bound by the header, not by the v2 commit. */
   settings: string;
 }
 

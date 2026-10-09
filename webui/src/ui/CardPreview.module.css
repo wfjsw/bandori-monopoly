@@ -22,7 +22,9 @@
 .auto { }
 
 .art { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; background: #eee; }
-.art img { width: 100%; display: block; }
+/* Card art is 4:3; the preview shows it at 75% of that height (16:9), cropped
+   around the centre, so the text below gets the room. */
+.art img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; object-position: center; }
 .title { font-size: 17px; font-weight: 700; margin: 6px 2px 2px; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 4px; }
 .text { font-size: 13px; line-height: 1.6; max-height: 240px; overflow: hidden; white-space: pre-wrap; }
@@ -34,3 +36,16 @@
 
 /* The shared host: pinned beside the hovered card inside the stage. */
 .hosted { z-index: 60; }
+
+/* The standing board panel: this same detail docked in the right sidebar --
+   full height, scrolling text, no floating chrome. */
+.stand {
+  position: relative; left: auto; right: auto; top: auto;
+  width: 100%; height: 100%; min-height: 0;
+  padding: 0; box-shadow: none; background: none; border-radius: 0;
+  animation: none; z-index: auto;
+  display: flex; flex-direction: column; overflow: auto;
+}
+.stand .text { max-height: none; flex: 1; overflow: auto; }
+.stand .art { border-bottom-width: 6px; }
+.stand .title { font-size: 19px; }

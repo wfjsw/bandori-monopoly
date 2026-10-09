@@ -169,18 +169,15 @@ export interface RoomInfo {
   id: string; name: string; ranked: boolean; maxPlayers: number; locked: boolean;
   playing: boolean; theme: string; weights: ScoreWeights; members: RoomMember[];
   /** Commit-reveal fairness (`docs/FAIRNESS.md`): the commitment is public
-   *  from the moment the room starts; the openings never travel here. */
+   *  from the moment the room is created (and a fresh one after every match);
+   *  the openings never travel here. */
   fair?: FairPublic;
 }
 
-/** What a client may see of the commit-reveal state during the match. */
+/** What a client may see of the commit-reveal state. */
 export interface FairPublic {
-  /** SHA-256 commitment (hex), copyable in the match UI. */
+  /** SHA-256 commitment (hex), copyable in the room UI. */
   commit: string;
-  /** Canonical room settings string the commitment hashed. */
-  settings: string;
-  /** True while the player-nonce window is still open. */
-  collecting: boolean;
 }
 
 /** A match command (NetMessage); only the fields a command uses matter. */

@@ -1,18 +1,16 @@
 // The 60-tile ring, tokens, and the center: cards in play, the event deck, banner.
 
-import { cardArt, charArt, sceneImg } from "../../core/assets";
+import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
 import { plain } from "../../core/format";
 import type { TileData } from "../../core/types";
-import { CardFace, showCard } from "../../ui/Card";
-import { Avatar, bandColor } from "../../ui/Character";
-import { SkillBody } from "../../ui/SkillBody";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
-import { showEvent, showEventPile, showField } from "./Popups";
+import { showEventPile } from "./Popups";
 import s from "./Ring.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
@@ -22,9 +20,11 @@ import { namesOf } from "../../core/names";
  *  12 x 10 grid of cells, `boardIndex 0` = CiRCLE at the bottom right,
  *  counter-clockwise. Each side's middle steps inward one cell and runs back
  *  out -- that extra rung is what lets one side carry 15 tiles instead of 12 on
- *  the same box. The map fills its slot: cells stretch to `box / 12` by
- *  `box / 10`, so the ring uses the whole rectangle (wide on a wide window)
- *  while the path -- and the pockets it encloses -- keep their grid shape. */
+ *  the same box. The board fills its own rect (the slot held to 1..1.6,
+ *  `viewport.ts` `boardRect`): cells stretch to `board / 12` by `board / 10`,
+ *  so the ring uses the whole rectangle while the path -- and the pockets it
+ *  encloses -- keep their grid shape. The window around it is the whole map
+ *  slot, so the visible range is 100% of the slot even though the map is not. */
 const COLS = 12;
 const ROWS = 10;
 const FOLD: readonly (readonly [number, number])[] = [
@@ -41,7 +41,8 @@ function cell(i: number): readonly [number, number] {
   return FOLD[i % FOLD.length];
 }
 
-/** Pixel centre of a 0-based column / row on a `w` x `h` board rect. */
+/** Pixel centre of a 0-based column / row on a `w` x `h` board rect (the ring
+ *  inside the window -- not the window itself). */
 const cellX = (col: number, w: number) => (col + 0.5) * (w / COLS);
 const cellY = (row: number, h: number) => (row + 0.5) * (h / ROWS);
 
@@ -51,13 +52,21 @@ export interface RingProps {
   /** Tiles a "tile" prompt lets you pick by clicking. */
   pickable: number[];
   onTile: (i: number) => void;
+  /** The die in the board's roll zone (hidden in replays). */
+  roll?: RollControl | null;
+}
+
+/** The roll-zone die button: same action as the old side-column one. */
+export interface RollControl {
+  enabled: boolean;
+  rolling: boolean;
+  dice: number;
+  hint: string;
+  onClick: () => void;
 }
 
 /** What a hovered tile marker says, and where (the wrap's own pixel space). */
 interface MarkTip { x: number; y: number; title: string; lines: string[] }
-
-/** Hover target: a card in play, or an event in effect (both expand the same way). */
-interface FieldHover { kind: "card" | "event"; id: string; note: string; owner?: number }
 
 /** A tile's face, drawn from the same data the deeds and engine use -- no board
  *  texture. The `#index` chip wears the tile's colour (the old colour bar);
@@ -84,20 +93,19 @@ function TileFace({ tile }: { tile: TileData }) {
   );
 }
 
-export function Ring({ m, anim, pickable, onTile }: RingProps) {
+export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   const S = m.S;
   const pos = anim.pos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
   const vp = useBoardViewport();
   const wrapRef = vp.wrapRef;
   const [tip, setTip] = useState<MarkTip | null>(null);
-  const [tipBox, setTipBox] = useState({ w: 0, h: 0 });
   const tipRef = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<FieldHover | null>(null);
   // Markers sit inside a tile (which clips), so their popup is drawn on the
   // untransformed overlay above the zoom layer. The wrap is not zoomed: its
   // bounding box carries only the stage scale, and converting the marker's
-  // screen box against it lands in the wrap's own pixel space at any zoom.
+  // screen box against it lands in the wrap's own pixel space (the window) at
+  // any zoom.
   const showTip = (e: React.MouseEvent, title: string, lines: string[]) => {
     const wrap = wrapRef.current;
     if (!wrap) return;
@@ -108,24 +116,18 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
   };
   const hideTip = () => setTip(null);
   // The tip is content-sized (`width: max-content`, max 220px) and the wrap
-  // clips the panned board, so keep it inside the board box: clamp x by its
-  // measured width and flip it below the marker near the top edge.
-  useLayoutEffect(() => {
-    const el = tipRef.current;
-    if (!el || !tip) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    if (w !== tipBox.w || h !== tipBox.h) setTipBox({ w, h });
-  }, [tip, tipBox.w, tipBox.h]);
-  const half = Math.min(tipBox.w || 220, 220) / 2;
+  // clips the panned board, so keep it inside the *window*: clamp x by its
+  // measured width against the window's width and flip it below the marker
+  // near the top edge.
+  const tipBox = useLayoutSize(tipRef, tip);
+  const half = Math.min(tipBox.width || 220, 220) / 2;
   const tipX = tip ? Math.min(Math.max(tip.x, half + 8), vp.box.width - half - 8) : 0;
-  const tipUp = tip ? tip.y - (tipBox.h || 90) - 12 >= 0 : true;
+  const tipUp = tip ? tip.y - (tipBox.height || 90) - 12 >= 0 : true;
   return (
     <div
       className={s.wrap}
       data-vp-bg
       ref={wrapRef}
-      style={{ width: vp.box.width, height: vp.box.height }}
       tabIndex={0}
       onKeyDown={vp.onKeyDown}
       onPointerDown={vp.onPointerDown}
@@ -136,11 +138,13 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
       onDoubleClick={vp.onDoubleClick}
       aria-label={tr("board.zoomLabel")}
     >
-      {/* Board pixels are the wrap's own pixels; this layer carries the user's
-          pan/zoom over the tiles and the interior. */}
-      <div className={s.viewport} style={vp.style}>
+      {/* Window pixels are the wrap's own pixels; the zoom layer is the board
+          rect (ring + interior) placed by the user's pan/zoom. It does not
+          fill the window -- on a wide slot the board keeps its aspect and sits
+          centred at fit, and the wrap shows the rest of the slot. */}
+      <div className={s.viewport} style={{ ...vp.style, width: vp.board.width, height: vp.board.height }}>
         <div className={s.ring} data-vp-bg>
-          <Center m={m} onHover={setHover} />
+          <Center m={m} roll={roll} />
           {D.tiles.map((t, i) => {
             const [col, row] = cell(i);
             const owner = S.owners[i] ?? -1;
@@ -207,9 +211,9 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
               const dx = n > 1 ? (k - (n - 1) / 2) * Math.min(14, 40 / (n - 1)) : 0;
               const ch = m.charOf(i);
               const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
-              const top = cellY(row, vp.box.height) + 16;
+              const top = cellY(row, vp.board.height) + 16;
               return (
-                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.box.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
                     ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />
@@ -220,12 +224,12 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
           </div>
         </div>
       </div>
-      {/* Fixed overlays: the hover details stay out of the zoom layer so they
-          keep their size and screen position at any zoom. The turn / action
+      {/* Fixed overlays: the marker tip stays out of the zoom layer so it
+          keeps its size and screen position at any zoom. The turn / action
           banners and the card flash are match-screen chrome (Board's FX
-          layer) -- not map-sized, not map-clipped. */}
+          layer) -- not map-sized, not map-clipped. Field cards now read from
+          the board's top sheet (FieldSheet), with the shared hover preview. */}
       <div className={s.overlay}>
-        <FieldPreview m={m} hover={hover} />
         {tip && (
           <div ref={tipRef} className={s.markTip} style={{ left: tipX, top: tip.y, transform: tipUp ? undefined : "translate(-50%, 6px)" }}>
             <b>{tip.title}</b>
@@ -250,52 +254,8 @@ function ZoomControls({ vp }: { vp: ViewportApi }) {
   );
 }
 
-/** The field-card / event hover detail, over the right of the board window.
- *  Rendered outside the zoom layer, so it never scales away from the viewer. */
-function FieldPreview({ m, hover }: { m: Model; hover: FieldHover | null }) {
-  const hc = hover?.kind === "card" ? D.card(hover.id) : undefined;
-  const he = hover?.kind === "event" ? D.event(hover.id) : undefined;
-  return (
-    <div className={cx(s.fieldPreview, hover && s.fieldPreviewOn)}>
-      {hover && (
-        <>
-          {hover.kind === "card" ? (
-            <>
-              <div className={s.fpArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
-              <div className={s.fpTitle}>{cardTitle(hover.id)}</div>
-              {hover.owner != null && (
-                <div className={s.fpOwner} style={{ ["--own" as string]: m.colorOf(hover.owner) }}>
-                  <Avatar c={m.charOf(hover.owner)} size={22} /><span>{tr("board.fieldOwner", { who: m.nameOf(hover.owner) })}</span>
-                </div>
-              )}
-              <div className={s.fpText}><SkillBody text={hc?.text ?? ""} /></div>
-            </>
-          ) : (
-            <>
-              <div className={s.fpTitle}><span className={s.fpEvent}>{tr("events.label", { id: hover.id })}</span> {he?.name ?? ""}</div>
-              <div className={s.fpText}>{he?.text ?? ""}</div>
-            </>
-          )}
-          {hover.note && <div className={s.fpNote}>{hover.note}</div>}
-        </>
-      )}
-    </div>
-  );
-}
-
-function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => void }) {
+function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
   const S = m.S;
-  // Skill rules are placed on the field so `On::Hook` reaches them (engine
-  // `bind_skills`); they are not cards in play and carry no displayable state,
-  // and the skill button is where they are actually shown. `skill:` is the
-  // rule-id prefix `skill_id` builds -- without this every player opens the
-  // match with two （未命名） cards on their field.
-  const rows = S.players
-    .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
-    .filter(([, f]) => f.length);
-  const fieldCount = rows.reduce((a, [, f]) => a + f.length, 0);
-  const events = S.eventActive ?? [];
-  const names = namesOf(S);
   return (
     <div className={s.inner} data-vp-bg>
       {/* Board colour and zone labels on the path's 12 x 10 grid (1-based grid
@@ -317,57 +277,26 @@ function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => v
         <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
         <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
       </div>
-      {/* 场上的卡 in the fold's big interior: compact card faces grouped by
-          whose field they are on, each with its live state (crystals, note).
-          Hover shows the full card; click opens it; the header opens the
-          large list (Popups `showField`). */}
-      {(fieldCount > 0 || events.length > 0) && (
-        <div className={s.field}>
-          <button type="button" className={s.fieldHead} onClick={() => showField(m)}>
-            <b>{tr("board.field")}</b><small>×{fieldCount}</small>
+      {/* The die in the board's roll zone (掷骰区): the one roll control, on
+          the spot the board names for it. Hidden in replays (`roll` null). */}
+      {roll && (
+        <div className={s.rollDock}>
+          <button
+            type="button"
+            className={cx(s.roll, roll.enabled && s.can, roll.rolling && s.rolling)}
+            title={roll.hint}
+            disabled={!roll.enabled}
+            onClick={roll.onClick}
+          >
+            <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />
+            <div className={s.diceNum}>{roll.dice || ""}</div>
+            <div className={s.diceCap}>{tr("board.dice")}</div>
           </button>
-          {/* One compact grid for every card in play, grouped by owner (seat
-              order); each card is framed in its owner's colour, and hovering
-              names the owner in the preview. Events follow, unowned. */}
-          <div className={s.fieldGrid} data-vp-scroll>
-            {rows.flatMap(([i, f]) => f.map((fc) => {
-              const note = fc.note ? fmtMsg(fc.note, names) : "";
-              const color = m.colorOf(i);
-              return fc.faceDown ? (
-                <div key={fc.uid} className={s.fieldBack} style={{ ["--own" as string]: color }} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
-              ) : (
-                <CardFace key={fc.uid} id={fc.card} size="hand" className={s.fieldCard} style={{ ["--own" as string]: color }} onClick={() => showCard(fc.card, [], note)} onMouseEnter={() => onHover({ kind: "card", id: fc.card, owner: i, note: note || [fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "", fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : ""].filter(Boolean).join(" · ") })} onMouseLeave={() => onHover(null)}>
-                  {fc.crystals > 0 && <span className={s.crystal}>◆{fc.crystals}</span>}
-                  {fc.cp > 0 && <span className={s.cpBadge} title={tr("board.cp", { n: fc.cp })}>CP{fc.cp}</span>}
-                  {note && <span className={s.noteDot} />}
-                </CardFace>
-              );
-            }))}
-          </div>
-          {/* Events in effect: the same compact face (event art is the deck's
-              back, tinted), its counters as badges, hover to expand. */}
-          {events.length > 0 && (
-            <div className={s.eventRow} title={tr("board.activeEvents")}>
-              {events.map((e) => {
-                const ev = D.event(e.id);
-                const note = e.note?.k ? fmtMsg(e.note, names) : "";
-                return e.faceDown ? (
-                  <div key={e.id} className={s.fieldBack} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
-                ) : (
-                  <div key={e.id} className={s.eventFace} onClick={() => showEvent(e.id, note)} onMouseEnter={() => onHover({ kind: "event", id: e.id, note })} onMouseLeave={() => onHover(null)}>
-                    <div className={s.eventArt}><img src={sceneImg("card_back")} alt="" /></div>
-                    <div className={s.eventTitle}>{ev?.name ?? e.id}</div>
-                    {e.counter > 0 && <span className={s.crystal}>×{e.counter}</span>}
-                    {note && <span className={s.noteDot} />}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
       {/* The shared event deck sits in the bottom-left pocket of the fold; your
-          own draw pile is at the head of your hand (Side.tsx). */}
+          own draw pile is at the head of your hand (Side.tsx). Cards in play
+          sit on the board's top sheet (FieldSheet), not in the interior. */}
       <div className={s.piles}>
         <button type="button" className={s.pile} onClick={() => showEventPile(S)}>
           <div className={s.stack}><img src={sceneImg("card_back")} alt="" /></div>

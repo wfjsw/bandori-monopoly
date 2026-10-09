@@ -6,6 +6,7 @@
 
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
+import { useEventListener } from "../hooks/dom";
 import s from "./Stage.module.css";
 
 export const STAGE_W = 1600;
@@ -47,24 +48,15 @@ function useStage(): { scale: number; w: number; h: number } {
     return { scale, w: vw / scale, h: vh / scale };
   };
   const [box, set] = useState(calc);
-  useEffect(() => {
-    const on = () => set(calc());
-    // A scrolled document desyncs touches from the fixed stage; snap back.
-    const unscroll = () => {
-      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
-    };
-    const vv = window.visualViewport;
-    window.addEventListener("resize", on);
-    vv?.addEventListener("resize", on);
-    vv?.addEventListener("scroll", unscroll);
-    window.addEventListener("scroll", unscroll);
-    return () => {
-      window.removeEventListener("resize", on);
-      vv?.removeEventListener("resize", on);
-      vv?.removeEventListener("scroll", unscroll);
-      window.removeEventListener("scroll", unscroll);
-    };
-  }, []);
+  useEventListener(window, "resize", () => set(calc()));
+  useEventListener(() => window.visualViewport, "resize", () => set(calc()));
+  // A scrolled document desyncs touches from the fixed stage (the mobile
+  // touch fix); snap back to the origin wherever the scroll came from.
+  const unscroll = () => {
+    if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  };
+  useEventListener(window, "scroll", unscroll);
+  useEventListener(() => window.visualViewport, "scroll", unscroll);
   return box;
 }
 
@@ -87,22 +79,32 @@ export function useStageFill(on = true): void {
   }, [on]);
 }
 
-export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
-  const { scale, w, h } = useStage();
-  const bg = useSyncExternalStore(
+/** The backdrop the scene set, for the blurred plate behind the stage. */
+export function useBackdropValue(): string | null {
+  return useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
     () => backdrop,
   );
-  const tall = useSyncExternalStore(
+}
+
+/** Is the scene filling the window (see `useStageFill`)? */
+export function useStageFillValue(): boolean {
+  return useSyncExternalStore(
     (cb) => {
       fillListeners.add(cb);
       return () => fillListeners.delete(cb);
     },
     () => fill,
   );
+}
+
+export function Stage({ children, fading }: { children: ReactNode; fading: boolean }) {
+  const { scale, w, h } = useStage();
+  const bg = useBackdropValue();
+  const tall = useStageFillValue();
   const src = bg ? sceneImg(bg) : "";
   return (
     <>

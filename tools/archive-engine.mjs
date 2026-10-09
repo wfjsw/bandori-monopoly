@@ -604,7 +604,11 @@ async function main() {
       modulesDir: "../modules",
     },
   };
-  writeFileSync(join(bundleDir, "bundle.json"), JSON.stringify(bundleJson, null, 1));
+  // A bundle already in the store keeps its first seal: re-running the archive
+  // for the same bytes (a web-only redeploy) must not rewrite its metadata, or
+  // the index's recorded hash of bundle.json goes stale.
+  const bundleJsonPath = join(bundleDir, "bundle.json");
+  if (!existsSync(bundleJsonPath)) writeFileSync(bundleJsonPath, JSON.stringify(bundleJson, null, 1));
 
   // Per-file hashes: what `--check` verifies, and the reason a store copy is
   // auditable even when `rebuild: false`.
@@ -648,8 +652,9 @@ async function main() {
     console.log(`       committing the tree is what makes tools/rebuild-engine.mjs work`);
   }
   const at = index.bundles.findIndex((b) => b.id === id);
-  if (at >= 0) index.bundles[at] = entry;
-  else index.bundles.unshift(entry);
+  // Same bytes already sealed: keep the first seal's entry (created, commit,
+  // ref) -- a redeploy of the same engine is not a new archive event.
+  if (at < 0) index.bundles.unshift(entry);
   if (a.current) index.current = id;
   writeFileSync(indexPath, JSON.stringify(index, null, 1));
 
