@@ -44,7 +44,7 @@ export function model(v: MatchView): Model {
     out: v.playerId < 0 || me.bankrupt || me.left,
     charOf,
     colorOf: (i) => charOf(i)?.color ?? FALLBACK_COLORS[i % FALLBACK_COLORS.length],
-    nameOf: (i) => (i === v.playerId && i >= 0 ? tr("common.you") : S.players[i]?.player ?? ""),
+    nameOf: (i) => (i === v.playerId && i >= 0 ? tr("common.you") : namesOf(S).playerId(i)),
     overHand: v.hand.length > (stateOf(me, "handLimit") || 5),
   };
 }

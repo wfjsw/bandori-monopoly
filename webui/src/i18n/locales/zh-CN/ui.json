@@ -235,7 +235,7 @@
   "deed.note.drawEvent": "抽 1 张手卡，然后抽 1 张事件卡。",
   "deed.note.leftHouses": "格子上留有 {{n}} 栋房屋（地主出局后留下的）：买下要连房屋一起付，共 {{total}}。",
   "deed.owner": "拥有者",
-  "deed.ownerLine": "{{who}}（{{chara}}）{{mort}}",
+  "deed.ownerLine": "{{who}}{{mort}}",
   "deed.perHouse": "{{n}} / 栋",
   "deed.poor": "（资金不够）",
   "deed.fundByMortgage": "（可抵押凑钱）",

@@ -5,7 +5,7 @@
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { sfx } from "../../core/audio";
-import { namesOf } from "../../core/names";
+import { namesOf, turnNamesOf } from "../../core/names";
 import { D } from "../../core/data";
 import { fmtMsg, type Names } from "../../i18n/msg";
 import type { MatchEvent, MatchView } from "../../core/types";
@@ -100,7 +100,7 @@ export class Animator {
   }
 
   addLog(e: MatchEvent): void {
-    const line = fmtMsg(e.msg, this.names());
+    const line = fmtMsg(e.msg, e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names());
     if (!line) return;
     this.log = [...this.log.slice(-199), { id: e.id, text: line, turn: e.type === "turn" }];
   }
@@ -197,11 +197,11 @@ export class Animator {
 
   private name(playerId: number): string {
     const v = this.view();
-    return playerId === v?.playerId ? tr("common.you") : v?.state.players[playerId]?.player ?? "";
+    return playerId === v?.playerId ? tr("common.you") : this.player(playerId);
   }
 
   private player(playerId: number): string {
-    return this.view()?.state.players[playerId]?.player ?? "";
+    return this.names().playerId(playerId);
   }
 
   private async diceAnim(value: number): Promise<void> {
@@ -385,7 +385,7 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
         const now = v.state;
         if (prev && now.phase === "play" && (prev.turn !== now.turn || prev.step !== now.step)) {
           const newTurn = prev.turn !== now.turn;
-          const who = now.players[now.turn]?.player ?? "";
+          const who = namesOf(now).playerId(now.turn);
           const label = newTurn ? (now.turn === v.playerId ? tr("anim.yourTurn") : tr("anim.turnOf", { who })) : undefined;
           a.stageTo(prev.step, { step: now.step, newTurn, label });
         }

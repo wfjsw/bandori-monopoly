@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 import { navigate } from "../../app/router";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
+import { D } from "../../core/data";
+import { namesOf } from "../../core/names";
 import { n0 } from "../../core/format";
 import { useSessionOther } from "../../core/hooks";
 import { applyMatch, hasProfile } from "../../core/store";
@@ -49,7 +51,7 @@ function Results({ m, reward, exit, sess, watch }: { m: Model; reward: MatchRewa
           <div key={i} className={cx(s.row, i === m.playerId && s.mine)}>
             <div className={cx(s.rank, x.rank <= 3 && s[`r${x.rank}`])}>{x.rank}</div>
             <Avatar c={m.charOf(i)} size={52} />
-            <div className={s.who}><b>{x.player}{i === m.playerId && <span className={s.you}>{tr("common.you")}</span>}</b><small>{m.charOf(i)?.display ?? ""}</small></div>
+            <div className={s.who}><b>{namesOf(S).playerId(i)}{i === m.playerId && <span className={s.you}>{tr("common.you")}</span>}</b><small>{D.band(m.charOf(i)?.band ?? "")?.name ?? ""}</small></div>
             <div className={s.num}><small>{x.bankrupt ? tr("board.bankrupt") : x.left ? tr("board.forfeit") : tr("common.score")}</small><b>{n0(x.score)}</b></div>
             <div className={s.num}><small>{tr("common.assets")}</small><b>{n0(x.assets)}</b></div>
           </div>

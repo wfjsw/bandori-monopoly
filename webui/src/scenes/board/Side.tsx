@@ -26,6 +26,7 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
   const auto = useAutoplay(sess);
   const S = m.S;
   const cur = S.players[S.turn];
+  const names = namesOf(S);
   const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
   const can = control !== null;
   const advance = control === "end";
@@ -35,12 +36,12 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
   else if (m.out) hint = m.me.bankrupt ? tr("board.spectating") : tr("board.youLeft");
   else if (S.turn < 0) hint = m.asking ? tr("board.redrawAsk") : tr("board.startingSoon");
   else if (S.busy || anim.animating) hint = tr("board.settling");
-  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: cur?.player ?? "" });
+  else if (S.roller === m.playerId && !m.myTurn && S.step === 2) hint = tr("board.rolledFor", { who: names.playerId(S.turn) });
   else if (m.myTurn && S.step === 2 && S.skipMove) hint = tr("board.stayHint");
   else if (advance) hint = tr("board.moved");
-  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: S.players[S.roller].player });
+  else if (m.myTurn && S.step === 2 && S.roller !== m.playerId && S.roller >= 0) hint = tr("board.waitRoller", { who: names.playerId(S.roller) });
   else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
-  else hint = tr("board.waiting", { who: cur?.player ?? "", bot: cur?.bot ? tr("board.botSuffix") : "" });
+  else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
 
   const hasSkill = m.me.actions?.some((a) => a.enabled);
   const caption = advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice");
