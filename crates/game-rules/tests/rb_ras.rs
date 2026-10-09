@@ -1592,6 +1592,67 @@ fn nagisa_fingertip_is_offered_as_a_counter_on_a_fire_pot_roll() {
     );
 }
 
+#[test]
+fn layer_keep_plays_from_hand_to_field() {
+    // Sheet 2026-10-06 新卡组卡 H16: 「可打出此卡」 -- the placement branch of
+    // the merged Play entry.
+    let mut t = Table::new(&["和奏瑞依", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.give(0, &["RAS:（和奏瑞依）寄于指尖的执念"]);
+    t.play(0, "RAS:（和奏瑞依）寄于指尖的执念").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "RAS:（和奏瑞依）寄于指尖的执念"));
+}
+
+#[test]
+fn layer_keep_press_refused_without_die_or_fire() {
+    // 「消耗一个火罐以用于替代当回合的移动掷骰」 -- needs both a kept die and
+    // a fire pot.
+    let mut t = Table::new(&["和奏瑞依", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "RAS:（和奏瑞依）寄于指尖的执念");
+    // no kept die
+    assert!(t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念").is_err());
+    drain(&mut t);
+    // a kept die but no fire
+    t.set_state(0, "layer_keep_count", 1);
+    t.set_state(0, "layer_keep_0", 7);
+    t.set_fire(0, 0, 1);
+    assert!(t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念").is_err());
+}
+
+#[test]
+fn layer_keep_press_replaces_the_move_roll_with_a_kept_die() {
+    // 规则书: 「在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰，随后删去
+    // 该骰点」 -- the placed-press branch of the merged Play entry.
+    let mut t = Table::new(&["和奏瑞依", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "RAS:（和奏瑞依）寄于指尖的执念");
+    t.set_state(0, "layer_keep_count", 1);
+    t.set_state(0, "layer_keep_0", 7);
+    t.set_fire(0, 1, 1);
+    t.skill(0, "RAS:（和奏瑞依）寄于指尖的执念").unwrap();
+    // 「可保留多个骰点」 -- a pick among the kept dice (one here).
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    t.answer_one(0).unwrap();
+    drain(&mut t);
+    // 「消耗一个火罐」 and 「删去该骰点」
+    assert_eq!(t.fire(0), 0, "one fire pot spent");
+    assert_eq!(t.state(0, "layer_keep_count"), 0, "the die was deleted");
+    // 「替代当回合的移动掷骰」 -- the next move roll is the kept face (7).
+    t.dice(&[1]); // loaded face is overridden by the fixed roll
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 7, "moved exactly the kept die");
+}
+
 
 #[test]
 fn interaction_please_choose_opt2_is_an_abnormal_move() {

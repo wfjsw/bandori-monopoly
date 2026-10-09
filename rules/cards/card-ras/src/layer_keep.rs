@@ -15,8 +15,11 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LAYER_KEEP: CardDef = CardDef::new(
     "RAS:（和奏瑞依）寄于指尖的执念",
     &[
-        On::Play("", None, play),
-        On::Play("", Some(can_use), use_die),
+        // One Play entry for both contexts (the engine dispatches only the
+        // first): the placement from hand (「可打出此卡」), or the later press
+        // that spends a 火罐 on a kept die. The gate admits whenever either
+        // branch is available.
+        On::Play("", Some(cant_play), play),
         On::Hook(&[HookKind::RollAfter], "", Some(roll_after_guard), roll_after),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
@@ -29,7 +32,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         ),
     ],
 )
-.legacy(&[(3, legacy_can_counter_fire)]);
+.legacy(&[(2, legacy_can_counter_fire)]);
 
 /// G4 audit oracle (docs/GUARDS.md §5.1).
 fn legacy_can_counter_fire(player_id: i32) -> bool {
@@ -54,9 +57,28 @@ const SLOT_DICE: [&str; 8] = [
     "layer_keep_7",
 ];
 
+/// Combined gate: not yet placed (the placement branch), or placed with a
+/// kept die and the 「一个火罐」 the reuse needs.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if !ctx::is_placed() {
+        return None;
+    }
+    if ctx::slot(player_id, SLOT_COUNT) < 1 {
+        return Some(Msg::new(key!("layer_keep_no_die")));
+    }
+    if ctx::fire(player_id) < 1 {
+        return Some(Msg::new(key!("layer_keep_no_fire")));
+    }
+    None
+}
+
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「当你使用火罐进行掷骰时，保留（写下）未被选择的另一个骰点」
-    // -- the card itself just stays in play (C# `H.PlaceFromPlay(c)`)?.
+    if ctx::is_placed() {
+        return use_die(player_id);
+    }
+    // 规则书: 「可打出此卡并保留（写下）未被选择的另一个骰点」 -- the card
+    // itself just stays in play (C# `H.PlaceFromPlay(c)`); the unchosen die is
+    // written by the `RollAfter` hook below.
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("layer_keep_note")));
     ctx::log(
@@ -115,20 +137,8 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰」 -- a press.
-fn can_use(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed() {
-        return Some(Msg::new(key!("layer_keep_not_placed")));
-    }
-    if ctx::slot(player_id, SLOT_COUNT) < 1 {
-        return Some(Msg::new(key!("layer_keep_no_die")));
-    }
-    if ctx::fire(player_id) < 1 {
-        return Some(Msg::new(key!("layer_keep_no_fire")));
-    }
-    None
-}
-
+/// 「在后续任意回合中消耗一个火罐以用于替代当回合的移动掷骰」 -- the
+/// placed-press branch of the merged Play entry.
 /// 「随后删去该骰点。可保留多个骰点。」
 fn use_die(player_id: i32) -> card_sdk::Asked {
     let n = ctx::slot(player_id, SLOT_COUNT);
