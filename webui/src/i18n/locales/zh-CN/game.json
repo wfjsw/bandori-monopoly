@@ -1,5 +1,5 @@
 {
-  "ask.counteract.move_extension": "本次主要移动已确定为 {{n}} 格，预计停在 {{tile}}。选择使用专卡或消耗火罐，之后决定增加 1 格或 2 格；也可以不使用。",
+  "ask.counteract.move_extension": "本次主要移动已确定为 {{n}} 格，预计停在 {{tile}}。这次移动多走几格？",
   "ask.counteract.skill": "消耗 {{n}} 个火罐 · {{card}}",
   "ask.agent.build": "{{tile}}　加盖第 {{nth}} 栋  {{cost}}",
   "ask.agent.buy": "{{tile}}　购买 {{price}}{{extra}}",
@@ -393,5 +393,8 @@
   "status.move_not_your_turn": "只能在自己的回合",
   "status.stunned": "[晕眩]",
   "vote.against": "{{who}} 反对",
-  "vote.timeout": "到时间还有人没投"
+  "vote.timeout": "到时间还有人没投",
+  "ask.counteract.move_extension_payment": "已选择 +{{n}} 格，预计停在 {{tile}}。选择支付方式。",
+  "ask.counteract.extend": "+{{n}} 格 → {{tile}}",
+  "ask.counteract.back": "返回上一步"
 }

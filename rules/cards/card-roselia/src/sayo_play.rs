@@ -63,22 +63,10 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let before = trigger::value().max(0);
     let extra = (trigger::move_total() - trigger::value().max(0)).max(0);
     let total = before + extra;
-    let landing =
-        |steps: i32| (trigger::tile() + steps * trigger::move_dir()).rem_euclid(ctx::tile_count());
-    let n = match ctx::ask_pick(
-        player_id,
-        &Msg::new(key!("sayo_play_ask_title")).card("card", "R:（纱夜）弹奏弹奏弹奏，继续弹奏"),
-        &Msg::new(key!("sayo_play_ask_text"))
-            .i("n", total as i64)
-            .tile("tile", landing(total)),
-        &[
-            Msg::new(key!("sayo_play_plus_one")).tile("tile", landing(total + 1)),
-            Msg::new(key!("sayo_play_plus_two")).tile("tile", landing(total + 2)),
-        ],
-    )? {
-        0 => 1,
-        _ => 2,
-    };
+    let n = trigger::move_tag(card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+    if !matches!(n, 1 | 2) {
+        return Ok(());
+    }
     // 规则书: 「打出时视为使用一次此卡使用者的技能」-- the C# body bumps the move.
     state::set(player_id, "skill.sayoThorns.used", ctx::turn_key());
     plan::set_steps(before + n);

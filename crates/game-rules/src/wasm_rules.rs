@@ -2948,6 +2948,7 @@ impl<M: CardModules> RulesBridge<M> {
             idx: -1,
             id: t.card.clone(),
             uid: -1,
+            move_extension: 0,
             answered: 0,
             link: trigger.clone(),
             answers: Vec::new(),
@@ -3024,7 +3025,7 @@ impl<M: CardModules> RulesBridge<M> {
                                 .copied()
                         })
                         .collect();
-                    let Some((id, idx, uid)) =
+                    let Some((id, idx, uid, move_extension)) =
                         self.declare_one(cx, cursor, &chain[timing].link, &mut memo, &groups)?
                     else {
                         // Explicit pass, or nothing eligible left: the visit
@@ -3060,6 +3061,7 @@ impl<M: CardModules> RulesBridge<M> {
                         idx,
                         id,
                         uid,
+                        move_extension,
                         answered: timing,
                         link: bridge_trigger(&link),
                         answers: Vec::new(),
@@ -3124,6 +3126,12 @@ impl<M: CardModules> RulesBridge<M> {
             // `set_cancelled` / `negate_effect` / `spare` land there -- and the
             // effect settles only after every counter has had its say.
             let mut on_link = chain[answered].link.clone();
+            if chain[idx].move_extension > 0 {
+                on_link.move_tags.push((
+                    card_sdk::abi::COUNTERACT_MOVE_EXTENSION.to_string(),
+                    chain[idx].move_extension,
+                ));
+            }
             let dest = self.drive(
                 cx,
                 Call::Counteract {
@@ -3134,6 +3142,9 @@ impl<M: CardModules> RulesBridge<M> {
                 uid,
                 &mut on_link,
             )?;
+            on_link.move_tags.retain(|(key, _)| {
+                key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION
+            });
             chain[answered].link = on_link;
             dest
         };
@@ -3290,7 +3301,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         memo: &mut ProbeMemo,
         groups: &[i32],
-    ) -> Flow<Option<(String, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32)>> {
         // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
@@ -3513,7 +3524,7 @@ impl<M: CardModules> RulesBridge<M> {
         top: &Trigger,
         order: Vec<(u8, u32, u32)>,
         options: Vec<(String, i32, i32)>,
-    ) -> Flow<Option<(String, i32, i32)>> {
+    ) -> Flow<Option<(String, i32, i32, i32)>> {
         if options.is_empty() {
             return Ok(None);
         }
@@ -3522,7 +3533,20 @@ impl<M: CardModules> RulesBridge<M> {
         let mut keyed: Vec<((u8, u32, u32), (String, i32, i32))> =
             order.into_iter().zip(options).collect();
         keyed.sort_by_key(|(k, _)| *k);
-        let options: Vec<(String, i32, i32)> = keyed.into_iter().map(|(_, o)| o).collect();
+        let mut options: Vec<(String, i32, i32)> = keyed.into_iter().map(|(_, o)| o).collect();
+        let shared_move = top.kind == TriggerKind::MoveBefore
+            && options.iter().any(|(_, idx, _)| {
+                self.ruleset.cards()[*idx as usize]
+                    .props
+                    .get(card_sdk::abi::prop::COUNTERACT_GROUP)
+                    .copied()
+                    .unwrap_or(0)
+                    > 0
+            });
+        if shared_move {
+            // Payment order: dedicated card, fire pots, then back.
+            options.sort_by_key(|(_, _, uid)| *uid >= 0);
+        }
         // C#: labels "打出「...」" + "不打"; the hint is the first CounteractHint or
         // the trigger's description. CounteractHint is not in the ABI yet (TODO).
         let mut labels: Vec<Msg> = options
@@ -3542,30 +3566,80 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             })
             .collect();
+        if shared_move {
+            let landing = |extra: i32| {
+                (top.tile + (top.move_total + extra) * top.move_dir)
+                    .rem_euclid(self.data.tiles.len() as i32)
+            };
+            loop {
+                // No declaration or resource change until the payment is confirmed.
+                // Keep the source metadata for the existing bot counteraction policy.
+                let distances = vec![
+                    Msg::new("ask.counteract.extend")
+                        .i("n", 2)
+                        .tile("tile", landing(2))
+                        .card("card", options[0].0.clone()),
+                    Msg::new("ask.counteract.extend")
+                        .i("n", 1)
+                        .tile("tile", landing(1))
+                        .card("card", options[0].0.clone()),
+                    Msg::new("ask.counteract.skip"),
+                ];
+                let ask = Ask::choice(
+                    vec![s],
+                    Msg::new("ask.counteract.title"),
+                    Msg::new("ask.counteract.move_extension")
+                        .i("n", top.move_total as i64)
+                        .tile("tile", landing(0)),
+                    distances,
+                    2,
+                    12.0,
+                );
+                let reply = cx.ask(ask)?;
+                let pick = reply
+                    .a
+                    .answers
+                    .first()
+                    .copied()
+                    .filter(|&x| x >= 0)
+                    .unwrap_or(reply.fallback);
+                let extension = match pick {
+                    0 => 2,
+                    1 => 1,
+                    _ => return Ok(None),
+                };
+                let mut payments = labels.clone();
+                payments.push(Msg::new("ask.counteract.back"));
+                let ask = Ask::choice(
+                    vec![s],
+                    Msg::new("ask.counteract.title"),
+                    Msg::new("ask.counteract.move_extension_payment")
+                        .i("n", extension as i64)
+                        .tile("tile", landing(extension)),
+                    payments,
+                    options.len() as i32,
+                    12.0,
+                );
+                let reply = cx.ask(ask)?;
+                let pick = reply
+                    .a
+                    .answers
+                    .first()
+                    .copied()
+                    .filter(|&x| x >= 0)
+                    .unwrap_or(reply.fallback) as usize;
+                if let Some((id, idx, uid)) = options.get(pick) {
+                    return Ok(Some((id.clone(), *idx, *uid, extension)));
+                }
+                // Back (also the payment timeout) reopens the distance choice.
+            }
+        }
         labels.push(Msg::new("ask.counteract.skip"));
         let fallback = labels.len() as i32 - 1;
-        let shared_move = top.kind == TriggerKind::MoveBefore
-            && options.iter().any(|(_, idx, _)| {
-                self.ruleset.cards()[*idx as usize]
-                    .props
-                    .get(card_sdk::abi::prop::COUNTERACT_GROUP)
-                    .copied()
-                    .unwrap_or(0)
-                    > 0
-            });
-        let text = if shared_move {
-            let landing =
-                (top.tile + top.move_total * top.move_dir).rem_euclid(self.data.tiles.len() as i32);
-            Msg::new("ask.counteract.move_extension")
-                .i("n", top.move_total as i64)
-                .tile("tile", landing)
-        } else {
-            Msg::new("ask.counteract.text").msg("detail", describe_trigger(top))
-        };
         let ask = Ask::choice(
             vec![s],
             Msg::new("ask.counteract.title"),
-            text,
+            Msg::new("ask.counteract.text").msg("detail", describe_trigger(top)),
             labels,
             fallback,
             12.0,
@@ -3578,10 +3652,9 @@ impl<M: CardModules> RulesBridge<M> {
             .copied()
             .filter(|&x| x >= 0)
             .unwrap_or(reply.fallback) as usize;
-        if pick >= options.len() {
-            return Ok(None);
-        }
-        Ok(Some(options[pick].clone()))
+        Ok(options
+            .get(pick)
+            .map(|(id, idx, uid)| (id.clone(), *idx, *uid, 0)))
     }
 }
 
@@ -3734,6 +3807,8 @@ struct ChainLink {
     id: String,
     /// Field instance being activated; -1 for a hand card or the root timing.
     uid: i32,
+    /// Extension chosen before declaring this movement source; zero otherwise.
+    move_extension: i32,
     /// Node index of the timing this answers.
     answered: usize,
     /// This node's own link -- what its answers read and rewrite.
