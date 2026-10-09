@@ -31,15 +31,17 @@
    (`translateY` drops all but the top 30px behind the bar); the raised state
    slides the whole row up. The fan itself is click-through -- only the cards'
    own boxes capture -- so the map stays clickable between and below them. */
+/* `align-items: stretch` + a flex `.fanCard`: every face in the hand takes the
+   height of the tallest one (the longest name), so the row is one size. */
 .fan {
-  display: flex; justify-content: center; align-items: flex-end;
+  display: flex; justify-content: center; align-items: stretch;
   pointer-events: none;
   transform: translateY(calc(100% - 30px));
   transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
 }
 .dockUp .fan { transform: translateY(0); }
 .fanCard {
-  position: relative; flex: none; margin: 0 -12px; pointer-events: auto;
+  position: relative; flex: none; display: flex; margin: 0 -12px; pointer-events: auto;
   transition: transform 0.16s ease, filter 0.16s ease;
 }
 .fanCard:first-child { margin-left: 0; }

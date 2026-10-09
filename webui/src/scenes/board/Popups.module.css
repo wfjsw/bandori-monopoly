@@ -47,7 +47,7 @@
 .pile { display: flex; flex-direction: column; gap: 12px; }
 .pileRow { display: flex; gap: 12px; align-items: flex-start; }
 .who { display: flex; align-items: center; gap: 6px; width: 120px; flex: none; font-size: 14px; font-weight: 700; }
-.pileCards { display: flex; flex-wrap: wrap; gap: 8px; }
+.pileCards { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
 /* 场上的卡: a card face (the graveyard's size) with its live note (crystals, counters) under it. */
 .fieldSlot { display: flex; flex-direction: column; gap: 3px; width: 120px; }
 .fieldSlot small { font-size: 11px; line-height: 1.3; color: var(--sub); overflow-wrap: anywhere; }

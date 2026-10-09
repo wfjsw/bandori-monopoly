@@ -46,9 +46,11 @@
    same width the multi-select grid uses -- see Card.module.css `.tile`). The
    face previews on hover and inspects on click; the caption beneath is the
    option itself. */
-.cardRow { width: 100%; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+/* Card options stretch to the tallest face in the row (longest name), so the
+   faces and their captions line up. */
+.cardRow { width: 100%; display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
 .cardOpt { display: flex; flex-direction: column; gap: 4px; width: 96px; }
-.cardOptFace { cursor: zoom-in; }
+.cardOptFace { cursor: zoom-in; flex: 1 1 auto; }
 .cardOptFace:hover { transform: translateY(-3px); }
 .cardOptCap {
   width: 100%; min-height: 32px; padding: 4px 6px; border-radius: 999px;
