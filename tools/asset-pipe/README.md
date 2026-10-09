@@ -13,12 +13,11 @@ python tools/asset-pipe/check.py        # coverage check; exits 1 on any failure
 Needs `ffmpeg` with `libopus` (found on PATH or via the WinGet link).
 Flags: `--only img,audio,fonts,text,live2d,data`, `--force`, `--jobs N`, `--probe`.
 
-The TTS board is a separate, versioned asset at
-`webui/public/assets/tts/board.png`, copied unchanged from the local Workshop
-cache for mod `3506424344`, board object `53c41e`. `tts/source.json` records the
-cache filename, dimensions, and SHA-256. It is independent of this Unity
-extractor and needs no network access. The board UI preserves its 1800 × 1500
-(6:5) aspect ratio; its 60 clickable cells match the mod's Lua `pathXY`.
+The board is generated in `webui/src/scenes/board/Ring.tsx` and its CSS module,
+using names, colours and prices from `data/board.json`. Its 12 × 10 square-cell
+layout follows the locally cached TTS mod `3506424344`, board object `53c41e`,
+including its 60-cell Lua `pathXY` and 6:5 aspect ratio. No full-board image is
+stored or fetched; the generated cells are also the clickable deed targets.
 
 ## Output
 

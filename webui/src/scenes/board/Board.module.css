@@ -2,7 +2,7 @@
 
    Three flex columns with `space-between` -- the outer columns hug the stage
    edges and the ring stays centred between them, so the composition holds at
-   any width. The centre column is 856px wide: the TTS map keeps its 6:5
+   any width. The centre column is 856px wide: the generated map keeps its 6:5
    aspect ratio and the hand occupies the space underneath. */
 .body { position: absolute; inset: 0 38px; display: flex; justify-content: space-between; gap: 9px; }
 .left { position: relative; flex: 0 0 350px; }

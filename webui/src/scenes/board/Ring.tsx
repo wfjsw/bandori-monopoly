@@ -15,8 +15,9 @@ import s from "./Ring.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
+import type { TileData } from "../../core/types";
 
-/** The cached TTS board uses a 12 x 10 grid of square cells. These 60
+/** The TTS layout uses a 12 x 10 grid of square cells. These 60
  *  coordinates match its board object 53c41e / Lua pathXY, starting at
  *  CiRCLE in the bottom-right and travelling counter-clockwise. */
 const COLS = 12;
@@ -50,6 +51,28 @@ export interface RingProps {
 /** What a hovered tile marker says, and where (ring coordinates). */
 interface MarkTip { x: number; y: number; title: string; lines: string[] }
 
+/** Tile faces are generated from the same data used by deeds and the engine. */
+function TileFace({ tile }: { tile: TileData }) {
+  const name = plain(tile.name);
+  const corner = ["circle", "cafe", "edogawa", "ryuseido"].includes(tile.kind);
+  const caption = tile.price > 0 ? String(tile.price)
+    : tile.kind === "agent" ? tr("deed.dealer")
+    : tile.kind === "edogawa" ? tr("deed.draw")
+    : tile.kind === "cafe" || tile.kind === "ryuseido" ? tr("board.cornerEvent")
+    : "";
+  return (
+    <>
+      <span className={s.tileNumber} style={{ background: tile.color }} aria-hidden="true">#{tile.index}</span>
+      <span className={s.tileBody} aria-hidden="true">
+        <span className={cx(s.tileName, (corner || tile.kind === "agent") && s.specialName, name.length > 18 && s.longName)}>{name}</span>
+        {tile.kind === "circle" ? (
+          <span className={s.tileNote}>{tr("board.circlePassing")}<br />{tr("board.circleStopping")}</span>
+        ) : <span className={s.tileCaption}>{caption}</span>}
+      </span>
+    </>
+  );
+}
+
 export function Ring({ m, anim, pickable, onTile }: RingProps) {
   const S = m.S;
   const pos = anim.pos ?? S.players.map((x) => x.pos);
@@ -70,7 +93,7 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
   const hideTip = () => setTip(null);
   return (
     <div className={s.wrap}>
-      <div className={s.ring} ref={ringRef} style={{ backgroundImage: 'url("/assets/tts/board.png")' }}>
+      <div className={s.ring} ref={ringRef}>
         <Center m={m} />
         {D.tiles.map((t, i) => {
           const [col, row] = cell(i);
@@ -121,6 +144,7 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
               title={`${t.index}. ${plain(t.name)}${t.price > 0 ? ` · ${t.price}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
               onClick={() => onTile(i)}
             >
+              <TileFace tile={t} />
               {owner >= 0 && <span className={s.ownerStrip} />}
               {extras}
             </button>
@@ -191,6 +215,14 @@ function Center({ m }: { m: Model }) {
   const he = hover?.kind === "event" ? D.event(hover.id) : undefined;
   return (
     <div className={s.inner}>
+      {/* Interior zones use the same square-cell grid as the path. */}
+      <div className={s.zones} aria-hidden="true">
+        <span style={{ gridColumn: "6 / 8", gridRow: "1 / 3" }}>{tr("board.markerZone")}</span>
+        <span style={{ gridColumn: "9 / 12", gridRow: "2 / 4" }}>{tr("board.specialMarkerZone")}</span>
+        <span style={{ gridColumn: "5 / 9", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
+        <span style={{ gridColumn: "1 / 4", gridRow: "5 / 7" }}>{tr("board.diceZone")}</span>
+        <span style={{ gridColumn: "10 / 13", gridRow: "5 / 7" }}>{tr("board.diceZone")}</span>
+      </div>
       {/* 场上的卡 in the fold's big interior: compact card faces grouped by
           whose field they are on, each with its live state (crystals, note).
           Hover shows the full card; click opens it; the header opens the
