@@ -33,12 +33,12 @@ function deedAction(m: Model, i: number): { label: string; cmd: { act: string; v
   if (S.phase !== "play") return null;
   const t = D.tiles[i];
   if (buyable(m, i)) {
-    const price = t.price + (S.houses[i] ?? 0) * t.house;
-    const ok = m.me.money >= price;
-    return { label: tr("deed.buy", { n: n0(price), poor: ok ? "" : tr("deed.poor") }), cmd: { act: "buy", value: i }, enabled: ok };
+    const price = S.buyPrice >= 0 ? S.buyPrice : t.price + (S.houses[i] ?? 0) * t.house;
+    const poor = m.me.money < price ? tr(S.canBuyHere ? "deed.fundByMortgage" : "deed.poor") : "";
+    return { label: tr("deed.buy", { n: n0(price), poor }), cmd: { act: "buy", value: i }, enabled: S.canBuyHere };
   }
   if (S.owners[i] !== m.playerId) return null;
-  if (canBuildOn(m, i)) return { label: tr("deed.buildN", { n: (S.houses[i] ?? 0) + 1, cost: n0(t.house) }), cmd: { act: "build", value: i }, enabled: true };
+  if (canBuildOn(m, i)) return { label: tr("deed.buildN", { n: (S.houses[i] ?? 0) + 1, cost: n0(t.house) }), cmd: { act: "build", value: i }, enabled: S.canBuildHere };
   if (!S.mortgaged[i] && t.kind !== "ring" && m.myTurn) return { label: tr("deed.mortgage", { n: n0(mortgageValue(i)) }), cmd: { act: "mortgage", value: i }, enabled: true };
   if (S.mortgaged[i] && m.myTurn) return { label: tr("deed.redeem", { n: n0(redeemCost(i)) }), cmd: { act: "redeem", value: i }, enabled: true };
   return null;

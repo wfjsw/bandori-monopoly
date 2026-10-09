@@ -232,6 +232,7 @@
   "deed.ownerLine": "{{who}} ({{chara}}){{mort}}",
   "deed.perHouse": "{{n}} / house",
   "deed.poor": " (not enough money)",
+  "deed.fundByMortgage": " (can mortgage to fund)",
   "deed.price": "Land price",
   "deed.redeem": "Redeem  −{{n}}",
   "deed.rentRing": "Rent = owner's RiNG count × {{mult}} × 1d20",

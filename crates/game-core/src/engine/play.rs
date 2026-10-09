@@ -135,6 +135,8 @@ pub struct Pay {
     pub tile: Option<usize>,
     /// Mandatory: raise funds (mortgage, then bankruptcy) if short.
     pub must: bool,
+    /// Offer a cancellable mortgage for an optional purchase/build.
+    pub allow_mortgage: bool,
     /// Log line; gets the amount as the `amount` argument. A **full** line
     /// (`log.paid_for` and kin), never a bare reason -- see [`Pay::reason`].
     pub text: Option<Msg>,
@@ -174,6 +176,7 @@ impl Pay {
             typ: None,
             tile: None,
             must: false,
+            allow_mortgage: false,
             text: None,
             source: "",
             reason: None,
@@ -1939,7 +1942,6 @@ impl Cx<'_> {
             }
             return Ok(());
         }
-        let money = self.w.st.players[i].money;
         let mut options = vec![];
         let mut labels = vec![];
         let mut prices: Vec<i32> = vec![];
@@ -1947,7 +1949,7 @@ impl Cx<'_> {
             if self.w.st.owners[t] < 0 {
                 let quote = self.buy_quote_for(i, t, purchase::BuyKind::Agent);
                 let price = quote.price.max(0);
-                if self.can_pay(i) && money >= price {
+                if self.can_pay(i) && quote.eligible {
                     let houses = self.w.st.houses[t];
                     options.push(t);
                     prices.push(price);
@@ -1965,7 +1967,6 @@ impl Cx<'_> {
             } else if self.w.st.owners[t] as usize == i
                 && buildable
                 && self.why_not_build_on(i, t).is_none()
-                && money >= self.build_cost(t)
             {
                 options.push(t);
                 prices.push(self.build_cost(t));
@@ -2008,12 +2009,11 @@ impl Cx<'_> {
         };
         if self.w.st.owners[t] < 0 {
             let quote = self.buy_quote_for(i, t, purchase::BuyKind::Agent);
-            if self.can_pay(i) && self.w.st.players[i].money >= quote.price.max(0) {
+            if self.can_pay(i) && quote.eligible {
                 self.buy(i, t, purchase::BuyKind::Agent)?;
             }
         } else if self.w.st.owners[t] as usize == i
             && self.why_not_build_on(i, t).is_none()
-            && self.w.st.players[i].money >= self.build_cost(t)
         {
             self.build(i, t)?;
         }
@@ -2312,7 +2312,7 @@ impl Cx<'_> {
     fn offer_buy(&mut self, i: usize, t: usize) -> Flow<()> {
         let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
         let price = quote.price.max(0);
-        if !self.can_pay(i) || self.w.st.players[i].money < price {
+        if !self.can_pay(i) || self.w.purchase_funds(self.data, i, None) < price {
             self.w.log(
                 "text",
                 i as i32,
@@ -2344,7 +2344,6 @@ impl Cx<'_> {
         ask.view.price = price;
         if self.ask(ask)?.of(i) == 0
             && self.w.st.owners[t] < 0
-            && self.w.st.players[i].money >= price
             && !self.out(i)
         {
             self.buy(i, t, purchase::BuyKind::Land)?;
@@ -2354,7 +2353,8 @@ impl Cx<'_> {
 
     /// `OfferBuild` (when a non-main move lands on own land).
     fn offer_build(&mut self, i: usize, t: usize) -> Flow<()> {
-        if self.why_not_build_on(i, t).is_some() || self.w.st.players[i].money < self.build_cost(t)
+        if self.why_not_build_on(i, t).is_some()
+            || self.w.purchase_funds(self.data, i, Some(t)) < self.build_cost(t)
         {
             let note = self.w.st.mortgaged[t].then(|| Msg::new("log.part.mortgaged"));
             self.w.log(
@@ -2384,7 +2384,6 @@ impl Cx<'_> {
         .with_tile(t);
         if self.ask(ask)?.of(i) == 0
             && self.why_not_build_on(i, t).is_none()
-            && self.w.st.players[i].money >= self.build_cost(t)
         {
             self.build(i, t)?;
         }
@@ -2446,8 +2445,12 @@ impl Cx<'_> {
     /// Chaos: a random subset that covers `need` -- at least one deed, never a
     /// tidy little list.
     fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
+        self.auto_mortgage_from(player_id, need, self.mortgageable(player_id))
+    }
+
+    fn auto_mortgage_from(&mut self, player_id: usize, need: i32, deeds: Vec<usize>) -> Vec<String> {
         if self.is_chaos(player_id) {
-            let mut rest = self.mortgageable(player_id);
+            let mut rest = deeds;
             let mut got = 0;
             let mut out = vec![];
             while !rest.is_empty() && (got < need || out.is_empty()) {
@@ -2461,7 +2464,7 @@ impl Cx<'_> {
         let p = self.strategy_of(player_id);
         let mut got = 0;
         let mut out = vec![];
-        for t in self.mortgage_order(self.mortgageable(player_id), &p) {
+        for t in self.mortgage_order(deeds, &p) {
             if got >= need {
                 break;
             }
@@ -2513,7 +2516,8 @@ impl Cx<'_> {
         }
         let t = self.w.st.players[i].pos as usize;
         let quote = self.buy_quote_for(i, t, purchase::BuyKind::Land);
-        quote.eligible && quote.price >= 0 && self.w.st.players[i].money >= quote.price.max(0)
+        quote.eligible && quote.price >= 0
+            && self.w.purchase_funds(self.data, i, None) >= quote.price.max(0)
     }
 
     pub(crate) fn can_build_here(&self, i: usize) -> bool {
@@ -2525,7 +2529,7 @@ impl Cx<'_> {
             && !st.bought
             && st.landed == pos as i32
             && self.why_not_build(i, pos).is_none()
-            && st.players[i].money >= self.build_cost(pos)
+            && self.w.purchase_funds(self.data, i, Some(pos)) >= self.build_cost(pos)
     }
 
     /// `WhyNotBuild` -- building as part of resolving the main move.
@@ -2627,6 +2631,7 @@ impl Cx<'_> {
             p.typ = Some("lose");
             p.tile = Some(t);
             p.source = "src.buy";
+            p.allow_mortgage = matches!(kind, purchase::BuyKind::Land | purchase::BuyKind::Agent);
             p.text = Some(Msg::new("log.paid_for").player_id("who", i).tile("tile", t));
             let paid = self.money(p)?;
             if !paid.paid {
@@ -2717,6 +2722,7 @@ impl Cx<'_> {
             p.typ = Some("lose");
             p.tile = Some(t);
             p.source = "src.build";
+            p.allow_mortgage = true;
             p.text = Some(
                 Msg::new("log.paid_for_house")
                     .player_id("who", i)
@@ -3236,6 +3242,20 @@ impl Cx<'_> {
                     if self.out(f) {
                         return Ok(Paid::default());
                     }
+                } else if p.allow_mortgage {
+                    // Fund the final amount after the payment hooks, without
+                    // forcing an optional purchase or risking bankruptcy.
+                    let exclude = if p.kind == "build" { p.tile } else { None };
+                    if !self.offer_mortgage_funds(f, loss, exclude)? {
+                        self.w.log(
+                            "text",
+                            f as i32,
+                            Msg::new("log.purchase_unfunded")
+                                .player_id("who", f)
+                                .n("amount", loss),
+                        );
+                        return Ok(Paid::default());
+                    }
                 } else {
                     loss = self.w.st.players[f].money.max(0);
                 }
@@ -3418,6 +3438,41 @@ impl Cx<'_> {
         if let Some(t) = p.tile {
             e.to = t as i32;
         }
+    }
+
+    /// Optional funding: selecting no mortgage cancels the purchase/build.
+    /// Rulebook: the deed being upgraded cannot fund its own construction.
+    fn offer_mortgage_funds(&mut self, i: usize, amount: i32, exclude: Option<usize>) -> Flow<bool> {
+        let need = amount - self.w.st.players[i].money;
+        let deeds: Vec<usize> = self
+            .mortgageable(i)
+            .into_iter()
+            .filter(|&t| Some(t) != exclude)
+            .collect();
+        if deeds.iter().map(|&t| self.mortgage_value(t)).sum::<i32>() < need {
+            return Ok(false);
+        }
+        let ai = self.auto_mortgage_from(i, need, deeds.clone());
+        let text = Msg::new("ask.mortgage.optional")
+            .n("amount", amount)
+            .n("need", need);
+        let mut ask = Ask::mortgage(i, need, text, &deeds, ai);
+        // A mortgage prompt with a cancel option accepts value=1 to skip.
+        ask.view.options = vec![Msg::new("ask.mortgage.skip")];
+        ask.view.fallback = 1;
+        let reply = self.ask(ask)?;
+        if reply.of(i) == 1 {
+            return Ok(false);
+        }
+        for id in &reply.a.picked {
+            if let Ok(t) = id.parse::<usize>() {
+                if deeds.contains(&t) && self.w.st.owners[t] == i as i32 && !self.w.st.mortgaged[t] {
+                    self.mortgage(i, t, Some(Msg::new("src.raise_funds")))?;
+                }
+            }
+        }
+        self.wait(0.6);
+        Ok(!self.out(i) && self.w.st.players[i].money >= amount)
     }
 
     /// `RaiseFunds` -- mortgage deeds to cover `amount`, else go bankrupt.

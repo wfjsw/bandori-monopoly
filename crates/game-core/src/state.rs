@@ -83,7 +83,8 @@ pub struct MatchState {
     /// `State.canBuyHere` -- would `act {act:"buy"}` be accepted at the turn's
     /// position right now? The engine's own gate (`why_not_act`'s buy branch =
     /// `buyable_here` + the quoted funds check): buyable shape, the plan's
-    /// no-buy flag, the quote's `eligible` gate, and the money. Together with
+    /// no-buy flag, the quote's `eligible` gate, and cash plus mortgageable
+    /// deeds. Together with
     /// [`Self::buy_price`] this is the view's why-not information for a buy --
     /// the bot action abstraction gates Buy on it instead of re-implementing
     /// the check. `false` when nothing is buyable, and when the engine would

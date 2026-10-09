@@ -14,6 +14,12 @@ ABI 39 → 40 (surface) → 41 (removals). SAVE_VERSION 3 → 4.
   APIs, `st.tile_colors` and `key::EXTRA_COLOR` are **deleted** (ABI 41).
 * The colour skills (朝日六花 / Roselia (1) / 游击演出 / soyo_clear / （soyo）
   混合的颜色) write the `colorFor:<p>` / `ANY_COLOR` tile props.
+* Dealer buy/build options are not filtered by current cash. After selecting
+  one, a short player can mortgage deeds to cover the final payment amount,
+  or cancel without a partial charge or bankruptcy. The deed being upgraded
+  is excluded from funding. Ordinary land buy/build gates and buttons also
+  count mortgageable deeds, and use the same optional funding path; normal
+  rent/auction funding stays mandatory.
 
 User request: tile purchasing and agent purchasing — what can pay, how much,
 how ownership is assigned — are handled by the `rules/` crates.
@@ -202,7 +208,9 @@ StubRules and the sim run.
 1. Buy-price stage order: add → mul → set? [yes]
 2. Does a buy's [消耗] also run the pay pipeline after the price stages? [yes,
    as today]
-3. May a player mortgage to fund a buy (line 76)? [engine refuses today]
+3. May a player mortgage to fund a buy (line 76)? [ordinary land and dealer
+   buys/builds allow optional mortgage funding; force-buy/card acquisition
+   offers keep their existing gates]
 4. Agent pick: a full [结算] of the chosen tile, or a direct buy / build? Does
    「玩家拥有的」 include other players' tiles?
 5. Does soyo's 「所有颜色」 count toward another colour's all-owned

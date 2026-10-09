@@ -113,6 +113,8 @@ impl Ask {
     }
 
     /// `MortgageAsk`: choose deeds worth at least `need`.
+    /// An optional mortgage supplies a cancel label in `view.options`; answer
+    /// value 1 cancels it, while value 0 submits the selected deeds as usual.
     pub fn mortgage(
         player_id: usize,
         need: i32,
