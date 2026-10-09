@@ -7,7 +7,7 @@ import { navigate } from "../app/router";
 import { setBackdrop } from "../app/Stage";
 import { playSceneBgm } from "../core/audio";
 import { useMatchView } from "../core/hooks";
-import { type GameSession, matchScene, resumeSolo } from "../game/session";
+import { type GameSession, discardSolo, matchScene, resumeSolo } from "../game/session";
 import { toast } from "../ui/Toast";
 import { Board } from "./board/Board";
 import { useOnline } from "./lobby/Room";
@@ -21,7 +21,21 @@ function SoloPlay() {
     if (!sess) {
       toast(tr("play.noSolo"));
       navigate({ name: "menu" }, { replace: true });
+      return;
     }
+    // The engine worker boots (and restores the save) asynchronously. A failure
+    // there is the old "solo save dropped" path, one tick later.
+    let alive = true;
+    void sess.ready.catch((e) => {
+      if (!alive) return;
+      console.warn("solo save dropped:", e);
+      toast(tr("play.noSolo"));
+      discardSolo();
+      navigate({ name: "menu" }, { replace: true });
+    });
+    return () => {
+      alive = false;
+    };
   }, [sess]);
   return sess ? <Match sess={sess} /> : null;
 }
