@@ -9,6 +9,7 @@
   "clear_cp_tok": "[CP点]",
   "effort_ask": "这回合的主要移动改为移动几格？",
   "effort_title": "尽力后的收获",
+  "effort_steps": "{{n}} 格 → {{tile}}",
   "encore_negate": "安可：{{who}} 无效了此次 [异常移动效果] 和其导致的所有效果",
   "fever_note": "被支付 / 获得资金时金额提高 X（600 起，场上每多一张卡 −200）",
   "fever_pay": "FEVER! {{x}}",

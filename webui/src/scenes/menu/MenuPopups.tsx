@@ -77,7 +77,7 @@ function Settings({ close }: { close: () => void }) {
   const slider = (label: string, key: "bgm" | "voice" | "se", icon: string) => (
     <label className={s.setRow}>
       <span className={s.setLabel}><Icon name={icon} />{label}</span>
-      <input className={s.range} type="range" min={0} max={10} value={st[key]} onChange={(e) => { update({ [key]: Number(e.target.value) }); if (key === "se") sfx("tap"); }} />
+      <input className={s.range} type="range" min={0} max={10} step={0.1} value={st[key]} onChange={(e) => { update({ [key]: Number(e.target.value) }); if (key === "se") sfx("tap"); }} />
       <span className={s.setVal}>{st[key]}</span>
     </label>
   );

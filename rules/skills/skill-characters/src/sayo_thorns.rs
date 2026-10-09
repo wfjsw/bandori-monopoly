@@ -16,7 +16,7 @@
 //!
 //! （3） is a standing modifier to （1） that lights up once anyone is out.
 
-use card_sdk::abi::{state_key, HookKind, MoveKind};
+use card_sdk::abi::{prop, state_key, ChainKind, HookKind, MoveKind};
 use card_sdk::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -37,14 +37,19 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
         On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
-        On::Hook(
-            &[HookKind::MoveBefore],
+        On::Counteract(
+            &[ChainKind::MoveBefore],
             card_sdk::pre::MINE,
             Some(can_offer),
             offer,
         ),
     ],
 )
+.props(&[
+    (prop::COUNTERACT_FROM_FIELD, 1),
+    (prop::COUNTERACT_GROUP, 1),
+    (prop::COUNTERACT_FIRE_COST, 6),
+])
 .legacy(&[(2, legacy_mine)]);
 
 fn legacy_mine(player_id: i32) -> bool {
@@ -107,38 +112,23 @@ fn can_offer(player_id: i32) -> bool {
     trigger::move_is_main()
         && trigger::move_kind() == Some(MoveKind::Walk)
         && !ctx::skill_blocked(player_id, "")
-        && state::get(player_id, USED) == 0
+        && state::get(player_id, USED) != ctx::turn_key()
         && state::get(player_id, state_key::FIRE) >= 6
 }
 
 /// （2）「将非[传送]的主要移动添加1或2格」.
 fn offer(player_id: i32) -> card_sdk::Asked {
-    // A MoveBefore counter (including Sayo's card) may already have extended
-    // the plan. Preview and extend that result, retaining earlier extra steps.
+    // Other MoveBefore counters may already have extended
+    // the plan. Apply the preselected extension, retaining earlier extra steps.
     let base = trigger::value().max(0);
-    let steps = trigger::move_total();
-    let from = trigger::tile();
-    let landing = |n: i32| (from + n * trigger::move_dir()).rem_euclid(ctx::tile_count());
-    let add = ctx::ask_pick(
-        player_id,
-        &Msg::new(key!("sayo_thorns_title")),
-        &Msg::new(key!("sayo_thorns_ask"))
-            .i("n", steps as i64)
-            .tile("tile", landing(steps)),
-        &[
-            Msg::new(key!("sayo_thorns_skip")),
-            Msg::new(key!("sayo_thorns_add1")).tile("tile", landing(steps + 1)),
-            Msg::new(key!("sayo_thorns_add2")).tile("tile", landing(steps + 2)),
-        ],
-    )?;
-    if add == 0 {
+    let n = trigger::move_tag(card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+    if !matches!(n, 1 | 2) {
         return Ok(());
     }
-    let n = add as i32;
     if !ctx::spend_fire(player_id, 6, &Msg::new(key!("sayo_thorns_spend")))? {
         return Ok(());
     }
-    state::set(player_id, USED, 1);
+    state::set(player_id, USED, ctx::turn_key());
     // The dice are already final. Extend the base distance and retain any
     // extra steps on this move; adding dice now would affect a later roll.
     plan::set_steps(base + n);

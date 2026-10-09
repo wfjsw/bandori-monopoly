@@ -1,4 +1,6 @@
 {
+  "ask.counteract.move_extension": "This main move is {{n}} tiles, landing on {{tile}}. How many extra tiles?",
+  "ask.counteract.skill": "Spend {{n}} fire pots · {{card}}",
   "ask.agent.build": "{{tile}}  build #{{nth}}  {{cost}}",
   "ask.agent.buy": "{{tile}}  buy {{price}}{{extra}}",
   "ask.agent.text": "{{who}} stopped at the dealer: settle one tile of the same colour -- buy an unowned one, or add a house to your own. You can also skip. If short on cash, you can mortgage other deeds to fund it.",
@@ -390,5 +392,8 @@
   "status.move_not_your_turn": "You can only do this on your own turn",
   "status.stunned": "[Stunned]",
   "vote.against": "{{who}} voted against",
-  "vote.timeout": "time ran out with votes missing"
+  "vote.timeout": "time ran out with votes missing",
+  "ask.counteract.move_extension_payment": "Selected +{{n}} tiles, landing on {{tile}}. Choose how to pay.",
+  "ask.counteract.extend": "+{{n}} tiles → {{tile}}",
+  "ask.counteract.back": "Back"
 }
