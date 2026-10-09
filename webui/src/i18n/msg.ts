@@ -58,6 +58,50 @@ export function fmtMsg(m: Msg | string | undefined | null, names: Names = dataNa
   return i18n.t(m.k, { ...args, ns, defaultValue: m.k }) as string;
 }
 
+/** One piece of a log line: plain text, or a card reference to hover/click. */
+export type LogPart = string | { card: string; text: string };
+
+const CARD_OPEN = String.fromCharCode(0xe000);
+const CARD_CLOSE = String.fromCharCode(0xe001);
+
+/** [`fmtMsg`], but `{{card}}` arguments come back as card references instead of
+ *  being folded into the string -- the log can then render them hoverable. */
+export function fmtMsgParts(m: Msg | string | undefined | null, names: Names = dataNames): LogPart[] {
+  if (m === undefined || m === null) return [];
+  if (typeof m === "string") return m ? [m] : [];
+  if (!isMsg(m)) return [];
+  const args: Record<string, unknown> = {};
+  const cards: { card: string; text: string }[] = [];
+  for (const [name, arg] of Object.entries(m.a ?? {})) {
+    if (arg && typeof arg === "object" && "card" in arg) {
+      const card = (arg as { card: string }).card;
+      args[name] = `${CARD_OPEN}${cards.length}${CARD_CLOSE}`;
+      cards.push({ card, text: names.card(card) });
+    } else {
+      args[name] = fmtArg(arg, names);
+    }
+  }
+  const ns = m.k.includes(":") ? undefined : "game";
+  const s = i18n.t(m.k, { ...args, ns, defaultValue: m.k }) as string;
+  const parts: LogPart[] = [];
+  const re = new RegExp(`${CARD_OPEN}(\\d+)${CARD_CLOSE}`, "g");
+  let last = 0;
+  for (const match of s.matchAll(re)) {
+    const at = match.index ?? 0;
+    if (at > last) parts.push(s.slice(last, at));
+    const c = cards[Number(match[1])];
+    if (c) parts.push(c);
+    last = at + match[0].length;
+  }
+  if (last < s.length) parts.push(s.slice(last));
+  return parts;
+}
+
+/** The plain text of [`fmtMsgParts`] -- what the line says without its markup. */
+export function partsText(parts: LogPart[]): string {
+  return parts.map((p) => (typeof p === "string" ? p : p.text)).join("");
+}
+
 function fmtArg(arg: MsgArg, names: Names): string {
   if (arg === null || arg === undefined) return "";
   if (typeof arg === "number") return String(arg);

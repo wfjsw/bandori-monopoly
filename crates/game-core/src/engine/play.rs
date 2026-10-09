@@ -693,8 +693,17 @@ impl Cx<'_> {
         let t = self.raise(t)?;
         // `Trigger.Cancelled` -- the press is negated (花园多惠（2）「将其抵消」);
         // the body does not run, exactly as `play_from_hand` treats a cancelled
-        // `card` link above.
+        // `card` link above. The card still flashes, marked negated. A press
+        // that goes through announces itself at its body (`drive_inner_body`).
         if t.is_cancelled() {
+            self.card_activated(
+                crate::state::card_trigger::SKILL,
+                player_id as i32,
+                card,
+                t.target,
+                t.tile,
+                true,
+            );
             return Ok(());
         }
         let rules = self.rules;
@@ -4174,8 +4183,18 @@ impl Cx<'_> {
         )?;
         let rules = self.rules;
         // `Trigger.Cancelled` -- the play is negated; the card still goes to its
-        // Dest below but its effect body does not run.
+        // Dest below but its effect body does not run. The card still flashes,
+        // marked negated. A play that goes through announces itself at its body
+        // (`drive_inner_body`), which is the point the effect actually runs.
         let dest = if t.is_cancelled() {
+            self.card_activated(
+                crate::state::card_trigger::PLAY,
+                i as i32,
+                id,
+                t.target,
+                t.tile,
+                true,
+            );
             Dest::Graveyard
         } else {
             rules.play(self, i, id)?
@@ -4287,8 +4306,18 @@ impl Cx<'_> {
         // declares run against a live instance. `bind_event` is a no-op for
         // `StubRules` (no `event:*` rule), which is the built-in fallback: the
         // draw is logged and the card filed away, the same as before. A
-        // negated draw binds nothing -- its effect never resolves.
+        // negated draw binds nothing -- its effect never resolves. The event
+        // still flashes, marked negated. A draw that goes through announces
+        // itself at its body (`drive_inner_body`).
         let placed = if t.is_cancelled() {
+            self.card_activated(
+                crate::state::card_trigger::EVENT,
+                i as i32,
+                &id,
+                t.target,
+                t.tile,
+                true,
+            );
             false
         } else {
             self.w.bind_event(self.data, rules, i as i32, &id);

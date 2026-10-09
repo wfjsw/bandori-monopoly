@@ -1,6 +1,8 @@
 // Run with: node --test webui/src/scenes/board/viewport.test.ts
 // The pan/zoom math is pure: everything here checks that the board window
 // keeps covering the wrap and that zooming is anchored on the cursor point.
+// The board rect is the map slot's rectangle (any aspect), so the checks use a
+// deliberately wide one -- the math is per-axis.
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
@@ -9,8 +11,9 @@ import {
   type Viewport,
 } from "./viewport.ts";
 
-const W = 856;
-const H = 856;
+/** A wide board rect (the 12 x 10 grid stretched past square). */
+const W = 1284;
+const H = 720;
 
 /** Board point under a window point, for anchor checks. */
 const under = (v: Viewport, px: number, py: number) => ({
@@ -30,9 +33,9 @@ test("clampZoom holds zoom between fit and 3x", () => {
 test("clampPan pins the fit view and never leaves a gap", () => {
   // At fit the board exactly covers the window: no pan at all.
   assert.deepEqual(clampPan({ z: 1, tx: 40, ty: -40 }, W, H), { z: 1, tx: 0, ty: 0 });
-  // At 2x the board is 1712 wide, so it may slide at most 856 either way.
-  assert.deepEqual(clampPan({ z: 2, tx: 500, ty: -5000 }, W, H), { z: 2, tx: 0, ty: -856 });
-  assert.deepEqual(clampPan({ z: 2, tx: -5000, ty: 500 }, W, H), { z: 2, tx: -856, ty: 0 });
+  // At 2x the board is 2W x 2H wide, so it may slide at most W / H either way.
+  assert.deepEqual(clampPan({ z: 2, tx: 500, ty: -5000 }, W, H), { z: 2, tx: 0, ty: -H });
+  assert.deepEqual(clampPan({ z: 2, tx: -5000, ty: 500 }, W, H), { z: 2, tx: -W, ty: 0 });
   // The board still covers the window at every extreme.
   for (const z of [1, 1.3, 2, 3]) {
     const v = clampPan({ z, tx: 1e6, ty: -1e6 }, W, H);
@@ -118,20 +121,21 @@ test("panBy moves the board and clamps at the window edge", () => {
   const zoomed = panBy({ z: 2, tx: -400, ty: -400 }, -100, 20, W, H);
   assert.deepEqual(zoomed, { z: 2, tx: -500, ty: -380 });
   const edge = panBy({ z: 2, tx: -500, ty: -500 }, -1e4, 1e4, W, H);
-  assert.deepEqual(edge, { z: 2, tx: -856, ty: 0 });
+  assert.deepEqual(edge, { z: 2, tx: -W, ty: 0 });
 });
 
-test("the 6:5 board keeps its own aspect under clamp and zoom", () => {
-  // The generated TTS board is 856 x 713.33; the math is per-axis.
-  const bw = 856;
-  const bh = 856 * 10 / 12;
-  const v = clampPan({ z: 2, tx: 0, ty: 0 }, bw, bh);
-  assert.deepEqual(v, { z: 2, tx: 0, ty: 0 });
-  const slide = clampPan({ z: 2, tx: -1e4, ty: -1e4 }, bw, bh);
-  assert.deepEqual(slide, { z: 2, tx: -856, ty: -bh });
-  const z = zoomAround({ z: 1, tx: 0, ty: 0 }, 800, 50, 2, bw, bh);
-  assert.ok(Math.abs(under(z, 800, 50).x - 800) < 1e-9);
-  assert.ok(Math.abs(under(z, 800, 50).y - 50) < 1e-9);
-  assert.ok(z.tx <= 0 && z.tx >= bw * (1 - z.z));
-  assert.ok(z.ty <= 0 && z.ty >= bh * (1 - z.z));
+test("any board rect keeps covering its window under clamp and zoom", () => {
+  // The map fills its slot, so the rect may be any aspect; the math is
+  // per-axis and must hold for each one.
+  for (const [bw, bh] of [[856, 856 * 10 / 12], [W, H], [600, 1100]] as const) {
+    const v = clampPan({ z: 2, tx: 0, ty: 0 }, bw, bh);
+    assert.deepEqual(v, { z: 2, tx: 0, ty: 0 });
+    const slide = clampPan({ z: 2, tx: -1e4, ty: -1e4 }, bw, bh);
+    assert.deepEqual(slide, { z: 2, tx: -bw, ty: -bh });
+    const z = zoomAround({ z: 1, tx: 0, ty: 0 }, bw * 0.9, bh * 0.07, 2, bw, bh);
+    assert.ok(Math.abs(under(z, bw * 0.9, bh * 0.07).x - bw * 0.9) < 1e-9);
+    assert.ok(Math.abs(under(z, bw * 0.9, bh * 0.07).y - bh * 0.07) < 1e-9);
+    assert.ok(z.tx <= 0 && z.tx >= bw * (1 - z.z));
+    assert.ok(z.ty <= 0 && z.ty >= bh * (1 - z.z));
+  }
 });
