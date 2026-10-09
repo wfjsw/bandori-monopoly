@@ -11,6 +11,7 @@
 
 import { cloneElement, type ReactElement, type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
 import { cx } from "../core/cx";
+import { useAutoFocus, useHotkeys } from "../hooks/dom";
 import { Btn } from "./Button";
 import { Icon } from "./Icon";
 import s from "./Modal.module.css";
@@ -202,33 +203,13 @@ export function useRaiseSheetOn(key: unknown): void {
   }, [key]);
 }
 
-/** Move keyboard focus onto `el` whenever `on` turns true (opens / raises). */
-function useFocusOn<T extends HTMLElement>(el: { current: T | null }, on: boolean): void {
-  useEffect(() => {
-    if (on) el.current?.focus({ preventScroll: true });
-  }, [el, on]);
-}
-
-/** Esc retracts / raises the prompt sheet -- prompts never dismiss on Esc. */
-function useSheetHotkeys(): void {
-  useEffect(() => {
-    const on = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.altKey || e.ctrlKey || e.metaKey || e.repeat) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
-      if (togglePromptSheet()) e.preventDefault();
-    };
-    window.addEventListener("keydown", on);
-    return () => window.removeEventListener("keydown", on);
-  }, []);
-}
-
 function ModalEntry({ e }: { e: Entry }) {
   const prompt = e.chrome === "prompt";
   const closable = e.closable ?? true;
   const winRef = useRef<HTMLDivElement>(null);
-  // The sheet takes focus when it opens and when it raises again.
-  useFocusOn(winRef, prompt && !e.closing && !e.retracted);
+  // The sheet takes focus when it opens and when it raises again (and hands
+  // focus back on retract / close).
+  useAutoFocus(prompt && !e.closing && !e.retracted, winRef);
   const close = () => requestClose(e.id);
   // Keep drafts, checked cards, scroll position and live subscriptions
   // mounted; minimizing only hides the window and its backdrop.
@@ -291,7 +272,8 @@ function ModalEntry({ e }: { e: Entry }) {
 
 export function ModalHost() {
   const list = useSyncExternalStore(subscribe, () => entries);
-  useSheetHotkeys();
+  // Esc retracts / raises the prompt sheet -- prompts never dismiss on Esc.
+  useHotkeys([{ key: "Escape", once: true, run: () => { togglePromptSheet(); } }]);
   return (
     <>
       {list.map((e) => <ModalEntry key={e.id} e={e} />)}

@@ -5,7 +5,8 @@
 // behaviour: `previewFrom` / `previewHide` from `InspectCard` (or a detail
 // block) and `InspectPreviewHost` draws the panel inside the stage.
 
-import { useEffect, useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
+import { useSyncExternalStore, type CSSProperties, type ReactElement } from "react";
+import { useMountEffect } from "../hooks/mount";
 import { cardArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { cardColor, cardText, cardTitle, D } from "../core/data";
@@ -103,14 +104,14 @@ export function stickCard(id: string, note = ""): void {
 
 /** Turn the floating hover popups off while a standing panel is on screen. */
 export function useStandingPreviewOn(): void {
-  useEffect(() => {
+  useMountEffect(() => {
     standing = true;
     emit();
     return () => {
       standing = false;
       emit();
     };
-  }, []);
+  });
 }
 
 /** True while the match screen's standing panel is up (floaters stay off). */

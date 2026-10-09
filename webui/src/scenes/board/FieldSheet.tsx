@@ -5,7 +5,8 @@
 // short idle. Per-card info is the shared one: owner colour ring, crystal /
 // CP badges, the live note, the floating hover preview and click-to-inspect.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { useTimeout } from "../../hooks/timers";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D } from "../../core/data";
@@ -27,18 +28,14 @@ function useFoldPanel(leaveMs = 220, holdMs = 2400): {
   toggle: () => void;
   hover: { onMouseEnter: () => void; onMouseLeave: () => void; onFocus: () => void; onBlur: () => void };
 } {
-  const [open, setOpen] = useState(false);
-  const timer = useRef(0);
-  const clear = () => window.clearTimeout(timer.current);
-  const openFor = (ms: number | null) => {
-    clear();
-    setOpen(true);
-    if (ms !== null) timer.current = window.setTimeout(() => setOpen(false), ms);
-  };
-  useEffect(() => clear, []);
+  // `closeIn` is the fold delay to arm (null = park open). The timer is keyed
+  // off `open`, so every reopen arms afresh.
+  const [plan, setPlan] = useState<{ open: boolean; closeIn: number | null }>({ open: false, closeIn: null });
+  useTimeout(() => setPlan((p) => (p.open ? { ...p, open: false } : p)), plan.open ? plan.closeIn : null);
+  const openFor = (ms: number | null) => setPlan({ open: true, closeIn: ms });
   return {
-    open,
-    toggle: () => (open ? (clear(), setOpen(false)) : openFor(holdMs)),
+    open: plan.open,
+    toggle: () => setPlan((p) => (p.open ? { open: false, closeIn: null } : { open: true, closeIn: holdMs })),
     hover: {
       onMouseEnter: () => openFor(null),
       onMouseLeave: () => openFor(leaveMs),
