@@ -31,9 +31,13 @@ mod compile;
 mod ctx;
 mod eval;
 mod kinds;
+pub mod view;
+pub mod vocab;
+mod view_impl;
+pub use view_impl::SnapshotView;
 /// The §4.2 vocabulary lint/rewrite: only the host (`compile`) walks it.
 #[cfg(feature = "compile")]
-mod schema;
+pub mod schema;
 
 pub use compile::Cond;
 #[cfg(feature = "compile")]

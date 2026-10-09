@@ -147,6 +147,53 @@ Not in the schema (residual, stays in the wasm guard): geometry, list builders,
 `gains_this_turn` / `targeted_count` / `price_tag` / `grade_of`, `skill_blocked`
 semantics beyond a `blocked(band)` int mirror.
 
+### 4.2b The condition vocabulary (one definition per name)
+
+`rules-cond`'s `vocab.rs` is **the** definition of every condition name: one
+`VOCAB` entry per name, from which the schema/lint's name lists, the CEL type
+info, the binding and the evaluator registration are all derived. Adding a
+name = one entry (plus a `CondView` accessor if it reads something new).
+
+| field | what it is |
+|---|---|
+| `cel` | the CEL spelling (`actor`, `move.main`, `is_circle`) |
+| `flat` | the flat identifier after the `root.field` rewrite (`move_main`) |
+| `scope` | `Window` / `Candidate` / `Func { arity }` |
+| `ty` | `Int` / `Bool` / `OptInt` (binds `null` when `-1`) |
+| `doc` | one line, mirrored in this table |
+
+Accessors go through [`crate::view::CondView`] (`rules-cond/src/view.rs`): a
+read-only query trait covering the trigger fields, the player/tile/card
+queries, `slot`/`tok` and the tile-kind predicates -- the same vocabulary the
+card SDK exposes to guests (`card-sdk` `ctx::*` reads). A condition and a
+guard therefore read the world through one surface. `game-rules` implements
+the view for its live snapshot (`LiveSnap` / `SnapSrc`); `rules-native` for
+its mirror; `SnapshotView` (`view_impl.rs`) is the eager `WindowCtx` +
+`CandidateCtx` reference implementation the tests and the precompiled-conds
+runtime use.
+
+Evaluation is lazy in principle: `vocab::bind_one` fills only the names
+`cond.used_vars()` reads, calling the view on demand. The host may still
+pre-fill a snapshot (the counteract pre-scan amortises it across ~200 probes
+per window).
+
+`tests/cond_tests.rs::vocab_matches_schema_lists` keeps the table in step
+with the lint: every `VOCAB` name is accepted by the schema, every schema
+`FUNCTIONS` entry is in `VOCAB` (or CEL stdlib), and flat names are unique.
+
+**How to add a condition name**
+
+1. Add a `CondView` accessor in `rules-cond/src/view.rs` (if it reads
+   something new).
+2. Add one `VOCAB` entry in `rules-cond/src/vocab.rs`.
+3. If it is a function, register the evaluator closure in `eval.rs`'s
+   `install_functions` (the closure calls the view on demand).
+4. Run `cargo test -p rules-cond` -- `vocab_matches_schema_lists` fails if
+   the lint and the table disagree.
+5. Mirror any new snapshot field in `game-rules`'s `fill_window` /
+   `fill_candidate` (and `rules-native`'s) **only if** the host pre-fills;
+   a `CondView` impl on the live snapshot needs no fill at all.
+
 ### 4.3 ABI / authoring surface
 
 * Manifest: `ManifestOn { kind, triggers, pre: Option<String> }` (postcard,
