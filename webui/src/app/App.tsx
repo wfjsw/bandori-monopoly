@@ -17,6 +17,7 @@ import { closeAllModals, ModalHost } from "../ui/Modal";
 import { ToastHost } from "../ui/Toast";
 import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
+import { Console } from "../console/Console";
 
 const BACKDROP: Record<Route["name"], string> = { menu: "bg_common", lobby: "bg_live", room: "bg_live", play: "bg_band", gallery: "bg_band", deck: "bg_band", replay: "bg_common", replayView: "bg_common" };
 const BGM: Record<Route["name"], string> = { menu: "menu", lobby: "lobby", room: "lobby", play: "select", gallery: "gallery", deck: "deck", replay: "menu", replayView: "board" };
@@ -78,13 +79,16 @@ export function App() {
 
   const booted = ready && profile;
   return (
-    <Stage fading={fading}>
-      {/* Remount on language change so every already-rendered string is re-read. */}
-      <div key={lang} style={{ position: "absolute", inset: 0 }}>
-        {booted ? shown && <div key={href(shown)}>{scene(shown)}</div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
-      </div>
-      <ModalHost />
-      <ToastHost />
-    </Stage>
+    <>
+      <Stage fading={fading}>
+        {/* Remount on language change so every already-rendered string is re-read. */}
+        <div key={lang} style={{ position: "absolute", inset: 0 }}>
+          {booted ? shown && <div key={href(shown)}>{scene(shown)}</div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
+        </div>
+        <ModalHost />
+        <ToastHost />
+      </Stage>
+      <Console />
+    </>
   );
 }

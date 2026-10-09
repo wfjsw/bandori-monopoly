@@ -492,6 +492,27 @@ async function main() {
   const rulesIndex = JSON.parse(readFileSync(join(src.rules, "index.json"), "utf8"));
   const dsha = dataSha256Hex(src.data, dataFiles);
 
+  // A debug engine (cfg(debug_assertions) -- the console cheats) must never
+  // become a replay bundle: it is larger/slower, and its records may carry
+  // cheat inputs a release engine cannot re-simulate (`docs/SERVER.md`).
+  // `cheats_enabled()` is the engine's own answer; `engine_id.json`'s
+  // `profile` is the belt-and-braces check from tools/build-glue.mjs. (A glue
+  // that predates both was built with the old hardcoded `--release`.)
+  const debugGlue = typeof g.cheats_enabled === "function" ? !!g.cheats_enabled() : false;
+  let idProfile = null;
+  try {
+    idProfile = JSON.parse(readFileSync(join(src.glue, "engine_id.json"), "utf8")).profile ?? null;
+  } catch {
+    /* no stamp: fall back to the glue's own answer */
+  }
+  if (debugGlue || idProfile === "debug") {
+    throw new Error(
+      `archive-engine: refusing to archive a debug engine (cheats_enabled=${debugGlue}, ` +
+        `engine_id.json profile=${idProfile ?? "unknown"}). Rebuild with ` +
+        `NODE_ENV=production node tools/build-glue.mjs`,
+    );
+  }
+
   // The stamp the engine would seal a record with here: its own format /
   // save / abi / engine / build, plus the ruleset and data hashes computed
   // from the files this bundle freezes.

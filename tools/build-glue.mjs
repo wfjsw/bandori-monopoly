@@ -6,6 +6,15 @@
 //
 //   node tools/build-glue.mjs
 //
+// Cargo profile follows `NODE_ENV` (`docs/SERVER.md`): `production` builds
+// `--release` -- no `debug_assertions`, so the console cheats
+// (`game-core/src/engine/debug.rs`) are not compiled in and `cheats_enabled()`
+// answers false. Anything else (development / unset, as under `npm run dev`)
+// builds the debug profile with the cheats. The one exception is npm's
+// `prebuild` lifecycle: it exists only to service `npm run build`, the deploy
+// path, and npm does not set `NODE_ENV` for scripts -- so `prebuild` is always
+// production, whatever `NODE_ENV` says.
+//
 // Determinism (`docs/REPLAY.md` §9 option C): two builds of the same commit on
 // the same toolchain must produce byte-identical `glue.js` + `glue_bg.wasm`,
 // whatever directory they run in, so an engine bundle can be rebuilt from its
@@ -140,6 +149,14 @@ function rustFlagList() {
 
 // ---------------------------------------------------------------- main
 
+// `docs/SERVER.md`: production / `prebuild` → the release engine (no cheats);
+// anything else → the debug engine (cheats in).
+const release =
+  process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "prebuild";
+const profile = release ? "release" : "debug";
+const profileDir = join(ROOT, "target", "wasm32-unknown-unknown", profile);
+console.log(`build-glue: profile ${profile} (NODE_ENV=${process.env.NODE_ENV ?? "<unset>"})`);
+
 const bindgen = checkBindgen();
 console.log(`wasm-bindgen ${bindgen}`);
 
@@ -155,13 +172,14 @@ const env = {
 delete env.RUSTFLAGS;
 
 console.log(`CARGO_ENCODED_RUSTFLAGS ${JSON.stringify(encoded)}`);
-execFileSync("cargo", ["build", "-p", "web-glue", "--target", "wasm32-unknown-unknown", "--release"], {
+execFileSync("cargo", ["build", "-p", "web-glue", "--target", "wasm32-unknown-unknown",
+  ...(release ? ["--release"] : [])], {
   cwd: ROOT,
   stdio: "inherit",
   env,
 });
 run("wasm-bindgen", "--target", "web", "--out-dir", "webui/src/wasm", "--out-name", "glue",
-    join(ROOT, "target", "wasm32-unknown-unknown", "release", "web_glue.wasm"));
+    join(profileDir, "web_glue.wasm"));
 console.log(`webui/src/wasm/glue_bg.wasm: ${statSync(join(ROOT, "webui", "src", "wasm", "glue_bg.wasm")).size} bytes`);
 
 // Glue identity for the engine-bundle id (`docs/REPLAY.md` §9): the webui
@@ -179,6 +197,9 @@ writeFileSync(
   JSON.stringify(
     {
       glueSha256: gsha,
+      // "release" | "debug" -- `tools/archive-engine.mjs` refuses to archive
+      // anything but a release engine (no debug build may become a bundle).
+      profile,
       built: new Date().toISOString(),
       commit: prov.dirty ? null : prov.commit,
       dirty: prov.dirty,

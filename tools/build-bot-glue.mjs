@@ -105,7 +105,14 @@ const env = {
 delete env.RUSTFLAGS;
 
 console.log(`CARGO_ENCODED_RUSTFLAGS ${JSON.stringify(encoded)}`);
-execFileSync("cargo", ["build", "-p", "bot-glue", "--target", "wasm32-unknown-unknown", "--release"], {
+// Same NODE_ENV profile rule as tools/build-glue.mjs (`docs/SERVER.md`):
+// production → `--release` (no debug_assertions), anything else → debug.
+const release =
+  process.env.NODE_ENV === "production" || process.env.npm_lifecycle_event === "prebuild";
+const profile = release ? "release" : "debug";
+console.log(`build-bot-glue: profile ${profile} (NODE_ENV=${process.env.NODE_ENV ?? "<unset>"})`);
+execFileSync("cargo", ["build", "-p", "bot-glue", "--target", "wasm32-unknown-unknown",
+  ...(release ? ["--release"] : [])], {
   cwd: ROOT,
   stdio: "inherit",
   env,
@@ -122,7 +129,7 @@ run(
   OUT_DIR,
   "--out-name",
   "glue",
-  join(ROOT, "target", "wasm32-unknown-unknown", "release", "bot_glue.wasm"),
+  join(ROOT, "target", "wasm32-unknown-unknown", profile, "bot_glue.wasm"),
 );
 const wasmPath = join(OUT_DIR, "glue_bg.wasm");
 const jsPath = join(OUT_DIR, "glue.js");

@@ -23,14 +23,16 @@ out on a fixed 1600 × 900 stage scaled to the window, like the original.
 
 ```sh
 node tools/build-ruleset.mjs      # card modules + precompiled conds -> dist/cards, webui/public/assets/rules
-node tools/build-glue.mjs         # wasm glue -> webui/src/wasm/
-cd webui && npm run dev           # :5173, proxies /api and /data to :8080
-cd webui && npm run build         # dist/, served by --static (prebuild: tools/live2d/build.mjs)
+node tools/build-glue.mjs         # wasm glue -> webui/src/wasm/ (profile from NODE_ENV, see "In-game console")
+cd webui && npm run dev           # :5173, proxies /api and /data to :8080 (predev: debug glue)
+cd webui && npm run build         # dist/, served by --static (prebuild: live2d + release glue)
 ```
 
 `npm run build` compiles the Live2D models first (`prebuild` ->
 `tools/live2d/build.mjs`, see [LIVE2D.md](LIVE2D.md)); a model whose assets are
-already up to date is skipped.
+already up to date is skipped. It also builds the wasm glue in **release**
+(the `prebuild` lifecycle always is), so a deployed site carries no console
+cheats; `npm run dev` builds the debug glue instead. See "In-game console".
 
 ### Deploy gate
 
@@ -261,6 +263,80 @@ The body is the original `NetMessage` shape; only the fields the command uses ma
 | `answer` | `prompt` = prompt id; `value`, or `cards` for `mortgage` / `pick` prompts; auction: `value` = bid, `-1` = pass | a prompt is waiting for you |
 | `vote` | `value` 1 = yes, 0 = no | start or answer the end-match vote |
 | `leave` | | forfeit |
+| `debug` | `debug` = money / tp / give / draw / state; `value`; `target` = player index (-1 = sender); `card` for give; `character` = state key | **debug builds only**, solo play only, no pending routine or movement; always rejected online |
+
+### In-game console
+
+Press the backquote / tilde key (`\`` / `~` / `～`) to toggle the console;
+Escape closes it. Opening it keeps the game running. The shortcut does not
+interrupt typing in other inputs or IME composition. The console stays above
+scene transitions and popups and is also available during boot and replays.
+
+Enter `help` for all commands. `status`, `players`, `hand`, `inspect`, `cards`
+and `tiles` inspect the current screen's match and data. `act {"act":"roll"}`
+sends an ordinary engine command; `auto off` returns the seat from autopilot
+before manual commands. Replays allow inspection only. Up/Down recalls the
+last 100 commands; Tab completes an unambiguous command name.
+
+Solo cheats use zero-based player indices (omit the index for yourself):
+
+```text
+money 50000          # set your money
+tp 10                # move without passing or landing effects
+give "Ringing Bloom" # add a card by unique exact name or ID
+draw 2               # draw from your deck
+state fire 2         # set an existing counter, respecting its declared cap
+inspect player       # list your state keys and bounds
+```
+
+Money is limited to 0–100,000,000; draw/give counts to 1–100. Cheats reject
+invalid seats/cards/keys, inactive players, setup/end phases and pending
+prompts. They run through `RecordedMatch::act`, so saves, live views and
+replays retain the changes. A successful cheat sets `MatchState.debugOpen`
+(shown as `cheated` in `status`) and emits a localized match-log entry -- a
+match whose state carries the flag (in the save and therefore in the record's
+checkpoints) is the record's mark that a cheat was used.
+
+**Cheats are compiled only into debug builds.** The handler
+(`game-core/src/engine/debug.rs`) is gated on `cfg(debug_assertions)`, so:
+
+* a `--release` server / binary and the production browser glue carry no cheat
+  code at all -- a `debug` act is refused as an unknown command (`err.unknown_act`);
+* online rooms refuse `debug` acts at the HTTP boundary in **every** build
+  (`crates/server/src/api.rs`), and the engine itself is solo-only, so a forged
+  message can neither change the world nor enter a ranked/casual record;
+* the browser console only offers the cheat commands when the loaded engine
+  reports `cheats_enabled()` (a `wasm-bindgen` export that answers
+  `cfg!(debug_assertions)`), and rejects them otherwise with "cheats are not
+  available in this build";
+
+The glue build profile follows `NODE_ENV`, the same switch the web bundle's
+dead-code elimination uses (`tools/build-glue.mjs`,
+`tools/build-bot-glue.mjs`):
+
+| Path | Profile | Cheats |
+|---|---|---|
+| `NODE_ENV=production node tools/build-glue.mjs` | `--release` | no |
+| `npm run build` (deploy; its `prebuild` runs build-glue) | `--release` | no |
+| `npm run dev` (its `predev` runs build-glue), `NODE_ENV` unset / `development` | debug | yes (solo) |
+| `tools/rebuild-engine.mjs` (archive rebuild) | forced `--release` | no |
+
+A debug wasm is much larger and slower than the release one -- never ship it.
+`tools/archive-engine.mjs` enforces that: it refuses to freeze a browser engine
+whose `cheats_enabled()` is true or whose `engine_id.json` says `profile:
+"debug"`, so a debug build can never become a deployed replay bundle.
+
+The console captures browser logs, uncaught errors, rejected promises and
+live match events. Filter by source, warnings/errors or text, toggle scrolling,
+clear the display or export a `.log` file. The in-memory tail holds 500 entries,
+with each entry capped at 12,000 characters; neither logs nor history write to
+the profile or match save.
+
+Run the console unit tests with `npm --prefix webui run test:console` (Node 24+).
+The keyboard, command validation and browser log capture tests use Node's
+built-in test runner. Engine cheat persistence and replay checks run with
+`cargo test -p game-core --test debug` (debug build); the compiled-out path is
+pinned by the same test under `cargo test --release -p game-core --test debug`.
 
 ## SSE stream
 

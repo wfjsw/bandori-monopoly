@@ -21,6 +21,7 @@ import { Btn } from "../../ui/Button";
 import { ReplayBar } from "./ReplayBar";
 import s from "./Replay.module.css";
 import { t as tr } from "../../i18n/t";
+import { bindConsoleSession } from "../../console/context";
 
 export function ReplayPlayer() {
   // `openPending` is memoized on the queued record and async (an archived
@@ -69,6 +70,7 @@ export function ReplayPlayer() {
 }
 
 function PlayerLive({ rs }: { rs: ReplaySession }) {
+  useEffect(() => bindConsoleSession(rs), [rs, bindConsoleSession]);
   useSessionOther(rs);
   // The replay runs on the bundle that wrote it, so a checkpoint mismatch is
   // engine drift in the record itself -- not "this is a different build".

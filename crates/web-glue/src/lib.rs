@@ -68,6 +68,16 @@ pub fn replay_api_version() -> u32 {
     REPLAY_API_VERSION
 }
 
+/// Whether this engine was built with `cfg(debug_assertions)` and therefore
+/// carries the console cheats (`game-core`'s `engine/debug.rs`). The web
+/// console hides its cheat commands when this is false (`docs/SERVER.md`);
+/// `tools/build-glue.mjs` picks the cargo profile from `NODE_ENV`, so a
+/// production build answers `false` and a dev build `true`.
+#[wasm_bindgen]
+pub fn cheats_enabled() -> bool {
+    cfg!(debug_assertions)
+}
+
 /// Record the glue identity for [`engine_stamp`] / record export: the hex
 /// sha256 of this build's `glue.js` bytes followed by its `glue_bg.wasm`
 /// bytes. The webui reads it from `webui/src/wasm/engine_id.json` (written by

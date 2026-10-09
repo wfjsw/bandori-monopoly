@@ -822,11 +822,13 @@ impl World {
             got += 1;
         }
         if got > 0 {
+            let over = (self.hidden[i].hand.len() > self.st.players[i].hand_limit() as usize)
+                .then(|| Msg::new("log.part.over_hand").i("limit", self.st.players[i].hand_limit()));
             self.log(
                 "draw",
                 player_id,
-                Msg::new("log.draw").player_id("who", player_id).i("n", got),
-            );
+                Msg::new("log.draw").player_id("who", player_id).i("n", got).opt("over", over),
+            ).value = got;
         }
         let _ = over_hand_limit;
         got

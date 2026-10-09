@@ -17,6 +17,11 @@
 
 mod ai;
 mod cx;
+// Console cheats: debug builds only (`cfg(debug_assertions)`), so a release
+// binary / wasm carries no cheat handling at all and a `debug` act is just an
+// unknown command there (`docs/SERVER.md`).
+#[cfg(debug_assertions)]
+mod debug;
 mod move_ctx;
 mod ops;
 mod play;
@@ -1339,7 +1344,10 @@ impl Match {
                 }
                 self.start(Routine::Act(i, Box::new(m.clone())));
             }
-            "debug" => return Err(Msg::new("err.debug_not_ported")),
+            // `debug` only exists in debug builds; in release it falls through
+            // to `err.unknown_act` like any unrecognized command.
+            #[cfg(debug_assertions)]
+            "debug" => return self.debug_act(i, m),
             "roll" | "buy" | "build" | "mortgage" | "redeem" | "play" | "discard" | "end" => {
                 if let Some(why) = self.with_cx(|cx| why_not_act(cx, i, m, busy)) {
                     return Err(why);

@@ -199,8 +199,12 @@ function buildInWorktree(worktree) {
       fail(`commit has no ${s} -- too old to rebuild with the pinned recipe`);
     }
   }
-  run(process.execPath, ["tools/build-glue.mjs"], { cwd: worktree });
-  run(process.execPath, ["tools/build-ruleset.mjs"], { cwd: worktree });
+  // Archive bundles are always release engines (`docs/SERVER.md`): force
+  // NODE_ENV=production so a caller's dev environment cannot rebuild a debug
+  // glue into the store (tools/build-glue.mjs keys the cargo profile on it).
+  const env = { ...process.env, NODE_ENV: "production" };
+  run(process.execPath, ["tools/build-glue.mjs"], { cwd: worktree, env });
+  run(process.execPath, ["tools/build-ruleset.mjs"], { cwd: worktree, env });
 }
 
 /**

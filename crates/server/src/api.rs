@@ -420,6 +420,15 @@ pub async fn act(
     Json(msg): Json<NetMessage>,
 ) -> ApiResult<Json<serde_json::Value>> {
     let (room, me) = member_room(&s, &sess, &id)?;
+    // Console cheats (`engine/debug.rs`) are solo-only and compiled out of
+    // release builds. A room is always Casual / Ranked (`RoomInfo::mode`), so
+    // a `debug` act can never be valid here: refuse at the door so a forged
+    // message reaches neither the engine nor the record log (which keeps even
+    // refused inputs). `err.unknown_act` is also what a release engine itself
+    // would answer -- no cheat key leaks into the binary.
+    if msg.act == "debug" {
+        return Err(ApiError::bad("err.unknown_act"));
+    }
     // Check the match out, drop the room lock, then run the command.
     let m = {
         let r = room.lock().unwrap();
