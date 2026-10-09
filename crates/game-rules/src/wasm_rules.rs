@@ -1277,6 +1277,15 @@ impl CardWorld for Run {
     // movement shaping ---------------------------------------------------------
     fn set_steps(&mut self, v: i32) {
         self.world.set_steps(v);
+        // Keep the shared MoveBefore link coherent for later counters and
+        // hooks. Its base distance is already final; a plan rewrite extends
+        // this move rather than rewriting a roll that has already resolved.
+        if self.trigger.kind == TriggerKind::MoveBefore {
+            let delta = v.max(0) - self.trigger.value.max(0);
+            self.trigger.value = v.max(0);
+            self.trigger.move_total = (self.trigger.move_total + delta).max(0);
+            self.trigger.move_remaining = (self.trigger.move_remaining + delta).max(0);
+        }
     }
     fn set_roller(&mut self, v: i32) {
         // `plan::set_roller` -- the stand-in roller for 「上一名玩家代替进行此次
