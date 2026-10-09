@@ -19,8 +19,8 @@ pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
         On::Play("", None, miracle),
-        On::Hook(&[HookKind::BuildBefore], "", Some(mine), before_build),
-        On::Hook(&[HookKind::BuildAfter], "", Some(mine), after_build),
+        On::Hook(&[HookKind::BuildBefore], "actor == owner && card.cp >= 1", Some(mine), before_build),
+        On::Hook(&[HookKind::BuildAfter], "actor == owner && card.cp >= 1", Some(mine), after_build),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠].
@@ -61,9 +61,6 @@ fn miracle(player_id: i32) -> card_sdk::Asked {
 /// （1）「当你进行加盖动作时可移除此卡上的一个奇迹水晶以代替资金花费」 -- C#
 /// `CardMiracle.BuildCost` returns 0 while a crystal remains.
 fn before_build(player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() < 1 {
-        return Ok(());
-    }
     let t = trigger::tile();
     if t < 0 {
         return Ok(());
@@ -74,9 +71,6 @@ fn before_build(player_id: i32) -> card_sdk::Asked {
 
 /// （1）'s 「移除此卡上的一个奇迹水晶」 -- C# `CardMiracle.Built` spends one.
 fn after_build(player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() < 1 {
-        return Ok(());
-    }
     ctx::add_crystals(-1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("miracle_built")));
     Ok(())

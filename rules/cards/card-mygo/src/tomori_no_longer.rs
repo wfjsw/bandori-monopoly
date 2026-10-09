@@ -21,8 +21,8 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     "MyGO:（灯）不再迷茫",
     &[
         On::Play("", None, tomori_no_longer),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, sweep),
-        On::Hook(&[HookKind::FireSpent], card_sdk::pre::MINE, None, cover),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed && card.cp == 0", None, sweep),
+        On::Hook(&[HookKind::FireSpent], "actor == owner && card.cp >= 1", None, cover),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
         // 获得等同于减少量的[奇迹水晶]」.
         On::Hook(&[HookKind::CrystalsChanged], card_sdk::pre::MINE, None, refill),
@@ -36,9 +36,6 @@ const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
 /// （2）'s substitution.
 fn cover(player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() < 1 {
-        return Ok(());
-    }
     let spent = ctx::trigger::value();
     if spent <= 0 {
         return Ok(());
@@ -131,12 +128,6 @@ fn legacy_mine(player_id: i32) -> bool {
 
 /// （3）「此卡上的奇迹水晶耗尽后，[移除]此卡」.
 fn sweep(_player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() > 0 {
-        return Ok(());
-    }
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

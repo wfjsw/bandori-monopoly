@@ -25,7 +25,7 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
         On::Play("", None, starry_night),
-        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], "", None, hook),
+        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], "card.placed && card.cp > 0", None, hook),
         On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
@@ -125,9 +125,6 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// `Fx.RollAfter` / `Fx.PassTile` (C# `CardStarryNight.RollAfter` / `PassTile`).
 /// Runs through the Fx hook dispatch, so these are field effects, not [反击].
 fn hook(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() || ctx::crystals() <= 0 {
-        return Ok(());
-    }
     match trigger::kind() {
         TriggerKind::RollAfter => {
             // C# `!m.Main || m.FixedRoll >= 0` -- only the main move's free roll.
