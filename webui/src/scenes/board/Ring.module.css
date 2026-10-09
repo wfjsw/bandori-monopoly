@@ -6,7 +6,7 @@
    The wrap is also the pan/zoom window: it clips the transformed board layer
    and holds the fixed overlays (banner, card flash, hover details, zoom
    buttons), which stay out of the zoom so they keep their size and place. */
-.wrap { position: relative; flex: none; border-radius: 10px; background: #d3e9e5; box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.wrap { position: relative; flex: none; background: #d3e9e5; box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .wrap:focus-visible { outline: 2px solid var(--pink); outline-offset: -4px; }
 /* Board pixels -> window pixels. Everything inside is laid out at 856 x 713. */
 .fit { position: absolute; left: 0; top: 0; width: 856px; height: calc(856px * 5 / 6); transform-origin: 0 0; }
