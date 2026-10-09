@@ -51,9 +51,23 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
 
 /// Hand a buffer to the host as packed `(ptr << 32) | len`. The bytes live as
 /// long as the run (bump allocator; the module is re-instantiated per run).
+///
+/// On a native build the "pointer" is an arena handle (see [`crate::native`]):
+/// `b.as_ptr() as u32` would truncate a 64-bit address and the host's
+/// `native::read` would look up a garbage slot. The arena is cleared at the
+/// start of the next [`on`], which is long enough for the host to read the
+/// buffer it just asked for.
 fn leak(bytes: Vec<u8>) -> i64 {
-    let b: &'static [u8] = Box::leak(bytes.into_boxed_slice());
-    pack(b.as_ptr() as u32, b.len() as u32)
+    #[cfg(target_arch = "wasm32")]
+    {
+        let b: &'static [u8] = Box::leak(bytes.into_boxed_slice());
+        pack(b.as_ptr() as u32, b.len() as u32)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (h, l) = crate::native::intern(&bytes);
+        pack(h as u32, l as u32)
+    }
 }
 
 /// A card handle is an index into the *flattened* manifest: every band's

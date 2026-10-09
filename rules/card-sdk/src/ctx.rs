@@ -644,12 +644,30 @@ mod sys {
 
 #[cfg(target_arch = "wasm32")]
 fn s(v: &str) -> (i32, i32) {
-    (v.as_ptr() as i32, v.len() as i32)
+    in_bytes(v.as_bytes())
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn s(v: &str) -> (i32, i32) {
-    crate::native::intern(v.as_bytes())
+    in_bytes(v.as_bytes())
+}
+
+/// The ABI handle for an **input** buffer the host reads during the call.
+///
+/// On wasm32 the handle *is* the linear-memory pointer. On a native build a
+/// 64-bit pointer does not fit in the `i32` wire form, so the bytes are
+/// interned in the per-call arena and the handle is the arena index
+/// ([`crate::native`]). The bytes must outlive the call -- a `&[u8]` borrowed
+/// from a local is fine because the host copies them out before returning.
+fn in_bytes(v: &[u8]) -> (i32, i32) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        (v.as_ptr() as i32, v.len() as i32)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        crate::native::intern(v)
+    }
 }
 
 /// The i32 wire form of a message: `postcard` bytes leaked for the host to read
@@ -657,15 +675,49 @@ fn s(v: &str) -> (i32, i32) {
 #[cfg(target_arch = "wasm32")]
 fn mj(m: &Msg) -> (i32, i32) {
     let b = m.to_bytes();
-    let p = b.as_ptr() as i32;
-    let l = b.len() as i32;
+    let out = (b.as_ptr() as i32, b.len() as i32);
     core::mem::forget(b);
-    (p, l)
+    out
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 fn mj(m: &Msg) -> (i32, i32) {
-    crate::native::intern(&m.to_bytes())
+    in_bytes(&m.to_bytes())
+}
+
+/// Reserve an **out-buffer** the host writes into during the call.
+///
+/// Returns `(handle, scratch)`. On wasm the handle is the scratch's
+/// linear-memory pointer (the host writes straight into it); on native it is
+/// an arena slot and `scratch` is a dummy of the same length (the real bytes
+/// come back through [`out_read`]).
+fn out_buf(cap: usize) -> (i32, alloc::vec::Vec<u8>) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let mut buf = alloc::vec![0u8; cap];
+        (buf.as_mut_ptr() as i32, buf)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let (h, l) = crate::native::reserve(cap);
+        (h, alloc::vec![0u8; l as usize])
+    }
+}
+
+/// Read back an out-buffer the host just wrote (`n` = the host's return).
+/// On wasm the scratch already holds the bytes; on native they live in the
+/// arena and `scratch` is discarded.
+fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = p;
+        scratch
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let _ = scratch;
+        crate::native::read(p, n.max(0) as usize)
+    }
 }
 
 // ------------------------------------------------------------- dice & log
@@ -1093,12 +1145,12 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     if need <= 0 {
         return Vec::new();
     }
-    let mut buf: Vec<u8> = Vec::new();
-    buf.resize(need as usize, 0);
-    let got = unsafe { sys::cards_in(player_id, pile as i32, buf.as_mut_ptr() as i32, need) };
+    let (p, scratch) = out_buf(need as usize);
+    let got = unsafe { sys::cards_in(player_id, pile as i32, p, need) };
     if got != need {
         return Vec::new();
     }
+    let buf = out_read(p, got, scratch);
     postcard::from_bytes(&buf).unwrap_or_default()
 }
 
@@ -1584,11 +1636,12 @@ pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
 /// names it, and [`invoke_skill`] runs a numbered effect on it.
 pub fn band_skill(player_id: i32) -> Option<String> {
     let cap = 1024;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::band_skill(player_id, buf.as_mut_ptr() as i32, cap) };
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::band_skill(player_id, p, cap) };
     if n <= 0 || n > cap {
         return None;
     }
+    let buf = out_read(p, n, scratch);
     let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
     if s.is_empty() {
         None
@@ -1603,11 +1656,12 @@ pub fn band_skill(player_id: i32) -> Option<String> {
 /// [`invoke_skill`] runs its offer.
 pub fn character_skill(player_id: i32) -> Option<String> {
     let cap = 1024;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::character_skill(player_id, buf.as_mut_ptr() as i32, cap) };
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::character_skill(player_id, p, cap) };
     if n <= 0 || n > cap {
         return None;
     }
+    let buf = out_read(p, n, scratch);
     let s: String = postcard::from_bytes(&buf[..n as usize]).unwrap_or_default();
     if s.is_empty() {
         None
@@ -1621,11 +1675,12 @@ pub fn character_skill(player_id: i32) -> Option<String> {
 /// 的效果不可叠加」 and 「不视为那个乐队的角色」.
 pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
     let cap = 8192;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::band_skills(player_id, buf.as_mut_ptr() as i32, cap) };
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::band_skills(player_id, p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
+    let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
@@ -2211,11 +2266,12 @@ pub fn gains_this_turn(player_id: i32) -> i32 {
 /// 「取消其对目标之一的[指定]」 branches on, before the play's body has run.
 pub fn designations(player_id: i32) -> Vec<i32> {
     let cap = 4096;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::designations(player_id, buf.as_mut_ptr() as i32, cap) };
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::designations(player_id, p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
+    let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
@@ -2441,11 +2497,11 @@ pub mod trigger {
         if need <= 0 {
             return Vec::new();
         }
-        let mut buf: Vec<u8> = Vec::new();
-        buf.resize(need as usize, 0);
-        if unsafe { sys::trig_cards(buf.as_mut_ptr() as i32, need) } != need {
+        let (p, scratch) = out_buf(need as usize);
+        if unsafe { sys::trig_cards(p, need) } != need {
             return Vec::new();
         }
+        let buf = out_read(p, need, scratch);
         postcard::from_bytes(&buf).unwrap_or_default()
     }
 
@@ -2691,11 +2747,12 @@ pub fn bump_mark(tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
 pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
     let (p, l) = s(prefix);
     let cap = 4096;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::tok_names(player_id, p, l, buf.as_mut_ptr() as i32, cap) };
+    let (bp, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::tok_names(player_id, p, l, bp, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
+    let buf = out_read(bp, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
@@ -2721,7 +2778,8 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
     for (i, &t) in tiles.iter().enumerate() {
         buf[i * 4..i * 4 + 4].copy_from_slice(&t.to_le_bytes());
     }
-    unsafe { sys::card_offer_build(player_id, buf.as_ptr() as i32, buf.len() as i32) != 0 }
+    let (p, l) = in_bytes(&buf);
+    unsafe { sys::card_offer_build(player_id, p, l) != 0 }
 }
 
 /// `H.DoMoveRoll` -- sum the planned move's dice tables into one face. The
@@ -2740,11 +2798,12 @@ pub fn is_live_house_for(player_id: i32, tile: i32) -> bool {
 /// Ids of the player's placed field cards, in placement order.
 pub fn placed_cards(player_id: i32) -> Vec<String> {
     let cap = 4096;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::placed_cards(player_id, buf.as_mut_ptr() as i32, cap) };
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::placed_cards(player_id, p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
+    let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
@@ -2797,21 +2856,15 @@ pub fn card_buy(player_id: i32, tile: i32) -> bool {
 /// for the whole batch.
 pub fn buy_quotes(player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> {
     let cap = 4096;
-    let mut buf = alloc::vec![0u8; cap as usize];
+    let (op, scratch) = out_buf(cap as usize);
     let raw: Vec<i32> = tiles.to_vec();
     let bytes = postcard::to_allocvec(&raw).unwrap_or_default();
-    let n = unsafe {
-        sys::buy_quotes(
-            player_id,
-            kind,
-            bytes.as_ptr() as i32,
-            bytes.len() as i32,
-            buf.as_mut_ptr() as i32,
-        )
-    };
+    let (ip, il) = in_bytes(&bytes);
+    let n = unsafe { sys::buy_quotes(player_id, kind, ip, il, op) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
+    let buf = out_read(op, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
@@ -2932,44 +2985,24 @@ pub fn set_extreme(v: i32) {
 /// 「与本回合内你骰出过的所有骰点都不同」 compares against this.
 pub fn turn_rolls() -> Vec<i32> {
     let cap = 4096;
-    #[cfg(target_arch = "wasm32")]
-    let (p, buf) = {
-        let mut buf = alloc::vec![0u8; cap as usize];
-        (buf.as_mut_ptr() as i32, buf)
-    };
-    #[cfg(not(target_arch = "wasm32"))]
-    let (p, mut buf) = {
-        let (h, l) = crate::native::reserve(cap as usize);
-        (h, alloc::vec![0u8; l as usize])
-    };
+    let (p, scratch) = out_buf(cap as usize);
     let n = unsafe { sys::turn_rolls(p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
-    #[cfg(not(target_arch = "wasm32"))]
-    let buf = crate::native::read(p, n as usize);
+    let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
 /// C# `_turnSnap[i]` -- `(pos, stay, stun, exile)` when the turn started. The
 /// four things 「回到起始地点并取消所有受到的效果」 restores.
 pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
-    #[cfg(target_arch = "wasm32")]
-    let (p, mut buf) = {
-        let mut buf = [0u8; 16];
-        (buf.as_mut_ptr() as i32, buf)
-    };
-    #[cfg(not(target_arch = "wasm32"))]
-    let (p, mut buf) = {
-        let (h, _) = crate::native::reserve(16);
-        (h, [0u8; 16])
-    };
+    let (p, scratch) = out_buf(16);
     let n = unsafe { sys::turn_snap(player_id, p) };
-    #[cfg(not(target_arch = "wasm32"))]
-    let buf = crate::native::read(p, n.max(0) as usize);
     if n < 16 {
         return (-1, 0, 0, 0);
     }
+    let buf = out_read(p, n, scratch);
     let g = |i: usize| i32::from_le_bytes([buf[i], buf[i + 1], buf[i + 2], buf[i + 3]]);
     (g(0), g(4), g(8), g(12))
 }
@@ -3050,11 +3083,12 @@ pub fn set_self_immune(on: bool) -> bool {
 /// op would hit the first copy twice when one player holds two.
 pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
     let cap = 8192;
-    let mut buf = alloc::vec![0u8; cap as usize];
-    let n = unsafe { sys::field_instances(player_id, buf.as_mut_ptr() as i32, cap) };
+    let (p, scratch) = out_buf(cap as usize);
+    let n = unsafe { sys::field_instances(player_id, p, cap) };
     if n <= 0 || n > cap {
         return Vec::new();
     }
+    let buf = out_read(p, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 

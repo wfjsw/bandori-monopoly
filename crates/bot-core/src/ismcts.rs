@@ -817,17 +817,29 @@ impl Ismcts {
         std::thread::scope(|scope| {
             let mut handles = Vec::with_capacity(threads);
             for (t, mut sim) in sims.into_iter().enumerate() {
-                handles.push(scope.spawn(move || {
-                    // Each thread runs its own tree over its own determinization
-                    // stream; the trees are merged afterwards.
-                    let mut tree = Ismcts::new();
-                    let cfg_t = SearchConfig {
-                        seed: seed_for_thread(cfg.seed, t),
-                        ..cfg
-                    };
-                    let out = tree.search(&mut sim, seat, cfg_t);
-                    (tree, out)
-                }));
+                // Explicit stack: the `rules-native` card runs are direct Rust
+                // calls on the thread's stack (the sandbox runs them in wasm
+                // linear memory), and a rollout's trigger chain can nest
+                // deeply. `RUST_MIN_STACK` is not reliably honoured by
+                // `scope.spawn`, so set the size here. 32 MiB is far above the
+                // deepest chain the shipped ruleset produces; the wasm path
+                // is unaffected (same work, less stack).
+                const STACK: usize = 32 * 1024 * 1024;
+                let handle = std::thread::Builder::new()
+                    .stack_size(STACK)
+                    .spawn_scoped(scope, move || {
+                        // Each thread runs its own tree over its own
+                        // determinization stream; the trees are merged after.
+                        let mut tree = Ismcts::new();
+                        let cfg_t = SearchConfig {
+                            seed: seed_for_thread(cfg.seed, t),
+                            ..cfg
+                        };
+                        let out = tree.search(&mut sim, seat, cfg_t);
+                        (tree, out)
+                    })
+                    .expect("spawn search thread");
+                handles.push(handle);
             }
             for h in handles {
                 if let Ok((tree, out)) = h.join() {
