@@ -31,7 +31,7 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
     ],
 )
     .legacy(&[(2, legacy_mine)]);
@@ -48,9 +48,6 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得1个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_circle(ctx::trigger::tile()) {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("lisa_goddess_gain")))?;
     Ok(())
 }

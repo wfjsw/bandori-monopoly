@@ -22,7 +22,13 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const MARINA_GIFTS: CardDef = CardDef::new(
     "skill:月岛麻里奈:礼物还有好多好多哟",
-    &[On::Hook(&[HookKind::Pass], "", None, on_pass)],
+    // 「其他玩家经过CiRCLE时」 -- another player's pass onto CiRCLE.
+    &[On::Hook(
+        &[HookKind::Pass],
+        "actor != owner && actor >= 0 && is_circle(tile.id)",
+        None,
+        on_pass,
+    )],
 );
 
 /// The cost of the offer, named in the clause.
@@ -31,14 +37,9 @@ const COST: i32 = 500;
 const PAYOUT: i32 = 1200;
 
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    // 「其他玩家经过CiRCLE时」
+    // 「其他玩家经过CiRCLE时」 is the condition
+    // (`actor != owner && actor >= 0 && is_circle(tile.id)`).
     let passer = ctx::trigger::player_id();
-    if passer == player_id || passer < 0 {
-        return Ok(());
-    }
-    if !ctx::is_circle(ctx::trigger::tile()) {
-        return Ok(());
-    }
     // 「可向你支付一次500资金」 -- the passer's call.
     let offered = ctx::ask_yes(
         passer,

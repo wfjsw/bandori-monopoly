@@ -28,7 +28,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
     "skill:高松灯:诗超绊",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && is_ring(tile.id)", None, on_pass),
         On::Hook(&[HookKind::SettleBefore], "", None, before_settle),
         On::Hook(&[HookKind::PayMul], "", Some(half), on_pay),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
@@ -54,9 +54,6 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]任意RiNG时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_ring(ctx::trigger::tile()) {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_poem_gain")))?;
     Ok(())
 }

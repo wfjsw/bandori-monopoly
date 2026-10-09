@@ -32,7 +32,7 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
             None,
             declare_cap,
         ),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
@@ -84,9 +84,6 @@ fn circle_gain() -> i32 {
 
 /// （1）「每次[经过]CiRCLE时获得2个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_circle(ctx::trigger::tile()) {
-        return Ok(());
-    }
     ctx::gain_fire(
         player_id,
         circle_gain(),

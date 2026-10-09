@@ -37,7 +37,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         On::Hook(&[HookKind::RollPlan], "", Some(in_one), on_plan),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         On::Hook(&[HookKind::Settle], "", Some(any), on_settle),
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
@@ -107,9 +107,6 @@ fn on_plan(player_id: i32) -> card_sdk::Asked {
 
 /// 「每当你经过CiRCLE的回合结束后…」 -- the pass clears the memory latch.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_circle(ctx::trigger::tile()) {
-        return Ok(());
-    }
     state::set(player_id, DIRTY, 0);
     Ok(())
 }

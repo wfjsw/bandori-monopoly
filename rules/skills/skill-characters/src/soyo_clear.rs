@@ -30,7 +30,7 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
     "skill:长崎素世:通透的颜色",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, offer),
         On::Hook(&[HookKind::Settle], card_sdk::pre::MINE, None, on_settle),
     ],
@@ -49,9 +49,6 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」, minus the penalty latch.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_circle(ctx::trigger::tile()) {
-        return Ok(());
-    }
     if state::get(player_id, PENALTY) != 0 {
         state::set(player_id, PENALTY, 0);
         ctx::log(player_id, &Msg::new(key!("soyo_clear_denied")));
