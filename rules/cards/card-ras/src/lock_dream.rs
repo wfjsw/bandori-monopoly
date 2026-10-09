@@ -18,10 +18,10 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LOCK_DREAM: CardDef = CardDef::new(
     "RAS:（LOCK）追逐梦想的步伐",
     &[
-        On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
+        On::Hook(&[HookKind::DeckBeforeGame], "", Some(deck_before_game_guard), deck_before_game),
         On::Hook(&[HookKind::DeckAtGameStart], "", Some(deck_at_game_start_guard), deck_at_game_start),
-        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
-        On::Hook(&[HookKind::SettleBefore], "", None, settle_before),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
+        On::Hook(&[HookKind::SettleBefore], "", Some(settle_before_guard), settle_before),
     ],
 );
 
@@ -31,9 +31,14 @@ const SLOT_TAG: &str = "lock_dream_tag";
 // 规则书（1）: 「抽取游戏开始的2手牌前将此卡从卡组展示给所有玩家并放置在自身场上」
 /// C# `CardLockDream.DeckBeforeGame` -- pull the card out of the draw pile and
 /// place it on the owner's field, revealed to everyone.
+/// The hook fires on this card while it sits in a draw pile (once per
+/// distinct id per player, up to 5 passes before the opening deal); it only
+/// applies while the card is still in the owner's deck.
+fn deck_before_game_guard(player_id: i32) -> bool {
+    ctx::cards_in(player_id, CardPile::Deck).iter().any(|c| c == "RAS:（LOCK）追逐梦想的步伐")
+}
+
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
-    // The hook fires on this card while it sits in a draw pile (once per
-    // distinct id per player, up to 5 passes before the opening deal).
     // C# pulls the id out of the deck and `H.PlaceCard(seat, seat, Id)`.
     if !ctx::take_card(player_id, CardPile::Deck, "RAS:（LOCK）追逐梦想的步伐") {
         return Ok(());
@@ -78,29 +83,34 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// C# `CardLockDream.PassTile` -- tag when the owner's main move passes
+// 规则书（2）: 「如果此卡拥有者的主要移动[经过]了“Bandori车站”」
+// -- C# `m.Seat == Seat && m.Main && H.Name(t) == "Bandori车站"`. The guard
+// holds the whole condition, so the hook only runs (and the card only
+// flashes) on that one step -- not on every step of every walk.
+fn pass_tile_guard(player_id: i32) -> bool {
+    let t = trigger::tile();
+    trigger::player_id() == player_id
+        && trigger::move_is_main()
+        && t >= 0
+        && ctx::tile_named("Bandori车站") == t
+}
+
+/// C# `CardLockDream.PassTile` -- tag the owner's main move as having passed
 /// Bandori车站.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // 规则书（2）: 「如果此卡拥有者的主要移动[经过]了“Bandori车站”」
-    // -- C# `m.Seat == Seat && m.Main && H.Name(t) == "Bandori车站"`.
-    if trigger::player_id() != player_id || !trigger::move_is_main() {
-        return Ok(());
-    }
-    let t = trigger::tile();
-    if t < 0 || ctx::tile_named("Bandori车站") != t {
-        return Ok(());
-    }
     // C# `m.Tags["lockStation"] = 1` -- a slot stands in for the move tag.
     ctx::set_slot(player_id, SLOT_TAG, 1);
     Ok(())
 }
 
-/// C# `CardLockDream.SettleBefore` -- if the tag is set, move the player to
+/// Applies only to the owner's settle after a tagged move.
+fn settle_before_guard(player_id: i32) -> bool {
+    trigger::player_id() == player_id && ctx::slot(player_id, SLOT_TAG) != 0
+}
+
+/// C# `CardLockDream.SettleBefore` -- the tagged move: move the player to
 /// 旭汤澡堂 before the settle and remove the card.
 fn settle_before(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id || ctx::slot(player_id, SLOT_TAG) == 0 {
-        return Ok(());
-    }
     ctx::set_slot(player_id, SLOT_TAG, 0);
     let to = ctx::tile_named("旭汤澡堂");
     if to >= 0 {
