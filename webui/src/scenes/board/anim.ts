@@ -63,8 +63,8 @@ export class Animator {
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
-  /** Replay speed (1 / 2 / 4): scales every sleep and timer. At 4 the queue
-   *  takes the fast path and nothing waits at all. */
+  /** Animation speed scales every sleep and timer. A 4x replay additionally
+   *  takes the instant path; live matches still show each movement step. */
   speed = 1;
   private seq = 0;
   private localLogId = 0;
@@ -72,7 +72,7 @@ export class Animator {
   private turnTimer = 0;
   private disposed = false;
 
-  constructor(private bump: () => void, private view: () => MatchView | null) {}
+  constructor(private bump: () => void, private view: () => MatchView | null, private readonly replay = false) {}
 
   /** `sleep` scaled by [`speed`]. */
   private nap(ms: number): Promise<void> {
@@ -81,7 +81,7 @@ export class Animator {
 
   /** The queue plays fast when it is deep, or when a replay is at 4x. */
   private fast(): boolean {
-    return this.queue.length > FAST_QUEUE || this.speed >= 4;
+    return this.queue.length > FAST_QUEUE || (this.replay && this.speed >= 4);
   }
 
   /** (Re)attach -- React StrictMode unmounts and remounts once in development. */
@@ -269,7 +269,7 @@ export class Animator {
         await wait(450);
         // A burst of reward/card events may fast-forward the log, but must
         // still show the path. Only explicit 4x replay skips movement frames.
-        await this.walk(playerId, e.from, e.value, this.speed >= 4 ? 0 : 130);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 130);
         break;
       }
       case "dice": {
@@ -295,7 +295,7 @@ export class Animator {
       case "move":
         if (!ok) break;
         this.showBanner(this.player(playerId), body);
-        await this.walk(playerId, e.from, e.value, this.speed >= 4 ? 0 : 90);
+        await this.walk(playerId, e.from, e.value, this.replay && this.speed >= 4 ? 0 : 90);
         break;
       case "teleport":
         if (!ok || !this.pos) break;
@@ -364,13 +364,13 @@ export function useBoardSession(sess: GameSession): { view: MatchView | null; at
   viewRef.current = state.view;
   const animRef = useRef<Animator | null>(null);
   if (!animRef.current) {
-    const a = new Animator(bump, () => viewRef.current);
+    const a = new Animator(bump, () => viewRef.current, sess.kind === "replay");
     for (const e of sess.view?.state.events ?? []) a.addLog(e);
     animRef.current = a;
   }
   useEffect(() => {
     const a = animRef.current!;
-    // A replay drives `Animator.speed` (1 / 2 / 4) through the session.
+    // Both the hand's live controls and replay transport drive local speed.
     const syncSpeed = () => {
       a.speed = sess.animSpeed;
     };
