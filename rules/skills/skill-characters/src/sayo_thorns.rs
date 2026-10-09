@@ -119,27 +119,12 @@ fn can_offer(player_id: i32) -> bool {
 /// （2）「将非[传送]的主要移动添加1或2格」.
 fn offer(player_id: i32) -> card_sdk::Asked {
     // Other MoveBefore counters may already have extended
-    // the plan. Preview and extend that result, retaining earlier extra steps.
+    // the plan. Apply the preselected extension, retaining earlier extra steps.
     let base = trigger::value().max(0);
-    let steps = trigger::move_total();
-    let from = trigger::tile();
-    let landing = |n: i32| (from + n * trigger::move_dir()).rem_euclid(ctx::tile_count());
-    let add = ctx::ask_pick(
-        player_id,
-        &Msg::new(key!("sayo_thorns_title")),
-        &Msg::new(key!("sayo_thorns_ask"))
-            .i("n", steps as i64)
-            .tile("tile", landing(steps)),
-        &[
-            Msg::new(key!("sayo_thorns_skip")),
-            Msg::new(key!("sayo_thorns_add1")).tile("tile", landing(steps + 1)),
-            Msg::new(key!("sayo_thorns_add2")).tile("tile", landing(steps + 2)),
-        ],
-    )?;
-    if add == 0 {
+    let n = trigger::move_tag(card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+    if !matches!(n, 1 | 2) {
         return Ok(());
     }
-    let n = add as i32;
     if !ctx::spend_fire(player_id, 6, &Msg::new(key!("sayo_thorns_spend")))? {
         return Ok(());
     }

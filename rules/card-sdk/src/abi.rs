@@ -263,7 +263,13 @@ use alloc::{string::String, vec::Vec};
 ///      unchanged (no save field).
 /// v47: opt-in field counteractions and mutually exclusive choice groups;
 ///      these share the hand-counteraction window without spending a field card.
-pub const ABI_VERSION: i32 = 47;
+/// v48: shared movement counteractions receive the preselected extension in
+///      `COUNTERACT_MOVE_EXTENSION`; distance is chosen before its payment.
+pub const ABI_VERSION: i32 = 48;
+
+/// Temporary trigger tag for the extension selected before source declaration.
+/// The host scopes it to one counteraction body, never the resulting walk.
+pub const COUNTERACT_MOVE_EXTENSION: &str = "counteract.moveExtension";
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";

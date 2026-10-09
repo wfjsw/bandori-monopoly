@@ -232,6 +232,13 @@ pub fn option_card_id(m: &game_core::msg::Msg) -> Option<String> {
 /// fallback's skip). One action per offered card, so the search can branch on
 /// *which* card to declare.
 pub fn counteract_action(p: &MatchPrompt, index: i32) -> Action {
+    // Sayo's distance choice carries source metadata for the heuristic, but
+    // +1 and +2 must remain separate choices before a source is declared.
+    if p.text.key() == "ask.counteract.move_extension" {
+        return Action::Offer {
+            index: if index < 0 { p.fallback } else { index },
+        };
+    }
     if index < 0 || index == p.fallback {
         return Action::Counteract { card: None };
     }
