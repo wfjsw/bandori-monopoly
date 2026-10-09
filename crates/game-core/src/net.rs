@@ -117,9 +117,10 @@ pub struct RoomInfo {
     pub weights: ScoreWeights,
     pub members: Vec<RoomMember>,
     /// Commit-reveal fairness (`docs/FAIRNESS.md`). `commit` is published the
-    /// moment the room starts, before any entropy is collected; the openings
-    /// (server seed / salt / player nonces) are **never** in here -- they
-    /// reach a client only inside the sealed post-match record.
+    /// moment the room is **created** -- before any entropy can be collected
+    /// -- and a fresh one is drawn after every match; the openings (server
+    /// seed / salt / player nonces) are **never** in here -- they reach a
+    /// client only inside the sealed post-match record.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fair: Option<crate::fair::FairPublic>,
 }

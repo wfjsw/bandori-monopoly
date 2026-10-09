@@ -31,44 +31,81 @@ use std::sync::Mutex;
 
 use crate::error::{ApiError, ApiResult};
 use crate::pool::{Out, Pool};
-use crate::store::{CrossState, LogEntry, RecordHead, RoomRecord, StoredRecord};
+use crate::store::{CrossState, LogEntry, RecordHead, RoomFair, RoomRecord, StoredRecord};
 
-/// How long a room waits for player nonces after the commitment is published
-/// (`docs/FAIRNESS.md`). A missing nonce is simply absent -- the start can
-/// never stall on a silent client.
-pub const NONCE_WINDOW: std::time::Duration = std::time::Duration::from_secs(5);
-
-/// The live commit-reveal state of a room between "start pressed" and "match
-/// created" (`docs/FAIRNESS.md`). In-memory only: the openings reach the
-/// server-side record log when the match is created (and the sealed record
-/// when it ends), and a restart during the window aborts the start cleanly
-/// (see [`Room::restore_game`]).
+/// A room's commit-reveal slot (`docs/FAIRNESS.md`): the openings of the
+/// **next** match this room will deal, drawn at room creation and redrawn
+/// after every match -- always published before that match's nonces can
+/// arrive, so the server is already committed when a client posts one.
+///
+/// There is no window and no wait: a nonce is collected as its member enters
+/// the room, the ones that do not sit down for the match are dropped at the
+/// start, and the match is created immediately.
+///
+/// In-memory beside the store's [`RoomFair`] copy (a restart picks the same
+/// slot back up). The openings also reach the server-side record log head
+/// when the match is created and the sealed record when it ends; they never
+/// enter a client-facing payload.
 #[derive(Debug, Clone)]
 struct FairState {
     /// Server secret 256-bit seed. Hex in the sealed record; never in a view.
     seed: [u8; 32],
     /// Server secret 256-bit salt. Same.
     salt: [u8; 32],
-    /// The tick quantum this match will run on (sealed into the record).
-    step: f32,
-    /// The commitment published at start.
+    /// The commitment shown in the room (hex).
     commit: String,
-    /// Canonical room settings the commitment hashed.
-    settings: String,
-    /// Human nonces collected so far (member -> 32 bytes).
+    /// Human nonces collected for the next match (member -> 32 bytes). Last
+    /// write wins; locked when the match starts.
     nonces: std::collections::BTreeMap<i32, [u8; 32]>,
-    /// Human members expected to contribute. Bots contribute none.
-    want: Vec<i32>,
-    /// The seating the match will be built from -- the roster after the
-    /// advanced-bot rewrite (`Room::start`). Kept here because the window
-    /// sits between that rewrite and `Match::new_seeded`.
-    members: Vec<RoomMember>,
-    /// The window closes at this instant; the match is created then at the
-    /// latest.
-    deadline: Instant,
-    /// The match has been created; the openings stay here (server-side) so
-    /// the leak scan and a late restore can see them until the record seals.
-    done: bool,
+    /// A match has consumed this slot. The commit still shows for the running
+    /// match (people copy it from there); no nonce is accepted, and the next
+    /// match waits for a fresh slot rolled when this one ends.
+    consumed: bool,
+}
+
+impl FairState {
+    /// Draw a fresh slot over the engine identity `stamp` names.
+    fn fresh(stamp: &game_core::record::EngineStamp) -> Self {
+        let seed = crate::state::random_32();
+        let salt = crate::state::random_32();
+        Self {
+            seed,
+            salt,
+            commit: fair::commit_hex(&seed, &salt, &stamp.bundle, &stamp.ruleset_sha256),
+            nonces: std::collections::BTreeMap::new(),
+            consumed: false,
+        }
+    }
+
+    fn to_record(&self) -> RoomFair {
+        RoomFair {
+            seed: fair::hex32(&self.seed),
+            salt: fair::hex32(&self.salt),
+            commit: self.commit.clone(),
+            nonces: self
+                .nonces
+                .iter()
+                .map(|(&m, n)| (m, fair::hex32(n)))
+                .collect(),
+            consumed: self.consumed,
+        }
+    }
+
+    fn from_record(r: &RoomFair) -> Option<Self> {
+        let seed = fair::unhex32(&r.seed).ok()?;
+        let salt = fair::unhex32(&r.salt).ok()?;
+        let mut nonces = std::collections::BTreeMap::new();
+        for (m, n) in &r.nonces {
+            nonces.insert(*m, fair::unhex32(n).ok()?);
+        }
+        Some(Self {
+            seed,
+            salt,
+            commit: r.commit.clone(),
+            nonces,
+            consumed: r.consumed,
+        })
+    }
 }
 
 /// Bookkeeping for one match's record log. Lives beside the blob rather than
@@ -492,9 +529,9 @@ pub struct Room {
     /// Standard before the match is built, so they play as ordinary engine
     /// bots instead of waiting on answers nobody will send.
     pub bot_search: bool,
-    /// Open commit-reveal window (`docs/FAIRNESS.md`). `Some` from the moment
-    /// the start is accepted until the match is created; the openings live
-    /// only here and in the server-side record log.
+    /// The commit-reveal slot (`docs/FAIRNESS.md`): drawn at room creation and
+    /// redrawn after every match. `None` only until the first [`Room::roll_fair`]
+    /// (or when a stored room carries none and the re-roll has not run yet).
     fair: Option<FairState>,
 }
 
@@ -556,6 +593,7 @@ impl Room {
             password: self.password.clone(),
             next_member: self.next_member,
             tokens: self.tokens.iter().map(|(&k, v)| (k, v.clone())).collect(),
+            fair: self.fair.as_ref().map(|f| f.to_record()),
         }
     }
 
@@ -571,6 +609,11 @@ impl Room {
     /// every [`RoomRecord`]. The match blob is picked up separately by
     /// [`MatchHandle`]; presence starts at zero streams, so everyone is briefly
     /// `away` until their SSE reconnects (well inside the presence timeout).
+    ///
+    /// The commit-reveal slot rides the record (`docs/FAIRNESS.md`): same
+    /// commitment, same already-collected nonces, so a restart is invisible to
+    /// the fairness scheme. A record from before the slot was persisted falls
+    /// back to a fresh one on [`Room::restore_game`].
     pub fn from_record(rec: RoomRecord, engine: Arc<Pool>, store: Arc<dyn CrossState>) -> Self {
         let tokens: HashMap<i32, String> = rec.tokens.into_iter().collect();
         let presence = tokens
@@ -587,8 +630,15 @@ impl Room {
             })
             .collect();
         let (tx, _) = broadcast::channel(64);
+        let fair = rec.fair.as_ref().and_then(FairState::from_record);
+        let mut info = rec.info;
+        if let Some(f) = &fair {
+            info.fair = Some(FairPublic {
+                commit: f.commit.clone(),
+            });
+        }
         Self {
-            info: rec.info,
+            info,
             password: rec.password,
             tokens,
             next_member: rec.next_member,
@@ -599,21 +649,19 @@ impl Room {
             presence,
             dissolved: None,
             bot_search: false,
-            fair: None,
+            fair,
         }
     }
 
-    /// The running match as the store holds it, for restore.
+    /// The running match as the store holds it, for restore. Also brings the
+    /// commit-reveal slot up: a room record written before the slot was
+    /// persisted (or a corrupt one) gets a fresh commitment here, before
+    /// anybody can post a nonce against it.
     pub fn restore_game(&mut self) {
-        // A restart during the nonce window loses the in-memory openings;
-        // abort that start cleanly rather than leave the room stuck at
-        // `playing` with no match (`docs/FAIRNESS.md`).
-        if self.info.playing && self.game.is_none() && self.fair_collecting() {
-            eprintln!("room {}: entropy window lost to a restart; start aborted", self.info.id);
-            self.fair = None;
-            self.info.fair = None;
-            self.info.playing = false;
-            self.notify();
+        if self.fair.is_none() {
+            if let Err(e) = self.roll_fair() {
+                eprintln!("room {}: fair slot roll failed: {e}", self.info.id);
+            }
         }
         let blob = match self.store.match_get(&self.info.id) {
             Ok(b) => b,
@@ -705,6 +753,11 @@ impl Room {
     pub fn leave(&mut self, member: i32) -> Option<String> {
         let token = self.tokens.remove(&member);
         self.presence.remove(&member);
+        // A leaver's nonce goes with them (`docs/FAIRNESS.md`): only the
+        // members who actually sit down for the match contribute.
+        if let Some(f) = self.fair.as_mut() {
+            f.nonces.remove(&member);
+        }
         let was_host = self.is_host(member);
         self.info.members.retain(|m| m.id != member);
         if was_host {
@@ -832,12 +885,12 @@ impl Room {
     /// see `docs/REPLAY.md` §1): the record seals it into its header so a
     /// replay reproduces the same `tick(dt)` f32s.
     ///
-    /// This does **not** create the match: it draws the server's secret
-    /// seed + salt, publishes their commitment (`docs/FAIRNESS.md`) and opens
-    /// the player-nonce window. The match is built by
-    /// [`Room::maybe_finalize_fair`] once every human nonce is in or
-    /// [`NONCE_WINDOW`] has passed -- `Match::new_seeded` draws RNG
-    /// immediately (seat order), so the derived seed must be complete first.
+    /// This creates the match, immediately (`docs/FAIRNESS.md`). The
+    /// commitment was published at **room creation** -- before any nonce could
+    /// exist -- and the player nonces were collected as their members entered
+    /// the room. The nonces of exactly the members who sit down are mixed in;
+    /// anything else (a leaver, a kicked member) is dropped. A member without
+    /// a nonce is simply absent. Nothing waits on anybody.
     pub fn start(&mut self, member: i32, force: bool, step: f32) -> ApiResult<()> {
         self.host_only(member)?;
         if self.info.playing {
@@ -886,110 +939,25 @@ impl Room {
                 }
             }
         }
-        // Commit-reveal, phase 1 (`docs/FAIRNESS.md`): draw the secret
-        // openings and publish only their commitment. The openings live in
-        // `FairState` (this process) and, once the match exists, in the
-        // server-side record log head -- never in `RoomInfo` / SSE / views.
-        let seed = crate::state::random_32();
-        let salt = crate::state::random_32();
-        let settings = CanonSettings::new(mode, step, &self.info.weights, &members).canon();
-        let stamp = self.engine.info().map_err(|e| ApiError::bad(e.as_str()))?;
-        let commit = fair::commit_hex(&seed, &salt, &stamp.bundle, &stamp.ruleset_sha256, &settings);
-        let want: Vec<i32> = members.iter().filter(|m| !m.bot).map(|m| m.id).collect();
-        self.fair = Some(FairState {
-            seed,
-            salt,
-            step,
-            commit: commit.clone(),
-            settings: settings.clone(),
-            nonces: std::collections::BTreeMap::new(),
-            want,
-            members: members.clone(),
-            deadline: Instant::now() + NONCE_WINDOW,
-            done: false,
-        });
-        self.info.fair = Some(FairPublic {
-            commit,
-            settings,
-            collecting: true,
-        });
-        self.info.playing = true;
-        self.persist();
-        for m in &mut self.info.members {
-            m.away = false;
-            if !m.host && !m.bot {
-                m.ready = false;
-            }
-        }
-        self.notify();
-        Ok(())
-    }
-
-    /// One human's entropy contribution (`docs/FAIRNESS.md`): 32 bytes as
-    /// hex, accepted for a member of this room until the window closes. A
-    /// member that never posts is simply absent from the derived seed. Last
-    /// write wins (a retry may overwrite). Nobody sees anyone else's nonce
-    /// until the sealed record, so there is nothing to grind against -- and
-    /// the server's seed was committed before any nonce arrived, so it
-    /// cannot adapt either.
-    pub fn submit_nonce(&mut self, member: i32, nonce_hex: &str) -> ApiResult<()> {
-        let Some(f) = self.fair.as_mut() else {
-            return Err(ApiError::bad("err.fair.closed"));
-        };
-        if f.done {
-            return Err(ApiError::bad("err.fair.closed"));
-        }
-        if !f.want.contains(&member) {
-            return Err(ApiError::bad("err.fair.not_human"));
-        }
-        let nonce = fair::unhex32(nonce_hex).map_err(|e| {
-            ApiError::bad(Msg::new("err.fair.nonce").text("detail", e))
-        })?;
-        f.nonces.insert(member, nonce);
-        self.maybe_finalize_fair()
-    }
-
-    /// True while the nonce window is open and the match has not been built.
-    pub fn fair_collecting(&self) -> bool {
-        self.fair.as_ref().is_some_and(|f| !f.done)
-    }
-
-    /// Test-only: the openings of this room's commit-reveal state (hex seed,
-    /// hex salt), so a leak scan can assert they never appear in a
-    /// client-facing payload. Server-side; never in a RoomInfo / view / SSE frame.
-    #[doc(hidden)]
-    pub fn debug_fair_openings(&self) -> Option<(String, String)> {
-        self.fair
+        // Commit-reveal (`docs/FAIRNESS.md`): the slot was drawn at room
+        // creation and is already published. Take the nonces of exactly the
+        // members in this match (ascending member id -- the derivation sorts,
+        // and the record stores them sorted too) and drop the rest.
+        let f = self
+            .fair
             .as_ref()
-            .map(|f| (fair::hex32(&f.seed), fair::hex32(&f.salt)))
-    }
-
-    /// Close the nonce window if it is due (every human answered, or
-    /// [`NONCE_WINDOW`] elapsed) and create the match. Called after each
-    /// nonce, from the room ticker and from state polls, so a silent client
-    /// can only delay the start by the window.
-    pub fn maybe_finalize_fair(&mut self) -> ApiResult<()> {
-        let due = match &self.fair {
-            None => return Ok(()),
-            Some(f) if f.done => return Ok(()),
-            Some(f) => {
-                Instant::now() >= f.deadline || f.want.iter().all(|m| f.nonces.contains_key(m))
-            }
-        };
-        if !due {
-            return Ok(());
-        }
-        let Some(f) = self.fair.clone() else {
-            return Ok(());
-        };
-        // Ascending member id -- the derivation sorts, and the record stores
-        // them sorted too.
-        let nonces: Vec<(i32, [u8; 32])> = f.nonces.iter().map(|(&m, &n)| (m, n)).collect();
-        let derived = fair::derive_match_seed(&f.seed, &nonces);
-        let mode = self.info.mode();
-        // The seating as `start` rewrote it (advanced -> standard without a
-        // bot service), not the live roster.
-        let members = f.members.clone();
+            .filter(|f| !f.consumed)
+            .ok_or_else(|| ApiError::bad("err.fair.closed"))?;
+        let (seed, salt, commit) = (f.seed, f.salt, f.commit.clone());
+        let seated: std::collections::BTreeSet<i32> = members.iter().map(|m| m.id).collect();
+        let nonces: Vec<(i32, [u8; 32])> = f
+            .nonces
+            .iter()
+            .filter(|(m, _)| seated.contains(m))
+            .map(|(&m, &n)| (m, n))
+            .collect();
+        let derived = fair::derive_match_seed(&seed, &nonces);
+        let settings = CanonSettings::new(mode, step, &self.info.weights, &members).canon();
         let blob = self
             .engine
             .new_match(&members, derived, mode as i32, &self.info.weights)
@@ -1000,12 +968,11 @@ impl Room {
         // this server-side log line only; the sealed record copies them out
         // after the match.
         let stamp = self.engine.info().map_err(|e| ApiError::bad(e.as_str()))?;
-        let entries: Vec<NonceEntry> = f
-            .nonces
+        let entries: Vec<NonceEntry> = nonces
             .iter()
-            .map(|(&m, &n)| NonceEntry {
-                member: m,
-                nonce: fair::hex32(&n),
+            .map(|(m, n)| NonceEntry {
+                member: *m,
+                nonce: fair::hex32(n),
             })
             .collect();
         let head = RecordHead {
@@ -1016,16 +983,16 @@ impl Room {
                 weights: self.info.weights.clone(),
             }),
             stamp,
-            step: f.step,
+            step,
             created: crate::state::now_stamp(),
             mode: mode as i32,
             fair: Some(Fairness {
                 v: fair::FAIR_VERSION,
-                commit: f.commit.clone(),
-                seed: fair::hex32(&f.seed),
-                salt: fair::hex32(&f.salt),
+                commit,
+                seed: fair::hex32(&seed),
+                salt: fair::hex32(&salt),
                 nonces: entries,
-                settings: f.settings.clone(),
+                settings,
             }),
         };
         let participants = self.info.members.iter().map(|m| m.id).collect();
@@ -1039,15 +1006,81 @@ impl Room {
         )
         .map_err(|e| ApiError::bad(e.as_str()))?;
         self.game = Some(Arc::new(m));
-        if let Some(pub_) = self.info.fair.as_mut() {
-            pub_.collecting = false;
-        }
+        // The slot is consumed: its commit stays up for the running match
+        // (people copy it from there), and the next one is rolled when this
+        // match ends.
         if let Some(f) = self.fair.as_mut() {
-            f.done = true;
+            f.consumed = true;
         }
+        self.info.playing = true;
+        self.persist();
+        for m in &mut self.info.members {
+            m.away = false;
+            if !m.host && !m.bot {
+                m.ready = false;
+            }
+        }
+        self.notify();
+        Ok(())
+    }
+
+    /// One human's entropy contribution (`docs/FAIRNESS.md`): 32 bytes as
+    /// hex, collected as the member enters the room and re-accepted (last
+    /// write wins) until a match consumes the slot. A member that never posts
+    /// is simply absent from the derived seed; one that leaves before the
+    /// start has its nonce dropped with it. Nobody sees anyone else's nonce
+    /// until the sealed record -- and the server's seed was committed at room
+    /// creation, before any nonce existed, so it cannot adapt either.
+    pub fn submit_nonce(&mut self, member: i32, nonce_hex: &str) -> ApiResult<()> {
+        let Some(f) = self.fair.as_mut() else {
+            return Err(ApiError::bad("err.fair.closed"));
+        };
+        if f.consumed {
+            return Err(ApiError::bad("err.fair.closed"));
+        }
+        if self.info.members.iter().any(|m| m.id == member && m.bot) {
+            return Err(ApiError::bad("err.fair.not_human"));
+        }
+        let nonce = fair::unhex32(nonce_hex).map_err(|e| {
+            ApiError::bad(Msg::new("err.fair.nonce").text("detail", e))
+        })?;
+        f.nonces.insert(member, nonce);
+        self.persist();
+        Ok(())
+    }
+
+    /// Test-only: the openings of this room's commit-reveal state (hex seed,
+    /// hex salt), so a leak scan can assert they never appear in a
+    /// client-facing payload. Server-side; never in a RoomInfo / view / SSE frame.
+    #[doc(hidden)]
+    pub fn debug_fair_openings(&self) -> Option<(String, String)> {
+        self.fair
+            .as_ref()
+            .map(|f| (fair::hex32(&f.seed), fair::hex32(&f.salt)))
+    }
+
+    /// Draw a fresh commit-reveal slot for the next match and publish its
+    /// commitment (`docs/FAIRNESS.md`). Called at room creation and again
+    /// whenever a match ends -- always before that match's nonces can arrive,
+    /// so the server is committed first. Clients re-submit automatically when
+    /// they see the new commit; nobody waits.
+    pub fn roll_fair(&mut self) -> Result<(), String> {
+        let stamp = self.engine.info()?;
+        let f = FairState::fresh(&stamp);
+        self.info.fair = Some(FairPublic {
+            commit: f.commit.clone(),
+        });
+        self.fair = Some(f);
         self.persist();
         self.notify();
         Ok(())
+    }
+
+    /// True when the last match consumed the slot and the next one has not
+    /// been rolled yet -- what the room ticker uses to roll it the moment the
+    /// match ends (and to recover if a roll failed).
+    pub fn fair_needs_roll(&self) -> bool {
+        self.fair.as_ref().is_some_and(|f| f.consumed) && !self.info.playing
     }
 
     /// The running match, if play is live. Clone it out and **drop the room

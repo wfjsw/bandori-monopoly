@@ -265,13 +265,17 @@ function soloFair(
   const salt = hex(rand32());
   const nonce = hex(rand32());
   const stamp = JSON.parse(glue.engine_stamp()) as { bundle?: string; ruleset_sha256?: string };
+  // The commitment covers the openings and the engine identity only (the
+  // settings are not fixed yet when it is drawn); the settings still ride the
+  // header so the verifier can pin them (`docs/FAIRNESS.md` §1.1).
   const settings = glue.fair_canon_settings(mode, TICK_STEP, JSON.stringify(weights), JSON.stringify(members));
-  const commit = glue.fair_commit(seed, salt, stamp.bundle ?? "", stamp.ruleset_sha256 ?? "", settings);
+  const commit = glue.fair_commit(seed, salt, stamp.bundle ?? "", stamp.ruleset_sha256 ?? "");
   // One human seat; bots contribute none.
   const derived = glue.fair_derive_seed(seed, JSON.stringify([{ member: human, nonce }]));
   return {
     derived,
-    open: { v: 1, commit, seed, salt, nonces: [{ member: human, nonce }], settings },
+    // `v` is the scheme version (`game_core::fair::FAIR_VERSION`).
+    open: { v: 2, commit, seed, salt, nonces: [{ member: human, nonce }], settings },
   };
 }
 

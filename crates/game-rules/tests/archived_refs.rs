@@ -3,13 +3,14 @@
 //! "old records").
 //!
 //! Each one is a short seeded match sealed at archive time by an engine that
-//! is now old -- the commit-reveal scheme did not exist yet, so they carry a
-//! `u64` seed (the legacy xoshiro stream), no `seed256`, and no fairness
-//! material. What this test pins:
+//! is now old -- the commit-reveal scheme did not exist yet, so they carry no
+//! fairness material (they predate it: either the legacy `u64` seed of the
+//! xoshiro stream, or a pinned `seed256` from the ChaCha switch but still
+//! before the scheme). What this test pins:
 //!
 //! * they still parse, and their `check` holds;
 //! * the stamp's `bundle` id is the file name -- what the loader routes on;
-//! * the legacy `Init::Seed` path is intact (a u64 seed, no 256-bit one);
+//! * the legacy `Init::Seed` path is intact (a seed of one kind or the other);
 //! * `verify` reports "no fairness material" instead of pretending.
 //!
 //! A full checkpoint replay of an old ref against **today's** rules is not
@@ -62,11 +63,17 @@ fn every_reference_record_still_parses_and_names_its_bundle() {
         let rep = verify(&file);
         assert!(!rep.present, "{name}: {:?}", rep.steps);
         assert!(!rep.ok, "{name}: {:?}", rep.steps);
-        // Legacy stream: the setup carries only the u64 seed.
+        // Seeded, pre-fairness: the setup carries its entropy as the legacy
+        // u64 `seed` (the xoshiro stream) or -- on a ChaCha-era ref sealed
+        // before the commit-reveal scheme -- as a pinned `seed256`. In every
+        // case `verify` above says there is no fairness material, which is
+        // what "old records keep verifying" means (`docs/FAIRNESS.md` §1.4).
         match &file.body.init {
             Init::Seed(s) => {
-                assert!(s.seed256.is_none(), "{name}: pre-scheme record has no seed256");
-                assert!(s.seed != 0, "{name}: seeded record has a seed");
+                assert!(
+                    s.seed256.is_some() || s.seed != 0,
+                    "{name}: seeded record carries no seed"
+                );
             }
             Init::Snapshot { .. } => {}
         }

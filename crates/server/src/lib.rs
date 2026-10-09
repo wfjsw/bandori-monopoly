@@ -11,8 +11,8 @@
 //! | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
 //! | POST | `/api/rooms/{id}/bots` | `{op: "add"\|"remove", member?}` | `RoomInfo` (host) |
 //! | POST | `/api/rooms/{id}/weights` | `ScoreWeights` | `RoomInfo` (host) |
-//! | POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host; opens the fairness nonce window) |
-//! | POST | `/api/rooms/{id}/nonce` | `{nonce}` | `RoomInfo` (`docs/FAIRNESS.md`) |
+//! | POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host; creates the match immediately) |
+//! | POST | `/api/rooms/{id}/nonce` | `{nonce}` | `RoomInfo` (`docs/FAIRNESS.md` -- on room entry) |
 //! | POST | `/api/rooms/{id}/leave` | | `{ok}` |
 //! | GET  | `/api/rooms/{id}/state` | | `{room, you, match: {state, hand, handNotes, you, player_id}}` |
 //! | POST | `/api/rooms/{id}/act` | `NetMessage` (`act`, `card`, `cards`, `value`, `prompt`, ...) | `{ok}` or 400 `{error}` |
@@ -135,12 +135,6 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
             // 1. presence and check-out -- the room lock is held only here.
             let (m, playing, dropped, removed) = {
                 let mut r = room.lock().unwrap();
-                // Close a due entropy window (the commit-reveal nonce phase,
-                // `docs/FAIRNESS.md`). Once per start; same lock-across-
-                // round-trip cost `Room::start` already pays.
-                if let Err(e) = r.maybe_finalize_fair() {
-                    eprintln!("room {id} fair finalize: {:?}", e.message);
-                }
                 let m = r.match_handle();
                 let playing = r.info.playing;
                 let (dropped, removed) = r.tick_presence(timeout);
@@ -174,6 +168,15 @@ pub async fn tick_all(server: &Arc<Server>, dt: f32, k: u8) {
                 r.info.playing = false;
                 changed = true;
                 server.bot_drive.lock().unwrap().forget_room(&id);
+            }
+            // A finished match rolls the next commit-reveal slot right here,
+            // in the same breath as `playing = false` (`docs/FAIRNESS.md`):
+            // the new commitment is published before anybody can post a nonce
+            // for it, and the clients re-submit without waiting on anything.
+            if r.fair_needs_roll() {
+                if let Err(e) = r.roll_fair() {
+                    eprintln!("room {id} fair slot roll failed: {e}");
+                }
             }
             if changed {
                 r.notify();

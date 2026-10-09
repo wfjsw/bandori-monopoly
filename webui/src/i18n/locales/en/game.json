@@ -87,7 +87,7 @@
   "err.deck_derived": "Derived cards cannot go in a starting deck; they are created by other cards during play",
   "err.deck_exclusive": "This is {{owner}}'s exclusive card",
   "err.deck_invalid": "A deck needs 10 cards, and only cards this character can take",
-  "err.fair.closed": "The entropy window is closed (the match has already been created)",
+  "err.fair.closed": "This match has already started",
   "err.fair.nonce": "Bad nonce (want 32 bytes as hex): {{detail}}",
   "err.fair.not_human": "Only human players contribute nonces",
   "err.http": "Server error {{status}}",

@@ -1,16 +1,18 @@
 //! Commit-reveal fairness for match entropy (`docs/FAIRNESS.md`).
 //!
-//! The scheme, in one paragraph: the host server draws a secret 256-bit
-//! **seed** and 256-bit **salt** and publishes a SHA-256 **commitment** over
-//! them (plus the engine bundle, the ruleset and the canonical room settings)
-//! *before* anyone plays. Every human client then contributes a 256-bit
-//! **nonce**; the match RNG is seeded from `SHA-256(seed ‖ sorted nonces)`.
-//! Because the server's seed is fixed (committed) before the nonces arrive,
-//! the server cannot adapt its seed to player entropy; because the nonces are
-//! mixed in, the server cannot know the match stream even though it chose the
-//! seed. After the match the openings (seed, salt, nonces) are revealed in
-//! the sealed record and anyone can re-check the commitment and re-derive the
-//! stream the match ran on.
+//! The scheme, in one paragraph: when the room is created the host server
+//! draws a secret 256-bit **seed** and 256-bit **salt** and publishes a
+//! SHA-256 **commitment** over them (plus the engine bundle id and the ruleset
+//! hash -- both fixed per server process) *before anyone can contribute a
+//! nonce*. Every human client then contributes a 256-bit **nonce** as it
+//! enters the room; the nonces of exactly the members who sit down for the
+//! match are mixed into `SHA-256(seed ‖ sorted nonces)` and the rest are
+//! dropped. Because the server's seed is fixed (committed) before any nonce
+//! exists, the server cannot adapt its seed to player entropy; because the
+//! nonces are mixed in, the server cannot know the match stream even though it
+//! chose the seed. After the match the openings (seed, salt, nonces) are
+//! revealed in the sealed record and anyone can re-check the commitment and
+//! re-derive the stream the match ran on.
 //!
 //! Everything in this module is pure hashing over explicit bytes: the server,
 //! the browser engine and the tests all run the same recipe. The encodings are
@@ -24,12 +26,24 @@ use crate::record::RecordFile;
 use crate::scoring::ScoreWeights;
 use crate::MatchMode;
 
-/// Version tag inside every hash domain string below. Bump when a recipe
-/// changes; an opening produced by another recipe simply fails verification.
-pub const FAIR_VERSION: u32 = 1;
+/// Version tag of the openings this module writes. Bump when a recipe
+/// changes; an opening produced by another recipe is checked against *its*
+/// recorded version and fails loudly if that version is unknown.
+///
+/// * **v1** (2026-10-08): the commitment also covered the canonical room
+///   settings and was drawn when the match started. Old records still verify
+///   against that recipe.
+/// * **v2** (2026-10-09): the commitment is drawn at **room creation** and
+///   covers only the seed, the salt and the engine identity -- the room
+///   settings and the participant list can still change before the start, so
+///   they are bound by the record header instead (see [`verify`]).
+pub const FAIR_VERSION: u32 = 2;
 
-/// Domain tag for the commitment hash.
+/// Domain tag for the v1 commitment hash (legacy records only).
 pub const DOM_COMMIT: &str = "bd-fair-commit-v1";
+/// Domain tag for the v2 commitment hash: seed + salt + engine identity,
+/// drawn at room creation (`docs/FAIRNESS.md` §1.1).
+pub const DOM_COMMIT_V2: &str = "bd-fair-commit-v2";
 /// Domain tag for the match-seed derivation.
 pub const DOM_SEED: &str = "bd-fair-seed-v1";
 /// Domain tag for the second stream (`Match`'s `live_rng`) derived from the
@@ -172,18 +186,24 @@ pub struct NonceEntry {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Fairness {
-    /// [`FAIR_VERSION`] of the recipe that produced these openings.
+    /// [`FAIR_VERSION`] of the recipe that produced these openings. A verifier
+    /// checks the record against **this** version, so a v1 record keeps
+    /// verifying under the v1 recipe.
     pub v: u32,
-    /// The SHA-256 commitment (hex), shown in the match UI at start.
+    /// The SHA-256 commitment (hex), shown in the room UI from the moment the
+    /// room exists.
     pub commit: String,
     /// The server's secret 256-bit seed (hex). Empty while the match runs.
     pub seed: String,
     /// The server's secret 256-bit salt (hex). Empty while the match runs.
     pub salt: String,
-    /// Human player nonces in **ascending member id** order. Bots contribute
-    /// none; a missing nonce is simply absent. Public after the game.
+    /// The nonces of the members who actually sat down for the match, in
+    /// **ascending member id** order. Bots contribute none; a missing nonce is
+    /// simply absent; a member who left before the start has theirs dropped.
+    /// Public after the game.
     pub nonces: Vec<NonceEntry>,
-    /// The canonical room settings string the commitment hashed.
+    /// The canonical room settings string of this match (v2: not part of the
+    /// commitment -- bound here and checked against the record's own setup).
     pub settings: String,
 }
 
@@ -202,12 +222,30 @@ impl Default for Fairness {
 
 // ---------------------------------------------------------------- recipes
 
-/// `commit = SHA-256("bd-fair-commit-v1\n" ‖ seed_hex ‖ "\n" ‖ salt_hex ‖
-/// "\n" ‖ bundle ‖ "\n" ‖ ruleset_sha256 ‖ "\n" ‖ settings ‖ "\n")` -- all
-/// parts hex / plain text, newline-separated, settings last (it is the only
-/// multi-line part and it ends with a newline of its own; the trailing
-/// separator is a second one, kept so every field has a separator after it).
-pub fn commit_hex(
+/// The v2 commitment, drawn at **room creation**:
+/// `commit = SHA-256("bd-fair-commit-v2\n" ‖ seed_hex ‖ "\n" ‖ salt_hex ‖
+/// "\n" ‖ bundle ‖ "\n" ‖ ruleset_sha256 ‖ "\n")` -- all parts hex / plain
+/// text, newline-separated.
+///
+/// Deliberately *not* covered: the room settings and the participant list.
+/// Both can still change between creation and the start (roster, weights,
+/// mode), and the commitment must be fixed **before** any nonce exists, i.e.
+/// at creation. They are bound by the record header instead and checked there
+/// (`docs/FAIRNESS.md` §1.1 / §2).
+pub fn commit_hex(seed: &[u8; 32], salt: &[u8; 32], bundle: &str, ruleset_sha256: &str) -> String {
+    sha256_hex(&[
+        format!("{DOM_COMMIT_V2}\n").as_bytes(),
+        format!("{}\n", hex32(seed)).as_bytes(),
+        format!("{}\n", hex32(salt)).as_bytes(),
+        format!("{bundle}\n").as_bytes(),
+        format!("{ruleset_sha256}\n").as_bytes(),
+    ])
+}
+
+/// The v1 commitment (records written 2026-10-08 only -- see [`FAIR_VERSION`]):
+/// `SHA-256("bd-fair-commit-v1\n" ‖ seed ‖ salt ‖ bundle ‖ ruleset ‖ settings)`.
+/// Kept so an old record still opens against its recorded recipe.
+pub fn commit_hex_v1(
     seed: &[u8; 32],
     salt: &[u8; 32],
     bundle: &str,
@@ -272,8 +310,8 @@ pub fn live_seed(match_seed: &[u8; 32]) -> [u8; 32] {
 /// (e.g. a partial record whose initial RNG cannot be pinned).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct VerifyStep {
-    /// Machine name: `commit` | `settings` | `derived_seed` | `initial_rng` |
-    /// `bundle` | `ruleset` | `replay`.
+    /// Machine name: `commit` | `settings` | `nonces` | `derived_seed` |
+    /// `initial_rng` | `bundle` | `ruleset` | `replay`.
     pub step: String,
     pub ok: bool,
     /// Human-readable reason (pass or fail). Empty when there is nothing to
@@ -310,13 +348,19 @@ impl VerifyReport {
 /// RNG state and the replay itself) is [`verify_replay`].
 ///
 /// Checks, in order:
-/// 1. `fair` is present and `v` is the version this recipe speaks.
+/// 1. `fair` is present and `v` names a recipe this verifier speaks (v1 or v2
+///    -- see [`FAIR_VERSION`]; each is checked against *its* commitment
+///    recipe).
 /// 2. The canonical settings string round-trips: it must equal what
 ///    [`CanonSettings`] rebuilt from the record's own header + setup hashes
 ///    (when the record carries a seeded setup; snapshot records skip this).
-/// 3. `commit` recomputes from `seed`/`salt`/`settings` and the record's
-///    engine stamp (bundle id + ruleset sha).
-/// 4. The derived match seed equals `body.init.seed256` (seeded records).
+///    The string includes the seats, so this step also pins the **participant
+///    set** the match was built from.
+/// 3. Every nonce belongs to a seat of that setup (and the list is clean:
+///    no duplicates, 32 bytes each).
+/// 4. `commit` recomputes from `seed`/`salt` and the record's engine stamp
+///    (bundle id + ruleset sha) -- v2; v1's recipe also folded `settings` in.
+/// 5. The derived match seed equals `body.init.seed256` (seeded records).
 pub fn verify(file: &RecordFile) -> VerifyReport {
     let mut r = VerifyReport {
         ok: true,
@@ -328,11 +372,11 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
         return r;
     };
     r.present = true;
-    if fair.v != FAIR_VERSION {
+    if fair.v != 1 && fair.v != FAIR_VERSION {
         r.push(
             "commit",
             false,
-            format!("fairness recipe v{} != v{}", fair.v, FAIR_VERSION),
+            format!("fairness recipe v{} is not one this build speaks", fair.v),
         );
         return r;
     }
@@ -355,9 +399,10 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
 
     // -- settings --------------------------------------------------------
     // Rebuild the canonical string from the record itself and require it to
-    // match what the server hashed. A snapshot record has no seeded setup to
-    // rebuild members from; take the stored string then (the commit still
-    // covers it).
+    // match the stored one. The string carries the seats, so this step pins
+    // the participant set too. A snapshot record has no seeded setup to
+    // rebuild members from; take the stored string then (the v1 commit covers
+    // it; a v2 snapshot is a solo/local export with no adversary).
     match &file.body.init {
         crate::record::Init::Seed(setup) => {
             let want = CanonSettings::new(
@@ -383,13 +428,24 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
     }
 
     // -- commit ----------------------------------------------------------
-    let got = commit_hex(
-        &seed,
-        &salt,
-        &file.header.engine.bundle,
-        &file.header.engine.ruleset_sha256,
-        &fair.settings,
-    );
+    // v1 folded the canonical settings into the hash; v2 (drawn at room
+    // creation) covers only the openings and the engine identity.
+    let got = if fair.v == 1 {
+        commit_hex_v1(
+            &seed,
+            &salt,
+            &file.header.engine.bundle,
+            &file.header.engine.ruleset_sha256,
+            &fair.settings,
+        )
+    } else {
+        commit_hex(
+            &seed,
+            &salt,
+            &file.header.engine.bundle,
+            &file.header.engine.ruleset_sha256,
+        )
+    };
     if got != fair.commit {
         r.push(
             "commit",
@@ -412,23 +468,44 @@ pub fn verify(file: &RecordFile) -> VerifyReport {
         r.push("ruleset", true, &file.header.engine.ruleset_sha256);
     }
 
-    // -- derived seed ----------------------------------------------------
+    // -- nonces: clean list, every member seated -------------------------
     let mut nonces: Vec<(i32, [u8; 32])> = Vec::new();
     for n in &fair.nonces {
         match unhex32(&n.nonce) {
             Ok(b) => {
                 if nonces.iter().any(|(m, _)| *m == n.member) {
-                    r.push("derived_seed", false, format!("member {} nonce duplicated", n.member));
+                    r.push("nonces", false, format!("member {} nonce duplicated", n.member));
                     return r;
                 }
                 nonces.push((n.member, b));
             }
             Err(e) => {
-                r.push("derived_seed", false, format!("member {}: {e}", n.member));
+                r.push("nonces", false, format!("member {}: {e}", n.member));
                 return r;
             }
         }
     }
+    match &file.body.init {
+        crate::record::Init::Seed(setup) => {
+            let outsider = fair
+                .nonces
+                .iter()
+                .find(|n| !setup.members.iter().any(|m| m.id == n.member));
+            match outsider {
+                Some(n) => r.push(
+                    "nonces",
+                    false,
+                    format!("member {} did not sit in this match", n.member),
+                ),
+                None => r.push("nonces", true, ""),
+            }
+        }
+        crate::record::Init::Snapshot { .. } => {
+            r.push("nonces", true, "snapshot record: roster not applicable");
+        }
+    }
+
+    // -- derived seed ----------------------------------------------------
     let derived = derive_match_seed(&seed, &nonces);
     match &file.body.init {
         crate::record::Init::Seed(setup) => match setup.seed256 {
@@ -586,19 +663,17 @@ pub fn verify_summary(rep: &VerifyReport) -> String {
     s
 }
 
-/// The `RoomInfo`-facing half of a match's fairness state: everything a
-/// client may see **during** the match. The openings are deliberately not
+/// The `RoomInfo`-facing half of a room's fairness state: everything a client
+/// may see, from the moment the room exists. The openings are deliberately not
 /// here (`docs/FAIRNESS.md`).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct FairPublic {
-    /// The commitment (hex). Copyable in the match UI.
+    /// The commitment (hex) of the **next** match this room will deal (the
+    /// running one, while a match is live). Copyable in the room UI; drawn at
+    /// room creation and redrawn after every match, always before that
+    /// match's nonces can arrive.
     pub commit: String,
-    /// The canonical room settings string the commitment hashed.
-    pub settings: String,
-    /// True while the nonce window is still open (the match has not been
-    /// created yet).
-    pub collecting: bool,
 }
 
 /// Match-mode canonicalization used by [`CanonSettings`]: the mode the room
@@ -643,14 +718,14 @@ mod tests {
 
     #[test]
     fn commit_round_trip() {
-        let s = CanonSettings::new(MatchMode::Casual, 0.05, &ScoreWeights::default(), &members());
-        let c = commit_hex(&seed(1), &seed(2), "bundle-x", "rules-y", &s.canon());
+        let c = commit_hex(&seed(1), &seed(2), "bundle-x", "rules-y");
         assert_eq!(c.len(), 64);
-        assert_eq!(
-            c,
-            commit_hex(&seed(1), &seed(2), "bundle-x", "rules-y", &s.canon())
-        );
-        assert_ne!(c, commit_hex(&seed(1), &seed(3), "bundle-x", "rules-y", &s.canon()));
+        assert_eq!(c, commit_hex(&seed(1), &seed(2), "bundle-x", "rules-y"));
+        assert_ne!(c, commit_hex(&seed(1), &seed(3), "bundle-x", "rules-y"));
+        assert_ne!(c, commit_hex(&seed(1), &seed(2), "bundle-z", "rules-y"));
+        // v2 does not fold the settings in (they are not fixed yet when the
+        // commitment is drawn).
+        assert_eq!(c, commit_hex(&seed(1), &seed(2), "bundle-x", "rules-y"));
     }
 
     #[test]
