@@ -1,4 +1,6 @@
 {
+  "ask.counteract.move_extension": "This main move is {{n}} tiles, landing on {{tile}}. Choose the card or fire pots, then add 1 or 2 tiles; you can also skip.",
+  "ask.counteract.skill": "Spend {{n}} fire pots · {{card}}",
   "ask.agent.build": "{{tile}}  build #{{nth}}  {{cost}}",
   "ask.agent.buy": "{{tile}}  buy {{price}}{{extra}}",
   "ask.agent.text": "{{who}} stopped at the dealer: settle one tile of the same colour -- buy an unowned one, or add a house to your own. You can also skip. If short on cash, you can mortgage other deeds to fund it.",

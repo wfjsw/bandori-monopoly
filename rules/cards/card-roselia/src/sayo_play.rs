@@ -9,8 +9,8 @@
 //! The C# realises 「视为使用一次此卡使用者的技能」
 //! as H.AnnounceSkill plus SkillSayo's extension (+1 or +2, no fire cost).
 
-use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
-use card_sdk::ctx::{self, plan, trigger};
+use card_sdk::abi::{prop, ChainKind, MoveKind, TriggerKind};
+use card_sdk::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAYO_PLAY: CardDef = CardDef::new(
@@ -25,6 +25,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
         On::Play("", Some(counter_only), no_play),
     ],
 )
+.props(&[(prop::COUNTERACT_GROUP, 1)])
 .legacy(&[(0, legacy_can_counteract)]);
 
 fn counter_only(_player_id: i32) -> Option<Msg> {
@@ -46,6 +47,8 @@ fn legacy_can_counteract(player_id: i32) -> bool {
         return false;
     }
     trigger::move_is_main()
+        && state::get(player_id, "skill.sayoThorns.used") != ctx::turn_key()
+        && !ctx::skill_blocked(player_id, "")
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
@@ -77,6 +80,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         _ => 2,
     };
     // 规则书: 「打出时视为使用一次此卡使用者的技能」-- the C# body bumps the move.
+    state::set(player_id, "skill.sayoThorns.used", ctx::turn_key());
     plan::set_steps(before + n);
     ctx::log(
         player_id,

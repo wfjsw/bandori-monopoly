@@ -2947,6 +2947,7 @@ impl<M: CardModules> RulesBridge<M> {
             seat: chain_starter(t, cx.state().turn, n),
             idx: -1,
             id: t.card.clone(),
+            uid: -1,
             answered: 0,
             link: trigger.clone(),
             answers: Vec::new(),
@@ -3002,29 +3003,50 @@ impl<M: CardModules> RulesBridge<M> {
             // its counter chance per offer) is recomputed per offer in
             // `Cx::ask` / `fill_ai`.
             let mut declared_any = false;
-            if can_counteract_now(cx, cursor) {
+            if can_counteract_now(cx, cursor)
+                || self.has_field_counter(cx, cursor, &chain[timing].link)
+            {
                 for _ in 0..MAX_COUNTERACT_PER_VISIT {
                     if *budget == 0 {
                         break 'visits;
                     }
                     *budget -= 1;
-                    let Some((id, idx)) =
-                        self.declare_one(cx, cursor, &chain[timing].link, &mut memo)?
+                    // One source per shared group, reserved at declaration (before
+                    // any of the bodies settle). Duplicate cards cannot re-offer it.
+                    let groups: Vec<i32> = chain[timing]
+                        .answers
+                        .iter()
+                        .filter(|&&at| chain[at].seat == cursor)
+                        .filter_map(|&at| {
+                            self.ruleset.cards()[chain[at].idx as usize]
+                                .props
+                                .get(card_sdk::abi::prop::COUNTERACT_GROUP)
+                                .copied()
+                        })
+                        .collect();
+                    let Some((id, idx, uid)) =
+                        self.declare_one(cx, cursor, &chain[timing].link, &mut memo, &groups)?
                     else {
                         // Explicit pass, or nothing eligible left: the visit
                         // ends and priority advances.
                         break;
                     };
                     // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
-                    let mut w = cx.world_copy();
-                    if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
-                        w.hidden[cursor].hand.remove(pos);
+                    if uid < 0 {
+                        let mut w = cx.world_copy();
+                        if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
+                            w.hidden[cursor].hand.remove(pos);
+                        }
+                        cx.swap_world(w);
                     }
-                    cx.swap_world(w);
                     // A hand changed: hand-sensitive probe verdicts and the
                     // scope's `_hand` table are stale from here.
                     memo.on_declaration();
-                    let mut link = CoreTrigger::new("card", cursor);
+                    let mut link =
+                        CoreTrigger::new(if uid >= 0 { "skillUsed" } else { "card" }, cursor);
+                    if uid >= 0 {
+                        link.cards = vec![id.clone()];
+                    }
                     link.card = id.clone();
                     link.step = cx.state().step;
                     link.by_card = Some(cursor as i32);
@@ -3037,6 +3059,7 @@ impl<M: CardModules> RulesBridge<M> {
                         seat: cursor,
                         idx,
                         id,
+                        uid,
                         answered: timing,
                         link: bridge_trigger(&link),
                         answers: Vec::new(),
@@ -3083,12 +3106,15 @@ impl<M: CardModules> RulesBridge<M> {
         // voids the counter's settlement (`set_cancelled` -- the activation
         // never happened -- or `negate_effect`, which settles to nothing).
         let negated = chain[idx].link.is_cancelled();
-        cx.log(
-            seat as i32,
-            Msg::new("log.play_counteract")
-                .player_id("who", seat as i32)
-                .card("card", id.clone()),
-        );
+        let uid = chain[idx].uid;
+        if uid < 0 {
+            cx.log(
+                seat as i32,
+                Msg::new("log.play_counteract")
+                    .player_id("who", seat as i32)
+                    .card("card", id.clone()),
+            );
+        }
         let dest = if negated {
             // The body does not run, so the card has no fate of its own: it was
             // played (it left the hand at declaration) and is spent.
@@ -3105,12 +3131,16 @@ impl<M: CardModules> RulesBridge<M> {
                     player_id: seat as i32,
                 },
                 &id,
-                -1,
+                uid,
                 &mut on_link,
             )?;
             chain[answered].link = on_link;
             dest
         };
+        // A field skill remains in place, even when its activation is negated.
+        if uid >= 0 {
+            return Ok(());
+        }
         let mut w = cx.world_copy();
         let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
         let mut refilled = false;
@@ -3164,6 +3194,28 @@ impl<M: CardModules> RulesBridge<M> {
         }
     }
 
+    /// Only sources explicitly opting into the shared declaration menu.
+    fn has_field_counter(&self, cx: &Cx, seat: usize, top: &Trigger) -> bool {
+        !cx.world().out(seat)
+            && cx
+                .world()
+                .field_instances(seat as i32)
+                .iter()
+                .any(|(_, id)| {
+                    let Some(idx) = self.ruleset.card(id) else {
+                        return false;
+                    };
+                    self.ruleset.counteracts_to(idx, top.kind)
+                        && self.ruleset.cards()[idx as usize]
+                            .props
+                            .get(card_sdk::abi::prop::COUNTERACT_FROM_FIELD)
+                            .copied()
+                            .unwrap_or(0)
+                            != 0
+                        && !cx.world().card_face_down(seat as i32, id)
+                })
+    }
+
     /// Valid-option-first pre-scan (docs/GUARDS.md §4.5): could **any** seat
     /// respond to `top` at all? Cheap static index first -- the per-card kind
     /// bitmask and seat eligibility -- then the compiled conditions against a
@@ -3186,6 +3238,9 @@ impl<M: CardModules> RulesBridge<M> {
         };
         let mut scope: Option<WindowScope> = None;
         for s in 0..n {
+            if self.has_field_counter(cx, s, top) {
+                return true;
+            }
             if !can_counteract_now(cx, s) {
                 continue;
             }
@@ -3234,7 +3289,8 @@ impl<M: CardModules> RulesBridge<M> {
         s: usize,
         top: &Trigger,
         memo: &mut ProbeMemo,
-    ) -> Flow<Option<(String, i32)>> {
+        groups: &[i32],
+    ) -> Flow<Option<(String, i32, i32)>> {
         // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
@@ -3246,9 +3302,13 @@ impl<M: CardModules> RulesBridge<M> {
         // kind bitmask, no world copy, no scope, no `Run`. A hand with nothing
         // that answers this kind returns before any per-window machinery
         // exists -- the common case for most seats of most raises.
-        let mut candidates: Vec<(usize, String, i32)> = Vec::new();
+        let mut candidates: Vec<((u8, u32, u32), String, i32, i32)> = Vec::new();
         let mut seen: Vec<String> = Vec::new();
-        for (hand_pos, id) in hand_of(cx, s).iter().enumerate() {
+        for (hand_pos, id) in hand_of(cx, s)
+            .iter()
+            .enumerate()
+            .filter(|_| can_counteract_now(cx, s))
+        {
             if seen.contains(id) {
                 continue;
             }
@@ -3259,8 +3319,47 @@ impl<M: CardModules> RulesBridge<M> {
             if !self.ruleset.counteracts_to(idx, top.kind) {
                 continue;
             }
-            candidates.push((hand_pos, id.clone(), idx));
+            candidates.push((
+                effect_order_key(LookupGroup::Hand, hand_pos as u32, 0),
+                id.clone(),
+                idx,
+                -1,
+            ));
         }
+        if !cx.world().out(s) {
+            for (field_pos, (uid, id)) in
+                cx.world().field_instances(s as i32).into_iter().enumerate()
+            {
+                let Some(idx) = self.ruleset.card(&id) else {
+                    continue;
+                };
+                if self.ruleset.cards()[idx as usize]
+                    .props
+                    .get(card_sdk::abi::prop::COUNTERACT_FROM_FIELD)
+                    .copied()
+                    .unwrap_or(0)
+                    == 0
+                    || !self.ruleset.counteracts_to(idx, top.kind)
+                    || cx.world().card_face_down(s as i32, &id)
+                {
+                    continue;
+                }
+                candidates.push((
+                    effect_order_key(source_group(cx.world(), uid), field_pos as u32, 0),
+                    id,
+                    idx,
+                    uid,
+                ));
+            }
+        }
+        candidates.retain(|(_, _, idx, _)| {
+            let group = self.ruleset.cards()[*idx as usize]
+                .props
+                .get(card_sdk::abi::prop::COUNTERACT_GROUP)
+                .copied()
+                .unwrap_or(0);
+            group == 0 || !groups.contains(&group)
+        });
         if candidates.is_empty() {
             return Ok(None);
         }
@@ -3292,11 +3391,10 @@ impl<M: CardModules> RulesBridge<M> {
                 doubled: -1,
                 linger_props: Default::default(),
             };
-            let win_scope =
-                crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
-            let mut options: Vec<(String, i32)> = Vec::new();
+            let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
+            let mut options: Vec<(String, i32, i32)> = Vec::new();
             let mut order: Vec<(u8, u32, u32)> = Vec::new();
-            for (hand_pos, id, idx) in candidates {
+            for (key, id, idx, uid) in candidates {
                 if self
                     .ruleset
                     .counteract_pre_allows(&win_run, idx, s as i32, &win_scope)
@@ -3304,14 +3402,15 @@ impl<M: CardModules> RulesBridge<M> {
                 {
                     continue;
                 }
-                let run = self.probe_run(cx, top, &id);
+                let mut run = self.probe_run(cx, top, &id);
+                run.current_uid = uid;
                 if self
                     .ruleset
                     .can_counteract_scoped(&run, idx, s as i32, &win_scope)
                     .unwrap_or(false)
                 {
-                    order.push(effect_order_key(LookupGroup::Hand, hand_pos as u32, 0));
-                    options.push((id, idx));
+                    order.push(key);
+                    options.push((id, idx, uid));
                 }
             }
             return self.finish_offer(cx, s, top, order, options);
@@ -3328,11 +3427,12 @@ impl<M: CardModules> RulesBridge<M> {
             data: &self.data,
             trigger: top,
         };
-        let mut options: Vec<(String, i32)> = Vec::new();
+        let mut options: Vec<(String, i32, i32)> = Vec::new();
         let mut order: Vec<(u8, u32, u32)> = Vec::new();
-        for (hand_pos, id, idx) in candidates {
+        for (key, id, idx, uid) in candidates {
             #[cfg(feature = "bot-cost")]
-            crate::host::bot_cost::COUNTERACT_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            crate::host::bot_cost::COUNTERACT_PROBES
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let Some(entry) = self.ruleset.cards()[idx as usize]
                 .entry(card_sdk::abi::OnKind::Counteract, Some(top.kind))
             else {
@@ -3344,16 +3444,16 @@ impl<M: CardModules> RulesBridge<M> {
             // hands (it can read anything) or the condition names a hand field.
             // Only those are stamped with `hand_gen`; the rest are stable for
             // the whole window (a ring's only world change is a declaration).
-            let hand_sensitive = !guard_is_none
-                || pre.is_some_and(|p| crate::cond_pre::cond_reads_hand(&p.cond));
+            let hand_sensitive =
+                !guard_is_none || pre.is_some_and(|p| crate::cond_pre::cond_reads_hand(&p.cond));
             if let Some(&(gen, eligible, hs)) = memo.verdicts.get(&(s, id.clone())) {
                 if !counteract_slow_path() && (!hs || gen == memo.hand_gen) {
                     #[cfg(feature = "bot-cost")]
                     crate::host::bot_cost::COUNTERACT_PROBE_MEMO_HITS
                         .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if eligible {
-                        order.push(effect_order_key(LookupGroup::Hand, hand_pos as u32, 0));
-                        options.push((id, idx));
+                        order.push(key);
+                        options.push((id, idx, uid));
                     }
                     continue;
                 }
@@ -3366,7 +3466,8 @@ impl<M: CardModules> RulesBridge<M> {
                     } else {
                         // No condition but a residual guard: the only path that
                         // still needs a `Run` (the guard's wasm store).
-                        let run = self.probe_run(cx, top, &id);
+                        let mut run = self.probe_run(cx, top, &id);
+                        run.current_uid = uid;
                         let scope = memo.scope_for(&live, true);
                         self.ruleset
                             .can_counteract_scoped(&run, idx, s as i32, scope)
@@ -3384,7 +3485,8 @@ impl<M: CardModules> RulesBridge<M> {
                         // copy, no wasm instantiation.
                         true
                     } else {
-                        let run = self.probe_run(cx, top, &id);
+                        let mut run = self.probe_run(cx, top, &id);
+                        run.current_uid = uid;
                         self.ruleset
                             .can_counteract_scoped(&run, idx, s as i32, scope)
                             .unwrap_or(false)
@@ -3394,8 +3496,8 @@ impl<M: CardModules> RulesBridge<M> {
             memo.verdicts
                 .insert((s, id.clone()), (memo.hand_gen, eligible, hand_sensitive));
             if eligible {
-                order.push(effect_order_key(LookupGroup::Hand, hand_pos as u32, 0));
-                options.push((id, idx));
+                order.push(key);
+                options.push((id, idx, uid));
             }
         }
         self.finish_offer(cx, s, top, order, options)
@@ -3410,29 +3512,60 @@ impl<M: CardModules> RulesBridge<M> {
         s: usize,
         top: &Trigger,
         order: Vec<(u8, u32, u32)>,
-        options: Vec<(String, i32)>,
-    ) -> Flow<Option<(String, i32)>> {
+        options: Vec<(String, i32, i32)>,
+    ) -> Flow<Option<(String, i32, i32)>> {
         if options.is_empty() {
             return Ok(None);
         }
         // Q5: order the offer list by the explicit key. Stable, and the key's
         // source component is the hand position, so this is today's order.
-        let mut keyed: Vec<((u8, u32, u32), (String, i32))> =
+        let mut keyed: Vec<((u8, u32, u32), (String, i32, i32))> =
             order.into_iter().zip(options).collect();
         keyed.sort_by_key(|(k, _)| *k);
-        let options: Vec<(String, i32)> = keyed.into_iter().map(|(_, o)| o).collect();
+        let options: Vec<(String, i32, i32)> = keyed.into_iter().map(|(_, o)| o).collect();
         // C#: labels "打出「...」" + "不打"; the hint is the first CounteractHint or
         // the trigger's description. CounteractHint is not in the ABI yet (TODO).
         let mut labels: Vec<Msg> = options
             .iter()
-            .map(|(id, _)| Msg::new("ask.counteract.play").card("card", id.clone()))
+            .map(|(id, idx, uid)| {
+                if *uid >= 0 {
+                    let cost = self.ruleset.cards()[*idx as usize]
+                        .props
+                        .get(card_sdk::abi::prop::COUNTERACT_FIRE_COST)
+                        .copied()
+                        .unwrap_or(0);
+                    Msg::new("ask.counteract.skill")
+                        .card("card", id.clone())
+                        .i("n", cost as i64)
+                } else {
+                    Msg::new("ask.counteract.play").card("card", id.clone())
+                }
+            })
             .collect();
         labels.push(Msg::new("ask.counteract.skip"));
         let fallback = labels.len() as i32 - 1;
+        let shared_move = top.kind == TriggerKind::MoveBefore
+            && options.iter().any(|(_, idx, _)| {
+                self.ruleset.cards()[*idx as usize]
+                    .props
+                    .get(card_sdk::abi::prop::COUNTERACT_GROUP)
+                    .copied()
+                    .unwrap_or(0)
+                    > 0
+            });
+        let text = if shared_move {
+            let landing =
+                (top.tile + top.move_total * top.move_dir).rem_euclid(self.data.tiles.len() as i32);
+            Msg::new("ask.counteract.move_extension")
+                .i("n", top.move_total as i64)
+                .tile("tile", landing)
+        } else {
+            Msg::new("ask.counteract.text").msg("detail", describe_trigger(top))
+        };
         let ask = Ask::choice(
             vec![s],
             Msg::new("ask.counteract.title"),
-            Msg::new("ask.counteract.text").msg("detail", describe_trigger(top)),
+            text,
             labels,
             fallback,
             12.0,
@@ -3599,6 +3732,8 @@ struct ChainLink {
     idx: i32,
     /// The declared card's id (L1: the trigger's own card).
     id: String,
+    /// Field instance being activated; -1 for a hand card or the root timing.
+    uid: i32,
     /// Node index of the timing this answers.
     answered: usize,
     /// This node's own link -- what its answers read and rewrite.

@@ -371,6 +371,10 @@ pub mod prop {
     /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
     /// reserve check -- never by legality. `0` = unknown / assume free.
     pub const EST_COST: &str = "estCost";
+    /// Opt-in field counteraction / shared-choice metadata (ABI v47).
+    pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
+    pub const COUNTERACT_GROUP: &str = "counteractGroup";
+    pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
     /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
     /// recipients (the play's other living players). Mirrors
     /// `card_sdk::abi::prop::DESIGNATES`.
