@@ -5,8 +5,9 @@
 // in localStorage. Transport shortcuts (Space / arrows / H) keep working while
 // the bar is hidden -- the handler lives here, not in the chrome.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSessionOther, useTick } from "../../core/hooks";
+import { useHotkeys } from "../../hooks/dom";
 import { D } from "../../core/data";
 import { cx } from "../../core/cx";
 import type { ReplaySession } from "../../game/replay";
@@ -72,51 +73,58 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   // Transport shortcuts, alive whether or not the bar is on screen. Editable
   // fields (the console, the scrub range, the perspective select) keep their
   // own keys; a focused button keeps Space so it can be activated that way.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
-      if (e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
-      const onButton = !!t && /^(BUTTON|A)$/.test(t.tagName);
-      switch (e.key) {
-        case " ":
-          if (onButton) return;
-          e.preventDefault();
-          rs.setPlaying(!rs.playing);
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          if (e.shiftKey) rs.prevTurn();
-          else rs.seek(rs.now() - SEEK_TICKS);
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          if (e.shiftKey) rs.nextTurn();
-          else rs.seek(rs.now() + SEEK_TICKS);
-          break;
-        case "Home":
-          e.preventDefault();
-          rs.seek(0);
-          break;
-        case "End":
-          e.preventDefault();
-          rs.seek(rs.totalTicks);
-          break;
-        case "h":
-        case "H":
-          if (e.repeat) return;
-          e.preventDefault();
-          setPrefs((old) => {
-            const n = { ...old, hidden: !old.hidden };
-            saveBarPrefs(n);
-            return n;
-          });
-          break;
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [rs]);
+  useHotkeys([
+    {
+      key: " ",
+      onControl: false,
+      run: (e) => {
+        e.preventDefault();
+        rs.setPlaying(!rs.playing);
+      },
+    },
+    {
+      key: "ArrowLeft",
+      run: (e) => {
+        e.preventDefault();
+        if (e.shiftKey) rs.prevTurn();
+        else rs.seek(rs.now() - SEEK_TICKS);
+      },
+    },
+    {
+      key: "ArrowRight",
+      run: (e) => {
+        e.preventDefault();
+        if (e.shiftKey) rs.nextTurn();
+        else rs.seek(rs.now() + SEEK_TICKS);
+      },
+    },
+    {
+      key: "Home",
+      run: (e) => {
+        e.preventDefault();
+        rs.seek(0);
+      },
+    },
+    {
+      key: "End",
+      run: (e) => {
+        e.preventDefault();
+        rs.seek(rs.totalTicks);
+      },
+    },
+    {
+      key: ["h", "H"],
+      once: true,
+      run: (e) => {
+        e.preventDefault();
+        setPrefs((old) => {
+          const n = { ...old, hidden: !old.hidden };
+          saveBarPrefs(n);
+          return n;
+        });
+      },
+    },
+  ]);
 
   if (prefs.hidden) {
     // A small handle on the bar's own edge brings it back (or press H).

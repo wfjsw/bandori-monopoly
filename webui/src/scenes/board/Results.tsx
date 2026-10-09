@@ -66,17 +66,19 @@ function Results({ m, reward, exit, sess, watch }: { m: Model; reward: MatchRewa
   );
 }
 
-/** 「下载回放」 / 「观看回放」 -- the `.bdrec` the match produced. Solo exports
- *  it locally when the match ends; online pulls it from the room's endpoint
- *  (participants only, and only after the match -- docs/SERVER.md). */
-function ReplayActions({ sess, watch }: { sess: GameSession; watch: (bytes: Uint8Array, name: string) => void }) {
+/**
+ * The `.bdrec` this finished match produced: solo's local export (picked up
+ * once `useSessionOther` ticks -- the id is known before the bytes are) or the
+ * online room's record. Stops looking once it has bytes.
+ */
+function useMatchRecord(sess: GameSession): { bytes: Uint8Array | null; name: string } {
   const solo = sess instanceof SoloSession ? sess : null;
   const room = sess instanceof OnlineSession ? sess.id : null;
   const [bytes, setBytes] = useState<Uint8Array | null>(solo?.replayBytes ?? null);
   const [name, setName] = useState(solo?.replayName ?? "");
   // `useSessionOther` re-renders when the (async) export lands; its counter is
-  // in the effect deps so a late export is picked up (the id is known before
-  // the bytes are).
+  // in the deps so a late export is picked up (the id is known before the
+  // bytes are).
   const other = useSessionOther(sess);
   useEffect(() => {
     if (bytes) return;
@@ -99,6 +101,14 @@ function ReplayActions({ sess, watch }: { sess: GameSession; watch: (bytes: Uint
       alive = false;
     };
   }, [bytes, solo, room, other]);
+  return { bytes, name };
+}
+
+/** 「下载回放」 / 「观看回放」 -- the `.bdrec` the match produced. Solo exports
+ *  it locally when the match ends; online pulls it from the room's endpoint
+ *  (participants only, and only after the match -- docs/SERVER.md). */
+function ReplayActions({ sess, watch }: { sess: GameSession; watch: (bytes: Uint8Array, name: string) => void }) {
+  const { bytes, name } = useMatchRecord(sess);
   if (!bytes) return null;
   return (
     <>

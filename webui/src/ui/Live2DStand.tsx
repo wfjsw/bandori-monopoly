@@ -7,11 +7,12 @@
 // into a 3:4 window (the Unity portrait's 768x1024 render target, AspectRatio-
 // Fitter FitInParent) centred in the stand box, with `zoom` / `focusTop` /
 // `headroom` and the per-id `framing.json` measuring sheet shifting and scaling
-// the canvas exactly as Live2DPortrait.Draw does.
+// the canvas exactly as Live2DPortrait.Draw does. All of that chain lives in
+// `useLive2DStand`; this component is the box, the art and the click.
 
-import { useEffect, useRef, useState } from "react";
-import { eyeLine, figureTop } from "../live2d/deform";
-import { Live2DModel, loadLive2D, type Live2DModelHandle } from "../live2d";
+import { useLive2DStand } from "../hooks/live2d";
+import { useRestartAnimation } from "../hooks/timers";
+import { Live2DModel } from "../live2d";
 import { charArt } from "../core/assets";
 import { cx } from "../core/cx";
 import { t as tr } from "../i18n/t";
@@ -45,203 +46,36 @@ export interface Live2DStandProps {
   fit?: "center" | "top";
 }
 
-/** One `framing.json` entry (Live2DPortrait.Framing). */
-interface Framing {
-  top: number;
-  scale: number;
-}
-
-/** Canvas rect inside the 3:4 window, in px relative to the window. */
-interface Box {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-}
-
-// `webui/public/assets/live2d/framing.json` (manifest.live2d.framing), one fetch.
-let framingFile: Promise<Map<string, Framing>> | null = null;
-
-function framingOf(id: string): Promise<Framing | undefined> {
-  framingFile ??= fetch("/assets/live2d/framing.json")
-    .then((r) => (r.ok ? r.text() : "{}"))
-    .then((text) => {
-      const data = JSON.parse(text.replace(/^﻿/, "")) as { models?: ({ id: string } & Framing)[] };
-      return new Map((data.models ?? []).map((m) => [m.id, { top: m.top, scale: m.scale }]));
-    })
-    .catch(() => new Map<string, Framing>());
-  return framingFile.then((m) => m.get(id));
-}
-
-/**
- * Map the canvas into the 3:4 window (Live2DPortrait.Draw).
- *
- * When `eyeY` is known the figure is anchored by its **eyes**: every character
- * lands its eye line on `eyeFrac` of the window height, so casts of different
- * heights line up. Anchoring on the head top instead makes the eye line wander
- * with each model's height. The anchor is then clamped so the figure's top
- * keeps `headroom` of the window below the window's top edge -- without that a
- * tall hairdo (004 needs 21% of the window above its eyes) is sliced off by
- * the portrait rect. `top`/`headroom` from framing.json remain a fallback for
- * models without eye params.
- */
-function canvasBox(
-  winW: number,
-  canvas: [number, number],
-  f: Framing | undefined,
-  zoom: number,
-  focusTop: number,
-  headroom: number,
-  eyeY: number | null,
-  eyeFrac: number,
-  figTop: number | null,
-): Box {
-  const [cw, ch] = canvas;
-  const z = zoom * (f && f.scale > 0 ? f.scale : 1);
-  const num = Math.max(cw, ch * 0.75);
-  const num2 = num / 0.75;
-  const viewW = num / z;
-  const viewH = viewW / 0.75;
-  const left = (cw - num) / 2 + (num - viewW) / 2;
-  const k = winW / viewW; // canvas unit -> px
-  let top: number;
-  if (eyeY != null) {
-    // Put the eye line at `eyeFrac` of the window height, then drop the figure
-    // (shrink `top`) as far as needed to keep `headroom` clear above its head.
-    top = eyeY - eyeFrac * viewH;
-    if (figTop != null && headroom > 0) {
-      top = Math.min(top, figTop - headroom * viewH);
-    }
-  } else {
-    const focus = f && f.top >= 0 && headroom > 0 ? Math.min(focusTop, f.top - headroom / z) : focusTop;
-    top = (ch - num2) / 2 + num2 * focus;
-  }
-  return { left: -left * k, top: -top * k, width: cw * k, height: ch * k };
-}
-
-export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom = 1, focusTop = 0, headroom = 0.02, eyeFrac = 0.28, fit = "center" }: Live2DStandProps) {
-  const box = useRef<HTMLDivElement>(null);
-  const anim = useRef<HTMLDivElement>(null);
-  const modelHandle = useRef<Live2DModelHandle>(null);
-  const [canvas, setCanvas] = useState<[number, number] | null>(null);
-  const [framing, setFraming] = useState<Framing | undefined>(undefined);
-  const [eyeY, setEyeY] = useState<number | null>(null);
-  const [figTop, setFigTop] = useState<number | null>(null);
-  const [win, setWin] = useState<Box | null>(null);
-  const [model, setModel] = useState<Box | null>(null);
-  const [shown, setShown] = useState(false);
-  const [gone, setGone] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const art = charArt(id, "stand");
-
-  // Load model.json + textures first: the static art stays until the model is
-  // ready to draw, and stays for good when the model is missing or broken.
-  useEffect(() => {
-    setCanvas(null);
-    setFraming(undefined);
-    setEyeY(null);
-    setFigTop(null);
-    setWin(null);
-    setModel(null);
-    setShown(false);
-    setGone(false);
-    setFailed(false);
-    let live = true;
-    void Promise.all([loadLive2D(id), framingOf(id)]).then(
-      ([data, f]) => {
-        if (!live) return;
-        setCanvas(data.model.canvas);
-        setFraming(f);
-        setEyeY(eyeLine(data.model));
-        setFigTop(figureTop(data.model));
-      },
-      () => {
-        if (live) setFailed(true);
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [id]);
-
-  // Lay the canvas out inside the stand box (re-run on box resize).
-  useEffect(() => {
-    const el = box.current;
-    if (!el) return;
-    const place = () => {
-      const w = el.clientWidth;
-      const h = el.clientHeight;
-      if (!canvas || !w || !h) {
-        setWin(null);
-        setModel(null);
-        return;
-      }
-      // the 3:4 portrait window: FitInParent centres it, `fit="top"` pulls it
-      // up flush with the stand's top edge so the head has room to breathe
-      const dw = Math.min(w, h * 0.75);
-      const dh = dw / 0.75;
-      setWin({ left: (w - dw) / 2, top: fit === "top" ? 0 : (h - dh) / 2, width: dw, height: dh });
-      setModel(canvasBox(dw, canvas, framing, zoom, focusTop, headroom, eyeY, eyeFrac, figTop));
-    };
-    place();
-    if (typeof ResizeObserver === "undefined") {
-      window.addEventListener("resize", place);
-      return () => window.removeEventListener("resize", place);
-    }
-    const ro = new ResizeObserver(place);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [canvas, framing, zoom, focusTop, headroom, eyeY, eyeFrac, figTop, fit]);
-
-  // The renderer draws on its first RAF after mount; fade the static art out
-  // once the model has had a few frames to paint, then drop it entirely. The
-  // drop is on a timer rather than `transitionend`: a hidden tab freezes CSS
-  // transition timelines (`currentTime` stays 0), which would leave the art
-  // ghosting through the canvas's transparent pixels forever.
-  useEffect(() => {
-    if (!model) return;
-    const fade = setTimeout(() => setShown(true), 150);
-    const drop = setTimeout(() => setGone(true), 500);
-    return () => {
-      clearTimeout(fade);
-      clearTimeout(drop);
-    };
-  }, [model]);
-
+export function Live2DStand({ id, className, pulse, alt, onClick, params, zoom, focusTop, headroom, eyeFrac, fit }: Live2DStandProps) {
+  const stand = useLive2DStand({ id, zoom, focusTop, headroom, eyeFrac, fit });
   // Restart the CSS bounce without remounting (which would reload the model).
-  useEffect(() => {
-    if (!pulse) return;
-    const el = anim.current;
-    if (!el) return;
-    el.style.animation = "none";
-    void el.offsetHeight;
-    el.style.animation = "";
-  }, [pulse]);
+  useRestartAnimation(pulse, stand.animRef);
+  const art = charArt(id, "stand");
 
   // Clicking the stand plays a random reaction (Live2DPortrait.TryPlayReaction;
   // reactions never stack) and still runs the scene's own click handler.
   const handleClick = () => {
-    modelHandle.current?.playReaction();
+    stand.modelHandle.current?.playReaction();
     onClick?.();
   };
 
   return (
-    <div ref={box} className={cx(s.stand, className)} onClick={handleClick}>
-      <div ref={anim} className={cx(s.anim, !!pulse && s.bounce)}>
+    <div ref={stand.boxRef} className={cx(s.stand, className)} onClick={handleClick}>
+      <div ref={stand.animRef} className={cx(s.anim, !!pulse && s.bounce)}>
         {art ? (
-          !gone && <img className={cx(s.art, shown && s.hide)} src={art} alt={alt ?? ""} draggable={false} />
+          !stand.gone && <img className={cx(s.art, stand.shown && s.hide)} src={art} alt={alt ?? ""} draggable={false} />
         ) : (
-          !gone && <div className={s.missing}>{failed ? tr("live2d.missing") : tr("live2d.loading")}</div>
+          !stand.gone && <div className={s.missing}>{stand.failed ? tr("live2d.missing") : tr("live2d.loading")}</div>
         )}
-        {win && model && (
-          <div className={s.window} style={win}>
-            <div className={s.model} style={model}>
-              <Live2DModel ref={modelHandle} id={id} params={params} className={s.fill} />
+        {stand.win && stand.model && (
+          <div className={s.window} style={stand.win}>
+            <div className={s.model} style={stand.model}>
+              <Live2DModel ref={stand.modelHandle} id={id} params={params} className={s.fill} />
             </div>
           </div>
         )}
       </div>
-      {art && !shown && !failed && <div className={s.loading}>{tr("live2d.loading")}</div>}
+      {art && !stand.shown && !stand.failed && <div className={s.loading}>{tr("live2d.loading")}</div>}
     </div>
   );
 }

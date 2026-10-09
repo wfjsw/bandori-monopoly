@@ -4,6 +4,7 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
 import { useLangVersion, useProfile } from "../core/hooks";
+import { useCrossfade } from "../hooks/scene";
 import { Boot } from "../scenes/boot/Boot";
 import { Deck } from "../scenes/deck/Deck";
 import { Gallery } from "../scenes/gallery/Gallery";
@@ -48,35 +49,24 @@ export function App() {
   const lang = useLangVersion();
   const path = usePath();
   const target = parse(path);
-  const [shown, setShown] = useState<Route | null>(null);
-  const [fading, setFading] = useState(false);
 
   // Unknown or empty routes go to the menu.
   useEffect(() => {
     if (ready && profile && !target) navigate({ name: "menu" }, { replace: true });
   }, [ready, profile, target]);
 
-  // Fade out, swap the scene, fade in.
-  const key = target ? href(target) : "";
-  useEffect(() => {
-    if (!ready || !target) return;
-    if (shown && href(shown) === key) return;
-    let cancelled = false;
-    setFading(true);
-    const t = window.setTimeout(() => {
-      if (cancelled) return;
+  // Fade out, swap the scene (backdrop + BGM), fade in. The first scene fades
+  // in over 30ms from the boot screen; later ones cross-fade under the fader.
+  const { shown, fading } = useCrossfade(ready ? target : null, {
+    eq: (a, b) => href(a) === href(b),
+    outMs: 180,
+    inMs: 30,
+    onSwap: (r) => {
       closeAllModals();
-      setBackdrop(BACKDROP[target.name]);
-      playSceneBgm(BGM[target.name]);
-      setShown(target);
-      window.setTimeout(() => setFading(false), 30);
-    }, shown ? 180 : 0);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, key]);
+      setBackdrop(BACKDROP[r.name]);
+      playSceneBgm(BGM[r.name]);
+    },
+  });
 
   const booted = ready && profile;
   return (

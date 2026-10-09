@@ -47,15 +47,20 @@ function loadAll(progress: (p: number) => void): Promise<void> {
 
 type Stage = "loading" | "tap" | "create" | "error";
 
-export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void }) {
-  useBackdrop(null);
-  const [p, setP] = useState(0);
-  const [stage, setStage] = useState<Stage>("loading");
-  const [error, setError] = useState("");
-  const [art, setArt] = useState("");
-  const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
-  const [name, setName] = useState("");
-
+/**
+ * One-shot boot: manifest, fonts, game data and the wasm rules, with a
+ * progress meter. On success it plays the boot BGM and either hands back to
+ * the shell (`resume`) or offers the tap / create screens.
+ */
+function useBootAssets(opts: {
+  resume: boolean;
+  onReady: () => void;
+  setP: (p: number) => void;
+  setStage: (s: Stage) => void;
+  setError: (e: string) => void;
+  setArt: (a: string) => void;
+}): void {
+  const { resume, onReady, setP, setStage, setError, setArt } = opts;
   useEffect(() => {
     let alive = true;
     loadAll((v) => alive && setP(v))
@@ -76,8 +81,20 @@ export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void
     return () => {
       alive = false;
     };
+    // Mount-only: the boot sequence runs once (its loaders are memoized).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+}
+
+export function Boot({ resume, onReady }: { resume: boolean; onReady: () => void }) {
+  useBackdrop(null);
+  const [p, setP] = useState(0);
+  const [stage, setStage] = useState<Stage>("loading");
+  const [error, setError] = useState("");
+  const [art, setArt] = useState("");
+  const [tip] = useState(() => TIPS[Math.floor(Math.random() * TIPS.length)]);
+  const [name, setName] = useState("");
+  useBootAssets({ resume, onReady, setP, setStage, setError, setArt });
 
   const start = () => {
     if (stage !== "tap") return;

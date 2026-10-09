@@ -2,12 +2,13 @@
 // player info, event / discard piles, settle and leave. Popups that act on the
 // match read the live state themselves, so they stay correct while open.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle, skillText } from "../../core/data";
 import { isLight, n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView } from "../../core/hooks";
+import { useCloseWhen } from "../../hooks/mount";
 import type { MatchState } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
@@ -50,9 +51,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
   // A new turn (or the end of the match) closes the deed card.
   const turnKey = m ? `${m.S.phase}:${m.S.round}:${m.S.turn}` : "";
   const [openedAt] = useState(turnKey);
-  useEffect(() => {
-    if (turnKey !== openedAt) close();
-  }, [turnKey, openedAt, close]);
+  useCloseWhen(turnKey !== openedAt, close);
   if (!m) return null;
   const S = m.S;
   const t = D.tiles[i];

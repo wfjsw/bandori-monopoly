@@ -1,5 +1,6 @@
 // Keep session binding separate from command/UI modules so editing commands
 // during development does not lose the live match.
+import { useEffect } from "react";
 import type { GameSession } from "../game/session";
 import { namesOf } from "../core/names";
 import { fmtMsg } from "../i18n/msg";
@@ -18,4 +19,9 @@ export function bindConsoleSession(sess: GameSession): () => void {
     off();
     if (active === sess) active = null;
   };
+}
+
+/** Scope the console to `sess` while the caller is mounted (see `bindConsoleSession`). */
+export function useConsoleSession(sess: GameSession | null): void {
+  useEffect(() => (sess ? bindConsoleSession(sess) : undefined), [sess]);
 }
