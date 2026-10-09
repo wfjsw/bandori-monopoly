@@ -276,6 +276,12 @@ fn l12_hand_places_and_caps_hand() {
 
 // -- skill:纯田真奈:甜甜圈爱好者 ---------------------------------------
 
+/// Base rent of a tile at house count `h` (the settle's table number).
+fn base_rent(t: usize, h: i32) -> i32 {
+    let tile = &data().tiles[t];
+    tile.rent[(h as usize).min(tile.rent.len().saturating_sub(1))]
+}
+
 #[test]
 fn mana_skill_fire_on_circle_pass() {
     let mut t = Table::new(&["纯田真奈", "三角初华（Sumimi）"]);
@@ -288,6 +294,79 @@ fn mana_skill_fire_on_circle_pass() {
     t.set_fire(0, 1, 2);
     assert_eq!(t.fire(0), 1);
     assert_eq!(t.p(0).fire_max(), 2);
+}
+
+/// 规则书: 「之后，直到你的下个回合结束，你的资金消耗减半」 -- the window
+/// runs through the end of the owner's **next** turn, not the arming turn's.
+#[test]
+fn mana_half_window_lasts_through_next_turn_end() {
+    let mut t = Table::new(&["纯田真奈", "美竹兰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    // One 火罐, then step onto 购物中心 and take the offer. The shop pay is
+    // what arms the window.
+    t.set_fire(0, 1, 2);
+    let shop = tile("购物中心");
+    t.set_pos(0, shop - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    // 「可选择消耗一个火罐并向对应格子进行一次支付」 -- say yes.
+    // `ask_yes` is an `Ask::choice` of [yes, no] with fallback (no) = 1.
+    while t.prompt().is_some() {
+        let p = t.expect_prompt();
+        if p.kind == "choice" {
+            let _ = t.answer_one(0);
+        } else {
+            decline_q(&mut t);
+        }
+    }
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.manaDonut.half"), 2, "window armed at 2 layers");
+    // The arming turn's end takes only the first layer. `end` runs
+    // `end_turn` -> `tick_state(TurnEnd)`; `begin_turn` skips that.
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.manaDonut.half"), 1, "still armed after the arming turn's end");
+    // Walk the table back around to P0: the window must hold across it.
+    t.begin_turn(0);
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.manaDonut.half"), 1, "still armed across the table");
+    // P0's next turn end is where the window dies. `end` needs a main move.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.state(0, "skill.manaDonut.half"), 0, "window closed at the end of the owner's next turn");
+}
+
+/// 规则书: 「你的资金消耗减半」 -- only the owner's own spending is halved.
+/// An armed window on P0 must not bend P1's rent.
+#[test]
+fn mana_half_only_halves_own_spending() {
+    let mut t = Table::new(&["纯田真奈", "美竹兰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    // Arm P0's window the way the skill does (two TurnEnd layers).
+    t.set_state(0, "skill.manaDonut.half", 2);
+    // P0 lands on P2's tile: the rent is halved.
+    t.set_owner(11, Some(2));
+    t.set_pos(0, 5);
+    t.dice(&[6]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    let rent = base_rent(11, 0);
+    assert_eq!(t.money(0), 10_000 - (rent + 1) / 2, "P0's rent halved");
+    // P1 lands on P2's tile while P0's window is still armed: full rent.
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, 5);
+    t.dice(&[6]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(1), 10_000 - rent, "P1's rent is full -- P0's window is not theirs");
 }
 
 // -- skill:三角初华（Sumimi）:成为偶像 ---------------------------------

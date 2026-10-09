@@ -9,27 +9,30 @@
 //!
 //! （2） 「向对应格子进行一次支付」 is a voluntary pay to the tile's owner (or
 //! the bank, when it is unowned) *before* the settle -- a pre-emptive charge
-//! that buys the half-price window. 「直到你的下个回合结束，你的资金消耗减半」
-//! is a pay bend with a `TurnEnd` expiry, which is what the keyed state carries.
+//! that buys the half-price window.
 //!
-//! TODO(规则书): the half-price window currently ends at the **arming turn's**
-//! end (`state::set_expires(..., TURN_END)` ticks one layer off at the owner's
-//! next `TurnEnd` wear-off, before the `TurnEnd` hook), not at 「你的下个回合
-//! 结束」. The book's window is one turn longer. `docs/rulebook/COVERAGE.md`
-//! marks the clause **unc**; changing the window length is a behaviour change
-//! and needs that ruling first.
+//! 「直到你的下个回合结束，你的资金消耗减半」 -- the window runs through the
+//! end of the owner's **next** turn, not the arming turn's. The keyed state
+//! carries two `TurnEnd` layers (one lost at each of the owner's own turn-end
+//! wear-offs), so an arm on turn T dies at the end of turn T+1. 「你的资金
+//! 消耗减半」 also scopes to the owner's own spending: the pay bend is
+//! `actor == owner`.
 
 use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-/// 「你的资金消耗减半」 -- armed until the owner's next turn-end wear-off.
+/// 「你的资金消耗减半」 -- two `TurnEnd` layers, so the window runs through
+/// the end of the owner's **next** turn (the arming turn's end takes the first).
 const HALF: &str = "skill.manaDonut.half";
-/// （2）「经过"购物中心"，…时」 -- the five named food tiles.
-const SHOP_PASS_PRE: &str = "actor == owner && fire(owner) >= 1 && \
-     (tile.id == tile_named('购物中心') || tile.id == tile_named('便利店') || \
-       tile.id == tile_named('快餐店') || tile.id == tile_named('羽泽咖啡厅') || \
-       tile.id == tile_named('山吹面包房'))";
+/// One `Pass` entry serves both clauses -- `CardInfo::entry` answers only the
+/// **first** entry per (kind, trigger), so the two bodies share one dispatch.
+/// The condition is "the body will do something": either the CiRCLE gain, or
+/// the shop offer (which needs a 火罐 to spend).
+const PASS_PRE: &str = "actor == owner && (tile.id == tile_named('CiRCLE') || \
+     (fire(owner) >= 1 && (tile.id == tile_named('购物中心') || \
+       tile.id == tile_named('便利店') || tile.id == tile_named('快餐店') || \
+       tile.id == tile_named('羽泽咖啡厅') || tile.id == tile_named('山吹面包房'))))";
 
 pub const MANA_DONUT: CardDef = CardDef::new(
     "skill:纯田真奈:甜甜圈爱好者",
@@ -44,31 +47,19 @@ pub const MANA_DONUT: CardDef = CardDef::new(
             Some(cap_unset),
             declare_cap,
         ),
-        // （1）「每次[经过]CiRCLE时获得1个[火罐]」 -- only the CiRCLE step.
-        On::Hook(
-            &[HookKind::Pass],
-            "actor == owner && tile.id == tile_named('CiRCLE')",
-            None,
-            on_pass_circle,
-        ),
-        // （2） the shop offer -- only a named food tile, and only when there
-        // is a 火罐 to spend. The choice / spend / pay stay in the body.
-        On::Hook(&[HookKind::Pass], SHOP_PASS_PRE, None, on_pass_shop),
-        // 「你的资金消耗减半」 -- only while the window is armed. TODO(规则书):
-        // `actor == owner` is what 「你的资金消耗减半」 says; the old residual
-        // `half` omitted it, so an armed window also halved *other* players'
-        // pays. Left out of this condition so behaviour does not move under the
-        // ckpt gate -- land the fix with the 「下个回合结束」 ruling above.
+        // （1）+（2） one `Pass` entry (see [`PASS_PRE`]); the body picks the
+        // branch. The choice / spend / pay stay in the body.
+        On::Hook(&[HookKind::Pass], PASS_PRE, None, on_pass),
+        // 「你的资金消耗减半」 -- only the owner's own pays, and only while
+        // the window is armed.
         On::Hook(
             &[HookKind::PayChoose],
-            "card.placed && slot('skill.manaDonut.half') > 0",
+            "actor == owner && card.placed && slot('skill.manaDonut.half') > 0",
             None,
             on_pay,
         ),
-        // No `TurnEnd` clear: `state_set_expires(..., TURN_END)` already ticks
-        // the window off at the owner's wear-off, before the `TurnEnd` hook
-        // fires -- a clear there was a no-op. See the TODO above for the
-        // window length the book actually specifies.
+        // No `TurnEnd` clear: the two `TurnEnd` layers tick off at the owner's
+        // own wear-offs (before the `TurnEnd` hook fires).
     ],
 );
 
@@ -85,17 +76,18 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每次[经过]CiRCLE时获得1个[火罐]」.
-fn on_pass_circle(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("mana_donut_gain")))?;
-    Ok(())
-}
-
-/// （2）「经过"购物中心"，…时，在触发结算前可选择消耗一个火罐并向对应格子
-/// 进行一次支付」. The fire check is the condition (`fire(owner) >= 1`);
-/// everything after the offer is resolution-time content.
-fn on_pass_shop(player_id: i32) -> card_sdk::Asked {
+/// （1）「每次[经过]CiRCLE时获得1个[火罐]」 / （2） the shop offer. The
+/// condition already picked "something happens"; this picks which.
+fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
+    // （1）「每次[经过]CiRCLE时获得1个[火罐]」
+    if t == ctx::tile_named("CiRCLE") {
+        ctx::gain_fire(player_id, 1, &Msg::new(key!("mana_donut_gain")))?;
+        return Ok(());
+    }
+    // （2）「经过"购物中心"，…时，在触发结算前可选择消耗一个火罐并向对应格子
+    // 进行一次支付」. The fire check is the condition (`fire(owner) >= 1`);
+    // everything after the offer is resolution-time content.
     let price = ctx::rent_of(t).max(ctx::buy_price(t));
     if !ctx::ask_yes(
         player_id,
@@ -117,8 +109,11 @@ fn on_pass_shop(player_id: i32) -> card_sdk::Asked {
     } else {
         ctx::pay(player_id, price, &Msg::new(key!("mana_donut_pay")))?;
     }
-    // 「之后，直到你的下个回合结束，你的资金消耗减半」
-    state::set(player_id, HALF, 1);
+    // 「之后，直到你的下个回合结束，你的资金消耗减半」 -- two `TurnEnd`
+    // layers: one is lost at this turn's wear-off, the second at the owner's
+    // next turn end. The window therefore covers the rest of this turn, the
+    // other players' turns, and the owner's next turn through its end.
+    state::set(player_id, HALF, 2);
     state::set_expires(player_id, HALF, card_sdk::ctx::state::TURN_END);
     ctx::log(player_id, &Msg::new(key!("mana_donut_half")));
     Ok(())
