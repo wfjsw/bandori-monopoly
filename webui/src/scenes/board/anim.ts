@@ -21,8 +21,8 @@ import { t as tr } from "../../i18n/t";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** True while the queue is deep enough (or the replay is at 4x) that the
- *  events should just snap into place instead of playing out. */
+/** A deep queue fast-forwards decorative events; walking keeps its path.
+ *  Explicit 4x replay fast-forwards both. */
 const FAST_QUEUE = 8;
 
 const EVENT_SFX: Record<string, string> = {
@@ -267,7 +267,9 @@ export class Animator {
         else this.dice = d;
         this.showBanner(tr("board.roll", { n: d }), body);
         await wait(450);
-        await this.walk(playerId, e.from, e.value, fast ? 0 : 130);
+        // A burst of reward/card events may fast-forward the log, but must
+        // still show the path. Only explicit 4x replay skips movement frames.
+        await this.walk(playerId, e.from, e.value, this.speed >= 4 ? 0 : 130);
         break;
       }
       case "dice": {
@@ -293,7 +295,7 @@ export class Animator {
       case "move":
         if (!ok) break;
         this.showBanner(this.player(playerId), body);
-        await this.walk(playerId, e.from, e.value, fast ? 0 : 90);
+        await this.walk(playerId, e.from, e.value, this.speed >= 4 ? 0 : 90);
         break;
       case "teleport":
         if (!ok || !this.pos) break;
