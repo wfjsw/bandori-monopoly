@@ -22,6 +22,7 @@
 use std::cell::RefCell;
 
 use crate::host::{HostCtx, HostErr, HostRequest, Prompt};
+use crate::world::CardWorld;
 
 /// What a drive installs around one guest call so its asks and host requests
 /// can be answered inline. Implemented by `wasm_rules`'s drive over the
@@ -187,6 +188,8 @@ pub fn request_or_pause<C: HostCtx>(
     {
         let st = c.st_mut();
         if let Some(&x) = st.answers.get(st.next_answer) {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
             st.next_answer += 1;
             return Ok(x);
         }

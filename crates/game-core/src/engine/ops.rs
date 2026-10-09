@@ -814,7 +814,23 @@ impl World {
 
     // ------------------------------------------------------------ card flow
 
-    /// `H.DrawR` -- draw `n` cards, reshuffling the discard pile when needed.
+    /// Restore an exhausted draw pile immediately, before any later effect.
+    /// Returns whether a shuffle happened so the caller can raise its hook.
+    pub fn refill_draw_pile(&mut self, i: usize) -> bool {
+        if self.st.players.get(i).is_none_or(|s| s.out())
+            || !self.hidden[i].draw.is_empty()
+            || self.hidden[i].discard.is_empty()
+        {
+            return false;
+        }
+        let mut pile = std::mem::take(&mut self.hidden[i].discard);
+        self.rng.shuffle(&mut pile);
+        self.hidden[i].draw = pile;
+        self.log("text", i as i32, Msg::new("log.reshuffle").player_id("who", i));
+        true
+    }
+
+    /// `H.DrawR` -- draw `n` cards, refilling as soon as the last card leaves.
     /// Returns how many were actually drawn.
     pub fn draw_cards(&mut self, player_id: i32, n: i32, over_hand_limit: bool) -> i32 {
         let Some(i) = usize::try_from(player_id).ok() else {
@@ -825,20 +841,12 @@ impl World {
         }
         let mut got = 0;
         for _ in 0..n.max(0) {
-            if self.hidden[i].draw.is_empty() && !self.hidden[i].discard.is_empty() {
-                let mut pile = std::mem::take(&mut self.hidden[i].discard);
-                self.rng.shuffle(&mut pile);
-                self.hidden[i].draw = pile;
-                self.log(
-                    "text",
-                    player_id,
-                    Msg::new("log.reshuffle").player_id("who", player_id),
-                );
-            }
+            self.refill_draw_pile(i);
             let Some(card) = self.hidden[i].draw.pop() else {
                 break;
             };
             self.hidden[i].hand.push(card);
+            self.refill_draw_pile(i);
             got += 1;
         }
         if got > 0 {
@@ -872,15 +880,17 @@ impl World {
         }
     }
 
-    pub fn to_discard(&mut self, player_id: i32, card: &str) {
+    pub fn to_discard(&mut self, player_id: i32, card: &str) -> bool {
         if let Ok(i) = usize::try_from(player_id) {
             if let Some(h) = self.hidden.get_mut(i) {
                 if let Some(k) = h.hand.iter().position(|c| c == card) {
                     h.hand.remove(k);
                 }
                 h.discard.push(card.to_string());
+                return self.refill_draw_pile(i);
             }
         }
+        false
     }
 
     // -------------------------------------------------------- placed cards
@@ -1513,11 +1523,11 @@ impl World {
         } else if !self.event_discard.iter().any(|e| e == id) {
             self.event_discard.push(id.to_string());
         }
+        self.refill_event_deck();
     }
 
-    /// An empty event deck takes the shuffled discard as the new deck. Called
-    /// once a draw has fully resolved (the drawn card filed away included), and
-    /// before a draw as a fallback; never mid-resolution.
+    /// Refill immediately when empty. A currently resolving event stays outside
+    /// both piles until it is filed away; it cannot be drawn a second time.
     pub fn refill_event_deck(&mut self) {
         if !self.event_deck.is_empty() || self.event_discard.is_empty() {
             return;

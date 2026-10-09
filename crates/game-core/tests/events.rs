@@ -157,19 +157,17 @@ fn event_deck_push_puts_it_on_top() {
     let _ = top_before;
 }
 
-// An empty event deck takes the shuffled discard only once everything has
-// resolved: filing a card does not refill it, `refill_event_deck` (run at the
-// end of a draw) does.
+// If no discard was available when the deck emptied, filing a card must
+// restore it immediately, without waiting for the rest of the effect.
 #[test]
-fn empty_event_deck_takes_the_discard_after_resolution() {
+fn empty_event_deck_takes_the_discard_immediately_when_filing() {
     let mut m = new_match(Arc::new(OneEvent));
     m.quick_start();
     let w = m.world_mut();
     w.event_deck.clear();
     w.event_discard = vec!["a".into(), "b".into()];
     w.expire_event("对邦", false);
-    assert!(m.world().event_deck.is_empty(), "not mid-resolution");
-    m.world_mut().refill_event_deck();
+    assert!(!m.world().event_deck.is_empty(), "refill before later effects");
     let mut deck = m.world().event_deck.clone();
     deck.sort();
     assert_eq!(deck, ["a", "b", "对邦"]);

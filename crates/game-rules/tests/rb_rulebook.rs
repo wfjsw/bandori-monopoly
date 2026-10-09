@@ -159,7 +159,7 @@ fn gf03_hand_limit_is_five_and_overdraw_discards_down() {
     assert_eq!(t.hand(0).len(), 6, "one over the limit");
     t.discard_card(0, "通用:THANKS PARTY!").unwrap();
     assert_eq!(t.hand(0).len(), 5, "discarded down to the limit");
-    assert!(t.discard(0).contains(&"通用:THANKS PARTY!".to_string()));
+    assert!(t.draw_pile(0).contains(&"通用:THANKS PARTY!".to_string()));
 }
 
 // 规则书 游戏流程 2: 「当抽卡区抽光时将弃卡区洗卡并放回抽卡区」.

@@ -169,7 +169,7 @@ fn dream_echo_flips_all_pp_characters() {
     accept_echo(&mut t);
     assert_eq!(fans(&t, 2), (3, 0), "PP character's reverse fans flipped");
     assert_eq!(fans(&t, 1), (0, 5), "non-PP fans untouched");
-    assert!(t.discard(0).contains(&"PP:[衍生]共鸣".to_string()), "{:?}", t.discard(0));
+    assert!(t.draw_pile(0).contains(&"PP:[衍生]共鸣".to_string()), "{:?}", t.draw_pile(0));
 }
 
 // ============================================================ PP:初次演出事故

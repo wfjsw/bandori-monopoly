@@ -70,9 +70,9 @@ fn m1_no_settle_move_still_grants_the_move_after_fire() {
         t.recent_keys(20)
     );
     assert!(
-        t.discard(0).iter().any(|c| c.contains("儿时玩伴")),
+        t.draw_pile(0).iter().any(|c| c.contains("儿时玩伴")),
         "the attachment is filed after 「移动后」: {:?}",
-        t.discard(0)
+        t.draw_pile(0)
     );
 }
 

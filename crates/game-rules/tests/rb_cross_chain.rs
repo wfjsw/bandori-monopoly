@@ -369,14 +369,14 @@ fn c07_three_deep_encore_negated() {
     assert_eq!(t.state(1, "stay"), 1, "P1 gets the stay after all");
     assert_eq!(t.state(0, "stay"), 1);
     assert!(
-        t.discard(1).contains(&"通用:安可".to_string()),
-        "安可 spent: {:?}",
-        t.discard(1)
+        t.draw_pile(1).contains(&"通用:安可".to_string()),
+        "安可 spent and reshuffled: {:?}",
+        t.draw_pile(1)
     );
     assert!(
-        t.discard(2).contains(&"通用:网络链接异常".to_string()),
-        "网络链接异常 spent: {:?}",
-        t.discard(2)
+        t.draw_pile(2).contains(&"通用:网络链接异常".to_string()),
+        "网络链接异常 spent and reshuffled: {:?}",
+        t.draw_pile(2)
     );
 }
 
@@ -867,9 +867,9 @@ fn c18_tritone_vs_card_payment() {
         pass(&mut t, 1);
     }
     assert!(
-        t.discard(1).contains(&"Mor:迷茫之蝶们的三全音".to_string()),
-        "discarded after 3 turn ends: {:?}",
-        t.discard(1)
+        t.draw_pile(1).contains(&"Mor:迷茫之蝶们的三全音".to_string()),
+        "discarded and reshuffled after 3 turn ends: {:?}",
+        t.draw_pile(1)
     );
     eprintln!(
         "c18 record: P1={}, P0={} (RULING: who receives the payback?)",

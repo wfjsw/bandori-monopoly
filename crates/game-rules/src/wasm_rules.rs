@@ -58,9 +58,31 @@ const MAX_COUNTERACT_DEPTH: u32 = 16;
 /// TODO(规则书): the book states no per-visit bound.
 const MAX_COUNTERACT_PER_VISIT: u32 = 16;
 
+/// Piles, randomness and their log at a host boundary. Replaying a card starts
+/// from the pre-draw piles, then adopts each completed request at its original
+/// statement. A discard/redraw effect cannot discard its freshly drawn hand.
+#[derive(Clone)]
+struct PileCheckpoint {
+    world: Arc<game_core::engine::World>,
+}
+impl PileCheckpoint {
+    fn new(world: game_core::engine::World) -> Self {
+        Self {
+            world: Arc::new(world),
+        }
+    }
+    fn apply(&self, world: &mut game_core::engine::World) {
+        world.hidden = self.world.hidden.clone();
+        world.rng = self.world.rng.clone();
+        world.recent = self.world.recent.clone();
+        world.next_event = self.world.next_event;
+    }
+}
+
 #[derive(Clone)]
 pub struct Run {
     world: game_core::engine::World,
+    pile_checkpoints: Arc<std::collections::BTreeMap<usize, PileCheckpoint>>,
     data: Arc<GameData>,
     /// Declared static properties (`card_props`) of every card in the loaded
     /// set, snapshotted at run creation -- the one thing a `Run` needs from the
@@ -177,6 +199,13 @@ impl Run {
 }
 
 impl CardWorld for Run {
+    fn after_host(&mut self, answer: usize) {
+        if let Some(checkpoint) = self.pile_checkpoints.get(&answer) {
+            checkpoint.apply(&mut self.world);
+            // These maintenance hooks already ran before this host request.
+            self.reshuffle_log.clear();
+        }
+    }
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
         self.world.roll(player_id, count, sides)
     }
@@ -304,7 +333,15 @@ impl CardWorld for Run {
             .get(player_id.max(0) as usize)
             .map(|h| h.hand.len())
             .unwrap_or(0);
+        let will_refill = self
+            .world
+            .hidden
+            .get(player_id.max(0) as usize)
+            .is_some_and(|h| !h.discard.is_empty() && n > 0 && h.draw.len() <= n as usize);
         let got = self.world.draw_cards(player_id, n, true);
+        if will_refill && got > 0 {
+            self.reshuffle_log.push(player_id);
+        }
         if got > 0 {
             if let Some(h) = self.world.hidden.get(player_id.max(0) as usize) {
                 for id in &h.hand[before..] {
@@ -330,6 +367,9 @@ impl CardWorld for Run {
         match list.iter().position(|c| c == card) {
             Some(k) => {
                 list.remove(k);
+                if pile == CardPile::Deck && self.world.refill_draw_pile(player_id.max(0) as usize) {
+                    self.reshuffle_log.push(player_id);
+                }
                 true
             }
             None => false,
@@ -366,7 +406,9 @@ impl CardWorld for Run {
         }
     }
     fn to_discard(&mut self, player_id: i32, card: &str) {
-        self.world.to_discard(player_id, card);
+        if self.world.to_discard(player_id, card) {
+            self.reshuffle_log.push(player_id);
+        }
         self.discard_log.push((player_id, card.to_string()));
     }
 
@@ -1019,6 +1061,9 @@ impl CardWorld for Run {
         h.hand.remove(p);
         h.discard.push(card.to_string());
         self.discard_log.push((player_id, card.to_string()));
+        if self.world.refill_draw_pile(player_id.max(0) as usize) {
+            self.reshuffle_log.push(player_id);
+        }
         1
     }
     fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32 {
@@ -1545,7 +1590,13 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
     /// writes land on top of the host effects, same as the replay's last pass.
     /// Two guest runs per body, not *k*+1.
     fn apply(&mut self, any: &mut dyn std::any::Any, req: HostRequest) -> Option<i32> {
+        // Draws mutate piles and run after-hooks immediately. Re-enter the
+        // guest from the engine's resulting snapshot, so both execution modes
+        // see those changes before subsequent guest reads and prompts.
         let run = Self::as_run(any);
+        if matches!(req, HostRequest::Draw { .. }) || !run.pile_checkpoints.is_empty() {
+            return None;
+        }
         let cx = unsafe { &mut *self.cx };
         let bridge = unsafe { &*self.bridge };
         let card_id: &str = unsafe { &*self.card_id };
@@ -1656,6 +1707,8 @@ impl<M: CardModules> RulesBridge<M> {
         guarded: bool,
     ) -> Flow<i32> {
         let mut answers: Vec<i32> = Vec::new();
+        let mut pile_base: Option<PileCheckpoint> = None;
+        let mut pile_checkpoints = std::collections::BTreeMap::new();
         // Guest-state overlays this drive pushed (one per `NeedHost`). Dropped
         // at the top of the next iteration -- the routine has finished and the
         // replay re-applies the guest writes from the restored world. Nested
@@ -1663,8 +1716,13 @@ impl<M: CardModules> RulesBridge<M> {
         let overlay_base = cx.guest_overlay_depth();
         loop {
             cx.restore_guests_to(overlay_base);
+            let mut world = cx.world_copy();
+            if let Some(base) = &pile_base {
+                base.apply(&mut world);
+            }
             let run = Run {
-                world: cx.world_copy(),
+                world,
+                pile_checkpoints: Arc::new(pile_checkpoints.clone()),
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: trigger.clone(),
@@ -1767,8 +1825,13 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         return self.commit_after(cx, after, call, card_id, trigger);
                     }
+                    let mut world = cx.world_copy();
+                    if let Some(base) = &pile_base {
+                        base.apply(&mut world);
+                    }
                     let run = Run {
-                        world: cx.world_copy(),
+                        world,
+                        pile_checkpoints: Arc::new(pile_checkpoints.clone()),
                         data: self.data.clone(),
                         props: self.modules_props(),
                         trigger: trigger.clone(),
@@ -1843,7 +1906,24 @@ impl<M: CardModules> RulesBridge<M> {
                     // at the next iteration's top, so the replay re-applies it
                     // rather than double-counting. See `Cx::overlay_guest_state`.
                     cx.overlay_guest_state(&run.world);
+                    if matches!(req, HostRequest::Draw { .. }) && pile_base.is_none() {
+                        pile_base = Some(PileCheckpoint::new(cx.world_copy()));
+                    }
+                    if pile_base.is_some() {
+                        // Make preceding pile writes and their refill visible now.
+                        // Replay reconstructs the prefix from pile_base, then skips
+                        // already-applied writes by adopting these checkpoints.
+                        let mut w = cx.world_copy();
+                        PileCheckpoint::new(run.world.clone()).apply(&mut w);
+                        cx.swap_world(w);
+                        for &player in &run.reshuffle_log {
+                            self.raise_core(cx, "reshuffled", player, |_| {})?;
+                        }
+                    }
                     let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
+                    if pile_base.is_some() {
+                        pile_checkpoints.insert(answers.len(), PileCheckpoint::new(cx.world_copy()));
+                    }
                     answers.push(v);
                 }
                 Err(e) => {
@@ -2134,54 +2214,16 @@ impl<M: CardModules> RulesBridge<M> {
             })?;
             return Ok(if t.is_cancelled() { 0 } else { 1 });
         }
-        // `H.DrawR`: the engine runs the draw itself -- one card at a
-        // time, raising the per-draw points (`drewBefore` / `drawn` /
-        // `drew`) on each -- so a card-driven draw fires the same
-        // per-draw effects an engine draw does, and a `drewBefore` hook
-        // may replace a card of it. The engine adjudicates each card's
-        // `drewBefore` here and answers with how many are plain draws;
-        // the effect's replay moves those on its own world copy (the
-        // same shape as `Pay`). A hook that replaces a draw has already
-        // put its card in hand, so the after points (`drawn` / `drew`)
-        // fire for it here.
+        // Run the entire draw now, including immediate empty-deck maintenance
+        // and per-card hooks. A later card/event prompt must see the new deck.
+        // The negative answer records an already-applied draw so guest replay
+        // reports the count without moving those cards a second time.
         HostRequest::Draw { player_id, n } => {
-            let p = player_id.max(0) as usize;
-            let mut plain = 0i32;
-            for _ in 0..n.max(0) {
-                let world = cx.world_copy();
-                let top = world
-                    .hidden
-                    .get(p)
-                    .and_then(|h| h.draw.last().cloned())
-                    .unwrap_or_default();
-                let hand_before = world.hidden.get(p).map(|h| h.hand.len()).unwrap_or(0);
-                let t = self.raise_core(cx, "drewBefore", player_id, |t| {
-                    t.card = top;
-                    t.value = 1;
-                })?;
-                if t.is_cancelled() {
-                    // The hook replaced this draw. Whatever it added to
-                    // the hand is the replacement draw (「此次加手视为
-                    // 抽卡动作」): the after points fire for it.
-                    let world = cx.world_copy();
-                    if let Some(h) = world.hidden.get(p) {
-                        for id in h.hand[hand_before..].to_vec() {
-                            self.raise_core(cx, "drawn", player_id, |t| {
-                                t.card = id.clone();
-                                t.value = 1;
-                            })?;
-                            self.raise_core(cx, "drew", player_id, |t| {
-                                t.card = id.clone();
-                                t.value = 1;
-                                t.cards = vec![id];
-                            })?;
-                        }
-                    }
-                } else {
-                    plain += 1;
-                }
-            }
-            return Ok(plain);
+            let Ok(player) = usize::try_from(player_id) else {
+                return Ok(-1);
+            };
+            let got = cx.draw_cards_with_hooks(player, n.max(0) as usize, true)?;
+            return Ok(-got - 1);
         }
         HostRequest::Pay {
             from,
@@ -2278,6 +2320,10 @@ impl<M: CardModules> RulesBridge<M> {
             let dest = after.dest;
             *trigger = after.trigger;
             cx.swap_world(after.world);
+            // Empty-deck maintenance precedes all settlement after-hooks.
+            for player_id in after.reshuffle_log {
+                self.raise_core(cx, "reshuffled", player_id, |_| {})?;
+            }
             // What the effect did, raised now that it has committed --
             // the same points `money()` / `discard()` raise (C# `Money`
             // PayAfter + `paid`, and `Discarded`).
@@ -2319,9 +2365,6 @@ impl<M: CardModules> RulesBridge<M> {
                     t.value = 1;
                     t.cards = vec![id];
                 })?;
-            }
-            for player_id in after.reshuffle_log {
-                self.raise_core(cx, "reshuffled", player_id, |_| {})?;
             }
             for (player_id, n) in after.fire_spent_log {
                 self.raise_core(cx, "fireSpent", player_id, |t| t.value = n)?;
@@ -2767,14 +2810,18 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(());
         }
         let who = to.unwrap_or(left);
+        let mut refilled = false;
         if dest == DEST_GRAVEYARD {
-            w.to_discard(who, card);
+            refilled = w.to_discard(who, card);
         } else if dest == 1 {
             // Back to the hand (手牌).
             w.add_to_hand(who, card);
         }
         // Banished (「[移除]」) is just "gone" -- it left above and goes nowhere.
         cx.swap_world(w);
+        if refilled {
+            self.raise_core(cx, "reshuffled", who, |_| {})?;
+        }
         if dest == DEST_GRAVEYARD {
             self.raise_core(cx, "discarded", who, |t| t.card = card.to_string())?;
         } else if dest != 1 {
@@ -3066,10 +3113,12 @@ impl<M: CardModules> RulesBridge<M> {
         };
         let mut w = cx.world_copy();
         let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
+        let mut refilled = false;
         match dest_from(dest) {
             Dest::Graveyard => {
                 if !w.out(seat) {
                     w.hidden[seat].discard.push(id.clone());
+                    refilled = w.refill_draw_pile(seat);
                 }
             }
             Dest::Hand => w.hidden[seat].hand.push(id.clone()),
@@ -3077,6 +3126,9 @@ impl<M: CardModules> RulesBridge<M> {
             Dest::Field => {}
         }
         cx.swap_world(w);
+        if refilled {
+            self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
+        }
         if spent {
             self.raise_core(cx, "discarded", seat as i32, |t| t.card = id.clone())?;
         }
@@ -3090,6 +3142,7 @@ impl<M: CardModules> RulesBridge<M> {
     fn probe_run(&self, cx: &Cx, top: &Trigger, card: &str) -> Run {
         Run {
             world: cx.world_copy(),
+            pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: top.clone(),
@@ -3219,6 +3272,7 @@ impl<M: CardModules> RulesBridge<M> {
         if counteract_slow_path() {
             let win_run = Run {
                 world: cx.world_copy(),
+                pile_checkpoints: Default::default(),
                 data: self.data.clone(),
                 props: self.modules_props(),
                 trigger: top.clone(),
@@ -4077,6 +4131,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             .map_or(-1, |(uid, _)| uid);
         let run = Run {
             world: cx.world_copy(),
+            pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: Trigger::default(),
@@ -4147,6 +4202,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // per hook run, so this is the quote's single world clone.
         let mut run = Run {
             world: w.clone(),
+            pile_checkpoints: Default::default(),
             data: self.data.clone(),
             props: self.modules_props(),
             trigger: Trigger::default(),

@@ -83,17 +83,23 @@ the same namespace the tile bodies use (`log.land_*`).
 engine's event logic, and it is deliberately per-event-free:
 
 ```
-draw the top of event_deck            (an empty deck takes the shuffled event_discard
-                                       once the draw has fully resolved, and before a
-                                       draw as a fallback: World::refill_event_deck)
+draw the top of event_deck
+refill an emptied event_deck          -- immediately, before any following effect;
+                                       the resolving event is not a discard yet
 log the public reveal (log.event)
 raise `event`                         -- the [反击] window on the draw
 bind the rule instance on BOARD_OWNER -- bind_event, one per event id
 rules.event(...)                      -- the body's On::Play
 if the body did not stay:             -- one-shot / negated
-    expire_event(id, derived?)        -- unbind + file away
+    expire_event(id, derived?)        -- unbind + file away; refill if still empty
 raise `eventAfter`
 ```
+
+The event tile's hand draw runs through the engine immediately, including
+empty-deck maintenance and per-card hooks, before the event draw can prompt.
+Card-module replay restores the pre-draw piles and adopts each completed host
+request at its original statement, so discard/redraw effects do not repeat
+their pile writes on the newly drawn hand.
 
 Everything else is the rule's:
 

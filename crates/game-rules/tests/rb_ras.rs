@@ -228,10 +228,10 @@ fn exist_flips_into_owner_discard() {
     t.end(1).unwrap();
     drain(&mut t);
     assert!(
-        t.discard(0).contains(&"RAS:EXIST".to_string()),
+        t.draw_pile(0).contains(&"RAS:EXIST".to_string()),
         "book: 「将其翻入弃牌堆」 of the card owner; discard0={:?} discard1={:?}",
-        t.discard(0),
-        t.discard(1)
+        t.draw_pile(0),
+        t.draw_pile(1)
     );
 }
 
@@ -330,7 +330,7 @@ fn hey_kids_transfers_one_house() {
     assert_eq!(t.houses(EDOGAWA_PARK), 1, "target gained");
     // 规则书: the settle itself is replaced -- no rent either way.
     assert_eq!(t.money(0), 20_500, "see money-formula tests");
-    assert!(t.discard(0).contains(&"RAS:狂乱Hey Kids!!".to_string()));
+    assert!(t.draw_pile(0).contains(&"RAS:狂乱Hey Kids!!".to_string()));
 }
 
 #[test]
@@ -568,10 +568,10 @@ fn change_world_goes_to_owner_discard() {
     t.roll(1).unwrap();
     drain(&mut t);
     assert!(
-        t.discard(0).contains(&"RAS:Change the world".to_string()),
+        t.draw_pile(0).contains(&"RAS:Change the world".to_string()),
         "owner's discard; discard0={:?} discard1={:?}",
-        t.discard(0),
-        t.discard(1)
+        t.draw_pile(0),
+        t.draw_pile(1)
     );
 }
 
@@ -654,7 +654,7 @@ fn please_choose_opt2_teleports_counteractor_without_settle() {
     drain(&mut t);
     assert_eq!(t.pos(0), SPACE, "counteractor teleports to the settler's tile");
     assert_eq!(t.pos(1), SPACE);
-    assert!(t.discard(0).contains(&"RAS:PLEASE CHOOSE".to_string()));
+    assert!(t.draw_pile(0).contains(&"RAS:PLEASE CHOOSE".to_string()));
 }
 
 // ===========================================================================
@@ -812,7 +812,7 @@ fn guerrilla_teleports_and_must_buy() {
     assert_eq!(t.owner(EDOGAWA_PARK), Some(0), "must buy the chosen tile");
     // 20000 - 400 (rent) - 1400 (江户川公园 price) = 18200
     assert_eq!(t.money(0), 18_200, "paid rent 400 and the deed 1400");
-    assert!(t.discard(0).contains(&"RAS:游击演出".to_string()));
+    assert!(t.draw_pile(0).contains(&"RAS:游击演出".to_string()));
 }
 
 #[test]
@@ -851,7 +851,7 @@ fn unstoppable_maps_dice_and_pays_out() {
         drain(&mut t);
         assert_eq!(t.pos(0), tile, "face {face}");
         assert_eq!(t.money(0), 10_000 + gain, "face {face} pays {gain}");
-        assert!(t.discard(0).contains(&"RAS:UNSTOPPABLE".to_string()));
+        assert!(t.draw_pile(0).contains(&"RAS:UNSTOPPABLE".to_string()));
     }
 }
 
@@ -888,7 +888,7 @@ fn repaint_reduces_the_move_by_owned_path_tiles() {
     t.counteract(0, "RAS:Repaint").unwrap();
     drain(&mut t);
     assert_eq!(t.pos(1), 5 + (10 - 2), "10 - 2 steps");
-    assert!(t.discard(0).contains(&"RAS:Repaint".to_string()));
+    assert!(t.draw_pile(0).contains(&"RAS:Repaint".to_string()));
 }
 
 #[test]
@@ -1104,7 +1104,7 @@ fn crush_adds_xd20_for_the_discard_pile() {
     drain(&mut t);
     assert_eq!(t.pos(0), 4);
     assert_eq!(t.dice_left(), 0, "four faces consumed");
-    assert!(t.discard(0).contains(&"RAS:（MASKING）CRUSH ON THE DRUM!!!".to_string()));
+    assert!(t.draw_pile(0).contains(&"RAS:（MASKING）CRUSH ON THE DRUM!!!".to_string()));
 }
 
 #[test]
@@ -1137,7 +1137,7 @@ fn pareo_card_gives_two_tokens_and_offers_a_house_removal() {
     let tok = t.p(0).tokens;
     assert_eq!(tok.iter().map(|c| c.value).sum::<i32>(), 2, "「获得2个PAREO标记」 {tok:?}");
     assert_eq!(t.houses(SHOPPING), 2, "declined the removal");
-    assert!(t.discard(0).contains(&"RAS:（PAREO）渐渐远去的你".to_string()));
+    assert!(t.draw_pile(0).contains(&"RAS:（PAREO）渐渐远去的你".to_string()));
 }
 
 #[test]

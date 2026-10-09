@@ -91,7 +91,7 @@ fn black_birthday_pays_by_money_bracket() {
     assert_eq!(t.money(1), 100, "p1 had 900, pays 800");
     assert_eq!(t.money(2), 4600, "p2 had 5000, pays 200 twice = 400");
     assert_eq!(t.money(0), 11_200, "gains 800 + 400");
-    assert!(t.discard(0).contains(&"Mujica:黑色生日".to_string()));
+    assert!(t.draw_pile(0).contains(&"Mujica:黑色生日".to_string()));
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn dice_cast_goes_to_discard_at_turn_end() {
     drain(&mut t);
     // 规则书: 「回合结束后放入弃牌堆」
     assert!(!t.on_field(0, "Mujica:骰子已经掷下"));
-    assert!(t.discard(0).contains(&"Mujica:骰子已经掷下".to_string()));
+    assert!(t.draw_pile(0).contains(&"Mujica:骰子已经掷下".to_string()));
 }
 
 #[test]
@@ -247,8 +247,8 @@ fn sparkler_last_crystal_goes_to_owner_discard() {
     t.end(0).unwrap();
     drain(&mut t);
     // 规则书: 「最后一个奇迹水晶移除后将此卡置入弃牌堆」
-    assert!(t.discard(0).contains(&"Mujica:燃尽前的线香花火".to_string()),
-        "owner's discard: {:?}", t.discard(0));
+    assert!(t.draw_pile(0).contains(&"Mujica:燃尽前的线香花火".to_string()),
+        "owner's discard: {:?}", t.draw_pile(0));
 }
 
 #[test]

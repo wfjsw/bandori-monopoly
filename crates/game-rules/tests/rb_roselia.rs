@@ -182,7 +182,8 @@ fn fire_bird_turn_end_burns_400_and_a_crystal() {
     roll_then_end(&mut t, 0);
     assert_eq!(t.money(0), 10_000 - 400, "events: {:?}", t.recent_keys(8));
     assert!(!t.on_field(0, "R:Fire bird"), "crystals exhausted -> discard");
-    assert!(t.discard(0).contains(&"R:Fire bird".to_string()));
+    assert!(t.draw_pile(0).contains(&"R:Fire bird".to_string()), "empty draw refills immediately: hand={:?}, draw={:?}, discard={:?}", t.hand(0), t.draw_pile(0), t.discard(0));
+    assert!(t.discard(0).is_empty());
 }
 
 #[test]
