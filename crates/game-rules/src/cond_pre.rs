@@ -15,8 +15,346 @@
 pub use rules_cond::{
     CandidateCtx, ChainLink, Cond, MoveSnap, PlayerSnap, TileSnap, WindowCtx, WindowScope,
 };
+use rules_cond::view::{CondView, TileKind};
 
 use crate::world::{CardWorld, Trigger};
+
+// ---------------------------------------------------------------------------
+// CondView over a SnapSrc (docs/GUARDS.md §4.2b)
+// ---------------------------------------------------------------------------
+
+/// A [`CondView`] over any [`SnapSrc`] plus the candidate being probed. This
+/// is the host accessor implementation: adding a condition name = a [`CondView`]
+/// method + a body here (and on [`rules_cond::SnapshotView`] / `LiveSnap`).
+///
+/// The methods call [`SnapSrc`] on `self.src` (the other type), never
+/// `self.<same-name>` -- a CondView method that re-enters itself via method
+/// resolution is an instant stack overflow (the previous attempt's bug).
+pub struct SnapView<'a, S: SnapSrc> {
+    pub src: &'a S,
+    pub trigger: Trigger,
+    /// The candidate being probed (`owner` seat). Named `owner_seat` so it
+    /// never shadows [`CondView::owner`] under method resolution.
+    pub owner_seat: i32,
+    pub card: &'a str,
+    pub placed: bool,
+}
+
+impl<'a, S: SnapSrc> SnapView<'a, S> {
+    /// Window-only view (no candidate); candidate accessors answer defaults.
+    pub fn window(src: &'a S) -> SnapView<'a, S> {
+        SnapView {
+            src,
+            trigger: src.trigger(),
+            owner_seat: -1,
+            card: "",
+            placed: false,
+        }
+    }
+
+    pub fn candidate(
+        src: &'a S,
+        owner: i32,
+        card: &'a str,
+        placed: bool,
+    ) -> SnapView<'a, S> {
+        SnapView {
+            src,
+            trigger: src.trigger(),
+            owner_seat: owner,
+            card,
+            placed,
+        }
+    }
+}
+
+impl<S: SnapSrc> CondView for SnapView<'_, S> {
+    // -- window / trigger ---------------------------------------------------
+    fn kind(&self) -> i64 {
+        self.trigger.kind as i64
+    }
+    fn actor(&self) -> i64 {
+        self.trigger.player_id as i64
+    }
+    fn target(&self) -> i64 {
+        self.trigger.target as i64
+    }
+    fn tile_id(&self) -> i64 {
+        self.trigger.tile as i64
+    }
+    fn tile_owner(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.src.tile_owner(self.trigger.tile) as i64
+        } else {
+            -1
+        }
+    }
+    fn tile_houses(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.src.houses_of(self.trigger.tile) as i64
+        } else {
+            0
+        }
+    }
+    fn tile_mortgaged(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.src.mortgaged_of(self.trigger.tile) as i64
+        } else {
+            0
+        }
+    }
+    fn tile_price(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.src.tile_price(self.trigger.tile) as i64
+        } else {
+            0
+        }
+    }
+    fn value(&self) -> i64 {
+        self.trigger.value as i64
+    }
+    fn step(&self) -> i64 {
+        self.trigger.step as i64
+    }
+    fn by(&self) -> i64 {
+        self.trigger.by_card.map(|b| b as i64).unwrap_or(-1)
+    }
+    fn pay_is_rent(&self) -> bool {
+        self.trigger.pay_is_rent
+    }
+    fn move_roll(&self) -> i64 {
+        // Negative face is the pre-cast sentinel; reads as `null`.
+        self.trigger.move_roll.filter(|&r| r >= 0).map(|r| r as i64).unwrap_or(-1)
+    }
+    fn move_kind(&self) -> i64 {
+        self.trigger.move_kind.map(|k| k as i64).unwrap_or(-1)
+    }
+    fn move_remaining(&self) -> i64 {
+        self.trigger.move_remaining as i64
+    }
+    fn move_main(&self) -> bool {
+        self.trigger.move_main
+    }
+    fn roll_source(&self) -> i64 {
+        self.trigger.roll_source as i64
+    }
+    fn abnormal(&self) -> bool {
+        matches!(self.trigger.kind, crate::TriggerKind::Abnormal)
+    }
+    fn turn_player(&self) -> i64 {
+        self.src.turn_player() as i64
+    }
+    fn turn_key(&self) -> i64 {
+        self.src.turn_key() as i64
+    }
+    fn chain_count(&self) -> i64 {
+        self.trigger.effects.len() as i64
+    }
+    fn chain_kinds(&self) -> Vec<i64> {
+        self.trigger
+            .effects
+            .iter()
+            .map(|e| crate::TriggerKind::from_str(e.kind) as i64)
+            .collect()
+    }
+    fn chain_hits(&self) -> Vec<i64> {
+        self.trigger.effects.iter().map(|e| e.target as i64).collect()
+    }
+
+    // -- candidate / owner --------------------------------------------------
+    fn owner(&self) -> i64 {
+        self.owner_seat as i64
+    }
+    fn owner_money(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.money(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_fire(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.fire(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_crystals(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.band_crystals(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_hand(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.hand_size(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_pos(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.player_pos(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_out(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.player_out(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_stay(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.stay_of(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_stun(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.stun_of(self.owner_seat) as i64 } else { 0 }
+    }
+    fn owner_exile(&self) -> i64 {
+        if self.owner_seat >= 0 {
+            self.src.state_get(self.owner_seat, game_core::state::key::EXILE) as i64
+        } else {
+            0
+        }
+    }
+    fn owner_no_hand(&self) -> i64 {
+        if self.owner_seat >= 0 {
+            self.src.state_get(self.owner_seat, game_core::state::key::NO_HAND) as i64
+        } else {
+            0
+        }
+    }
+    fn owner_character(&self) -> i64 {
+        if self.owner_seat < 0 {
+            return 0;
+        }
+        id_of(&self.src.character_skill_id(self.owner_seat).unwrap_or_default())
+    }
+    fn owner_band(&self) -> i64 {
+        if self.owner_seat < 0 {
+            return 0;
+        }
+        id_of(&self.src.band_skill_id(self.owner_seat).unwrap_or_default())
+    }
+    fn owner_tiles(&self) -> i64 {
+        if self.owner_seat >= 0 { self.src.owned_count(self.owner_seat) as i64 } else { 0 }
+    }
+    fn card_id(&self) -> i64 {
+        id_of(self.card)
+    }
+    fn card_placed(&self) -> bool {
+        self.placed
+    }
+    fn card_cp(&self) -> i64 {
+        if self.owner_seat >= 0 {
+            self.src.card_crystals(self.owner_seat, self.card) as i64
+        } else {
+            0
+        }
+    }
+    fn slot(&self, name: &str) -> i64 {
+        if self.owner_seat >= 0 {
+            self.src.state_get(self.owner_seat, name) as i64
+        } else {
+            0
+        }
+    }
+    fn tok(&self, _kind: i64) -> i64 {
+        // The live world keeps tokens in per-card state; `fill_candidate`
+        // leaves `toks` empty and the eager path answers 0. Match that.
+        0
+    }
+    fn blocked(&self, band: i64) -> bool {
+        // Mirror of `fill_candidate`'s empty `blocked_bands`: the host fills
+        // the blocked list from the skill dispatch, not the raw world.
+        let _ = band;
+        false
+    }
+
+    // -- player table -------------------------------------------------------
+    fn money(&self, seat: i64) -> i64 {
+        self.src.money(seat as i32) as i64
+    }
+    fn fire(&self, seat: i64) -> i64 {
+        self.src.fire(seat as i32) as i64
+    }
+    fn crystals(&self, seat: i64) -> i64 {
+        self.src.band_crystals(seat as i32) as i64
+    }
+    fn hand(&self, seat: i64) -> i64 {
+        self.src.hand_size(seat as i32) as i64
+    }
+    fn pos(&self, seat: i64) -> i64 {
+        self.src.player_pos(seat as i32) as i64
+    }
+    fn out(&self, seat: i64) -> i64 {
+        self.src.player_out(seat as i32) as i64
+    }
+    fn stay(&self, seat: i64) -> i64 {
+        self.src.stay_of(seat as i32) as i64
+    }
+    fn stun(&self, seat: i64) -> i64 {
+        self.src.stun_of(seat as i32) as i64
+    }
+    fn exile(&self, seat: i64) -> i64 {
+        self.src.state_get(seat as i32, game_core::state::key::EXILE) as i64
+    }
+    fn no_hand(&self, seat: i64) -> i64 {
+        self.src.state_get(seat as i32, game_core::state::key::NO_HAND) as i64
+    }
+    fn character(&self, seat: i64) -> i64 {
+        id_of(&self.src.character_skill_id(seat as i32).unwrap_or_default())
+    }
+    fn band(&self, seat: i64) -> i64 {
+        id_of(&self.src.band_skill_id(seat as i32).unwrap_or_default())
+    }
+    fn tiles(&self, seat: i64) -> i64 {
+        self.src.owned_count(seat as i32) as i64
+    }
+    fn seat_count(&self) -> i64 {
+        self.src.player_count() as i64
+    }
+
+    // -- board --------------------------------------------------------------
+    fn tile_named(&self, name: &str) -> i64 {
+        self.src.tile_named(name) as i64
+    }
+    fn is_circle(&self, tile: i64) -> bool {
+        self.src.is_circle(tile as i32)
+    }
+    fn is_ring(&self, tile: i64) -> bool {
+        self.src.is_ring(tile as i32)
+    }
+    fn is_live_house(&self, tile: i64) -> bool {
+        self.src.is_live_house(tile as i32)
+    }
+    fn is_buyable(&self, tile: i64) -> bool {
+        self.src.is_buyable(tile as i32)
+    }
+
+    // -- eager function tables ---------------------------------------------
+    fn slot_table(&self) -> Vec<(String, i64)> {
+        // Same keys `fill_candidate_extras` registers.
+        SLOT_NAMES
+            .iter()
+            .map(|n| {
+                let v = if self.owner_seat >= 0 {
+                    self.src.state_get(self.owner_seat, n) as i64
+                } else {
+                    0
+                };
+                (n.to_string(), v)
+            })
+            .collect()
+    }
+    fn tok_table(&self) -> Vec<(i64, i64)> {
+        Vec::new()
+    }
+    fn blocked_bands(&self) -> Vec<i64> {
+        Vec::new()
+    }
+    fn tile_id_table(&self) -> Vec<(String, i64)> {
+        collect_tile_ids(self.src)
+            .into_iter()
+            .map(|(k, v)| (k, v))
+            .collect()
+    }
+    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64> {
+        let count = self.src.tile_count();
+        let mut out = Vec::new();
+        for tile in 0..count {
+            let hit = match kind {
+                TileKind::Circle => self.src.is_circle(tile),
+                TileKind::Ring => self.src.is_ring(tile),
+                TileKind::LiveHouse => self.src.is_live_house(tile),
+                TileKind::Buyable => self.src.is_buyable(tile),
+            };
+            if hit {
+                out.push(tile as i64);
+            }
+        }
+        out
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Snapshot sources (docs/GUARDS.md §4.2)
@@ -703,7 +1041,7 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
 /// resolve to the same id the guest's `ctx::tile_named` returns. Unknown names
 /// stay out of the map; the CEL `tile_named` answers `-1` for those (matching
 /// the guest), never tile 0.
-fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<String, i64> {
+pub fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<String, i64> {
     let mut tile_ids = std::collections::BTreeMap::new();
     for tile in 0..world.tile_count() {
         let name = world.tile_name(tile);
@@ -763,7 +1101,7 @@ pub fn fill_candidate<S: SnapSrc>(
 /// `CardWorld::slot`, **not** a `slot:`-prefixed alias (that mismatch made
 /// `slot('lastWalk') > 0` read 0 and silently close a counteraction window).
 /// Extend this list when a new `slot('…')` shows up in a `pre`.
-const SLOT_NAMES: &[&str] = &[
+pub const SLOT_NAMES: &[&str] = &[
     "asUsualTurn",
     "lastWalk",
     // `追逐梦想的步伐` pass tag (`ctx::set_slot(player_id, SLOT_TAG, 1)`).

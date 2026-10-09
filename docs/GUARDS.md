@@ -152,47 +152,74 @@ semantics beyond a `blocked(band)` int mirror.
 `rules-cond`'s `vocab.rs` is **the** definition of every condition name: one
 `VOCAB` entry per name, from which the schema/lint's name lists, the CEL type
 info, the binding and the evaluator registration are all derived. Adding a
-name = one entry (plus a `CondView` accessor if it reads something new).
+name = one entry + a `CondView` accessor (and that accessor's host
+implementations). No edits to `schema.rs` / `eval.rs` tables.
 
 | field | what it is |
 |---|---|
 | `cel` | the CEL spelling (`actor`, `move.main`, `is_circle`) |
+| `aliases` | other CEL spellings that flatten to the same `flat` (`chain.count` for `effect.count`, `trigger.kind` for `kind`) |
 | `flat` | the flat identifier after the `root.field` rewrite (`move_main`) |
-| `scope` | `Window` / `Candidate` / `Func { arity }` |
+| `scope` | `Window` / `Candidate` / `Func { arity, cand }` |
 | `ty` | `Int` / `Bool` / `OptInt` (binds `null` when `-1`) |
+| `get` | scalar fetch: `fn(&dyn CondView) -> i64` |
+| `fx` | function shape (`Fx::SeatInt` / `StrInt` / `IntHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
 | `doc` | one line, mirrored in this table |
 
 Accessors go through [`crate::view::CondView`] (`rules-cond/src/view.rs`): a
 read-only query trait covering the trigger fields, the player/tile/card
 queries, `slot`/`tok` and the tile-kind predicates -- the same vocabulary the
 card SDK exposes to guests (`card-sdk` `ctx::*` reads). A condition and a
-guard therefore read the world through one surface. `game-rules` implements
-the view for its live snapshot (`LiveSnap` / `SnapSrc`); `rules-native` for
-its mirror; `SnapshotView` (`view_impl.rs`) is the eager `WindowCtx` +
-`CandidateCtx` reference implementation the tests and the precompiled-conds
-runtime use.
+guard therefore read the world through one surface.
 
-Evaluation is lazy in principle: `vocab::bind_one` fills only the names
-`cond.used_vars()` reads, calling the view on demand. The host may still
-pre-fill a snapshot (the counteract pre-scan amortises it across ~200 probes
-per window).
+Host views (all call the underlying store directly -- never `self.<same
+method>`, which is trait-method recursion and a stack overflow):
+
+* `rules_cond::SnapshotView` (`view_impl.rs`) -- the eager `WindowCtx` +
+  `CandidateCtx` reference the tests and the precompiled-conds runtime use.
+* `game-rules::cond_pre::SnapView<S: SnapSrc>` -- any `SnapSrc` (a
+  `CardWorld`, or `rules-native`'s linked world) plus the candidate being
+  probed. This is the generic host accessor implementation.
+* `game-rules::wasm_rules::LiveSnap` -- the live `World` + `GameData` +
+  `Trigger` (+ optional candidate), reading `self.world.*` / `self.data.*`.
+
+**Eager vs lazy.** The evaluator **eagerly copies** the used names and the
+function tables into the CEL context once per window (`bind_window`) and per
+probe (`bind_candidate`, only `cond.used_vars()` / `used_fns()`). A true
+lazy path -- every function closure fetching through a `&dyn CondView` at
+call time -- was measured (`bench_cond`: `lazy dyn-CondView money(seat)` ≈
+2.4 ns/call) and does **not** beat the ~1.2 µs/eval eager mean: a full eval
+is dominated by the CEL AST walk, and a `Context<'static, 'static>` wants
+owned values, so lazy still needs a thread-local side channel
+(`eval::with_live_view`). Keep eager filling, now generated from VOCAB
+through `CondView`. `WindowScope::new` (~30 µs) amortises over the
+counteract pre-scan's ~200 probes per window.
 
 `tests/cond_tests.rs::vocab_matches_schema_lists` keeps the table in step
-with the lint: every `VOCAB` name is accepted by the schema, every schema
-`FUNCTIONS` entry is in `VOCAB` (or CEL stdlib), and flat names are unique.
+with the lint (both sides derive from VOCAB, so this is a regression guard
+for the projections and the CEL-stdlib list); `vocab_flats_are_unique`
+guards the flat namespace.
 
 **How to add a condition name**
 
 1. Add a `CondView` accessor in `rules-cond/src/view.rs` (if it reads
    something new).
-2. Add one `VOCAB` entry in `rules-cond/src/vocab.rs`.
-3. If it is a function, register the evaluator closure in `eval.rs`'s
-   `install_functions` (the closure calls the view on demand).
-4. Run `cargo test -p rules-cond` -- `vocab_matches_schema_lists` fails if
+2. Add one `VOCAB` entry in `rules-cond/src/vocab.rs` (scalar: `get` points
+   at the accessor; function: `fx` picks an existing `Fx` shape and its
+   `fill`/`field` closure calls the accessor).
+3. Implement the accessor on each host view: `SnapshotView`
+   (`view_impl.rs`), `SnapView` (`game-rules/cond_pre.rs`), `LiveSnap`
+   (`game-rules/wasm_rules.rs`).
+4. If the name reads **new** world state, also extend `SnapSrc` /
+   `fill_window` / `fill_candidate` (the eager snapshot mapping). A name
+   over existing snapshot fields needs no fill edit.
+5. Run `cargo test -p rules-cond` -- `vocab_matches_schema_lists` fails if
    the lint and the table disagree.
-5. Mirror any new snapshot field in `game-rules`'s `fill_window` /
-   `fill_candidate` (and `rules-native`'s) **only if** the host pre-fills;
-   a `CondView` impl on the live snapshot needs no fill at all.
+
+`schema.rs` and `eval.rs` are pure consumers of VOCAB: the lint lists, the
+`root.field` rewrite (via `vocab::by_cel`), the variable bindings (via
+`Name::get`) and the function registration (via `Name::fx`) all iterate the
+table. Adding a name never edits their bodies.
 
 ### 4.3 ABI / authoring surface
 

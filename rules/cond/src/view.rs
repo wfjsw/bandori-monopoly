@@ -3,14 +3,24 @@
 //! One vocabulary: a condition and a guard read the world through the same
 //! names (the card SDK's `ctx::*` read-only host queries, flattened). The
 //! host implements [`CondView`] for its live snapshot (`game-rules`'s
-//! `LiveSnap` / `SnapSrc`, `rules-native`'s mirror); [`crate::ctx::WindowCtx`]
+//! `LiveSnap` / `SnapView`, `rules-native`'s mirror); [`crate::ctx::WindowCtx`]
 //! + [`crate::ctx::CandidateCtx`] implement it for the eager snapshot the
 //! tests and the precompiled-conds runtime use.
 //!
-//! Accessors are **lazy**: [`crate::vocab`]'s function closures call the view
-//! on demand, so an unevaluated branch costs nothing. The host may still
-//! pre-fill a snapshot (the counteract pre-scan's ~250 windows × ~200 probes
-//! amortise it); the view is the contract either way.
+//! Accessors are **lazy** in principle: [`crate::vocab`]'s getters call the
+//! view on demand. The evaluator still **eagerly** copies the used names into
+//! the CEL context (see `eval.rs`) because a CEL `Context` wants owned
+//! `'static` values -- a live trait-object indirection per probe measured
+//! slower than the copy (GUARDS.md §4.2b).
+
+/// Which tile-kind set a condition's `is_*` family asks for.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TileKind {
+    Circle,
+    Ring,
+    LiveHouse,
+    Buyable,
+}
 
 /// Read-only queries a condition name may make. Int-only: every accessor
 /// returns `i64` (or `bool`, bound as a CEL bool).
@@ -48,7 +58,7 @@ pub trait CondView {
     fn abnormal(&self) -> bool;
     fn turn_player(&self) -> i64;
     fn turn_key(&self) -> i64;
-    /// Effect-chain length (`chain.count`).
+    /// Effect-chain length (`effect.count` / `chain.count`).
     fn chain_count(&self) -> i64;
     /// Chain link kinds, in order.
     fn chain_kinds(&self) -> Vec<i64>;
@@ -56,8 +66,23 @@ pub trait CondView {
     fn chain_hits(&self) -> Vec<i64>;
 
     // -- candidate / owner --------------------------------------------------
-    /// The candidate's owner seat (`owner`).
+    /// The candidate's owner seat (`owner` / `owner.id`).
     fn owner(&self) -> i64;
+    /// Owner overlay (`owner.money` etc.). Same numbers as `money(owner())`
+    /// in a well-filled snapshot; the overlay is the per-probe answer.
+    fn owner_money(&self) -> i64;
+    fn owner_fire(&self) -> i64;
+    fn owner_crystals(&self) -> i64;
+    fn owner_hand(&self) -> i64;
+    fn owner_pos(&self) -> i64;
+    fn owner_out(&self) -> i64;
+    fn owner_stay(&self) -> i64;
+    fn owner_stun(&self) -> i64;
+    fn owner_exile(&self) -> i64;
+    fn owner_no_hand(&self) -> i64;
+    fn owner_character(&self) -> i64;
+    fn owner_band(&self) -> i64;
+    fn owner_tiles(&self) -> i64;
     /// The candidate card's id hash (`card.id`).
     fn card_id(&self) -> i64;
     /// Is the candidate's running instance in play (`card.placed`)?
@@ -99,4 +124,17 @@ pub trait CondView {
     fn is_ring(&self, tile: i64) -> bool;
     fn is_live_house(&self, tile: i64) -> bool;
     fn is_buyable(&self, tile: i64) -> bool;
+
+    // -- eager function tables (docs/GUARDS.md §4.2b: why eager) ------------
+    /// Every `slot(name)` latch the host knows. Baked into `_<var>` for the
+    /// eager function closures; a live view may answer from the world.
+    fn slot_table(&self) -> Vec<(String, i64)>;
+    /// Every `tok(kind)` counter.
+    fn tok_table(&self) -> Vec<(i64, i64)>;
+    /// Bands blocked for this candidate.
+    fn blocked_bands(&self) -> Vec<i64>;
+    /// Every `tile_named` spelling the host registers.
+    fn tile_id_table(&self) -> Vec<(String, i64)>;
+    /// Tile ids of one kind (the `is_*` family's backing list).
+    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64>;
 }

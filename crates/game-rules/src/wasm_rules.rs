@@ -3411,6 +3411,7 @@ impl<M: CardModules> RulesBridge<M> {
             world: cx.world(),
             data: &self.data,
             trigger: top,
+            cand: None,
         };
         let mut scope: Option<WindowScope> = None;
         for s in 0..n {
@@ -3603,6 +3604,7 @@ impl<M: CardModules> RulesBridge<M> {
             world: cx.world(),
             data: &self.data,
             trigger: top,
+            cand: None,
         };
         let mut options: Vec<(String, i32, i32)> = Vec::new();
         let mut order: Vec<(u8, u32, u32)> = Vec::new();
@@ -4081,6 +4083,10 @@ pub struct LiveSnap<'a> {
     pub world: &'a game_core::engine::World,
     pub data: &'a GameData,
     pub trigger: &'a Trigger,
+    /// Candidate being probed, for the [`rules_cond::view::CondView`] impl:
+    /// `(owner seat, card id, placed)`. `None` on the window-only form
+    /// [`crate::cond_pre::fill_window`] takes.
+    pub cand: Option<(i32, &'a str, bool)>,
 }
 
 impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
@@ -4229,6 +4235,343 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     #[inline]
     fn turn_key(&self) -> i32 {
         self.world.st.round * 100 + self.world.st.turn + 1
+    }
+}
+
+/// `CondView` over the live world (docs/GUARDS.md §4.2b). Every method calls
+/// `self.world.*` / `self.data.*` **directly** -- never `self.<SnapSrc::method>`,
+/// which would re-enter this trait and overflow the stack.
+impl rules_cond::view::CondView for LiveSnap<'_> {
+    fn kind(&self) -> i64 {
+        self.trigger.kind as i64
+    }
+    fn actor(&self) -> i64 {
+        self.trigger.player_id as i64
+    }
+    fn target(&self) -> i64 {
+        self.trigger.target as i64
+    }
+    fn tile_id(&self) -> i64 {
+        self.trigger.tile as i64
+    }
+    fn tile_owner(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.world.tile_owner(self.trigger.tile) as i64
+        } else {
+            -1
+        }
+    }
+    fn tile_houses(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.world
+                .st
+                .houses
+                .get(self.trigger.tile.max(0) as usize)
+                .copied()
+                .unwrap_or(0) as i64
+        } else {
+            0
+        }
+    }
+    fn tile_mortgaged(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.world
+                .st
+                .mortgaged
+                .get(self.trigger.tile.max(0) as usize)
+                .copied()
+                .unwrap_or(false) as i64
+        } else {
+            0
+        }
+    }
+    fn tile_price(&self) -> i64 {
+        if self.trigger.tile >= 0 {
+            self.data
+                .tiles
+                .get(self.trigger.tile.max(0) as usize)
+                .map(|t| t.price)
+                .unwrap_or(0) as i64
+        } else {
+            0
+        }
+    }
+    fn value(&self) -> i64 {
+        self.trigger.value as i64
+    }
+    fn step(&self) -> i64 {
+        self.trigger.step as i64
+    }
+    fn by(&self) -> i64 {
+        self.trigger.by_card.map(|b| b as i64).unwrap_or(-1)
+    }
+    fn pay_is_rent(&self) -> bool {
+        self.trigger.pay_is_rent
+    }
+    fn move_roll(&self) -> i64 {
+        self.trigger
+            .move_roll
+            .filter(|&r| r >= 0)
+            .map(|r| r as i64)
+            .unwrap_or(-1)
+    }
+    fn move_kind(&self) -> i64 {
+        self.trigger.move_kind.map(|k| k as i64).unwrap_or(-1)
+    }
+    fn move_remaining(&self) -> i64 {
+        self.trigger.move_remaining as i64
+    }
+    fn move_main(&self) -> bool {
+        self.trigger.move_main
+    }
+    fn roll_source(&self) -> i64 {
+        self.trigger.roll_source as i64
+    }
+    fn abnormal(&self) -> bool {
+        matches!(self.trigger.kind, crate::TriggerKind::Abnormal)
+    }
+    fn turn_player(&self) -> i64 {
+        self.world.st.turn as i64
+    }
+    fn turn_key(&self) -> i64 {
+        (self.world.st.round * 100 + self.world.st.turn + 1) as i64
+    }
+    fn chain_count(&self) -> i64 {
+        self.trigger.effects.len() as i64
+    }
+    fn chain_kinds(&self) -> Vec<i64> {
+        self.trigger
+            .effects
+            .iter()
+            .map(|e| crate::TriggerKind::from_str(e.kind) as i64)
+            .collect()
+    }
+    fn chain_hits(&self) -> Vec<i64> {
+        self.trigger.effects.iter().map(|e| e.target as i64).collect()
+    }
+    fn owner(&self) -> i64 {
+        self.cand.map(|(o, _, _)| o as i64).unwrap_or(-1)
+    }
+    fn owner_money(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world.player_money(o as i32) as i64
+        } else {
+            0
+        }
+    }
+    fn owner_fire(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 { self.world.fire(o as i32) as i64 } else { 0 }
+    }
+    fn owner_crystals(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world.band_crystals(o as i32) as i64
+        } else {
+            0
+        }
+    }
+    fn owner_hand(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world
+                .hidden
+                .get(o.max(0) as usize)
+                .map(|h| h.hand.len() as i64)
+                .unwrap_or(0)
+        } else {
+            0
+        }
+    }
+    fn owner_pos(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 { self.world.player_pos(o as i32) as i64 } else { 0 }
+    }
+    fn owner_out(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 { self.world.player_out(o as i32) as i64 } else { 0 }
+    }
+    fn owner_stay(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 { self.world.state_get(o as i32, game_core::state::key::STAY) as i64 } else { 0 }
+    }
+    fn owner_stun(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 { self.world.state_get(o as i32, game_core::state::key::STUN) as i64 } else { 0 }
+    }
+    fn owner_exile(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world.state_get(o as i32, game_core::state::key::EXILE) as i64
+        } else {
+            0
+        }
+    }
+    fn owner_no_hand(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world.state_get(o as i32, game_core::state::key::NO_HAND) as i64
+        } else {
+            0
+        }
+    }
+    fn owner_character(&self) -> i64 {
+        let o = self.owner();
+        if o < 0 {
+            return 0;
+        }
+        crate::cond_pre::id_of(
+            &self.world.character_skill_id(o as i32).unwrap_or_default(),
+        )
+    }
+    fn owner_band(&self) -> i64 {
+        let o = self.owner();
+        if o < 0 {
+            return 0;
+        }
+        crate::cond_pre::id_of(&self.world.band_skill_id(o as i32).unwrap_or_default())
+    }
+    fn owner_tiles(&self) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world.owned_tiles(o as i32).len() as i64
+        } else {
+            0
+        }
+    }
+    fn card_id(&self) -> i64 {
+        self.cand
+            .map(|(_, c, _)| crate::cond_pre::id_of(c))
+            .unwrap_or(0)
+    }
+    fn card_placed(&self) -> bool {
+        self.cand.map(|(_, _, p)| p).unwrap_or(false)
+    }
+    fn card_cp(&self) -> i64 {
+        let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
+            return 0;
+        };
+        self.world.card_crystals(o, c) as i64
+    }
+    fn slot(&self, name: &str) -> i64 {
+        let o = self.owner();
+        if o >= 0 {
+            self.world.state_get(o as i32, name) as i64
+        } else {
+            0
+        }
+    }
+    fn tok(&self, _kind: i64) -> i64 {
+        0
+    }
+    fn blocked(&self, _band: i64) -> bool {
+        false
+    }
+    fn money(&self, seat: i64) -> i64 {
+        self.world.player_money(seat as i32) as i64
+    }
+    fn fire(&self, seat: i64) -> i64 {
+        self.world.fire(seat as i32) as i64
+    }
+    fn crystals(&self, seat: i64) -> i64 {
+        self.world.band_crystals(seat as i32) as i64
+    }
+    fn hand(&self, seat: i64) -> i64 {
+        self.world
+            .hidden
+            .get(seat.max(0) as usize)
+            .map(|h| h.hand.len() as i64)
+            .unwrap_or(0)
+    }
+    fn pos(&self, seat: i64) -> i64 {
+        self.world.player_pos(seat as i32) as i64
+    }
+    fn out(&self, seat: i64) -> i64 {
+        self.world.player_out(seat as i32) as i64
+    }
+    fn stay(&self, seat: i64) -> i64 {
+        self.world.state_get(seat as i32, game_core::state::key::STAY) as i64
+    }
+    fn stun(&self, seat: i64) -> i64 {
+        self.world.state_get(seat as i32, game_core::state::key::STUN) as i64
+    }
+    fn exile(&self, seat: i64) -> i64 {
+        self.world
+            .state_get(seat as i32, game_core::state::key::EXILE) as i64
+    }
+    fn no_hand(&self, seat: i64) -> i64 {
+        self.world
+            .state_get(seat as i32, game_core::state::key::NO_HAND) as i64
+    }
+    fn character(&self, seat: i64) -> i64 {
+        crate::cond_pre::id_of(&self.world.character_skill_id(seat as i32).unwrap_or_default())
+    }
+    fn band(&self, seat: i64) -> i64 {
+        crate::cond_pre::id_of(&self.world.band_skill_id(seat as i32).unwrap_or_default())
+    }
+    fn tiles(&self, seat: i64) -> i64 {
+        self.world.owned_tiles(seat as i32).len() as i64
+    }
+    fn seat_count(&self) -> i64 {
+        self.world.st.players.len() as i64
+    }
+    fn tile_named(&self, name: &str) -> i64 {
+        self.world.tile_named(self.data, name) as i64
+    }
+    fn is_circle(&self, tile: i64) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "circle")
+    }
+    fn is_ring(&self, tile: i64) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "ring")
+    }
+    fn is_live_house(&self, tile: i64) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable() && t.group == 10)
+    }
+    fn is_buyable(&self, tile: i64) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable())
+    }
+    fn slot_table(&self) -> Vec<(String, i64)> {
+        crate::cond_pre::SLOT_NAMES
+            .iter()
+            .map(|n| (n.to_string(), self.slot(n)))
+            .collect()
+    }
+    fn tok_table(&self) -> Vec<(i64, i64)> {
+        Vec::new()
+    }
+    fn blocked_bands(&self) -> Vec<i64> {
+        Vec::new()
+    }
+    fn tile_id_table(&self) -> Vec<(String, i64)> {
+        crate::cond_pre::collect_tile_ids(self).into_iter().collect()
+    }
+    fn tile_kind_list(&self, kind: rules_cond::view::TileKind) -> Vec<i64> {
+        let mut out = Vec::new();
+        for tile in 0..self.data.tiles.len() as i64 {
+            let hit = match kind {
+                rules_cond::view::TileKind::Circle => self.is_circle(tile),
+                rules_cond::view::TileKind::Ring => self.is_ring(tile),
+                rules_cond::view::TileKind::LiveHouse => self.is_live_house(tile),
+                rules_cond::view::TileKind::Buyable => self.is_buyable(tile),
+            };
+            if hit {
+                out.push(tile);
+            }
+        }
+        out
     }
 }
 

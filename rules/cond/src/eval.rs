@@ -2,17 +2,24 @@
 //! candidate. The window scope is where the savings of G1 live -- the CEL
 //! context (and the custom lookup functions) are built once and reused across
 //! every candidate probe in the window.
+//!
+//! Every variable and function binding is **driven from [`crate::vocab::VOCAB`]
+//! through [`crate::view::CondView`]**: adding a name never edits this file's
+//! tables. The evaluator only knows the CEL `Value` plumbing and the few
+//! shapes of [`crate::vocab::Fx`] a function closure can take.
 
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use cel::common::value::{CowVal, Val};
+use cel::common::value::{CowVal, Val as CelVal};
 use cel::objects::{Key, Map, Value};
 use cel::{Context, ExecutionError, FunctionContext};
 
 use crate::compile::{shared_env, Cond};
 use crate::ctx::{CandidateCtx, WindowCtx};
 use crate::kinds;
+use crate::view::CondView;
+use crate::vocab::{self, Fx, Name, Scope, Table, VOCAB};
 
 /// A window's reusable CEL root context. Build once per `declare_one` /
 /// `run_hook` window; then [`Cond::eval`] (or [`Cond::eval_with_scope`]) for
@@ -27,7 +34,14 @@ impl WindowScope {
     /// functions. `O(schema)` once per window.
     pub fn new(win: &WindowCtx) -> Self {
         let mut root = Context::with_env(shared_env());
-        bind_window(&mut root, win);
+        // The eager snapshot is the reference `CondView`; the host's live
+        // view (`game-rules`'s `LiveSnap`) can fill the same tables directly.
+        let empty_cand = CandidateCtx::default();
+        let view = crate::SnapshotView {
+            win,
+            cand: &empty_cand,
+        };
+        bind_window(&mut root, &view);
         install_functions(&mut root);
         WindowScope { root }
     }
@@ -43,7 +57,15 @@ impl WindowScope {
     /// exists for the G3 audit and the tests.
     pub fn eval_checked(&self, cond: &Cond, cand: &CandidateCtx) -> Result<bool, EvalError> {
         let mut child = self.root.new_inner_scope();
-        bind_candidate(&mut child, cand, cond);
+        // Candidate overlay through the same `CondView` contract. The window
+        // half of the view is not needed here (those names are already bound
+        // on the root); a default window keeps `SnapshotView` total.
+        let empty_win = WindowCtx::default();
+        let view = crate::SnapshotView {
+            win: &empty_win,
+            cand,
+        };
+        bind_candidate(&mut child, cond, &view);
         let val = child
             .resolve(cond.expr())
             .map_err(EvalError::Exec)?;
@@ -73,303 +95,199 @@ impl std::fmt::Display for EvalError {
 impl std::error::Error for EvalError {}
 
 // ---------------------------------------------------------------------------
-// bindings
+// bindings (driven from VOCAB through CondView)
 // ---------------------------------------------------------------------------
 
-fn bind_window(ctx: &mut Context<'static, 'static>, win: &WindowCtx) {
+fn emit_var(ctx: &mut Context<'_, '_>, name: &str, v: vocab::Val) {
+    ctx.add_variable_from_value(name, cel_value(&v));
+}
+
+fn cel_value(v: &vocab::Val) -> Value {
+    match v {
+        vocab::Val::Int(i) => Value::Int(*i),
+        vocab::Val::Bool(b) => Value::Bool(*b),
+        vocab::Val::Null => Value::Null,
+    }
+}
+
+fn table_value(t: &Table) -> Value {
+    match t {
+        Table::IntMap(rows) => {
+            let mut m = HashMap::new();
+            for (k, v) in rows {
+                m.insert(Key::Int(*k), Value::Int(*v));
+            }
+            Value::Map(Map { map: Arc::new(m) })
+        }
+        Table::StrMap(rows) => {
+            let mut m = HashMap::new();
+            for (k, v) in rows {
+                m.insert(Key::String(Arc::new(k.clone())), Value::Int(*v));
+            }
+            Value::Map(Map { map: Arc::new(m) })
+        }
+        Table::IntList(items) => {
+            Value::List(Arc::new(items.iter().map(|i| Value::Int(*i)).collect()))
+        }
+        Table::Seats(n) => Value::Int(*n),
+    }
+}
+
+/// Window half: kind constants, every VOCAB window scalar, and the window-side
+/// function tables. Built once per window (the amortised G1 saving).
+fn bind_window(ctx: &mut Context<'static, 'static>, view: &dyn CondView) {
     // Kind constants (bare identifiers in conditions).
     for (name, val) in kinds::constants() {
         ctx.add_variable_from_value(*name, Value::Int(*val));
     }
 
-    // Window scalars (§4.2). Absent optionals bind CEL `null`.
-    ctx.add_variable_from_value("kind", Value::Int(win.kind));
-    ctx.add_variable_from_value("actor", Value::Int(win.actor));
-    ctx.add_variable_from_value("target", Value::Int(win.target));
-    ctx.add_variable_from_value("value", Value::Int(win.value));
-    ctx.add_variable_from_value("step", Value::Int(win.step));
-    ctx.add_variable_from_value("by", Value::Int(win.by));
-    ctx.add_variable_from_value("pay_is_rent", Value::Bool(win.pay_is_rent));
-    ctx.add_variable_from_value("roll_source", Value::Int(win.roll_source));
-    ctx.add_variable_from_value("abnormal", Value::Bool(win.abnormal));
-    ctx.add_variable_from_value("turn_player", Value::Int(win.turn_player));
-    ctx.add_variable_from_value("turn_key", Value::Int(win.turn_key));
-
-    // move.* (flattened)
-    ctx.add_variable_from_value(
-        "move_roll",
-        match win.mv.roll {
-            Some(r) => Value::Int(r),
-            None => Value::Null,
-        },
-    );
-    ctx.add_variable_from_value(
-        "move_kind",
-        match win.mv.kind {
-            Some(k) => Value::Int(k),
-            None => Value::Null,
-        },
-    );
-    ctx.add_variable_from_value("move_remaining", Value::Int(win.mv.remaining));
-    ctx.add_variable_from_value("move_main", Value::Bool(win.mv.main));
-
-    // tile.* (flattened)
-    ctx.add_variable_from_value("tile_id", Value::Int(win.tile.id));
-    ctx.add_variable_from_value("tile_owner", Value::Int(win.tile.owner));
-    ctx.add_variable_from_value("tile_houses", Value::Int(win.tile.houses));
-    ctx.add_variable_from_value("tile_mortgaged", Value::Int(win.tile.mortgaged));
-    ctx.add_variable_from_value("tile_price", Value::Int(win.tile.price));
-
-    // tile-kind sets for `is_circle(t)` / `is_ring(t)` / ...
-    ctx.add_variable_from_value("_circle_tiles", int_list(win.circle_tiles.iter().copied()));
-    ctx.add_variable_from_value("_ring_tiles", int_list(win.ring_tiles.iter().copied()));
-    ctx.add_variable_from_value("_live_house_tiles", int_list(win.live_house_tiles.iter().copied()));
-    ctx.add_variable_from_value("_buyable_tiles", int_list(win.buyable_tiles.iter().copied()));
-
-    // effect/chain
-    ctx.add_variable_from_value("effect_count", Value::Int(win.chain.len() as i64));
-
-    // Lookup tables for the functions.
-    ctx.add_variable_from_value("_seats", Value::Int(win.seat_count()));
-    ctx.add_variable_from_value("_chain_kinds", int_list(win.chain.iter().map(|l| l.kind)));
-    ctx.add_variable_from_value("_hit_seats", int_list(win.chain.iter().map(|l| l.hits)));
-    ctx.add_variable_from_value("_chain_froms", int_list(win.chain.iter().map(|l| l.from)));
-
-    // Player table for money(p) / character_is(p, …).
-    ctx.add_variable_from_value("_money", player_field(win, |p| p.money));
-    ctx.add_variable_from_value("_fire", player_field(win, |p| p.fire));
-    ctx.add_variable_from_value("_crystals", player_field(win, |p| p.crystals));
-    ctx.add_variable_from_value("_hand", player_field(win, |p| p.hand));
-    ctx.add_variable_from_value("_pos", player_field(win, |p| p.pos));
-    ctx.add_variable_from_value("_character", player_field(win, |p| p.character));
-    ctx.add_variable_from_value("_band", player_field(win, |p| p.band));
-    ctx.add_variable_from_value("_tiles", player_field(win, |p| p.tiles));
-
-    // tile_named(name) -> id
-    let mut names = HashMap::new();
-    for (k, v) in &win.tile_ids {
-        names.insert(Key::String(Arc::new(k.clone())), Value::Int(*v));
+    // Window scalars: every VOCAB Window name, fetched through the view.
+    for n in VOCAB {
+        if n.scope != Scope::Window {
+            continue;
+        }
+        let v = vocab::fetch_name(n, view).unwrap_or(vocab::Val::Null);
+        emit_var(ctx, n.flat, v);
     }
-    ctx.add_variable_from_value("_tile_ids", Value::Map(Map { map: Arc::new(names) }));
+
+    // Window-side function tables (money(p), tile_named, is_*, chain_*, …).
+    for n in VOCAB {
+        if !matches!(n.scope, Scope::Func { cand: false, .. }) {
+            continue;
+        }
+        if let Some((var, t)) = vocab::fn_table(n, view) {
+            // Several functions share a table (`money` bakes `_money` once);
+            // re-baking the same var is idempotent, so just write it.
+            ctx.add_variable_from_value(var, table_value(&t));
+        }
+    }
 }
 
 /// Candidate-side bindings, restricted to what `cond` actually reads. This is
 /// the per-probe cost of the evaluator; binding the whole schema every time
 /// measured ~5 µs/eval, binding only the used names gets the simple
 /// predicates down toward the AST walk itself.
-fn bind_candidate(ctx: &mut Context<'_, '_>, cand: &CandidateCtx, cond: &Cond) {
-    let wants = |n: &str| cond.used_vars().iter().any(|v| v == n);
-    let fn_wants = |n: &str| cond.used_fns().iter().any(|v| v == n);
-
-    if wants("owner") {
-        ctx.add_variable_from_value("owner", Value::Int(cand.owner));
-    }
-    macro_rules! maybe_int {
-        ($name:literal, $field:ident) => {
-            if wants($name) {
-                ctx.add_variable_from_value($name, Value::Int(cand.$field));
-            }
+fn bind_candidate(ctx: &mut Context<'_, '_>, cond: &Cond, view: &dyn CondView) {
+    // Walk the condition's own used names (small) and look each up in VOCAB,
+    // rather than scanning the whole vocabulary per probe.
+    for flat in cond.used_vars() {
+        let Some(n) = vocab::by_flat(flat) else {
+            continue;
         };
-    }
-    maybe_int!("owner_money", owner_money);
-    maybe_int!("owner_fire", owner_fire);
-    maybe_int!("owner_crystals", owner_crystals);
-    maybe_int!("owner_hand", owner_hand);
-    maybe_int!("owner_pos", owner_pos);
-    maybe_int!("owner_out", owner_out);
-    maybe_int!("owner_stay", owner_stay);
-    maybe_int!("owner_stun", owner_stun);
-    maybe_int!("owner_exile", owner_exile);
-    maybe_int!("owner_no_hand", owner_no_hand);
-    maybe_int!("owner_character", owner_character);
-    maybe_int!("owner_band", owner_band);
-    maybe_int!("owner_tiles", owner_tiles);
-    maybe_int!("card_id", card_id);
-    maybe_int!("card_cp", card_cp);
-    if wants("card_placed") {
-        ctx.add_variable_from_value("card_placed", Value::Bool(cand.card_placed));
-    }
-
-    if fn_wants("slot") {
-        let mut slots = HashMap::new();
-        for (k, v) in &cand.slots {
-            slots.insert(Key::String(Arc::new(k.clone())), Value::Int(*v));
+        if n.scope != Scope::Candidate {
+            continue;
         }
-        ctx.add_variable_from_value("_slots", Value::Map(Map { map: Arc::new(slots) }));
+        let v = vocab::fetch_name(n, view).unwrap_or(vocab::Val::Null);
+        emit_var(ctx, n.flat, v);
     }
-    if fn_wants("tok") {
-        let mut toks = HashMap::new();
-        for (k, v) in &cand.toks {
-            toks.insert(Key::Int(*k), Value::Int(*v));
+
+    // Candidate-side function tables (`slot` / `tok` / `blocked`). The
+    // window-side tables (`_seats`, `_money`, …) are already on the root.
+    for flat in cond.used_fns() {
+        let Some(n) = vocab::by_flat(flat) else {
+            continue;
+        };
+        if !matches!(n.scope, Scope::Func { cand: true, .. }) {
+            continue;
         }
-        ctx.add_variable_from_value("_toks", Value::Map(Map { map: Arc::new(toks) }));
+        if let Some((var, t)) = vocab::fn_table(n, view) {
+            ctx.add_variable_from_value(var, table_value(&t));
+        }
     }
-    if fn_wants("blocked") {
-        let blocked: Vec<Value> = cand.blocked_bands.iter().map(|b| Value::Int(*b)).collect();
-        ctx.add_variable_from_value("_blocked", Value::List(Arc::new(blocked)));
-    }
-}
-
-fn int_list(it: impl Iterator<Item = i64>) -> Value {
-    Value::List(Arc::new(it.map(Value::Int).collect()))
-}
-
-fn player_field(win: &WindowCtx, f: impl Fn(&crate::ctx::PlayerSnap) -> i64) -> Value {
-    let mut m = HashMap::new();
-    for (i, p) in win.players.iter().enumerate() {
-        m.insert(Key::Int(i as i64), Value::Int(f(p)));
-    }
-    Value::Map(Map { map: Arc::new(m) })
 }
 
 // ---------------------------------------------------------------------------
-// lookup functions (registered per window root)
+// lookup functions (registered per window root, shaped by VOCAB's Fx)
 // ---------------------------------------------------------------------------
 
 fn install_functions(ctx: &mut Context<'static, 'static>) {
-    // Each closure reads hidden `_`-prefixed variables from the live context.
-    // Inference picks the `WithFunctionContext` impls (first arg is
+    // Each closure reads the hidden table `vocab::fn_table` baked from the
+    // view. Inference picks the `WithFunctionContext` impls (first arg is
     // `&FunctionContext`).
-    ctx.add_function("slot", |ftx: &FunctionContext, name: Arc<String>| -> Result<i64, ExecutionError> {
-        let m = map_var(ftx, "_slots")?;
-        Ok(int_at_str(&m, name.as_str()))
-    })
-    .expect("slot");
-
-    ctx.add_function("tok", |ftx: &FunctionContext, kind: i64| -> Result<i64, ExecutionError> {
-        let m = map_var(ftx, "_toks")?;
-        Ok(int_at_int(&m, kind))
-    })
-    .expect("tok");
-
-    ctx.add_function("money", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_money")
-    })
-    .expect("money");
-    ctx.add_function("fire", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_fire")
-    })
-    .expect("fire");
-    ctx.add_function("crystals", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_crystals")
-    })
-    .expect("crystals");
-    ctx.add_function("hand", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_hand")
-    })
-    .expect("hand");
-    ctx.add_function("pos", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_pos")
-    })
-    .expect("pos");
-    ctx.add_function("character", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_character")
-    })
-    .expect("character");
-    ctx.add_function("band", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_band")
-    })
-    .expect("band");
-    ctx.add_function("tiles", |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
-        player_int(ftx, p, "_tiles")
-    })
-    .expect("tiles");
-
-    ctx.add_function(
-        "character_is",
-        |ftx: &FunctionContext, p: i64, id: i64| -> Result<bool, ExecutionError> {
-            Ok(player_int(ftx, p, "_character")? == id)
-        },
-    )
-    .expect("character_is");
-    ctx.add_function(
-        "band_is",
-        |ftx: &FunctionContext, p: i64, id: i64| -> Result<bool, ExecutionError> {
-            Ok(player_int(ftx, p, "_band")? == id)
-        },
-    )
-    .expect("band_is");
-
-    ctx.add_function(
-        "blocked",
-        |ftx: &FunctionContext, band: i64| -> Result<bool, ExecutionError> {
-            let list = ftx
-                .ptx
-                .get_variable("_blocked")
-                .ok_or_else(|| missing("_blocked"))?;
-            let v = to_value(list.as_ref())?;
-            Ok(match v {
-                Value::List(items) => items.iter().any(|i| matches!(i, Value::Int(x) if *x == band)),
-                _ => false,
-            })
-        },
-    )
-    .expect("blocked");
-
-    ctx.add_function(
-        "neighbor",
-        |ftx: &FunctionContext, p: i64, delta: i64| -> Result<i64, ExecutionError> {
-            let n = int_var(ftx, "_seats")?;
-            if n <= 0 {
-                return Ok(-1);
-            }
-            Ok(((p + delta) % n + n) % n)
-        },
-    )
-    .expect("neighbor");
-
-    ctx.add_function(
-        "tile_named",
-        |ftx: &FunctionContext, name: Arc<String>| -> Result<i64, ExecutionError> {
-            let m = map_var(ftx, "_tile_ids")?;
-            // -1 when unregistered, matching the guest `ctx::tile_named`
-            // (`CardWorld::tile_named`): tile 0 is a real tile (CiRCLE), so a
-            // 0 sentinel would alias it.
-            Ok(match m.get(&Key::String(Arc::new(name.as_str().to_string()))) {
-                Some(Value::Int(i)) => *i,
-                _ => -1,
-            })
-        },
-    )
-    .expect("tile_named");
-
-    for (fname, var) in [
-        ("is_circle", "_circle_tiles"),
-        ("is_ring", "_ring_tiles"),
-        ("is_live_house", "_live_house_tiles"),
-        ("is_buyable", "_buyable_tiles"),
-    ] {
-        let var = var.to_string();
-        ctx.add_function(
-            fname,
-            move |ftx: &FunctionContext, tile: i64| -> Result<bool, ExecutionError> {
-                Ok(list_contains(ftx, &var, tile))
-            },
-        )
-        .expect(fname);
+    for n in VOCAB {
+        install_one(ctx, n);
     }
+}
 
-    ctx.add_function(
-        "chain_has",
-        |ftx: &FunctionContext, kind: i64| -> Result<bool, ExecutionError> {
-            Ok(list_contains(ftx, "_chain_kinds", kind))
-        },
-    )
-    .expect("chain_has");
-    ctx.add_function(
-        "chain_hits",
-        |ftx: &FunctionContext, seat: i64| -> Result<bool, ExecutionError> {
-            Ok(list_contains(ftx, "_hit_seats", seat))
-        },
-    )
-    .expect("chain_hits");
+fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
+    if !matches!(n.scope, Scope::Func { .. }) {
+        return;
+    }
+    let fname = n.cel;
+    match n.fx {
+        Fx::SeatIntIs { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, p: i64, id: i64| -> Result<bool, ExecutionError> {
+                    Ok(player_int(ftx, p, &var)? == id)
+                },
+            )
+            .expect(fname);
+        }
+        Fx::SeatInt { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, p: i64| -> Result<i64, ExecutionError> {
+                    player_int(ftx, p, &var)
+                },
+            )
+            .expect(fname);
+        }
+        Fx::StrInt { var, missing, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, name: Arc<String>| -> Result<i64, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(int_at_str(&m, name.as_str(), missing))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::IntInt { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, kind: i64| -> Result<i64, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(int_at_int(&m, kind))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::IntHas { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, x: i64| -> Result<bool, ExecutionError> {
+                    Ok(list_contains(ftx, &var, x))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::Neighbor => {
+            ctx.add_function(
+                fname,
+                |ftx: &FunctionContext, p: i64, delta: i64| -> Result<i64, ExecutionError> {
+                    let n = int_var(ftx, "_seats")?;
+                    if n <= 0 {
+                        return Ok(-1);
+                    }
+                    Ok(((p + delta) % n + n) % n)
+                },
+            )
+            .expect(fname);
+        }
+    }
 }
 
 fn missing(name: &str) -> ExecutionError {
     ExecutionError::UndeclaredReference(name.to_string().into())
 }
 
-fn to_value(v: &dyn Val) -> Result<Value, ExecutionError> {
+fn to_value(v: &dyn CelVal) -> Result<Value, ExecutionError> {
     Value::try_from(v).map_err(|_| ExecutionError::InternalError("value conversion".into()))
 }
 
@@ -395,10 +313,10 @@ fn int_var(ftx: &FunctionContext, name: &str) -> Result<i64, ExecutionError> {
     }
 }
 
-fn int_at_str(m: &HashMap<Key, Value>, key: &str) -> i64 {
+fn int_at_str(m: &HashMap<Key, Value>, key: &str, missing: i64) -> i64 {
     match m.get(&Key::String(Arc::new(key.to_string()))) {
         Some(Value::Int(i)) => *i,
-        _ => 0,
+        _ => missing,
     }
 }
 
@@ -449,3 +367,51 @@ impl Cond {
 // Silence an unused-import warning if CowVal is not referenced in some cfgs.
 #[allow(dead_code)]
 fn _cow_ty(_: CowVal<'_, '_>) {}
+
+// ---------------------------------------------------------------------------
+// lazy probe (measurement only) -- see docs/GUARDS.md §4.2b
+// ---------------------------------------------------------------------------
+//
+// A CEL `Context` wants owned `'static` values, so the production path bakes
+// the used names / function tables into the context once per window. The
+// alternative -- have every function closure fetch through a `&dyn CondView`
+// at call time -- needs a side channel. A thread-local is the least unsafe
+// one; this module exposes it so `examples/bench_cond.rs` can measure whether
+// that indirection beats the eager copy. Spoiler: it does not (GUARDS.md).
+
+thread_local! {
+    static LIVE_VIEW: std::cell::Cell<Option<&'static dyn CondView>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Run `f` with `view` installed as the thread-local live [`CondView`].
+///
+/// # Safety of the lifetime cast
+/// The `'static` is a lie for the duration of `f` only: the pointer is
+/// cleared (and the previous value restored) before this returns, and `f`
+/// cannot stash it. Measurement-only -- the production path bakes values.
+pub fn with_live_view<R>(view: &dyn CondView, f: impl FnOnce() -> R) -> R {
+    LIVE_VIEW.with(|c| {
+        let prev = c.get();
+        let static_view: &'static dyn CondView = unsafe { std::mem::transmute(view) };
+        c.set(Some(static_view));
+        let r = f();
+        c.set(prev);
+        r
+    })
+}
+
+/// The live view installed by [`with_live_view`], if any.
+pub fn live_view() -> Option<&'static dyn CondView> {
+    LIVE_VIEW.with(|c| c.get())
+}
+
+/// Fetch one function argument through the live view (lazy path). Used by the
+/// measurement closures in `bench_cond`; the production closures read the
+/// baked tables instead.
+pub fn lazy_money(seat: i64) -> i64 {
+    match live_view() {
+        Some(v) => v.money(seat),
+        None => 0,
+    }
+}

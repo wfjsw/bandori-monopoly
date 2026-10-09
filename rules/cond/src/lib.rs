@@ -29,7 +29,7 @@
 
 mod compile;
 mod ctx;
-mod eval;
+pub mod eval;
 mod kinds;
 pub mod view;
 pub mod vocab;
