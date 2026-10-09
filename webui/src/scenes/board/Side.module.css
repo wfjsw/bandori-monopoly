@@ -27,8 +27,13 @@
 .handHead { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
 /* No stacking context on the hand: the auto switch must stay above modals. */
 .handTools { position: relative; flex: none; display: flex; align-items: center; min-height: 30px; }
-.handTools.withAuto { padding-right: 86px; }
-.autoSlot { right: 0; top: 0; }
+.handTools.withAuto { padding-right: 206px; }
+.autoSlot { right: 0; top: 0; display: flex; align-items: center; gap: 8px; }
+.speeds { display: flex; align-items: center; gap: 2px; height: 30px; padding: 2px; background: #fff; border: 1.5px solid var(--line); border-radius: 15px; }
+.speed { width: 32px; height: 23px; border-radius: 12px; color: var(--sub); font-size: 13px; font-weight: 700; }
+.speed:hover { color: var(--pink); background: var(--light-pill); }
+.speed.speedOn { background: var(--pink); color: #fff; }
+.speed:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
 .thinkingSlot { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 41; pointer-events: none; white-space: nowrap; }
 .handHead > span:first-child { height: 28px; font-size: 15px; }
 /* Shares the row with the draw pile, so the longer hints (over the hand limit)

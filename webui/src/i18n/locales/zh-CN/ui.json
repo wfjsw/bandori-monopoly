@@ -27,6 +27,8 @@
   "board.afk": "托管",
   "board.advanced": "进阶",
   "board.autoOff": "手动",
+  "board.animationSpeed": "动画速度",
+  "board.animationSpeedAt": "动画速度 {{n}}×",
   "board.autoplayBanner": "{{mode}}中 — 电脑正在替你操作",
   "board.autoplayHint": "让电脑代打这个座位（点击切换模式 / 收回操作）",
   "board.autoplayStarting": "{{n}} 秒后开始，可再点一次切换",

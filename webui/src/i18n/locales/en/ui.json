@@ -27,6 +27,8 @@
   "board.afk": "AFK",
   "board.advanced": "Advanced",
   "board.autoOff": "Manual",
+  "board.animationSpeed": "Animation speed",
+  "board.animationSpeedAt": "Animation speed {{n}}×",
   "board.autoplayBanner": "{{mode}} is on — the computer is playing for you",
   "board.autoplayHint": "Let the computer play this seat (click to change mode / take over)",
   "board.autoplayStarting": "starting in {{n}}s — click again to switch",

@@ -270,6 +270,13 @@ export abstract class GameSession {
   readOnly = false;
   /** Animation speed the board's `Animator` follows (1 / 2 / 4). */
   animSpeed = 1;
+  /** Only local presentation changes; the match and its answer clocks do not. */
+  setAnimSpeed(v: number): void {
+    const speed = v >= 4 ? 4 : v >= 2 ? 2 : 1;
+    if (this.animSpeed === speed) return;
+    this.animSpeed = speed;
+    this.emitOther();
+  }
   /**
    * Auto-play mode for this seat: `off` (you), `bot` (托管), `chaos` (混沌),
    * `advanced` (进阶 -- the worker-pool search, `docs/BOT.md` B6).
