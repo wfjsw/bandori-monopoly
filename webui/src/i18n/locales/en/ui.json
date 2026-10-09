@@ -235,7 +235,7 @@
   "deed.note.drawEvent": "Draw 1 card, then draw 1 event card.",
   "deed.note.leftHouses": "{{n}} houses were left on this tile (its owner went out): buying it pays for the houses too, {{total}} in all.",
   "deed.owner": "Owner",
-  "deed.ownerLine": "{{who}} ({{chara}}){{mort}}",
+  "deed.ownerLine": "{{who}}{{mort}}",
   "deed.perHouse": "{{n}} / house",
   "deed.poor": " (not enough money)",
   "deed.fundByMortgage": " (can mortgage to fund)",

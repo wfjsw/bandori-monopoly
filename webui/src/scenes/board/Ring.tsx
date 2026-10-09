@@ -194,11 +194,11 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
             const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
             const top = cellY(row) + 16;
             return (
-              <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col) + dx, top, zIndex: Math.round(top) }} title={x.player}>
+              <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
                 <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                 {ch
                   ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />
-                  : <div className={s.dot} style={{ background: m.colorOf(i) }}>{x.player.slice(0, 1)}</div>}
+                  : <div className={s.dot} style={{ background: m.colorOf(i) }}>{namesOf(S).playerId(i).slice(0, 1)}</div>}
               </div>
             );
           })}

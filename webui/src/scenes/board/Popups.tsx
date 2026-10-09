@@ -74,7 +74,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
   if (owner < 0 && houses > 0) notes.unshift(tr("deed.note.leftHouses", { n: houses, total: n0(t.price + houses * t.house) }));
   const names = namesOf(S);
   const marks = (S.marks ?? []).filter((x) => x.tile === i).map((x) => {
-    const who = x.owner >= 0 ? tr("deed.markOwner", { who: S.players[x.owner].player }) : "";
+    const who = x.owner >= 0 ? tr("deed.markOwner", { who: names.playerId(x.owner) }) : "";
     const note = x.note?.k ? fmtMsg(x.note, names) : "";
     return x.kind === "card"
       ? `${who}${tr("common.quotes", { x: cardTitle(x.card) })}${note ? tr("common.noteColon", { x: note }) : ""}`
@@ -95,7 +95,7 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
           <div><small>{tr("deed.price")}</small><b>{t.price ? n0(t.price) : "—"}</b></div>
           <div><small>{tr("deed.house")}</small><b>{t.kind === "ring" ? tr("deed.noBuild") : t.house ? tr("deed.perHouse", { n: n0(t.house) }) : "—"}</b></div>
           <div className={s.wide}><small>{tr("prompt.mortgage")}</small><b>{mortgaged ? tr("deed.mortgagedLine", { n: n0(redeemCost(i)) }) : t.price && t.kind !== "ring" ? tr("deed.mortgageLine", { mortgage: n0(t.price / 2), redeem: n0(redeemCost(i)) }) : tr("deed.noMortgage")}</b></div>
-          <div className={s.wide}><small>{tr("deed.owner")}</small><b>{owner >= 0 ? tr("deed.ownerLine", { who: S.players[owner].player, chara: m.charOf(owner)?.display ?? "", mort: mortgaged ? tr("common.mortgagedTag") : "" }) : tr("deed.unowned")}</b></div>
+          <div className={s.wide}><small>{tr("deed.owner")}</small><b>{owner >= 0 ? tr("deed.ownerLine", { who: names.playerId(owner), mort: mortgaged ? tr("common.mortgagedTag") : "" }) : tr("deed.unowned")}</b></div>
         </div>
       )}
       {t.rent.length >= 4 && (
@@ -185,7 +185,7 @@ export function showPlayerInfo(m: Model, i: number): void {
     x.skillNote?.k ? tr("player.skillNote", { note: fmtMsg(x.skillNote, namesOf(S)) }) : "",
     ...(x.tokens ?? []).map((tok) => `${tok.name} ×${tok.value}`),
   ].filter(Boolean);
-  openModal(`${x.player}${i === m.playerId ? tr("common.youSuffix") : ""}`, (
+  openModal(`${namesOf(S).playerId(i)}${i === m.playerId ? tr("common.youSuffix") : ""}`, (
     <div className={s.info}>
       <div className={s.infoTop}>
         <Avatar c={c} size={92} />

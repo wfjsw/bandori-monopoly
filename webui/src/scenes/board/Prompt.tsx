@@ -74,7 +74,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
           {p.kind === "mortgage" && <MortgageOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
-          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? view.state.players[p.bidder]?.player ?? "" : ""} answer={answer} auto={auto} />}
+          {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? namesOf(view.state).playerId(p.bidder) : ""} answer={answer} auto={auto} />}
           {!returnsGroup && p.kind !== "pick" && isCardChoice(p) && <CardChoice p={p} answer={answer} auto={auto} names={namesOf(view.state)} />}
           {!["tile", "mortgage", "pick", "auction"].includes(p.kind) && !isCardChoice(p) && p.options.map((o, i) => (
             <Btn key={i} kind={i === 0 ? "pink" : "white"} className={s.opt} disabled={auto} onClick={() => void answer({ value: i })}>{fmtMsg(o, namesOf(view.state))}</Btn>
