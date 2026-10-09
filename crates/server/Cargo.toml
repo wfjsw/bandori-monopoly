@@ -34,3 +34,9 @@ bytes = "1"
 # `bot_core::Ismcts` directly with `SearchConfig::profile` on.
 bot-core = { path = "../bot-core" }
 
+[features]
+# Measurement counters (`game-rules`/`game-core` `bot-cost`): world clones,
+# wasm store/instantiate/guest ns, counteract ring, cant_play memo. Nothing
+# behavioural. `cargo build -p server --example bot_cpu --features bot-cost`.
+bot-cost = ["game-core/bot-cost", "game-rules/bot-cost"]
+

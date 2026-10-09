@@ -60,9 +60,90 @@ pub mod bot_cost {
     pub static WORLD_SHARES: AtomicU64 = AtomicU64::new(0);
 }
 
+/// Always-on wall-time buckets for the bot's rollout-cost breakdown
+/// (`target/scratch/profile/REPORT-2.md`). Two cheap `AtomicU64` bumps per
+/// timed site; nothing behavioural. `reset` / `snapshot` from the harness.
+pub mod rtimer {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Instant;
+
+    pub static STATE_NS: AtomicU64 = AtomicU64::new(0);
+    pub static VIEW_EXTRA_NS: AtomicU64 = AtomicU64::new(0);
+    pub static LOG_NS: AtomicU64 = AtomicU64::new(0);
+    pub static WORLD_COPY_NS: AtomicU64 = AtomicU64::new(0);
+    pub static TICK_NS: AtomicU64 = AtomicU64::new(0);
+    pub static ACT_NS: AtomicU64 = AtomicU64::new(0);
+
+    pub fn add(stat: &AtomicU64, t0: Instant) {
+        stat.fetch_add(t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    /// Drop-guard so early returns still record.
+    pub struct Guard(pub &'static AtomicU64, pub Instant);
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            add(self.0, self.1);
+        }
+    }
+    pub fn guard(stat: &'static AtomicU64) -> Guard {
+        Guard(stat, Instant::now())
+    }
+
+    pub fn reset() {
+        for s in [&STATE_NS, &VIEW_EXTRA_NS, &LOG_NS, &WORLD_COPY_NS, &TICK_NS, &ACT_NS] {
+            s.store(0, Ordering::Relaxed);
+        }
+    }
+
+    pub fn snapshot() -> [(&'static str, u64); 6] {
+        let g = |s: &AtomicU64| s.load(Ordering::Relaxed);
+        [
+            ("state()", g(&STATE_NS)),
+            ("view_extra", g(&VIEW_EXTRA_NS)),
+            ("log/event", g(&LOG_NS)),
+            ("world_copy", g(&WORLD_COPY_NS)),
+            ("tick", g(&TICK_NS)),
+            ("act", g(&ACT_NS)),
+        ]
+    }
+}
+
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+
+/// The engine's own AI answer for one seat's live prompt -- the typed form of
+/// `view_extra`'s `aiAnswer` (`Ask::ai` / `ai_picked` / `worth`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct RawAiAnswer {
+    pub answer: i32,
+    pub picked: Vec<String>,
+    pub worth: i32,
+}
+
+/// Typed twin of [`Match::view_extra`] (same fields, no JSON).
+#[derive(Debug, Clone, Default)]
+pub struct ViewExtra {
+    pub ai_answer: Option<RawAiAnswer>,
+    pub playable: Vec<bool>,
+    pub est_cost: Vec<i32>,
+}
+
+/// Cheap decision-surface probe: the fields the rollout loop needs, without
+/// cloning [`MatchState`] or computing the buy/build previews.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SurfaceProbe {
+    pub round: i32,
+    pub turn: i32,
+    pub step: i32,
+    pub phase_is_play: bool,
+    pub busy: bool,
+    pub prompt_id: i32,
+    /// `prompt.id > 0 && prompt.waiting(seat)`.
+    pub prompt_waiting: bool,
+    /// `step` is OPS/END and `turn == seat` (a turn surface).
+    pub turn_surface: bool,
+}
 
 use crate::data::GameData;
 use crate::msg::Msg;
@@ -422,6 +503,13 @@ impl Match {
 
     /// The public state, with the live prompt, vote and clocks filled in.
     pub fn state(&self) -> MatchState {
+        let t0 = std::time::Instant::now();
+        let st = self.state_inner();
+        rtimer::add(&rtimer::STATE_NS, t0);
+        st
+    }
+
+    fn state_inner(&self) -> MatchState {
         let mut st = self.world.public_state();
         st.seq = self.seq;
         st.vote = self.vote.clone();
@@ -644,6 +732,55 @@ impl Match {
             .unwrap_or_default()
     }
 
+    /// Hand length and first card id, without cloning the hand -- the rollout
+    /// heuristic's over-hand discard branch only needs these.
+    pub fn hand_len_first(&self, member: i32) -> (usize, Option<String>) {
+        match self.player_index(member) {
+            Some(i) => {
+                let h = &self.world.hidden[i].hand;
+                (h.len(), h.first().cloned())
+            }
+            None => (0, None),
+        }
+    }
+
+    /// The decision surface at `member`'s seat, without cloning [`MatchState`]
+    /// and without the buy/build previews. The rollout loop calls this every
+    /// tick; [`Match::state`] runs only when a surface is actually found.
+    pub fn surface_probe(&self, member: i32) -> SurfaceProbe {
+        let st = &self.world.st;
+        let seat = self.player_index(member).map(|i| i as i32);
+        let prompt = self.pending.as_ref().map(|p| &p.live);
+        let (prompt_id, prompt_waiting) = match prompt {
+            Some(l) => {
+                let id = l.ask.view.id;
+                let waiting = id > 0
+                    && seat.is_some_and(|s| {
+                        l.ask.view.player_index(s).is_some_and(|k| {
+                            l.answers.get(k).copied().unwrap_or(-1) < 0
+                        })
+                    });
+                (id, waiting)
+            }
+            None => (0, false),
+        };
+        let my_turn = seat.is_some_and(|s| st.turn == s);
+        let turn_surface = my_turn
+            && self.pending.is_none()
+            && (st.step == stage::OPS || st.step == stage::END)
+            && st.phase == "play";
+        SurfaceProbe {
+            round: st.round,
+            turn: st.turn,
+            step: st.step,
+            phase_is_play: st.phase == "play",
+            busy: self.pending.is_some(),
+            prompt_id,
+            prompt_waiting,
+            turn_surface,
+        }
+    }
+
     /// The member's remaining draw pile, **sorted by card id**.
     ///
     /// The pile's order is the shuffled one the engine draws from, so it never
@@ -692,8 +829,36 @@ impl Match {
     /// Both view builders (`web-glue` and `rules-worker`) merge this into the
     /// match frame.
     pub fn view_extra(&self, member: i32) -> serde_json::Value {
+        let t0 = std::time::Instant::now();
+        let v = self.view_extra_inner(member);
+        rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
+        v
+    }
+
+    /// Typed twin of [`Match::view_extra`] for in-process callers (the bot's
+    /// rollout / action abstraction). Same fields, no JSON round trip.
+    pub fn view_extra_typed(&self, member: i32) -> ViewExtra {
+        let t0 = std::time::Instant::now();
+        let v = self.view_extra_parts(member);
+        rtimer::add(&rtimer::VIEW_EXTRA_NS, t0);
+        v
+    }
+
+    fn view_extra_inner(&self, member: i32) -> serde_json::Value {
+        let p = self.view_extra_parts(member);
+        let ai_answer = p.ai_answer.map(|a| {
+            serde_json::json!({
+                "answer": a.answer,
+                "picked": a.picked,
+                "worth": a.worth,
+            })
+        });
+        serde_json::json!({ "aiAnswer": ai_answer, "playable": p.playable, "estCost": p.est_cost })
+    }
+
+    fn view_extra_parts(&self, member: i32) -> ViewExtra {
         let Some(i) = self.player_index(member) else {
-            return serde_json::json!({ "aiAnswer": null, "playable": [], "estCost": [] });
+            return ViewExtra::default();
         };
         let ai_answer = self.pending.as_ref().and_then(|p| {
             let l = &p.live;
@@ -701,11 +866,11 @@ impl Match {
             if l.answers.get(k).copied().unwrap_or(-1) >= 0 {
                 return None;
             }
-            Some(serde_json::json!({
-                "answer": l.ask.ai.get(k).copied().unwrap_or(l.ask.view.fallback),
-                "picked": l.ask.ai_picked.get(k).cloned().unwrap_or_default(),
-                "worth": l.ask.worth.get(k).copied().unwrap_or(0),
-            }))
+            Some(RawAiAnswer {
+                answer: l.ask.ai.get(k).copied().unwrap_or(l.ask.view.fallback),
+                picked: l.ask.ai_picked.get(k).cloned().unwrap_or_default(),
+                worth: l.ask.worth.get(k).copied().unwrap_or(0),
+            })
         });
         let cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
         let mut playable = Vec::new();
@@ -720,7 +885,11 @@ impl Match {
             playable.push(ok);
             est_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
-        serde_json::json!({ "aiAnswer": ai_answer, "playable": playable, "estCost": est_cost })
+        ViewExtra {
+            ai_answer,
+            playable,
+            est_cost,
+        }
     }
 
     // ------------------------------------------------------- simulation fork
@@ -939,6 +1108,7 @@ impl Match {
 
     /// Advance the match by `dt` seconds (`Tick`).
     pub fn tick(&mut self, dt: f32) {
+        let _tg = rtimer::guard(&rtimer::TICK_NS);
         let phase = self.world.st.phase.clone();
         if phase.is_empty() || phase == "ended" {
             return;
@@ -1306,6 +1476,7 @@ impl Match {
 
     /// A player command (`Act`). `Err` carries the message shown to the player.
     pub fn act(&mut self, member: i32, m: &NetMessage) -> Result<(), Msg> {
+        let _tg = rtimer::guard(&rtimer::ACT_NS);
         let i = self
             .player_index(member)
             .ok_or_else(|| Msg::new("err.not_in_match"))?;

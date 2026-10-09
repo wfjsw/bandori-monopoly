@@ -1263,6 +1263,62 @@ not the totals. Rollout (85–87 % of search CPU) is exactly the engine path
 A/B/C attack; `bot_cost`'s identical-game counters above are the clean
 before/after.
 
+### Rollout view-work (2026-10-09)
+
+Post A–C profile (`target/scratch/profile/REPORT-2.md`, `bot_cpu` 1 match
+seed 1, `--search-threads 2 --budget-ms 250`, real `dist/cards`). The
+sampling profiler was unusable (box saturated with other agents' tests;
+`VSDiagnostics stop` hangs on this machine), so the numbers below come from
+process-local instrumentation: `SearchConfig::profile` anatomy,
+`game_core::engine::rtimer` (always-on ns buckets), `bot-cost` counters, and
+a sampling allocator (94 M allocs / 15.8 GiB per match -- still
+allocation-bound). Rollout is 84–85 % of search; inside the engine,
+`Match::state` was the single hottest call.
+
+**Exactness first:** `ckpt_equiv -- 3 4 60` is **byte-identical**
+(sha256 `5a809e12…`, 730 lines / 36 046 B) and `sim -- 50 4 200` counts are
+identical (rounds 196.6; end reasons `{last: 10, settle: 40}`; prompts /
+event kinds / details all match the A–C baseline). No ABI bump; no
+replay-format change.
+
+**1 -- `Match::surface_probe` (cheap rollout tick).** The rollout loop used
+to call `fork.state()` -- a deep `MatchState` clone plus the buy/build
+preview quotes -- on **every 0.25 s tick**, including ticks with no decision
+surface. `surface_probe` reads `round` / `prompt_id` / `waiting` / `step` /
+`turn` straight off the live world (no clone, no previews); `Match::state`
+runs only when a surface is actually found.
+
+**2 -- typed `view_extra` + `heuristic_message_direct`.** `Match::view_extra`
+returned a `serde_json::Value` that `legal_actions` / `action_priors` /
+`SeatView::from_match` immediately parsed back, and `heuristic_message_with`
+built a full `SeatView` (state + hand + sorted `draw` + JSON extra) for every
+rollout prompt and turn. Now: `view_extra_typed` returns
+`ViewExtra { ai_answer, playable, est_cost }` (JSON form is a wrapper for
+the wire), and the rollout heuristic reads only `st` + `hand_len_first` +
+`aiAnswer` when a prompt is open.
+
+Measured with `bot_cpu` (same seed 1, same budget, `RUST_MIN_STACK=16MiB`):
+
+| | before | after |
+|---|---|---|
+| `Match::state()` | 7.70 s | **0.99 s** (−87 %) |
+| `view_extra` | 0.92 s | 0.51 s (−45 %) |
+| bot CPU / 200 game-s | 44.1 s | 44.2 s (budget-bound) |
+| searched decides | 57 @ 701 ms CPU, 3.16 iters | 58 @ 703 ms CPU, **3.67 iters** |
+| wall / decide | 515 ms | **411 ms** |
+| iterations / CPU-second | 4.51 | **5.23 (+16 %)** |
+| anatomy rollout share | 85.0 % | 84.3 % |
+
+Match CPU is budget-bound (the search fills its 250 ms), so the win shows up
+as **+16 % iterations per decision** (per iteration 222 → 192 ms CPU,
+−13 %), not as less CPU. `state()` alone freed 6.7 s of a 44 s match.
+
+**Next levers, ranked (see REPORT-2.md):** wasm store reuse /
+`rules-native` (99 k instantiations, 7.6 s store+instantiate per 200 game-s;
+blocked on the native-vs-sandbox drift gate), quiet rollout
+(`World::log` is only 0.20 s), `MatchState` COW, undo journal. No search
+parameter was changed, so no `ismcts_vs_bots` strength gate applies.
+
 ### Counteract offers at `passTile` / `passPlayer` (2026-10-08)
 
 `is_hook_only` listed `PassTile` and `PassPlayer`, so `hand_counteractions`
