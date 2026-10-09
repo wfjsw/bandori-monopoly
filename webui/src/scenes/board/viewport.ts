@@ -2,20 +2,28 @@
 // transformed -- prompts, panels, the banners and the card flash sit outside
 // the zoom layer so they keep their size and screen position at any zoom.
 //
-// Coordinates are the board window's own pixels: the map fills its slot, so
-// the board rect is whatever the match screen gives it (the 12 x 10 cell grid
-// stretches to that width and height). The zoom layer inside the wrap carries
-// `translate(tx px, ty px) scale(z)` with `transform-origin: 0 0`: a board
-// point (x, y) lands at (x * z + tx, y * z + ty) in board pixels. `z = 1` is
-// "fit": the whole board fills the window at zero pan; dragging may still move it
-// up to `OVERPAN` of a window past any edge.
+// Two rectangles live in the map slot: the *window* (the wrap, which clips) is
+// the whole slot -- 100% of its width and height -- and the *board* (the tile
+// ring plus its interior) keeps the slot held to MIN_RATIO..MAX_RATIO
+// (`boardRect`) and sits centred in the window at fit. The map never stretches
+// to a long thin slot; the pannable view of it does.
+//
+// Coordinates are the window's own pixels: the zoom layer carries
+// `translate(tx px, ty px) scale(z)` with `transform-origin: 0 0`, so a board
+// point (x, y) -- 0..boardW / 0..boardH -- lands at (x * z + tx, y * z + ty) in
+// window pixels. `z = FIT_ZOOM` is "fit": the whole board at its boardRect
+// size, centred, no pan. The zoom floor (`MIN_ZOOM`) sits just under fit so a
+// wheel-out can show a little more of the window. Dragging may still move the
+// board up to `OVERPAN` of the *window* past any edge.
 
 import {
-  useCallback, useEffect, useRef, useState,
+  useCallback, useRef, useState,
   type CSSProperties, type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent, type RefObject,
 } from "react";
+import { useEventListener } from "../../hooks/dom.ts";
+import { useResizeObserver } from "../../hooks/measure.ts";
 
 /** Smallest board window (stage px) the map is ever laid out at. */
 export const MIN_BOARD = 240;
@@ -36,10 +44,31 @@ export function boardRect(slotW: number, slotH: number): { width: number; height
   return { width: w, height: h };
 }
 
+/** The map's two rectangles. `win` is the clipping window (the whole slot);
+ *  `board` is the tile ring + interior at its clamped aspect, centred in the
+ *  window at fit. */
+export interface MapBox {
+  /** Window: the visible slot (clips). */
+  winW: number;
+  winH: number;
+  /** Board: the ring + interior (keeps MIN_RATIO..MAX_RATIO). */
+  boardW: number;
+  boardH: number;
+}
+
+/** Both rectangles for a map slot. The window is the slot (floored at
+ *  MIN_BOARD); the board is `boardRect` of it. */
+export function mapBox(slotW: number, slotH: number): MapBox {
+  const winW = Math.max(MIN_BOARD, slotW);
+  const winH = Math.max(MIN_BOARD, slotH);
+  const b = boardRect(winW, winH);
+  return { winW, winH, boardW: b.width, boardH: b.height };
+}
+
 export interface Viewport {
   /** User zoom, 1 = fit. */
   z: number;
-  /** Pan in board pixels. */
+  /** Board top-left in window pixels. */
   tx: number;
   ty: number;
 }
@@ -49,7 +78,11 @@ export interface Point {
   y: number;
 }
 
-/** Fit view (the pre-zoom default: the whole ring, no pan). */
+/** Fit view (the pre-zoom default): the whole board at its boardRect size,
+ *  centred in the window. The `1:1` / reset control lands here. */
+export const FIT_ZOOM = 1;
+/** The zoom floor. Slightly under fit (master's tweak) so a wheel-out can
+ *  show a little more of the window around the board. */
 export const MIN_ZOOM = 0.95;
 export const MAX_ZOOM = 3;
 /** Screen-pixel movement before a press turns into a pan. Clicks stay under
@@ -60,7 +93,16 @@ const WHEEL_K = 0.0022;
 /** Each button / key step multiplies the zoom by this. */
 const STEP = 1.25;
 
-export const fitViewport = (): Viewport => ({ z: MIN_ZOOM, tx: 0, ty: 0 });
+/** The board centred in the window at zoom `z`, whole and un-panned. */
+export function centeredViewport(b: MapBox, z: number = FIT_ZOOM): Viewport {
+  const z2 = clampZoom(z);
+  return { z: z2, tx: (b.winW - b.boardW * z2) / 2, ty: (b.winH - b.boardH * z2) / 2 };
+}
+
+/** Fit: the board at its boardRect size, centred in the window. */
+export function fitViewport(b: MapBox): Viewport {
+  return centeredViewport(b, FIT_ZOOM);
+}
 
 export function clampZoom(z: number): number {
   if (!Number.isFinite(z)) return MIN_ZOOM;
@@ -68,60 +110,70 @@ export function clampZoom(z: number): number {
 }
 
 /** How far past its edge the board may be dragged, as a fraction of the
- *  window on that axis: half a window of overscroll on every side. */
+ *  *window* on that axis: half a window of overscroll on every side. */
 export const OVERPAN = 0.5;
 
-/** Keep an `w x h` board scaled by `z` within reach of the `w x h` window: its
- *  edges may be dragged up to `OVERPAN` of the window past the window's edges
- *  (so a corner tile can be brought to the middle), never further. The rect is
- *  the actual board size (any aspect): the math is per-axis. */
-export function clampPan(v: Viewport, w: number, h: number): Viewport {
+/** Keep the board (scaled by `z`) within reach of the window: the window may
+ *  show up to `OVERPAN` of its own size of empty / off-board past either edge
+ *  (so a corner tile can be brought to the middle), never more. The board is
+ *  `boardW x boardH`; the window is `winW x winH` -- on a wide slot the board
+ *  is narrower than the window and may sit anywhere that still covers the
+ *  middle `1 - OVERPAN` of it. */
+export function clampPan(v: Viewport, b: MapBox): Viewport {
   const z = clampZoom(v.z);
-  const loX = w * (1 - z) - w * OVERPAN;
-  const loY = h * (1 - z) - h * OVERPAN;
+  // Board covers [tx, tx + boardW*z]; the window keeps at most OVERPAN of
+  // itself empty on each side, so:
+  //   tx <= winW * OVERPAN
+  //   tx + boardW * z >= winW * (1 - OVERPAN)
+  const loX = b.winW * (1 - OVERPAN) - b.boardW * z;
+  const hiX = b.winW * OVERPAN;
+  const loY = b.winH * (1 - OVERPAN) - b.boardH * z;
+  const hiY = b.winH * OVERPAN;
   return {
     z,
-    tx: Math.min(w * OVERPAN, Math.max(loX, v.tx)),
-    ty: Math.min(h * OVERPAN, Math.max(loY, v.ty)),
+    tx: Math.min(hiX, Math.max(loX, v.tx)),
+    ty: Math.min(hiY, Math.max(loY, v.ty)),
   };
 }
 
 /** Scale to `z`, keeping the window point (`px`, `py`) fixed on the board
  *  (wheel / pinch zooming around the cursor). */
-export function zoomAround(v: Viewport, px: number, py: number, z: number, w: number, h: number): Viewport {
+export function zoomAround(v: Viewport, px: number, py: number, z: number, b: MapBox): Viewport {
   const z2 = clampZoom(z);
-  // Zooming all the way out lands on the fit view, overscroll and all.
-  if (z2 <= MIN_ZOOM) return fitViewport();
+  // Zooming out to fit (or below) lands on the centred view at that zoom --
+  // the whole board visible, overscroll and all. The cursor anchor only
+  // applies while zoomed in past fit.
+  if (z2 <= FIT_ZOOM) return centeredViewport(b, z2);
   const k = z2 / clampZoom(v.z);
-  return clampPan({ z: z2, tx: px - (px - v.tx) * k, ty: py - (py - v.ty) * k }, w, h);
+  return clampPan({ z: z2, tx: px - (px - v.tx) * k, ty: py - (py - v.ty) * k }, b);
 }
 
 /** Mouse wheel / trackpad pinch step. `dy` is the normalized wheel delta
  *  (positive = wheel down = zoom out). */
-export function wheelZoom(v: Viewport, px: number, py: number, dy: number, w: number, h: number): Viewport {
-  return zoomAround(v, px, py, clampZoom(v.z) * Math.exp(-dy * WHEEL_K), w, h);
+export function wheelZoom(v: Viewport, px: number, py: number, dy: number, b: MapBox): Viewport {
+  return zoomAround(v, px, py, clampZoom(v.z) * Math.exp(-dy * WHEEL_K), b);
 }
 
 /** Button / keyboard step (dir > 0 zooms in), around (`px`, `py`). */
-export function stepZoom(v: Viewport, dir: 1 | -1, px: number, py: number, w: number, h: number): Viewport {
-  return zoomAround(v, px, py, clampZoom(v.z) * (dir > 0 ? STEP : 1 / STEP), w, h);
+export function stepZoom(v: Viewport, dir: 1 | -1, px: number, py: number, b: MapBox): Viewport {
+  return zoomAround(v, px, py, clampZoom(v.z) * (dir > 0 ? STEP : 1 / STEP), b);
 }
 
 /** Two-finger pinch, recomputed from the gesture start so it cannot drift:
  *  scale `k` (current span / starting span) around the moving midpoint. */
-export function pinchAround(v0: Viewport, mid0: Point, mid: Point, k: number, w: number, h: number): Viewport {
+export function pinchAround(v0: Viewport, mid0: Point, mid: Point, k: number, b: MapBox): Viewport {
   const z = clampZoom(clampZoom(v0.z) * k);
   const bx = (mid0.x - v0.tx) / clampZoom(v0.z);
   const by = (mid0.y - v0.ty) / clampZoom(v0.z);
-  return clampPan({ z, tx: mid.x - bx * z, ty: mid.y - by * z }, w, h);
+  return clampPan({ z, tx: mid.x - bx * z, ty: mid.y - by * z }, b);
 }
 
-/** Drag by (`dx`, `dy`) in the wrap's design pixels. */
-export function panBy(v: Viewport, dx: number, dy: number, w: number, h: number): Viewport {
-  return clampPan({ z: v.z, tx: v.tx + dx, ty: v.ty + dy }, w, h);
+/** Drag by (`dx`, `dy`) in the window's design pixels. */
+export function panBy(v: Viewport, dx: number, dy: number, b: MapBox): Viewport {
+  return clampPan({ z: v.z, tx: v.tx + dx, ty: v.ty + dy }, b);
 }
 
-/** Client px -> board px. The wrap is laid out in board pixels (its own
+/** Client px -> window px. The wrap is laid out in window pixels (its own
  *  offset size) and the stage scales that to the screen, so the net factor is
  *  `client width / offset width` on both axes. */
 function toLocal(el: HTMLElement, clientX: number, clientY: number): Point {
@@ -143,10 +195,12 @@ interface Gesture {
 
 export interface ViewportApi {
   wrapRef: RefObject<HTMLDivElement | null>;
-  /** `translate + scale` for the zoom layer (board pixels). */
+  /** `translate + scale` for the zoom layer (window pixels). */
   style: CSSProperties;
-  /** The board window's size in stage pixels (it fills the map slot). */
+  /** The clipping window's size (the whole map slot). */
   box: { width: number; height: number };
+  /** The board rect (ring + interior), centred in the window at fit. */
+  board: { width: number; height: number };
   zoom: number;
   zoomIn: () => void;
   zoomOut: () => void;
@@ -164,7 +218,10 @@ export interface ViewportApi {
  *  math; put `data-vp-bg` on the empty board containers (wrap / ring /
  *  interior) and `data-vp-ctl` on the zoom buttons. */
 export function useBoardViewport(): ViewportApi {
-  const [v, setV] = useState<Viewport>(fitViewport);
+  const [map, setMap] = useState<MapBox>(() => mapBox(MIN_BOARD, MIN_BOARD));
+  const mapRef = useRef(map);
+  mapRef.current = map;
+  const [v, setV] = useState<Viewport>(() => fitViewport(map));
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const vRef = useRef(v);
   vRef.current = v;
@@ -172,56 +229,52 @@ export function useBoardViewport(): ViewportApi {
     pointers: new Map(), last: { x: 0, y: 0 }, moved: 0,
     dragging: false, dragged: false, pinch: null,
   });
-  // The board window: the map slot's rectangle held to MIN_RATIO..MAX_RATIO
-  // (`boardRect`; the tiles stretch to fill it). Measured in JS --
-  // `container-type: size` was unreliable here -- and board pixels are those
-  // stage pixels 1:1.
-  const [box, setBox] = useState({ width: MIN_BOARD, height: MIN_BOARD });
-  const boxRef = useRef(box);
-  boxRef.current = box;
-  useEffect(() => {
-    const el = wrapRef.current;
-    const slot = el?.parentElement;
-    if (!el || !slot) return;
-    const measure = () => setBox(boardRect(slot.clientWidth, slot.clientHeight));
-    measure();
-    const ro = new ResizeObserver(measure);
-    ro.observe(slot);
-    return () => ro.disconnect();
-  }, []);
-  // A new rect keeps the user's zoom and re-clamps the pan to it.
-  useEffect(() => {
-    setV((cur) => clampPan(cur, box.width, box.height));
-  }, [box.width, box.height]);
+  // The window is the map slot (`mapBox`); the board inside it keeps
+  // MIN_RATIO..MAX_RATIO and is centred at fit. Measured in JS --
+  // `container-type: size` was unreliable here -- and window pixels are those
+  // stage pixels 1:1. A new box keeps the user's zoom and their pan relative to
+  // fit (so the board stays where they put it as the slot re-centres), then
+  // re-clamps: the ResizeObserver callback is the one place the two change
+  // together, so there is no effect mirroring `map` into `v`.
+  useResizeObserver(() => wrapRef.current?.parentElement ?? null, () => {
+    const slot = wrapRef.current?.parentElement;
+    if (!slot) return;
+    const next = mapBox(slot.clientWidth, slot.clientHeight);
+    const prev = mapRef.current;
+    const oldFit = fitViewport(prev);
+    const newFit = fitViewport(next);
+    setMap(next);
+    setV((cur) => clampPan({
+      z: cur.z,
+      tx: cur.tx + (newFit.tx - oldFit.tx),
+      ty: cur.ty + (newFit.ty - oldFit.ty),
+    }, next));
+  });
 
   const zoomAt = useCallback((dir: 1 | -1) => {
-    const { width: w, height: h } = boxRef.current;
-    setV((cur) => stepZoom(cur, dir, w / 2, h / 2, w, h));
+    const b = mapRef.current;
+    setV((cur) => stepZoom(cur, dir, b.winW / 2, b.winH / 2, b));
   }, []);
   const zoomIn = useCallback(() => zoomAt(1), [zoomAt]);
   const zoomOut = useCallback(() => zoomAt(-1), [zoomAt]);
-  const reset = useCallback(() => setV(fitViewport()), []);
+  const reset = useCallback(() => setV(fitViewport(mapRef.current)), []);
 
   // Wheel needs a non-passive listener: React's synthetic wheel is passive, so
   // `preventDefault` there would not stop the browser's own ctrl+wheel zoom.
-  useEffect(() => {
+  useEventListener(wrapRef, "wheel", (e) => {
     const el = wrapRef.current;
     if (!el) return;
-    const onWheel = (e: WheelEvent) => {
-      // A scrollable pocket (the field-card list) keeps its own wheel, but only
-      // when it can actually scroll -- over a short list the wheel zooms.
-      const t = e.target as Element | null;
-      const scroller = t && typeof t.closest === "function" ? t.closest("[data-vp-scroll]") : null;
-      if (scroller instanceof HTMLElement && scroller.scrollHeight > scroller.clientHeight + 1) return;
-      e.preventDefault();
-      const p = toLocal(el, e.clientX, e.clientY);
-      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
-      const { width: w, height: h } = boxRef.current;
-      setV((cur) => wheelZoom(cur, p.x, p.y, dy, w, h));
-    };
-    el.addEventListener("wheel", onWheel, { passive: false });
-    return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+    const ev = e as WheelEvent;
+    // A scrollable pocket (the field-card list) keeps its own wheel, but only
+    // when it can actually scroll -- over a short list the wheel zooms.
+    const t = ev.target as Element | null;
+    const scroller = t && typeof t.closest === "function" ? t.closest("[data-vp-scroll]") : null;
+    if (scroller instanceof HTMLElement && scroller.scrollHeight > scroller.clientHeight + 1) return;
+    ev.preventDefault();
+    const p = toLocal(el, ev.clientX, ev.clientY);
+    const dy = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaMode === 2 ? ev.deltaY * 400 : ev.deltaY;
+    setV((cur) => wheelZoom(cur, p.x, p.y, dy, mapRef.current));
+  }, { passive: false });
 
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     const g = gesture.current;
@@ -260,12 +313,12 @@ export function useBoardViewport(): ViewportApi {
     g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = wrapRef.current;
     if (!el) return;
-    const { width: w, height: h } = boxRef.current;
+    const b = mapRef.current;
     if (g.pointers.size >= 2 && g.pinch) {
-      const [a, b] = [...g.pointers.values()];
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      const d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
-      setV(() => pinchAround(g.pinch!.v0, g.pinch!.mid0, toLocal(el, mid.x, mid.y), d / g.pinch!.d0, w, h));
+      const [a, c] = [...g.pointers.values()];
+      const mid = { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 };
+      const d = Math.hypot(a.x - c.x, a.y - c.y) || 1;
+      setV(() => pinchAround(g.pinch!.v0, g.pinch!.mid0, toLocal(el, mid.x, mid.y), d / g.pinch!.d0, b));
       g.dragging = true;
       g.dragged = true;
       return;
@@ -288,7 +341,7 @@ export function useBoardViewport(): ViewportApi {
     }
     if (g.dragging) {
       const k = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
-      setV((curV) => panBy(curV, dx / k, dy / k, w, h));
+      setV((curV) => panBy(curV, dx / k, dy / k, b));
     }
   }, []);
 
@@ -354,7 +407,8 @@ export function useBoardViewport(): ViewportApi {
   return {
     wrapRef,
     style: { transform: `translate(${v.tx}px, ${v.ty}px) scale(${v.z})` },
-    box,
+    box: { width: map.winW, height: map.winH },
+    board: { width: map.boardW, height: map.boardH },
     zoom: v.z,
     zoomIn, zoomOut, reset,
     onPointerDown, onPointerMove, onPointerUp,

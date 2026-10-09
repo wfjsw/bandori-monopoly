@@ -123,6 +123,32 @@ pub struct RoomRecord {
     pub next_member: i32,
     /// Member id -> session token. `Vec` so the encoding is stable.
     pub tokens: Vec<(i32, String)>,
+    /// The room's commit-reveal slot (`docs/FAIRNESS.md`). Server-side storage,
+    /// exactly like the record log head: the openings live here from room
+    /// creation until the reveal, and a restart picks the same slot back up so
+    /// the commitment the lobby showed does not change under the clients.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fair: Option<RoomFair>,
+}
+
+/// The persisted half of a room's commit-reveal slot. Hex strings, because the
+/// store's encoding is JSON; the in-memory [`crate::room`] form keeps the raw
+/// 32 bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RoomFair {
+    /// Server secret 256-bit seed (hex).
+    pub seed: String,
+    /// Server secret 256-bit salt (hex).
+    pub salt: String,
+    /// The commitment (hex) shown in the room -- drawn at room creation,
+    /// before any nonce can exist.
+    pub commit: String,
+    /// Nonces collected for the next match, ascending member id.
+    pub nonces: Vec<(i32, String)>,
+    /// A match has consumed this slot: the commit still shows for the running
+    /// match, but no nonce is accepted and the next match waits for a fresh
+    /// slot (rolled when the match ends).
+    pub consumed: bool,
 }
 
 /// The record a store persists for a session. Mirrors [`Session`]; split out so

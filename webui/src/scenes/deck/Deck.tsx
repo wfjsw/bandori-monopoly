@@ -4,7 +4,7 @@
 // reorder); the star marks the default for deck pick. Names are profile-only
 // metadata -- a match gets just the card list.
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { navigate } from "../../app/router";
 import { sceneImg } from "../../core/assets";
 import { sfx } from "../../core/audio";
@@ -12,6 +12,7 @@ import { cx } from "../../core/cx";
 import { D, cardTitle, rules, skillText } from "../../core/data";
 import { DECK_NAME_MAX, deckLabelWith, parseDeckList, sanitizeDeckName, type DeckEntry } from "../../core/deckNames";
 import { useProfile } from "../../core/hooks";
+import { useMountEffect } from "../../hooks/mount";
 import { markSeen, profileJson, updateProfile } from "../../core/store";
 import type { CardData, CharacterData } from "../../core/types";
 import { Btn } from "../../ui/Button";
@@ -37,7 +38,7 @@ const filterLabel = (f: Filter) => (f === "all" ? tr("common.all") : tr(CARD_KIN
 const matches = (c: CardData, f: Filter) => (f === "all" ? cardKind(c) !== "derived" : cardKind(c) === f);
 
 export function Deck() {
-  useEffect(() => markSeen("deck"), []);
+  useMountEffect(() => markSeen("deck"));
   const p = useProfile()!; // re-render on every save
   const [character, setCharacter] = useState<CharacterData>(() => D.character(p.homeCharacter) ?? D.characters[0]);
   const [slot, setSlot] = useState(() => rules.deck_chosen_slot(profileJson(), character.name));

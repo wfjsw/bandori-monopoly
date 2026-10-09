@@ -8,6 +8,7 @@ import { sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
 import { D, skillText } from "../../core/data";
 import { useAutoplay, useMatchView, useTick, useWakeLock } from "../../core/hooks";
+import { useLatestRef } from "../../hooks/latest";
 import { getProfile } from "../../core/store";
 import type { CharacterData, Command } from "../../core/types";
 import { endSession, type GameSession, SoloSession } from "../../game/session";
@@ -50,11 +51,12 @@ export function Select({ sess }: { sess: GameSession }) {
   // While 托管 is on the autopilot submits the preset deck itself, so the
   // modal is not opened (it would block the board for nothing).
   const me = view?.state.players[view.playerId];
+  const actRef = useLatestRef(act);
   useEffect(() => {
     if (!view || !me || sess.autoMode !== "off") return;
     if (view.state.phase === "deck" && !me.deckReady && deckOpenedFor.current !== me.character && !isModalOpen("deck")) {
       deckOpenedFor.current = me.character;
-      showDeckPick(sess, me.character, act);
+      showDeckPick(sess, me.character, actRef.current);
     }
   });
 

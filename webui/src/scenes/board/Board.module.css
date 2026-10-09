@@ -3,21 +3,23 @@
    Three flex columns -- the outer columns hug the stage edges at their fixed
    widths and the middle one takes every remaining pixel, so the composition
    holds at any width. The match stage fills the window height (Stage
-   `useStageFill`): the columns stretch to it. The map fills the centre
-   column's width and the height above the hand (no fixed aspect): the ring's
-   12 x 10 grid stretches to that rectangle (Ring.module.css). */
+   `useStageFill`): the columns stretch to it. The map *window* fills the
+   centre column's width and the height above the hand (100% of the slot, so
+   the visible range is the whole slot); the board itself keeps a 1..1.6
+   aspect inside it (viewport.ts `boardRect`) and is centred at fit. */
 .body { position: absolute; inset: 0 38px; display: flex; justify-content: space-between; gap: 9px; }
 .left { position: relative; flex: 0 0 350px; }
 /* The hand docks over the bottom edge (Master Duel), so the map takes the
    middle column's whole height -- no reserved strip beneath it. */
 .middle { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
-/* The board keeps a width:height of 1..1.6 (viewport.ts `boardRect`) and is
-   centred in the slot when the slot is taller or wider than that. */
-/* Margins keep the board off the stage's top edge -- and clear of the field
-   strip that docks there (FieldSheet, ~32px) -- and clear of the docked hand
-   (its bar ~38px + the retracted fan's 30px peek), plus breathing room.
-   Margins, not padding: `boardRect` measures the slot's client box. */
-.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; margin: 46px 0 82px; display: flex; align-items: center; justify-content: center; }
+/* The map window is the whole slot (the wrap fills it and clips); the board
+   inside keeps a width:height of 1..1.6 (viewport.ts `boardRect`) and is
+   centred in the window when the slot is taller or wider than that. */
+/* The user's margins (18px top / none below): the field strip and the docked
+   hand overlay the map window instead of reserving room for it -- the board is
+   centred in the window, and tiles under the hand bar are a pan away (OVERPAN).
+   Margins, not padding: `mapBox` measures the slot's client box. */
+.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; margin: 18px 0; display: flex; align-items: center; justify-content: center; }
 .right { position: relative; flex: 0 0 300px; }
 /* The right sidebar splits in half: the standing card panel over the log. */
 .standSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: calc(50% + 6px); display: flex; }

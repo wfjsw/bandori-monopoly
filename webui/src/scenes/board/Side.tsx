@@ -1,10 +1,13 @@
 // Compact turn controls at the bottom left; the Hand is docked below the map.
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useRef, useState, type CSSProperties } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
 import { useAutoplay, useSessionOther } from "../../core/hooks";
+import { useEventListener, useHotkeys } from "../../hooks/dom";
+import { useMountEffect, useCloseWhen } from "../../hooks/mount";
+import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
@@ -90,9 +93,8 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
 
 /** Park the hand fan while `parked` (the prompt sheet owns the bottom edge). */
 function useParkedHand(parked: boolean, setRaised: (v: boolean) => void): void {
-  useEffect(() => {
-    if (parked) setRaised(false);
-  }, [parked, setRaised]);
+  // `useCloseWhen`'s contract: act as soon as the condition holds.
+  useCloseWhen(parked, () => setRaised(false));
 }
 
 /**
@@ -226,47 +228,37 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
     window.clearTimeout(closeTimer.current);
     closeTimer.current = window.setTimeout(() => setRaised(false), 200);
   };
-  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  useMountEffect(() => () => window.clearTimeout(closeTimer.current));
   // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered hand card:
   // the wheel over the hand, or PgUp/PgDn/↑/↓ while a card is hovered.
   const fanRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (textRef.current) textRef.current.scrollTop = 0;
-  }, [hover?.id]);
-  useEffect(() => {
-    if (!hover) return;
-    const text = () => {
-      const el = textRef.current;
-      return el && el.scrollHeight > el.clientHeight ? el : null;
-    };
-    const onWheel = (e: WheelEvent) => {
-      const el = text();
-      if (!el) return;
-      e.preventDefault();
-      el.scrollTop += e.deltaMode === 1 ? e.deltaY * 21 : e.deltaMode === 2 ? e.deltaY * el.clientHeight : e.deltaY;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      const el = text();
-      if (!el || e.altKey || e.ctrlKey || e.metaKey) return;
-      const target = e.target as HTMLElement | null;
-      if (target && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
-      const line = 21; // `.pText` line-height: 13px × 1.6
-      const page = Math.max(line, el.clientHeight - line);
-      const delta = { ArrowDown: line, ArrowUp: -line, PageDown: page, PageUp: -page }[e.key];
-      if (delta === undefined) return;
-      e.preventDefault();
-      el.scrollTop += delta;
-    };
-    const fan = fanRef.current;
-    fan?.addEventListener("wheel", onWheel, { passive: false });
-    window.addEventListener("keydown", onKey);
-    return () => {
-      fan?.removeEventListener("wheel", onWheel);
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [hover]);
+  useResetScroll(textRef, hover?.id);
+  const scrollableText = () => {
+    const el = textRef.current;
+    return el && el.scrollHeight > el.clientHeight ? el : null;
+  };
+  useEventListener(fanRef, "wheel", (e) => {
+    const el = scrollableText();
+    if (!el) return;
+    e.preventDefault();
+    const ev = e as WheelEvent;
+    el.scrollTop += ev.deltaMode === 1 ? ev.deltaY * 21 : ev.deltaMode === 2 ? ev.deltaY * el.clientHeight : ev.deltaY;
+  }, { passive: false });
+  const line = 21; // `.pText` line-height: 13px × 1.6
+  const scrollText = (deltaOf: (el: HTMLElement) => number) => (e: KeyboardEvent) => {
+    const el = scrollableText();
+    if (!el) return;
+    e.preventDefault();
+    el.scrollTop += deltaOf(el);
+  };
+  useHotkeys([
+    { key: "ArrowDown", run: scrollText(() => line) },
+    { key: "ArrowUp", run: scrollText(() => -line) },
+    { key: "PageDown", run: scrollText((el) => Math.max(line, el.clientHeight - line)) },
+    { key: "PageUp", run: scrollText((el) => -Math.max(line, el.clientHeight - line)) },
+  ]);
   return (
     <>
       <div

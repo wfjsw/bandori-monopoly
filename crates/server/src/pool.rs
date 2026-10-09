@@ -16,7 +16,7 @@ use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 
@@ -152,6 +152,11 @@ pub struct Pool {
     /// worker binary speaks. That is the tests, and a fallback when no worker
     /// binary is installed -- not the production path.
     local: Option<rules_worker::Ctx>,
+    /// The engine stamp, cached after the first [`Pool::info`]. It names the
+    /// worker binary's identity and is fixed for the life of this process, so
+    /// the commit-reveal slot can bind it at room creation without a
+    /// round-trip per room (`docs/FAIRNESS.md` §1.1).
+    stamp: OnceLock<game_core::record::EngineStamp>,
 }
 
 impl Pool {
@@ -167,6 +172,7 @@ impl Pool {
             rules,
             timeout: DEFAULT_TIMEOUT,
             local: None,
+            stamp: OnceLock::new(),
         });
         for slot in &pool.workers {
             *slot.lock().unwrap() = Worker::spawn(&pool.exe, &pool.data, &pool.rules).ok();
@@ -209,6 +215,7 @@ impl Pool {
             rules: PathBuf::new(),
             timeout: DEFAULT_TIMEOUT,
             local: Some(rules_worker::Ctx::new(data, rules)),
+            stamp: OnceLock::new(),
         })
     }
 
@@ -265,14 +272,22 @@ impl Pool {
 
     /// The engine's identity: the [`EngineStamp`] a record should be sealed
     /// with. From the worker's `info` op, so a worker binary and the in-process
-    /// fallback report the same thing.
+    /// fallback report the same thing. Cached after the first call -- the
+    /// stamp is the worker binary's identity and cannot change under a running
+    /// pool.
     pub fn info(&self) -> Result<game_core::record::EngineStamp, String> {
+        if let Some(s) = self.stamp.get() {
+            return Ok(s.clone());
+        }
         let v = self.call(json!({"op": "info"}))?;
         let s = v
             .get("stamp")
             .cloned()
             .ok_or_else(|| "worker returned no stamp".to_string())?;
-        serde_json::from_value(s).map_err(|e| format!("stamp: {e}"))
+        let s: game_core::record::EngineStamp =
+            serde_json::from_value(s).map_err(|e| format!("stamp: {e}"))?;
+        let _ = self.stamp.set(s.clone());
+        Ok(s)
     }
 
     /// Build a match from the derived 256-bit seed (`docs/FAIRNESS.md`). The

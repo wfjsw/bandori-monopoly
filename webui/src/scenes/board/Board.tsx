@@ -15,8 +15,8 @@ import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
 import { CardFace } from "../../ui/Card";
 import { TopBar } from "../../ui/TopBar";
-import { useBoardSession } from "./anim";
-import { act, buyable, canBuildOn, modeName, model } from "./model";
+import { useBoardSession, type Animator } from "./anim";
+import { act, buyable, canBuildOn, modeName, model, type Model } from "./model";
 import { Log, Players } from "./Players";
 import { openDeed, showLeave } from "./Popups";
 import { openPrompt, waitingOn } from "./Prompt";
@@ -30,36 +30,26 @@ import { useStandingPreviewOn } from "../../ui/CardPreview";
 import type { RollControl } from "./Ring";
 import s from "./Board.module.css";
 
-export function Board({ sess }: { sess: GameSession }) {
-  const { view, at, anim } = useBoardSession(sess);
-  useTick(500); // turn timer
-  const auto = useAutoplay(sess); // 托管 -- one shared input-lock
-  // The match screen is the one scene that fills the window: no top / bottom
-  // letterbox, so the columns stretch and the ring centres in the middle one.
-  useStageFill();
-  // Screen stays on during a live match only -- not in a replay (which also
-  // renders this Board) and not once the match has ended.
-  useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
-  // The standing card panel replaces the floating hover popups on this screen.
-  useStandingPreviewOn();
+/**
+ * The match driver: opens the prompt / landing-deed popups and the results
+ * once the animation queue has caught up, and auto-ends a settled turn. Runs
+ * after every render on purpose -- `view`, `anim.animating` and the modal stack
+ * arrive from three different channels and either may land first. While 托管
+ * is on the prompt modal is not opened at all (it would block the board) and
+ * the landing deed is left alone -- the autopilot answers both.
+ */
+function useMatchDriver(opts: {
+  sess: GameSession;
+  m: Model | null;
+  anim: Animator;
+  auto: boolean;
+  exit: () => void;
+}): void {
+  const { sess, m, anim, auto, exit } = opts;
   const promptFor = useRef(0);
   const autoDeed = useRef(-1);
   const autoEnd = useRef(-1);
   const resultsShown = useRef(false);
-
-  const exit = () => {
-    if (sess.kind === "replay") navigate({ name: "replay" });
-    else if (sess.kind === "solo") {
-      endSession();
-      navigate({ name: "menu" });
-    } else navigate({ name: "room", id: sess.id });
-  };
-
-  const m = view ? model(view) : null;
-
-  // Prompts, the landing deed popup and the results open once the animation has caught up.
-  // While 托管 is on the prompt modal is not opened at all (it would block the
-  // board) and the landing deed is left alone -- the autopilot answers both.
   useEffect(() => {
     if (!m) return;
     const S = m.S;
@@ -98,6 +88,31 @@ export function Board({ sess }: { sess: GameSession }) {
       showResults(sess, m, exit);
     }
   });
+}
+
+export function Board({ sess }: { sess: GameSession }) {
+  const { view, at, anim } = useBoardSession(sess);
+  useTick(500); // turn timer
+  const auto = useAutoplay(sess); // 托管 -- one shared input-lock
+  // The match screen is the one scene that fills the window: no top / bottom
+  // letterbox, so the columns stretch and the ring centres in the middle one.
+  useStageFill();
+  // Screen stays on during a live match only -- not in a replay (which also
+  // renders this Board) and not once the match has ended.
+  useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
+  // The standing card panel replaces the floating hover popups on this screen.
+  useStandingPreviewOn();
+
+  const exit = () => {
+    if (sess.kind === "replay") navigate({ name: "replay" });
+    else if (sess.kind === "solo") {
+      endSession();
+      navigate({ name: "menu" });
+    } else navigate({ name: "room", id: sess.id });
+  };
+
+  const m = view ? model(view) : null;
+  useMatchDriver({ sess, m, anim, auto, exit });
 
   if (!m) return null;
   const S = m.S;

@@ -3,8 +3,9 @@
 // downloaded or deleted; the badge previews whether the current engine can
 // play it (`compat`'s rules over `engine_stamp` vs the record's stamp).
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { navigate } from "../../app/router";
+import { useMountEffect } from "../../hooks/mount";
 import { D } from "../../core/data";
 import { cx } from "../../core/cx";
 import {
@@ -66,7 +67,7 @@ export function Replays() {
         setEntries([]);
       });
   };
-  useEffect(reload, []);
+  useMountEffect(reload);
 
   const openBytes = async (bytes: Uint8Array, id = "") => {
     try {

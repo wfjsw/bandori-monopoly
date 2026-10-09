@@ -5,9 +5,11 @@
 // rendered by the match screens. 进阶 is the worker-pool search
 // (`docs/BOT.md` B6), lazy-loaded; it falls back to 托管 on any failure.
 
-import { useEffect, useState } from "react";
-import { useAutoMode } from "../core/hooks";
+import { useState } from "react";
+import { useAutoMode, useThinking } from "../core/hooks";
 import { cx } from "../core/cx";
+import { useInterval } from "../hooks/timers";
+import { bannerDeadline } from "../hooks/pure";
 import type { AutoMode } from "../game/autopilot";
 import type { GameSession } from "../game/session";
 import { Icon } from "./Icon";
@@ -48,10 +50,8 @@ export function AutoToggle({ sess, className, compact }: { sess: GameSession; cl
  * (`docs/BOT.md` B6). Small, transient, never blocks input.
  */
 export function ThinkingPill({ sess, member }: { sess: GameSession; member?: number }) {
-  const [, tick] = useState(0);
-  useEffect(() => sess.subscribeThinking(() => tick((n) => n + 1)), [sess]);
-  const who = member ?? sess.you;
-  if (!sess.isThinking(who)) return null;
+  const thinking = useThinking(sess, member);
+  if (!thinking) return null;
   return (
     <div className={s.thinking} role="status" aria-live="polite">
       <Icon name="psychology" />
@@ -70,20 +70,20 @@ const BANNER_FADE_MS = 400;
 export function AutoBanner({ sess }: { sess: GameSession }) {
   const mode = useAutoMode(sess);
   const [, tick] = useState(0);
-  // When to drop the strip: re-armed on every mode change.
+  // When to drop the strip: re-armed on every mode change. Derived at render
+  // time -- a mode flip is an event, the deadline its consequence -- so there
+  // is no frame of the previous mode's deadline.
   const [hideAt, setHideAt] = useState(0);
-  useEffect(() => {
-    setHideAt(mode === "off" ? 0 : performance.now() + sess.autoCooldownLeft() + BANNER_HOLD_MS);
-  }, [mode, sess]);
+  const [armedFor, setArmedFor] = useState(mode);
+  if (armedFor !== mode) {
+    setArmedFor(mode);
+    setHideAt(bannerDeadline(mode, performance.now(), sess.autoCooldownLeft(), BANNER_HOLD_MS));
+  }
   const now = performance.now();
   const left = Math.ceil(sess.autoCooldownLeft() / 1000);
   const visible = mode !== "off" && now < hideAt;
   // Re-render to count the cooldown down and to fade / drop the strip on time.
-  useEffect(() => {
-    if (!visible) return;
-    const id = window.setTimeout(() => tick((n) => n + 1), 200);
-    return () => clearTimeout(id);
-  });
+  useInterval(() => tick((n) => n + 1), visible ? 200 : null);
   if (sess.readOnly || !visible) return null;
   return (
     <div className={cx(s.banner, mode === "chaos" && s.chaos, hideAt - now < BANNER_FADE_MS && s.fading)} role="status">

@@ -2,7 +2,8 @@
 
 import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
 import { plain } from "../../core/format";
@@ -19,9 +20,11 @@ import { namesOf } from "../../core/names";
  *  12 x 10 grid of cells, `boardIndex 0` = CiRCLE at the bottom right,
  *  counter-clockwise. Each side's middle steps inward one cell and runs back
  *  out -- that extra rung is what lets one side carry 15 tiles instead of 12 on
- *  the same box. The map fills its slot: cells stretch to `box / 12` by
- *  `box / 10`, so the ring uses the whole rectangle (wide on a wide window)
- *  while the path -- and the pockets it encloses -- keep their grid shape. */
+ *  the same box. The board fills its own rect (the slot held to 1..1.6,
+ *  `viewport.ts` `boardRect`): cells stretch to `board / 12` by `board / 10`,
+ *  so the ring uses the whole rectangle while the path -- and the pockets it
+ *  encloses -- keep their grid shape. The window around it is the whole map
+ *  slot, so the visible range is 100% of the slot even though the map is not. */
 const COLS = 12;
 const ROWS = 10;
 const FOLD: readonly (readonly [number, number])[] = [
@@ -38,7 +41,8 @@ function cell(i: number): readonly [number, number] {
   return FOLD[i % FOLD.length];
 }
 
-/** Pixel centre of a 0-based column / row on a `w` x `h` board rect. */
+/** Pixel centre of a 0-based column / row on a `w` x `h` board rect (the ring
+ *  inside the window -- not the window itself). */
 const cellX = (col: number, w: number) => (col + 0.5) * (w / COLS);
 const cellY = (row: number, h: number) => (row + 0.5) * (h / ROWS);
 
@@ -96,12 +100,12 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   const vp = useBoardViewport();
   const wrapRef = vp.wrapRef;
   const [tip, setTip] = useState<MarkTip | null>(null);
-  const [tipBox, setTipBox] = useState({ w: 0, h: 0 });
   const tipRef = useRef<HTMLDivElement>(null);
   // Markers sit inside a tile (which clips), so their popup is drawn on the
   // untransformed overlay above the zoom layer. The wrap is not zoomed: its
   // bounding box carries only the stage scale, and converting the marker's
-  // screen box against it lands in the wrap's own pixel space at any zoom.
+  // screen box against it lands in the wrap's own pixel space (the window) at
+  // any zoom.
   const showTip = (e: React.MouseEvent, title: string, lines: string[]) => {
     const wrap = wrapRef.current;
     if (!wrap) return;
@@ -112,18 +116,13 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   };
   const hideTip = () => setTip(null);
   // The tip is content-sized (`width: max-content`, max 220px) and the wrap
-  // clips the panned board, so keep it inside the board box: clamp x by its
-  // measured width and flip it below the marker near the top edge.
-  useLayoutEffect(() => {
-    const el = tipRef.current;
-    if (!el || !tip) return;
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    if (w !== tipBox.w || h !== tipBox.h) setTipBox({ w, h });
-  }, [tip, tipBox.w, tipBox.h]);
-  const half = Math.min(tipBox.w || 220, 220) / 2;
+  // clips the panned board, so keep it inside the *window*: clamp x by its
+  // measured width against the window's width and flip it below the marker
+  // near the top edge.
+  const tipBox = useLayoutSize(tipRef, tip);
+  const half = Math.min(tipBox.width || 220, 220) / 2;
   const tipX = tip ? Math.min(Math.max(tip.x, half + 8), vp.box.width - half - 8) : 0;
-  const tipUp = tip ? tip.y - (tipBox.h || 90) - 12 >= 0 : true;
+  const tipUp = tip ? tip.y - (tipBox.height || 90) - 12 >= 0 : true;
   return (
     <div
       className={s.wrap}
@@ -140,9 +139,11 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
       onDoubleClick={vp.onDoubleClick}
       aria-label={tr("board.zoomLabel")}
     >
-      {/* Board pixels are the wrap's own pixels; this layer carries the user's
-          pan/zoom over the tiles and the interior. */}
-      <div className={s.viewport} style={vp.style}>
+      {/* Window pixels are the wrap's own pixels; the zoom layer is the board
+          rect (ring + interior) placed by the user's pan/zoom. It does not
+          fill the window -- on a wide slot the board keeps its aspect and sits
+          centred at fit, and the wrap shows the rest of the slot. */}
+      <div className={s.viewport} style={{ ...vp.style, width: vp.board.width, height: vp.board.height }}>
         <div className={s.ring} data-vp-bg>
           <Center m={m} roll={roll} />
           {D.tiles.map((t, i) => {
@@ -211,9 +212,9 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
               const dx = n > 1 ? (k - (n - 1) / 2) * Math.min(14, 40 / (n - 1)) : 0;
               const ch = m.charOf(i);
               const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
-              const top = cellY(row, vp.box.height) + 16;
+              const top = cellY(row, vp.board.height) + 16;
               return (
-                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.box.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
                     ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />

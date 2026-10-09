@@ -1,11 +1,12 @@
 // Player panels on the left; the match log is placed in the right column.
 
 import { stateOf, stateMax } from "../../core/names";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cardTitle } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
+import { useScrollFollow } from "../../hooks/measure";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -160,10 +161,9 @@ function CardRef({ card, text, onHover, onLeave }: { card: string; text: string;
 
 export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [lines]);
+  // The log follows its own tail: re-pin only when new lines arrive, so a
+  // reader who scrolled up is not thrown back down by a hover re-render.
+  useScrollFollow(ref, [lines]);
   // Hovered card reference: the standing card panel (right sidebar) shows it.
   const groups = turnGroups(lines);
   return (
