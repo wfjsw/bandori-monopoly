@@ -25,7 +25,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「本回合的[主要移动]改为移动1到6以内的任意整数」 -- C#
     // `int max = c.N(0, 6)` sizes the ask; `H.AskNumber(c.Seat, ..., 1, max, ...)`
     // picks the step count. Include the geometric landing in every label;
-    // movement reactions (including Sayo's extension) still happen afterwards.
+    // movement counteractions (including Sayo's extension) still happen afterwards.
     let max = ctx::n(0, 6);
     let dir = ctx::plan::dir();
     let options: Vec<Msg> = (1..=max)
