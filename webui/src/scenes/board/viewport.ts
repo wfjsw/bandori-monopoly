@@ -84,8 +84,8 @@ export const FIT_ZOOM = 1;
 /** The zoom floor -- and the default / reset view (user request: default zoom
  *  0.95). At 0.95 the whole board shows centred with a small margin around
  *  it; the `1:1` / reset control and the first slot measure land here. */
-export const MIN_ZOOM = 0.95;
-export const DEFAULT_ZOOM = MIN_ZOOM;
+export const MIN_ZOOM = 0.75;
+export const DEFAULT_ZOOM = 0.9;
 export const MAX_ZOOM = 3;
 /** Screen-pixel movement before a press turns into a pan. Clicks stay under
  *  this so tiles, field cards and tokens remain tappable. */
