@@ -1702,20 +1702,32 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// One `"card"` activation event for a body that is about to run: the
-    /// client's card flash plus its log line. `call` / `card_id` / `uid` /
-    /// `trigger` are the drive's own context; the owner is the instance's
-    /// player (the seat that played a hand card, the field's owner of a hook)
-    /// and `trigger.player_id` / `trigger.tile` name who it is about.
+    /// client's card flash plus its log line. `call` / `card_id` / `uid` are the
+    /// drive's own context; `target` / `tile` name who and where it is about.
     ///
     /// Written to `w` -- the **guest's own world copy** -- not to the live
     /// world: [`Self::commit_after`] swaps that copy in wholesale, so an event
-    /// logged on `cx` between the copy and the swap would be dropped. A guard
-    /// that rejects throws the copy away, announcement included, which is
-    /// exactly "nothing about the card reaches the UI".
+    /// logged on `cx` between the copy and the swap would be dropped.
+    ///
+    /// Called exactly at **body entry** (the `on_body` callback
+    /// [`Self::drive_inner_body`] hands to `run` / `run_hook`): after the CEL
+    /// `pre` and the residual guard admitted, after any play gate, and only
+    /// when the entry exists -- so a guard reject, a probe, a quote or a
+    /// bodyless drive never reaches the UI. One drive's multi-pass re-runs
+    /// announce on the copy that lands (the others are thrown away with their
+    /// pass).
     ///
     /// A tile's own settle body (`tile:*`) is a board square, not a card, so it
     /// does not flash -- a *card* placed on the square still does.
-    fn announce_drive(&self, w: &mut game_core::engine::World, call: Call, card_id: &str, uid: i32, trigger: &Trigger) {
+    fn announce_drive(
+        &self,
+        w: &mut game_core::engine::World,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        target: i32,
+        tile: i32,
+    ) {
         if matches!(call, Call::Settle { .. }) && card_id.starts_with("tile:") {
             return;
         }
@@ -1745,7 +1757,7 @@ impl<M: CardModules> RulesBridge<M> {
         } else {
             call.player_id()
         };
-        let who = if owner >= 0 { owner } else { trigger.player_id };
+        let who = if owner >= 0 { owner } else { target };
         // Activation wording (「发动」) is for a genuine activation only -- a
         // skill press, which has no declaration line of its own. A hand play,
         // a [反击] and a drawn event already logged their action (打出 / 抽到),
@@ -1757,7 +1769,7 @@ impl<M: CardModules> RulesBridge<M> {
                 .card("card", cid),
             _ => Msg::default(),
         };
-        w.card_activation(kind, owner, cid, trigger.player_id, trigger.tile, false, msg);
+        w.card_activation(kind, owner, cid, target, tile, false, msg);
     }
 
     /// Run one effect to completion, prompting through the engine as needed.
@@ -1833,6 +1845,13 @@ impl<M: CardModules> RulesBridge<M> {
         // replay re-applies the guest writes from the restored world. Nested
         // drives record their own base, so they never pop an outer one.
         let overlay_base = cx.guest_overlay_depth();
+        // The activation announcement fires at **body entry** (see
+        // [`Self::announce_drive`]): `run` / `run_hook` call this on the world
+        // copy the body will write into, only once the entry exists and the
+        // condition + guard admitted. A pass's copy is dropped when the body
+        // pauses, so a multi-pass drive announces on every pass and exactly one
+        // of those copies -- the one that lands -- carries the event.
+        let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
             cx.restore_guests_to(overlay_base);
             // Share the live world (fix B): the body's writes detach a private
@@ -1840,12 +1859,6 @@ impl<M: CardModules> RulesBridge<M> {
             let mut world = cx.share_world();
             if let Some(base) = &pile_base {
                 base.apply(&mut world);
-            }
-            // The activation rides the guest's own copy (see
-            // [`Self::announce_drive`]): first pass only -- a re-run after a
-            // prompt re-announces through the commit pass below instead.
-            if answers.is_empty() {
-                self.announce_drive(&mut world, call, card_id, uid, trigger);
             }
             let run = Run {
                 world,
@@ -1886,9 +1899,15 @@ impl<M: CardModules> RulesBridge<M> {
                 halt: None,
                 answers: Vec::new(),
             });
+            let mut announce = |w: &mut crate::Run| {
+                self.announce_drive(&mut w.world, call, card_id, uid, target, tile);
+            };
             let mut guest = || -> Result<Option<Result<Outcome<Run>, RuleError>>, RuleError> {
                 if guarded {
-                    match self.ruleset.run_hook(&run, call, &answers) {
+                    match self
+                        .ruleset
+                        .run_hook(&run, call, &answers, Some(&mut announce))
+                    {
                         Err(e) => Ok(Some(Err(e))),
                         // Not activated -- the guard refused. Nothing ran, and
                         // nothing about the card reaches the UI.
@@ -1896,7 +1915,9 @@ impl<M: CardModules> RulesBridge<M> {
                         Ok(Some(hr)) => Ok(Some(Ok(hr.outcome))),
                     }
                 } else {
-                    Ok(Some(self.ruleset.run(&run, call, &answers)))
+                    Ok(Some(
+                        self.ruleset.run(&run, call, &answers, Some(&mut announce)),
+                    ))
                 }
             };
             // `run_hook` cannot actually fail here (its `Err` arm above is
@@ -1943,10 +1964,9 @@ impl<M: CardModules> RulesBridge<M> {
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
                     }
-                    // This pass's world is the one that lands: it carries the
-                    // activation (the learn pass's copy above is dropped when
-                    // any pause was answered).
-                    self.announce_drive(&mut world, call, card_id, uid, trigger);
+                    // This pass's world is the one that lands: the learn pass's
+                    // copy above is dropped when any pause was answered, so the
+                    // activation rides this copy (announced at body entry below).
                     let run = Run {
                         world,
                         pile_checkpoints: Arc::new(pile_checkpoints.clone()),
@@ -1970,14 +1990,21 @@ impl<M: CardModules> RulesBridge<M> {
                         linger_props: Default::default(),
                         wrap_effect: Self::wraps_effect(call, card_id),
                     };
+                    let mut announce = |w: &mut crate::Run| {
+                        self.announce_drive(&mut w.world, call, card_id, uid, target, tile);
+                    };
                     let outcome2 = if guarded {
-                        match self.ruleset.run_hook(&run, call, &answers) {
+                        match self
+                            .ruleset
+                            .run_hook(&run, call, &answers, Some(&mut announce))
+                        {
                             Err(e) => Err(e),
                             Ok(None) => return Ok(DEST_UNSET),
                             Ok(Some(hr)) => Ok(hr.outcome),
                         }
                     } else {
-                        self.ruleset.run(&run, call, &answers)
+                        self.ruleset
+                            .run(&run, call, &answers, Some(&mut announce))
                     };
                     match outcome2 {
                         Ok(Outcome::Done(after2)) => {
@@ -4361,10 +4388,18 @@ impl<M: CardModules> RulesBridge<M> {
         run.trigger = trig.clone();
         run.current_card = card.to_string();
         run.current_uid = uid;
-        if let Ok(Some(hr)) =
-            self.ruleset
-                .run_hook(&*run, Call::Hook { card: idx, kind, player_id: owner }, &[])
-        {
+        // `None` for `on_body`: a quote is a preview, never an activation --
+        // the commit's own re-quote is the run that may flash.
+        if let Ok(Some(hr)) = self.ruleset.run_hook(
+            &*run,
+            Call::Hook {
+                card: idx,
+                kind,
+                player_id: owner,
+            },
+            &[],
+            None,
+        ) {
             if let Outcome::Done(after) = hr.outcome {
                 *trig = after.trigger;
             }

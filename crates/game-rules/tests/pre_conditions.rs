@@ -115,7 +115,7 @@ fn pre_hook_does_not_fire() {
         kind: TriggerKind::PayAdd,
         player_id: 0,
     };
-    let fired = r.run_hook(&w, call, &[]).unwrap();
+    let fired = r.run_hook(&w, call, &[], None).unwrap();
     assert!(
         fired.is_none(),
         "condition `false` must keep the hook from firing"

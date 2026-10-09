@@ -839,11 +839,17 @@ impl Ruleset {
     /// `world` is never modified. On [`Outcome::Done`] the caller commits the returned
     /// world; on [`Outcome::NeedInput`] it publishes the prompt, and once the answer
     /// arrives calls again with the **same** `world` and `answers` + the new answer.
+    ///
+    /// `on_body` fires exactly when the effect **body** is entered -- the entry
+    /// exists and `OP_RUN` is about to call it -- with the world copy the body
+    /// will write into. The activation announcement (the client's card flash)
+    /// goes there, so a drive with no entry, a guard reject or a probe is silent.
     pub fn run<W: CardWorld>(
         &self,
         world: &W,
         call: Call,
         answers: &[i32],
+        mut on_body: Option<&mut dyn FnMut(&mut W)>,
     ) -> Result<Outcome<W>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         self.check(card)?;
@@ -860,6 +866,9 @@ impl Ruleset {
             return Ok(Outcome::Done(world.clone()));
         };
         let mut store = self.store(world.clone(), answers)?;
+        if let Some(cb) = on_body.as_deref_mut() {
+            cb(store.data_mut().w());
+        }
         let res = call_card(
             &self.inner,
             &mut store,
@@ -877,15 +886,15 @@ impl Ruleset {
     ///
     /// Returns `Ok(None)` when the card is not activated at all (its condition
     /// rejected, its guard refused, or it has no entry at this kind).
-    /// [`HookRun::announced`] is the "a guard existed and passed" moment -- the
-    /// one time the card shows itself; a gate, which has no guard, runs without
-    /// announcing. The guard step goes through [`crate::cond_pre::admits`]
-    /// (docs/GUARDS.md §4.4 item 2).
+    /// [`HookRun::announced`] is the "a guard existed and passed" moment.
+    /// `on_body` fires exactly when the effect **body** is entered (after the
+    /// condition and guard admitted) -- see [`Self::run`].
     pub fn run_hook<W: CardWorld>(
         &self,
         world: &W,
         call: Call,
         answers: &[i32],
+        mut on_body: Option<&mut dyn FnMut(&mut W)>,
     ) -> Result<Option<HookRun<W>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         self.check(card)?;
@@ -946,6 +955,9 @@ impl Ruleset {
                 // not fire.
                 return Ok(None);
             }
+        }
+        if let Some(cb) = on_body.as_deref_mut() {
+            cb(store.data_mut().w());
         }
         let res = call_card(
             &self.inner,
@@ -1414,12 +1426,14 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         world: &crate::Run,
         call: Call,
         answers: &[i32],
+        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
     ) -> Result<Outcome<crate::Run>, RuleError>;
     fn run_hook(
         &self,
         world: &crate::Run,
         call: Call,
         answers: &[i32],
+        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
     fn can_counteract(
         &self,
@@ -1507,16 +1521,18 @@ impl CardModules for Ruleset {
         world: &crate::Run,
         call: Call,
         answers: &[i32],
+        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
     ) -> Result<Outcome<crate::Run>, RuleError> {
-        Ruleset::run::<crate::Run>(self, world, call, answers)
+        Ruleset::run::<crate::Run>(self, world, call, answers, on_body)
     }
     fn run_hook(
         &self,
         world: &crate::Run,
         call: Call,
         answers: &[i32],
+        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
-        Ruleset::run_hook::<crate::Run>(self, world, call, answers)
+        Ruleset::run_hook::<crate::Run>(self, world, call, answers, on_body)
     }
     fn can_counteract(
         &self,

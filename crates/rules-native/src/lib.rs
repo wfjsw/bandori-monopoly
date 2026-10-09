@@ -562,6 +562,7 @@ impl CardModules for NativeModules {
         world: &Run,
         call: Call,
         answers: &[i32],
+        mut on_body: Option<&mut dyn FnMut(&mut Run)>,
     ) -> Result<Outcome<Run>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         let info = self
@@ -571,12 +572,17 @@ impl CardModules for NativeModules {
         let Some(entry) = entry_of(info, &call, world.trigger().kind) else {
             return Ok(Outcome::Done(world.clone()));
         };
-        let state = HostState::new(
+        let mut state = HostState::new(
             self.index.clone(),
             world.clone(),
             answers.to_vec(),
             0,
         );
+        // Body entry: the activation announcement goes here (mirrors
+        // `Ruleset::run`), never for a bodyless drive.
+        if let Some(cb) = on_body.as_deref_mut() {
+            cb(state.w());
+        }
         let (res, state, _fuel) = run_on(
             state,
             card,
@@ -594,6 +600,7 @@ impl CardModules for NativeModules {
         world: &Run,
         call: Call,
         answers: &[i32],
+        mut on_body: Option<&mut dyn FnMut(&mut Run)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         let kind = world.trigger().kind;
@@ -652,7 +659,12 @@ impl CardModules for NativeModules {
                 return Ok(None);
             }
         }
-        let state = state.take().expect("host state present");
+        let mut state = state.take().expect("host state present");
+        // Body entry (after the condition + guard admitted): the activation
+        // announcement goes here (mirrors `Ruleset::run_hook`).
+        if let Some(cb) = on_body.as_deref_mut() {
+            cb(state.w());
+        }
         let (res, state, _fuel) = run_on(
             state,
             card,
