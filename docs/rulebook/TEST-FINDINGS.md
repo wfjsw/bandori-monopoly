@@ -71,22 +71,21 @@ is `crates/game-rules/tests/rb_events.rs` (73 tests, one or more per event).
 
 The discrepancy pass (2026-10-07) cleared 12 of the 14 `DISCREPANCY` ignores.
 Two `RULING` ignores remain (哈比内尔 「结束后传送」 timing; 元祖！邦多利酱's
-host clocks). Two `DISCREPANCY` ignores remain, both **test-is-wrong** rather
-than code-is-wrong:
+host clocks). The two **test-is-wrong** `DISCREPANCY` ignores were closed
+2026-10-09:
 
 * **`asukayama_stun_wears_off_a_layer_at_a_time`** -- the engine's stun decay
   is correct (one layer per turn start, `MatchPlayer::tick_state`). The test
-  observes after `until_turn(0)`, which waits for `stage::OPS`; a [眩晕]
-  player's turn is auto-skipped (rulebook 204 「眩晕效果发动：跳过经营和主要
-  移动阶段」), so the helper loops until *both* layers have ticked away. The
-  assertion would need to observe at the turn-start boundary, not at OPS.
-* **`marina_box_spend_is_optional`** -- the pass now opens an optional prompt
-  (the 「可」), but the test's `10_000` expectation forgets the [经过]CiRCLE
-  reward of +2000 (it would be `10_000 + 2_000`). It also contradicts
-  `marina_box_pays_500_and_may_gain_1200_on_a_circle_pass` /
-  `marina_box_no_gain_below_six`, which use the same `drain()` and expect the
-  500 to be spent -- `drain()` declines every prompt, so the three cannot all
-  hold. The prompt's fallback is 「消耗」 to keep the two green tests green.
+  observed after `until_turn(0)`, which waits for `stage::OPS`; a [眩晕]
+  player's turn is auto-skipped (rulebook 204), so the helper looped until
+  *both* layers had ticked away. Now observes at the first tick (stops when
+  the layer count drops). Un-ignored and green.
+* **`marina_box_spend_is_optional`** -- 「可[消耗]一次500资金」 is opt-in; the
+  prompt's fallback was 「消耗」 so `drain()` spent and the three tests could
+  not all hold. The default is now 「不消耗」 (option order
+  `[不消耗, 消耗]`); the two behaviour tests answer 「消耗」 explicitly, and
+  this one expects `10_000 + 2_000` (it had forgotten the [经过]CiRCLE
+  reward). All three green.
 
 One **previously-green** test now fails for the same class of reason:
 **`asukayama_teleports_and_assigns_the_status_spread`** asserts
@@ -281,10 +280,13 @@ The `#[ignore]` reasons are authoritative. This list is the current
 `#[ignore` set (2026-10-06 working tree) -- anything not named here has
 either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
 
-* **general** (2)
-  * 网络链接异常 negates a whole multi-target card (see §3, TODO(ABI)).
-  * The CiRCLE band (2) doubling is unported.
-* **pp** (4)
+* **general** (0)
+  * ~~CiRCLE band (2) doubling is unported.~~ **Fixed 2026-10-09** (GREAT
+    tags the 2000 via `ctx::n`, the skill rides the pre-effect `card` hook,
+    `PlayCtx.Doubled` lives on `TurnCtx`).
+  * 网络链接异常's drop-one is landed (§3); two cross fixtures still see the
+    whole-card negate (c05 / g19) -- see cross below.
+* **pp** (3)
   * 丸山彩's (2) PayChoose hook still prompts under 初次演出事故 -- the
     `skillBlock` token is set but the guard/body `skill_blocked` check does
     not see it (hook-guard dispatch).
@@ -293,13 +295,15 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * 安可 doesn't counter 重叠的声音's self-teleport.
   * PP band (2) overflow crystals: a passive 「X大于拥有数时」 hook on a
     fan-flip effect, and there is no flip-effect trigger to observe (§6).
-* **roselia** (5)
-  * 凑友希那 (3) stop-pot offers no prompt when a player [经过]s (two tests,
-    one of them against 安可).
-  * 凑友希那 (1) grants no fire pot on a RiNG landing.
-  * 白金燐子 (2) has no pre-roll pot window (two tests).
+* **roselia** (1)
+  * ~~凑友希那 (3) stop-pot offers no prompt.~~ **Fixed 2026-10-09** (test
+    matched Chinese text instead of the `kokoro_practice_force_*` key).
+  * ~~凑友希那 (1) grants no fire pot on a RiNG landing.~~ **Fixed
+    2026-10-09** (fire cap 「上限1」 now declared).
+  * ~~白金燐子 (2) has no pre-roll pot window.~~ **Fixed 2026-10-09** (it is
+    a press; the tests now press before the roll).
   * 选择自己的舞台 opens no window on a self-inflicted [传送].
-* **morfonica** (4)
+* **morfonica** (2)
   * 星月夜's even-roll crystal-removal offer never prompts.
   * 纯真振翅 never rolls after the teleport.
   * （NNM）稍微努力了一下 is a **card bug**: its CardDef declares two
@@ -310,12 +314,13 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * 游击演出 lands one tile past the chosen one, and its [特] never opens.
   * Repaint halves a shaped settlement payment only partially (the Tomorrow's
     Door surcharge joins at full price) -- §6.
-* **mygo** (6)
-  * 灯 不再迷茫: a crystal cannot pay a skill's fire cost, so the card is
-    never [移除]d when its crystals run out (two tests).
+* **mygo** (4)
+  * 灯 不再迷茫: a crystal cannot pay a skill's fire cost (B -- wants a
+    pre-spend `FirePaying` hook), so the card is never [移除]d when its
+    crystals run out (two tests).
   * A mid-turn [停留] doesn't stop the move (also an ambiguity -- §6).
-  * 要乐奈's Space teleport spends the 3 fire but leaves the piece at the
-    origin.
+  * ~~要乐奈's Space teleport spends the 3 fire but leaves the piece at the
+    origin.~~ **Fixed 2026-10-09** (`card_move` now runs the plan).
   * MyGO band (2)'s 2-crystal **draw** half is unreachable: the band skill
     declares two `On::Play` activations and `use_skill` runs only the first
     (the move-1 half). See §6 multi-activation.
@@ -970,3 +975,116 @@ New `rb_money` cases (all green at time of writing):
 
 Open items unchanged: N3 (effect-level atomicity), N4 (「取消所有受到的效果」
 refunds), N5 (`Negation::Activation` returns the counteraction card to hand).
+
+---
+
+## 2026-10-09 triage batch (rulebook-fixes)
+
+Worktree `rb-wt` off `integration`. Every `#[ignore]` and every open
+TEST-FINDINGS item was triaged A/B/C/D (A = clear from the book + existing
+rulings, fix the engine; B = missing capability, implement if contained;
+C = genuinely ambiguous, collect a ruling question; D = test wrong vs the
+book). This batch lands the A/B/D items that were contained; the rest is the
+ruling list in §6 and the open sections below.
+
+### Resolved (2026-10-09)
+
+* **凑友希那 (3) fire cap** (`yukina_skill_3_gains_a_fire_pot_on_a_ring`).
+  The book's 「获得一个火罐（上限1）」 is a fire-pot cap, and `gain_fire` is a
+  no-op at cap 0. `kokoro_practice` now declares `fire_pot(_, 0, 1)` at
+  `TurnStartBefore` / `DeckAtGameStart` (the same shape as 燐子 / 要乐奈).
+  Engine fix; un-ignored and green.
+* **要乐奈 (2) Space teleport** (`rana_cat_space_teleport_spends_three_fire`).
+  「传送至space代替本回合的移动」 -- the press *is* the main move.
+  `rana_parking::use_skill` set the plan but never ran `ctx::card_move`, so
+  the piece stayed put (fire was spent). Now executes the plan (and marks
+  `MainMoved`). Un-ignored and green.
+* **凑友希那 (3) stop-pot prompt match**
+  (`interaction_yukina_stop_pot_vs_a_passing_player`, **test bug D**). The
+  offer is i18n keys `kokoro_practice_force_*`; the test matched the resolved
+  Chinese text (`yukina` / `练习` / `火罐`) and declined the offer as noise --
+  the same class as §6 item 14 (pareo_far). Match the key; un-ignored and
+  green. (`rb_settle_stages::m4_kokoro_force_stop_stops_a_passer` already
+  pinned the mechanism.)
+* **白金燐子 (2) pre-roll window** (`rinko_skill_2_*`, two tests, **test bug
+  D**). 「你可以在移动掷骰前消耗X个[火罐]」 with 「此技能可以正常使用」 is a
+  **press** with a timing window, not an auto-prompt. The tests rolled and
+  waited for a prompt that a press never raises. They now press the skill
+  (`t.skill`) before the roll and take the X prompt; un-ignored and green.
+* **麻里奈小姐的礼物箱 「可」** (`marina_box_spend_is_optional`, plus the two
+  green siblings). 「可[消耗]一次500资金」 is opt-in. The prompt's fallback was
+  「消耗」 so `drain()` (which takes the fallback) spent, and the three tests
+  could not all hold. The option order is now `[不消耗, 消耗]` (fallback =
+  no-spend, the truer reading of 「可」). The two behaviour tests answer
+  「消耗」 explicitly; `marina_box_spend_is_optional` now expects
+  `10_000 + 2_000` (it forgot the [经过]CiRCLE reward). All three green.
+* **飞鸟山之战 stun layers**
+  (`asukayama_stun_wears_off_a_layer_at_a_time`, **test bug D**). The engine's
+  one-layer-per-turn-start tick is correct; `until_turn` waits for OPS and a
+  [眩晕] player's turn is auto-skipped (规则书 204), so the helper consumed
+  *both* starts. The test now observes at the first tick (stops when the
+  layer count drops). Un-ignored and green.
+* **CiRCLE band (2) doubling** (`circle_band_doubles_a_number`). Three
+  gaps, all contained:
+  1. `通用:GREAT` hardcoded `gain(2000)` -- now `ctx::n(1, 2000)` (「一个
+     数字」, one-shot: `n` spends the flag so a later tagged number on the
+     same play stays put).
+  2. `skill:CiRCLE:后勤人员的努力` hung on the post-effect `cardPlayed`
+     hook; 「在你打出的"通用"卡生效时」 is the **pre-effect** `card` hook, so
+     `set_play_doubled` has to land before the body reads `ctx::n`.
+  3. `PlayCtx.Doubled` lived on the per-guest-run state (a new run per
+     invocation), so a hook's write died with its run. It now lives on
+     `TurnCtx.play_doubled` (the play being resolved), cleared at each play's
+     start -- the same home as `cancelled_designations`. The `card` raise also
+     fills `t.cards` (the `skillUsed` pattern) so `trigger::cards()` names the
+     played card.
+
+  Un-ignored and green. No ABI bump: the surface already had
+  `set_play_doubled` / `ctx::n` / `HookKind::Card`; only their homes were
+  wrong.
+
+### Test-bug fixes kept in the book's favour
+
+Never weakened: every assertion above is the rulebook's. The three D items
+changed only *how the test drives the engine* (match i18n keys; press a
+press-skill; observe at the right boundary) or a *forgot-the-CiRCLE-reward*
+expectation that contradicted the book's own reward clause.
+
+### Still open (unchanged, triaged)
+
+The remaining `#[ignore]`s are C (ruling -- §6 and the Timing / order block)
+or A/B items that need a wider surface than this batch:
+
+* **B, contained next:** MyGO:（灯）不再迷茫 (2) 「移除此卡上的一个[奇迹水晶]
+  以代替此次技能的火罐消耗」. `spend_fire` has no pre-spend substitution hook
+  (only the post-commit `fireSpent`), so a 0-fire player cannot pay with a
+  crystal. Wants a `FirePaying` hook (or a substitute consult inside
+  `spend_fire`) -- ABI bump. Tests: `light_crystal_pays_skill_fire_cost`,
+  `light_removed_when_crystals_run_out`.
+* **B, contained next:** 丸山彩 (2) under 初次演出事故 -- the
+  `skillBlock:Pastel✽Palettes` token is set but `skill_blocked` is not seen
+  on the `PayTotalAdd` guard/body (hook-guard dispatch). Test:
+  `accident_blocks_pp_skill_2`.
+* **B / A:** 冰川日菜 (2) -- `hina_lottery` is written (roll 1d4, borrow the
+  matching (2)) but `place_raw` + `begin_turn` never reaches `borrowed`.
+  Test: `hina_skill_2_borrows_skill` (also asserts the *face* where the
+  skill stores the 0-based pool index -- fix the test to pin the face in the
+  log, not the scratch key).
+* **A, needs the abnormal-move Effect chain:** 选择自己的舞台 / 安可 vs a
+  self-inflicted [传送] (`choose_your_stage_answers_an_abnormal_move`,
+  `ix_encore_blocks_overlap_teleport`) -- no window opens on
+  `plan::set_teleport_to` + `card_move`. Wants the teleport-as-main-move to
+  raise the `Effect` link with `AbKind::Teleport`.
+* **A, engine:** 要乐奈 (3) / 凑友希那 (3) stop-pot landing (`t.pos == 36`)
+  and the `rb_cross_move` stop-pot cases -- `plan::set_stop_at` during a
+  `PassTile` hook does not land the piece on the hook's tile.
+* **A, engine:** 游击演出 ends on chosen+1 after `teleport_to` +
+  `card_settle_at` (the settle inherits the turn's walk plan). Fix:
+  `card_settle_at` must not clone `turn.plan` for an arbitrary tile.
+* **C:** everything whose `#[ignore]` says `RULING` / `CROSS-AGENT`, plus the
+  §6 open list and the Timing / order block. Collected as numbered questions
+  in the report.
+* **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8);
+  笑容大游行 stack overflow; 网络链接异常 drop-one (the ABI landed but two
+  fixtures still see the whole-card negate); 花园多惠 (2) cancel window;
+  骰子已经掷下 shut-window; the `rb_fuzz_found` latent shapes.
