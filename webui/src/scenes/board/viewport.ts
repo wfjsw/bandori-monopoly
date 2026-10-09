@@ -244,11 +244,18 @@ export function useBoardViewport(): ViewportApi {
     const oldFit = fitViewport(prev);
     const newFit = fitViewport(next);
     setMap(next);
-    setV((cur) => clampPan({
-      z: cur.z,
-      tx: cur.tx + (newFit.tx - oldFit.tx),
-      ty: cur.ty + (newFit.ty - oldFit.ty),
-    }, next));
+    setV((cur) => {
+      // First measurement (still the MIN_BOARD placeholder): land on the true
+      // fit. A later slot change keeps the user's zoom and their pan relative
+      // to fit, so the board stays where they put it as the slot re-centres.
+      const first = prev.winW === MIN_BOARD && prev.winH === MIN_BOARD;
+      if (first) return newFit;
+      return clampPan({
+        z: cur.z,
+        tx: cur.tx + (newFit.tx - oldFit.tx),
+        ty: cur.ty + (newFit.ty - oldFit.ty),
+      }, next);
+    });
   });
 
   const zoomAt = useCallback((dir: 1 | -1) => {
