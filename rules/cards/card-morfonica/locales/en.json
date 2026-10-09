@@ -21,7 +21,7 @@
   "nanami_effort_money": "Gained {{n}}",
   "nanami_effort_no_crystal": "You need a [Miracle Crystal] on this card.",
   "nanami_effort_no_skill": "No character skill is bound.",
-  "nanami_effort_no_tok": "(NNM) Tried a Little: needs character tokens discarded; effect pending",
+  "nanami_effort_no_tok": "Needs character tokens discarded from hand.",
   "nanami_effort_not_placed": "This card is not in play.",
   "nanami_effort_pick_text": "Which effect?",
   "nanami_effort_pick_title": "Nanami, trying a little",

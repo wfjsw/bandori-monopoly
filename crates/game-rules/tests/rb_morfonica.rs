@@ -417,7 +417,6 @@ fn nnm_refused_without_character_marks() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: card bug in Mor:（NNM）稍微努力了一下 -- its CardDef declares TWO On::Play entries (the (3) crystal-press `can_use_skill`/`use_skill`, then the hand body `nanami_effort`) and the host dispatches only the first, so a hand play is refused with nanami_effort_not_placed (is_placed() is false). Merge them into one Play entry that branches on is_placed(). The 角色标记 path itself is wired: 广町七深（2） now offers on skillUsed (the skill id rides t.cards) and names marks 角色标记:<skill id>, which NNM's TOKEN_PREFIX sees"]
 fn nnm_discard_marks_draw_x() {
     // 规则书 (sheet 2026-10-06 新卡组卡 G7): 「弃置手中x枚角色标记…（1）抽x张卡（可超过上限），
     // 回合结束后将手牌弃置到五张」
@@ -438,7 +437,35 @@ fn nnm_discard_marks_draw_x() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: card bug in Mor:（NNM）稍微努力了一下 -- its CardDef declares TWO On::Play entries (the (3) crystal-press `can_use_skill`/`use_skill`, then the hand body `nanami_effort`) and the host dispatches only the first, so a hand play is refused with nanami_effort_not_placed (is_placed() is false). Merge them into one Play entry that branches on is_placed(). Sheet 2026-10-06 新卡组卡 G7 (2): 「获得x次经过CiRCLE时的资金奖励」 (was 「获得x*2000资金」)"]
+fn nnm_placed_press_spends_a_crystal_for_the_owner_skill() {
+    // 规则书 (3): 「你可以移除一个奇迹水晶视为发动你的（2）技能，此次技能不受数量或
+    // 轮数限制」 -- the placed-press branch of the merged Play entry.
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    t.set_crystals(0, "Mor:（NNM）稍微努力了一下", 1);
+    t.skill(0, "Mor:（NNM）稍微努力了一下").unwrap();
+    decline_all(&mut t);
+    assert_eq!(
+        t.crystals(0, "Mor:（NNM）稍微努力了一下"),
+        Some(0),
+        "one crystal removed for the owner's (2) skill"
+    );
+}
+
+#[test]
+fn nnm_placed_press_refused_without_a_crystal() {
+    // 「移除一个奇迹水晶」 -- no crystal, no press.
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.place_raw(0, "Mor:（NNM）稍微努力了一下");
+    assert!(t.skill(0, "Mor:（NNM）稍微努力了一下").is_err());
+}
+
+#[test]
+#[ignore = "DISCREPANCY: Sheet 2026-10-06 新卡组卡 G7 (2): 「获得x次经过CiRCLE时的资金奖励」 (was 「获得x*2000资金」). The default reward is 2000 so x*2000 matches here, but a modified CiRCLE money reward (Morfonica's 1000/1500/2000 cycle) should scale this too -- TODO(规则书) in nanami_effort.rs"]
 fn nnm_option2_gains_x_times_circle_money_reward() {
     // Sheet 2026-10-06 新卡组卡 G7 (2): 「获得x次经过CiRCLE时的资金奖励」
     // -- x times the CiRCLE pass *money* reward (专有名词 11: 「[CiRCLE奖励]：

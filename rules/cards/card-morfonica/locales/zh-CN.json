@@ -21,7 +21,7 @@
   "nanami_effort_money": "获得 {{n}}",
   "nanami_effort_no_crystal": "此卡上需要一个奇迹水晶。",
   "nanami_effort_no_skill": "没有绑定的角色技能。",
-  "nanami_effort_no_tok": "（NNM）稍微努力了一下：需要弃置角色标记，效果待接入",
+  "nanami_effort_no_tok": "需要弃置手里的角色标记。",
   "nanami_effort_not_placed": "此卡不在场上。",
   "nanami_effort_pick_text": "发动哪个效果？",
   "nanami_effort_pick_title": "稍微努力了一下",

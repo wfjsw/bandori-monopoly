@@ -25,11 +25,41 @@ const TOKEN_PREFIX: &str = "角色标记:";
 pub const NANAMI_EFFORT: CardDef = CardDef::new(
     "Mor:（NNM）稍微努力了一下",
     &[
-        On::Play("", Some(can_use_skill), use_skill),
-        On::Play("", None, nanami_effort),
+        // One Play entry for both contexts (the engine dispatches only the
+        // first): the hand body (spend x 角色标记, pick one of (1)/(2)/(3)),
+        // or the placed (3) press (spend 1 crystal to fire the owner's (2)
+        // skill). The gate admits whenever either branch is available.
+        On::Play("", Some(cant_play), play),
         On::AtEnd(discard_down_to_five),
     ],
 );
+
+/// Combined gate: from hand the x-标记 body needs at least one 「角色标记:*」;
+/// once placed the (3) press needs a crystal and a bound owner skill.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if !ctx::is_placed() {
+        let names = ctx::tok_names(player_id, TOKEN_PREFIX);
+        let total: i32 = names.iter().map(|n| ctx::tok(player_id, n)).sum();
+        if total > 0 {
+            return None;
+        }
+        return Some(Msg::new(key!("nanami_effort_no_tok")));
+    }
+    if ctx::crystals() < 1 {
+        return Some(Msg::new(key!("nanami_effort_no_crystal")));
+    }
+    if owner_skill(player_id).is_none() {
+        return Some(Msg::new(key!("nanami_effort_no_skill")));
+    }
+    None
+}
+
+fn play(player_id: i32) -> card_sdk::Asked {
+    if ctx::is_placed() {
+        return use_skill(player_id);
+    }
+    nanami_effort(player_id)
+}
 
 fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「弃置手中x枚角色标记，发动以下效果中的一个」 -- the tokens are the
@@ -77,7 +107,12 @@ fn nanami_effort(player_id: i32) -> card_sdk::Asked {
     match k {
         // (1) 「回合结束时抽x张卡（可超过上限）」 -- scheduled, runs in `effect_draw`.
         0 => effect_draw(player_id, x)?,
-        // (2) 「获得x*2000资金」
+        // (2) Sheet 2026-10-06 新卡组卡 G7: 「获得x次经过CiRCLE时的资金奖励」
+        // -- x times the CiRCLE pass *money* reward, not a flat x*2000. The
+        // default reward is 2000; a modified one (Morfonica's 1000/1500/2000
+        // cycle) should scale this too.
+        // TODO(规则书): query the live CiRCLE money reward (it is rewritten by
+        //   `circleAffected` listeners) instead of hard-coding 2000.
         1 => {
             let got = x * 2000;
             ctx::gain(
@@ -159,20 +194,7 @@ fn discard_down_to_five(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （3）「移除一个奇迹水晶视为发动你的（2）技能」.
-fn can_use_skill(player_id: i32) -> Option<Msg> {
-    if !ctx::is_placed() {
-        return Some(Msg::new(key!("nanami_effort_not_placed")));
-    }
-    if ctx::crystals() < 1 {
-        return Some(Msg::new(key!("nanami_effort_no_crystal")));
-    }
-    if owner_skill(player_id).is_none() {
-        return Some(Msg::new(key!("nanami_effort_no_skill")));
-    }
-    None
-}
-
+/// （3）「移除一个奇迹水晶视为发动你的（2）技能」 -- the placed-press branch.
 fn owner_skill(player_id: i32) -> Option<alloc::string::String> {
     ctx::placed_cards(player_id)
         .into_iter()
