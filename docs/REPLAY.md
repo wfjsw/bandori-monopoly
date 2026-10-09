@@ -838,17 +838,20 @@ or the bundle is not deployed at all, the embedded engine runs -- that is the
 whole point of carrying it. The user is told: 「正在使用回放文件内嵌的引擎」 /
 "Playing on the engine embedded in this record (bundle …)".
 
-**BOM note (`data_sha256`).** `load_data` hashes the *strings* it is handed,
-and three of the game tables (`cards.json`, `characters.json`,
-`skill_simple.json`) begin with a UTF-8 BOM. A byte-preserving decode keeps it
-(`as_bytes()` puts `EF BB BF` back); `TextDecoder`'s default and
-`Response.text()` strip it. So a record sealed by `tools/` or the server
-carries the BOM-inclusive `data_sha256` and one sealed by a page that loaded
-the tables with `r.text()` carries the stripped hash -- two real values for
-the same bytes. The embedded loader therefore decodes the tables both ways and
-feeds the one that reproduces the record's own `data_sha256`, so either kind
-of record replays. (The same asymmetry exists on the hosted worker path; a
-mismatch there falls back to the embedded engine.)
+**BOM note (`data_sha256`).** Three of the game tables (`cards.json`,
+`characters.json`, `skill_simple.json`) begin with a UTF-8 BOM, and a
+byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back) while
+`TextDecoder`'s default and `Response.text()` strip it. The stamp recipe is
+unified on **hash without the BOM**: `load_data`, `Ctx::load` and
+`tools/archive-engine.mjs` all drop a leading `U+FEFF` before hashing, so a
+record sealed by `tools/`, the server or a page carries the same
+`data_sha256` for the same tables. The embedded loader still decodes the
+tables both ways and feeds the one whose pre-recipe hash is the record's own
+`data_sha256`, so the bytes the engine parses match what the file was sealed
+against -- including records sealed before the recipe was unified (those
+carry the BOM-inclusive stamp; `compat` names `data_sha256` and `force`
+opens them). (The same dual decode is what the hosted worker's `keepBom`
+fetch does; a mismatch there falls back to the embedded engine.)
 
 Sizes (the 2026-10-08 archive bundle `ae7ede19…`, 18 files, measured by
 `tools/bdrec-portable.mjs pack`):
