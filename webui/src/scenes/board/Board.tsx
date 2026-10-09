@@ -6,11 +6,13 @@ import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";
 import { useStageFill } from "../../app/Stage";
 import { t as tr } from "../../i18n/t";
+import { cx } from "../../core/cx";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
 import { isModalOpen } from "../../ui/Modal";
 import { sfx } from "../../core/audio";
 import { AutoBanner } from "../../ui/AutoToggle";
+import { CardFace } from "../../ui/Card";
 import { TopBar } from "../../ui/TopBar";
 import { useBoardSession } from "./anim";
 import { act, buyable, canBuildOn, modeName, model } from "./model";
@@ -116,6 +118,41 @@ export function Board({ sess }: { sess: GameSession }) {
             <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
           </div>
           <Hand m={m} sess={sess} busy={anim.animating} />
+          {/* Match-screen FX layer: the stage banner (new-turn announcement),
+              the action banner and the card activation flash are detached from
+              the map -- sized and placed by this column, never clipped or
+              scaled by the ring's window or zoom. */}
+          <div className={s.fx}>
+            {anim.banner && (
+              <div key={anim.banner.id} className={s.banner}>
+                <b>{anim.banner.title}</b>
+                {anim.banner.body && <span>{anim.banner.body}</span>}
+              </div>
+            )}
+            {anim.turnAnnouncement && (
+              <div key={anim.turnAnnouncement.id} className={s.phaseFlash}>
+                <i className={s.link} /><i className={s.link} /><i className={s.link} /><i className={s.link} />
+                <span>{anim.turnAnnouncement.label}</span>
+              </div>
+            )}
+            {anim.flash && (
+              <div key={anim.flash.id} className={cx(s.flash, anim.flash.out && s.flashOut)}>
+                <div
+                  className={s.flashFace}
+                  style={{ ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)" }}
+                >
+                  <CardFace id={anim.flash.card} size="big" />
+                  {(anim.flash.caption || anim.flash.detail.length > 0) && (
+                    <div className={s.flashCaption}>
+                      {anim.flash.caption && <div>{anim.flash.caption}</div>}
+                      {anim.flash.detail.map((d, k) => <div key={k} className={s.flashDetail}>{d}</div>)}
+                    </div>
+                  )}
+                  {anim.flash.negated && <div className={s.flashNegated}><span>{tr("board.cardNegated")}</span></div>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         <div className={s.right}>
           <div className={s.logSlot}>

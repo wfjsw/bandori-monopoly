@@ -3,14 +3,52 @@
    Three flex columns -- the outer columns hug the stage edges at their fixed
    widths and the middle one takes every remaining pixel, so the composition
    holds at any width. The match stage fills the window height (Stage
-   `useStageFill`): the columns stretch to it. The PR's composition is kept
-   inside the centre column -- the 6:5 map on top, the collapsed hand
-   underneath -- but the centre itself is responsive rather than a fixed
-   856px: extra width and height all go to the map area (the board scales to
-   the largest 6:5 rect in `.mapSlot`; the hand takes its own height). */
+   `useStageFill`): the columns stretch to it. The map fills the centre
+   column's width and the height above the hand (no fixed aspect): the ring's
+   12 x 10 grid stretches to that rectangle (Ring.module.css). */
 .body { position: absolute; inset: 0 38px; display: flex; justify-content: space-between; gap: 9px; }
 .left { position: relative; flex: 0 0 350px; }
 .middle { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding-bottom: 22px; }
-.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
+.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; justify-content: stretch; }
 .right { position: relative; flex: 0 0 300px; }
 .logSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+
+/* Match-screen FX layer over the centre column: the stage banner, the action
+   banner and the card flash. Detached from the map element -- never clipped
+   or sized by the ring's window or zoom -- so they read the same at any map
+   size. */
+.fx { position: absolute; inset: 0; pointer-events: none; }
+.banner { position: absolute; left: 50%; top: 40.65%; transform: translateX(-50%); z-index: 20; min-width: 360px; max-width: 600px; pointer-events: none; background: rgba(255, 255, 255, 0.96); border-radius: 14px; box-shadow: 0 10px 30px rgba(80, 30, 50, 0.25); padding: 12px 26px; text-align: center; display: flex; flex-direction: column; gap: 4px; border-top: 6px solid var(--pink); animation: banner 2.2s ease forwards; }
+@keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 8%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
+.banner b { font-size: 26px; color: var(--pink); }
+.banner span { font-size: 15px; }
+/* New-turn announcement: a wide light bar sweeps the player's turn label
+   across the centre -- in once, shine pass, out. */
+.phaseFlash { position: absolute; left: 50%; top: 24.95%; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.5s ease forwards; }
+.phaseFlash span { display: block; font-size: 34px; font-weight: 800; letter-spacing: 0.14em; white-space: nowrap; background: linear-gradient(90deg, var(--pink) 0%, #c23a7c 48%, var(--pink) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.phaseFlash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.9) 50%, transparent 68%); transform: translateX(-120%); animation: phaseSweep 0.9s ease-out forwards; }
+/* Master Duel's chain resolve: links snap across the banner, then a white flash. */
+.phaseFlash::before { content: ""; position: absolute; inset: -20%; border-radius: 50%; background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.95) 0%, rgba(255, 214, 230, 0.5) 45%, transparent 72%); opacity: 0; animation: resolveFlash 1.5s ease-out forwards; }
+.link { position: absolute; top: -13px; width: 21px; height: 32px; border: 4px solid rgba(226, 66, 118, 0.8); border-radius: 11px; background: rgba(255, 255, 255, 0.55); opacity: 0; transform: rotate(90deg) scale(0.3); animation: linkSnap 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+.link:nth-of-type(1) { left: 10%; animation-delay: 0s; }
+.link:nth-of-type(2) { left: 30%; animation-delay: 0.11s; }
+.link:nth-of-type(3) { left: 62%; animation-delay: 0.22s; }
+.link:nth-of-type(4) { left: 82%; animation-delay: 0.33s; }
+@keyframes linkSnap { to { opacity: 1; transform: rotate(90deg) scale(1); } }
+@keyframes resolveFlash { 0% { opacity: 0; transform: scale(0.55); } 32% { opacity: 0.95; transform: scale(1); } 100% { opacity: 0; transform: scale(1.25); } }
+@keyframes phaseFlash { 0% { opacity: 0; transform: translate(-50%, -16px) scale(0.9); } 12% { opacity: 1; transform: translate(-50%, 0) scale(1); } 78% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, 10px) scale(1.05); } }
+@keyframes phaseSweep { to { transform: translateX(120%); } }
+/* Below the status banner: a card activation flash overlaps it at vertical
+   centre. The face carries the owner's colour, the activation's caption and,
+   when its body applied an effect (正论暴击 and kin), that effect's line --
+   the flash is where those land, never their own modal. A negated activation
+   is marked 无效. */
+.flash { position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 25; animation: flash 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
+.flashFace { position: relative; width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); border-radius: 12px; border: 3px solid var(--owner, var(--pink)); background: #fff; }
+.flashCaption { margin-top: -2px; padding: 6px 10px 8px; text-align: center; font-size: 15px; font-weight: 700; color: var(--ink, #4b2233); background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 236, 244, 0.95) 40%); border-radius: 0 0 9px 9px; display: flex; flex-direction: column; gap: 3px; }
+/* An attached effect line under the caption: same block, a lighter weight. */
+.flashDetail { font-size: 13px; font-weight: 600; line-height: 1.45; color: var(--ink, #4b2233); }
+.flashNegated { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.flashNegated span { transform: rotate(-12deg); border: 6px solid rgba(190, 30, 70, 0.75); border-radius: 14px; padding: 6px 18px; background: rgba(255, 255, 255, 0.72); font-size: 44px; font-weight: 900; letter-spacing: 0.2em; color: rgba(190, 30, 70, 0.82); text-shadow: 0 2px 10px rgba(255, 255, 255, 0.9); }
+.flashOut { opacity: 0; transform: translate(-50%, -60%); }
+@keyframes flash { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }
