@@ -12,7 +12,8 @@ import { n0 } from "../../core/format";
 import { useSessionOther } from "../../core/hooks";
 import { applyMatch, hasProfile } from "../../core/store";
 import type { MatchReward } from "../../core/types";
-import { downloadRecord, getReplay } from "../../game/record";
+import { downloadRecordPrompt } from "../../game/downloadPrompt";
+import { getReplay } from "../../game/record";
 import { queueReplayBytes } from "../../game/replay";
 import { type GameSession, endSession, OnlineSession, SoloSession } from "../../game/session";
 import { api } from "../../net/api";
@@ -99,7 +100,7 @@ function ReplayActions({ sess, watch }: { sess: GameSession; watch: (bytes: Uint
   if (!bytes) return null;
   return (
     <>
-      <Btn onClick={() => downloadRecord(bytes, name.endsWith(".bdrec") ? name : `${name}.bdrec`)}>{tr("results.downloadReplay")}</Btn>
+      <Btn onClick={() => downloadRecordPrompt(bytes, name)}>{tr("results.downloadReplay")}</Btn>
       <Btn kind="blue" onClick={() => watch(bytes, name)}>{tr("results.watchReplay")}</Btn>
     </>
   );

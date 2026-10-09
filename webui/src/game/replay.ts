@@ -15,17 +15,8 @@ import type { Msg } from "../i18n/msg";
 import { t as tr } from "../i18n/t";
 import { GameSession } from "./session";
 import { rules } from "../core/data";
-import {
-  archiveIndex,
-  missingBundleMessage,
-  resolveBundle,
-  type BundleChoice,
-} from "./engineBundle";
-import {
-  currentStamp,
-  openOnOwnEngine,
-  type ReplayHandle,
-} from "./replayEngine";
+import { type ReplayHandle } from "./replayEngine";
+import { openRecordOnEngine } from "./portableEngine";
 import type {
   EngineStamp,
   IndexStatus,
@@ -133,6 +124,10 @@ export class ReplaySession extends GameSession {
   /** Which engine is playing: the page's own wasm, or an archived bundle. */
   readonly engineKind: "page" | "worker";
   readonly engineBundle: string;
+  /** How the engine was obtained: the page, the hosted archive, or the copy
+   *  the record itself carries (`docs/REPLAY.md` §10). `"embedded"` is the
+   *  only one the user is told about. */
+  engineSource: "page" | "hosted" | "embedded" = "page";
 
   private h: ReplayHandle;
   /** Serializes engine calls (a worker answers one at a time anyway). */
@@ -421,21 +416,17 @@ export function openPending(): Promise<Opened> | null {
 
 const opened = new WeakMap<{ bytes: Uint8Array; id: string }, Promise<Opened>>();
 
-/** Bundle resolution + engine boot + the fatal compat gate. */
+/** Bundle resolution + engine boot + the fatal compat gate.
+ *
+ *  A portable record (`docs/REPLAY.md` §10) is routed by
+ *  `openRecordOnEngine`: the hosted archive when it holds the same bytes,
+ *  otherwise the engine the record itself carries. `force` is false: the
+ *  engine is chosen to match the record, so a stamp difference here is a bug
+ *  in the archive, not something to play through. */
 async function openRecord(p: { bytes: Uint8Array; id: string }): Promise<Opened> {
   try {
-    const header = JSON.parse(rules.record_header_bytes(p.bytes)) as RecordHeader;
-    const choice: BundleChoice = resolveBundle(header, await archiveIndex(), currentStamp());
-    if (pending !== p) return { phase: "error", message: tr("replay.noReplay") };
-    if (choice.kind === "missing") {
-      return { phase: "error", message: missingBundleMessage(choice.bundle) };
-    }
-    if (choice.kind === "unknown") {
-      return { phase: "error", message: choice.reason };
-    }
-    // `force` is false: the engine was chosen to match the record, so a stamp
-    // difference here is a bug in the archive, not something to play through.
-    const h = await openOnOwnEngine(choice, p.bytes, false);
+    const opened = await openRecordOnEngine(p.bytes, false);
+    const h = opened.handle;
     try {
       if (pending !== p) {
         await h.free();
@@ -452,6 +443,7 @@ async function openRecord(p: { bytes: Uint8Array; id: string }): Promise<Opened>
       }
       const rs = await ReplaySession.create(h, p.id);
       rs.stampMismatches = mis;
+      rs.engineSource = opened.source;
       startReplay(rs);
       return { phase: "ready", rs };
     } catch (e) {

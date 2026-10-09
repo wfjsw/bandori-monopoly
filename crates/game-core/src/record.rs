@@ -585,6 +585,13 @@ pub fn is_gzip(bytes: &[u8]) -> bool {
 /// Accepts zstd (the current form), gzip (older browser downloads and
 /// IndexedDB rows) and plain JSON. One decode path for every caller -- the
 /// wasm build included -- so an old recording plays anywhere a new one does.
+///
+/// **Trailing bytes are ignored.** A portable `.bdrec` (`docs/REPLAY.md` §10)
+/// appends a zstd skippable frame (the embedded engine bundle) after the
+/// record frame; every reader -- including every archived bundle -- stops at
+/// the end of the record frame and never looks at what follows. That is what
+/// keeps the plain format unchanged and old engines from misreading the
+/// extension: to them the file is just the record.
 pub fn expand_record(bytes: &[u8]) -> Result<Vec<u8>, ReplayError> {
     match sniff_record(bytes) {
         RecordEncoding::Zstd => {
@@ -661,6 +668,37 @@ pub fn zst_encode_pure(bytes: &[u8]) -> Vec<u8> {
         bytes,
         structured_zstd::encoding::CompressionLevel::Fastest,
     )
+}
+
+/// zstd-decompress a single frame, bounded by `max` output bytes.
+///
+/// The portable record extension (`docs/REPLAY.md` §10) keeps its embedded
+/// engine bundle in a zstd frame; a reader must refuse a decompression bomb
+/// rather than grow without limit, so the cap is part of the API. Decode is
+/// [`expand_record`]'s decoder (`ruzstd`) -- one decoder everywhere.
+pub fn zst_decode(bytes: &[u8], max: usize) -> Result<Vec<u8>, ReplayError> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    let mut dec = ruzstd::decoding::StreamingDecoder::new(bytes)
+        .map_err(|e| ReplayError::Corrupt(format!("zstd: {e}")))?;
+    // Read in chunks and bail as soon as the cap is passed -- `read_to_end`
+    // would have to allocate the whole (possibly hostile) output first.
+    let mut chunk = [0u8; 64 * 1024];
+    loop {
+        let n = dec
+            .read(&mut chunk)
+            .map_err(|e| ReplayError::Corrupt(format!("zstd: {e}")))?;
+        if n == 0 {
+            break;
+        }
+        if out.len() + n > max {
+            return Err(ReplayError::Corrupt(format!(
+                "zstd output exceeds {max} bytes"
+            )));
+        }
+        out.extend_from_slice(&chunk[..n]);
+    }
+    Ok(out)
 }
 
 /// Serialize a record to a gzip member (legacy framing; tests and the size
