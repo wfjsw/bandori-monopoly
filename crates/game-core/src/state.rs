@@ -919,6 +919,29 @@ pub struct MatchEvent {
     pub dice: i32,
     pub card: String,
     pub msg: Msg,
+    /// Trigger kind of a `"card"` activation -- `card_trigger::PLAY` / `SKILL` /
+    /// `EVENT` / `COUNTER` / `HOOK`. Empty on every other event type.
+    /// `#[serde(default)]` so an event tail written before this field loads.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub kind: String,
+    /// A `"card"` activation a counteraction negated: the card still flashes
+    /// (marked 无效) and its log line says so, but its body did not run.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub negated: bool,
+}
+
+/// The [`MatchEvent::kind`] values of a `"card"` activation event.
+pub mod card_trigger {
+    /// A card played from hand (`PlayFromHand`).
+    pub const PLAY: &str = "play";
+    /// A skill press (`use_skill`).
+    pub const SKILL: &str = "skill";
+    /// A drawn event card's effect.
+    pub const EVENT: &str = "event";
+    /// A [反击] card's body.
+    pub const COUNTER: &str = "counter";
+    /// A placed / field card's hook firing (tile, rent, pass, settle, ...).
+    pub const HOOK: &str = "hook";
 }
 
 impl Default for MatchEvent {
@@ -934,6 +957,8 @@ impl Default for MatchEvent {
             dice: 0,
             card: String::new(),
             msg: Msg::default(),
+            kind: String::new(),
+            negated: false,
         }
     }
 }

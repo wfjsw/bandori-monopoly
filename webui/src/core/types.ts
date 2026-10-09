@@ -83,6 +83,12 @@ export interface MatchVote { id: number; by: number; players: number[]; answers:
 export interface MatchEvent {
   id: number; type: string; playerId: number; other: number; value: number;
   from: number; to: number; dice: number; card: string; msg: Msg;
+  /** A `card` activation's trigger kind: play | skill | event | counter | hook.
+   *  Empty on every other event type (serde-defaulted on the wire). */
+  kind?: string;
+  /** A `card` activation a counteraction negated: the card still flashes,
+   *  marked 无效, but its body did not run. */
+  negated?: boolean;
 }
 /** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */

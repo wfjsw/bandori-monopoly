@@ -706,9 +706,58 @@ fn pass_tele_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A field card with a hook on the tile it stands beside: its `settle` clause
+/// fires for **its holder** landing anywhere. Another player's land is a guard
+/// reject, so the body never runs and nothing about the card is announced --
+/// the card-activation event must say the same.
+const TILE_HOOK: CardDef = CardDef::new(
+    "TEST:tileHook",
+    &[
+        On::Play("", None, tile_hook_place),
+        On::Hook(&[HookKind::Settle], "", Some(tile_hook_yes), tile_hook),
+    ],
+);
+
+fn tile_hook_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:tileHook", &Msg::new(key!("tile_hook_note")));
+    Ok(())
+}
+
+fn tile_hook_yes(player_id: i32) -> bool {
+    ctx::is_placed() && trigger::player_id() == player_id
+}
+
+fn tile_hook(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("tile_hook_ran")));
+    Ok(())
+}
+
+/// [反击] a root play itself -- 「将其抵消」. Answers the `card` link at its own
+/// declaration (`seq == 0`, the root; a counter's link is `seq >= 2`) and
+/// negates the **activation**, so the played card's body never runs.
+/// (`TEST:deny` is the same for a *counter's* play.)
+const DENY_PLAY: CardDef = CardDef::new(
+    "TEST:denyPlay",
+    &[On::Counteract(&[ChainKind::Card], "", Some(deny_play_yes), deny_play)],
+);
+
+fn deny_play_yes(player_id: i32) -> bool {
+    trigger::player_id() != player_id && trigger::seq() == 0
+}
+
+fn deny_play(player_id: i32) -> card_sdk::Asked {
+    trigger::set_cancelled();
+    ctx::log(
+        player_id,
+        &Msg::new(key!("deny_play_fired")).player_id("who", player_id),
+    );
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
-    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PASS_TELE
+    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PASS_TELE, TILE_HOOK, DENY_PLAY
 ]);

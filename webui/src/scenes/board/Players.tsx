@@ -3,12 +3,14 @@
 import { stateOf, stateMax } from "../../core/names";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
-import { cardTitle } from "../../core/data";
+import { D, cardTitle, skillText } from "../../core/data";
 import { cx } from "../../core/cx";
 import { n0 } from "../../core/format";
 import { Avatar } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
+import { CardFace, showCard } from "../../ui/Card";
+import { SkillBody } from "../../ui/SkillBody";
 import type { LogLine } from "./anim";
 import type { Model } from "./model";
 import type { MatchPlayer } from "../../core/types";
@@ -138,12 +140,32 @@ function turnGroups(lines: LogLine[]): { head?: LogLine; body: LogLine[] }[] {
   return groups;
 }
 
+/** A card name inside a log line: hover shows the card's details, click opens
+ *  the full card view. */
+function CardRef({ card, text, onHover, onLeave }: { card: string; text: string; onHover: (id: string, el: HTMLElement) => void; onLeave: () => void }) {
+  return (
+    <span
+      className={s.cardRef}
+      onMouseEnter={(e) => onHover(card, e.currentTarget)}
+      onMouseLeave={onLeave}
+      onClick={(e) => {
+        e.stopPropagation();
+        showCard(card);
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
 export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines]);
+  // Hovered card reference: its details float beside the line that names it.
+  const [peek, setPeek] = useState<{ id: string; x: number; y: number } | null>(null);
   const groups = turnGroups(lines);
   return (
     <div className={s.log}>
@@ -159,11 +181,42 @@ export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: 
               style={bar ? { ["--bar" as string]: bar } : undefined}
             >
               {g.head && <div className={s.groupHead}>{g.head.text}</div>}
-              {g.body.map((l) => <div key={l.id} className={cx(l.stage && s.stageLine)}>{l.text}</div>)}
+              {g.body.map((l) => (
+                <div key={l.id} className={cx(l.stage && s.stageLine)}>
+                  {l.parts?.length
+                    ? l.parts.map((p, k) =>
+                        typeof p === "string" ? (
+                          <span key={k}>{p}</span>
+                        ) : (
+                          <CardRef
+                            key={k}
+                            card={p.card}
+                            text={p.text}
+                            onHover={(id, el) => {
+                              const r = el.getBoundingClientRect();
+                              setPeek({ id, x: r.left, y: r.bottom + 6 });
+                            }}
+                            onLeave={() => setPeek(null)}
+                          />
+                        ))
+                    : l.text}
+                </div>
+              ))}
             </div>
           );
         })}
       </div>
+      {peek && (
+        <div className={s.cardPeek} style={{ left: peek.x, top: peek.y }}>
+          <div className={s.cardPeekRow}>
+            <CardFace id={peek.id} size="mini" />
+            <div className={s.cardPeekHead}>
+              <b>{cardTitle(peek.id)}</b>
+              <SkillBody text={skillText(D.card(peek.id))} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

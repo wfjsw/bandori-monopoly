@@ -857,7 +857,7 @@ impl Table {
     pub fn keys_since(&self, mark: i32) -> Vec<String> {
         self.events_since(mark)
             .into_iter()
-            .map(|e| e.msg.key().to_string())
+            .map(|e| log_key(&e))
             .collect()
     }
 
@@ -868,10 +868,26 @@ impl Table {
             .world()
             .recent
             .iter()
-            .map(|e| e.msg.key().to_string())
+            .map(|e| log_key(e))
             .collect();
         all[all.len().saturating_sub(n)..].to_vec()
     }
+}
+
+/// The key a log event speaks as: its own, or the `what` inside an in-play
+/// card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`). A
+/// flash-only `"card"` event (an activation with no line of its own) speaks as
+/// `""`.
+pub fn log_key(e: &MatchEvent) -> String {
+    let m = if e.msg.key() == "log.card_effect" {
+        match e.msg.a.get("what") {
+            Some(Arg::Msg(m)) => m.as_ref(),
+            _ => &e.msg,
+        }
+    } else {
+        &e.msg
+    };
+    m.key().to_string()
 }
 
 /// An integer argument of a message (`.i` / `.n`).

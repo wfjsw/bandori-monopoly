@@ -391,6 +391,10 @@ pub struct StubRules;
 
 impl CardRules for StubRules {
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest> {
+        // No module body runs and no effect activates -- a stub play stays
+        // silent apart from the "not ported" note. (`WasmRules` announces its
+        // bodies at `drive_inner_body`; the sim's counts therefore see no new
+        // event kinds.)
         cx.log(
             player_id as i32,
             Msg::new("log.card_not_ported").card("card", card),
