@@ -755,9 +755,9 @@ fn t18_rana_interesting_woman() {
         "card left the field"
     );
     assert!(
-        t.discard(0).iter().any(|c| c.contains("有趣的女人")),
-        "card shuffled into a discard pile: {:?}",
-        t.discard(0)
+        t.draw_pile(0).iter().any(|c| c.contains("有趣的女人")),
+        "card filed and immediately reshuffled into the empty deck: {:?}",
+        t.draw_pile(0)
     );
 }
 

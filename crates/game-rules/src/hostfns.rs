@@ -508,35 +508,31 @@ pub fn players_on_at<C: HostCtx>(c: &mut C, tile: i32, except: i32, index: i32) 
 }
 
 pub fn draw<C: HostCtx>(c: &mut C, player_id: i32, n: i32) -> Result<i32, HostErr> {
-            // A card-driven draw is paused so the engine can raise the per-card
-            // `drewBefore` point (and so a hook may replace a card of it) before
-            // the cards move. The engine adjudicates; **this** run then moves
-            // the plain cards on its own world copy -- the same shape as `pay`,
-            // where the engine runs the Money pipeline and the effect applies
-            // the payment. The answer is how many of the `n` are plain draws.
-            //
-            // Three shapes, same tail: a logged answer, an inline answer
-            // (simulation mode -- the engine routine ran mid-body and the
-            // cards move now, no replay), or the pause. Only the pause leaves
-            // the cards in the draw pile for the replay to move.
-            {
-                let st = c.st_mut();
-                if let Some(&plain) = st.answers.get(st.next_answer) {
-                    st.next_answer += 1;
-                    let plain = plain.clamp(0, n);
-                    return Ok(st.w().draw(player_id, plain));
-                }
-            }
-            if let Some(plain) =
-                crate::inline::request_or_inline(c, HostRequest::Draw { player_id, n })?
-            {
-                let plain = plain.clamp(0, n);
-                let st = c.st_mut();
-                return Ok(st.w().draw(player_id, plain));
-            }
-            let st = c.st_mut();
-            st.host_request = Some(HostRequest::Draw { player_id, n });
-            Ok(abi::EXIT_NEED_INPUT)
+    // Negative replies encode draws the engine already applied, including
+    // replacements, refill and after-hooks. Guest replay only returns their
+    // count; the fresh world copy already contains the resulting piles.
+    // Positive replies remain supported by standalone host fixtures.
+    fn apply_reply<C: HostCtx>(c: &mut C, player_id: i32, n: i32, reply: i32) -> i32 {
+        if reply < 0 {
+            (-(reply + 1)).clamp(0, n.max(0))
+        } else {
+            c.st_mut().w().draw(player_id, reply.clamp(0, n.max(0)))
+        }
+    }
+    {
+        let st = c.st_mut();
+        if let Some(&reply) = st.answers.get(st.next_answer) {
+            let answer = st.next_answer;
+            st.w().after_host(answer);
+            st.next_answer += 1;
+            return Ok(apply_reply(c, player_id, n, reply));
+        }
+    }
+    if let Some(reply) = crate::inline::request_or_inline(c, HostRequest::Draw { player_id, n })? {
+        return Ok(apply_reply(c, player_id, n, reply));
+    }
+    c.st_mut().host_request = Some(HostRequest::Draw { player_id, n });
+    Ok(abi::EXIT_NEED_INPUT)
 }
 
 pub fn draw_event<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
@@ -1329,6 +1325,8 @@ pub fn teleport_to<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<(
             {
                 let st = c.st_mut();
                 if st.answers.get(st.next_answer).is_some() {
+                    let answer = st.next_answer;
+                    st.w().after_host(answer);
                     st.next_answer += 1;
                     return Ok(());
                 }
@@ -1412,6 +1410,8 @@ pub fn card_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> 
             {
                 let st = c.st_mut();
                 if let Some(&ok) = st.answers.get(st.next_answer) {
+                    let answer = st.next_answer;
+                    st.w().after_host(answer);
                     st.next_answer += 1;
                     return Ok(ok);
                 }

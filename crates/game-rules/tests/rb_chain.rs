@@ -199,9 +199,9 @@ fn an_explicit_pass_advances_priority() {
         "only the declared probe ran"
     );
     assert_eq!(
-        t.discard(1).iter().filter(|c| *c == "TEST:probe").count(),
+        t.draw_pile(1).iter().filter(|c| *c == "TEST:probe").count(),
         1,
-        "one probe spent, one kept: {:?}",
+        "one probe spent and immediately reshuffled, one kept: {:?}",
         t.hand(1)
     );
 }
@@ -590,9 +590,9 @@ fn a_negated_counters_body_does_not_run() {
     );
     // The declaration still stands: the card was played and is spent.
     assert!(
-        t.discard(1).contains(&"TEST:probe".to_string()),
-        "the negated counter is still spent: {:?}",
-        t.discard(1)
+        t.draw_pile(1).contains(&"TEST:probe".to_string()),
+        "the negated counter is spent and immediately reshuffled: {:?}",
+        t.draw_pile(1)
     );
     // Its body would have negated X; it never ran, so X settled.
     assert_eq!(

@@ -3920,6 +3920,15 @@ impl Cx<'_> {
         Ok(())
     }
 
+    /// Restore the draw pile and run its hook before any later after-effect.
+    pub fn refill_draw_pile(&mut self, i: usize, hooks: bool) -> Flow<bool> {
+        let refilled = self.w.refill_draw_pile(i);
+        if refilled && hooks {
+            raise!(self, "reshuffled", i)?;
+        }
+        Ok(refilled)
+    }
+
     /// Draw `n` cards one at a time, raising one **before-draw** and one
     /// **after-draw** point per single card. Returns how many entered the hand.
     ///
@@ -3946,20 +3955,7 @@ impl Cx<'_> {
         }
         let mut got = 0;
         for _ in 0..n {
-            if self.w.hidden[i].draw.is_empty() && !self.w.hidden[i].discard.is_empty() {
-                let mut pile = std::mem::take(&mut self.w.hidden[i].discard);
-                self.w.rng.shuffle(&mut pile);
-                self.w.hidden[i].draw = pile;
-                self.w.log(
-                    "text",
-                    i as i32,
-                    Msg::new("log.reshuffle").player_id("who", i),
-                );
-                if hooks {
-                    // `reshuffled` (Fx) -- C# `Each(Reshuffled)` 19655.
-                    raise!(self, "reshuffled", i)?;
-                }
-            }
+            self.refill_draw_pile(i, hooks)?;
             let top = self.w.hidden[i].draw.last().cloned().unwrap_or_default();
             // `drewBefore` -- the per-card replacement point.
             let mut replacement: Option<String> = None;
@@ -3988,9 +3984,13 @@ impl Cx<'_> {
                 card
             };
             let Some(card) = card else {
+                self.refill_draw_pile(i, hooks)?;
                 continue;
             };
             got += 1;
+            // Empty-deck maintenance has priority over the card's own Drawn,
+            // field Drew hooks, and any prompts those effects may open.
+            self.refill_draw_pile(i, hooks)?;
             if hooks {
                 // `drawn` -- the drawn card's own hook (C# AfterDraw 19660).
                 raise!(self, "drawn", i, card = card.clone(), value = 1)?;
@@ -4053,9 +4053,11 @@ impl Cx<'_> {
                     .card("card", card),
             )
             .card = card.to_string();
-        // `discarded` (Fx) -- C# `OnDiscarded` on that card, now in the pile.
+        self.refill_draw_pile(i, true)?;
+        // `discarded` (Fx) -- C# `OnDiscarded` on the filed card, which may
+        // already have been shuffled into its owner's newly refilled deck.
         raise!(self, "discarded", i, card = card.to_string())?;
-        // `discardAfter` -- the card is in the discard pile.
+        // `discardAfter` -- after filing and immediate deck maintenance.
         raise!(self, "discardAfter", i, card = card.to_string())?;
         Ok(())
     }
@@ -4164,6 +4166,7 @@ impl Cx<'_> {
             Dest::Graveyard => {
                 if !self.out(i) {
                     self.w.hidden[i].discard.push(id.to_string());
+                    self.refill_draw_pile(i, true)?;
                     // `discarded` -- C# PlayCard 19872: before CardPlayed.
                     raise!(self, "discarded", i, card = id.to_string())?;
                 }

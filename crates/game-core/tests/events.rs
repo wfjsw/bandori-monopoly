@@ -159,7 +159,7 @@ fn event_deck_push_puts_it_on_top() {
 
 // An empty event deck takes the shuffled discard only once everything has
 // resolved: filing a card does not refill it, `refill_event_deck` (run at the
-// end of a draw) does.
+// end of a draw) does. (User ruling 2026-10-07.)
 #[test]
 fn empty_event_deck_takes_the_discard_after_resolution() {
     let mut m = new_match(Arc::new(OneEvent));

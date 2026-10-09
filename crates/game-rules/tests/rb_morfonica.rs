@@ -279,9 +279,9 @@ fn starry_empty_goes_to_discard() {
     t.roll(0).unwrap();
     decline_all(&mut t);
     assert!(
-        t.discard(0).contains(&"Mor:蝴蝶飞舞的星月夜".to_string()),
+        t.draw_pile(0).contains(&"Mor:蝴蝶飞舞的星月夜".to_string()),
         "discard={:?}",
-        t.discard(0)
+        t.draw_pile(0)
     );
 }
 
@@ -668,9 +668,9 @@ fn again_spent_card_goes_to_discard() {
     t.roll(1).unwrap();
     decline_all(&mut t);
     assert!(
-        t.discard(1).contains(&"Mor:再次牵起手来".to_string()),
+        t.draw_pile(1).contains(&"Mor:再次牵起手来".to_string()),
         "discard={:?}",
-        t.discard(1)
+        t.draw_pile(1)
     );
 }
 

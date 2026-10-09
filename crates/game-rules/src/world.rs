@@ -251,6 +251,10 @@ pub trait CardWorld: Clone + 'static {
     /// `H.PayR` -- money out (what the player could pay), logged.
     fn pay(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
 
+    /// Adopt the recorded pile state of an already-applied host request.
+    /// The default keeps standalone host fixtures independent of engine replay.
+    fn after_host(&mut self, _answer: usize) {}
+
     // ------------------------------------------------------------ hand/deck
     /// `H.DrawR` -- draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;

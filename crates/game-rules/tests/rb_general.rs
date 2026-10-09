@@ -42,7 +42,7 @@ fn tsugu_ge22_draws_a_card() {
     t.answer(0, 0).unwrap(); // gain 1000
     // 规则书: 「结果至少为22则抽1张卡」
     assert!(t.hand(0).contains(&"通用:GREAT".to_string()), "hand {:?}", t.hand(0));
-    assert!(t.draw_pile(0).is_empty(), "draw {:?}", t.draw_pile(0));
+    assert_eq!(t.draw_pile(0), vec!["通用:@Tsugu ycm"], "played card refills the empty deck");
 }
 
 // 规则书: 「结果小于26则选择[获得]1000资金或进入移动阶段并将本回合的[主要移动]改为[传送]到“bandori车站”并[结算]」
@@ -156,7 +156,7 @@ fn budokan_targets_everyone_else() {
     assert_eq!(t.money(1), 9_000);
     assert_eq!(t.money(2), 9_000);
     // Card goes to discard (not [移除], not [场地]).
-    assert_eq!(t.discard(0), vec!["通用:登上武道馆".to_string()]);
+    assert_eq!(t.draw_pile(0), vec!["通用:登上武道馆".to_string()]);
 }
 
 // =====================================================================
@@ -184,7 +184,7 @@ fn perfect_removes_self_adds_fever_gains_3000() {
     // [移除]此卡: PERFECT is gone from the game, not in the discard.
     assert!(!t.discard(0).contains(&"通用:[衍生]PERFECT".to_string()), "PERFECT [移除]ed");
     // 规则书: 「将一张“FEVER!“加入弃卡区」
-    assert_eq!(t.discard(0), vec!["通用:[衍生]FEVER!".to_string()]);
+    assert_eq!(t.draw_pile(0), vec!["通用:[衍生]FEVER!".to_string()]);
 }
 
 // 规则书: 「将此卡放置在[使用者]的[场地]」
@@ -278,7 +278,7 @@ fn fever_leaves_to_users_discard() {
     // Owner's turn start: card leaves the field.
     assert!(!t.on_field(0, "通用:[衍生]FEVER!"), "field {:?}", t.field_ids(0));
     // …into the [使用者]'s (P0's) discard.
-    assert_eq!(t.discard(0), vec!["通用:[衍生]FEVER!".to_string()]);
+    assert_eq!(t.draw_pile(0), vec!["通用:[衍生]FEVER!".to_string()]);
 }
 
 // =====================================================================
@@ -293,7 +293,7 @@ fn recruit_costs_1500_and_draws() {
     t.give_play(0, "通用:10次招募（1回限定）").unwrap();
     assert_eq!(t.money(0), 8_500);
     assert!(t.hand(0).contains(&"通用:GREAT".to_string()));
-    assert_eq!(t.discard(0), vec!["通用:10次招募（1回限定）".to_string()]);
+    assert_eq!(t.draw_pile(0), vec!["通用:10次招募（1回限定）".to_string()]);
 }
 
 // The name says 「1回限定」 but the body carries no [限]; the engine lets the
@@ -566,9 +566,9 @@ fn cp_card_is_graveyarded_when_its_on_card_cp_reaches_zero() {
         "the card left the field the moment its on-card [CP点] was empty"
     );
     assert!(
-        t.discard(0).iter().any(|c| c == "通用:该清CP了"),
-        "the card went to the discard: {:?}",
-        t.discard(0)
+        t.draw_pile(0).iter().any(|c| c == "通用:该清CP了"),
+        "the filed card immediately refilled the draw pile: {:?}",
+        t.draw_pile(0)
     );
 }
 
@@ -627,7 +627,7 @@ fn rain_stays_x_players_including_user() {
         // 规则书: 「获得一层[停留]」
         assert_eq!(t.state(who, "stay"), 1, "P{who} stay");
     }
-    assert_eq!(t.discard(0), vec!["通用:雨啊，快点来吧".to_string()]);
+    assert_eq!(t.draw_pile(0), vec!["通用:雨啊，快点来吧".to_string()]);
 }
 
 // 规则书: 「[指定]X名玩家（其中必须包括[使用者]）」
@@ -658,10 +658,12 @@ fn net_negates_untargeted_hand_effect() {
     skip_all(&mut t);
     // 规则书: 「抵消其所有的效果」 — no money, no PERFECT.
     assert_eq!(t.money(0), 10_000, "no +2000");
-    assert!(t.draw_pile(0).is_empty(), "no PERFECT");
-    // The played card still lands in the discard (the play was not undone).
-    assert!(t.discard(0).contains(&"通用:GREAT".to_string()));
-    assert!(t.discard(1).contains(&"通用:网络链接异常".to_string()));
+    assert!(!t.draw_pile(0).contains(&"通用:[衍生]PERFECT".to_string()), "no PERFECT");
+    // Both spent cards are filed, then immediately refill their owners' empty decks.
+    assert_eq!(t.draw_pile(0), vec!["通用:GREAT"]);
+    assert_eq!(t.draw_pile(1), vec!["通用:网络链接异常"]);
+    assert!(t.discard(0).is_empty());
+    assert!(t.discard(1).is_empty());
 }
 
 // 规则书: 「1. 手卡的[手]效果且有[指定]目标则取消其对目标之一的[指定]」

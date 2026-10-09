@@ -95,6 +95,19 @@ if the body did not stay:             -- one-shot / negated
 raise `eventAfter`
 ```
 
+The event-deck reshuffle waits for everything to resolve (user ruling
+2026-10-07: "Wait for everything to resolve, only then reshuffle the event
+deck back"), which is also the rulebook's shape (`data/rules.txt` 基础[结算]
+2.2: 「事件结算后进入事件弃卡区。如果没有事件可抽取则将事件弃卡区洗切并当作新的
+事件卡堆来抽取。」). The hand-card draw pile is the opposite: it refills as
+soon as it empties (「当抽卡区抽光时将弃卡区洗卡并放回抽卡区」, 规则书 游戏流程 2).
+
+The event tile's hand draw runs through the engine immediately, including
+empty-deck maintenance and per-card hooks, before the event draw can prompt.
+Card-module replay restores the pre-draw piles and adopts each completed host
+request at its original statement, so discard/redraw effects do not repeat
+their pile writes on the newly drawn hand.
+
 Everything else is the rule's:
 
 | mechanic | where |

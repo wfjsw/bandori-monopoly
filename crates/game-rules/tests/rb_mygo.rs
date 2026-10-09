@@ -96,9 +96,9 @@ fn confused_持续_moves_by_hand_count() {
     drain(&mut t);
     assert!(!t.on_field(0, "MyGO:即使迷茫着"), "{:?}", t.field_ids(0));
     assert!(
-        t.discard(0).contains(&"MyGO:即使迷茫着".to_string()),
+        t.draw_pile(0).contains(&"MyGO:即使迷茫着".to_string()),
         "discard {:?}",
-        t.discard(0)
+        t.draw_pile(0)
     );
     assert_eq!(t.pos(0), 3, "3 hand cards -> 3 steps");
 }
@@ -116,7 +116,9 @@ fn light_places_with_stay_and_x_plus_1_crystals() {
     assert_eq!(t.state(0, "stay"), 2, "two stay layers");
     assert!(t.on_field(0, "MyGO:（灯）不再迷茫"), "{:?}", t.field_ids(0));
     assert!(t.hand(0).is_empty(), "hand {:?}", t.hand(0));
-    assert_eq!(t.discard(0).len(), 2, "discard {:?}", t.discard(0));
+    // The first discard refills the empty deck before the next card is discarded.
+    assert_eq!(t.draw_pile(0), vec!["R:[衍生] 压"]);
+    assert_eq!(t.discard(0), vec!["R:[衍生] 觉悟"]);
     assert_eq!(crystals(&t, 0, "MyGO:（灯）不再迷茫"), 3, "X=2 -> 3");
 }
 
@@ -254,9 +256,9 @@ fn rain_gives_one_stay() {
     t.give_play(0, "MyGO:轮符雨").unwrap();
     assert_eq!(t.state(0, "stay"), 1);
     assert!(
-        t.discard(0).contains(&"MyGO:轮符雨".to_string()),
-        "non-[持续] card to discard: {:?}",
-        t.discard(0)
+        t.draw_pile(0).contains(&"MyGO:轮符雨".to_string()),
+        "non-[持续] card filed and reshuffled: {:?}",
+        t.draw_pile(0)
     );
 }
 
@@ -522,7 +524,7 @@ fn haneoka_at_19_does_not_place() {
         "19 is not ≥20; the card must not stay on the field"
     );
     assert!(
-        t.discard(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+        t.draw_pile(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
         "to discard"
     );
 }
@@ -862,9 +864,9 @@ fn meet_again_rerolls_until_passing_a_player() {
     drain(&mut t);
     assert!(t.pos(0) > 3, "passed P1 at 3; landed {}", t.pos(0));
     assert!(
-        t.discard(0).contains(&"MyGO:若能再次交汇".to_string()),
-        "counter to discard: {:?}",
-        t.discard(0)
+        t.draw_pile(0).contains(&"MyGO:若能再次交汇".to_string()),
+        "counter filed and reshuffled: {:?}",
+        t.draw_pile(0)
     );
 }
 
@@ -1211,9 +1213,9 @@ fn band_ineffective_card_adds_over_cap_crystal() {
     rest(&mut t);
     drain(&mut t);
     assert!(
-        t.discard(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
-        "ineffective card to discard: {:?}",
-        t.discard(0)
+        t.draw_pile(0).contains(&"MyGO:羽丘的不可思议女孩".to_string()),
+        "ineffective card filed and reshuffled: {:?}",
+        t.draw_pile(0)
     );
     assert_eq!(crystals(&t, 0, &band), 1, "one over-cap crystal");
 }
@@ -1452,7 +1454,7 @@ fn normal_ordinary_copies_last_main_move_steps() {
     if t.counteract_offered("MyGO:普通与理所当然") {
         t.counteract(0, "MyGO:普通与理所当然").unwrap();
         assert!(
-            t.discard(0).contains(&"MyGO:普通与理所当然".to_string())
+            t.draw_pile(0).contains(&"MyGO:普通与理所当然".to_string())
                 || t.on_field(0, "MyGO:普通与理所当然"),
             "counter left the hand: hand={:?}",
             t.hand(0)
