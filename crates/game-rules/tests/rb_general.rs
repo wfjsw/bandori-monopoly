@@ -1153,16 +1153,26 @@ fn circle_band_deck_rule_not_testable() {
 
 // 规则书: 「（2）在你打出的“通用”卡生效时，可额外弃一张牌，将打出的那张卡[手]效果中的一个数字变为两倍」
 #[test]
-#[ignore = "DISCREPANCY: 「可额外弃一张牌，将…一个数字变为两倍」 — no prompt and no doubling when a 通用 card resolves (GREAT pays 2000 not 4000 with a spare card in hand). wasm_rules notes the doubling band skill 「is not ported yet」"]
 fn circle_band_doubles_a_number() {
     let mut t = Table::new(&["月岛麻里奈", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
     t.give(0, &["通用:GREAT", "通用:登上武道馆"]); // spare card to discard
     t.play(0, "通用:GREAT").unwrap();
-    // Expect a prompt offering the double; take it and discard the spare.
+    // 「后勤人员的努力」 (2): accept the offer and name number 1 (the 2000).
+    // `ask_number(1, 9)` offers option 0 = number 1.
+    while t.prompt().is_some() {
+        let d = t.dump_prompt();
+        if d.contains("circle_staff_ask") {
+            let _ = t.answer_one(0); // yes
+        } else if d.contains("circle_staff") {
+            let _ = t.answer_one(0); // number 1 (option 0 of min..=max)
+        } else {
+            t.decline();
+        }
+    }
     // 规则书: 「一个数字变为两倍」 → 2000 becomes 4000.
-    assert_eq!(t.money(0), 14_000, "2000 doubled to 4000");
+    assert_eq!(t.money(0), 14_000, "2000 doubled to 4000: {:?}", t.recent_keys(12));
 }
 
 // =====================================================================

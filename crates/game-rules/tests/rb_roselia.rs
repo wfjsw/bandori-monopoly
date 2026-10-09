@@ -465,7 +465,6 @@ fn yukina_skill_1_first_circle_pass_gives_no_reward() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「移动终点为任意“RiNG”时，获得一个火罐（上限1）」, engine grants no fire pot on a Ring landing"]
 fn yukina_skill_3_gains_a_fire_pot_on_a_ring() {
     // 规则书: 「（3）移动终点为任意“RiNG”时，获得一个火罐（上限1）。」
     let mut t = Table::new(&["凑友希那", "户山香澄"]);
@@ -511,45 +510,52 @@ fn rinko_skill_1_gains_three_fire_pots_passing_circle() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「你可以在移动掷骰前消耗X个火罐，使这回合移动掷骰的结果固定为X*6」, engine offers no pre-roll pot prompt (the roll goes through unmodified)"]
 fn rinko_skill_2_fixes_the_move_roll_to_x_times_six() {
     // 规则书: 「你可以在移动掷骰前消耗X个火罐，使这回合移动掷骰的结果固定为X*6。」
+    // （2） is a press (「此技能可以正常使用」) with a timing window 「移动掷骰前」,
+    // not an auto-prompt: press the skill, then roll.
     let mut t = Table::new(&["白金燐子", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.set_fire(0, 2, 3);
     t.set_pos(0, 0);
     t.dice(&[3]);
-    t.roll(0).unwrap();
+    let skill = t.skill_id(0, "1cm");
+    t.skill(0, &skill).unwrap();
+    // the X prompt (ask_number 1..=2) -- option 1 is X = 2
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("rinko") || d.contains("1cm") || d.contains("前进") || d.contains("火罐") {
-            let _ = t.answer_one(2);
+        if d.contains("rinko_1cm") {
+            let _ = t.answer_one(1);
         } else {
             t.decline();
         }
     }
+    t.roll(0).unwrap();
+    drain(&mut t);
     assert_eq!(t.pos(0), 12, "2 * 6 = 12, events {:?}", t.recent_keys(10));
     assert_eq!(t.fire(0), 0, "2 pots spent");
 }
 
 #[test]
-#[ignore = "DISCREPANCY: same as rinko_skill_2_fixes_the_move_roll_to_x_times_six -- no pre-roll pot window"]
 fn rinko_skill_2_prompt_is_offered_before_the_move_roll() {
-    // 规则书: 「你可以在移动掷骰前消耗X个火罐」 -- a pre-roll window must exist.
+    // 规则书: 「你可以在移动掷骰前消耗X个火罐」 -- the press is available
+    // before the roll. `can_use` gates on holding ≥1 pot; pressing it opens
+    // the X prompt (i18n key `rinko_1cm_*`) while the roll has not happened.
     let mut t = Table::new(&["白金燐子", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.set_fire(0, 3, 3);
     t.set_pos(0, 0);
     t.dice(&[1]);
+    let skill = t.skill_id(0, "1cm");
     let mk = t.mark();
-    t.roll(0).unwrap();
+    t.skill(0, &skill).unwrap();
     let keys = t.keys_since(mk);
     let mut saw = false;
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("rinko") || d.contains("1cm") || d.contains("前进") || d.contains("火罐") {
+        if d.contains("rinko_1cm") {
             saw = true;
         }
         t.decline();
@@ -685,9 +691,10 @@ fn interaction_nfo_stay_blocks_next_turns_move() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 「当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下」, engine offers no such prompt"]
 fn interaction_yukina_stop_pot_vs_a_passing_player() {
     // 凑友希那 (3): 「当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算。」
+    // The offer is `kokoro_practice_force_*` (i18n keys, not the resolved
+    // Chinese text) -- match the key, the same way `rb_settle_stages::m4_kokoro_force_stop_stops_a_passer` does.
     let mut t = Table::new(&["凑友希那", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
@@ -701,14 +708,17 @@ fn interaction_yukina_stop_pot_vs_a_passing_player() {
     t.dice(&[5]); // passes r2
     t.roll(1).unwrap();
     // yukina may fire the pot
+    let mut offered = false;
     while t.prompt().is_some() {
         let d = t.dump_prompt();
-        if d.contains("yukina") || d.contains("练习") || d.contains("火罐") {
+        if d.contains("kokoro_practice_force") {
+            offered = true;
             let _ = t.answer_one(0); // yes, stop
         } else {
             t.decline();
         }
     }
+    assert!(offered, "the force-stop offer came up: {:?}", t.recent_keys(12));
     assert_eq!(t.pos(1), r2, "forced stop on yukina's tile: {:?}", t.recent_keys(12));
 }
 

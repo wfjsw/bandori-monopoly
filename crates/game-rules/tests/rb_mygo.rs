@@ -1123,7 +1123,6 @@ fn rana_cat_initial_fire_is_three() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book says 3 fire teleports to Space as the main move; engine spends the 3 fire but leaves the piece at the origin"]
 fn rana_cat_space_teleport_spends_three_fire() {
     // 规则书: 「（2）可花费3个火罐传送至space代替本回合的移动，该次传送不可进行地契购买。」
     let mut t = Table::new(&["要乐奈", "高松灯"]);
