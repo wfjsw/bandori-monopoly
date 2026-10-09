@@ -9,6 +9,7 @@
   "clear_cp_tok": "CP point",
   "effort_ask": "How many steps for this turn's main move?",
   "effort_title": "Fruit of Effort",
+  "effort_steps": "{{n}} tiles → {{tile}}",
   "encore_negate": "Encore: {{who}} negated this [Abnormal Move] and everything it leads to",
   "fever_note": "Money paid to or gained by the owner +X (starts at 600, −200 per card in play)",
   "fever_pay": "FEVER! {{x}}",

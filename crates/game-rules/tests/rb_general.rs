@@ -7,6 +7,7 @@
 
 mod common;
 use common::*;
+use game_core::msg::Arg;
 
 // =====================================================================
 // local helpers
@@ -692,11 +693,36 @@ fn harvest_moves_chosen_distance_and_settles() {
     t.give_play(0, "通用:尽力后的收获").unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.options.len(), 6, "1..=6: {}", t.dump_prompt());
+    for (i, option) in p.options.iter().enumerate() {
+        assert_eq!(option.a.get("n"), Some(&Arg::I(i as i64 + 1)));
+        assert_eq!(option.a.get("tile"), Some(&Arg::Tile(i as i32 + 1)));
+    }
     t.answer(0, 3).unwrap(); // 4
     assert_eq!(t.pos(0), 4, "events {:?}", t.recent_keys(8));
     // 并[结算]: tile 4 is a 地产商 — its settle offers the same-colour buys.
     let p = t.expect_prompt();
     assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+}
+
+#[test]
+fn harvest_previews_each_distance_with_wraparound_and_reverse() {
+    for reverse in [false, true] {
+        let mut t = Table::vanilla(2);
+        t.set_pos(0, if reverse { 2 } else { 58 });
+        t.m.world_mut().turn.plan.reverse = reverse;
+        t.give_play(0, "通用:尽力后的收获").unwrap();
+        let p = t.expect_prompt();
+        assert_eq!(p.options.len(), 6);
+        for (i, option) in p.options.iter().enumerate() {
+            let n = i as i32 + 1;
+            let tile = if reverse { (2 - n).rem_euclid(60) } else { (58 + n) % 60 };
+            assert_eq!(option.a.get("tile"), Some(&Arg::Tile(tile)));
+        }
+        let destination = if reverse { 58 } else { 2 };
+        t.answer(0, 3).unwrap(); // four tiles
+        while t.prompt().is_some() { t.decline(); }
+        assert_eq!(t.pos(0), destination);
+    }
 }
 
 // =====================================================================

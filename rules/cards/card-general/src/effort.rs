@@ -7,6 +7,7 @@
 //!
 //! main move becomes 1-6 steps and settles.
 
+use alloc::vec::Vec;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const EFFORT: CardDef = CardDef::new("通用:尽力后的收获", &[On::Play("", Some(cant_play), play)]);
@@ -23,15 +24,21 @@ fn cant_play(player_id: i32) -> Option<Msg> {
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「本回合的[主要移动]改为移动1到6以内的任意整数」 -- C#
     // `int max = c.N(0, 6)` sizes the ask; `H.AskNumber(c.Seat, ..., 1, max, ...)`
-    // picks the step count.
+    // picks the step count. Include the geometric landing in every label;
+    // movement reactions (including Sayo's extension) still happen afterwards.
     let max = ctx::n(0, 6);
-    let steps = ctx::ask_number(
+    let dir = ctx::plan::dir();
+    let options: Vec<Msg> = (1..=max)
+        .map(|n| Msg::new(key!("effort_steps"))
+            .i("n", n as i64)
+            .tile("tile", ctx::tile_steps_ahead(player_id, n * dir)))
+        .collect();
+    let steps = ctx::ask_pick(
         player_id,
         &Msg::new(key!("effort_title")),
         &Msg::new(key!("effort_ask")),
-        1,
-        max,
-    )?;
+        &options,
+    )? as i32 + 1;
     // 规则书[手]: 「立刻进入移动阶段，本回合的[主要移动]改为移动1到6以内的任意整数并[结算]」
     // -- C# `H.CardMove(c, new MoveCtx { Steps = Math.Max(1, r.value) })`
     // (MatchHost.cs:2326-2329): `Steps` >= 0 walks exactly that many with no roll,
