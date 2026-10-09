@@ -30,7 +30,11 @@
    strip peeks), raising on hover / keyboard focus. The container itself never
    takes pointer events -- only the visible card tops and the bar do -- so map
    clicks near the bottom pass through the gaps and the hidden part of the fan. */
-.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column; align-items: stretch; pointer-events: none; }
+.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column; align-items: stretch; pointer-events: none; transition: bottom 0.22s cubic-bezier(0.22, 0.7, 0.25, 1); }
+/* Over a retracted prompt sheet (its title strip, `--sheet-strip` 60px in
+   Modal.module.css, holds the bottom edge): the hand rides above the strip. */
+.aboveSheet { bottom: 60px; }
+@media (prefers-reduced-motion: reduce) { .dock { transition: none; } }
 /* The fan: overlapping cards, anchored to the bottom, arranged as a circular
    sector (Master Duel's arc): each card is rotated a little around a pivot
    below the hand (`--fan-a`), the outer ones lower and tilted outward, the

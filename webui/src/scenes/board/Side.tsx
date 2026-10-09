@@ -262,7 +262,9 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   return (
     <>
       <div
-        className={cx(s.dock, raised && s.dockUp)}
+        // A retracted prompt sheet's title strip sits on the bottom edge: lift the
+        // whole hand above it so the cards stay easy to reach.
+        className={cx(s.dock, raised && s.dockUp, sheet.open && !sheet.raised && s.aboveSheet)}
         onMouseEnter={raise}
         onMouseLeave={retract}
         onFocus={raise}
