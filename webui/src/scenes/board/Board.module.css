@@ -57,6 +57,8 @@
    the flash is where those land, never their own modal. A negated activation
    is marked 无效. */
 .flash { position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 25; animation: flash 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
+/* The face fills the frame (its `big` size would leave a strip on the right). */
+.flashFace > :first-child { --card-w: 100%; }
 .flashFace { position: relative; width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); border-radius: 12px; border: 3px solid var(--owner, var(--pink)); background: #fff; }
 .flashCaption { margin-top: -2px; padding: 6px 10px 8px; text-align: center; font-size: 15px; font-weight: 700; color: var(--ink, #4b2233); background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 236, 244, 0.95) 40%); border-radius: 0 0 9px 9px; display: flex; flex-direction: column; gap: 3px; }
 /* An attached effect line under the caption: same block, a lighter weight. */
