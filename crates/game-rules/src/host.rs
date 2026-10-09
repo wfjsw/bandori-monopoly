@@ -85,12 +85,34 @@ pub struct CardInfo {
 impl CardInfo {
     /// The first entry of `kind` (answering `trigger`, for trigger-keyed kinds).
     pub fn entry(&self, kind: OnKind, trigger: Option<crate::TriggerKind>) -> Option<i32> {
+        self.entries(kind, trigger).first().copied()
+    }
+
+    /// **Every** entry of `kind` answering `trigger`, in declaration order.
+    /// A card may carry several independent effects on one timing (「初始1，
+    /// 上限2」 plus 「每回合开始时」); all of them run.
+    pub fn entries(&self, kind: OnKind, trigger: Option<crate::TriggerKind>) -> Vec<i32> {
         self.on
             .iter()
-            .position(|o| {
+            .enumerate()
+            .filter(|(_, o)| {
                 o.kind == kind as i32 && trigger.is_none_or(|t| o.triggers.contains(&(t as i32)))
             })
-            .map(|i| i as i32)
+            .map(|(i, _)| i as i32)
+            .collect()
+    }
+
+    /// Play-mode selection: a card may declare several `On::Play` entries as
+    /// alternative activations (each with its own gate -- 「可以…传送到…」 vs
+    /// 「将此卡放置到场上」). The mode that runs is the **first gated entry whose
+    /// gate admits**; failing that, the first ungated entry. `None` when the
+    /// card has no Play entry at all.
+    pub fn play_entry_preferring_gated(&self) -> Option<i32> {
+        let entries = self.entries(OnKind::Play, None);
+        if entries.is_empty() {
+            return None;
+        }
+        Some(entries[0])
     }
 
     pub fn has_play(&self) -> bool {
@@ -107,13 +129,21 @@ impl CardInfo {
         self.hook_entry(trigger).is_some()
     }
 
-    /// The field-card entry that answers `trigger`, whether it was declared as a
+    /// The field-card entries that answer `trigger`, whether declared as a
     /// settlement hook (`On::Hook`) or as a gate (`On::Gate`). Both run
     /// automatically on a placed card and neither opens a [反击] window; they
     /// are separate declarations only so the type can say which is a question.
+    /// **All** of them run, in declaration order -- each carries its own
+    /// condition / guard and at most one body entry per entry per raise.
+    pub fn hook_entries(&self, trigger: crate::TriggerKind) -> Vec<i32> {
+        let mut v = self.entries(OnKind::Hook, Some(trigger));
+        v.extend(self.entries(OnKind::Gate, Some(trigger)));
+        v
+    }
+
+    /// The first field-card entry answering `trigger` (see [`Self::hook_entries`]).
     pub fn hook_entry(&self, trigger: crate::TriggerKind) -> Option<i32> {
-        self.entry(OnKind::Hook, Some(trigger))
-            .or_else(|| self.entry(OnKind::Gate, Some(trigger)))
+        self.hook_entries(trigger).first().copied()
     }
 
     pub fn has_at_end(&self) -> bool {
@@ -880,15 +910,19 @@ impl Ruleset {
         finish(store, res)
     }
 
-    /// Ask one card's hook guard and, when it passes, run its body -- on a
-    /// **single** instantiation, so a fired hook costs one fire-up and one world
-    /// copy rather than the two a separate guard query + [`Self::run`] cost.
+    /// Ask one card's hook guards and run every admitted body -- each entry
+    /// on the same instantiation sequence, in declaration order. A card may
+    /// carry several independent effects on one timing (「初始1，上限2」 plus
+    /// 「每回合开始时」); each entry has its own condition / guard and runs at
+    /// most once per raise.
     ///
-    /// Returns `Ok(None)` when the card is not activated at all (its condition
-    /// rejected, its guard refused, or it has no entry at this kind).
-    /// [`HookRun::announced`] is the "a guard existed and passed" moment.
-    /// `on_body` fires exactly when the effect **body** is entered (after the
-    /// condition and guard admitted) -- see [`Self::run`].
+    /// Returns `Ok(None)` when no entry is admitted (condition rejected, guard
+    /// refused, or the card has no entry at this kind). [`HookRun::announced`]
+    /// is the "a guard existed and passed" moment. `on_body` fires exactly
+    /// when an effect **body** is entered (after that entry's condition and
+    /// guard admitted). The first entry whose body pauses (prompt / host) owns
+    /// the outcome; the drive's multi-pass loop re-runs this whole sequence
+    /// with the new answers.
     pub fn run_hook<W: CardWorld>(
         &self,
         world: &W,
@@ -900,85 +934,103 @@ impl Ruleset {
         self.check(card)?;
         let kind = world.trigger().kind;
         let info = &self.inner.cards[card as usize];
-        let Some(entry) = info.hook_entry(kind) else {
+        let entries = info.hook_entries(kind);
+        if entries.is_empty() {
             return Ok(None);
-        };
-        let mut store = self.store(world.clone(), answers)?;
-        let mut announced = false;
-        // `On::Hook` entries carry a guard; `On::Gate` entries are questions and
-        // have none, so they run unasked.
-        if let Some(guard) = info.entry(OnKind::Hook, Some(kind)) {
-            let pre = self
-                .inner
-                .pre
-                .get(card as usize)
-                .and_then(|r| r.get(guard as usize))
-                .and_then(|p| p.as_ref());
-            let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
-            // `card.placed` must answer for the **running instance** (the
-            // guest's `ctx::is_placed()`): a game-start hook also fires for the
-            // same id while it sits in a pile / hand (`uid = -1`), where the
-            // condition has to reject what `card.placed` names.
-            let cand = crate::cond_pre::fill_candidate(
-                world,
-                player_id,
-                &info.id,
-                world.is_placed() != 0,
-            );
-            #[cfg(feature = "guard-audit")]
-            let audit = self.legacy_probe(world, card, guard, player_id);
-            let admitted = if self.guard_is_none(card, guard) {
-                // G4 deleted the residual: the condition alone decides.
-                crate::cond_pre::admits_pre(pre, Some(&scope), &cand)
-            } else {
-                // A guard is a pure query: refuse inline answers (a nested drive's
-                // host must not answer a question nobody asked -- see
-                // `crate::inline::Deny`). A prompting guard fails closed, as below.
-                let asked: Result<bool, ()> = crate::cond_pre::admits(pre, Some(&scope), &cand, || {
-                    match crate::inline::with_no_inline(|| {
-                        call_card(&self.inner, &mut store, card, guard, export::OP_GUARD, player_id)
-                    }) {
-                        Ok(0) => Ok(false),
-                        Ok(_) => Ok(true),
-                        // A trap or a prompting guard: fail closed -- the contract
-                        // `can_hook` + `hook_guard` had.
-                        Err(_) => Ok(false),
-                    }
-                });
-                matches!(asked, Ok(true))
-            };
-            #[cfg(feature = "guard-audit")]
-            if let Some(legacy) = audit {
-                crate::cond_pre::legacy_audit(
-                    &info.id,
-                    guard,
-                    Some(legacy),
-                    admitted,
-                    &trigger_dump(&world.trigger()),
-                );
-            }
-            if admitted {
-                announced = true;
-            } else {
-                // Condition rejected, guard refused, or a trap: the card does
-                // not fire.
-                return Ok(None);
-            }
         }
-        if let Some(cb) = on_body.as_deref_mut() {
-            cb(store.data_mut().w());
-        }
-        let res = call_card(
-            &self.inner,
-            &mut store,
-            card,
-            entry,
-            export::OP_RUN,
+        let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+        // `card.placed` must answer for the **running instance** (the guest's
+        // `ctx::is_placed()`): a game-start hook also fires for the same id
+        // while it sits in a pile / hand (`uid = -1`).
+        let cand = crate::cond_pre::fill_candidate(
+            world,
             player_id,
+            &info.id,
+            world.is_placed() != 0,
         );
+        let mut cur: W = world.clone();
+        let mut announced = false;
+        let mut ran_any = false;
+        for entry in entries {
+            // `On::Hook` entries carry a guard; `On::Gate` entries are
+            // questions and have none, so they run unasked.
+            let is_hook = info
+                .on
+                .get(entry as usize)
+                .is_some_and(|o| o.kind == OnKind::Hook as i32);
+            if is_hook {
+                let pre = self
+                    .inner
+                    .pre
+                    .get(card as usize)
+                    .and_then(|r| r.get(entry as usize))
+                    .and_then(|p| p.as_ref());
+                #[cfg(feature = "guard-audit")]
+                let audit = self.legacy_probe(world, card, entry, player_id);
+                let mut store_for_guard = self.store(cur.clone(), answers)?;
+                let admitted = if self.guard_is_none(card, entry) {
+                    crate::cond_pre::admits_pre(pre, Some(&scope), &cand)
+                } else {
+                    let asked: Result<bool, ()> =
+                        crate::cond_pre::admits(pre, Some(&scope), &cand, || {
+                            match crate::inline::with_no_inline(|| {
+                                call_card(
+                                    &self.inner,
+                                    &mut store_for_guard,
+                                    card,
+                                    entry,
+                                    export::OP_GUARD,
+                                    player_id,
+                                )
+                            }) {
+                                Ok(0) => Ok(false),
+                                Ok(_) => Ok(true),
+                                Err(_) => Ok(false),
+                            }
+                        });
+                    matches!(asked, Ok(true))
+                };
+                #[cfg(feature = "guard-audit")]
+                if let Some(legacy) = audit {
+                    crate::cond_pre::legacy_audit(
+                        &info.id,
+                        entry,
+                        Some(legacy),
+                        admitted,
+                        &trigger_dump(&world.trigger()),
+                    );
+                }
+                if !admitted {
+                    continue;
+                }
+                announced = true;
+            }
+            let mut store = self.store(cur, answers)?;
+            if let Some(cb) = on_body.as_deref_mut() {
+                cb(store.data_mut().w());
+            }
+            let res = call_card(&self.inner, &mut store, card, entry, export::OP_RUN, player_id);
+            let outcome = finish(store, res)?;
+            ran_any = true;
+            match outcome {
+                Outcome::Done(w) => {
+                    // Later entries see earlier writes.
+                    cur = w;
+                }
+                paused => {
+                    return Ok(Some(HookRun {
+                        announced,
+                        outcome: paused,
+                    }));
+                }
+            }
+        }
+        if !ran_any {
+            return Ok(None);
+        }
         Ok(Some(HookRun {
             announced,
-            outcome: finish(store, res)?,
+            outcome: Outcome::Done(cur),
         }))
     }
 
@@ -1170,6 +1222,66 @@ impl Ruleset {
     ///
     /// Goes through [`crate::cond_pre::admits_gate`] (docs/GUARDS.md §4.4 item
     /// 3): a rejecting condition **is** a block (`err.play_pre`) and the gate
+    /// Play-mode selection (a card may declare several `On::Play` entries as
+    /// alternative activations, each with its own gate): the first **gated**
+    /// entry whose gate admits; failing that, the first ungated entry. `None`
+    /// when the card has no Play entry. Both [`Self::cant_play`] and
+    /// [`Self::run`] (Play) pick through here, so they agree.
+    fn play_entry_for<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        player_id: i32,
+    ) -> Result<Option<i32>, RuleError> {
+        let info = &self.inner.cards[card as usize];
+        let entries = info.entries(OnKind::Play, None);
+        if entries.is_empty() {
+            return Ok(None);
+        }
+        let mut first_ungated = None;
+        for &entry in &entries {
+            if self.guard_is_none(card, entry) && self.pre_at(card, entry).is_none() {
+                // Ungated entry: the fallback mode.
+                first_ungated.get_or_insert(entry);
+                continue;
+            }
+            // Gated entry: ask the gate.
+            let pre = self.pre_at(card, entry);
+            let scope;
+            let scope: Option<&crate::cond_pre::WindowScope> = if pre.is_some() {
+                scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window_ambient(
+                    world, player_id,
+                ));
+                Some(&scope)
+            } else {
+                None
+            };
+            let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, false);
+            let admits = if self.guard_is_none(card, entry) {
+                crate::cond_pre::condition_allows(pre, scope, &cand)
+            } else {
+                // A `Play` gate answers `Option<Msg>`: `None` (= packed 0) is
+                // "playable", `Some(why)` is the block. `call_card_msg` decodes
+                // that shape -- `call_card`'s 0/non-zero bool convention is the
+                // Hook-guard one and would invert the verdict.
+                let mut store = self.store(world.clone(), &[])?;
+                let gate_ok = match crate::inline::with_no_inline(|| {
+                    call_card_msg(&self.inner, &mut store, card, entry, export::OP_GUARD, player_id)
+                }) {
+                    Ok(None) => true,
+                    Ok(Some(_)) => false,
+                    Err(e) if is_need_input(&e) => return Err(RuleError::GuardPrompted),
+                    Err(_) => false,
+                };
+                gate_ok && crate::cond_pre::condition_allows(pre, scope, &cand)
+            };
+            if admits {
+                return Ok(Some(entry));
+            }
+        }
+        Ok(first_ungated.or(entries.first().copied()))
+    }
+
     /// is skipped. The play-gate window has no `Trigger` (`kind` absent).
     pub fn cant_play<W: CardWorld>(
         &self,
@@ -1178,6 +1290,8 @@ impl Ruleset {
         player_id: i32,
     ) -> Result<Option<crate::Msg>, RuleError> {
         self.check(card)?;
+        // Play duplicates are a per-card merge problem (modes vs contexts),
+        // not a dispatch one -- first entry until the merges land.
         let Some(entry) = self.inner.cards[card as usize].entry(OnKind::Play, None) else {
             return Ok(None);
         };
