@@ -104,7 +104,7 @@ function provenance() {
     const st = runOut("git", "status", "--porcelain", "--",
       "Cargo.toml", "Cargo.lock",
       "crates/game-core", "crates/game-rules", "crates/web-glue",
-      "crates/rules-cond", "crates/rules-native",
+      "rules/cond", "crates/rules-native",
       "rules", "data",
       "tools/build-glue.mjs", "tools/build-ruleset.mjs", "tools/rules-aggregate.mjs",
     );

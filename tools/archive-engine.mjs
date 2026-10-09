@@ -282,7 +282,7 @@ function provenance(a, glueDir, gsha, sourceRoot, dataFiles) {
         "crates/game-core",
         "crates/game-rules",
         "crates/web-glue",
-        "crates/rules-cond",
+        "rules/cond",
         "third_party/cel-rust",
         "rules",
         "data",

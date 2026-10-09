@@ -6,7 +6,7 @@ members = [
     "crates/bot-service",
     "crates/game-core",
     "crates/game-rules",
-    "crates/rules-cond",
+    "rules/cond",
     "crates/rules-native",
     "crates/rules-worker",
     "crates/server",

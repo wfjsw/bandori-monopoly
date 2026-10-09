@@ -17,11 +17,11 @@ serde_json = { workspace = true }
 # source (the `cel` parser); the wasm32 (browser glue) build loads the lean
 # compiled form with `runtime-only` and never ships the parser (§8.3).
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-rules-cond = { path = "../rules-cond" }
+rules-cond = { path = "../../rules/cond" }
 wasmtime = "37"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-rules-cond = { path = "../rules-cond", default-features = false, features = ["runtime-only"] }
+rules-cond = { path = "../../rules/cond", default-features = false, features = ["runtime-only"] }
 
 [features]
 # Run the interpreter even natively (the tests then cover both backends).

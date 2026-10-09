@@ -19,7 +19,7 @@
 //
 // Input set (behaviour-relevant only):
 //
-//   crates/game-core, crates/game-rules, crates/web-glue, crates/rules-cond,
+//   crates/game-core, crates/game-rules, crates/web-glue, rules/cond,
 //   third_party/cel-rust,            (the whole trees)
 //   rules/**,                        (the guest workspace: card-sdk, cards,
 //                                     skills, tiles, events, fixtures, locks)
@@ -44,7 +44,7 @@ export const SOURCE_TREES = [
   "crates/game-core",
   "crates/game-rules",
   "crates/web-glue",
-  "crates/rules-cond",
+  "rules/cond",
   "third_party/cel-rust",
   "rules",
 ];
