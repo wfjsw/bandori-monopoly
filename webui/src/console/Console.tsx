@@ -1,5 +1,7 @@
-import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type FormEvent, type KeyboardEvent as ReactKeyboardEvent, useRef, useState, useSyncExternalStore } from "react";
 import { useLangVersion } from "../core/hooks";
+import { useAutoFocus, useEventListener } from "../hooks/dom";
+import { useScrollFollow } from "../hooks/measure";
 import { t as tr } from "../i18n/t";
 import { acceptsInputKey, completeCommand, isConsoleShortcut, recallCommand, rememberCommand } from "./input";
 import { getLogs, subscribeLogs, clearLogs, type LogEntry, type LogSource } from "./log";
@@ -24,34 +26,26 @@ export function Console() {
   const lines = useSyncExternalStore(subscribeLogs, () => (open ? getLogs() : NO_LINES));
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
-  const previousFocus = useRef<HTMLElement | null>(null);
   const historyIndex = useRef(history.length);
   const draft = useRef("");
 
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (isConsoleShortcut(e, open, e.target as HTMLElement | null)) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        setOpen((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", key, true);
-    return () => window.removeEventListener("keydown", key, true);
-  }, [open]);
+  // The console's own shortcut, on the capture phase so it outranks the scene
+  // hotkeys behind it.
+  useEventListener(window, "keydown", (e) => {
+    const ev = e as KeyboardEvent;
+    if (isConsoleShortcut(ev, open, ev.target as HTMLElement | null)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      setOpen((v) => !v);
+    }
+  }, { capture: true });
 
-  useEffect(() => {
-    if (!open) return;
-    previousFocus.current = document.activeElement as HTMLElement | null;
-    inputRef.current?.focus();
+  // The input takes over while the panel is open; focus returns on close.
+  useAutoFocus(open, inputRef, () => {
     historyIndex.current = history.length;
-    return () => { previousFocus.current?.isConnected && previousFocus.current.focus(); };
-  }, [open]);
-
-  useEffect(() => {
-    const el = outputRef.current;
-    if (open && follow && el) el.scrollTop = el.scrollHeight;
-  }, [open, lines, follow, source, errors, search]);
+  });
+  // The output stays pinned to the newest line while following.
+  useScrollFollow(outputRef, [open, lines, follow, source, errors, search], open && follow);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
