@@ -310,8 +310,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     `On::Play` entries and the host dispatches only the first, so a hand
     play is refused (`nanami_effort_not_placed`). Two tests. See §6
     multi-activation.
-* **ras** (3)
-  * 游击演出 lands one tile past the chosen one, and its [特] never opens.
+* **ras** (2)
+  * ~~游击演出 lands one tile past the chosen one.~~ **Fixed 2026-10-09**
+    (`card_settle_at` no longer inherits the turn's walk).
+  * 游击演出's [特] never opens at turn end.
   * Repaint halves a shaped settlement payment only partially (the Tomorrow's
     Door surcharge joins at full price) -- §6.
 * **mygo** (4)
@@ -1042,6 +1044,11 @@ ruling list in §6 and the open sections below.
   Un-ignored and green. No ABI bump: the surface already had
   `set_play_doubled` / `ctx::n` / `HookKind::Card`; only their homes were
   wrong.
+* **游击演出 ends on the chosen tile** (`guerrilla_ends_on_the_chosen_tile`).
+  `card_settle_at` cloned the turn's walk plan, so a `teleport_to` +
+  `card_settle_at` left the piece one tile past the destination. The settle
+  now keeps the plan's payment shaping (`pay_factor`, tags) and pins
+  from/to/steps to the settle tile. Un-ignored and green.
 
 ### Test-bug fixes kept in the book's favour
 
@@ -1081,6 +1088,7 @@ or A/B items that need a wider surface than this batch:
 * **A, engine:** 游击演出 ends on chosen+1 after `teleport_to` +
   `card_settle_at` (the settle inherits the turn's walk plan). Fix:
   `card_settle_at` must not clone `turn.plan` for an arbitrary tile.
+  ~~**Fixed 2026-10-09.**~~
 * **C:** everything whose `#[ignore]` says `RULING` / `CROSS-AGENT`, plus the
   §6 open list and the Timing / order block. Collected as numbered questions
   in the report.
