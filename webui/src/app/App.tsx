@@ -1,7 +1,7 @@
 // App shell: boot gate, History API routes with the scene fade (SceneFader: 0.18 s
 // out, 0.3 s in), BGM per screen, popups and toasts.
 
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { playSceneBgm, sfx, unlockAudio } from "../core/audio";
 import { useLangVersion, useProfile } from "../core/hooks";
 import { useCrossfade } from "../hooks/scene";
@@ -48,7 +48,10 @@ export function App() {
   const profile = useProfile();
   const lang = useLangVersion();
   const path = usePath();
-  const target = parse(path);
+  // Parsed once per path: `useCrossfade` keys on this object, and a fresh one
+  // every render would re-run its effect (and cancel its timers) on every
+  // profile bump under a live match.
+  const target = useMemo(() => parse(path), [path]);
 
   // Unknown or empty routes go to the menu.
   useEffect(() => {
