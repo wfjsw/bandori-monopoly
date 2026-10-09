@@ -1,4 +1,5 @@
 .back { position: absolute; inset: 0; z-index: 40; background: rgba(60, 40, 50, 0.38); display: flex; align-items: center; justify-content: center; animation: fade 0.15s; }
+.back[hidden] { display: none; }
 @keyframes fade { from { opacity: 0; } }
 .window { width: 834px; max-height: 840px; display: flex; flex-direction: column; background: #fff; border-radius: 20px; padding: 8px; box-shadow: 0 20px 60px rgba(60, 20, 40, 0.3); animation: pop 0.18s ease-out; }
 @keyframes pop { from { transform: scale(0.94); opacity: 0; } }
@@ -8,9 +9,20 @@
 .wide { width: 1000px; }
 .xl { width: 1250px; }
 .head { position: relative; flex: none; height: 54px; border-radius: 14px; background: linear-gradient(var(--pink-light), var(--pink)); display: flex; align-items: center; justify-content: center; }
-.head h2 { color: #fff; font-size: 25px; font-weight: 700; letter-spacing: 1px; max-width: calc(100% - 120px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.head h2 { color: #fff; font-size: 25px; font-weight: 700; letter-spacing: 1px; max-width: calc(100% - 220px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .x { position: absolute; right: 6px; top: 5px; width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--pink); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
 .x i { width: 24px; height: 24px; }
+.minimize { right: 58px; }
+.minus { width: 20px; height: 3px; background: currentColor; border-radius: 2px; }
+.x:hover { background: #fff0f5; }
+.x:focus-visible, .restore:focus-visible { outline: 3px solid var(--pink); outline-offset: 3px; }
+/* A small restore list over the log column leaves the entire map visible. */
+.restoreTray { position: absolute; top: 14px; right: 14px; z-index: 42; display: flex; flex-direction: column; gap: 6px; width: 300px; max-height: 260px; padding: 4px; overflow: auto; }
+.restore { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 10px; border: 2px solid var(--pink); border-radius: 12px; background: #fff; color: var(--pink); box-shadow: var(--shadow); font-size: 14px; }
+.restore:hover { background: #fff0f5; }
+.restoreTitle { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; font-weight: 700; }
+.restoreHint { flex: none; font-size: 12px; }
+.restoreIcon { flex: none; width: 16px; height: 14px; border: 2px solid currentColor; border-top-width: 5px; border-radius: 2px; }
 .body { overflow: auto; padding: 18px 18px 14px; font-size: 17px; line-height: 1.6; }
 .ask { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
 .ask p { font-size: 19px; white-space: pre-wrap; }

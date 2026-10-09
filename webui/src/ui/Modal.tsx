@@ -23,6 +23,7 @@ export interface ModalOpts {
 
 interface Entry extends ModalOpts {
   id: number;
+  minimized: boolean;
   title: string;
   body: ReactNode | ((close: () => void) => ReactNode);
 }
@@ -42,7 +43,7 @@ export function openModal(title: string, body: Entry["body"], opts: ModalOpts = 
     e.onClose?.();
   };
   if (opts.key) entries.filter((e) => e.key === opts.key).forEach((e) => closeById(e.id));
-  entries = [...entries, { id, title, body, ...opts }];
+  entries = [...entries, { id, title, body, minimized: false, ...opts }];
   emit();
   return close;
 }
@@ -51,6 +52,18 @@ function closeById(id: number): void {
   const e = entries.find((x) => x.id === id);
   entries = entries.filter((x) => x.id !== id);
   e?.onClose?.();
+}
+
+function minimize(id: number): void {
+  entries = entries.map((e) => e.id === id ? { ...e, minimized: true } : e);
+  emit();
+}
+
+function restore(id: number): void {
+  const e = entries.find((x) => x.id === id);
+  if (!e) return;
+  entries = [...entries.filter((x) => x.id !== id), { ...e, minimized: false }];
+  emit();
 }
 
 /** Close every popup (scene changes). */
@@ -105,10 +118,15 @@ export function ModalHost() {
         };
         const closable = e.closable ?? true;
         return (
-          <div key={e.id} className={s.back} onClick={(ev) => closable && ev.target === ev.currentTarget && close()}>
+          // Keep drafts, checked cards, scroll position and live subscriptions
+          // mounted; minimizing only hides the window and its backdrop.
+          <div key={e.id} className={s.back} hidden={e.minimized} onClick={(ev) => closable && ev.target === ev.currentTarget && close()}>
             <div className={cx(s.window, s[e.size ?? "normal"], e.className)}>
               <div className={s.head}>
                 <h2>{e.title}</h2>
+                <button type="button" className={cx(s.x, closable && s.minimize)} onClick={() => minimize(e.id)} title={tr("common.minimize")} aria-label={tr("common.minimize")}>
+                  <span className={s.minus} aria-hidden />
+                </button>
                 {closable && (
                   <button type="button" className={s.x} onClick={close} title={tr("common.close")}>
                     <Icon name="close" />
@@ -120,6 +138,17 @@ export function ModalHost() {
           </div>
         );
       })}
+      {list.some((e) => e.minimized) && (
+        <div className={s.restoreTray} aria-label={tr("common.minimizedPopups")}>
+          {list.filter((e) => e.minimized).map((e) => (
+            <button key={e.id} type="button" className={s.restore} onClick={() => restore(e.id)} title={tr("common.restorePopup", { title: e.title })} aria-label={tr("common.restorePopup", { title: e.title })}>
+              <span className={s.restoreIcon} aria-hidden />
+              <span className={s.restoreTitle}>{e.title}</span>
+              <span className={s.restoreHint}>{tr("common.restore")}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </>
   );
 }
