@@ -829,15 +829,28 @@ or the bundle is not deployed at all, the embedded engine runs -- that is the
 whole point of carrying it. The user is told: 「正在使用回放文件内嵌的引擎」 /
 "Playing on the engine embedded in this record (bundle …)".
 
-Sizes (the 2026-10-08 archive bundle `ae7ede19…`, 18 files):
+**BOM note (`data_sha256`).** `load_data` hashes the *strings* it is handed,
+and three of the game tables (`cards.json`, `characters.json`,
+`skill_simple.json`) begin with a UTF-8 BOM. A byte-preserving decode keeps it
+(`as_bytes()` puts `EF BB BF` back); `TextDecoder`'s default and
+`Response.text()` strip it. So a record sealed by `tools/` or the server
+carries the BOM-inclusive `data_sha256` and one sealed by a page that loaded
+the tables with `r.text()` carries the stripped hash -- two real values for
+the same bytes. The embedded loader therefore decodes the tables both ways and
+feeds the one that reproduces the record's own `data_sha256`, so either kind
+of record replays. (The same asymmetry exists on the hosted worker path; a
+mismatch there falls back to the embedded engine.)
+
+Sizes (the 2026-10-08 archive bundle `ae7ede19…`, 18 files, measured by
+`tools/bdrec-portable.mjs pack`):
 
 | Form | Size |
 |---|---|
-| plain `.bdrec` (ref record) | 1.1 KiB |
+| plain `.bdrec` (ref record) | 1,115 B |
 | plain `.bdrec` (a real match, +events) | ~65 KiB |
-| engine bundle, uncompressed | 7.07 MiB |
-| engine bundle, zstd blob | **1.62 MiB** |
-| portable `.bdrec` (ref + engine) | **1.62 MiB** |
+| engine bundle, uncompressed | 7,533,971 B (7.18 MiB) |
+| engine bundle, zstd blob | 1,728,620 B (1.65 MiB) — 4.4× |
+| portable `.bdrec` (ref + engine) | 1,732,334 B (1.65 MiB) |
 
 ### 10.3 Export
 
@@ -928,4 +941,7 @@ is an error, never a warning.
   hashes, an unknown loader and an oversized section are refused.
 * `cargo test -p game-core --test record_codec` -- `zst_decode`'s cap, and
   that a portable tail is ignored by `parse_header_bytes` / `decode_record`.
+* Browser gate: a portable reference record opened in a build whose
+  `assets/engine/<bundle>/` is **absent** (rename it away) plays on the
+  embedded engine and shows 「正在使用回放文件内嵌的引擎」.
 * `python tools/i18n/check.py` -- en + zh-CN, no new findings.

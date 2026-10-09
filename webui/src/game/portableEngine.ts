@@ -230,7 +230,7 @@ export async function openRecordOnEngine(bytes: Uint8Array, force = false): Prom
         console.warn("portable: hosted bundle failed, falling back to the embedded engine:", e);
       }
     }
-    return openEmbedded(prep.embedded, prep.record, force, policy);
+    return openEmbedded(prep.embedded, prep.record, header, force, policy);
   }
 
   // Plain record: unchanged routing.
@@ -256,6 +256,7 @@ async function openPlain(
 async function openEmbedded(
   embedded: EmbeddedBundle,
   record: Uint8Array,
+  header: RecordHeader,
   force: boolean,
   policy: ReturnType<typeof loaderPolicyFrom>,
 ): Promise<OpenedEngine> {
@@ -270,11 +271,11 @@ async function openEmbedded(
 
   // Rebuild the bundle.json layout from the manifest: the worker's embedded
   // boot does not read a layout, it is handed the files directly.
-  const dataFiles = new Map<string, string>();
+  const rawFiles = new Map<string, Uint8Array>();
   const modules: Uint8Array[] = [];
   let conds: Uint8Array | null = null;
   for (const [path, bytes] of embedded.files) {
-    if (path.startsWith("data/")) dataFiles.set(path.slice("data/".length), new TextDecoder().decode(bytes));
+    if (path.startsWith("data/")) rawFiles.set(path.slice("data/".length), bytes);
     else if (path.startsWith("modules/")) modules.push(bytes);
     else if (/^rules\/conds-.*\.bin$/.test(path)) conds = bytes;
   }
@@ -290,11 +291,7 @@ async function openEmbedded(
       names = null;
     }
   }
-  const data: Record<string, string> = {};
-  for (const n of names ?? [...dataFiles.keys()]) {
-    const v = dataFiles.get(n);
-    if (v !== undefined) data[n] = v;
-  }
+  const data = await assembleDataFor(rawFiles, names ?? [...rawFiles.keys()], header);
 
   const h = await WorkerReplayHandle.openEmbedded({
     loaderUrl,
@@ -313,6 +310,52 @@ async function openEmbedded(
     bundle: m.bundle,
     note: "embedded",
   };
+}
+
+/**
+ * Decode the embedded data tables into the strings `load_data` hashes.
+ *
+ * `load_data` stamps `sha256` over the **strings** it is given, and a UTF-8
+ * BOM at the head of a table survives a byte-preserving decode but not
+ * `TextDecoder`'s default (which strips it). Records sealed by the tools and
+ * the server therefore carry the BOM-inclusive hash; ones sealed by a page
+ * that loaded the tables with `Response.text()` carry the stripped hash. Both
+ * are real, so pick whichever reproduces the record's own `data_sha256` --
+ * that is the only way the embedded engine can agree with the record.
+ */
+async function assembleDataFor(
+  rawFiles: Map<string, Uint8Array>,
+  names: string[],
+  header: RecordHeader,
+): Promise<Record<string, string>> {
+  const wanted = header.engine?.data_sha256 ?? "";
+  const build = (keepBom: boolean): Record<string, string> => {
+    // `ignoreBOM: true` means "leave the BOM alone" (the naming is inverted).
+    const dec = new TextDecoder("utf-8", { ignoreBOM: keepBom });
+    const out: Record<string, string> = {};
+    for (const n of names) {
+      const b = rawFiles.get(n);
+      if (b) out[n] = dec.decode(b);
+    }
+    return out;
+  };
+  const hashOf = async (data: Record<string, string>): Promise<string> => {
+    const parts = names.filter((n) => n in data).map((n) => new TextEncoder().encode(data[n]));
+    const all = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
+    let at = 0;
+    for (const p of parts) {
+      all.set(p, at);
+      at += p.length;
+    }
+    return sha256Hex(all);
+  };
+  for (const keepBom of [true, false]) {
+    const data = build(keepBom);
+    if (!wanted || (await hashOf(data)) === wanted) return data;
+  }
+  // Neither mode matched: keep the raw bytes (BOM-inclusive), which is what
+  // the file actually says, and let `compat` report the difference.
+  return build(true);
 }
 
 // ---------------------------------------------------------------- export
