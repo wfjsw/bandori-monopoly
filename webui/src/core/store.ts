@@ -93,7 +93,7 @@ export function markSeen(what: "gallery" | "deck" | "rules" | "history"): void {
 
 // ------------------------------------------------------------------ settings
 
-const DEFAULT_SETTINGS: SoundSettings = { bgm: 5, voice: 10, se: 7, skipLine: true, greet: true, idleTalk: true, skillTextSimple: true, keepAwake: true };
+const DEFAULT_SETTINGS: SoundSettings = { bgm: 1, voice: 2, se: 1.4, skipLine: true, greet: true, idleTalk: true, skillTextSimple: true, keepAwake: true };
 
 export function settings(): SoundSettings {
   try {
