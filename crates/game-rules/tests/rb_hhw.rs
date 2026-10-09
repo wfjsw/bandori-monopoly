@@ -386,38 +386,81 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
     assert_eq!(t.money(0), 11_000 + 2_000 + 1_500, "events: {:?}", t.recent_keys(12));
 }
 
+fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
+    t.m.world_mut().st.players[who]
+        .tokens
+        .push(game_core::state::Counter { name: name.into(), value });
+}
+
 #[test]
-fn wacha_mocha_markers_sit_on_the_card_and_activate_in_main_phase() {
-    // Sheet 2026-10-06 新卡组卡 F13:
-    // 「[场]花音每次倒走时此卡获得一个水母标记；主要阶段中，若此卡上有至少9个水母标记，
-    // 可以清除所有标记并传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，
-    // 然后此卡置入弃牌堆。」
-    // (was 「花音每次倒走获得一个水母标记，当水母标记到达9个时可以清除…」 --
-    // markers now ride the card, activation is a main-phase action.)
+fn wacha_mocha_plays_from_hand_to_field() {
+    // Sheet 2026-10-06 新卡组卡 F13: 「[场]」 -- the placement branch of the
+    // merged Play entry (`ctx::is_placed()` false).
     let mut t = Table::new(&["松原花音", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);
     t.give(0, &["HHW:（花音）Wacha Mocha 啪嗒进行曲"]);
-    let r = t.play(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
-    // Whether the card is [场] (auto-placed) or [手], it must end up on the
-    // field with its markers attached to the card itself.
+    t.play(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
     drain(&mut t);
-    if r.is_err() {
-        // [场] cards may not be manually played; place_raw is the seam.
-        t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
-    }
     assert!(
         t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"),
         "the card sits on the field: {:?}",
         t.field_ids(0)
     );
-    // Activation is 主要阶段 with ≥9 markers on the card. Arrange 9 and try.
-    // Markers are the card's own tokens; if the engine has no marker slot yet
-    // this records the gap.
-    let f = t.field(0).into_iter().find(|f| f.card.contains("Wacha"));
-    eprintln!("wacha field entry: {:?}", f);
-    // At minimum the card is placed and the turn is in OPS (主要阶段).
     assert_eq!(t.step(), game_core::state::stage::OPS);
+}
+
+#[test]
+fn wacha_mocha_press_refused_below_nine_markers() {
+    // 「若此卡上有至少9个水母标记」 -- below 9 the jump branch is not available.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_tok(&mut t, 0, "水母标记", 8);
+    assert!(
+        t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").is_err(),
+        "press below 9 markers is refused"
+    );
+}
+
+#[test]
+fn wacha_mocha_jump_at_nine_markers() {
+    // Sheet 2026-10-06 新卡组卡 F13:
+    // 「主要阶段中，若此卡上有至少9个水母标记，可以清除所有标记并传送到#4水族馆
+    // 或者 #30弦卷豪宅，视为本次主要移动(喊出呼诶诶～!)，然后此卡置入弃牌堆。」
+    // The jump branch of the merged Play entry (`ctx::is_placed()` true).
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_tok(&mut t, 0, "水母标记", 9);
+    t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
+    // 「传送到#4水族馆或者 #30弦卷豪宅」 -- a tile pick between the two.
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    let aquarium = tile("水族馆");
+    let mansion = tile("弦卷豪宅");
+    let k = p
+        .items
+        .iter()
+        .position(|s| s == &aquarium.to_string() || s == &mansion.to_string())
+        .expect("aquarium or mansion offered");
+    t.answer(0, k as i32).unwrap();
+    drain(&mut t);
+    // 「视为本次主要移动」 -- the teleport is the move: the player is on one of
+    // the two destinations and the card is gone (「置入弃牌堆」).
+    let pos = t.pos(0);
+    assert!(
+        pos == aquarium || pos == mansion,
+        "teleported to aquarium or mansion, pos={pos}"
+    );
+    assert!(
+        !t.on_field(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲"),
+        "card discarded after the jump"
+    );
+    // 「清除所有标记」
+    assert_eq!(t.token(0, "水母标记"), 0, "markers cleared");
 }
 
 #[test]

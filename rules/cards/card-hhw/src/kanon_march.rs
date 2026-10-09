@@ -16,27 +16,45 @@ const JELLY: &str = "水母标记";
 pub const KANON_MARCH: CardDef = CardDef::new(
     "HHW:（花音）Wacha Mocha 啪嗒进行曲",
     &[
-        On::Play("", None, play),
+        // One Play entry for both contexts (the engine dispatches only the
+        // first): [场] placement from hand, or the ≥9-marker jump once placed.
+        // The gate admits whenever either branch is available.
+        On::Play("", Some(cant_play), play),
         On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
-        On::Play("", Some(can_jump), jump),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
 
+/// Combined gate: not yet placed (the placement branch), or placed with the
+/// 「至少9个水母标记」 the jump needs. A placement is always available from
+/// hand; a placed card without 9 markers is refused.
+fn cant_play(player_id: i32) -> Option<Msg> {
+    if !ctx::is_placed() {
+        return None;
+    }
+    if ctx::tok(player_id, JELLY) >= 9 {
+        return None;
+    }
+    Some(Msg::new(key!("kanon_march_need")))
+}
+
 fn play(player_id: i32) -> card_sdk::Asked {
-    // 规则书: 「[场]」 -- a field card; C# `H.PlaceFromPlay(c)`.
-    ctx::set_dest(ctx::Dest::Field);
-    ctx::place_card(
-        player_id,
-        "HHW:（花音）Wacha Mocha 啪嗒进行曲",
-        &Msg::new(key!("kanon_march_note")),
-    );
-    ctx::log(
-        player_id,
-        &Msg::new(key!("kanon_march_placed")).player_id("who", player_id),
-    );
-    ctx::add_tok(player_id, JELLY, 0, 9)?;
-    Ok(())
+    if !ctx::is_placed() {
+        // 规则书: 「[场]」 -- a field card; C# `H.PlaceFromPlay(c)`.
+        ctx::set_dest(ctx::Dest::Field);
+        ctx::place_card(
+            player_id,
+            "HHW:（花音）Wacha Mocha 啪嗒进行曲",
+            &Msg::new(key!("kanon_march_note")),
+        );
+        ctx::log(
+            player_id,
+            &Msg::new(key!("kanon_march_placed")).player_id("who", player_id),
+        );
+        ctx::add_tok(player_id, JELLY, 0, 9)?;
+        return Ok(());
+    }
+    jump(player_id)
 }
 
 fn legacy_mine(player_id: i32) -> bool {
@@ -62,13 +80,6 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 
 /// 「当水母标记到达9个时可以清除所有标记传送到#4水族馆或者 #30弦卷豪宅，视为本次
 /// 主要移动(喊出呼诶诶～!)，然后置入弃牌堆」.
-fn can_jump(player_id: i32) -> Option<Msg> {
-    if ctx::tok(player_id, JELLY) < 9 {
-        return Some(Msg::new(key!("kanon_march_need")));
-    }
-    None
-}
-
 fn jump(player_id: i32) -> card_sdk::Asked {
     if ctx::tok(player_id, JELLY) < 9 {
         return Ok(());
