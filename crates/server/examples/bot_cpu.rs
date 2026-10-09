@@ -36,7 +36,7 @@
 //! (`SearchConfig::profile` on a sample of recorded views) that splits one
 //! search into fork materialisation / descent / rollout / evaluation / key.
 
-#[path = "alloc_hook.rs"]
+#[path = "shared/alloc_hook.rs"]
 mod alloc_hook;
 
 use std::collections::HashMap;

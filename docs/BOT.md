@@ -1279,7 +1279,18 @@ allocation-bound). Rollout is 84–85 % of search; inside the engine,
 (sha256 `5a809e12…`, 730 lines / 36 046 B) and `sim -- 50 4 200` counts are
 identical (rounds 196.6; end reasons `{last: 10, settle: 40}`; prompts /
 event kinds / details all match the A–C baseline). No ABI bump; no
-replay-format change.
+replay-format change. These baselines were taken on `integration` before
+the 2026-10-09 merge of `origin/master` (531b447: card flash, map/FX
+layout, fairness commit-reveal / ChaCha12 RNG, `RECORD_VERSION` 2). After
+that merge the *engine* baselines shift with the new RNG (as the
+coordinator noted) -- `ckpt-merged.txt` sha256 `bed8588d…` (same 730 lines
+/ 723 turns; master's card-flash events replace some `text` events) and
+`sim -- 50 4 200` gives rounds 192.5 / end reasons `{last: 15, settle: 35}`
+-- and this change's engine-side edits are timing-only / additive APIs
+(`rtimer`, `state_inner` split, `view_extra_typed`, `surface_probe`,
+`hand_len_first`), none of which touch `Match::save`, the RNG, or event
+construction, so they cannot move those numbers. `RECORD_VERSION` 2 is
+master's bump (reads of older records default the new fields), not ours.
 
 **1 -- `Match::surface_probe` (cheap rollout tick).** The rollout loop used
 to call `fork.state()` -- a deep `MatchState` clone plus the buy/build
