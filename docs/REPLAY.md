@@ -496,6 +496,15 @@ Only what replay needs is kept: no audio, no live2d, no UI. Size on the
 modules pool is content-addressed -- filenames are their sha256 -- so bundles
 share it. Each reference record is a few kB of input log (two bots, seed 7).
 
+What is **not** in the archive: the site's own workers. The live solo match
+runs in a module worker the page bundles beside itself
+(`webui/src/game/soloWorker.ts`, rsbuild's worker chunk) and loads **this
+build's** glue -- the same `webui/src/wasm/glue*` bytes the page imports, same
+`engine_id.json`, so a record it seals names this bundle exactly. The
+advanced-bot worker bundle is excluded for the same reason as before (§9.2):
+replays never run a bot. Archived bundles are still driven only by
+`replay-worker.js`; an old record is unaffected by where the live match runs.
+
 Each index entry records how the bytes can be reproduced:
 
 | Field | Meaning |
