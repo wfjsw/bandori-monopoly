@@ -240,7 +240,18 @@ impl CardWorld for Run {
 
     fn effect(&mut self, player_id: i32, msg: Msg) {
         let msg = self.attribute(msg);
-        self.world.log("effect", player_id, msg);
+        // Name the running card on the event, so the client can ride the line
+        // on that card's flash (正论暴击 and kin) instead of popping the effect
+        // modal. The id matches the `"card"` activation's (`event:` instances
+        // are announced without the prefix); empty outside a card body keeps
+        // today's popup.
+        let src = self
+            .current_card
+            .strip_prefix("event:")
+            .unwrap_or(&self.current_card)
+            .to_string();
+        let e = self.world.log("effect", player_id, msg);
+        e.card = src;
     }
 
     fn extreme(&self) -> i32 {

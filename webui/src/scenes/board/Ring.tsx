@@ -19,14 +19,14 @@ import { fmtMsg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 
 /** The TTS board (mod 3506424344, object 53c41e / Lua `pathXY`): 60 tiles on a
- *  12 x 10 grid of square cells, `boardIndex 0` = CiRCLE at the bottom right,
+ *  12 x 10 grid of cells, `boardIndex 0` = CiRCLE at the bottom right,
  *  counter-clockwise. Each side's middle steps inward one cell and runs back
  *  out -- that extra rung is what lets one side carry 15 tiles instead of 12 on
- *  the same box. Cells are square (12 x 10 = the board's 6:5 aspect). */
+ *  the same box. The map fills its slot: cells stretch to `box / 12` by
+ *  `box / 10`, so the ring uses the whole rectangle (wide on a wide window)
+ *  while the path -- and the pockets it encloses -- keep their grid shape. */
 const COLS = 12;
 const ROWS = 10;
-const RING = 856;
-const HEIGHT = RING * ROWS / COLS;
 const FOLD: readonly (readonly [number, number])[] = [
   [11, 9], [10, 9], [9, 9], [8, 9], [7, 9], [7, 8], [7, 7], [6, 7], [5, 7], [4, 7],
   [4, 8], [4, 9], [3, 9], [2, 9], [1, 9], [0, 9], [0, 8], [0, 7], [0, 6], [1, 6],
@@ -41,9 +41,9 @@ function cell(i: number): readonly [number, number] {
   return FOLD[i % FOLD.length];
 }
 
-/** Pixel centre of a 0-based column / row (square cells). */
-const cellX = (col: number) => (col + 0.5) * (RING / COLS);
-const cellY = (row: number) => (row + 0.5) * (HEIGHT / ROWS);
+/** Pixel centre of a 0-based column / row on a `w` x `h` board rect. */
+const cellX = (col: number, w: number) => (col + 0.5) * (w / COLS);
+const cellY = (row: number, h: number) => (row + 0.5) * (h / ROWS);
 
 export interface RingProps {
   m: Model;
@@ -53,7 +53,7 @@ export interface RingProps {
   onTile: (i: number) => void;
 }
 
-/** What a hovered tile marker says, and where (the wrap's 856 px space). */
+/** What a hovered tile marker says, and where (the wrap's own pixel space). */
 interface MarkTip { x: number; y: number; title: string; lines: string[] }
 
 /** Hover target: a card in play, or an event in effect (both expand the same way). */
@@ -97,12 +97,12 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
   // Markers sit inside a tile (which clips), so their popup is drawn on the
   // untransformed overlay above the zoom layer. The wrap is not zoomed: its
   // bounding box carries only the stage scale, and converting the marker's
-  // screen box against it lands in the wrap's own 856 px space at any zoom.
+  // screen box against it lands in the wrap's own pixel space at any zoom.
   const showTip = (e: React.MouseEvent, title: string, lines: string[]) => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     const r = wrap.getBoundingClientRect();
-    const k = r.width / RING || 1;
+    const k = r.width / (wrap.offsetWidth || 1) || 1;
     const b = (e.currentTarget as HTMLElement).getBoundingClientRect();
     setTip({ x: (b.left + b.width / 2 - r.left) / k, y: (b.top - r.top) / k, title, lines: lines.filter(Boolean) });
   };
@@ -118,7 +118,7 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
     if (w !== tipBox.w || h !== tipBox.h) setTipBox({ w, h });
   }, [tip, tipBox.w, tipBox.h]);
   const half = Math.min(tipBox.w || 220, 220) / 2;
-  const tipX = tip ? Math.min(Math.max(tip.x, half + 8), RING - half - 8) : 0;
+  const tipX = tip ? Math.min(Math.max(tip.x, half + 8), vp.box.width - half - 8) : 0;
   const tipUp = tip ? tip.y - (tipBox.h || 90) - 12 >= 0 : true;
   return (
     <div
@@ -136,9 +136,9 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
       onDoubleClick={vp.onDoubleClick}
       aria-label={tr("board.zoomLabel")}
     >
-      {/* Board pixels -> the window: one fit scale, then the user's pan/zoom. */}
-      <div className={s.fit} style={{ transform: `scale(${vp.fit})` }}>
-        <div className={s.viewport} style={vp.style}>
+      {/* Board pixels are the wrap's own pixels; this layer carries the user's
+          pan/zoom over the tiles and the interior. */}
+      <div className={s.viewport} style={vp.style}>
         <div className={s.ring} data-vp-bg>
           <Center m={m} onHover={setHover} />
           {D.tiles.map((t, i) => {
@@ -207,9 +207,9 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
               const dx = n > 1 ? (k - (n - 1) / 2) * Math.min(14, 40 / (n - 1)) : 0;
               const ch = m.charOf(i);
               const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
-              const top = cellY(row) + 16;
+              const top = cellY(row, vp.box.height) + 16;
               return (
-                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
+                <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.box.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
                   {ch
                     ? <img key={hop} className={cx(s.sd, hop > 0 && s.hop)} src={charArt(D.artId(ch), "sdThumb")} alt="" />
@@ -220,33 +220,11 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
           </div>
         </div>
       </div>
-      {/* Fixed overlays: turn banner, card flash and the hover details stay out
-          of the zoom layer so they keep their size and screen position. */}
+      {/* Fixed overlays: the hover details stay out of the zoom layer so they
+          keep their size and screen position at any zoom. The turn / action
+          banners and the card flash are match-screen chrome (Board's FX
+          layer) -- not map-sized, not map-clipped. */}
       <div className={s.overlay}>
-        {anim.banner && (
-          <div key={anim.banner.id} className={s.banner}>
-            <b>{anim.banner.title}</b>
-            {anim.banner.body && <span>{anim.banner.body}</span>}
-          </div>
-        )}
-        {anim.turnAnnouncement && (
-          <div key={anim.turnAnnouncement.id} className={s.phaseFlash}>
-            <i className={s.link} /><i className={s.link} /><i className={s.link} /><i className={s.link} />
-            <span>{anim.turnAnnouncement.label}</span>
-          </div>
-        )}
-        {anim.flash && (
-          <div key={anim.flash.id} className={cx(s.flash, anim.flash.out && s.flashOut)}>
-            <div
-              className={s.flashFace}
-              style={{ ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)" }}
-            >
-              <CardFace id={anim.flash.card} size="big" />
-              <div className={s.flashCaption}>{anim.flash.caption}</div>
-              {anim.flash.negated && <div className={s.flashNegated}><span>{tr("board.cardNegated")}</span></div>}
-            </div>
-          </div>
-        )}
         <FieldPreview m={m} hover={hover} />
         {tip && (
           <div ref={tipRef} className={s.markTip} style={{ left: tipX, top: tip.y, transform: tipUp ? undefined : "translate(-50%, 6px)" }}>
@@ -254,7 +232,6 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
             {tip.lines.map((l, k) => <span key={k}>{l}</span>)}
           </div>
         )}
-      </div>
       </div>
       <ZoomControls vp={vp} />
     </div>
@@ -321,14 +298,24 @@ function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => v
   const names = namesOf(S);
   return (
     <div className={s.inner} data-vp-bg>
-      {/* Interior zones of the TTS board, on the same square-cell grid as the
-          path, beneath the live cards. */}
+      {/* Board colour and zone labels on the path's 12 x 10 grid (1-based grid
+          lines). Teal fills only the ring's five enclosed pockets -- top-left,
+          top-right, centre, bottom-left, bottom-right. The four side notches
+          of the TTS board (its marker / dice-storage pockets) are outside the
+          ring, so they carry no background and their labels move inside: the
+          markers to the top-left pocket, the dice storage to the roll zone's
+          flanks. */}
       <div className={s.zones} aria-hidden="true">
-        <span style={{ gridColumn: "6 / 8", gridRow: "1 / 3" }}>{tr("board.markerZone")}</span>
+        <span className={s.pocket} style={{ gridColumn: "2 / 5", gridRow: "2 / 4" }} />
+        <span className={s.pocket} style={{ gridColumn: "9 / 12", gridRow: "2 / 4" }} />
+        <span className={s.pocket} style={{ gridColumn: "5 / 9", gridRow: "4 / 8" }} />
+        <span className={s.pocket} style={{ gridColumn: "2 / 5", gridRow: "8 / 10" }} />
+        <span className={s.pocket} style={{ gridColumn: "9 / 12", gridRow: "8 / 10" }} />
+        <span style={{ gridColumn: "2 / 5", gridRow: "2 / 4" }}>{tr("board.markerZone")}</span>
         <span style={{ gridColumn: "9 / 12", gridRow: "2 / 4" }}>{tr("board.specialMarkerZone")}</span>
-        <span style={{ gridColumn: "5 / 9", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
-        <span style={{ gridColumn: "1 / 4", gridRow: "5 / 7" }}>{tr("board.diceZone")}</span>
-        <span style={{ gridColumn: "10 / 13", gridRow: "5 / 7" }}>{tr("board.diceZone")}</span>
+        <span className={s.zoneNarrow} style={{ gridColumn: "5 / 6", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
+        <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
+        <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
       </div>
       {/* 场上的卡 in the fold's big interior: compact card faces grouped by
           whose field they are on, each with its live state (crystals, note).

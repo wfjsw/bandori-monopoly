@@ -80,10 +80,16 @@ export class Animator {
   /** Only the new-turn announcement appears over the board. */
   turnAnnouncement: { label: string; id: number } | null = null;
   /** The card activation flash: the face shown prominently over the board,
-   *  with the owner's colour and a short caption (who/what triggered it). */
+   *  with the owner's colour and a short caption (who/what triggered it).
+   *  `detail` holds the activation's effect lines (「<卡名> 的效果：…」) that
+   *  ride the flash instead of popping their own modal. */
   flash: {
     card: string; owner: number; caption: string; negated: boolean;
     out: boolean; id: number;
+    detail: string[];
+    /** The activation's trigger kind (`card_trigger`); `hook` and kin caption
+     *  generically, and their detail lines already name the card. */
+    kind: string;
   } | null = null;
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
@@ -95,6 +101,7 @@ export class Animator {
   private localLogId = 0;
   private bannerTimer = 0;
   private turnTimer = 0;
+  private flashTimer = 0;
   private disposed = false;
 
   constructor(private bump: () => void, private view: () => MatchView | null, private readonly replay = false) {}
@@ -122,6 +129,7 @@ export class Animator {
     this.disposed = true;
     clearTimeout(this.bannerTimer);
     clearTimeout(this.turnTimer);
+    clearTimeout(this.flashTimer);
   }
 
   addLog(e: MatchEvent): void {
@@ -197,29 +205,73 @@ export class Animator {
   /** The card activation flash: the face up for ~1.2s (briefly when the queue
    *  is deep), barred in the owner's colour with a short caption, and marked
    *  无效 when a counteraction negated it. The queue plays simultaneous
-   *  activations one after another, so none is lost. */
+   *  activations one after another, so none is lost -- a new face waits for
+   *  the previous one to fade. The hold is a timer, not a queue pause: the
+   *  activation's own follow-ups (its roll, its effect lines) land on the face
+   *  instead of waiting it out. */
   private async cardFlash(e: MatchEvent, fast: boolean): Promise<void> {
-    const hold = (fast ? CARD_FLASH_FAST_MS : CARD_FLASH_MS) / Math.max(1, this.speed);
-    const fade = fast ? 0 : 250 / Math.max(1, this.speed);
+    while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
+    if (this.disposed) return;
     // An already-in-play card's effect is captioned 「<卡名> 的效果」 -- its
-    // outcome lines, logged alongside, say what happened. A genuine
-    // activation (play / [反击] / skill / event) names who did it.
+    // outcome lines, logged alongside, ride along and say what happened. A
+    // genuine activation (play / [反击] / skill / event) names who did it.
     const kind = e.kind ?? "";
     const caption = KIND_KEY[kind]
       ? tr(KIND_KEY[kind], { who: e.playerId >= 0 ? this.player(e.playerId) : tr("board.cardNeutral") })
       : tr("board.cardEffect", { card: cardTitle(e.card) });
     if (!fast) sfx(e.negated ? "prompt" : "card_play");
+    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, [], fast);
+  }
+
+  /** Put a card face up; `armFlash` starts its hold. */
+  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], fast: boolean): void {
     const id = ++this.seq;
-    this.flash = { card: e.card, owner: e.playerId, caption, negated: !!e.negated, out: false, id };
+    this.flash = { card, owner, caption, negated, out: false, id, detail, kind };
+    this.armFlash(id, fast);
     this.bump();
-    await sleep(hold - fade);
-    if (this.flash?.id !== id) return;
-    this.flash = { ...this.flash, out: true };
-    this.bump();
-    if (fade > 0) await sleep(fade);
-    if (this.flash?.id !== id) return;
-    this.flash = null;
-    this.bump();
+  }
+
+  /** Start (or re-arm) the flash's hold, then its fade. One timer slot: an
+   *  effect line that lands on the face re-arms it before the fade eats it. */
+  private armFlash(id: number, fast: boolean): void {
+    const hold = (fast ? CARD_FLASH_FAST_MS : CARD_FLASH_MS) / Math.max(1, this.speed);
+    const fade = (fast ? 0 : 250) / Math.max(1, this.speed);
+    clearTimeout(this.flashTimer);
+    this.flashTimer = window.setTimeout(() => {
+      if (this.flash?.id !== id) return;
+      if (fade <= 0) {
+        this.flash = null;
+        this.bump();
+        return;
+      }
+      this.flash = { ...this.flash, out: true };
+      this.bump();
+      this.flashTimer = window.setTimeout(() => {
+        if (this.flash?.id !== id || !this.flash.out) return;
+        this.flash = null;
+        this.bump();
+      }, fade);
+    }, Math.max(0, hold - fade));
+  }
+
+  /** An `effect` line whose source is a card: it rides that card's flash (the
+   *  same 「<卡名> 的效果：…」 wording the log keeps) instead of popping the
+   *  effect modal -- 正论暴击 and every other `ctx::effect` land here. With no
+   *  flash up the card's face comes back, line attached. */
+  private async rideEffect(card: string, owner: number, text: string, fast: boolean): Promise<void> {
+    const f = this.flash;
+    if (f && f.card === card && !f.out) {
+      // A hook's generic 「<卡名> 的效果」 caption repeats what the line says;
+      // drop it and let the line speak. A named trigger keeps its caption.
+      const caption = KIND_KEY[f.kind] ? f.caption : "";
+      this.flash = { ...f, caption, detail: [...f.detail, text], out: false };
+      this.armFlash(f.id, fast);
+      this.bump();
+      return;
+    }
+    while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
+    if (this.disposed) return;
+    this.showFlash(card, owner, "", false, "", [text], fast);
   }
 
   private showTurn(label: string): void {
@@ -345,7 +397,14 @@ export class Animator {
       }
       case "effect": {
         // Which effect a card just applied. Additive to the log line the same
-        // message already produced -- this is the popup window on top of it.
+        // message already produced. An effect with a source card rides that
+        // card's flash (正论暴击 and kin: no modal of their own); only an
+        // unattributed one keeps the popup window.
+        if (e.card) {
+          await this.rideEffect(e.card, playerId, body, fast);
+          await wait(fast ? 0 : 250);
+          break;
+        }
         if (!fast) sfx("place");
         showEffect(body, EFFECT_HOLD_MS);
         await wait(EFFECT_HOLD_MS);

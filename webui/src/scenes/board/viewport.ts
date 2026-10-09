@@ -1,13 +1,13 @@
 // Pan + zoom for the tile board. Only the ring (and its interior) is
-// transformed -- prompts, panels, the banner and the card flash sit outside
+// transformed -- prompts, panels, the banners and the card flash sit outside
 // the zoom layer so they keep their size and screen position at any zoom.
 //
-// Coordinates are the board's own pixels (856 x 713.33, the TTS 6:5 box). The
-// board window (the wrap) is that box scaled to fit the middle column
-// (`fit`), and the zoom layer inside it carries `translate(tx px, ty px)
-// scale(z)` with `transform-origin: 0 0`: a board point (x, y) lands at
-// (x * z + tx, y * z + ty) in board pixels. `z = 1` is "fit": the whole board
-// fills the window, so the pan pins to zero.
+// Coordinates are the board window's own pixels: the map fills its slot, so
+// the board rect is whatever the match screen gives it (the 12 x 10 cell grid
+// stretches to that width and height). The zoom layer inside the wrap carries
+// `translate(tx px, ty px) scale(z)` with `transform-origin: 0 0`: a board
+// point (x, y) lands at (x * z + tx, y * z + ty) in board pixels. `z = 1` is
+// "fit": the whole board fills the window, so the pan pins to zero.
 
 import {
   useCallback, useEffect, useRef, useState,
@@ -16,9 +16,8 @@ import {
   type PointerEvent as ReactPointerEvent, type RefObject,
 } from "react";
 
-/** The generated board's size in its own pixels: 12 x 10 square cells. */
-export const BOARD_W = 856;
-export const BOARD_H = BOARD_W * 10 / 12;
+/** Smallest board window (stage px) the map is ever laid out at. */
+export const MIN_BOARD = 240;
 
 export interface Viewport {
   /** User zoom, 1 = fit. */
@@ -53,7 +52,8 @@ export function clampZoom(z: number): number {
 
 /** Keep an `w x h` board scaled by `z` covering the `w x h` window: never a
  *  gap at the edges (so the board can't be dragged out of view). At `z = 1`
- *  the board exactly covers the window, which pins the pan to zero. */
+ *  the board exactly covers the window, which pins the pan to zero. The rect
+ *  is the actual board size (any aspect): the math is per-axis. */
 export function clampPan(v: Viewport, w: number, h: number): Viewport {
   const z = clampZoom(v.z);
   const loX = w * (1 - z);
@@ -98,12 +98,12 @@ export function panBy(v: Viewport, dx: number, dy: number, w: number, h: number)
   return clampPan({ z: v.z, tx: v.tx + dx, ty: v.ty + dy }, w, h);
 }
 
+/** Client px -> board px. The wrap is laid out in board pixels (its own
+ *  offset size) and the stage scales that to the screen, so the net factor is
+ *  `client width / offset width` on both axes. */
 function toLocal(el: HTMLElement, clientX: number, clientY: number): Point {
   const r = el.getBoundingClientRect();
-  // The wrap is the board box scaled to the window (and the stage scales that
-  // again); `r.width / BOARD_W` is the net factor from board pixels to screen,
-  // so dividing by it lands back in board pixels on both axes.
-  const k = r.width / BOARD_W || 1;
+  const k = r.width / (el.offsetWidth || 1) || 1;
   return { x: (clientX - r.left) / k, y: (clientY - r.top) / k };
 }
 
@@ -122,9 +122,7 @@ export interface ViewportApi {
   wrapRef: RefObject<HTMLDivElement | null>;
   /** `translate + scale` for the zoom layer (board pixels). */
   style: CSSProperties;
-  /** Scale of the board box filling its window (856 px -> the wrap's width). */
-  fit: number;
-  /** The board window's size in stage pixels (6:5). */
+  /** The board window's size in stage pixels (it fills the map slot). */
   box: { width: number; height: number };
   zoom: number;
   zoomIn: () => void;
@@ -151,27 +149,35 @@ export function useBoardViewport(): ViewportApi {
     pointers: new Map(), last: { x: 0, y: 0 }, moved: 0,
     dragging: false, dragged: false, pinch: null,
   });
-  // The board window: the largest 6:5 rect in the slot (the middle column).
-  // Measured in JS -- `container-type: size` was unreliable here -- and the
-  // same number gives the fit scale (window px / board px).
-  const [box, setBox] = useState({ width: BOARD_W, height: BOARD_H });
+  // The board window: the map slot's whole rectangle (the tiles stretch to
+  // fill it). Measured in JS -- `container-type: size` was unreliable here --
+  // and board pixels are those stage pixels 1:1.
+  const [box, setBox] = useState({ width: MIN_BOARD, height: MIN_BOARD });
+  const boxRef = useRef(box);
+  boxRef.current = box;
   useEffect(() => {
     const el = wrapRef.current;
     const slot = el?.parentElement;
     if (!el || !slot) return;
     const measure = () => {
-      const w = Math.min(slot.clientWidth, slot.clientHeight * (BOARD_W / BOARD_H));
-      setBox({ width: Math.max(240, w), height: Math.max(240, w) * (BOARD_H / BOARD_W) });
+      setBox({
+        width: Math.max(MIN_BOARD, slot.clientWidth),
+        height: Math.max(MIN_BOARD, slot.clientHeight),
+      });
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(slot);
     return () => ro.disconnect();
   }, []);
-  const fit = box.width / BOARD_W;
+  // A new rect keeps the user's zoom and re-clamps the pan to it.
+  useEffect(() => {
+    setV((cur) => clampPan(cur, box.width, box.height));
+  }, [box.width, box.height]);
 
   const zoomAt = useCallback((dir: 1 | -1) => {
-    setV((cur) => stepZoom(cur, dir, BOARD_W / 2, BOARD_H / 2, BOARD_W, BOARD_H));
+    const { width: w, height: h } = boxRef.current;
+    setV((cur) => stepZoom(cur, dir, w / 2, h / 2, w, h));
   }, []);
   const zoomIn = useCallback(() => zoomAt(1), [zoomAt]);
   const zoomOut = useCallback(() => zoomAt(-1), [zoomAt]);
@@ -191,7 +197,8 @@ export function useBoardViewport(): ViewportApi {
       e.preventDefault();
       const p = toLocal(el, e.clientX, e.clientY);
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaMode === 2 ? e.deltaY * 400 : e.deltaY;
-      setV((cur) => wheelZoom(cur, p.x, p.y, dy, BOARD_W, BOARD_H));
+      const { width: w, height: h } = boxRef.current;
+      setV((cur) => wheelZoom(cur, p.x, p.y, dy, w, h));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -234,8 +241,7 @@ export function useBoardViewport(): ViewportApi {
     g.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const el = wrapRef.current;
     if (!el) return;
-    const w = BOARD_W;
-    const h = BOARD_H;
+    const { width: w, height: h } = boxRef.current;
     if (g.pointers.size >= 2 && g.pinch) {
       const [a, b] = [...g.pointers.values()];
       const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
@@ -262,7 +268,7 @@ export function useBoardViewport(): ViewportApi {
       }
     }
     if (g.dragging) {
-      const k = el.getBoundingClientRect().width / BOARD_W || 1;
+      const k = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
       setV((curV) => panBy(curV, dx / k, dy / k, w, h));
     }
   }, []);
@@ -329,7 +335,6 @@ export function useBoardViewport(): ViewportApi {
   return {
     wrapRef,
     style: { transform: `translate(${v.tx}px, ${v.ty}px) scale(${v.z})` },
-    fit,
     box,
     zoom: v.z,
     zoomIn, zoomOut, reset,
