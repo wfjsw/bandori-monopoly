@@ -4243,13 +4243,46 @@ impl ProbeMemo {
 
 /// The one-line description of the answered link the [反击] prompt shows (C#
 /// `DescribeTrigger`).
+///
+/// The key is kind-specific so the client can say **what** is being answered
+/// (「{{who}} 打出了「{{card}}」」 / 「{{who}} 将支付 {{n}} 给 {{to}}」 /
+/// 「{{who}} 将移动 {{n}} 格」) instead of a bare 「{{who}} 的触发」.
+/// `ask.counteract.detail` stays the fallback for the long tail of kinds -- and
+/// for prompts already on the wire, so old replays keep rendering.
 fn describe_trigger(t: &Trigger) -> Msg {
-    let mut m = Msg::new("ask.counteract.detail").player_id("who", t.player_id);
+    let effect_kind = t.effects.first().map(|e| e.kind).unwrap_or("");
+    let mut m = match t.kind {
+        // A play (L1) or a declared counter -- both are `card` links.
+        TriggerKind::Card if !t.card.is_empty() => Msg::new("ask.counteract.detail.play"),
+        TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::Roll | TriggerKind::MoveRoll => {
+            Msg::new("ask.counteract.detail.move")
+        }
+        // The [反击] key for a payment / a targeted effect is `effect`
+        // (`docs` on `TriggerKind::Effect`); the declared effect's own kind
+        // says which.
+        TriggerKind::Effect if effect_kind == "pay" => {
+            if t.pay_is_rent && t.target >= 0 {
+                Msg::new("ask.counteract.detail.rent")
+            } else if t.target >= 0 {
+                Msg::new("ask.counteract.detail.pay")
+            } else {
+                Msg::new("ask.counteract.detail.pay_out")
+            }
+        }
+        TriggerKind::Effect if effect_kind != "" && !t.card.is_empty() => {
+            Msg::new("ask.counteract.detail.effect")
+        }
+        _ => Msg::new("ask.counteract.detail"),
+    };
+    m = m.player_id("who", t.player_id);
     if !t.card.is_empty() {
         m = m.card("card", &t.card);
     }
     if t.tile >= 0 {
         m = m.tile("tile", t.tile);
+    }
+    if t.target >= 0 {
+        m = m.player_id("to", t.target);
     }
     m = m.i("n", t.value as i64);
     m

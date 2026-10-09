@@ -52,6 +52,12 @@ export interface CardFaceProps {
    */
   width?: number;
   on?: boolean;
+  /**
+   * Field-row face: the tags tuck above the title and the title + `children`
+   * (the caller's marker badges) form a fixed-height bottom zone -- exactly
+   * the part that peeks while the field row is retracted.
+   */
+  field?: boolean;
   onClick?: () => void;
   onMouseEnter?: (el: HTMLElement) => void;
   onMouseLeave?: () => void;
@@ -63,13 +69,13 @@ export interface CardFaceProps {
   style?: CSSProperties;
 }
 
-export function CardFace({ id, size = "mini", width, on, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
+export function CardFace({ id, size = "mini", width, on, field, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
   const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
   const clickable = !!onClick;
   return (
     <div
-      className={cx(s.face, s[size], on && s.on, className)}
+      className={cx(s.face, s[size], on && s.on, field && s.field, className)}
       style={faceStyle}
       role={clickable ? "button" : undefined}
       tabIndex={clickable ? 0 : undefined}
@@ -85,7 +91,7 @@ export function CardFace({ id, size = "mini", width, on, onClick, onMouseEnter, 
       <div className={s.line} style={{ background: cardColor(id) }} />
       <div className={s.title}>{cardTitle(id)}</div>
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-      {children}
+      {field ? <div className={s.marks}>{children}</div> : children}
     </div>
   );
 }

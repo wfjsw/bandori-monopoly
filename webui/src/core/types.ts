@@ -10,6 +10,9 @@ export interface TileData {
 export interface CardData {
   id: string; band: string; name: string; rawName: string; owner: string;
   derived: boolean; tags: string[]; text: string; cell: string;
+  /** The [反击] card's trigger-condition clause (「…时」), extracted once from
+   *  `text` and checked for every 反击-tagged card. Why the card is offered. */
+  counterReason?: string;
 }
 export interface CharacterData {
   name: string; display: string; band: string; color: string; skill: string; text: string;

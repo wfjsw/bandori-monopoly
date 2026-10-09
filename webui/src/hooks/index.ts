@@ -9,6 +9,7 @@
 //   timers.ts   -- interval / timeout / animation frame / countdowns
 //   measure.ts  -- ResizeObserver, scroll follow / reset
 //   mount.ts    -- one-shot mount actions, overlay auto-close
+//   dock.ts     -- the docked card rows' raise / retract
 //   async.ts    -- cancellable async work
 //   scene.ts    -- the scene cross-fade
 //   live2d.ts   -- the Live2D model / GL resource
@@ -31,6 +32,7 @@ export {
 } from "./timers.ts";
 export { useResizeObserver, useScrollFollow, useResetScroll } from "./measure.ts";
 export { useMountEffect, useCloseWhen } from "./mount.ts";
+export { useDockRaise, type DockRaise } from "./dock.ts";
 export { useAsync, type AsyncState } from "./async.ts";
 export { useCrossfade, type Crossfade } from "./scene.ts";
 export {

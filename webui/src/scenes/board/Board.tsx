@@ -1,5 +1,5 @@
 // The match board (BoardDemoController). Left: players. Center: the ring
-// with the field panel and the event deck inside, and the collapsed hand
+// with the cards-in-play row over its top edge, and the collapsed hand
 // underneath. Controls sit below the players; the right is a full match log.
 
 import { useEffect, useRef } from "react";
@@ -152,9 +152,9 @@ export function Board({ sess }: { sess: GameSession }) {
           <Side m={m} sess={sess} anim={anim} />
         </div>
         <div className={s.middle}>
-          {/* The cards in play, as a fold-away strip at the top of this column
-              (under the FX layer). The board's roll-zone die takes the roll
-              action from the old side-column button. */}
+          {/* The cards in play, as a top-docked card row over this column's
+              upper edge (under the FX layer). The board's roll-zone die takes
+              the roll action from the old side-column button. */}
           <FieldSheet m={m} />
           <div className={s.mapSlot}>
             <Ring

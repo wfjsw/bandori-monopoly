@@ -32,6 +32,10 @@
    min-width: 100%` keeps a long sentence from widening a `fit` window by
    itself. */
 .text { font-size: 17px; line-height: 1.65; white-space: pre-wrap; width: 0; min-width: 100%; }
+/* A card name inside the body text: hover previews it (the standing panel
+   follows), click opens the card -- the log's card reference. */
+.cardRef { color: var(--pink); font-weight: 700; text-decoration: underline dotted rgba(237, 78, 118, 0.55); text-underline-offset: 3px; cursor: pointer; }
+.cardRef:hover { color: var(--tag-red); }
 /* Options wrap like the old pill row. */
 .options { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
 /* Optional content a prompt can drop in before its options -- e.g. a strip of
@@ -50,6 +54,28 @@
 /* Card options stretch to the tallest face in the row (longest name), so the
    faces and their captions line up. */
 .cardRow { width: 100%; display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
+/* The select-then-confirm card pick: tiles alone on a light tray that scrolls
+   sideways, so a wide offer never widens the sheet. */
+.cardTray {
+  width: 100%; display: flex; flex-wrap: nowrap; gap: 12px; align-items: stretch;
+  overflow-x: auto; overflow-y: hidden;
+  background: var(--light-pill); border-radius: 12px; padding: 12px;
+}
+/* A short row centres in the tray; an overflowing one starts at the first card
+   (auto margins resolve to 0 when there is no free space -- plain
+   `justify-content: center` would clip the start). */
+.cardTray > :first-child { margin-left: auto; }
+.cardTray > :last-child { margin-right: auto; }
+.cardTray .choiceCard { cursor: pointer; flex: none; }
+.cardTray .choiceCard:hover { transform: translateY(-3px); }
+/* The centred 确认 / 取消 row under the tray. */
+.confirmRow { width: 100%; display: flex; justify-content: center; gap: 12px; }
+/* Why the focused card may be declared: its [反击] trigger clause. */
+.reason {
+  width: 100%; font-size: 14px; line-height: 1.55;
+  background: var(--pink-pale); border-radius: 10px; padding: 8px 12px;
+}
+.reason b { color: var(--pink-deep); margin-right: 6px; }
 .cardOpt { display: flex; flex-direction: column; gap: 4px; width: 96px; }
 .cardOptFace { cursor: zoom-in; flex: 1 1 auto; }
 .cardOptFace:hover { transform: translateY(-3px); }

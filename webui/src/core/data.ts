@@ -187,6 +187,14 @@ export function cardText(id: string): string {
   return skillCard(id)?.text ?? "";
 }
 
+/** Why a [反击] card may be declared: its own trigger-condition clause
+ *  (「…时」), kept on the card data (`counterReason`). Empty when the card
+ *  carries no such clause. */
+export function cardCounterReason(id: string): string {
+  if (!id || !D) return "";
+  return D.card(id)?.counterReason ?? "";
+}
+
 /** The band colour a card id belongs to (skill stand-ins included). */
 export function cardColor(id: string): string {
   if (!id || !D) return "#ED4E76";

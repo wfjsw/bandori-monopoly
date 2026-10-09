@@ -1,95 +1,106 @@
-/* The cards-in-play top sheet, at the top of the centre column (the mirror of
-   the prompt sheet's bottom one). A slim strip is always visible; the card row
-   unfolds over the board's upper edge and folds away on its own. Sits under
-   the FX layer (Board `.fx` is z-index 20+) so banners and the card flash
-   still read over it. */
+/* The cards-in-play row, docked at the top edge of the centre column: the
+   mirror of the hand's bottom fan. Straight (no arc), overlapping, retracted
+   upward behind the top edge so each face's bottom zone -- name + live markers
+   -- peeks below it; hover / focus lowers the row. Sits under the FX layer
+   (Board `.fx` is z-index 20+) so banners and the card flash still read over
+   it, and only the card boxes take the pointer -- the board stays clickable in
+   the gaps. */
 
 .sheet {
-  position: absolute; left: 0; right: 0; top: 0; z-index: 15;
+  position: absolute; inset: 0; z-index: 15;
   display: flex; flex-direction: column; align-items: center;
   pointer-events: none;
-}
-/* The drawer: one white sheet hanging from the column's top edge. Folded it is
-   just its handle row (title, count, chevron); open, the card tray unfolds
-   above the handle inside the same sheet. */
-.drawer {
-  pointer-events: auto;
-  display: flex; flex-direction: column; align-items: stretch;
-  min-width: 150px; max-width: min(92%, 860px);
-  border-radius: 0 0 14px 14px;
-  background: rgba(255, 255, 255, 0.96); box-shadow: var(--shadow);
+  /* Clips the retracted row at the top edge (the mirror of the hand sliding
+     behind the bottom one). */
   overflow: hidden;
-  transition: box-shadow 0.22s;
 }
-.open .drawer { width: min(92%, 860px); box-shadow: 0 12px 30px rgba(60, 20, 40, 0.18); }
-.strip { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 14px; }
-.toggle { display: flex; align-items: baseline; gap: 8px; height: 100%; color: var(--text); font-size: 14px; }
-.toggle b { color: var(--pink); font-size: 15px; padding-left: 8px; border-left: 4px solid var(--pink); }
-.toggle small { color: var(--sub); font-size: 12px; }
-.toggle:hover b { color: var(--pink-deep); }
-.chev {
-  align-self: center;
-  width: 9px; height: 9px;
-  border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor;
-  border-radius: 1px;
-  transform: rotate(45deg) translate(-1px, -1px);
+/* Retracted, the row rides up so only its bottom `--peek` px show. That zone
+   is the face's own bottom (Card `.field .title` 38px + `.marks` 18px + the
+   face's 4px padding = 60px) -- name and markers in view either way. */
+.row {
+  display: flex; align-items: stretch; justify-content: center;
+  pointer-events: none;
+  max-width: 100%;
+  transform: translateY(calc(-100% + 60px));
+  transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
 }
-.chevOpen { transform: rotate(-135deg) translate(-1px, -1px); }
+.up .row { transform: translateY(0); }
 
-/* The tray: `max-height` animates the fold; folded it is 0 tall. */
-.panel {
-  max-height: 0; overflow: hidden;
-  /* No intrinsic width: the folded drawer is as wide as its handle only. */
-  contain: inline-size;
-  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
-  transition: max-height 0.22s cubic-bezier(0.22, 0.7, 0.25, 1), padding 0.22s;
-  padding: 0 10px;
-}
-.open .panel { max-height: 240px; padding: 10px 10px 4px; }
-.cards { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; overflow: auto; min-height: 0; }
-.empty { padding: 8px 4px; font-size: 13px; color: var(--sub); }
-.more {
-  margin-left: auto; padding: 3px 10px; border-radius: 999px;
-  border: 1.5px solid var(--pink-pale); color: var(--pink); font-size: 12px; font-weight: 600;
-}
-.more:hover { background: var(--pink-pale); }
-
-/* Cards in play, framed in their owner's colour (ring + tint), with the live
-   counters as badges -- the same read-out the board's field panel carried. */
-.card {
+/* One card's slot: equal heights across the row (the face stretches to the
+   tallest), the owner's colour on the frame, and a hover that drops the card
+   further into view and over its neighbours. `--row-slot` (rowSpread) is the
+   step between card centres and tightens with the count. */
+.slot {
   position: relative;
-  box-shadow: 0 0 0 2px var(--own), 0 3px 8px rgba(80, 40, 60, 0.12);
-  background: color-mix(in srgb, var(--own) 18%, #fff);
+  display: flex;
+  flex: none;
+  pointer-events: auto;
+  transition: transform 0.16s ease, filter 0.16s ease;
 }
-.back { border-radius: 4px; box-shadow: 0 0 0 2px var(--own, #ddd); }
-.back img { width: 54px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; display: block; }
-.crystal {
-  position: absolute; right: -3px; top: -3px; padding: 0 4px; border-radius: 8px;
-  background: var(--purple); color: #fff; font-size: 10px; line-height: 15px;
+.slot + .slot { margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px)); }
+.slot + .sep { margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px) + 14px); }
+.slot:hover, .slot:focus-within {
+  transform: translateY(12px);
+  z-index: 2;
+  filter: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
+}
+
+/* The face itself: a clear border in the owner's colour, readable whether the
+   row is retracted or down. Scoped under `.slot` so it outranks the shared
+   face's own shadow / background. */
+.slot .card {
+  box-shadow: 0 0 0 2.5px var(--own, #ddd), 0 3px 8px rgba(80, 40, 60, 0.12);
+  background: color-mix(in srgb, var(--own, #fff) 12%, #fff);
+}
+
+/* Live markers in the face's bottom zone -- the part that must read while the
+   row is retracted: crystals, on-card CP, the note dot. */
+.crystal, .cp, .count {
+  padding: 0 5px; border-radius: 8px;
+  color: #fff; font-size: 10px; line-height: 16px; font-weight: 700;
   box-shadow: 0 0 0 1.5px #fff;
 }
-.cp {
-  position: absolute; right: -3px; bottom: -3px; padding: 0 4px; border-radius: 8px;
-  background: var(--teal, #0a8f7c); color: #fff; font-size: 10px; line-height: 15px;
-  box-shadow: 0 0 0 1.5px #fff;
-}
+.crystal, .count { background: var(--purple); }
+.cp { background: var(--teal, #0a8f7c); }
 .noteDot {
-  position: absolute; left: -2px; top: -2px; width: 9px; height: 9px;
-  border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1.5px #fff;
+  flex: none; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--pink); box-shadow: 0 0 0 1.5px #fff;
 }
-/* Events in effect: a compact face tinted like the event deck. */
+
+/* Face-down: a card back in the owner's frame (no name or markers leak). */
+.back {
+  width: var(--card-w, 120px);
+  aspect-ratio: 3 / 4;
+  border-radius: 6px; overflow: hidden;
+  box-shadow: 0 0 0 2.5px var(--own, #ddd), 0 3px 8px rgba(80, 40, 60, 0.12);
+}
+.back img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Events in effect: the same face shape at the row's end -- art, name and
+   counters in a bottom zone that matches the cards' peek. */
 .event {
-  position: relative; width: 54px; padding: 2px; border-radius: 6px;
-  background: #fff; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.12);
+  width: var(--card-w, 120px);
+  display: flex; flex-direction: column;
+  padding: 4px;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 0 0 2.5px var(--own, var(--purple)), 0 3px 8px rgba(80, 40, 60, 0.12);
+  cursor: pointer; text-align: left;
 }
-.event:hover { transform: translateY(-3px); }
-.event img {
-  width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px;
-  border-bottom: 3px solid var(--purple); filter: hue-rotate(250deg) saturate(0.8);
+.eventArt { flex: 1; min-height: 0; border-radius: 3px; overflow: hidden; background: #eee; }
+.eventArt img { width: 100%; height: 100%; object-fit: cover; display: block; filter: hue-rotate(250deg) saturate(0.8); }
+.eventName {
+  height: 38px;
+  padding: 3px 2px 1px;
+  font-size: 13px; font-weight: 700; line-height: 1.3;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
-.event span { display: block; font-size: 9px; font-weight: 700; line-height: 1.15; padding: 2px 1px 0; height: 24px; overflow: hidden; }
+.marks {
+  height: 18px;
+  display: flex; align-items: center; gap: 3px;
+  padding: 0 2px;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .panel { transition: none; }
-  .event:hover { transform: none; }
+  .row, .slot { transition: none; }
 }
