@@ -29,6 +29,13 @@
 
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #f4e4ea; }
+/* Pin the document. Mobile browsers still scroll an `overflow: hidden` body
+   (keyboard, address-bar collapse, rubber-banding); the fixed, scaled stage
+   then paints at its place while touches hit-test against the scrolled
+   layout, so every button answers below where it is drawn. A fixed body
+   cannot scroll. */
+html, body { position: fixed; inset: 0; overscroll-behavior: none; }
+body { touch-action: manipulation; }
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; padding: 0; }
 button:disabled { cursor: default; }

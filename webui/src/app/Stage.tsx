@@ -36,15 +36,34 @@ export function useBackdrop(name: string | null): void {
  * columns stretch and the tile board has no bars above or below.
  */
 function useStage(): { scale: number; w: number; h: number } {
+  // Size against the *visual* viewport where there is one: on a phone the
+  // layout viewport (innerWidth / innerHeight) and what is on screen differ
+  // while the address bar or keyboard is showing.
   const calc = () => {
-    const scale = Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
-    return { scale, w: window.innerWidth / scale, h: window.innerHeight / scale };
+    const vv = window.visualViewport;
+    const vw = vv?.width ?? window.innerWidth;
+    const vh = vv?.height ?? window.innerHeight;
+    const scale = Math.min(vw / STAGE_W, vh / STAGE_H);
+    return { scale, w: vw / scale, h: vh / scale };
   };
   const [box, set] = useState(calc);
   useEffect(() => {
     const on = () => set(calc());
+    // A scrolled document desyncs touches from the fixed stage; snap back.
+    const unscroll = () => {
+      if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+    };
+    const vv = window.visualViewport;
     window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
+    vv?.addEventListener("resize", on);
+    vv?.addEventListener("scroll", unscroll);
+    window.addEventListener("scroll", unscroll);
+    return () => {
+      window.removeEventListener("resize", on);
+      vv?.removeEventListener("resize", on);
+      vv?.removeEventListener("scroll", unscroll);
+      window.removeEventListener("scroll", unscroll);
+    };
   }, []);
   return box;
 }
@@ -90,6 +109,7 @@ export function Stage({ children, fading }: { children: ReactNode; fading: boole
       <div className={s.backdrop} style={{ backgroundImage: src ? `url("${src}")` : undefined }} />
       <div
         className={s.stage}
+        data-stage
         style={{ width: w, height: tall ? h : STAGE_H, transform: `translate(-50%, -50%) scale(${scale})` }}
       >
         {children}
