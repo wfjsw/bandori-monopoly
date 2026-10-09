@@ -34,6 +34,7 @@ fn window() -> WindowCtx {
             roll: Some(5),
             kind: Some(rules_cond::mv::Walk),
             remaining: 5,
+            main: true,
         },
         roll_source: 0,
         abnormal: false,

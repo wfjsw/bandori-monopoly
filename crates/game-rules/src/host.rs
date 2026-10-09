@@ -915,7 +915,16 @@ impl Ruleset {
                 .and_then(|r| r.get(guard as usize))
                 .and_then(|p| p.as_ref());
             let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
-            let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, true);
+            // `card.placed` must answer for the **running instance** (the
+            // guest's `ctx::is_placed()`): a game-start hook also fires for the
+            // same id while it sits in a pile / hand (`uid = -1`), where the
+            // condition has to reject what `card.placed` names.
+            let cand = crate::cond_pre::fill_candidate(
+                world,
+                player_id,
+                &info.id,
+                world.is_placed() != 0,
+            );
             #[cfg(feature = "guard-audit")]
             let audit = self.legacy_probe(world, card, guard, player_id);
             let admitted = if self.guard_is_none(card, guard) {

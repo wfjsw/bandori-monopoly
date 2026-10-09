@@ -73,6 +73,9 @@ pub struct MoveSnap {
     /// [`crate::kinds::mv`] value; `None` when the window has no move.
     pub kind: Option<i64>,
     pub remaining: i64,
+    /// `t.Move.Main` -- was this the turn's main move (`move.main`)? `false`
+    /// when the window has no move.
+    pub main: bool,
 }
 
 /// Built **once per trigger / chain window** (the `declare_one` / `run_hook`

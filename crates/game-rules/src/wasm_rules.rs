@@ -299,6 +299,13 @@ impl CardWorld for Run {
     fn tile_named(&self, name: &str) -> i32 {
         self.world.tile_named(&self.data, name)
     }
+    fn tile_name(&self, tile: i32) -> String {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.name.replace('\n', ""))
+            .unwrap_or_default()
+    }
     fn tile_owner(&self, tile: i32) -> i32 {
         self.world.tile_owner(tile)
     }
@@ -4084,6 +4091,18 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     #[inline]
     fn tile_named(&self, name: &str) -> i32 {
         self.world.tile_named(self.data, name)
+    }
+    #[inline]
+    fn tile_count(&self) -> i32 {
+        self.data.tiles.len() as i32
+    }
+    #[inline]
+    fn tile_name(&self, tile: i32) -> String {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .map(|t| t.name.replace('\n', ""))
+            .unwrap_or_default()
     }
     #[inline]
     fn player_count(&self) -> i32 {

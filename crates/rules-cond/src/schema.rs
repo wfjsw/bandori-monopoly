@@ -37,7 +37,7 @@ pub const STRUCT_ROOTS: &[(&str, &[&str])] = &[
     ),
     ("card", &["id", "placed", "cp"]),
     ("tile", &["id", "owner", "houses", "mortgaged", "price"]),
-    ("move", &["roll", "kind", "remaining"]),
+    ("move", &["roll", "kind", "remaining", "main"]),
     ("effect", &["count"]),
     ("chain", &["count"]),
 ];

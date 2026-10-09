@@ -111,6 +111,7 @@ fn bind_window(ctx: &mut Context<'static, 'static>, win: &WindowCtx) {
         },
     );
     ctx.add_variable_from_value("move_remaining", Value::Int(win.mv.remaining));
+    ctx.add_variable_from_value("move_main", Value::Bool(win.mv.main));
 
     // tile.* (flattened)
     ctx.add_variable_from_value("tile_id", Value::Int(win.tile.id));
@@ -315,7 +316,13 @@ fn install_functions(ctx: &mut Context<'static, 'static>) {
         "tile_named",
         |ftx: &FunctionContext, name: Arc<String>| -> Result<i64, ExecutionError> {
             let m = map_var(ftx, "_tile_ids")?;
-            Ok(int_at_str(&m, name.as_str()))
+            // -1 when unregistered, matching the guest `ctx::tile_named`
+            // (`CardWorld::tile_named`): tile 0 is a real tile (CiRCLE), so a
+            // 0 sentinel would alias it.
+            Ok(match m.get(&Key::String(Arc::new(name.as_str().to_string()))) {
+                Some(Value::Int(i)) => *i,
+                _ => -1,
+            })
         },
     )
     .expect("tile_named");

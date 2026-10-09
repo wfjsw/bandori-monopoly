@@ -155,6 +155,12 @@ pub trait CardWorld: Clone + 'static {
     fn tile_count(&self) -> i32;
     /// Tile index of a name (a data key), or -1.
     fn tile_named(&self, name: &str) -> i32;
+    /// Board name of `tile` (the `tile_named` spelling). Empty when unknown --
+    /// the default for worlds without a data table.
+    fn tile_name(&self, tile: i32) -> String {
+        let _ = tile;
+        String::new()
+    }
     fn tile_owner(&self, tile: i32) -> i32;
     fn player_pos(&self, player_id: i32) -> i32;
     /// Tile `steps` around the ring from a player (-1 when the player is out).

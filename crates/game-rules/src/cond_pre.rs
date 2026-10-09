@@ -30,6 +30,12 @@ use crate::world::{CardWorld, Trigger};
 pub trait SnapSrc {
     fn trigger(&self) -> Trigger;
     fn tile_named(&self, name: &str) -> i32;
+    /// Board tile count (ids are `0..tile_count`).
+    fn tile_count(&self) -> i32;
+    /// Board name of `tile` (the `tile_named` spelling, line breaks already
+    /// stripped). Empty when the id is out of range. `fill_window` registers
+    /// every name so a condition's `tile_named('…')` resolves.
+    fn tile_name(&self, tile: i32) -> String;
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
     fn fire(&self, player_id: i32) -> i32;
@@ -60,6 +66,14 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn tile_named(&self, name: &str) -> i32 {
         CardWorld::tile_named(self, name)
+    }
+    #[inline]
+    fn tile_count(&self) -> i32 {
+        CardWorld::tile_count(self)
+    }
+    #[inline]
+    fn tile_name(&self, tile: i32) -> String {
+        CardWorld::tile_name(self, tile)
     }
     #[inline]
     fn player_count(&self) -> i32 {
@@ -495,17 +509,7 @@ pub fn id_of(name: &str) -> i64 {
 /// where the G1 savings live: ~48 900 counteract probes share ~250 windows.
 pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let t = world.trigger();
-    let mut tile_ids = std::collections::BTreeMap::new();
-    // Best-effort: the schema only needs the names a condition actually
-    // mentions, and `tile_named` resolves at load. Register the common CiRCLE
-    // / shop aliases used by the §2.1 sample conditions; anything else
-    // resolves to 0 (the "unknown tile" sentinel the evaluator already uses).
-    for name in ["circle", "shop", "ring", "agent", "liveHouse"] {
-        let id = world.tile_named(name);
-        if id >= 0 {
-            tile_ids.insert(name.to_string(), id as i64);
-        }
-    }
+    let tile_ids = collect_tile_ids(world);
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
@@ -542,6 +546,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         roll: t.move_roll.filter(|&r| r >= 0).map(|r| r as i64),
         kind: t.move_kind.map(|k| k as i64),
         remaining: t.move_remaining as i64,
+        // `t.Move.Main` (`trigger::move_is_main()` in the guest).
+        main: t.move_main,
     };
 
     let tile = TileSnap {
@@ -580,13 +586,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
 /// (`TriggerKind::None`). Everything else is ambient world state, actor = the
 /// player being asked. Built once per ask; reused across the cards of one view.
 pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
-    let mut tile_ids = std::collections::BTreeMap::new();
-    for name in ["circle", "shop", "ring", "agent", "liveHouse"] {
-        let id = world.tile_named(name);
-        if id >= 0 {
-            tile_ids.insert(name.to_string(), id as i64);
-        }
-    }
+    let tile_ids = collect_tile_ids(world);
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
@@ -633,6 +633,30 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     }
 }
 
+/// Every board name -> id, so `tile_named('Bandori车站')` / `tile_named('CiRCLE')`
+/// resolve to the same id the guest's `ctx::tile_named` returns. Unknown names
+/// stay out of the map; the CEL `tile_named` answers `-1` for those (matching
+/// the guest), never tile 0.
+fn collect_tile_ids<S: SnapSrc>(world: &S) -> std::collections::BTreeMap<String, i64> {
+    let mut tile_ids = std::collections::BTreeMap::new();
+    for tile in 0..world.tile_count() {
+        let name = world.tile_name(tile);
+        if !name.is_empty() {
+            tile_ids.insert(name, tile as i64);
+        }
+    }
+    // Legacy §2.1 sample aliases (`tile_named("circle")` etc.): resolve through
+    // the same `tile_named` lookup so a kind-spelled name still works if a
+    // board ever carries one.
+    for name in ["circle", "shop", "ring", "agent", "liveHouse"] {
+        let id = world.tile_named(name);
+        if id >= 0 {
+            tile_ids.insert(name.to_string(), id as i64);
+        }
+    }
+    tile_ids
+}
+
 /// Per-candidate overlay: the card + seat being probed. Built per (card, seat)
 /// inside a window -- much cheaper than a window, so a fresh value is fine.
 pub fn fill_candidate<S: SnapSrc>(
@@ -673,7 +697,14 @@ pub fn fill_candidate<S: SnapSrc>(
 /// `CardWorld::slot`, **not** a `slot:`-prefixed alias (that mismatch made
 /// `slot('lastWalk') > 0` read 0 and silently close a counteraction window).
 /// Extend this list when a new `slot('…')` shows up in a `pre`.
-const SLOT_NAMES: &[&str] = &["asUsualTurn", "lastWalk"];
+const SLOT_NAMES: &[&str] = &[
+    "asUsualTurn",
+    "lastWalk",
+    // `追逐梦想的步伐` pass tag (`ctx::set_slot(player_id, SLOT_TAG, 1)`).
+    "lock_dream_tag",
+    // `甜甜圈爱好者` half-price window (`state::set(player_id, HALF, 1)`).
+    "skill.manaDonut.half",
+];
 
 /// Fill the per-candidate slot / token tables a condition may read
 /// (`slot('asUsualTurn')`, `tok(kind)`). Only worth the copy when the

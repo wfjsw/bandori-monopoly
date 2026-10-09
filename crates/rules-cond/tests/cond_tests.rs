@@ -26,6 +26,7 @@ fn win() -> WindowCtx {
             roll: Some(5),
             kind: Some(rules_cond::mv::Walk),
             remaining: 5,
+            main: true,
         },
         roll_source: 0,
         abnormal: false,
@@ -320,8 +321,23 @@ fn tile_named() {
     let cond = compile("tile_named('festival') == 9").unwrap();
     assert!(cond.eval(&win(), &cand(0)));
 
+    // Unregistered names answer -1 (the guest's `ctx::tile_named`), never 0 --
+    // tile 0 is a real tile (CiRCLE).
+    let cond = compile("tile_named('nowhere') == -1").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+
     let cond = compile("tile_named('nowhere') == 9").unwrap();
     assert!(!cond.eval(&win(), &cand(0)));
+}
+
+#[test]
+fn move_main() {
+    // `win()` carries `main: true`.
+    assert!(compile("move.main").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("!move.main").unwrap().eval(&win(), &cand(0)));
+    let mut w = win();
+    w.mv.main = false;
+    assert!(!compile("move.main").unwrap().eval(&w, &cand(0)));
 }
 
 #[test]
