@@ -10,7 +10,7 @@
 //! pre-game field card that exiles to 东京外 and reroutes a Bandori车站 pass.
 
 use card_sdk::abi::{CardPile, HookKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// C# `Normal => false` with no `Play`/`Counteract`: the card is shown out of the
@@ -18,10 +18,28 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const LOCK_DREAM: CardDef = CardDef::new(
     "RAS:（LOCK）追逐梦想的步伐",
     &[
-        On::Hook(&[HookKind::DeckBeforeGame], "", Some(deck_before_game_guard), deck_before_game),
-        On::Hook(&[HookKind::DeckAtGameStart], "", Some(deck_at_game_start_guard), deck_at_game_start),
-        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
-        On::Hook(&[HookKind::SettleBefore], "", Some(settle_before_guard), settle_before),
+        // Card-in-deck is not in the CEL schema (and a `card_in(pile)` probe
+        // would cost a pile walk per candidate for a hook that fires ~5 times
+        // before the opening deal) -- the residual guard stays.
+        On::Hook(
+            &[HookKind::DeckBeforeGame],
+            "",
+            Some(deck_before_game_guard),
+            deck_before_game,
+        ),
+        On::Hook(&[HookKind::DeckAtGameStart], "card.placed", None, deck_at_game_start),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && move.main && tile.id == tile_named('Bandori车站')",
+            None,
+            pass_tile,
+        ),
+        On::Hook(
+            &[HookKind::SettleBefore],
+            "actor == owner && slot('lock_dream_tag') != 0",
+            None,
+            settle_before,
+        ),
     ],
 );
 
@@ -59,12 +77,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
 // 规则书（1）: 「游戏开始时[传送]到“东京外”获得3层[除外]」
 /// C# `CardLockDream.AtGameStart` -> `H.Teleport` to `H.TileNamed("东京外")`
 /// with `resolve: false` and `H.GiveExile(Seat, 3, to)`.
-/// Pure guard for [`deck_at_game_start`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn deck_at_game_start_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
+/// Activation gate is the condition `card.placed` (`ctx::is_placed()`).
 fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     let to = ctx::tile_named("东京外");
     if to < 0 {
@@ -84,17 +97,8 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
 }
 
 // 规则书（2）: 「如果此卡拥有者的主要移动[经过]了“Bandori车站”」
-// -- C# `m.Seat == Seat && m.Main && H.Name(t) == "Bandori车站"`. The guard
-// holds the whole condition, so the hook only runs (and the card only
-// flashes) on that one step -- not on every step of every walk.
-fn pass_tile_guard(player_id: i32) -> bool {
-    let t = trigger::tile();
-    trigger::player_id() == player_id
-        && trigger::move_is_main()
-        && t >= 0
-        && ctx::tile_named("Bandori车站") == t
-}
-
+// -- C# `m.Seat == Seat && m.Main && H.Name(t) == "Bandori车站"`, now the
+// condition `actor == owner && move.main && tile.id == tile_named('Bandori车站')`.
 /// C# `CardLockDream.PassTile` -- tag the owner's main move as having passed
 /// Bandori车站.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
@@ -103,13 +107,9 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Applies only to the owner's settle after a tagged move.
-fn settle_before_guard(player_id: i32) -> bool {
-    trigger::player_id() == player_id && ctx::slot(player_id, SLOT_TAG) != 0
-}
-
 /// C# `CardLockDream.SettleBefore` -- the tagged move: move the player to
-/// 旭汤澡堂 before the settle and remove the card.
+/// 旭汤澡堂 before the settle and remove the card. The condition
+/// `actor == owner && slot('lock_dream_tag') != 0` selects exactly that move.
 fn settle_before(player_id: i32) -> card_sdk::Asked {
     ctx::set_slot(player_id, SLOT_TAG, 0);
     let to = ctx::tile_named("旭汤澡堂");
