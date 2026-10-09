@@ -6,7 +6,7 @@
   "scripts": {
     "predev": "node ../tools/build-glue.mjs",
     "dev": "rsbuild dev",
-    "prebuild": "node ../tools/live2d/build.mjs && node ../tools/build-glue.mjs",
+    "prebuild": "node -e \"fs.existsSync('../tools/live2d/build.mjs') && child_process.execFileSync(process.execPath, ['../tools/live2d/build.mjs'], { stdio: 'inherit' })\" && node ../tools/build-glue.mjs",
     "build": "tsc --noEmit && rsbuild build",
     "typecheck": "tsc --noEmit",
     "test:console": "node --test src/console/*.test.ts",

@@ -53,3 +53,9 @@ docs/ui-ref
 
 # Built browser bot bundle (`node tools/build-bot-glue.mjs`)
 /webui/public/assets/engine/bot-glue/
+
+# Live2D tooling and docs stay local (model conversion / checks). Only the
+# runtime renderer under webui/src/live2d is versioned.
+/tools/live2d/
+/docs/LIVE2D*.md
+/webui/src/live2d/check*.mjs
