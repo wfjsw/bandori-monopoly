@@ -6,7 +6,7 @@ import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
 import { useAutoplay, useSessionOther } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
-import { useMountEffect, useCloseWhen } from "../../hooks/mount";
+import { useDockRaise } from "../../hooks/dock";
 import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
@@ -89,12 +89,6 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
       </div>}
     </div>
   );
-}
-
-/** Park the hand fan while `parked` (the prompt sheet owns the bottom edge). */
-function useParkedHand(parked: boolean, setRaised: (v: boolean) => void): void {
-  // `useCloseWhen`'s contract: act as soon as the condition holds.
-  useCloseWhen(parked, () => setRaised(false));
 }
 
 /**
@@ -189,11 +183,13 @@ export function fanRise(n: number): string {
 export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   const [hover, setHover] = useState<{ k: number; id: string; note: string } | null>(null);
   const [peek, setPeek] = useState(false);
-  const [raised, setRaised] = useState(false);
   const auto = useAutoplay(sess); // 托管: play / discard are locked (inspect stays)
   const sheet = usePromptSheet();
   const stand = useStandingMode();
-  useParkedHand(sheet.raised, setRaised);
+  // Raise on hover / focus; retract only after a short delay, so moving between
+  // cards (or to the bar and back) does not drop the hand out from under you.
+  // A raised sheet owns the band above the bar -- the fan stays down behind it.
+  const dock = useDockRaise({ blocked: sheet.raised });
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
@@ -215,20 +211,6 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
-  // Raise on hover / focus; retract only after a short delay, so moving between
-  // cards (or to the bar and back) does not drop the hand out from under you.
-  // A raised sheet owns the band above the bar -- the fan stays down behind it.
-  const closeTimer = useRef(0);
-  const raise = () => {
-    window.clearTimeout(closeTimer.current);
-    if (sheet.raised) return;
-    setRaised(true);
-  };
-  const retract = () => {
-    window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => setRaised(false), 200);
-  };
-  useMountEffect(() => () => window.clearTimeout(closeTimer.current));
   // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered hand card:
   // the wheel over the hand, or PgUp/PgDn/↑/↓ while a card is hovered.
@@ -264,11 +246,8 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
       <div
         // A retracted prompt sheet's title strip sits on the bottom edge: lift the
         // whole hand above it so the cards stay easy to reach.
-        className={cx(s.dock, raised && s.dockUp, sheet.open && !sheet.raised && s.aboveSheet)}
-        onMouseEnter={raise}
-        onMouseLeave={retract}
-        onFocus={raise}
-        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) retract(); }}
+        className={cx(s.dock, dock.raised && s.dockUp, sheet.open && !sheet.raised && s.aboveSheet)}
+        {...dock.hover}
       >
         <div className={s.fan} ref={fanRef} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length) }}>
           {m.v.hand.map((id, k) => (
