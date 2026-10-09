@@ -176,7 +176,9 @@ export interface MatchRecord {
   time: string; mode: number; ranked: boolean; rank: number; players: number; character: string;
   exp: number; fireUsed: number; coins: number; stars: number; levelAfter: number;
 }
-export interface SavedDeck { character: string; slot: number; cards: string[] }
+/** `slot` is the stable deck id within the character; `name` is UI-only
+ * metadata ("" = auto, displayed as 「卡组 n」/"Deck n"). Never sent in a match. */
+export interface SavedDeck { character: string; slot: number; name: string; cards: string[] }
 export interface PlayerProfile {
   saveVersion: number; playerName: string; playerId: string; createdAt: string;
   level: number; exp: number; totalExp: number; fire: number; fireDate: string; firePerGame: number;
