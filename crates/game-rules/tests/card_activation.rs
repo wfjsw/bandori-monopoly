@@ -206,3 +206,179 @@ fn negated_play_shows_negated() {
     assert!(!deny[0].negated);
     assert_eq!(deny[0].kind, "counter");
 }
+
+/// A hook whose CEL `pre` rejects is not an activation at all: the body never
+/// runs and nothing about the card reaches the UI. `TEST:preHook`'s `PayAdd`
+/// entry carries `pre: "false"`; `TEST:selfCharge` moving money raises the
+/// `PayAdd` the hook declares.
+#[test]
+fn hook_whose_cel_pre_rejects_stays_silent() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:preHook").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "TEST:preHook"), "{}", t.dump_prompt());
+
+    let mark = t.mark();
+    // Money moves -> `PayAdd` -> every field card's `PayAdd` hook is asked.
+    t.give(0, &["TEST:selfCharge"]);
+    t.play(0, "TEST:selfCharge").unwrap();
+    drain(&mut t);
+
+    let fired = activations_since(&t, mark, "TEST:preHook");
+    assert!(
+        fired.is_empty(),
+        "a rejecting condition must not flash: {:?} / {}",
+        fired,
+        t.recent_keys(20).join(", ")
+    );
+    // The payment itself went through (its own activation is a separate card).
+    assert!(
+        !activations_since(&t, mark, "TEST:selfCharge").is_empty(),
+        "the payment's own body ran: {}",
+        t.recent_keys(20).join(", ")
+    );
+}
+
+/// A [反击] that is **offered and declined** is not an activation: the hand
+/// window listing the card is not a declaration, and nothing about the card
+/// reaches the UI until its body runs (or a negation marks it).
+#[test]
+fn declined_counteraction_offer_stays_silent() {
+    let mut t = Table::vanilla(3);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.set_hand(2, &[]);
+    t.give(0, &["TEST:aimer"]);
+    t.give(1, &["TEST:probe"]);
+    let mark = t.mark();
+    t.play(0, "TEST:aimer").unwrap();
+    // P0 is the initial user and holds no counter -> skipped; P1's probe is up.
+    assert!(t.counteract_offered("TEST:probe"), "{}", t.dump_prompt());
+    assert_eq!(
+        activations_since(&t, mark, "TEST:probe").len(),
+        0,
+        "an offer is not an activation: {}",
+        t.recent_keys(20).join(", ")
+    );
+    t.decline();
+    drain(&mut t);
+
+    assert!(
+        activations_since(&t, mark, "TEST:probe").is_empty(),
+        "a declined offer must not flash: {}",
+        t.recent_keys(20).join(", ")
+    );
+    // The played card's own body ran exactly once.
+    let aimer = activations_since(&t, mark, "TEST:aimer");
+    assert_eq!(aimer.len(), 1, "{}", t.recent_keys(20).join(", "));
+    assert!(!aimer[0].negated);
+}
+
+/// A play-gate probe (`cant_play`, the `On::Play` gate + its CEL `pre`) is a
+/// question, not an activation: asking whether a card may be played never
+/// flashes it. `TEST:prePlay` declares `pre: "owner.money >= 999999"`, so the
+/// play is refused -- and the refusal is silent.
+#[test]
+fn play_gate_probe_stays_silent() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give(0, &["TEST:prePlay"]);
+    t.set_money(0, 1000);
+    let mark = t.mark();
+    // The legality probe runs before the refusal; the state poll re-asks it.
+    let _ = t.play(0, "TEST:prePlay");
+    drain(&mut t);
+    let _ = t.st();
+
+    assert!(
+        activations_since(&t, mark, "TEST:prePlay").is_empty(),
+        "a gate probe must not flash: {}",
+        t.recent_keys(20).join(", ")
+    );
+}
+
+/// A purchase **quote** previews what the buy hooks would do; the quote is not
+/// an activation. `通用:@Tsugu ycm` declares a `BuyAdd` hook -- quoting a price
+/// runs it in pure guard mode against a throwaway copy, and that must not
+/// flash. Only the commit's own run may.
+#[test]
+fn buy_quote_stays_silent() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    // The buy hook rides the instance; `place_raw` puts one on the field
+    // without going through the card's own (one-shot) play body.
+    t.place_raw(0, "通用:@Tsugu ycm");
+    assert!(t.on_field(0, "通用:@Tsugu ycm"), "{}", t.dump_prompt());
+    // A buyable, unowned deed under the player's feet, and money to buy it.
+    let at = tile("花咲川女子学院");
+    t.set_pos(0, at);
+    t.set_owner(at, None);
+    t.set_money(0, 50_000);
+    let mark = t.mark();
+    // Reaching the end step refreshes the buy preview -- the quote.
+    t.settle();
+    let _ = t.st();
+
+    assert!(
+        activations_since(&t, mark, "通用:@Tsugu ycm").is_empty(),
+        "a quote must not flash: {:?}",
+        t.events_since(mark)
+            .into_iter()
+            .map(|e| format!("{}:{}", e.r#type, e.card))
+            .collect::<Vec<_>>()
+    );
+}
+
+/// A body that runs is exactly one activation -- the flash rides the world copy
+/// the body wrote, so a promptless play lands one event, not one per re-run.
+#[test]
+fn a_body_that_runs_emits_exactly_one() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give(0, &["TEST:aimer"]);
+    let mark = t.mark();
+    t.play(0, "TEST:aimer").unwrap();
+    drain(&mut t);
+
+    let aimer = activations_since(&t, mark, "TEST:aimer");
+    assert_eq!(
+        aimer.len(),
+        1,
+        "exactly one activation for one body run: {}",
+        t.recent_keys(20).join(", ")
+    );
+    assert_eq!(aimer[0].kind, "play");
+    assert!(!aimer[0].negated);
+    assert_eq!(aimer[0].player_id, 0);
+}
+
+/// A negated play is exactly one negated activation at the decision site -- the
+/// body never runs, so there is no second, un-negated event.
+#[test]
+fn a_negated_play_emits_exactly_one_negated() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give(0, &["TEST:aimer"]);
+    t.give(1, &["TEST:denyPlay"]);
+    let mark = t.mark();
+    t.play(0, "TEST:aimer").unwrap();
+    assert!(t.counteract_offered("TEST:denyPlay"), "{}", t.dump_prompt());
+    t.counteract(1, "TEST:denyPlay").unwrap();
+    drain(&mut t);
+
+    let aimer = activations_since(&t, mark, "TEST:aimer");
+    assert_eq!(
+        aimer.len(),
+        1,
+        "one negated flash, no body follow-up: {}",
+        t.recent_keys(20).join(", ")
+    );
+    assert!(aimer[0].negated);
+    assert_eq!(aimer[0].kind, "play");
+}
