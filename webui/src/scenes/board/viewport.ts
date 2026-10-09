@@ -11,10 +11,10 @@
 // Coordinates are the window's own pixels: the zoom layer carries
 // `translate(tx px, ty px) scale(z)` with `transform-origin: 0 0`, so a board
 // point (x, y) -- 0..boardW / 0..boardH -- lands at (x * z + tx, y * z + ty) in
-// window pixels. `z = FIT_ZOOM` is "fit": the whole board at its boardRect
-// size, centred, no pan. The zoom floor (`MIN_ZOOM`) sits just under fit so a
-// wheel-out can show a little more of the window. Dragging may still move the
-// board up to `OVERPAN` of the *window* past any edge.
+// window pixels. The default / reset view (`DEFAULT_ZOOM`, just under the
+// board's own `FIT_ZOOM`) is the whole board, centred, no pan; the zoom floor
+// (`MIN_ZOOM`) is that same 0.95. Dragging may still move the board up to
+// `OVERPAN` of the *window* past any edge.
 
 import {
   useCallback, useRef, useState,
@@ -78,12 +78,14 @@ export interface Point {
   y: number;
 }
 
-/** Fit view (the pre-zoom default): the whole board at its boardRect size,
- *  centred in the window. The `1:1` / reset control lands here. */
+/** The board's own rect size in the window (the board's "1:1"). Not a view
+ *  anyone lands on: the default sits just under it (DEFAULT_ZOOM). */
 export const FIT_ZOOM = 1;
-/** The zoom floor. Slightly under fit (master's tweak) so a wheel-out can
- *  show a little more of the window around the board. */
+/** The zoom floor -- and the default / reset view (user request: default zoom
+ *  0.95). At 0.95 the whole board shows centred with a small margin around
+ *  it; the `1:1` / reset control and the first slot measure land here. */
 export const MIN_ZOOM = 0.95;
+export const DEFAULT_ZOOM = MIN_ZOOM;
 export const MAX_ZOOM = 3;
 /** Screen-pixel movement before a press turns into a pan. Clicks stay under
  *  this so tiles, field cards and tokens remain tappable. */
@@ -94,14 +96,15 @@ const WHEEL_K = 0.0022;
 const STEP = 1.25;
 
 /** The board centred in the window at zoom `z`, whole and un-panned. */
-export function centeredViewport(b: MapBox, z: number = FIT_ZOOM): Viewport {
+export function centeredViewport(b: MapBox, z: number = DEFAULT_ZOOM): Viewport {
   const z2 = clampZoom(z);
   return { z: z2, tx: (b.winW - b.boardW * z2) / 2, ty: (b.winH - b.boardH * z2) / 2 };
 }
 
-/** Fit: the board at its boardRect size, centred in the window. */
+/** The default view: the whole board, a hair under its rect size, centred.
+ *  The `1:1` / reset control and the first slot measure land here. */
 export function fitViewport(b: MapBox): Viewport {
-  return centeredViewport(b, FIT_ZOOM);
+  return centeredViewport(b, DEFAULT_ZOOM);
 }
 
 export function clampZoom(z: number): number {

@@ -8,7 +8,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
-  FIT_ZOOM, MAX_RATIO, MAX_ZOOM, MIN_RATIO, MIN_ZOOM, OVERPAN, boardRect, mapBox,
+  FIT_ZOOM, MAX_RATIO, MAX_ZOOM, MIN_RATIO, MIN_ZOOM, DEFAULT_ZOOM, OVERPAN, boardRect, mapBox,
   centeredViewport, clampPan, clampZoom, fitViewport, panBy, pinchAround, stepZoom, wheelZoom, zoomAround,
   type MapBox, type Viewport,
 } from "./viewport.ts";
@@ -39,11 +39,13 @@ test("clampZoom holds zoom between the floor and 3x", () => {
 });
 
 test("fitViewport centres the board in the window", () => {
-  assert.deepEqual(fitViewport(SQUARE), { z: FIT_ZOOM, tx: 0, ty: 0 });
-  // Wide slot: the board keeps 16:10 and sits centred -- 416px of window on
-  // each side. The map does not stretch; the window does.
-  assert.deepEqual(fitViewport(WIDE), { z: FIT_ZOOM, tx: (2560 - 1728) / 2, ty: 0 });
-  assert.deepEqual(fitViewport(TALL), { z: FIT_ZOOM, tx: 0, ty: (1100 - 700) / 2 });
+  // At the default zoom (a hair under fit) the board sits centred on both
+  // axes, with a small margin wherever it used to meet the edge.
+  assert.deepEqual(fitViewport(SQUARE), { z: DEFAULT_ZOOM, tx: (1200 - 1200 * DEFAULT_ZOOM) / 2, ty: (900 - 900 * DEFAULT_ZOOM) / 2 });
+  // Wide slot: the board keeps 16:10 and sits centred. The map does not
+  // stretch; the window does.
+  assert.deepEqual(fitViewport(WIDE), { z: DEFAULT_ZOOM, tx: (2560 - 1728 * DEFAULT_ZOOM) / 2, ty: (1080 - 1080 * DEFAULT_ZOOM) / 2 });
+  assert.deepEqual(fitViewport(TALL), { z: DEFAULT_ZOOM, tx: (700 - 700 * DEFAULT_ZOOM) / 2, ty: (1100 - 700 * DEFAULT_ZOOM) / 2 });
   // A slightly-smaller-than-fit zoom is still centred.
   const out = centeredViewport(WIDE, MIN_ZOOM);
   assert.equal(out.z, MIN_ZOOM);
@@ -52,6 +54,33 @@ test("fitViewport centres the board in the window", () => {
   for (const b of [WIDE, SQUARE, TALL]) {
     const f = fitViewport(b);
     assert.deepEqual(clampPan(f, b), f);
+  }
+});
+
+test("the default view keeps a wide window's whole board inside and centred", () => {
+  // A window much wider than the board (the user's ~2000px case): the whole
+  // board is visible at the default zoom, centred on both axes, and nothing
+  // of it lies outside the window.
+  const wide = mapBox(2000, 700);
+  assert.ok(wide.boardW < wide.winW, "board is narrower than the window");
+  const f = fitViewport(wide);
+  assert.equal(f.z, DEFAULT_ZOOM);
+  const left = f.tx;
+  const top = f.ty;
+  const right = f.tx + wide.boardW * f.z;
+  const bottom = f.ty + wide.boardH * f.z;
+  assert.ok(Math.abs(left - (wide.winW - right)) < 1e-9, `centred x: ${left} .. ${right} of ${wide.winW}`);
+  assert.ok(Math.abs(top - (wide.winH - bottom)) < 1e-9, `centred y: ${top} .. ${bottom} of ${wide.winH}`);
+  assert.ok(left >= 0 && top >= 0 && right <= wide.winW && bottom <= wide.winH, "board fully inside the window");
+  // Every board rect, at a few wide sizes: the default view is inside and
+  // centred, and re-clamping it changes nothing.
+  for (const [w, h] of [[2000, 700], [2560, 1080], [3000, 600], [1920, 1080]] as const) {
+    const b = mapBox(w, h);
+    const v = fitViewport(b);
+    const l = v.tx, t = v.ty, r = v.tx + b.boardW * v.z, bm = v.ty + b.boardH * v.z;
+    assert.ok(Math.abs(l - (b.winW - r)) < 1e-9 && Math.abs(t - (b.winH - bm)) < 1e-9, `centred ${w}x${h}`);
+    assert.ok(l >= 0 && t >= 0 && r <= b.winW && bm <= b.winH, `inside ${w}x${h}`);
+    assert.deepEqual(clampPan(v, b), v, `stable ${w}x${h}`);
   }
 });
 
@@ -93,13 +122,15 @@ test("zoomAround keeps the point under the cursor fixed", () => {
 });
 
 test("zoomAround clamps pan while still hugging the cursor", () => {
-  // Zooming into the top-left corner at fit keeps the corner under the cursor.
-  const z = zoomAround(fitViewport(SQUARE), 0, 0, 3, SQUARE);
-  assert.deepEqual(z, { z: 3, tx: 0, ty: 0 });
+  // Zooming into the board's top-left corner keeps that corner under the
+  // cursor (the default view has a margin, so the corner is not the window's).
+  const fit = fitViewport(SQUARE);
+  const z = zoomAround(fit, fit.tx, fit.ty, 3, SQUARE);
+  assert.deepEqual(z, { z: 3, tx: fit.tx, ty: fit.ty });
   // Zooming all the way out lands on the centred view at the zoom floor,
   // overscroll dropped.
   const v: Viewport = { z: 3, tx: SQUARE.winW * (1 - 3), ty: SQUARE.winH * (1 - 3) };
-  assert.deepEqual(zoomAround(v, SQUARE.winW / 2, SQUARE.winH / 2, 1, SQUARE), fitViewport(SQUARE));
+  assert.deepEqual(zoomAround(v, SQUARE.winW / 2, SQUARE.winH / 2, FIT_ZOOM, SQUARE), centeredViewport(SQUARE, FIT_ZOOM));
   assert.deepEqual(zoomAround(v, SQUARE.winW / 2, SQUARE.winH / 2, 0.5, SQUARE), centeredViewport(SQUARE, MIN_ZOOM));
   // Any anchor stays within the overscroll limits -- on the wide slot too,
   // where the fit view is already centred with room to spare.
@@ -130,9 +161,9 @@ test("wheelZoom steps continuously and caps at the floor / 3x", () => {
 test("stepZoom moves in fixed increments around its anchor", () => {
   const b = WIDE;
   const v = stepZoom(fitViewport(b), 1, b.winW / 2, b.winH / 2, b);
-  assert.ok(Math.abs(v.z - 1.25) < 1e-9);
+  assert.ok(Math.abs(v.z - DEFAULT_ZOOM * 1.25) < 1e-9);
   const two = stepZoom(v, 1, b.winW / 2, b.winH / 2, b);
-  assert.ok(Math.abs(two.z - 1.25 * 1.25) < 1e-9);
+  assert.ok(Math.abs(two.z - DEFAULT_ZOOM * 1.25 * 1.25) < 1e-9);
   // Stepping around the window centre keeps the board's centre under it.
   assert.ok(Math.abs(under(two, b.winW / 2, b.winH / 2).x - b.boardW / 2) < 1e-9);
   assert.ok(Math.abs(under(two, b.winW / 2, b.winH / 2).y - b.boardH / 2) < 1e-9);
@@ -162,8 +193,13 @@ test("pinchAround scales on the moving midpoint", () => {
 
 test("panBy moves the board and clamps at the window edge", () => {
   // Even at fit the board drags, up to half a window.
-  assert.deepEqual(panBy(fitViewport(SQUARE), 30, -30, SQUARE), { z: 1, tx: 30, ty: -30 });
-  assert.deepEqual(panBy(fitViewport(SQUARE), 1e4, -1e4, SQUARE), { z: 1, tx: SQUARE.winW * OVERPAN, ty: -SQUARE.winH * OVERPAN });
+  const fit = fitViewport(SQUARE);
+  assert.deepEqual(panBy(fit, 30, -30, SQUARE), { z: DEFAULT_ZOOM, tx: fit.tx + 30, ty: fit.ty - 30 });
+  assert.deepEqual(panBy(fit, 1e4, -1e4, SQUARE), {
+    z: DEFAULT_ZOOM,
+    tx: SQUARE.winW * OVERPAN,
+    ty: SQUARE.winH * (1 - OVERPAN) - SQUARE.boardH * DEFAULT_ZOOM,
+  });
   const zoomed = panBy({ z: 2, tx: -400, ty: -400 }, -100, 20, SQUARE);
   assert.deepEqual(zoomed, { z: 2, tx: -500, ty: -380 });
   const edge = panBy({ z: 2, tx: -500, ty: -500 }, -1e4, 1e4, SQUARE);
@@ -172,8 +208,12 @@ test("panBy moves the board and clamps at the window edge", () => {
   // small drag just nudges it -- and the window (not the board) sets the limit.
   const wideFit = fitViewport(WIDE);
   const nudged = panBy(wideFit, 30, -30, WIDE);
-  assert.deepEqual(nudged, { z: 1, tx: wideFit.tx + 30, ty: wideFit.ty - 30 });
-  assert.deepEqual(panBy(wideFit, 1e4, -1e4, WIDE), { z: 1, tx: WIDE.winW * OVERPAN, ty: -WIDE.winH * OVERPAN });
+  assert.deepEqual(nudged, { z: DEFAULT_ZOOM, tx: wideFit.tx + 30, ty: wideFit.ty - 30 });
+  assert.deepEqual(panBy(wideFit, 1e4, -1e4, WIDE), {
+    z: DEFAULT_ZOOM,
+    tx: WIDE.winW * OVERPAN,
+    ty: WIDE.winH * (1 - OVERPAN) - WIDE.boardH * DEFAULT_ZOOM,
+  });
 });
 
 test("any map box stays within the overscroll limits under clamp and zoom", () => {
@@ -192,13 +232,14 @@ test("any map box stays within the overscroll limits under clamp and zoom", () =
       tx: b.winW * (1 - OVERPAN) - b.boardW * 2,
       ty: b.winH * (1 - OVERPAN) - b.boardH * 2,
     });
-    const z = zoomAround(fitViewport(b), b.winW * 0.9, b.winH * 0.07, 2, b);
+    const fit = fitViewport(b);
+    const z = zoomAround(fit, b.winW * 0.9, b.winH * 0.07, 2, b);
     // The cursor stays anchored unless the overscroll clamp pulls it back --
     // so either the board point is unchanged, or the pan sits on a limit.
     const ax = under(z, b.winW * 0.9, b.winH * 0.07).x;
     const ay = under(z, b.winW * 0.9, b.winH * 0.07).y;
-    const wantX = b.winW * 0.9 - fitViewport(b).tx;
-    const wantY = b.winH * 0.07 - fitViewport(b).ty;
+    const wantX = (b.winW * 0.9 - fit.tx) / fit.z;
+    const wantY = (b.winH * 0.07 - fit.ty) / fit.z;
     const clampedX = z.tx <= b.winW * OVERPAN + 1e-9 && z.tx + b.boardW * z.z >= b.winW * (1 - OVERPAN) - 1e-9;
     const clampedY = z.ty <= b.winH * OVERPAN + 1e-9 && z.ty + b.boardH * z.z >= b.winH * (1 - OVERPAN) - 1e-9;
     assert.ok(clampedX && clampedY);
