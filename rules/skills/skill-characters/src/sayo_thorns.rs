@@ -113,6 +113,9 @@ fn can_offer(player_id: i32) -> bool {
 
 /// （2）「将非[传送]的主要移动添加1或2格」.
 fn offer(player_id: i32) -> card_sdk::Asked {
+    // A MoveBefore counter (including Sayo's card) may already have extended
+    // the plan. Preview and extend that result, retaining earlier extra steps.
+    let base = trigger::value().max(0);
     let steps = trigger::move_total();
     let from = trigger::tile();
     let landing = |n: i32| (from + n * trigger::move_dir()).rem_euclid(ctx::tile_count());
@@ -138,7 +141,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, USED, 1);
     // The dice are already final. Extend the base distance and retain any
     // extra steps on this move; adding dice now would affect a later roll.
-    plan::set_steps(trigger::value().max(0) + n);
+    plan::set_steps(base + n);
     ctx::log(
         player_id,
         &Msg::new(key!("sayo_thorns_added")).i("n", n as i64),
