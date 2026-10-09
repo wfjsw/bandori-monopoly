@@ -19,6 +19,11 @@ fn sayo() -> Table {
 fn offer(t: &mut Table) {
     t.dice(&[5]);
     t.roll(0).unwrap();
+    let source = t.expect_prompt();
+    assert_eq!(source.title.key(), "ask.counteract.title");
+    assert_eq!(t.pos(0), 1, "source selection must precede movement");
+    let skill = t.option(SKILL).expect("six-pot skill offered in the shared window");
+    t.answer(0, skill).unwrap();
     let p = t.expect_prompt();
     assert!(
         p.title.key().ends_with("sayo_thorns_title"),
@@ -128,6 +133,7 @@ fn reverse_move_previews_and_extends_in_the_same_direction() {
     t.m.world_mut().turn.plan.reverse = true;
     t.dice(&[5]);
     t.roll(0).unwrap();
+    t.counteract(0, SKILL).unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(15)));
     assert_eq!(p.options[2].a.get("tile"), Some(&Arg::Tile(13)));

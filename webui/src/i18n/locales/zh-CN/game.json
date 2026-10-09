@@ -1,4 +1,6 @@
 {
+  "ask.counteract.move_extension": "本次主要移动已确定为 {{n}} 格，预计停在 {{tile}}。选择使用专卡或消耗火罐，之后决定增加 1 格或 2 格；也可以不使用。",
+  "ask.counteract.skill": "消耗 {{n}} 个火罐 · {{card}}",
   "ask.agent.build": "{{tile}}　加盖第 {{nth}} 栋  {{cost}}",
   "ask.agent.buy": "{{tile}}　购买 {{price}}{{extra}}",
   "ask.agent.text": "{{who}} 停在地产商：选一块同色的地结算一次——无主的可以买下，自己的可以加盖一栋房屋；也可以不选。现金不足时可以抵押其他地契凑钱。",

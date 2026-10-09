@@ -188,6 +188,10 @@ function PickOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto
 
 /** Prompts whose options are cards: render them as cards, not as text buttons. */
 export function isCardChoice(p: MatchPrompt): boolean {
+  // This window chooses between a hand card and a paid skill. Keep the full
+  // source labels together, including the fire cost, instead of presenting
+  // only the card as a large card-picking panel.
+  if (p.text.k === "ask.counteract.move_extension") return false;
   return p.kind === "pick" || (p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "auction" && p.options.some((o) => optionCard(o) !== null));
 }
 

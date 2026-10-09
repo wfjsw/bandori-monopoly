@@ -261,7 +261,9 @@ use alloc::{string::String, vec::Vec};
 ///      `legacy` table and `export::OP_LEGACY_GUARD` (= 2) returns the
 ///      pre-migration guard for the `guard-audit` equivalence check. SAVE_VERSION
 ///      unchanged (no save field).
-pub const ABI_VERSION: i32 = 46;
+/// v47: opt-in field counteractions and mutually exclusive choice groups;
+///      these share the hand-counteraction window without spending a field card.
+pub const ABI_VERSION: i32 = 47;
 
 /// Wasm import module name for every host function.
 pub const IMPORT_MODULE: &str = "bandori";
@@ -354,6 +356,12 @@ pub mod mark {
 ///
 /// Every key has a defined default of `0` when a card does not declare it.
 pub mod prop {
+    /// Offer this placed source in the hand-counteraction window. Default 0.
+    pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
+    /// Nonzero alternatives with the same group are exclusive per seat/timing.
+    pub const COUNTERACT_GROUP: &str = "counteractGroup";
+    /// Fire-pot cost shown on a field counteraction's source-choice label.
+    pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
     /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`) while the card
     /// sits on the field. Stamped onto the field instance at placement and
     /// gone with the card. `-1` cuts the owner's hand limit; a positive value
