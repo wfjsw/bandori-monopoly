@@ -11,10 +11,10 @@
    centred on that column (+25px), and clips the slide; the window inside is
    content-sized and carries the slide / retract transforms. `pointer-events:
    none` on the wrapper: the board beside a narrow sheet stays clickable.
-   It rests on the hand bar (Side.module.css `.bar`, ~38px) and sits above the
-   bar / fan in z-order (the dock is z-index 30). */
+   It stands on the bottom edge of the screen, over the hand bar / fan
+   (the dock is z-index 30). */
 .sheet {
-  position: absolute; left: calc(50% + 25px); bottom: 40px; z-index: 40;
+  position: absolute; left: calc(50% + 25px); bottom: 0; z-index: 40;
   width: calc(100% - 744px);
   transform: translateX(-50%);
   display: flex; justify-content: center;
@@ -79,6 +79,8 @@
   transition: transform 0.22s cubic-bezier(0.22, 0.7, 0.25, 1);
 }
 .sheetWin.retracted { transform: translateY(calc(100% - var(--sheet-strip))); }
+/* Attached to the screen's bottom edge: no bottom border, square bottom corners. */
+.sheetWin { border-bottom: none; border-radius: 20px 20px 0 0; }
 .sheetWin.sheetOut { animation: sheetOut 0.18s ease-in forwards; }
 .sheetOut .body { pointer-events: none; }
 @keyframes sheetIn { from { transform: translateY(100%); opacity: 0.35; } }
