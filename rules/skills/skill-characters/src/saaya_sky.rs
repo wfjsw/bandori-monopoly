@@ -23,9 +23,14 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
     "skill:山吹沙绫:焕然一新的天空中",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::PayAfter], "", Some(other), on_pay_after),
-        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
-        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, None, on_pay),
+        // （1）'s 「一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时」 is the
+        // hook's applicability, not its effect (the ask is the effect).
+        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_applies), on_pay_after),
+        // （1）'s 「拥有saaya标记时」 -- the mark is the applicability.
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, Some(roll_needs_mark), on_roll),
+        // （2）'s 「可使用5个[火罐]」 -- the amount and the pot are the
+        // applicability; spending the pot is the cost, kept in the body.
+        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, Some(pay_cut_applies), on_pay),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
@@ -38,6 +43,25 @@ fn other(player_id: i32) -> bool {
     ctx::trigger::player_id() != player_id
 }
 
+/// （1）'s applicability: another player spent/paid at least 1000 and this
+/// player holds no saaya mark yet.
+fn pay_after_applies(player_id: i32) -> bool {
+    other(player_id)
+        && ctx::tok(player_id, MARK) == 0
+        && ctx::trigger::value() >= 1000
+        && ctx::trigger::player_id() >= 0
+}
+
+/// （1）'s applicability for the dice cut: the mark is there to spend.
+fn roll_needs_mark(player_id: i32) -> bool {
+    ctx::tok(player_id, MARK) >= 1
+}
+
+/// （2）'s applicability: a non-zero money change and the 5-pot price.
+fn pay_cut_applies(player_id: i32) -> bool {
+    ctx::trigger::value() > 0 && state::get(player_id, state_key::FIRE) >= 5
+}
+
 /// 「初始3，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id, 3, 5);
@@ -45,19 +69,10 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「其他玩家一次[消耗]或[支付]至少1000资金且自己不拥有saaya标记时可让那名
-/// 玩家获得200资金且自己获得1个saaya标记和1个[火罐]」.
+/// 玩家获得200资金且自己获得1个saaya标记和1个[火罐]」. Applicability is
+/// [`pay_after_applies`]; the ask is the effect.
 fn on_pay_after(player_id: i32) -> card_sdk::Asked {
-    if ctx::tok(player_id, MARK) > 0 {
-        return Ok(());
-    }
-    let amount = ctx::trigger::value();
-    if amount < 1000 {
-        return Ok(());
-    }
     let payer = ctx::trigger::player_id();
-    if payer < 0 || payer == player_id {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("saaya_sky_title")),
@@ -76,9 +91,6 @@ fn on_pay_after(player_id: i32) -> card_sdk::Asked {
 /// （1）「拥有saaya标记时投掷移动骰时失去1个saaya标记，此次投掷结果减1d10
 /// （计算后小等于0则移动到下一个可购买格子）」.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    if ctx::tok(player_id, MARK) < 1 {
-        return Ok(());
-    }
     ctx::add_tok(player_id, MARK, -1, 1)?;
     let cut = ctx::roll(player_id, 1, 10).max(0);
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
@@ -118,11 +130,11 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「[消耗]或[支付]资金时可使用5个[火罐]，此次资金变动减少5000（最少0）」.
+/// The amount and the pot are [`pay_cut_applies`]'s job; spending the pot is
+/// the cost and stays here (resolution-time: the pot may be spent between the
+/// gate and this body).
 fn on_pay(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
-    if amount <= 0 || state::get(player_id, state_key::FIRE) < 5 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("saaya_sky_cut_title")),

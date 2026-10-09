@@ -39,7 +39,16 @@ const PROP_BAND: &str = "returns.band";
 pub const RETURNS: CardDef = CardDef::new(
     "PPP:Returns",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::CardPlayed], card_sdk::pre::MINE, None, on_played),
+        // [持续]（4）「[拥有者]的通用卡的[手]效果全部生效后」 -- `pre::MINE`
+        // states the actor; the residual guard names the 通用 card. The body
+        // used to re-check the actor and the prefix and return early -- a flash
+        // per non-通用 play by the owner.
+        On::Hook(
+            &[card_sdk::abi::HookKind::CardPlayed],
+            card_sdk::pre::MINE,
+            Some(on_played_is_general),
+            on_played,
+        ),
         On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], card_sdk::pre::MINE, None, choose_band),
         On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
         On::Hook(&[HookKind::DeckAtGameStart], "", None, deck_at_game_start),
@@ -209,17 +218,18 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
 // `cardPlayed` hook is in; a card's band is the prefix of its id (`通用:`, `G:`),
 // which is what `H.Db.Card(c.Id)?.band == "通用"` reads.
 
+/// （4）'s applicability: the played card is a 通用 one (a card's band is the
+/// prefix of its id -- `H.Db.Card(c.Id)?.band == "通用"`). The actor is
+/// `pre::MINE`'s job and is not re-checked here (docs/GUARDS.md).
+fn on_played_is_general(_player_id: i32) -> bool {
+    ctx::trigger::cards()
+        .into_iter()
+        .next()
+        .is_some_and(|id| id.starts_with("通用") || id.starts_with("G:"))
+}
+
 /// （4）「[拥有者]的通用卡的[手]效果全部生效后获得1个星星贴纸」.
 fn on_played(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::player_id() != player_id {
-        return Ok(());
-    }
-    let Some(id) = ctx::trigger::cards().into_iter().next() else {
-        return Ok(());
-    };
-    if !id.starts_with("通用") && !id.starts_with("G:") {
-        return Ok(());
-    }
     ctx::add_tok(player_id, "星星贴纸", 1, i32::MAX)?;
     ctx::log(player_id, &Msg::new(key!("returns_sticker")));
     Ok(())

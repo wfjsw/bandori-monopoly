@@ -28,8 +28,15 @@ pub const POPPIN: CardDef = CardDef::new(
     "skill:Poppin' Party:星之鼓动",
     &[
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
-        On::Hook(&[HookKind::SettleBefore], "", Some(any), before_settle),
+        // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
+        // not its effect: the residual guard names the four spots (the condition
+        // layer already has `pre::MINE`). A body that ran and immediately
+        // returned still flashed -- one per step of every walk.
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_spots), on_pass),
+        // The settle hook splits two ways: the owner's own settle re-arms the
+        // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
+        // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
+        On::Hook(&[HookKind::SettleBefore], "", Some(before_settle_applies), before_settle),
         On::Play("", Some(can_crystal), to_crystal),
         On::Play("", Some(can_cash), cash),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
@@ -63,8 +70,35 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn any(_player_id: i32) -> bool {
-    true
+/// （1）'s four sticker spots -- the `Pass` hook's applicability (residual
+/// guard; the condition layer has `pre::MINE`).
+fn on_pass_spots(_player_id: i32) -> bool {
+    SPOTS.contains(&ctx::trigger::tile())
+}
+
+/// `SettleBefore`'s applicability: the owner's own settle (the （2）/（4）
+/// re-arm), or a non-band settler on 星之鼓动山丘 (the （3） rent split). Pure
+/// reads only -- the same instant as the body (`run_hook` runs both on one
+/// store), so nothing here is resolution-time.
+fn before_settle_applies(player_id: i32) -> bool {
+    let actor = ctx::trigger::player_id();
+    if actor == player_id {
+        return true;
+    }
+    let hill = ctx::tile_named("星之鼓动山丘");
+    if hill < 0 || ctx::trigger::tile() != hill {
+        return false;
+    }
+    if ctx::in_band(actor, "Poppin' Party") {
+        return false;
+    }
+    if ctx::trigger::value() <= 0 {
+        return false;
+    }
+    // At least one un-mortgaged Poppin' Party payee.
+    ctx::others(player_id)
+        .into_iter()
+        .any(|p| ctx::in_band(p, "Poppin' Party") && !ctx::mortgaged_of(hill))
 }
 
 /// PPP:Returns 「无效[拥有者]Poppin' Party团卡的（4）效果」 (ruling 2026-10-06)
@@ -93,11 +127,9 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸」.
+/// （1）「[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸」. The spots are
+/// [`on_pass_spots`]'s job -- the body only hands the sticker out.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !SPOTS.contains(&ctx::trigger::tile()) {
-        return Ok(());
-    }
     ctx::add_tok(player_id, STICKER, 1, i32::MAX)?;
     ctx::log(
         player_id,
@@ -106,7 +138,9 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「无法获取[CiRCLE奖励]」, and （3）'s rent split.
+/// （2）「无法获取[CiRCLE奖励]」, and （3）'s rent split. Applicability is
+/// [`before_settle_applies`]'s job: this side either re-arms the owner's
+/// vetoes or splits the hill's rent, and both are effects.
 fn before_settle(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::player_id() == player_id {
         // （2） -- this player's own pass earns nothing. The veto is already
@@ -125,26 +159,13 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     // （3）「非Poppin' Party角色对"星之鼓动山丘"的[结算]改为分摊支付给所有
     // 未抵押"星之鼓动山丘"的Poppin' Party角色」
     let hill = ctx::tile_named("星之鼓动山丘");
-    let t = ctx::trigger::tile();
-    if hill < 0 || t != hill {
-        return Ok(());
-    }
-    if ctx::in_band(ctx::trigger::player_id(), "Poppin' Party") {
-        return Ok(());
-    }
     let mut payees: alloc::vec::Vec<i32> = alloc::vec::Vec::new();
     for p in ctx::others(player_id) {
         if ctx::in_band(p, "Poppin' Party") && !ctx::mortgaged_of(hill) {
             payees.push(p);
         }
     }
-    if payees.is_empty() {
-        return Ok(());
-    }
     let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     // `PIPELINE-AUDIT` Q2: the command-wide pre-split stage shapes the settled
     // amount before it divides among the payees (the 「分摊前」 figure).
     let why = Msg::new(key!("poppin_share"));

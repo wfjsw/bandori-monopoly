@@ -18,13 +18,27 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
     "event:协助CiRCLE重建",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "", Some(always), on_pass),
-        On::Hook(&[HookKind::SettleBody], "", Some(always), on_settle_body),
+        // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
+        // event re-homes are the hooks' applicability, not their effect. The
+        // guard ran `always`, so every pass of every tile flashed the event.
+        On::Hook(&[HookKind::PassTile], "", Some(on_circle_or_cafe), on_pass),
+        On::Hook(&[HookKind::SettleBody], "", Some(settle_applies), on_settle_body),
     ],
 );
 
-fn always(_player_id: i32) -> bool {
-    true
+/// The two tiles this event's effects live on.
+fn on_circle_or_cafe(_owner: i32) -> bool {
+    let at = trigger::tile();
+    if at < 0 {
+        return false;
+    }
+    ctx::is_circle(at) || (ctx::tile_named(CAFE) >= 0 && at == ctx::tile_named(CAFE))
+}
+
+/// [`on_circle_or_cafe`], plus the settle not already claimed by an earlier
+/// replacement in the chain (the `cancelled` bail below).
+fn settle_applies(owner: i32) -> bool {
+    on_circle_or_cafe(owner) && !trigger::cancelled()
 }
 
 /// 规则书: 「将此卡放置于场地中央，为其放置5个奇迹水晶」 -- keep the event in
@@ -55,9 +69,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// reward is paid out on a pass of the cafe instead.
 fn on_pass(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
-    if at < 0 {
-        return Ok(());
-    }
     if ctx::is_circle(at) {
         // Re-arm the veto the reward step just consumed, so the next pass of
         // CiRCLE is silent too.
@@ -77,13 +88,10 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     // 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」 -- the [经过]
     // reward is one of them. `tile:circle`'s own Pass entry only fires on
     // CiRCLE, so the cafe's pass pays it out here.
-    let cafe = ctx::tile_named(CAFE);
-    if cafe >= 0 && at == cafe {
-        let who = trigger::player_id();
-        if who >= 0 {
-            let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
-            ctx::settle_circle_reward(who, landing)?;
-        }
+    let who = trigger::player_id();
+    if who >= 0 {
+        let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
+        ctx::settle_circle_reward(who, landing)?;
     }
     Ok(())
 }
@@ -98,14 +106,8 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
 /// replacement that claims the body first still wins (the `cancelled` bail).
 fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     let at = trigger::tile();
-    if at < 0 {
-        return Ok(());
-    }
     let who = trigger::player_id();
     if ctx::is_circle(at) {
-        if trigger::cancelled() {
-            return Ok(());
-        }
         trigger::set_cancelled();
         // 「选择获得2层[停留]或失去500资金」 -- the settler picks one.
         let pick = ctx::ask_pick(
@@ -132,15 +134,13 @@ fn on_settle_body(_owner: i32) -> card_sdk::Asked {
     }
     // 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」 -- the cafe runs
     // CiRCLE's original settle (「CiRCLE的[结算]是：抽取一张手卡」) instead of its
-    // own draw-hand-plus-draw-event.
+    // own draw-hand-plus-draw-event. [`settle_applies`] already put us here.
     let cafe = ctx::tile_named(CAFE);
-    if cafe >= 0 && at == cafe && !trigger::cancelled() {
-        trigger::set_cancelled();
-        ctx::log(
-            who,
-            &Msg::new("log.event.rebuild_cafe").tile("tile", cafe),
-        );
-        ctx::draw(who, 1)?;
-    }
+    trigger::set_cancelled();
+    ctx::log(
+        who,
+        &Msg::new("log.event.rebuild_cafe").tile("tile", cafe),
+    );
+    ctx::draw(who, 1)?;
     Ok(())
 }

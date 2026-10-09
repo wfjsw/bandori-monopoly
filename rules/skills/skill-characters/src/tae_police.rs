@@ -27,7 +27,9 @@ pub const TAE_POLICE: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
+        // applicability (residual guard; `pre::MINE` already states the actor).
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_has_rabbits), on_pass),
         On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], "", Some(can_negate), negate),
     ],
 )
@@ -65,14 +67,16 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 「经过有[多惠兔子]的格子」 -- the applicability of the `Pass` hook.
+fn on_pass_has_rabbits(_player_id: i32) -> bool {
+    ctx::count_marks(ctx::trigger::tile(), RABBIT, -2) > 0
+}
+
 /// （1）「当你经过有[多惠兔子]的格子时[移除]该格子上的所有[多惠兔子]并获得
 /// 等量的[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     let n = ctx::count_marks(t, RABBIT, -2);
-    if n <= 0 {
-        return Ok(());
-    }
     ctx::remove_marks(t, RABBIT, -2);
     ctx::gain_fire(player_id, n, &Msg::new(key!("tae_police_gain")))?;
     Ok(())

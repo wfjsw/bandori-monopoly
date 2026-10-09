@@ -49,32 +49,30 @@ fn random_star(player_id: i32) -> card_sdk::Asked {
 /// 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]」
 /// -- C# `CardRandomStar.PassTile` -> `Stop`.
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// means the card is not activated at all. C# `m.Seat != Seat || t != Ryuseido
+/// || m.Remaining <= 0 || m.Teleport || H.Tok(...) < 2` is the applicability
+/// (the ask itself is the effect).
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
-fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Seat != Seat || t != Ryuseido || m.Remaining <= 0 || m.Teleport ||
-    // H.Tok(Player, "星星贴纸") < 2`.
-    if trigger::player_id() != player_id {
-        return Ok(());
+    if !ctx::is_placed() || trigger::player_id() != player_id {
+        return false;
     }
     let ryuseido = ctx::tile_named("流星堂");
     if ryuseido < 0 || trigger::tile() != ryuseido {
-        return Ok(());
+        return false;
     }
     // C# `m.Remaining <= 0` -- only a still-walking pass can be intercepted.
     if trigger::move_remaining() <= 0 {
-        return Ok(());
+        return false;
     }
     // C# `m.Teleport` -- a teleport does not walk past the tile.
     if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return Ok(());
+        return false;
     }
-    if ctx::tok(player_id, "星星贴纸") < 2 {
-        return Ok(());
-    }
+    ctx::tok(player_id, "星星贴纸") >= 2
+}
+
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    let ryuseido = ctx::tile_named("流星堂");
     // 规则书（2）: 「可使用2星星贴纸」 -- C# `H.AskYes(..., "经过流星堂：要用 2 个
     // 星星贴纸在这里 [强制停下] 并结算吗？")`.
     if !ctx::ask_yes(

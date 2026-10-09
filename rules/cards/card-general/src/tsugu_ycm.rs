@@ -22,8 +22,9 @@ pub const TSUGU_YCM: CardDef = CardDef::new(
         On::Play("", Some(cant_play), play),
         // （3）「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- a `BuyAdd`
         // stage on the buy price, riding a `ctx::linger` instance for the turn
-        // (`docs/PURCHASE.md`). The engine floors the stage at 0.
-        On::Hook(&[HookKind::BuyAdd], card_sdk::pre::MINE, None, buy_add_1500),
+        // (`docs/PURCHASE.md`). The engine floors the stage at 0. The tile is
+        // the hook's applicability (the residual guard).
+        On::Hook(&[HookKind::BuyAdd], card_sdk::pre::MINE, Some(buy_add_on_a_tile), buy_add_1500),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -34,14 +35,16 @@ fn legacy_mine(player_id: i32) -> bool {
     trigger::player_id() == player_id
 }
 
+/// 「购买格子时」 -- the `BuyAdd` hook's applicability: there is a tile being
+/// bought. (`pre::MINE` already states the actor.)
+fn buy_add_on_a_tile(_player_id: i32) -> bool {
+    trigger::tile() >= 0
+}
+
 /// （3）: 「本回合购买格子时[消耗]资金时降低1500（最低0）」 -- `BuyAdd` is the
 /// fixed-± stage (`docs/PURCHASE.md`), so the hook subtracts and the engine
 /// floors the stage at 0.
 fn buy_add_1500(_player_id: i32) -> card_sdk::Asked {
-    let t = trigger::tile();
-    if t < 0 {
-        return Ok(());
-    }
     trigger::set_price(trigger::price() - 1500);
     Ok(())
 }

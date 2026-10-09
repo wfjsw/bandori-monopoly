@@ -37,7 +37,9 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Settle], "", None, on_settle),
+        // （1） is 「其他玩家"星之鼓动山丘"上[结算]时」 -- who and where are the
+        // hook's applicability (the residual guard), not its effect.
+        On::Hook(&[HookKind::Settle], "", Some(on_settle_applies), on_settle),
     ],
 );
 
@@ -48,17 +50,16 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// （1）'s applicability: *another* player settling on 星之鼓动山丘.
+fn on_settle_applies(player_id: i32) -> bool {
+    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == hill()
+}
+
 /// （1）「其他玩家"星之鼓动山丘"上[结算]时获得一个[火罐]」 -- a field event, so
 /// an [`On::Hook`] at `Settle`. The settler is the trigger's player and the tile
 /// is the trigger's tile; the clause says *another* player, so this player's own
-/// landing does not pay out.
+/// landing does not pay out ([`on_settle_applies`]).
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::player_id() == player_id {
-        return Ok(());
-    }
-    if ctx::trigger::tile() != hill() {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("extraordinary_star.gain")))?;
     Ok(())
 }

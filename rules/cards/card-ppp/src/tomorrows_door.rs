@@ -77,20 +77,23 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 的下一个，如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 -- the
 /// hop runs on the user's own pass over wherever the card currently sits.
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// means the card is not activated at all. Also the route cursor and the
+/// "am I on the tile being passed" checks -- applicability, not effect (a
+/// hook body that ran and returned still flashes).
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
+    if !ctx::is_placed() || trigger::player_id() != player_id {
+        return false;
+    }
+    let step = ctx::slot(player_id, SLOT_STEP);
+    if step < 0 || step >= ROUTE.len() as i32 {
+        return false;
+    }
+    let here = ctx::self_tile().unwrap_or(-1);
+    here >= 0 && trigger::tile() == here
 }
 
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     let step = ctx::slot(player_id, SLOT_STEP);
-    if step < 0 || step >= ROUTE.len() as i32 {
-        return Ok(());
-    }
-    let here = ctx::self_tile().unwrap_or(-1);
-    if here < 0 || trigger::tile() != here {
-        return Ok(());
-    }
     let next = step + 1;
     ctx::set_slot(player_id, SLOT_STEP, next);
     // 「如果已经所在为“大阪中之岛公园”则将此卡放置在此卡使用者的游玩区域」 --
@@ -112,8 +115,30 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 
 /// (3)'s surcharge, as a flat add on the rent payment (`payAdd` runs before
 /// `payMul`, so a 「支付减半」 scaler sees rent + surcharge as one figure).
+/// The guard carries the whole applicability: the route must be finished, the
+/// payment a rent on the owner's own tile by someone else, and there must be a
+/// surcharge to add. `TriggerKind::PayAdd` is the category's job -- not
+/// re-checked here (docs/GUARDS.md).
 fn pay_add_guard(player_id: i32) -> bool {
-    ctx::is_placed()
+    if !ctx::is_placed() {
+        return false;
+    }
+    // Still travelling: no tax.
+    if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
+        return false;
+    }
+    if !trigger::pay_is_rent() {
+        return false;
+    }
+    let payer = trigger::player_id();
+    if payer == player_id || ctx::player_out(payer) {
+        return false;
+    }
+    let at = trigger::tile();
+    if at < 0 || ctx::tile_owner(at) != player_id {
+        return false;
+    }
+    tax_due() > 0
 }
 
 /// Is the card in the owner's play area (the route finished)?
@@ -123,31 +148,16 @@ fn in_play_area() -> bool {
     ctx::self_tile().unwrap_or(-1) < 0
 }
 
-fn pay_add(player_id: i32) -> card_sdk::Asked {
-    // Still travelling: no tax.
-    if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
-        return Ok(());
-    }
-    // 规则书（3）: 「[拥有者]以外的玩家在[拥有者]拥有的格子…[结算]时额外支付…」
-    // Only a rent payment on the owner's tile gets the add here; a settle on
-    // 梦开始的地方 (no rent to attach to) is charged in `settle_after`.
-    if trigger::kind() != TriggerKind::PayAdd || !trigger::pay_is_rent() {
-        return Ok(());
-    }
-    let payer = trigger::player_id();
-    if payer == player_id || ctx::player_out(payer) {
-        return Ok(());
-    }
-    let at = trigger::tile();
-    if at < 0 || ctx::tile_owner(at) != player_id {
-        return Ok(());
-    }
+/// 规则书（3）'s figure: 「星之鼓动山丘上房子数量×100」.
+fn tax_due() -> i32 {
     let hill = ctx::tile_named("星之鼓动山丘");
     let houses = if hill >= 0 { ctx::houses_of(hill) } else { 0 };
-    let due = houses * 100;
-    if due <= 0 {
-        return Ok(());
-    }
+    houses * 100
+}
+
+fn pay_add(player_id: i32) -> card_sdk::Asked {
+    let due = tax_due();
+    let payer = trigger::player_id();
     let amount = trigger::value();
     trigger::set_pay_amount(amount + due);
     ctx::log(
@@ -163,44 +173,43 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
 /// `Fx.SettleBody` -- the non-rent side of (3): a settle on 梦开始的地方 (or on
 /// a mortgaged owner tile, where no rent payment exists to carry the add) still
 /// owes `houses(星之鼓动山丘) × 100`. 行动阶段 15 (`SETTLE-STAGES.md` §4 M2).
+/// The guard carries the applicability (route finished, someone else settling
+/// on 梦开始的地方 or a mortgaged owner tile, a surcharge due): the body is
+/// the transfer.
 fn settle_body_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
-fn settle_body(player_id: i32) -> card_sdk::Asked {
-    if trigger::cancelled() {
-        return Ok(());
+    if !ctx::is_placed() || trigger::cancelled() {
+        return false;
     }
     if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
-        return Ok(());
+        return false;
     }
     let payer = trigger::player_id();
     if payer == player_id || ctx::player_out(payer) {
-        return Ok(());
+        return false;
     }
     // 规则书（3）: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时
     //   额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。」
     let at = trigger::tile();
     if at < 0 {
-        return Ok(());
+        return false;
     }
     let dream = ctx::tile_named("梦开始的地方");
-    let hill = ctx::tile_named("星之鼓动山丘");
     let is_dream = dream >= 0 && at == dream;
     let is_owner_tile = ctx::tile_owner(at) == player_id;
     if !is_dream && !is_owner_tile {
-        return Ok(());
+        return false;
     }
     // Rent on an unmortgaged owner tile already carried the surcharge via
     // `pay_add`; don't charge it twice.
     if is_owner_tile && !is_dream && !ctx::mortgaged_of(at) {
-        return Ok(());
+        return false;
     }
-    let houses = if hill >= 0 { ctx::houses_of(hill) } else { 0 };
-    let due = houses * 100;
-    if due <= 0 {
-        return Ok(());
-    }
+    tax_due() > 0
+}
+
+fn settle_body(player_id: i32) -> card_sdk::Asked {
+    let due = tax_due();
+    let payer = trigger::player_id();
     ctx::transfer(
         payer,
         player_id,

@@ -40,31 +40,22 @@ const MAX_CRYSTALS: i32 = 10;
 /// `Fx.PassTile` (C# `CardPopipapapipopa.PassTile`) -- the owner passing one of
 /// the five named tiles banks a crystal on this card.
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// means the card is not activated at all. C# `m.Seat != Seat` and the spot
+/// list are applicability, not effect.
 fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
-fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Seat != Seat` -- only the owner's own move feeds this card.
-    if trigger::player_id() != player_id {
-        return Ok(());
+    if !ctx::is_placed() || trigger::player_id() != player_id {
+        return false;
     }
     let t = trigger::tile();
     if t < 0 {
-        return Ok(());
+        return false;
     }
+    SPOTS.iter().any(|&name| ctx::tile_named(name) == t)
+}
+
+fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    let t = trigger::tile();
     // 规则书[持续]（1）: 「每次[经过]…时为此卡添加1个[奇迹水晶]（上限10个）。」
-    let mut hit = false;
-    for name in SPOTS {
-        if ctx::tile_named(name) == t {
-            hit = true;
-            break;
-        }
-    }
-    if !hit {
-        return Ok(());
-    }
     let before = ctx::crystals();
     let after = ctx::add_crystals(1, MAX_CRYSTALS)?;
     if after > before {
@@ -82,24 +73,18 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
 /// spend crystals to shrink the pending payment by 150 each.
 /// Pure guard for [`pay_choose`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// means the card is not activated at all. C# `p.from != Player`, a non-zero
+/// payment and the crystal count decide whether there is anything to ask.
 fn pay_choose_guard(player_id: i32) -> bool {
     ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::value() > 0
+        && ctx::crystals() > 0
 }
 
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    // C# `p.from != Player` -- only the owner's own payment.
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
     let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     let have = ctx::crystals();
-    if have <= 0 {
-        return Ok(());
-    }
     // C# `max = Math.Min(Crystals, (p.amount + 149) / 150)` -- never ask for
     // more than can actually cut the payment to zero.
     let max = have.min((amount + 149) / 150);
