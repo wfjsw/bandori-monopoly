@@ -14,6 +14,7 @@
 .normal { width: 834px; }
 .wide { width: 1000px; }
 .xl { width: 1250px; }
+.fit { width: fit-content; min-width: 380px; max-width: 856px; }
 .head { position: relative; flex: none; height: 54px; border-radius: 14px; background: linear-gradient(var(--pink-light), var(--pink)); display: flex; align-items: center; justify-content: center; }
 .head h2 { color: #fff; font-size: 25px; font-weight: 700; letter-spacing: 1px; max-width: calc(100% - 220px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .x { position: absolute; right: 6px; top: 5px; width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--pink); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }

@@ -9,7 +9,9 @@ import { Icon } from "./Icon";
 import s from "./Modal.module.css";
 import { t as tr } from "../i18n/t";
 
-export type ModalSize = "small" | "mid" | "normal" | "wide" | "xl";
+/** `fit`: as wide as the content needs (between 380px and the board width) --
+ *  the inline board prompts. */
+export type ModalSize = "small" | "mid" | "normal" | "wide" | "xl" | "fit";
 
 export interface ModalOpts {
   closable?: boolean;

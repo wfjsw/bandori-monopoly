@@ -401,6 +401,6 @@ export function openPrompt(sess: GameSession, p: MatchPrompt): void {
     key: "prompt",
     chrome: "prompt",
     placement: inline ? "inline" : "overlay",
-    size: inline ? "mid" : "wide",
+    size: inline ? "fit" : "wide",
   });
 }

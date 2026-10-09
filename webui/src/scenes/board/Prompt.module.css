@@ -27,7 +27,10 @@
 .timerBar { flex: 1; height: 4px; border-radius: 2px; background: var(--pink-pale); overflow: hidden; }
 .timerFill { height: 100%; border-radius: 2px; background: var(--pink); transition: width 0.4s linear; }
 .timerNum { flex: none; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
-.text { font-size: 17px; line-height: 1.65; white-space: pre-wrap; }
+/* The question wraps to whatever width the cards and options need: `width: 0;
+   min-width: 100%` keeps a long sentence from widening a `fit` window by
+   itself. */
+.text { font-size: 17px; line-height: 1.65; white-space: pre-wrap; width: 0; min-width: 100%; }
 /* Options wrap like the old pill row. */
 .options { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
 /* Optional content a prompt can drop in before its options -- e.g. a strip of
