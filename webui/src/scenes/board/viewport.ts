@@ -50,7 +50,7 @@ export interface Point {
 }
 
 /** Fit view (the pre-zoom default: the whole ring, no pan). */
-export const MIN_ZOOM = 1;
+export const MIN_ZOOM = 0.95;
 export const MAX_ZOOM = 3;
 /** Screen-pixel movement before a press turns into a pan. Clicks stay under
  *  this so tiles, field cards and tokens remain tappable. */
