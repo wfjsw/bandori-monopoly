@@ -60,16 +60,18 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   }, [live, close]);
   // The deadline is measured against the time the prompt was first shown.
   const total = useRef(0);
+  // A prompt that names a card shows the card: options become card tiles, and
+  // anything the title/body names lands in the related-card panel. Hovering a
+  // tile floats the shared preview (the hand's / the field cards'). Declared
+  // before the early return: React hooks must run in the same order every
+  // render, and going quiet (`!live`) must not drop one.
+  const [hover, setHover] = useState<string | null>(null);
   if (!live || !view || !p) return null;
   const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
   const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
   if (!total.current) total.current = Math.max(1, left);
 
-  // A prompt that names a card shows the card: options become card tiles, and
-  // anything the title/body names lands in the related-card panel. Hovering a
-  // tile floats the shared preview (the hand's / the field cards').
   const bodyCards = uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]);
-  const [hover, setHover] = useState<string | null>(null);
 
   let side = null;
   if (/hand|mulligan/.test(p.title.k) && !p.options.some((o) => msgCards(o).length)) {

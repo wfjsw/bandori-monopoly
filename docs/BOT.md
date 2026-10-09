@@ -1338,6 +1338,13 @@ advanced bot seats".
 the vote resolves on the next tick with no external answer. `sim -- 50 4 200`
 counts are **unchanged** (standard-only sims never vote).
 
+**ckpt impact of the three rulings.** `ckpt_equiv -- 3 4 60` after the rulings
+(`target/scratch/ckpt-abc-after-rulings.txt`) has the same 730 checkpoint
+lines / 723 turns / identical event-kind counts as the A–C baseline, but the
+per-turn hashes diverge from line 243 on -- expected: ruling 1 opens new
+[反击] windows whose propensity draws move the match RNG stream. The A–C
+tree itself is byte-identical (`ckpt-abc-before.txt` == `ckpt-abc-after.txt`).
+
 ### B4 harness (2026-10-07)
 
 `crates/bot-core/examples/ismcts_vs_bots.rs` — seat 0 = ISMCTS over

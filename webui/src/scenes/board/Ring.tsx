@@ -45,46 +45,6 @@ function cell(i: number): readonly [number, number] {
 const cellX = (col: number) => (col + 0.5) * (RING / COLS);
 const cellY = (row: number) => (row + 0.5) * (HEIGHT / ROWS);
 
-/** How the ring turns at a tile: `outer` is the tile's vertex on the ring's
- *  outside (0 = bottom-right, 1 = bottom-left, 2 = top-left, 3 = top-right).
- *
- *  `convex` is which way the fold bends. Bending toward the interior (a board
- *  corner, or an edge stepping down into a notch) leaves the tile's two free
- *  edges -- the ones with no neighbour on them -- facing out. Bending away from
- *  it (the floor of a notch) leaves them facing in. */
-interface Turn { outer: number; convex: boolean }
-
-/** Where the ring *turns*, or null on a straight run where the single-strip
- *  form is right.
- *
- *  Every turn gets the wrapped mark, not just the four board corners -- the
- *  fold turns back on itself at each notch, and those corners need it too. */
-function turnAt(i: number): Turn | null {
-  const n = FOLD.length;
-  const [c, r] = FOLD[i];
-  const [pc, pr] = FOLD[(i + n - 1) % n];
-  const [nc, nr] = FOLD[(i + 1) % n];
-  const din: readonly [number, number] = [c - pc, r - pr];
-  const dout: readonly [number, number] = [nc - c, nr - r];
-  if (din[0] === dout[0] && din[1] === dout[1]) return null;
-  // The interior is the left of travel; map each segment's normal to an edge
-  // (0 top, 1 right, 2 bottom, 3 left).
-  const edge = (d: readonly [number, number]) => {
-    const col = -d[1];
-    const row = d[0];
-    return row < 0 ? 0 : row > 0 ? 2 : col > 0 ? 1 : 3;
-  };
-  const e = new Set([edge(din), edge(dout)]);
-  const outer = e.has(0) && e.has(3) ? 0 // inner top+left -> outer bottom-right
-    : e.has(0) && e.has(1) ? 1 // inner top+right -> outer bottom-left
-    : e.has(2) && e.has(1) ? 2 // inner bottom+right -> outer top-left
-    : 3; // inner bottom+left -> outer top-right
-  // Convex when the path turns toward the incoming step's interior normal
-  // (`[-din[1], din[0]]`, as in `sideOf`).
-  const convex = -din[1] * dout[0] + din[0] * dout[1] > 0;
-  return { outer, convex };
-}
-
 export interface RingProps {
   m: Model;
   anim: Animator;
@@ -183,7 +143,6 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
           <Center m={m} onHover={setHover} />
           {D.tiles.map((t, i) => {
             const [col, row] = cell(i);
-            const turn = turnAt(i);
             const owner = S.owners[i] ?? -1;
             const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, pick.has(i) && s.pickable);
             const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
@@ -191,7 +150,6 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
             const embers = S.embers?.[i] ?? 0;
             const extras = (
               <>
-                {owner >= 0 && <span className={s.ownerStrip} />}
                 <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
                 <div className={s.marks}>
                   {marks.map((x) => {
@@ -222,7 +180,21 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
                 </div>
               </>
             );
-            return <Tile key={i} t={t} cls={cls} style={style} turn={turn} onClick={() => onTile(i)}>{extras}</Tile>;
+            return (
+              <button
+                key={i}
+                type="button"
+                className={cls}
+                style={style}
+                aria-label={`${t.index}. ${plain(t.name)}`}
+                title={`${t.index}. ${plain(t.name)}${t.price > 0 ? ` · ${t.price}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
+                onClick={() => onTile(i)}
+              >
+                <TileFace tile={t} />
+                {owner >= 0 && <span className={s.ownerStrip} />}
+                {extras}
+              </button>
+            );
           })}
           <div className={s.tokens}>
             {S.players.map((x, i) => {
@@ -323,42 +295,6 @@ function FieldPreview({ m, hover }: { m: Model; hover: FieldHover | null }) {
   );
 }
 
-interface TileProps { t: TileData; cls: string; style: React.CSSProperties; onClick: () => void; turn: Turn | null; children: React.ReactNode }
-
-/** The wrapped marks at a turn. The rule is the straight run's -- the tile's
- *  colour on the ring's inside, ownership on its outside -- but at a turn one
- *  strip has to wrap the corner as an L along the tile's free edges, and the
- *  other shrinks to a block in the opposite vertex. Which one wraps follows the
- *  fold: on a convex turn the free edges face out, so the L is ownership; on a
- *  concave one they face in, so the L is the tile's colour. `null` means the
- *  path is straight here and the single-strip form applies instead. */
-function TurnMarks({ turn, color }: { turn: Turn | null; color: string }) {
-  if (turn == null) return null;
-  const at = turn.convex ? turn.outer : (turn.outer + 2) % 4;
-  const tile = { background: color };
-  const lOwn = turn.convex && s.own;
-  const lStyle = turn.convex ? undefined : tile;
-  return (
-    <div className={cx(s.turnMarks, s[`l${at}`])}>
-      <div className={cx(s.lA, lOwn)} style={lStyle} />
-      <div className={cx(s.lB, lOwn)} style={lStyle} />
-      <div className={cx(s.sq, !turn.convex && s.own)} style={turn.convex ? tile : undefined} />
-    </div>
-  );
-}
-
-/** One clickable cell: the generated face, the ownership strip, and every live
- *  overlay (turn marks, buildings, tile marks) on top. */
-function Tile({ t, cls, style, onClick, turn, children }: TileProps) {
-  return (
-    <button type="button" className={cls} style={style} onClick={onClick} title={`${t.index}. ${plain(t.name)}${t.price > 0 ? ` · ${t.price}` : ""}`}>
-      <TileFace tile={t} />
-      <TurnMarks turn={turn} color={t.color} />
-      {children}
-    </button>
-  );
-}
-
 function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => void }) {
   const S = m.S;
   // Skill rules are placed on the field so `On::Hook` reaches them (engine
@@ -373,7 +309,7 @@ function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => v
   const events = S.eventActive ?? [];
   const names = namesOf(S);
   return (
-    <div className={s.inner} data-vp-bg style={{ backgroundImage: `url("${sceneImg("world_map")}")` }}>
+    <div className={s.inner} data-vp-bg>
       {/* Interior zones of the TTS board, on the same square-cell grid as the
           path, beneath the live cards. */}
       <div className={s.zones} aria-hidden="true">
