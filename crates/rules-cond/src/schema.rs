@@ -68,6 +68,11 @@ pub const FUNCTIONS: &[&str] = &[
     "slot",
     "tok",
     "tile_named",
+    // tile-kind predicates (the guest's `is_circle` / `is_ring` / ...)
+    "is_circle",
+    "is_ring",
+    "is_live_house",
+    "is_buyable",
     // player-table lookups (any seat, not just owner)
     "money",
     "fire",

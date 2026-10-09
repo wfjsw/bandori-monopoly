@@ -53,6 +53,10 @@ fn window() -> WindowCtx {
             })
             .collect(),
         tile_ids: [("festival".to_string(), 9)].into_iter().collect(),
+        circle_tiles: vec![0],
+        ring_tiles: vec![],
+        live_house_tiles: vec![],
+        buyable_tiles: vec![],
     }
 }
 

@@ -111,6 +111,12 @@ pub struct WindowCtx {
     /// `tile_named(name) -> id`, resolved at load. Empty is fine if no
     /// condition uses it.
     pub tile_ids: BTreeMap<String, i64>,
+    /// Tile ids of each kind, for `is_circle(t)` / `is_ring(t)` /
+    /// `is_live_house(t)` / `is_buyable(t)`.
+    pub circle_tiles: Vec<i64>,
+    pub ring_tiles: Vec<i64>,
+    pub live_house_tiles: Vec<i64>,
+    pub buyable_tiles: Vec<i64>,
 }
 
 impl WindowCtx {

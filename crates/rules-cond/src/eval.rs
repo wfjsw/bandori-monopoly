@@ -120,6 +120,12 @@ fn bind_window(ctx: &mut Context<'static, 'static>, win: &WindowCtx) {
     ctx.add_variable_from_value("tile_mortgaged", Value::Int(win.tile.mortgaged));
     ctx.add_variable_from_value("tile_price", Value::Int(win.tile.price));
 
+    // tile-kind sets for `is_circle(t)` / `is_ring(t)` / ...
+    ctx.add_variable_from_value("_circle_tiles", int_list(win.circle_tiles.iter().copied()));
+    ctx.add_variable_from_value("_ring_tiles", int_list(win.ring_tiles.iter().copied()));
+    ctx.add_variable_from_value("_live_house_tiles", int_list(win.live_house_tiles.iter().copied()));
+    ctx.add_variable_from_value("_buyable_tiles", int_list(win.buyable_tiles.iter().copied()));
+
     // effect/chain
     ctx.add_variable_from_value("effect_count", Value::Int(win.chain.len() as i64));
 
@@ -326,6 +332,22 @@ fn install_functions(ctx: &mut Context<'static, 'static>) {
         },
     )
     .expect("tile_named");
+
+    for (fname, var) in [
+        ("is_circle", "_circle_tiles"),
+        ("is_ring", "_ring_tiles"),
+        ("is_live_house", "_live_house_tiles"),
+        ("is_buyable", "_buyable_tiles"),
+    ] {
+        let var = var.to_string();
+        ctx.add_function(
+            fname,
+            move |ftx: &FunctionContext, tile: i64| -> Result<bool, ExecutionError> {
+                Ok(list_contains(ftx, &var, tile))
+            },
+        )
+        .expect(fname);
+    }
 
     ctx.add_function(
         "chain_has",

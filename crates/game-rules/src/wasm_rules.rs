@@ -4105,6 +4105,34 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
             .unwrap_or_default()
     }
     #[inline]
+    #[inline]
+    fn is_circle(&self, tile: i32) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "circle")
+    }
+    #[inline]
+    fn is_ring(&self, tile: i32) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.kind == "ring")
+    }
+    #[inline]
+    fn is_live_house(&self, tile: i32) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable() && t.group == 10)
+    }
+    #[inline]
+    fn is_buyable(&self, tile: i32) -> bool {
+        self.data
+            .tiles
+            .get(tile.max(0) as usize)
+            .is_some_and(|t| t.is_buyable())
+    }
     fn player_count(&self) -> i32 {
         self.world.st.players.len() as i32
     }

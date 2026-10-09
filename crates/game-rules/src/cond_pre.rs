@@ -36,6 +36,11 @@ pub trait SnapSrc {
     /// stripped). Empty when the id is out of range. `fill_window` registers
     /// every name so a condition's `tile_named('…')` resolves.
     fn tile_name(&self, tile: i32) -> String;
+    /// Tile-kind predicates backing the CEL `is_circle(t)` family.
+    fn is_circle(&self, tile: i32) -> bool;
+    fn is_ring(&self, tile: i32) -> bool;
+    fn is_live_house(&self, tile: i32) -> bool;
+    fn is_buyable(&self, tile: i32) -> bool;
     fn player_count(&self) -> i32;
     fn money(&self, player_id: i32) -> i32;
     fn fire(&self, player_id: i32) -> i32;
@@ -74,6 +79,22 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn tile_name(&self, tile: i32) -> String {
         CardWorld::tile_name(self, tile)
+    }
+    #[inline]
+    fn is_circle(&self, tile: i32) -> bool {
+        CardWorld::is_circle(self, tile) != 0
+    }
+    #[inline]
+    fn is_ring(&self, tile: i32) -> bool {
+        CardWorld::is_ring(self, tile) != 0
+    }
+    #[inline]
+    fn is_live_house(&self, tile: i32) -> bool {
+        CardWorld::is_live_house(self, tile) != 0
+    }
+    #[inline]
+    fn is_buyable(&self, tile: i32) -> bool {
+        CardWorld::is_buyable(self, tile) != 0
     }
     #[inline]
     fn player_count(&self) -> i32 {
@@ -510,6 +531,25 @@ pub fn id_of(name: &str) -> i64 {
 pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
     let t = world.trigger();
     let tile_ids = collect_tile_ids(world);
+    let mut circle_tiles = Vec::new();
+    let mut ring_tiles = Vec::new();
+    let mut live_house_tiles = Vec::new();
+    let mut buyable_tiles = Vec::new();
+    for tile in 0..world.tile_count() {
+        if world.is_circle(tile) {
+            circle_tiles.push(tile as i64);
+        }
+        if world.is_ring(tile) {
+            ring_tiles.push(tile as i64);
+        }
+        if world.is_live_house(tile) {
+            live_house_tiles.push(tile as i64);
+        }
+        if world.is_buyable(tile) {
+            buyable_tiles.push(tile as i64);
+        }
+    }
+
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
@@ -578,6 +618,10 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         turn_key: world.turn_key() as i64,
         players,
         tile_ids,
+        circle_tiles,
+        ring_tiles,
+        live_house_tiles,
+        buyable_tiles,
     }
 }
 
@@ -587,6 +631,24 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
 /// player being asked. Built once per ask; reused across the cards of one view.
 pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
     let tile_ids = collect_tile_ids(world);
+    let mut circle_tiles = Vec::new();
+    let mut ring_tiles = Vec::new();
+    let mut live_house_tiles = Vec::new();
+    let mut buyable_tiles = Vec::new();
+    for tile in 0..world.tile_count() {
+        if world.is_circle(tile) {
+            circle_tiles.push(tile as i64);
+        }
+        if world.is_ring(tile) {
+            ring_tiles.push(tile as i64);
+        }
+        if world.is_live_house(tile) {
+            live_house_tiles.push(tile as i64);
+        }
+        if world.is_buyable(tile) {
+            buyable_tiles.push(tile as i64);
+        }
+    }
     let players: Vec<PlayerSnap> = (0..world.player_count())
         .map(|p| PlayerSnap {
             money: world.money(p) as i64,
@@ -630,6 +692,10 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         turn_key: world.turn_key() as i64,
         players,
         tile_ids,
+        circle_tiles,
+        ring_tiles,
+        live_house_tiles,
+        buyable_tiles,
     }
 }
 

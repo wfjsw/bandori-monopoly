@@ -61,6 +61,10 @@ fn win() -> WindowCtx {
             PlayerSnap::default(),
         ],
         tile_ids: [("festival".to_string(), 9)].into_iter().collect(),
+        circle_tiles: vec![0],
+        ring_tiles: vec![],
+        live_house_tiles: vec![],
+        buyable_tiles: vec![],
     }
 }
 
@@ -328,6 +332,14 @@ fn tile_named() {
 
     let cond = compile("tile_named('nowhere') == 9").unwrap();
     assert!(!cond.eval(&win(), &cand(0)));
+}
+
+#[test]
+fn tile_kind_predicates() {
+    // `win()` fills circle_tiles with tile 0.
+    assert!(compile("is_circle(0)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("is_circle(1)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("is_ring(0)").unwrap().eval(&win(), &cand(0)));
 }
 
 #[test]
