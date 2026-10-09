@@ -47,11 +47,16 @@ fn main() {
                 ..Default::default()
             })
             .collect();
-        let mut m = Match::new(
+        // New matches (this sim included) run on the ChaCha12 stream keyed
+        // by a 256-bit seed (`docs/FAIRNESS.md`). The sim's u64 game index is
+        // padded into that key -- it is a test seed, not a fairness one.
+        let mut key = [0u8; 32];
+        key[..8].copy_from_slice(&seed.to_le_bytes());
+        let mut m = Match::new_seeded(
             data.clone(),
             Arc::new(StubRules),
             &members,
-            seed,
+            game_core::rng::Seed256(key),
             MatchMode::Casual,
             ScoreWeights::default(),
         );

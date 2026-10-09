@@ -5,6 +5,7 @@
 import { useEffect, useRef } from "react";
 import { navigate } from "../../app/router";
 import { t as tr } from "../../i18n/t";
+import { CommitChip } from "../../ui/CommitChip";
 import { useAutoplay, useTick, useWakeLock } from "../../core/hooks";
 import { endSession, type GameSession } from "../../game/session";
 import { isModalOpen } from "../../ui/Modal";
@@ -100,7 +101,14 @@ export function Board({ sess }: { sess: GameSession }) {
 
   return (
     <>
-      <TopBar compact help={false} section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })} title={tr("board.round", { n: Math.max(1, S.round) })} onBack={leave} right={<></>} />
+      <TopBar
+        compact
+        help={false}
+        section={tr("board.mode", { mode: modeName(S.mode), n: S.players.length })}
+        title={tr("board.round", { n: Math.max(1, S.round) })}
+        onBack={leave}
+        right={sess.kind === "online" && sess.room?.fair ? <CommitChip commit={sess.room.fair.commit} /> : <></>}
+      />
       <AutoBanner sess={sess} />
       <div className={s.body}>
         <div className={s.left}>

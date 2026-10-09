@@ -275,14 +275,19 @@ impl Pool {
         serde_json::from_value(s).map_err(|e| format!("stamp: {e}"))
     }
 
+    /// Build a match from the derived 256-bit seed (`docs/FAIRNESS.md`). The
+    /// worker keys its ChaCha12 stream from `seed256`; the legacy `seed`
+    /// field is no longer sent (a worker that only understands it is older
+    /// than this scheme and must not run a fair match).
     pub fn new_match(
         &self,
         members: &[RoomMember],
-        seed: u64,
+        seed256: [u8; 32],
         mode: i32,
         weights: &ScoreWeights,
     ) -> Result<String, String> {
-        let v = self.call(json!({"op": "new", "members": members, "seed": seed, "mode": mode, "weights": weights}))?;
+        let hex: String = seed256.iter().map(|b| format!("{b:02x}")).collect();
+        let v = self.call(json!({"op": "new", "members": members, "seed256": hex, "mode": mode, "weights": weights}))?;
         v.get("state")
             .and_then(Value::as_str)
             .map(str::to_string)

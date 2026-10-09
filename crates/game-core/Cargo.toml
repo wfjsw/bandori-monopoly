@@ -31,6 +31,12 @@ flate2 = { version = "1", default-features = false, features = ["rust_backend"] 
 # The engine-bundle id recipe (`record::bundle_id`, `docs/REPLAY.md` §9) --
 # one sha256 implementation for every host that stamps a record.
 sha2 = { workspace = true }
+# Match RNG for every new match: ChaCha12 keystream (`rng.rs`,
+# `docs/FAIRNESS.md`). Portable pure-Rust, no_std-capable, wasm32-ready,
+# deterministic across platforms. `rand_core` only for the `RngCore` /
+# `SeedableRng` traits the stream is driven through.
+rand_chacha = { version = "0.3", default-features = false }
+rand_core = { version = "0.6", default-features = false }
 
 # Native encode: the reference binding at level 1, the strictest witness
 # available for the "standard zstd frames" claim. Off on wasm32 --

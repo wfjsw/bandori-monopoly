@@ -440,11 +440,14 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(st: MatchState, players: usize, seed: u64) -> Self {
+    /// Assemble a world around an already-built [`Rng`]: which stream the
+    /// match runs on is the caller's choice (`Match::new` legacy xoshiro vs
+    /// `Match::new_seeded` ChaCha12, `docs/FAIRNESS.md`).
+    pub fn new(st: MatchState, players: usize, rng: Rng) -> Self {
         Self {
             st,
             hidden: vec![Hidden::default(); players],
-            rng: Rng::new(seed),
+            rng,
             next_event: 1,
             recent: EventTail::default(),
             turn: TurnCtx::default(),

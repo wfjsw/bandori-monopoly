@@ -6,6 +6,7 @@
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
 import { D, rules } from "../core/data";
+import type { EngineStamp } from "./record";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
 import type { Msg } from "../i18n/msg";
@@ -480,8 +481,31 @@ export class SoloSession extends GameSession {
       seat(1, player, chars[0], false, "standard"),
       ...bots.map((b, i) => seat(i + 2, b.name, chars[i + 1], true, b.mentality)),
     ];
-    const seed = Math.floor(Math.random() * 0xffffffff);
-    return new SoloSession(new rules.SoloMatch(JSON.stringify(members), seed, 0, JSON.stringify(weights)), weights);
+    // Commit-reveal, locally (`docs/FAIRNESS.md`): the same recipe an online
+    // match runs, so the exported record carries the openings and verifies.
+    // Solo proves little -- the player is both committer and contributor --
+    // so the UI does not show the commitment (docs/FAIRNESS.md "solo").
+    const rand32 = () => crypto.getRandomValues(new Uint8Array(32));
+    const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+    const seed = hex(rand32());
+    const salt = hex(rand32());
+    const nonce = hex(rand32());
+    const stamp = JSON.parse(rules.engine_stamp()) as EngineStamp;
+    const settings = rules.fair_canon_settings(0, TICK_STEP, JSON.stringify(weights), JSON.stringify(members));
+    const commit = rules.fair_commit(seed, salt, stamp.bundle ?? "", stamp.ruleset_sha256 ?? "", settings);
+    const derived = rules.fair_derive_seed(seed, JSON.stringify([{ member: 1, nonce }]));
+    const m = new rules.SoloMatch(JSON.stringify(members), derived, 0, JSON.stringify(weights));
+    m.set_fair(
+      JSON.stringify({
+        v: 1,
+        commit,
+        seed,
+        salt,
+        nonces: [{ member: 1, nonce }],
+        settings,
+      }),
+    );
+    return new SoloSession(m, weights);
   }
 
   /** The match saved before a refresh, if any. */

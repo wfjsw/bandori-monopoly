@@ -189,6 +189,13 @@ pub struct RecordHead {
     pub created: String,
     /// [`game_core::MatchMode`] as its wire integer.
     pub mode: i32,
+    /// Commit-reveal material (`docs/FAIRNESS.md`): the openings, written
+    /// here when the match is created and copied into the sealed record's
+    /// header when it ends. This log line is server-side storage, not a
+    /// client-facing payload -- it is the only place the seed/salt live
+    /// between match creation and the reveal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fair: Option<game_core::fair::Fairness>,
 }
 
 /// A turn boundary. `at` counts [`Input`]s (the open tick run included), so the

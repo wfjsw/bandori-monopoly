@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::auth::{Auth, COOKIE};
 use crate::error::{ApiError, ApiResult};
 use crate::room::{NewMember, Room};
-use crate::state::{random_hex, random_u64, room_code, Server, Session};
+use crate::state::{random_hex, room_code, Server, Session};
 
 type S = State<Arc<Server>>;
 
@@ -334,11 +334,42 @@ pub async fn start(
     let step = crate::TICK_QUANTUM * s.time_scale;
     let info = tokio::task::spawn_blocking(move || {
         let mut r = room.lock().unwrap();
-        r.start(me, req.force, random_u64(), step)?;
+        // Draws the secret seed + salt and publishes only their commitment;
+        // the match itself is created once the player nonces are in (or the
+        // window closes) -- `docs/FAIRNESS.md`.
+        r.start(me, req.force, step)?;
         Ok::<_, ApiError>(r.info.clone())
     })
     .await
     .map_err(|e| ApiError::bad(format!("start task: {e}").as_str()))??;
+    Ok(Json(info))
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct NonceReq {
+    /// 32 random bytes as lower-case hex (`crypto.getRandomValues` on the
+    /// client). `docs/FAIRNESS.md`.
+    pub nonce: String,
+}
+
+/// `POST /api/rooms/{id}/nonce` -- one human's entropy contribution, during
+/// the window [`crate::room::NONCE_WINDOW`] keeps open after `start`. A
+/// missing nonce is simply absent; this never blocks the match.
+pub async fn nonce(
+    State(s): S,
+    Auth(sess): Auth,
+    Path(id): Path<String>,
+    Json(req): Json<NonceReq>,
+) -> ApiResult<Json<RoomInfo>> {
+    let (room, me) = member_room(&s, &sess, &id)?;
+    let info = tokio::task::spawn_blocking(move || {
+        let mut r = room.lock().unwrap();
+        r.submit_nonce(me, &req.nonce)?;
+        Ok::<_, ApiError>(r.info.clone())
+    })
+    .await
+    .map_err(|e| ApiError::bad(format!("nonce task: {e}").as_str()))??;
     Ok(Json(info))
 }
 

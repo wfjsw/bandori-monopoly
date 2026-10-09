@@ -253,7 +253,9 @@ fn sample_world(
     let next_event = st.events.iter().map(|e| e.id).max().unwrap_or(0) + 1;
     let ask_seq = st.prompt.id;
 
-    let mut world = World::new(st, hidden.len(), rng.next_u64());
+    // The fork's own stream, seeded from the determinizer (never the match
+    // RNG -- `docs/BOT.md` §3.4, `docs/FAIRNESS.md` threat model).
+    let mut world = World::new(st, hidden.len(), Rng::new(rng.next_u64()));
     world.hidden = hidden;
     for e in view.state.events.iter() {
         world.recent.push_back(e.clone());

@@ -19,6 +19,7 @@ use game_core::msg::Msg;
 use game_core::net::{NetMessage, RoomMember};
 use game_core::profile::{PlayerProfile, Seen};
 use game_core::progression;
+use game_core::rng::Seed256;
 use game_core::record::{
     decode_record, encode_record_zst, parse_header, parse_header_bytes, parse_record, EngineStamp,
     MatchSetup, RecordedMatch, Replayer, RECORD_VERSION,
@@ -556,12 +557,14 @@ pub struct SoloMatch {
 #[wasm_bindgen]
 impl SoloMatch {
     /// `members_json`: `RoomMember[]` (each carries its `mentality`);
-    /// `seed`: the match seed; `mode`: 0 solo, 1 casual, 2 ranked;
+    /// `seed_hex`: the derived 256-bit match seed (`docs/FAIRNESS.md` -- the
+    /// solo driver runs the commit-reveal recipe locally and passes what
+    /// `fair_derive_seed` returns); `mode`: 0 solo, 1 casual, 2 ranked;
     /// `weights_json`: `ScoreWeights` (empty = default).
     #[wasm_bindgen(constructor)]
     pub fn new(
         members_json: &str,
-        seed: u32,
+        seed_hex: &str,
         mode: i32,
         weights_json: &str,
     ) -> Result<SoloMatch, JsError> {
@@ -572,14 +575,28 @@ impl SoloMatch {
             parse("weights", weights_json)?
         };
         let mode = MatchMode::from_i32(mode).unwrap_or_default();
+        let seed = Seed256::from_hex(seed_hex).map_err(|e| JsError::new(&e))?;
         let setup = MatchSetup {
             members,
-            seed: seed as u64,
+            seed: 0,
+            seed256: Some(seed),
             weights,
         };
         Ok(SoloMatch {
             m: RecordedMatch::new(data()?, rules()?, setup, mode),
         })
+    }
+
+    /// Attach the commit-reveal material (`docs/FAIRNESS.md`) so the exported
+    /// record reveals it: `fair_json` is a `game_core::fair::Fairness`
+    /// (`{v, commit, seed, salt, nonces, settings}`). Solo keeps the scheme
+    /// for uniformity; the UI does not display the commitment (a local
+    /// commitment proves nothing -- `docs/FAIRNESS.md` "solo").
+    pub fn set_fair(&mut self, fair_json: &str) -> Result<(), JsError> {
+        let fair: game_core::fair::Fairness =
+            parse("fair", fair_json)?;
+        self.m.set_fair(fair);
+        Ok(())
     }
 
     /// Rebuild a match from [`SoloMatch::save`] (page refresh). The record
@@ -863,4 +880,90 @@ pub fn record_header(json_str: &str) -> Result<String, JsError> {
 pub fn record_header_bytes(bytes: &[u8]) -> Result<String, JsError> {
     let h = parse_header_bytes(bytes).map_err(|e| JsError::new(&e.to_string()))?;
     Ok(json(&h))
+}
+
+
+// ------------------------------------------------------- commit-reveal (fair)
+
+/// The canonical room settings string a commitment hashes
+/// (`game_core::fair::CanonSettings::canon`, `docs/FAIRNESS.md`).
+#[wasm_bindgen]
+pub fn fair_canon_settings(
+    mode: i32,
+    step: f32,
+    weights_json: &str,
+    members_json: &str,
+) -> Result<String, JsError> {
+    let members: Vec<RoomMember> = parse("members", members_json)?;
+    let weights: ScoreWeights = if weights_json.is_empty() {
+        ScoreWeights::default()
+    } else {
+        parse("weights", weights_json)?
+    };
+    let mode = MatchMode::from_i32(mode).ok_or_else(|| JsError::new("bad mode"))?;
+    Ok(game_core::fair::CanonSettings::new(mode, step, &weights, &members).canon())
+}
+
+/// `commit = SHA-256(...)` (`docs/FAIRNESS.md`). All inputs hex / text.
+#[wasm_bindgen]
+pub fn fair_commit(
+    seed_hex: &str,
+    salt_hex: &str,
+    bundle: &str,
+    ruleset_sha256: &str,
+    settings: &str,
+) -> Result<String, JsError> {
+    let seed = game_core::fair::unhex32(seed_hex).map_err(|e| JsError::new(&e))?;
+    let salt = game_core::fair::unhex32(salt_hex).map_err(|e| JsError::new(&e))?;
+    Ok(game_core::fair::commit_hex(
+        &seed,
+        &salt,
+        bundle,
+        ruleset_sha256,
+        settings,
+    ))
+}
+
+/// The derived match seed: `SHA-256(seed, sorted nonces)`
+/// (`docs/FAIRNESS.md`). `nonces_json` is `[{"member": 1, "nonce": "<hex>"}]`.
+#[wasm_bindgen]
+pub fn fair_derive_seed(seed_hex: &str, nonces_json: &str) -> Result<String, JsError> {
+    let seed = game_core::fair::unhex32(seed_hex).map_err(|e| JsError::new(&e))?;
+    let entries: Vec<game_core::fair::NonceEntry> = parse("nonces", nonces_json)?;
+    let mut nonces = Vec::with_capacity(entries.len());
+    for e in entries {
+        let n = game_core::fair::unhex32(&e.nonce).map_err(|x| JsError::new(&x))?;
+        nonces.push((e.member, n));
+    }
+    Ok(game_core::fair::hex32(&game_core::fair::derive_match_seed(
+        &seed, &nonces,
+    )))
+}
+
+/// The browser "verify" action (`docs/FAIRNESS.md`): recompute the
+/// commitment, check it matches the one the record carries, derive the match
+/// seed, pin the match's initial RNG state to it and replay the whole log
+/// through **this** engine (which, for a record that names another bundle, is
+/// that archived bundle -- the loader routes first, `docs/REPLAY.md` §9).
+///
+/// Returns a `game_core::fair::VerifyReport` JSON: `{ok, present, steps:
+/// [{step, ok, note}]}`. A record with no fairness material reports
+/// `present: false` -- it predates the scheme and is not a failure of its
+/// own.
+#[wasm_bindgen]
+pub fn verify_fair(bytes: &[u8]) -> Result<String, JsError> {
+    let file = game_core::record::decode_record(bytes)
+        .map_err(|e| JsError::new(&format!("record: {e}")))?;
+    let rep = game_core::fair::verify_replay(&file, data()?, rules()?);
+    Ok(json(&rep))
+}
+
+/// Hash-only half of [`verify_fair`] (no engine needed): commitment opening,
+/// canonical settings and derived seed. The same verdict [`verify_fair`]
+/// reports for those steps.
+#[wasm_bindgen]
+pub fn verify_fair_hash(bytes: &[u8]) -> Result<String, JsError> {
+    let file = game_core::record::decode_record(bytes)
+        .map_err(|e| JsError::new(&format!("record: {e}")))?;
+    Ok(json(&game_core::fair::verify(&file)))
 }

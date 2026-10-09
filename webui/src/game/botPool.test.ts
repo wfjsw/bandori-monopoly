@@ -23,6 +23,9 @@ import {
 import { decisionAt, seedForThread } from "./botBudget.ts";
 import type { MatchView, RoomMember } from "../core/types.ts";
 
+/** `SoloMatch::new` takes the derived 256-bit seed as hex (`docs/FAIRNESS.md`); tests just need a deterministic one. */
+const seedHex = (n: number) => (n >>> 0).toString(16).padStart(64, "0");
+
 const WEBUI = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const ROOT = resolve(WEBUI, "..");
 const BOT_DIR = join(WEBUI, "public", "assets", "engine", "bot-glue");
@@ -101,7 +104,7 @@ function collectViews(glue: Record<string, any>, limit: number): { view: MatchVi
   // A couple of games: one seed rarely shows every surface before the cap.
   for (const seed of [20261008, 777, 31337]) {
     if (out.length >= limit) break;
-    const m = new glue.SoloMatch(JSON.stringify(members()), seed, 0, "");
+    const m = new glue.SoloMatch(JSON.stringify(members()), seedHex(seed), 0, "");
     try {
       m.quick_start();
       for (let step = 0; step < 300 && out.length < limit; step++) {
@@ -275,7 +278,7 @@ test("decide is deterministic given the seed (and per-worker seeds differ)", asy
 test("a trivial surface is answered by the heuristic without searching", async () => {
   const bot = await loadBotGlue("trivial");
   const web = await loadWebGlue("trivial-views");
-  const m = new web.SoloMatch(JSON.stringify(members()), 4242, 0, "");
+  const m = new web.SoloMatch(JSON.stringify(members()), seedHex(4242), 0, "");
   try {
     m.quick_start();
     // Find a frame where someone is at 运营 with nothing worth searching
@@ -338,7 +341,7 @@ test("a solo match with an Advanced bot records and replays clean", async () => 
     { id: 1, player: "P", character: "户山香澄", cnId: "", ready: true, host: true, bot: false, away: false, mentality: "standard" },
     { id: 2, player: "B", character: "美竹兰", cnId: "", ready: true, host: false, bot: true, away: false, mentality: "advanced" },
   ];
-  const m = new web.SoloMatch(JSON.stringify(seats), 5150, 0, "");
+  const m = new web.SoloMatch(JSON.stringify(seats), seedHex(5150), 0, "");
   try {
     m.quick_start();
     const v0 = JSON.parse(m.view(2)) as MatchView;

@@ -78,6 +78,24 @@ function open(bytes, force) {
   return true;
 }
 
+/**
+ * The fairness check (`docs/FAIRNESS.md`): run `verify_fair` in **this**
+ * bundle's engine, so the re-run uses the engine that wrote the record.
+ * Bundles from before the scheme cannot verify; say so instead of failing
+ * mysteriously.
+ */
+function verify(bytes) {
+  if (!glue) throw new Error("init first");
+  if (typeof glue.verify_fair !== "function") {
+    return JSON.stringify({
+      ok: false,
+      present: false,
+      steps: [{ step: "commit", ok: false, note: "engine predates fairness verification" }],
+    });
+  }
+  return glue.verify_fair(bytes);
+}
+
 function call(method, args) {
   if (!match) throw new Error("open first");
   switch (method) {
@@ -108,6 +126,7 @@ self.onmessage = async (e) => {
     let value;
     if (op === "init") value = await init(rest.base);
     else if (op === "open") value = open(rest.bytes, !!rest.force);
+    else if (op === "verify") value = verify(rest.bytes);
     else if (op === "call") {
       if (!CALLS.has(rest.method)) throw new Error(`unknown call ${rest.method}`);
       value = call(rest.method, rest.args ?? []);

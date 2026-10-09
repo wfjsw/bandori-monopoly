@@ -135,6 +135,8 @@ export class ReplaySession extends GameSession {
   readonly engineBundle: string;
 
   private h: ReplayHandle;
+  /** The record bytes this session plays -- what `verifyFair` re-checks. */
+  readonly bytes: Uint8Array;
   /** Serializes engine calls (a worker answers one at a time anyway). */
   private q: Promise<unknown> = Promise.resolve();
   private lastStatus: ReplayStatus = { tick: "0", ended: false, diverged: false };
@@ -147,9 +149,10 @@ export class ReplaySession extends GameSession {
   private busy = false;
   private indexing = false;
 
-  private constructor(h: ReplayHandle, header: RecordHeader, turns: Turn[], totalTicks: number, id: string) {
+  private constructor(h: ReplayHandle, header: RecordHeader, turns: Turn[], totalTicks: number, id: string, bytes: Uint8Array) {
     super();
     this.h = h;
+    this.bytes = bytes;
     this.id = id || "replay";
     this.header = header;
     this.turns = turns;
@@ -164,11 +167,11 @@ export class ReplaySession extends GameSession {
   }
 
   /** Build the session on an opened handle (whatever engine runs it). */
-  static async create(h: ReplayHandle, id = ""): Promise<ReplaySession> {
+  static async create(h: ReplayHandle, id = "", bytes: Uint8Array = new Uint8Array()): Promise<ReplaySession> {
     const header = await h.header();
     const turns = (await h.turns()).map((t: TurnMark) => ({ round: t.round, turn: t.turn, tick: Number(t.tick) }));
     const totalTicks = await h.totalTicks();
-    const s = new ReplaySession(h, header, turns, totalTicks, id);
+    const s = new ReplaySession(h, header, turns, totalTicks, id, bytes);
     s.lastStatus = await h.status();
     return s;
   }
@@ -359,6 +362,12 @@ export class ReplaySession extends GameSession {
   }
 
   /** No commands -- a replay is read-only. */
+  /** The commit-reveal fairness check (`docs/FAIRNESS.md`), run by whatever
+   *  engine plays this record (the archived bundle that wrote it). */
+  verifyFair(): Promise<string> {
+    return this.run((h) => h.verifyFair(this.bytes));
+  }
+
   act(_cmd: Command): Promise<Msg | null> {
     return Promise.resolve({ k: "err.replay" });
   }
@@ -450,7 +459,7 @@ async function openRecord(p: { bytes: Uint8Array; id: string }): Promise<Opened>
           message: `${tr("replay.compatFatalText")} (${fatal.map((x) => x.field).join(", ")})`,
         };
       }
-      const rs = await ReplaySession.create(h, p.id);
+      const rs = await ReplaySession.create(h, p.id, p.bytes);
       rs.stampMismatches = mis;
       startReplay(rs);
       return { phase: "ready", rs };

@@ -31,7 +31,14 @@ use crate::MatchMode;
 
 /// Record file format version (`EngineStamp.format`). Bump on any change to
 /// the schema below; a file with a **newer** format is refused outright.
-pub const RECORD_VERSION: u32 = 1;
+///
+/// v2 (2026-10-08): additive commit-reveal fields -- `MatchSetup::seed256`
+/// and `RecordHeader::fair` (`docs/FAIRNESS.md`). A v1 record still loads
+/// here (both fields default to absent and the old `u64` seed keeps the
+/// legacy xoshiro stream); a v2 record is refused by a v1 engine, so an old
+/// archived bundle never mis-replays a new record. Old records replay on
+/// their own bundles either way (`docs/REPLAY.md` §9).
+pub const RECORD_VERSION: u32 = 2;
 
 /// The tick quantum. `tick_steps(k)` ticks `dt = k as f32 * STEP`, k in 1..=10,
 /// so replay recomputes the identical f32.
@@ -262,6 +269,12 @@ pub struct RecordHeader {
     /// for a record the engine itself wrote.
     #[serde(default)]
     pub gaps: bool,
+    /// Commit-reveal fairness material (`docs/FAIRNESS.md`). The `commit` is
+    /// public at match start; the openings (seed / salt / nonces) reach a
+    /// client only inside this sealed header, only after the match, only to
+    /// participants. Absent on records written before the scheme.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fair: Option<crate::fair::Fairness>,
 }
 
 impl Default for RecordHeader {
@@ -279,6 +292,7 @@ impl Default for RecordHeader {
             rounds: 0,
             total_ticks: 0,
             gaps: false,
+            fair: None,
         }
     }
 }
@@ -290,9 +304,17 @@ impl Default for RecordHeader {
 #[serde(default)]
 pub struct MatchSetup {
     pub members: Vec<RoomMember>,
+    /// Legacy u64 seed. Meaningful only when [`MatchSetup::seed256`] is
+    /// absent -- that is the xoshiro stream of a pre-fairness record.
     #[serde(with = "u64_str")]
     pub seed: u64,
     pub weights: ScoreWeights,
+    /// The derived 256-bit seed (`docs/FAIRNESS.md`). Present on every record
+    /// this build writes; absent on older ones, which then replay on the
+    /// legacy stream named by [`MatchSetup::seed`]. Serde-skipped when absent
+    /// so an old record's body `check` re-serializes byte-identically.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed256: Option<crate::rng::Seed256>,
 }
 
 impl Default for MatchSetup {
@@ -301,6 +323,7 @@ impl Default for MatchSetup {
             members: vec![],
             seed: 0,
             weights: ScoreWeights::default(),
+            seed256: None,
         }
     }
 }
@@ -456,7 +479,19 @@ pub fn compat(a: &EngineStamp, b: &EngineStamp) -> Vec<Mismatch> {
             });
         }
     }
-    num(&mut out, "format", a.format, b.format, true);
+    // `format` is one-way fatal: a record written by a **newer** schema is
+    // refused (this engine cannot read it), but an older format loads here
+    // with the newer fields defaulting to absent (`RECORD_VERSION`'s note).
+    // Comparing the other way would badge every historical record fatal the
+    // moment the format bumps.
+    if a.format > b.format {
+        out.push(Mismatch {
+            field: "format".into(),
+            want: a.format.to_string(),
+            got: b.format.to_string(),
+            fatal: true,
+        });
+    }
     num(&mut out, "save_version", a.save_version, b.save_version, false);
     num(&mut out, "abi", a.abi, b.abi, true);
     text(&mut out, "ruleset_sha256", &a.ruleset_sha256, &b.ruleset_sha256, false);
@@ -705,6 +740,10 @@ pub struct Recorder {
     pub events: Option<Vec<MatchEvent>>,
     pub origin: Origin,
     pub partial: bool,
+    /// Commit-reveal material to seal into the header at export
+    /// (`docs/FAIRNESS.md`). Set once at match creation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fair: Option<crate::fair::Fairness>,
     /// Running total of the recorded tick calls (the sum of every `Ticks.n`).
     /// Kept up to date by [`Recorder::push_ticks`] so a checkpoint is O(1);
     /// recomputed by [`Recorder::recount`] after a deserialize.
@@ -724,6 +763,7 @@ impl Default for Recorder {
             events: None,
             origin: Origin::Solo,
             partial: false,
+            fair: None,
             ticks: 0,
         }
     }
@@ -871,14 +911,17 @@ impl RecordedMatch {
         mode: MatchMode,
     ) -> Self {
         let rec = Recorder::new_seed(setup.clone());
-        let m = Match::new(
-            data,
-            rules,
-            &setup.members,
-            setup.seed,
-            mode,
-            setup.weights,
-        );
+        let m = match setup.seed256 {
+            Some(seed) => Match::new_seeded(
+                data,
+                rules,
+                &setup.members,
+                seed,
+                mode,
+                setup.weights,
+            ),
+            None => Match::new(data, rules, &setup.members, setup.seed, mode, setup.weights),
+        };
         let turn_key = turn_key(&m);
         Self {
             m,
@@ -1014,6 +1057,12 @@ impl RecordedMatch {
         &self.rec
     }
 
+    /// Attach the commit-reveal material (`docs/FAIRNESS.md`) that the export
+    /// seals into the header. Call once, before the match is played.
+    pub fn set_fair(&mut self, fair: crate::fair::Fairness) {
+        self.rec.fair = Some(fair);
+    }
+
     /// The recorder as JSON, to be stored beside `save()`.
     pub fn recorder_json(&self) -> String {
         self.rec.to_json()
@@ -1058,6 +1107,7 @@ impl RecordedMatch {
             rounds: st.round,
             total_ticks: self.rec.total_ticks(),
             gaps: false,
+            fair: self.rec.fair.clone(),
         };
         let check = body_check(&body);
         RecordFile {
@@ -1234,14 +1284,24 @@ impl Replayer {
         body: RecordBody,
     ) -> Result<Self, ReplayError> {
         let m = match &body.init {
-            Init::Seed(setup) => Match::new(
-                data.clone(),
-                rules.clone(),
-                &setup.members,
-                setup.seed,
-                header.mode,
-                setup.weights,
-            ),
+            Init::Seed(setup) => match setup.seed256 {
+                Some(seed) => Match::new_seeded(
+                    data.clone(),
+                    rules.clone(),
+                    &setup.members,
+                    seed,
+                    header.mode,
+                    setup.weights,
+                ),
+                None => Match::new(
+                    data.clone(),
+                    rules.clone(),
+                    &setup.members,
+                    setup.seed,
+                    header.mode,
+                    setup.weights,
+                ),
+            },
             Init::Snapshot { save } => Match::restore(data.clone(), rules.clone(), save)
                 .map_err(|e| ReplayError::Corrupt(e.to_string()))?,
         };

@@ -59,6 +59,7 @@ fn run_bot_game(seed: u64, n: i32, max_rounds: i32) -> game_core::record::Record
     let setup = MatchSetup {
         members,
         seed,
+        seed256: None,
         weights: ScoreWeights::default(),
     };
     let mut rm = RecordedMatch::new(data(), rules(), setup, MatchMode::Casual);
@@ -195,6 +196,7 @@ fn size_comparison_on_a_real_200_round_bot_game() {
         MatchSetup {
             members,
             seed: 0xB07,
+            seed256: None,
             weights: ScoreWeights::default(),
         },
         MatchMode::Casual,

@@ -303,6 +303,11 @@ impl Match {
     }
 
     /// `MatchHost(members, seed, mode, weights)`. At most 10 players.
+    ///
+    /// **Legacy** seeding: xoshiro256\*\* keyed by a `u64`. This is the stream
+    /// every record written before the commit-reveal switch runs on, and the
+    /// only way to rebuild one byte-identically. New matches go through
+    /// [`Match::new_seeded`] (`docs/FAIRNESS.md`).
     pub fn new(
         data: Arc<GameData>,
         rules: Arc<dyn CardRules>,
@@ -310,6 +315,60 @@ impl Match {
         seed: u64,
         mode: MatchMode,
         weights: ScoreWeights,
+    ) -> Self {
+        Self::build(
+            data,
+            rules,
+            members,
+            ((seed as i32) & 0x7FFF_FFFF) | 1,
+            mode,
+            weights,
+            Rng::new(seed),
+            Rng::new(seed ^ 0x5EED_1A7E),
+        )
+    }
+
+    /// The constructor every **new** match uses: ChaCha12 keyed by the
+    /// 256-bit derived seed of the commit-reveal scheme (`docs/FAIRNESS.md`),
+    /// with the live-cosmetics stream keyed by [`crate::fair::live_seed`].
+    pub fn new_seeded(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        members: &[RoomMember],
+        seed: crate::rng::Seed256,
+        mode: MatchMode,
+        weights: ScoreWeights,
+    ) -> Self {
+        let key = seed.0;
+        // Not seed bits: a match id travels in every public view, so it is
+        // hashed out of the derived seed (docs/FAIRNESS.md threat model).
+        let id = crate::fair::match_id(&key);
+        let live = crate::fair::live_seed(&key);
+        Self::build(
+            data,
+            rules,
+            members,
+            ((id as i32) & 0x7FFF_FFFF) | 1,
+            mode,
+            weights,
+            Rng::from_seed256(key),
+            Rng::from_seed256(live),
+        )
+    }
+
+    /// Shared body of [`Match::new`] / [`Match::new_seeded`]: `match_id` is
+    /// already derived from the caller's seed, and the two streams arrive
+    /// fully built so the seeding recipe stays in exactly one place per
+    /// algorithm.
+    fn build(
+        data: Arc<GameData>,
+        rules: Arc<dyn CardRules>,
+        members: &[RoomMember],
+        match_id: i32,
+        mode: MatchMode,
+        weights: ScoreWeights,
+        world_rng: Rng,
+        live_rng: Rng,
     ) -> Self {
         let members = &members[..members.len().min(10)];
         let w = weights.sanitized(ScoreWeights::from_rules(&data.match_rules));
@@ -329,7 +388,7 @@ impl Match {
                 names.len() == members.len()
             };
         let st = MatchState {
-            match_id: ((seed as i32) & 0x7FFF_FFFF) | 1,
+            match_id,
             phase: "order".into(),
             mode: mode as i32,
             players: members
@@ -368,8 +427,8 @@ impl Match {
         };
         let n = st.players.len();
         let mut m = Self {
-            world: World::new(st, n, seed),
-            live_rng: Rng::new(seed ^ 0x5EED_1A7E),
+            world: World::new(st, n, world_rng),
+            live_rng,
             data,
             rules,
             mode,
@@ -628,6 +687,14 @@ impl Match {
     #[doc(hidden)]
     pub fn world(&self) -> &World {
         &self.world
+    }
+
+    /// The 256-bit keys of this match's two streams (`world.rng`, `live_rng`),
+    /// when they are ChaCha streams. What `docs/FAIRNESS.md`'s verify step
+    /// compares against the derived seed; `None` on the legacy xoshiro
+    /// stream.
+    pub fn seed256s(&self) -> (Option<[u8; 32]>, Option<[u8; 32]>) {
+        (self.world.rng.seed256(), self.live_rng.seed256())
     }
 
     pub fn hand_of(&self, member: i32) -> Vec<String> {

@@ -194,15 +194,17 @@ A `.bdrec` is a **zstd-framed `RecordFile` JSON**. The codec lives in
 ### Schema
 
 ```rust
-pub const RECORD_VERSION: u32 = 1;
+pub const RECORD_VERSION: u32 = 2;   // v2: + MatchSetup.seed256, RecordHeader.fair (docs/FAIRNESS.md)
 pub const STEP: f32 = 0.05;
 pub struct RecordFile { magic: String /*"bdrec"*/, header: RecordHeader, body: RecordBody, check: String }
 pub struct EngineStamp { format: u32, save_version: u32, abi: u32, ruleset_sha256: String /*"stub"*/, data_sha256: String, engine: String, build: String, bundle: String }
 pub struct SeatInfo { member: i32, player: String, bot: bool, mentality: BotMentality, character: String, rank: i32, score: i32 }
 pub enum Origin { Solo, Online { room: String } }
 pub struct RecordHeader { engine: EngineStamp, mode: MatchMode, step: f32, origin: Origin, created: String,
-                          seats: Vec<SeatInfo>, partial: bool, ended: bool, reason: String, rounds: i32, total_ticks: u64 /*str*/ }
-pub struct MatchSetup { members: Vec<RoomMember> /*incl. mentality*/, seed: u64 /*str*/, weights: ScoreWeights }
+                          seats: Vec<SeatInfo>, partial: bool, ended: bool, reason: String, rounds: i32, total_ticks: u64 /*str*/,
+                          #[serde(default)] fair: Option<fair::Fairness> /*docs/FAIRNESS.md, additive*/ }
+pub struct MatchSetup { members: Vec<RoomMember> /*incl. mentality*/, seed: u64 /*str*/ /*legacy xoshiro*/, weights: ScoreWeights,
+                        #[serde(default)] seed256: Option<rng::Seed256> /*hex; the ChaCha key every new match uses*/ }
 pub enum Init { Seed(MatchSetup), Snapshot { save: String } }
 #[serde(tag="t")] pub enum Input { Ticks{k:u8,n:u32}, Act{m:i32,msg:NetMessage,ok:bool}, QuickStart, Finish, Left{m:i32,can_return:bool}, Back{m:i32} }
 pub struct Checkpoint { at: u32, tick: u64, round: i32, turn: i32, hash: String }
@@ -721,3 +723,29 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
   is exactly the host compile of every `pre` (`shipped_precompiled_blobs_match_host_compile`),
   and a mismatched / stale blob is a build error.
 * `crates/game-core/tests/record.rs` / `record_codec.rs` stay green.
+
+## 10. Commit-reveal fairness (2026-10-08)
+
+Every new match (online **and** solo) seeds its RNG from a 256-bit derived
+key that nobody can bias: the server commits to a secret seed before play,
+each human mixes in a nonce, and the sealed record reveals the openings
+afterwards. The scheme, the exact hash recipes, the verify action in the
+replay viewer and the threat model are in **`docs/FAIRNESS.md`**. What it
+means here:
+
+* `RecordHeader.fair` (additive, optional) carries the commitment shown at
+  start plus the openings revealed at seal time. A record without it simply
+  predates the scheme.
+* `MatchSetup.seed256` (additive, optional) is the derived key the match ran
+  on. When it is absent the record's `seed: u64` keys the **legacy
+  xoshiro256\*\*** stream (`game_core::rng::Rng`) and replays exactly as it
+  always did -- both forms coexist in one `Rng`, tagged by their JSON shape
+  (`"s"` vs `"c"`), so an old save resumes and an old record rebuilds
+  byte-identically on this engine as well as on its archived bundle.
+* `RECORD_VERSION` is 2. A v2 record is refused by a v1 engine (so an old
+  bundle never mis-replays one); a v1 record loads here, with the new fields
+  defaulting to absent. `compat` only reports `format` when the record is
+  **newer** than the engine -- an older format is the normal case.
+* The Verify action in the replay viewer runs on the engine bundle that
+  plays the record (§9) and checks the commitment opening, the derived seed,
+  the initial RNG state and the full replay (`docs/FAIRNESS.md` §2).
