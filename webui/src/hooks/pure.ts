@@ -31,10 +31,15 @@ export function isEditableTarget(t: EventTarget | null | { tagName?: string; isC
   return !!el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
 }
 
-/** Is the event going to an activatable control (a button keeps Space)? */
-export function isControlTarget(t: EventTarget | null | { tagName?: string }): boolean {
-  const el = t as { tagName?: string } | null;
-  return !!el && typeof el.tagName === "string" && /^(BUTTON|A)$/.test(el.tagName);
+/** Is the event going to an activatable control (a button keeps Space)?
+ *  A `role="button"` div counts too -- `CardFace` is one, and Enter on it
+ *  selects the card rather than confirming the prompt's choice. */
+export function isControlTarget(t: EventTarget | null | { tagName?: string; role?: string }): boolean {
+  const el = t as { tagName?: string; role?: string; getAttribute?: (n: string) => string | null } | null;
+  if (!el || typeof el.tagName !== "string") return false;
+  if (/^(BUTTON|A)$/.test(el.tagName)) return true;
+  const role = el.role ?? el.getAttribute?.("role");
+  return role === "button";
 }
 
 /** The event shape `matchHotkey` needs (a real `KeyboardEvent` fits). */
@@ -46,7 +51,7 @@ export interface HotkeyEventLike {
   repeat: boolean;
   /** True while an IME composition is in flight (those keys are not shortcuts). */
   isComposing?: boolean;
-  target: EventTarget | { tagName?: string; isContentEditable?: boolean } | null;
+  target: EventTarget | { tagName?: string; isContentEditable?: boolean; role?: string } | null;
 }
 
 /** Does `e` hit `hk`? */

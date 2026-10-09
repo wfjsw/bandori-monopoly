@@ -8,16 +8,17 @@
 import { useRef, useState } from "react";
 import { cardArt } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle, cardText, cardColor } from "../../core/data";
+import { D, cardTitle, cardText, cardColor, cardCounterReason } from "../../core/data";
 import { n0, plain } from "../../core/format";
 import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
-import { useCloseWhen } from "../../hooks/mount";
+import { useCloseWhen, useMountEffect } from "../../hooks/mount";
 import { useTimeout } from "../../hooks/timers";
+import { useHotkeys } from "../../hooks/dom";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
 import { InspectCard, showCard, TagChip } from "../../ui/Card";
-import { previewFrom, previewHide } from "../../ui/CardPreview";
+import { previewFrom, previewHide, stickCard } from "../../ui/CardPreview";
 import { bandColor } from "../../ui/Character";
 import { SkillBody } from "../../ui/SkillBody";
 import { TextInput } from "../../ui/Form";
@@ -25,7 +26,7 @@ import { openModal, useRaiseSheetOn } from "../../ui/Modal";
 import { act } from "./model";
 import s from "./Prompt.module.css";
 import { t as tr } from "../../i18n/t";
-import { fmtMsg, type Msg } from "../../i18n/msg";
+import { fmtMsg, fmtMsgParts, type Msg } from "../../i18n/msg";
 import { namesOf } from "../../core/names";
 import { toast } from "../../ui/Toast";
 import { msgCards, optionCard, returnsPickCount, returnsPickNumber, submitReturnsSelection } from "./returnsSelection";
@@ -97,6 +98,13 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
 
   const bodyCards = uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]);
+  // The prompt names a source card (the trigger a [反击] answers): the standing
+  // card panel on the right follows it, so the player sees what they are
+  // answering while they choose.
+  const standCard = bodyCards[0];
+  useMountEffect(() => {
+    if (standCard) stickCard(standCard);
+  });
 
   // One layout rule for every prompt that shows cards: a panel that is just a
   // row of card faces (the hand), or more than one related-card detail, stacks
@@ -152,7 +160,11 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
     <div className={cx(s.prompt, side && s.withSide, stacked && s.stacked)}>
       {side}
       <div className={s.main}>
-        {!returnsGroup && <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>}
+        {!returnsGroup && (
+          <div className={s.text}>
+            <MsgBody m={p.text} names={namesOf(view.state)} />
+          </div>
+        )}
         <div className={s.options}>
           {returnsGroup && <ReturnsOptions p={p} sess={sess} auto={auto} />}
           {p.kind === "tile" && <TileOptions p={p} answer={answer} names={namesOf(view.state)} auto={auto} />}
@@ -165,6 +177,40 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Prompt body text. `{{card}}` arguments render as card references that hover
+ * (the standing preview follows them) and click open the card -- the same
+ * affordance a log line's card name has. A nested message (the [反击] prompt's
+ * `detail`, "what is being answered") is interpolated the same way.
+ */
+function MsgBody({ m, names }: { m: Msg; names: Names }) {
+  const parts = fmtMsgParts(m, names);
+  return (
+    <>
+      {parts.map((p, k) =>
+        typeof p === "string" ? (
+          <span key={k}>{p}</span>
+        ) : (
+          <span
+            key={k}
+            className={s.cardRef}
+            onMouseEnter={(e) => previewFrom(e.currentTarget, p.card)}
+            onMouseLeave={previewHide}
+            onFocus={(e) => previewFrom(e.currentTarget, p.card)}
+            onBlur={previewHide}
+            onClick={() => showCard(p.card)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showCard(p.card); } }}
+            tabIndex={0}
+            role="button"
+          >
+            {p.text}
+          </span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -190,13 +236,18 @@ function OptionPill({ o, names, disabled, onAnswer }: {
 }
 
 /**
- * Every option laid out as the prompt's card row plus a pill row:
- *   * an option that names a card becomes a uniform card tile (art + the card
- *     title + the option's own caption, e.g. the player name), hover previews
- *     it, clicking the face inspects it, clicking the caption answers;
- *   * an option that names no card stays an outline pill in the row beneath.
- * Single-select only -- the multi-select grids (Returns' eight-pick) keep
- * their checkbox grid and confirm.
+ * Every option laid out as the prompt's card row plus a pill row.
+ *
+ * A **card pick** (which card to play / declare -- [反击]'s offer, `ask_card`)
+ * shows the cards alone in a scrollable tray: clicking one selects it, and a
+ * centred 确认 / 取消 row answers. The single plain option beside the cards is
+ * the decline (「不打」), relabelled 取消 and answered by the engine's fallback.
+ *
+ * A window whose option labels *are* the choice (the move-extension distance /
+ * payment method, a player pick that merely decorates its name with a card)
+ * keeps the old tiles-plus-caption-buttons shape -- the caption carries the
+ * choice's meaning. Single-select only either way; the multi-select grids
+ * (Returns' eight-pick) keep their checkbox grid and confirm.
  */
 function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
   const carded = p.options.flatMap((o, i) => {
@@ -204,6 +255,8 @@ function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; a
     return id ? [{ o, i, id }] : [];
   });
   const plain = p.options.flatMap((o, i) => (msgCards(o).length ? [] : [{ o, i }]));
+  const pick = carded.length > 0 && !isLabeledChoice(p) && carded.every(({ o }) => isCardPickOption(o));
+  if (pick) return <CardPick p={p} carded={carded} answer={answer} auto={auto} />;
   return (
     <>
       {carded.length > 0 && (
@@ -240,6 +293,88 @@ function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; a
       {plain.map(({ o, i }) => (
         <OptionPill key={i} o={o} names={names} disabled={auto} onAnswer={() => void answer({ value: i })} />
       ))}
+    </>
+  );
+}
+
+/** Is this window's option label the choice itself (distance / payment method /
+ *  a player name with a card decoration) rather than "play this card"? */
+function isLabeledChoice(p: MatchPrompt): boolean {
+  return p.text.k === "ask.counteract.move_extension" || p.text.k === "ask.counteract.move_extension_payment";
+}
+
+/** `ask.cardOption` / `ask.counteract.play` name only their card; the paid
+ *  skill variant adds the fire cost but is still "play this card". */
+function isCardPickOption(o: Msg): boolean {
+  return optionCard(o) !== null || o.k === "ask.counteract.skill";
+}
+
+/** The select-then-confirm card row: a tray of tiles, then 确认 / 取消. */
+function CardPick({ p, carded, answer, auto }: {
+  p: MatchPrompt;
+  carded: { o: Msg; i: number; id: string }[];
+  answer: Answer;
+  auto: boolean;
+}) {
+  // One offered card starts selected -- the common [反击] case is a single
+  // counter in hand, and 取消 is always there for the player who meant "no".
+  // Clicking a card selects it; clicking the selected card again clears the
+  // selection (and disables 确认).
+  const [picked, setPicked] = useState<number | null>(() => (carded.length === 1 ? carded[0].i : null));
+  // The hovered card's reason shows in place of the selected one's (the
+  // standing preview follows the same card).
+  const [hover, setHover] = useState<number | null>(null);
+  const focus = hover ?? picked;
+  const focusId = focus === null ? null : (carded.find((c) => c.i === focus)?.id ?? null);
+  const reason = focusId ? cardCounterReason(focusId) : "";
+  // Enter confirms. Esc stays the sheet's retract -- ModalHost owns it and a
+  // prompt never dismisses on Esc. `onControl: false` keeps Enter on a focused
+  // card face for selecting that card.
+  useHotkeys([{ key: "Enter", once: true, onControl: false, run: () => {
+    if (!auto && picked !== null) void answer({ value: picked });
+  } }]);
+  // The decline is the plain option beside the cards -- [反击]'s 「不打」, the
+  // engine's timeout fallback. A window with no plain option (ask_card) has
+  // nothing to cancel to.
+  const fallback = p.options[p.fallback];
+  const cancelAt = fallback && msgCards(fallback).length === 0 ? p.fallback : null;
+  return (
+    <>
+      <p className={s.sub}>{tr("prompt.pickOne")}</p>
+      <div className={s.cardTray}>
+        {carded.map(({ i, id }) => (
+          <InspectCard
+            key={i}
+            id={id}
+            size="tile"
+            className={s.choiceCard}
+            on={picked === i}
+            onClick={() => setPicked(picked === i ? null : i)}
+            onHover={(h) => setHover(h === null ? null : i)}
+          />
+        ))}
+      </div>
+      {reason && focusId && (
+        <div className={s.reason}>
+          <b>{cardTitle(focusId)}</b>
+          {tr("prompt.counterReason", { reason })}
+        </div>
+      )}
+      <div className={s.confirmRow}>
+        <button
+          type="button"
+          className={cx(s.opt, s.optMain)}
+          disabled={auto || picked === null}
+          onClick={() => picked !== null && void answer({ value: picked })}
+        >
+          {tr("common.confirm")}
+        </button>
+        {cancelAt !== null && (
+          <button type="button" className={s.opt} disabled={auto} onClick={() => void answer({ value: cancelAt })}>
+            {tr("common.cancel")}
+          </button>
+        )}
+      </div>
     </>
   );
 }

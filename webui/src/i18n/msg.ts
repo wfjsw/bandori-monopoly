@@ -65,24 +65,15 @@ const CARD_OPEN = String.fromCharCode(0xe000);
 const CARD_CLOSE = String.fromCharCode(0xe001);
 
 /** [`fmtMsg`], but `{{card}}` arguments come back as card references instead of
- *  being folded into the string -- the log can then render them hoverable. */
+ *  being folded into the string -- the log and the prompt body can then render
+ *  them hoverable. Cards named inside a nested `msg` / `list` argument (the
+ *  [反击] prompt's `detail`) come back the same way. */
 export function fmtMsgParts(m: Msg | string | undefined | null, names: Names = dataNames): LogPart[] {
   if (m === undefined || m === null) return [];
   if (typeof m === "string") return m ? [m] : [];
   if (!isMsg(m)) return [];
-  const args: Record<string, unknown> = {};
   const cards: { card: string; text: string }[] = [];
-  for (const [name, arg] of Object.entries(m.a ?? {})) {
-    if (arg && typeof arg === "object" && "card" in arg) {
-      const card = (arg as { card: string }).card;
-      args[name] = `${CARD_OPEN}${cards.length}${CARD_CLOSE}`;
-      cards.push({ card, text: names.card(card) });
-    } else {
-      args[name] = fmtArg(arg, names);
-    }
-  }
-  const ns = m.k.includes(":") ? undefined : "game";
-  const s = i18n.t(m.k, { ...args, ns, defaultValue: m.k }) as string;
+  const s = fmtMsgMarkers(m, names, cards);
   const parts: LogPart[] = [];
   const re = new RegExp(`${CARD_OPEN}(\\d+)${CARD_CLOSE}`, "g");
   let last = 0;
@@ -95,6 +86,28 @@ export function fmtMsgParts(m: Msg | string | undefined | null, names: Names = d
   }
   if (last < s.length) parts.push(s.slice(last));
   return parts;
+}
+
+/** Like [`fmtMsg`], but each `card` argument becomes a marker into `cards`. */
+function fmtMsgMarkers(m: Msg, names: Names, cards: { card: string; text: string }[]): string {
+  const args: Record<string, unknown> = {};
+  for (const [name, arg] of Object.entries(m.a ?? {})) args[name] = fmtArgMarkers(arg, names, cards);
+  const ns = m.k.includes(":") ? undefined : "game";
+  return i18n.t(m.k, { ...args, ns, defaultValue: m.k }) as string;
+}
+
+function fmtArgMarkers(arg: MsgArg, names: Names, cards: { card: string; text: string }[]): string {
+  if (arg === null || arg === undefined) return "";
+  if (typeof arg === "number") return String(arg);
+  if (typeof arg === "string") return arg;
+  if ("card" in arg) {
+    const card = arg.card;
+    cards.push({ card, text: names.card(card) });
+    return `${CARD_OPEN}${cards.length - 1}${CARD_CLOSE}`;
+  }
+  if ("msg" in arg) return fmtMsgMarkers(arg.msg, names, cards);
+  if ("list" in arg) return arg.list.map((x) => fmtArgMarkers(x, names, cards)).join(listSep());
+  return fmtArg(arg, names);
 }
 
 /** The plain text of [`fmtMsgParts`] -- what the line says without its markup. */

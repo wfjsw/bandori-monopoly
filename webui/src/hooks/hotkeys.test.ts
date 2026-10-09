@@ -49,6 +49,14 @@ test("Space leaves a focused button its click", () => {
   assert.equal(matchHotkey(hk({ key: "ArrowLeft" }), ev({ key: "ArrowLeft", target: button })), true);
 });
 
+test("a role=button div is a control too (CardFace keeps Enter)", () => {
+  const card = { tagName: "DIV", role: "button", isContentEditable: false };
+  assert.equal(matchHotkey(hk({ onControl: false }), ev({ target: card })), false, "Enter is handed to the card face");
+  assert.equal(matchHotkey(hk({ onControl: false }), ev({ key: "Enter", target: card })), false);
+  const plain = fakeEl("DIV");
+  assert.equal(matchHotkey(hk({ key: "Enter", onControl: false }), ev({ key: "Enter", target: plain })), true, "a bare div still takes it");
+});
+
 test("held-key repeat is ignored only when the binding says once", () => {
   assert.equal(matchHotkey(hk({ key: "ArrowLeft" }), ev({ key: "ArrowLeft", repeat: true })), true, "arrows want the repeat");
   assert.equal(matchHotkey(hk({ key: "h", once: true }), ev({ key: "h", repeat: true })), false);
