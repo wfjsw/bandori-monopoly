@@ -2,7 +2,7 @@
 //! shared mutable state between them. See `lib.rs` for the protocol.
 //!
 //! ```json
-//! {"id":1,"op":"new","members":[...],"seed":42,"mode":0,"weights":{...}}
+//! {"id":1,"op":"new","members":[...],"seed256":"<hex64>","mode":0,"weights":{...}}
 //! {"id":2,"op":"act","state":"...","member":1,"cmd":{...}}
 //! ```
 //!

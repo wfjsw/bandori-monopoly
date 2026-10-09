@@ -57,6 +57,8 @@ export const api = {
     call<RoomInfo>("POST", `/api/rooms/${id}/bots`, { op, member, mentality }),
   weights: (id: string, w: ScoreWeights) => call<RoomInfo>("POST", `/api/rooms/${id}/weights`, w),
   start: (id: string, force: boolean) => call<RoomInfo>("POST", `/api/rooms/${id}/start`, { force }),
+  /** This seat's commit-reveal nonce (32 random bytes, hex) -- `docs/FAIRNESS.md`. */
+  nonce: (id: string, nonce: string) => call<RoomInfo>("POST", `/api/rooms/${id}/nonce`, { nonce }),
   leave: (id: string) => call<unknown>("POST", `/api/rooms/${id}/leave`, {}),
   roomState: (id: string) => call<{ room: RoomInfo; you: number; game: MatchView | null }>("GET", `/api/rooms/${id}/state`),
   act: (id: string, cmd: Command) => call<unknown>("POST", `/api/rooms/${id}/act`, cmd),

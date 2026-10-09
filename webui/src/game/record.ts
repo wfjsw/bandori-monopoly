@@ -33,6 +33,21 @@ export interface SeatInfo {
   score: number;
 }
 
+/** Commit-reveal openings sealed into the header (`docs/FAIRNESS.md`). */
+export interface Fairness {
+  v: number;
+  /** The commitment shown at match start (hex). */
+  commit: string;
+  /** Server secret 256-bit seed (hex), revealed after the match. */
+  seed: string;
+  /** Server secret 256-bit salt (hex). */
+  salt: string;
+  /** Human player nonces, ascending member id. */
+  nonces: { member: number; nonce: string }[];
+  /** Canonical room settings string the commitment hashed. */
+  settings: string;
+}
+
 /** `RecordHeader`. `total_ticks` travels as a JSON string (u64). */
 export interface RecordHeader {
   engine: EngineStamp;
@@ -48,6 +63,23 @@ export interface RecordHeader {
   total_ticks: string;
   /** Server-side recording lost buffered ticks (a restart mid-match). */
   gaps?: boolean;
+  /** Commit-reveal material (absent on records from before the scheme). */
+  fair?: Fairness;
+}
+
+/** One checked step of the fairness verify (`docs/FAIRNESS.md`). */
+export interface VerifyStep {
+  step: string;
+  ok: boolean;
+  note: string;
+}
+
+/** What `verify_fair` reported about one record. */
+export interface VerifyReport {
+  ok: boolean;
+  /** False when the record carries no fairness material (pre-scheme). */
+  present: boolean;
+  steps: VerifyStep[];
 }
 
 /** One field of `EngineStamp` that differs between record and engine. */

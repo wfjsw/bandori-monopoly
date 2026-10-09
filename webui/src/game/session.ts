@@ -500,11 +500,15 @@ export class SoloSession extends GameSession {
       seat(1, player, chars[0], false, "standard"),
       ...bots.map((b, i) => seat(i + 2, b.name, chars[i + 1], true, b.mentality)),
     ];
-    const seed = Math.floor(Math.random() * 0xffffffff);
+    // Commit-reveal runs inside the solo engine worker (`soloWorker.ts`,
+    // `docs/FAIRNESS.md` "solo"): the same recipe an online match runs, so the
+    // exported record carries the openings and verifies. Solo proves little --
+    // the player is both committer and contributor -- so the UI does not show
+    // the commitment.
     const engine = new SoloEngine();
     return new SoloSession(engine, weights, async () => {
       await engine.boot();
-      await engine.start({ members, seed, mode: 0, weights, you: 1 });
+      await engine.start({ members, mode: 0, weights, you: 1 });
       engine.setVisibility(document.hidden);
     });
   }

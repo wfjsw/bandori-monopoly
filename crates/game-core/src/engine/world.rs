@@ -441,11 +441,14 @@ pub struct World {
 }
 
 impl World {
-    pub fn new(st: MatchState, players: usize, seed: u64) -> Self {
+    /// Assemble a world around an already-built [`Rng`]: which stream the
+    /// match runs on is the caller's choice (`Match::new` legacy xoshiro vs
+    /// `Match::new_seeded` ChaCha12, `docs/FAIRNESS.md`).
+    pub fn new(st: MatchState, players: usize, rng: Rng) -> Self {
         Self {
             st,
             hidden: vec![Hidden::default(); players],
-            rng: Rng::new(seed),
+            rng,
             next_event: 1,
             recent: EventTail::default(),
             turn: TurnCtx::default(),
@@ -529,6 +532,30 @@ impl World {
             self.recent.drain_front(drop);
         }
         self.recent.back_mut().expect("just pushed")
+    }
+
+    /// A card's effect activated -- or was negated before its body could run.
+    /// One `"card"` event carries both the log line and the client's card flash:
+    /// `kind` is the trigger kind ([`crate::state::card_trigger`]), `owner` the
+    /// card's player, `target` the affected player and `tile` where it fired
+    /// (`-1` when not applicable). `msg` names the card via [`Msg::card`].
+    pub fn card_activation(
+        &mut self,
+        kind: &str,
+        owner: i32,
+        card: &str,
+        target: i32,
+        tile: i32,
+        negated: bool,
+        msg: Msg,
+    ) -> &mut MatchEvent {
+        let e = self.log("card", owner, msg);
+        e.card = card.to_string();
+        e.other = target;
+        e.value = tile;
+        e.kind = kind.to_string();
+        e.negated = negated;
+        e
     }
 
     pub fn player_count(&self) -> usize {

@@ -32,13 +32,24 @@ fn ev(name: &str) -> String {
     format!("cards:fixture-test-cards.{name}")
 }
 
+/// The outcome line a log event speaks as: itself, or the `what` inside an
+/// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
+fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
+    if msg.key() == "log.card_effect" {
+        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+            return m;
+        }
+    }
+    msg
+}
+
 /// Fixture events with this name, oldest first.
 fn events(t: &Table, name: &str) -> Vec<MatchEvent> {
     let full = ev(name);
     t.st()
         .events
         .iter()
-        .filter(|e| e.msg.key() == full)
+        .filter(|e| unadorned(&e.msg).key() == full)
         .cloned()
         .collect()
 }
@@ -47,7 +58,7 @@ fn events(t: &Table, name: &str) -> Vec<MatchEvent> {
 fn ev_args(t: &Table, name: &str, arg: &str) -> Vec<i64> {
     events(t, name)
         .iter()
-        .map(|e| int_arg(&e.msg, arg).unwrap_or(-1))
+        .map(|e| int_arg(unadorned(&e.msg), arg).unwrap_or(-1))
         .collect()
 }
 
@@ -55,7 +66,7 @@ fn ev_args(t: &Table, name: &str, arg: &str) -> Vec<i64> {
 fn who_of(t: &Table, name: &str) -> Vec<i64> {
     events(t, name)
         .iter()
-        .map(|e| match e.msg.a.get("who") {
+        .map(|e| match unadorned(&e.msg).a.get("who") {
             Some(Arg::PlayerId(v)) => *v as i64,
             Some(Arg::I(v)) | Some(Arg::N(v)) => *v,
             other => panic!("who is not a player arg: {other:?}"),

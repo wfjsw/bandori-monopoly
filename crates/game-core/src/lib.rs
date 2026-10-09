@@ -11,6 +11,7 @@ pub mod data;
 pub mod deck;
 pub mod deck_book;
 pub mod engine;
+pub mod fair;
 pub mod msg;
 pub mod net;
 pub mod profile;

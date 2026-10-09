@@ -208,7 +208,6 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
 
         "new" => {
             let members: Vec<RoomMember> = parse(req, "members")?;
-            let seed = req.get("seed").and_then(Value::as_u64).unwrap_or(1);
             let mode = req.get("mode").and_then(Value::as_i64).unwrap_or(0) as i32;
             let weights: ScoreWeights = match req.get("weights") {
                 None | Some(Value::Null) => ScoreWeights::default(),
@@ -216,14 +215,34 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     serde_json::from_value(w.clone()).map_err(|e| format!("weights: {e}"))?
                 }
             };
-            let m = Match::new(
-                ctx.data.clone(),
-                ctx.rules.clone(),
-                &members,
-                seed,
-                MatchMode::from_i32(mode).unwrap_or_default(),
-                weights,
-            );
+            // Prefer the derived 256-bit seed (every new match,
+            // `docs/FAIRNESS.md`); a bare u64 `seed` is the legacy path, kept
+            // for pre-fairness callers and tests only.
+            let m = match req.get("seed256").and_then(Value::as_str) {
+                Some(hex) => {
+                    let key = game_core::fair::unhex32(hex)
+                        .map_err(|e| format!("seed256: {e}"))?;
+                    Match::new_seeded(
+                        ctx.data.clone(),
+                        ctx.rules.clone(),
+                        &members,
+                        game_core::rng::Seed256(key),
+                        MatchMode::from_i32(mode).unwrap_or_default(),
+                        weights,
+                    )
+                }
+                None => {
+                    let seed = req.get("seed").and_then(Value::as_u64).unwrap_or(1);
+                    Match::new(
+                        ctx.data.clone(),
+                        ctx.rules.clone(),
+                        &members,
+                        seed,
+                        MatchMode::from_i32(mode).unwrap_or_default(),
+                        weights,
+                    )
+                }
+            };
             Ok(json!({"ok": true, "state": m.save()}))
         }
 

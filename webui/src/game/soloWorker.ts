@@ -20,7 +20,7 @@ import init, * as glue from "../wasm/glue";
 import engineId from "../wasm/engine_id.json";
 import { loadRulesetInto } from "../core/rulesetLoad.ts";
 import type { MatchEvent, MatchView, Command } from "../core/types.ts";
-import { tickQuanta, type EngineBoot, type SaveSnap, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
+import { tickQuanta, TICK_STEP, type EngineBoot, type SaveSnap, type SoloOpen, type SoloPush, type SoloRestore } from "./soloProtocol.ts";
 
 /** The worker global (tsconfig has no WebWorker lib; only these are used). */
 const ctx = self as unknown as {
@@ -250,12 +250,47 @@ function requireMatch(): Match {
   return match;
 }
 
+/** Draw the solo openings and derive the match seed (`docs/FAIRNESS.md`).
+ *  Same recipe the server runs online; the openings ride in the exported
+ *  record (`set_fair`) so a viewer can verify. */
+function soloFair(
+  members: SoloOpen["members"],
+  mode: number,
+  weights: SoloOpen["weights"],
+  human: number,
+): { derived: string; open: Record<string, unknown> } {
+  const rand32 = () => crypto.getRandomValues(new Uint8Array(32));
+  const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  const seed = hex(rand32());
+  const salt = hex(rand32());
+  const nonce = hex(rand32());
+  const stamp = JSON.parse(glue.engine_stamp()) as { bundle?: string; ruleset_sha256?: string };
+  const settings = glue.fair_canon_settings(mode, TICK_STEP, JSON.stringify(weights), JSON.stringify(members));
+  const commit = glue.fair_commit(seed, salt, stamp.bundle ?? "", stamp.ruleset_sha256 ?? "", settings);
+  // One human seat; bots contribute none.
+  const derived = glue.fair_derive_seed(seed, JSON.stringify([{ member: human, nonce }]));
+  return {
+    derived,
+    open: { v: 1, commit, seed, salt, nonces: [{ member: human, nonce }], settings },
+  };
+}
+
 function call(op: string, rest: Record<string, unknown>): unknown {
   switch (op) {
     case "start": {
       const s = rest as unknown as SoloOpen;
       you = s.you;
-      openMatch(new glue.SoloMatch(JSON.stringify(s.members), s.seed, s.mode, JSON.stringify(s.weights)), 0);
+      // Commit-reveal, locally (`docs/FAIRNESS.md` "solo"): the same recipe an
+      // online match runs, so the exported record carries the openings and
+      // verifies. Solo proves little -- the player is both committer and
+      // contributor -- so the UI does not show the commitment. `seed256` is a
+      // test seam that pins the derived stream and skips the openings.
+      const fair = s.seed256
+        ? { derived: s.seed256, open: null }
+        : soloFair(s.members, s.mode, s.weights, s.you);
+      const m = new glue.SoloMatch(JSON.stringify(s.members), fair.derived, s.mode, JSON.stringify(s.weights));
+      if (fair.open) m.set_fair(JSON.stringify(fair.open));
+      openMatch(m, 0);
       return true;
     }
     case "restore": {

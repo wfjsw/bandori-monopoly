@@ -61,6 +61,10 @@ export interface ReplayHandle {
   totalTicks(): Promise<number>;
   status(): Promise<ReplayStatus>;
   index(budget: number): Promise<IndexStatus>;
+  /** The commit-reveal fairness check (`docs/FAIRNESS.md`), run by this
+   *  handle's engine -- the bundle that wrote the record. Returns the
+   *  `VerifyReport` JSON. */
+  verifyFair(bytes: Uint8Array): Promise<string>;
   free(): Promise<void>;
 }
 
@@ -161,6 +165,21 @@ export class PageReplayHandle implements ReplayHandle {
   }
   index(budget: number): Promise<IndexStatus> {
     return Promise.resolve(JSON.parse(this.m.index(budget)) as IndexStatus);
+  }
+  verifyFair(bytes: Uint8Array): Promise<string> {
+    // The page's own glue. `verify_fair` arrived with the fairness scheme;
+    // older builds do not have it.
+    const f = (rules as unknown as { verify_fair?: (b: Uint8Array) => string }).verify_fair;
+    if (typeof f !== "function") {
+      return Promise.resolve(
+        JSON.stringify({
+          ok: false,
+          present: false,
+          steps: [{ step: "commit", ok: false, note: "engine predates fairness verification" }],
+        }),
+      );
+    }
+    return Promise.resolve(rules.verify_fair(bytes));
   }
   free(): Promise<void> {
     if (!this.done) {
@@ -313,6 +332,9 @@ export class WorkerReplayHandle implements ReplayHandle {
   }
   index(budget: number): Promise<IndexStatus> {
     return this.call("index", budget);
+  }
+  verifyFair(bytes: Uint8Array): Promise<string> {
+    return this.rpc("verify", { bytes });
   }
   async free(): Promise<void> {
     if (this.done) return;

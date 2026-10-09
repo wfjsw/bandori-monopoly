@@ -153,6 +153,16 @@ export function cardTitle(id: string): string {
   // bands.json / characters.json. Match the engine's skill:<owner>:<skill> id.
   const skill = skillCard(id);
   if (skill) return skill.title;
+  // An event's activation names it as `event:<id>` (the rule id) or as the
+  // bare `data/events.json` id the draw event carries -- both resolve here.
+  const ev = D.event(id.startsWith("event:") ? id.slice(6) : id)?.name;
+  if (ev) return ev;
+  // A tile rule instance (`tile:circle`) is named after the board tile of that
+  // kind; a mark owner (`mark:cp`) is named after its id.
+  if (id.startsWith("tile:")) {
+    const t = D.tiles.find((x) => x.kind === id.slice(5));
+    if (t) return t.name.replace(/\n/g, "");
+  }
   return tr("common.unnamed");
 }
 

@@ -57,6 +57,7 @@ fn stamp() -> EngineStamp {
 fn setup(members: Vec<RoomMember>, seed: u64) -> MatchSetup {
     MatchSetup {
         members,
+        seed256: None,
         seed,
         weights: ScoreWeights::default(),
     }
@@ -684,6 +685,7 @@ fn u64_and_f32_values_are_bit_exact() {
     let setup = MatchSetup {
         members: vec![member(1, true, BotMentality::Standard)],
         seed: 1,
+        seed256: None,
         weights: w,
     };
     let body = game_core::record::RecordBody {

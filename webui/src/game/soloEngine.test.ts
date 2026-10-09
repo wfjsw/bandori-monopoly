@@ -93,14 +93,14 @@ test("start / restore carry the open spec the worker builds the match from", asy
   await engine.boot();
   await engine.start({
     members: [{ id: 1, player: "P", character: "美竹兰", cnId: "", ready: true, host: true, bot: false, away: false, mentality: "standard" }],
-    seed: 7,
     mode: 0,
     weights: { exp: 1 },
     you: 1,
+    seed256: "a".repeat(64),
   });
   await engine.restore({ save: '{"v":1}', rec: '{"log":[]}', last: 12, you: 1 });
   assert.equal(specs[1].op, "start");
-  assert.equal(specs[1].seed, 7);
+  assert.equal(specs[1].seed256, "a".repeat(64));
   assert.equal(specs[1].you, 1);
   assert.equal((specs[1].members as unknown[]).length, 1);
   assert.equal(specs[2].op, "restore");

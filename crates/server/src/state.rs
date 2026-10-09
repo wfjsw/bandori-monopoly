@@ -139,6 +139,14 @@ impl Server {
     }
 }
 
+/// 32 random bytes -- the server's secret commit-reveal seed / salt
+/// (`docs/FAIRNESS.md`).
+pub fn random_32() -> [u8; 32] {
+    let mut buf = [0u8; 32];
+    getrandom::fill(&mut buf).expect("OS randomness");
+    buf
+}
+
 /// `n` random bytes as lower-case hex.
 pub fn random_hex(n: usize) -> String {
     let mut buf = vec![0u8; n];

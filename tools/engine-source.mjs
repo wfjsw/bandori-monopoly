@@ -172,7 +172,7 @@ export function makeReferenceRecord(g, seed = 7) {
     { id: 1, player: "P1", bot: true },
     { id: 2, player: "P2", bot: true },
   ];
-  const m = new g.SoloMatch(JSON.stringify(members), seed, 1, "");
+  const m = new g.SoloMatch(JSON.stringify(members), seedHex(seed), 1, "");
   try {
     m.quick_start();
     for (let i = 0; i < 400; i++) {
@@ -234,6 +234,10 @@ export function verifyReferenceRecord(g, bytes, force = true) {
  * `glueDir` has glue.js + glue_bg.wasm; `dataDir` has the tables; `rules` is
  * optional `{index, modulesDir}`.
  */
+/** `SoloMatch::new` wants the 256-bit seed as hex (`docs/FAIRNESS.md`); tools
+ *  just need a deterministic one. */
+const seedHex = (n) => (n >>> 0).toString(16).padStart(64, "0");
+
 export async function loadGlue({ glueDir, dataDir, rules, glueSha, tag }) {
   const { pathToFileURL } = await import("node:url");
   const g = await import(pathToFileURL(join(glueDir, "glue.js")).href + `?${tag ?? Math.random().toString(36).slice(2)}`);

@@ -215,7 +215,7 @@ fn a_played_card_runs_its_module_and_answers_a_prompt() {
     assert!(
         st.events
             .iter()
-            .any(|e| e.msg.key() == "cards:card-hhw.hagumi_marks_placed"),
+            .any(|e| unadorned(&e.msg).key() == "cards:card-hhw.hagumi_marks_placed"),
         "mark message logged: {:?}",
         st.events.iter().map(|e| e.msg.key()).collect::<Vec<_>>()
     );
@@ -360,6 +360,17 @@ fn ported_official_cards_run_in_a_match() {
     );
 }
 
+/// The outcome line a log event speaks as: itself, or the `what` inside an
+/// in-play card's attribution (「<卡名> 的效果：<what>」, `log.card_effect`).
+fn unadorned(msg: &game_core::msg::Msg) -> &game_core::msg::Msg {
+    if msg.key() == "log.card_effect" {
+        if let Some(Arg::Msg(m)) = msg.a.get("what") {
+            return m;
+        }
+    }
+    msg
+}
+
 /// Logged events with this fixture key, newest last.
 fn fixture_events<'a>(
     st: &'a game_core::state::MatchState,
@@ -368,8 +379,10 @@ fn fixture_events<'a>(
     let full = format!("cards:fixture-test-cards.{key}");
     st.events
         .iter()
-        .filter(|e| e.msg.key() == full)
-        .map(|e| &e.msg)
+        .filter_map(|e| {
+            let m = unadorned(&e.msg);
+            (m.key() == full).then_some(m)
+        })
         .collect()
 }
 

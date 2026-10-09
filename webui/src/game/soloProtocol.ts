@@ -67,12 +67,15 @@ export interface WorkerReply {
 
 export interface SoloOpen {
   members: RoomMember[];
-  seed: number;
   /** `MatchMode` as the engine's i32 (0 solo). */
   mode: number;
   weights: ScoreWeights;
   /** The human's seat id (the frame the board renders). */
   you: number;
+  /** Optional pre-derived 256-bit match seed (hex) for tests that want a
+   *  pinned stream. Absent in production: the worker runs the commit-reveal
+   *  recipe locally and derives one (`docs/FAIRNESS.md` "solo"). */
+  seed256?: string;
 }
 
 export interface SoloRestore {

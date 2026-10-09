@@ -83,6 +83,12 @@ export interface MatchVote { id: number; by: number; players: number[]; answers:
 export interface MatchEvent {
   id: number; type: string; playerId: number; other: number; value: number;
   from: number; to: number; dice: number; card: string; msg: Msg;
+  /** A `card` activation's trigger kind: play | skill | event | counter | hook.
+   *  Empty on every other event type (serde-defaulted on the wire). */
+  kind?: string;
+  /** A `card` activation a counteraction negated: the card still flashes,
+   *  marked 无效, but its body did not run. */
+  negated?: boolean;
 }
 /** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */
@@ -162,6 +168,19 @@ export interface RoomMember {
 export interface RoomInfo {
   id: string; name: string; ranked: boolean; maxPlayers: number; locked: boolean;
   playing: boolean; theme: string; weights: ScoreWeights; members: RoomMember[];
+  /** Commit-reveal fairness (`docs/FAIRNESS.md`): the commitment is public
+   *  from the moment the room starts; the openings never travel here. */
+  fair?: FairPublic;
+}
+
+/** What a client may see of the commit-reveal state during the match. */
+export interface FairPublic {
+  /** SHA-256 commitment (hex), copyable in the match UI. */
+  commit: string;
+  /** Canonical room settings string the commitment hashed. */
+  settings: string;
+  /** True while the player-nonce window is still open. */
+  collecting: boolean;
 }
 
 /** A match command (NetMessage); only the fields a command uses matter. */

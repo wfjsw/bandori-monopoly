@@ -9,7 +9,7 @@
 // dynamically imports `<bundle>/glue.js` at runtime, which no bundler should
 // rewrite. The message contract is mirrored by `webui/src/game/replayEngine.ts`.
 //
-// Messages in  ({id, op, ...}):  init | init-embedded | open | call | free | close
+// Messages in  ({id, op, ...}):  init | init-embedded | open | verify | call | free | close
 // Messages out ({id, ok, value} | {id, ok:false, error})
 //
 // `init-embedded` boots a **portable** record's own engine (`docs/REPLAY.md`
@@ -92,6 +92,24 @@ function open(bytes, force) {
   match?.free?.();
   match = glue.ReplayMatch.from_record_bytes(bytes, force);
   return true;
+}
+
+/**
+ * The fairness check (`docs/FAIRNESS.md`): run `verify_fair` in **this**
+ * bundle's engine, so the re-run uses the engine that wrote the record.
+ * Bundles from before the scheme cannot verify; say so instead of failing
+ * mysteriously.
+ */
+function verify(bytes) {
+  if (!glue) throw new Error("init first");
+  if (typeof glue.verify_fair !== "function") {
+    return JSON.stringify({
+      ok: false,
+      present: false,
+      steps: [{ step: "commit", ok: false, note: "engine predates fairness verification" }],
+    });
+  }
+  return glue.verify_fair(bytes);
 }
 
 /** Replace the globals an untrusted engine could otherwise reach with stubs
@@ -179,6 +197,7 @@ self.onmessage = async (e) => {
     else if (op === "init-embedded") {
       value = await initEmbedded(rest);
     } else if (op === "open") value = open(rest.bytes, !!rest.force);
+    else if (op === "verify") value = verify(rest.bytes);
     else if (op === "call") {
       if (!CALLS.has(rest.method)) throw new Error(`unknown call ${rest.method}`);
       value = call(rest.method, rest.args ?? []);

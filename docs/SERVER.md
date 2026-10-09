@@ -235,7 +235,8 @@ works, for tools.
 | POST | `/api/rooms/{id}/ready` | `{on}` | `RoomInfo` |
 | POST | `/api/rooms/{id}/bots` | `{op: "add" \| "remove", member?, mentality?}` | `RoomInfo` (host) |
 | POST | `/api/rooms/{id}/weights` | `{money, property, houses}` | `RoomInfo` (host) |
-| POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host) |
+| POST | `/api/rooms/{id}/start` | `{force}` | `RoomInfo` (host) -- publishes the fairness `commit` and opens the nonce window (`docs/FAIRNESS.md`) |
+| POST | `/api/rooms/{id}/nonce` | `{nonce}` (32 bytes hex) | `RoomInfo` -- this human's entropy contribution; a missing nonce is simply absent |
 | POST | `/api/rooms/{id}/leave` | | `{ok}` |
 | GET  | `/api/rooms/{id}/state` | | `{room, you, match}` |
 | POST | `/api/rooms/{id}/act` | `NetMessage` | `{ok}` |

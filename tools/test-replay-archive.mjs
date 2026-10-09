@@ -67,7 +67,7 @@ function recordSomeGame(g, seed) {
     { id: 1, player: "P1", bot: true },
     { id: 2, player: "P2", bot: true },
   ];
-  const m = new g.SoloMatch(JSON.stringify(members), seed, 1, "");
+  const m = new g.SoloMatch(JSON.stringify(members), seedHex(seed), 1, "");
   try {
     m.quick_start();
     for (let i = 0; i < 400; i++) {
@@ -79,6 +79,10 @@ function recordSomeGame(g, seed) {
     m.free();
   }
 }
+
+/** `SoloMatch::new` wants the 256-bit seed as hex (`docs/FAIRNESS.md`); tools
+ *  just need a deterministic one. */
+const seedHex = (n) => (n >>> 0).toString(16).padStart(64, "0");
 
 function recordJson(bytes) {
   return JSON.parse(zstdDecompressSync(bytes).toString("utf8"));

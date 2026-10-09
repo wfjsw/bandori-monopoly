@@ -21,6 +21,7 @@ import { Btn } from "../../ui/Button";
 import { ReplayBar } from "./ReplayBar";
 import s from "./Replay.module.css";
 import { t as tr } from "../../i18n/t";
+import type { VerifyReport } from "../../game/record";
 import { bindConsoleSession } from "../../console/context";
 
 export function ReplayPlayer() {
@@ -72,6 +73,24 @@ export function ReplayPlayer() {
 function PlayerLive({ rs }: { rs: ReplaySession }) {
   useEffect(() => bindConsoleSession(rs), [rs, bindConsoleSession]);
   useSessionOther(rs);
+  // The fairness check (`docs/FAIRNESS.md`): recompute the commitment, derive
+  // the match seed and re-run the record on this very engine.
+  const [verify, setVerify] = useState<{ run: true } | { run: false; rep: VerifyReport } | null>(null);
+  const runVerify = () => {
+    setVerify({ run: true });
+    rs.verifyFair()
+      .then((json) => setVerify({ run: false, rep: JSON.parse(json) as VerifyReport }))
+      .catch((e) =>
+        setVerify({
+          run: false,
+          rep: {
+            ok: false,
+            present: true,
+            steps: [{ step: "commit", ok: false, note: String(e?.message ?? e) }],
+          },
+        }),
+      );
+  };
   // The replay runs on the bundle that wrote it, so a checkpoint mismatch is
   // engine drift in the record itself -- not "this is a different build".
   const stampNote = rs.stampMismatches.length
@@ -101,6 +120,36 @@ function PlayerLive({ rs }: { rs: ReplaySession }) {
             <Btn size="small" kind="pink" onClick={() => rs.ackDivergence(true)}>{tr("replay.divergedContinue")}</Btn>
             <Btn size="small" onClick={() => rs.ackDivergence(false)}>{tr("replay.divergedStop")}</Btn>
           </div>
+        </div>
+      )}
+      {verify && (
+        <div className={cx(s.banner, verify.run || verify.rep.ok ? s.verifyOk : s.diverge)} role="status">
+          <span>
+            {verify.run
+              ? tr("replay.verifyRunning")
+              : !verify.rep.present
+                ? tr("replay.verifyNoMaterial")
+                : verify.rep.ok
+                  ? tr("replay.verifyPass")
+                  : tr("replay.verifyFail")}
+            {!verify.run &&
+              verify.rep.steps
+                .filter((st) => !st.ok || st.note)
+                .map((st) => ` — ${st.step}: ${st.ok ? "✓" : "✗"} ${st.note}`)
+                .join("")}
+          </span>
+          <div className={s.btns}>
+            <Btn size="small" onClick={runVerify} disabled={verify.run}>
+              {tr("replay.verify")}
+            </Btn>
+          </div>
+        </div>
+      )}
+      {!verify && (
+        <div className={s.btns} style={{ position: "absolute", right: "0.6em", top: "0.6em", zIndex: 5 }}>
+          <Btn size="small" onClick={runVerify}>
+            {tr("replay.verify")}
+          </Btn>
         </div>
       )}
       <ReplayBar rs={rs} onExit={() => { clearPendingReplay(); endReplay(); navigate({ name: "replay" }); }} />
