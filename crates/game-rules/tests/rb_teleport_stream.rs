@@ -639,7 +639,8 @@ fn pass_tile_teleport_does_not_send_the_walk_back_to_the_old_tile() {
     assert_eq!(walk.to, 21, "the walk ends at the step's landing: {:?}", ev);
     let hook_log = all
         .iter()
-        .find(|e| e.msg.key().contains("pass_tele_done"))
+        // `log_key` reads through the 「<card> 的效果：…」 attribution wrapper.
+        .find(|e| log_key(e).contains("pass_tele_done"))
         .expect("the passTile hook logged");
     assert!(
         walk.id < hook_log.id,
