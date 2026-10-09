@@ -128,7 +128,6 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
       className={s.wrap}
       data-vp-bg
       ref={wrapRef}
-      style={{ width: vp.box.width, height: vp.box.height }}
       tabIndex={0}
       onKeyDown={vp.onKeyDown}
       onPointerDown={vp.onPointerDown}

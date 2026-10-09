@@ -15,7 +15,11 @@
    and holds the fixed overlays (hover details, zoom buttons), which stay out
    of the zoom so they keep their size and place. The banners and the card
    flash are match-screen chrome (Board.module.css), not map-sized. */
-.wrap { position: relative; flex: none; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+/* The wrap is the pan/zoom *window*: it fills the whole map slot (the CSS box
+   is the clip, so it can never be narrower or offset inside the column -- a
+   measured px size would lag the layout and clip a panned board early) and
+   clips the transformed board layer. */
+.wrap { position: absolute; inset: 0; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
 .wrap:focus-visible { outline: 2px solid var(--pink); outline-offset: -4px; }
 /* The zoomed layer: `translate(tx, ty) scale(z)` placing the board rect
    (viewport.ts) in the window. Sized to the board, not the window -- on a
