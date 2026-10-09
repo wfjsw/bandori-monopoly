@@ -1,8 +1,8 @@
 # Advanced bot (ISMCTS) — design (2026-10-07)
 
 Status: B0 measured (§5), **B1 shipped** (host split + `rules-native` +
-drift check; §5 has the numbers; one known sandbox/native divergence is
-`#[ignore]`d and tracked below), **B2 shipped** (answer-provider mode +
+drift check; §5 has the numbers; the sandbox/native divergence is **closed**
+2026-10-09 -- §5 "native-rules drift"), **B2 shipped** (answer-provider mode +
 inline card prompts + two-pass drive; §5 has the numbers and the one known
 equivalence gap), **B4 shipped** (determinizer + ISMCTS core in
 `crates/bot-core`, consistency tests green, StubRules harness smoke in §5),
@@ -96,10 +96,13 @@ modules. The bot links them directly.
   at every entry → `RuleError::Trap` ("this card is out"), the sandbox trap
   contract. The `extern "C-unwind"` shim ABI is what lets the panic cross
   the guest boundary at all; `extern "C"` aborts instead.
-* **Drift check.** `crates/rules-native/tests/drift.rs` plays a seeded game
-  through `WasmRules` and `rules-native` and compares `save()` checkpoints;
-  `examples/drift_where.rs` prints the first semantic difference. Native is
-  self-deterministic. See §5 (B1) for the known divergence.
+* **Drift check.** `crates/rules-native/tests/drift.rs` plays seeded games
+  through `WasmRules` and `rules-native` and compares `save()` checkpoints,
+  event streams and final saves (plus the loaded manifest). Native is
+  self-deterministic and **byte-identical to the sandbox** (closed 2026-10-09,
+  §5 "native-rules drift"). `examples/drift_where.rs` /
+  `examples/drift_events.rs` print the first semantic difference when one
+  reappears. `DRIFT_LONG=1` runs the long variant (full games, more seeds).
 
 ### 3.2 Inline answers (simulation mode) — shipped (B2)
 
@@ -926,37 +929,26 @@ fire-up and the guest-call share: the floor is still the engine shell
 cost at depth 2-3 should now be ~0.10 s instead of ~0.15 s -- still far from
 the 2-5 ms ISMCTS wants.
 
-**Drift check.** `crates/rules-native/tests/drift.rs`:
+**Drift check.** `crates/rules-native/tests/drift.rs` (all green since
+2026-10-09, §5 "native-rules drift"):
 
-* `native_is_deterministic` — green. Two native runs of the same seed
-  produce identical `save()` checkpoints.
-* `native_and_sandbox_agree_on_a_seeded_game` — **`#[ignore]`d**, known
-  divergence. Setup agrees (`checkpoint 0` identical); from round 1 the
-  native run draws one extra card and raises two extra prompts
-  (`ask_seq` 7 vs 9, player 0's draw pile 14 vs 13 and differently ordered,
-  `live_rng` advanced differently). `examples/drift_where -- 7 2` prints the
-  full first-difference list. Candidates still open: a guard / hook
-  dispatch difference in `NativeModules`, the native fuel counter being
-  effectively unlimited (the sandbox stops runaways at `DEFAULT_FUEL`), or
-  an in-flight card-rule change landing in `rules/*` after `dist/cards` was
-  last built (the sandbox runs the snapshot, native compiles the sources).
-  Per §1 this makes the bot weaker / different, never corrupts a match --
-  but it must be closed before the native build is trusted for search.
-* `tests/abi_link_names.rs` — green. Every `mod sys` import has both the
-  native `link_name` and a `bandori_*` shim; a new import without them fails
-  `cargo test -p rules-native` with the fix spelled out.
-
-Suite: `cargo test -p game-core -p game-rules -p server -p bot-core -p
-bot-service -p rules-cond` = 1048 passed / 0 failed / 96 ignored (baseline
-~1041; the delta is the concurrent purchasing batch). The sandbox path is
-byte-for-byte the same `Ruleset` as before the split -- the closures moved
-into `hostfns.rs` and the wrappers forward.
+* `native_is_deterministic` — two native runs of the same seed produce
+  identical `save()` checkpoints and identical event streams.
+* `native_and_sandbox_agree_on_a_seeded_game` — **real (no longer ignored)**:
+  several seeds, both backends, identical checkpoints + event streams +
+  final saves. `DRIFT_LONG=1` plays full games over more seeds.
+* `native_and_sandbox_agree_on_the_manifest` — same card ids / entries /
+  declared conditions, and every non-empty condition string is present as a
+  `CompiledPre` on the native handle (the `RulesHandle::pre` default-`None`
+  bug left them silently uncompiled).
+* `tests/abi_link_names.rs` — every `mod sys` import has both the native
+  `link_name` and a `bandori_*` shim.
 
 **Wiring.** `bot-service` has a `native-rules` cargo feature (off by
 default) that swaps its `CardRules` to `rules_native::native_rules` for the
 search's simulations; `WasmRules` / `StubRules` fallback is unchanged when
-the feature is off. `cargo test -p bot-service --features native-rules` is
-green. Turn it on by default once the drift above is closed.
+the feature is off, and the server's authoritative match always runs the
+sandbox. §5 "native-rules drift" has the `bot_cpu` numbers.
 
 ### B2: inline answers (2026-10-07)
 
@@ -1326,9 +1318,87 @@ as **+16 % iterations per decision** (per iteration 222 → 192 ms CPU,
 
 **Next levers, ranked (see REPORT-2.md):** wasm store reuse /
 `rules-native` (99 k instantiations, 7.6 s store+instantiate per 200 game-s;
-blocked on the native-vs-sandbox drift gate), quiet rollout
+the drift gate is closed -- see below), quiet rollout
 (`World::log` is only 0.20 s), `MatchState` COW, undo journal. No search
 parameter was changed, so no `ismcts_vs_bots` strength gate applies.
+
+### Native-rules drift closed (2026-10-09)
+
+The `#[ignore]`d `native_and_sandbox_agree_on_a_seeded_game` (B1, 2026-10-07)
+is green and the test is a real suite covering checkpoints, event streams and
+final saves. Three root causes, all at the native/guest ABI boundary:
+
+1. **`RulesHandle::pre` defaulted to `None`.** `NativeRulesHandle` overrode
+   `by_id` / `card` but not `pre`, so every CEL condition read as *absent* on
+   native. `admits_pre` / `admits_gate` then admitted every entry -- a
+   `pre::MINE` hook (`"actor == owner"`) fired for **every** player instead of
+   the trigger's actor, which is what raised the extra prompts and reshuffled
+   the draw pile in round 1. The compiled conditions were built correctly in
+   `NativeIndex` and then never read (the compiler's "field `pre` is never
+   read" warning was the smoking gun). Fix: `RulesHandle::pre` delegates to
+   `NativeIndex::pre` (`crates/rules-native/src/lib.rs`); pinned by
+   `native_and_sandbox_agree_on_the_manifest`.
+2. **Guest buffers crossed the ABI as truncated 64-bit pointers.**
+   `card-sdk`'s `ctx` passed `buf.as_mut_ptr() as i32` (and
+   `bytes.as_ptr() as i32`) as the `ptr: i32` wire form. On wasm32 that is a
+   real linear-memory address; on a 64-bit native build it truncates a heap
+   pointer and the host's `native::read` / `native::write` looks up a garbage
+   arena slot. `cards_in` &co. therefore returned **empty** on native (the
+   postcard decode of a zeroed buffer is an empty `Vec`), so e.g.
+   `PPP:Returns`'s `pool_for` thought the player owned no cards and rolled
+   `1d21` where the sandbox rolled `1d11`. Fix: `in_bytes` / `out_buf` /
+   `out_read` helpers in `card-sdk/src/ctx.rs` route through the arena
+   (`native::intern` / `reserve` / `read`) on non-wasm, the same shape
+   `turn_rolls` / `turn_snap` already used. `rt::leak` (the `cant_play` gate's
+   packed `Msg`) had the same truncation and now interns too.
+3. **`NativeModules::run_hook` gave the guard and the body separate
+   `HostState`s.** The sandbox runs both on one `store`, so a guard's world
+   writes and answer consumption are visible to the body. Native threw the
+   guard's state away. Also `can_counteract` swallowed guard traps into
+   `Ok(false)` where the sandbox propagates `Err(Trap)` (callers fold with
+   `unwrap_or(false)`, so the observable verdict matched, but the surface did
+   not). Both now mirror `Ruleset::run_hook` / `can_counteract_scoped`.
+
+**Evidence.** `drift_where` / `drift_events` over seeds 1,2,3,5,7,11,21,42,
+77,99,123 (caps 2-30 rounds): zero checkpoint differences, zero event-stream
+differences. `cargo test -p rules-native` is 6 green (4 drift + 2
+abi_link_names). `DRIFT_LONG=1` plays full games over 8 seeds.
+
+**Exactness.** The wasm path is untouched: every fix is either
+`#[cfg(not(target_arch = "wasm32"))]` or a refactor of wasm-equivalent code.
+`sim -- 50 4 200` counts match the post-merge baseline exactly (rounds 192.5,
+end reasons `{last: 15, settle: 35}`). `ckpt_equiv -- 3 4 60` writes the same
+730 checkpoint lines / 723 turns over the shipped `dist/cards`. No ABI bump,
+no replay-format change.
+
+**`bot_cpu` (native rules in the search's simulations).**
+`--features bot-service/native-rules`, same seed 1 / `--search-threads 2` /
+`--budget-ms 250` as the "Rollout view-work" measurement above, 1 match,
+`RUST_MIN_STACK=16 MiB`:
+
+| | WasmRules (baseline) | rules-native | |
+|---|---|---|---|
+| searched decides | 100 @ 670 ms CPU, 3.22 iters | 95 @ 616 ms CPU, **5.96 iters** | |
+| iterations / CPU-second | 4.81 | **9.68 (+101 %)** | |
+| bot CPU / match | 74.2 s | **63.4 s** | |
+| anatomy rollout share | 84.6 % | 85.7 % | |
+
+The win is **+85 % iterations per decision** and **+101 % iterations per
+CPU-second**: the sandbox's 99 k store+instantiations per match are gone.
+Per-iteration CPU is unchanged (~200 ms -- the engine shell is still the
+floor). The feature stays **off by default**; the server's authoritative
+match always runs the sandbox.
+
+**Two native-only guards added along the way.** (a) `MAX_RUN_DEPTH = 256`
+on the native guest entry (`rules-native/src/lib.rs`): the sandbox bounds a
+runaway with store fuel + a wasm stack limit (a trap = "this card is out");
+native has no instruction meter and the B2 inline provider runs a body to
+completion in one deep stack chain, which overflowed the search worker
+threads. The depth guard turns that into the same trap contract. (b) the
+ISMCTS root-parallel `scope.spawn` now sets an explicit 32 MiB stack
+(`bot-core/src/ismcts.rs`) -- the native guest frames live on the thread
+stack, and `RUST_MIN_STACK` was not reliably honoured. Neither guard changes
+the sandbox path.
 
 ### Counteract offers at `passTile` / `passPlayer` (2026-10-08)
 

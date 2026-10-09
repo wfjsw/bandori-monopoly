@@ -211,6 +211,15 @@ impl RulesHandle for NativeRulesHandle {
     fn card(&self, i: i32) -> Option<&CardInfo> {
         self.inner.cards.get(i as usize)
     }
+    /// The compiled condition of `cards[i].on[entry]` (docs/GUARDS.md G0).
+    /// **Must not fall back to the `RulesHandle` default (`None`)** -- that
+    /// reads as "no condition" and `admits_pre` / `admits_gate` then admit
+    /// every entry, which is how a `pre::MINE` hook fired for the wrong
+    /// player on native while the sandbox skipped it (the drift `tests/drift.rs`
+    /// caught in round 1).
+    fn pre(&self, i: i32, entry: i32) -> Option<&game_rules::CompiledPre> {
+        self.inner.pre(i, entry)
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -303,6 +312,41 @@ fn quiet_control_flow_panics() {
 // One card call: install the host, run the entry, fold the result
 // ---------------------------------------------------------------------------
 
+/// Guard on the guest call chain. The sandbox bounds a runaway effect with
+/// store fuel and a wasm stack limit (a trap = "this card is out"); the native
+/// build has no instruction meter, so the bound is the call depth. The limit
+/// is far above anything the shipped ruleset produces (the deepest chain in
+/// the drift suite is ~20) and far below a thread stack.
+const MAX_RUN_DEPTH: u32 = 256;
+
+thread_local! {
+    static RUN_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+
+/// RAII depth counter -- drops (including on unwind) decrement.
+struct DepthGuard;
+
+impl DepthGuard {
+    fn enter() -> Result<Self, HostErr> {
+        RUN_DEPTH.with(|d| {
+            let v = d.get();
+            if v >= MAX_RUN_DEPTH {
+                return Err(HostErr::trap(format!(
+                    "guest call nested deeper than {MAX_RUN_DEPTH}"
+                )));
+            }
+            d.set(v + 1);
+            Ok(Self)
+        })
+    }
+}
+
+impl Drop for DepthGuard {
+    fn drop(&mut self) {
+        RUN_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+    }
+}
+
 fn run_on(
     nested: NativeHostState,
     card: i32,
@@ -325,6 +369,10 @@ fn run_on(
                 fuel,
             )
         }
+    };
+    let _depth = match DepthGuard::enter() {
+        Ok(g) => g,
+        Err(e) => return (Err(e), nested, fuel),
     };
     quiet_control_flow_panics();
     let host = NativeHost {
@@ -489,6 +537,18 @@ impl CardModules for NativeModules {
             .and_then(|c| c.on.get(entry as usize))
             .is_some_and(|o| !o.has_guard)
     }
+    /// Fix A cheap pre-filter, same shape as [`game_rules::host::Ruleset`]:
+    /// no `On::Play` entry, or a G4-deleted gate with no condition -- the
+    /// verdict is always "playable".
+    fn play_gate_vanishes(&self, card: i32) -> bool {
+        let Some(info) = self.index.card(card) else {
+            return true;
+        };
+        let Some(entry) = info.entry(OnKind::Play, None) else {
+            return true;
+        };
+        self.entry_guard_is_none(card, entry) && self.pre(card, entry).is_none()
+    }
     fn sha256(&self) -> Option<&str> {
         Some(&self.sha)
     }
@@ -544,6 +604,17 @@ impl CardModules for NativeModules {
         let Some(entry) = info.hook_entry(kind) else {
             return Ok(None);
         };
+        // One `HostState` for the guard *and* the body, exactly like the
+        // sandbox's single `store` (`Ruleset::run_hook`): the guard's world
+        // writes and answer consumption are visible to the body there, so they
+        // have to be here too. (`Option` so the guard closure can move it out
+        // of `run_on` and put it back.)
+        let mut state = Some(HostState::new(
+            self.index.clone(),
+            world.clone(),
+            answers.to_vec(),
+            0,
+        ));
         let mut announced = false;
         // `On::Hook` entries carry a guard; `On::Gate` entries are questions
         // and have none, so they run unasked.
@@ -553,32 +624,35 @@ impl CardModules for NativeModules {
             let scope =
                 game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
             let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, true);
-            let asked: Result<bool, ()> = game_rules::cond_pre::admits(pre, Some(&scope), &cand, || {
-                let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
-                // A guard is a pure query: refuse inline answers (see
-                // `game_rules::inline`).
-                let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
-                    run_on(state, card, guard, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
-                });
-                Ok(match res {
-                    Ok(CallOut::Code(0)) => false,
-                    Ok(_) => true,
-                    // A trap or a prompting guard: fail closed.
-                    Err(_) => false,
-                })
-            });
-            match asked {
-                Ok(true) => announced = true,
-                Ok(false) => return Ok(None),
-                Err(()) => return Ok(None),
+            let admitted = if self.entry_guard_is_none(card, guard) {
+                // G4 deleted the residual: the condition alone decides.
+                game_rules::cond_pre::admits_pre(pre, Some(&scope), &cand)
+            } else {
+                let asked: Result<bool, ()> =
+                    game_rules::cond_pre::admits(pre, Some(&scope), &cand, || {
+                        let st = state.take().expect("host state present");
+                        // A guard is a pure query: refuse inline answers (see
+                        // `game_rules::inline`).
+                        let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
+                            run_on(st, card, guard, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
+                        });
+                        state = Some(st);
+                        Ok(match res {
+                            Ok(CallOut::Code(0)) => false,
+                            Ok(_) => true,
+                            // A trap or a prompting guard: fail closed.
+                            Err(_) => false,
+                        })
+                    });
+                matches!(asked, Ok(true))
+            };
+            if admitted {
+                announced = true;
+            } else {
+                return Ok(None);
             }
         }
-        let state = HostState::new(
-            self.index.clone(),
-            world.clone(),
-            answers.to_vec(),
-            0,
-        );
+        let state = state.take().expect("host state present");
         let (res, state, _fuel) = run_on(
             state,
             card,
@@ -600,35 +674,8 @@ impl CardModules for NativeModules {
         card: i32,
         player_id: i32,
     ) -> Result<bool, RuleError> {
-        let info = self
-            .index
-            .card(card)
-            .ok_or_else(|| RuleError::Trap(format!("bad card handle {card}")))?;
-        let Some(entry) = info.entry(OnKind::Counteract, Some(world.trigger().kind)) else {
-            return Ok(false);
-        };
-        // docs/GUARDS.md §4.4: condition first, guard second, one `admits`.
-        // Scope only when a condition exists (`pre == None` never reads it).
-        let pre = self.index.pre(card, entry);
-        let scope;
-        let scope: Option<&game_rules::cond_pre::WindowScope> = if pre.is_some() {
-            scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
-            Some(&scope)
-        } else {
-            None
-        };
-        let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
-        game_rules::cond_pre::admits(pre, scope, &cand, || {
-            let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
-            let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
-                run_on(state, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
-            });
-            Ok(match res {
-                Ok(CallOut::Code(v)) => v != 0,
-                Ok(_) => true,
-                Err(_) => false,
-            })
-        })
+        let scope = game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
+        self.can_counteract_scoped(world, card, player_id, &scope)
     }
 
     /// [`Self::can_counteract`] with the window scope the caller built once per
@@ -648,18 +695,27 @@ impl CardModules for NativeModules {
         let Some(entry) = info.entry(OnKind::Counteract, Some(world.trigger().kind)) else {
             return Ok(false);
         };
+        // docs/GUARDS.md §4.4: condition first, guard second, one `admits`.
         let pre = self.index.pre(card, entry);
         let cand = game_rules::cond_pre::fill_candidate(world, player_id, &info.id, false);
+        if self.entry_guard_is_none(card, entry) {
+            // G4 deleted the residual: the condition alone decides.
+            return Ok(game_rules::cond_pre::admits_pre(pre, Some(scope), &cand));
+        }
         game_rules::cond_pre::admits(pre, Some(scope), &cand, || {
             let state = HostState::new(self.index.clone(), world.clone(), vec![], 0);
             let (res, _state, _fuel) = game_rules::inline::with_no_inline(|| {
                 run_on(state, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
             });
-            Ok(match res {
-                Ok(CallOut::Code(v)) => v != 0,
-                Ok(_) => true,
-                Err(_) => false,
-            })
+            // Same verdict / error surface as `Ruleset::can_counteract_scoped`:
+            // a prompting guard is `GuardPrompted`, a trap propagates (callers
+            // fold it with `unwrap_or(false)`), a code is `!= 0`.
+            match res {
+                Ok(CallOut::Code(v)) => Ok(v != 0),
+                Ok(_) => Ok(true),
+                Err(HostErr::NeedInput) => Err(RuleError::GuardPrompted),
+                Err(HostErr::Trap(m)) => Err(RuleError::Trap(m)),
+            }
         })
     }
 
