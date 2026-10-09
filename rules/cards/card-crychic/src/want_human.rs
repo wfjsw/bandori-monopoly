@@ -38,7 +38,7 @@ fn want_human(player_id: i32) -> card_sdk::Asked {
     let x = ctx::ask_number(
         player_id,
         &Msg::new(key!("want_human_title")),
-        &Msg::new(key!("want_human_ask")),
+        &Msg::new(key!("want_human_ask")).card("card", "CRYCHIC:想要成为人类"),
         1,
         20,
     )?;

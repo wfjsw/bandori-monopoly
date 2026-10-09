@@ -365,7 +365,7 @@ fn heuristic_auction(
 /// Routine context: the world being mutated, read-only game data, card rules, and
 /// the replay cursor.
 pub struct Cx<'a> {
-    pub(crate) w: World,
+    pub(crate) w: crate::engine::world::SharedWorld,
     pub(crate) data: &'a GameData,
     pub(crate) rules: &'a dyn CardRules,
     answers: &'a [Answered],
@@ -392,6 +392,51 @@ pub struct Cx<'a> {
     /// duration (see [`Self::overlay_guest_state`]). A stack: nested drives push
     /// and pop their own. Transient (not serialized).
     pub(crate) guest_overlays: Vec<GuestOverlay>,
+    /// Play-gate verdicts for the current world stamp (fix A,
+    /// `docs/BOT.md` "engine efficiency A–C"). `rules.cant_play` is a pure
+    /// query of the world; within one unchanged world state the same
+    /// `(player, card)` always answers the same, so a scan of the hand (or a
+    /// second look at the same card) reuses the first verdict. Dropped the
+    /// moment [`Self::w`] is written (its stamp changes).
+    play_memo: std::cell::RefCell<PlayMemo>,
+}
+
+/// The play-gate memo: verdicts keyed by `(player, card id)`, valid only for
+/// the [`crate::engine::world::SharedWorld`] stamp they were computed under.
+/// A small linear map (a hand scan has few unique ids) -- no hashing on the
+/// hot path.
+#[derive(Default)]
+struct PlayMemo {
+    stamp: u64,
+    entries: Vec<((usize, String), Option<Msg>)>,
+}
+
+impl PlayMemo {
+    fn clear(&mut self) {
+        self.entries.clear();
+    }
+    fn get(&self, player: usize, card: &str) -> Option<&Option<Msg>> {
+        self.entries
+            .iter()
+            .find(|((p, c), _)| *p == player && c == card)
+            .map(|(_, v)| v)
+    }
+    fn insert(&mut self, player: usize, card: &str, why: Option<Msg>) {
+        if let Some(slot) = self
+            .entries
+            .iter_mut()
+            .find(|((p, c), _)| *p == player && c == card)
+        {
+            slot.1 = why;
+            return;
+        }
+        // Cap the memo: a scan that runs away must not grow without bound
+        // (the stamp resets it on the next write anyway).
+        if self.entries.len() >= 64 {
+            self.entries.clear();
+        }
+        self.entries.push(((player, card.to_string()), why));
+    }
 }
 
 /// The guest's pending player-state **clears**, overlaid on the live world
@@ -426,7 +471,7 @@ impl<'a> Cx<'a> {
         #[cfg(feature = "bot-cost")]
         crate::engine::bot_cost::WORLD_CLONES
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.w.clone()
+        self.w.deep_clone()
     }
 
     /// Immutable view of the live world -- **no clone**. Read-only queries
@@ -436,16 +481,51 @@ impl<'a> Cx<'a> {
         &self.w
     }
 
+    /// A shareable handle to the live world -- a refcount bump, **no copy**
+    /// (fix B). A pure check (`cant_play` probe, guard body, buy quote) runs
+    /// against it; the first write inside the check's sandbox detaches a
+    /// private copy (`Arc::make_mut`) and the live world is untouched. Prefer
+    /// this over [`Self::world_copy`] whenever the consumer only reads, or
+    /// writes into a throwaway sandbox.
+    pub fn share_world(&self) -> crate::engine::world::SharedWorld {
+        #[cfg(feature = "bot-cost")]
+        crate::engine::bot_cost::WORLD_SHARES
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.w.share()
+    }
+
+    /// The stamp of the live world right now (changes on every write).
+    pub fn world_stamp(&self) -> u64 {
+        self.w.stamp()
+    }
+
     /// Swap in the world a rules host produced; returns the previous one.
     pub fn swap_world(&mut self, w: World) -> World {
+        self.play_memo.borrow_mut().clear();
+        std::mem::replace(&mut self.w, crate::engine::world::SharedWorld::new(w)).into_inner()
+    }
+
+    /// Swap in a shared handle (the commit half of a drive -- see
+    /// [`Self::swap_world`]). Zero-copy when the handle is the only one left.
+    pub fn swap_shared(
+        &mut self,
+        w: crate::engine::world::SharedWorld,
+    ) -> crate::engine::world::SharedWorld {
+        self.play_memo.borrow_mut().clear();
         std::mem::replace(&mut self.w, w)
+    }
+
+    /// Unwrap the live world out of this context (the host adopts it).
+    pub fn into_world(self) -> World {
+        self.w.into_inner()
     }
 
     /// Swap the live world with `other` in place -- zero-copy, for the
     /// card-rules inline host (`docs/BOT.md` §3.2) which runs a host request
     /// against the guest's own world copy and hands it back afterwards.
     pub fn swap_world_ref(&mut self, other: &mut World) {
-        std::mem::swap(&mut self.w, other);
+        self.play_memo.borrow_mut().clear();
+        std::mem::swap(&mut *self.w, other);
     }
 
     /// Adopt the turn-ctx **policy** another world set up (build/buy discounts,
@@ -610,7 +690,7 @@ impl<'a> Cx<'a> {
         answers: &'a [Answered],
     ) -> Self {
         Self {
-            w,
+            w: crate::engine::world::SharedWorld::new(w),
             data,
             rules,
             answers,
@@ -621,7 +701,40 @@ impl<'a> Cx<'a> {
             reentrant_hooks: Vec::new(),
             move_start: -1,
             guest_overlays: Vec::new(),
+            play_memo: std::cell::RefCell::new(PlayMemo::default()),
         }
+    }
+
+    /// `CardRules::cant_play` with the per-world memo (fix A). The rule's
+    /// play gate is a pure query of the world; within one unchanged world
+    /// stamp the same `(player, card)` always answers the same, so a hand scan
+    /// (or a second look at the same card in one step) reuses the first
+    /// verdict instead of re-running the gate body.
+    ///
+    /// This is the **rules** gate only -- the engine's own cheap gates (hand
+    /// membership, phase, `CannotPlay`, exclusivity, `normal`) run every time
+    /// in [`Self::cant_play`] and are pure field reads.
+    pub fn rules_cant_play(&self, player: usize, card: &str) -> Option<Msg> {
+        #[cfg(feature = "bot-cost")]
+        use std::sync::atomic::Ordering::Relaxed;
+        let stamp = self.w.stamp();
+        {
+            let mut memo = self.play_memo.borrow_mut();
+            if memo.stamp != stamp {
+                memo.clear();
+                memo.stamp = stamp;
+            }
+            if let Some(v) = memo.get(player, card) {
+                #[cfg(feature = "bot-cost")]
+                crate::engine::bot_cost::CANT_PLAY_MEMO_HITS.fetch_add(1, Relaxed);
+                return v.clone();
+            }
+        }
+        #[cfg(feature = "bot-cost")]
+        crate::engine::bot_cost::CANT_PLAY_CALLS.fetch_add(1, Relaxed);
+        let why = self.rules.cant_play(self, player, card);
+        self.play_memo.borrow_mut().insert(player, card, why.clone());
+        why
     }
 
     /// Simulation mode: answer every prompt through `p` instead of halting

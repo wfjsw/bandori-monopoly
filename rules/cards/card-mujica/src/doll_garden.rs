@@ -38,7 +38,8 @@ fn doll_garden(player_id: i32) -> card_sdk::Asked {
                 &Msg::new(key!("doll_garden_ask_title")),
                 &Msg::new(key!("doll_garden_ask_text"))
                     .player_id("user", player_id)
-                    .i("x", x as i64),
+                    .i("x", x as i64)
+                    .card("card", "Mujica:人偶的箱庭"),
                 &[
                     Msg::new(key!("doll_garden_move")),
                     Msg::new(key!("doll_garden_pay")).n("money", (x * 20) as i64),

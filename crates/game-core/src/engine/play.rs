@@ -215,9 +215,10 @@ impl Cx<'_> {
         st.houses = vec![0; n];
         st.mortgaged = vec![false; n];
         st.embers = vec![0; n];
-        for i in 0..st.players.len() {
-            st.players[i].money = START_MONEY;
-            st.players[i].pos = 0;
+        let players = st.players.len();
+        for i in 0..players {
+            self.w.st.players[i].money = START_MONEY;
+            self.w.st.players[i].pos = 0;
             let mut draw = std::mem::take(&mut self.w.hidden[i].draw);
             self.w.rng.shuffle(&mut draw);
             self.w.hidden[i].draw = draw;
@@ -1801,13 +1802,14 @@ impl Cx<'_> {
                     let houses = self.w.st.houses[at];
                     let extra =
                         (houses > 0).then(|| Msg::new("log.part.with_houses").i("h", houses));
+                    let price = self.buy_price(at);
                     self.w.log(
                         "text",
                         i as i32,
                         Msg::new("log.land_unowned")
                             .player_id("who", i)
                             .tile("tile", at)
-                            .n("price", self.buy_price(at))
+                            .n("price", price)
                             .opt("extra", extra),
                     );
                 } else {
@@ -3665,7 +3667,6 @@ impl Cx<'_> {
             s.state_set(k, 0);
         }
         s.state_set(key::EXILE_TO, -1);
-        self.w.hidden[i].hand.clear();
         // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81: 「将其控制的所有棋子，角色卡，
         // 乐队卡，和手卡移出游戏。所有其正在生效的卡，技能效果停止生效。」 The
         // field holds the character cards, band cards and every 「[持续]」 card
@@ -3684,6 +3685,7 @@ impl Cx<'_> {
         s.tokens.clear();
         s.field.clear();
         s.actions.clear();
+        self.w.hidden[i].hand.clear();
         self.w.extra_turns.retain(|&x| x != i);
         // Drop every marker an exiting rule owned, wherever its copies sit.
         self.purge_markers_owned_by(&owned_rules);
@@ -4018,7 +4020,8 @@ impl Cx<'_> {
         }
         if self.w.st.players[i].ai && self.playing() {
             while self.over_hand(i) {
-                let k = self.w.rng.below(self.w.hidden[i].hand.len());
+                let hand_len = self.w.hidden[i].hand.len();
+                let k = self.w.rng.below(hand_len);
                 let card = self.w.hidden[i].hand[k].clone();
                 self.discard(i, &card)?;
             }
@@ -4043,13 +4046,14 @@ impl Cx<'_> {
             h.hand.remove(k);
         }
         h.discard.push(card.to_string());
+        let limit = self.w.st.players[i].hand_limit() as i64;
         self.w
             .log(
                 "discard",
                 i as i32,
                 Msg::new("log.discard")
                     .player_id("who", i)
-                    .i("limit", self.w.st.players[i].hand_limit() as i64)
+                    .i("limit", limit)
                     .card("card", card),
             )
             .card = card.to_string();
@@ -4107,7 +4111,7 @@ impl Cx<'_> {
         if !self.rules.normal(id) {
             return Some(Msg::new("err.play_timing"));
         }
-        self.rules.cant_play(self, i, id)
+        self.rules_cant_play(i, id)
     }
 
     /// `PlayFromHand` + `PlayCard`

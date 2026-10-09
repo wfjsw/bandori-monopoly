@@ -51,7 +51,19 @@ export function charArt(artId: string, kind: CharArtKind = "sd"): string {
 }
 
 export function cardArt(id: string): string {
-  return url(m().cards[id]);
+  if (!id) return "";
+  const man = m();
+  const a = man.cards[id];
+  if (a) return url(a);
+  // Skill stand-ins (`skill:<band>:<skill>` -- the 团卡 / character skill) have
+  // no card art; their band logo stands in so a prompt that names one still
+  // shows a picture. Bands the asset set has no logo for fall back to the card
+  // back, never to a broken image.
+  if (id.startsWith("skill:")) {
+    const owner = id.slice("skill:".length).split(":")[0];
+    return url(man.bands[owner]) || url(man.scene?.img?.card_back);
+  }
+  return url(man.scene?.img?.card_back) || url(undefined);
 }
 
 export function bandLogo(band: string): string {

@@ -1,13 +1,15 @@
 /* Board: players and controls | tile ring | full log and hand.
 
-   Three flex columns with `space-between` -- the outer columns hug the stage
-   edges and the ring stays centred between them, so the composition holds at
-   any width. The centre column is 856px wide: the tile ring is that 856
-   square (its 12 x 10 fold grid is), so it fills the 900px stage height and
-   the hand docks at the bottom of the right column instead (a 6:5 map would
-   leave a strip under the ring; the square tile ring does not). */
+   Three flex columns -- the outer columns hug the stage edges at their fixed
+   widths and the middle one takes every remaining pixel, so the composition
+   holds at any width. The match stage fills the window height (Stage
+   `useStageFill`): the columns stretch to it and the 856px tile ring (its
+   12 x 10 fold grid) is centred in the middle column, which is always at
+   least that wide and that tall. The hand docks at the bottom of the right
+   column (a 6:5 map would leave a strip under the ring; the square ring does
+   not). */
 .body { position: absolute; inset: 0 38px; display: flex; justify-content: space-between; gap: 9px; }
 .left { position: relative; flex: 0 0 350px; }
-.middle { position: relative; flex: 0 0 856px; width: 856px; }
+.middle { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; justify-content: center; }
 .right { position: relative; flex: 0 0 300px; }
 .logSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }

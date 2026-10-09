@@ -55,7 +55,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
     let who = ctx::ask_player(
         player_id,
         &Msg::new(key!("chuchu_music_title")),
-        &Msg::new(key!("chuchu_music_ask")),
+        &Msg::new(key!("chuchu_music_ask")).card("card", ID),
         &others,
     )?;
     let hit = match ctx::target(who) {

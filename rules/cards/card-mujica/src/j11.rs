@@ -102,7 +102,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
             if !ctx::ask_yes(
                 player_id,
                 &Msg::new(key!("j11_title")),
-                &Msg::new(key!("j11_ask_targeted")),
+                &Msg::new(key!("j11_ask_targeted")).card("card", ID),
             )? {
                 return Ok(());
             }

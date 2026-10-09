@@ -7,6 +7,7 @@ import engineId from "../wasm/engine_id.json";
 import { t as tr } from "../i18n/t";
 import { toast } from "../ui/Toast";
 import { loadRulesetInto } from "./rulesetLoad";
+import { bandLogo, charArt } from "./assets";
 import type { BandData, CardData, CharacterData, EventData, TileData, VoiceLine } from "./types";
 
 export interface GameData {
@@ -143,17 +144,48 @@ export async function loadGameData(progress: (p: number) => void): Promise<void>
 export const GENERAL_BAND = "通用";
 
 export function cardTitle(id: string): string {
+  // A prompt can render before `load_data` has filled `D` (or during a module
+  // hot-reload): never read through it unguarded, or the whole board blanks.
+  if (!id || !D) return tr("common.unnamed");
   const name = D.card(id)?.name;
   if (name) return name;
   // Skills use card-typed message arguments too, but their names live in
   // bands.json / characters.json. Match the engine's skill:<owner>:<skill> id.
-  if (id.startsWith("skill:")) {
-    const band = D.bands.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
-    if (band) return band.skill;
-    const character = D.characters.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
-    if (character) return character.skill;
-  }
+  const skill = skillCard(id);
+  if (skill) return skill.title;
   return tr("common.unnamed");
+}
+
+/** A `skill:<owner>:<skill>` id (the engine's band / character skill stand-in,
+ *  e.g. the 团卡 `skill:Poppin' Party:星之鼓动`) resolved for display: title and
+ *  body come from bands.json / characters.json, art from the band logo or the
+ *  character's art. Undefined for anything that is not a skill id. */
+export function skillCard(id: string): { title: string; text: string; band?: string; color: string; art: string } | undefined {
+  if (!id || !D || !id.startsWith("skill:")) return undefined;
+  const band = D.bands.find((b) => b.skill && id === `skill:${b.name}:${b.skill}`);
+  if (band) return { title: band.skill, text: skillText(band), band: band.name, color: band.color, art: bandLogo(band.name) };
+  const character = D.characters.find((c) => c.skill && id === `skill:${c.name}:${c.skill}`);
+  if (character) return { title: character.skill, text: skillText(character), band: character.band, color: character.color, art: charArt(character.art, "thumb") };
+  return undefined;
+}
+
+/** The effect text of a card id: a data card's text, or a skill stand-in's. */
+export function cardText(id: string): string {
+  if (!id || !D) return "";
+  const c = D.card(id);
+  if (c) return skillText(c);
+  return skillCard(id)?.text ?? "";
+}
+
+/** The band colour a card id belongs to (skill stand-ins included). */
+export function cardColor(id: string): string {
+  if (!id || !D) return "#ED4E76";
+  const c = D.card(id);
+  return c ? bandColorOf(c) : skillCard(id)?.color ?? "#ED4E76";
+}
+
+function bandColorOf(c: CardData): string {
+  return D.band(c.band)?.color ?? "#ED4E76";
 }
 
 /** C# `SkillText.Of(c)`: the simplified skill text when the setting is on. */

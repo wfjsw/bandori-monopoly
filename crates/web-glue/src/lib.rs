@@ -119,10 +119,12 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
         .map_err(|e| JsError::new(&e))?;
     // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
     // can tell whether the board / card data it was written against is here.
+    // A leading UTF-8 BOM is not content: the browser's decoder strips it and
+    // `read_to_string` keeps it, so hash without it to get one recipe.
     let mut hasher = Sha256::new();
     for name in DATA_FILES {
         if let Some(contents) = files.get(name) {
-            hasher.update(contents.as_bytes());
+            hasher.update(contents.strip_prefix('\u{feff}').unwrap_or(contents).as_bytes());
         }
     }
     let sha = hex(&hasher.finalize());

@@ -19,6 +19,18 @@ export interface ModalOpts {
   onClose?: () => void;
   /** A key: opening another modal with the same key replaces it. */
   key?: string;
+  /**
+   * "overlay" (default): dimmed, centred window that blocks the board.
+   * "inline": a floating card over the board centre -- no backdrop, so the
+   * ring stays visible and pickable around it (the prompt's tile picks).
+   */
+  placement?: "overlay" | "inline";
+  /**
+   * "window" (default): the pink title bar of a popup.
+   * "prompt": white panel with a pink border and pink title text -- the
+   * prompt card's look.
+   */
+  chrome?: "window" | "prompt";
 }
 
 interface Entry extends ModalOpts {
@@ -117,11 +129,18 @@ export function ModalHost() {
           e.onClose?.();
         };
         const closable = e.closable ?? true;
+        const prompt = e.chrome === "prompt";
+        const inline = e.placement === "inline";
+        // Keep drafts, checked cards, scroll position and live subscriptions
+        // mounted; minimizing only hides the window and its backdrop.
         return (
-          // Keep drafts, checked cards, scroll position and live subscriptions
-          // mounted; minimizing only hides the window and its backdrop.
-          <div key={e.id} className={s.back} hidden={e.minimized} onClick={(ev) => closable && ev.target === ev.currentTarget && close()}>
-            <div className={cx(s.window, s[e.size ?? "normal"], e.className)}>
+          <div
+            key={e.id}
+            className={inline ? s.inline : s.back}
+            hidden={e.minimized}
+            onClick={(ev) => closable && ev.target === ev.currentTarget && close()}
+          >
+            <div className={cx(s.window, s[e.size ?? "normal"], prompt && s.promptWin, e.className)}>
               <div className={s.head}>
                 <h2>{e.title}</h2>
                 <button type="button" className={cx(s.x, closable && s.minimize)} onClick={() => minimize(e.id)} title={tr("common.minimize")} aria-label={tr("common.minimize")}>

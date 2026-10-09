@@ -33,22 +33,29 @@ let glue = null;
 let match = null;
 
 async function init(base) {
-  const manifest = await (await fetch(new URL("bundle.json", base))).json();
+  // `base` is a path like `/assets/engine/<id>/`; `new URL` needs an absolute
+  // base, so resolve it against the worker's own URL first.
+  const root = new URL(base, self.location.href);
+  const manifest = await (await fetch(new URL("bundle.json", root))).json();
   const L = manifest.layout;
   // The glue resolves `glue_bg.wasm` against its own URL, so importing it
   // from the bundle is enough -- a separate wasm instance per bundle.
-  glue = await import(new URL(L.glueJs, base).href);
+  glue = await import(new URL(L.glueJs, root).href);
   await glue.default();
   const files = {};
+  // `Response.text()` strips a leading UTF-8 BOM, but the seal hashed the
+  // file bytes as stored (`read_to_string` keeps it). Decode ourselves and
+  // keep the BOM so `load_data` sees the same contents the stamp covers.
+  const keepBom = new TextDecoder("utf-8", { ignoreBOM: true });
   for (const name of L.dataFiles ?? JSON.parse(glue.data_files())) {
-    const r = await fetch(new URL(`${L.dataDir}/${name}`, base));
-    if (r.ok) files[name] = await r.text();
+    const r = await fetch(new URL(`${L.dataDir}/${name}`, root));
+    if (r.ok) files[name] = keepBom.decode(await r.arrayBuffer());
   }
   glue.load_data(JSON.stringify(files));
-  const indexUrl = new URL(L.rulesIndex, base);
+  const indexUrl = new URL(L.rulesIndex, root);
   const index = await (await fetch(indexUrl)).json();
   for (const m of index.modules ?? []) {
-    const w = await fetch(new URL(`${L.modulesDir}/${m.file}`, base));
+    const w = await fetch(new URL(`${L.modulesDir}/${m.file}`, root));
     if (!w.ok) throw new Error(`${m.file}: HTTP ${w.status}`);
     glue.ruleset_add(new Uint8Array(await w.arrayBuffer()));
   }

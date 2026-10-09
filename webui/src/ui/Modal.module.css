@@ -1,5 +1,11 @@
 .back { position: absolute; inset: 0; z-index: 40; background: rgba(60, 40, 50, 0.38); display: flex; align-items: center; justify-content: center; animation: fade 0.15s; }
 .back[hidden] { display: none; }
+/* Inline: a floating card over the board centre. No backdrop -- the ring stays
+   visible and clickable around it. The +25px keeps the card centred on the
+   tile ring (Board.module.css: 38px inset + 350px left column + 9px gap +
+   half of the 856px middle column = 825px on a 1600px stage). */
+.inline { position: absolute; left: calc(50% + 25px); top: 50%; transform: translate(-50%, -50%); z-index: 40; display: flex; justify-content: center; max-width: 856px; animation: fade 0.15s; }
+.inline[hidden] { display: none; }
 @keyframes fade { from { opacity: 0; } }
 .window { width: 834px; max-height: 840px; display: flex; flex-direction: column; background: #fff; border-radius: 20px; padding: 8px; box-shadow: 0 20px 60px rgba(60, 20, 40, 0.3); animation: pop 0.18s ease-out; }
 @keyframes pop { from { transform: scale(0.94); opacity: 0; } }
@@ -24,6 +30,18 @@
 .restoreHint { flex: none; font-size: 12px; }
 .restoreIcon { flex: none; width: 16px; height: 14px; border: 2px solid currentColor; border-top-width: 5px; border-radius: 2px; }
 .body { overflow: auto; padding: 18px 18px 14px; font-size: 17px; line-height: 1.6; }
+/* Prompt card chrome: the old popup's look -- white rounded panel with a pink
+   border, the source · tile named in pink above the body, no title bar. */
+.promptWin { padding: 14px 18px 16px; border: 3px solid var(--pink); box-shadow: 0 14px 44px rgba(60, 20, 40, 0.24); }
+.promptWin .head { height: auto; min-height: 30px; background: none; border-radius: 0; justify-content: flex-start; padding: 0 92px 8px 2px; }
+.promptWin .head h2 { color: var(--pink); font-size: 21px; letter-spacing: 0; max-width: 100%; text-align: left; }
+.promptWin .x { width: 32px; height: 32px; background: var(--pink-pale); box-shadow: none; }
+.promptWin .x i { width: 18px; height: 18px; }
+.promptWin .minus { width: 16px; height: 3px; }
+.promptWin .x:hover { background: #ffd0dc; }
+/* The prompt body is not a scroll box: the card hover preview floats out of
+   the panel (CardPreview) and must not be clipped. */
+.promptWin .body { padding: 0; overflow: visible; }
 .ask { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
 .ask p { font-size: 19px; white-space: pre-wrap; }
 .row { display: flex; gap: 14px; justify-content: center; }

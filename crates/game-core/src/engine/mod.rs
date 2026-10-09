@@ -39,7 +39,7 @@ pub use move_ctx::{MoveCtx, MoveKind, Roll};
 pub use play::{Paid, Pay};
 pub use play::purchase;
 pub use rules::{CardRules, Dest, StubRules, Trigger};
-pub use world::{Hidden, Scheduled, TurnCtx, World};
+pub use world::{Hidden, Scheduled, SharedWorld, TurnCtx, World};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.
@@ -50,6 +50,14 @@ pub mod bot_cost {
     /// Engine-side routine snapshots (`Match::execute` / `start`) clone the
     /// world too, 1-2 per routine (re)run; those are not counted here.
     pub static WORLD_CLONES: AtomicU64 = AtomicU64::new(0);
+    /// Play-gate (`rules.cant_play`) evaluations that actually ran.
+    pub static CANT_PLAY_CALLS: AtomicU64 = AtomicU64::new(0);
+    /// Play-gate verdicts served from the per-world memo (fix A) instead of
+    /// re-running the check.
+    pub static CANT_PLAY_MEMO_HITS: AtomicU64 = AtomicU64::new(0);
+    /// [`Cx::share_world`] calls -- pure checks that shared the live world
+    /// instead of cloning it (fix B).
+    pub static WORLD_SHARES: AtomicU64 = AtomicU64::new(0);
 }
 
 use std::sync::Arc;
@@ -778,7 +786,7 @@ impl Match {
         let (data, rules) = (self.data.clone(), self.rules.clone());
         let mut cx = Cx::new(self.world.clone(), &data, &*rules, &[]);
         let r = f(&mut cx);
-        self.world = cx.w;
+        self.world = cx.into_world();
         self.changed = true;
         self.seq += 1;
         r
@@ -802,7 +810,7 @@ impl Match {
                 None => cx,
             };
             let res = run(&mut cx, &routine);
-            (res, cx.delay, cx.w)
+            (res, cx.delay, cx.into_world())
         };
         self.provider = prov;
         self.changed = true;
@@ -894,8 +902,33 @@ impl Match {
     }
 
     /// Is this prompt player answered by the machine (bot, or a human who left)?
+    ///
+    /// This is the **prompt** auto-answer ([`Self::tick_live`]): `ai` seats
+    /// (standard / chaos bots, and a human under 托管). An Advanced bot is
+    /// `ai = false` on purpose -- its prompts wait for the external driver
+    /// (`docs/BOT.md` B5). Votes are different; see [`Self::auto_vote`].
     fn auto_player(&self, player_id: usize) -> bool {
         self.world.st.players[player_id].ai
+            || self
+                .deferred
+                .iter()
+                .any(|d| matches!(d, Deferred::Leave(s) | Deferred::Left(s, _) if *s == player_id))
+    }
+
+    /// Is this seat's **vote** cast by the machine?
+    ///
+    /// Every bot seat -- standard, chaos, and **advanced** -- votes via the
+    /// engine (user ruling 2026-10-09: "have the engine vote for advanced bot
+    /// seats"). An advanced bot's play-phase decisions belong to the external
+    /// driver, but the drivers have no vote path and a solo vote never
+    /// expires, so the engine casts the seat's vote with the standard policy
+    /// (yes) exactly as it always has for `ai` seats. A human under 托管 is
+    /// likewise machine-answered, as today; an active human votes for
+    /// themselves.
+    fn auto_vote(&self, player_id: usize) -> bool {
+        let p = &self.world.st.players[player_id];
+        p.ai
+            || p.bot
             || self
                 .deferred
                 .iter()
@@ -1493,9 +1526,14 @@ impl Match {
 
     // ---------------------------------------------------------------- vote
 
+    /// Every seat still in the match votes -- humans by hand, bot seats (any
+    /// mentality) by the engine via [`Self::auto_player`] (user ruling
+    /// 2026-10-09). An `ai` seat used to be dropped here, which left an
+    /// advanced bot (`ai` off, held for its driver) as a voter nobody answered
+    /// -- and a solo vote never expires.
     fn voters(&self) -> Vec<usize> {
         (0..self.world.player_count())
-            .filter(|&p| !self.world.out(p) && !self.world.st.players[p].ai)
+            .filter(|&p| !self.world.out(p))
             .collect()
     }
 
@@ -1568,7 +1606,7 @@ impl Match {
         }
         for k in 0..self.vote.players.len() {
             let s = self.vote.players[k] as usize;
-            if self.vote.answers[k] < 0 && (self.world.out(s) || self.auto_player(s)) {
+            if self.vote.answers[k] < 0 && (self.world.out(s) || self.auto_vote(s)) {
                 self.vote.answers[k] = 1;
                 self.changed = true;
             }
@@ -1789,7 +1827,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             }
             // The rule's own gate (`On::Play`'s), so the cost check stays in the
             // rule body where the 规则书 clause lives.
-            cx.rules.cant_play(cx, i, &m.card)
+            cx.rules_cant_play(i, &m.card)
         }
         "buy" => {
             if !my_turn || st.step != stage::END || busy {

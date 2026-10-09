@@ -123,7 +123,7 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("haneoka_cancel_title")).card("card", ID),
-        &Msg::new(key!("haneoka_cancel_ask")).n("money", amount as i64),
+        &Msg::new(key!("haneoka_cancel_ask")).n("money", amount as i64).card("card", ID),
     )? {
         return Ok(());
     }

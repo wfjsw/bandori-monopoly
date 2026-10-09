@@ -125,18 +125,44 @@ export function Players({ m, solo, elapsed }: { m: Model; solo: boolean; elapsed
   );
 }
 
-export function Log({ lines, children }: { lines: LogLine[]; children?: ReactNode }) {
+/** Group the log per turn: each 「第 N 轮 · … 的回合」 heading opens a block
+ *  whose entries follow it, barred in that player's colour. Setup lines before
+ *  the first turn stay unheaded. */
+function turnGroups(lines: LogLine[]): { head?: LogLine; body: LogLine[] }[] {
+  const groups: { head?: LogLine; body: LogLine[] }[] = [];
+  for (const l of lines) {
+    if (l.turn) groups.push({ head: l, body: [] });
+    else if (groups.length) groups[groups.length - 1].body.push(l);
+    else (groups[0] ??= { body: [] }).body.push(l);
+  }
+  return groups;
+}
+
+export function Log({ lines, colorOf, children }: { lines: LogLine[]; colorOf?: (playerId: number) => string; children?: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = ref.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines]);
+  const groups = turnGroups(lines);
   return (
     <div className={s.log}>
       <PanelTab><Icon name="history" />{tr("menu.history")}</PanelTab>
       {children}
       <div className={s.lines} ref={ref}>
-        {lines.map((l) => <div key={l.id} className={cx(l.turn && s.turnLine, l.stage && s.stageLine)}>{l.text}</div>)}
+        {groups.map((g) => {
+          const bar = g.head && g.head.who != null && g.head.who >= 0 ? colorOf?.(g.head.who) : undefined;
+          return (
+            <div
+              key={g.head?.id ?? "pre"}
+              className={cx(g.head && s.turnGroup)}
+              style={bar ? { ["--bar" as string]: bar } : undefined}
+            >
+              {g.head && <div className={s.groupHead}>{g.head.text}</div>}
+              {g.body.map((l) => <div key={l.id} className={cx(l.stage && s.stageLine)}>{l.text}</div>)}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

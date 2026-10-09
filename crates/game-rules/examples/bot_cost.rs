@@ -396,6 +396,9 @@ fn main() {
         game_rules::bot_cost::COUNTERACT_PROBE_MEMO_HITS.store(0, Ordering::Relaxed);
         game_rules::bot_cost::COUNTERACT_DECLARED.store(0, Ordering::Relaxed);
         game_core::engine::bot_cost::WORLD_CLONES.store(0, Ordering::Relaxed);
+        game_core::engine::bot_cost::CANT_PLAY_CALLS.store(0, Ordering::Relaxed);
+        game_core::engine::bot_cost::CANT_PLAY_MEMO_HITS.store(0, Ordering::Relaxed);
+        game_core::engine::bot_cost::WORLD_SHARES.store(0, Ordering::Relaxed);
     }
     counts.play.store(0, Ordering::Relaxed);
     counts.event.store(0, Ordering::Relaxed);
@@ -450,6 +453,9 @@ fn main() {
         let guest_ns = rules_c::GUEST_NS.load(Ordering::Relaxed);
         let host_clones = rules_c::HOST_WORLD_CLONES.load(Ordering::Relaxed);
         let cx_clones = core_c::WORLD_CLONES.load(Ordering::Relaxed);
+        let shares = core_c::WORLD_SHARES.load(Ordering::Relaxed);
+        let cp_calls = core_c::CANT_PLAY_CALLS.load(Ordering::Relaxed);
+        let cp_memo = core_c::CANT_PLAY_MEMO_HITS.load(Ordering::Relaxed);
         let inst_s = inst_ns as f64 / 1e9;
         let store_s = store_ns as f64 / 1e9;
         let guest_s = guest_ns as f64 / 1e9;
@@ -460,10 +466,17 @@ fn main() {
             inst as f64 / entries.max(1) as f64,
         );
         println!(
-            "  world clones/game: {:.0} cx.world_copy + {:.0} host-boundary ({} total)",
+            "  world clones/game: {:.0} cx.world_copy + {:.0} host-boundary ({} total); {:.0} shares (no copy)",
             cx_clones as f64 / n,
             host_clones as f64 / n,
             (cx_clones + host_clones) as f64 / n,
+            shares as f64 / n,
+        );
+        println!(
+            "  cant_play/game: {:.0} evaluated, {:.0} memo hits ({:.0} total queries)",
+            cp_calls as f64 / n,
+            cp_memo as f64 / n,
+            (cp_calls + cp_memo) as f64 / n,
         );
         let wins = rules_c::COUNTERACT_WINDOWS.load(Ordering::Relaxed);
         let wins_skip = rules_c::COUNTERACT_WINDOWS_SKIPPED.load(Ordering::Relaxed);

@@ -6,7 +6,36 @@ import type { Msg } from "../../i18n/msg";
 export function optionCard(o: Msg): string | null {
   const args = Object.values(o.a ?? {});
   const v = args.length === 1 ? args[0] : undefined;
-  return v && "card" in v ? v.card : null;
+  const id = v && typeof v === "object" && "card" in v ? (v as { card?: unknown }).card : undefined;
+  return typeof id === "string" && id ? id : null;
+}
+
+/**
+ * Every card id a message names -- its own `card` arguments plus those of any
+ * nested `msg` / `list` parts. A prompt that refers to a card this way shows
+ * the card itself (never just its title): option pills carry a mini face and
+ * the body's cards land in the related-card panel.
+ */
+export function msgCards(m: Msg | string | undefined | null): string[] {
+  const out: string[] = [];
+  const walk = (v: unknown) => {
+    if (v === null || v === undefined || typeof v !== "object") return;
+    if (typeof (v as { k?: unknown }).k === "string") {
+      for (const arg of Object.values((v as { a?: Record<string, unknown> }).a ?? {})) walk(arg);
+      return;
+    }
+    const c = (v as { card?: unknown }).card;
+    if (typeof c === "string" && c && !out.includes(c)) out.push(c);
+    if ("msg" in (v as object)) walk((v as { msg: unknown }).msg);
+    const list = (v as { list?: unknown }).list;
+    if (Array.isArray(list)) for (const x of list) walk(x);
+    for (const [k, x] of Object.entries(v as object)) {
+      if (k === "card" || k === "msg" || k === "list") continue;
+      if (x && typeof x === "object") walk(x);
+    }
+  };
+  walk(m);
+  return out;
 }
 
 export function returnsPickNumber(p: MatchPrompt | undefined): number | null {

@@ -1,4 +1,4 @@
-﻿{
+{
  "note": "角色技能 / 团技能的简明说明（给新手看的版本）。原文在 characters.json / bands.json（从设计表导出，不要改）；这里手写，导出脚本不会覆盖。",
  "characters": [
   {

@@ -59,12 +59,16 @@ test("malformed inputs never dispatch an action", async () => {
   assert.equal(h.sent.length, 0);
 });
 
-test("online cheats and raw debug JSON are blocked; ordinary online actions work", async () => {
+test("online cheats dispatch in debug builds; ordinary online actions work", async () => {
   const h = harness("online");
-  await assert.rejects(h.run("money 1"), /soloOnly/);
-  await assert.rejects(h.run('act {"act":"debug","debug":"money","value":1}'), /soloOnly/);
+  await h.run("money 1");
+  await h.run('act {"act":"debug","debug":"money","value":1}');
   await h.run('act {"act":"roll"}');
-  assert.deepEqual(h.sent, [{ act: "roll" }]);
+  assert.deepEqual(h.sent, [
+    { act: "debug", debug: "money", value: 1, target: 0 },
+    { act: "debug", debug: "money", value: 1 },
+    { act: "roll" },
+  ]);
 });
 
 test("replays and autopilot block commands, and auto off restores manual control", async () => {

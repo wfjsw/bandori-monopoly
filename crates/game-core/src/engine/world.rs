@@ -6,6 +6,7 @@
 //! bidding and the end-match vote belong to the host ([`super::Match`]) instead.
 
 use std::collections::VecDeque;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -574,5 +575,93 @@ impl World {
             }
         }
         st
+    }
+}
+
+/// Copy-on-write handle to a [`World`] (engine efficiency fix B,
+/// `docs/BOT.md` "engine efficiency A–C").
+///
+/// Reads deref straight to the inner world -- **no clone**. The first write
+/// through [`DerefMut`] clones only when the handle is shared
+/// ([`Arc::make_mut`]); a private handle is mutated in place. Pure checks
+/// (`cant_play` probes, buy quotes, guard bodies) share one handle with the
+/// live world, so a check whose body never writes never copies the world --
+/// and `Run` clones handed to a rules store are refcount bumps, not deep
+/// copies.
+///
+/// [`Self::stamp`] changes on every write. Play-gate memos key on it, so a
+/// cached `cant_play` verdict is dropped the moment anything writes.
+#[derive(Clone)]
+pub struct SharedWorld {
+    inner: Arc<World>,
+    stamp: u64,
+}
+
+impl SharedWorld {
+    /// Take ownership of `w` behind a fresh handle.
+    pub fn new(w: World) -> Self {
+        Self {
+            inner: Arc::new(w),
+            stamp: 0,
+        }
+    }
+
+    /// Another handle to the same world -- a refcount bump, **no copy**.
+    pub fn share(&self) -> Self {
+        self.clone()
+    }
+
+    /// A monotonic id for this world's current contents. Changes on every
+    /// write; equal stamps mean equal state (the handle was shared and
+    /// neither side wrote).
+    pub fn stamp(&self) -> u64 {
+        self.stamp
+    }
+
+    /// Unwrap the world, deep-cloning only if the handle is still shared.
+    pub fn into_inner(self) -> World {
+        match Arc::try_unwrap(self.inner) {
+            Ok(w) => w,
+            Err(arc) => (*arc).clone(),
+        }
+    }
+
+    /// A plain deep copy (the old [`World::clone`] cost). Prefer
+    /// [`Self::share`] when the caller only needs a read view or a COW
+    /// sandbox.
+    pub fn deep_clone(&self) -> World {
+        (*self.inner).clone()
+    }
+}
+
+impl Deref for SharedWorld {
+    type Target = World;
+    fn deref(&self) -> &World {
+        &self.inner
+    }
+}
+
+impl DerefMut for SharedWorld {
+    fn deref_mut(&mut self) -> &mut World {
+        // Cheap monotonic stamp (not a global counter: only same-handle
+        // comparisons matter, and a shared clone carries the stamp of the
+        // state it captured).
+        self.stamp = self.stamp.wrapping_add(1);
+        Arc::make_mut(&mut self.inner)
+    }
+}
+
+impl From<World> for SharedWorld {
+    fn from(w: World) -> Self {
+        Self::new(w)
+    }
+}
+
+impl std::fmt::Debug for SharedWorld {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedWorld")
+            .field("stamp", &self.stamp)
+            .field("world", &*self.inner)
+            .finish()
     }
 }

@@ -3,8 +3,10 @@
 //! Compiled in only when `cfg(debug_assertions)` (the `mod debug` declaration
 //! in `engine/mod.rs` is gated the same way), so a `--release` binary or the
 //! production browser glue has no cheat handling at all and a `debug` act is
-//! refused as an unknown command. Solo matches only: online rooms are always
-//! Casual / Ranked and must never take a cheat input (`docs/SERVER.md`).
+//! refused as an unknown command. Debug builds take a cheat input in every
+//! match mode -- Solo, Casual and Ranked alike -- and mark the match
+//! (`MatchState.debugOpen`) so the record shows the cheat use
+//! (`docs/SERVER.md`).
 //!
 //! Validate everything before changing the world; a suspended routine would
 //! otherwise overwrite changes when it resumes.
@@ -12,13 +14,10 @@
 #![cfg(debug_assertions)]
 
 use super::Match;
-use crate::{msg::Msg, net::NetMessage, state::stage, MatchMode};
+use crate::{msg::Msg, net::NetMessage, state::stage};
 
 impl Match {
     pub(super) fn debug_act(&mut self, actor: usize, m: &NetMessage) -> Result<(), Msg> {
-        if self.mode != MatchMode::Solo {
-            return Err(Msg::new("err.debug_solo_only"));
-        }
         if self.world.st.phase != "play" {
             return Err(Msg::new("err.debug_play_only"));
         }
