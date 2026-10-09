@@ -26,8 +26,14 @@ pub const MYGO: CardDef = CardDef::new(
         On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
         On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, after_roll),
         On::Hook(&[HookKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
-        On::Play("", Some(can_step), step_one),
-        On::Play("", Some(can_draw), draw_two),
+        // One Play entry for both press effects (the engine dispatches only
+        // the first). 规则书（2）/（3） give two independent 「可」 abilities
+        // (move-1 before the move roll for 1 crystal; draw 1 for 2 crystals)
+        // rather than one press with two modes, so each press activates one of
+        // them and the player presses again for the other. The gate admits
+        // whenever either is available; the body lists the available options
+        // and skips the prompt when only one is.
+        On::Play("", Some(cant_play), press),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
@@ -74,8 +80,21 @@ fn on_discarded(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
-fn can_step(player_id: i32) -> Option<Msg> {
+/// Which press effects are available right now, in rulebook order: the
+/// (2) move-1 and the (3) draw-1. `ctx::is_placed` is true for the skill
+/// press, so the instance's crystal pool is the one being spent.
+fn available(player_id: i32) -> [bool; 2] {
+    if card_sdk::ctx::skill_blocked(player_id, "") || !is_my_turn(player_id) {
+        return [false, false];
+    }
+    let c = ctx::crystals();
+    [c >= 1, c >= 2]
+}
+
+/// Combined gate: admit whenever either press effect is available. The (2)
+/// move-1 costs 1 crystal and the (3) draw costs 2, so 1 crystal is already
+/// enough for the move half.
+fn cant_play(player_id: i32) -> Option<Msg> {
     if card_sdk::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
@@ -88,6 +107,40 @@ fn can_step(player_id: i32) -> Option<Msg> {
     None
 }
 
+/// One press = one effect. The rulebook's （2） and （3） are two independent
+/// 「可」 abilities (different windows and costs), so when both are available
+/// the player picks which this press activates; a single available option is
+/// taken without prompting. The player can press again for the other.
+fn press(player_id: i32) -> card_sdk::Asked {
+    let avail = available(player_id);
+    let step = avail[0];
+    let draw = avail[1];
+    if !step && !draw {
+        return Ok(());
+    }
+    if step && !draw {
+        return step_one(player_id);
+    }
+    if draw && !step {
+        return draw_two(player_id);
+    }
+    let k = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("mygo_press_title")),
+        &Msg::new(key!("mygo_press_which")),
+        &[
+            Msg::new(key!("mygo_press_step")),
+            Msg::new(key!("mygo_press_draw")),
+        ],
+    )?;
+    if k == 0 {
+        step_one(player_id)
+    } else {
+        draw_two(player_id)
+    }
+}
+
+/// （2）「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」.
 fn step_one(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
     if ctx::crystals() < 1 {
@@ -104,19 +157,6 @@ fn step_one(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （3）「你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡」.
-fn can_draw(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
-        return Some(Msg::new(key!("skill_blocked")));
-    }
-    if !is_my_turn(player_id) {
-        return Some(Msg::new(key!("mygo_not_your_turn")));
-    }
-    if ctx::crystals() < 2 {
-        return Some(Msg::new(key!("mygo_need_two")));
-    }
-    None
-}
-
 fn draw_two(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
     if ctx::crystals() < 2 {
@@ -124,6 +164,7 @@ fn draw_two(player_id: i32) -> card_sdk::Asked {
     }
     ctx::add_crystals(-2, i32::MAX)?;
     ctx::draw(player_id, 1)?;
+    ctx::log(player_id, &Msg::new(key!("mygo_draw")));
     Ok(())
 }
 

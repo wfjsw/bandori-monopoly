@@ -1220,9 +1220,10 @@ fn band_ineffective_card_adds_over_cap_crystal() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: the band skill declares two `On::Play` activations (move-1 and draw); `use_skill` runs the first entry only, so the draw half is unreachable and the press takes the move-1 half instead"]
 fn band_draw_for_two_crystals() {
     // 规则书: 「你的回合中，可移除此卡的两个[奇迹水晶]以抽一张卡。」
+    // With 2 crystals both press effects are available, so the merged entry
+    // asks which; this picks the draw half.
     let mut t = Table::new(&["高松灯", "千早爱音"]);
     t.clean();
     t.begin_turn(0);
@@ -1230,14 +1231,17 @@ fn band_draw_for_two_crystals() {
     set_crystals(&mut t, 0, &band, 2);
     t.set_draw(0, &["R:[衍生] 压"]);
     t.skill(0, &band).unwrap();
+    let k = t.option("mygo_press_draw").expect("draw option offered");
+    t.answer(0, k).unwrap();
+    drain(&mut t);
     assert_eq!(crystals(&t, 0, &band), 0);
     assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()]);
 }
 
 #[test]
-#[test]
 fn band_move_one_for_a_crystal() {
     // 规则书: 「你的回合中，可于移动掷骰前选择移动1格以替代移动掷骰并移除一个[奇迹水晶]」
+    // 1 crystal: only the move-1 half is available, so no prompt.
     let mut t = Table::new(&["高松灯", "千早爱音"]);
     t.clean();
     t.begin_turn(0);
@@ -1248,6 +1252,37 @@ fn band_move_one_for_a_crystal() {
     drain(&mut t);
     assert_eq!(t.pos(0), 1, "moved exactly 1");
     assert_eq!(crystals(&t, 0, &band), 0, "one crystal removed");
+}
+
+#[test]
+fn band_press_offers_both_effects_when_both_are_available() {
+    // 规则书（2）/（3）: two independent 「可」 abilities -- with enough crystals
+    // for both, the press asks which one this activation takes. The move half
+    // runs the move immediately (leaving 运营), so take the draw first and the
+    // move on the next press.
+    let mut t = Table::new(&["高松灯", "千早爱音"]);
+    t.clean();
+    t.begin_turn(0);
+    let band = t.skill_id(0, "迷途之星");
+    set_crystals(&mut t, 0, &band, 3);
+    t.set_draw(0, &["R:[衍生] 压", "R:[衍生] 压"]);
+    t.skill(0, &band).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    assert!(t.option("mygo_press_step").is_some(), "{}", t.dump_prompt());
+    assert!(t.option("mygo_press_draw").is_some(), "{}", t.dump_prompt());
+    // Take the draw half this press.
+    let k = t.option("mygo_press_draw").unwrap();
+    t.answer(0, k).unwrap();
+    drain(&mut t);
+    assert_eq!(crystals(&t, 0, &band), 1, "two crystals for the draw");
+    assert_eq!(t.hand(0), vec!["R:[衍生] 压".to_string()]);
+    // The move half is still reachable on the next press (only option left).
+    t.skill(0, &band).unwrap();
+    rest(&mut t);
+    drain(&mut t);
+    assert_eq!(t.pos(0), 1, "moved exactly 1");
+    assert_eq!(crystals(&t, 0, &band), 0, "one crystal for the move");
 }
 
 // ================================================================ interactions
