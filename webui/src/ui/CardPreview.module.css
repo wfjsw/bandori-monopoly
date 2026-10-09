@@ -22,7 +22,9 @@
 .auto { }
 
 .art { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; background: #eee; }
-.art img { width: 100%; display: block; }
+/* Card art is 4:3; the preview shows it at 75% of that height (16:9), cropped
+   around the centre, so the text below gets the room. */
+.art img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; object-position: center; }
 .title { font-size: 17px; font-weight: 700; margin: 6px 2px 2px; }
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 4px; }
 .text { font-size: 13px; line-height: 1.6; max-height: 240px; overflow: hidden; white-space: pre-wrap; }

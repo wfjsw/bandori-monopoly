@@ -94,7 +94,7 @@
 .choiceCheck { position: absolute; right: 5px; top: 5px; width: 22px; height: 22px; accent-color: var(--pink); cursor: pointer; }
 .detail { width: 250px; height: 100%; flex: none; background: var(--light-pill); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
 .dArt { flex: none; border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
-.dArt img { width: 100%; display: block; }
+.dArt img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; object-position: center; }
 .dTitle { font-size: 17px; font-weight: 700; margin: 4px 2px 0; }
 .dTags { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 2px; }
 .dText { font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow: auto; flex: 1; min-height: 0; }
