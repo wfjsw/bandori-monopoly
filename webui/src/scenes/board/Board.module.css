@@ -15,10 +15,11 @@
 /* The map window is the whole slot (the wrap fills it and clips); the board
    inside keeps a width:height of 1..1.6 (viewport.ts `boardRect`) and is
    centred in the window when the slot is taller or wider than that. */
-/* Margins keep the map off the stage's top edge and clear of the docked
-   hand (its bar ~38px + the retracted fan's 30px peek), plus breathing room.
+/* Margins keep the map off the stage's top edge. The hand docks over the
+   bottom edge (Master Duel) and the map window fills what is left, so there
+   is no reserved strip beneath it.
    Margins, not padding: `mapBox` measures the slot's client box. */
-.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; margin: 18px 0 82px; display: flex; align-items: center; justify-content: center; }
+.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; margin: 18px 0; display: flex; align-items: center; justify-content: center; }
 .right { position: relative; flex: 0 0 300px; }
 .logSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
 

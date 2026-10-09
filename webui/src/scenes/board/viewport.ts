@@ -11,8 +11,10 @@
 // Coordinates are the window's own pixels: the zoom layer carries
 // `translate(tx px, ty px) scale(z)` with `transform-origin: 0 0`, so a board
 // point (x, y) -- 0..boardW / 0..boardH -- lands at (x * z + tx, y * z + ty) in
-// window pixels. `z = 1` is "fit": the whole board, centred, no pan. Dragging
-// may still move it up to `OVERPAN` of the *window* past any edge.
+// window pixels. `z = FIT_ZOOM` is "fit": the whole board at its boardRect
+// size, centred, no pan. The zoom floor (`MIN_ZOOM`) sits just under fit so a
+// wheel-out can show a little more of the window. Dragging may still move the
+// board up to `OVERPAN` of the *window* past any edge.
 
 import {
   useCallback, useRef, useState,
@@ -76,8 +78,12 @@ export interface Point {
   y: number;
 }
 
-/** Fit view (the pre-zoom default): the whole board, centred in the window. */
-export const MIN_ZOOM = 1;
+/** Fit view (the pre-zoom default): the whole board at its boardRect size,
+ *  centred in the window. The `1:1` / reset control lands here. */
+export const FIT_ZOOM = 1;
+/** The zoom floor. Slightly under fit (master's tweak) so a wheel-out can
+ *  show a little more of the window around the board. */
+export const MIN_ZOOM = 0.95;
 export const MAX_ZOOM = 3;
 /** Screen-pixel movement before a press turns into a pan. Clicks stay under
  *  this so tiles, field cards and tokens remain tappable. */
@@ -87,9 +93,15 @@ const WHEEL_K = 0.0022;
 /** Each button / key step multiplies the zoom by this. */
 const STEP = 1.25;
 
-/** Fit: the board centred in the window, whole and un-panned. */
+/** The board centred in the window at zoom `z`, whole and un-panned. */
+export function centeredViewport(b: MapBox, z: number = FIT_ZOOM): Viewport {
+  const z2 = clampZoom(z);
+  return { z: z2, tx: (b.winW - b.boardW * z2) / 2, ty: (b.winH - b.boardH * z2) / 2 };
+}
+
+/** Fit: the board at its boardRect size, centred in the window. */
 export function fitViewport(b: MapBox): Viewport {
-  return { z: MIN_ZOOM, tx: (b.winW - b.boardW) / 2, ty: (b.winH - b.boardH) / 2 };
+  return centeredViewport(b, FIT_ZOOM);
 }
 
 export function clampZoom(z: number): number {
@@ -128,8 +140,10 @@ export function clampPan(v: Viewport, b: MapBox): Viewport {
  *  (wheel / pinch zooming around the cursor). */
 export function zoomAround(v: Viewport, px: number, py: number, z: number, b: MapBox): Viewport {
   const z2 = clampZoom(z);
-  // Zooming all the way out lands on the fit view, overscroll and all.
-  if (z2 <= MIN_ZOOM) return fitViewport(b);
+  // Zooming out to fit (or below) lands on the centred view at that zoom --
+  // the whole board visible, overscroll and all. The cursor anchor only
+  // applies while zoomed in past fit.
+  if (z2 <= FIT_ZOOM) return centeredViewport(b, z2);
   const k = z2 / clampZoom(v.z);
   return clampPan({ z: z2, tx: px - (px - v.tx) * k, ty: py - (py - v.ty) * k }, b);
 }

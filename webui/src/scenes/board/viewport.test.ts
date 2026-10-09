@@ -8,8 +8,8 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
-  MAX_RATIO, MAX_ZOOM, MIN_RATIO, MIN_ZOOM, OVERPAN, boardRect, mapBox,
-  clampPan, clampZoom, fitViewport, panBy, pinchAround, stepZoom, wheelZoom, zoomAround,
+  FIT_ZOOM, MAX_RATIO, MAX_ZOOM, MIN_RATIO, MIN_ZOOM, OVERPAN, boardRect, mapBox,
+  centeredViewport, clampPan, clampZoom, fitViewport, panBy, pinchAround, stepZoom, wheelZoom, zoomAround,
   type MapBox, type Viewport,
 } from "./viewport.ts";
 
@@ -26,20 +26,28 @@ const under = (v: Viewport, px: number, py: number) => ({
   y: (py - v.ty) / v.z,
 });
 
-test("clampZoom holds zoom between fit and 3x", () => {
+test("clampZoom holds zoom between the floor and 3x", () => {
   assert.equal(clampZoom(0.2), MIN_ZOOM);
-  assert.equal(clampZoom(1), 1);
+  assert.equal(clampZoom(MIN_ZOOM), MIN_ZOOM);
+  assert.equal(clampZoom(FIT_ZOOM), FIT_ZOOM);
   assert.equal(clampZoom(2.5), 2.5);
   assert.equal(clampZoom(10), MAX_ZOOM);
   assert.equal(clampZoom(NaN), MIN_ZOOM);
+  // The floor sits just under fit, so a wheel-out can show a little more of
+  // the window than the board's own rect (master's minimum-zoom tweak).
+  assert.ok(MIN_ZOOM < FIT_ZOOM);
 });
 
 test("fitViewport centres the board in the window", () => {
-  assert.deepEqual(fitViewport(SQUARE), { z: 1, tx: 0, ty: 0 });
+  assert.deepEqual(fitViewport(SQUARE), { z: FIT_ZOOM, tx: 0, ty: 0 });
   // Wide slot: the board keeps 16:10 and sits centred -- 416px of window on
   // each side. The map does not stretch; the window does.
-  assert.deepEqual(fitViewport(WIDE), { z: 1, tx: (2560 - 1728) / 2, ty: 0 });
-  assert.deepEqual(fitViewport(TALL), { z: 1, tx: 0, ty: (1100 - 700) / 2 });
+  assert.deepEqual(fitViewport(WIDE), { z: FIT_ZOOM, tx: (2560 - 1728) / 2, ty: 0 });
+  assert.deepEqual(fitViewport(TALL), { z: FIT_ZOOM, tx: 0, ty: (1100 - 700) / 2 });
+  // A slightly-smaller-than-fit zoom is still centred.
+  const out = centeredViewport(WIDE, MIN_ZOOM);
+  assert.equal(out.z, MIN_ZOOM);
+  assert.ok(Math.abs(out.tx - (2560 - 1728 * MIN_ZOOM) / 2) < 1e-9);
   // The fit view is always inside the overscroll limits.
   for (const b of [WIDE, SQUARE, TALL]) {
     const f = fitViewport(b);
@@ -88,9 +96,11 @@ test("zoomAround clamps pan while still hugging the cursor", () => {
   // Zooming into the top-left corner at fit keeps the corner under the cursor.
   const z = zoomAround(fitViewport(SQUARE), 0, 0, 3, SQUARE);
   assert.deepEqual(z, { z: 3, tx: 0, ty: 0 });
-  // Zooming all the way out lands on the fit view, overscroll dropped.
+  // Zooming all the way out lands on the centred view at the zoom floor,
+  // overscroll dropped.
   const v: Viewport = { z: 3, tx: SQUARE.winW * (1 - 3), ty: SQUARE.winH * (1 - 3) };
   assert.deepEqual(zoomAround(v, SQUARE.winW / 2, SQUARE.winH / 2, 1, SQUARE), fitViewport(SQUARE));
+  assert.deepEqual(zoomAround(v, SQUARE.winW / 2, SQUARE.winH / 2, 0.5, SQUARE), centeredViewport(SQUARE, MIN_ZOOM));
   // Any anchor stays within the overscroll limits -- on the wide slot too,
   // where the fit view is already centred with room to spare.
   for (const b of [WIDE, SQUARE]) {
@@ -105,14 +115,15 @@ test("zoomAround clamps pan while still hugging the cursor", () => {
   }
 });
 
-test("wheelZoom steps continuously and caps at fit / 3x", () => {
+test("wheelZoom steps continuously and caps at the floor / 3x", () => {
   for (const b of [WIDE, SQUARE]) {
     let v = fitViewport(b);
     for (let i = 0; i < 40; i++) v = wheelZoom(v, 400, 300, -120, b); // wheel up
     assert.equal(v.z, MAX_ZOOM);
     for (let i = 0; i < 80; i++) v = wheelZoom(v, 400, 300, 120, b); // wheel down
+    // Zooming out past fit lands centred on the zoom floor.
     assert.equal(v.z, MIN_ZOOM);
-    assert.deepEqual(v, fitViewport(b));
+    assert.deepEqual(v, centeredViewport(b, MIN_ZOOM));
   }
 });
 
