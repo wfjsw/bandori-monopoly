@@ -528,6 +528,7 @@ impl World {
 
     /// Append an event (`MatchHost.Log`). Returns it for further fields.
     pub fn log(&mut self, kind: &str, player_id: i32, msg: Msg) -> &mut MatchEvent {
+        let _tg = crate::engine::rtimer::guard(&crate::engine::rtimer::LOG_NS);
         let e = MatchEvent {
             id: self.next_event,
             r#type: kind.into(),

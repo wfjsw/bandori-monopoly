@@ -70,22 +70,12 @@ impl SeatView {
     pub fn from_match(m: &Match, member: i32) -> Self {
         let state = m.state();
         let player_id = state.player_of(member);
-        let extra = m.view_extra(member);
-        let ai_answer = extra.get("aiAnswer").cloned().and_then(|v| {
-            if v.is_null() {
-                None
-            } else {
-                serde_json::from_value::<AiAnswer>(v).ok()
-            }
+        let extra = m.view_extra_typed(member);
+        let ai_answer = extra.ai_answer.map(|a| AiAnswer {
+            answer: a.answer,
+            picked: a.picked,
+            worth: a.worth,
         });
-        let playable = extra
-            .get("playable")
-            .and_then(|v| serde_json::from_value::<Vec<bool>>(v.clone()).ok())
-            .unwrap_or_default();
-        let est_cost = extra
-            .get("estCost")
-            .and_then(|v| serde_json::from_value::<Vec<i32>>(v.clone()).ok())
-            .unwrap_or_default();
         Self {
             hand: m.hand_of(member),
             draw: m.draw_of(member),
@@ -93,8 +83,8 @@ impl SeatView {
             you: member,
             player_id,
             ai_answer,
-            playable,
-            est_cost,
+            playable: extra.playable,
+            est_cost: extra.est_cost,
         }
     }
 

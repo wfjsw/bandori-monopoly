@@ -193,16 +193,8 @@ impl Simulator for MatchSim {
         }
         let st = fork.state();
         let hand = fork.hand_of(self.member);
-        let extra = fork.view_extra(self.member);
-        let playable = extra
-            .get("playable")
-            .and_then(|v| serde_json::from_value::<Vec<bool>>(v.clone()).ok())
-            .unwrap_or_default();
-        let est_cost = extra
-            .get("estCost")
-            .and_then(|v| serde_json::from_value::<Vec<i32>>(v.clone()).ok())
-            .unwrap_or_default();
-        action::legal_actions_with_cost(&self.data, &st, &hand, &playable, &est_cost, seat)
+        let extra = fork.view_extra_typed(self.member);
+        action::legal_actions_with_cost(&self.data, &st, &hand, &extra.playable, &extra.est_cost, seat)
     }
 
     fn apply(&mut self, fork: &mut Match, seat: usize, action: &Action) -> Result<(), SimError> {
@@ -262,20 +254,17 @@ impl Simulator for MatchSim {
         }
         let st = fork.state();
         let hand = fork.hand_of(self.member);
-        let extra = fork.view_extra(self.member);
-        let ai_answer = extra
-            .get("aiAnswer")
-            .filter(|v| !v.is_null())
-            .and_then(|v| serde_json::from_value::<AiAnswer>(v.clone()).ok());
-        let est_cost = extra
-            .get("estCost")
-            .and_then(|v| serde_json::from_value::<Vec<i32>>(v.clone()).ok())
-            .unwrap_or_default();
+        let extra = fork.view_extra_typed(self.member);
+        let ai_answer = extra.ai_answer.map(|a| AiAnswer {
+            answer: a.answer,
+            picked: a.picked,
+            worth: a.worth,
+        });
         action::action_priors(
             &self.data,
             &st,
             &hand,
-            &est_cost,
+            &extra.est_cost,
             ai_answer.as_ref(),
             seat,
             actions,
@@ -313,14 +302,16 @@ impl MatchSim {
             if fork.ended() {
                 return Advance::Ended;
             }
-            let st = fork.state();
-            if st.round.max(0) as u32 >= start_round + horizon.rounds {
+            // Cheap probe: no `MatchState` clone on the non-surface ticks.
+            let probe = fork.surface_probe(self.member);
+            if probe.round.max(0) as u32 >= start_round + horizon.rounds {
                 return Advance::Horizon;
             }
             // The searching seat is never auto-played (`ai = false` in the
             // fork), so every decision of its is handled here: returned to
             // the tree in descent, answered by the heuristic in rollout.
-            if st.prompt.id > 0 && st.prompt.waiting(seat as i32) {
+            if probe.prompt_waiting {
+                let st = fork.state();
                 let searchable = matches!(
                     action::surface(&st, seat),
                     Some(Surface::Prompt(ref p)) if action::searchable_prompt(p)
@@ -354,32 +345,31 @@ impl MatchSim {
                     return Advance::Horizon;
                 }
             }
-            if !turn_ended {
-                if let Some(Surface::Turn) = action::surface(&st, seat) {
-                    let acts = self.legal_actions(fork, seat);
-                    if !acts.is_empty() && intercept_seat {
-                        return Advance::Decision;
-                    }
-                    // Rollout (or heuristic-delegated surface): the engine's
-                    // own turn policy -- buy / build / discard / end, or roll.
-                    let msg = heuristic_message_with(&self.data, fork, self.member, &st);
-                    let is_end = msg.act == "end";
-                    if fork.act(self.member, &msg).is_err() {
-                        // A refused roll (main move already spent) falls
-                        // through to `end`.
-                        let _ = fork.act(self.member, &NetMessage::act("end"));
-                        turn_ended = true;
-                    } else if is_end {
-                        turn_ended = true;
-                    }
-                    continue;
+            if !turn_ended && probe.turn_surface {
+                let st = fork.state();
+                let acts = self.legal_actions(fork, seat);
+                if !acts.is_empty() && intercept_seat {
+                    return Advance::Decision;
                 }
+                // Rollout (or heuristic-delegated surface): the engine's
+                // own turn policy -- buy / build / discard / end, or roll.
+                let msg = heuristic_message_with(&self.data, fork, self.member, &st);
+                let is_end = msg.act == "end";
+                if fork.act(self.member, &msg).is_err() {
+                    // A refused roll (main move already spent) falls
+                    // through to `end`.
+                    let _ = fork.act(self.member, &NetMessage::act("end"));
+                    turn_ended = true;
+                } else if is_end {
+                    turn_ended = true;
+                }
+                continue;
             }
             if turn_ended {
                 // Clear the latch once the state has moved on.
-                if st.turn != seat as i32
-                    || (st.step != stage::END && st.step != stage::NONE)
-                    || st.prompt.id > 0
+                if probe.turn != seat as i32
+                    || (probe.step != stage::END && probe.step != stage::NONE)
+                    || probe.prompt_id > 0
                 {
                     turn_ended = false;
                 }
@@ -534,19 +524,91 @@ pub fn heuristic_message_view(data: &GameData, view: &SeatView) -> NetMessage {
 }
 
 /// [`heuristic_message_view`] over a forked [`Match`]'s own accessors.
+///
+/// Rollout hot path: builds only what the heuristic reads (the caller's
+/// already-fresh `st`, the hand size / first card, and `aiAnswer` when a prompt
+/// is open) -- no `SeatView`, no `view_extra` JSON, no `draw_of` sort.
 pub fn heuristic_message_with(
     data: &GameData,
     fork: &Match,
     member: i32,
     st: &MatchState,
 ) -> NetMessage {
-    let mut view = SeatView::from_match(fork, member);
-    // The caller often already holds a fresher `state()` than `from_match`
-    // re-reads; prefer the one it passed.
-    if st.prompt.id != view.state.prompt.id || st.seq != view.state.seq {
-        view.state = st.clone();
+    let player_id = st.player_of(member);
+    if st.prompt.id > 0 && st.prompt.waiting(player_id) {
+        let ai_answer = fork.view_extra_typed(member).ai_answer.map(|a| AiAnswer {
+            answer: a.answer,
+            picked: a.picked,
+            worth: a.worth,
+        });
+        if let Some(ans) = &ai_answer {
+            if let Some(action) = ai_answer_to_action(st, ans, player_id.max(0) as usize) {
+                return action::to_net_message(&action, st, player_id.max(0) as usize);
+            }
+        }
+        return NetMessage {
+            act: "answer".into(),
+            prompt: st.prompt.id,
+            value: st.prompt.fallback,
+            ..Default::default()
+        };
     }
-    heuristic_message_view(data, &view)
+    // Turn surface. Same order as `heuristic_message_view`; hand is only
+    // needed for the over-hand discard branch.
+    let me = player_id.max(0) as usize;
+    let limit = st.players.get(me).map(|p| p.hand_limit()).unwrap_or(5);
+    let (hand_len, first) = fork.hand_len_first(member);
+    if hand_len as i32 > limit {
+        if let Some(c) = first {
+            return NetMessage {
+                act: "discard".into(),
+                card: c,
+                ..Default::default()
+            };
+        }
+    }
+    if st.step == stage::OPS {
+        if action::ab_on("BOT_STRENGTH_AB_NO_GATES") {
+            if st.skip_move {
+                return NetMessage::act("end");
+            }
+            return NetMessage::act("roll");
+        }
+        if st.can_end_here && !st.can_roll_here {
+            return NetMessage::act("end");
+        }
+        return NetMessage::act("roll");
+    }
+    if st.step == stage::END {
+        let t = st.landed;
+        if t >= 0 {
+            let t = t as usize;
+            let money = st.players.get(me).map(|p| p.money).unwrap_or(0);
+            let params = game_core::strategy::for_seat(data, st, me);
+            let group = data.tiles.get(t).map(|x| x.group).unwrap_or(0);
+            let houses = st.houses.get(t).copied().unwrap_or(0);
+            if action::buyable(data, st, me, t)
+                && params.wants_buy_tile(money, st.buy_price.max(0), group, st.round, false)
+            {
+                return NetMessage {
+                    act: "buy".into(),
+                    value: t as i32,
+                    ..Default::default()
+                };
+            }
+            if action::can_build(data, st, me, t)
+                && params.wants_build_tile(money, st.build_cost.max(0), group, houses)
+            {
+                return NetMessage {
+                    act: "build".into(),
+                    value: t as i32,
+                    ..Default::default()
+                };
+            }
+        }
+        return NetMessage::act("end");
+    }
+    NetMessage::act("end")
 }
 
 /// Drive a live (or forked) [`Match`] to the searching seat's next decision.

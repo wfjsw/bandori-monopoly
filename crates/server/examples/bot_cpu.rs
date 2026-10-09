@@ -36,8 +36,14 @@
 //! (`SearchConfig::profile` on a sample of recorded views) that splits one
 //! search into fork materialisation / descent / rollout / evaluation / key.
 
+#[path = "shared/alloc_hook.rs"]
+mod alloc_hook;
+
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+
+#[global_allocator]
+static ALLOC: alloc_hook::ProfAlloc = alloc_hook::ProfAlloc;
 
 use bot_service::{
     decide_request, handle, heuristic_message_view, ponder_request, BotAnswer, BotSeatView, Ctx,
@@ -637,6 +643,7 @@ fn print_agg(label: &str, a: &Agg) {
 }
 
 fn main() {
+    alloc_hook::init();
     let data_dir = std::path::PathBuf::from(arg("--data", "data"));
     let rules_dir = std::path::PathBuf::from(arg("--rules", "dist/cards"));
     let matches: usize = arg("--matches", "1").parse().unwrap_or(1).max(1);
@@ -1108,7 +1115,60 @@ fn main() {
     });
     println!();
     println!("SUMMARY {summary}");
+    {
+        let rows = game_core::engine::rtimer::snapshot();
+        println!("-- engine rtimer buckets (whole run) --");
+        for (k, ns) in rows {
+            println!("  {k:<12} {:>8.2} s", ns as f64 / 1e9);
+        }
+    }
+    dump_bot_cost();
+    alloc_hook::dump();
 }
+
+/// `--features bot-cost`: the engine/rules measurement counters over the whole
+/// run (`docs/BOT.md` §5). Compiled out otherwise.
+#[cfg(feature = "bot-cost")]
+fn dump_bot_cost() {
+    use game_core::engine::bot_cost as gc;
+    use game_rules::bot_cost as gr;
+    use game_rules::cond_pre::guard_cost as cp;
+    let g = |v: &std::sync::atomic::AtomicU64| v.load(std::sync::atomic::Ordering::Relaxed);
+    println!("-- bot-cost counters (whole run) --");
+    println!(
+        "  world copies {}  shares {}  cant_play {} (memo hits {})",
+        g(&gc::WORLD_CLONES),
+        g(&gc::WORLD_SHARES),
+        g(&gc::CANT_PLAY_CALLS),
+        g(&gc::CANT_PLAY_MEMO_HITS)
+    );
+    println!(
+        "  wasm: instantiations {}  instantiate {:.1}s  store {:.1}s  guest {:.1}s  host-world-clones {}",
+        g(&gr::INSTANTIATIONS),
+        g(&gr::INSTANTIATE_NS) as f64 / 1e9,
+        g(&gr::STORE_NS) as f64 / 1e9,
+        g(&gr::GUEST_NS) as f64 / 1e9,
+        g(&gr::HOST_WORLD_CLONES)
+    );
+    println!(
+        "  counteract: windows {} (skipped {})  probes {} (memo {})  declared {}",
+        g(&gr::COUNTERACT_WINDOWS),
+        g(&gr::COUNTERACT_WINDOWS_SKIPPED),
+        g(&gr::COUNTERACT_PROBES),
+        g(&gr::COUNTERACT_PROBE_MEMO_HITS),
+        g(&gr::COUNTERACT_DECLARED)
+    );
+    println!(
+        "  cond_pre: evals {}  skipped-by-condition {}  guard-asked {}  cond-eval {:.1}s",
+        g(&cp::COND_EVALS),
+        g(&cp::SKIPPED_BY_CONDITION),
+        g(&cp::GUARD_ASKED),
+        g(&cp::COND_EVAL_NS) as f64 / 1e9
+    );
+}
+
+#[cfg(not(feature = "bot-cost"))]
+fn dump_bot_cost() {}
 
 fn pct(part: u64, whole: u64) -> f64 {
     if whole == 0 {
