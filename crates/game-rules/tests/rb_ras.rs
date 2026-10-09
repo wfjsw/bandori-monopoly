@@ -816,7 +816,6 @@ fn guerrilla_teleports_and_must_buy() {
 }
 
 #[test]
-#[ignore = "DISCREPANCY: book teleports to the chosen tile (stop there); engine buys that tile but ends the player on the next tile (chosen+1)"]
 fn guerrilla_ends_on_the_chosen_tile() {
     let mut t = guerrilla_table();
     t.counteract(0, "RAS:游击演出").unwrap();
