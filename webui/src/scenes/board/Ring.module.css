@@ -149,12 +149,17 @@
 @keyframes phaseSweep { to { transform: translateX(120%); } }
 .banner b { font-size: 26px; color: var(--pink); }
 .banner span { font-size: 15px; }
-/* Below the status banner (top 290, ~85-100px tall): a played-card reveal
-   overlaps it at vertical centre and hides 掷出xx / 付地租. */
-.reveal { position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 25; animation: reveal 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
-.reveal > div { width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); }
-.revealOut { opacity: 0; transform: translate(-50%, -60%); }
-@keyframes reveal { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }
+/* Below the status banner (top 290, ~85-100px tall): a card activation flash
+   overlaps it at vertical centre and hides 掷出xx / 付地租. The face carries
+   the owner's colour, a short caption (who/what triggered it) and, when a
+   counteraction negated it, a 无效 mark. */
+.flash { position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 25; animation: flash 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
+.flashFace { position: relative; width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); border-radius: 12px; border: 3px solid var(--owner, var(--pink)); background: #fff; }
+.flashCaption { margin-top: -2px; padding: 6px 10px 8px; text-align: center; font-size: 15px; font-weight: 700; color: var(--ink, #4b2233); background: linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 236, 244, 0.95) 40%); border-radius: 0 0 9px 9px; }
+.flashNegated { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.flashNegated span { transform: rotate(-12deg); border: 6px solid rgba(190, 30, 70, 0.75); border-radius: 14px; padding: 6px 18px; background: rgba(255, 255, 255, 0.72); font-size: 44px; font-weight: 900; letter-spacing: 0.2em; color: rgba(190, 30, 70, 0.82); text-shadow: 0 2px 10px rgba(255, 255, 255, 0.9); }
+.flashOut { opacity: 0; transform: translate(-50%, -60%); }
+@keyframes flash { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }
 
 /* 场上的卡 -- the big interior, inset 6px: compact card faces, one row per
    player (left border = the player's colour), each with its live state. */

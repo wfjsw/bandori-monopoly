@@ -143,9 +143,29 @@ pub struct Run {
     /// `set_prop` to write, so a `set_prop` against no instance parks the value
     /// here and `linger` carries it onto [`crate::world::Lingering::props`].
     linger_props: std::collections::BTreeMap<String, i32>,
+    /// This run is an already-in-play card applying its effect (a field /
+    /// tile / lingering hook, a settle body, a scheduled callback): its log
+    /// lines say 「<卡名> 的效果：<what happened>」 rather than standing alone.
+    /// A fresh activation (a hand play, a [反击] declaration, a skill press,
+    /// a drawn event) logs its own action and leaves its outcome lines bare.
+    wrap_effect: bool,
 }
 
 impl Run {
+    /// An already-in-play card's log lines name their source: 「<卡名> 的效果：
+    /// <what happened>」. A fresh activation (hand play, [反击], skill press,
+    /// drawn event) leaves its outcome lines bare -- the play already said
+    /// which card they belong to.
+    fn attribute(&self, msg: Msg) -> Msg {
+        if self.wrap_effect {
+            Msg::new("log.card_effect")
+                .card("card", self.current_card.clone())
+                .msg("what", msg)
+        } else {
+            msg
+        }
+    }
+
     /// Record a crystal write on the instance at `uid` so the commit point can
     /// raise `crystalsChanged` (the same shape as `fire_spent_log` /
     /// `house_log`). `was` and `now` bracket the write; only the delta rides
@@ -211,7 +231,7 @@ impl CardWorld for Run {
     }
 
     fn effect(&mut self, player_id: i32, msg: Msg) {
-        self.world.log("effect", player_id, msg);
+        self.world.log("effect", player_id, self.attribute(msg));
     }
 
     fn extreme(&self) -> i32 {
@@ -248,7 +268,7 @@ impl CardWorld for Run {
     }
 
     fn log(&mut self, player_id: i32, msg: Msg) {
-        self.world.log("text", player_id, msg);
+        self.world.log("text", player_id, self.attribute(msg));
     }
 
     // board -----------------------------------------------------------------
@@ -1641,6 +1661,78 @@ impl<M: CardModules> RulesBridge<M> {
         Arc::new(m)
     }
 
+    /// Does this drive's log lines name their source (「<卡名> 的效果：…」)?
+    /// An already-in-play card applying its effect: a hook, a card placed on a
+    /// tile's settle body, a dice-shaping `RollPlan`, a scheduled `AtEnd`. A
+    /// fresh activation (hand play, [反击], skill press, drawn event) leaves
+    /// its outcome lines bare.
+    fn wraps_effect(call: Call, card_id: &str) -> bool {
+        match call {
+            Call::Hook { .. } | Call::RollPlan { .. } | Call::AtEnd { .. } => true,
+            Call::Settle { .. } => !card_id.starts_with("tile:"),
+            _ => false,
+        }
+    }
+
+    /// One `"card"` activation event for a body that is about to run: the
+    /// client's card flash plus its log line. `call` / `card_id` / `uid` /
+    /// `trigger` are the drive's own context; the owner is the instance's
+    /// player (the seat that played a hand card, the field's owner of a hook)
+    /// and `trigger.player_id` / `trigger.tile` name who it is about.
+    ///
+    /// Written to `w` -- the **guest's own world copy** -- not to the live
+    /// world: [`Self::commit_after`] swaps that copy in wholesale, so an event
+    /// logged on `cx` between the copy and the swap would be dropped. A guard
+    /// that rejects throws the copy away, announcement included, which is
+    /// exactly "nothing about the card reaches the UI".
+    ///
+    /// A tile's own settle body (`tile:*`) is a board square, not a card, so it
+    /// does not flash -- a *card* placed on the square still does.
+    fn announce_drive(&self, w: &mut game_core::engine::World, call: Call, card_id: &str, uid: i32, trigger: &Trigger) {
+        if matches!(call, Call::Settle { .. }) && card_id.starts_with("tile:") {
+            return;
+        }
+        use game_core::state::card_trigger;
+        let kind = match call {
+            Call::Counteract { .. } => card_trigger::COUNTER,
+            Call::Play { .. } => {
+                if card_id.starts_with("event:") {
+                    card_trigger::EVENT
+                } else if card_id.starts_with("skill:") {
+                    card_trigger::SKILL
+                } else {
+                    card_trigger::PLAY
+                }
+            }
+            // `On::Hook` / `RollPlan` / `AtEnd` (and a card's settle body):
+            // a placed card's effect firing on someone else's turn.
+            _ => card_trigger::HOOK,
+        };
+        // An event instance is bound under `event:<id>`; the draw's own event
+        // names it without the prefix, so the flash and the two log lines agree.
+        let cid = card_id.strip_prefix("event:").unwrap_or(card_id);
+        let owner = if uid >= 0 {
+            w.field_by_uid(uid)
+                .map(|f| f.owner)
+                .unwrap_or(call.player_id())
+        } else {
+            call.player_id()
+        };
+        let who = if owner >= 0 { owner } else { trigger.player_id };
+        // Activation wording (「发动」) is for a genuine activation only -- a
+        // skill press, which has no declaration line of its own. A hand play,
+        // a [反击] and a drawn event already logged their action (打出 / 抽到),
+        // and an already-in-play card's effect logs 「<卡名> 的效果：<what>」
+        // out of its own body -- so those flashes carry no line of their own.
+        let msg = match kind {
+            card_trigger::SKILL => Msg::new("log.card_activated")
+                .player_id("who", who)
+                .card("card", cid),
+            _ => Msg::default(),
+        };
+        w.card_activation(kind, owner, cid, trigger.player_id, trigger.tile, false, msg);
+    }
+
     /// Run one effect to completion, prompting through the engine as needed.
     /// Returns the card's destination (`PlayCtx.Dest`). A reroll the module made
     /// (`set_move_roll`) is written back to `trigger` (C# shares `t.Move`).
@@ -1658,8 +1750,8 @@ impl<M: CardModules> RulesBridge<M> {
     /// As [`drive`], but ask the hook's guard first and skip the body when it
     /// refuses -- on the same instantiation, so a fired hook costs one fire-up
     /// and one world copy rather than the two a `hook_guard` + `drive` pair
-    /// cost. The "a guard passed" announcement is made here, once, on the first
-    /// pass (a prompt re-runs the module).
+    /// cost. A body that runs announces itself once, on the first pass (a
+    /// prompt re-runs the module) -- see [`Self::announce_drive`].
     fn drive_hook(
         &self,
         cx: &mut Cx,
@@ -1720,6 +1812,12 @@ impl<M: CardModules> RulesBridge<M> {
             if let Some(base) = &pile_base {
                 base.apply(&mut world);
             }
+            // The activation rides the guest's own copy (see
+            // [`Self::announce_drive`]): first pass only -- a re-run after a
+            // prompt re-announces through the commit pass below instead.
+            if answers.is_empty() {
+                self.announce_drive(&mut world, call, card_id, uid, trigger);
+            }
             let run = Run {
                 world,
                 pile_checkpoints: Arc::new(pile_checkpoints.clone()),
@@ -1741,6 +1839,7 @@ impl<M: CardModules> RulesBridge<M> {
             exile_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
+                wrap_effect: Self::wraps_effect(call, card_id),
             };
             // Simulation mode (`docs/BOT.md` §3.2): with a provider installed
             // the body must run **once** -- every pause is answered inline
@@ -1758,7 +1857,6 @@ impl<M: CardModules> RulesBridge<M> {
                 halt: None,
                 answers: Vec::new(),
             });
-            let mut announced = false;
             let mut guest = || -> Result<Option<Result<Outcome<Run>, RuleError>>, RuleError> {
                 if guarded {
                     match self.ruleset.run_hook(&run, call, &answers) {
@@ -1766,12 +1864,7 @@ impl<M: CardModules> RulesBridge<M> {
                         // Not activated -- the guard refused. Nothing ran, and
                         // nothing about the card reaches the UI.
                         Ok(None) => Ok(None),
-                        Ok(Some(hr)) => {
-                            if hr.announced && answers.is_empty() {
-                                announced = true;
-                            }
-                            Ok(Some(Ok(hr.outcome)))
-                        }
+                        Ok(Some(hr)) => Ok(Some(Ok(hr.outcome))),
                     }
                 } else {
                     Ok(Some(self.ruleset.run(&run, call, &answers)))
@@ -1795,14 +1888,6 @@ impl<M: CardModules> RulesBridge<M> {
             // its own answer -- the same bookkeeping the `NeedInput` arm does.
             if let Some(h) = inline.as_mut() {
                 answers.append(&mut h.answers);
-            }
-            if announced {
-                cx.log(
-                    call.player_id(),
-                    Msg::new("log.hook_fire")
-                        .player_id("who", call.player_id())
-                        .card("card", card_id.to_string()),
-                );
             }
             let outcome = match wrapped {
                 Ok(Some(outcome)) => outcome,
@@ -1829,6 +1914,10 @@ impl<M: CardModules> RulesBridge<M> {
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
                     }
+                    // This pass's world is the one that lands: it carries the
+                    // activation (the learn pass's copy above is dropped when
+                    // any pause was answered).
+                    self.announce_drive(&mut world, call, card_id, uid, trigger);
                     let run = Run {
                         world,
                         pile_checkpoints: Arc::new(pile_checkpoints.clone()),
@@ -1850,6 +1939,7 @@ impl<M: CardModules> RulesBridge<M> {
                         exile_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
+                        wrap_effect: Self::wraps_effect(call, card_id),
                     };
                     let outcome2 = if guarded {
                         match self.ruleset.run_hook(&run, call, &answers) {
@@ -3091,7 +3181,17 @@ impl<M: CardModules> RulesBridge<M> {
         );
         let dest = if negated {
             // The body does not run, so the card has no fate of its own: it was
-            // played (it left the hand at declaration) and is spent.
+            // played (it left the hand at declaration) and is spent. It still
+            // flashes -- marked 无效 -- so the negation is visible.
+            let link = &chain[answered].link;
+            cx.card_activated(
+                game_core::state::card_trigger::COUNTER,
+                seat as i32,
+                &id,
+                link.player_id,
+                link.tile,
+                true,
+            );
             DEST_UNSET
         } else {
             // The counter's body runs against the link it answers, so its
@@ -3161,6 +3261,7 @@ impl<M: CardModules> RulesBridge<M> {
             exile_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
+            wrap_effect: false,
         }
     }
 
@@ -3291,6 +3392,7 @@ impl<M: CardModules> RulesBridge<M> {
                 exile_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
+                wrap_effect: false,
             };
             let win_scope =
                 crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
@@ -4150,6 +4252,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             exile_log: vec![],
             doubled: -1,
                 linger_props: Default::default(),
+            wrap_effect: false,
         };
         self.ruleset
             .cant_play(&run, idx, player_id as i32)
@@ -4221,6 +4324,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             exile_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
+            wrap_effect: false,
         };
         q.tiles
             .iter()

@@ -215,7 +215,18 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
             <span>{anim.turnAnnouncement.label}</span>
           </div>
         )}
-        {anim.reveal && <div className={cx(s.reveal, anim.reveal.out && s.revealOut)}><CardFace id={anim.reveal.card} size="big" /></div>}
+        {anim.flash && (
+          <div key={anim.flash.id} className={cx(s.flash, anim.flash.out && s.flashOut)}>
+            <div
+              className={s.flashFace}
+              style={{ ["--owner" as string]: anim.flash.owner >= 0 ? m.colorOf(anim.flash.owner) : "var(--pink)" }}
+            >
+              <CardFace id={anim.flash.card} size="big" />
+              <div className={s.flashCaption}>{anim.flash.caption}</div>
+              {anim.flash.negated && <div className={s.flashNegated}><span>{tr("board.cardNegated")}</span></div>}
+            </div>
+          </div>
+        )}
         {tip && (
           <div className={s.markTip} style={{ left: tip.x, top: tip.y }}>
             <b>{tip.title}</b>

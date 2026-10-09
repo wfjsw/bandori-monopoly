@@ -796,6 +796,35 @@ impl<'a> Cx<'a> {
         self.w.log("text", player_id, msg);
     }
 
+    /// A card's effect activated -- or a counteraction negated it before its
+    /// body could run. One `"card"` event carries both the log line and the
+    /// client's card flash. `kind` is a [`crate::state::card_trigger`]
+    /// constant; `owner` is the card's player, `target` the affected player and
+    /// `tile` where it fired (`-1` when not applicable). A negated activation
+    /// still shows the card, marked 无效, and logs 「<卡名> 的效果被无效」.
+    pub fn card_activated(
+        &mut self,
+        kind: &str,
+        owner: i32,
+        card: &str,
+        target: i32,
+        tile: i32,
+        negated: bool,
+    ) {
+        let msg = if negated {
+            Msg::new("log.card_negated").card("card", card)
+        } else {
+            // A genuine activation with no declaration line of its own (a
+            // skill press): 「{{who}} 的「{{card}}」发动」.
+            let who = if owner >= 0 { owner } else { target };
+            Msg::new("log.card_activated")
+                .player_id("who", who)
+                .card("card", card)
+        };
+        self.w
+            .card_activation(kind, owner, card, target, tile, negated, msg);
+    }
+
     /// `H.Roll` -- `count` d`sides`, logged as a dice event.
     pub fn roll(&mut self, player_id: i32, count: i32, sides: i32, what: Option<Msg>) -> i32 {
         let faces: Vec<i32> = (0..count).map(|_| self.w.rng.d(sides)).collect();

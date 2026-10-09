@@ -529,6 +529,30 @@ impl World {
         self.recent.back_mut().expect("just pushed")
     }
 
+    /// A card's effect activated -- or was negated before its body could run.
+    /// One `"card"` event carries both the log line and the client's card flash:
+    /// `kind` is the trigger kind ([`crate::state::card_trigger`]), `owner` the
+    /// card's player, `target` the affected player and `tile` where it fired
+    /// (`-1` when not applicable). `msg` names the card via [`Msg::card`].
+    pub fn card_activation(
+        &mut self,
+        kind: &str,
+        owner: i32,
+        card: &str,
+        target: i32,
+        tile: i32,
+        negated: bool,
+        msg: Msg,
+    ) -> &mut MatchEvent {
+        let e = self.log("card", owner, msg);
+        e.card = card.to_string();
+        e.other = target;
+        e.value = tile;
+        e.kind = kind.to_string();
+        e.negated = negated;
+        e
+    }
+
     pub fn player_count(&self) -> usize {
         self.st.players.len()
     }

@@ -69,3 +69,14 @@
 .peekRow img { flex: none; width: 26px; height: 26px; object-fit: cover; border-radius: 3px; }
 .peekRow span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .peekEmpty { font-size: 13px; color: var(--sub); padding: 4px; }
+
+/* A card name in the log: hoverable (details) and clickable (the card view). */
+.cardRef { color: var(--pink); font-weight: 700; text-decoration: underline dotted rgba(237, 78, 118, 0.55); text-underline-offset: 3px; cursor: pointer; }
+.cardRef:hover { color: var(--tag-red); }
+
+/* The hovered log card's details: face + title + effect text. Fixed, anchored
+   under the reference (viewport coordinates from the hover target). */
+.cardPeek { position: fixed; z-index: 60; max-width: 340px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 10px; pointer-events: none; }
+.cardPeekRow { display: flex; gap: 10px; align-items: flex-start; }
+.cardPeekHead { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
+.cardPeekHead b { color: var(--pink); font-size: 15px; }
