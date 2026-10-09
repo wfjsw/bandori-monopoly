@@ -194,6 +194,8 @@ export interface Command {
 export interface MatchRecord {
   time: string; mode: number; ranked: boolean; rank: number; players: number; character: string;
   exp: number; fireUsed: number; coins: number; stars: number; levelAfter: number;
+  /** Local replay-store id of this match's `.bdrec` (`game/record.ts`), "" when none. */
+  replayId: string;
 }
 /** `slot` is the stable deck id within the character; `name` is UI-only
  * metadata ("" = auto, displayed as 「卡组 n」/"Deck n"). Never sent in a match. */

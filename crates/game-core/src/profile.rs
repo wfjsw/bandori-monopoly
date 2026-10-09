@@ -114,6 +114,12 @@ pub struct MatchRecord {
     pub coins: i32,
     pub stars: i32,
     pub level_after: i32,
+    /// Id of this match's `.bdrec` in the browser's local replay store
+    /// (`webui/src/game/record.ts`), when the client kept one. Empty on rows
+    /// from before ids existed (and on online matches, whose records live on
+    /// the server). Serde-default so old profiles load unchanged.
+    #[serde(default)]
+    pub replay_id: String,
 }
 
 /// `CharacterStat.cs`
@@ -294,7 +300,9 @@ impl PlayerProfile {
     }
 
     /// `ProfileService.ApplyMatch` -- spend fire, grant EXP/stars/coins, update
-    /// counters and stats, and prepend to history (capped at 30).
+    /// counters and stats, and prepend to history (capped at 30). `replay_id`
+    /// is the local replay-store id of this match's record, if the client kept
+    /// one (empty otherwise).
     pub fn apply_match(
         &mut self,
         mode: MatchMode,
@@ -302,6 +310,7 @@ impl PlayerProfile {
         players: i32,
         character: &str,
         now: &str,
+        replay_id: &str,
     ) -> MatchReward {
         let ranked = mode == MatchMode::Ranked;
         let mut r = MatchReward {
@@ -372,6 +381,7 @@ impl PlayerProfile {
                 coins: r.coins,
                 stars: r.stars,
                 level_after: self.level,
+                replay_id: replay_id.into(),
             },
         );
         self.history.truncate(HISTORY_CAP);

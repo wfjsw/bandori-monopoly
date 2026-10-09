@@ -243,7 +243,7 @@ fn profile_create_and_apply_match() {
     assert_eq!(p.fire, 5);
 
     p.set_fire_per_game(3);
-    let r = p.apply_match(MatchMode::Ranked, 1, 6, "户山香澄", "2026-10-05 20:00");
+    let r = p.apply_match(MatchMode::Ranked, 1, 6, "户山香澄", "2026-10-05 20:00", "r1a2b3");
     assert_eq!(
         (r.base_exp, r.fire_used, r.multiplier, r.exp),
         (200, 3, 4, 800)
@@ -257,14 +257,16 @@ fn profile_create_and_apply_match() {
         Some((1, 1))
     );
     assert!(p.has_new(&d, Seen::History));
+    // The history row carries the local replay-store id it was written with.
+    assert_eq!(p.history[0].replay_id, "r1a2b3");
 
     // Coins never go below zero, and the reward reports the actual change.
     let mut poor = PlayerProfile::default();
-    let r = poor.apply_match(MatchMode::Ranked, 6, 6, "", "t");
+    let r = poor.apply_match(MatchMode::Ranked, 6, 6, "", "t", "");
     assert_eq!((r.coins, poor.coins), (0, 0));
 
     for _ in 0..40 {
-        poor.apply_match(MatchMode::Casual, 2, 4, "", "t");
+        poor.apply_match(MatchMode::Casual, 2, 4, "", "t", "");
     }
     assert_eq!(poor.history.len(), 30);
     assert_eq!(poor.casual_games, 40);
@@ -287,6 +289,9 @@ fn profile_normalize_migrates_v1_saves() {
     assert_eq!(p.history[1].mode, MatchMode::Casual);
     // MatchMode is an integer on disk, like JsonUtility writes it.
     assert_eq!(serde_json::to_value(&p.history[0]).unwrap()["mode"], 2);
+    // Rows written before replay ids existed load with an empty one.
+    assert_eq!(p.history[0].replay_id, "");
+    assert!(serde_json::to_string(&p).unwrap().contains("replayId"));
 }
 
 #[test]

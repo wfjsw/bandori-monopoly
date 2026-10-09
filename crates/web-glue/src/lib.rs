@@ -481,7 +481,8 @@ struct Applied {
     reward: progression::MatchReward,
 }
 
-/// Record a finished match: `{profile, reward}`.
+/// Record a finished match: `{profile, reward}`. `replay_id` is the local
+/// replay-store id of the match's `.bdrec`, if the client kept one.
 #[wasm_bindgen]
 pub fn profile_apply_match(
     profile_json: &str,
@@ -490,10 +491,11 @@ pub fn profile_apply_match(
     players: i32,
     character_name: &str,
     now: &str,
+    replay_id: &str,
 ) -> Result<String, JsError> {
     let mut p: PlayerProfile = parse("profile", profile_json)?;
     let mode = MatchMode::from_i32(mode).unwrap_or_default();
-    let reward = p.apply_match(mode, rank, players, character_name, now);
+    let reward = p.apply_match(mode, rank, players, character_name, now, replay_id);
     Ok(json(&Applied { profile: p, reward }))
 }
 

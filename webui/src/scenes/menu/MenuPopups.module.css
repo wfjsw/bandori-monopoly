@@ -1,13 +1,17 @@
 .history { display: flex; flex-direction: column; gap: 8px; }
 .sum { color: var(--sub); text-align: center; margin-bottom: 4px; }
 .empty { padding: 30px; text-align: center; color: var(--sub); }
-.histRow { display: grid; grid-template-columns: 80px 1fr 180px 200px; align-items: center; gap: 12px; border-radius: 10px; background: var(--light-pill); padding: 8px 16px; }
+.histRow { display: grid; grid-template-columns: 80px 1fr 150px 160px 92px; align-items: center; gap: 12px; border-radius: 10px; background: var(--light-pill); padding: 8px 16px; }
 .rank { font-size: 30px; font-weight: 700; text-align: center; }
 .rank small { font-size: 15px; color: var(--sub); }
 .first { color: var(--gold); }
 .who { display: flex; flex-direction: column; }
 .who small, .gain small { color: var(--sub); font-size: 13px; }
 .gain { font-weight: 700; color: var(--pink); }
+.act { display: flex; justify-content: flex-end; }
+/* No replay to play (or one that was evicted): muted, with the reason as a
+   tooltip on the wrapper (a disabled button gets no hover of its own). */
+.actOff { opacity: 0.5; }
 
 .fire { display: flex; flex-direction: column; gap: 18px; text-align: center; }
 .fireOpts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }

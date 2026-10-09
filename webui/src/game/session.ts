@@ -458,8 +458,9 @@ export class SoloSession extends GameSession {
     this.you = 1;
     this.engine = engine;
     this.weights = weights;
-    // Set before the first sync push, which would otherwise export the record
-    // again on resume of an already-finished match.
+    // The store id this match's record goes under (kept from the save, so a
+    // re-export on resume overwrites the same row and the history row stays
+    // linked to it).
     this.replayId = replayId;
     engine.onPush = (p) => this.onPush(p);
     this.ready = open();
@@ -704,20 +705,23 @@ export class SoloSession extends GameSession {
   }
 
   /** Export the `.bdrec` once, when the match ends: zstd-frame it into
-   *  IndexedDB (keep 10) and hold the bytes for the Results buttons. Guarded
-   *  by `replayId` in the save, so a refresh on the results screen does not
-   *  export twice. The compression runs in the worker (`record_zst`). */
+   *  IndexedDB (keep 10) and hold the bytes for the Results buttons. The store
+   *  id is allocated **synchronously** and kept across a resume, so
+   *  `showResults` can write it into the history row the moment the match ends
+   *  (`applyMatch`), before the async export lands; a re-export (a refresh
+   *  before the first one finished) then overwrites the same id. The
+   *  compression runs in the worker (`record_zst`). */
   private exportReplay(): void {
-    if (this.exportStarted || this.replayId) return;
+    if (this.exportStarted) return;
     this.exportStarted = true;
+    this.replayId ??= `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     const created = new Date().toISOString();
     void (async () => {
       try {
         const bytes = await this.engine.export(created);
         const header = JSON.parse(rules.record_header_bytes(bytes)) as RecordHeader;
-        const id = await putReplay(header, bytes);
+        await putReplay(header, bytes, this.replayId ?? undefined);
         this.replayBytes = bytes;
-        this.replayId = id;
         this.replayName = recordFilename(created);
         this.persist();
       } catch (e) {

@@ -76,9 +76,11 @@ export function deleteProfile(): void {
   listeners.forEach((cb) => cb());
 }
 
-/** Record a finished match; returns what it earned. */
-export function applyMatch(mode: number, rank: number, players: number, character: string): MatchReward {
-  const r = JSON.parse(rules.profile_apply_match(profileJson(), mode, rank, players, character, now()));
+/** Record a finished match; returns what it earned. `replayId` links the new
+ *  history row to the local replay store (`game/record.ts`), when the client
+ *  kept this match's `.bdrec`. */
+export function applyMatch(mode: number, rank: number, players: number, character: string, replayId = ""): MatchReward {
+  const r = JSON.parse(rules.profile_apply_match(profileJson(), mode, rank, players, character, now(), replayId));
   save(JSON.stringify(r.profile));
   return r.reward;
 }

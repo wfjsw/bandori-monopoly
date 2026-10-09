@@ -74,8 +74,10 @@ function ReplayActions({ sess, watch }: { sess: GameSession; watch: (bytes: Uint
   const room = sess instanceof OnlineSession ? sess.id : null;
   const [bytes, setBytes] = useState<Uint8Array | null>(solo?.replayBytes ?? null);
   const [name, setName] = useState(solo?.replayName ?? "");
-  // `useSessionOther` re-renders when the (async) export lands.
-  useSessionOther(sess);
+  // `useSessionOther` re-renders when the (async) export lands; its counter is
+  // in the effect deps so a late export is picked up (the id is known before
+  // the bytes are).
+  const other = useSessionOther(sess);
   useEffect(() => {
     if (bytes) return;
     let alive = true;
@@ -96,7 +98,7 @@ function ReplayActions({ sess, watch }: { sess: GameSession; watch: (bytes: Uint
     return () => {
       alive = false;
     };
-  }, [bytes, solo, room]);
+  }, [bytes, solo, room, other]);
   if (!bytes) return null;
   return (
     <>
@@ -110,7 +112,16 @@ export function showResults(sess: GameSession, m: Model, exit: () => void): void
   const mine = m.S.players[m.playerId];
   let reward: MatchReward | null = null;
   if (!sess.recorded && mine && hasProfile()) {
-    reward = applyMatch(m.S.mode, mine.rank, m.S.players.length, mine.character);
+    // Solo exports the `.bdrec` locally and allocates its store id before this
+    // runs, so the history row is born linked to the replay. Online records
+    // live on the server (downloaded from the room) and are not kept locally.
+    reward = applyMatch(
+      m.S.mode,
+      mine.rank,
+      m.S.players.length,
+      mine.character,
+      sess instanceof SoloSession ? sess.replayId ?? "" : "",
+    );
     if (sess instanceof SoloSession) sess.markRecorded();
     else sess.recorded = true;
   }

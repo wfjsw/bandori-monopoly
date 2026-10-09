@@ -1,6 +1,7 @@
 // Menu popups: match history, settings, fire per game.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { navigate } from "../../app/router";
 import { applyVolumes, sfx } from "../../core/audio";
 import { cx } from "../../core/cx";
 import { D, rules } from "../../core/data";
@@ -8,10 +9,13 @@ import { n0 } from "../../core/format";
 import { useProfile, useSettings } from "../../core/hooks";
 import { deleteProfile, getProfile, markSeen, profileJson, saveSettings, updateProfile } from "../../core/store";
 import type { SoundSettings } from "../../core/types";
+import { resolveHistoryReplay, type HistoryReplayLink } from "../../game/historyReplay";
+import { getReplay, listReplays, type ReplayEntry } from "../../game/record";
+import { queueReplayBytes } from "../../game/replay";
 import { Btn } from "../../ui/Button";
 import { TextInput } from "../../ui/Form";
 import { Icon } from "../../ui/Icon";
-import { ask, openModal } from "../../ui/Modal";
+import { ask, closeAllModals, openModal } from "../../ui/Modal";
 import { toast } from "../../ui/Toast";
 import s from "./MenuPopups.module.css";
 import { t as tr } from "../../i18n/t";
@@ -19,20 +23,67 @@ import { LANGS, LANG_LABEL, setLang, savedLang, type Lang } from "../../i18n";
 
 const modeLabel = (mode: number) => ([tr("mode.shortSolo"), tr("common.casualShort"), tr("common.rankShort")][mode] ?? "");
 
+/** Watch a history row's match: the same path the replay list opens a record. */
+async function openHistoryReplay(link: HistoryReplayLink): Promise<void> {
+  if (link.kind === "none") return;
+  const bytes = await getReplay(link.id).catch(() => null);
+  if (!bytes) {
+    // Evicted from the local store (it keeps 10), or never written.
+    toast(tr("history.replayGone"), "error");
+    return;
+  }
+  try {
+    queueReplayBytes(bytes, link.id);
+    closeAllModals();
+    navigate({ name: "replayView" });
+  } catch (e) {
+    console.warn("could not open the replay:", e);
+    toast(tr("replay.badFile"), "error");
+  }
+}
+
 function History() {
   const p = useProfile()!;
   const rows = [...p.history].reverse();
+  // Headers only, to decide per row whether a replay exists (and which one).
+  const [replays, setReplays] = useState<ReplayEntry[] | null>(null);
+  useEffect(() => {
+    void listReplays()
+      .then(setReplays)
+      .catch((e) => {
+        console.warn("replay list:", e);
+        setReplays([]);
+      });
+  }, []);
   return (
     <div className={s.history}>
       <div className={s.sum}>{tr("topbar.stats", { games: p.games, solo: p.soloGames, casual: p.casualGames, ranked: p.rankedGames, wins: p.rankedWins })}</div>
-      {rows.length === 0 ? <div className={s.empty}>{tr("history.empty")}</div> : rows.map((r, i) => (
-        <div key={i} className={s.histRow}>
-          <div className={cx(s.rank, r.rank === 1 && s.first)}>{r.rank}<small>/{r.players}</small></div>
-          <div className={s.who}><b>{D.character(r.character)?.display ?? r.character}</b><small>{modeLabel(r.mode)} · {r.time}</small></div>
-          <div className={s.gain}>+{n0(r.exp)} EXP{r.fireUsed > 0 && <small>{tr("history.fireUsed", { n: r.fireUsed })}</small>}</div>
-          <div className={s.gain}>{r.coins ? tr("history.gainCoins", { coins: (r.coins > 0 ? "+" : "") + n0(r.coins) }) : ""}{r.stars > 0 && <small>{tr("history.starsGained", { n: r.stars })}</small>}</div>
-        </div>
-      ))}
+      {rows.length === 0 ? <div className={s.empty}>{tr("history.empty")}</div> : rows.map((r, i) => {
+        const link = replays ? resolveHistoryReplay(r, replays) : null;
+        const tip = link?.kind === "gone" ? tr("history.replayGone") : link?.kind === "none" ? tr("history.replayNone") : "";
+        return (
+          <div key={i} className={s.histRow}>
+            <div className={cx(s.rank, r.rank === 1 && s.first)}>{r.rank}<small>/{r.players}</small></div>
+            <div className={s.who}><b>{D.character(r.character)?.display ?? r.character}</b><small>{modeLabel(r.mode)} · {r.time}</small></div>
+            <div className={s.gain}>+{n0(r.exp)} EXP{r.fireUsed > 0 && <small>{tr("history.fireUsed", { n: r.fireUsed })}</small>}</div>
+            <div className={s.gain}>{r.coins ? tr("history.gainCoins", { coins: (r.coins > 0 ? "+" : "") + n0(r.coins) }) : ""}{r.stars > 0 && <small>{tr("history.starsGained", { n: r.stars })}</small>}</div>
+            {/* 「回放」 -- open this match's `.bdrec` in the player. No link
+                (an online match, or one the store no longer holds) disables
+                it and says why on hover. */}
+            <div className={s.act} title={tip}>
+              <Btn
+                size="small"
+                kind="pink"
+                className={link && link.kind !== "none" ? undefined : s.actOff}
+                disabled={!link || link.kind === "none"}
+                onClick={() => {
+                  if (link) void openHistoryReplay(link);
+                }}
+              >{tr("history.replay")}</Btn>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
