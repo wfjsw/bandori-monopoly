@@ -134,6 +134,11 @@ The field is additive and optional: a record without it predates the scheme
 than pretending. A v2 record is refused by a v1 engine, so an old archived
 bundle never mis-replays a new record (`docs/REPLAY.md` §9).
 
+The openings live in the `RecordHeader` JSON, i.e. inside the plain record
+frame. A **portable** `.bdrec` (`docs/REPLAY.md` §10) appends its engine as a
+trailing skippable frame and never touches that header, so a portable file
+carries the same fairness material and verifies exactly like a plain one.
+
 ## 2. Verify
 
 The replay viewer has a **Verify** action (local-only, like the rest of

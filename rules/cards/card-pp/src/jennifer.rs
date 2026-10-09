@@ -55,7 +55,7 @@ fn jennifer(player_id: i32) -> card_sdk::Asked {
     let target = ctx::ask_player(
         player_id,
         &Msg::new(key!("jennifer_title")),
-        &Msg::new(key!("jennifer_ask")),
+        &Msg::new(key!("jennifer_ask")).card("card", "PP:找回珍妮弗"),
         &targets,
     )?;
     let hit = match ctx::target(target) {

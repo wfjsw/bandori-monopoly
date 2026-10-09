@@ -29,7 +29,11 @@ const EVENT_SFX: Record<string, string> = {
   gain: "coin_gain", pass: "bonus", lose: "coin_pay", draw: "draw", mulligan: "draw", discard: "card_play",
 };
 
-export interface LogLine { id: number; text: string; turn: boolean; stage?: boolean }
+export interface LogLine {
+  id: number; text: string; turn: boolean; stage?: boolean;
+  /** On a turn heading: the seat the group belongs to (for its colour bar). */
+  who?: number;
+}
 
 /** A turn-stage change, queued behind the events that led to it. `step` is the
  *  engine's stage number (1..4 = 开始 / 运营 / 移动 / 结束). */
@@ -102,7 +106,10 @@ export class Animator {
   addLog(e: MatchEvent): void {
     const line = fmtMsg(e.msg, e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names());
     if (!line) return;
-    this.log = [...this.log.slice(-199), { id: e.id, text: line, turn: e.type === "turn" }];
+    this.log = [...this.log.slice(-199), {
+      id: e.id, text: line, turn: e.type === "turn",
+      who: e.type === "turn" ? e.playerId : undefined,
+    }];
   }
 
   /** Names for message arguments (players/tiles/cards of the running match). */

@@ -1163,6 +1163,188 @@ per-candidate `Run`/guard. In the mixed 1-human + 3-bot live case the human
 zero copies for a condition-only card) are what remove that cost. Exactness is
 unchanged either way -- see the `ckpt_equiv` A/B below.
 
+### Engine efficiency A–C (2026-10-08)
+
+The live bot-service profile (`target/scratch/profile/REPORT.md`) candidate
+fixes A/B/C. **Exactness first:** `cargo run -p game-rules --release --example
+ckpt_equiv -- 3 4 60` is **byte-identical** before/after (730 checkpoint lines,
+36 046 B, `cmp` clean; `target/scratch/ckpt-abc-{before,after}.txt`), and
+`cargo run -p game-core --release --example sim -- 50 4 200` counts are
+identical (rounds 196.6; end reasons `{last: 10, settle: 40}`; prompts
+`{auction: 276, choice: 6427, mortgage: 1142, tile: 4131}`; every event-kind
+and detail count matches the baseline). No ABI bump; no replay-format change.
+
+**A -- cache `cant_play` per (card, decision state) within a step.** Two
+layers:
+
+1. A **cheap pre-filter** (the REPORT's "condition-only / declares bitmask"
+   shape): `Ruleset::play_gate_vanishes(card)` is true when the card has no
+   `On::Play` entry, or G4 deleted the gate *and* it declares no condition --
+   the verdict is always "playable", so `RulesBridge::cant_play` returns
+   before the uid lookup, the `Run` and the CEL scope.
+2. A **per-world memo** on `Cx` (`rules_cant_play`): `rules.cant_play` is a
+   pure query of the world, so within one unchanged world stamp the same
+   `(player, card)` always answers the same. A small linear map (no hashing;
+   a hand scan has few unique ids) keyed on the `SharedWorld` stamp -- it is
+   dropped the moment anything writes. Covers the engine gate
+   (`Cx::cant_play`) and the skill gate (`ai_skill_choice`) alike.
+
+**B -- no `World` copies for pure checks.** `Cx::w` and `Run::world` are now a
+`SharedWorld` (copy-on-write handle, `Arc<World>` + `Deref`/`DerefMut`):
+reads deref with **no clone**; the first write `Arc::make_mut`s a private copy.
+Pure checks share the live handle (`Cx::share_world`, a refcount bump):
+
+- `cant_play` probes: uid lookup reads `cx.world()`; the `Run` shares
+  `cx.share_world()`. A gate body that never writes never copies the world;
+  one that does copies **once**, at its first write.
+- The drive's per-iteration `Run` and every `run_hook` / `run` store build
+  clone a `Run` = refcount bumps, not deep copies (`HOST_WORLD_CLONES` still
+  counts *store builds*, which are now mostly bumps).
+- `can_counteract_now` already read the live world; the remaining
+  `cx.world_copy().out(..)`-style pure reads became `cx.world()`.
+- Quotes keep one copy per quote batch (REPORT C's "otherwise reuse one copy
+  per quote batch"); the per-hook `run_hook` clones inside the batch are
+  bumps.
+
+**C -- skip the buy-hook quote when no card declares one.** The counteract
+index's shape, applied to buy kinds (`BUY_HOOK_KINDS` = `BuyGate`/`BuyAdd`/
+`BuyMul`/`BuySet`):
+
+- `Ruleset::declares_buy()` ORs the whole-set `declared` bitmask over those
+  kinds. No card in the manifest hooks a buy kind -> `buy_quote` returns the
+  native formula with **no** instance walk, no `Run`, no `pure_buy_hook`.
+- The per-instance filter and `pure_buy_hook` use `Ruleset::hooks_to`
+  (the per-card `hook_mask` shift) instead of the entry-table scan
+  (`CardInfo::hooks`) -- the same one-shift test `counteracts_to` already
+  gets.
+
+Measured with `bot-cost` (`cargo run -p game-rules --release --features
+bot-cost --example bot_cost -- 2 4 60`), 2 games x 4 standard bots, real
+`dist/cards`, same seeds both sides (identical games -- prompts 161.0 and
+rounds 61.0 match exactly, so the counter deltas are pure overhead):
+
+| | before (HEAD) | after A–C (+ the two rulings below) |
+|---|---|---|
+| `WasmRules` ms/game | 16 105 | **7 304** (quiet rep; 14 141 under load) |
+| `cx.world_copy`/game | 43 508 | **19 407** (−55 %) |
+| host-boundary store builds/game | 22 794 | 22 794 (now mostly refcount bumps) |
+| total world clones/game | 66 303 | **42 201** + 22 800 shares |
+| `cant_play` evaluations/game | (every query) | 831 (see below) |
+| module instantiations/game | 18 294 | (unchanged -- C is the quote path) |
+| `StubRules` ms/game | 99.9 | 289 (the COW handle taxes writes; ≤ 323 budget) |
+
+The `cant_play` memo shows 0 hits at this bench (one query per card per step,
+no duplicates in hand): the win is the **pre-filter** and the missing copies,
+not the memo. The memo pays on the live search, where `view_extra` /
+`why_not_act` / the hand scan re-ask the same card inside one unchanged world.
+
+Wall times are ±30 % between reps on a loaded machine (the `StubRules` row is
+the tell). `bot_cost -- 4 4 120` **stack-overflows on the default main-thread
+stack** on both the baseline and the new tree -- a pre-existing deep-recursion
+limit in long WasmRules games, not an A–C regression; the 2x4x60 config is the
+comparison harness. `bot_cpu` (the live 3-advanced-bot drive) is the
+request-level harness; its per-decision CPU moves with the same engine paths.
+
+Request-level (`crates/server/examples/bot_cpu.rs`, 1 match, 3 Advanced +
+1 Standard, `--search-threads 1 --budget-ms 200`):
+
+| | before (HEAD) | after A–C (+ the rulings below) |
+|---|---|---|
+| bot CPU / match | 41.7 s / 354 game-s (11.8 % of one core) | **39.6 s** / 352 game-s (11.2 %) |
+| searched decides | 89 (31.8 CPU-s, **358 ms** each) | 99 (31.3 CPU-s, **316 ms** each) |
+| idle ponders | 3 173 calls, 12.1 CPU-s | 3 194 calls, 13.0 CPU-s |
+| obvious (1 legal action) | 8 calls | 13 calls |
+| **stall seconds** | **0** | **0** (the C1 refusal loop stays closed) |
+| search anatomy | rollout 85 % | rollout **87 %** |
+
+The two runs are not a strict A/B (the rulings below move the trajectory --
+89 vs 99 searched decides), so read the per-decide CPU and the rollout share,
+not the totals. Rollout (85–87 % of search CPU) is exactly the engine path
+A/B/C attack; `bot_cost`'s identical-game counters above are the clean
+before/after.
+
+### Counteract offers at `passTile` / `passPlayer` (2026-10-08)
+
+`is_hook_only` listed `PassTile` and `PassPlayer`, so `hand_counteractions`
+never ran at them and a card declaring `ChainKind::PassTile` (ABI v43 --
+`AG:刻入天穹傲岸的烈光`, 「当你经过一名角色时」) was never offered. Removed
+both from the list (`wasm_rules.rs`); the valid-option-first pre-scan skips
+the ring when no seat holds a card that answers, which is the common case on
+a `passTile` (it fires on every tile walked) -- in the `bot-cost` bench the
+skip count went 11 738 -> 15 714 per game (the extra ~4 000 are the
+`passTile`/`passPlayer` raises now considered and skipped). The counteract
+index (`counteracts_to`) and the CEL pre-filter already cover these kinds --
+they are ordinary `ChainKind`s. R2 (a no-settle teleport raises `passTile` /
+`passPlayer` at its **destination** only, never mid-route) is unchanged and
+pinned by `rb_ag::glory_counter_opens_only_at_a_teleports_destination`.
+
+Behaviour change (not equivalence-neutral): `sim -- 50 4 200` counts are
+**unchanged** (StubRules has no hand-counteraction cards, so no new window
+opens there). The real-ruleset trajectory only changes where a seat holds a
+`PassTile`/`PassPlayer` counter.
+
+### Bots do not mortgage to buy land (2026-10-08)
+
+User ruling "avoid mortgage to buy land". PR #4 made `can_buy_here` /
+`can_build_here` use `World::purchase_funds` (cash + mortgageable deeds), so a
+cash-poor / deed-rich seat's Buy is *legal* -- and the C1 menu treats a legal
+Buy as forced (no Decline beside it), so the search would take it and the
+engine would auto-mortgage. Legality for humans is unchanged; bots now
+require **cash alone** to cover the quoted price and decline instead:
+
+- `bot-core/src/action.rs` `buyable`: `cash >= st.buy_price` on top of
+  `can_buy_here`. Empty menu -> Decline (C1's refusal-loop fix preserved).
+- `game-core/src/engine/ai.rs` standard bot: explicit cash gate on the buy
+  branch (its `ai_wants_buy` already read cash; the gate makes the rule
+  visible).
+- `webui/src/game/autopilot.ts` `wantsBuyP`: `money >= price` made explicit.
+
+Builds keep the old funds rule (the ruling names *buy land*; `can_build` is a
+separate predicate and was left alone). Pinned by
+`bot-core/tests/action_legality.rs`
+(`cash_poor_deed_rich_bot_declines_instead_of_mortgaging_to_buy`,
+`a_deed_rich_broke_bot_does_not_mortgage_to_buy_land`).
+
+Behaviour change (not equivalence-neutral): `sim -- 50 4 200` counts are
+**unchanged** -- the StubRules engine bot's `ai_wants_buy` already read cash,
+so no sim buy was mortgage-funded. The shift shows on the advanced-bot search
+(a forced Buy whose `can_buy_here` was funds-backed is now declined) and on
+the live table.
+
+### The engine votes for bot seats (2026-10-09)
+
+A solo game with an 进阶 (Advanced) bot seat hung at the end-match vote: the
+engine's auto-vote (`auto_player`) covered only `ai` seats, `voters()` listed
+every non-`ai` seat (so an Advanced bot -- `ai` off, held for its driver --
+*was* a voter), the drivers (`webui` `botDrive`, `botsvc`) have no vote path,
+and a solo vote never expires. User ruling: "have the engine vote for
+advanced bot seats".
+
+- `Match::auto_vote` (new) answers for **every bot seat** (any mentality --
+  standard, chaos, advanced; `p.ai || p.bot`) plus a human under 托管
+  (`apply_left`), and is used **only** by `tick_vote`. The policy is the
+  standard bot's: always **yes** (`answers[k] = 1`, matching `autopilot.ts`'s
+  `vote: () => ({ act: "vote", value: 1 })`).
+- `Match::auto_player` is unchanged -- it stays the **prompt** auto-answer
+  (`tick_live`, `ai` seats only), so an Advanced bot's prompts still wait for
+  its external driver (`docs/BOT.md` B5).
+- `Match::voters()` lists every seat still in the match (humans by hand, bots
+  by the engine) instead of dropping `ai` seats -- so the engine casts a
+  standard bot's vote too, and the vote's player list shows the whole table.
+
+`unanimous_vote_ends_the_match` (engine.rs) now expects 3 voters in its
+2-human + 1-bot table and ticks once for the engine's vote;
+`an_advanced_bot_seat_gets_its_vote_cast_by_the_engine` pins the solo hang:
+the vote resolves on the next tick with no external answer. `sim -- 50 4 200`
+counts are **unchanged** (standard-only sims never vote).
+
+**ckpt impact of the three rulings.** `ckpt_equiv -- 3 4 60` after the rulings
+(`target/scratch/ckpt-abc-after-rulings.txt`) has the same 730 checkpoint
+lines / 723 turns / identical event-kind counts as the A–C baseline, but the
+per-turn hashes diverge from line 243 on -- expected: ruling 1 opens new
+[反击] windows whose propensity draws move the match RNG stream. The A–C
+tree itself is byte-identical (`ckpt-abc-before.txt` == `ckpt-abc-after.txt`).
+
 ### B4 harness (2026-10-07)
 
 `crates/bot-core/examples/ismcts_vs_bots.rs` — seat 0 = ISMCTS over

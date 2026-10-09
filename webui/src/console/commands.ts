@@ -82,9 +82,9 @@ export async function executeCommand(line: string, ctx: ConsoleContext): Promise
     const s = sess();
     if (s.readOnly || s.kind === "replay") fail("console.readOnly");
     if (s.autoMode !== "off") fail("console.autoActive");
-    // Cheats are solo-only and only in a debug-built engine (`docs/SERVER.md`).
+    // Cheats need a debug-built engine (`docs/SERVER.md`); debug builds take
+    // them in every session kind, solo and online alike.
     if (cmd.act === "debug" && !cheatsOn()) fail("console.cheatsDisabled");
-    if (cmd.act === "debug" && s.kind !== "solo") fail("console.soloOnly");
     const error = await s.act(cmd);
     if (error) throw new Error(ctx.errorMessage(error));
     return ctx.t("console.ok");

@@ -1,95 +1,54 @@
-/* The ring is a fixed 856 square (its tile grid is), so it is a fixed-basis
-   flex item in Board.module.css's row and the gutters absorb the slack.
+/* Generated TTS layout: 12 x 10 square cells (the mod's Lua `pathXY`), drawn
+   from tile data -- no board texture. The board keeps its 6:5 aspect (856 x
+   713.33 in board pixels) and is scaled to the largest such rect in the middle
+   column (`.fit`); `.wrap` is that window and clips the zoomed layer.
 
-   The grid is 12 x 10, not a 16 x 16 perimeter: the 10-05 fold steps each
-   side's middle inward to add a rung, which is what lets a cell be 71 x 86
-   instead of 50 x 50 while still carrying 60 tiles. */
-.wrap { position: relative; flex: 0 0 856px; width: 856px; height: 856px; margin-top: 22px; border-radius: 16px; background: rgba(255, 255, 255, 0.85); box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); }
-/* Thickness of the colour / ownership strips and the turn tiles' L + block
-   (was 13px; 80% then 70% of that). */
-.ring { --strip: 7.35px; position: relative; width: 856px; height: 856px; display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(10, 1fr); }
+   The wrap is also the pan/zoom window: it clips the transformed board layer
+   and holds the fixed overlays (banner, card flash, hover details, zoom
+   buttons), which stay out of the zoom so they keep their size and place. */
+.wrap { position: relative; flex: none; border-radius: 10px; background: #d3e9e5; box-shadow: 0 6px 24px rgba(80, 40, 60, 0.14); overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+.wrap:focus-visible { outline: 2px solid var(--pink); outline-offset: -4px; }
+/* Board pixels -> window pixels. Everything inside is laid out at 856 x 713. */
+.fit { position: absolute; left: 0; top: 0; width: 856px; height: calc(856px * 5 / 6); transform-origin: 0 0; }
+/* The zoomed layer: `translate(tx, ty) scale(z)` from the board's top-left
+   (viewport.ts). Only board content (tiles, tokens, the interior) lives here. */
+.viewport { position: absolute; left: 0; top: 0; width: 856px; height: calc(856px * 5 / 6); transform-origin: 0 0; }
+/* Fixed overlays on the board window: never zoomed, never in the way. */
+.overlay { position: absolute; inset: 0; pointer-events: none; }
+.ring { position: relative; width: 856px; height: calc(856px * 5 / 6); display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(10, 1fr); outline: 1px solid #52635f; outline-offset: -1px; }
 
-/* tiles: the group color bar sits on the inner edge */
-.tile { position: relative; z-index: 1; display: flex; cursor: pointer; background: #fff; overflow: hidden; transition: background 0.2s; }
-.tile:hover { filter: brightness(0.97); }
-.bar { flex: none; }
-/* Ownership strip: the outer mirror of `.bar`, painted with `--owner`. It only
-   exists once the land is owned, so an unowned tile is not carrying a blank
-   strip (and does not shift when someone buys it). */
-.obar { display: none; flex: none; background: var(--owner); }
-.owned .obar { display: block; }
-
-/* Turn tiles. The straight-run rule holds -- the tile's colour on the ring's
-   inside, ownership on its outside -- but at a turn one of the two strips has
-   to wrap the corner as an L (two `--strip` strips, `lA` + `lB`, along the tile's
-   free edges) and the other shrinks to a `--strip` block (`sq`) in the opposite
-   vertex. Which one wraps follows the fold (`turnAt` / `TurnMarks` in
-   Ring.tsx): the free edges face out on a convex turn, so the L is ownership;
-   they face in on a concave one, so the L is the tile's colour.
-
-   `.l0`..`.l3` name the vertex the L wraps: 0 = bottom-right, 1 = bottom-left,
-   2 = top-left, 3 = top-right. The block sits diagonally opposite. */
-.turnMarks { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-.lA, .lB, .sq { position: absolute; }
-.sq { width: var(--strip); height: var(--strip); }
-/* Whichever mark carries ownership only exists once the land is owned. */
-.own { display: none; background: var(--owner); }
-.owned .own { display: block; }
-
-.l0 .lA { bottom: 0; left: 0; right: 0; height: var(--strip); }
-.l0 .lB { top: 0; bottom: 0; right: 0; width: var(--strip); }
-.l0 .sq { left: 0; top: 0; }
-.l1 .lA { bottom: 0; left: 0; right: 0; height: var(--strip); }
-.l1 .lB { top: 0; bottom: 0; left: 0; width: var(--strip); }
-.l1 .sq { right: 0; top: 0; }
-.l2 .lA { top: 0; left: 0; right: 0; height: var(--strip); }
-.l2 .lB { top: 0; bottom: 0; left: 0; width: var(--strip); }
-.l2 .sq { right: 0; bottom: 0; }
-.l3 .lA { top: 0; left: 0; right: 0; height: var(--strip); }
-.l3 .lB { top: 0; bottom: 0; right: 0; width: var(--strip); }
-.l3 .sq { left: 0; bottom: 0; }
-.body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; min-width: 0; }
-.name { font-size: 13px; line-height: 1.2; white-space: pre-line; }
-.ringName { color: #cd1146; font-weight: 700; font-size: 14px; }
-.price { font-size: 12px; color: var(--sub); margin-top: 2px; }
-.agent { font-size: 12px; color: var(--tag-red); margin-top: 2px; }
-.s0 { flex-direction: column; }
-.s2 { flex-direction: column-reverse; }
-/* The strips run the full length of their edge so a tile's mark butts against
-   its neighbour's: same-colour tiles then read as one continuous band around
-   the ring instead of a dashed line with a gap at every tile boundary. */
-.s0 .bar, .s2 .bar, .s0 .obar, .s2 .obar { height: var(--strip); margin: 0; }
-.s1 { flex-direction: row-reverse; }
-.s3 { flex-direction: row; }
-.s1 .bar, .s3 .bar, .s1 .obar, .s3 .obar { width: var(--strip); margin: 0; }
-.owned { background: color-mix(in srgb, var(--owner) 16%, #fff); box-shadow: inset 0 0 0 2px var(--owner); }
-.mortgaged .body { opacity: 0.45; }
-.mortgaged::after { content: "抵押"; position: absolute; inset: auto 0 2px 0; text-align: center; font-size: 10px; color: #fff; background: rgba(90, 90, 90, 0.6); }
+/* tiles: a generated face per cell (TileFace) plus every live overlay */
+.tile { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; cursor: pointer; color: #25342f; background: #fff; border: 0.5px solid #52635f; overflow: hidden; transition: background 0.2s; padding: 0; font: inherit; text-align: inherit; }
+.tile:hover { background: #ffeef3; }
+.tile:focus-visible { outline: 3px solid var(--pink); outline-offset: -3px; }
+/* The `#index` chip wears the tile's colour -- what the colour strip used to
+   carry. */
+.tileNumber { flex: 0 0 17px; width: 100%; font-size: 11px; line-height: 17px; color: #17221e; }
+.tileBody { flex: 1; min-height: 0; width: 100%; padding: 2px 3px 3px; display: flex; flex-direction: column; gap: 1px; pointer-events: none; }
+.tileName { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; line-height: 1.12; }
+.specialName { font-size: 14px; font-weight: 700; }
+.longName { font-size: 9px; }
+.tileCaption { flex: 0 0 auto; font-size: 11px; line-height: 13px; }
+.tileNote { flex: 0 0 auto; font-size: 8px; line-height: 10px; }
+/* Ownership: a tint, an inner ring, and the colour strip along the bottom. */
+.owned { background: color-mix(in srgb, var(--owner) 12%, #fff); box-shadow: inset 0 0 0 2px var(--owner); }
+.ownerStrip { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 4px; border-radius: 2px; background: var(--owner); pointer-events: none; }
+.mortgaged { background: #e2e2e2; }
+.mortgaged::after { content: "抵押"; position: absolute; inset: auto 0 2px 0; text-align: center; font-size: 10px; color: #fff; background: rgba(90, 90, 90, 0.7); }
 .landed { box-shadow: inset 0 0 0 3px var(--pink); z-index: 2; }
 .pickable { animation: glow 0.9s ease-in-out infinite alternate; z-index: 3; }
-@keyframes glow { from { box-shadow: inset 0 0 0 3px var(--gold); } to { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8); background: #fff6dc; } }
-.houses { position: absolute; display: flex; gap: 1px; pointer-events: none; }
-.houses img { width: 13px; height: 13px; }
-.s0 .houses { top: 0; left: 50%; transform: translateX(-50%); }
-.s2 .houses { bottom: 0; left: 50%; transform: translateX(-50%); }
-.s1 .houses { right: 0; top: 50%; transform: translateY(-50%); flex-direction: column; }
-.s3 .houses { left: 0; top: 50%; transform: translateY(-50%); flex-direction: column; }
-/* Tile markers sit above every tile decoration (turn L / block z2, ribbon and
-   corner name z3) and take the pointer for their hover popup (`.markTip`). */
-.marks { position: absolute; left: 2px; bottom: 2px; z-index: 4; display: flex; gap: 1px; pointer-events: none; }
+@keyframes glow { from { box-shadow: inset 0 0 0 3px var(--gold); } to { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8); background: rgba(246, 178, 30, 0.16); } }
+
+.houses { position: absolute; top: 20px; left: 3px; display: flex; gap: 1px; pointer-events: none; }
+.houses img { width: 12px; height: 12px; }
+.marks { position: absolute; left: 3px; bottom: 7px; z-index: 4; display: flex; gap: 1px; pointer-events: none; }
 .marks .mark { pointer-events: auto; cursor: help; box-shadow: 0 0 0 1px #fff; }
 .mark { width: 14px; height: 14px; border-radius: 50%; color: #fff; font-size: 9px; text-align: center; line-height: 14px; }
 /* [CP点] is its own tile-mark category: no seat owns one, so it does not wear a
-   seat colour. A gold rounded square (not a seat-coloured dot) keeps it visually
-   apart from the player marks beside it. */
+   seat colour. A gold rounded square keeps it visually apart from the player
+   marks beside it. */
 .mark.cp { border-radius: 3px; background: var(--gold); color: #4a3400; font-size: 8px; font-weight: 700; letter-spacing: -0.2px; }
 .ember { background: var(--tag-red); }
-
-.corner { flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 3px; }
-.cornerArt { width: 70px; }
-.ribbon { position: absolute; left: 4px; top: 3px; height: 18px; line-height: 18px; padding: 0 8px; border-radius: 3px; background: var(--tag-red); color: #fff; font-size: 11px; z-index: 3; }
-.cornerName { position: relative; z-index: 3; font-size: 11px; color: var(--tag-red); font-weight: 700; white-space: nowrap; }
-.circle .cornerName { background: var(--pink); color: #fff; border-radius: 9px; padding: 0 14px; font-size: 13px; }
 
 /* tokens: chibi SD art standing on the tile center */
 .tokens { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
@@ -102,38 +61,32 @@
 .hop.sd { animation: hop 0.13s ease-out; }
 @keyframes hop { 50% { transform: translateY(-18px); } }
 
-/* center */
-/* The interior is a backdrop for the whole board -- the fold cuts into it, so
-   it can no longer be the one clean rectangle the perimeter left behind. The
-   tiles paint over it; the field panel and the piles sit above both. */
-.inner { grid-row: 1 / -1; grid-column: 1 / -1; position: relative; border-radius: 16px; background: center / cover; overflow: hidden; }
-.piles { z-index: 2; }
-.field { z-index: 2; }
-.inner::before { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.52); }
+/* Generated interior zones beneath the live cards. */
+.inner { grid-row: 1 / -1; grid-column: 1 / -1; position: relative; pointer-events: none; }
+.zones { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(12, 1fr); grid-template-rows: repeat(10, 1fr); }
+.zones > span { display: flex; align-items: center; justify-content: center; color: #344c44; font-size: 18px; font-weight: 700; }
+.inner button, .field, .fieldPreview { pointer-events: auto; }
+.piles, .field { z-index: 2; }
 
-/* Board geometry (856 / 12 x 856 / 10 = 71.3 x 85.6 per cell): the fold leaves
-   one big interior, cols 4-7 x rows 3-6 (285, 257 / 285 x 342), for the cards
-   in play, and four pockets of cols 1-3 / 8-10 x rows 1-2 / 7-8 (214 x 171).
-   The event deck takes the bottom-left pocket. */
-.piles { position: absolute; left: 71px; top: 599px; width: 214px; height: 171px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+/* Board geometry on square cells (71.333 px): the event pocket is cols 1-3 /
+   rows 7-8, the central field cols 4-7 / rows 3-6, and the movement hint takes
+   the bottom-right pocket (cols 8-10 / rows 7-8). */
+.piles { position: absolute; left: 71.333px; top: 499.333px; width: 214px; height: 142.667px; display: flex; align-items: center; justify-content: center; pointer-events: none; }
 .pile { display: flex; flex-direction: column; align-items: center; gap: 4px; pointer-events: auto; }
-.stack { position: relative; width: 96px; height: 128px; transition: transform 0.12s; }
+.stack { position: relative; width: 72px; height: 96px; transition: transform 0.12s; }
 .pile:hover .stack { transform: translateY(-3px); }
 .stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 4px 4px 0 #fff, 5px 5px 0 #f0b3c3, 0 6px 14px rgba(0, 0, 0, 0.18); }
 .stack img.face { border: 3px solid #fff; }
 .pileEmpty { position: absolute; inset: 0; border-radius: 8px; border: 3px dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(255, 255, 255, 0.5); }
-.pileLabel { position: relative; height: 32px; padding: 0 14px; border-radius: 16px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 16px; font-weight: 700; line-height: 32px; white-space: nowrap; }
+.pileLabel { position: relative; height: 26px; padding: 0 12px; border-radius: 13px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 13px; font-weight: 700; line-height: 26px; white-space: nowrap; }
 .pileLabel b { color: var(--pink); margin-left: 6px; }
-/* The movement hint takes the bottom-right pocket (cols 8-10 x rows 7-8), the
-   mirror of the event deck's; a full-width line at the bottom ran under the
-   bottom row of tiles. */
-.hint { position: absolute; left: 571px; top: 599px; width: 214px; height: 171px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: 15px; line-height: 1.5; pointer-events: none; }
+.hint { position: absolute; left: 570.667px; top: 499.333px; width: 214px; height: 142.667px; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: 15px; line-height: 1.5; pointer-events: none; }
 
-.banner { position: absolute; left: 50%; top: 290px; transform: translateX(-50%); z-index: 20; min-width: 360px; max-width: 600px; pointer-events: none; background: rgba(255, 255, 255, 0.96); border-radius: 14px; box-shadow: 0 10px 30px rgba(80, 30, 50, 0.25); padding: 12px 26px; text-align: center; display: flex; flex-direction: column; gap: 4px; border-top: 6px solid var(--pink); animation: banner 2.2s ease forwards; }
+.banner { position: absolute; left: 50%; top: 40.65%; transform: translateX(-50%); z-index: 20; min-width: 360px; max-width: 600px; pointer-events: none; background: rgba(255, 255, 255, 0.96); border-radius: 14px; box-shadow: 0 10px 30px rgba(80, 30, 50, 0.25); padding: 12px 26px; text-align: center; display: flex; flex-direction: column; gap: 4px; border-top: 6px solid var(--pink); animation: banner 2.2s ease forwards; }
 @keyframes banner { 0% { opacity: 0; transform: translate(-50%, -8px); } 8%, 88% { opacity: 1; transform: translate(-50%, 0); } 100% { opacity: 0; } }
 /* New-turn announcement: a wide light bar sweeps the player's turn label
    across the board centre -- in once, shine pass, out. */
-.phaseFlash { position: absolute; left: 50%; top: 178px; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.5s ease forwards; }
+.phaseFlash { position: absolute; left: 50%; top: 24.95%; transform: translateX(-50%); z-index: 22; pointer-events: none; padding: 12px 56px; border-radius: 12px; overflow: hidden; background: linear-gradient(105deg, rgba(255, 255, 255, 0) 0%, rgba(255, 214, 230, 0.92) 16%, rgba(255, 255, 255, 0.97) 50%, rgba(255, 214, 230, 0.92) 84%, rgba(255, 255, 255, 0) 100%); box-shadow: 0 14px 44px rgba(230, 60, 120, 0.35); animation: phaseFlash 1.5s ease forwards; }
 .phaseFlash span { display: block; font-size: 34px; font-weight: 800; letter-spacing: 0.14em; white-space: nowrap; background: linear-gradient(90deg, var(--pink) 0%, #c23a7c 48%, var(--pink) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .phaseFlash::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, transparent 32%, rgba(255, 255, 255, 0.9) 50%, transparent 68%); transform: translateX(-120%); animation: phaseSweep 0.9s ease-out forwards; }
 /* Master Duel's chain resolve: links snap across the banner, then a white flash. */
@@ -149,16 +102,15 @@
 @keyframes phaseSweep { to { transform: translateX(120%); } }
 .banner b { font-size: 26px; color: var(--pink); }
 .banner span { font-size: 15px; }
-/* Below the status banner (top 290, ~85-100px tall): a played-card reveal
-   overlaps it at vertical centre and hides 掷出xx / 付地租. */
+/* Below the status banner: a played-card reveal overlaps it at centre. */
 .reveal { position: absolute; left: 50%; top: 68%; transform: translate(-50%, -50%); z-index: 25; animation: reveal 0.3s ease-out; transition: opacity 0.25s, transform 0.25s; }
 .reveal > div { width: 300px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3); }
 .revealOut { opacity: 0; transform: translate(-50%, -60%); }
 @keyframes reveal { from { transform: translate(-50%, -40%) scale(0.6); opacity: 0; } }
 
-/* 场上的卡 -- the big interior, inset 6px: compact card faces, one row per
-   player (left border = the player's colour), each with its live state. */
-.field { position: absolute; left: 291px; top: 263px; width: 274px; height: 330px; box-sizing: border-box; border-radius: 10px; background: rgba(255, 255, 255, 0.92); box-shadow: var(--shadow); padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px; }
+/* 场上的卡 -- the central zone: compact card faces, one row per player (left
+   border = the player's colour), each with its live state. */
+.field { position: absolute; left: 291.333px; top: 220px; width: 273.333px; height: 273.333px; box-sizing: border-box; border-radius: 10px; background: rgba(255, 255, 255, 0.92); box-shadow: var(--shadow); padding: 8px 8px 6px; display: flex; flex-direction: column; gap: 6px; pointer-events: auto; }
 .fieldHead { display: flex; align-items: baseline; gap: 6px; text-align: left; }
 .fieldHead b { color: var(--pink); font-size: 15px; padding-left: 8px; border-left: 4px solid var(--pink); }
 .fieldHead small { color: var(--sub); font-size: 12px; }
@@ -168,7 +120,7 @@
 .fieldBack { border-radius: 4px; box-shadow: 0 0 0 2px var(--own); }
 .fieldBack img { width: 54px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; display: block; }
 .crystal { position: absolute; right: -3px; top: -3px; padding: 0 4px; border-radius: 8px; background: var(--purple); color: #fff; font-size: 10px; line-height: 15px; box-shadow: 0 0 0 1.5px #fff; }
-/* On-card [CP点] (「自己[场上]N个[CP点]」) -- the field card's counter badge. */
+/* On-card [CP点] -- the field card's counter badge. */
 .cpBadge { position: absolute; right: -3px; bottom: -3px; padding: 0 4px; border-radius: 8px; background: var(--teal, #0a8f7c); color: #fff; font-size: 10px; line-height: 15px; box-shadow: 0 0 0 1.5px #fff; }
 .noteDot { position: absolute; left: -2px; top: -2px; width: 9px; height: 9px; border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1.5px #fff; }
 /* Events in effect: the field's compact face, purple. */
@@ -180,8 +132,10 @@
 .eventTitle { font-size: 9px; font-weight: 700; line-height: 1.15; padding: 2px 1px 0; height: 24px; overflow: hidden; }
 .fpEvent { color: var(--purple); }
 
-/* Hovered field card at full size, over the right of the interior. */
-.fieldPreview { position: absolute; left: 575px; top: 257px; width: 230px; z-index: 30; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; pointer-events: none; opacity: 0; transform: translateX(-8px); transition: opacity 0.12s, transform 0.12s; }
+/* Hovered field card at full size, over the right of the interior. On the
+   fixed overlay: sized in screen px (it never zooms), placed as a fraction of
+   the board window so it stays over the same board region at any fit size. */
+.fieldPreview { position: absolute; left: 67.17%; top: 30%; width: 230px; z-index: 30; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; pointer-events: none; opacity: 0; transform: translateX(-8px); transition: opacity 0.12s, transform 0.12s; }
 .fieldPreviewOn { opacity: 1; transform: none; }
 .fpArt { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
 .fpArt img { width: 100%; display: block; }
@@ -190,6 +144,20 @@
 .fpText { font-size: 13px; line-height: 1.6; max-height: 220px; overflow: hidden; white-space: pre-wrap; }
 .fpNote { font-size: 12px; color: var(--note); margin-top: 4px; }
 
-/* A tile marker's popup, drawn on the ring (tiles clip), above the marker. */
-.markTip { position: absolute; z-index: 30; transform: translate(-50%, calc(-100% - 6px)); max-width: 220px; padding: 6px 10px; border-radius: 8px; background: rgba(40, 30, 40, 0.92); color: #fff; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: normal; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
+/* A tile marker's popup, on the fixed overlay above the zoom layer (tiles
+   clip, and the popup must not scale with the board). `width: max-content`:
+   an absolute box shrinks to the space between its `left` and the container's
+   right edge, so a marker on the right column would squeeze the popup to a
+   sliver; size it by its text instead. Ring.tsx clamps its `left` by the
+   measured width so the 220px box stays fully inside the board window, and
+   flips it below the marker near the top edge. */
+.markTip { position: absolute; z-index: 30; transform: translate(-50%, calc(-100% - 6px)); width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: rgba(40, 30, 40, 0.92); color: #fff; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: normal; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
 .markTip b { font-size: 13px; }
+
+/* Pan/zoom buttons, top-right of the board window. Same pill language as the
+   animation-speed control (Side.module.css): small, white, pink on hover. */
+.zoomCtl { position: absolute; right: 8px; top: 8px; z-index: 40; display: flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: 14px; background: rgba(255, 255, 255, 0.82); border: 1.5px solid var(--line); opacity: 0.72; transition: opacity 0.15s, background 0.15s; pointer-events: auto; }
+.zoomCtl:hover, .zoomCtl:focus-within { opacity: 1; background: #fff; }
+.zoomCtl button { width: 30px; height: 23px; border-radius: 11px; color: var(--sub); font-size: 13px; font-weight: 700; line-height: 23px; text-align: center; padding: 0; }
+.zoomCtl button:hover { color: var(--pink); background: var(--light-pill); }
+.zoomCtl button:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }

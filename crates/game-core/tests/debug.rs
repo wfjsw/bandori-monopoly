@@ -1,5 +1,5 @@
 //! Console mutations must survive saves and deterministic replay, and be
-//! impossible in online matches even when a client bypasses the UI.
+//! accepted in every match mode when the engine carries them.
 //!
 //! The handler only exists in debug builds (`engine/debug.rs` is
 //! `cfg(debug_assertions)`), so the cheat tests are gated the same way and a
@@ -60,8 +60,8 @@ fn cheat(op: &str, value: i32, target: i32) -> NetMessage {
 }
 
 #[cfg(debug_assertions)]
-fn ready_game() -> Match {
-    let mut m = game(MatchMode::Solo);
+fn ready_game(mode: MatchMode) -> Match {
+    let mut m = game(mode);
     for _ in 0..100 {
         let st = m.state();
         if st.prompt.id == 0 && !st.busy {
@@ -89,7 +89,7 @@ fn ready_game() -> Match {
 #[cfg(debug_assertions)]
 #[test]
 fn cheats_update_views_and_survive_save_restore() {
-    let mut m = ready_game();
+    let mut m = ready_game(MatchMode::Solo);
     let human = m.state().player_of(1) as usize;
     let bot = m.state().player_of(2) as usize;
     m.world_mut().st.players[human].state_set_bounds("fire", 0, 5);
@@ -124,19 +124,28 @@ fn cheats_update_views_and_survive_save_restore() {
     assert_eq!(restored.state().players[human].money, 50_000);
 }
 
+/// A debug-built engine accepts cheats in **every** match mode -- Solo,
+/// Casual and Ranked alike (online cheats in debug builds) -- and marks the
+/// match (`MatchState.debugOpen`) so the record shows the cheat use.
 #[cfg(debug_assertions)]
 #[test]
-fn invalid_commands_and_online_cheats_leave_the_world_unchanged() {
-    for mode in [MatchMode::Casual, MatchMode::Ranked] {
-        let mut m = game(mode);
+fn cheats_apply_in_every_mode_and_mark_the_match() {
+    for mode in [MatchMode::Solo, MatchMode::Casual, MatchMode::Ranked] {
+        let mut m = ready_game(mode);
+        let me = m.state().player_of(1) as usize;
         let before = m.save();
-        assert_eq!(
-            m.act(1, &cheat("money", 1, 0)).unwrap_err().key(),
-            "err.debug_solo_only"
-        );
-        assert_eq!(m.save(), before);
+        m.act(1, &cheat("money", 50_000, -1)).unwrap();
+        let st = m.state();
+        assert!(st.debug_open, "{mode:?}");
+        assert_eq!(st.players[me].money, 50_000, "{mode:?}");
+        assert_ne!(m.save(), before, "{mode:?}");
     }
-    let mut m = ready_game();
+}
+
+#[cfg(debug_assertions)]
+#[test]
+fn invalid_commands_leave_the_world_unchanged() {
+    let mut m = ready_game(MatchMode::Solo);
     for cmd in [
         cheat("money", -1, 0),
         cheat("money", 100_000_001, 0),
@@ -177,7 +186,7 @@ fn pending_prompts_reject_cheats_without_losing_answers() {
 #[cfg(debug_assertions)]
 #[test]
 fn cheats_replay_to_the_identical_world_and_event_stream() {
-    let mut rm = RecordedMatch::from_snapshot(ready_game());
+    let mut rm = RecordedMatch::from_snapshot(ready_game(MatchMode::Solo));
     rm.act(1, &cheat("money", 50_000, 0)).unwrap();
     rm.act(1, &cheat("tp", 5, 1)).unwrap();
     rm.act(1, &cheat("draw", 2, 0)).unwrap();

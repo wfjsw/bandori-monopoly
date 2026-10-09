@@ -1,5 +1,5 @@
 //! `DeckRules.cs` + `DeckService.cs` -- 10-card decks, who may use which card,
-//! and the 3 saved slots per character (slot 0 = the read-only preset).
+//! and the named saved decks per character (id 0 = the read-only preset).
 //!
 //! Note `clean` returns cards in **pool order**, not input order, and `fill` cleans
 //! again after padding -- both exactly as in the C#.
@@ -8,12 +8,13 @@ use std::collections::HashSet;
 
 use crate::data::{CardData, CharacterData, GameData};
 use crate::msg::Msg;
-use crate::profile::{DeckChoice, PlayerProfile, SavedDeck};
+use crate::profile::{sanitize_deck_name, DeckChoice, PlayerProfile, SavedDeck};
 
 /// Cards per deck.
 pub const SIZE: usize = 10;
-/// Custom slots per character (`DeckService.Slots`).
-pub const SLOTS: i32 = 3;
+/// Saved custom decks per character -- an arbitrary number, bounded so one
+/// profile cannot grow without limit.
+pub const DECKS_MAX: usize = 100;
 
 /// `DeckRules.WhyNot` -- `None` if `c` may put `card` in a starting deck.
 pub fn cant_play(data: &GameData, c: &CharacterData, card: &CardData) -> Option<Msg> {
@@ -121,98 +122,201 @@ pub fn is_complete<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S])
     clean(data, c, ids).len() == SIZE
 }
 
-// --- DeckService: saved slots on the profile -------------------------------------
+// --- DeckService: named saved decks on the profile --------------------------------
 
-fn find<'p>(p: &'p PlayerProfile, c: &CharacterData, slot: i32) -> Option<&'p SavedDeck> {
+fn find<'p>(p: &'p PlayerProfile, c: &CharacterData, id: i32) -> Option<&'p SavedDeck> {
     p.decks
         .iter()
-        .find(|d| d.character == c.name && d.slot == slot)
+        .find(|d| d.character == c.name && d.slot == id)
 }
 
-/// Deck in `slot`; slot 0 is the preset.
-pub fn cards(data: &GameData, p: &PlayerProfile, c: &CharacterData, slot: i32) -> Vec<String> {
-    if slot <= 0 {
+/// Saved custom decks of `c`, in display order. Id 0 (the preset) is not one.
+pub fn list<'p>(p: &'p PlayerProfile, c: &CharacterData) -> Vec<&'p SavedDeck> {
+    p.decks.iter().filter(|d| d.character == c.name).collect()
+}
+
+/// Next free deck id for `c` (one past its highest), or `None` at [`DECKS_MAX`].
+fn next_id(p: &PlayerProfile, c: &CharacterData) -> Option<i32> {
+    let decks = list(p, c);
+    if decks.len() >= DECKS_MAX {
+        return None;
+    }
+    Some(decks.iter().map(|d| d.slot).max().unwrap_or(0) + 1)
+}
+
+/// Deck in `id`; id 0 is the preset.
+pub fn cards(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> Vec<String> {
+    if id <= 0 {
         return preset(data, c);
     }
-    find(p, c, slot)
+    find(p, c, id)
         .map(|d| clean(data, c, &d.cards))
         .unwrap_or_default()
 }
 
-pub fn is_empty(data: &GameData, p: &PlayerProfile, c: &CharacterData, slot: i32) -> bool {
-    slot > 0 && cards(data, p, c, slot).is_empty()
+pub fn is_empty(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> bool {
+    id > 0 && cards(data, p, c, id).is_empty()
 }
 
-pub fn slot_complete(data: &GameData, p: &PlayerProfile, c: &CharacterData, slot: i32) -> bool {
-    cards(data, p, c, slot).len() == SIZE
+pub fn slot_complete(data: &GameData, p: &PlayerProfile, c: &CharacterData, id: i32) -> bool {
+    cards(data, p, c, id).len() == SIZE
 }
 
-/// Save (or, if nothing usable remains, delete) a custom slot. Returns whether the
-/// profile changed.
+/// Save cards into an existing custom deck. An empty list clears the deck -- it
+/// stays, with its name; [`delete`] removes it. Returns whether the profile
+/// changed.
 pub fn save<S: AsRef<str>>(
     data: &GameData,
     p: &mut PlayerProfile,
     c: &CharacterData,
-    slot: i32,
+    id: i32,
     ids: &[S],
 ) -> bool {
-    if slot <= 0 || slot > SLOTS {
+    let Some(d) = p
+        .decks
+        .iter_mut()
+        .find(|d| d.character == c.name && d.slot == id)
+    else {
+        return false;
+    };
+    let list = clean(data, c, ids);
+    if d.cards == list {
         return false;
     }
-    let list = clean(data, c, ids);
-    let pos = p
+    d.cards = list;
+    true
+}
+
+/// Create a custom deck from `ids` (cleaned; may be empty) under `name`
+/// ([`sanitize_deck_name`]; empty = auto). Appended after `c`'s other decks.
+/// Returns the new id, or `None` at [`DECKS_MAX`].
+pub fn create<S: AsRef<str>>(
+    data: &GameData,
+    p: &mut PlayerProfile,
+    c: &CharacterData,
+    name: &str,
+    ids: &[S],
+) -> Option<i32> {
+    let id = next_id(p, c)?;
+    let cards = clean(data, c, ids);
+    let at = p
         .decks
         .iter()
-        .position(|d| d.character == c.name && d.slot == slot);
-    match (pos, list.is_empty()) {
-        (None, true) => false,
-        (None, false) => {
-            p.decks.push(SavedDeck {
-                character: c.name.clone(),
-                slot,
-                cards: list,
-            });
-            true
-        }
-        (Some(i), true) => {
-            p.decks.remove(i);
-            true
-        }
-        (Some(i), false) => {
-            p.decks[i].cards = list;
-            true
-        }
+        .rposition(|d| d.character == c.name)
+        .map(|i| i + 1)
+        .unwrap_or(p.decks.len());
+    p.decks.insert(
+        at,
+        SavedDeck {
+            character: c.name.clone(),
+            slot: id,
+            name: sanitize_deck_name(name),
+            cards,
+        },
+    );
+    Some(id)
+}
+
+/// Copy deck `id` to a new deck right after it (auto-named). Returns the new
+/// id, or `None` if `id` is missing or at [`DECKS_MAX`].
+pub fn duplicate(data: &GameData, p: &mut PlayerProfile, c: &CharacterData, id: i32) -> Option<i32> {
+    let at = p
+        .decks
+        .iter()
+        .position(|d| d.character == c.name && d.slot == id)?;
+    let new_id = next_id(p, c)?;
+    let cards = clean(data, c, &p.decks[at].cards);
+    p.decks.insert(
+        at + 1,
+        SavedDeck {
+            character: c.name.clone(),
+            slot: new_id,
+            name: String::new(),
+            cards,
+        },
+    );
+    Some(new_id)
+}
+
+/// Rename deck `id` ([`sanitize_deck_name`]; empty restores the auto name).
+/// Duplicates are allowed. Returns whether the profile changed.
+pub fn rename(p: &mut PlayerProfile, c: &CharacterData, id: i32, name: &str) -> bool {
+    let Some(d) = p
+        .decks
+        .iter_mut()
+        .find(|d| d.character == c.name && d.slot == id)
+    else {
+        return false;
+    };
+    let name = sanitize_deck_name(name);
+    if d.name == name {
+        return false;
     }
+    d.name = name;
+    true
 }
 
-pub fn first_empty_slot(data: &GameData, p: &PlayerProfile, c: &CharacterData) -> i32 {
-    (1..=SLOTS).find(|&s| is_empty(data, p, c, s)).unwrap_or(0)
+/// Delete deck `id`. A chosen default pointing at it falls back to the preset.
+/// Returns whether the profile changed.
+pub fn delete(p: &mut PlayerProfile, c: &CharacterData, id: i32) -> bool {
+    let Some(i) = p
+        .decks
+        .iter()
+        .position(|d| d.character == c.name && d.slot == id)
+    else {
+        return false;
+    };
+    p.decks.remove(i);
+    p.deck_choices
+        .retain(|d| !(d.character == c.name && d.slot == id));
+    true
 }
 
-pub fn custom_count(data: &GameData, p: &PlayerProfile, c: &CharacterData) -> i32 {
-    (1..=SLOTS).filter(|&s| !is_empty(data, p, c, s)).count() as i32
+/// Move deck `id` by `delta` places in `c`'s display order (-1 up, +1 down).
+/// Returns whether the profile changed.
+pub fn move_by(p: &mut PlayerProfile, c: &CharacterData, id: i32, delta: i32) -> bool {
+    if delta == 0 {
+        return false;
+    }
+    let idxs: Vec<usize> = p
+        .decks
+        .iter()
+        .enumerate()
+        .filter(|(_, d)| d.character == c.name)
+        .map(|(i, _)| i)
+        .collect();
+    let Some(pos) = idxs.iter().position(|&i| p.decks[i].slot == id) else {
+        return false;
+    };
+    let to = pos as i32 + delta;
+    if to < 0 || to as usize >= idxs.len() {
+        return false;
+    }
+    let (a, b) = (idxs[pos], idxs[to as usize]);
+    p.decks.swap(a, b);
+    true
 }
 
-/// Slot chosen last time, if it still holds a complete deck; else 0 (preset).
+/// Id chosen last time, if it still holds a complete deck; else 0 (preset).
 pub fn chosen_slot(data: &GameData, p: &PlayerProfile, c: &CharacterData) -> i32 {
     match p.deck_choices.iter().find(|d| d.character == c.name) {
-        Some(d) if d.slot > 0 && d.slot <= SLOTS && slot_complete(data, p, c, d.slot) => d.slot,
+        Some(d) if d.slot > 0 && slot_complete(data, p, c, d.slot) => d.slot,
         _ => 0,
     }
 }
 
-/// Remember the chosen slot. Returns whether the profile changed.
-pub fn choose(p: &mut PlayerProfile, c: &CharacterData, slot: i32) -> bool {
+/// Remember the chosen deck (0 = preset). Returns whether the profile changed.
+pub fn choose(p: &mut PlayerProfile, c: &CharacterData, id: i32) -> bool {
     match p.deck_choices.iter_mut().find(|d| d.character == c.name) {
-        Some(d) if d.slot == slot => false,
+        Some(d) if d.slot == id => false,
         Some(d) => {
-            d.slot = slot;
+            d.slot = id;
             true
         }
         None => {
             p.deck_choices.push(DeckChoice {
                 character: c.name.clone(),
-                slot,
+                slot: id,
             });
             true
         }

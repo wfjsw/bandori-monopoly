@@ -39,5 +39,7 @@
   "pre_accept_ran": "pre accept body ran",
   "pre_play_ran": "pre play body ran",
   "pre_hook_ran": "pre hook body ran",
-  "pre_hook_note": "pre hook placed"
+  "pre_hook_note": "pre hook placed",
+  "pass_tele_note": "pass tele placed",
+  "pass_tele_done": "pass tele jumped to {pos}"
 }

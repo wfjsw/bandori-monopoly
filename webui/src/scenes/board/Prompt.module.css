@@ -1,22 +1,72 @@
-.prompt { display: flex; gap: 22px; min-height: 340px; }
-.side { width: 250px; flex: none; background: var(--light-pill); border-radius: 12px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
-.sideTitle { font-size: 18px; font-weight: 700; }
+/* The prompt card (the old popup): white panel with a pink border (the window
+   chrome, see Modal.module.css), body text, a thin pink timer bar, and the
+   options as outline pill buttons that wrap. Card-grid prompts keep the wide
+   overlay but share this look. */
+
+.prompt { position: relative; display: flex; gap: 18px; }
+.withSide { gap: 22px; }
+.side { width: 220px; flex: none; background: var(--light-pill); border-radius: 12px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.sideTitle { font-size: 17px; font-weight: 700; }
 .sideCards { display: flex; flex-wrap: wrap; gap: 8px; }
-.handCard { width: 108px; }
+.handCard { width: 100px; }
 .sideCard { width: 100%; }
 .sideHint { margin-top: auto; font-size: 13px; color: var(--sub); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-.timer { align-self: flex-end; display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 16px; border-radius: 16px; background: var(--pink-pale); color: var(--pink); font-size: 16px; }
-.text { font-size: 19px; line-height: 1.65; white-space: pre-wrap; text-align: center; }
-.withSide .text { text-align: left; }
-.options { display: flex; flex-direction: column; gap: 14px; align-items: center; margin-top: 20px; }
-.opt { width: 432px; min-height: 58px; font-size: 21px; }
-.sub { font-size: 14px; color: var(--sub); }
-.checks { width: 100%; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow: auto; }
+/* The answer deadline as a thin pink progress bar (online matches only). */
+.timerRow { display: flex; align-items: center; gap: 8px; }
+.timerBar { flex: 1; height: 4px; border-radius: 2px; background: var(--pink-pale); overflow: hidden; }
+.timerFill { height: 100%; border-radius: 2px; background: var(--pink); transition: width 0.4s linear; }
+.timerNum { flex: none; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }
+.text { font-size: 17px; line-height: 1.65; white-space: pre-wrap; }
+/* Options wrap like the old pill row. */
+.options { display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: center; }
+/* Optional content a prompt can drop in before its options -- e.g. a strip of
+   landing-tile previews. Kept generic: any block may sit here. */
+.previews { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
+.previewChip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 12px; background: var(--light-pill); font-size: 14px; color: var(--text); }
+.previewChip img { width: 36px; height: 36px; object-fit: cover; border-radius: 8px; flex: none; }
+.previewChip i { width: 6px; height: 22px; border-radius: 3px; flex: none; }
+/* An option pill may lead with a thumbnail (tile / card preview). */
+.opt img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; flex: none; }
+.opt i { width: 6px; height: 20px; border-radius: 3px; flex: none; }
+/* Card options: a row of uniform tiles (the standard 96px prompt card, the
+   same width the multi-select grid uses). The face previews on hover and
+   inspects on click; the caption beneath is the option itself. */
+.cardRow { width: 100%; display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-start; }
+.cardOpt { display: flex; flex-direction: column; gap: 4px; width: 96px; }
+.cardOptFace { width: 96px; cursor: zoom-in; }
+.cardOptFace:hover { transform: translateY(-3px); }
+.cardOptCap {
+  width: 100%; min-height: 32px; padding: 4px 6px; border-radius: 999px;
+  border: 2px solid var(--pink-pale); background: #fff; color: var(--text);
+  font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.cardOptCap:hover:not(:disabled) { border-color: var(--pink); background: var(--pink-pale); color: var(--pink-deep); }
+.cardOptCap:disabled { opacity: 0.5; }
+.sideCardWrap { display: flex; flex-direction: column; gap: 4px; }
+.sub { width: 100%; font-size: 14px; color: var(--sub); }
+/* Outline pill: every choice reads as an equal option (「不选」 included). */
+.opt {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 42px; padding: 8px 20px; border-radius: 999px;
+  border: 2px solid var(--pink-pale); background: #fff; color: var(--text);
+  font-size: 16px; font-weight: 500; line-height: 1.3; text-align: center;
+  transition: border-color 0.12s, background 0.12s, color 0.12s;
+}
+.opt:hover:not(:disabled) { border-color: var(--pink); background: var(--pink-pale); color: var(--pink-deep); }
+.opt:disabled { opacity: 0.5; }
+/* Filled pill for the confirm / submit of a multi-step prompt. */
+.optMain {
+  border-color: var(--pink); background: var(--pink); color: #fff; font-weight: 700;
+}
+.optMain:hover:not(:disabled) { background: var(--pink-light); border-color: var(--pink-light); color: #fff; }
+.checks { width: 100%; display: flex; flex-direction: column; gap: 6px; max-height: 240px; overflow: auto; }
 .check { display: flex; align-items: center; gap: 10px; background: var(--light-pill); border-radius: 8px; padding: 8px 12px; cursor: pointer; }
 .check input { width: 20px; height: 20px; accent-color: var(--pink); }
 .check i { width: 8px; height: 26px; border-radius: 4px; }
 .check b { margin-left: auto; color: var(--pink); }
+.sum { width: 100%; }
 .sum b { color: var(--tag-red); }
 .sum b.ok { color: var(--green); }
 .pick { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
@@ -34,10 +84,10 @@
 .dText { font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow: auto; flex: 1; min-height: 0; }
 .dMore { flex: none; align-self: flex-end; border: none; background: none; color: var(--pink); font-size: 13px; cursor: pointer; padding: 2px 4px; }
 .dEmpty { margin: auto; font-size: 14px; color: var(--sub); text-align: center; }
-.cardConfirm { height: 58px; flex: none; }
+.cardConfirm { width: 100%; min-height: 50px; }
 .confirmLabel { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.auction { width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: center; }
-.auctionTop { font-size: 20px; }
-.auctionTop b { color: var(--pink); font-size: 26px; }
-.bidRow { display: flex; gap: 12px; align-items: center; }
+.auction { width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.auctionTop { font-size: 18px; }
+.auctionTop b { color: var(--pink); font-size: 24px; }
+.bidRow { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .bidInput { width: 180px; }

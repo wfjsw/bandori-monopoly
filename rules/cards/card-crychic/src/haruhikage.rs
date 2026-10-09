@@ -109,7 +109,7 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     let yes = ctx::ask_yes(
         player_id,
         &Msg::new(key!("haruhikage_title")),
-        &Msg::new(key!("haruhikage_special_ask")),
+        &Msg::new(key!("haruhikage_special_ask")).card("card", ID),
     )?;
     if !yes {
         return Ok(());

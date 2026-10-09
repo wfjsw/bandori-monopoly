@@ -191,34 +191,39 @@ fn deck_rules_reject_with_csharp_reasons() {
 }
 
 #[test]
-fn deck_slots_save_choose_and_delete() {
+fn deck_save_choose_and_clear() {
     let d = data();
     let c = d.character("户山香澄").unwrap();
     let mut p = PlayerProfile::default();
-    assert_eq!(deck::first_empty_slot(&d, &p, c), 1);
     let preset = deck::preset(&d, c);
-    assert!(deck::save(&d, &mut p, c, 2, &preset));
-    assert_eq!(deck::cards(&d, &p, c, 2), preset);
-    assert_eq!(deck::custom_count(&d, &p, c), 1);
-    assert!(!deck::save(&d, &mut p, c, 4, &preset), "slot out of range");
+    let id = deck::create(&d, &mut p, c, "", &preset).unwrap();
+    assert_eq!(id, 1);
+    assert_eq!(deck::cards(&d, &p, c, id), preset);
+    assert_eq!(deck::list(&p, c).len(), 1);
+    assert!(!deck::save(&d, &mut p, c, 9, &preset), "unknown deck");
 
-    assert!(deck::choose(&mut p, c, 2));
-    assert!(!deck::choose(&mut p, c, 2), "no change");
-    assert_eq!(deck::chosen_slot(&d, &p, c), 2);
+    assert!(deck::choose(&mut p, c, id));
+    assert!(!deck::choose(&mut p, c, id), "no change");
+    assert_eq!(deck::chosen_slot(&d, &p, c), id);
 
     let half: Vec<&String> = preset.iter().take(5).collect();
-    assert!(deck::save(&d, &mut p, c, 2, &half));
+    assert!(deck::save(&d, &mut p, c, id, &half));
     assert_eq!(
         deck::chosen_slot(&d, &p, c),
         0,
-        "incomplete slot falls back to preset"
+        "incomplete deck falls back to preset"
     );
 
     assert!(
-        deck::save(&d, &mut p, c, 2, &Vec::<String>::new()),
-        "empty deletes"
+        deck::save(&d, &mut p, c, id, &Vec::<String>::new()),
+        "empty clears"
     );
+    assert_eq!(deck::list(&p, c).len(), 1, "the deck stays after a clear");
+    assert!(deck::cards(&d, &p, c, id).is_empty());
+
+    assert!(deck::delete(&mut p, c, id));
     assert!(p.decks.is_empty());
+    assert!(!deck::delete(&mut p, c, id), "already gone");
 }
 
 #[test]
@@ -271,7 +276,7 @@ fn profile_normalize_migrates_v1_saves() {
                  "history":[{"ranked":true,"rank":1},{"ranked":false,"rank":2}]}"#;
     let d = data();
     let p = PlayerProfile::from_json(&d, v1).unwrap();
-    assert_eq!(p.save_version, 3);
+    assert_eq!(p.save_version, 4);
     assert_eq!((p.level, p.fire_per_game), (500, 3));
     assert_eq!(
         p.home_character, d.match_rules.default_home_character,

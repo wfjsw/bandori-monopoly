@@ -245,6 +245,48 @@ export class WorkerReplayHandle implements ReplayHandle {
     return h;
   }
 
+  /**
+   * Boot a worker on a record's **embedded** engine (`docs/REPLAY.md` §10).
+   *
+   * Security: `loaderUrl` must be one of our own shipped loaders (the caller
+   * verified its sha256 against the embedded `glue.js` and the allow-list) --
+   * the file's own `glue.js` is never imported. The wasm and the tables come
+   * from the record, hash-checked already, and the worker locks its globals
+   * down (no fetch / sockets) once the engine is in.
+   */
+  static async openEmbedded(args: {
+    loaderUrl: string;
+    wasm: Uint8Array;
+    data: Record<string, string>;
+    modules: Uint8Array[];
+    conds: Uint8Array | null;
+    api: number;
+    bundle: string;
+    record: Uint8Array;
+    force: boolean;
+  }): Promise<WorkerReplayHandle> {
+    const w = new Worker("/assets/engine/replay-worker.js", {
+      type: "module",
+      name: `replay-embedded-${args.bundle.slice(0, 8)}`,
+    });
+    const h = new WorkerReplayHandle(w, args.api || 1, args.bundle);
+    try {
+      const boot = await h.rpc<{ api: number; stamp: EngineStamp; id: string }>("init-embedded", {
+        loader: args.loaderUrl,
+        wasm: args.wasm,
+        data: args.data,
+        modules: args.modules,
+        conds: args.conds,
+      });
+      (h as { apiVersion: number }).apiVersion = boot.api ?? 1;
+      await h.rpc("open", { bytes: args.record, force: args.force });
+    } catch (e) {
+      await h.free().catch(() => {});
+      throw e instanceof Error ? e : new Error(String(e));
+    }
+    return h;
+  }
+
   private rpc<T>(op: string, rest: Record<string, unknown> = {}): Promise<T> {
     if (this.done) return Promise.reject(new Error("replay worker closed"));
     const id = ++this.seq;

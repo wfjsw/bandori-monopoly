@@ -684,6 +684,17 @@ fn compile_pre(
     }
 }
 
+/// The buy-quote hook kinds (`docs/PURCHASE.md`): the gate that may cancel a
+/// buy, plus the three price stages (`BuyAdd` → `BuyMul` → `BuySet`).
+/// [`Ruleset::declares_buy`] ORs these against the manifest's declared-kind
+/// bitmask (fix C).
+pub const BUY_HOOK_KINDS: [crate::TriggerKind; 4] = [
+    crate::TriggerKind::BuyGate,
+    crate::TriggerKind::BuyAdd,
+    crate::TriggerKind::BuyMul,
+    crate::TriggerKind::BuySet,
+];
+
 /// A loaded, validated set of card modules.
 #[derive(Clone)]
 pub struct Ruleset {
@@ -742,6 +753,37 @@ impl Ruleset {
     pub fn declares(&self, kind: crate::TriggerKind) -> bool {
         let v = kind as i32;
         (0..128).contains(&v) && (self.inner.declared & (1u128 << v)) != 0
+    }
+
+    /// Does the **manifest** declare any buy hook at all (fix C,
+    /// `docs/PURCHASE.md`)? One shift of the whole-set `declared` bitmask per
+    /// buy kind -- the quote skips its live-instance walk, the `Run` and every
+    /// `pure_buy_hook` when no card in the set can answer a buy hook, the same
+    /// way `declares` lets `counteract` skip a raise nothing listens to.
+    pub fn declares_buy(&self) -> bool {
+        BUY_HOOK_KINDS.iter().any(|&k| self.declares(k))
+    }
+
+    /// Does `card` declare a buy hook at `kind`? The per-card `hook_mask`
+    /// shift (the counteract index's `counteracts_to` shape) instead of an
+    /// entry-table scan.
+    pub fn hooks_buy(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        self.hooks_to(card, kind)
+    }
+
+    /// Fix A cheap pre-filter: does this card's play gate vanish entirely
+    /// (no `On::Play` entry, or G4-deleted gate with no condition)? Then the
+    /// verdict is always "playable" and [`Self::cant_play`] would return
+    /// `Ok(None)` without asking anything -- callers can skip the uid lookup,
+    /// the `Run` and the CEL scope too.
+    pub fn play_gate_vanishes(&self, card: i32) -> bool {
+        let Some(info) = self.inner.cards.get(card as usize) else {
+            return true;
+        };
+        let Some(entry) = info.entry(OnKind::Play, None) else {
+            return true;
+        };
+        self.guard_is_none(card, entry) && self.pre_at(card, entry).is_none()
     }
 
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
@@ -1306,6 +1348,18 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .get(card as usize)
             .is_some_and(|c| c.counteracts_to(kind))
     }
+    /// Hook/gate twin of [`Self::counteracts_to`] (fix C's buy-hook index).
+    /// Default scans the entry table (`CardInfo::hooks`); [`Ruleset`] overrides
+    /// with the per-card `hook_mask` shift.
+    fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        self.cards().get(card as usize).is_some_and(|c| c.hooks(kind))
+    }
+    /// Does the set declare any buy hook at all (fix C)? Default ORs
+    /// [`Self::declares`] over [`BUY_HOOK_KINDS`]; [`Ruleset`] overrides with
+    /// the whole-set declared bitmask.
+    fn declares_buy(&self) -> bool {
+        BUY_HOOK_KINDS.iter().any(|&k| self.declares(k))
+    }
     /// Condition pre-filter (BOT-RESEARCH.md #1): `Some(entry)` when the
     /// card's [反击] at this window's kind exists and its condition admits.
     /// `None` skips the `Run` / guard entirely. Default builds the candidate
@@ -1339,6 +1393,16 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     /// Default `false` (conservative: assume a guard and run it). [`Ruleset`]
     /// overrides from its manifest.
     fn entry_guard_is_none(&self, _card: i32, _entry: i32) -> bool {
+        false
+    }
+    /// Fix A cheap pre-filter: does this card's play gate vanish entirely?
+    /// `true` when the card has no `On::Play` entry, or G4 deleted the gate
+    /// and it declares no condition -- the verdict is always "playable" and
+    /// the probe can skip the uid lookup, the `Run` and the CEL scope.
+    /// Default `false` (conservative: run the check). [`Ruleset`] overrides
+    /// from its manifest.
+    fn play_gate_vanishes(&self, card: i32) -> bool {
+        let _ = card;
         false
     }
     /// Content hash of the loaded set; `None` when there is no module image
@@ -1404,6 +1468,12 @@ impl CardModules for Ruleset {
     fn counteracts_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
         Ruleset::counteracts_to(self, card, kind)
     }
+    fn hooks_to(&self, card: i32, kind: crate::TriggerKind) -> bool {
+        Ruleset::hooks_to(self, card, kind)
+    }
+    fn declares_buy(&self) -> bool {
+        Ruleset::declares_buy(self)
+    }
     fn counteract_pre_allows(
         &self,
         world: &crate::Run,
@@ -1422,6 +1492,9 @@ impl CardModules for Ruleset {
     }
     fn entry_guard_is_none(&self, card: i32, entry: i32) -> bool {
         Ruleset::guard_is_none(self, card, entry)
+    }
+    fn play_gate_vanishes(&self, card: i32) -> bool {
+        Ruleset::play_gate_vanishes(self, card)
     }
     fn sha256(&self) -> Option<&str> {
         Some(Ruleset::sha256(self))

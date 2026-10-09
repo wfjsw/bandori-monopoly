@@ -1877,6 +1877,34 @@ pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> R
     Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
 }
 
+/// `H.AskSeat` where each option also names a **card** to show with it (Returns
+/// 「复制哪名玩家的团卡？」 -- the player's band card rides the option). The
+/// answer is still the chosen player; only the label gains a `card` argument,
+/// so a client renders the card in the option instead of a bare name.
+///
+/// Built on [`ask_pick`] (`PromptKind::Choice`) rather than `PromptKind::Player`
+/// because only the string-option path can carry a card per option. C#'s own
+/// `H.AskSeat` is an `AskPick` over player-name options too, so this is the
+/// faithful shape; bot / autopilot answering is unchanged (an index either way).
+pub fn ask_player_cards(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    players: &[i32],
+    cards: &[&str],
+) -> Result<i32, Prompt> {
+    let n = players.len().min(cards.len());
+    let mut options: Vec<Msg> = Vec::with_capacity(n);
+    for (p, c) in players.iter().zip(cards.iter()).take(n) {
+        options.push(Msg::new("ask.player").player_id("who", *p).card("card", c));
+    }
+    if options.is_empty() {
+        return Ok(-1);
+    }
+    let i = ask_pick(player_id, title, text, &options)?;
+    Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
+}
+
 /// `H.AskCard` -- pick one of `cards` (ids); returns the index.
 pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
     for c in cards {

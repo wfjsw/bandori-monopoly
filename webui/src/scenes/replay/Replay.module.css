@@ -80,7 +80,8 @@
   position: absolute;
   inset: 0;
 }
-/* The transport rides at the bottom of the board. */
+/* The transport rides at the bottom of the board; docked it goes full-width
+   and flush to an edge. Hidden, only a small handle is left on that edge. */
 .bar {
   position: absolute;
   left: 40px;
@@ -95,6 +96,42 @@
   padding: 12px 20px;
   z-index: 6;
 }
+.bar.dockBottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 16px 16px 0 0;
+  padding-bottom: 14px;
+}
+.bar.dockTop {
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: auto;
+  border-radius: 0 0 16px 16px;
+  padding-top: 14px;
+}
+.handle {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow);
+  padding: 8px 18px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sub);
+  cursor: pointer;
+  z-index: 6;
+}
+.handle:hover { color: var(--pink); }
+.handle.handleTop { top: 14px; bottom: auto; }
 .transport { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .speeds { display: flex; gap: 4px; background: #fff; border-radius: 10px; padding: 3px; }
 .speed {

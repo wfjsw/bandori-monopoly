@@ -657,9 +657,58 @@ fn pre_hook_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A `passTile` hook that teleports the mover 3 tiles ahead with a bare
+/// `ctx::teleport_to` (no settle, no `teleport` event), once per walk. Pins
+/// the walk-announce / `passTile` order: the walk's `roll`/`move` event must be
+/// published **before** the hook jumps the piece, or the client animates the
+/// walk from the pre-jump tile -- the reported "move starts from the location
+/// prior to the teleport" bug.
+const PASS_TELE: CardDef = CardDef::new(
+    "TEST:pass_tele",
+    &[
+        On::Play("", None, pass_tele_place),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_tele_guard), pass_tele_body),
+    ],
+);
+
+fn pass_tele_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:pass_tele", &Msg::new(key!("pass_tele_note")));
+    Ok(())
+}
+
+fn pass_tele_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::player_id() == player_id
+        // Once per walk: the jump itself re-raises `passTile` at the destination.
+        && ctx::state::get(player_id, "TEST.pass_tele.done") == 0
+}
+
+fn pass_tele_body(player_id: i32) -> card_sdk::Asked {
+    let n = ctx::tile_count();
+    if n <= 0 {
+        return Ok(());
+    }
+    let to = ctx::tile_steps_ahead(player_id, 3);
+    if to < 0 {
+        return Ok(());
+    }
+    ctx::state::set(player_id, "TEST.pass_tele.done", 1);
+    // A bare `ctx::teleport_to` (no settle, no `teleport` event) -- the
+    // walk-announce / `passTile` order shows up as the walk event's id vs
+    // this log line's id: HEAD publishes the walk before `passTile`, 808f0b3
+    // published it after.
+    ctx::teleport_to(player_id, to);
+    ctx::log(
+        player_id,
+        &Msg::new(key!("pass_tele_done")).i("pos", ctx::player_pos(player_id) as i64),
+    );
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
-    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK
+    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PASS_TELE
 ]);

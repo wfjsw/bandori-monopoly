@@ -6,7 +6,6 @@
 // (the token lives in sessionStorage) and `GET /api/rooms/{id}/state`.
 
 import { D, rules } from "../core/data";
-import type { EngineStamp } from "./record";
 import type { BotMentality, Command, MatchEvent, MatchView, RoomInfo, RoomMember, ScoreWeights } from "../core/types";
 import { api, ensureSession, openStream } from "../net/api";
 import type { Msg } from "../i18n/msg";
@@ -14,6 +13,8 @@ import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
 import { advancedSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks } from "./botDrive";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
+import { SoloEngine } from "./soloEngine";
+import type { SaveSnap, SoloPush } from "./soloProtocol";
 
 type ViewCb = (v: MatchView) => void;
 type EventCb = (e: MatchEvent) => void;
@@ -382,8 +383,6 @@ export function endSession(): void {
 
 const SOLO_KEY = "bm.solo";
 const SOLO_VERSION = 1;
-/** One recorded tick quantum (`docs/REPLAY.md` §1). */
-const TICK_STEP = 0.05;
 
 interface SoloSave {
   v: number;
@@ -398,38 +397,31 @@ interface SoloSave {
 }
 
 /**
- * Rebuild a solo match from its save plus the recorder beside it. Old saves
- * carry no `rec` and fall back to a partial record (`RecordedMatch` starts a
- * fresh log at the snapshot). `restore_with_record` is bound as an instance
- * method in the glue, so borrow a throwaway instance to call it -- the Rust
- * side does not read `self`.
+ * One solo match. The `SoloMatch` (wasm), its 50 ms fixed-step tick loop and
+ * the engine's standard bots run in a module worker (`soloWorker.ts`); this
+ * class is the page-side half: it caches the frames the worker pushes, drives
+ * the 进阶 seats through the bot pool, and keeps a `localStorage` save fresh.
+ *
+ * `ready` resolves once the worker has booted (glue + data + ruleset) and
+ * opened the match. Until then `view` is null and the UI waits -- the same
+ * shape as `OnlineSession`, whose first frame arrives over the stream.
  */
-function restoreSoloMatch(save: string, rec: string | undefined): InstanceType<typeof rules.SoloMatch> {
-  if (!rec) return rules.SoloMatch.restore(save);
-  const tmp = rules.SoloMatch.restore(save);
-  try {
-    return tmp.restore_with_record(save, rec);
-  } finally {
-    tmp.free();
-  }
-}
-
 export class SoloSession extends GameSession {
   readonly kind = "solo";
   readonly id = "solo";
   readonly weights: ScoreWeights;
+  /** Resolves when the engine worker is running the match; rejects when it
+   *  could not (the save is dropped, the UI backs out to the menu). */
+  readonly ready: Promise<void>;
   /** The `.bdrec` exported when the match ended (zstd-framed), kept for Results. */
   replayBytes: Uint8Array | null = null;
   replayId: string | null = null;
   replayName = "bdrec-replay.bdrec";
-  private m: InstanceType<typeof rules.SoloMatch>;
-  private timer: number;
-  private last = 0;
-  private lastTick = performance.now();
-  /** Whole `TICK_STEP` quanta still owed to the engine. */
-  private acc = 0;
-  private dirty = true;
-  private savedAt = 0;
+  private engine: SoloEngine;
+  /** Newest engine snapshot the worker pushed. `pagehide` writes this as-is --
+   *  the page cannot await a round-trip as it goes away (`docs` note in
+   *  `soloProtocol.ts`). */
+  private snap: SaveSnap = { match: "", last: 0 };
   private closed = false;
   private exportStarted = false;
   /** Seats the 进阶 driver is currently searching for (one ask at a time). */
@@ -441,21 +433,48 @@ export class SoloSession extends GameSession {
    *  (`docs/BOT.md` §3.5 -- the same shape as the server's `spawn_ponder`). */
   private botPonderInFlight = new Set<number>();
   private botPonderAt = new Map<number, number>();
-  private onHide = () => this.persist(true);
+  /** The 进阶 seats' frames the worker pushes (the driver's views). */
+  private botViews = new Map<number, MatchView>();
+  /** Re-checks the speculative ponder surface while idle (the worker only
+   *  pushes on change; a ponder is worth firing without a state change). */
+  private ponderTimer: number;
+  /** Write the cached snapshot now (pagehide cannot await), ask the worker for
+   *  a fresher one while the page can still hear the answer (tab switch), and
+   *  forward visibility so the tick loop keeps the page's pacing while hidden. */
+  private onHide = () => {
+    this.engine.setVisibility(document.hidden);
+    this.persist();
+    void this.engine
+      .save()
+      .then((s) => {
+        this.snap = s;
+        this.persist();
+      })
+      .catch(() => undefined);
+  };
 
-  private constructor(m: InstanceType<typeof rules.SoloMatch>, weights: ScoreWeights, last = 0, replayId: string | null = null) {
+  private constructor(engine: SoloEngine, weights: ScoreWeights, open: () => Promise<void>, replayId: string | null = null) {
     super();
     this.you = 1;
-    this.m = m;
+    this.engine = engine;
     this.weights = weights;
-    this.last = last;
-    // Set before the first `pump`, which would otherwise export the record
+    // Set before the first sync push, which would otherwise export the record
     // again on resume of an already-finished match.
     this.replayId = replayId;
-    this.timer = window.setInterval(() => this.tick(), 50);
+    engine.onPush = (p) => this.onPush(p);
+    this.ready = open();
+    // Mark the rejection handled here too -- the setup path never awaits
+    // `ready`; Play's effect is what backs out of a failed open.
+    void this.ready.catch((e) => {
+      console.warn("solo engine could not open the match:", e);
+      if (this.closed) return;
+      localStorage.removeItem(SOLO_KEY);
+    });
+    this.ponderTimer = window.setInterval(() => {
+      if (!this.closed) this.driveAdvancedBots();
+    }, 350);
     window.addEventListener("pagehide", this.onHide);
     document.addEventListener("visibilitychange", this.onHide);
-    this.pump();
   }
 
   static start(player: string, playerCharacter: string, bots: SoloBot[], weights: ScoreWeights): SoloSession {
@@ -481,41 +500,39 @@ export class SoloSession extends GameSession {
       seat(1, player, chars[0], false, "standard"),
       ...bots.map((b, i) => seat(i + 2, b.name, chars[i + 1], true, b.mentality)),
     ];
-    // Commit-reveal, locally (`docs/FAIRNESS.md`): the same recipe an online
-    // match runs, so the exported record carries the openings and verifies.
-    // Solo proves little -- the player is both committer and contributor --
-    // so the UI does not show the commitment (docs/FAIRNESS.md "solo").
-    const rand32 = () => crypto.getRandomValues(new Uint8Array(32));
-    const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-    const seed = hex(rand32());
-    const salt = hex(rand32());
-    const nonce = hex(rand32());
-    const stamp = JSON.parse(rules.engine_stamp()) as EngineStamp;
-    const settings = rules.fair_canon_settings(0, TICK_STEP, JSON.stringify(weights), JSON.stringify(members));
-    const commit = rules.fair_commit(seed, salt, stamp.bundle ?? "", stamp.ruleset_sha256 ?? "", settings);
-    const derived = rules.fair_derive_seed(seed, JSON.stringify([{ member: 1, nonce }]));
-    const m = new rules.SoloMatch(JSON.stringify(members), derived, 0, JSON.stringify(weights));
-    m.set_fair(
-      JSON.stringify({
-        v: 1,
-        commit,
-        seed,
-        salt,
-        nonces: [{ member: 1, nonce }],
-        settings,
-      }),
-    );
-    return new SoloSession(m, weights);
+    // Commit-reveal runs inside the solo engine worker (`soloWorker.ts`,
+    // `docs/FAIRNESS.md` "solo"): the same recipe an online match runs, so the
+    // exported record carries the openings and verifies. Solo proves little --
+    // the player is both committer and contributor -- so the UI does not show
+    // the commitment.
+    const engine = new SoloEngine();
+    return new SoloSession(engine, weights, async () => {
+      await engine.boot();
+      await engine.start({ members, mode: 0, weights, you: 1 });
+      engine.setVisibility(document.hidden);
+    });
   }
 
-  /** The match saved before a refresh, if any. */
+  /** The match saved before a refresh, if any. The save's engine strings go to
+   *  the worker; a restore failure (a corrupt save) rejects `ready` and Play
+   *  drops the session. */
   static resume(): SoloSession | null {
     const raw = localStorage.getItem(SOLO_KEY);
     if (!raw) return null;
     try {
       const s: SoloSave = JSON.parse(raw);
       if (s.v !== SOLO_VERSION) throw new Error("old save");
-      const out = new SoloSession(restoreSoloMatch(s.match, s.rec), s.weights, s.last, s.replayId ?? null);
+      const engine = new SoloEngine();
+      const out = new SoloSession(
+        engine,
+        s.weights,
+        async () => {
+          await engine.boot();
+          await engine.restore({ save: s.match, rec: s.rec, last: s.last, you: 1 });
+          engine.setVisibility(document.hidden);
+        },
+        s.replayId ?? null,
+      );
       out.recorded = s.recorded;
       return out;
     } catch (e) {
@@ -529,35 +546,20 @@ export class SoloSession extends GameSession {
     return !!localStorage.getItem(SOLO_KEY);
   }
 
-  /** Fixed-step: whole `TICK_STEP` quanta, `tick_steps(k)` with k in 1..=10,
-   *  the remainder carried over -- so the record's tick runs match what ran. */
-  private tick(): void {
-    const t = performance.now();
-    const dt = Math.min(0.5, (t - this.lastTick) / 1000);
-    this.lastTick = t;
-    this.acc += dt;
-    let k = Math.floor(this.acc / TICK_STEP);
-    if (k > 10) k = 10;
-    if (k > 0) {
-      this.acc -= k * TICK_STEP;
-      this.m.tick_steps(k);
+  /** Worker pushes: events + frames (the UI's view), engine snapshots (the
+   *  save), and the end-of-match trigger for the `.bdrec` export. Order is
+   *  the worker's post order, so a view is already fresh when `act` resolves. */
+  private onPush(p: SoloPush): void {
+    if (this.closed) return;
+    if (p.push === "save") {
+      this.snap = { match: p.match, rec: p.rec, last: p.last };
+      this.persist();
+      return;
     }
-    this.pump();
-    this.persist(false);
-  }
-
-  private pump(): void {
-    const evs: MatchEvent[] = JSON.parse(this.m.events_since(this.last));
-    for (const e of evs) {
-      this.last = e.id;
-      this.emitEvent(e);
-    }
-    if (evs.length) this.dirty = true;
-    if (this.m.take_changed() || !this.view) {
-      this.dirty = true;
-      this.emitView(JSON.parse(this.m.view(this.you)));
-    }
-    if (this.m.ended()) this.exportReplay();
+    for (const e of p.events) this.emitEvent(e);
+    if (p.view) this.emitView(p.view);
+    for (const b of p.bots ?? []) this.botViews.set(b.member, b.view);
+    if (p.ended) this.exportReplay();
     else this.driveAdvancedBots();
   }
 
@@ -568,6 +570,11 @@ export class SoloSession extends GameSession {
    * normal `act` path. Setup (ban / pick / deck) stays engine-side
    * (`MatchPlayer::auto_setup`). Fallback to the existing bot policy on any
    * search failure so a match never stalls (§1).
+   *
+   * The seats' frames come from the worker's pushes (they change together with
+   * the state); the driver runs on every sync and on a light idle timer, which
+   * is what keeps the speculative `ponder` (`docs/BOT.md` §3.5) firing while
+   * the match is quiet.
    */
   private driveAdvancedBots(): void {
     const v0 = this.view;
@@ -580,7 +587,8 @@ export class SoloSession extends GameSession {
     }
     for (const member of advancedSeats(v0)) {
       if (this.botInFlight.has(member)) continue;
-      const v = JSON.parse(this.m.view(member)) as MatchView;
+      const v = this.botViews.get(member);
+      if (!v) continue;
       if (decisionAt(v.state, v.playerId) == null) {
         // Nothing to answer right now. Speculate on the seat's **next own
         // decision** when it is near (BOT-RESEARCH #5, `docs/BOT.md` §3.5) --
@@ -595,7 +603,7 @@ export class SoloSession extends GameSession {
           this.botPonderInFlight.add(member);
           this.botPonderAt.set(member, now + 200);
           ponderUpcoming(
-            (m) => (m === member ? v : (JSON.parse(this.m.view(m)) as MatchView)),
+            (m) => this.botViews.get(m) ?? null,
             member,
             {
               room: this.id,
@@ -617,12 +625,8 @@ export class SoloSession extends GameSession {
       this.botInFlight.add(member);
       const played = this.botPlayed.get(member) ?? 0;
       void driveSeat(
-        async (m, cmd) => {
-          const err = this.actAs(m, cmd);
-          if (!err && cmd.act === "play") this.botPlayed.set(m, (this.botPlayed.get(m) ?? 0) + 1);
-          return err;
-        },
-        (m) => (m === member ? v : (JSON.parse(this.m.view(m)) as MatchView)),
+        (m, cmd) => this.actAs(m, cmd),
+        (m) => this.botViews.get(m) ?? null,
         member,
         {
           ctx: this.autopilotCtx(),
@@ -643,11 +647,11 @@ export class SoloSession extends GameSession {
   }
 
   /** `act` as any member (the 进阶 driver's seat, not just the human's). */
-  private actAs(member: number, cmd: Command): Msg | null {
-    const raw = this.m.act(member, JSON.stringify(cmd));
-    this.pump();
-    this.persist(true);
-    return raw ? (JSON.parse(raw) as Msg) : null;
+  private actAs(member: number, cmd: Command): Promise<Msg | null> {
+    return this.engine.act(member, cmd).then((err) => {
+      if (!err && cmd.act === "play") this.botPlayed.set(member, (this.botPlayed.get(member) ?? 0) + 1);
+      return err;
+    });
   }
 
   /** The shared fallback-policy inputs (the same context `Autopilot` builds). */
@@ -675,21 +679,21 @@ export class SoloSession extends GameSession {
     };
   }
 
-  /** Save at most once a second (and always when the page is hidden). The
-   *  recorder rides along in the same write, so a refresh keeps the log. */
-  private persist(force: boolean): void {
-    if (this.closed || !this.dirty) return;
-    const now = performance.now();
-    if (!force && now - this.savedAt < 1000) return;
-    this.savedAt = now;
-    this.dirty = false;
+  /** Write the cached engine snapshot to `localStorage` (the envelope fields
+   *  -- weights / recorded / replayId -- are the page's). Called on the
+   *  worker's save pushes (at most one a second while dirty) and on the way
+   *  out (`pagehide`); see `soloProtocol.ts` for why the snapshot is cached. */
+  private persist(): void {
+    if (this.closed || !this.snap.match) return;
     const save: SoloSave = {
       v: SOLO_VERSION,
-      match: this.m.save(),
+      match: this.snap.match,
       weights: this.weights,
       recorded: this.recorded,
-      last: this.last,
-      rec: this.m.record_state(),
+      // The cursor that belongs with these engine strings -- not a later one,
+      // or a resume would skip events the snapshot does not have.
+      last: this.snap.last,
+      rec: this.snap.rec,
       replayId: this.replayId ?? undefined,
     };
     try {
@@ -702,29 +706,22 @@ export class SoloSession extends GameSession {
   /** Export the `.bdrec` once, when the match ends: zstd-frame it into
    *  IndexedDB (keep 10) and hold the bytes for the Results buttons. Guarded
    *  by `replayId` in the save, so a refresh on the results screen does not
-   *  export twice. */
+   *  export twice. The compression runs in the worker (`record_zst`). */
   private exportReplay(): void {
     if (this.exportStarted || this.replayId) return;
     this.exportStarted = true;
     const created = new Date().toISOString();
-    let bytes: Uint8Array;
-    try {
-      bytes = this.m.record_zst(created);
-    } catch (e) {
-      console.warn("could not export the replay:", e);
-      return;
-    }
     void (async () => {
       try {
+        const bytes = await this.engine.export(created);
         const header = JSON.parse(rules.record_header_bytes(bytes)) as RecordHeader;
         const id = await putReplay(header, bytes);
         this.replayBytes = bytes;
         this.replayId = id;
         this.replayName = recordFilename(created);
-        this.dirty = true;
-        this.persist(true);
+        this.persist();
       } catch (e) {
-        console.warn("could not save the replay:", e);
+        console.warn("could not export the replay:", e);
       } finally {
         this.emitOther();
       }
@@ -733,30 +730,25 @@ export class SoloSession extends GameSession {
 
   markRecorded(): void {
     this.recorded = true;
-    this.dirty = true;
-    this.persist(true);
+    this.persist();
   }
 
   act(cmd: Command): Promise<Msg | null> {
-    const raw = this.m.act(this.you, JSON.stringify(cmd));
-    this.pump();
-    this.persist(true);
-    return Promise.resolve(raw ? (JSON.parse(raw) as Msg) : null);
+    return this.engine.act(this.you, cmd);
   }
 
   /** Skip the character pick with a random one and preset decks. */
   quickStart(): void {
-    this.m.quick_start();
-    this.pump();
+    void this.engine.quickStart();
   }
 
   leave(): void {
     this.closed = true;
-    clearInterval(this.timer);
+    clearInterval(this.ponderTimer);
     window.removeEventListener("pagehide", this.onHide);
     document.removeEventListener("visibilitychange", this.onHide);
     localStorage.removeItem(SOLO_KEY);
-    this.m.free();
+    this.engine.close();
   }
 }
 

@@ -9,8 +9,17 @@
 // dynamically imports `<bundle>/glue.js` at runtime, which no bundler should
 // rewrite. The message contract is mirrored by `webui/src/game/replayEngine.ts`.
 //
-// Messages in  ({id, op, ...}):  init | open | call | free | close
+// Messages in  ({id, op, ...}):  init | init-embedded | open | verify | call | free | close
 // Messages out ({id, ok, value} | {id, ok:false, error})
+//
+// `init-embedded` boots a **portable** record's own engine (`docs/REPLAY.md`
+// §10). SECURITY: the record's `glue.js` is never imported -- the page hands
+// this worker a URL of a loader *we* shipped (already hash-verified against
+// the file's copy and the deployment's allow-list) plus the file's wasm and
+// tables, all hash-checked before they got here. Once the engine is in, the
+// globals an untrusted wasm could otherwise reach (fetch and friends) are
+// replaced with throwing stubs. The wasm's own import surface is just
+// `Error` / `throw` / the externref table -- see the audit in §10.4.
 
 /** The frozen API: every method a driver may call on an engine bundle. */
 const CALLS = new Set([
@@ -33,22 +42,29 @@ let glue = null;
 let match = null;
 
 async function init(base) {
-  const manifest = await (await fetch(new URL("bundle.json", base))).json();
+  // `base` is a path like `/assets/engine/<id>/`; `new URL` needs an absolute
+  // base, so resolve it against the worker's own URL first.
+  const root = new URL(base, self.location.href);
+  const manifest = await (await fetch(new URL("bundle.json", root))).json();
   const L = manifest.layout;
   // The glue resolves `glue_bg.wasm` against its own URL, so importing it
   // from the bundle is enough -- a separate wasm instance per bundle.
-  glue = await import(new URL(L.glueJs, base).href);
+  glue = await import(new URL(L.glueJs, root).href);
   await glue.default();
   const files = {};
+  // `Response.text()` strips a leading UTF-8 BOM, but the seal hashed the
+  // file bytes as stored (`read_to_string` keeps it). Decode ourselves and
+  // keep the BOM so `load_data` sees the same contents the stamp covers.
+  const keepBom = new TextDecoder("utf-8", { ignoreBOM: true });
   for (const name of L.dataFiles ?? JSON.parse(glue.data_files())) {
-    const r = await fetch(new URL(`${L.dataDir}/${name}`, base));
-    if (r.ok) files[name] = await r.text();
+    const r = await fetch(new URL(`${L.dataDir}/${name}`, root));
+    if (r.ok) files[name] = keepBom.decode(await r.arrayBuffer());
   }
   glue.load_data(JSON.stringify(files));
-  const indexUrl = new URL(L.rulesIndex, base);
+  const indexUrl = new URL(L.rulesIndex, root);
   const index = await (await fetch(indexUrl)).json();
   for (const m of index.modules ?? []) {
-    const w = await fetch(new URL(`${L.modulesDir}/${m.file}`, base));
+    const w = await fetch(new URL(`${L.modulesDir}/${m.file}`, root));
     if (!w.ok) throw new Error(`${m.file}: HTTP ${w.status}`);
     glue.ruleset_add(new Uint8Array(await w.arrayBuffer()));
   }
@@ -96,6 +112,59 @@ function verify(bytes) {
   return glue.verify_fair(bytes);
 }
 
+/** Replace the globals an untrusted engine could otherwise reach with stubs
+ *  that throw. The wasm cannot call them today (its import object is Error /
+ *  throw / the externref table), and the trusted glue only touches them when
+ *  it is given a URL to fetch -- which `init-embedded` never does. This is the
+ *  belt to that braces: a future glue that asks for `fetch` fails loudly here
+ *  instead of reaching the network from a record's own engine. */
+function lockdown() {
+  const trap = (name) =>
+    function lockedDown() {
+      throw new Error(`${name} is disabled inside the embedded-engine replay worker`);
+    };
+  for (const name of ["fetch", "XMLHttpRequest", "WebSocket", "EventSource", "importScripts", "caches"]) {
+    try {
+      Object.defineProperty(self, name, { value: trap(name), writable: false, configurable: false });
+    } catch {
+      /* not every worker global exists or is configurable -- best effort */
+    }
+  }
+}
+
+/**
+ * Boot the engine a portable record carries. Every byte here was hash-checked
+ * by the page (`webui/src/game/portableEngine.ts`) before it was posted; the
+ * loader is our own copy, never the record's `glue.js`.
+ */
+async function initEmbedded({ loader, wasm, data, modules, conds }) {
+  if (typeof loader !== "string" || !loader.startsWith("/assets/engine/")) {
+    throw new Error(`refusing loader URL ${JSON.stringify(loader)} (must be a shipped /assets/engine/ asset)`);
+  }
+  if (!(wasm instanceof Uint8Array) || wasm.length === 0) throw new Error("embedded engine has no wasm");
+  glue = await import(loader);
+  // Bytes in, no fetch: `wasm-bindgen`'s init instantiates what it is given.
+  await glue.default({ module_or_path: wasm });
+  glue.load_data(JSON.stringify(data ?? {}));
+  for (const m of modules ?? []) {
+    if (!(m instanceof Uint8Array)) throw new Error("embedded rule module is not bytes");
+    glue.ruleset_add(m);
+  }
+  if (conds) {
+    if (typeof glue.ruleset_precompiled !== "function") {
+      throw new Error("embedded bundle ships precompiled conditions but its glue cannot load them");
+    }
+    glue.ruleset_precompiled(conds);
+  }
+  glue.ruleset_build();
+  lockdown();
+  return {
+    api: typeof glue.replay_api_version === "function" ? glue.replay_api_version() : 1,
+    stamp: JSON.parse(glue.engine_stamp()),
+    id: JSON.parse(glue.engine_stamp()).bundle || "",
+  };
+}
+
 function call(method, args) {
   if (!match) throw new Error("open first");
   switch (method) {
@@ -125,7 +194,9 @@ self.onmessage = async (e) => {
   try {
     let value;
     if (op === "init") value = await init(rest.base);
-    else if (op === "open") value = open(rest.bytes, !!rest.force);
+    else if (op === "init-embedded") {
+      value = await initEmbedded(rest);
+    } else if (op === "open") value = open(rest.bytes, !!rest.force);
     else if (op === "verify") value = verify(rest.bytes);
     else if (op === "call") {
       if (!CALLS.has(rest.method)) throw new Error(`unknown call ${rest.method}`);

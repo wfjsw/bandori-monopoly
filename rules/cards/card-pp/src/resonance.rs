@@ -36,7 +36,7 @@ pub fn try_resonance(player_id: i32) -> Result<bool, card_sdk::Prompt> {
     let yes = ctx::ask_yes(
         player_id,
         &Msg::new(key!("resonance_title")),
-        &Msg::new(key!("resonance_text")),
+        &Msg::new(key!("resonance_text")).card("card", "PP:[衍生]共鸣"),
     )?;
     if !yes {
         return Ok(false);

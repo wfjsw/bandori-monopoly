@@ -120,7 +120,7 @@ def main() -> int:
                 n_songs += 1
                 need_res(f"bandorisongs/{clip}", "CardSongs")
 
-    # 4. Live2D (compiled by tools/live2d/build.sh; see docs/LIVE2D.md)
+    # 4. Live2D (compiled by tools/live2d/build.mjs; see docs/LIVE2D.md)
     l2d = ASSETS / "live2d"
     catalog = load(l2d / "catalog.json")["models"]
     framing = {f["id"] for f in load(l2d / "framing.json")["models"]}
@@ -129,14 +129,17 @@ def main() -> int:
         d = l2d / mid
         model = d / "model.json"
         if not model.is_file():
-            errors.append(f"live2d {mid}: missing model.json (run tools/live2d/build.sh)")
+            errors.append(f"live2d {mid}: missing model.json (run tools/live2d/build.mjs)")
             continue
         for tex in load(model).get("textures", []):
             if not (d / tex).is_file():
                 errors.append(f"live2d {mid}: missing {tex}")
         for stray in d.iterdir():
-            if stray.name != "model.json" and not re.fullmatch(r"texture_\d+\.png", stray.name):
-                errors.append(f"live2d {mid}: unexpected {stray.name} (only model.json + textures may ship)")
+            ok = stray.name in ("model.json", "physics.json") or stray.suffix == ".mtn" \
+                or re.fullmatch(r"texture_\d+\.webp", stray.name)
+            if not ok:
+                errors.append(f"live2d {mid}: unexpected {stray.name} "
+                              f"(only model.json + texture WebPs + motions may ship)")
     warnings += [f"framing.json entry {i} has no catalog model" for i in sorted(framing - ids)]
 
     # report

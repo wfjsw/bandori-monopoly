@@ -10,7 +10,7 @@ import { D } from "../../core/data";
 import { useSessionOther } from "../../core/hooks";
 import { getProfile } from "../../core/store";
 import type { BotMentality } from "../../core/types";
-import { downloadRecord } from "../../game/record";
+import { downloadRecordPrompt } from "../../game/downloadPrompt";
 import { endSession, matchScene, OnlineSession, resumeOnline } from "../../game/session";
 import { api } from "../../net/api";
 import { fmtMsg, type Msg } from "../../i18n/msg";
@@ -185,7 +185,7 @@ export function Room({ id }: { id: string }) {
                 toast(fmtMsg(res.error), "error");
                 return;
               }
-              downloadRecord(res.bytes, res.filename);
+              downloadRecordPrompt(res.bytes, res.filename);
             }}
           >
             {tr("room.downloadLastReplay")}

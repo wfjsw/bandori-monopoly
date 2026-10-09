@@ -20,17 +20,10 @@ fn offer(t: &mut Table) {
     t.dice(&[5]);
     t.roll(0).unwrap();
     let p = t.expect_prompt();
-    assert!(
-        p.title.key().ends_with("sayo_thorns_title"),
-        "{}",
-        t.dump_prompt()
-    );
-    assert_eq!(t.pos(0), 1, "the choice must precede the first step");
-    assert_eq!(t.fire(0), 10, "opening the choice must not spend pots");
-    assert_eq!(
-        p.fallback, 0,
-        "timeout/default must skip the optional skill"
-    );
+    assert_eq!(p.text.key(), "ask.counteract.move_extension");
+    assert_eq!(t.pos(0), 1, "distance selection must precede movement");
+    assert_eq!(t.fire(0), 10);
+    assert_eq!(p.fallback, 2, "timeout must skip");
     assert_eq!(p.options.len(), 3);
 }
 
@@ -42,7 +35,7 @@ fn offer_shows_resolved_distance_and_each_landing_before_walking() {
     assert_eq!(p.text.a.get("n"), Some(&Arg::I(5)));
     assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(6)));
     assert_eq!(p.options[1].a.get("tile"), Some(&Arg::Tile(7)));
-    assert_eq!(p.options[2].a.get("tile"), Some(&Arg::Tile(8)));
+    assert_eq!(p.options[0].a.get("tile"), Some(&Arg::Tile(8)));
 }
 
 #[test]
@@ -50,7 +43,8 @@ fn choosing_one_or_two_extends_this_move_and_spends_six_once() {
     for add in [1, 2] {
         let mut t = sayo();
         offer(&mut t);
-        t.answer(0, add).unwrap();
+        t.answer(0, 2 - add).unwrap();
+        t.counteract(0, SKILL).unwrap();
         assert_eq!(t.pos(0), 6 + add as usize);
         assert_eq!(t.fire(0), 4);
         assert_eq!(t.m.world().turn.main_steps, 5 + add);
@@ -116,7 +110,8 @@ fn final_distance_override_and_existing_extra_steps_are_preserved() {
     let p = t.expect_prompt();
     assert_eq!(p.text.a.get("n"), Some(&Arg::I(9)));
     assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(10)));
-    t.answer(0, 2).unwrap();
+    t.answer(0, 0).unwrap();
+    t.counteract(0, SKILL).unwrap();
     assert_eq!(t.pos(0), 12, "7 determined + 2 existing + 2 Sayo");
     assert_eq!(t.fire(0), 4);
 }
@@ -130,8 +125,9 @@ fn reverse_move_previews_and_extends_in_the_same_direction() {
     t.roll(0).unwrap();
     let p = t.expect_prompt();
     assert_eq!(p.text.a.get("tile"), Some(&Arg::Tile(15)));
-    assert_eq!(p.options[2].a.get("tile"), Some(&Arg::Tile(13)));
-    t.answer(0, 2).unwrap();
+    assert_eq!(p.options[0].a.get("tile"), Some(&Arg::Tile(13)));
+    t.answer(0, 0).unwrap();
+    t.counteract(0, SKILL).unwrap();
     assert_eq!(t.pos(0), 13);
     assert_eq!(t.fire(0), 4);
 }
@@ -141,6 +137,7 @@ fn use_is_once_per_turn_and_resets_on_the_next_turn() {
     let mut t = sayo();
     offer(&mut t);
     t.answer(0, 1).unwrap();
+    t.counteract(0, SKILL).unwrap();
     t.set_fire(0, 10, 10);
     // Even if another effect allowed another main move in the same turn,
     // replenished pots must not allow a second use.

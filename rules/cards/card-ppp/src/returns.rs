@@ -128,7 +128,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
     let pick = ctx::ask_yes(
         player_id,
         &Msg::new(key!("returns_add_eight_title")),
-        &Msg::new(key!("returns_add_eight_ask")),
+        &Msg::new(key!("returns_add_eight_ask")).card("card", ID),
     )?;
     let mut added = 0;
     while added < 8 && !pool.is_empty() {
@@ -301,11 +301,31 @@ fn borrow_band(player_id: i32) -> card_sdk::Asked {
     if pool.is_empty() {
         return Ok(());
     }
-    let who = ctx::ask_player(
+    // 「复制哪名玩家的团卡？」 -- each option shows that player's 团卡 beside the
+    // name (a prompt that asks about a card shows the card, not just its title).
+    // The bound band skill is that 团卡's rule id; fall back to the band table
+    // when nothing is bound yet.
+    let cards: alloc::vec::Vec<String> = pool
+        .iter()
+        .map(|&p| {
+            ctx::band_skill(p).unwrap_or_else(|| {
+                let band = band_of(p);
+                BANDS
+                    .iter()
+                    .position(|b| *b == band)
+                    .and_then(|i| SKILLS.get(i))
+                    .map(|s| String::from(*s))
+                    .unwrap_or_default()
+            })
+        })
+        .collect();
+    let refs: alloc::vec::Vec<&str> = cards.iter().map(|s| s.as_str()).collect();
+    let who = ctx::ask_player_cards(
         player_id,
         &Msg::new(key!("returns_title")),
         &Msg::new(key!("returns_which_band")),
         &pool,
+        &refs,
     )?;
     if who < 0 {
         return Ok(());

@@ -173,6 +173,70 @@ fn corrupt_input_is_corrupt_not_format() {
     assert!(matches!(err, ReplayError::Corrupt(_) | ReplayError::Format(_)));
 }
 
+// ---------------------------------------------------------------- portable tail
+//
+// A portable `.bdrec` (`docs/REPLAY.md` §10) appends an engine bundle after
+// the record frame. The contract every reader -- including every archived
+// bundle -- depends on is that the trailing bytes are simply not looked at.
+
+/// A zstd skippable frame (`184D2A50`) wrapping `payload`. The portable
+/// extension is exactly one of these; `zstd -d` skips them.
+fn skippable_frame(payload: &[u8]) -> Vec<u8> {
+    let mut out = vec![0x50, 0x2A, 0x4D, 0x18];
+    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    out.extend_from_slice(payload);
+    out
+}
+
+#[test]
+fn trailing_portable_section_is_ignored() {
+    let file = run_bot_game(13, 2, 2);
+    let zst = encode_record_zst(&file);
+    let header = parse_header_bytes(&zst).expect("plain header");
+
+    // A portable tail: skippable frame + a fixed trailer. The reader must not
+    // care about either -- the record is the record.
+    let mut with_tail = zst.clone();
+    with_tail.extend_from_slice(&skippable_frame(b"BDRECENG pretend engine bundle"));
+    with_tail.extend_from_slice(&[0u8; 32]);
+    let header2 = parse_header_bytes(&with_tail).expect("portable header");
+    assert_eq!(header, header2, "header is the same with a portable tail");
+    let file2 = decode_record(&with_tail).expect("portable decode");
+    assert_eq!(file.check, file2.check, "body check is the same with a portable tail");
+    assert_eq!(file.body.final_hash, file2.body.final_hash);
+
+    // Trailing junk (not even a skippable frame) is ignored too -- that is
+    // what makes the extension safe to append to any existing framing.
+    let mut with_junk = zst.clone();
+    with_junk.extend_from_slice(b"JUNKJUNK");
+    assert_eq!(header, parse_header_bytes(&with_junk).expect("junk header"));
+}
+
+#[test]
+fn zst_decode_round_trips_and_honours_the_cap() {
+    let file = run_bot_game(7, 2, 2);
+    let json = encode_record_json(&file).into_bytes();
+    for encode in [
+        game_core::record::zst_encode as fn(&[u8]) -> Vec<u8>,
+        game_core::record::zst_encode_pure,
+    ] {
+        let frame = encode(&json);
+        // The two encoders must both be standard frames this decoder reads.
+        let out = game_core::record::zst_decode(&frame, json.len() * 2).expect("decode");
+        assert_eq!(out, json);
+        // A cap below the real size refuses instead of growing without bound.
+        let err = game_core::record::zst_decode(&frame, json.len() / 2).unwrap_err();
+        assert!(matches!(err, ReplayError::Corrupt(_)), "cap: {err:?}");
+        // A cap of zero refuses even an empty result path.
+        assert!(game_core::record::zst_decode(&frame, 0).is_err());
+    }
+    // A bare skippable frame is not a content frame: `ruzstd` reports it as a
+    // `SkipFrame` error rather than an empty output. That is fine -- the
+    // portable extension never asks `zst_decode` to read one; the split hands
+    // the payload straight to it.
+    assert!(game_core::record::zst_decode(&skippable_frame(b"hi"), 1024).is_err());
+}
+
 // ---------------------------------------------------------------- sizes
 
 /// The number the format choice rests on: a real 200-round bot game as raw

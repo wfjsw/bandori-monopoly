@@ -191,7 +191,7 @@ fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(
         roller,
         &Msg::new(key!("starry_night_attack_title")),
-        &Msg::new(key!("starry_night_attack_ask"))
+        &Msg::new(key!("starry_night_attack_ask")).card("card", ID)
             .player_id("who", player_id)
             .i("roll", roll as i64),
     )? {

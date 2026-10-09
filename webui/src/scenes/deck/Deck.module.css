@@ -5,7 +5,7 @@
 .left { position: relative; flex: 0 0 390px; }
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 
-.char { position: absolute; left: 0; top: 0; width: 390px; height: 465px; border-radius: 14px; background: #fff; box-shadow: var(--shadow); overflow: hidden; }
+.char { position: absolute; left: 0; top: 0; width: 390px; height: 440px; border-radius: 14px; background: #fff; box-shadow: var(--shadow); overflow: hidden; }
 .glow { position: absolute; inset: 20% 10% -10%; border-radius: 50%; opacity: 0.25; filter: blur(50px); }
 .stand { position: absolute; left: 50%; top: 0; height: 100%; transform: translateX(-50%); }
 .band { position: absolute; left: 14px; top: 14px; }
@@ -14,13 +14,17 @@
 .side { position: absolute; right: 16px; top: 16px; width: 160px; font-size: 17px; }
 .second { top: 74px; }
 
-.slots { position: absolute; left: 0; top: 480px; width: 390px; height: 270px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.slots { position: absolute; left: 0; top: 455px; width: 390px; height: 295px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .slotsHead { display: flex; align-items: center; gap: 8px; padding-left: 4px; }
 .slotsHead > span { height: 28px; font-size: 14px; }
 .slotsHead img { width: 20px; }
 .slotsHead small { color: var(--sub); font-size: 12px; }
-.slot { display: flex; align-items: center; gap: 10px; height: 46px; border-radius: 23px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); padding: 0 18px 0 8px; cursor: pointer; flex: none; }
-.slot b { font-size: 19px; flex: 1; }
+.slotList { flex: 1 1 auto; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 6px; padding: 2px; }
+.slotsFoot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.slotsFoot button { min-width: 0; padding: 0 8px; }
+.moveBtn { min-width: 28px; padding: 0 6px; }
+.slot { display: flex; align-items: center; gap: 10px; height: 42px; border-radius: 21px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); padding: 0 18px 0 8px; cursor: pointer; flex: none; }
+.slot b { font-size: 19px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot small { color: var(--sub); font-size: 14px; }
 .on { background: var(--pink); color: #fff; }
 .on small { color: #fff; }

@@ -1,4 +1,6 @@
 {
+  "ask.counteract.move_extension": "本次主要移动已确定为 {{n}} 格，预计停在 {{tile}}。这次移动多走几格？",
+  "ask.counteract.skill": "消耗 {{n}} 个火罐 · {{card}}",
   "ask.agent.build": "{{tile}}　加盖第 {{nth}} 栋  {{cost}}",
   "ask.agent.buy": "{{tile}}　购买 {{price}}{{extra}}",
   "ask.agent.text": "{{who}} 停在地产商：选一块同色的地结算一次——无主的可以买下，自己的可以加盖一栋房屋；也可以不选。现金不足时可以抵押其他地契凑钱。",
@@ -80,7 +82,6 @@
   "err.debug_argument": "作弊参数无效：请检查数值、卡牌 ID 或已有状态键",
   "err.debug_busy": "请先完成当前提示或移动，再使用作弊命令",
   "err.debug_play_only": "请在正式游戏阶段使用作弊命令",
-  "err.debug_solo_only": "作弊仅限单机对局",
   "err.debug_target": "目标玩家不存在或已出局",
   "err.deck_band": "这是 {{band}} 的卡，只有这个乐队的角色能带",
   "err.deck_derived": "衍生卡不能放进初始卡组，对局中由别的卡产生",
@@ -394,5 +395,8 @@
   "status.move_not_your_turn": "只能在自己的回合",
   "status.stunned": "[晕眩]",
   "vote.against": "{{who}} 反对",
-  "vote.timeout": "到时间还有人没投"
+  "vote.timeout": "到时间还有人没投",
+  "ask.counteract.move_extension_payment": "已选择 +{{n}} 格，预计停在 {{tile}}。选择支付方式。",
+  "ask.counteract.extend": "+{{n}} 格 → {{tile}}",
+  "ask.counteract.back": "返回上一步"
 }

@@ -86,15 +86,7 @@ fn the_heuristic_answer_names_the_offered_card_it_picked() {
         worth: 0,
     };
     let acts = action::legal_actions(&Default::default(), &st, &hand, &[], 1);
-    let priors = action::action_priors(
-        &Default::default(),
-        &st,
-        &hand,
-        &[],
-        Some(&ai),
-        1,
-        &acts,
-    );
+    let priors = action::action_priors(&Default::default(), &st, &hand, &[], Some(&ai), 1, &acts);
     let deny = Action::Counteract {
         card: Some("TEST:deny".into()),
     };
@@ -105,7 +97,10 @@ fn the_heuristic_answer_names_the_offered_card_it_picked() {
     let at = |a: &Action| priors[acts.iter().position(|x| x == a).unwrap()];
     assert_eq!(at(&deny), 1.0, "the heuristic's card is the anchor");
     assert!(at(&probe) < 1.0, "the other declaration is not the anchor");
-    assert!(at(&skip) < 1.0, "the skip is not the anchor when it declares");
+    assert!(
+        at(&skip) < 1.0,
+        "the skip is not the anchor when it declares"
+    );
 }
 
 /// A skip answer anchors the skip.
@@ -119,16 +114,45 @@ fn the_heuristic_skip_anchors_the_fallback() {
         worth: 0,
     };
     let acts = action::legal_actions(&Default::default(), &st, &hand, &[], 1);
-    let priors = action::action_priors(
-        &Default::default(),
-        &st,
-        &hand,
-        &[],
-        Some(&ai),
-        1,
-        &acts,
-    );
+    let priors = action::action_priors(&Default::default(), &st, &hand, &[], Some(&ai), 1, &acts);
     let skip = Action::Counteract { card: None };
     let at = |a: &Action| priors[acts.iter().position(|x| x == a).unwrap()];
     assert_eq!(at(&skip), 1.0);
+}
+#[test]
+fn movement_extensions_keep_distinct_indices_despite_shared_source_metadata() {
+    let mut p = counteract_prompt();
+    p.text = Msg::new("ask.counteract.move_extension");
+    p.options = vec![
+        Msg::new("ask.counteract.extend")
+            .i("n", 2)
+            .card("card", "TEST:probe"),
+        Msg::new("ask.counteract.extend")
+            .i("n", 1)
+            .card("card", "TEST:probe"),
+        Msg::new("ask.counteract.skip"),
+    ];
+    let st = state_with(p);
+    let acts = action::legal_actions(&Default::default(), &st, &[], &[], 1);
+    assert_eq!(
+        acts,
+        vec![
+            Action::Offer { index: 0 },
+            Action::Offer { index: 1 },
+            Action::Offer { index: 2 }
+        ]
+    );
+    for (i, a) in acts.iter().enumerate() {
+        let msg = action::to_net_message(a, &st, 1);
+        assert_eq!(msg.value, i as i32);
+        assert_eq!(msg.prompt, 7);
+    }
+    let ai = AiAnswer {
+        answer: 1,
+        picked: vec![],
+        worth: 0,
+    };
+    let priors = action::action_priors(&Default::default(), &st, &[], &[], Some(&ai), 1, &acts);
+    assert_eq!(priors[1], 1.0, "+1 heuristic must not collapse into +2");
+    assert!(priors[0] < 1.0);
 }

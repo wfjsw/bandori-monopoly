@@ -380,8 +380,10 @@ fn detour_can_be_a_counter() {
 }
 
 // 规则书: 「[反击] 当你经过一名角色时…你从对方处获得等于对方最贵格子基础购买价格一半数额的资金…」
+// ABI v43: `PassTile` is a [`ChainKind`], so the hand [反击] window opens at
+// the [经过] step (`is_hook_only` no longer lists it).
 #[test]
-fn glory_counter_on_passing_a_character() {
+fn glory_counter_is_offered_when_passing_a_character() {
     let mut t = Table::vanilla(2);
     t.give(0, &["AG:刻入天穹傲岸的烈光"]);
     t.own(1, &[HILL]); // P1's cheapest; give them a dearer one
@@ -391,11 +393,136 @@ fn glory_counter_on_passing_a_character() {
     t.set_pos(0, 18);
     t.dice(&[3]); // 18+3 = 21, passes 20 (P1)
     t.roll(0).unwrap();
-    if t.counteract_offered("AG:刻入天穹傲岸的烈光") {
-        t.counteract(0, "AG:刻入天穹傲岸的烈光").unwrap();
-    }
+    // The [经过] window must offer the card to the mover (a human seat here).
+    assert!(
+        t.counteract_offered("AG:刻入天穹傲岸的烈光"),
+        "the passTile [反击] window must offer the card: {}",
+        t.dump_prompt()
+    );
+    let m0 = t.money(0);
+    let m1 = t.money(1);
+    t.counteract(0, "AG:刻入天穹傲岸的烈光").unwrap();
     skip_all(&mut t);
-    eprintln!("money: {} {}", t.money(0), t.money(1));
+    // 「对方最贵格子基础购买价格一半」 = 3400/2 = 1700 from P1;
+    // 「你最贵格子基础购买价格一半」 = 0 (P0 owns nothing) from P0.
+    assert_eq!(t.money(0), m0 + 1700, "P0 gained half of P1's dearest deed");
+    assert_eq!(t.money(1), m1 - 1700, "P1 paid half of their dearest deed");
+}
+
+// The same window reaches a **bot** seat: "is a bot" is not a rulebook reason
+// (ruling 2026-10-08), so a standard bot is offered and answers through its
+// `CounterParams` propensity (1000‰ here -- always declare).
+#[test]
+fn glory_counter_is_offered_to_a_bot_seat() {
+    use game_core::state::BotMentality;
+    use game_core::strategy::{
+        CounterParams, StrategyBook, StrategyEntry, StrategyParams, PARAMS_VERSION,
+        POLICY_STANDARD, STRATEGY_BOOK_VERSION,
+    };
+    use game_core::MatchMode;
+    use std::collections::BTreeMap;
+
+    let names = common::characters();
+    let bot_char = names[0].clone();
+    let mut params = StrategyParams::default();
+    params.counteract.insert(
+        "AG:刻入天穹傲岸的烈光".into(),
+        CounterParams {
+            propensity_milli: 1_000,
+            by_kind: BTreeMap::new(),
+        },
+    );
+    let mut b = StrategyBook::default();
+    b.version = STRATEGY_BOOK_VERSION;
+    b.policy = POLICY_STANDARD.into();
+    b.params_version = PARAMS_VERSION;
+    b.generated_at = "rb_ag".into();
+    b.me.push(StrategyEntry {
+        me: bot_char,
+        band: String::new(),
+        opponent_bands: Vec::new(),
+        deck: Vec::new(),
+        params,
+    });
+    let chars: Vec<&str> = names.iter().take(2).map(String::as_str).collect();
+    let mut t = Table::with_book(&chars, b, MatchMode::Solo);
+    t.strip_skills();
+    t.clean();
+    t.make_bot(0, BotMentality::Standard);
+
+    t.give(0, &["AG:刻入天穹傲岸的烈光"]);
+    t.own(1, &[40]); // 武道馆, price 3400 -> 1700 on the swap
+    t.set_pos(1, 20);
+    t.begin_turn(0);
+    t.set_pos(0, 18);
+    t.dice(&[3]); // 18+3 = 21, passes 20 (P1)
+    let m1_before = t.money(1);
+    t.roll(0).unwrap();
+    // The window opens on the bot's seat and the propensity declares.
+    t.tick_until("the bot declares the passTile counter", |t| {
+        t.prompt().is_none() || !t.asked().contains(&0)
+    });
+    skip_all(&mut t);
+    assert_eq!(
+        t.money(1),
+        m1_before - 1700,
+        "the bot's counter swapped half of P1's dearest deed (money {} -> {})",
+        m1_before,
+        t.money(1)
+    );
+}
+
+// R2 / M6a (`SETTLE-STAGES.md` §6): a no-settle teleport raises `passTile` +
+// `passPlayer` at its **destination** only, never mid-route. So a character
+// standing mid-route is not "passed", and the [反击] window does not open for
+// them -- while one standing at the destination is.
+#[test]
+fn glory_counter_opens_only_at_a_teleports_destination() {
+    // P1 stands mid-route (tile 20). P0 teleports from 18 to 48 (via
+    // AG:商店街的青梅竹马's [传送] -- a no-settle move). P1 is NOT passed.
+    let mut t = Table::vanilla(2);
+    t.give(0, &["AG:刻入天穹傲岸的烈光"]);
+    t.own(0, &[YAMABUKI]); // one group-10 tile -> the 1st owned shop tile
+    t.set_pos(1, 20); // mid-route of a 18 -> 48 walk
+    t.begin_turn(0);
+    t.set_pos(0, 18);
+    t.dice(&[1]); // 1d6 = 1 -> the 1st owned shop tile (山吹面包房, 48)
+    t.give_play(0, "AG:商店街的青梅竹马").unwrap();
+    assert_eq!(t.pos(0), YAMABUKI, "teleported to the shop tile");
+    // Drain every prompt, recording whether the glory card was ever offered.
+    let mut offered = false;
+    for _ in 0..20 {
+        if t.prompt().is_none() {
+            break;
+        }
+        if t.counteract_offered("AG:刻入天穹傲岸的烈光") {
+            offered = true;
+        }
+        t.decline();
+    }
+    assert!(
+        !offered,
+        "a mid-route tile is never 'passed' by a teleport (R2): {}",
+        t.dump_prompt()
+    );
+
+    // Now the destination case: P1 stands on the destination tile.
+    let mut t = Table::vanilla(2);
+    t.give(0, &["AG:刻入天穹傲岸的烈光"]);
+    t.own(0, &[YAMABUKI]);
+    t.set_pos(1, YAMABUKI); // stands on the destination
+    t.begin_turn(0);
+    t.set_pos(0, 18);
+    t.dice(&[1]);
+    t.give_play(0, "AG:商店街的青梅竹马").unwrap();
+    // The destination raise opens the window.
+    assert!(
+        t.counteract_offered("AG:刻入天穹傲岸的烈光"),
+        "the destination's passTile [反击] window must offer the card: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "AG:刻入天穹傲岸的烈光").unwrap();
+    skip_all(&mut t);
 }
 
 #[test]

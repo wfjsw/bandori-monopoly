@@ -120,10 +120,12 @@ pub fn load_data(files_json: &str) -> Result<(), JsError> {
         .map_err(|e| JsError::new(&e))?;
     // Stamp input: sha256 over the contents in `DATA_FILES` order, so a record
     // can tell whether the board / card data it was written against is here.
+    // A leading UTF-8 BOM is not content: the browser's decoder strips it and
+    // `read_to_string` keeps it, so hash without it to get one recipe.
     let mut hasher = Sha256::new();
     for name in DATA_FILES {
         if let Some(contents) = files.get(name) {
-            hasher.update(contents.as_bytes());
+            hasher.update(contents.strip_prefix('\u{feff}').unwrap_or(contents).as_bytes());
         }
     }
     let sha = hex(&hasher.finalize());
@@ -301,7 +303,8 @@ pub fn deck_slot_cards(
     )))
 }
 
-/// Save a slot (an empty list deletes it). Returns the updated profile.
+/// Save cards into an existing deck (an empty list clears it; `deck_delete`
+/// removes it). Returns the updated profile.
 #[wasm_bindgen]
 pub fn deck_save(
     profile_json: &str,
@@ -316,6 +319,108 @@ pub fn deck_save(
     Ok(json(&p))
 }
 
+/// Saved custom decks of `character`, in display order:
+/// `[{"id": <int>, "name": <str>, "cards": [id, ...]}, ...]`. `name` is the
+/// user-editable label ("" = auto, shown as 「卡组 n」/"Deck n"); `cards` are
+/// cleaned to what is usable today. Id 0 (the preset) is not included.
+#[wasm_bindgen]
+pub fn deck_list(profile_json: &str, character_name: &str) -> Result<String, JsError> {
+    let d = data()?;
+    let p: PlayerProfile = parse("profile", profile_json)?;
+    let c = character(&d, character_name)?;
+
+    #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Entry {
+        id: i32,
+        name: String,
+        cards: Vec<String>,
+    }
+    let list: Vec<Entry> = deck::list(&p, c)
+        .into_iter()
+        .map(|sd| Entry {
+            id: sd.slot,
+            name: sd.name.clone(),
+            cards: deck::cards(&d, &p, c, sd.slot),
+        })
+        .collect();
+    Ok(json(&list))
+}
+
+/// Create a deck from `ids_json` (may be empty) named `name` ("" = auto).
+/// Returns the updated profile (no-op past `deck::DECKS_MAX`).
+#[wasm_bindgen]
+pub fn deck_create(
+    profile_json: &str,
+    character_name: &str,
+    name: &str,
+    ids_json: &str,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let mut p: PlayerProfile = parse("profile", profile_json)?;
+    let ids: Vec<String> = parse("ids", ids_json)?;
+    deck::create(&d, &mut p, character(&d, character_name)?, name, &ids);
+    Ok(json(&p))
+}
+
+/// Copy deck `slot` to a new deck right after it (auto-named). Returns the
+/// updated profile.
+#[wasm_bindgen]
+pub fn deck_duplicate(
+    profile_json: &str,
+    character_name: &str,
+    slot: i32,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let mut p: PlayerProfile = parse("profile", profile_json)?;
+    deck::duplicate(&d, &mut p, character(&d, character_name)?, slot);
+    Ok(json(&p))
+}
+
+/// Rename deck `slot` ("" restores the auto name; duplicates allowed).
+/// Returns the updated profile.
+#[wasm_bindgen]
+pub fn deck_rename(
+    profile_json: &str,
+    character_name: &str,
+    slot: i32,
+    name: &str,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let mut p: PlayerProfile = parse("profile", profile_json)?;
+    deck::rename(&mut p, character(&d, character_name)?, slot, name);
+    Ok(json(&p))
+}
+
+/// Delete deck `slot` (a chosen default pointing at it falls back to the
+/// preset). Returns the updated profile.
+#[wasm_bindgen]
+pub fn deck_delete(
+    profile_json: &str,
+    character_name: &str,
+    slot: i32,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let mut p: PlayerProfile = parse("profile", profile_json)?;
+    deck::delete(&mut p, character(&d, character_name)?, slot);
+    Ok(json(&p))
+}
+
+/// Move deck `slot` by `delta` places in display order (-1 up, +1 down).
+/// Returns the updated profile.
+#[wasm_bindgen]
+pub fn deck_move(
+    profile_json: &str,
+    character_name: &str,
+    slot: i32,
+    delta: i32,
+) -> Result<String, JsError> {
+    let d = data()?;
+    let mut p: PlayerProfile = parse("profile", profile_json)?;
+    deck::move_by(&mut p, character(&d, character_name)?, slot, delta);
+    Ok(json(&p))
+}
+
 #[wasm_bindgen]
 pub fn deck_choose(profile_json: &str, character_name: &str, slot: i32) -> Result<String, JsError> {
     let d = data()?;
@@ -324,7 +429,7 @@ pub fn deck_choose(profile_json: &str, character_name: &str, slot: i32) -> Resul
     Ok(json(&p))
 }
 
-/// Last chosen slot if it still holds a complete deck, else 0 (preset).
+/// Last chosen deck id if it still holds a complete deck, else 0 (preset).
 #[wasm_bindgen]
 pub fn deck_chosen_slot(profile_json: &str, character_name: &str) -> Result<i32, JsError> {
     let d = data()?;
@@ -876,12 +981,15 @@ pub fn record_header(json_str: &str) -> Result<String, JsError> {
 }
 
 /// [`record_header`] over raw `.bdrec` bytes -- zstd, gzip or plain JSON.
+///
+/// Portable files (`docs/REPLAY.md` §10) work unchanged: the codec stops at
+/// the end of the record frame and ignores the appended engine section, so a
+/// portable file lists exactly like the plain record it wraps.
 #[wasm_bindgen]
 pub fn record_header_bytes(bytes: &[u8]) -> Result<String, JsError> {
     let h = parse_header_bytes(bytes).map_err(|e| JsError::new(&e.to_string()))?;
     Ok(json(&h))
 }
-
 
 // ------------------------------------------------------- commit-reveal (fair)
 
@@ -966,4 +1074,26 @@ pub fn verify_fair_hash(bytes: &[u8]) -> Result<String, JsError> {
     let file = game_core::record::decode_record(bytes)
         .map_err(|e| JsError::new(&format!("record: {e}")))?;
     Ok(json(&game_core::fair::verify(&file)))
+}
+
+// ---------------------------------------------------------------- portable codec
+//
+// The portable record extension (`docs/REPLAY.md` §10) embeds an engine bundle
+// in a zstd frame. Packing and unpacking happen on the page (and in
+// `tools/bdrec-portable.mjs`), and both need the same codec the record framing
+// uses -- the browser has no other zstd. These are **not** part of the frozen
+// replay API v1: only the page's own engine is asked for them, never an
+// archived bundle.
+
+/// zstd-compress `bytes` into one standard frame (portable-record packing).
+#[wasm_bindgen]
+pub fn zst_compress(bytes: &[u8]) -> Vec<u8> {
+    game_core::record::zst_encode(bytes)
+}
+
+/// zstd-decompress one standard frame, refusing to grow past `max_out` bytes
+/// (portable-record unpacking; the cap is the decompression-bomb limit).
+#[wasm_bindgen]
+pub fn zst_decompress(bytes: &[u8], max_out: u32) -> Result<Vec<u8>, JsError> {
+    game_core::record::zst_decode(bytes, max_out as usize).map_err(|e| JsError::new(&e.to_string()))
 }

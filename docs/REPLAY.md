@@ -498,6 +498,15 @@ Only what replay needs is kept: no audio, no live2d, no UI. Size on the
 modules pool is content-addressed -- filenames are their sha256 -- so bundles
 share it. Each reference record is a few kB of input log (two bots, seed 7).
 
+What is **not** in the archive: the site's own workers. The live solo match
+runs in a module worker the page bundles beside itself
+(`webui/src/game/soloWorker.ts`, rsbuild's worker chunk) and loads **this
+build's** glue -- the same `webui/src/wasm/glue*` bytes the page imports, same
+`engine_id.json`, so a record it seals names this bundle exactly. The
+advanced-bot worker bundle is excluded for the same reason as before (§9.2):
+replays never run a bot. Archived bundles are still driven only by
+`replay-worker.js`; an old record is unaffected by where the live match runs.
+
 Each index entry records how the bytes can be reproduced:
 
 | Field | Meaning |
@@ -724,7 +733,234 @@ file). That is what the `os.tmpdir()` worktree is for. The index records
   and a mismatched / stale blob is a build error.
 * `crates/game-core/tests/record.rs` / `record_codec.rs` stay green.
 
-## 10. Commit-reveal fairness (2026-10-08)
+## 10. Portable records: the engine inside the file (2026-10-08)
+
+§9 replays a record with the bundle that wrote it, fetched from the engine
+archive. That is exact, but it needs the archive to hold those bytes -- a
+deployment that never ran `archive-engine.mjs` for that build cannot play the
+record, and nothing works offline. A **portable** `.bdrec` closes that gap
+*optionally*: it carries the exact engine bundle inside the file, so the
+record is self-contained.
+
+Standing rules, unchanged: a portable file is still only ever opened and
+replayed **in the browser**, never uploaded to or hosted by the server; the
+plain `.bdrec` format does not change; every existing record keeps replaying
+exactly as before. Exporting the portable form is opt-in (「包含引擎（可离线回放）」
+/ "Include engine (play offline)", **default off**) on every download dialog.
+
+### 10.1 Format
+
+An additive, versioned extension. The file is three parts back to back:
+
+```text
+[0, R)          the plain `.bdrec` -- ONE zstd frame of RecordFile JSON,
+                byte-identical to what `record_zst` writes today
+[R, R+S)        the portable section: one **zstd skippable frame**
+                (magic 184D2A50) wrapping the engine-bundle container
+[R+S, R+S+32)   the trailer locating the section
+```
+
+* **Trailer (32 bytes):** `"BDRECEND"` | `u8 version=1` | `u8 kind=1` (engine
+  bundle) | `u16 flags=0` | `u64le section_off` | `u64le section_len` |
+  `u32le crc32` of the first 28 bytes.
+* **Skippable frame:** `50 2A 4D 18` | `u32le payload_len` | payload. zstd
+  decoders must skip it, so `zstd -d file.bdrec` prints the record JSON and
+  nothing else.
+* **Container (the payload):** `"BDRECENG"` | `u8 version=1` |
+  `u8 compression=1` (zstd) | `u16 reserved` | `u32le manifest_len` |
+  manifest (UTF-8 JSON) | blob (one zstd frame over `concat(file bytes)`).
+
+The **manifest** is the `{path, sha256, len}` list the extension is built on:
+
+```json
+{ "kind": "bdrec-portable", "version": 1,
+  "bundle": "<EngineStamp.bundle>", "glueSha256": "<sha256 of glue.js || glue_bg.wasm>",
+  "api": 1, "compression": "zstd",
+  "blobLen": 1732274, "blobSha256": "…",
+  "files": [ { "path": "glue.js",          "sha256": "…", "len": 50762 },
+             { "path": "glue_bg.wasm",     "sha256": "…", "len": 6703874 },
+             { "path": "data/board.json",  "sha256": "…", "len": 15194 },
+             { "path": "rules/index.json", "sha256": "…", "len": 65538 },
+             { "path": "rules/conds-….bin", "sha256": "…", "len": 10276 },
+             { "path": "modules/<sha>.wasm", "sha256": "…", "len": 393598 } ] }
+```
+
+Every file the replay worker loads rides in it: `glue.js` + `glue_bg.wasm`,
+the `data/` tables, `rules/index.json`, the precompiled `conds-*.bin`, the
+content-addressed `modules/*.wasm`, and `bundle.json`. Paths are
+bundle-relative, slash-separated, and rejected if they contain `..`, a
+leading slash, a backslash or a drive letter.
+
+**Why a trailing section is safe.** Every reader's `expand_record` stops at the
+end of the record frame and ignores what follows -- verified against every
+archived bundle's glue, and pinned by
+`trailing_portable_section_is_ignored` in `crates/game-core/tests/record_codec.rs`
+and `record_header_bytes reads a portable file exactly like the plain one` in
+`tools/test-portable.mjs`. So:
+
+* a plain reader sees a plain record (it never looks at the tail);
+* `record_header_bytes` on a portable file returns exactly the plain header;
+* `zstd -d` skips the skippable frame;
+* the plain `.bdrec` format is unchanged -- a portable file is a plain record
+  with something appended, not a new record encoding.
+
+A trailer that is present but malformed is an **error**, never a silent
+fallback to "plain": the user asked for that engine and must know it did not
+load.
+
+**Bounds** (decompression-bomb and hostile-manifest limits, enforced before
+any allocation grows past them):
+
+| Cap | Value |
+|---|---|
+| whole portable section | 24 MiB |
+| decompressed blob | 32 MiB |
+| compressed blob | 24 MiB |
+| manifest | 256 KiB |
+| file count | 256 |
+| one path | 200 bytes |
+| one file | 24 MiB |
+
+### 10.2 Loading
+
+`webui/src/game/portable.ts` (the format, pure and node-safe) +
+`webui/src/game/portableEngine.ts` (the policy). Order:
+
+| Case | Policy |
+|---|---|
+| plain record | unchanged (§9.4) |
+| record names this page's bundle | play on the page's engine |
+| portable, and the hosted archive holds that bundle with the **same bytes** (the index's `files` map matches the manifest) | play the hosted bundle in the worker (§9) |
+| portable, otherwise | run the **embedded** engine |
+| embedded loader not on the allow-list | refuse, naming the sha and the path it would live at |
+
+"Prefer the hosted bundle" is a byte-identity claim, not a guess: the
+manifest's per-file hashes must agree with `index.json`'s. When they do not,
+or the bundle is not deployed at all, the embedded engine runs -- that is the
+whole point of carrying it. The user is told: 「正在使用回放文件内嵌的引擎」 /
+"Playing on the engine embedded in this record (bundle …)".
+
+**BOM note (`data_sha256`).** Three of the game tables (`cards.json`,
+`characters.json`, `skill_simple.json`) begin with a UTF-8 BOM, and a
+byte-preserving decode keeps it (`as_bytes()` puts `EF BB BF` back) while
+`TextDecoder`'s default and `Response.text()` strip it. The stamp recipe is
+unified on **hash without the BOM**: `load_data`, `Ctx::load` and
+`tools/archive-engine.mjs` all drop a leading `U+FEFF` before hashing, so a
+record sealed by `tools/`, the server or a page carries the same
+`data_sha256` for the same tables. The embedded loader still decodes the
+tables both ways and feeds the one whose pre-recipe hash is the record's own
+`data_sha256`, so the bytes the engine parses match what the file was sealed
+against -- including records sealed before the recipe was unified (those
+carry the BOM-inclusive stamp; `compat` names `data_sha256` and `force`
+opens them). (The same dual decode is what the hosted worker's `keepBom`
+fetch does; a mismatch there falls back to the embedded engine.)
+
+Sizes (the 2026-10-08 archive bundle `ae7ede19…`, 18 files, measured by
+`tools/bdrec-portable.mjs pack`):
+
+| Form | Size |
+|---|---|
+| plain `.bdrec` (ref record) | 1,115 B |
+| plain `.bdrec` (a real match, +events) | ~65 KiB |
+| engine bundle, uncompressed | 7,533,971 B (7.18 MiB) |
+| engine bundle, zstd blob | 1,728,620 B (1.65 MiB) — 4.4× |
+| portable `.bdrec` (ref + engine) | 1,732,334 B (1.65 MiB) |
+
+### 10.3 Export
+
+`tools/bdrec-portable.mjs pack|unpack|verify` (node, `node:zlib` zstd) and the
+browser's download dialog (Results / replay list / room) build the same bytes
+through the same `portable.ts`. The browser packs with the engine's own codec
+(`zst_compress` / `zst_decompress` in web-glue -- the same frames `record_zst`
+writes; node's libzstd and the engine's frames are cross-checked in both test
+suites).
+
+The export option is **default off**. With it on, the page collects the bundle
+from the hosted archive (verified against `index.json`), or reuses a portable
+record's own embedded copy on re-export, and reports the plain vs portable
+sizes before the download.
+
+```bash
+node tools/bdrec-portable.mjs pack   in.bdrec [--out f] [--bundle id] [--store dir]
+node tools/bdrec-portable.mjs verify in.bdrec      # hashes, bounds, loader allow-list
+node tools/bdrec-portable.mjs unpack in.bdrec [--out-dir d]
+```
+
+`--store` defaults to `data/engine-archive/` (read-only: the tool never writes
+into the store). The archive's reference records pack as a test.
+
+### 10.4 Security model (the file is untrusted input)
+
+**The embedded `glue.js` is never executed.** wasm-bindgen glue is tied to its
+wasm's import/export interface, so we need *a* matching loader -- but not the
+one in the file. Instead:
+
+1. sha256 the embedded `glue.js` and `glue_bg.wasm`; check
+   `sha256(glue.js || glue_bg.wasm) == manifest.glueSha256`;
+2. check `manifest.glueSha256` is on the deployment's **loader allow-list** --
+   the set of `glueSha256`s in `archive/engine/index.json` (plus the running
+   build's own glue identity). Not on the list: refuse, with the path
+   `assets/engine/loaders/<sha>/glue.js` a deployment can add. Never run it;
+3. fetch **our** copy of that loader (`assets/engine/loaders/<sha>/glue.js`,
+   deployed by `tools/archive-engine.mjs`) and check its sha256 equals the
+   embedded `glue.js`'s -- we import our bytes, the file's copy is discarded;
+4. instantiate the embedded **wasm** with that loader (`init({module_or_path:
+   wasmBytes})`), and feed it the embedded tables -- all hash-verified first.
+
+The wasm runs in a dedicated module worker (`replay-worker.js`, no DOM) with
+the embedded boot (`init-embedded`). After boot the worker replaces `fetch`,
+`XMLHttpRequest`, `WebSocket`, `EventSource`, `importScripts` and `caches`
+with throwing stubs; the worker is never given a session token.
+
+**Wasm import audit.** The thing that decides what an untrusted wasm can do is
+the import object the glue hands it. Audited across the shipped glue builds
+(`webui/src/wasm/glue.js` and the archived bundles in `data/engine-archive/`):
+the wasm imports exactly three functions, all of them `./glue_bg.js` shims --
+
+| Import | What it can do |
+|---|---|
+| `__wbg_Error_*` | construct a JS `Error` from a wasm string |
+| `__wbg___wbindgen_throw_*` | throw that error |
+| `__wbindgen_init_externref_table` | seed the externref table with `undefined` / `null` / `true` / `false` |
+
+No `fetch`, no `eval` / `Function`, no DOM, no storage, no `postMessage`, no
+timers, no crypto. `TextEncoder` / `TextDecoder` and `WebAssembly.instantiate`
+are used by the glue's *own* JS (string marshalling and boot), not exposed to
+the wasm. `ruleset_pre_eval` is a card-guard entry point with that name -- it
+is not `eval`. The glue's `__wbg_load` does call `fetch` when given a URL; the
+embedded path only ever passes bytes, and the worker's lockdown means even a
+future glue that asked for a URL would throw.
+
+Everything else the engine touches goes through the frozen replay API v1
+(§9.3): JSON in, JSON out, over the worker's postMessage protocol.
+
+**Manifest verification is total.** `verifyEmbedded` checks the blob's sha256,
+decompresses under the 32 MiB cap, checks the decompressed length against the
+manifest, and checks every file's length and sha256 before anything is handed
+to an engine. Paths are validated against a strict allow-pattern. A mismatch
+is an error, never a warning.
+
+### 10.5 Tools and tests
+
+* `tools/bdrec-portable.mjs` -- pack / unpack / verify (shared format code
+  with the browser: `webui/src/game/portable.ts`).
+* `node --test webui/src/game/portable.test.ts` -- the format: round-trip,
+  tampered blob / file / manifest hashes, unsafe paths, oversized section,
+  corrupt trailer, unknown loader, manifest shape.
+* `node --test tools/test-portable.mjs` -- end to end against the real
+  archive: every reference record packs through the CLI and replays
+  **identically** as plain and as portable (byte-equal end state) on the
+  bundle that wrote it; `record_header_bytes` agrees; the engine and node
+  zstd codecs read each other's frames; the decompression cap holds; tampered
+  hashes, an unknown loader and an oversized section are refused.
+* `cargo test -p game-core --test record_codec` -- `zst_decode`'s cap, and
+  that a portable tail is ignored by `parse_header_bytes` / `decode_record`.
+* Browser gate: a portable reference record opened in a build whose
+  `assets/engine/<bundle>/` is **absent** (rename it away) plays on the
+  embedded engine and shows 「正在使用回放文件内嵌的引擎」.
+* `python tools/i18n/check.py` -- en + zh-CN, no new findings.
+
+## 11. Commit-reveal fairness (2026-10-08)
 
 Every new match (online **and** solo) seeds its RNG from a 256-bit derived
 key that nobody can bias: the server commits to a secret seed before play,
@@ -749,3 +985,7 @@ means here:
 * The Verify action in the replay viewer runs on the engine bundle that
   plays the record (§9) and checks the commitment opening, the derived seed,
   the initial RNG state and the full replay (`docs/FAIRNESS.md` §2).
+* The fairness material sits in the `RecordHeader` JSON, inside the plain
+  record frame. A portable file (§10) appends its engine after that frame and
+  leaves the header alone, so the openings ride along unchanged and verify
+  the same way.

@@ -232,6 +232,13 @@ pub fn option_card_id(m: &game_core::msg::Msg) -> Option<String> {
 /// fallback's skip). One action per offered card, so the search can branch on
 /// *which* card to declare.
 pub fn counteract_action(p: &MatchPrompt, index: i32) -> Action {
+    // Sayo's distance choice carries source metadata for the heuristic, but
+    // +1 and +2 must remain separate choices before a source is declared.
+    if p.text.key() == "ask.counteract.move_extension" {
+        return Action::Offer {
+            index: if index < 0 { p.fallback } else { index },
+        };
+    }
     if index < 0 || index == p.fallback {
         return Action::Counteract { card: None };
     }
@@ -383,10 +390,22 @@ fn prompt_actions(data: &GameData, st: &MatchState, p: &MatchPrompt, seat: usize
 /// [`MatchState::can_buy_here`], computed inside `Match::state` from the same
 /// predicates `why_not_act` uses. Never offer a Buy the engine would refuse
 /// (`err.cannot_buy` / `err.buy_poor`).
+///
+/// **Cash-only for bots** (user ruling 2026-10-08: "avoid mortgage to buy
+/// land"). `can_buy_here` is funded by [`World::purchase_funds`] = cash +
+/// mortgageable deeds, so a cash-poor / deed-rich seat legally *could* buy by
+/// mortgaging first -- and because the C1 menu treats a legal Buy as forced
+/// (no Decline beside it), the search would take it and the engine would
+/// auto-mortgage. Bots decline instead: require **cash alone** to cover the
+/// quoted price. Legality for humans is unchanged (`can_buy_here` still
+/// gates the button); this is a bot-side preference filter that leaves the
+/// menu empty -- Decline covers it (see [`legal_actions`]), so no refusal
+/// loop. Builds keep the old funds rule (the ruling names *buy land*).
 pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool {
     let Some(t) = data.tiles.get(i) else {
         return false;
     };
+    let cash = st.players.get(seat).map(|p| p.money).unwrap_or(0);
     matches!(t.kind.as_str(), "property" | "ring")
         && st.phase == "play"
         && st.step == stage::END
@@ -397,6 +416,8 @@ pub fn buyable(data: &GameData, st: &MatchState, seat: usize, i: usize) -> bool 
         && st.players.get(seat).map(|p| p.pos) == Some(i as i32)
         && st.owners.get(i).copied().unwrap_or(-1) < 0
         && (st.can_buy_here || ab_on("BOT_STRENGTH_AB_NO_GATES"))
+        // Bots do not mortgage to buy (see the doc above).
+        && cash >= st.buy_price.max(0)
 }
 
 /// `CanBuildHere` (autopilot.ts). Gated on [`MatchState::can_build_here`] --

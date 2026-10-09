@@ -40,8 +40,8 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
         &Msg::new(key!("soyo_back_special")).player_id("who", player_id),
     );
     let options = [
-        Msg::new(key!("soyo_back_opt1")),
-        Msg::new(key!("soyo_back_opt2")),
+        Msg::new(key!("soyo_back_opt1")).card("card", "CRYCHIC:（soyo）回到曾经"),
+        Msg::new(key!("soyo_back_opt2")).card("card", "CRYCHIC:（soyo）回到曾经"),
     ];
     let pick = ctx::ask_pick(
         player_id,
