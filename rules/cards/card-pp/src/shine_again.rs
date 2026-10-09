@@ -83,7 +83,7 @@ fn unrecorded_owned_colors(player_id: i32) -> Vec<i32> {
 /// C# `CardShineAgain.PayChoose` -- while the owner cannot cover a payment,
 /// record a colour and take that colour's top deed price / 5 plus a fan.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayChoose || !ctx::is_placed() {
+    if !ctx::is_placed() {
         return Ok(());
     }
     if trigger::player_id() != player_id || trigger::value() <= 0 {

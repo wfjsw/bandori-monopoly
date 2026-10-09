@@ -113,7 +113,7 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 /// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
 /// replace (`trigger::cancelled()`) skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::SettleBody || trigger::cancelled() || !ctx::is_placed() {
+    if trigger::cancelled() || !ctx::is_placed() {
         return Ok(());
     }
     let mover = trigger::player_id();

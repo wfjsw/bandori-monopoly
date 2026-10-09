@@ -31,7 +31,7 @@ fn can_counteract(player_id: i32) -> bool {
     // 规则书: 「（此卡可以被反击）」 -- playable as a [反击] too (C#
     // `CardDiceCast.CanCounteract`: any other player's card play during your own turn,
     // unless the lock is already yours).
-    if trigger::kind() != TriggerKind::Card || trigger::player_id() == player_id {
+    if trigger::player_id() == player_id {
         return false;
     }
     // C# `H.State.turn == seat` -- only during your own turn.

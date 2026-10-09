@@ -78,7 +78,7 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
 /// -- the user's own pass, onto the tile this card is bound to, and the three
 /// steps in order.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile || trigger::player_id() != player_id {
+    if trigger::player_id() != player_id {
         return Ok(());
     }
     let Some(tile) = ctx::self_tile() else {

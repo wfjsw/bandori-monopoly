@@ -50,7 +50,7 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
 
 fn can_counteract(player_id: i32) -> bool {
     // 规则书: 「[反击]移动掷骰后」 -- C# `t.Kind == "moveRoll" && t.Seat == seat`.
-    if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
+    if trigger::player_id() != player_id {
         return false;
     }
     // 规则书: 「且场上有可被经过的玩家时可打出」 -- C# `!t.Move.Teleport && Next(t.Move) > 0`

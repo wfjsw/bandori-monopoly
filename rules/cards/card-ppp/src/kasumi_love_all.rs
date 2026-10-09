@@ -48,7 +48,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 此次[结算]如果[支付]地租则地租只算作原本的一半。」
 /// -- C# `CardKasumiLoveAll.PassTile` -> `Stop`.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
+    if !ctx::is_placed() {
         return Ok(());
     }
     let tile = ctx::self_tile().unwrap_or(-1);

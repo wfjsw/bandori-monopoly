@@ -26,9 +26,6 @@ pub const TOMOE_SAVIOR: CardDef = CardDef::new(
 
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
 fn legacy_can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != TriggerKind::Mortgage {
-        return false;
-    }
     let t = trigger::tile();
     if !is_shop(t) {
         return false;

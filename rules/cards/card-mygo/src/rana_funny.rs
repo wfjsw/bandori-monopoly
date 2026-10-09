@@ -46,7 +46,7 @@ fn rana_funny(player_id: i32) -> card_sdk::Asked {
 /// C# `CardRanaFunny.PassTile` -- a passer who does not settle here grows a
 /// miracle crystal on the card; at 5+ crystals a foreign passer is trapped.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
+    if !ctx::is_placed() {
         return Ok(());
     }
     // 规则书: 「将此卡置于当前格子上」 -- the instance carries its tile;

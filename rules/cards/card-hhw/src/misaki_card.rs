@@ -41,7 +41,7 @@ fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「使用火罐进行移动掷骰后，触发结算前可打出此卡」 -- C#
     // `CanCounteract`: `t.Kind == "moveRoll" && t.Seat == seat && t.Move != null &&
     // t.Move.FireRoll && Between(t.Move).Count > 0`.
-    if trigger::kind() != TriggerKind::MoveRoll || trigger::player_id() != player_id {
+    if trigger::player_id() != player_id {
         return false;
     }
     // The [火罐] roll is card-owned state: the card that armed one tagged the

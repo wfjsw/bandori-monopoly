@@ -75,7 +75,7 @@ fn jennifer(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardJennifer.PassTile` -- the owner walks past 「偶像经纪公司」.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
+    if !ctx::is_placed() {
         return Ok(());
     }
     // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」

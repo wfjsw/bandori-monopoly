@@ -30,9 +30,6 @@ pub const PROUD_LIGHT: CardDef = CardDef::new(
 
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
 fn legacy_can_counteract(player_id: i32) -> bool {
-    if trigger::kind() != TriggerKind::PassTile {
-        return false;
-    }
     if trigger::player_id() != player_id {
         return false;
     }

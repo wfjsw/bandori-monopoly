@@ -67,7 +67,7 @@ fn drew(_player_id: i32) -> card_sdk::Asked {
 /// C# `CardEveBushido.SettleBefore` -- the owner is settling on someone else's
 /// deed and this card still holds a miracle crystal: duel the landlord.
 fn settle_before(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::SettleBefore || !ctx::is_placed() {
+    if !ctx::is_placed() {
         return Ok(());
     }
     if trigger::player_id() != player_id || ctx::crystals() <= 0 {

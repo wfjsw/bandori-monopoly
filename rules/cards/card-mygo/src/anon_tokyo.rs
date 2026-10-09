@@ -157,7 +157,7 @@ fn link_guard(player_id: i32) -> bool {
 /// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
 /// owned by Player.
 fn link_rent(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayAdd || !trigger::pay_is_rent() {
+    if !trigger::pay_is_rent() {
         return Ok(());
     }
     // 「收费时」 -- the link owner is the one collecting the rent.

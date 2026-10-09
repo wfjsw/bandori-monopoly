@@ -43,7 +43,7 @@ fn can_counteract(player_id: i32) -> bool {
     // but the window is 「[触发结算]前」 (行动阶段 14), so this stays on
     // `settleBefore` and reads "the move ended" as a **fact** (`move_is_main`),
     // not as "a settle is happening".
-    if trigger::kind() != TriggerKind::SettleBefore || trigger::player_id() != player_id {
+    if trigger::player_id() != player_id {
         return false;
     }
     if !trigger::move_is_main() {
