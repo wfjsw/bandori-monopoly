@@ -58,11 +58,9 @@ export function FieldSheet({ m }: { m: Model }) {
   const total = fieldCount + events.length;
   return (
     <div className={cx(s.sheet, panel.open && s.open)} {...panel.hover}>
-      <button type="button" className={s.strip} onClick={panel.toggle} aria-expanded={panel.open} title={tr("board.field")}>
-        <b>{tr("board.field")}</b>
-        <small>×{total}</small>
-        <span className={cx(s.chev, panel.open && s.chevOpen)} aria-hidden />
-      </button>
+      {/* One drawer: the card tray unfolds above its own handle row, so the
+          strip and the cards read as a single sheet pulled down from the top. */}
+      <div className={s.drawer}>
       <div className={s.panel}>
         {total > 0 ? (
           <div className={s.cards} data-vp-scroll>
@@ -111,7 +109,15 @@ export function FieldSheet({ m }: { m: Model }) {
         ) : (
           <div className={s.empty}>{tr("common.empty")}</div>
         )}
-        <button type="button" className={s.more} onClick={() => showField(m)}>{tr("common.all")}</button>
+      </div>
+      <div className={s.strip}>
+        <button type="button" className={s.toggle} onClick={panel.toggle} aria-expanded={panel.open} title={tr("board.field")}>
+          <b>{tr("board.field")}</b>
+          <small>×{total}</small>
+          <span className={cx(s.chev, panel.open && s.chevOpen)} aria-hidden />
+        </button>
+        {panel.open && <button type="button" className={s.more} onClick={() => showField(m)}>{tr("common.all")}</button>}
+      </div>
       </div>
     </div>
   );

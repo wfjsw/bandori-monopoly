@@ -9,18 +9,26 @@
   display: flex; flex-direction: column; align-items: center;
   pointer-events: none;
 }
-.strip {
+/* The drawer: one white sheet hanging from the column's top edge. Folded it is
+   just its handle row (title, count, chevron); open, the card tray unfolds
+   above the handle inside the same sheet. */
+.drawer {
   pointer-events: auto;
-  display: flex; align-items: baseline; gap: 8px;
-  height: 32px; padding: 0 14px;
-  border-radius: 0 0 12px 12px;
-  background: var(--panel); box-shadow: var(--shadow);
-  color: var(--text); font-size: 14px;
+  display: flex; flex-direction: column; align-items: stretch;
+  min-width: 150px; max-width: min(92%, 860px);
+  border-radius: 0 0 14px 14px;
+  background: rgba(255, 255, 255, 0.96); box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: box-shadow 0.22s;
 }
-.strip b { color: var(--pink); font-size: 15px; padding-left: 8px; border-left: 4px solid var(--pink); }
-.strip small { color: var(--sub); font-size: 12px; }
-.strip:hover { background: #fff; }
+.open .drawer { width: min(92%, 860px); box-shadow: 0 12px 30px rgba(60, 20, 40, 0.18); }
+.strip { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px 0 14px; }
+.toggle { display: flex; align-items: baseline; gap: 8px; height: 100%; color: var(--text); font-size: 14px; }
+.toggle b { color: var(--pink); font-size: 15px; padding-left: 8px; border-left: 4px solid var(--pink); }
+.toggle small { color: var(--sub); font-size: 12px; }
+.toggle:hover b { color: var(--pink-deep); }
 .chev {
+  align-self: center;
   width: 9px; height: 9px;
   border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor;
   border-radius: 1px;
@@ -28,23 +36,20 @@
 }
 .chevOpen { transform: rotate(-135deg) translate(-1px, -1px); }
 
-/* The unfolded row: a translucent tray over the board's top edge. `max-height`
-   animates the fold; the folded tray is 0 tall and never captures. */
+/* The tray: `max-height` animates the fold; folded it is 0 tall. */
 .panel {
-  width: min(92%, 860px);
   max-height: 0; overflow: hidden;
+  /* No intrinsic width: the folded drawer is as wide as its handle only. */
+  contain: inline-size;
   display: flex; flex-direction: column; gap: 6px; align-items: stretch;
-  border-radius: 0 0 14px 14px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 12px 30px rgba(60, 20, 40, 0.18);
   transition: max-height 0.22s cubic-bezier(0.22, 0.7, 0.25, 1), padding 0.22s;
   padding: 0 10px;
 }
-.open .panel { max-height: 240px; padding: 10px; pointer-events: auto; }
+.open .panel { max-height: 240px; padding: 10px 10px 4px; }
 .cards { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; overflow: auto; min-height: 0; }
 .empty { padding: 8px 4px; font-size: 13px; color: var(--sub); }
 .more {
-  align-self: flex-end; padding: 3px 10px; border-radius: 999px;
+  margin-left: auto; padding: 3px 10px; border-radius: 999px;
   border: 1.5px solid var(--pink-pale); color: var(--pink); font-size: 12px; font-weight: 600;
 }
 .more:hover { background: var(--pink-pale); }
