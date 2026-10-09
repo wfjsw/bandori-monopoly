@@ -22,8 +22,9 @@
 .relatedRow .sideCardWrap { flex: 1 1 240px; min-width: 220px; max-width: 420px; background: #fff; border-radius: 10px; padding: 8px; }
 .sideHint { margin-top: auto; font-size: 13px; color: var(--sub); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
-/* The answer deadline as a thin pink progress bar (online matches only). */
-.timerRow { display: flex; align-items: center; gap: 8px; }
+/* The answer deadline as a thin pink progress bar (online matches only), laid
+   into the sheet's title strip (Modal `headExtra`) so it survives retracting. */
+.timerRow { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
 .timerBar { flex: 1; height: 4px; border-radius: 2px; background: var(--pink-pale); overflow: hidden; }
 .timerFill { height: 100%; border-radius: 2px; background: var(--pink); transition: width 0.4s linear; }
 .timerNum { flex: none; font-size: 13px; color: var(--sub); font-variant-numeric: tabular-nums; min-width: 2ch; text-align: right; }

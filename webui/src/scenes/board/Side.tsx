@@ -1,6 +1,6 @@
 // Compact turn controls at the bottom left; the Hand is docked below the map.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { D, cardTitle } from "../../core/data";
@@ -8,10 +8,12 @@ import { useAutoplay, useSessionOther } from "../../core/hooks";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
-import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
+import { CardFace, type CardAction, InspectCard, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
+import { usePromptSheet } from "../../ui/Modal";
+import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import type { Animator } from "./anim";
 import { act, type Model } from "./model";
@@ -52,12 +54,16 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
   return (
     <div className={s.actions}>
       <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} disabled={auto} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
-      <button type="button" className={cx(s.dice, can && s.can, anim.rolling && s.rolling)} title={hint} disabled={!can} onClick={() => control && void act(sess, { act: control })}>
-        {advance ? <Icon name="arrow_forward" className={s.advanceIcon} /> : <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />}
-        {!advance && <div className={s.diceNum}>{anim.dice || ""}</div>}
-        <div className={s.diceCap}>{caption}{!advance && <small>{" "}1d20</small>}</div>
-        <div className={s.diceHint}>{hint}</div>
-      </button>
+      {/* The die itself lives in the board's roll zone (Ring). This slot keeps
+          only the "skip movement / continue" step, and collapses away when
+          there is nothing to advance. */}
+      {advance && (
+        <button type="button" className={cx(s.dice, can && s.can)} title={hint} disabled={!can} onClick={() => control && void act(sess, { act: control })}>
+          <Icon name="arrow_forward" className={s.advanceIcon} />
+          <div className={s.diceCap}>{caption}</div>
+          <div className={s.diceHint}>{hint}</div>
+        </button>
+      )}
       <Btn icon="account_balance" className={s.act} disabled={auto} onClick={() => showDeedList(sess, false)}>{tr("board.mortgageDeeds")}</Btn>
       <Btn icon="redo" className={s.act} disabled={auto} onClick={() => showDeedList(sess, true)}>{tr("board.redeemDeeds")}</Btn>
     </div>
@@ -82,6 +88,89 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
   );
 }
 
+/** Park the hand fan while `parked` (the prompt sheet owns the bottom edge). */
+function useParkedHand(parked: boolean, setRaised: (v: boolean) => void): void {
+  useEffect(() => {
+    if (parked) setRaised(false);
+  }, [parked, setRaised]);
+}
+
+/**
+ * The player's pressable skills as cards, docked to the right of the hand fan
+ * and rising with it -- the `使用技能` list, moved out of the popup. Only
+ * `SkillAction` entries appear: the engine's activatable set (each carries
+ * `enabled` / `reason` for cooldown, cost and marker gates). Passive / hook
+ * rules never land here -- they have no activation and are read from the
+ * character's skill text instead. A usable card opens the detail sheet with a
+ * 「使用」 action; an unusable one (or any card while a prompt sheet is up) is
+ * inspect-only, like the hand.
+ */
+function SkillAside({ m, sess }: { m: Model; sess: GameSession }) {
+  const auto = useAutoplay(sess);
+  const sheet = usePromptSheet();
+  const names = namesOf(m.S);
+  const acts = m.me.actions ?? [];
+  if (!acts.length) return null;
+  return (
+    <div className={s.skillAside}>
+      <div className={s.skillHead}>{tr("board.skillCards", { n: acts.length })}</div>
+      {acts.map((a) => {
+        const usable = a.enabled && !auto && !sess.readOnly && !sheet.open;
+        const note = fmtMsg(a.text, names);
+        return (
+          <div
+            key={a.id}
+            className={cx(s.skillSlot, !a.enabled && s.skillOff)}
+            title={a.enabled ? note : fmtMsg(a.reason, names) || tr("skills.unavailable")}
+          >
+            <InspectCard
+              id={a.id}
+              size="tile"
+              className={s.skillCard}
+              title={fmtMsg(a.title, names)}
+              note={note}
+              actions={usable ? [{
+                label: tr("common.use"),
+                kind: "pink",
+                enabled: true,
+                run: () => act(sess, { act: "skill", card: a.id }),
+              }] : []}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * One card's place in the hand's circular-sector fan: a tilt around a pivot
+ * below the hand, a gentle vertical arc (outer cards lower, centre highest),
+ * and a spread that tightens as the hand grows so 1-10 cards all fit the
+ * centre column. Returns the CSS custom properties `.fanCard` reads.
+ */
+export function fanArc(n: number, k: number): Record<string, string> {
+  const step = n > 1 ? Math.min(8, 52 / (n - 1)) : 0; // degrees per card, total ≤ 52°
+  const a = (k - (n - 1) / 2) * step;
+  const aMax = ((n - 1) / 2) * step;
+  // The arc drop: R(1 - cos a) against a 420px pivot radius, normalised so the
+  // outer cards sit on the baseline and the centre one rides highest.
+  const drop = (deg: number) => 420 * (1 - Math.cos((deg * Math.PI) / 180));
+  const rise = drop(aMax) - drop(a);
+  const slot = n > 1 ? Math.min(112, 660 / (n - 1)) : 0; // px between card centres
+  return {
+    "--fan-a": `${a.toFixed(2)}deg`,
+    "--fan-y": `${(-rise).toFixed(1)}px`,
+    "--fan-slot": `${slot.toFixed(1)}px`,
+  };
+}
+
+/** How high the centre card rides above the outer ones -- the retracted peek
+ *  measures from there, so the fan shows 30px of its tallest point. */
+export function fanRise(n: number): string {
+  return `${Math.abs(parseFloat(fanArc(n, (n - 1) / 2)["--fan-y"]))}px`;
+}
+
 /**
  * The match hand, docked at the bottom of the middle column like Master Duel's:
  * a fanned row of full card faces, retracted so only the top strip of each card
@@ -89,20 +178,34 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
  * the hand; leaving retracts it after a short delay. Hovering one card lifts it
  * clear of its neighbours and floats the full text. The slim bar under the fan
  * (hand count, hint, draw pile, 托管) stays visible either way.
+ *
+ * A prompt sheet owns the bottom edge while it is up: the fan stays retracted
+ * behind it (no hover-raise over the sheet), and the hand is inspect-only --
+ * looking at cards is fine, play / discard are not. Once the sheet retracts the
+ * hand raises again for looking; once the question is answered it is normal.
  */
 export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
   const [hover, setHover] = useState<{ k: number; id: string; note: string } | null>(null);
   const [peek, setPeek] = useState(false);
   const [raised, setRaised] = useState(false);
   const auto = useAutoplay(sess); // 托管: play / discard are locked (inspect stays)
+  const sheet = usePromptSheet();
+  const stand = useStandingMode();
+  useParkedHand(sheet.raised, setRaised);
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
+  // Hovering a hand card lifts it and feeds the standing card panel.
+  const peekHand = (k: number, id: string) => {
+    const note = fmtMsg(m.v.handNotes[k], namesOf(S));
+    setHover({ k, id, note });
+    stickCard(id, note);
+  };
   const detail = (id: string, k: number) => {
     setHover(null);
     const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
-    // Replay: the sheet is inspection only -- no play / discard buttons.
-    if (sess.readOnly) return void showCard(id, [], note);
+    // Replay (and a live prompt sheet): inspection only -- no play / discard.
+    if (sess.readOnly || sheet.open) return void showCard(id, [], note);
     const acts: CardAction[] = [];
     if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: !auto, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
     acts.push({ label: canPlay ? tr("board.play") : tr("board.playOnlyOps"), enabled: canPlay, run: () => act(sess, { act: "play", card: id }) });
@@ -112,9 +215,11 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   const deck = byTitle(m.v.draw ?? []);
   // Raise on hover / focus; retract only after a short delay, so moving between
   // cards (or to the bar and back) does not drop the hand out from under you.
+  // A raised sheet owns the band above the bar -- the fan stays down behind it.
   const closeTimer = useRef(0);
   const raise = () => {
     window.clearTimeout(closeTimer.current);
+    if (sheet.raised) return;
     setRaised(true);
   };
   const retract = () => {
@@ -171,17 +276,17 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
         onFocus={raise}
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) retract(); }}
       >
-        <div className={s.fan} ref={fanRef}>
+        <div className={s.fan} ref={fanRef} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length) }}>
           {m.v.hand.map((id, k) => (
-            <div key={`${id}:${k}`} className={s.fanCard}>
+            <div key={`${id}:${k}`} className={s.fanCard} style={fanArc(m.v.hand.length, k) as CSSProperties}>
               <CardFace
                 id={id}
                 size="mini"
                 title={cardTitle(id)}
                 onClick={() => detail(id, k)}
-                onMouseEnter={() => setHover({ k, id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
+                onMouseEnter={() => peekHand(k, id)}
                 onMouseLeave={() => setHover(null)}
-                onFocus={() => setHover({ k, id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
+                onFocus={() => peekHand(k, id)}
                 onBlur={() => setHover(null)}
               />
             </div>
@@ -203,9 +308,10 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
             <div className={s.thinkingSlot}><ThinkingPill sess={sess} /></div>
           </div>
         </div>
-        {/* Hovering or focusing a card reveals the full card above the raised hand. */}
-        <div className={cx(s.preview, hover && s.previewOn)}>
-          {hover && (
+        {/* Hovering or focusing a card reveals the full card above the raised
+            hand -- unless the match screen's standing panel is showing it. */}
+        <div className={cx(s.preview, hover && !stand && s.previewOn)}>
+          {hover && !stand && (
             <>
               <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
               <div className={s.pTitle}>{cardTitle(hover.id)}</div>
@@ -215,6 +321,8 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
             </>
           )}
         </div>
+        {/* Pressable skills as cards, in their own strip beside the fan. */}
+        <SkillAside m={m} sess={sess} />
       </div>
       {/* The draw pile, alphabetical -- never in the order it will be drawn. */}
       <div className={cx(s.peek, peek && s.peekOn)}>

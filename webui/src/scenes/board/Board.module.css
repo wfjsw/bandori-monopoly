@@ -13,12 +13,16 @@
 .middle { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
 /* The board keeps a width:height of 1..1.6 (viewport.ts `boardRect`) and is
    centred in the slot when the slot is taller or wider than that. */
-/* Margins keep the board off the stage's top edge and clear of the docked
-   hand (its bar ~38px + the retracted fan's 30px peek), plus breathing room.
+/* Margins keep the board off the stage's top edge -- and clear of the field
+   strip that docks there (FieldSheet, ~32px) -- and clear of the docked hand
+   (its bar ~38px + the retracted fan's 30px peek), plus breathing room.
    Margins, not padding: `boardRect` measures the slot's client box. */
-.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; margin: 18px 0; display: flex; align-items: center; justify-content: center; }
+.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; margin: 46px 0 82px; display: flex; align-items: center; justify-content: center; }
 .right { position: relative; flex: 0 0 300px; }
-.logSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
+/* The right sidebar splits in half: the standing card panel over the log. */
+.standSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: calc(50% + 6px); display: flex; }
+.standSlot > * { flex: 1; min-height: 0; }
+.logSlot { position: absolute; left: 0; right: 0; top: calc(50% + 6px); bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
 
 /* Match-screen FX layer over the centre column: the stage banner, the action
    banner and the card flash. Detached from the map element -- never clipped

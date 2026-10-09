@@ -1,0 +1,90 @@
+/* The cards-in-play top sheet, at the top of the centre column (the mirror of
+   the prompt sheet's bottom one). A slim strip is always visible; the card row
+   unfolds over the board's upper edge and folds away on its own. Sits under
+   the FX layer (Board `.fx` is z-index 20+) so banners and the card flash
+   still read over it. */
+
+.sheet {
+  position: absolute; left: 0; right: 0; top: 0; z-index: 15;
+  display: flex; flex-direction: column; align-items: center;
+  pointer-events: none;
+}
+.strip {
+  pointer-events: auto;
+  display: flex; align-items: baseline; gap: 8px;
+  height: 32px; padding: 0 14px;
+  border-radius: 0 0 12px 12px;
+  background: var(--panel); box-shadow: var(--shadow);
+  color: var(--text); font-size: 14px;
+}
+.strip b { color: var(--pink); font-size: 15px; padding-left: 8px; border-left: 4px solid var(--pink); }
+.strip small { color: var(--sub); font-size: 12px; }
+.strip:hover { background: #fff; }
+.chev {
+  width: 9px; height: 9px;
+  border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor;
+  border-radius: 1px;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.chevOpen { transform: rotate(-135deg) translate(-1px, -1px); }
+
+/* The unfolded row: a translucent tray over the board's top edge. `max-height`
+   animates the fold; the folded tray is 0 tall and never captures. */
+.panel {
+  width: min(92%, 860px);
+  max-height: 0; overflow: hidden;
+  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+  border-radius: 0 0 14px 14px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 30px rgba(60, 20, 40, 0.18);
+  transition: max-height 0.22s cubic-bezier(0.22, 0.7, 0.25, 1), padding 0.22s;
+  padding: 0 10px;
+}
+.open .panel { max-height: 240px; padding: 10px; pointer-events: auto; }
+.cards { display: flex; flex-wrap: wrap; gap: 6px; align-items: flex-start; overflow: auto; min-height: 0; }
+.empty { padding: 8px 4px; font-size: 13px; color: var(--sub); }
+.more {
+  align-self: flex-end; padding: 3px 10px; border-radius: 999px;
+  border: 1.5px solid var(--pink-pale); color: var(--pink); font-size: 12px; font-weight: 600;
+}
+.more:hover { background: var(--pink-pale); }
+
+/* Cards in play, framed in their owner's colour (ring + tint), with the live
+   counters as badges -- the same read-out the board's field panel carried. */
+.card {
+  position: relative;
+  box-shadow: 0 0 0 2px var(--own), 0 3px 8px rgba(80, 40, 60, 0.12);
+  background: color-mix(in srgb, var(--own) 18%, #fff);
+}
+.back { border-radius: 4px; box-shadow: 0 0 0 2px var(--own, #ddd); }
+.back img { width: 54px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; display: block; }
+.crystal {
+  position: absolute; right: -3px; top: -3px; padding: 0 4px; border-radius: 8px;
+  background: var(--purple); color: #fff; font-size: 10px; line-height: 15px;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.cp {
+  position: absolute; right: -3px; bottom: -3px; padding: 0 4px; border-radius: 8px;
+  background: var(--teal, #0a8f7c); color: #fff; font-size: 10px; line-height: 15px;
+  box-shadow: 0 0 0 1.5px #fff;
+}
+.noteDot {
+  position: absolute; left: -2px; top: -2px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--pink); box-shadow: 0 0 0 1.5px #fff;
+}
+/* Events in effect: a compact face tinted like the event deck. */
+.event {
+  position: relative; width: 54px; padding: 2px; border-radius: 6px;
+  background: #fff; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.12);
+}
+.event:hover { transform: translateY(-3px); }
+.event img {
+  width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 3px;
+  border-bottom: 3px solid var(--purple); filter: hue-rotate(250deg) saturate(0.8);
+}
+.event span { display: block; font-size: 9px; font-weight: 700; line-height: 1.15; padding: 2px 1px 0; height: 24px; overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .panel { transition: none; }
+  .event:hover { transform: none; }
+}

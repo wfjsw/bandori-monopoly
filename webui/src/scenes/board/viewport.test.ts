@@ -27,7 +27,7 @@ test("clampZoom holds zoom between fit and 3x", () => {
   assert.equal(clampZoom(2.5), 2.5);
   assert.equal(clampZoom(10), MAX_ZOOM);
   assert.equal(clampZoom(NaN), MIN_ZOOM);
-  assert.deepEqual(fitViewport(), { z: 1, tx: 0, ty: 0 });
+  assert.deepEqual(fitViewport(), { z: MIN_ZOOM, tx: 0, ty: 0 });
 });
 
 test("clampPan allows half a window of overscroll past each edge", () => {
@@ -66,7 +66,7 @@ test("zoomAround clamps pan while still hugging the cursor", () => {
   assert.deepEqual(z, { z: 3, tx: 0, ty: 0 });
   // Zooming all the way out lands on the fit view, overscroll dropped.
   const v: Viewport = { z: 3, tx: W * (1 - 3), ty: H * (1 - 3) };
-  assert.deepEqual(zoomAround(v, W / 2, H / 2, 1, W, H), fitViewport());
+  assert.deepEqual(zoomAround(v, W / 2, H / 2, MIN_ZOOM, W, H), fitViewport());
   // Any anchor stays within the overscroll limits.
   for (const px of [0, W / 2, W]) {
     for (const py of [0, H / 2, H]) {
@@ -87,13 +87,16 @@ test("wheelZoom steps continuously and caps at fit / 3x", () => {
 });
 
 test("stepZoom moves in fixed increments around its anchor", () => {
+  // Steps multiply the current zoom by 1.25 (viewport `STEP`).
   const v = stepZoom(fitViewport(), 1, W / 2, H / 2, W, H);
-  assert.ok(Math.abs(v.z - 1.25) < 1e-9);
+  assert.ok(Math.abs(v.z - MIN_ZOOM * 1.25) < 1e-9);
   const two = stepZoom(v, 1, W / 2, H / 2, W, H);
-  assert.ok(Math.abs(two.z - 1.25 * 1.25) < 1e-9);
-  // Stepping around the centre keeps the board's centre under it.
-  assert.ok(Math.abs(under(two, W / 2, H / 2).x - W / 2) < 1e-9);
-  assert.ok(Math.abs(under(two, W / 2, H / 2).y - H / 2) < 1e-9);
+  assert.ok(Math.abs(two.z - MIN_ZOOM * 1.25 * 1.25) < 1e-9);
+  // Stepping around the centre keeps the board point under it fixed (the
+  // fit view is under-zoomed, so that point is not the window centre).
+  const c0 = under(fitViewport(), W / 2, H / 2);
+  assert.ok(Math.abs(under(two, W / 2, H / 2).x - c0.x) < 1e-9);
+  assert.ok(Math.abs(under(two, W / 2, H / 2).y - c0.y) < 1e-9);
   let max = v;
   for (let i = 0; i < 6; i++) max = stepZoom(max, 1, 0, 0, W, H);
   assert.equal(max.z, MAX_ZOOM);
@@ -118,9 +121,10 @@ test("pinchAround scales on the moving midpoint", () => {
 });
 
 test("panBy moves the board and clamps at the window edge", () => {
-  // Even at fit the board drags, up to half a window.
-  assert.deepEqual(panBy(fitViewport(), 30, -30, W, H), { z: 1, tx: 30, ty: -30 });
-  assert.deepEqual(panBy(fitViewport(), 1e4, -1e4, W, H), { z: 1, tx: W * OVERPAN, ty: -H * OVERPAN });
+  // Even at fit the board drags, up to half a window (and, at a fit zoom
+  // under 1, into the little extra room the smaller board leaves).
+  assert.deepEqual(panBy(fitViewport(), 30, -30, W, H), { z: MIN_ZOOM, tx: 30, ty: -30 });
+  assert.deepEqual(panBy(fitViewport(), 1e4, -1e4, W, H), { z: MIN_ZOOM, tx: W * OVERPAN, ty: H * (1 - MIN_ZOOM) - H * OVERPAN });
   const zoomed = panBy({ z: 2, tx: -400, ty: -400 }, -100, 20, W, H);
   assert.deepEqual(zoomed, { z: 2, tx: -500, ty: -380 });
   const edge = panBy({ z: 2, tx: -500, ty: -500 }, -1e4, 1e4, W, H);

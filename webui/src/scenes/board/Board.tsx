@@ -23,7 +23,11 @@ import { openPrompt, waitingOn } from "./Prompt";
 import { showResults } from "./Results";
 import { Ring } from "./Ring";
 import { Hand, SettleVote, Side } from "./Side";
-import { shouldFinishTurn } from "./turnFlow";
+import { shouldFinishTurn, movementControl } from "./turnFlow";
+import { FieldSheet } from "./FieldSheet";
+import { CardStand } from "./CardStand";
+import { useStandingPreviewOn } from "../../ui/CardPreview";
+import type { RollControl } from "./Ring";
 import s from "./Board.module.css";
 
 export function Board({ sess }: { sess: GameSession }) {
@@ -36,6 +40,8 @@ export function Board({ sess }: { sess: GameSession }) {
   // Screen stays on during a live match only -- not in a replay (which also
   // renders this Board) and not once the match has ended.
   useWakeLock(sess.kind !== "replay" && view?.state.phase !== "ended");
+  // The standing card panel replaces the floating hover popups on this screen.
+  useStandingPreviewOn();
   const promptFor = useRef(0);
   const autoDeed = useRef(-1);
   const autoEnd = useRef(-1);
@@ -104,6 +110,15 @@ export function Board({ sess }: { sess: GameSession }) {
     openDeed(sess, i);
   };
   const leave = () => (sess.kind === "replay" || S.phase === "ended" || m.out ? exit() : showLeave(sess, exit));
+  // The die lives in the board's roll zone (Ring); replays hide it entirely.
+  const control = movementControl(m, { auto, animating: anim.animating, readOnly: sess.readOnly, connected: sess.connected });
+  const roll: RollControl | null = sess.readOnly ? null : {
+    enabled: control === "roll",
+    rolling: anim.rolling,
+    dice: anim.dice,
+    hint: control === "roll" ? tr("board.clickRoll") : "",
+    onClick: () => control === "roll" && void act(sess, { act: "roll" }),
+  };
 
   return (
     <>
@@ -122,8 +137,18 @@ export function Board({ sess }: { sess: GameSession }) {
           <Side m={m} sess={sess} anim={anim} />
         </div>
         <div className={s.middle}>
+          {/* The cards in play, as a fold-away strip at the top of this column
+              (under the FX layer). The board's roll-zone die takes the roll
+              action from the old side-column button. */}
+          <FieldSheet m={m} />
           <div className={s.mapSlot}>
-            <Ring m={m} anim={anim} pickable={tilePick} onTile={onTile} />
+            <Ring
+              m={m}
+              anim={anim}
+              pickable={tilePick}
+              onTile={onTile}
+              roll={roll}
+            />
           </div>
           <Hand m={m} sess={sess} busy={anim.animating} />
           {/* Match-screen FX layer: the stage banner (new-turn announcement),
@@ -163,6 +188,11 @@ export function Board({ sess }: { sess: GameSession }) {
           </div>
         </div>
         <div className={s.right}>
+          {/* Half the sidebar: the standing card detail (hover / click / flash).
+              The log keeps the other half. */}
+          <div className={s.standSlot}>
+            <CardStand flash={anim.flash?.card} />
+          </div>
           <div className={s.logSlot}>
             <Log lines={anim.log} colorOf={m.colorOf}><SettleVote m={m} sess={sess} /></Log>
           </div>

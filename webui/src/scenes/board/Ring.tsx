@@ -1,18 +1,15 @@
 // The 60-tile ring, tokens, and the center: cards in play, the event deck, banner.
 
-import { cardArt, charArt, sceneImg } from "../../core/assets";
+import { charArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
 import { plain } from "../../core/format";
 import type { TileData } from "../../core/types";
-import { CardFace, showCard } from "../../ui/Card";
-import { Avatar, bandColor } from "../../ui/Character";
-import { SkillBody } from "../../ui/SkillBody";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
-import { showEvent, showEventPile, showField } from "./Popups";
+import { showEventPile } from "./Popups";
 import s from "./Ring.module.css";
 import { t as tr } from "../../i18n/t";
 import { fmtMsg } from "../../i18n/msg";
@@ -51,13 +48,21 @@ export interface RingProps {
   /** Tiles a "tile" prompt lets you pick by clicking. */
   pickable: number[];
   onTile: (i: number) => void;
+  /** The die in the board's roll zone (hidden in replays). */
+  roll?: RollControl | null;
+}
+
+/** The roll-zone die button: same action as the old side-column one. */
+export interface RollControl {
+  enabled: boolean;
+  rolling: boolean;
+  dice: number;
+  hint: string;
+  onClick: () => void;
 }
 
 /** What a hovered tile marker says, and where (the wrap's own pixel space). */
 interface MarkTip { x: number; y: number; title: string; lines: string[] }
-
-/** Hover target: a card in play, or an event in effect (both expand the same way). */
-interface FieldHover { kind: "card" | "event"; id: string; note: string; owner?: number }
 
 /** A tile's face, drawn from the same data the deeds and engine use -- no board
  *  texture. The `#index` chip wears the tile's colour (the old colour bar);
@@ -84,7 +89,7 @@ function TileFace({ tile }: { tile: TileData }) {
   );
 }
 
-export function Ring({ m, anim, pickable, onTile }: RingProps) {
+export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
   const S = m.S;
   const pos = anim.pos ?? S.players.map((x) => x.pos);
   const pick = new Set(pickable);
@@ -93,7 +98,6 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
   const [tip, setTip] = useState<MarkTip | null>(null);
   const [tipBox, setTipBox] = useState({ w: 0, h: 0 });
   const tipRef = useRef<HTMLDivElement>(null);
-  const [hover, setHover] = useState<FieldHover | null>(null);
   // Markers sit inside a tile (which clips), so their popup is drawn on the
   // untransformed overlay above the zoom layer. The wrap is not zoomed: its
   // bounding box carries only the stage scale, and converting the marker's
@@ -140,7 +144,7 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
           pan/zoom over the tiles and the interior. */}
       <div className={s.viewport} style={vp.style}>
         <div className={s.ring} data-vp-bg>
-          <Center m={m} onHover={setHover} />
+          <Center m={m} roll={roll} />
           {D.tiles.map((t, i) => {
             const [col, row] = cell(i);
             const owner = S.owners[i] ?? -1;
@@ -220,12 +224,12 @@ export function Ring({ m, anim, pickable, onTile }: RingProps) {
           </div>
         </div>
       </div>
-      {/* Fixed overlays: the hover details stay out of the zoom layer so they
-          keep their size and screen position at any zoom. The turn / action
+      {/* Fixed overlays: the marker tip stays out of the zoom layer so it
+          keeps its size and screen position at any zoom. The turn / action
           banners and the card flash are match-screen chrome (Board's FX
-          layer) -- not map-sized, not map-clipped. */}
+          layer) -- not map-sized, not map-clipped. Field cards now read from
+          the board's top sheet (FieldSheet), with the shared hover preview. */}
       <div className={s.overlay}>
-        <FieldPreview m={m} hover={hover} />
         {tip && (
           <div ref={tipRef} className={s.markTip} style={{ left: tipX, top: tip.y, transform: tipUp ? undefined : "translate(-50%, 6px)" }}>
             <b>{tip.title}</b>
@@ -250,52 +254,8 @@ function ZoomControls({ vp }: { vp: ViewportApi }) {
   );
 }
 
-/** The field-card / event hover detail, over the right of the board window.
- *  Rendered outside the zoom layer, so it never scales away from the viewer. */
-function FieldPreview({ m, hover }: { m: Model; hover: FieldHover | null }) {
-  const hc = hover?.kind === "card" ? D.card(hover.id) : undefined;
-  const he = hover?.kind === "event" ? D.event(hover.id) : undefined;
-  return (
-    <div className={cx(s.fieldPreview, hover && s.fieldPreviewOn)}>
-      {hover && (
-        <>
-          {hover.kind === "card" ? (
-            <>
-              <div className={s.fpArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
-              <div className={s.fpTitle}>{cardTitle(hover.id)}</div>
-              {hover.owner != null && (
-                <div className={s.fpOwner} style={{ ["--own" as string]: m.colorOf(hover.owner) }}>
-                  <Avatar c={m.charOf(hover.owner)} size={22} /><span>{tr("board.fieldOwner", { who: m.nameOf(hover.owner) })}</span>
-                </div>
-              )}
-              <div className={s.fpText}><SkillBody text={hc?.text ?? ""} /></div>
-            </>
-          ) : (
-            <>
-              <div className={s.fpTitle}><span className={s.fpEvent}>{tr("events.label", { id: hover.id })}</span> {he?.name ?? ""}</div>
-              <div className={s.fpText}>{he?.text ?? ""}</div>
-            </>
-          )}
-          {hover.note && <div className={s.fpNote}>{hover.note}</div>}
-        </>
-      )}
-    </div>
-  );
-}
-
-function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => void }) {
+function Center({ m, roll }: { m: Model; roll?: RollControl | null }) {
   const S = m.S;
-  // Skill rules are placed on the field so `On::Hook` reaches them (engine
-  // `bind_skills`); they are not cards in play and carry no displayable state,
-  // and the skill button is where they are actually shown. `skill:` is the
-  // rule-id prefix `skill_id` builds -- without this every player opens the
-  // match with two （未命名） cards on their field.
-  const rows = S.players
-    .map((x, i) => [i, (x.field ?? []).filter((c) => !c.card.startsWith("skill:"))] as const)
-    .filter(([, f]) => f.length);
-  const fieldCount = rows.reduce((a, [, f]) => a + f.length, 0);
-  const events = S.eventActive ?? [];
-  const names = namesOf(S);
   return (
     <div className={s.inner} data-vp-bg>
       {/* Board colour and zone labels on the path's 12 x 10 grid (1-based grid
@@ -317,57 +277,26 @@ function Center({ m, onHover }: { m: Model; onHover: (h: FieldHover | null) => v
         <span style={{ gridColumn: "6 / 8", gridRow: "4 / 8" }}>{tr("board.rollZone")}</span>
         <span className={s.zoneNarrow} style={{ gridColumn: "8 / 9", gridRow: "4 / 8" }}>{tr("board.diceZone")}</span>
       </div>
-      {/* 场上的卡 in the fold's big interior: compact card faces grouped by
-          whose field they are on, each with its live state (crystals, note).
-          Hover shows the full card; click opens it; the header opens the
-          large list (Popups `showField`). */}
-      {(fieldCount > 0 || events.length > 0) && (
-        <div className={s.field}>
-          <button type="button" className={s.fieldHead} onClick={() => showField(m)}>
-            <b>{tr("board.field")}</b><small>×{fieldCount}</small>
+      {/* The die in the board's roll zone (掷骰区): the one roll control, on
+          the spot the board names for it. Hidden in replays (`roll` null). */}
+      {roll && (
+        <div className={s.rollDock}>
+          <button
+            type="button"
+            className={cx(s.roll, roll.enabled && s.can, roll.rolling && s.rolling)}
+            title={roll.hint}
+            disabled={!roll.enabled}
+            onClick={roll.onClick}
+          >
+            <img className={s.diceImg} src={sceneImg("dice_d20")} alt="" />
+            <div className={s.diceNum}>{roll.dice || ""}</div>
+            <div className={s.diceCap}>{tr("board.dice")}</div>
           </button>
-          {/* One compact grid for every card in play, grouped by owner (seat
-              order); each card is framed in its owner's colour, and hovering
-              names the owner in the preview. Events follow, unowned. */}
-          <div className={s.fieldGrid} data-vp-scroll>
-            {rows.flatMap(([i, f]) => f.map((fc) => {
-              const note = fc.note ? fmtMsg(fc.note, names) : "";
-              const color = m.colorOf(i);
-              return fc.faceDown ? (
-                <div key={fc.uid} className={s.fieldBack} style={{ ["--own" as string]: color }} title={`${m.nameOf(i)} · ${tr("board.faceDown")}`}><img src={sceneImg("card_back")} alt="" /></div>
-              ) : (
-                <CardFace key={fc.uid} id={fc.card} size="hand" className={s.fieldCard} style={{ ["--own" as string]: color }} onClick={() => showCard(fc.card, [], note)} onMouseEnter={() => onHover({ kind: "card", id: fc.card, owner: i, note: note || [fc.crystals ? tr("board.crystals", { n: fc.crystals }) : "", fc.cp > 0 ? tr("board.cp", { n: fc.cp }) : ""].filter(Boolean).join(" · ") })} onMouseLeave={() => onHover(null)}>
-                  {fc.crystals > 0 && <span className={s.crystal}>◆{fc.crystals}</span>}
-                  {fc.cp > 0 && <span className={s.cpBadge} title={tr("board.cp", { n: fc.cp })}>CP{fc.cp}</span>}
-                  {note && <span className={s.noteDot} />}
-                </CardFace>
-              );
-            }))}
-          </div>
-          {/* Events in effect: the same compact face (event art is the deck's
-              back, tinted), its counters as badges, hover to expand. */}
-          {events.length > 0 && (
-            <div className={s.eventRow} title={tr("board.activeEvents")}>
-              {events.map((e) => {
-                const ev = D.event(e.id);
-                const note = e.note?.k ? fmtMsg(e.note, names) : "";
-                return e.faceDown ? (
-                  <div key={e.id} className={s.fieldBack} title={tr("board.faceDown")}><img src={sceneImg("card_back")} alt="" /></div>
-                ) : (
-                  <div key={e.id} className={s.eventFace} onClick={() => showEvent(e.id, note)} onMouseEnter={() => onHover({ kind: "event", id: e.id, note })} onMouseLeave={() => onHover(null)}>
-                    <div className={s.eventArt}><img src={sceneImg("card_back")} alt="" /></div>
-                    <div className={s.eventTitle}>{ev?.name ?? e.id}</div>
-                    {e.counter > 0 && <span className={s.crystal}>×{e.counter}</span>}
-                    {note && <span className={s.noteDot} />}
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       )}
       {/* The shared event deck sits in the bottom-left pocket of the fold; your
-          own draw pile is at the head of your hand (Side.tsx). */}
+          own draw pile is at the head of your hand (Side.tsx). Cards in play
+          sit on the board's top sheet (FieldSheet), not in the interior. */}
       <div className={s.piles}>
         <button type="button" className={s.pile} onClick={() => showEventPile(S)}>
           <div className={s.stack}><img src={sceneImg("card_back")} alt="" /></div>

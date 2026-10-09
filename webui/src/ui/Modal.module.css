@@ -6,6 +6,23 @@
    half of the 856px middle column = 825px on a 1600px stage). */
 .inline { position: absolute; left: calc(50% + 25px); top: 50%; transform: translate(-50%, -50%); z-index: 40; display: flex; justify-content: center; max-width: 856px; animation: fade 0.15s; }
 .inline[hidden] { display: none; }
+/* Prompt sheets: a bottom sheet over the hand (Master Duel). The wrapper is the
+   centre column's width (1600px stage - 744px of side chrome, Board.module.css)
+   centred on that column (+25px), and clips the slide; the window inside is
+   content-sized and carries the slide / retract transforms. `pointer-events:
+   none` on the wrapper: the board beside a narrow sheet stays clickable.
+   It rests on the hand bar (Side.module.css `.bar`, ~38px) and sits above the
+   bar / fan in z-order (the dock is z-index 30). */
+.sheet {
+  position: absolute; left: calc(50% + 25px); bottom: 40px; z-index: 40;
+  width: calc(100% - 744px);
+  transform: translateX(-50%);
+  display: flex; justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+}
+.sheet[hidden] { display: none; }
+.sheet .window { pointer-events: auto; }
 @keyframes fade { from { opacity: 0; } }
 .window { width: 834px; max-height: 840px; display: flex; flex-direction: column; background: #fff; border-radius: 20px; padding: 8px; box-shadow: 0 20px 60px rgba(60, 20, 40, 0.3); animation: pop 0.18s ease-out; }
 @keyframes pop { from { transform: scale(0.94); opacity: 0; } }
@@ -32,17 +49,41 @@
 .restoreIcon { flex: none; width: 16px; height: 14px; border: 2px solid currentColor; border-top-width: 5px; border-radius: 2px; }
 .body { overflow: auto; padding: 18px 18px 14px; font-size: 17px; line-height: 1.6; }
 /* Prompt card chrome: the old popup's look -- white rounded panel with a pink
-   border, the source · tile named in pink above the body, no title bar. */
+   border, the source · tile named in pink above the body. The head is the
+   retract strip: title, the countdown (headExtra), and the raise chevron. */
 .promptWin { padding: 14px 18px 16px; border: 3px solid var(--pink); box-shadow: 0 14px 44px rgba(60, 20, 40, 0.24); }
-.promptWin .head { height: auto; min-height: 30px; background: none; border-radius: 0; justify-content: flex-start; padding: 0 92px 8px 2px; }
-.promptWin .head h2 { color: var(--pink); font-size: 21px; letter-spacing: 0; max-width: 100%; text-align: left; }
+.promptWin .head { height: 42px; min-height: 42px; background: none; border-radius: 0; display: flex; align-items: center; gap: 10px; justify-content: flex-start; padding: 0 52px 0 2px; }
+.promptWin .head h2 { flex: 0 1 auto; min-width: 0; max-width: none; color: var(--pink); font-size: 21px; letter-spacing: 0; text-align: left; }
+.headToggle { cursor: pointer; }
+/* Retract / raise chevron in the strip's round button. */
+.chev { width: 11px; height: 11px; border-right: 3px solid currentColor; border-bottom: 3px solid currentColor; border-radius: 1px; transform: rotate(45deg) translate(-1px, -1px); }
+.chevUp { transform: rotate(-135deg) translate(-1px, -1px); }
 .promptWin .x { width: 32px; height: 32px; background: var(--pink-pale); box-shadow: none; }
 .promptWin .x i { width: 18px; height: 18px; }
 .promptWin .minus { width: 16px; height: 3px; }
 .promptWin .x:hover { background: #ffd0dc; }
-/* The prompt body is not a scroll box: the card hover preview floats out of
-   the panel (CardPreview) and must not be clipped. */
-.promptWin .body { padding: 0; overflow: visible; }
+/* The sheet caps its height and scrolls the body: the floating hover preview
+   is hosted on the stage (CardPreview InspectPreviewHost), so it escapes the
+   scroll box. */
+.promptWin .body { padding: 0; overflow: auto; }
 .ask { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
 .ask p { font-size: 19px; white-space: pre-wrap; }
 .row { display: flex; gap: 14px; justify-content: center; }
+/* The sheet's window: content-sized (up to the centre column), capped height
+   with the body scrolling, and the slide / retract transforms. Kept last so it
+   wins over `.window`'s fixed widths and `pop`. */
+.sheetWin {
+  width: fit-content; min-width: 380px; max-width: 100%; max-height: 640px;
+  --sheet-strip: 60px;
+  animation: sheetIn 0.22s cubic-bezier(0.22, 0.7, 0.25, 1);
+  transition: transform 0.22s cubic-bezier(0.22, 0.7, 0.25, 1);
+}
+.sheetWin.retracted { transform: translateY(calc(100% - var(--sheet-strip))); }
+.sheetWin.sheetOut { animation: sheetOut 0.18s ease-in forwards; }
+.sheetOut .body { pointer-events: none; }
+@keyframes sheetIn { from { transform: translateY(100%); opacity: 0.35; } }
+@keyframes sheetOut { to { transform: translateY(100%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .sheetWin { animation: none; transition: none; }
+  .sheetWin.sheetOut { animation: none; opacity: 0; }
+}
