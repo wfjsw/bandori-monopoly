@@ -232,6 +232,7 @@
   "deed.ownerLine": "{{who}}（{{chara}}）{{mort}}",
   "deed.perHouse": "{{n}} / 栋",
   "deed.poor": "（资金不够）",
+  "deed.fundByMortgage": "（可抵押凑钱）",
   "deed.price": "地价",
   "deed.redeem": "赎回  −{{n}}",
   "deed.rentRing": "地租 = 地主拥有的 RiNG 数量 × {{mult}} × 1d20",

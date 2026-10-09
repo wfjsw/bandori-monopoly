@@ -430,8 +430,10 @@ impl Match {
             } else {
                 l.time_left.max(0.0)
             };
-            st.prompt.bid = l.bid;
-            st.prompt.bidder = l.bidder;
+            if l.kind() == "auction" {
+                st.prompt.bid = l.bid;
+                st.prompt.bidder = l.bidder;
+            }
         } else {
             st.prompt = Default::default();
         }
@@ -450,7 +452,6 @@ impl Match {
             st.can_build_here = false;
             st.can_roll_here = false;
             st.can_end_here = false;
-            let money = st.players.get(ti).map(|p| p.money).unwrap_or(0);
             // `Cx::can_pay` (not out / stunned / exiled), without building a Cx
             // (which would clone the world -- this runs inside rollouts).
             let can_pay = st
@@ -488,7 +489,7 @@ impl Match {
                         .is_some_and(|t| t.is_buyable())
                     && !self.world.turn.plan.no_buy
                     && can_pay
-                    && money >= st.buy_price.max(0);
+                    && self.world.purchase_funds(&self.data, ti, None) >= st.buy_price.max(0);
             }
             if st.step == stage::END && !st.built && !st.bought && pos >= 0 && st.landed == pos {
                 // Only preview a build cost when a build is actually possible
@@ -513,7 +514,7 @@ impl Match {
                         .world
                         .why_not_build_on(&self.data, ti as i32, pos)
                         .is_none()
-                    && money >= st.build_cost.max(0);
+                    && self.world.purchase_funds(&self.data, ti, Some(t)) >= st.build_cost.max(0);
             }
             let bank = self.bank.get(st.turn as usize).copied().unwrap_or(0.0);
             st.shield = self.shield;
@@ -1441,19 +1442,24 @@ impl Match {
                 l.answers[k] = 0;
             }
             "mortgage" => {
-                let got = picked(&l.ask.view.items);
-                let sum: i32 = got
-                    .iter()
-                    .filter_map(|t| t.parse::<usize>().ok())
-                    .map(|t| data.tiles[t].price / 2)
-                    .sum();
-                if sum < l.ask.view.bid {
-                    return Err(Msg::new("err.mortgage_short")
-                        .n("need", l.ask.view.bid)
-                        .n("sum", sum));
+                if !l.ask.view.options.is_empty() && m.value == 1 {
+                    l.picked.clear();
+                    l.answers[k] = 1;
+                } else {
+                    let got = picked(&l.ask.view.items);
+                    let sum: i32 = got
+                        .iter()
+                        .filter_map(|t| t.parse::<usize>().ok())
+                        .map(|t| data.tiles[t].price / 2)
+                        .sum();
+                    if sum < l.ask.view.bid {
+                        return Err(Msg::new("err.mortgage_short")
+                            .n("need", l.ask.view.bid)
+                            .n("sum", sum));
+                    }
+                    l.picked = got;
+                    l.answers[k] = 0;
                 }
-                l.picked = got;
-                l.answers[k] = 0;
             }
             "tile" => {
                 let n = l.ask.view.items.len() as i32;
@@ -1801,7 +1807,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if quote.price < 0 {
                 return Some(Msg::new("err.cannot_buy"));
             }
-            if st.players[i].money < quote.price.max(0) {
+            if cx.w.purchase_funds(cx.data, i, None) < quote.price.max(0) {
                 return Some(Msg::new("err.buy_poor"));
             }
             None
@@ -1819,7 +1825,7 @@ fn why_not_act(cx: &Cx, i: usize, m: &NetMessage, busy: bool) -> Option<Msg> {
             if let Some(e) = cx.why_not_build(i, pos as usize) {
                 return Some(e);
             }
-            if st.players[i].money < cx.build_cost(pos as usize) {
+            if cx.w.purchase_funds(cx.data, i, Some(pos as usize)) < cx.build_cost(pos as usize) {
                 return Some(Msg::new("err.poor"));
             }
             None

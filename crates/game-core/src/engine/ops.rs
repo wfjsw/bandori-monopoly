@@ -328,6 +328,26 @@ impl World {
             .map_or(0, |t| t.price / 2)
     }
 
+    /// Cash plus mortgageable deeds; construction cannot fund itself.
+    pub(crate) fn purchase_funds(
+        &self,
+        data: &GameData,
+        player: usize,
+        exclude: Option<usize>,
+    ) -> i32 {
+        self.st.players[player].money
+            + data.tiles.iter().enumerate()
+                .filter(|&(t, tile)| {
+                    Some(t) != exclude
+                        && tile.is_buyable()
+                        && tile.kind != "ring"
+                        && self.st.owners[t] == player as i32
+                        && !self.st.mortgaged[t]
+                })
+                .map(|(_, tile)| tile.price / 2)
+                .sum::<i32>()
+    }
+
     /// The tile `steps` ahead of a player without passing others' logic
     /// (`H.NearestAhead`-lite): pure geometry on the ring.
     pub fn tile_steps_ahead(&self, data: &GameData, player_id: i32, steps: i32) -> i32 {

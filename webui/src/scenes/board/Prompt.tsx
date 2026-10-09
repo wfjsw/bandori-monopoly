@@ -153,6 +153,7 @@ function TileOptions({ p, answer, names, auto }: { p: MatchPrompt; answer: Answe
 
 function MortgageOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; auto: boolean }) {
   const [picked, setPicked] = useState<string[]>([]);
+  const cancellable = p.options.length > 0;
   const sum = picked.reduce((a, t) => a + Math.floor(D.tiles[Number(t)].price / 2), 0);
   return (
     <>
@@ -168,7 +169,8 @@ function MortgageOptions({ p, answer, auto }: { p: MatchPrompt; answer: Answer; 
         })}
       </div>
       <div className={s.sum}>{tr("prompt.selected")}<b className={sum >= p.bid ? s.ok : ""}>{n0(sum)}</b>{tr("prompt.need", { n: n0(p.bid) })}</div>
-      <Btn kind="pink" className={s.opt} disabled={auto} onClick={() => void answer({ cards: picked })}>{tr("prompt.mortgage")}</Btn>
+      <Btn kind="pink" className={s.opt} disabled={auto || (cancellable && sum < p.bid)} onClick={() => void answer({ cards: picked })}>{tr("prompt.mortgage")}</Btn>
+      {cancellable && <Btn className={s.opt} disabled={auto} onClick={() => void answer({ value: 1 })}>{fmtMsg(p.options[0], namesOf())}</Btn>}
     </>
   );
 }
