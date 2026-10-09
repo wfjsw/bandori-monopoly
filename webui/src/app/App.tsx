@@ -14,6 +14,7 @@ import { Play } from "../scenes/Play";
 import { Replays } from "../scenes/replay/Replays";
 import { ReplayPlayer } from "../scenes/replay/ReplayPlayer";
 import { closeAllModals, ModalHost } from "../ui/Modal";
+import { InspectPreviewHost } from "../ui/CardPreview";
 import { ToastHost } from "../ui/Toast";
 import { href, navigate, parse, type Route, usePath } from "./router";
 import { setBackdrop, Stage } from "./Stage";
@@ -86,6 +87,7 @@ export function App() {
           {booted ? shown && <div key={href(shown)}>{scene(shown)}</div> : <Boot resume={!!target} onReady={() => setReady(true)} />}
         </div>
         <ModalHost />
+        <InspectPreviewHost />
         <ToastHost />
       </Stage>
       <Console />

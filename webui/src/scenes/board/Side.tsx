@@ -8,7 +8,7 @@ import { useAutoplay, useSessionOther } from "../../core/hooks";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
-import { type CardAction, showCard, TagChip } from "../../ui/Card";
+import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -82,9 +82,18 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
   );
 }
 
+/**
+ * The match hand, docked at the bottom of the middle column like Master Duel's:
+ * a fanned row of full card faces, retracted so only the top strip of each card
+ * peeks above the bottom edge. Hovering the dock (or focusing a card) raises
+ * the hand; leaving retracts it after a short delay. Hovering one card lifts it
+ * clear of its neighbours and floats the full text. The slim bar under the fan
+ * (hand count, hint, draw pile, 托管) stays visible either way.
+ */
 export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
-  const [hover, setHover] = useState<{ id: string; note: string } | null>(null);
+  const [hover, setHover] = useState<{ k: number; id: string; note: string } | null>(null);
   const [peek, setPeek] = useState(false);
+  const [raised, setRaised] = useState(false);
   const auto = useAutoplay(sess); // 托管: play / discard are locked (inspect stays)
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
@@ -101,10 +110,22 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
-  // The preview is `pointer-events: none` (it sits beside the hand, not under
+  // Raise on hover / focus; retract only after a short delay, so moving between
+  // cards (or to the bar and back) does not drop the hand out from under you.
+  const closeTimer = useRef(0);
+  const raise = () => {
+    window.clearTimeout(closeTimer.current);
+    setRaised(true);
+  };
+  const retract = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setRaised(false), 200);
+  };
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  // The preview is `pointer-events: none` (it sits above the hand, not under
   // the cursor), so a long card text is scrolled from the hovered hand card:
   // the wheel over the hand, or PgUp/PgDn/↑/↓ while a card is hovered.
-  const cardsRef = useRef<HTMLDivElement>(null);
+  const fanRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (textRef.current) textRef.current.scrollTop = 0;
@@ -133,18 +154,40 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
       e.preventDefault();
       el.scrollTop += delta;
     };
-    const cards = cardsRef.current;
-    cards?.addEventListener("wheel", onWheel, { passive: false });
+    const fan = fanRef.current;
+    fan?.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("keydown", onKey);
     return () => {
-      cards?.removeEventListener("wheel", onWheel);
+      fan?.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
     };
   }, [hover]);
   return (
     <>
-      <div className={s.hand}>
-        <div className={s.handHead}>
+      <div
+        className={cx(s.dock, raised && s.dockUp)}
+        onMouseEnter={raise}
+        onMouseLeave={retract}
+        onFocus={raise}
+        onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) retract(); }}
+      >
+        <div className={s.fan} ref={fanRef}>
+          {m.v.hand.map((id, k) => (
+            <div key={`${id}:${k}`} className={s.fanCard}>
+              <CardFace
+                id={id}
+                size="mini"
+                title={cardTitle(id)}
+                onClick={() => detail(id, k)}
+                onMouseEnter={() => setHover({ k, id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
+                onMouseLeave={() => setHover(null)}
+                onFocus={() => setHover({ k, id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
+                onBlur={() => setHover(null)}
+              />
+            </div>
+          ))}
+        </div>
+        <div className={s.bar}>
           <PanelTab>{tr("board.hand", { n: m.v.hand.length, max: limit })}</PanelTab>
           <span className={cx(s.handHint, m.overHand && s.warn)}>{m.overHand ? tr("board.overHand") : canPlay ? tr("board.canPlay") : tr("board.tapCard")}</span>
           {/* Your draw pile, at the head of the hand it feeds (it used to sit in
@@ -160,36 +203,18 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
             <div className={s.thinkingSlot}><ThinkingPill sess={sess} /></div>
           </div>
         </div>
-        <div className={s.cards} ref={cardsRef}>
-          {m.v.hand.map((id, k) => (
-            <button
-              key={`${id}:${k}`}
-              type="button"
-              className={s.handCard}
-              style={{ ["--band" as string]: bandColor(D.card(id)?.band ?? "") }}
-              title={cardTitle(id)}
-              onClick={() => detail(id, k)}
-              onMouseEnter={() => setHover({ id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
-              onMouseLeave={() => setHover(null)}
-              onFocus={() => setHover({ id, note: fmtMsg(m.v.handNotes[k], namesOf(S)) })}
-              onBlur={() => setHover(null)}
-            >
-              <span>{cardTitle(id)}</span>
-            </button>
-          ))}
+        {/* Hovering or focusing a card reveals the full card above the raised hand. */}
+        <div className={cx(s.preview, hover && s.previewOn)}>
+          {hover && (
+            <>
+              <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
+              <div className={s.pTitle}>{cardTitle(hover.id)}</div>
+              {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
+              <div className={s.pText} ref={textRef}><SkillBody text={hc?.text ?? ""} /></div>
+              {hover.note && <div className={s.pNote}>{hover.note}</div>}
+            </>
+          )}
         </div>
-      </div>
-      {/* Hovering or focusing a title reveals the full card above the bottom dock. */}
-      <div className={cx(s.preview, hover && s.previewOn)}>
-        {hover && (
-          <>
-            <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
-            <div className={s.pTitle}>{cardTitle(hover.id)}</div>
-            {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-            <div className={s.pText} ref={textRef}><SkillBody text={hc?.text ?? ""} /></div>
-            {hover.note && <div className={s.pNote}>{hover.note}</div>}
-          </>
-        )}
       </div>
       {/* The draw pile, alphabetical -- never in the order it will be drawn. */}
       <div className={cx(s.peek, peek && s.peekOn)}>

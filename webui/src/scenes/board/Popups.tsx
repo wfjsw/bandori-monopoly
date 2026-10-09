@@ -11,7 +11,7 @@ import { useAutoplay, useMatchView } from "../../core/hooks";
 import type { MatchState } from "../../core/types";
 import type { GameSession } from "../../game/session";
 import { Btn } from "../../ui/Button";
-import { CardFace, showCard } from "../../ui/Card";
+import { InspectCard } from "../../ui/Card";
 import { Avatar } from "../../ui/Character";
 import { openModal } from "../../ui/Modal";
 import { SkillBody } from "../../ui/SkillBody";
@@ -257,7 +257,7 @@ export function showGraveyard(m: Model, playerId: number): void {
     <div className={s.pile}>
       <div className={s.pileRow}>
         <div className={s.who}><Avatar c={m.charOf(playerId)} size={30} /><span>{m.nameOf(playerId)}</span></div>
-        <div className={s.pileCards}>{cards.map((id, k) => <CardFace key={k} id={id} onClick={() => showCard(id)} />)}</div>
+        <div className={s.pileCards}>{cards.map((id, k) => <InspectCard key={k} id={id} />)}</div>
       </div>
     </div>
   ) : <div className={s.empty}>{tr("graveyard.empty")}</div>, { size: "wide" });
@@ -289,7 +289,7 @@ export function showField(m: Model): void {
                 </div>
               ) : (
                 <div key={fc.uid} className={s.fieldSlot}>
-                  <CardFace id={fc.card} onClick={() => showCard(fc.card, [], note)} />
+                  <InspectCard id={fc.card} note={note} />
                   {note && <small>{note}</small>}
                 </div>
               );
@@ -317,7 +317,7 @@ export function showDeck(m: Model): void {
     <div className={s.pile}>
       <div className={s.pileRow}>
         <div className={s.who}><Avatar c={m.charOf(m.playerId)} size={30} /><span>{m.nameOf(m.playerId)}</span></div>
-        <div className={s.pileCards}>{cards.map((id, k) => <CardFace key={k} id={id} onClick={() => showCard(id)} />)}</div>
+        <div className={s.pileCards}>{cards.map((id, k) => <InspectCard key={k} id={id} />)}</div>
       </div>
     </div>
   ) : <div className={s.empty}>{tr("board.drawPileEmpty")}</div>, { size: "wide" });

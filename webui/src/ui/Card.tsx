@@ -1,5 +1,8 @@
 // Card faces (art, color strip, title, tags) and the card detail popup
-// (CardDetailView).
+// (CardDetailView). Sizing is deterministic: the `width` prop sets `--card-w`,
+// which every size class reads as its default, so a caller override always wins
+// regardless of stylesheet order. `InspectCard` is the one hover-preview /
+// click-to-inspect behaviour every prompt and card collection shares.
 
 import type { CSSProperties, ReactNode } from "react";
 import { cardArt } from "../core/assets";
@@ -9,6 +12,7 @@ import type { CardData } from "../core/types";
 import { Btn } from "./Button";
 import s from "./Card.module.css";
 import { openModal } from "./Modal";
+import { previewFrom, previewHide } from "./CardPreview";
 import { SkillBody } from "./SkillBody";
 import { t as tr } from "../i18n/t";
 
@@ -40,21 +44,43 @@ export function KindChip({ kind, className }: { kind: CardKind; className?: stri
 
 export interface CardFaceProps {
   id: string;
-  size?: "hand" | "strip" | "mini" | "mid" | "pool" | "big";
+  size?: "hand" | "strip" | "mini" | "mid" | "pool" | "big" | "tile";
+  /**
+   * Force the face's width in px. Sets `--card-w`, which the size classes read
+   * as their default -- so the override always wins, whatever the stylesheet
+   * order. Use this instead of a className that sets `width`.
+   */
+  width?: number;
   on?: boolean;
   onClick?: () => void;
-  onMouseEnter?: () => void;
+  onMouseEnter?: (el: HTMLElement) => void;
   onMouseLeave?: () => void;
+  onFocus?: (el: HTMLElement) => void;
+  onBlur?: () => void;
   children?: ReactNode;
   className?: string;
   title?: string;
   style?: CSSProperties;
 }
 
-export function CardFace({ id, size = "mini", on, onClick, onMouseEnter, onMouseLeave, children, className, title, style }: CardFaceProps) {
+export function CardFace({ id, size = "mini", width, on, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, children, className, title, style }: CardFaceProps) {
   const c = D.card(id);
+  const faceStyle = width != null ? { ...style, ["--card-w" as string]: `${width}px` } : style;
+  const clickable = !!onClick;
   return (
-    <div className={cx(s.face, s[size], on && s.on, className)} style={style} onClick={onClick} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave} title={title}>
+    <div
+      className={cx(s.face, s[size], on && s.on, className)}
+      style={faceStyle}
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={onClick}
+      onKeyDown={clickable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } : undefined}
+      onMouseEnter={(e) => onMouseEnter?.(e.currentTarget)}
+      onMouseLeave={onMouseLeave}
+      onFocus={(e) => onFocus?.(e.currentTarget)}
+      onBlur={onBlur}
+      title={title}
+    >
       <div className={s.art}><img src={cardArt(id)} alt="" loading="lazy" draggable={false} /></div>
       <div className={s.line} style={{ background: cardColor(id) }} />
       <div className={s.title}>{cardTitle(id)}</div>
@@ -65,8 +91,8 @@ export function CardFace({ id, size = "mini", on, onClick, onMouseEnter, onMouse
 }
 
 /** An empty deck slot (pink with a star). */
-export function EmptySlot({ size = "strip", star }: { size?: CardFaceProps["size"]; star: string }) {
-  return <div className={cx(s.face, s[size], s.empty)}><img src={star} alt="" /></div>;
+export function EmptySlot({ size = "strip", star, width }: { size?: CardFaceProps["size"]; star: string; width?: number }) {
+  return <div className={cx(s.face, s[size], s.empty)} style={width != null ? { ["--card-w" as string]: `${width}px` } : undefined}><img src={star} alt="" /></div>;
 }
 
 export interface CardAction {
@@ -105,4 +131,44 @@ function CardDetail({ id, actions, note, close }: { id: string; actions: CardAct
 /** CardDetailView: big art, kind + tags, effect text, optional action buttons. */
 export function showCard(id: string, actions: CardAction[] = [], note = ""): () => void {
   return openModal(cardTitle(id), (close) => <CardDetail id={id} actions={actions} note={note} close={close} />, { size: "wide", key: "card" });
+}
+
+export interface InspectCardProps extends CardFaceProps {
+  /** Detail-sheet actions beyond a bare inspect (play / discard, pick this). */
+  actions?: CardAction[];
+  /** Note for the hover preview and the detail sheet (live state, hand notes). */
+  note?: string;
+  /** Hover also reports the card id (a select grid's own detail panel). */
+  onHover?: (id: string | null) => void;
+  /** Skip the floating hover preview (the screen shows its own detail panel). */
+  preview?: boolean;
+}
+
+/**
+ * The shared card interaction: hover / focus floats the preview, click opens
+ * the detail sheet. Every card shown in a prompt or a card-collection popup
+ * goes through this one component -- no per-call-site wiring.
+ */
+export function InspectCard({ id, actions, note, onHover, preview = true, onClick, onMouseEnter, onMouseLeave, onFocus, onBlur, ...face }: InspectCardProps) {
+  const enter = (el: HTMLElement) => {
+    if (preview) previewFrom(el, id, note);
+    onHover?.(id);
+    onMouseEnter?.(el);
+  };
+  const leave = (after?: () => void) => {
+    if (preview) previewHide();
+    onHover?.(null);
+    after?.();
+  };
+  return (
+    <CardFace
+      id={id}
+      onClick={onClick ?? (() => void showCard(id, actions, note))}
+      onMouseEnter={enter}
+      onFocus={enter}
+      onMouseLeave={() => leave(onMouseLeave)}
+      onBlur={() => leave(onBlur)}
+      {...face}
+    />
+  );
 }

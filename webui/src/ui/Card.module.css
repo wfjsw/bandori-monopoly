@@ -6,19 +6,31 @@
 .tags { display: flex; gap: 3px; flex-wrap: wrap; padding: 0 2px 2px; }
 .on { box-shadow: 0 0 0 4px var(--pink); }
 
-.mini { width: 120px; }
-.mid { width: 150px; }
-.big { width: 240px; }
+/* Sizing is one rule per size class, always `width: var(--card-w, <default>)`.
+   A caller sets `--card-w` (CardFace's `width` prop, or a class) and the face
+   follows it: the size class is the only `width` declaration, so nothing can
+   fight it -- unlike the old scheme, where a size class and a caller class both
+   set `width` and stylesheet order picked the winner. */
+.mini { width: var(--card-w, 120px); }
+.mid { width: var(--card-w, 150px); }
+.big { width: var(--card-w, 240px); }
 .big .title { font-size: 18px; }
-.hand { width: 54px; padding: 2px; transition: transform 0.12s; }
+.hand { width: var(--card-w, 54px); padding: 2px; transition: transform 0.12s; }
 .hand:hover { transform: translateY(-6px); }
 .hand .art { aspect-ratio: 1; }
 .hand .title { font-size: 9px; line-height: 1.15; padding: 2px 1px 0; height: 24px; overflow: hidden; }
 .hand .tags { display: none; }
-.strip { padding: 3px; height: 118px; }
+/* The prompt card: the one size every prompt card row / grid uses (option
+   tiles, the hand panel, multi-select grids) so a prompt's cards are always
+   uniform. */
+.tile { width: var(--card-w, 96px); padding: 3px; }
+.tile .art { aspect-ratio: 1; }
+.tile .title { font-size: 12px; line-height: 1.25; padding: 2px 1px 0; height: 32px; overflow: hidden; }
+.tile .tags { display: none; }
+.strip { width: var(--card-w, auto); padding: 3px; height: 118px; }
 .strip .title { font-size: 11px; padding: 2px 1px; }
 .strip .tags { display: none; }
-.pool { width: 164px; border: 3px solid transparent; }
+.pool { width: var(--card-w, 164px); border: 3px solid transparent; }
 .pool .title { min-height: 44px; font-size: 14px; }
 .pool.on { border-color: var(--pink); box-shadow: 0 3px 10px rgba(237, 78, 118, 0.2); }
 .empty { align-items: center; justify-content: center; background: linear-gradient(#f9b7c9, #f39bb3); cursor: default; }

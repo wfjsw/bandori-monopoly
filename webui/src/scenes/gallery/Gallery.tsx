@@ -14,7 +14,7 @@ import { useProfile } from "../../core/hooks";
 import { markSeen, patchProfile } from "../../core/store";
 import type { CharacterData } from "../../core/types";
 import { Btn } from "../../ui/Button";
-import { CardFace, showCard } from "../../ui/Card";
+import { InspectCard } from "../../ui/Card";
 import { BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
 import { Chips } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -69,7 +69,7 @@ function Detail({ list, start }: { list: CharacterData[]; start: number }) {
         <div className={s.skill}><span className={s.skillTag}>{tr("select.skillChar")}</span><SkillTextToggle className={s.skillSwitch} /><b>{c.skill || tr("select.skillTbd")}</b><SkillBody text={skillText(c)} /></div>
         <div className={cx(s.skill, s.bandSkill)}><span className={s.skillTag}>{tr("select.skillBand")}</span><b>{band?.skill || tr("select.bandSkillTbd")}</b><SkillBody text={skillText(band)} /></div>
         <div className={s.sub}>{tr("gallery.exclusives")}</div>
-        {exclusive.length ? <div className={s.cards}>{exclusive.map((x) => <CardFace key={x.id} id={x.id} onClick={() => showCard(x.id)} />)}</div> : <p className={s.muted}>{tr("gallery.noExclusives")}</p>}
+        {exclusive.length ? <div className={s.cards}>{exclusive.map((x) => <InspectCard key={x.id} id={x.id} />)}</div> : <p className={s.muted}>{tr("gallery.noExclusives")}</p>}
         {lines.length > 0 && <div className={s.sub}>{tr("gallery.voice")}</div>}
         {lines.length > 0 && (
           <div className={s.lines}>

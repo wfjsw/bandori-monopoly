@@ -21,11 +21,42 @@
 .voteActions { display: flex; gap: 8px; }
 .voteActions > button { flex: 1; }
 
-/* The hand sits beneath the 6:5 board, at the bottom of the centre column
-   (the PR's composition). Only title tabs are visible at rest; the full card
-   appears above them on hover or keyboard focus. */
-.hand { position: relative; flex: none; width: 100%; }
-.handHead { display: flex; align-items: center; gap: 8px; padding: 0 6px; }
+/* The hand docks at the bottom of the centre column like Master Duel's: a
+   fanned row of full card faces retracted behind the bottom edge (only the top
+   strip peeks), raising on hover / keyboard focus. The container itself never
+   takes pointer events -- only the visible card tops and the bar do -- so map
+   clicks near the bottom pass through the gaps and the hidden part of the fan. */
+.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column; align-items: stretch; pointer-events: none; }
+/* The fan: overlapping cards, anchored to the bottom. Retracted by default
+   (`translateY` drops all but the top 30px behind the bar); the raised state
+   slides the whole row up. The fan itself is click-through -- only the cards'
+   own boxes capture -- so the map stays clickable between and below them. */
+.fan {
+  display: flex; justify-content: center; align-items: flex-end;
+  pointer-events: none;
+  transform: translateY(calc(100% - 30px));
+  transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
+}
+.dockUp .fan { transform: translateY(0); }
+.fanCard {
+  position: relative; flex: none; margin: 0 -12px; pointer-events: auto;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+.fanCard:first-child { margin-left: 0; }
+.fanCard:last-child { margin-right: 0; }
+.fanCard:hover, .fanCard:focus-within {
+  transform: translateY(-12px);
+  z-index: 2;
+  filter: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
+}
+
+/* The slim bar under the fan: always visible, so the hand count, hint, draw
+   pile and 托管 stay reachable while the hand is retracted. */
+.bar {
+  position: relative; z-index: 2; pointer-events: auto;
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+  background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.92) 42%);
+}
 /* No stacking context on the hand: the auto switch must stay above modals. */
 .handTools { position: relative; flex: none; display: flex; align-items: center; min-height: 30px; }
 .handTools.withAuto { padding-right: 206px; }
@@ -36,7 +67,7 @@
 .speed.speedOn { background: var(--pink); color: #fff; }
 .speed:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
 .thinkingSlot { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 41; pointer-events: none; white-space: nowrap; }
-.handHead > span:first-child { height: 28px; font-size: 15px; }
+.bar > span:first-child { height: 28px; font-size: 15px; }
 /* Shares the row with the draw pile, so the longer hints (over the hand limit)
    wrap to a second line inside the tab's 28px instead of pushing it out. */
 .handHint { flex: 1; min-width: 0; font-size: 12px; line-height: 1.15; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
@@ -46,13 +77,8 @@
 .deck:hover img { transform: translateY(-2px); }
 .deck b { font-size: 16px; }
 .warn { color: var(--tag-red); font-weight: 700; }
-.cards { display: flex; justify-content: center; gap: 8px; margin-top: 8px; min-height: 44px; }
-.handCard { position: relative; flex: 1; min-width: 0; max-width: 168px; height: 44px; padding: 4px 9px; border-top: 4px solid var(--band); border-radius: 7px; background: #fff; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.16); text-align: center; transition: transform 0.12s, box-shadow 0.12s; }
-.handCard span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 16px; font-weight: 700; }
-.handCard:hover, .handCard:focus-visible { transform: translateY(-6px); box-shadow: 0 0 0 2px var(--band), 0 6px 16px rgba(80, 40, 60, 0.2); }
-.handCard:focus-visible { outline: 2px solid var(--pink); outline-offset: 3px; }
 
-.preview { position: absolute; right: 0; bottom: 116px; width: 260px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
+.preview { position: absolute; right: 6px; bottom: calc(100% + 8px); width: 260px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 32; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
 .previewOn { opacity: 1; transform: none; }
 .pArt { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
 .pArt img { width: 100%; display: block; }
@@ -62,7 +88,7 @@
 .pNote { font-size: 12px; color: var(--note); margin-top: 4px; }
 
 /* Draw-pile peek grows upward above the hand dock. */
-.peek { position: absolute; right: 0; bottom: 116px; width: 260px; max-height: 740px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
+.peek { position: absolute; right: 0; bottom: 56px; width: 260px; max-height: 740px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 31; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
 .peekOn { opacity: 1; transform: none; }
 .peekHead { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; margin: 2px 4px 6px; }
 .peekHead b { color: var(--pink); }

@@ -13,8 +13,8 @@ import { useAutoplay, useMatchView, useTick } from "../../core/hooks";
 import type { Command, MatchPrompt } from "../../core/types";
 import type { Names } from "../../i18n/msg";
 import type { GameSession } from "../../game/session";
-import { CardFace, showCard, TagChip } from "../../ui/Card";
-import { CardPreview } from "../../ui/CardPreview";
+import { InspectCard, showCard, TagChip } from "../../ui/Card";
+import { previewFrom, previewHide } from "../../ui/CardPreview";
 import { bandColor } from "../../ui/Character";
 import { SkillBody } from "../../ui/SkillBody";
 import { TextInput } from "../../ui/Form";
@@ -60,12 +60,6 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
   }, [live, close]);
   // The deadline is measured against the time the prompt was first shown.
   const total = useRef(0);
-  // A prompt that names a card shows the card: options become card tiles, and
-  // anything the title/body names lands in the related-card panel. Hovering a
-  // tile floats the shared preview (the hand's / the field cards'). Declared
-  // before the early return: React hooks must run in the same order every
-  // render, and going quiet (`!live`) must not drop one.
-  const [hover, setHover] = useState<string | null>(null);
   if (!live || !view || !p) return null;
   const answer = (extra: Partial<Command>) => (auto ? Promise.resolve(false) : act(sess, { act: "answer", prompt: p.id, ...extra }));
   const left = Math.max(0, Math.ceil(p.timeLeft - (performance.now() - at) / 1000));
@@ -73,40 +67,58 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
 
   const bodyCards = uniqCards([...(p.card ? [p.card] : []), ...msgCards(p.title), ...msgCards(p.text)]);
 
+  // One layout rule for every prompt that shows cards: a panel that is just a
+  // row of card faces (the hand), or more than one related-card detail, stacks
+  // ABOVE the question and lays its cards out across the width -- a 220px side
+  // column forced pairs to stack into a tall thin strip of wasted space. A
+  // single related-card detail keeps the side column (it reads as a caption).
+  const showsHand = /hand|mulligan/.test(p.title.k) && !p.options.some((o) => msgCards(o).length);
+  const relatedCards = showsHand ? [] : bodyCards;
+  const stacked = showsHand || relatedCards.length > 1;
+
   let side = null;
-  if (/hand|mulligan/.test(p.title.k) && !p.options.some((o) => msgCards(o).length)) {
+  if (showsHand) {
     side = (
-      <div className={s.side}>
+      <div className={cx(s.side, s.sideTop)}>
         <div className={s.sideTitle}>{tr("prompt.hand")}</div>
-        <div className={s.sideCards}>{view.hand.map((h, k) => <CardFace key={k} id={h} size="mid" className={s.handCard} onClick={() => showCard(h)} />)}</div>
+        <div className={s.cardStrip}>{view.hand.map((h, k) => <InspectCard key={k} id={h} size="tile" />)}</div>
         <div className={s.sideHint}>{tr("prompt.handHint")}</div>
       </div>
     );
-  } else if (bodyCards.length) {
+  } else if (relatedCards.length) {
     side = (
-      <div className={s.side}>
+      <div className={cx(s.side, stacked && s.sideTop)}>
         <div className={s.sideTitle}>{tr("prompt.related")}</div>
-        {bodyCards.map((cid) => {
-          const c = D.card(cid);
-          return (
-            <div key={cid} className={s.sideCardWrap} onMouseEnter={() => setHover(cid)} onMouseLeave={() => setHover(null)}>
-              <div className={s.dArt} style={{ borderColor: cardColor(cid) }}>
-                <img src={cardArt(cid)} alt="" />
+        <div className={stacked ? s.relatedRow : undefined}>
+          {relatedCards.map((cid) => {
+            const c = D.card(cid);
+            return (
+              <div
+                key={cid}
+                className={s.sideCardWrap}
+                onMouseEnter={(e) => previewFrom(e.currentTarget, cid)}
+                onMouseLeave={previewHide}
+                onFocus={(e) => previewFrom(e.currentTarget, cid)}
+                onBlur={previewHide}
+                tabIndex={0}
+              >
+                <div className={s.dArt} style={{ borderColor: cardColor(cid) }}>
+                  <img src={cardArt(cid)} alt="" />
+                </div>
+                <div className={s.dTitle}>{cardTitle(cid)}</div>
+                {!!c?.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
+                <div className={s.dText}><SkillBody text={cardText(cid)} /></div>
+                <button type="button" className={s.dMore} onClick={() => showCard(cid)}>{tr("prompt.cardDetail")}</button>
               </div>
-              <div className={s.dTitle}>{cardTitle(cid)}</div>
-              {!!c?.tags.length && <div className={s.dTags}>{c.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-              <div className={s.dText}><SkillBody text={cardText(cid)} /></div>
-              <button type="button" className={s.dMore} onClick={() => showCard(cid)}>{tr("prompt.cardDetail")}</button>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className={cx(s.prompt, side && s.withSide)}>
-      <CardPreview id={hover} />
+    <div className={cx(s.prompt, side && s.withSide, stacked && s.stacked)}>
       {side}
       <div className={s.main}>
         {!returnsGroup && <div className={s.text}>{fmtMsg(p.text, namesOf(view.state))}</div>}
@@ -126,7 +138,7 @@ function Prompt({ sess, id, close }: { sess: GameSession; id: number; close: () 
           {p.kind === "pick" && <PickOptions p={p} answer={answer} auto={auto} />}
           {p.kind === "auction" && <Auction p={p} playerId={view.playerId} bidderName={p.bidder >= 0 ? namesOf(view.state).playerId(p.bidder) : ""} answer={answer} auto={auto} />}
           {p.kind !== "tile" && p.kind !== "mortgage" && p.kind !== "pick" && p.kind !== "auction" && !returnsGroup && (
-            <Options p={p} answer={answer} auto={auto} names={namesOf(view.state)} onHover={setHover} />
+            <Options p={p} answer={answer} auto={auto} names={namesOf(view.state)} />
           )}
         </div>
       </div>
@@ -164,7 +176,7 @@ function OptionPill({ o, names, disabled, onAnswer }: {
  * Single-select only -- the multi-select grids (Returns' eight-pick) keep
  * their checkbox grid and confirm.
  */
-function Options({ p, answer, auto, names, onHover }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names; onHover: (id: string | null) => void }) {
+function Options({ p, answer, auto, names }: { p: MatchPrompt; answer: Answer; auto: boolean; names: Names }) {
   const carded = p.options.flatMap((o, i) => {
     const id = msgCards(o)[0];
     return id ? [{ o, i, id }] : [];
@@ -182,24 +194,17 @@ function Options({ p, answer, auto, names, onHover }: { p: MatchPrompt; answer: 
               // caption falls back to a plain 「选择」.
               const caption = label === cardTitle(id) ? tr("prompt.choose") : label;
               return (
-                <div
-                  key={i}
-                  className={s.cardOpt}
-                  onMouseEnter={() => onHover(id)}
-                  onMouseLeave={() => onHover(null)}
-                  onFocus={() => onHover(id)}
-                  onBlur={() => onHover(null)}
-                >
-                  <CardFace
+                <div key={i} className={s.cardOpt}>
+                  <InspectCard
                     id={id}
-                    size="hand"
+                    size="tile"
                     className={s.cardOptFace}
-                    onClick={() => showCard(id, [{
+                    actions={[{
                       label: tr("prompt.pickThis", { card: cardTitle(id) }),
                       enabled: !auto,
                       kind: "pink",
                       run: () => answer({ value: i }),
-                    }])}
+                    }]}
                   />
                   <button type="button" className={s.cardOptCap} disabled={auto} onClick={() => void answer({ value: i })}>
                     {caption}
@@ -331,7 +336,8 @@ export function isCardChoice(p: MatchPrompt): boolean {
 }
 
 /** Cards laid out like the hand, but larger, with a detail panel: hovering
- *  previews a card, clicking selects it and keeps it in the panel. */
+ *  previews a card, clicking selects it and keeps it in the panel. The detail
+ *  panel is the hover preview here, so the floating one is off. */
 function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled = false }: { ids: string[]; picked: number[]; onPick: (k: number) => void; onConfirm?: (k: number) => void; multiple?: boolean; disabled?: boolean }) {
   const [hover, setHover] = useState<number | null>(null);
   const focus = hover ?? picked[picked.length - 1] ?? null;
@@ -341,18 +347,18 @@ function CardGrid({ ids, picked, onPick, onConfirm, multiple = false, disabled =
     <div className={s.cardChoice}>
       <div className={s.cardGrid}>
         {ids.map((cid, k) => (
-          <CardFace
+          <InspectCard
             key={`${cid}:${k}`}
             id={cid}
-            size="hand"
+            size="tile"
             className={s.choiceCard}
             on={picked.includes(k)}
+            preview={false}
             onClick={() => onPick(k)}
-            onMouseEnter={() => setHover(k)}
-            onMouseLeave={() => setHover(null)}
+            onHover={(h) => setHover(h === null ? null : k)}
           >
             {multiple && <input type="checkbox" className={s.choiceCheck} aria-label={cardTitle(cid)} checked={picked.includes(k)} disabled={disabled} onChange={() => onPick(k)} onClick={(e) => e.stopPropagation()} onFocus={() => setHover(k)} onBlur={() => setHover(null)} />}
-          </CardFace>
+          </InspectCard>
         ))}
       </div>
       <div className={s.detail} onDoubleClick={() => focus !== null && onConfirm?.(focus)}>

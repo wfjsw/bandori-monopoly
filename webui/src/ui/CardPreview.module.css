@@ -27,3 +27,10 @@
 .tags { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 2px 4px; }
 .text { font-size: 13px; line-height: 1.6; max-height: 240px; overflow: hidden; white-space: pre-wrap; }
 .note { margin-top: 4px; font-size: 12px; color: var(--sub); }
+
+/* Tag chips (local copy of Card's, so this module never imports Card). */
+.tagChip { display: inline-block; font-size: 12px; line-height: 18px; padding: 0 7px; border-radius: 9px; background: var(--blue); color: #fff; font-weight: 700; }
+.tagRed { background: var(--tag-red); }
+
+/* The shared host: pinned beside the hovered card inside the stage. */
+.hosted { z-index: 60; }

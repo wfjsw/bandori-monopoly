@@ -15,7 +15,7 @@ import { useProfile } from "../../core/hooks";
 import { markSeen, profileJson, updateProfile } from "../../core/store";
 import type { CardData, CharacterData } from "../../core/types";
 import { Btn } from "../../ui/Button";
-import { CARD_KIND_LABEL, CardFace, cardKind, EmptySlot, KindChip, showCard, type CardAction, type CardKind } from "../../ui/Card";
+import { CARD_KIND_LABEL, cardKind, EmptySlot, InspectCard, KindChip, showCard, type CardAction, type CardKind } from "../../ui/Card";
 import { BandMark, CharCard, inTab, NamePlate, tabLabels } from "../../ui/Character";
 import { Chips, PanelTab } from "../../ui/Chips";
 import { Form, FormRow, TextInput } from "../../ui/Form";
@@ -257,7 +257,7 @@ export function Deck() {
         </div>
         <div className={s.stripCards}>
           {Array.from({ length: SIZE }, (_, k) => (cards[k]
-            ? <CardFace key={k} id={cards[k]} size="strip" onClick={() => detail(cards[k])} />
+            ? <InspectCard key={k} id={cards[k]} size="strip" onClick={() => detail(cards[k])} />
             : <EmptySlot key={k} star={sceneImg("star5")} />))}
         </div>
         <div className={s.hint}>
@@ -275,14 +275,14 @@ export function Deck() {
           {pool.filter((c) => matches(c, filter)).map((c) => {
             const on = cards.includes(c.id);
             return (
-              <CardFace key={c.id} id={c.id} size="pool" on={on} onClick={() => detail(c.id)} title={cardTitle(c.id)}>
+              <InspectCard key={c.id} id={c.id} size="pool" on={on} onClick={() => detail(c.id)} title={cardTitle(c.id)}>
                 <KindChip kind={cardKind(c)} className={s.kind} />
                 {!c.derived && (
                   <button type="button" className={cx(s.toggle, on && s.toggleOn)} onClick={(e) => { e.stopPropagation(); toggle(c.id); }}>
                     <Icon name={on ? "check" : "add"} />
                   </button>
                 )}
-              </CardFace>
+              </InspectCard>
             );
           })}
         </div>
@@ -341,7 +341,7 @@ function showBandCards(c: CharacterData): void {
       <div className={s.row}><BandMark band={c.band} /><b>{band?.skill ?? ""}</b></div>
       <SkillBody text={skillText(band) || tr("select.bandSkillTbd")} />
       <div className={s.bandGrid}>
-        {D.cards.filter((x) => x.band === c.band && !x.owner && !x.derived).map((x) => <CardFace key={x.id} id={x.id} onClick={() => showCard(x.id)} />)}
+        {D.cards.filter((x) => x.band === c.band && !x.owner && !x.derived).map((x) => <InspectCard key={x.id} id={x.id} />)}
       </div>
     </div>
   ), { size: "wide" });

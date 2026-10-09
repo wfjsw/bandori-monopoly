@@ -8,8 +8,12 @@
    12 x 10 grid stretches to that rectangle (Ring.module.css). */
 .body { position: absolute; inset: 0 38px; display: flex; justify-content: space-between; gap: 9px; }
 .left { position: relative; flex: 0 0 350px; }
-.middle { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding-bottom: 22px; }
-.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; justify-content: stretch; }
+/* The hand docks over the bottom edge (Master Duel), so the map takes the
+   middle column's whole height -- no reserved strip beneath it. */
+.middle { position: relative; flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+/* The board keeps a width:height of 1..1.6 (viewport.ts `boardRect`) and is
+   centred in the slot when the slot is taller or wider than that. */
+.mapSlot { position: relative; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
 .right { position: relative; flex: 0 0 300px; }
 .logSlot { position: absolute; left: 0; right: 0; top: 22px; bottom: 22px; display: flex; flex-direction: column; gap: 10px; }
 
