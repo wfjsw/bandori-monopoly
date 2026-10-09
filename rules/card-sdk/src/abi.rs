@@ -1044,6 +1044,8 @@ pub enum TriggerKind {
     /// (`SETTLE-STAGES.md` §7 「移动前」). The roll-specific `rollPlan` /
     /// `moveRoll` and the teleport-specific `teleport` stay inside a main move's
     /// own head; this is the generic move point.
+    /// For a walk, `value` is the resolved base distance and `move_total` /
+    /// `move_remaining` include existing extra steps, before any are walked.
     MoveBefore = 90,
     /// **After a completed move** -- 「移动后」/「主要移动结束时」 and the
     /// 「[移动终点]」 condition anchor. Fires after `passPlayer`, before

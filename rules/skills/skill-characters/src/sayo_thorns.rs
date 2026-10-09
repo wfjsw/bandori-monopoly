@@ -11,27 +11,41 @@
 //! passed, which is `passPlayer`, not `pass`.
 //!
 //! （2） 「非[传送]的主要移动」 is the walk, not a teleport, and 「添加1或2格」
-//! rides on the plan's extra steps -- a bonus on top of the face.
+//! is offered once per turn after the final roll/counteractions, before the
+//! first step (the confirmed timing; the skill sheet text remains unchanged).
 //!
 //! （3） is a standing modifier to （1） that lights up once anyone is out.
 
-use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, plan, state};
+use card_sdk::abi::{state_key, HookKind, MoveKind};
+use card_sdk::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
+
+const USED: &str = "skill.sayoThorns.used";
 
 pub const SAYO_THORNS: CardDef = CardDef::new(
     "skill:冰川纱夜:踏上荆棘之路的觉悟",
     &[
-        On::Play("", Some(can_use), use_skill),
-        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
+        On::Play("", Some(cant_press), offer),
+        On::Hook(
+            &[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+            "",
+            None,
+            declare_cap,
+        ),
         On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
         On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
+        On::Hook(
+            &[HookKind::MoveBefore],
+            card_sdk::pre::MINE,
+            Some(can_offer),
+            offer,
+        ),
     ],
 )
-    .legacy(&[(2, legacy_mine)]);
+.legacy(&[(2, legacy_mine)]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -40,7 +54,15 @@ fn legacy_mine(player_id: i32) -> bool {
 /// 「初始10，上限10」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id, 10, 10);
+    // One handler per hook: reset alongside the existing turn-start cap
+    // declaration, including an extra turn by the same player.
+    state::set(player_id, USED, 0);
     Ok(())
+}
+
+/// The manual skill button must not arm this before seeing the roll.
+fn cant_press(_player_id: i32) -> Option<Msg> {
+    Some(Msg::new(key!("sayo_thorns_timing")))
 }
 
 /// （3）「第一个玩家被淘汰，经过Circle时获得的火罐加1」.
@@ -80,36 +102,43 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2） 「你可以消耗6个[火罐]」.
-fn can_use(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
-        return Some(Msg::new(key!("skill_blocked")));
-    }
-    if state::get(player_id, state_key::FIRE) < 6 {
-        return Some(Msg::new(key!("sayo_thorns_no_fire")));
-    }
-    None
+/// Once per turn, and only after a non-teleport main move is determined.
+fn can_offer(player_id: i32) -> bool {
+    trigger::move_is_main()
+        && trigger::move_kind() == Some(MoveKind::Walk)
+        && !ctx::skill_blocked(player_id, "")
+        && state::get(player_id, USED) == 0
+        && state::get(player_id, state_key::FIRE) >= 6
 }
 
 /// （2）「将非[传送]的主要移动添加1或2格」.
-fn use_skill(player_id: i32) -> card_sdk::Asked {
-    // 「非[传送]的主要移动」 -- extra steps on a teleport plan are inert (a
-    // teleport has no route to extend), so the clause is satisfied by the
-    // bonus simply not applying there rather than by a separate gate.
+fn offer(player_id: i32) -> card_sdk::Asked {
+    let steps = trigger::move_total();
+    let from = trigger::tile();
+    let landing = |n: i32| (from + n * trigger::move_dir()).rem_euclid(ctx::tile_count());
     let add = ctx::ask_pick(
         player_id,
         &Msg::new(key!("sayo_thorns_title")),
-        &Msg::new(key!("sayo_thorns_ask")),
+        &Msg::new(key!("sayo_thorns_ask"))
+            .i("n", steps as i64)
+            .tile("tile", landing(steps)),
         &[
-            Msg::new(key!("sayo_thorns_add1")),
-            Msg::new(key!("sayo_thorns_add2")),
+            Msg::new(key!("sayo_thorns_skip")),
+            Msg::new(key!("sayo_thorns_add1")).tile("tile", landing(steps + 1)),
+            Msg::new(key!("sayo_thorns_add2")).tile("tile", landing(steps + 2)),
         ],
     )?;
-    let n = if add == 1 { 2 } else { 1 };
+    if add == 0 {
+        return Ok(());
+    }
+    let n = add as i32;
     if !ctx::spend_fire(player_id, 6, &Msg::new(key!("sayo_thorns_spend")))? {
         return Ok(());
     }
-    plan::add_extra_dice(n, 0, "踏上荆棘之路的觉悟");
+    state::set(player_id, USED, 1);
+    // The dice are already final. Extend the base distance and retain any
+    // extra steps on this move; adding dice now would affect a later roll.
+    plan::set_steps(trigger::value().max(0) + n);
     ctx::log(
         player_id,
         &Msg::new(key!("sayo_thorns_added")).i("n", n as i64),
