@@ -37,8 +37,15 @@ pub const POPPIN: CardDef = CardDef::new(
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
         On::Hook(&[HookKind::SettleBefore], "", Some(before_settle_applies), before_settle),
-        On::Play("", Some(can_crystal), to_crystal),
-        On::Play("", Some(can_cash), cash),
+        // One Play entry for both press effects (the engine dispatches only
+        // the first). 规则书（1） chains two independent 「随后可使用…」 actions
+        // (2 stickers -> 1 crystal, then 2 crystals -> draw 1 or +2000) rather
+        // than one press with two modes, so each press activates one of them
+        // and the player presses again for the other. The gate admits whenever
+        // either is available; the body lists the available options and skips
+        // the prompt when only one is. The 「或」 inside the crystal half is its
+        // own sub-choice (draw 1 vs +2000).
+        On::Play("", Some(cant_play), press),
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
@@ -185,17 +192,72 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]」.
-fn can_crystal(player_id: i32) -> Option<Msg> {
+/// Which press effects are available right now, in rulebook order: the
+/// sticker->crystal exchange and the crystal->draw/cash spend.
+fn available(player_id: i32) -> [bool; 2] {
+    if card_sdk::ctx::skill_blocked(player_id, "") {
+        return [false, false];
+    }
+    [
+        ctx::tok(player_id, STICKER) >= 2,
+        state::get(player_id, USED) == 0 && ctx::crystals() >= 2,
+    ]
+}
+
+/// Combined gate: admit whenever either press effect is available.
+fn cant_play(player_id: i32) -> Option<Msg> {
     if card_sdk::ctx::skill_blocked(player_id, "") {
         return Some(Msg::new(key!("skill_blocked")));
     }
-    if ctx::tok(player_id, STICKER) < 2 {
+    let avail = available(player_id);
+    if avail[0] || avail[1] {
+        return None;
+    }
+    // Neither: name the closest reason.
+    if ctx::tok(player_id, STICKER) < 2 && ctx::crystals() < 2 {
         return Some(Msg::new(key!("poppin_no_sticker")));
     }
-    None
+    if state::get(player_id, USED) != 0 {
+        return Some(Msg::new(key!("poppin_once")));
+    }
+    Some(Msg::new(key!("poppin_no_crystal")))
 }
 
+/// One press = one effect. 规则书（1） chains 「随后可使用…随后可使用…」 -- two
+/// independent optional actions, not one press with two modes -- so when both
+/// are available the player picks which this press activates; a single
+/// available option is taken without prompting. The player can press again
+/// for the other.
+fn press(player_id: i32) -> card_sdk::Asked {
+    let avail = available(player_id);
+    let crystal = avail[0];
+    let cash_ok = avail[1];
+    if !crystal && !cash_ok {
+        return Ok(());
+    }
+    if crystal && !cash_ok {
+        return to_crystal(player_id);
+    }
+    if cash_ok && !crystal {
+        return cash(player_id);
+    }
+    let k = ctx::ask_pick(
+        player_id,
+        &Msg::new(key!("poppin_title")),
+        &Msg::new(key!("poppin_press_which")),
+        &[
+            Msg::new(key!("poppin_press_crystal")),
+            Msg::new(key!("poppin_press_cash")),
+        ],
+    )?;
+    if k == 0 {
+        to_crystal(player_id)
+    } else {
+        cash(player_id)
+    }
+}
+
+/// （1）「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]」.
 fn to_crystal(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
     if ctx::tok(player_id, STICKER) < 2 {
@@ -208,19 +270,6 @@ fn to_crystal(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「随后可使用此卡的2个[奇迹水晶]抽1张卡或[获得]2000资金（…为1回合1次）」.
-fn can_cash(player_id: i32) -> Option<Msg> {
-    if card_sdk::ctx::skill_blocked(player_id, "") {
-        return Some(Msg::new(key!("skill_blocked")));
-    }
-    if state::get(player_id, USED) != 0 {
-        return Some(Msg::new(key!("poppin_once")));
-    }
-    if ctx::crystals() < 2 {
-        return Some(Msg::new(key!("poppin_no_crystal")));
-    }
-    None
-}
-
 fn cash(player_id: i32) -> card_sdk::Asked {
     crate::spend_copy_sticker(player_id)?;
     if state::get(player_id, USED) != 0 {

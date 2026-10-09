@@ -41,6 +41,9 @@ fn ppp_band_table() -> Table {
         w.st.players[0]
             .field
             .retain(|f| f.card != "PPP:Returns" && !f.card.contains("Afterglow"));
+        // Returns is gone, so its 「使用因此卡获得的团卡的主动效果时需要支付
+        // 1个星星贴纸」 tax must not linger (`spend_copy_sticker`).
+        w.st.players[0].tokens.retain(|c| c.name != "returns.copied");
     }
     if !t.on_field(0, "skill:Poppin' Party:星之鼓动") {
         t.place_raw(0, "skill:Poppin' Party:星之鼓动");
@@ -933,27 +936,59 @@ fn ix_band_sticker_to_crystal_to_cash() {
     t.roll(0).unwrap();
     skip_all(&mut t);
     assert!(t.token(0, STICKER) >= 2, "stickers {}", t.token(0, STICKER));
-    // Convert and cash out via the skill press (if the engine surfaces it).
-    let sid = t.skill_id(0, "星之鼓动");
-    let r = t.skill(0, &sid);
-    eprintln!("band skill press: {r:?}");
-    if t.prompt().is_some() {
-        eprintln!("prompt: {}", t.dump_prompt());
-        t.answer(0, 0).ok();
-    }
+    // Presses are a 运营-phase action: start a fresh turn.
+    t.begin_turn(0);
     skip_all(&mut t);
+    // Only the sticker->crystal half is available (no crystals yet), so the
+    // press takes it without prompting.
+    let sid = t.skill_id(0, "星之鼓动");
+    t.skill(0, &sid).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.token(0, STICKER), 0, "2 stickers spent");
     let band_x = t
         .field(0)
         .iter()
         .find(|f| f.band_skill)
         .map(|f| f.crystals)
         .unwrap_or(0);
-    eprintln!(
-        "stickers={} crystals={} money={}",
-        t.token(0, STICKER),
-        band_x,
-        t.money(0)
-    );
+    assert_eq!(band_x, 1, "1 crystal added");
+}
+
+#[test]
+fn band_press_offers_both_exchange_and_cash() {
+    // 规则书（1）: 「随后可使用2个星星贴纸为此卡添加1个[奇迹水晶]，随后可使用此卡的
+    // 2个[奇迹水晶]抽1张卡或[获得]2000资金」 -- two independent 「随后可使用」
+    // actions. With both resources the press asks which one this activation
+    // takes; the other stays reachable on the next press.
+    let mut t = ppp_band_table();
+    skip_all(&mut t);
+    {
+        let w = t.m.world_mut();
+        w.st.players[0].tokens.push(game_core::state::Counter {
+            name: STICKER.into(),
+            value: 2,
+        });
+    }
+    let sid = t.skill_id(0, "星之鼓动");
+    t.set_crystals(0, &sid, 2);
+    t.skill(0, &sid).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "choice", "{}", t.dump_prompt());
+    assert!(t.option("poppin_press_crystal").is_some(), "{}", t.dump_prompt());
+    assert!(t.option("poppin_press_cash").is_some(), "{}", t.dump_prompt());
+    // Take the crystal spend this press (draw 1).
+    let k = t.option("poppin_press_cash").unwrap();
+    t.answer(0, k).unwrap();
+    // 「抽1张卡或[获得]2000资金」 -- the sub-choice.
+    let k = t.option("ask.yes").expect("draw-or-cash sub-choice");
+    t.answer(0, k).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.crystals(0, &sid), Some(0), "2 crystals spent");
+    // The sticker exchange is still available on the next press.
+    t.skill(0, &sid).unwrap();
+    skip_all(&mut t);
+    assert_eq!(t.token(0, STICKER), 0, "2 stickers spent");
+    assert_eq!(t.crystals(0, &sid), Some(1), "1 crystal added");
 }
 
 // AG:宣战布告 (Afterglow) counters a PPP targeting card.
