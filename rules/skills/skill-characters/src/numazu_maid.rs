@@ -21,10 +21,15 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
     "skill:鳰原令王那:梦幻可爱♪女仆",
     &[
         On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::HouseAdded], card_sdk::pre::MINE, None, on_built),
+        On::Hook(
+            &[HookKind::HouseAdded],
+            "actor == owner && tok('PAREO标记') >= 1",
+            None,
+            on_built,
+        ),
         // （2）'s offer is also a press, so a card can run it out of turn
         // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
-        On::Play("", None, offer),
+        On::Play("tok('PAREO标记') >= 1", None, offer),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -60,9 +65,7 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
 /// the `houseAdded` hook above, and the press entry (`On::Play`) a card runs
 /// for 「视为你的房屋总数增加」 (pareo_far, C# `SkillPareo -> Offer()`).
 fn offer(player_id: i32) -> card_sdk::Asked {
-    if ctx::tok(player_id, PAREO) < 1 {
-        return Ok(());
-    }
+    // `tok('PAREO标记') >= 1` lives on both entries' pre.
     // 「所有你拥有的格子中取最高值」 -- the largest `build_cost × houses` over
     // the player's own deeds, which is 「格子的房屋造价×格子上的房屋数」.
     let mut best = 0;

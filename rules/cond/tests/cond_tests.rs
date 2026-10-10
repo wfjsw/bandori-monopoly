@@ -44,6 +44,7 @@ fn win() -> WindowCtx {
         ],
         turn_player: 1,
         turn_key: 7,
+        trigger_card: 0,
         players: vec![
             PlayerSnap {
                 money: 1200,
@@ -84,7 +85,7 @@ fn cand(owner: i64) -> CandidateCtx {
         card_placed: false,
         card_cp: 1,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
-        toks: [(rules_cond::trig::FireSpent, 2)].into_iter().collect(),
+        tok_names: [("水母标记".to_string(), 2)].into_iter().collect(),
         blocked_bands: vec![2],
         ..CandidateCtx::default()
     }
@@ -354,13 +355,71 @@ fn move_main() {
 
 #[test]
 fn tok_lookup() {
-    let cond = compile("tok(Pay) >= 1").unwrap();
-    // cand toks has FireSpent=2, not Pay -> 0
+    // `tok('name')` is the owner's named token counter (the guest's
+    // `ctx::tok(owner, name)`); missing names answer 0.
+    let cond = compile("tok('水母标记') >= 1").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+
+    let cond = compile("tok('星星贴纸') >= 1").unwrap();
     assert!(!cond.eval(&win(), &cand(0)));
 
     let mut c = cand(0);
-    c.toks.insert(rules_cond::trig::Pay, 3);
+    c.tok_names.insert("星星贴纸".to_string(), 3);
     assert!(cond.eval(&win(), &c));
+}
+
+#[test]
+fn trigger_card_matches_card_id() {
+    // `trigger_card` shares `card.id`'s encoding: the self-check form is
+    // `trigger_card == card.id`.
+    let mut w = win();
+    w.trigger_card = 42;
+    assert!(compile("trigger_card == card.id").unwrap().eval(&w, &cand(0)));
+    // No card on the trigger -> 0, never a real card id.
+    assert!(!compile("trigger_card == card.id").unwrap().eval(&win(), &cand(0)));
+
+    // A card-id literal is the same `id_of` hash.
+    let lit = rules_cond::id_of("CRYCHIC:春日影");
+    let mut w = win();
+    w.trigger_card = lit;
+    assert!(compile(&format!("trigger_card == {lit}")).unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn band_is_name_form() {
+    // The name form hashes through `id_of` and compares to the view's
+    // `band(seat)` -- the same name `ctx::in_band` matches.
+    let name = "Pastel✽Palettes";
+    let mut w = win();
+    w.players[0].band = rules_cond::id_of(name);
+    w.players[1].band = rules_cond::id_of("Afterglow");
+    let mut c = cand(0);
+    c.owner_band = rules_cond::id_of(name);
+
+    let cond = compile("band_is(owner, 'Pastel✽Palettes')").unwrap();
+    assert!(cond.eval(&w, &c));
+
+    let mut c1 = cand(1);
+    c1.owner_band = rules_cond::id_of("Afterglow");
+    assert!(!cond.eval(&w, &c1));
+
+    // The int form still compares against the raw id.
+    let mut w2 = win();
+    w2.players[0].band = 7;
+    assert!(compile("band_is(0, 7)").unwrap().eval(&w2, &cand(0)));
+}
+
+#[test]
+fn character_is_name_form() {
+    let name = "三角初华（Sumimi）";
+    let mut w = win();
+    w.players[0].character = rules_cond::id_of(name);
+    let mut c = cand(0);
+    c.owner_character = rules_cond::id_of(name);
+
+    let cond = compile("character_is(owner, '三角初华（Sumimi）')").unwrap();
+    assert!(cond.eval(&w, &c));
+    assert!(!compile("character_is(owner, '纯田真奈')").unwrap().eval(&w, &c));
 }
 
 #[test]

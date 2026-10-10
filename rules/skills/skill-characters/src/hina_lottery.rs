@@ -15,7 +15,7 @@
 //! and unplacing it at the next turn start is the same shape as （1）, with an
 //! expiry -- which is what the keyed state's `expires` is for.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -34,7 +34,12 @@ const POOL: [&str; 4] = [
 pub const HINA_LOTTERY: CardDef = CardDef::new(
     "skill:冰川日菜:日菜抽中的大奖",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            "band_is(owner, 'Pastel✽Palettes')",
+            None,
+            at_start,
+        ),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, roll),
         On::Hook(&[HookKind::TurnStart], card_sdk::pre::MINE, None, expire),
     ],
@@ -49,10 +54,7 @@ fn legacy_mine(player_id: i32) -> bool {
 /// 的（2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- their copies must not re-fire it.
-    if !ctx::in_band(player_id, "Pastel✽Palettes") {
-        return Ok(());
-    }
+    // the grantees of the (2) below -- the `band_is(owner, …)` pre owns that.
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {

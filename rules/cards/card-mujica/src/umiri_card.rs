@@ -27,10 +27,20 @@ pub const UMIRI_CARD: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), umiri_card),
         // 规则书（1）: the hop at the user's turn start (C# `CardUmiriCard.TurnStart`).
-        On::Hook(&[HookKind::TurnStart], "", None, turn_start),
+        On::Hook(
+            &[HookKind::TurnStart],
+            "card.placed && actor == slot('umiri_user') - 1 && owner != slot('umiri_user') - 1",
+            None,
+            turn_start,
+        ),
         // 规则书（3）: the discard + draw when the card is back at the user's field
         // (C# `CardUmiriCard.TurnEnd` -> `End`).
-        On::Hook(&[HookKind::TurnEnd], "", None, turn_end),
+        On::Hook(
+            &[HookKind::TurnEnd],
+            "card.placed && actor == slot('umiri_user') - 1 && owner == slot('umiri_user') - 1",
+            None,
+            turn_end,
+        ),
     ],
 );
 
@@ -100,11 +110,9 @@ fn take_bands(holder: i32, user: i32) {
 /// user). Runs through the Fx hook dispatch at `turnStart`, so this is a field
 /// effect, not a [反击].
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // C# `if (turn != User || !H._placed.Contains(this) || Player == User) return null;`
+    // The `card.placed && actor == slot('umiri_user') - 1 &&
+    // owner != slot('umiri_user') - 1` pre owns the gate.
     let user = ctx::slot(player_id, USER_KEY) - 1;
-    if trigger::player_id() != user || player_id == user || !ctx::is_placed() {
-        return Ok(());
-    }
     // 规则书（1）: 「轮到使用者的回合开始时，将其移动到其所在场的玩家行动序列后一名的玩家场上。」
     // C# `int num = NextOf(Player); if (num == User) Player = User; else Player = num`.
     let dest = next_of(player_id);
@@ -137,11 +145,9 @@ fn turn_start(player_id: i32) -> card_sdk::Asked {
 /// draw 1. Runs through the Fx hook dispatch at `turnEnd`, so this is a field
 /// effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    // C# `if (turn != User || Player != User || !H._placed.Contains(this)) return null;`
+    // The `card.placed && actor == slot('umiri_user') - 1 &&
+    // owner == slot('umiri_user') - 1` pre owns the gate.
     let user = ctx::slot(player_id, USER_KEY) - 1;
-    if trigger::player_id() != user || player_id != user || !ctx::is_placed() {
-        return Ok(());
-    }
     // 规则书（3）: 「当此卡回到使用者场上时，使用者回合结束时将此卡与使用者拿取的所有乐队技能卡置入弃牌堆，抽一张卡。」
     // C# `End`: `H.Unplace(this, "discard", "回到了使用者的场上")` +
     // `H.DrawR(User, 1, ...)`; `Detach` -> `Drop` of the taken band cards.

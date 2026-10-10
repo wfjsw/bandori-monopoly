@@ -19,7 +19,7 @@
 //! cut applies to the whole, and the split happens afterwards.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";
@@ -28,12 +28,22 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const AYA_WITH: CardDef = CardDef::new(
     "skill:丸山彩:With~",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            "band_is(owner, 'Pastel✽Palettes')",
+            None,
+            at_start,
+        ),
         // 「此次支付的分摊前资金减少Y×100（最少0）」 -- the **pre-split** total
         // (「分摊前」), so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the
         // per-share `payChoose`. A 「[分摊][支付]2000」 is cut to 1500 *before*
         // it divides, not 500 off each share.
-        On::Hook(&[HookKind::PayTotalAdd], "", Some(mine), on_pay),
+        On::Hook(
+            &[HookKind::PayTotalAdd],
+            "value > 0 && tok('P✽P粉丝(正)') >= 1",
+            Some(mine),
+            on_pay,
+        ),
     ],
 );
 
@@ -52,10 +62,7 @@ fn mine(player_id: i32) -> bool {
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- their copies must not re-fire it.
-    if !ctx::in_band(player_id, "Pastel✽Palettes") {
-        return Ok(());
-    }
+    // the grantees of the (2) below -- the `band_is(owner, …)` pre owns that.
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     // 「所有非Pastel✽Palettes玩家获得丸山彩的（2）技能」 -- a grant is the skill
     // rule placed on the grantee's field. `bind_skills` already puts a player's
@@ -79,13 +86,7 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     let up = ctx::tok(player_id, FANS_UP);
-    if up < 1 {
-        return Ok(());
-    }
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("aya_with_title")),

@@ -217,10 +217,24 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
     match n.fx {
         Fx::SeatIntIs { var, .. } => {
             let var = var.to_string();
+            // Second arg is either an int id or a string name (the guest's
+            // `character_is(p, "名")` / `band_is(p, "Band")` spelling). A
+            // string hashes through `id_of` -- the same name-stable id the
+            // view's `character` / `band` accessors return.
             ctx.add_function(
                 fname,
-                move |ftx: &FunctionContext, p: i64, id: i64| -> Result<bool, ExecutionError> {
-                    Ok(player_int(ftx, p, &var)? == id)
+                move |ftx: &FunctionContext, p: i64, id: Value| -> Result<bool, ExecutionError> {
+                    let want = match &id {
+                        Value::Int(i) => *i,
+                        Value::String(s) => crate::id_of(s.as_str()),
+                        other => {
+                            return Err(ExecutionError::FunctionError {
+                                function: fname.into(),
+                                message: format!("expected int or string id, got {other:?}"),
+                            })
+                        }
+                    };
+                    Ok(player_int(ftx, p, &var)? == want)
                 },
             )
             .expect(fname);

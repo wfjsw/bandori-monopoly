@@ -83,6 +83,9 @@ impl CondView for SnapshotView<'_> {
     fn chain_hits(&self) -> Vec<i64> {
         self.win.chain.iter().map(|l| l.hits).collect()
     }
+    fn trigger_card(&self) -> i64 {
+        self.win.trigger_card
+    }
     fn owner(&self) -> i64 {
         self.cand.owner
     }
@@ -137,8 +140,8 @@ impl CondView for SnapshotView<'_> {
     fn slot(&self, name: &str) -> i64 {
         self.cand.slot(name)
     }
-    fn tok(&self, kind: i64) -> i64 {
-        self.cand.tok(kind)
+    fn tok_named(&self, name: &str) -> i64 {
+        self.cand.tok_named(name)
     }
     fn blocked(&self, band: i64) -> bool {
         self.cand.blocked(band)
@@ -203,8 +206,12 @@ impl CondView for SnapshotView<'_> {
     fn slot_table(&self) -> Vec<(String, i64)> {
         self.cand.slots.iter().map(|(k, v)| (k.clone(), *v)).collect()
     }
-    fn tok_table(&self) -> Vec<(i64, i64)> {
-        self.cand.toks.iter().map(|(k, v)| (*k, *v)).collect()
+    fn tok_named_table(&self) -> Vec<(String, i64)> {
+        self.cand
+            .tok_names
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
     }
     fn blocked_bands(&self) -> Vec<i64> {
         self.cand.blocked_bands.clone()

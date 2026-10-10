@@ -24,7 +24,12 @@ const QUIET: &str = "skill.mutsumiActor.quiet";
 pub const MUTSUMI_ACTOR: CardDef = CardDef::new(
     "skill:若叶睦:天生的演员",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            "actor == owner && slot('skillState') != 2",
+            None,
+            at_turn_start,
+        ),
         On::Hook(&[HookKind::CardPlayed], card_sdk::pre::MINE, None, on_play),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
@@ -36,9 +41,7 @@ fn legacy_mine(player_id: i32) -> bool {
 }
 
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return Ok(());
-    }
+    // `slot('skillState') != 2` is the pre.
     // 「你的每6回合不打出任何手牌，在回合开始前抽1张牌」
     if state::get(player_id, QUIET) >= 6 {
         state::set(player_id, QUIET, 0);

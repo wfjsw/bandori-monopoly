@@ -17,10 +17,25 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const COUNCIL_CHECK: CardDef = CardDef::new(
     "R:学生会的检查",
     &[
-        On::Counteract(&[ChainKind::SettleBefore], "", Some(can_counteract), counteract),
-        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
-        On::Hook(&[HookKind::PayAfter], "", None, pay_after),
-        On::Hook(&[HookKind::SettleAfter], "", None, settle_after),
+        On::Counteract(
+            &[ChainKind::SettleBefore],
+            "actor == owner && turn_player == owner",
+            Some(can_counteract),
+            counteract,
+        ),
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport",
+            None,
+            pass_tile,
+        ),
+        On::Hook(
+            &[HookKind::PayAfter],
+            "card.placed && pay_is_rent && target == owner",
+            None,
+            pay_after,
+        ),
+        On::Hook(&[HookKind::SettleAfter], "card.placed", None, settle_after),
     ],
 );
 
@@ -35,15 +50,9 @@ fn near(player_id: i32) -> Vec<i32> {
 
 /// 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「[触发结算]前可打出」 -- C# `t.Kind == "settleBefore" && t.Seat == seat`.
-    if trigger::kind() != TriggerKind::SettleBefore || trigger::player_id() != player_id {
-        return false;
-    }
-    // C# `CardCouncilCheck.CanCounteract` also wants `H.State.turn == seat`.
-    if ctx::turn_player() != player_id {
-        return false;
-    }
-    // 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子」
+    // `actor == owner && turn_player == owner` is the pre (「[触发结算]前可打出」
+    // is the category's SettleBefore). 「移动结束后前后三格内若存在你拥有地契的
+    // 格子」 is a derived-list residual.
     !near(player_id).is_empty()
 }
 
@@ -124,23 +133,10 @@ const SLOT_STOP: &str = "council_stop";
 /// owner, force a stop + settle at half rent. The `H.AbnormalGate` stop guard is
 /// still held; the move-shaping itself is written below.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PassTile || !ctx::is_placed() {
-        return Ok(());
-    }
+    // `card.placed && actor != owner && move.remaining > 0 &&
+    // move.kind != Teleport` is the pre; `self_tile` is a derived lookup.
     let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return Ok(());
-    }
-    // C# `m.Seat == Seat` -- the card's own owner is not stopped by it.
-    if trigger::player_id() == player_id {
-        return Ok(());
-    }
-    // C# `m.Remaining <= 0` -- only a still-walking pass is intercepted.
-    if trigger::move_remaining() <= 0 {
-        return Ok(());
-    }
-    // C# `m.Teleport` -- a teleport does not walk past the tile.
-    if trigger::move_kind() == Some(MoveKind::Teleport) {
         return Ok(());
     }
     // 规则书[反击]: the stop runs behind `H.AbnormalGate` (C#
@@ -166,12 +162,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// C# `CardCouncilCheck.PayAfter`: track the rent the forced settle actually
 /// collected (`_got += p.finalGain`), keyed on the council stop flag.
 fn pay_after(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayAfter || !ctx::is_placed() {
-        return Ok(());
-    }
-    if !trigger::pay_is_rent() || trigger::target() != player_id {
-        return Ok(());
-    }
+    // `card.placed && pay_is_rent && target == owner` is the pre.
     let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
@@ -188,9 +179,7 @@ fn pay_after(player_id: i32) -> card_sdk::Asked {
 /// unplace to discard and refund the placement cost when the halved rent fell
 /// short of what the tile should have paid.
 fn settle_after(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::SettleAfter || !ctx::is_placed() {
-        return Ok(());
-    }
+    // `card.placed` is the pre.
     if ctx::slot(player_id, SLOT_STOP) == 0 {
         return Ok(());
     }

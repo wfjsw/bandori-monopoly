@@ -32,7 +32,12 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
         On::Play("", Some(can_use_exile), use_exile),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", None, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            "actor == owner && fire(owner) >= 1",
+            None,
+            at_turn_start,
+        ),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
@@ -57,9 +62,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （2）「你的回合开始时，你可以消耗一个火罐，使你的移动掷骰额外获得一个1d10，
 /// 且你的移动视为[传送]」.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
+    // `fire(owner) >= 1` is the pre (「你可以消耗一个火罐」).
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("misaki_other_title")),

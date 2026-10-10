@@ -11,6 +11,19 @@
 
 use game_core::msg::Msg;
 
+/// `skill:<owner>:<skill>` -> `owner` (the character or band name).
+/// `game_core::data::skill_id`'s format; neither name contains `:` in the
+/// shipped data, so the first `:` split is the owner.
+pub(crate) fn skill_id_owner(id: &str) -> Option<String> {
+    let rest = id.strip_prefix("skill:")?;
+    let (owner, _) = rest.split_once(':')?;
+    if owner.is_empty() {
+        None
+    } else {
+        Some(owner.to_string())
+    }
+}
+
 /// The trigger a counteraction is checked against (C# `Trigger`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Trigger {
@@ -642,6 +655,22 @@ pub trait CardWorld: Clone + 'static {
     /// Rule id of the player's **character skill** (`skill:<character>:<skill>`).
     fn character_skill_id(&self, _player_id: i32) -> Option<String> {
         None
+    }
+    /// The player's character **name** -- the spelling [`Self::character_is`]
+    /// matches. Defaults to the owner component of the character skill id
+    /// (`skill:<character>:<skill>`; neither name contains `:` in the shipped
+    /// data); override with the direct lookup where one exists.
+    fn character_name(&self, player_id: i32) -> Option<String> {
+        self.character_skill_id(player_id)
+            .and_then(|id| skill_id_owner(&id))
+    }
+    /// The player's band **name** -- the spelling [`Self::in_band`] matches.
+    /// Defaults to the owner component of the band skill id
+    /// (`skill:<band>:<skill>`); override with the direct lookup where one
+    /// exists.
+    fn band_name(&self, player_id: i32) -> Option<String> {
+        self.band_skill_id(player_id)
+            .and_then(|id| skill_id_owner(&id))
     }
     /// Every band-skill attachment on the player's field, as
     /// `(uid, rule id, extra)` in placement order. `extra` is a 「拿取」ed copy.

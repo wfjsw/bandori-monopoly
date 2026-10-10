@@ -28,8 +28,18 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
     "skill:祐天寺若麦:大主播喵梦亲",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::PayAdd], "", Some(in_one), on_pay_add),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(
+            &[HookKind::PayAdd],
+            "target == owner && actor != owner && slot('skillState') != 2",
+            None,
+            on_pay_add,
+        ),
+        On::Hook(
+            &[HookKind::TurnEnd],
+            "actor == owner && slot('skillState') != 2",
+            None,
+            at_turn_end,
+        ),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end_exit),
     ],
 )
@@ -39,10 +49,6 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn in_one(player_id: i32) -> bool {
-    ctx::trigger::target() == player_id && state::get(player_id, state_key::SKILL_STATE) != 2
-}
-
 /// 「初始0，上限5」.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
     crate::fire_pot(player_id, 0, 5);
@@ -50,12 +56,9 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态1（1）「每次其他玩家向你支付资金时，你立即获得1火罐…并使那次支付的金额
-/// 提高X*100」.
+/// 提高X*100」. `target == owner && actor != owner && slot('skillState') != 2`
+/// is the pre.
 fn on_pay_add(player_id: i32) -> card_sdk::Asked {
-    let from = ctx::trigger::player_id();
-    if from == player_id {
-        return Ok(());
-    }
     // 「你立即获得1火罐」 first, so X counts it.
     ctx::gain_fire(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     // 「使那次支付的金额提高X*100，X为你拥有的火罐数」
@@ -74,10 +77,9 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
 }
 
 /// The turn-end tick also catches a pot that filled outside a payment.
+/// `slot('skillState') != 2` is the pre; the cap compare needs `state::max`
+/// and stays.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return Ok(());
-    }
     if state::get(player_id, state_key::FIRE) >= state::max(player_id, state_key::FIRE) {
         enter_two(player_id);
     }

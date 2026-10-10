@@ -23,8 +23,13 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const EVE_UNIFY: CardDef = CardDef::new(
     "skill:若宫伊芙:天下统一",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
-        On::Hook(&[HookKind::RollAfter], "", Some(mine), on_roll),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            "band_is(owner, 'Pastel✽Palettes')",
+            None,
+            at_start,
+        ),
+        On::Hook(&[HookKind::RollAfter], "tok('P✽P粉丝(正)') >= 1", Some(mine), on_roll),
     ],
 );
 
@@ -39,10 +44,7 @@ fn mine(player_id: i32) -> bool {
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- their copies must not re-fire it.
-    if !ctx::in_band(player_id, "Pastel✽Palettes") {
-        return Ok(());
-    }
+    // the grantees of the (2) below -- the `band_is(owner, …)` pre owns that.
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -59,13 +61,12 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
+    // `fixed_roll` is resolution-time (a face the engine already fixed this
+    // roll); the `tok('P✽P粉丝(正)') >= 1` pre owns the "has fans" clause.
     if ctx::fixed_roll().is_some() {
         return Ok(());
     }
     let up = ctx::tok(player_id, FANS_UP);
-    if up < 1 {
-        return Ok(());
-    }
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("eve_unify_title")),

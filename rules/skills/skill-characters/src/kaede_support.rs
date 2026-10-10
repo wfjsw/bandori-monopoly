@@ -38,26 +38,27 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::TurnStartBefore], "", Some(other_turn), offer_support),
+        On::Hook(&[HookKind::TurnStartBefore], "actor != owner", None, offer_support),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
-        On::Hook(&[HookKind::PayMul], "", Some(splitting), split_rent),
+        On::Hook(
+            &[HookKind::PayMul],
+            "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
+            None,
+            split_rent,
+        ),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
-/// 「直到状态2结束为止」 -- only while this player is in 状态2.
-fn splitting(player_id: i32) -> bool {
-    state::get(player_id, state_key::SKILL_STATE) == 2
-        && ctx::trigger::pay_is_rent()
-        && ctx::trigger::value() > 0
-}
-
 /// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
+/// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0` is
+/// the pre; the SPLIT marker is keyed on the tile (a dynamic state key) and
+/// stays.
 fn split_rent(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    if t < 0 || state::get(player_id, &format!("{}{}", SPLIT, t)) < 0 {
+    if state::get(player_id, &format!("{}{}", SPLIT, t)) < 0 {
         // the marker is keyed on the tile; a named deed is the one that was bought in
         return Ok(());
     }
@@ -79,10 +80,6 @@ fn split_rent(player_id: i32) -> card_sdk::Asked {
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
-}
-
-fn other_turn(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id
 }
 
 /// 「初始0，上限4」.

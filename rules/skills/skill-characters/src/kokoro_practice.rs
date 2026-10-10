@@ -39,7 +39,12 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // （3）「当其他玩家移动[经过]您时」 -- 行动阶段 12 [经过], per step
         // (`SETTLE-STAGES.md` §4 M4), not the end-tile [重叠]. The guard reads
         // the mover and the tile being entered, so it is `passed_by`, not `mine`.
-        On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor != owner && tile.id == owner.pos && fire(owner) >= 1 && move.remaining > 0",
+            None,
+            on_passed,
+        ),
         // （3）「移动终点为任意"RiNG"时，获得一个火罐」 -- 行动阶段 13
         // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
         // settle, for every completed move including a 「不触发结算」 one.
@@ -67,10 +72,8 @@ fn legacy_mine(player_id: i32) -> bool {
 }
 
 /// 「当其他玩家移动[经过]您时」 -- another player's step onto **my** tile.
-/// `trigger::tile()` is the tile being entered; the mover is `trigger::player_id()`.
-fn passed_by(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == ctx::player_pos(player_id)
-}
+/// `actor != owner && tile.id == owner.pos && fire(owner) >= 1 &&
+/// move.remaining > 0` is the pre.
 
 /// （1）「初始获得"RiNG 4"格子，从"RiNG 4"格子开始游戏，首次经过CiRCLE不获得
 /// 经过奖励」.
@@ -139,12 +142,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// used to sit on `passPlayer`, where `move_remaining()` is always 0 and the
 /// force-stop could never fire (§4 M4's latent bug).
 fn on_passed(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
-    if ctx::trigger::move_remaining() <= 0 {
-        return Ok(());
-    }
+    // `fire(owner) >= 1 && move.remaining > 0` is the pre.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("kokoro_practice_force_title")),

@@ -8,15 +8,15 @@
 //! > （2）[手] 获得500资金
 //!
 
-use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::HookKind;
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SOYO_BACK: CardDef = CardDef::new(
     "CRYCHIC:（soyo）回到曾经",
     &[
         On::Play("", None, soyo_back),
-        On::Hook(&[HookKind::Drawn], "", None, on_drawn),
+        On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
     ],
 );
 
@@ -31,9 +31,7 @@ fn soyo_back(player_id: i32) -> card_sdk::Asked {
 /// 规则书（1）[特]: 「抽到此卡时立刻从抽牌堆打出并执行以下操作之一」 -- C#
 /// `CardSoyoBack.Drawn` -> `Special`.
 fn on_drawn(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
-        return Ok(());
-    }
+    // `trigger_card == card.id` owns "this card was drawn".
     // The card was just drawn, so it is in hand (C# `hand.Contains(Id)`).
     ctx::log(
         player_id,

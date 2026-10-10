@@ -64,6 +64,10 @@ pub trait CondView {
     fn chain_kinds(&self) -> Vec<i64>;
     /// Chain link `hits` seats, in order.
     fn chain_hits(&self) -> Vec<i64>;
+    /// The trigger's card id hash (`trigger_card`), same encoding as
+    /// [`CondView::card_id`] -- comparable to `card.id` and to a card-id
+    /// literal (`id_of("…")`). `0` when the trigger carries no card.
+    fn trigger_card(&self) -> i64;
 
     // -- candidate / owner --------------------------------------------------
     /// The candidate's owner seat (`owner` / `owner.id`).
@@ -91,8 +95,9 @@ pub trait CondView {
     fn card_cp(&self) -> i64;
     /// Per-card latch (`slot(name)`); missing = 0.
     fn slot(&self, name: &str) -> i64;
-    /// Per-card token (`tok(kind)`); missing = 0.
-    fn tok(&self, kind: i64) -> i64;
+    /// Per-card token counter (`tok('name')`, the guest's `ctx::tok(owner,
+    /// name)`); missing = 0.
+    fn tok_named(&self, name: &str) -> i64;
     /// Is `band` blocked for this candidate (`blocked(band)`)?
     fn blocked(&self, band: i64) -> bool;
 
@@ -107,9 +112,11 @@ pub trait CondView {
     fn stun(&self, seat: i64) -> i64;
     fn exile(&self, seat: i64) -> i64;
     fn no_hand(&self, seat: i64) -> i64;
-    /// Character id hash (`character_is(p, …)`).
+    /// Character **name** hash (`character_is(p, "名")` compares this to
+    /// `id_of("名")` -- the same name `ctx::character_is` matches).
     fn character(&self, seat: i64) -> i64;
-    /// Band id hash (`band_is(p, …)`).
+    /// Band **name** hash (`band_is(p, "Band")` compares this to
+    /// `id_of("Band")` -- the same name `ctx::in_band` matches).
     fn band(&self, seat: i64) -> i64;
     /// Owned-tile count.
     fn tiles(&self, seat: i64) -> i64;
@@ -129,8 +136,8 @@ pub trait CondView {
     /// Every `slot(name)` latch the host knows. Baked into `_<var>` for the
     /// eager function closures; a live view may answer from the world.
     fn slot_table(&self) -> Vec<(String, i64)>;
-    /// Every `tok(kind)` counter.
-    fn tok_table(&self) -> Vec<(i64, i64)>;
+    /// Every `tok('name')` counter (non-zero ones; missing = 0).
+    fn tok_named_table(&self) -> Vec<(String, i64)>;
     /// Bands blocked for this candidate.
     fn blocked_bands(&self) -> Vec<i64>;
     /// Every `tile_named` spelling the host registers.

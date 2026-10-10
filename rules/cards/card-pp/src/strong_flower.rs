@@ -26,7 +26,7 @@ pub const STRONG_FLOWER: CardDef = CardDef::new(
     "PP:可爱又强壮的花朵",
     &[
         On::Play("", Some(cant_play), strong_flower),
-        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
+        On::Hook(&[HookKind::PassTile], "actor == owner", None, pass_tile),
     ],
 );
 
@@ -78,9 +78,8 @@ fn strong_flower(player_id: i32) -> card_sdk::Asked {
 /// -- the user's own pass, onto the tile this card is bound to, and the three
 /// steps in order.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
+    // `actor == owner` is the pre. `self_tile` is a derived lookup (the tile
+    // this card is bound to).
     let Some(tile) = ctx::self_tile() else {
         return Ok(());
     };

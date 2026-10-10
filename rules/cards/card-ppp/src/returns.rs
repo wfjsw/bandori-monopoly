@@ -27,8 +27,8 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use card_sdk::abi::{CardPile, HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::{CardPile, HookKind};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const ID: &str = "PPP:Returns";
@@ -51,7 +51,12 @@ pub const RETURNS: CardDef = CardDef::new(
         ),
         On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], card_sdk::pre::MINE, None, choose_band),
         On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, deck_at_game_start),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            "trigger_card == card.id",
+            None,
+            deck_at_game_start,
+        ),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -176,9 +181,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
 /// C# `CardReturns.DeckAtGameStart` -> `Setup`: pull the id out of the draw pile
 /// (or hand) and place it on the owner's field, then borrow a band.
 fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::DeckAtGameStart || !trigger::card_is(ID) {
-        return Ok(());
-    }
+    // `trigger_card == card.id` owns "this card was opened".
     // C# `hidden.draw.Remove(Id) || hidden.hand.Remove(Id)` then `H.PlaceCard`.
     if !ctx::take_card(player_id, CardPile::Deck, ID)
         && !ctx::take_card(player_id, CardPile::Hand, ID)
