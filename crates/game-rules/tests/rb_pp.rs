@@ -13,8 +13,8 @@ use game_core::state::Counter;
 
 fn set_fans(t: &mut Table, who: usize, up: i32, down: i32) {
     t.m.world_mut().st.players[who].tokens = vec![
-        Counter { name: "P✽P粉丝(正)".into(), value: up },
-        Counter { name: "P✽P粉丝(反)".into(), value: down },
+        Counter { name: "P✽P粉丝(正)".into(), value: up, instance: -1 },
+        Counter { name: "P✽P粉丝(反)".into(), value: down, instance: -1 },
     ];
 }
 

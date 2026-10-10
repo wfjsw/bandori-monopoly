@@ -147,6 +147,8 @@ fn m03_eve_then_yolo() {
     t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
         name: "P✽P粉丝(正)".into(),
         value: 5,
+    
+        instance: -1,
     });
     t.give(0, &["AG:Y.O.L.O"]);
     // Before the roll: flip Y = 2 fans for +2d4 (loaded 1, 1). d20 = 4.

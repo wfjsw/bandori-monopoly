@@ -58,7 +58,7 @@ fn end_quiet(t: &mut Table, who: usize) {
 fn add_token(t: &mut Table, who: usize, name: &str, value: i32) {
     t.m.world_mut().st.players[who]
         .tokens
-        .push(Counter { name: name.into(), value });
+        .push(Counter { name: name.into(), value, instance: -1 });
 }
 
 // ============================================================ cards

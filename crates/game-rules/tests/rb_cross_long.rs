@@ -212,6 +212,8 @@ fn l02_one_walk_several_pass_effects() {
     t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
         name: "星星贴纸".into(),
         value: 2,
+    
+        instance: -1,
     });
     // 安可 in hand from the start, so the 香澄 forced stop can be countered.
     t.give(0, &["通用:安可"]);
@@ -476,7 +478,9 @@ fn l06_one_draw_several_effects() {
         t.m.world_mut().st.players[0].tokens.push(game_core::state::Counter {
             name: "P✽P粉丝(正)".into(),
             value: 1,
-        });
+        
+        instance: -1,
+    });
     }
     t.place_raw(0, "PP:梦在前方，结彩当下");
     t.set_hand(0, &[FILL, FILL, FILL]);

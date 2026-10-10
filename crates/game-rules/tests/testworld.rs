@@ -120,8 +120,18 @@ impl CardWorld for TestWorld {
     fn tile_count(&self) -> i32 {
         60
     }
-    fn add_mark(&mut self, tile: i32, player_id: i32, _kind: &str, note: Msg) {
-        self.marks.push((tile, player_id, note));
+    fn place_mark(
+        &mut self,
+        tile: i32,
+        _kind: &str,
+        _category: &str,
+        owner: i32,
+        _src: i32,
+        _count: i32,
+        note: Msg,
+    ) -> i32 {
+        self.marks.push((tile, owner, note));
+        1
     }
     fn money(&self, player_id: i32) -> i32 {
         self.money[player_id as usize]
@@ -211,10 +221,10 @@ impl CardWorld for TestWorld {
     fn is_placed(&self) -> i32 {
         0
     }
-    fn count_marks(&self, _: i32, _: &str, _: i32) -> i32 {
+    fn count_marks(&self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0
     }
-    fn remove_marks(&mut self, _: i32, _: &str, _: i32) -> i32 {
+    fn remove_marks(&mut self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0
     }
     fn tok(&self, _: i32, _: &str) -> i32 {

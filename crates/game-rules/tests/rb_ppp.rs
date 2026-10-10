@@ -967,7 +967,9 @@ fn band_press_offers_both_exchange_and_cash() {
         w.st.players[0].tokens.push(game_core::state::Counter {
             name: STICKER.into(),
             value: 2,
-        });
+        
+        instance: -1,
+    });
     }
     let sid = t.skill_id(0, "星之鼓动");
     t.set_crystals(0, &sid, 2);

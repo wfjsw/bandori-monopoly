@@ -126,20 +126,13 @@ pub struct Run {
     fire_spent_log: Vec<(i32, i32)>,
     /// Houses added during the run, raised as `houseAdded` once it commits.
     house_log: Vec<(i32, i32, i32)>,
-    /// Miracle-crystal writes this run made, `(owner, card, change)` -- the
-    /// engine raises `crystalsChanged` for each once the run commits. `change`
+    /// Named-counter writes this run made, `(owner, card, name, change)` -- the
+    /// engine raises `counterChanged` for each once the run commits. `change`
     /// is the signed delta the write applied (0 = a write that landed on the
     /// same count, e.g. a card placed with none); the count it left is the
-    /// instance's own `crystals()`.
-    crystals_log: Vec<(i32, String, i32)>,
-    /// [CP点] writes this run made, `(owner, card, change)` -- the engine raises
-    /// `cpChanged` for each once the run commits (the same shape as
-    /// `crystals_log`). `change` is the signed delta the write applied to an
-    /// instance's **on-card** [CP点] count (`FieldCard::cp`, 「自己[场上]N个
-    /// [CP点]」 -- user ruling 2026-10-07); the count it left is `cp_attached()`
-    /// on that instance. Tile-mark writes (`place_cp` / `clear_cp`) are the
-    /// other [CP点] kind and do not ride this log.
-    cp_log: Vec<(i32, String, i32)>,
+    /// instance's own `counter(name)`. One log for every named counter:
+    /// `counter::CRYSTALS`, `counter::CP`, and any card-declared name.
+    counter_log: Vec<(i32, String, String, i32)>,
     /// Players this run granted [除外] layers to -- the engine raises `exile`
     /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
     exile_log: Vec<i32>,
@@ -180,12 +173,12 @@ impl Run {
     /// the trigger, so a write that lands on the same count still raises --
     /// a card placed with no crystals has to hear about its own count. A write
     /// to an instance that is not on a field raises nothing.
-    fn note_crystals(&mut self, uid: i32, was: i32, now: i32) {
+    fn note_counter_changed(&mut self, uid: i32, was: i32, now: i32, name: &str) {
         let Some(f) = self.world.field_by_uid(uid) else {
             return;
         };
         let (owner, card) = (f.owner, f.card.clone());
-        self.crystals_log.push((owner, card, now - was));
+        self.counter_log.push((owner, card, name.to_string(), now - was));
     }
 
     /// Record an **on-card** [CP点] write against the instance at `uid` so the
@@ -195,13 +188,7 @@ impl Run {
     /// and a count emptied by *any* path -- this run's settle, another effect's
     /// removal -- leaves the field the same way. A write with no live instance
     /// raises nothing.
-    fn note_cp(&mut self, uid: i32, was: i32, now: i32) {
-        let Some(f) = self.world.field_by_uid(uid) else {
-            return;
-        };
-        let (owner, card) = (f.owner, f.card.clone());
-        self.cp_log.push((owner, card, now - was));
-    }
+
 
     /// Move the running instance to `dest` **now** -- `H.Unplace(this, "discard")`
     /// and kin, applied mid-effect rather than at the run's commit, for a card
@@ -576,20 +563,25 @@ impl CardWorld for Run {
         }
         false
     }
-    fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
-        self.world.card_crystals(player_id, card)
-    }
-    fn add_card_crystals(&mut self, player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-        let was = self.world.card_crystals(player_id, card);
-        // Which instance the name resolves to, so the raise names the right one.
+    fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
         let uid = self
             .world
             .field_instances(player_id)
             .into_iter()
             .find(|(_, id)| id == card)
             .map_or(-1, |(uid, _)| uid);
-        let now = self.world.add_card_crystals(player_id, card, n, max);
-        self.note_crystals(uid, was, now);
+        self.world.counter_at(uid, name)
+    }
+    fn add_card_counter(&mut self, player_id: i32, card: &str, name: &str, n: i32, max: i32) -> i32 {
+        let uid = self
+            .world
+            .field_instances(player_id)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-1, |(uid, _)| uid);
+        let was = self.world.counter_at(uid, name);
+        let now = self.world.add_counter_at(uid, name, n, max);
+        self.note_counter_changed(uid, was, now, name);
         now
     }
     /// Is the running **instance** in play?
@@ -602,6 +594,9 @@ impl CardWorld for Run {
     fn is_placed(&self) -> i32 {
         (self.current_uid >= 0 && self.world.field_by_uid(self.current_uid).is_some()) as i32
     }
+    fn counter(&self, name: &str) -> i32 {
+        self.world.counter_at(self.current_uid, name)
+    }
     fn crystals(&self) -> i32 {
         self.world.crystals_at(self.current_uid)
     }
@@ -611,16 +606,27 @@ impl CardWorld for Run {
     fn set_self_prop(&mut self, key: &str, value: i32) -> i32 {
         self.world.set_prop_at(self.current_uid, key, value)
     }
-    fn set_crystals(&mut self, n: i32) -> i32 {
-        let was = self.world.crystals_at(self.current_uid);
-        let now = self.world.set_crystals_at(self.current_uid, n);
-        self.note_crystals(self.current_uid, was, now);
+    fn set_counter(&mut self, name: &str, n: i32) -> i32 {
+        let uid = self.current_uid;
+        let was = self.world.counter_at(uid, name);
+        let now = self.world.set_counter_at(uid, name, n);
+        self.note_counter_changed(uid, was, now, name);
         now
     }
-    fn add_crystals(&mut self, n: i32, max: i32) -> i32 {
-        let was = self.world.crystals_at(self.current_uid);
-        let now = self.world.add_crystals_at(self.current_uid, n, max);
-        self.note_crystals(self.current_uid, was, now);
+    fn add_counter(&mut self, name: &str, n: i32, max: i32) -> i32 {
+        let uid = self.current_uid;
+        let was = self.world.counter_at(uid, name);
+        let now = self.world.add_counter_at(uid, name, n, max);
+        self.note_counter_changed(uid, was, now, name);
+        now
+    }
+    fn counter_at(&self, uid: i32, name: &str) -> i32 {
+        self.world.counter_at(uid, name)
+    }
+    fn add_counter_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
+        let was = self.world.counter_at(uid, name);
+        let now = self.world.add_counter_at(uid, name, n, max);
+        self.note_counter_changed(uid, was, now, name);
         now
     }
     fn field_instances(&self, player_id: i32) -> Vec<(i32, String)> {
@@ -629,11 +635,8 @@ impl CardWorld for Run {
     fn crystals_at(&self, uid: i32) -> i32 {
         self.world.crystals_at(uid)
     }
-    fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
-        let was = self.world.crystals_at(uid);
-        let now = self.world.add_crystals_at(uid, n, max);
-        self.note_crystals(uid, was, now);
-        now
+    fn self_uid(&self) -> i32 {
+        self.current_uid
     }
     fn prop_at(&self, uid: i32, key: &str) -> i32 {
         self.world.prop_at(uid, key)
@@ -676,101 +679,111 @@ impl CardWorld for Run {
         self.world.set_immune_at(uid, on)
     }
 
-    // marks & tokens --------------------------------------------------------
-    fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg) {
-        // Marker ownership (user ruling 2026-10-07): the rule that creates a
-        // mark owns it -- `skill:要乐奈` owns every 抹茶芭菲 copy, on any tile
-        // or player counter.
+    // marks & bound units (user ruling 2026-10-10) ---------------------------
+    /// Bind `count` units of the running instance's counter `kind` to `tile`.
+    /// Marker ownership (user ruling 2026-10-07): the rule that creates a
+    /// mark owns it -- `skill:要乐奈` owns every 抹茶芭菲 copy, on any tile
+    /// or player counter. `instance` is stamped as the current uid and `src`
+    /// (provenance, -1 → current uid).
+    fn place_mark(
+        &mut self,
+        tile: i32,
+        kind: &str,
+        category: &str,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> i32 {
         let who = self.current_card.clone();
         self.world.note_marker_owner(kind, &who);
-        self.world.add_mark(tile, player_id, kind, note);
-    }
-    fn count_marks(&self, tile: i32, kind: &str, owner: i32) -> i32 {
-        self.world.count_marks(tile, kind, owner)
-    }
-    fn set_card_immune(&mut self, player_id: i32, card: &str, on: bool) -> bool {
-        self.world.set_card_immune(player_id, card, on)
-    }
-    fn card_immune(&self, player_id: i32, card: &str) -> bool {
-        self.world.card_immune(player_id, card)
-    }
-    fn set_card_tile(&mut self, player_id: i32, card: &str, tile: i32) -> bool {
-        self.world.set_card_tile(player_id, card, tile)
-    }
-    fn bump_mark(&mut self, tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
-        self.world.bump_mark(tile, kind, owner, delta)
-    }
-    fn remove_marks(&mut self, tile: i32, kind: &str, owner: i32) -> i32 {
-        self.world.remove_marks(tile, kind, owner)
-    }
-    // [CP点] -- the two kinds (user ruling 2026-10-07). **Tile marks** are the
-    // `mark:cp` owner's API (`place_cp` / `count_cp` / `count_cp_from` /
-    // `clear_cp` / `cp_src_at`): neutral marks with the placing instance as
-    // provenance, never owned by a player. **On-card** [CP点] (`cp_attached` /
-    // `add_cp` / `cp_at` / `add_cp_at`) is `FieldCard::cp` -- 「自己[场上]N个
-    // [CP点]」, the CP points attached to the card itself, the card rule's own
-    // stock. Only on-card writes ride `note_cp` (→ `cpChanged`, the graveyard
-    // rule); a tile-mark write is the other kind and raises nothing.
-    fn place_cp(&mut self, tile: i32, note: Msg) -> i32 {
         let me = self.current_uid;
-        let card = self
-            .world
-            .field_by_uid(me)
-            .map(|f| f.card.clone())
-            .unwrap_or_default();
-        // A fresh mark attaches to the placer. Stacking onto an existing mark
-        // keeps that mark's attachment (the placement rule forbids it -- 「没有
-        // [CP点]的格子」 -- so this is the defensive path).
-        self.world.add_cp_mark(tile, me, &card, note)
+        let src = if src < 0 { me } else { src };
+        self.world
+            .place_mark(me, kind, category, tile, owner, src, count, note)
     }
-    fn count_cp(&self, tile: i32) -> i32 {
-        self.world.count_cp(tile)
+    /// Like [`Self::place_mark`] but always pushes a fresh row.
+    fn place_mark_new(
+        &mut self,
+        tile: i32,
+        kind: &str,
+        category: &str,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> i32 {
+        let who = self.current_card.clone();
+        self.world.note_marker_owner(kind, &who);
+        let me = self.current_uid;
+        let src = if src < 0 { me } else { src };
+        self.world
+            .place_mark_new(me, kind, category, tile, owner, src, count, note)
     }
-    fn count_cp_from(&self, tile: i32) -> i32 {
-        self.world.count_cp_from(tile, self.current_uid)
+    fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        self.world.count_marks(tile, filter)
     }
-    fn clear_cp(&mut self, tile: i32) -> i32 {
-        self.world.clear_cp(tile)
+    fn bump_mark(
+        &mut self,
+        tile: i32,
+        filter: &game_core::state::MarkFilter<'_>,
+        delta: i32,
+    ) -> i32 {
+        self.world.bump_mark(tile, filter, delta)
     }
-    fn cp_src_at(&self, tile: i32) -> i32 {
-        self.world.cp_src_at(tile)
+    fn remove_marks(&mut self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        self.world.remove_marks(tile, filter)
     }
-    fn cp_attached(&self) -> i32 {
-        self.world.cp_at(self.current_uid)
+    fn mark_src_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        self.world.mark_src_at(tile, filter)
     }
-    fn add_cp(&mut self, n: i32, max: i32) -> i32 {
-        let uid = self.current_uid;
-        let was = self.world.cp_at(uid);
-        let now = self.world.add_cp_at(uid, n, max);
-        self.note_cp(uid, was, now);
-        now
+    fn mark_instance_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        self.world.mark_instance_at(tile, filter)
     }
-    fn cp_at(&self, uid: i32) -> i32 {
-        self.world.cp_at(uid)
+    /// Units of the running instance's counter `name` held by `player_id`.
+    fn count_held(&self, name: &str, player_id: i32) -> i32 {
+        self.world.count_held(self.current_uid, name, player_id)
     }
-    fn add_cp_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
-        let was = self.world.cp_at(uid);
-        let now = self.world.add_cp_at(uid, n, max);
-        self.note_cp(uid, was, now);
-        now
+    fn add_held(&mut self, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+        // Marker ownership: the rule that creates a marker owns it.
+        let who = self.current_card.clone();
+        self.world.note_marker_owner(name, &who);
+        self.world
+            .bind_held(self.current_uid, name, player_id, n, max)
+    }
+    fn count_held_name(&self, name: &str, player_id: i32) -> i32 {
+        // Name-keyed (any owner / instance): the legacy `tok` lookup.
+        self.world.tok(player_id, name)
+    }
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+        let who = self.current_card.clone();
+        self.world.note_marker_owner(name, &who);
+        self.world.set_tok(player_id, name, v);
+    }
+    fn move_units(
+        &mut self,
+        name: &str,
+        from_tile: i32,
+        from_player: i32,
+        to_tile: i32,
+        to_player: i32,
+        n: i32,
+    ) -> i32 {
+        self.world.move_units(
+            self.current_uid,
+            name,
+            from_tile,
+            from_player,
+            to_tile,
+            to_player,
+            n,
+        )
+    }
+    fn mark_rule_instances(&self) -> Vec<(i32, String)> {
+        self.world.mark_rule_instances()
     }
     fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
         self.world.tok_names(player_id, prefix)
-    }
-    fn tok(&self, player_id: i32, name: &str) -> i32 {
-        self.world.tok(player_id, name)
-    }
-    fn set_tok(&mut self, player_id: i32, name: &str, value: i32) {
-        // Marker ownership (user ruling 2026-10-07): the rule that creates a
-        // marker owns it, wherever its copies sit.
-        let who = self.current_card.clone();
-        self.world.note_marker_owner(name, &who);
-        self.world.set_tok(player_id, name, value);
-    }
-    fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
-        let who = self.current_card.clone();
-        self.world.note_marker_owner(name, &who);
-        self.world.add_tok(player_id, name, n, max)
     }
 
     // keyed state ------------------------------------------------------------
@@ -1904,8 +1917,7 @@ impl<M: CardModules> RulesBridge<M> {
                 reshuffle_log: vec![],
                 fire_spent_log: vec![],
                 house_log: vec![],
-                crystals_log: vec![],
-                cp_log: vec![],
+                counter_log: vec![],
             exile_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
@@ -2011,8 +2023,7 @@ impl<M: CardModules> RulesBridge<M> {
                         reshuffle_log: vec![],
                         fire_spent_log: vec![],
                         house_log: vec![],
-                        crystals_log: vec![],
-                        cp_log: vec![],
+                        counter_log: vec![],
                         exile_log: vec![],
                         doubled: -1,
                         linger_props: Default::default(),
@@ -2589,9 +2600,10 @@ impl<M: CardModules> RulesBridge<M> {
             // `crystalsChanged` -- 「此卡上不再拥有[奇迹水晶]时」 (AG:绯红之魂
             // (3) and kin) live here rather than at each spend site, so a
             // count emptied by *any* path still leaves the field.
-            for (owner, card, change) in after.crystals_log {
-                self.raise_core(cx, "crystalsChanged", owner, |t| {
+            for (owner, card, name, change) in after.counter_log {
+                self.raise_core(cx, "counterChanged", owner, |t| {
                     t.card = card;
+                    t.name = name;
                     t.value = change;
                     t.by_card = by;
                 })?;
@@ -2602,13 +2614,7 @@ impl<M: CardModules> RulesBridge<M> {
             // run's `add_cp_at`, another effect's removal) leaves the
             // field. The count watched is `FieldCard::cp`, the CP points
             // attached to the card -- not the tile marks.
-            for (owner, card, change) in after.cp_log {
-                self.raise_core(cx, "cpChanged", owner, |t| {
-                    t.card = card;
-                    t.value = change;
-                    t.by_card = by;
-                })?;
-            }
+
             // `exile` -- 「任意玩家获得[除外]…时」 (火种燃尽之后会怎么样呢？
             // 「移除所有此卡的复制品」) listens here rather than at each
             // grant site, so a layer granted by *any* path still fires.
@@ -2917,11 +2923,14 @@ impl<M: CardModules> RulesBridge<M> {
     /// A tile marked [`card_sdk::abi::mark::NO_TARGET`] cannot be named at all --
     /// that is 「有标记时此地块不能被指定」. Not ported: the per-play `immune<p>` tags.
     fn target_tile(&self, cx: &mut Cx, tile: i32, by: i32, card: &str) -> Flow<i32> {
-        if cx
-            .world_copy()
-            .count_marks(tile, card_sdk::abi::mark::NO_TARGET, -2)
-            > 0
-        {
+        let no_target = game_core::state::MarkFilter {
+            kind: card_sdk::abi::mark::NO_TARGET,
+            category: "",
+            owner: -2,
+            src: -2,
+            instance: -2,
+        };
+        if cx.world_copy().count_marks(tile, &no_target) > 0 {
             return Ok(-1);
         }
         let Some(&owner) = usize::try_from(tile)
@@ -3419,8 +3428,7 @@ impl<M: CardModules> RulesBridge<M> {
             reshuffle_log: vec![],
             fire_spent_log: vec![],
             house_log: vec![],
-            crystals_log: vec![],
-            cp_log: vec![],
+            counter_log: vec![],
             exile_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -3620,8 +3628,7 @@ impl<M: CardModules> RulesBridge<M> {
                 reshuffle_log: vec![],
                 fire_spent_log: vec![],
                 house_log: vec![],
-                crystals_log: vec![],
-                cp_log: vec![],
+                counter_log: vec![],
                 exile_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
@@ -3924,6 +3931,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         )
         .then_some(t.value),
         card: t.card.clone(),
+        name: t.name.clone(),
         roll_source: t.roll_source,
         buy_kind: t.buy_kind,
         seller: t.seller,
@@ -4498,6 +4506,14 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             crate::cond_pre::id_of(&self.trigger.card)
         }
     }
+    fn counter_name(&self) -> i64 {
+        // `t.Name` on a `CounterChanged` hook / `On::Message` entry.
+        if self.trigger.name.is_empty() {
+            0
+        } else {
+            crate::cond_pre::id_of(&self.trigger.name)
+        }
+    }
     fn owner(&self) -> i64 {
         self.cand.map(|(o, _, _)| o as i64).unwrap_or(-1)
     }
@@ -4623,6 +4639,12 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             return 0;
         };
         self.world.card_crystals(o, c) as i64
+    }
+    fn card_counter(&self, name: &str) -> i64 {
+        let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
+            return 0;
+        };
+        self.world.card_counter(o, c, name) as i64
     }
     fn slot(&self, name: &str) -> i64 {
         let o = self.owner();
@@ -4758,6 +4780,23 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
                 (n, v)
             })
             .collect()
+    }
+    fn card_counter_table(&self) -> Vec<(String, i64)> {
+        // The two on-card wire names (`"cp"` / `"crystals"`) plus any
+        // card-declared named counter on the candidate instance.
+        let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let cp = self.world.card_counter(o, c, "cp") as i64;
+        if cp != 0 {
+            out.push(("cp".to_string(), cp));
+        }
+        let crystals = self.world.card_counter(o, c, "crystals") as i64;
+        if crystals != 0 {
+            out.push(("crystals".to_string(), crystals));
+        }
+        out
     }
     fn blocked_bands(&self) -> Vec<i64> {
         Vec::new()
@@ -5109,6 +5148,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            name: String::new(),
             buy_kind: 0,
             seller: -1,
             price: 0,
@@ -5176,8 +5216,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             reshuffle_log: vec![],
             fire_spent_log: vec![],
             house_log: vec![],
-            crystals_log: vec![],
-            cp_log: vec![],
+            counter_log: vec![],
             exile_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -5254,8 +5293,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             reshuffle_log: vec![],
             fire_spent_log: vec![],
             house_log: vec![],
-            crystals_log: vec![],
-            cp_log: vec![],
+            counter_log: vec![],
             exile_log: vec![],
             doubled: -1,
             linger_props: Default::default(),
@@ -5346,6 +5384,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            name: String::new(),
             buy_kind: 0,
             seller: -1,
             price: 0,
@@ -5412,6 +5451,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            name: String::new(),
             buy_kind: 0,
             seller: -1,
             price: 0,
@@ -5871,8 +5911,7 @@ fn is_hook_only(kind: &str) -> bool {
             | TriggerKind::ImmuneAll
             | TriggerKind::Untargetable
             | TriggerKind::Redirect
-            | TriggerKind::CrystalsChanged
-            | TriggerKind::CpChanged
+            | TriggerKind::CounterChanged
     )
 }
 

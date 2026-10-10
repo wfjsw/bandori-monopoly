@@ -231,14 +231,24 @@ pub fn add_held<C: HostCtx>(
     max: i32,
 ) -> Result<i32, HostErr> {
     let name = guest_str(c, np, nl)?;
-    // Marker window: `add_tok` historically opened markerSpend/markerGain.
-    let before = c.st().wr().count_held(&name, player_id);
-    let now = {
-        let st = c.st_mut();
-        st.w().add_held(&name, player_id, n, max)
-    };
-    let _ = before;
-    Ok(now)
+    // Marker window (user ruling 2026-10-07): `markerSpend` / `markerGain` open
+    // before the counters move. Sentinel pause, as `add_tok` did -- the guest
+    // wrapper returns `Result<i32, Prompt>` and a cancelled link surfaces there.
+    if n != 0 {
+        let ok = crate::inline::request_or_pause(
+            c,
+            crate::HostRequest::Marker {
+                player_id,
+                name: name.clone(),
+                delta: n,
+            },
+            crate::inline::Pause::Sentinel,
+        )?;
+        if ok != 1 {
+            return Ok(ok);
+        }
+    }
+    Ok(c.st_mut().w().add_held(&name, player_id, n, max))
 }
 
 pub fn count_held_name<C: HostCtx>(
@@ -531,15 +541,6 @@ pub fn field_instances<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32
             Ok(bytes.len() as i32)
 }
 
-pub fn crystals_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().crystals_at(uid)
-    })
-}
-
-pub fn add_crystals_at<C: HostCtx>(c: &mut C, uid: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().add_crystals_at(uid, n, max),)
-}
 
 pub fn unplace_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
     Ok({
@@ -896,15 +897,7 @@ pub fn card_text_mentions<C: HostCtx>(c: &mut C, cp: i32, cl: i32, np: i32, nl: 
             Ok(c.st().wr().card_text_mentions(&card, &needle) as i32)
 }
 
-pub fn card_crystals<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
-            Ok(c.st().wr().card_crystals(player_id, &card))
-}
 
-pub fn add_card_crystals<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
-            Ok(c.st_mut().w().add_card_crystals(player_id, &card, n, max))
-}
 
 pub fn is_placed<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().is_placed())
@@ -944,39 +937,7 @@ pub fn set_self_immune<C: HostCtx>(c: &mut C, on: i32) -> Result<i32, HostErr> {
     })
 }
 
-pub fn crystals<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().crystals())
-}
 
-pub fn set_crystals<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().set_crystals(n)
-    })
-}
-
-pub fn add_crystals<C: HostCtx>(c: &mut C, n: i32, max: i32) -> Result<i32, HostErr> {
-    // Marker window: `markerSpend` / `markerGain` open before the crystals move.
-    // Traps on pause for the same reason `gain_fire` does: the result is widely
-    // discarded, and a swallow would trap "kept going" on the replay path while
-    // the inline answer path completed the body.
-    if n != 0 {
-        let ok = crate::inline::request_or_pause(
-            c,
-            crate::HostRequest::Marker {
-                player_id: c.st().wr().turn_player(),
-                name: "crystals".into(),
-                delta: n,
-            },
-            crate::inline::Pause::Trap,
-        )?;
-        if ok != 1 {
-            return Ok(ok);
-        }
-    }
-    Ok({
-        c.st_mut().w().add_crystals(n, max)
-    })
-}
 
 pub fn self_prop<C: HostCtx>(c: &mut C, kp: i32, kl: i32) -> Result<i32, HostErr> {
             let key = guest_str(c, kp, kl)?;
@@ -1008,47 +969,9 @@ pub fn set_prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32, v: i32) ->
             Ok(c.st_mut().w().set_prop_at(uid, &key, v))
 }
 
-pub fn count_marks<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32, owner: i32) -> Result<i32, HostErr> {
-            let kind = guest_str(c, kp, kl)?;
-            Ok(c.st().wr().count_marks(tile, &kind, owner))
-}
 
-pub fn remove_marks<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32, owner: i32) -> Result<i32, HostErr> {
-            let kind = guest_str(c, kp, kl)?;
-            Ok(c.st_mut().w().remove_marks(tile, &kind, owner))
-}
 
-pub fn tok<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<i32, HostErr> {
-            let name = guest_str(c, p, n)?;
-            Ok(c.st().wr().tok(player_id, &name))
-}
 
-pub fn set_tok<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, v: i32) -> Result<(), HostErr> {
-            let name = guest_str(c, p, n)?;
-            c.st_mut().w().set_tok(player_id, &name, v);
-            Ok(())
-}
-
-pub fn add_tok<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32, max: i32) -> Result<i32, HostErr> {
-            let name = guest_str(c, p, n)?;
-            // Marker window (user ruling 2026-10-07): `markerSpend` /
-            // `markerGain` open before the counters move.
-            if by != 0 {
-                let ok = crate::inline::request_or_pause(
-                    c,
-                    crate::HostRequest::Marker {
-                        player_id,
-                        name: name.clone(),
-                        delta: by,
-                    },
-                    crate::inline::Pause::Sentinel,
-                )?;
-                if ok != 1 {
-                    return Ok(ok);
-                }
-            }
-            Ok(c.st_mut().w().add_tok(player_id, &name, by, max))
-}
 
 pub fn state_get<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, field: i32) -> Result<i32, HostErr> {
             let key = guest_str(c, p, n)?;
@@ -1111,16 +1034,15 @@ pub fn inc_slot<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32, by: i32) 
             Ok(c.st_mut().w().inc_slot(player_id, &key, by))
 }
 
+// `band_crystals` / `add_band_crystals` stay on the guest surface for now
+// (`ctx::band_crystals` still imports them); they are sugar over the
+// band-skill instance's `counter::CRYSTALS` (see `ops.rs` `band_skill_uid`).
 pub fn band_crystals<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().band_crystals(player_id)
-    })
+    Ok(c.st().wr().band_crystals(player_id))
 }
 
 pub fn add_band_crystals<C: HostCtx>(c: &mut C, player_id: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok({
-            c.st_mut().w().add_band_crystals(player_id, n, max)
-    })
+    Ok(c.st_mut().w().add_band_crystals(player_id, n, max))
 }
 
 pub fn band_skill<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, cap: i32) -> Result<i32, HostErr> {
@@ -1392,10 +1314,7 @@ pub fn in_band<C: HostCtx>(c: &mut C, player_id: i32, p: i32, n: i32) -> Result<
             Ok(c.st().wr().in_band(player_id, &name))
 }
 
-pub fn bump_mark<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32, owner: i32, delta: i32) -> Result<i32, HostErr> {
-            let kind = guest_str(c, kp, kl)?;
-            Ok(c.st_mut().w().bump_mark(tile, &kind, owner, delta))
-}
+
 
 pub fn do_move_roll<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
             Ok(c.st_mut().w().do_move_roll(player_id))
@@ -1464,19 +1383,45 @@ pub fn clear_dice<C: HostCtx>(c: &mut C) -> Result<(), HostErr> {
         Ok(())
 }
 
+/// The first field instance of `card` on `player_id`'s seat, or -1.
+fn field_uid_of<C: HostCtx>(c: &C, player_id: i32, card: &str) -> i32 {
+    c.st()
+        .wr()
+        .field_instances(player_id)
+        .into_iter()
+        .find(|(_, id)| id == card)
+        .map(|(u, _)| u)
+        .unwrap_or(-1)
+}
+
+/// 「不受任何效果影响」 on a named placed card. Resolved through the instance
+/// (`is_immune_at` / `set_immune_at`): the card name is not an identity, so
+/// this hits the first field copy.
 pub fn set_card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, on: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
-            Ok(c.st_mut().w().set_card_immune(player_id, &card, on != 0) as i32)
+    let card = guest_str(c, cp, cl)?;
+    let uid = field_uid_of(c, player_id, &card);
+    if uid < 0 {
+        return Ok(0);
+    }
+    Ok(c.st_mut().w().set_immune_at(uid, on != 0) as i32)
 }
 
 pub fn card_immune<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
-            Ok(c.st().wr().card_immune(player_id, &card) as i32)
+    let card = guest_str(c, cp, cl)?;
+    let uid = field_uid_of(c, player_id, &card);
+    if uid < 0 {
+        return Ok(0);
+    }
+    Ok(c.st().wr().is_immune_at(uid) as i32)
 }
 
 pub fn set_card_tile<C: HostCtx>(c: &mut C, player_id: i32, cp: i32, cl: i32, tile: i32) -> Result<i32, HostErr> {
-            let card = guest_str(c, cp, cl)?;
-            Ok(c.st_mut().w().set_card_tile(player_id, &card, tile) as i32)
+    let card = guest_str(c, cp, cl)?;
+    let uid = field_uid_of(c, player_id, &card);
+    if uid < 0 {
+        return Ok(0);
+    }
+    Ok(c.st_mut().w().set_tile_at(uid, tile) as i32)
 }
 
 pub fn place_card_on<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, cp: i32, cl: i32, p: i32, n: i32) -> Result<i32, HostErr> {
@@ -2489,4 +2434,219 @@ pub fn move_total<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 
 pub fn move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().move_dir())
+}
+
+
+// -- cross-card messages ----------------------------------------------------
+
+/// Resolve `Target` to the receiver instance uids that could answer, in field
+/// order. `Uid` names one; `Card` names the first field copy of that card id on
+/// that seat; `Board` names a standing board pseudo card (`mark:cp` and kin)
+/// via [`CardWorld::mark_rule_instances`].
+fn resolve_receivers<C: HostCtx>(
+    c: &C,
+    target: &abi::Target,
+) -> Vec<(i32, String)> {
+    let w = c.st().wr();
+    match target {
+        abi::Target::Uid(uid) => {
+            // The rule id comes from whichever listing owns the instance.
+            let uid = *uid;
+            let mut hit = Vec::new();
+            for p in 0..w.player_count() {
+                for (u, id) in w.field_instances(p) {
+                    if u == uid {
+                        hit.push((u, id));
+                        return hit;
+                    }
+                }
+            }
+            for (u, id) in w.mark_rule_instances() {
+                if u == uid {
+                    hit.push((u, id));
+                    return hit;
+                }
+            }
+            hit
+        }
+        abi::Target::Card { player, card } => w
+            .field_instances(*player)
+            .into_iter()
+            .filter(|(_, id)| id == card)
+            .collect(),
+        abi::Target::Board(id) => w
+            .mark_rule_instances()
+            .into_iter()
+            .filter(|(_, rid)| rid == id)
+            .collect(),
+    }
+}
+
+/// `ctx::send` -- deliver `name`/`payload` to the addressed receiver's
+/// `On::Message` entry and return its reply.
+///
+/// **Returns 0** when there is no receiver, no matching message name, or the
+/// entry's pre-guard rejects (documented contract: "no receiver / no matching
+/// name / pre-guard reject → 0"). The **first admitted** receiver in field
+/// order answers. The handler does **not** flash the card.
+pub fn send<C: HostCtx>(
+    c: &mut C,
+    tp: i32,
+    tl: i32,
+    np: i32,
+    nl: i32,
+    pp: i32,
+    pl: i32,
+) -> Result<i32, HostErr> {
+    let tbytes = c.read_guest(tp, tl)?;
+    let target: abi::Target = postcard::from_bytes(&tbytes)
+        .map_err(|_| HostErr::trap("guest target is not Target postcard"))?;
+    let name = guest_str(c, np, nl)?;
+    let pbytes = c.read_guest(pp, pl)?;
+    let payload: abi::Message = postcard::from_bytes(&pbytes)
+        .map_err(|_| HostErr::trap("guest payload is not Message postcard"))?;
+
+    let rules = c
+        .st()
+        .rules
+        .clone()
+        .ok_or_else(|| HostErr::trap("send unavailable here"))?;
+
+    // Sender context for the handler (`ctx::message::*`).
+    let sender_uid = c.st().wr().self_uid();
+    let sender_seat = c.st().wr().turn_player();
+
+    for (uid, rule_id) in resolve_receivers(c, &target) {
+        let Some(card) = rules.by_id(&rule_id) else {
+            continue;
+        };
+        let Some(info) = rules.card(card) else {
+            continue;
+        };
+        // The `On::Message` entry whose `messages` list contains `name`.
+        let Some(entry) = info.on.iter().enumerate().find_map(|(i, o)| {
+            (o.kind == OnKind::Message as i32 && o.messages.iter().any(|m| m == &name))
+                .then_some(i as i32)
+        }) else {
+            continue;
+        };
+        // Pre-guard reject: this entry is not a receiver.
+        if let Some(pre) = rules.pre(card, entry) {
+            let cand = crate::cond_pre::fill_candidate(c.st().wr(), sender_seat, &info.id, false);
+            if !crate::cond_pre::admits_pre(Some(pre), None, &cand) {
+                continue;
+            }
+        }
+        if c.st().depth >= MAX_NESTING {
+            return Err(HostErr::trap(format!(
+                "send nested deeper than {MAX_NESTING}"
+            )));
+        }
+        let fuel = c.fuel()?;
+        let st = c.st_mut();
+        // The handler runs as a fresh instance of `rule_id` (same as
+        // `invoke_skill`): `enter_card` gives it its own uid.
+        let saved = st.w().enter_card(&rule_id);
+        let was_from_hand = st.w().play_from_hand();
+        st.w().set_play_from_hand(false);
+        let mut nested = HostState::new(
+            rules.clone(),
+            st.world.take().expect("world present"),
+            std::mem::take(&mut st.answers),
+            st.depth + 1,
+        );
+        nested.next_answer = st.next_answer;
+        // Stash the message context; the handler reads it via `ctx::message`.
+        nested.msg_sender_uid = sender_uid;
+        nested.msg_sender_seat = sender_seat;
+        nested.msg_name = name.clone();
+        nested.msg = payload.clone();
+        nested.msg_reply = 0;
+        let (res, inner, left) = c.call_entry(nested, card, entry, export::OP_RUN, sender_seat, false);
+        let st = c.st_mut();
+        st.world = inner.world;
+        if let Some(w) = st.world.as_mut() {
+            w.set_play_from_hand(was_from_hand);
+        }
+        st.answers = inner.answers;
+        st.next_answer = inner.next_answer;
+        if inner.asked.is_some() {
+            st.asked = inner.asked;
+        }
+        if inner.host_request.is_some() {
+            st.host_request = inner.host_request;
+        }
+        let reply = inner.msg_reply;
+        let _ = st.w().leave_card(saved);
+        c.set_fuel(left)?;
+        match res {
+            Ok(_) => return Ok(reply),
+            Err(e) if e.is_need_input() => return Ok(abi::EXIT_NEED_INPUT),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(0)
+}
+
+/// The sender's instance uid (`ctx::message::sender_uid`).
+pub fn msg_sender_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg_sender_uid)
+}
+
+/// The sender's seat (`ctx::message::sender_seat`).
+pub fn msg_sender_seat<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg_sender_seat)
+}
+
+/// The message name being handled. Two-call string pattern: `p`/`n` are the
+/// guest buffer; `(0,0)` returns the byte length needed.
+pub fn msg_name<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
+    let s = c.st().msg_name.clone();
+    write_str(c, &s, p, n)
+}
+
+pub fn msg_a<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg.a)
+}
+pub fn msg_b<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg.b)
+}
+pub fn msg_c<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg.c)
+}
+pub fn msg_tile<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg.tile)
+}
+pub fn msg_seat<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().msg.seat)
+}
+
+/// The payload text.
+pub fn msg_text<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
+    let s = c.st().msg.text.clone();
+    write_str(c, &s, p, n)
+}
+
+/// Set the reply the sender receives.
+pub fn msg_reply<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
+    c.st_mut().msg_reply = v;
+    Ok(())
+}
+
+/// Two-call string export: write `s` into the guest buffer when it fits,
+/// returning the byte length the guest should allocate.
+fn write_str<C: HostCtx>(c: &mut C, s: &str, p: i32, n: i32) -> Result<i32, HostErr> {
+    let bytes = s.as_bytes();
+    if p != 0 && n >= bytes.len() as i32 {
+        c.write_guest(p, bytes)?;
+    }
+    Ok(bytes.len() as i32)
+}
+
+/// `t.Name` -- the counter name on a `CounterChanged` raise, or the message
+/// name on an `On::Message` dispatch. Two-call string pattern like
+/// [`msg_name`].
+pub fn trig_name<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
+    let s = c.st().wr().trigger().name.clone();
+    write_str(c, &s, p, n)
 }

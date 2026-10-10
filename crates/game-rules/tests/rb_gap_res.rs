@@ -389,13 +389,17 @@ fn g32_eve_fan_flip_leaves_the_matcha_crepe() {
         .push(game_core::state::Counter {
             name: "抹茶芭菲".into(),
             value: 1,
-        });
+        
+        instance: -1,
+    });
     t.m.world_mut().st.players[0]
         .tokens
         .push(game_core::state::Counter {
             name: "P✽P粉丝(正)".into(),
             value: 2,
-        });
+        
+        instance: -1,
+    });
     assert_eq!(t.token(0, "抹茶芭菲"), 1);
     assert_eq!(t.token(0, "P✽P粉丝(正)"), 2);
     // Roll with Y = 2 fans: d20 + 2d4. Eve's (2) is a pre-roll choice; the

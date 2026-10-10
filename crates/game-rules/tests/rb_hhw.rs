@@ -389,7 +389,7 @@ fn kokoro_skill_2_gains_1500_extra_on_passing_circle() {
 fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
     t.m.world_mut().st.players[who]
         .tokens
-        .push(game_core::state::Counter { name: name.into(), value });
+        .push(game_core::state::Counter { name: name.into(), value, instance: -1 });
 }
 
 #[test]

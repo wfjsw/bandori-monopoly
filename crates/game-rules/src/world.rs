@@ -447,6 +447,10 @@ pub trait CardWorld: Clone + 'static {
     fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
         Vec::new()
     }
+    /// Standing board-owned pseudo cards (`mark:cp` and kin), as `(uid, id)`.
+    fn mark_rule_instances(&self) -> Vec<(i32, String)> {
+        Vec::new()
+    }
     /// The instance at `uid`, wherever it sits.
     fn crystals_at(&self, _uid: i32) -> i32 {
         0

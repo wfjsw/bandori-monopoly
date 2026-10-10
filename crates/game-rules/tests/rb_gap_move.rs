@@ -227,7 +227,9 @@ fn g10_eve_plus_yd4_on_a_2d20_move() {
         .push(game_core::state::Counter {
             name: "P✽P粉丝(正)".into(),
             value: 2,
-        });
+        
+        instance: -1,
+    });
     t.dice(&[5, 5, 1, 1]);
     t.roll(0).unwrap();
     // Eve's (2) is a pre-roll choice; the roll may raise the window.

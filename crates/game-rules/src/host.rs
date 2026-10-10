@@ -1871,6 +1871,17 @@ pub struct HostState<W, R = Arc<Inner>> {
     pub asked: Option<Prompt>,
     pub host_request: Option<HostRequest>,
     pub depth: u32,
+    // -- message context (`On::Message` / `ctx::send`) -------------------
+    /// Sender instance uid for the message being handled.
+    pub msg_sender_uid: i32,
+    /// Sender seat for the message being handled.
+    pub msg_sender_seat: i32,
+    /// The message name being handled.
+    pub msg_name: String,
+    /// The payload.
+    pub msg: card_sdk::abi::Message,
+    /// The reply the handler set (`ctx::message::reply`).
+    pub msg_reply: i32,
     /// Per-instance resource ceiling. Installed on the store by [`new_store`];
     /// lives in the store data because that is where `Store::limiter` wants its
     /// resource limiter to come from. Unused on the native backend.
@@ -1905,6 +1916,11 @@ impl<W, R: RulesHandle> HostState<W, R> {
             asked: None,
             host_request: None,
             depth,
+            msg_sender_uid: -1,
+            msg_sender_seat: -1,
+            msg_name: String::new(),
+            msg: card_sdk::abi::Message::default(),
+            msg_reply: 0,
             limits: store_limits(),
         }
     }
@@ -2318,72 +2334,226 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "add_mark",
-        |mut c: C<W>, tile: i32, player_id: i32, kp: i32, kl: i32, p: i32, n: i32| -> Result<(), Error> {
-            hostfns::add_mark(&mut c, tile, player_id, kp, kl, p, n).map_err(HostErr::into_err)
+        "place_mark",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::place_mark(&mut c, tile, kp, kl, cp, cl, owner, src, count, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "place_cp",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::place_cp(&mut c, tile).map_err(HostErr::into_err)
+        "place_mark_new",
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::place_mark_new(&mut c, tile, kp, kl, cp, cl, owner, src, count, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "count_cp",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::count_cp(&mut c, tile).map_err(HostErr::into_err)
+        "count_marks_f",
+        |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
+            hostfns::count_marks_f(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "count_cp_from",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::count_cp_from(&mut c, tile).map_err(HostErr::into_err)
+        "bump_mark_f",
+        |mut c: C<W>, tile: i32, fp: i32, fl: i32, delta: i32| -> Result<i32, Error> {
+            hostfns::bump_mark_f(&mut c, tile, fp, fl, delta).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "clear_cp",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::clear_cp(&mut c, tile).map_err(HostErr::into_err)
+        "remove_marks_f",
+        |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
+            hostfns::remove_marks_f(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "cp_src_at",
-        |mut c: C<W>, tile: i32| -> Result<i32, Error> {
-            hostfns::cp_src_at(&mut c, tile).map_err(HostErr::into_err)
+        "mark_src_at",
+        |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
+            hostfns::mark_src_at(&mut c, tile, fp, fl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "cp_attached",
+        "mark_instance_at",
+        |mut c: C<W>, tile: i32, fp: i32, fl: i32| -> Result<i32, Error> {
+            hostfns::mark_instance_at(&mut c, tile, fp, fl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "counter_self",
+        |mut c: C<W>, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::counter_self(&mut c, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_counter_self",
+        |mut c: C<W>, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_counter_self(&mut c, np, nl, n, max).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_counter_self",
+        |mut c: C<W>, np: i32, nl: i32, n: i32| -> Result<i32, Error> {
+            hostfns::set_counter_self(&mut c, np, nl, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "counter_at",
+        |mut c: C<W>, uid: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::counter_at(&mut c, uid, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_counter_at",
+        |mut c: C<W>, uid: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_counter_at(&mut c, uid, np, nl, n, max).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "card_counter",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::card_counter(&mut c, player_id, cp, cl, np, nl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_card_counter",
+        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_card_counter(&mut c, player_id, cp, cl, np, nl, n, max).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "count_held",
+        |mut c: C<W>, np: i32, nl: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::count_held(&mut c, np, nl, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "add_held",
+        |mut c: C<W>, np: i32, nl: i32, player_id: i32, n: i32, max: i32| -> Result<i32, Error> {
+            hostfns::add_held(&mut c, np, nl, player_id, n, max).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "count_held_name",
+        |mut c: C<W>, np: i32, nl: i32, player_id: i32| -> Result<i32, Error> {
+            hostfns::count_held_name(&mut c, np, nl, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_held_name",
+        |mut c: C<W>, np: i32, nl: i32, player_id: i32, v: i32| -> Result<(), Error> {
+            hostfns::set_held_name(&mut c, np, nl, player_id, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "move_units",
+        |mut c: C<W>, np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32| -> Result<i32, Error> {
+            hostfns::move_units(&mut c, np, nl, from_tile, from_player, to_tile, to_player, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "self_uid",
         |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::cp_attached(&mut c).map_err(HostErr::into_err)
+            hostfns::self_uid(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_cp",
-        |mut c: C<W>, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_cp(&mut c, n, max).map_err(HostErr::into_err)
+        "send",
+        |mut c: C<W>, tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32| -> Result<i32, Error> {
+            hostfns::send(&mut c, tp, tl, np, nl, pp, pl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "cp_at",
-        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
-            hostfns::cp_at(&mut c, uid).map_err(HostErr::into_err)
+        "msg_sender_uid",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_sender_uid(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
         m,
-        "add_cp_at",
-        |mut c: C<W>, uid: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_cp_at(&mut c, uid, n, max).map_err(HostErr::into_err)
+        "msg_sender_seat",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_sender_seat(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_name",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::msg_name(&mut c, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_a",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_a(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_b",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_b(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_c",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_c(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_tile",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_tile(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_seat",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::msg_seat(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_text",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::msg_text(&mut c, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "msg_reply",
+        |mut c: C<W>, v: i32| -> Result<(), Error> {
+            hostfns::msg_reply(&mut c, v).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_name",
+        |mut c: C<W>, p: i32, n: i32| -> Result<i32, Error> {
+            hostfns::trig_name(&mut c, p, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2594,20 +2764,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "field_instances",
         |mut c: C<W>, player_id: i32, buf: i32, cap: i32| -> Result<i32, Error> {
             hostfns::field_instances(&mut c, player_id, buf, cap).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "crystals_at",
-        |mut c: C<W>, uid: i32| -> Result<i32, Error> {
-            hostfns::crystals_at(&mut c, uid).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "add_crystals_at",
-        |mut c: C<W>, uid: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_crystals_at(&mut c, uid, n, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -2983,20 +3139,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "card_crystals",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32| -> Result<i32, Error> {
-            hostfns::card_crystals(&mut c, player_id, cp, cl).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "add_card_crystals",
-        |mut c: C<W>, player_id: i32, cp: i32, cl: i32, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_card_crystals(&mut c, player_id, cp, cl, n, max).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "is_placed",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::is_placed(&mut c).map_err(HostErr::into_err)
@@ -3046,27 +3188,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "crystals",
-        |mut c: C<W>| -> Result<i32, Error> {
-            hostfns::crystals(&mut c).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "set_crystals",
-        |mut c: C<W>, n: i32| -> Result<i32, Error> {
-            hostfns::set_crystals(&mut c, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "add_crystals",
-        |mut c: C<W>, n: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_crystals(&mut c, n, max).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "self_prop",
         |mut c: C<W>, kp: i32, kl: i32| -> Result<i32, Error> {
             hostfns::self_prop(&mut c, kp, kl).map_err(HostErr::into_err)
@@ -3105,41 +3226,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "set_prop_at",
         |mut c: C<W>, uid: i32, kp: i32, kl: i32, v: i32| -> Result<i32, Error> {
             hostfns::set_prop_at(&mut c, uid, kp, kl, v).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "count_marks",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
-            hostfns::count_marks(&mut c, tile, kp, kl, owner).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "remove_marks",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32| -> Result<i32, Error> {
-            hostfns::remove_marks(&mut c, tile, kp, kl, owner).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "tok",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
-            hostfns::tok(&mut c, player_id, p, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "set_tok",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, v: i32| -> Result<(), Error> {
-            hostfns::set_tok(&mut c, player_id, p, n, v).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "add_tok",
-        |mut c: C<W>, player_id: i32, p: i32, n: i32, by: i32, max: i32| -> Result<i32, Error> {
-            hostfns::add_tok(&mut c, player_id, p, n, by, max).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3371,13 +3457,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "in_band",
         |mut c: C<W>, player_id: i32, p: i32, n: i32| -> Result<i32, Error> {
             hostfns::in_band(&mut c, player_id, p, n).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "bump_mark",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, owner: i32, delta: i32| -> Result<i32, Error> {
-            hostfns::bump_mark(&mut c, tile, kp, kl, owner, delta).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4412,6 +4491,11 @@ impl HostState<NullWorld> {
             asked: None,
             host_request: None,
             depth: 0,
+            msg_sender_uid: -1,
+            msg_sender_seat: -1,
+            msg_name: String::new(),
+            msg: card_sdk::abi::Message::default(),
+            msg_reply: 0,
             limits: store_limits(),
         }
     }
@@ -4545,28 +4629,63 @@ impl CardWorld for NullWorld {
     fn is_placed(&self) -> i32 {
         0
     }
-    fn crystals(&self) -> i32 {
+    // named counters & bound units (user ruling 2026-10-10): the null world
+    // holds none, so every read is 0 and every write is a no-op. The sugar
+    // (`crystals` / `tok` / `band_crystals`) defaults over these.
+    fn counter(&self, _: &str) -> i32 {
         0
     }
-    fn set_crystals(&mut self, _: i32) -> i32 {
+    fn set_counter(&mut self, _: &str, _: i32) -> i32 {
         0
     }
-    fn add_crystals(&mut self, _: i32, _: i32) -> i32 {
+    fn add_counter(&mut self, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn add_mark(&mut self, _: i32, _: i32, _: &str, _: crate::Msg) {}
-    fn count_marks(&self, _: i32, _: &str, _: i32) -> i32 {
+    fn counter_at(&self, _: i32, _: &str) -> i32 {
         0
     }
-    fn remove_marks(&mut self, _: i32, _: &str, _: i32) -> i32 {
+    fn add_counter_at(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
         0
     }
-    fn tok(&self, _: i32, _: &str) -> i32 {
+    fn place_mark(
+        &mut self,
+        _: i32,
+        _: &str,
+        _: &str,
+        _: i32,
+        _: i32,
+        _: i32,
+        _: crate::Msg,
+    ) -> i32 {
         0
     }
-    fn set_tok(&mut self, _: i32, _: &str, _: i32) {}
-    fn add_tok(&mut self, _: i32, _: &str, _: i32, _: i32) -> i32 {
+    fn count_marks(&self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
         0
+    }
+    fn bump_mark(&mut self, _: i32, _: &game_core::state::MarkFilter<'_>, _: i32) -> i32 {
+        0
+    }
+    fn remove_marks(&mut self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
+        0
+    }
+    fn mark_src_at(&self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
+        -1
+    }
+    fn mark_instance_at(&self, _: i32, _: &game_core::state::MarkFilter<'_>) -> i32 {
+        -1
+    }
+    fn count_held(&self, _: &str, _: i32) -> i32 {
+        0
+    }
+    fn add_held(&mut self, _: &str, _: i32, _: i32, _: i32) -> i32 {
+        0
+    }
+    fn set_held_name(&mut self, _: &str, _: i32, _: i32) {}
+    fn move_units(&mut self, _: &str, _: i32, _: i32, _: i32, _: i32, _: i32) -> i32 {
+        0
+    }
+    fn self_uid(&self) -> i32 {
+        -1
     }
     fn slot(&self, _: i32, _: &str) -> i32 {
         0
