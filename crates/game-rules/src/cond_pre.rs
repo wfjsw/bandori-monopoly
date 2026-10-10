@@ -17,6 +17,10 @@ pub use rules_cond::{
 };
 use rules_cond::view::{CondView, TileKind};
 
+/// Name-stable hash for string identities (character / band / card id).
+/// Re-exported from [`rules_cond::id_of`] -- one hash, one spelling.
+pub use rules_cond::id_of;
+
 use crate::world::{CardWorld, Trigger};
 
 // ---------------------------------------------------------------------------
@@ -160,6 +164,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn chain_hits(&self) -> Vec<i64> {
         self.trigger.effects.iter().map(|e| e.target as i64).collect()
     }
+    fn trigger_card(&self) -> i64 {
+        if self.trigger.card.is_empty() {
+            0
+        } else {
+            id_of(&self.trigger.card)
+        }
+    }
 
     // -- candidate / owner --------------------------------------------------
     fn owner(&self) -> i64 {
@@ -207,13 +218,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         if self.owner_seat < 0 {
             return 0;
         }
-        id_of(&self.src.character_skill_id(self.owner_seat).unwrap_or_default())
+        id_of(&self.src.character_name(self.owner_seat).unwrap_or_default())
     }
     fn owner_band(&self) -> i64 {
         if self.owner_seat < 0 {
             return 0;
         }
-        id_of(&self.src.band_skill_id(self.owner_seat).unwrap_or_default())
+        id_of(&self.src.band_name(self.owner_seat).unwrap_or_default())
     }
     fn owner_tiles(&self) -> i64 {
         if self.owner_seat >= 0 { self.src.owned_count(self.owner_seat) as i64 } else { 0 }
@@ -238,10 +249,14 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             0
         }
     }
-    fn tok(&self, _kind: i64) -> i64 {
-        // The live world keeps tokens in per-card state; `fill_candidate`
-        // leaves `toks` empty and the eager path answers 0. Match that.
-        0
+    fn tok_named(&self, name: &str) -> i64 {
+        // Same data the guest's `ctx::tok(owner, name)` reads
+        // (`CardWorld::tok`).
+        if self.owner_seat >= 0 {
+            self.src.tok(self.owner_seat, name) as i64
+        } else {
+            0
+        }
     }
     fn blocked(&self, band: i64) -> bool {
         // Mirror of `fill_candidate`'s empty `blocked_bands`: the host fills
@@ -282,10 +297,10 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.src.state_get(seat as i32, game_core::state::key::NO_HAND) as i64
     }
     fn character(&self, seat: i64) -> i64 {
-        id_of(&self.src.character_skill_id(seat as i32).unwrap_or_default())
+        id_of(&self.src.character_name(seat as i32).unwrap_or_default())
     }
     fn band(&self, seat: i64) -> i64 {
-        id_of(&self.src.band_skill_id(seat as i32).unwrap_or_default())
+        id_of(&self.src.band_name(seat as i32).unwrap_or_default())
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.src.owned_count(seat as i32) as i64
@@ -326,8 +341,18 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             })
             .collect()
     }
-    fn tok_table(&self) -> Vec<(i64, i64)> {
-        Vec::new()
+    fn tok_named_table(&self) -> Vec<(String, i64)> {
+        if self.owner_seat < 0 {
+            return Vec::new();
+        }
+        self.src
+            .tok_names(self.owner_seat, "")
+            .into_iter()
+            .map(|n| {
+                let v = self.src.tok(self.owner_seat, &n) as i64;
+                (n, v)
+            })
+            .collect()
     }
     fn blocked_bands(&self) -> Vec<i64> {
         Vec::new()
@@ -391,6 +416,16 @@ pub trait SnapSrc {
     fn state_get(&self, player_id: i32, key: &str) -> i32;
     fn character_skill_id(&self, player_id: i32) -> Option<String>;
     fn band_skill_id(&self, player_id: i32) -> Option<String>;
+    /// The player's character **name** -- the spelling `ctx::character_is`
+    /// matches. `character_is(p, "名")` compares `id_of(name)` to this.
+    fn character_name(&self, player_id: i32) -> Option<String>;
+    /// The player's band **name** -- the spelling `ctx::in_band` matches.
+    /// `band_is(p, "Band")` compares `id_of(name)` to this.
+    fn band_name(&self, player_id: i32) -> Option<String>;
+    /// Named token counter (`ctx::tok`); 0 when absent.
+    fn tok(&self, player_id: i32, name: &str) -> i32;
+    /// Non-zero named token counters (`ctx::tok_names`); `tok('name')` missing = 0.
+    fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String>;
     fn owned_count(&self, player_id: i32) -> i32;
     fn card_crystals(&self, player_id: i32, card: &str) -> i32;
     fn tile_owner(&self, tile: i32) -> i32;
@@ -481,6 +516,22 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn band_skill_id(&self, player_id: i32) -> Option<String> {
         CardWorld::band_skill_id(self, player_id)
+    }
+    #[inline]
+    fn character_name(&self, player_id: i32) -> Option<String> {
+        CardWorld::character_name(self, player_id)
+    }
+    #[inline]
+    fn band_name(&self, player_id: i32) -> Option<String> {
+        CardWorld::band_name(self, player_id)
+    }
+    #[inline]
+    fn tok(&self, player_id: i32, name: &str) -> i32 {
+        CardWorld::tok(self, player_id, name)
+    }
+    #[inline]
+    fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+        CardWorld::tok_names(self, player_id, prefix)
     }
     #[inline]
     fn owned_count(&self, player_id: i32) -> i32 {
@@ -849,20 +900,6 @@ pub fn admits_pre(
 // Window / candidate snapshots (docs/GUARDS.md §4.2)
 // ---------------------------------------------------------------------------
 
-/// Stable int id for a string identity (character / band / card id). Not the
-/// data-table index -- a name-stable hash so a condition's `character_is(p, …)`
-/// literal survives a data reshuffle. Collisions are astronomically unlikely
-/// at 64 bits and the schema is int-only.
-pub fn id_of(name: &str) -> i64 {
-    // FNV-1a 64.
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for b in name.as_bytes() {
-        h ^= *b as u64;
-        h = h.wrapping_mul(0x0000_0100_0000_01b3);
-    }
-    h as i64
-}
-
 /// Build the window snapshot once per trigger / chain window and reuse it
 /// across every candidate probe in that window ([`WindowScope`]). This is
 /// where the G1 savings live: ~48 900 counteract probes share ~250 windows.
@@ -900,8 +937,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             stun: world.stun_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-            character: id_of(&world.character_skill_id(p).unwrap_or_default()),
-            band: id_of(&world.band_skill_id(p).unwrap_or_default()),
+            character: id_of(&world.character_name(p).unwrap_or_default()),
+            band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
         })
         .collect();
@@ -954,6 +991,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         chain,
         turn_player: world.turn_player() as i64,
         turn_key: world.turn_key() as i64,
+        trigger_card: if t.card.is_empty() { 0 } else { id_of(&t.card) },
         players,
         tile_ids,
         circle_tiles,
@@ -999,8 +1037,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             stun: world.stun_of(p) as i64,
             exile: world.state_get(p, game_core::state::key::EXILE) as i64,
             no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-            character: id_of(&world.character_skill_id(p).unwrap_or_default()),
-            band: id_of(&world.band_skill_id(p).unwrap_or_default()),
+            character: id_of(&world.character_name(p).unwrap_or_default()),
+            band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
         })
         .collect();
@@ -1028,6 +1066,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         chain: Vec::new(),
         turn_player: world.turn_player() as i64,
         turn_key: world.turn_key() as i64,
+        // No trigger: no card. `trigger_card == card.id` is false here.
+        trigger_card: 0,
         players,
         tile_ids,
         circle_tiles,
@@ -1082,14 +1122,24 @@ pub fn fill_candidate<S: SnapSrc>(
         owner_stun: world.stun_of(p) as i64,
         owner_exile: world.state_get(p, game_core::state::key::EXILE) as i64,
         owner_no_hand: world.state_get(p, game_core::state::key::NO_HAND) as i64,
-        owner_character: id_of(&world.character_skill_id(p).unwrap_or_default()),
-        owner_band: id_of(&world.band_skill_id(p).unwrap_or_default()),
+        owner_character: id_of(&world.character_name(p).unwrap_or_default()),
+        owner_band: id_of(&world.band_name(p).unwrap_or_default()),
         owner_tiles: world.owned_count(p) as i64,
         card_id: id_of(card),
         card_placed: placed,
         card_cp: world.card_crystals(p, card) as i64,
         slots: Default::default(),
-        toks: Default::default(),
+        // Non-zero named counters only: `tok('name')` missing = 0, so the
+        // zero entries are exactly the absent ones. Same data
+        // `ctx::tok_names` / `ctx::tok` read.
+        tok_names: world
+            .tok_names(p, "")
+            .into_iter()
+            .map(|n| {
+                let v = world.tok(p, &n) as i64;
+                (n, v)
+            })
+            .collect(),
         blocked_bands: Vec::new(),
     };
     fill_candidate_extras(world, owner, &mut cand, true);

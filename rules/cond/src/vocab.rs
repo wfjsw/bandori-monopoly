@@ -216,6 +216,16 @@ pub const VOCAB: &[Name] = &[
         doc: "once-per-turn key; compared against `slot(…)`",
     },
     Name {
+        cel: "trigger_card",
+        aliases: &[],
+        flat: "trigger_card",
+        scope: Scope::Window,
+        ty: Ty::Int,
+        get: |v| v.trigger_card(),
+        fx: NO_FX,
+        doc: "the trigger's card id hash; comparable to `card.id`",
+    },
+    Name {
         cel: "tile.id",
         aliases: &[],
         flat: "tile_id",
@@ -518,11 +528,12 @@ pub const VOCAB: &[Name] = &[
         scope: Scope::Func { arity: 1, cand: true },
         ty: Ty::Int,
         get: NO_GET,
-        fx: Fx::IntInt {
+        fx: Fx::StrInt {
             var: "_toks",
-            fill: |v| v.tok_table(),
+            missing: 0,
+            fill: |v| v.tok_named_table(),
         },
-        doc: "tok(kind) -> the candidate's token; missing = 0",
+        doc: "tok('name') -> the owner's token counter; missing = 0",
     },
     Name {
         cel: "tile_named",
@@ -705,7 +716,7 @@ pub const VOCAB: &[Name] = &[
             var: "_character",
             field: |v, s| v.character(s),
         },
-        doc: "character_is(p, id) -> seat plays that character",
+        doc: "character_is(p, '名') / character_is(p, id) -> seat plays that character",
     },
     Name {
         cel: "band_is",
@@ -718,7 +729,7 @@ pub const VOCAB: &[Name] = &[
             var: "_band",
             field: |v, s| v.band(s),
         },
-        doc: "band_is(p, id) -> seat is in that band",
+        doc: "band_is(p, 'Band') / band_is(p, id) -> seat is in that band",
     },
     Name {
         cel: "blocked",

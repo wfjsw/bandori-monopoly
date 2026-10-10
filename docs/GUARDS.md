@@ -138,10 +138,10 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `roll_source`, `abnormal`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264) |
+| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `roll_source`, `abnormal`, `trigger_card`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264) |
 | window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/fire/crystals/hand/pos/out/stay/stun/exile/no_hand`, `owner.character`, `owner.band`, `owner.tiles` (count) | `World`/`Player` |
-| candidate | `card.id`, `card.placed`, `card.cp`, `slot(name)`, `tok(kind)`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks |
+| candidate | `card.id`, `card.placed`, `card.cp`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks |
 
 Not in the schema (residual, stays in the wasm guard): geometry, list builders,
 `gains_this_turn` / `targeted_count` / `price_tag` / `grade_of`, `skill_blocked`

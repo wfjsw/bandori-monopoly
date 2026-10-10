@@ -46,6 +46,20 @@ pub use ctx::{CandidateCtx, ChainLink, MoveSnap, PlayerSnap, TileSnap, WindowCtx
 pub use eval::{EvalError, WindowScope};
 pub use kinds::{constants as kind_constants, mv, trig, TELEPORT_TRIGGER};
 
+/// Stable int id for a string identity (character name / band name / card id).
+/// Not the data-table index -- a name-stable hash so a condition's
+/// `character_is(p, "…")` / `band_is(p, "…")` / `trigger_card` literal survives
+/// a data reshuffle. Collisions are astronomically unlikely at 64 bits and the
+/// schema is int-only. FNV-1a 64.
+pub fn id_of(name: &str) -> i64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for b in name.as_bytes() {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    h as i64
+}
+
 /// Why a condition failed to compile. Fail-closed at build: an unparsable or
 /// rejected condition is a `build-ruleset` error (G2 maps this to
 /// `RuleError::BadPre`), never "treat as true" — the clauses it carries would

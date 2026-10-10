@@ -106,6 +106,9 @@ pub struct WindowCtx {
     pub turn_player: i64,
     /// Once-per-turn key; compared against `slot('…')`.
     pub turn_key: i64,
+    /// The trigger's card id hash (`trigger_card`), same encoding as
+    /// [`CandidateCtx::card_id`]. `0` when the trigger carries no card.
+    pub trigger_card: i64,
     /// Index = seat id.
     pub players: Vec<PlayerSnap>,
     /// `tile_named(name) -> id`, resolved at load. Empty is fine if no
@@ -164,8 +167,9 @@ pub struct CandidateCtx {
     /// `slot(name)` lookup. Missing name evaluates to `0` (matches the
     /// "unset slot" guards such as `slot('asUsualTurn') != turn_key`).
     pub slots: BTreeMap<String, i64>,
-    /// `tok(kind)` lookup. Missing kind evaluates to `0`.
-    pub toks: BTreeMap<i64, i64>,
+    /// `tok('name')` lookup -- the owner's named token counters, the same
+    /// data `ctx::tok(player_id, name)` reads. Missing name = `0`.
+    pub tok_names: BTreeMap<String, i64>,
     /// Bands whose skill is blocked for this candidate (`blocked(band)`).
     pub blocked_bands: Vec<i64>,
 }
@@ -175,8 +179,8 @@ impl CandidateCtx {
         self.slots.get(name).copied().unwrap_or(0)
     }
 
-    pub fn tok(&self, kind: i64) -> i64 {
-        self.toks.get(&kind).copied().unwrap_or(0)
+    pub fn tok_named(&self, name: &str) -> i64 {
+        self.tok_names.get(name).copied().unwrap_or(0)
     }
 
     pub fn blocked(&self, band: i64) -> bool {

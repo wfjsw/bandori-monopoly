@@ -44,6 +44,7 @@ fn window() -> WindowCtx {
         ],
         turn_player: 1,
         turn_key: 7,
+        trigger_card: 0,
         players: (0..4)
             .map(|i| PlayerSnap {
                 money: 500 + i * 100,
@@ -69,7 +70,7 @@ fn candidate(owner: i64) -> CandidateCtx {
         owner_band: owner % 2,
         card_id: 42,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
-        toks: [(rules_cond::trig::Pay, 1)].into_iter().collect(),
+        tok_names: [("水母标记".to_string(), 1)].into_iter().collect(),
         ..CandidateCtx::default()
     }
 }

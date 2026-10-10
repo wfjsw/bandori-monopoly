@@ -820,6 +820,24 @@ impl CardWorld for Run {
     fn character_skill_id(&self, player_id: i32) -> Option<String> {
         self.world.character_skill_id(player_id)
     }
+    fn character_name(&self, player_id: i32) -> Option<String> {
+        // The `character_is` spelling: `MatchPlayer::character`.
+        self.world
+            .st
+            .players
+            .get(player_id.max(0) as usize)
+            .map(|s| s.character.clone())
+            .filter(|c| !c.is_empty())
+    }
+    fn band_name(&self, player_id: i32) -> Option<String> {
+        // The `in_band` spelling: the character's band from the data table.
+        let s = self.world.st.players.get(player_id.max(0) as usize)?;
+        self.data
+            .characters
+            .iter()
+            .find(|c| c.name == s.character)
+            .map(|c| c.band.clone())
+    }
     fn band_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
         self.world.band_skills(player_id)
     }
@@ -4191,6 +4209,33 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.world.band_skill_id(player_id)
     }
     #[inline]
+    fn character_name(&self, player_id: i32) -> Option<String> {
+        self.world
+            .st
+            .players
+            .get(player_id.max(0) as usize)
+            .map(|s| s.character.clone())
+            .filter(|c| !c.is_empty())
+    }
+    #[inline]
+    fn band_name(&self, player_id: i32) -> Option<String> {
+        // Same lookup `CardWorld::in_band` does: the character's band.
+        let s = self.world.st.players.get(player_id.max(0) as usize)?;
+        self.data
+            .characters
+            .iter()
+            .find(|c| c.name == s.character)
+            .map(|c| c.band.clone())
+    }
+    #[inline]
+    fn tok(&self, player_id: i32, name: &str) -> i32 {
+        self.world.tok(player_id, name)
+    }
+    #[inline]
+    fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String> {
+        self.world.tok_names(player_id, prefix)
+    }
+    #[inline]
     fn owned_count(&self, player_id: i32) -> i32 {
         self.world.owned_tiles(player_id).len() as i32
     }
@@ -4349,6 +4394,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn chain_hits(&self) -> Vec<i64> {
         self.trigger.effects.iter().map(|e| e.target as i64).collect()
     }
+    fn trigger_card(&self) -> i64 {
+        if self.trigger.card.is_empty() {
+            0
+        } else {
+            crate::cond_pre::id_of(&self.trigger.card)
+        }
+    }
     fn owner(&self) -> i64 {
         self.cand.map(|(o, _, _)| o as i64).unwrap_or(-1)
     }
@@ -4421,16 +4473,37 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         if o < 0 {
             return 0;
         }
-        crate::cond_pre::id_of(
-            &self.world.character_skill_id(o as i32).unwrap_or_default(),
-        )
+        // The character **name** (`ctx::character_is` spelling), not the
+        // skill id -- `character_is(p, "名")` hashes the name.
+        let name = self
+            .world
+            .st
+            .players
+            .get(o.max(0) as usize)
+            .map(|s| s.character.clone())
+            .unwrap_or_default();
+        crate::cond_pre::id_of(&name)
     }
     fn owner_band(&self) -> i64 {
         let o = self.owner();
         if o < 0 {
             return 0;
         }
-        crate::cond_pre::id_of(&self.world.band_skill_id(o as i32).unwrap_or_default())
+        // The band **name** (`ctx::in_band` spelling).
+        let band = self
+            .world
+            .st
+            .players
+            .get(o.max(0) as usize)
+            .and_then(|s| {
+                self.data
+                    .characters
+                    .iter()
+                    .find(|c| c.name == s.character)
+                    .map(|c| c.band.clone())
+            })
+            .unwrap_or_default();
+        crate::cond_pre::id_of(&band)
     }
     fn owner_tiles(&self) -> i64 {
         let o = self.owner();
@@ -4462,8 +4535,14 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             0
         }
     }
-    fn tok(&self, _kind: i64) -> i64 {
-        0
+    fn tok_named(&self, name: &str) -> i64 {
+        // Same data `ctx::tok(owner, name)` reads.
+        let o = self.owner();
+        if o >= 0 {
+            self.world.tok(o as i32, name) as i64
+        } else {
+            0
+        }
     }
     fn blocked(&self, _band: i64) -> bool {
         false
@@ -4505,10 +4584,30 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .state_get(seat as i32, game_core::state::key::NO_HAND) as i64
     }
     fn character(&self, seat: i64) -> i64 {
-        crate::cond_pre::id_of(&self.world.character_skill_id(seat as i32).unwrap_or_default())
+        let name = self
+            .world
+            .st
+            .players
+            .get(seat.max(0) as usize)
+            .map(|s| s.character.clone())
+            .unwrap_or_default();
+        crate::cond_pre::id_of(&name)
     }
     fn band(&self, seat: i64) -> i64 {
-        crate::cond_pre::id_of(&self.world.band_skill_id(seat as i32).unwrap_or_default())
+        let band = self
+            .world
+            .st
+            .players
+            .get(seat.max(0) as usize)
+            .and_then(|s| {
+                self.data
+                    .characters
+                    .iter()
+                    .find(|c| c.name == s.character)
+                    .map(|c| c.band.clone())
+            })
+            .unwrap_or_default();
+        crate::cond_pre::id_of(&band)
     }
     fn tiles(&self, seat: i64) -> i64 {
         self.world.owned_tiles(seat as i32).len() as i64
@@ -4549,8 +4648,19 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             .map(|n| (n.to_string(), self.slot(n)))
             .collect()
     }
-    fn tok_table(&self) -> Vec<(i64, i64)> {
-        Vec::new()
+    fn tok_named_table(&self) -> Vec<(String, i64)> {
+        let o = self.owner();
+        if o < 0 {
+            return Vec::new();
+        }
+        self.world
+            .tok_names(o as i32, "")
+            .into_iter()
+            .map(|n| {
+                let v = self.world.tok(o as i32, &n) as i64;
+                (n, v)
+            })
+            .collect()
     }
     fn blocked_bands(&self) -> Vec<i64> {
         Vec::new()
