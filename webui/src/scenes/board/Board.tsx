@@ -83,7 +83,9 @@ function useMatchDriver(opts: {
         if (!ok && autoEnd.current === key) autoEnd.current = -1;
       });
     }
-    if (S.phase === "ended" && !resultsShown.current) {
+    // A replay ends on its last frame with the transport still up (scrub
+    // back, or exit); the results popup belongs to a live match only.
+    if (S.phase === "ended" && !resultsShown.current && sess.kind !== "replay") {
       resultsShown.current = true;
       showResults(sess, m, exit);
     }
