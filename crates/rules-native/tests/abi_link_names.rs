@@ -17,30 +17,17 @@
 
 use std::path::Path;
 
+/// `card-sdk`'s `mod sys` (`rules/card-sdk/src/ctx/sys.rs`): the file is the
+/// one extern block, so all of it is scanned.
+fn sys_block() -> String {
+    let sys = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/card-sdk/src/ctx/sys.rs");
+    std::fs::read_to_string(&sys).unwrap_or_else(|e| panic!("read {}: {e}", sys.display()))
+}
+
 #[test]
 fn every_sys_import_has_a_native_link_name() {
-    let ctx = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/card-sdk/src/ctx.rs");
-    let src = std::fs::read_to_string(&ctx).unwrap_or_else(|e| panic!("read {}: {e}", ctx.display()));
-
-    let start = src
-        .find("mod sys {")
-        .unwrap_or_else(|| panic!("no `mod sys` block in {}", ctx.display()));
-    let mut depth = 0usize;
-    let mut end = start;
-    for (k, ch) in src[start..].char_indices() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    end = start + k;
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let block = &src[start..end];
+    let block = sys_block();
+    let block = block.as_str();
 
     let mut missing: Vec<String> = vec![];
     let mut prev_has_attr = false;
@@ -73,7 +60,7 @@ fn every_sys_import_has_a_native_link_name() {
 
     assert!(
         missing.is_empty(),
-        "rules/card-sdk/src/ctx.rs `mod sys` imports missing \
+        "rules/card-sdk/src/ctx/sys.rs imports missing \
          `#[cfg_attr(not(target_arch = \"wasm32\"), link_name = \"bandori_<name>\")]`: \
          {missing:?}.\n\
          Without it the native build (rules-native, docs/BOT.md B1) links the bare \
@@ -85,30 +72,13 @@ fn every_sys_import_has_a_native_link_name() {
 
 #[test]
 fn every_sys_import_has_a_native_symbol() {
-    let ctx = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../rules/card-sdk/src/ctx.rs");
-    let src = std::fs::read_to_string(&ctx).unwrap();
     let syms = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/game-rules/src/native_shims.rs"),
     )
     .unwrap();
 
-    let start = src.find("mod sys {").unwrap();
-    let mut depth = 0usize;
-    let mut end = start;
-    for (k, ch) in src[start..].char_indices() {
-        match ch {
-            '{' => depth += 1,
-            '}' => {
-                depth -= 1;
-                if depth == 0 {
-                    end = start + k;
-                    break;
-                }
-            }
-            _ => {}
-        }
-    }
-    let block = &src[start..end];
+    let block = sys_block();
+    let block = block.as_str();
 
     let mut missing: Vec<String> = vec![];
     for line in block.lines() {
