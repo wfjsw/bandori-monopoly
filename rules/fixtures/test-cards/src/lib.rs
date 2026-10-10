@@ -931,8 +931,13 @@ fn on_ping(player_id: i32) -> card_sdk::Asked {
 }
 
 fn ping_send(player_id: i32) -> card_sdk::Asked {
+    // Address the first `TEST:ping` on our own field (the placed copy). A
+    // board pseudo card with no `On::Message` answers 0.
     let reply = ctx::send(
-        &card_sdk::abi::Target::Board("mark:cp".into()),
+        &card_sdk::abi::Target::Card {
+            player: player_id,
+            card: "TEST:ping".into(),
+        },
         "ping",
         &card_sdk::abi::Message {
             name: "ping".into(),
