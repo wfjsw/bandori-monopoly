@@ -268,3 +268,53 @@ fn deck_before_game_self_place_announces_once() {
         t.recent_keys(40).join(", ")
     );
 }
+
+/// `RAS:成为最强` rolls 1d10 only when the player already owns a livehouse;
+/// otherwise it logs 「没有Livehouse格子」 and teleports to Live House with no
+/// roll. The 4x4x40 seed-0 delta (master dice 18, ours 17) is this branch:
+/// master's multi-pass re-run sees the deed this card's own agent-settle buys
+/// and rolls; the check at play time says no livehouse, so we skip the roll.
+/// Destinations coincide (roll 10 and the no-livehouse branch both pick Live
+/// House), which is why the state hashes match.
+#[test]
+fn be_strongest_rolls_only_with_a_livehouse() {
+    // No livehouse: no dice, and the 「没有」 line is logged.
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.set_money(0, 50_000);
+    t.set_money(1, 50_000);
+    // Strip any opening deeds so neither seat owns a group-6 tile.
+    {
+        let w = t.m.world_mut();
+        for p in w.st.players.iter_mut() {
+            p.field.clear();
+        }
+    }
+    let mark = t.mark();
+    t.give_play(0, "RAS:成为最强").ok();
+    drain(&mut t);
+    let dice = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "dice")
+        .count();
+    assert_eq!(dice, 0, "no livehouse -> no 1d10 roll");
+
+    // Owns a livehouse (RiNG 3 is group 6): the 1d10 must land exactly once.
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.set_money(0, 50_000);
+    t.set_money(1, 50_000);
+    t.set_owner(36, Some(0));
+    let mark = t.mark();
+    t.give_play(0, "RAS:成为最强").ok();
+    drain(&mut t);
+    let dice = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "dice")
+        .count();
+    assert_eq!(dice, 1, "owns a livehouse -> exactly one 1d10 roll");
+}

@@ -149,11 +149,18 @@ fn main() {
         m.quick_start();
         let (mut last_turn, mut last_prompt, mut last_event) = (-1i32, 0i32, 0i32);
         let mut game_hash: u64 = 0xcbf2_9ce4_8422_2325;
+        let mut ev_log: Vec<String> = Vec::new();
         while !m.ended() {
             m.tick(0.25);
             for e in m.events_since(last_event) {
                 last_event = e.id;
                 *kinds.entry(e.r#type.clone()).or_default() += 1;
+                if dump_events.is_some() {
+                    ev_log.push(format!(
+                        "id={} type={} card={:?} player={} value={} from={} to={} msg={} parent={}",
+                        e.id, e.r#type, e.card, e.player_id, e.value, e.from, e.to, e.msg.key(), e.parent
+                    ));
+                }
             }
             let st = m.state();
             if st.prompt.id != 0 && st.prompt.id != last_prompt {
@@ -179,19 +186,7 @@ fn main() {
                         &save,
                     );
                 }
-                if let Some(dir) = &dump_events {
-                    if seed == 0 {
-                        let _ = std::fs::create_dir_all(dir);
-                        let mut lines = Vec::new();
-                        for e in m.events_since(-1) {
-                            lines.push(format!(
-                                "id={} type={} card={:?} value={} msg={} parent={}",
-                                e.id, e.r#type, e.card, e.value, e.msg.key(), e.parent
-                            ));
-                        }
-                        let _ = std::fs::write(Path::new(dir).join("seed0-events.txt"), lines.join("\n"));
-                    }
-                }
+
                 let h = fnv1a64(save.as_bytes());
                 game_hash = game_hash
                     .wrapping_mul(0x0000_0100_0000_01b3)
@@ -224,6 +219,13 @@ fn main() {
             "seed={seed} END round={} reason={} endHash={final_h:016x} gameHash={game_hash:016x}",
             st.round, st.end_reason
         ));
+        if let Some(dir) = &dump_events {
+            let _ = std::fs::create_dir_all(dir);
+            let _ = std::fs::write(
+                Path::new(dir).join(format!("seed{seed}-events.txt")),
+                ev_log.join("\n"),
+            );
+        }
     }
 
     lines.push(format!("TOTAL games={games} players={players} max_rounds={max_rounds} mentality={}", mentality.as_str()));
