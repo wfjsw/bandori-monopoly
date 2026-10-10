@@ -9,7 +9,7 @@ use super::cx::{Ask, Cx, Flow, Halt};
 pub(crate) use super::move_ctx::MoveCtx as Move;
 use super::move_ctx::MoveKind;
 use super::rules::{raise, Dest, Trigger};
-use super::world::{Signal, CIRCLE_MONEY, START_HAND, START_MONEY};
+use super::world::{Signal, WalkSeg, CIRCLE_MONEY, START_HAND, START_MONEY};
 use crate::msg::{Arg, Msg};
 use crate::state::{key, stage, Tick};
 
@@ -1136,7 +1136,22 @@ impl Cx<'_> {
     }
 
     /// `WalkMove` -- step tile by tile; passing CiRCLE pays the reward.
+    ///
+    /// Wraps [`Self::walk_inner`] with the lazy-flush lifecycle: any exit
+    /// (interrupt, out, prompt halt) publishes whatever segment is still
+    /// pending so the client token is never left short of the engine's, and
+    /// the innermost [`WalkSeg`] is popped (a nested walk keeps its own).
     fn walk(&mut self, m: &mut Move) -> Flow<()> {
+        let depth = self.w.walk_depth();
+        let r = self.walk_inner(m);
+        self.w.flush_walk();
+        while self.w.walk_depth() > depth {
+            self.w.pop_walk_seg();
+        }
+        r
+    }
+
+    fn walk_inner(&mut self, m: &mut Move) -> Flow<()> {
         let i = m.player_id;
         let n = self.data.tiles.len() as i32;
         // `Start` -- 「此次移动以X为起点（不触发起点地块效果）」: the walk begins
@@ -1230,15 +1245,30 @@ impl Cx<'_> {
             self.after_walk(m)?;
             return self.move_resolved(m);
         }
-        let (mut seg_from, mut seg_steps, mut first) = (pos, 0, true);
+        // Lazy-flush segment: steps accumulate here and are published as one
+        // `roll` / `move` event when the walk reaches CiRCLE / its last step,
+        // or when anything else is about to be logged (see `World::flush_walk`).
+        // Armed with the head text now; `pending_first` marks that it has not
+        // been published. At every step boundary the segment covers exactly
+        // `from..=to` (`to` lags `next` until the step completes, so a
+        // `passBefore` hook flushes the approach up to `cur`).
+        self.w.push_walk_seg(WalkSeg {
+            player: i as i32,
+            from: pos,
+            to: pos,
+            value: 0,
+            pending_first: true,
+            main: m.main,
+            roll: m.roll,
+            head: head(false),
+        });
         // C# `WalkMoveSteps` bounds the walk by `steps + m.ExtraSteps`, re-read
-        // each step: a card that adds steps mid-walk lengthens it. `MoreSteps`
-        // is a second walk phase (see the tail below).
+        // each step: a card that adds steps mid-walk lengthens it. (`MoreSteps`
+        // is stored on the move but has no second walk phase yet.)
         let mut k = 0usize;
         while k < (steps.max(0) as usize) + m.extra_steps.max(0) as usize {
             let cur = self.w.st.players[i].pos;
             let next = ((cur + m.dir()) % n + n) % n;
-            seg_steps += 1;
             // `MoveCtx.Total` / `Remaining` / `Path` -- the walk's length, how
             // much of it is left, and the tiles it visits (`to_plan`'s `reach`).
             // `total` is the planned length (it tracks `ExtraSteps` mid-walk);
@@ -1253,6 +1283,8 @@ impl Cx<'_> {
             let last = remaining == 0;
             // `passBefore` -- the glossary's 「[经过]X」 is any tile on the move
             // path, so this fires for every step (not just CiRCLE / the end).
+            // A hook that logs here flushes the segment covering steps up to
+            // `cur` (the step onto `next` has not happened yet).
             raise!(self, "passBefore", i, @m m, tile = next)?;
             if self.out(i) || !self.playing() {
                 return Ok(());
@@ -1262,29 +1294,20 @@ impl Cx<'_> {
             }
             self.w.st.players[i].pos = next;
             m.path.push(next);
+            // The step is taken: extend the pending segment to `next`.
+            if let Some(seg) = self.w.walk_seg_mut() {
+                seg.to = next;
+                seg.value += m.dir();
+            }
             if passes_circle || last {
                 // Publish the approach before `passTile`: CiRCLE's rule can
                 // halt there for its reward choice. The client must walk to
                 // the tile before showing that choice, then continue from it
                 // after the reward resolves, without snapping back to `from`.
-                let text = if first {
-                    head(false)
-                } else {
-                    Msg::new("log.move_on").player_id("who", i)
-                };
-                let ek = if first && m.main { "roll" } else { "move" };
-                let e = self.w.log(ek, i as i32, text);
-                e.from = seg_from;
-                e.to = next;
-                e.value = seg_steps * m.dir();
-                e.dice = if first && m.main { m.roll } else { 0 };
-                let pace = if ek == "roll" { 1.5 } else { 0.3 };
-                self.wait(pace + seg_steps as f32 * 0.15);
-                first = false;
-                seg_from = next;
-                seg_steps = 0;
+                self.w.flush_walk();
             }
-            // `passTile` (Fx) -- the player has stepped onto this tile.
+            // `passTile` (Fx) -- the player has stepped onto this tile. A hook
+            // that logs here flushes the segment covering steps up to `next`.
             raise!(self, "passTile", i, @m m, tile = next)?;
             if self.out(i) || !self.playing() {
                 return Ok(());

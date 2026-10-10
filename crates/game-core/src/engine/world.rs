@@ -271,6 +271,59 @@ struct WindowCache {
     events: Arc<Vec<MatchEvent>>,
 }
 
+/// One pending walk segment awaiting lazy flush (`Cx::walk`).
+///
+/// A walk's `roll` / `move` event is not logged per step: steps accumulate
+/// here and the segment is published when the walk reaches CiRCLE / its last
+/// step -- **or** when anything else is about to be logged (a hook's `"card"`
+/// flash, a pay, a prompt's log line), so the client animates the approach
+/// before the thing that interrupted it. Silent hooks do not split the walk.
+///
+/// `from` / `to` are board tiles (`to` is the segment's endpoint, not
+/// `from + value` -- the walk wraps the board). `value` is signed steps
+/// (`seg_steps * dir`). `pending_first` says the walk's head line (`log.roll`
+/// / `log.move_forward` / `log.move_back`) has not been published yet; the
+/// first flush takes `head`, later ones `log.move_on`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WalkSeg {
+    pub player: i32,
+    pub from: i32,
+    pub to: i32,
+    pub value: i32,
+    pub pending_first: bool,
+    /// The walk is the turn's main move: the first publish is kind `roll`
+    /// carrying `dice = roll`, not a bare `move`.
+    pub main: bool,
+    /// The dice face the head `roll` event shows (`m.roll`).
+    pub roll: i32,
+    /// Prebuilt head text (`head(false)` -- 「…n格」 without 「原地」).
+    pub head: Msg,
+}
+
+/// Transient walk-flush state riding a [`World`] (see [`WalkSeg`]).
+///
+/// Not serialized and never compared: it is empty at every checkpointable
+/// moment (flushed before each log line and each prompt), so it cannot affect
+/// a save or a checkpoint-equivalence check. The derived `PartialEq` on
+/// [`World`] would otherwise drag a mid-walk `Some` into a mismatch.
+#[derive(Debug, Default, Clone)]
+pub struct WalkFlush {
+    /// Innermost last: `Cx::walk` pushes, so a nested walk's first event must
+    /// still flush the outer approach first (see [`World::flush_walk`]).
+    stack: Vec<WalkSeg>,
+    /// Presentation time owed to the host for flushed segments. [`crate::engine::cx::Cx::wait`]
+    /// drains it into `delay`.
+    delay: f32,
+    /// Re-entrancy guard: the flush itself logs.
+    flushing: bool,
+}
+
+impl PartialEq for WalkFlush {
+    fn eq(&self, _: &Self) -> bool {
+        true
+    }
+}
+
 impl Default for WindowCache {
     fn default() -> Self {
         Self {
@@ -449,6 +502,10 @@ pub struct World {
     /// ([CP点], `owner == -1`) have no player-owned rule and stay.
     #[serde(default)]
     pub marker_owner: std::collections::BTreeMap<String, String>,
+    /// Pending walk segments + flush pacing (see [`WalkSeg`]). Transient: not
+    /// serialized, not compared.
+    #[serde(skip)]
+    pub walk_flush: WalkFlush,
 }
 
 impl World {
@@ -477,6 +534,7 @@ impl World {
             targeted: vec![],
             gains: vec![],
             marker_owner: std::collections::BTreeMap::new(),
+            walk_flush: WalkFlush::default(),
         }
     }
 
@@ -527,8 +585,14 @@ impl World {
     }
 
     /// Append an event (`MatchHost.Log`). Returns it for further fields.
+    ///
+    /// Lazy walk flush: any other event while a [`WalkSeg`] is pending
+    /// publishes the approach first, so the client walks to the tile before
+    /// showing the card flash / pay / effect that fired there. The flush's own
+    /// event re-enters here under [`WalkFlush::flushing`] and is not re-flushed.
     pub fn log(&mut self, kind: &str, player_id: i32, msg: Msg) -> &mut MatchEvent {
         let _tg = crate::engine::rtimer::guard(&crate::engine::rtimer::LOG_NS);
+        self.flush_walk();
         let e = MatchEvent {
             id: self.next_event,
             r#type: kind.into(),
@@ -543,6 +607,87 @@ impl World {
             self.recent.drain_front(drop);
         }
         self.recent.back_mut().expect("just pushed")
+    }
+
+    /// Publish every pending [`WalkSeg`] that has something to say, outermost
+    /// first (a nested walk's events must not jump the queue ahead of the
+    /// approach that spawned them). Idempotent; safe to call from a halt.
+    ///
+    /// A segment is published when it has walked at least one step, **or**
+    /// when it is a main move's un-published head (the dice-only `roll` on the
+    /// very first `passBefore` -- the client must see the dice before the card
+    /// that reacted to them). A non-main segment with no steps says nothing
+    /// and stays pending, so its head line lands with the first real step.
+    pub fn flush_walk(&mut self) {
+        if self.walk_flush.flushing {
+            return;
+        }
+        self.walk_flush.flushing = true;
+        // Snapshot what to publish (and reset the slots) before logging:
+        // `log` takes `&mut self`, so the stack cannot stay borrowed.
+        let mut pending = Vec::new();
+        for seg in self.walk_flush.stack.iter_mut() {
+            if seg.value == 0 && !(seg.pending_first && seg.main) {
+                continue;
+            }
+            let ek = if seg.pending_first && seg.main {
+                "roll"
+            } else {
+                "move"
+            };
+            let text = if seg.pending_first {
+                seg.head.clone()
+            } else {
+                Msg::new("log.move_on").player_id("who", seg.player)
+            };
+            let dice = if seg.pending_first && seg.main {
+                seg.roll
+            } else {
+                0
+            };
+            pending.push((ek, text, seg.player, seg.from, seg.to, seg.value, dice));
+            seg.from = seg.to;
+            seg.value = 0;
+            seg.pending_first = false;
+        }
+        for (ek, text, player, from, to, value, dice) in pending {
+            let e = self.log(ek, player, text);
+            e.from = from;
+            e.to = to;
+            e.value = value;
+            e.dice = dice;
+            // Same pacing the old per-publish `Cx::wait` applied (1.5s for the
+            // head `roll`, 0.3s for a continuation, plus 0.15s/step).
+            let pace = if ek == "roll" { 1.5 } else { 0.3 };
+            self.walk_flush.delay += pace + value.unsigned_abs() as f32 * 0.15;
+        }
+        self.walk_flush.flushing = false;
+    }
+
+    /// Drain the presentation time [`Self::flush_walk`] accumulated since the
+    /// last drain (the host's `Cx::wait` equivalent).
+    pub fn take_walk_delay(&mut self) -> f32 {
+        std::mem::take(&mut self.walk_flush.delay)
+    }
+
+    /// Arm a new innermost walk segment (`Cx::walk` on entry).
+    pub fn push_walk_seg(&mut self, seg: WalkSeg) {
+        self.walk_flush.stack.push(seg);
+    }
+
+    /// Drop the innermost walk segment (`Cx::walk` on exit, after flushing).
+    pub fn pop_walk_seg(&mut self) {
+        self.walk_flush.stack.pop();
+    }
+
+    /// The walk currently stepping: the innermost armed segment.
+    pub fn walk_seg_mut(&mut self) -> Option<&mut WalkSeg> {
+        self.walk_flush.stack.last_mut()
+    }
+
+    /// How many walk segments are armed (a nested walk pushes another).
+    pub fn walk_depth(&self) -> usize {
+        self.walk_flush.stack.len()
     }
 
     /// A card's effect activated -- or was negated before its body could run.

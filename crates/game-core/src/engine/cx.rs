@@ -771,6 +771,7 @@ impl<'a> Cx<'a> {
         if let Some(a) = self.answers.get(self.cursor) {
             self.cursor += 1;
             self.delay = 0.0;
+            self.w.take_walk_delay();
             return Ok(Reply {
                 players: ask.view.players,
                 fallback: ask.view.fallback,
@@ -780,6 +781,7 @@ impl<'a> Cx<'a> {
         if let Some(p) = self.provider.as_mut() {
             if let Some(a) = p.answer(&ask) {
                 self.delay = 0.0;
+                self.w.take_walk_delay();
                 return Ok(Reply {
                     players: ask.view.players,
                     fallback: ask.view.fallback,
@@ -787,6 +789,10 @@ impl<'a> Cx<'a> {
                 });
             }
         }
+        // Halt for player input: flush any pending walk segment first, so the
+        // client has animated the approach to this point before the prompt
+        // shows (a [反击] window mid-walk, a CiRCLE reward, …).
+        self.w.flush_walk();
         self.w.st.prompt = ask.view.clone();
         Err(Halt(HaltKind::Ask(Box::new(ask))))
     }
@@ -891,7 +897,14 @@ impl<'a> Cx<'a> {
 
     /// Presentation pause (C# `yield return <float>`).
     pub(crate) fn wait(&mut self, secs: f32) {
-        self.delay += secs;
+        self.delay += secs + self.w.take_walk_delay();
+    }
+
+    /// Total presentation time owed to the host, including the pacing a lazy
+    /// walk flush accumulated (`World::flush_walk`) since the last drain.
+    pub(crate) fn take_delay(&mut self) -> f32 {
+        self.delay += self.w.take_walk_delay();
+        std::mem::take(&mut self.delay)
     }
 
     // ---- public surface for card rules ------------------------------------------

@@ -1062,7 +1062,8 @@ impl Match {
                 None => cx,
             };
             let res = run(&mut cx, &routine);
-            (res, cx.delay, cx.into_world())
+            let delay = cx.take_delay();
+            (res, delay, cx.into_world())
         };
         self.provider = prov;
         self.changed = true;
