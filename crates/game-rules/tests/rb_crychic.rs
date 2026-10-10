@@ -503,16 +503,80 @@ fn mutsumi_crychic_skill_fire_cap() {
     assert_eq!(t.p(0).fire_max(), 1);
 }
 
+// -- skill:长崎素世（CRYCHIC）:雨中祈晴 --------------------------------
+
+/// 规则书: 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付，使你下回合的
+/// 主要移动变为传送至触发此技能的那格。」 -- with no cancelled payment there is no
+/// teleport owed: the first planned move walks the dice, it does not jump to tile 0.
 #[test]
-fn soyo_skill_cancels_payment_on_own_tile() {
-    let mut t = Table::new(&["长崎素世（CRYCHIC）", "高松灯（CRYCHIC）"]);
+fn soyo_no_teleport_without_a_cancelled_payment() {
+    let mut t = Table::new(&["长崎素世（CRYCHIC）", "户山香澄"]);
     t.clean();
     t.begin_turn(0);
-    while t.prompt().is_some() {
-        decline_q(&mut t);
+    drain(&mut t);
+    t.set_pos(0, 20);
+    t.dice(&[5]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        25,
+        "no teleport owed: walked 20+5, not tile 0: keys={:?}",
+        t.recent_keys(15)
+    );
+}
+
+/// 规则书: 「你可取消那次支付，使你下回合的主要移动变为传送至触发此技能的那格。」
+/// -- cancelling P1's rent on tile T arms one teleport to T; it is consumed by
+/// P0's next main move exactly once.
+#[test]
+fn soyo_cancel_arms_one_teleport_to_the_payment_tile() {
+    let mut t = Table::new(&["长崎素世（CRYCHIC）", "户山香澄"]);
+    t.clean();
+    t.begin_turn(1);
+    drain(&mut t);
+    let blue = tile("江户川公园");
+    t.set_owner(blue, Some(0));
+    t.set_pos(1, (blue + 59) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    // 「你可取消那次支付」 -- the opt-in ask.
+    let mut cancelled = false;
+    while let Some(_) = t.prompt() {
+        if t.dump_prompt().contains("soyo_crychic") {
+            cancelled = true;
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
     }
-    // 规则书: 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」
-    assert!(t.skills(0).iter().any(|s| s.contains("长崎素世")));
+    assert!(cancelled, "the cancel ask came up: {:?}", t.recent_keys(20));
+    assert_eq!(t.money(1), 10_000, "the rent was cancelled");
+    assert_eq!(t.state(0, "skill.soyoCrychic.armed"), 1, "teleport armed");
+    // 「下回合的主要移动变为传送至触发此技能的那格」
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 20);
+    // No dice loaded: the armed teleport casts none.
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        blue,
+        "teleported to the cancelled-payment tile: keys={:?}",
+        t.recent_keys(15)
+    );
+    assert_eq!(t.state(0, "skill.soyoCrychic.armed"), 0, "the latch is one-shot");
+    // Exactly once: the next main move after that walks again.
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 20);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 23, "the teleport does not repeat: keys={:?}", t.recent_keys(10));
 }
 
 // =====================================================================

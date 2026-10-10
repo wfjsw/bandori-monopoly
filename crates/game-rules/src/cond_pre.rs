@@ -1493,6 +1493,8 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.misakiOther.fire",
     "skill.uikaIdol.fire",
     "skill.takiCrychic.armed",
+    // `soyo_crychic` teleport one-shot flag (`state::set(player_id, ARMED, 1)`).
+    "skill.soyoCrychic.armed",
     "skill.tamade.builtThis",
     // `kaoru_thief` mark-turn latch (`ctx::set_slot(player_id, TURN, turn_key)`).
     "kaoru_thief_turn",

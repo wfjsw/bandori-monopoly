@@ -698,22 +698,31 @@ impl Cx<'_> {
                 self.w.turn.plan = plan.clone();
                 raise!(self, "rollPlan", i, @m plan)?;
                 plan = self.w.turn.plan.clone();
-                plan.roll = match self.w.turn.fixed_roll {
-                    Some(n) => n,
-                    None => self.roll_tables(&plan),
-                };
-                let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
-                plan.roll = t.value.max(0);
-                let t = raise!(self, "moveRoll", i, @m plan, value = plan.roll)?;
-                plan.roll = t.value.max(0);
-                if let Some(steps) = self.w.hidden[i].next_steps.take() {
-                    plan.roll = steps.max(0);
-                }
-                if !plan.signed {
-                    plan.roll = plan.roll.max(plan.min_roll);
+                // A `rollPlan` body may have rewritten this move as a [传送]
+                // (same branch `main_move` takes for the turn's main move).
+                if plan.teleport_to >= 0 {
+                    let to = plan.teleport_to as usize;
+                    let resolve = plan.resolve;
+                    let why = plan.why.clone();
+                    self.teleport(i, to, resolve, why)?;
+                } else {
+                    plan.roll = match self.w.turn.fixed_roll {
+                        Some(n) => n,
+                        None => self.roll_tables(&plan),
+                    };
+                    let t = raise!(self, "rollAfter", i, @m plan, value = plan.roll)?;
+                    plan.roll = t.value.max(0);
+                    let t = raise!(self, "moveRoll", i, @m plan, value = plan.roll)?;
+                    plan.roll = t.value.max(0);
+                    if let Some(steps) = self.w.hidden[i].next_steps.take() {
+                        plan.roll = steps.max(0);
+                    }
+                    if !plan.signed {
+                        plan.roll = plan.roll.max(plan.min_roll);
+                    }
                 }
             }
-            if !plan.cancelled && !self.out(i) {
+            if plan.teleport_to < 0 && !plan.cancelled && !self.out(i) {
                 self.walk(&mut plan)?;
             }
         }
@@ -1103,34 +1112,46 @@ impl Cx<'_> {
                 self.w.st.step = stage::END;
                 return Ok(());
             }
-            // A stored fixed face ([`super::world::TurnCtx`]'s `fixed_roll`)
-            // replaces the roll, otherwise sum the `base` + `dice` tables
-            // (default 1d20; `sides == 0` is a flat `count`).
-            m.roll = match self.w.turn.fixed_roll {
-                Some(n) => n,
-                None => self.roll_tables(&m),
-            };
-            // `rollAfter` (Fx) runs on the fresh roll, *before* the moveRoll
-            // [反击] window; a field card may rewrite it (`set_move_roll`),
-            // which is how a stored boost lands.
-            let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
-            m.roll = t.value.max(0);
-            let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
-            // A [反击] may have rerolled the dice: the face the walk uses is
-            // the one left on the trigger.
-            m.roll = t.value.max(0);
-            // A stored step count (`next_steps`) overrides the roll for this
-            // one main move.
-            if let Some(steps) = self.w.hidden[i].next_steps.take() {
-                m.roll = steps.max(0);
+            if m.teleport_to >= 0 {
+                // A `rollPlan` body rewrote this move as a [传送] (the same
+                // shape `card_move` gives a plan that already carries
+                // `teleport_to`): the destination is the plan's, and no dice
+                // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
+                // …那格」 writes it here.
+                let to = m.teleport_to as usize;
+                let resolve = m.resolve;
+                let why = m.why.clone();
+                self.teleport(i, to, resolve, why)?;
+            } else {
+                // A stored fixed face ([`super::world::TurnCtx`]'s `fixed_roll`)
+                // replaces the roll, otherwise sum the `base` + `dice` tables
+                // (default 1d20; `sides == 0` is a flat `count`).
+                m.roll = match self.w.turn.fixed_roll {
+                    Some(n) => n,
+                    None => self.roll_tables(&m),
+                };
+                // `rollAfter` (Fx) runs on the fresh roll, *before* the moveRoll
+                // [反击] window; a field card may rewrite it (`set_move_roll`),
+                // which is how a stored boost lands.
+                let t = raise!(self, "rollAfter", i, @m m, value = m.roll)?;
+                m.roll = t.value.max(0);
+                let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?;
+                // A [反击] may have rerolled the dice: the face the walk uses is
+                // the one left on the trigger.
+                m.roll = t.value.max(0);
+                // A stored step count (`next_steps`) overrides the roll for this
+                // one main move.
+                if let Some(steps) = self.w.hidden[i].next_steps.take() {
+                    m.roll = steps.max(0);
+                }
+                // The unsigned-roll clamp (`roll = max(min_roll, roll)`) applies
+                // to the final face after the counteractions, so a card that
+                // pushes the roll down still respects the floor.
+                if !m.signed {
+                    m.roll = m.roll.max(m.min_roll);
+                }
+                self.walk(&mut m)?;
             }
-            // The unsigned-roll clamp (`roll = max(min_roll, roll)`) applies to
-            // the final face after the counteractions, so a card that pushes
-            // the roll down still respects the floor.
-            if !m.signed {
-                m.roll = m.roll.max(m.min_roll);
-            }
-            self.walk(&mut m)?;
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
             // each follower recorded on the plan replays this move's result,

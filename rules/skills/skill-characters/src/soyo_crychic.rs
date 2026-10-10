@@ -9,13 +9,23 @@
 //! (`set_pay_amount(0)`); 「下回合的主要移动变为传送至…」 is an armed one-shot
 //! the next `RollPlan` consumes -- the same shape as detour's 「下一次的移动掷骰
 //! 变更为1d6」.
+//!
+//! The latch is a presence flag plus a tile memory (the detour / soyo_clear
+//! idiom), not a signed tile: an unset key reads 0, and tile 0 is a real tile,
+//! so a bare tile index cannot say "nothing owed" without a sentinel. The flag
+//! gates the read and the CEL `slot('skill.soyoCrychic.armed')` condition, so
+//! the residual guard is gone.
 
 use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
-/// The tile this skill wants to teleport back to, or -1.
-const OWED: &str = "skill.soyoCrychic.owed";
+/// The teleport is armed (0/1). Presence only -- the tile to teleport to rides
+/// in [`TILE`], so no value doubles as "nothing owed".
+const ARMED: &str = "skill.soyoCrychic.armed";
+/// The tile 「触发此技能的那格」 to teleport back to. Only read while [`ARMED`]
+/// is set; tile 0 is a real tile, not "nothing".
+const TILE: &str = "skill.soyoCrychic.tile";
 
 pub const SOYO_CRYCHIC: CardDef = CardDef::new(
     "skill:长崎素世（CRYCHIC）:雨中祈晴",
@@ -32,10 +42,15 @@ pub const SOYO_CRYCHIC: CardDef = CardDef::new(
             on_pay,
         ),
         // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
-        // the armed one-shot (`MINE` = `turn_player == owner` on `RollPlan`).
-        // `skill.soyoCrychic.owed` is not in SLOT_NAMES, so the latch is the
-        // residual guard.
-        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, Some(on_plan_owed), on_plan),
+        // the armed one-shot (`actor == owner` on `RollPlan`). The latch is a
+        // CEL `slot` presence flag (`skill.soyoCrychic.armed` is in SLOT_NAMES),
+        // so the condition alone decides and no residual guard remains.
+        On::Hook(
+            &[HookKind::RollPlan],
+            "actor == owner && slot('skill.soyoCrychic.armed') != 0",
+            None,
+            on_plan,
+        ),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -59,7 +74,8 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     // 「取消那次支付」
     ctx::trigger::set_pay_amount(0);
     // 「使你下回合的主要移动变为传送至触发此技能的那格」
-    state::set(player_id, OWED, t);
+    state::set(player_id, TILE, t);
+    state::set(player_id, ARMED, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("soyo_crychic_cancelled")).tile("tile", t),
@@ -67,17 +83,11 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for 「传送至…那格」 -- `skill.soyoCrychic.owed` is not in the
-/// condition vocabulary's SLOT_NAMES, so the latch stays here.
-fn on_plan_owed(player_id: i32) -> bool {
-    state::get(player_id, OWED) >= 0
-}
-
 /// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
-/// is the residual guard (`on_plan_owed`).
+/// is the entry's condition (`slot('skill.soyoCrychic.armed') != 0`).
 fn on_plan(player_id: i32) -> card_sdk::Asked {
-    let t = state::get(player_id, OWED);
-    state::set(player_id, OWED, -1);
+    let t = state::get(player_id, TILE);
+    state::set(player_id, ARMED, 0);
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(t);
     plan::set_resolve(true);
