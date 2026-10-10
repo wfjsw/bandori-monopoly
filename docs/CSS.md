@@ -147,7 +147,9 @@ New copies of these shapes should compose the primitive, not restate it.
 
 | | before | after |
 | --- | --- | --- |
-| lines | 2059 | see report |
-| rules | ~1144 | see report |
-| raw `z-index` numbers | 51 | 0 (outside local 0/1) |
-| hex colours in modules | 304 | see report |
+| lines | 2059 | 3201 (multi-line formatting) |
+| rules | ~1144 | ~1154 |
+| raw `z-index` numbers | 51 | 0 (outside Ring's in-tile 0..10) |
+| hex colours in modules | 304 | 242 (the rest are the map tile palette) |
+| `!important` | 1 | 0 |
+| `:root` tokens | 21 | 96 |
