@@ -1042,11 +1042,48 @@ fn settle_nest(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+
+/// STACK-01: a SettleBody hook whose body logs before a nested settle, then
+/// after it (the tail). A sibling hook logs too. The test pins that the tail
+/// runs exactly once and the sibling is not re-run.
+const SETTLE_TAIL: CardDef = CardDef::new(
+    "TEST:settleTail",
+    &[On::Hook(&[HookKind::SettleBody], "actor == owner && card.placed", None, settle_tail)],
+);
+
+fn settle_tail(player_id: i32) -> card_sdk::Asked {
+    // Only on the tile this card sits on (tile 5 in the test) -- not every
+    // settle the owner makes.
+    if ctx::trigger::tile() != 5 {
+        return Ok(());
+    }
+    ctx::log(player_id, &Msg::new(key!("tail_before")));
+    // Settle a *different* tile so this is a 1-level nest (the tail must run
+    // exactly once). Tile 0 has no settleTail instance.
+    ctx::card_settle_at(player_id, 0, true);
+    ctx::log(player_id, &Msg::new(key!("tail_after")));
+    Ok(())
+}
+
+/// Sibling hook on SettleBody -- must run once per settle, not again on resume.
+const SETTLE_SIB: CardDef = CardDef::new(
+    "TEST:settleSib",
+    &[On::Hook(&[HookKind::SettleBody], "actor == owner && card.placed", None, settle_sib)],
+);
+
+fn settle_sib(player_id: i32) -> card_sdk::Asked {
+    if ctx::trigger::tile() != 5 {
+        return Ok(());
+    }
+    ctx::log(player_id, &Msg::new(key!("sib_once")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
-    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST
+    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB
 ]);
