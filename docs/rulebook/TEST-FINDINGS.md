@@ -1142,3 +1142,9 @@ or A/B items that need a wider surface than this batch:
   (`set_fixed_roll`); the tests omitted the main `t.roll(0)`. Same drive as the
   green `rinko_skill_2_fixes_the_move_roll_to_x_times_six` / `g09_*` twins.
   m11 records 14 (Y.O.L.O +2 over the fixed 12).
+* **SKILL-08 (2026-10-10):** 要乐奈 (3) 「你与其他玩家重合时」 now fires. The body
+  read `trigger::player_id()` as "the other" under a `MINE` pre (always the
+  owner) and bailed; it now reads `trigger::target()`. New test
+  `rana_cat_overlap_takes_800_and_gives_a_parfait`. Amount 800 (sheet).
+* **SKILL-09 (stale):** kaoru_prince Pass half is already `pre::MINE` +
+  filtered `PassTile`; live `kaoru_skill_1_*` tests pin it.

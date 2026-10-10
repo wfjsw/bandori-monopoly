@@ -693,25 +693,25 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 ## SKILL-08 — Rana parking 「你与其他玩家重合时」 never fires (suspected bug)
 - **kind**: implementation bug
-- **class**: A
+- **class**: D (fixed 2026-10-10; see D-07)
 - **severity**: medium
 - **suggested batch**: movement / skills: MyGO
 - **locations**
-  - `rules/skills/skill-characters/src/rana_parking.rs:46` (pre is `MINE` but body reads `player_id` as "the other"; bails when it equals the owner — always)
+  - `rules/skills/skill-characters/src/rana_parking.rs` `on_overlap` (un-ignored via new test `rana_cat_overlap_takes_800_and_gives_a_parfait`, green twice)
 - **rulebook**: 「你与其他玩家重合时」.
-- **current**: clause never fires.
-- **expected**: fires on overlap; read `target` as the other player.
+- **was**: pre is `MINE` (owner is the mover) but the body read `player_id` as "the other" and bailed when it equalled the owner — always.
+- **fixed**: body reads `trigger::target()` (the other player already on the landing tile). Amount stays 800 (sheet / `characters.json`; older `rulebook.txt` prose says 1000).
 
 ## SKILL-09 — kaoru_prince 「每次[经过]或被[经过]时」 fires for every passer
-- **kind**: implementation bug
-- **class**: A
+- **kind**: stale
+- **class**: D (already fixed; backlog entry was against an older revision)
 - **severity**: medium
 - **suggested batch**: movement
 - **locations**
-  - `rules/skills/skill-characters/src/kaoru_prince.rs:33` (`""` pre currently fires for every passer)
+  - `rules/skills/skill-characters/src/kaoru_prince.rs` — Pass half is already `pre::MINE`; 被[经过] is a filtered `PassTile`
+  - live pins: `rb_hhw.rs` `kaoru_skill_1_own_walk_gains_one_pot_per_step` / `kaoru_skill_1_another_players_walk_gives_nothing` / `kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step`
 - **rulebook**: 「每次[经过]或被[经过]时」 — `Pass` half is "I pass" (`actor == owner`).
-- **current**: unfiltered (suspected bug).
-- **expected**: filter `actor == owner` on the Pass half.
+- **fixed already**: `On::Hook(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
 
 ## TILE-01 — Anon Tokyo link arrangements (Fire bird / Repaint / ONE OF US / linked rent)
 - **kind**: implementation bug
@@ -1399,6 +1399,11 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 - Green twins already pin the drive: `rinko_skill_2_fixes_the_move_roll_to_x_times_six` (rb_roselia), `g09_fixed_roll_plus_starlit_reroll` (rb_gap_move).
 - Fix: `t.roll(0)` after the X prompt. m10 (stunned mid-turn) and m11 (Y.O.L.O) un-ignored, green twice. m11 records 14 (Y.O.L.O +2 over the fixed 12).
 - Related (not this item): `fixed_roll` is not one-shot-cleared after consumption (latent, no test); the 「固定」 vs later additives question stays a RULING (starry_night / eve_unify already refuse additives over a fixed face; Y.O.L.O does not).
+
+## D-07 — SKILL-08 要乐奈 (3) overlap (pre/body mismatch; 2026-10-10)
+- Root cause: `on_overlap` sat on `PassPlayer` with `pre::MINE` (owner is the mover) but read `trigger::player_id()` as "the other" and bailed when it equalled the owner — always. `target` is the other player already on the landing tile (`abi.rs` PassPlayer payload).
+- Fix: read `trigger::target()`. New test `rana_cat_overlap_takes_800_and_gives_a_parfait` (rb_mygo) pins +800/−800 and a 抹茶芭菲 on the other. Green twice.
+- Amount: 800 (sheet / `characters.json`). Older `rulebook.txt` prose says 1000 — sheet wins.
 
 ---
 

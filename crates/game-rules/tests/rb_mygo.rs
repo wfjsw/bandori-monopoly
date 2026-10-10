@@ -1137,6 +1137,28 @@ fn rana_cat_space_teleport_spends_three_fire() {
     assert_eq!(t.fire(0), 0, "three fire spent");
 }
 
+#[test]
+fn rana_cat_overlap_takes_800_and_gives_a_parfait() {
+    // 规则书: 「（3）你与其他玩家重合时，获得其800资金并使那个玩家获得一个"抹茶芭菲"」.
+    // Sheet / characters.json name 800 (the older rulebook.txt prose says 1000).
+    let mut t = Table::new(&["要乐奈", "高松灯"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_pos(0, 0);
+    t.set_pos(1, 5);
+    t.dice(&[5]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 5, "Rana walked onto P1");
+    assert_eq!(t.money(0), 10_800, "gained 800 from the overlap");
+    assert_eq!(t.money(1), 9_200, "the other player paid 800");
+    assert_eq!(
+        t.token(1, "抹茶芭菲"),
+        1,
+        "the other player gained a 抹茶芭菲"
+    );
+}
+
 // ================================================================ band skill
 
 #[test]

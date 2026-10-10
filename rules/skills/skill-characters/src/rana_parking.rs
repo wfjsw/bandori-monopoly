@@ -43,12 +43,10 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
         On::Hook(&[HookKind::SettleBody], "", Some(any), replace_body),
-        // TODO(规则书): 「你与其他玩家重合时」 -- the pre is `MINE` (the owner is
-        // the mover), but the body reads `trigger::player_id()` as "the other"
-        // and bails when it equals the owner -- which it always does on this
-        // window (`passPlayer`'s `player_id` is the mover; the other player is
-        // `target`). The clause never fires (a suspected bug). Not fixed here:
-        // correcting the read would change behaviour.
+        // （3）「你与其他玩家重合时」 -- 行动阶段 13 [重叠] (`passPlayer`). The
+        // pre puts the owner in the actor seat (the mover); `target` is the
+        // other player already standing on the landing tile (one raise per
+        // such other). The body must read `target`, not `player_id`.
         On::Hook(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
     ],
 )
@@ -238,9 +236,11 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （3）「你与其他玩家重合时，获得其800资金并使那个玩家获得一个"抹茶芭菲"」.
+/// `passPlayer`'s `player_id`/`actor` is the mover (the owner, on this `MINE`
+/// pre); `target` is the other player already on the landing tile.
 fn on_overlap(player_id: i32) -> card_sdk::Asked {
-    let other = ctx::trigger::player_id();
-    if other == player_id {
+    let other = ctx::trigger::target();
+    if other < 0 || other == player_id {
         return Ok(());
     }
     ctx::transfer(
