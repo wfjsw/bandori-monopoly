@@ -69,7 +69,7 @@ pub fn tile_rule_id(kind: &str) -> &'static str {
 /// Board-wide **mark-owner** rules (`mark:*`) -- one instance each on the
 /// neutral board owner, governing no single tile (unlike [`tile_rule_id`]'s
 /// `tile:*`, which binds one per board tile of the kind). `mark:cp` is the
-/// [CP点] tile-mark owner (`rules/tiles/src/cp.rs`, `docs/TILES.md`).
+/// [CP点] tile-mark owner (`rules/tile_marks/src/cp.rs`, `docs/TILES.md`).
 pub fn mark_rule_ids() -> &'static [&'static str] {
     &["mark:cp"]
 }

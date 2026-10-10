@@ -13,7 +13,7 @@
 //! the card rule)」):
 //!
 //! * **Tile [CP点]** -- `TileMark`s of category `"cp"`, neutral, owned by the
-//!   `mark:cp` rule instance (`rules/tiles/src/cp.rs`) and carrying this
+//!   `mark:cp` rule instance (`rules/tile_marks/src/cp.rs`) and carrying this
 //!   instance as provenance (`TileMark.src`). 「此卡在格子上添加的[CP点]及其
 //!   产物」 (（1）) is these.
 //! * **On-card [CP点]** -- `FieldCard::cp` on this instance itself, the card

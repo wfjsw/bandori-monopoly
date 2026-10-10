@@ -133,7 +133,7 @@ after; **PASS** = 经过-vs-重叠 confusion; **OK** = wired where its text name
 | `tile:circle` Pass entry | 96 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]」 | a 经过 effect, correctly on `PassTile` | OK |
 | `tile:edogawa` | 95 | landing draw | OK |
 | `tile:event` | 97–99 | draw + event | OK |
-| `mark:cp` | 「在拥有[CP]点的格子上**[结算]时**移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | 「[结算]时」 clause | **AT** — wired `HookKind::SettleAfter` (`cp.rs:81`) |
+| `mark:cp` (`rules/tile_marks/src/cp.rs`) | 「在拥有[CP]点的格子上**[结算]时**移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | 「[结算]时」 clause | **AT** — wired `HookKind::SettleAfter` (`cp.rs:81`) |
 
 ### 3.5 `settleAfter` (「[结算]后」/「[触发结算]后」)
 
@@ -459,5 +459,6 @@ about which tile is being settled.
 | the walk / teleport | `play.rs` `walk` / `teleport_as` / `move_after` / `move_resolved`; `move_ctx.rs` (`MoveCtx::resolve`) |
 | kind lists | `rules/card-sdk/src/abi.rs` `TriggerKind` / `ChainKind` / `HookKind` / `OnKind::Settle` |
 | tile bodies | `rules/tiles/src/*`, `docs/TILES.md` |
+| tile-mark rules (`mark:*`) | `rules/tile_marks/src/*`, `docs/TILES.md` → 「Board marks」 |
 | prior audit (Q6/Q7 origin) | `docs/rulebook/PIPELINE-AUDIT.md` §4, §5.4 |
 | rulebook ground truth | `data/rules.txt`; timing tables `docs/rulebook/rulebook-doc.md` |

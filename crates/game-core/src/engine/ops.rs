@@ -1402,7 +1402,7 @@ impl World {
         // Board-wide **mark owners** (`mark:*`, `crate::data::mark_rule_ids`) --
         // one instance each on the neutral board owner, governing no single
         // tile (`tile = -1`). `mark:cp` is the [CP点] tile-mark owner
-        // (`rules/tiles/src/cp.rs`): a board-wide category, so it is not bound
+        // (`rules/tile_marks/src/cp.rs`): a board-wide category, so it is not bound
         // per board tile the way `tile:*` is. Idempotent.
         for id in crate::data::mark_rule_ids() {
             if !rules.has_rule(id) {

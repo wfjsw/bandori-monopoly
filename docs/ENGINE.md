@@ -72,7 +72,7 @@ Two other kinds of board-owned instance sit beside the `tile:*` ones
 event is live) and **mark owners** (`mark:*`, one per mark category,
 `game_core::data::mark_rule_ids`). Neither governs a single tile, so the hook
 dispatch adds them to the board list for a tile-carrying trigger as well.
-`mark:cp` is the [CP点] **tile-mark** owner: [CP点] is its own tile-mark category
+`mark:cp` (`rules/tile_marks`) is the [CP点] **tile-mark** owner: [CP点] is its own tile-mark category
 (`TileMark.category`, 「放置于路面上的指示物」, `data/rules.txt` 125), held by the
 neutral board owner and **never by a player** (`TileMark.owner = -1`);
 provenance is `TileMark.src` (the placing card instance) and `TileMark.card`

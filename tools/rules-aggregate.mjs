@@ -21,12 +21,15 @@ const CARDS = join(ROOT, "rules", "cards");
 const SKILLS = join(ROOT, "rules", "skills");
 const TILES = join(ROOT, "rules", "tiles");
 const EVENTS = join(ROOT, "rules", "events");
+const TILE_MARKS = join(ROOT, "rules", "tile_marks");
 const OUT = join(CARDS, "card-all");
 
 /** [{root, dir, name, rel}] of every rule crate, sorted. Covers `rules/cards/*`
  *  (the cards you draw), `rules/skills/*` (character / band skills),
- *  `rules/tiles` (board tile rules, `docs/TILES.md`) and `rules/events` (event
- *  card rules, `docs/EVENTS.md`) -- four areas on purpose, one shipped module. */
+ *  `rules/tiles` (board tile rules, `docs/TILES.md`), `rules/tile_marks`
+ *  (tile-mark rules, `mark:*`, `docs/TILES.md` -> Board marks) and
+ *  `rules/events` (event card rules, `docs/EVENTS.md`) -- five areas on
+ *  purpose, one shipped module. */
 function ruleCrates() {
   const scan = (root, dirFilter, rel) =>
     readdirSync(root, { withFileTypes: true })
@@ -39,7 +42,8 @@ function ruleCrates() {
         if (!m) throw new Error(`${toml}: no package name`);
         return [{ root, dir, name: m[1], rel: rel + dir }];
       });
-  // `rules/tiles` and `rules/events` are one crate each (not directories of them).
+  // `rules/tiles`, `rules/tile_marks` and `rules/events` are one crate each
+  // (not directories of them).
   const single = (root, dir, rel) => {
     const toml = join(root, "Cargo.toml");
     const m = readFileSync(toml, "utf8").match(/^name = "([^"]+)"/m);
@@ -50,6 +54,7 @@ function ruleCrates() {
     ...scan(CARDS, (e) => e.isDirectory() && e.name !== "card-all", "../"),
     ...scan(SKILLS, (e) => e.isDirectory(), "../../skills/"),
     ...single(TILES, "tiles", "../../tiles"),
+    ...single(TILE_MARKS, "tile_marks", "../../tile_marks"),
     ...single(EVENTS, "events", "../../events"),
   ];
 }
@@ -98,6 +103,6 @@ ${tables}
 
 console.log(`card-all: ${crates.length} rule crates linked`);
 for (const c of crates) {
-  const sub = c.root === SKILLS ? "skills" : c.root === TILES ? "" : c.root === EVENTS ? "" : "cards";
+  const sub = c.root === SKILLS ? "skills" : c.root === TILES || c.root === TILE_MARKS || c.root === EVENTS ? "" : "cards";
   console.log(`  ${c.name} <- rules/${sub ? sub + "/" : ""}${c.dir}`);
 }

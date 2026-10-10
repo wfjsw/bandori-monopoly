@@ -55,7 +55,7 @@ how ownership is assigned — are handled by the `rules/` crates.
 
 ## Responsibilities
 
-**The rules crate** (`rules/tiles` plus card / skill hooks) decides:
+**The rules crate** (`rules/tiles` / `rules/tile_marks` plus card / skill hooks) decides:
 
 * **Eligibility:**
   * the tile prop `BUYABLE` (「可购买格子」, rules.txt line 19);

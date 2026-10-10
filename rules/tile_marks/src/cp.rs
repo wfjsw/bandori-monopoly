@@ -77,8 +77,8 @@ use card_sdk::{CardDef, Msg, On};
 
 /// The board-owned [CP点] rule. One instance on [`BOARD_OWNER`], governing no
 /// single tile (`tile = -1`): [CP点] is a board-wide category, not a tile kind.
-/// Registered next to the `tile:*` rules in [`crate::CARDS`]; `bind_tiles`
-/// places it (see `docs/TILES.md`).
+/// Registered in this crate's [`crate::CARDS`] (a sibling of the `tile:*`
+/// rules); `bind_tiles` places it (see `docs/TILES.md`).
 pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land)]);
 
 /// 规则书: 「在拥有[CP]点的格子上[结算]时」 -- the tile must actually carry a

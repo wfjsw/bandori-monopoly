@@ -1,5 +1,4 @@
-//! Board **tile rules** -- what a board tile does when someone [结算]s it, and
-//! the neutral marks that sit on the board.
+//! Board **tile rules** -- what a board tile does when someone [结算]s it.
 //!
 //! Standardized the same way card and skill rules are: one [`CardDef`] per
 //! tile kind, bound to every board tile of that kind at match start on a
@@ -16,19 +15,13 @@
 //! | `tile:circle` | `circle` | 95–96 |
 //! | `tile:edogawa` | `edogawa` | 95 |
 //! | `tile:event` | `cafe`, `ryuseido` | 97–99 |
-//! | `mark:cp` | (none -- board-wide) | 125 (「CP点：放置于路面上的指示物」) |
 //!
 //! Every body quotes the passage it implements and cites it per line, like a
 //! card. Gaps in the text are `TODO(规则书)`, never silently dropped.
 //!
-//! [`cp::MARK_CP`] is not a tile *kind* rule: it is the [CP点] tile-mark
-//! **owner** (「放置于路面上的指示物」), one instance on the board owner with no
-//! single tile of its own. Cards place / count / clear the **tile** [CP点]
-//! through `ctx::place_cp` / `count_cp` / `clear_cp` -- the small API this
-//! owner implements -- and the marks carry no player owner. The other [CP点]
-//! kind is the **on-card** count (`FieldCard::cp`, 「自己[场上]N个[CP点]」),
-//! the card rule's own stock (`ctx::add_cp` / `cp_attached` / `cp_at` /
-//! `add_cp_at`) -- user ruling 2026-10-07.
+//! Board-wide **tile marks** (`mark:*`, e.g. the [CP点] owner `mark:cp`) are
+//! a sibling category, not a tile kind: see `rules/tile_marks` (one crate,
+//! one `CardDef` per mark category, bound once on the board owner).
 
 #![cfg_attr(target_arch = "wasm32", no_std)]
 
@@ -38,8 +31,6 @@ pub mod agent;
 use agent::AGENT;
 pub mod circle;
 use circle::CIRCLE;
-pub mod cp;
-use cp::MARK_CP;
 pub mod edogawa;
 use edogawa::EDOGAWA;
 pub mod event;
@@ -50,5 +41,5 @@ pub mod ring;
 use ring::RING;
 
 /// Every tile rule, in registration order. The shipped module (`card-all`)
-/// concatenates these tables with the card and skill ones.
-pub static CARDS: &[card_sdk::CardDef] = &[EDOGAWA, EVENT, CIRCLE, AGENT, RING, PROPERTY, MARK_CP];
+/// concatenates these tables with the card, skill, tile-mark and event ones.
+pub static CARDS: &[card_sdk::CardDef] = &[EDOGAWA, EVENT, CIRCLE, AGENT, RING, PROPERTY];

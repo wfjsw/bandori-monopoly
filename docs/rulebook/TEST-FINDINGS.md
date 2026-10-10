@@ -376,7 +376,7 @@ only.
 * Sheet-superseded 2026-10-06: 黑色生日 「不多于1000」 is inclusive (1000
   pays 800); 羽丘 的 thresholds are 「至少为10/15/20」.
 * User rulings 2026-10-07 (通用:该清CP了 / the [CP点] mark owner; see
-  `rules/tiles/src/cp.rs` and `rules/cards/card-general/src/clear_cp.rs`):
+  `rules/tile_marks/src/cp.rs` and `rules/cards/card-general/src/clear_cp.rs`):
   * **[CP点] is its own tile-mark category, never owned by a player.**
     `TileMark.category = "cp"`, `TileMark.owner = -1`; provenance is
     `TileMark.src` (the placing card instance) and `TileMark.card`. The

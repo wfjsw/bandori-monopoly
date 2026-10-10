@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Check that every card in rules/cards/, every tile in rules/tiles/ and every
-event in rules/events/ cites its rule book passage.
+"""Check that every card in rules/cards/, every tile in rules/tiles/, every
+tile mark in rules/tile_marks/ and every event in rules/events/ cites its rule
+book passage.
 
 The rule book (docs/rulebook/cards-sheet.csv -> cards.json via extract.py) is the
 spec; a card's file quotes the passage (`//! > …`) and its code lines cite the
 sentents they implement (`// 规则书: …`). A card the sheet omits must say so and
 cite the C# class it was translated from instead.
 
-Tile rules (rules/tiles/src/*.rs) have no `tile:*` ids in cards.json, so their
-quotes live in the file header and must appear in `data/rules.txt` -- the
-authoritative rulebook text (「基础[结算]规则」 + 「专有名词」) -- verbatim
-(whitespace aside). Each file must also carry at least one `// 规则书: …`
-citation line. `TODO(规则书)` notes do not exempt a file from quoting.
+Tile rules (rules/tiles/src/*.rs) and tile-mark rules
+(rules/tile_marks/src/*.rs) have no ids in cards.json, so their quotes live in
+the file header and must appear in `data/rules.txt` -- the authoritative
+rulebook text (「基础[结算]规则」 + 「专有名词」) -- verbatim (whitespace aside).
+Each file must also carry at least one `// 规则书: …` citation line.
+`TODO(规则书)` notes do not exempt a file from quoting. (A card body quoted
+inline rather than as `//! > ` -- e.g. the 该清CP了 text on `mark:cp` -- is
+fine; only `//! > ` runs are checked.)
 
 Event rules (rules/events/src/*.rs) are `event:*` ids with no cards.json entry
 either; their quote is the event's `text` in `data/events.json` (the sheet's
@@ -94,12 +98,16 @@ def main() -> int:
     card_bad = bad
     print(f"{checked} cards checked, {card_bad} problem(s).")
 
-    # Tile rules cite data/rules.txt from the file header (cards.json has no
-    # `tile:*` ids). Every quoted passage must appear there; TODO(规则书) notes
-    # do not excuse a missing or non-verbatim quote.
+    # Tile rules and tile-mark rules cite data/rules.txt from the file header
+    # (cards.json has no `tile:*` / `mark:*` ids). Every quoted passage must
+    # appear there; TODO(规则书) notes do not excuse a missing or non-verbatim
+    # quote.
     tiles = 0
     rules_n = norm(RULES)
-    for src in sorted(ROOT.glob("rules/tiles/src/*.rs")):
+    tile_srcs = sorted(ROOT.glob("rules/tiles/src/*.rs")) + sorted(
+        ROOT.glob("rules/tile_marks/src/*.rs")
+    )
+    for src in tile_srcs:
         if src.name == "lib.rs":
             continue
         text = src.read_text(encoding="utf-8")
@@ -116,7 +124,7 @@ def main() -> int:
         if not CITES.search(text):
             bad += 1
             print(f"{rel}: quotes the passage but no code line cites it (// 规则书: ...)")
-    print(f"{tiles} tiles checked, {bad - card_bad} problem(s).")
+    print(f"{tiles} tiles + tile marks checked, {bad - card_bad} problem(s).")
 
     # Event rules cite data/events.json from the file header (cards.json has no
     # `event:*` ids). The quote is the event's `text` field, matched the same

@@ -30,7 +30,7 @@ through `StubRules::event` (「还没有移植」) and went straight to the disc
 ## The crate: `rules/events`
 
 One crate, one `.rs` per event, one `CardDef` each -- the same authoring shape
-as `rules/cards/card-*`, `rules/skills/*` and `rules/tiles`:
+as `rules/cards/card-*`, `rules/skills/*`, `rules/tiles` and `rules/tile_marks`:
 
 | id | file | kind | sheet |
 |---|---|---|---|
@@ -64,14 +64,16 @@ as `rules/cards/card-*`, `rules/skills/*` and `rules/tiles`:
 | `event:火种燃尽之后会怎么样呢？` | `embers.rs` | active | A29 |
 
 The crate is a **rule crate**, not a card crate: its ids are `event:*`, not
-`data/cards.json` ids. `tools/rules-aggregate.mjs` scans `rules/events` as a
-fourth root (besides `rules/cards`, `rules/skills` and `rules/tiles`) so
-`card-all` links it; `tools/build-ruleset.mjs` runs that aggregate first.
+`data/cards.json` ids. `tools/rules-aggregate.mjs` scans `rules/events` as one
+of its roots (alongside `rules/cards`, `rules/skills`, `rules/tiles` and
+`rules/tile_marks`) so `card-all` links it; `tools/build-ruleset.mjs` runs that
+aggregate first.
 
 Each body quotes the event text from `data/events.json` and cites it per line,
 exactly like a card (`docs/CARDS.md` → 「Every line cites the rule book」).
 `python tools/rulebook/check.py` requires the quote on `rules/events/*` the way
-it does on `rules/cards/*` and `rules/tiles/*` -- the passage is the event's
+it does on `rules/cards/*`, `rules/tiles/*` and `rules/tile_marks/*` -- the
+passage is the event's
 `text` field, since `docs/rulebook/cards.json` has no `event:*` ids.
 
 Log lines are `log.event.*` keys in `webui/src/i18n/locales/<lang>/game.json`,
@@ -215,7 +217,7 @@ sheet text, by kind of gap (each tagged `TODO(规则书)` at the clause):
 | events category | ok (285 rules) | green (incl. 7 new `tests/events.rs`) | green, intentional ignores only | 28 events, 0 problems | ABI v37; sim on StubRules **261.6 ms/game** (budget ≤ 323), shell event counts identical to baseline (rent 19,612 / build 4,641 / buy 2,908 / forcebuy 415 / circle money 5,915 / agent half rent 4,221) |
 
 `cargo test -p game-rules --no-fail-fast` was green apart from three
-`cp_*` tests in `rb_general.rs` and one `rules/tiles/src/cp.rs` quote problem
+`cp_*` tests in `rb_general.rs` and one `rules/tile_marks/src/cp.rs` quote problem
 in `check.py` -- both the concurrent [CP点] tile-mark batch, not this migration.
 
 Events with no dedicated test are listed in [TEST-FINDINGS.md](rulebook/TEST-FINDINGS.md)
