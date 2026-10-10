@@ -30,6 +30,51 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 # HIGH
 
+## STACK-01 — nested `card_settle_at` recursion overflows the stack (engine defect)
+- **kind**: implementation bug
+- **class**: A
+- **severity**: high (any long bot game / real match that nests a settle hook; already aborts `ckpt_equiv`)
+- **suggested batch**: engine: settle recursion / stack safety
+- **locations**
+  - repro (2026-10-10, this worktree, release, 8 MiB main stack):
+    `cargo run -p game-rules --release --example ckpt_equiv -- out 8 4 120 standard`
+    → `thread 'main' has overflowed its stack` / `fatal runtime error: stack overflow, aborting`
+  - recursion cycle (LD_PRELOAD `backtrace()` on SIGSEGV + `addr2line`, 5-frame repeat):
+    ```
+    game_core::engine::play::Cx::card_settle_at          (play.rs:790)
+      → Cx::settle_at                                    (play.rs:1677)
+        → CardRules::counteract                          (wasm_rules.rs:5610)
+          → RulesBridge::drive_inner_body                (wasm_rules.rs:1878)
+            → RulesBridge::apply_host_request            (wasm_rules.rs:2231 HostRequest::SettleAt)
+              → Cx::card_settle_at                       (play.rs:790)  … repeat
+    ```
+  - no depth guard on nested settles (`MAX_SETTLE_REDIRECTS` = 8 only caps *redirects inside one* settlement, `play.rs:41/1641`; `MAX_COUNTERACT_DEPTH` = 16 only caps one counteract *tree*, `wasm_rules.rs:53/3149`; `MAX_MONEY_DEPTH` = 32 only caps the money pipeline, `play.rs:27/3048`)
+  - guest callers of `ctx::card_settle_at` from hook bodies (any of these can re-enter `settle_at`):
+    `rules/cards/card-hhw/src/smile_parade.rs:122` (`On::Hook(SettleBody, settle_instead)` — direct self-nest: the body cancels the tile settle and `card_settle_at`s at 「弦卷集团」),
+    `card-ras/src/{studio_storm,guerrilla}.rs`, `card-mygo/src/{taki_serious,rinne_rain}.rs`,
+    `card-morfonica/src/noble_blue.rs`, `skills/skill-characters/src/{kaede_support,tomori_crychic,tukushi_try,tomori_poem}.rs`
+  - related: `crates/bot-core/src/ismcts.rs:823-830` already documents "a rollout's trigger chain can nest deeply" and spawns 32 MiB stacks for that reason
+- **ABI / engine contract**: `HostRequest::SettleAt` is a synchronous nested routine (`wasm_rules.rs:2231-2238` → `cx.card_settle_at` → `settle_at` → `raise!` → `counteract` → `drive` …). A hook body that settles therefore stacks a full `settle_at` + `drive_inner_body` (a large `Run` frame) on top of the outer one. Guest **fuel** (`be_wasmi.rs:51` / `be_wasmtime.rs:72`) bounds guest recursion only; these are **host** frames.
+- **current**: unbounded mutual recursion `card_settle_at ↔ settle_at ↔ counteract ↔ drive_inner_body ↔ apply_host_request`. Long seeded bot games hit it on the 8 MiB main stack (`ckpt_equiv`).
+- **expected**: nested settles are either (a) queued and pumped by an iterative loop at the outermost `execute` / `tick` (preferred — same shape as `flush_deferred`'s intent, but without `start()` re-entering `execute()`), or (b) refused past a `MAX_SETTLE_DEPTH` (stopgap; log + no-op the inner settle). A bigger stack is a workaround only.
+- **can a real match hit this?**
+  - **Server — yes, more easily than `ckpt_equiv`.** Room work runs on `tokio::task::spawn_blocking` (`crates/server/src/lib.rs:134`, `api.rs:503`, `botsvc.rs:440`, …) with the Rust default ~2 MiB thread stack (no `stack_size` in `crates/server/Cargo.toml`). A settle-nesting chain that already dies at 8 MiB will kill the blocking worker at ~1/4 the depth → aborted thread / failed `act` / dropped room tick.
+  - **Browser / wasm — yes for the host side.** The guest module is fuel-bounded, but `card_settle_at` runs as a **host import** on the JS/embedder native stack (and on wasmi/wasmtime's host call stack). Each nested `drive_inner_body` allocates a full `Run` on that stack. Worker stacks are typically 1–2 MiB. wasmtime's "trap tears the stack" note (`be_wasmtime.rs:43`) covers *guest* traps, not host frames.
+  - **bot-core ISMCTS** already works around this with 32 MiB stacks; that workaround does not cover server workers or the browser.
+- **fix sketch**
+  1. **Preferred:** give `Cx` a settle-job queue. `card_settle_at` pushes `(player, tile, main)` and returns; the outermost `execute` / `tick_play` drains the queue in a `while` loop (no `start()` inside `flush_deferred` — that path has the same re-entry shape via `Deferred::Leave` → `start(Routine::Act)` → `execute` → `flush_deferred`).
+  2. **Stopgap:** `MAX_SETTLE_DEPTH` (e.g. 8) in `card_settle_at` / `settle_at`; past it, log and skip. Cheap, unblocks fuzz / `ckpt_equiv`, does not fix the shape.
+  3. **Do not** "fix" this by raising server/browser stack sizes alone (bot-core already tried that for one caller).
+- **cross-links**
+  - **SETTLE-01** (笑容大游行 stack overflow, `t13_smile_parade` / `g30_*`) is one *instance* of this cycle — `smile_parade::settle_instead` is a `SettleBody` hook that calls `card_settle_at`. Fix STACK-01 first; then SETTLE-01 may reduce to the swap-axes bug alone.
+  - **HOST-01** (HostRequest B2 learn-pass rebase) is a different defect in the same `apply_host_request` surface.
+  - `flush_deferred` → `start` → `execute` re-entry (`engine/mod.rs:1172-1286`) is a second unbounded host-stack growth path (Leave → Act → Leave → …); fold it into the same batch.
+- **notes / reproduction**
+  - Fails reliably with `games=8 players=4 max_rounds=120 standard` on an 8 MiB stack. Completes for `games=2 max_rounds=40` on 2 MiB — the nest is seed/length dependent, not a constant-depth crash.
+  - Backtrace captured with a SIGSEGV + `sigaltstack` + `backtrace()` LD_PRELOAD (`target/scratch/btso.c`, scratch only — not committed) because `gdb` is not installed on the host. Frame offsets in the release `ckpt_equiv` binary: `+0x55d2d3` `+0x55ab6f` `+0x546f24` `+0xb091c9` `+0xaef4fd` (5-cycle).
+  - Tag any fix `TODO(规则书)` only if a *rule* text forces a nested settle; the engine defect itself is not a rulebook divergence.
+
+
 ## MONEY-01 — rent / settle multipliers do not have a composition rule
 - **kind**: rulebook divergence
 - **class**: C
@@ -1345,13 +1390,13 @@ L162 "latent bug" on 凑友希那 force-stop may be stale (M4 done / m4_kokoro p
 | **C** | needs a user ruling | 23 |
 | **D** | stale (already fixed / landed) | 6 note groups (9 removed ignores + V2 + 2026-10-09 batch + landed surfaces + dead host names + stale comments) |
 
-*(A+B+C = 77 open root-cause items after dedup of 144 TODOs + ~85 ignore rows + the 2026-10-10 ABI audit. Some A items are "contained engine bug" one-liners; some B items unblock several A/C.)*
+*(A+B+C = 78 open root-cause items after dedup of 144 TODOs + ~85 ignore rows + the 2026-10-10 ABI audit. Some A items are "contained engine bug" one-liners; some B items unblock several A/C.)*
 
 ## Per kind
 
 | kind | count (approx) |
 |---|---|
-| implementation bug | 38 |
+| implementation bug | 39 |
 | ABI defect | 24 |
 | rulebook divergence | 14 |
 | stale | 6 note groups |
@@ -1376,6 +1421,7 @@ L162 "latent bug" on 凑友希那 force-stop may be stale (M4 done / m4_kokoro p
 | skills: Mujica | SETTLE-03, SKILL-04, CH-08 | |
 | HHW cards | SETTLE-01, CRYSTAL-05..07 | |
 | settle stages | SETTLE-04, SETTLE-05, MOVE-08, HOST-02 | |
+| engine: settle recursion / stack safety | STACK-01, (then SETTLE-01) | 1 high A |
 | events | EVENT-01..04, ABI-09 | |
 | fuzz/determinism | FUZZ-01, HOST-03 | 1 high A |
 | tiles | TILE-06, HOST-04, LOW-02 | |
@@ -1386,25 +1432,27 @@ L162 "latent bug" on 凑友希那 force-stop may be stale (M4 done / m4_kokoro p
 
 Do these in order; each batch should be a PR that does not share files with the next.
 
-1. **high-A engine bugs — movement** (MOVE-01, MOVE-02, MOVE-04, SKILL-08, SKILL-09, TILE-04, TILE-05)
+1. **high-A engine: settle recursion / stack safety** (STACK-01)
+   - Unblocks `ckpt_equiv`, long bot games, server `spawn_blocking` workers (~2 MiB), and the browser host stack. Preferred fix: queue nested `card_settle_at` jobs and pump them iteratively (also unroll `flush_deferred` → `start` → `execute`). Stopgap: `MAX_SETTLE_DEPTH`. Then re-check SETTLE-01 (笑容大游行). Files: `crates/game-core/src/engine/{play,mod}.rs`, `crates/game-rules/src/wasm_rules.rs` (`HostRequest::SettleAt`).
+2. **high-A engine bugs — movement** (MOVE-01, MOVE-02, MOVE-04, SKILL-08, SKILL-09, TILE-04, TILE-05)
    - Unblocks the most ignored `rb_cross_move` tests. Files: `game-core/engine/{play,ops,move_ctx}.rs`, `skill-characters/{rana_parking,kaoru_prince}.rs`.
-2. **high-A counteraction windows** (CH-02, CH-03, CH-04 play-as-counter, CH-06, WINDOW-01, WINDOW-02)
+3. **high-A counteraction windows** (CH-02, CH-03, CH-04 play-as-counter, CH-06, WINDOW-01, WINDOW-02)
    - Files: `game-rules/src/wasm_rules.rs` chain, `card-mujica/*`, `card-roselia` Hanae.
-3. **high-A money** (MONEY-03 Repaint shaped half, CRYSTAL-03 crimson_soul 500 timing, SETTLE-02 CRYCHIC 6-hand block, SETTLE-03 Sakiko absorb)
-4. **high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08 `set_no_build`)
+4. **high-A money** (MONEY-03 Repaint shaped half, CRYSTAL-03 crimson_soul 500 timing, SETTLE-02 CRYCHIC 6-hand block, SETTLE-03 Sakiko absorb)
+5. **high-A host ABI: reply sentinels + quote==charge** (HOST-06, HOST-07, HOST-08 `set_no_build`)
    - Files: `crates/game-rules/src/{wasm_rules,hostfns,native_shims}.rs`, `rules/card-sdk/src/ctx.rs`. Do not share a PR with card bodies.
-5. **high-B unblockers** (in this order)
+6. **high-B unblockers** (in this order)
    - **MOVE-03 multi-activation selection** (unblocks MyGO band (2) + NNM)
    - **CH-05 play-history + nested PlayCtx** (unblocks Mortis, Mana Champion, dice_cast counters)
    - **CH-01 self-abnormal Effect chain** (unblocks 安可 / 像往常一样 / 我自己的问题 / RAS band (1))
    - **CRYSTAL-01 FirePaying** (unblocks 灯 不再迷茫)
    - **HOST-01 HostRequest rebase** (unblocks inline equivalence + some fuzz)
-6. **high-A fuzz/determinism** (FUZZ-01) once HOST-01 is in.
-7. **C questions to the user** (collect all of §C below in one sitting). While waiting, continue on:
-8. **medium-A contained bugs** (SKILL-02 hina lottery, SKILL-07 soyo expiry, DRAW-01/02/03, CH-11/12/13, CRYSTAL-04 NNM live reward, CRYSTAL-08 ringing_bloom continuous max, MOVE-10/11/12, LOW-02 docs)
-9. **medium-B ABI pile** (ABI-01..12, HOST-04/05/09/10/11) — one ABI bump, many cards.
-10. **medium-C leftovers + events** (EVENT-01..04) after the user answers §C.
-11. **D cleanup** — rewrite NEGATION-AUDIT V2 TODOs as settled notes; strike the stale TEST-FINDINGS / COVERAGE / CROSS-TESTS sections listed above.
+7. **high-A fuzz/determinism** (FUZZ-01) once HOST-01 is in.
+8. **C questions to the user** (collect all of §C below in one sitting). While waiting, continue on:
+9. **medium-A contained bugs** (SKILL-02 hina lottery, SKILL-07 soyo expiry, DRAW-01/02/03, CH-11/12/13, CRYSTAL-04 NNM live reward, CRYSTAL-08 ringing_bloom continuous max, MOVE-10/11/12, LOW-02 docs)
+10. **medium-B ABI pile** (ABI-01..12, HOST-04/05/09/10/11) — one ABI bump, many cards.
+11. **medium-C leftovers + events** (EVENT-01..04) after the user answers §C.
+12. **D cleanup** — rewrite NEGATION-AUDIT V2 TODOs as settled notes; strike the stale TEST-FINDINGS / COVERAGE / CROSS-TESTS sections listed above.
 
 ---
 
