@@ -11,3 +11,6 @@ remove another worktree unless the user requests it.
 
 Report the branch and worktree path when delivering the work. Run the checks
 appropriate to the change from that worktree.
+
+Offload (only) complex implementations to subagents, with comprehensive 
+instructions, guidance, and in-progress assistance.
