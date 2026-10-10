@@ -49,15 +49,14 @@ fn spawn(_player_id: i32) -> card_sdk::Asked {
     let t = ctx::tile_named("北泽精肉店");
     if t >= 0 {
         // One fresh row per turn -- croquettes accumulate as separate units.
-        ctx::place_mark_new(
+        ctx::place_mark(
             t,
             ON_TILE,
             "",
             -1,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("hagumi_homerun_note")),
-        );
+            &Msg::new(key!("hagumi_homerun_note")), card_sdk::abi::Stack::Fresh);
     }
     Ok(())
 }

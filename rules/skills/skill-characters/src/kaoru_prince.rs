@@ -142,15 +142,14 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     };
     for _ in 0..3 {
         // Three separate rows (tests pin row identity) -- `place_mark_new`.
-        ctx::place_mark_new(
+        ctx::place_mark(
             tile,
             THIEF,
             "",
             player_id,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("kaoru_prince_note")),
-        );
+            &Msg::new(key!("kaoru_prince_note")), card_sdk::abi::Stack::Fresh);
     }
     // 「使你的本次移动以微笑号为起点」
     let ship = ctx::tile_named("微笑号");

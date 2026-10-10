@@ -102,15 +102,14 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // One pot per placement, its own row (`place_mark_new`).
-    ctx::place_mark_new(
+    ctx::place_mark(
         tile,
         POT,
         "",
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("uika_idol_note")),
-    );
+        &Msg::new(key!("uika_idol_note")), card_sdk::abi::Stack::Fresh);
     ctx::log(
         player_id,
         &Msg::new(key!("uika_idol_placed")).tile("tile", tile),

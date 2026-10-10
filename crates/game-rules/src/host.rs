@@ -2335,15 +2335,8 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     l.func_wrap(
         m,
         "place_mark",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::place_mark(&mut c, tile, kp, kl, cp, cl, owner, src, count, np, nl).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
-        "place_mark_new",
-        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32| -> Result<i32, Error> {
-            hostfns::place_mark_new(&mut c, tile, kp, kl, cp, cl, owner, src, count, np, nl).map_err(HostErr::into_err)
+        |mut c: C<W>, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32| -> Result<i32, Error> {
+            hostfns::place_mark(&mut c, tile, kp, kl, cp, cl, owner, src, count, stack, np, nl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4656,6 +4649,7 @@ impl CardWorld for NullWorld {
         _: i32,
         _: i32,
         _: crate::Msg,
+        _: bool,
     ) -> i32 {
         0
     }

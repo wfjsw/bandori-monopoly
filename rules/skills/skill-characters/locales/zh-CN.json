@@ -205,6 +205,8 @@
   "ran_red_reverse": "本次移动反向，[经过] CiRCLE 不获得奖励",
   "ran_red_spend": "叛逆的红挑染",
   "rana_parking_free": "Space 属于他人：免除付款并抽 1 张卡",
+  "rana_parking_transfer": "将一个「抹茶芭菲」转移到 Space 以免除当次付款？",
+  "rana_parking_transfer_done": "转移「抹茶芭菲」：免除当次付款",
   "rana_parking_gain": "投币式停车场的猫：+1 [火罐]",
   "rana_parking_gave": "与 {{who}} 重合：+800，对方获得一个「抹茶芭菲」",
   "rana_parking_moved": "[传送]至 {{tile}}（不可购买地契）",

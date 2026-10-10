@@ -79,15 +79,14 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
     // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- one row per
     // mark (`place_mark_new`, the old `add_mark` semantics).
     let note = Msg::new(key!("hagumi_marks_mark_note")).n("money", 2000);
-    ctx::place_mark_new(
+    ctx::place_mark(
         tile,
         key!("hagumi_marks_mark"),
         "",
         player_id,
         ctx::self_uid(),
         1,
-        &note,
-    );
+        &note, card_sdk::abi::Stack::Fresh);
     ctx::log(
         player_id,
         &Msg::new(key!("hagumi_marks_placed")).tile("tile", tile),

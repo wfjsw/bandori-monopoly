@@ -106,15 +106,14 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
                 continue;
             }
             // One row per mark (`place_mark_new`, the old `add_mark` semantics).
-            ctx::place_mark_new(
+            ctx::place_mark(
                 tile,
                 key!("anon_tokyo_mark"),
                 "",
                 player_id,
                 ctx::self_uid(),
                 1,
-                &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other),
-            );
+                &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other), card_sdk::abi::Stack::Fresh);
             // Remember the pairing so the `PayAdd` hook below can find the partner
             // (mark notes are not readable across the ABI).
             ctx::set_slot(player_id, &alloc::format!("{LINK}{tile}"), other);

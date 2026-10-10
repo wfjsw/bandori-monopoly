@@ -130,8 +130,7 @@ fn on_place(_owner: i32) -> card_sdk::Asked {
         -1,
         src,
         count,
-        &Msg::new("log.cp_place"),
-    );
+        &Msg::new("log.cp_place"), card_sdk::abi::Stack::Merge);
     ctx::message::reply(cp_on(tile));
     Ok(())
 }

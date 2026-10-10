@@ -52,7 +52,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
             // One row per copy (`place_mark_new`): the old `add_mark` pushed a
             // fresh row, and tests pin separate rows when two players share a
             // tile.
-            ctx::place_mark_new(at, EMBER, "", -1, ctx::self_uid(), 1, &note);
+            ctx::place_mark(at, EMBER, "", -1, ctx::self_uid(), 1, &note, card_sdk::abi::Stack::Fresh);
         }
     }
     ctx::log(player_id, &note);
@@ -84,7 +84,7 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
             if at >= 0 {
                 // Fresh row per copy (`place_mark_new`): two players sharing a
                 // neighbour must land as separate rows, not one stacked count.
-                ctx::place_mark_new(at, EMBER, "", -1, ctx::self_uid(), 1, &note);
+                ctx::place_mark(at, EMBER, "", -1, ctx::self_uid(), 1, &note, card_sdk::abi::Stack::Fresh);
             }
         }
     }

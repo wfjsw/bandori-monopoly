@@ -33,7 +33,7 @@ pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
         // the owner owes, with a crystal to spend.
         On::Hook(
             &[HookKind::PayChoose],
-            "card.placed && actor == owner && value > 0 && card.cp > 0",
+            "card.placed && actor == owner && value > 0 && card.counter('crystals') > 0",
             None,
             pay_choose,
         ),
@@ -70,7 +70,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
 /// spend crystals to shrink the pending payment by 150 each.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && actor == owner && value > 0 && card.cp > 0` is the pre.
+    // `card.placed && actor == owner && value > 0 && card.counter('crystals') > 0` is the pre.
     let amount = trigger::value();
     let have = ctx::crystals();
     // C# `max = Math.Min(Crystals, (p.amount + 149) / 150)` -- never ask for

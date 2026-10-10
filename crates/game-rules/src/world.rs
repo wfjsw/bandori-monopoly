@@ -561,6 +561,7 @@ pub trait CardWorld: Clone + 'static {
         0
     }
     /// Bind `count` units of the running instance's counter `kind` to `tile`.
+    /// `stack`: merge onto the first match, or always push a fresh row.
     fn place_mark(
         &mut self,
         tile: i32,
@@ -570,22 +571,9 @@ pub trait CardWorld: Clone + 'static {
         src: i32,
         count: i32,
         note: Msg,
+        fresh: bool,
     ) -> i32 {
-        let _ = (tile, kind, category, owner, src, count, note);
-        0
-    }
-    /// Like [`Self::place_mark`] but always pushes a fresh row.
-    fn place_mark_new(
-        &mut self,
-        tile: i32,
-        kind: &str,
-        category: &str,
-        owner: i32,
-        src: i32,
-        count: i32,
-        note: Msg,
-    ) -> i32 {
-        let _ = (tile, kind, category, owner, src, count, note);
+        let _ = (tile, kind, category, owner, src, count, note, fresh);
         0
     }
     fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {

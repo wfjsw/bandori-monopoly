@@ -104,9 +104,6 @@ pub trait CondView {
     fn card_id(&self) -> i64;
     /// Is the candidate's running instance in play (`card.placed`)?
     fn card_placed(&self) -> bool;
-    /// Crystals on the candidate instance (`card.cp`, the legacy name --
-    /// it reads **crystals**, not CP).
-    fn card_cp(&self) -> i64;
     /// Named counter `name` on the candidate instance (`card.counter('name')`).
     /// `"cp"` → `FieldCard::cp`, `"crystals"` → `FieldCard::crystals`, else
     /// `FieldCard::counters[name]`. Missing = 0. (The wire names of

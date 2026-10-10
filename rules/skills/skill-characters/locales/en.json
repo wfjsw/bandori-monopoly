@@ -205,6 +205,8 @@
   "ran_red_reverse": "This move reverses; no CiRCLE reward for passing",
   "ran_red_spend": "Rebellious Red Highlights",
   "rana_parking_free": "Space belongs to another: payment voided, draw 1",
+  "rana_parking_transfer": "Move one Matcha Parfait to Space to void this payment?",
+  "rana_parking_transfer_done": "Moved a Matcha Parfait: payment voided",
   "rana_parking_gain": "Cat at the Coin Parking: +1 fire pot",
   "rana_parking_gave": "Overlapped {{who}}: +800, they gain a [Matcha Parfait]",
   "rana_parking_moved": "Teleported to {{tile}} (no deed purchase)",

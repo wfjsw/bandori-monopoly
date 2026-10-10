@@ -456,6 +456,29 @@ impl MarkFilter {
     }
 }
 
+/// How [`ctx::place_mark`] applies `count` to an existing matching row.
+/// Wire codes on the `stack` argument (0 = [`Self::Merge`], 1 = [`Self::Fresh`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(i32)]
+pub enum Stack {
+    /// Stack onto the first match (same tile/kind/category/instance/src);
+    /// create a row when there is none. The old `place_cp` behaviour.
+    Merge = 0,
+    /// Always push a fresh row. The old `add_mark` behaviour (tests count
+    /// rows; kaoru's 3 「怪盗标记」, embers' copies, tae_police rabbits).
+    Fresh = 1,
+}
+
+impl Stack {
+    pub fn from_i32(v: i32) -> Self {
+        if v == 1 {
+            Self::Fresh
+        } else {
+            Self::Merge
+        }
+    }
+}
+
 /// Cross-card message payload (`ctx::send` / `On::Message`). A few typed ints
 /// plus an optional name -- postcard-friendly.
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]

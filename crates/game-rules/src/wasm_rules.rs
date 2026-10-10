@@ -697,31 +697,14 @@ impl CardWorld for Run {
         src: i32,
         count: i32,
         note: Msg,
+        fresh: bool,
     ) -> i32 {
         let who = self.current_card.clone();
         self.world.note_marker_owner(kind, &who);
         let me = self.current_uid;
         let src = if src < 0 { me } else { src };
         self.world
-            .place_mark(me, kind, category, tile, owner, src, count, note)
-    }
-    /// Like [`Self::place_mark`] but always pushes a fresh row.
-    fn place_mark_new(
-        &mut self,
-        tile: i32,
-        kind: &str,
-        category: &str,
-        owner: i32,
-        src: i32,
-        count: i32,
-        note: Msg,
-    ) -> i32 {
-        let who = self.current_card.clone();
-        self.world.note_marker_owner(kind, &who);
-        let me = self.current_uid;
-        let src = if src < 0 { me } else { src };
-        self.world
-            .place_mark_new(me, kind, category, tile, owner, src, count, note)
+            .place_mark(me, kind, category, tile, owner, src, count, note, fresh)
     }
     fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.count_marks(tile, filter)
@@ -4636,12 +4619,6 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     }
     fn card_placed(&self) -> bool {
         self.cand.map(|(_, _, p)| p).unwrap_or(false)
-    }
-    fn card_cp(&self) -> i64 {
-        let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {
-            return 0;
-        };
-        self.world.card_crystals(o, c) as i64
     }
     fn card_counter(&self, name: &str) -> i64 {
         let (Some((o, c, _)), true) = (self.cand, self.owner() >= 0) else {

@@ -139,11 +139,28 @@ fn exempt_pay(player_id: i32) -> card_sdk::Asked {
     }
     let mover = trigger::player_id();
     if mover != player_id {
-        // TODO(规则书): 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"
-        //   转移到该格上以免除当次付款」 is not implemented. A non-owner mover
-        //   holding a parfait should be offered
-        //   `ctx::move_units(PARFAIT, -1, mover, space, -1, 1)` in exchange for
-        //   cancelling this payment; today this branch lets the payment run.
+        // 规则书: 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"转移到
+        //   该格上以免除当次付款」 -- the settling non-owner **may** (「可」) pay
+        //   a held parfait instead of money. Same payment-stage cancel gesture
+        //   (R4 / `payTotalCancel`) as the owner branch above.
+        if ctx::tok(mover, PARFAIT) < 1 {
+            return Ok(());
+        }
+        let yes = ctx::ask_yes(
+            mover,
+            &Msg::new(key!("rana_parking_title")),
+            &Msg::new(key!("rana_parking_transfer")),
+        )?;
+        if !yes {
+            return Ok(());
+        }
+        // One held unit moves onto space; the payment never runs.
+        ctx::move_units(PARFAIT, -1, mover, space, -1, 1);
+        trigger::set_cancelled();
+        ctx::log(
+            player_id,
+            &Msg::new(key!("rana_parking_transfer_done")).player_id("who", mover),
+        );
         return Ok(());
     }
     let owner = ctx::tile_owner(space);
@@ -211,8 +228,7 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("rana_parking_note")),
-    );
+        &Msg::new(key!("rana_parking_note")), card_sdk::abi::Stack::Merge);
     ctx::log(
         player_id,
         &Msg::new(key!("rana_parking_placed")).tile("tile", space),

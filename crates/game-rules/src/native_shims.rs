@@ -32,8 +32,9 @@ pub trait HostOps {
     fn op_effect(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
     /// `bandori_tile_count`
     fn op_tile_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr>;
-    /// `bandori_place_mark_new` -- always a fresh row.
-    fn op_place_mark_new(
+    /// `bandori_place_mark` -- 11 args, explicit params (the array is only 6).
+    /// `stack`: 0 = merge, 1 = fresh row.
+    fn op_place_mark(
         &mut self,
         tile: i32,
         kp: i32,
@@ -43,6 +44,7 @@ pub trait HostOps {
         owner: i32,
         src: i32,
         count: i32,
+        stack: i32,
         np: i32,
         nl: i32,
     ) -> Result<i64, HostErr>;
@@ -872,7 +874,7 @@ impl<C: crate::host::HostCtx> HostOps for C {
     fn op_tile_count(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {
         Ok(crate::hostfns::tile_count(self)? as i64)
     }
-    fn op_place_mark_new(
+    fn op_place_mark(
         &mut self,
         tile: i32,
         kp: i32,
@@ -882,10 +884,13 @@ impl<C: crate::host::HostCtx> HostOps for C {
         owner: i32,
         src: i32,
         count: i32,
+        stack: i32,
         np: i32,
         nl: i32,
     ) -> Result<i64, HostErr> {
-        Ok(crate::hostfns::place_mark_new(self, tile, kp, kl, cp, cl, owner, src, count, np, nl)? as i64)
+        Ok(crate::hostfns::place_mark(
+            self, tile, kp, kl, cp, cl, owner, src, count, stack, np, nl,
+        )? as i64)
     }
     fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {
         Ok(crate::hostfns::count_marks_f(self, tile, fp, fl)? as i64)
@@ -2281,17 +2286,8 @@ pub unsafe extern "C-unwind" fn bandori_tile_count() -> i32 {
 }
 
 #[no_mangle]
-pub unsafe extern "C-unwind" fn bandori_tile_named(ptr: i32, len: i32) -> i32 {
-    with_host(|h| match h.op_tile_named([ptr, len, 0, 0, 0, 0]) {
-pub unsafe extern "C-unwind" fn bandori_place_mark_new(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_place_mark_new(tile, kp, kl, cp, cl, owner, src, count, np, nl) {
-        Ok(v) => v as i32,
-        Err(e) => abort_host(e),
-    })
-}
-
-pub unsafe extern "C-unwind" fn bandori_place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32) -> i32 {
-    with_host(|h| match h.op_place_mark(tile, kp, kl, cp, cl, owner, src, count, np, nl) {
+pub unsafe extern "C-unwind" fn bandori_place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32 {
+    with_host(|h| match h.op_place_mark(tile, kp, kl, cp, cl, owner, src, count, stack, np, nl) {
         Ok(v) => v as i32,
         Err(e) => abort_host(e),
     })

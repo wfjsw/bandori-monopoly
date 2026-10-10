@@ -539,8 +539,27 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
         let w = t.m.world_mut();
         w.note_marker_owner("抹茶芭菲", "skill:要乐奈:投币式停车场的猫");
         w.set_tok(1, "抹茶芭菲", 2);
-        w.add_mark(tile("Space") as i32, 1, "抹茶芭菲", Default::default());
-        w.add_cp_mark(tile("CiRCLE") as i32, -1, "test", Default::default());
+        // One parfait row on Space (fresh row, owner seat 1).
+        w.place_mark(
+            -1,
+            "抹茶芭菲",
+            "",
+            tile("Space") as i32,
+            1,
+            -1,
+            1,
+            Default::default(), true);
+        // A neutral [CP点] row on CiRCLE -- units of the standing `mark:cp`
+        // counter, so they outlive any placer.
+        w.place_mark(
+            w.mark_cp_uid(),
+            game_core::state::mark_kind::CP,
+            game_core::state::mark_category::CP,
+            tile("CiRCLE") as i32,
+            game_core::state::BOARD_OWNER,
+            -1,
+            1,
+            Default::default(), true);
     }
     // P0 is forced under by a rent they cannot cover.
     t.set_money(0, 0);

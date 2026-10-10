@@ -8,7 +8,7 @@
 //! | scope | CEL spelling | binding |
 //! |---|---|---|
 //! | [`Scope::Window`] | `actor`, `move.main`, … | a flat window variable |
-//! | [`Scope::Candidate`] | `owner`, `card.cp`, … | a flat candidate variable |
+//! | [`Scope::Candidate`] | `owner`, `card.counter('name')`, … | a flat candidate variable |
 //! | [`Scope::Func`] | `slot(…)`, `is_circle(…)`, … | a CEL function over the view |
 //!
 //! Window / candidate names with a dotted spelling (`move.main`) rewrite to a
@@ -227,7 +227,7 @@ pub const VOCAB: &[Name] = &[
     },
     Name {
         cel: "counter_name",
-        aliases: &["trigger_name"],
+        aliases: &[],
         flat: "counter_name",
         scope: Scope::Window,
         ty: Ty::Int,
@@ -515,16 +515,6 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.card_placed() as i64,
         fx: NO_FX,
         doc: "is the running instance in play",
-    },
-    Name {
-        cel: "card.cp",
-        aliases: &[],
-        flat: "card_cp",
-        scope: Scope::Candidate,
-        ty: Ty::Int,
-        get: |v| v.card_cp(),
-        fx: NO_FX,
-        doc: "crystals on the candidate instance (legacy name)",
     },
     // -- functions ----------------------------------------------------------
     Name {

@@ -321,8 +321,25 @@ fn g31_aya_fan_flip_leaves_the_rabbit_marks() {
     // 2 兔子 marks on a tile P0 will NOT pass (the fan flip must not touch
     // them) but P1 (多惠) will.
     let mark_tile = tile("星空齿科");
-    t.m.world_mut().add_mark(mark_tile as i32, 1, "多惠兔子", Msg::default());
-    t.m.world_mut().add_mark(mark_tile as i32, 1, "多惠兔子", Msg::default());
+    // Two fresh rabbit rows (the old `add_mark` semantics: one row per call).
+    t.m.world_mut().place_mark(
+        -1,
+        "多惠兔子",
+        "",
+        mark_tile as i32,
+        1,
+        -1,
+        1,
+        Msg::default(), true);
+    t.m.world_mut().place_mark(
+        -1,
+        "多惠兔子",
+        "",
+        mark_tile as i32,
+        1,
+        -1,
+        1,
+        Msg::default(), true);
     assert_eq!(t.marks_on(mark_tile).len(), 2);
     // P0 pays a rent on a tile past the mark tile... no: land on a tile that
     // does not pass the marks, so only the fan flip happens here.

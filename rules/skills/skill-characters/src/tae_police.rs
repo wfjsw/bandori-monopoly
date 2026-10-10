@@ -58,15 +58,14 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // One rabbit per placement, each its own row (tests pin row identity).
-    ctx::place_mark_new(
+    ctx::place_mark(
         t,
         RABBIT,
         "",
         player_id,
         ctx::self_uid(),
         1,
-        &Msg::new(key!("tae_police_note")),
-    );
+        &Msg::new(key!("tae_police_note")), card_sdk::abi::Stack::Fresh);
     ctx::log(
         player_id,
         &Msg::new(key!("tae_police_placed"))

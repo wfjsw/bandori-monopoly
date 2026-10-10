@@ -297,3 +297,112 @@ fn q7_settle_before_relocation_settles_at_the_new_tile() {
         t.recent_keys(20)
     );
 }
+
+
+// =====================================================================
+// R4 -- 要乐奈 (2) 「其他人…转移到该格上以免除当次付款」
+// =====================================================================
+
+/// 规则书 (要乐奈 (2)): 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"
+/// 转移到该格上以免除当次付款」. The settling non-owner who holds a held
+/// parfait is **offered** the transfer; on yes one unit moves onto Space and
+/// the payment-stage cancel runs (same `payTotalCancel` gesture as the owner
+/// branch). Deliberate behaviour change: this clause was previously unimplemented.
+///
+/// Setup: P0 owns the skill (and so every 抹茶芭菲), P1 owns Space, P2 settles it.
+
+fn rana_transfer_setup() -> Table {
+    let mut t = Table::new(&["要乐奈", "仓田真白", "花园多惠"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "skill:要乐奈:投币式停车场的猫");
+    t.own(1, &[tile("Space")]);
+    t
+}
+
+/// Holder accepts: one held unit moves onto Space and the payment never runs.
+#[test]
+fn rana_parfait_transfer_voids_the_space_payment() {
+    let mut t = rana_transfer_setup();
+    t.m.world_mut().set_tok(2, "抹茶芭菲", 1);
+    let money_before = t.money(2);
+    let owner_before = t.money(1);
+    t.begin_turn(2);
+    drain(&mut t);
+    t.set_pos(2, tile("Space") - 1);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    // The transfer ask goes to the settling non-owner (P2).
+    let p = t.expect_prompt();
+    assert!(
+        p.title.key().contains("rana_parking_title"),
+        "the transfer ask: {:?}",
+        p.title
+    );
+    t.answer(2, 0).unwrap(); // yes
+    drain(&mut t);
+    assert_eq!(t.token(2, "抹茶芭菲"), 0, "the held unit left the mover");
+    assert_eq!(
+        t.marks_on(tile("Space"))
+            .iter()
+            .filter(|m| m.kind == "抹茶芭菲")
+            .map(|m| m.count)
+            .sum::<i32>(),
+        1,
+        "the unit landed on Space: {:?}",
+        t.marks_on(tile("Space"))
+    );
+    assert_eq!(t.money(2), money_before, "no payment ran: {:?}", t.recent_keys(12));
+    assert_eq!(t.money(1), owner_before, "the owner received nothing");
+}
+
+/// Holder declines: the payment runs as usual.
+#[test]
+fn rana_parfait_transfer_declined_pays_the_rent() {
+    let mut t = rana_transfer_setup();
+    t.m.world_mut().set_tok(2, "抹茶芭菲", 1);
+    let money_before = t.money(2);
+    t.begin_turn(2);
+    drain(&mut t);
+    t.set_pos(2, tile("Space") - 1);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    let p = t.expect_prompt();
+    assert!(p.title.key().contains("rana_parking_title"), "{:?}", p.title);
+    t.answer(2, 1).unwrap(); // no
+    drain(&mut t);
+    assert_eq!(t.token(2, "抹茶芭菲"), 1, "the held unit stayed");
+    assert_eq!(
+        t.marks_on(tile("Space"))
+            .iter()
+            .filter(|m| m.kind == "抹茶芭菲")
+            .map(|m| m.count)
+            .sum::<i32>(),
+        0,
+        "nothing landed on Space"
+    );
+    assert!(t.money(2) < money_before, "the rent was paid: {:?}", t.recent_keys(12));
+}
+
+/// Holds none: no ask at all, the payment just runs.
+#[test]
+fn rana_parfait_transfer_not_offered_without_a_held_unit() {
+    let mut t = rana_transfer_setup();
+    let money_before = t.money(2);
+    t.begin_turn(2);
+    drain(&mut t);
+    t.set_pos(2, tile("Space") - 1);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    // No transfer ask: any prompt that comes up is not the rana ask.
+    while let Some(p) = t.prompt() {
+        assert!(
+            !p.title.key().contains("rana_parking_title"),
+            "no transfer ask when the mover holds none: {:?}",
+            p.title
+        );
+        t.decline();
+    }
+    assert!(t.money(2) < money_before, "the rent was paid: {:?}", t.recent_keys(12));
+}

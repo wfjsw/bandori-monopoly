@@ -86,7 +86,6 @@ fn cand(owner: i64) -> CandidateCtx {
         owner_tiles: 1,
         card_id: 42,
         card_placed: false,
-        card_cp: 1,
         slots: [("asUsualTurn".to_string(), 3)].into_iter().collect(),
         tok_names: [("水母标记".to_string(), 2)].into_iter().collect(),
         blocked_bands: vec![2],
@@ -449,10 +448,6 @@ fn card_counter_lookup() {
     assert!(compile("card_counter('cp') == 6").unwrap().eval(&win(), &c));
     // Missing names answer 0 (same as `tok`).
     assert!(compile("card.counter('抹茶芭菲') == 0").unwrap().eval(&win(), &c));
-    // Legacy `card.cp` reads the `card_cp` snapshot field (crystals), not
-    // the name-keyed table -- same meaning, different storage row.
-    c.card_cp = 2;
-    assert!(compile("card.cp == 2").unwrap().eval(&win(), &c));
 }
 
 #[test]

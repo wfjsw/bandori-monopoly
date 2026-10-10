@@ -52,15 +52,14 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // `skillBlock` mark is what the shared skill-press gate reads
     // (`ctx::skill_blocked` -> `count_marks(t, &MarkFilter::any().kind("skillBlock"))`).
     if space >= 0 {
-        ctx::place_mark_new(
+        ctx::place_mark(
             space,
             "skillBlock",
             "",
             player_id,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("parking_space_note")),
-        );
+            &Msg::new(key!("parking_space_note")), card_sdk::abi::Stack::Fresh);
     }
     // 规则书[手]: 「将其上的房屋转移至其他你拥有的格子上（每个格子因此效果最多获得1层）」
     // -- C# takes `H.State.houses[s]` houses off the Space tile (only when the

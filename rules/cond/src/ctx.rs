@@ -187,9 +187,6 @@ pub struct CandidateCtx {
     /// `card.*`
     pub card_id: i64,
     pub card_placed: bool,
-    /// Crystals on the candidate instance (`card.cp`, the legacy name -- it
-    /// reads **crystals**, not CP).
-    pub card_cp: i64,
     /// `card.counter('name')` lookup -- the candidate instance's named
     /// counters (`"cp"` / `"crystals"` map to `FieldCard::cp` /
     /// `FieldCard::crystals`, anything else to `FieldCard::counters`).

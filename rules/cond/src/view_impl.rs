@@ -156,9 +156,6 @@ impl CondView for SnapshotView<'_> {
     fn card_placed(&self) -> bool {
         self.cand.card_placed
     }
-    fn card_cp(&self) -> i64 {
-        self.cand.card_cp
-    }
     fn card_counter(&self, name: &str) -> i64 {
         self.cand.card_counter(name)
     }

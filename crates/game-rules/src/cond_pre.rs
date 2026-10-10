@@ -260,13 +260,6 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn card_placed(&self) -> bool {
         self.placed
     }
-    fn card_cp(&self) -> i64 {
-        if self.owner_seat >= 0 {
-            self.src.card_crystals(self.owner_seat, self.card) as i64
-        } else {
-            0
-        }
-    }
     fn card_counter(&self, name: &str) -> i64 {
         if self.owner_seat >= 0 {
             self.src.card_counter(self.owner_seat, self.card, name) as i64
@@ -1204,7 +1197,6 @@ pub fn fill_candidate<S: SnapSrc>(
         owner_tiles: world.owned_count(p) as i64,
         card_id: id_of(card),
         card_placed: placed,
-        card_cp: world.card_crystals(p, card) as i64,
         card_counters: world
             .card_counter_names(p, card)
             .into_iter()

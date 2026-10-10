@@ -52,15 +52,14 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     // `H.AddMark(tsurumakiAgent, "黑衣人的补给", c.Seat, 1, ...)`: a tile mark
     // owned by the player of this card. `place_mark_new`: one row per crystal.
     if group >= 0 {
-        ctx::place_mark_new(
+        ctx::place_mark(
             group,
             MARK,
             "",
             player_id,
             ctx::self_uid(),
             1,
-            &Msg::new(key!("black_suits_crystal_note")),
-        );
+            &Msg::new(key!("black_suits_crystal_note")), card_sdk::abi::Stack::Fresh);
         ctx::log(
             player_id,
             &Msg::new(key!("black_suits_placed"))
