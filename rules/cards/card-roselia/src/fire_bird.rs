@@ -20,8 +20,8 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         // play gate -- an unaffordable in-body payment takes the Q1 shortfall
         // path (mortgage, then bankruptcy). C# `CardFireBird.WhyNot` had one.
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
-        On::Hook(&[HookKind::PayMul], "", Some(pay_mul_guard), pay_mul),
+        On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
+        On::Hook(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
         On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600)]);
@@ -74,18 +74,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// (after `PayAdd`, before `PayChoose`), so this is a field effect, not a [反击].
 /// Pure guard for [`pay_mul`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn pay_mul_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn pay_mul(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayMul || !trigger::pay_is_rent() {
-        return Ok(());
-    }
-    // C# `p.to == Player` -- the rent must be landing on this card's owner.
-    if trigger::target() != player_id {
-        return Ok(());
-    }
     let amount = trigger::value();
     if amount <= 0 {
         return Ok(());
@@ -110,10 +99,6 @@ fn pay_mul(player_id: i32) -> card_sdk::Asked {
 /// Fx hook dispatch, so this is a field effect, not a [反击].
 /// Pure guard for [`turn_end`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「每回合结束时失去400资金」 -- C# `H.LoseR(Seat, 400, "Fire bird")`.
     ctx::pay(

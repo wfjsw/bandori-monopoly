@@ -23,7 +23,7 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
     "PP:[大和麻弥]可能性为∞",
     &[
         On::Play("", Some(can_swap), swap),
-        On::Hook(&[HookKind::Drew], "", Some(drew_guard), drew),
+        On::Hook(&[HookKind::Drew], "actor == owner && card.placed && value > 0", None, drew),
     ],
 );
 
@@ -37,16 +37,7 @@ pub const INFINITE_POSSIBILITY: CardDef = CardDef::new(
 /// 规则书[持续]（1）: 「[拥有者]进行抽卡动作后如果此卡的[奇迹水晶]小于4则为此卡
 /// 添加1个[奇迹水晶]，否则移除此卡的[奇迹水晶]并为[拥有者]的Pastel✽Palettes乐队卡添加1个
 /// [奇迹水晶]」
-/// Pure guard for [`drew`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn drew_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
 fn drew(player_id: i32) -> card_sdk::Asked {
-    if trigger::value() <= 0 {
-        return Ok(());
-    }
     if ctx::crystals() < 4 {
         ctx::add_crystals(1, 4)?;
     } else {
@@ -74,9 +65,6 @@ fn can_swap(player_id: i32) -> Option<Msg> {
 }
 
 fn swap(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     if !crate::resonance::try_resonance(player_id)? {
         return Ok(());
     }

@@ -18,8 +18,8 @@ use crate::want_human::SLOT_X;
 pub const TOMORI_INNER_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:（灯）内心的呐喊",
     &[
-        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], "", Some(mine), pull),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], "", Some(empty_piles), shuffle_in),
+        On::Hook(&[card_sdk::abi::HookKind::SettleBefore], "actor != owner && move.main && card.placed", None, pull),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEndBefore], card_sdk::pre::MINE, Some(empty_piles), shuffle_in),
         On::Play("", None, tomori_inner_shout),
     ],
 );
@@ -96,13 +96,7 @@ fn tomori_inner_shout(player_id: i32) -> card_sdk::Asked {
 /// （3）: when another player's main-move endpoint is within 5 of this card's
 /// tile and the owner has 1 fire, pull them onto the card's tile with no settle.
 fn pull(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     let mover = ctx::trigger::player_id();
-    if mover == player_id || !ctx::trigger::move_is_main() {
-        return Ok(());
-    }
     let Some(card_tile) = ctx::self_tile() else {
         return Ok(());
     };
@@ -141,9 +135,7 @@ fn pull(player_id: i32) -> card_sdk::Asked {
 /// The band skill's (2) fires when both piles are empty; this card shuffles
 /// itself in at the same moment.
 fn empty_piles(player_id: i32) -> bool {
-    ctx::trigger::player_id() == player_id
-        && ctx::deck_count(player_id) == 0
-        && ctx::discard_size(player_id) == 0
+    ctx::deck_count(player_id) == 0 && ctx::discard_size(player_id) == 0
 }
 
 fn shuffle_in(player_id: i32) -> card_sdk::Asked {
@@ -155,6 +147,3 @@ fn shuffle_in(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-fn mine(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id
-}

@@ -1108,6 +1108,14 @@ pub const SLOT_NAMES: &[&str] = &[
     "lock_dream_tag",
     // `甜甜圈爱好者` half-price window (`state::set(player_id, HALF, 1)`).
     "skill.manaDonut.half",
+    // `（沙绫）总有一天要给这片天空命名` pass tag (`ctx::set_slot(player_id, SLOT_PASSED, 1)`).
+    "saaya_sky_passed",
+    // `one_of_us` partner seat+1 (`ctx::set_slot(owner, "one_of_us_partner", partner+1)`).
+    "one_of_us_partner",
+    // `骰子已经掷下` turn-key lock (`ctx::set_slot(player_id, NO_COUNTERACT, turn_key)`).
+    "diceCastActive",
+    // `Change the world` once-per-turn tag (`ctx::set_slot(player_id, SLOT_TURN, turn_key)`).
+    "change_world_turn",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read

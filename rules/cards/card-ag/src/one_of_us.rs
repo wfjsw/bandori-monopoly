@@ -16,14 +16,14 @@ pub const ONE_OF_US: CardDef = CardDef::new(
     "AG:ONE OF US",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::BeforeOut], "", None, before_out),
+        On::Hook(&[HookKind::BeforeOut], "card.placed && slot('one_of_us_partner') > 0", None, before_out),
         // 「先在地契原主人方结算完成，之后被分享方资金直接增加」 -- the settle
         // runs to completion at the original owner (`tileResolved`, the
         // 「结算完成时」 terminal, `SETTLE-STAGES.md` §4 M5) and only then does
         // the partner's share land. `PayAfter` just measures the rent income
         // the settle produced; the split is the terminal's job.
-        On::Hook(&[HookKind::PayAfter], "", None, measure_rent),
-        On::Hook(&[HookKind::TileResolved], "", None, share_at_resolved),
+        On::Hook(&[HookKind::PayAfter], "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", Some(measure_rent_guard), measure_rent),
+        On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, share_at_resolved),
     ],
 );
 
@@ -157,22 +157,14 @@ fn designated(owner: i32, tile: i32) -> bool {
 /// Measure the rent income a designated deed just produced (`Fx.PayAfter`).
 /// `t.Pay.tile` rides the pay trigger (ABI v42), so the designated-tile match
 /// is exact. Recorded on a slot; `share_at_resolved` spends it.
+/// Residual guard for [`measure_rent`] -- the designated-tile check is a
+/// derived lookup (GUARDS.md §6).
+fn measure_rent_guard(owner: i32) -> bool {
+    designated(owner, trigger::tile())
+}
+
 fn measure_rent(owner: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() || ctx::slot(owner, "one_of_us_partner") <= 0 {
-        return Ok(());
-    }
-    let k = trigger::kind();
-    if k != card_sdk::abi::TriggerKind::PayAfter || !trigger::pay_is_rent() {
-        return Ok(());
-    }
-    if !designated(owner, trigger::tile()) {
-        return Ok(());
-    }
-    // `value()` is the settled figure (`p.finalGain`).
     let paid = trigger::value().max(0);
-    if paid <= 0 {
-        return Ok(());
-    }
     ctx::set_slot(owner, "one_of_us_rent", paid);
     Ok(())
 }
@@ -183,13 +175,7 @@ fn measure_rent(owner: i32) -> card_sdk::Asked {
 /// when the settle was cancelled (complete-as-nothing) -- with no recorded
 /// income there is nothing to split.
 fn share_at_resolved(owner: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     let partner = ctx::slot(owner, "one_of_us_partner") - 1;
-    if partner < 0 {
-        return Ok(());
-    }
     let income = ctx::slot(owner, "one_of_us_rent");
     ctx::set_slot(owner, "one_of_us_rent", 0);
     if income <= 0 {
@@ -236,13 +222,7 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
 fn before_out(owner: i32) -> card_sdk::Asked {
     // `owner` is the card's player; `trigger::player_id()` is the player leaving (C#
     // `BeforeOut(int player_id)`).
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     let partner = ctx::slot(owner, "one_of_us_partner") - 1;
-    if partner < 0 {
-        return Ok(());
-    }
     let out = trigger::player_id();
     // C# `player_id != Player && player_id != Partner` -> return.
     if out != owner && out != partner {

@@ -16,7 +16,7 @@ pub const HANEOKA: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), haneoka),
         // C# `CardHaneoka.PayChoose` -- while placed, may cancel one payment.
-        On::Hook(&[HookKind::PayChoose], "", None, pay_choose),
+        On::Hook(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
     ],
 );
 
@@ -109,14 +109,7 @@ fn haneoka(player_id: i32) -> card_sdk::Asked {
 /// C# `CardHaneoka.PayChoose` -- while placed, ask to bin the card and cancel
 /// one payment of yours (`p.cancel = true`).
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-        if trigger::player_id() != player_id
-        || !ctx::is_placed() {
-        return Ok(());
-        }
     let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     // 规则书: 「在后续任何时刻可将其置入弃牌堆并抵消一次任意付款」 -- C# `Ask`:
     // `H.AskYes(Seat, CardName, "要付 ... ：要把「羽丘的不可思议女孩」放入弃卡区，
     // 抵消这次付款吗？")`, then `p.cancel = true` and `H.Unplace(this, "discard", ...)`.

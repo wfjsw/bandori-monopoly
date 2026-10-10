@@ -21,7 +21,7 @@ pub const NYAMU_CARD: CardDef = CardDef::new(
     "Mujica:（喵梦）",
     &[
         On::Play("", None, nyamu_card),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], card_sdk::pre::MINE, None, watch_flips),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed", None, watch_flips),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -32,9 +32,6 @@ fn legacy_mine(player_id: i32) -> bool {
 
 /// 「每当此卡将从背面翻至正面时此卡拥有者抽一张卡」.
 fn watch_flips(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     let now = ctx::self_face_down();
     let was = ctx::slot(player_id, WAS_DOWN) != 0;
     ctx::set_slot(player_id, WAS_DOWN, now as i32);

@@ -42,7 +42,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
-        On::Hook(&[HookKind::PassTile], "", Some(in_two), on_pass_player),
+        On::Hook(&[HookKind::PassTile], "actor == owner && move.main", Some(in_two), on_pass_player),
         On::Hook(&[HookKind::SettleBefore], "", Some(in_two), before_settle),
     ],
 )
@@ -66,7 +66,7 @@ fn in_one(player_id: i32) -> bool {
 }
 
 fn in_two(player_id: i32) -> bool {
-    mine(player_id) && state::get(player_id, state_key::SKILL_STATE) == 2
+    state::get(player_id, state_key::SKILL_STATE) == 2
 }
 
 /// 状态1's entry offer, and 状态2's cap.
@@ -134,9 +134,6 @@ fn on_settle(player_id: i32) -> card_sdk::Asked {
 /// mover -- the guard already pinned that to `player_id`, so the body bailed
 /// and the charge never fired.)
 fn on_pass_player(player_id: i32) -> card_sdk::Asked {
-    if !ctx::trigger::move_is_main() {
-        return Ok(());
-    }
     let at = ctx::trigger::tile();
     for other in ctx::players_on(at, player_id) {
         ctx::transfer(

@@ -69,9 +69,6 @@ fn can_go(player_id: i32) -> Option<Msg> {
 }
 
 fn go(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     // The move below settles, so the card must be gone before it runs.
     ctx::send_to_dest(ctx::Dest::Graveyard);
     ctx::plan::set_steps(ctx::hand_size(player_id));

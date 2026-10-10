@@ -24,7 +24,7 @@ pub const MYGO: CardDef = CardDef::new(
         // （1）「开局时投掷3d20，并取出目作为你本局游戏的起始点」 -- a start
         // position: the before-match-start point decides those.
         On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
-        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, after_roll),
+        On::Hook(&[HookKind::RollAfter], "actor == owner && move.roll >= 16", None, after_roll),
         On::Hook(&[HookKind::Discarded], card_sdk::pre::MINE, None, on_discarded),
         // One Play entry for both press effects (the engine dispatches only
         // the first). 规则书（2）/（3） give two independent 「可」 abilities
@@ -59,9 +59,6 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「若移动掷骰出目为16及以上，为此卡添加一个[奇迹水晶]（上限1）」.
 fn after_roll(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::move_roll().unwrap_or(0) < 16 {
-        return Ok(());
-    }
     ctx::add_crystals(1, 1)?;
     ctx::log(player_id, &Msg::new(key!("mygo_crystal")));
     Ok(())

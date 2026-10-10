@@ -108,9 +108,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 「下次结算后可选择在绝对距离5格以内自己拥有的格子上进行一次盖房，随后减少1层」.
 fn after_settle(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::player_id() != player_id {
-        return Ok(());
-    }
     if ctx::slot(player_id, "star_beat.layers") <= 0 {
         return Ok(());
     }

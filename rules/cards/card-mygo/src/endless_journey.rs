@@ -16,12 +16,12 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
     "MyGO:哪怕这旅程没有终点",
     &[
         On::Play("", None, endless_journey),
-        On::Hook(&[HookKind::TurnEnd], "", None, turn_end),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
         // （2）「触发结算时」 is 行动阶段 15 -- an entry in the settle's effect
         // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
         // field card that replaces the body skips this entry.
-        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::SettleBody], "actor == owner && move.main && card.placed", None, settle_body),
+        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -48,10 +48,6 @@ fn endless_journey(player_id: i32) -> card_sdk::Asked {
 /// C# `CardEndlessJourney.TurnEnd` -- when the owner's main move walked more
 /// than 6 steps, burn one miracle crystal; at 0 the card is discarded.
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-        if trigger::player_id() != player_id
-        || !ctx::is_placed() {
-        return Ok(());
-        }
     // 规则书[手]: 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶。当此卡奇迹
     // 水晶数量为0时，将此卡置入弃牌堆。」 -- C# `H._turnCtx.LastMain > 6` ->
     // `AddCrystals(-1)` and `H.Unplace(this, "discard", ...)` at 0.
@@ -70,14 +66,9 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn crystals_changed_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-        && trigger::player_id() == player_id
-        && trigger::card_is(ID)
-        && ctx::crystals() == 0
-        // Only a write that did not raise the count speaks for the empty
-        // state; see AG:绯红之魂 (3).
-        && trigger::value() <= 0
+/// Residual guard -- `card_is` stays here (not yet in the condition vocabulary).
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::card_is(ID)
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
@@ -95,12 +86,7 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
 /// replace (`trigger::cancelled()`) skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
-    if trigger::cancelled() || !ctx::is_placed() {
-        return Ok(());
-    }
-    // C# `m.Seat != Seat || !m.Main || m.Path.Count == 0` -- only the owner's
-    // own main move pays out (`t.Move` is the move that just settled).
-    if trigger::player_id() != player_id || !trigger::move_is_main() {
+    if trigger::cancelled() {
         return Ok(());
     }
     // 规则书（2）: 「[持续] 触发结算时，获得X*60资金，X为你此次主要移动[经过]的格数」

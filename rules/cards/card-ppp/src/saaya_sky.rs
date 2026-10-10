@@ -19,8 +19,8 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
-        On::Hook(&[HookKind::TurnEndAfter], "", None, turn_end_after),
+        On::Hook(&[HookKind::PassTile], "actor == owner", Some(pass_tile_guard), pass_tile),
+        On::Hook(&[HookKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", None, turn_end_after),
     ],
 );
 
@@ -66,9 +66,6 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// 规则书（2）: 「在回合结束后获得1个[火罐]，然后投掷3d20将此卡放置在投掷结果的格子上」
 /// -- C# `CardSaayaSky.TurnEndAfter`.
 fn turn_end_after(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() || ctx::slot(player_id, SLOT_PASSED) == 0 {
-        return Ok(());
-    }
     ctx::set_slot(player_id, SLOT_PASSED, 0);
     // 规则书（2）: 「获得1个[火罐]」 -- C# `H.GainFire(User, 1, CardName)`.
     ctx::gain_fire(player_id, 1, &Msg::new(key!("saaya_sky_fire")))?;

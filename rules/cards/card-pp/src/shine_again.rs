@@ -29,12 +29,12 @@ pub const SHINE_AGAIN: CardDef = CardDef::new(
         // [共鸣] branch (2) is offered from the `PayChoose` hook below, not as a
         // second `Play` entry (its `is_placed` gate was blocking this play).
         On::Play("", None, shine_again),
-        On::Hook(&[HookKind::PayChoose], "", None, pay_choose),
+        On::Hook(&[HookKind::PayChoose], "actor == owner && card.placed && value > 0", None, pay_choose),
         // 规则书[持续]（2）: 「[共鸣]记录一个此卡未记录的颜色」 -- offered at the
         // owner's turn start (the text gives no narrower timing).
         // TODO(规则书)（2）: 「[共鸣]」 timing -- the sheet does not say when; a
         //   turn-start offer is a stand-in for the C# action window.
-        On::Hook(&[HookKind::TurnStart], "", None, offer_resonance),
+        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, offer_resonance),
     ],
 );
 
@@ -83,12 +83,6 @@ fn unrecorded_owned_colors(player_id: i32) -> Vec<i32> {
 /// C# `CardShineAgain.PayChoose` -- while the owner cannot cover a payment,
 /// record a colour and take that colour's top deed price / 5 plus a fan.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
-    if trigger::player_id() != player_id || trigger::value() <= 0 {
-        return Ok(());
-    }
     // 规则书[持续]（1）: 「当前资金不够时」 -- C# `Me.money >= p.amount` refuses.
     if ctx::money_of(player_id) >= trigger::value() {
         return Ok(());
@@ -153,10 +147,6 @@ fn can_record(player_id: i32) -> Option<Msg> {
 
 /// Offer the [共鸣] record at the owner's turn start (see the TODO on the hook).
 fn offer_resonance(player_id: i32) -> card_sdk::Asked {
-        if trigger::player_id() != player_id
-        || !ctx::is_placed() {
-        return Ok(());
-        }
     if can_record(player_id).is_some() {
         return Ok(());
     }

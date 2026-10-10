@@ -17,10 +17,10 @@ pub const MOCA_HALF: CardDef = CardDef::new(
     "AG:（摩卡）0.5倍速",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
-        On::Hook(&[HookKind::RollAfter], "", None, roll_after),
-        On::Hook(&[HookKind::PayMul], "", None, pay_mul),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
+        On::Hook(&[HookKind::RollAfter], "actor == owner && move.main && card.placed", None, roll_after),
+        On::Hook(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
+        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -41,12 +41,6 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书(1): 「你的回合结束时移除一个奇迹水晶」 -- C# `DecayCard.TurnEnd` ->
 /// `AddCrystals(-1)`. The 「奇迹水晶为0时此卡放入弃牌堆」 half is
 /// [`on_crystals_changed`], not this tick.
-/// Pure guard for [`turn_end`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     ctx::decay()?;
     Ok(())
@@ -58,16 +52,10 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// Listens to this card's own [`HookKind::CrystalsChanged`] rather than being
 /// re-checked at the decay tick, so a count emptied by *any* write leaves the
 /// field just the same.
-/// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn crystals_changed_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-        && trigger::player_id() == player_id
-        && trigger::card_is(ID)
-        && ctx::crystals() == 0
-        // Only a write that did not raise the count speaks for the empty
-        // state; see AG:绯红之魂 (3).
-        && trigger::value() <= 0
+/// Residual guard for [`on_crystals_changed`] -- `card_is` stays here (not yet
+/// in the condition vocabulary).
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::card_is(ID)
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
@@ -83,9 +71,6 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// `CardMocaHalf.RollAfter`: `m.Roll = ceil(max(0, roll)/2)` on the player's own
 /// main-move roll.
 fn roll_after(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id || !trigger::move_is_main() || !ctx::is_placed() {
-        return Ok(());
-    }
     let roll = trigger::value().max(0);
     let halved = (roll + 1) / 2;
     trigger::set_move_roll(halved);
@@ -104,9 +89,6 @@ fn roll_after(player_id: i32) -> card_sdk::Asked {
 /// The `PayMul` pass (after `PayAdd`, before `PayChoose`) rewrites the amount
 /// via `ctx::trigger::set_pay_amount`.
 fn pay_mul(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id || !ctx::is_placed() {
-        return Ok(());
-    }
     let amount = trigger::value();
     if amount <= 0 {
         return Ok(());

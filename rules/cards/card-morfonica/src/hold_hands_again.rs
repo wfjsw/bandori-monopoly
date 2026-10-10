@@ -26,7 +26,7 @@ pub const HOLD_HANDS_AGAIN: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::Hook(&[HookKind::PayAt], "", None, pay_at),
+        On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, pay_at),
     ],
 )
 .legacy(&[(0, legacy_can_counteract)]);
@@ -73,11 +73,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// `payAt` (after `PayChoose`, before the `pay` [反击] window), so this is a
 /// field effect, not a [反击].
 fn pay_at(player_id: i32) -> card_sdk::Asked {
-        if trigger::player_id() != player_id
-        || !ctx::is_placed()
-        || trigger::value() <= 0 {
-        return Ok(());
-        }
     // 规则书[持续]: 「取消此次资金变动」
     trigger::set_pay_amount(0);
     // 规则书[持续]: 「将此卡放置到弃卡区」

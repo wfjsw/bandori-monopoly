@@ -23,7 +23,7 @@ pub const ANON_TOKYO: CardDef = CardDef::new(
     "MyGO:[千早爱音]Anon Tokyo",
     &[
         On::Play("", Some(cant_play), anon_tokyo),
-        On::Hook(&[HookKind::PayAdd], "", Some(link_guard), link_rent),
+        On::Hook(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner && value > 0", None, link_rent),
     ],
 );
 
@@ -157,13 +157,6 @@ fn link_guard(player_id: i32) -> bool {
 /// link add `RentOf(linked) / 2` when `p.tile` is either end and the other end is
 /// owned by Player.
 fn link_rent(player_id: i32) -> card_sdk::Asked {
-    if !trigger::pay_is_rent() {
-        return Ok(());
-    }
-    // 「收费时」 -- the link owner is the one collecting the rent.
-    if trigger::target() != player_id || trigger::value() <= 0 {
-        return Ok(());
-    }
     let tile = trigger::tile();
     if tile < 0 {
         return Ok(());

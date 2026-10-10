@@ -22,19 +22,15 @@ pub const ARISA_BONSAI: CardDef = CardDef::new(
     "skill:市谷有咲:盆栽爱好者",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Event], "", Some(other), on_event),
+        On::Hook(&[HookKind::Event], "actor != owner && tile.id == tile_named('流星堂')", None, on_event),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('流星堂')", None, on_pass),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
-}
-
-fn other(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id
 }
 
 /// 「初始0，上限2」.
@@ -45,9 +41,6 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次有其他玩家在"流星堂"抽取事件时获得一个[火罐]」.
 fn on_event(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::tile() != station() {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("arisa_bonsai_gain")))?;
     Ok(())
 }
@@ -78,9 +71,6 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 
 /// Latch for （2）: this player passed the station during a move.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::tile() != station() {
-        return Ok(());
-    }
     if ctx::trigger::move_is_main() {
         ctx::set_slot(player_id, "skill.arisa.passedStation", 1);
     }

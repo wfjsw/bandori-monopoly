@@ -26,7 +26,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
     &[
         On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
-        On::Hook(&[HookKind::MoveAfter], "", Some(after_move_guard), after_move),
+        On::Hook(&[HookKind::MoveAfter], "actor == owner && move.main && card.placed", None, after_move),
         On::AtEnd(at_end),
     ],
 );
@@ -69,15 +69,7 @@ fn childhood_cheer(player_id: i32) -> card_sdk::Asked {
 /// not a [反击].
 /// Pure guard for [`after_move`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn after_move_guard(_player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn after_move(player_id: i32) -> card_sdk::Asked {
-    // C# `if (m.Seat != Player || !m.Main) return null`.
-    if trigger::player_id() != player_id || !trigger::move_is_main() {
-        return Ok(());
-    }
     // 规则书: 「并在移动后获得一个火罐」 -- 行动阶段 13, after [重叠] and
     // before any settle. Fires for a 「不触发结算」 move too.
     ctx::gain_fire(player_id, 1, &Msg::new(key!("childhood_cheer_fire")))?;

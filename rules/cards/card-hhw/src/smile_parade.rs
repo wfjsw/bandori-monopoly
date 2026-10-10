@@ -18,10 +18,10 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
     "HHW:笑容大游行",
     &[
         On::Hook(&[card_sdk::abi::HookKind::SettleBody], card_sdk::pre::MINE, None, settle_instead),
-        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], card_sdk::pre::MINE, None, move_after),
+        On::Hook(&[card_sdk::abi::HookKind::SettleAfter], "actor == owner && card.placed", None, move_after),
         On::Counteract(&[ChainKind::Pass], "", Some(can_counteract), counteract),
-        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
+        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -72,12 +72,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// (`turn == Player && Tile == Group && Crystals > 0` -> `AddCrystals(-1)`).
 /// The 「奇迹水晶为0时若此卡仍位于"弦卷集团"则将其放入弃牌堆」 half is
 /// [`on_crystals_changed`].
-/// Pure guard for [`turn_end`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     // C# `Tile == Group` -- the decay only runs while the card still sits on
     // 弦卷集团.
@@ -103,17 +97,10 @@ fn on_group() -> bool {
 /// 「若此卡仍位于"弦卷集团"」 is a real condition, not a restatement of the
 /// tick's own gate: （2） moves the card to the [移动终点] and strips its
 /// crystals, and that emptying is *not* this discard.
-/// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn crystals_changed_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-        && trigger::player_id() == player_id
-        && trigger::card_is(ID)
-        && ctx::crystals() == 0
-        // Only a write that did not raise the count speaks for the empty
-        // state; see AG:绯红之魂 (3).
-        && trigger::value() <= 0
-        && on_group()
+/// Residual guard for [`on_crystals_changed`] -- `card_is` and the group
+/// check stay here (not yet in the condition vocabulary).
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::card_is(ID) && on_group()
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
@@ -127,9 +114,6 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「当次移动的移动终点视为"弦卷集团"地产商」 -- `H.AgentLanding(m.Seat, Group)`.
 fn settle_instead(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::player_id() != player_id {
-        return Ok(());
-    }
     let group = ctx::tile_named("弦卷集团");
     if group < 0 {
         return Ok(());
@@ -147,9 +131,6 @@ fn settle_instead(player_id: i32) -> card_sdk::Asked {
 /// （2）「[触发结算]后可将"弦卷集团"格子上的此卡放置于[移动终点]格子上并移除其上
 /// 全部奇迹水晶」.
 fn move_after(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     let group = ctx::tile_named("弦卷集团");
     let here = ctx::self_tile().unwrap_or(-1);
     if group < 0 || here != group {

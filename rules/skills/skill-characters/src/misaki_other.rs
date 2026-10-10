@@ -31,7 +31,7 @@ pub const MISAKI_OTHER: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use_exile), use_exile),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('弦卷集团')", None, on_pass),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
     ],
 )
@@ -49,9 +49,6 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次经过"弦卷集团"（#29）格子后获得2火罐」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::tile() != ctx::tile_named("弦卷集团") {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 2, &Msg::new(key!("misaki_other_gain")))?;
     state::set(player_id, GROUP, 0);
     Ok(())

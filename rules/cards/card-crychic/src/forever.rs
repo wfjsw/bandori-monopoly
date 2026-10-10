@@ -30,7 +30,7 @@ pub const FOREVER: CardDef = CardDef::new(
                 HookKind::TurnEndBefore,
                 HookKind::TurnEnd,
             ],
-            "",
+            "card.placed && owner.hand >= 7",
             None,
             on_drew
         ),
@@ -64,13 +64,7 @@ fn forever(player_id: i32) -> card_sdk::Asked {
 /// owner's own draws; the sheet says 「立即」, so every hand-size movement
 /// (and the turn boundaries as a backstop) re-checks.
 fn on_drew(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
-    // 规则书（2）[持续]: 「若你的手牌大于等于7」 -- C# `H._hidden[Player].hand.Count < 7`.
-    if ctx::hand_size(player_id) < 7 {
-        return Ok(());
-    }
+    // 规则书（2）[持续]: 「若你的手牌大于等于7」 -- `owner.hand >= 7` in the condition.
     // 规则书（2）[持续]: 「此卡立即置入弃牌堆」 -- C# `H.Unplace(this, "discard", "手牌有 7 张以上")`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

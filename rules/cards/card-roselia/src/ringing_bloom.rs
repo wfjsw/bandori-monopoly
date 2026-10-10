@@ -20,7 +20,7 @@ pub const RINGING_BLOOM: CardDef = CardDef::new(
     "R:（燐子）Ringing Bloom",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_guard), pay_after),
+        On::Hook(&[HookKind::PayAfter], "card.placed && pay_is_rent && target == owner", None, pay_after),
     ],
 );
 
@@ -96,18 +96,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
 /// Pure guard for [`pay_after`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn pay_after_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn pay_after(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::PayAfter || !trigger::pay_is_rent() {
-        return Ok(());
-    }
-    // C# `p.to != Player` -- the rent must be landing on this card's owner.
-    if trigger::target() != player_id {
-        return Ok(());
-    }
     // C# `p.tile < 0 || H._tiles[p.tile].kind == "ring"` -- skip RiNG (and tile-less) pays.
     let tile = trigger::tile();
     if tile < 0 || ctx::is_ring(tile) {

@@ -12,7 +12,7 @@ pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
         On::Play("", None, l11),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], card_sdk::pre::MINE, None, sweep),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.cp <= 0", None, sweep),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -43,12 +43,6 @@ fn legacy_mine(player_id: i32) -> bool {
 
 /// 「此卡[奇迹水晶]数为0时放入弃牌堆」.
 fn sweep(_player_id: i32) -> card_sdk::Asked {
-    if ctx::crystals() > 0 {
-        return Ok(());
-    }
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

@@ -31,13 +31,13 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
-        On::Hook(&[HookKind::PassTile], "", Some(in_one), on_pass_player),
+        On::Hook(&[HookKind::PassTile], "actor == owner && move.main", Some(in_one), on_pass_player),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
         // raised. The guard keeps 状态1 and this player as the *recipient*
         // (`trigger::target()`), not the causer.
-        On::Hook(&[HookKind::Abnormal], "", Some(im_hit), on_abnormal),
+        On::Hook(&[HookKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -52,13 +52,13 @@ fn mine(player_id: i32) -> bool {
 }
 
 fn in_one(player_id: i32) -> bool {
-    mine(player_id) && state::get(player_id, state_key::SKILL_STATE) != 2
+    state::get(player_id, state_key::SKILL_STATE) != 2
 }
 
 /// The `Abnormal` hook's guard: this player is the *recipient* of the effect
 /// (`trigger::target()`), still in 状态1.
 fn im_hit(player_id: i32) -> bool {
-    trigger::target() == player_id && state::get(player_id, state_key::SKILL_STATE) != 2
+    state::get(player_id, state_key::SKILL_STATE) != 2
 }
 
 /// 「初始0，上限3」.
@@ -107,9 +107,6 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 /// mover -- the guard already pinned that to `player_id`, so the body bailed at
 /// its own first line and the clause never fired.)
 fn on_pass_player(player_id: i32) -> card_sdk::Asked {
-    if !ctx::trigger::move_is_main() {
-        return Ok(());
-    }
     let at = ctx::trigger::tile();
     let Some(&other) = ctx::players_on(at, player_id).first() else {
         return Ok(());
@@ -157,9 +154,6 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
 fn on_abnormal(player_id: i32) -> card_sdk::Asked {
     // The `abnormal` hook carries `t.target` = the recipient and `t.player_id`
     // = the causer. 「受到…影响」 names the recipient.
-    if trigger::target() != player_id {
-        return Ok(());
-    }
     if !matches!(
         trigger::abnormal_kind(),
         Some(card_sdk::abi::AbKind::Stay | card_sdk::abi::AbKind::Stun | card_sdk::abi::AbKind::Exile)

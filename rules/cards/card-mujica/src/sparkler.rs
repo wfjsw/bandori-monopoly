@@ -19,8 +19,8 @@ pub const SPARKLER: CardDef = CardDef::new(
         // C# `CardSparkler.TurnEndAfter` -> `Burn` -- a field hook on the card's own
         // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
         // matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Hook(&[HookKind::TurnEndAfter], "", None, turn_end),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
+        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -44,9 +44,6 @@ fn sparkler(player_id: i32) -> card_sdk::Asked {
 /// `turn` is the player whose turn ended -- only the card's own turn end counts
 /// (`turn != Player` -> skip).
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id || !ctx::is_placed() {
-        return Ok(());
-    }
     // 规则书: 「你的回合结束后自动移除一个奇迹水晶并使你获得一个额外回合」
     // C# `AddCrystals(-1, "回合结束")` then `H.GiveExtraTurn(Seat, CardName)`.
     ctx::add_crystals(-1, 0)?;
@@ -68,13 +65,9 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// sits at 0 without a removal taking it there does not stun its owner.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn crystals_changed_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-        && trigger::player_id() == player_id
-        && trigger::card_is(ID)
-        && ctx::crystals() == 0
-        // The removal that emptied it -- see the clause above.
-        && trigger::value() < 0
+/// Residual guard -- `card_is` stays here (not yet in the condition vocabulary).
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::card_is(ID)
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

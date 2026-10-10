@@ -19,7 +19,7 @@ pub const NFO: CardDef = CardDef::new(
     &[
         On::Hook(&[card_sdk::abi::HookKind::PayChoose], "", Some(gain_guard), gain_bump),
         On::Play("", None, play),
-        On::Hook(&[HookKind::PayAt], "", None, counteract),
+        On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, counteract),
         On::AtEnd(at_end),
     ],
 );
@@ -229,14 +229,7 @@ fn split_pay(payers: &[i32], to: i32, total: i32, why: &Msg) -> card_sdk::Asked 
 /// the Fx hook dispatch at `payAt` (after `PayChoose`, before the `pay` [反击]
 /// window), so this is a field effect, not a [反击].
 fn counteract(player_id: i32) -> card_sdk::Asked {
-        if trigger::player_id() != player_id
-        || !ctx::is_placed() {
-        return Ok(());
-        }
     let amount = trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     trigger::set_pay_amount((amount - 1000).max(0));
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

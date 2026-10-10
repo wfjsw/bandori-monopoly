@@ -19,7 +19,7 @@ pub const J11: CardDef = CardDef::new(
         On::Play("", None, play),
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.PayChoose` +
         // `CardJ11.Targeted` -- all field hooks, not [反击]s.
-        On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted], "", None, counteract),
+        On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted], "card.placed", None, counteract),
         On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
@@ -58,9 +58,6 @@ fn fire(player_id: i32) {
 /// and `CardJ11.Targeted`. Runs through the Fx hook dispatch, so these are
 /// field effects, not [反击]s.
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     match trigger::kind() {
         // `DecayCard.TurnEnd` (C# MatchHost.cs:1874-1897) -- burn one miracle
         // crystal at the card's own player's turn end (`turn != DecayOn` -> skip,

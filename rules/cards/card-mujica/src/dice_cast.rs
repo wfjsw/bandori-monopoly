@@ -20,28 +20,12 @@ pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
         On::Play("", Some(cant_play), play),
-        On::Counteract(&[ChainKind::Card], "", Some(can_counteract), counteract),
+        On::Counteract(&[ChainKind::Card], "actor != owner && turn_player == owner && slot('diceCastActive') != turn_key", None, counteract),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
-        On::Hook(&[HookKind::TurnEndAfter], "", None, turn_end),
+        On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
     ],
 );
-
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书: 「（此卡可以被反击）」 -- playable as a [反击] too (C#
-    // `CardDiceCast.CanCounteract`: any other player's card play during your own turn,
-    // unless the lock is already yours).
-    if trigger::player_id() == player_id {
-        return false;
-    }
-    // C# `H.State.turn == seat` -- only during your own turn.
-    if ctx::turn_player() != player_id {
-        return false;
-    }
-    // C# `H._noCounteractTurn != player_id` -- not already active; the `NO_COUNTERACT` turn-key
-    // latch is the stand-in (set in `cast`).
-    ctx::slot(player_id, NO_COUNTERACT) != ctx::turn_key()
-}
 
 /// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -88,9 +72,6 @@ fn cast(player_id: i32) {
 /// `turnEndAfter` (ABI v23 `TriggerKind::TurnEndAfter`), so this is a field
 /// effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id || !ctx::is_placed() {
-        return Ok(());
-    }
     // C# `if (H._noCounteractTurn == Player) H._noCounteractTurn = -1`.
     if ctx::slot(player_id, NO_COUNTERACT) == ctx::turn_key() {
         ctx::set_slot(player_id, NO_COUNTERACT, 0);

@@ -17,13 +17,13 @@ pub const STUDIO_STORM: CardDef = CardDef::new(
     "RAS:练习室里的风暴",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
+        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed && is_circle(tile.id)", None, pass_tile),
         // （2）「在距此卡所在格子X个格子处[结算]时」 is 行动阶段 15
         // (`SETTLE-STAGES.md` §4 M2) -- an entry in the settle's effect list.
         // `docs/TILES.md` names the long-term home as a remote-settle rule
         // instance on this card's tile; the `settleBody` hook is the same list
         // entry for now and is skipped when a field card replaces the body.
-        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
+        On::Hook(&[HookKind::SettleBody], "actor != owner && card.placed", None, settle_body),
     ],
 );
 
@@ -79,20 +79,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// C# `CardStudioStorm.PassTile` -- the user passing a CiRCLE tile adds a crystal.
 /// Pure guard for [`pass_tile`] -- the activation gate. `false`
 /// means the card is not activated at all.
-fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // C# `m.Seat != User || H.Tile(t)?.kind != "circle"`.
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
     let t = trigger::tile();
-    // 规则书（1）: 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
-    if t < 0 || !ctx::is_circle(t) {
-        return Ok(());
-    }
     ctx::add_crystals(1, 3)?;
     ctx::log(
         player_id,
@@ -108,7 +97,7 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// 规则书（2）: 「…[结算]时将此卡放入弃牌堆且对那个玩家进行一次…收费」 --
 /// 行动阶段 15 (`SETTLE-STAGES.md` §4 M2), so a body replace skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() || trigger::cancelled() || trigger::player_id() == player_id {
+    if trigger::cancelled() {
         return Ok(());
     }
     let Some(tile) = ctx::self_tile() else {
