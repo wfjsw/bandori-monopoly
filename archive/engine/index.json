@@ -1,7 +1,55 @@
 {
  "version": 1,
- "current": "1ae886455238b62533ef8652ac1bc481bb22116643dddc771de673713990e2bb",
+ "current": "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d",
  "bundles": [
+  {
+   "id": "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d",
+   "created": "2026-10-10T04:42:02.745Z",
+   "glueSha256": "a76d358ccbe9ad4488611cb013a060d85ecde8c6da5bfd01383effaf29296fbc",
+   "bytes": 7380856,
+   "stamp": {
+    "format": 2,
+    "save_version": 5,
+    "abi": 48,
+    "ruleset_sha256": "2af6b7d12ab0ca6f74e75c9c0267ace6171c780c679d04b87b5d5eacafcfe621",
+    "data_sha256": "6b0b9bcf489b414c99520b62d7a29b54755d0ea1f0457707c537b4b2c5bbb0e8",
+    "engine": "game-core",
+    "build": "0.1.0",
+    "bundle": "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d"
+   },
+   "key": "2|5|48|2af6b7d12ab0ca6f74e75c9c0267ace6171c780c679d04b87b5d5eacafcfe621|6b0b9bcf489b414c99520b62d7a29b54755d0ea1f0457707c537b4b2c5bbb0e8",
+   "source_id": "6ffb9986e8f4fc431e33da1e0a931e7bd08cd64e683e09bac595a897b12a9210",
+   "ref": "refs/0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d.bdrec",
+   "ref_sha256": "a3849c3a445880776e741f90e3e4c16a43d9f252feced28368c359cf620bc19f",
+   "commit": "f8fbb916648b3d3bb16b78caf592e624884d3af6",
+   "dirty": false,
+   "rebuild": true,
+   "toolchain": {
+    "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)",
+    "cargo": "cargo 1.96.1 (356927216 2026-06-26)",
+    "wasm_bindgen": "wasm-bindgen 0.2.129"
+   },
+   "files": {
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/bundle.json": "0e43129f68d60e7e1c967db73d14a8d8edf4404422fa62f6a84dbca3980ff26b",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/bands.json": "bfd0e6c7c948c2f6010e13af6a0bae94b9954c21ccb9d2bd6e28841b485efd37",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/board.json": "06644c894fdf71b2db2a89bffcc44d91820ca00ed4160c4a0f3e0a0f3d87f8a5",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/cards.json": "9442bf90af9631093a202e6e1fba1c224a55fa19beeb4305ba80daf3205887dc",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/characters.json": "6cf0531eb720bff58cfb37c20f9761d8d312e7a730add283b034bd81ebeab213",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/events.json": "3259c94decf72877ec9acc432ddd99ddf3207d0aaad1b10685b7c2f93ad5b446",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/home_lines.json": "bc36f9cba3f80554851a1f1a6df86c744480fc8b3543f0e4f289f45fed93b1e0",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/match_rules.json": "b3233e5216089587c47e9f3f1b666e5b4d8b0e2a0d3570cb9174543607c5ada8",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/rules.txt": "db4d2e99379e727bb9945cc2cb57ef2bfddd14d2cbeac44d041844c3f667ae8b",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/schools.json": "9c7796fb8252d66ae6140de2c1c7cecbc43f0d57c7ffd6f91eef4300a3457ed6",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/skill_simple.json": "3ed9687d780caf68ccf07214945dc91c45a5e8de3f3bfb5794fd27fe2ba3f205",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/song_cards.json": "0154d62cd351f1456754e9cd98408ee77acf9d6596b7c17cf4b6530f7b1870e2",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/data/voice_lines.json": "3fc279c5138ea5f84017ab3203c11a9743be79cb3e6d9340efb8b1930d05df0d",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/glue.js": "afc5c66fd622791d97c7328d61e15e688f2b36f64c886f6e71d12f3ec0864ec8",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/glue_bg.wasm": "fcfad3d13aa4df7ad209bd5687afb58172e5f75ec45b5c5cf4c3079015e9f59a",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/rules/conds-79b931d8f2ff81eafddce464b5ebb25da02052cea1acad2cf4592784e43631ab.bin": "79b931d8f2ff81eafddce464b5ebb25da02052cea1acad2cf4592784e43631ab",
+    "0caaf27245d5a5e354ade086a0998dc35d6099a99aad4bba4b1e3ae9c085db0d/rules/index.json": "c19b99ce4bb2aaff349924735a2e7b39872318126283141954c222aa753de088",
+    "modules/0dc4e4893a142f92f9c2afe17c7294d49b62de7ee2b973f56f9525c060b62fa6.wasm": "0dc4e4893a142f92f9c2afe17c7294d49b62de7ee2b973f56f9525c060b62fa6"
+   }
+  },
   {
    "id": "1ae886455238b62533ef8652ac1bc481bb22116643dddc771de673713990e2bb",
    "created": "2026-10-10T02:07:32.271Z",
