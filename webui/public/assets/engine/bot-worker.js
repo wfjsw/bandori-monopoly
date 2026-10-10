@@ -2,7 +2,7 @@
 // slot: it loads its own `bot-glue` wasm bundle (game-core + game-rules wasmi +
 // bot-core -- never the page's glue), feeds it the same game tables and card
 // modules the page loads (`webui/src/core/rulesetLoad.ts`'s sequence), and
-// answers `decide` / `ponder` for ONE seat's view.
+// answers `decide` / `ponder` / `extras` for ONE seat's view.
 //
 // Kept as a plain ES module in webui/public/ (not bundled) on purpose: it
 // dynamically imports `./bot-glue/glue.js` at runtime, which no bundler should
@@ -12,7 +12,7 @@
 // the page renders for that seat. Never a World, a match seed, or another
 // seat's hidden information. The `seed` is the **search** RNG's.
 //
-// Messages in  ({id, op, ...}):  init | decide | ponder | invalidate | close
+// Messages in  ({id, op, ...}):  init | decide | ponder | extras | invalidate | close
 // Messages out ({id, ok, value} | {id, ok:false, error})
 
 let glue = null;
@@ -92,6 +92,17 @@ function ponder(view, budgetMs, seed) {
   return JSON.parse(glue.ponder(JSON.stringify(view), budgetMs | 0, seed >>> 0));
 }
 
+/**
+ * Per-viewer extras from ONE seat's frame (`{playable, estCost, skills,
+ * aiAnswer}`). The online path's client-side twin of the engine's
+ * `view_extra` -- the server no longer ships those fields to human seats.
+ * `seed` is the determinizer's sampling seed (never the match RNG).
+ */
+function extras(view, seed) {
+  if (!glue) throw new Error("init first");
+  return JSON.parse(glue.extras(JSON.stringify(view), seed >>> 0));
+}
+
 /** Drop a cached answer after the engine refused it (docs/BOT.md §5 B6). */
 function invalidate(decisionKey) {
   if (!glue) throw new Error("init first");
@@ -105,6 +116,7 @@ self.onmessage = async (e) => {
     if (op === "init") value = await init(rest.base);
     else if (op === "decide") value = decide(rest.view, rest.budgetMs, rest.seed);
     else if (op === "ponder") value = ponder(rest.view, rest.budgetMs, rest.seed);
+    else if (op === "extras") value = extras(rest.view, rest.seed);
     else if (op === "invalidate") value = invalidate(rest.decisionKey);
     else if (op === "close") {
       glue = null;

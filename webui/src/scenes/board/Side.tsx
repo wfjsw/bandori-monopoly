@@ -256,9 +256,16 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
     const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
     // Replay (and a live prompt sheet): inspection only -- no play / discard.
     if (sess.readOnly || sheet.open) return void showCard(id, [], note);
+    // Per-card `playable` (online extras / solo `view_extra`): gate the play
+    // action. Absent = unknown = keep the coarse gate's behaviour.
+    const cardPlayable = m.v.playable?.[k] !== false;
     const acts: CardAction[] = [];
     if (m.overHand) acts.push({ label: tr("board.discardThis"), enabled: !auto, kind: "white", run: () => act(sess, { act: "discard", card: id }) });
-    acts.push({ label: canPlay ? tr("board.play") : tr("board.playOnlyOps"), enabled: canPlay, run: () => act(sess, { act: "play", card: id }) });
+    acts.push({
+      label: canPlay ? tr("board.play") : tr("board.playOnlyOps"),
+      enabled: canPlay && cardPlayable,
+      run: () => act(sess, { act: "play", card: id }),
+    });
     showCard(id, acts, note);
   };
   const hc = hover ? D.card(hover.id) : undefined;
@@ -315,7 +322,15 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
       >
         <div className={s.fan} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length, fanSpread) }}>
           {m.v.hand.map((id, k) => (
-            <div key={`${id}:${k}`} className={s.fanCard} style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}>
+            // Per-card `playable` greys a card only while the coarse gate is
+            // on (otherwise the whole hand is inspect-only anyway). Absent
+            // `playable` (solo before merge / failed online extras) keeps the
+            // card looking normal.
+            <div
+              key={`${id}:${k}`}
+              className={cx(s.fanCard, canPlay && m.v.playable?.[k] === false && s.cardOff)}
+              style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}
+            >
               <CardFace
                 id={id}
                 size="mini"

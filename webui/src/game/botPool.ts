@@ -15,8 +15,26 @@
 // ([`decisionSeed`] + [`seedForThread`]), never the match's. Recordings are
 // unchanged because the answers are what get recorded.
 
-import type { Command, MatchView } from "../core/types.ts";
+import type { Command, MatchView, SkillAction } from "../core/types.ts";
 import { outerDeadlineMs, seedForThread } from "./botBudget.ts";
+
+// ---------------------------------------------------------------- extras
+
+/**
+ * The per-viewer extras `bot-glue`'s `extras` returns: the same fields the
+ * server's `Match::view_extra` used to ship on the frame (`MatchView.aiAnswer`
+ * / `playable` / `estCost` / `skills`), derived from ONE seat's view.
+ */
+export interface ViewExtras {
+  /** Parallel to `hand`: would `cant_play` allow each card now? */
+  playable: boolean[];
+  /** Parallel to `hand`: bot-only estimated execution cost (reserve check). */
+  estCost: number[];
+  /** The viewer's pressable skills, gated through `why_not_act`. */
+  skills: SkillAction[];
+  /** The standard bot's answer for the viewer's own live prompt, if any. */
+  aiAnswer: { answer: number; picked: string[]; worth: number } | null;
+}
 
 // ---------------------------------------------------------------- merge
 
@@ -164,7 +182,9 @@ class WorkerSlot {
 
   private ensure(): BotWorkerLike {
     if (this.w) return this.w;
-    const w = this.factory(new URL("bot-worker.js", this.base), this.index);
+    // `this.base` is the bot-glue bundle dir; the worker script is its
+    // sibling (`docs/BOT.md` B6: `webui/public/assets/engine/bot-worker.js`).
+    const w = this.factory(new URL("../bot-worker.js", this.base), this.index);
     w.onmessage = (e) => {
       const r = e.data as WorkerReply;
       const p = this.pending.get(r.id);
@@ -319,6 +339,21 @@ export class BotPool {
   }
 
   /**
+   * Per-viewer extras from ONE seat's frame (`playable` / `estCost` / `skills`
+   * / `aiAnswer`) -- the online path's client-side twin of the server's
+   * `Match::view_extra`. One worker is enough: extras is a single determinize
+   * + gate pass (no root-parallel search), and the `seed` is the determinizer's
+   * sampling seed (`decisionSeed`), never the match RNG.
+   */
+  async extras(view: MatchView, seed: number): Promise<ViewExtras> {
+    await this.ensureLoaded();
+    // Any live slot will do; slot 0 keeps the cache warm for `decide`.
+    const slot = this.slots[0];
+    if (!slot) throw new Error("bot pool has no workers");
+    return (await slot.call("extras", { view, seed }, 15_000)) as ViewExtras;
+  }
+
+  /**
    * Drop the cached answer for one decision key after the engine refused it
    * (`docs/BOT.md` §5 B6), so a refused answer is never replayed. Fires at
    * every worker (each keeps its own cache); best-effort.
@@ -382,6 +417,7 @@ export interface DirectBotGlue {
   ruleset_build(): number;
   decide(view: string, budgetMs: number, seed: number): string;
   ponder(view: string, budgetMs: number, seed: number): string;
+  extras(view: string, seed: number): string;
   invalidate(decisionKey: string): boolean;
   info(): string;
   set_search(opts: string): void;

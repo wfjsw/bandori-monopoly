@@ -208,6 +208,16 @@
   z-index: 2;
   filter: var(--peek-lift);
 }
+/* `playable[k]` is false while the coarse play gate is on: dim just this
+   card (same treatment as a disabled skill slot). */
+.cardOff {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
+.cardOff:hover,
+.cardOff:focus-within {
+  filter: grayscale(0.6) var(--peek-lift);
+}
 
 /* The slim bar under the fan: always visible, so the hand count, hint, draw
    pile and 托管 stay reachable while the hand is retracted. */

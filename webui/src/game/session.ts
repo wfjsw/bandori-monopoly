@@ -12,6 +12,7 @@ import type { Msg } from "../i18n/msg";
 import { isAuto, plan, type AutoMode, type AutopilotCtx } from "./autopilot";
 import { SOLO_CAP_MS } from "./botBudget";
 import { advancedSeats, driveSeat, decisionAt, ponderUpcoming, type DriveHooks } from "./botDrive";
+import { emitOnlineView, OnlineExtras } from "./viewExtras";
 import { putReplay, recordFilename, type RecordHeader } from "./record";
 import { SoloEngine } from "./soloEngine";
 import type { SaveSnap, SoloPush } from "./soloProtocol";
@@ -810,13 +811,27 @@ export class OnlineSession extends GameSession {
   readonly id: string;
   private close: () => void;
   dissolved: Msg | null = null;
+  /**
+   * Online extras cache (`playable` / `estCost` / `skills` / `aiAnswer`).
+   * Solo does **not** use this: the local engine already ships those fields
+   * in its frame (`web-glue`'s `Match::view_extra`) and is the authoritative
+   * engine there -- exact and free (no determinization, no sampling). Online
+   * computes them from the seat view through the bot worker because the
+   * server no longer ships them and the client must not ask for hidden state.
+   * The two paths stay separate because the results are not identical
+   * (online samples hidden zones; solo reads the live match).
+   */
+  private extras: OnlineExtras;
 
   constructor(room: RoomInfo, you: number, view: MatchView | null = null) {
     super();
     this.id = room.id;
     this.room = room;
     this.you = you;
-    this.view = view;
+    this.extras = new OnlineExtras(room.id, you);
+    // Route the initial frame through `emitView` too, so extras kick off
+    // before the first subscriber attaches (they get the merged view).
+    if (view) this.emitView(view);
     this.close = openStream(room.id, {
       room: (r) => {
         this.room = r;
@@ -833,6 +848,17 @@ export class OnlineSession extends GameSession {
         this.emitOther();
       },
     });
+  }
+
+  /**
+   * Merge cached extras, emit, and kick off the seat-view computation when
+   * they are not in yet (`emitOnlineView`). Until they arrive the fields stay
+   * absent (consumers already tolerate that); when they land the view is
+   * re-emitted so the UI updates. A failed / slow `extras` never blocks the
+   * frame -- greying may be coarse and 托管 falls back to its policy table.
+   */
+  protected emitView(v: MatchView): void {
+    emitOnlineView(this.extras, v, (m) => super.emitView(m), () => this.view);
   }
 
   async act(cmd: Command): Promise<Msg | null> {
