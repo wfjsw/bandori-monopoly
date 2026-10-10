@@ -19,8 +19,9 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::SettleBefore],
-            "actor == owner && turn_player == owner",
-            Some(can_counteract),
+            // 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
+            "actor == owner && turn_player == owner && owned_within(owner, 3) > 0",
+            None,
             counteract,
         ),
         On::Hook(
@@ -46,14 +47,6 @@ fn near(player_id: i32) -> Vec<i32> {
         .into_iter()
         .filter(|&t| ctx::dist(pos, t) <= 3)
         .collect()
-}
-
-/// 规则书[反击]: 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-fn can_counteract(player_id: i32) -> bool {
-    // `actor == owner && turn_player == owner` is the pre (「[触发结算]前可打出」
-    // is the category's SettleBefore). 「移动结束后前后三格内若存在你拥有地契的
-    // 格子」 is a derived-list residual.
-    !near(player_id).is_empty()
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

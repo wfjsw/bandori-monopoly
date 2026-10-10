@@ -16,18 +16,12 @@ pub const LISA_BOND: CardDef = CardDef::new(
     "R:必然的联系（莉莎）",
     &[On::Counteract(
         &[ChainKind::SkillTeleport],
-        "actor == owner",
-        Some(can_counteract),
+        "actor == owner && players_on(owner.pos, owner) > 0",
+        None,
         counteract,
     )],
 )
 .legacy(&[(0, legacy_can_counteract)]);
-
-/// Residual guard for [`can_counteract`] -- the same-tile player scan stays
-/// here (not yet in the condition vocabulary).
-fn can_counteract(player_id: i32) -> bool {
-    !ctx::players_on(ctx::player_pos(player_id), player_id).is_empty()
-}
 
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
 fn legacy_can_counteract(player_id: i32) -> bool {
@@ -42,8 +36,7 @@ fn legacy_can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner` is the pre; the same-tile player scan is the residual
-    // guard.
+    // `actor == owner && players_on(owner.pos, owner) > 0` is the pre.
     let candidates: Vec<i32> = ctx::players_on(ctx::player_pos(player_id), player_id);
     // 规则书[反击]: 「并指定一个和你在同一地块的角色」 -- C# `H.PickTarget` over the
     // same-tile players: `H.AskSeat` then the `H.Target` gate (`SingleTarget`).

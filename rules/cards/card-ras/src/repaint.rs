@@ -13,8 +13,8 @@ pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
     &[On::Counteract(
         &[ChainKind::MoveRoll],
-        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0",
-        Some(can_counteract),
+        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0 && on_path(owner, actor) > 0",
+        None,
         counteract,
     )],
 )
@@ -37,14 +37,6 @@ fn on_path(me: i32, them: i32, roll: i32) -> i32 {
         }
     }
     count
-}
-
-/// Residual guard for [`can_counteract`] -- the `on_path` tile-count scan
-/// stays here (not yet in the condition vocabulary).
-fn can_counteract(player_id: i32) -> bool {
-    let them = trigger::player_id();
-    let roll = trigger::move_roll().unwrap_or(0);
-    on_path(player_id, them, roll) > 0
 }
 
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
@@ -73,7 +65,7 @@ fn legacy_can_counteract(player_id: i32) -> bool {
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // `actor != owner && move.kind != Teleport && move.roll != null &&
-    // move.roll > 0` is the pre; `on_path` is the residual guard.
+    // move.roll > 0 && on_path(owner, actor) > 0` is the pre.
     let Some(roll) = trigger::move_roll() else {
         return Ok(());
     };

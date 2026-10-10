@@ -15,8 +15,8 @@ pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
     &[On::Counteract(
         &[ChainKind::MoveRoll],
-        "actor == owner && move.kind != Teleport && move.roll != null",
-        Some(can_counteract),
+        "actor == owner && move.kind != Teleport && move.roll != null && next_dist(owner, move.dir) > 0",
+        None,
         counteract,
     )],
 )
@@ -54,12 +54,6 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
     }
 }
 
-/// Residual guard for [`can_counteract`] -- `next_dist`'s geometry scan stays
-/// here (not yet in the condition vocabulary).
-fn can_counteract(player_id: i32) -> bool {
-    next_dist(player_id, trigger::move_dir()) > 0
-}
-
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
 fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书: 「[反击]移动掷骰后」 -- C# `t.Kind == "moveRoll" && t.Seat == seat`.
@@ -75,8 +69,8 @@ fn legacy_can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && move.kind != Teleport && move.roll != null` is the
-    // pre; `next_dist` is the residual guard.
+    // `actor == owner && move.kind != Teleport && move.roll != null &&
+    // next_dist(owner, move.dir) > 0` is the pre.
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
     let Some(mut roll) = trigger::move_roll() else {
         return Ok(());

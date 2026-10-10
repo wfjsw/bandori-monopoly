@@ -24,13 +24,13 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
                 ChainKind::MoveRoll,
                 ChainKind::SettleBefore,
             ],
-            // Per-kind applicability as a disjunction; the kind match in
-            // [`can_counteract`] only routes the residual, never rejects.
+            // Per-kind applicability as a disjunction. The SettleBefore arm
+            // carries the within-5 scan (丰川祥子 needs a player to step toward).
             "(kind == MoveRoll && actor == owner && move.roll != null) \
-             || (kind == SettleBefore && actor == owner) \
+             || (kind == SettleBefore && actor == owner && others_within(owner, 5) > 0) \
              || (kind == Effect && pay_is_rent && actor != owner \
                  && target == owner && tile.id >= 0 && value > 0)",
-            Some(can_counteract),
+            None,
             counteract
         ),
         On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
@@ -147,18 +147,6 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`can_counteract`] -- the within5 path scan stays here
-/// (not yet in the condition vocabulary). The kind match only routes that
-/// residual per arm; the pre already rejected the other kinds' applicability.
-fn can_counteract(player_id: i32) -> bool {
-    match trigger::kind() {
-        // 规则书（2）[反击]: C# `H.Within(player, 5, includeSame: false).Count > 0`
-        // runs 丰川祥子（CRYCHIC）'s skill (needs a player to step toward).
-        TriggerKind::SettleBefore => !within5(player_id).is_empty(),
-        _ => true,
-    }
-}
-
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
 fn legacy_can_counteract(player_id: i32) -> bool {
     match trigger::kind() {
@@ -223,9 +211,6 @@ fn reroll_skill(player_id: i32) {
 /// 丰川祥子（CRYCHIC）的技能 -- the endpoint steps 1 tile toward a player within 5.
 fn step_toward_skill(player_id: i32) -> card_sdk::Asked {
     let near = within5(player_id);
-    if near.is_empty() {
-        return Ok(());
-    }
     // 规则书（2）: 「使用一次Crychic角色的技能」 -- C# `Counteract` "settleBefore" branch
     // asks `终点向哪名玩家靠近 1 格？` over `H.Within(i, 5, includeSame: false)`.
     let who = ctx::ask_player(

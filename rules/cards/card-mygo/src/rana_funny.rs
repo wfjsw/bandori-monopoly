@@ -16,12 +16,12 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
     &[
         On::Play("", None, rana_funny),
         // 规则书: 「将此卡置于当前格子上，每当有人经过且未在其上[触发结算]时」
-        // -- placed, a still-walking pass (not a teleport, not the walk's end).
-        // The "is this the card's own tile" check is the residual guard.
+        // -- placed, a still-walking pass (not a teleport, not the walk's end)
+        // of the card's own tile.
         On::Hook(
             &[HookKind::PassTile],
-            "card.placed && move.kind != Teleport && move.remaining > 0",
-            Some(pass_tile_guard),
+            "card.placed && move.kind != Teleport && move.remaining > 0 && card.tile == tile.id",
+            None,
             pass_tile,
         ),
     ],
@@ -51,20 +51,12 @@ fn rana_funny(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`pass_tile`] -- `self_tile` is the tile this card is
-/// bound to (an instance binding, not yet in the condition vocabulary).
-fn pass_tile_guard(_player_id: i32) -> bool {
-    ctx::self_tile()
-        .map(|t| t == ctx::trigger::tile())
-        .unwrap_or(false)
-}
-
 /// C# `CardRanaFunny.PassTile` -- a passer who does not settle here grows a
 /// miracle crystal on the card; at 5+ crystals a foreign passer is trapped.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && move.kind != Teleport && move.remaining > 0` is the pre
-    // (`未在其上[触发结算]` is a still-walking pass); the card's own tile is
-    // the residual guard.
+    // `card.placed && move.kind != Teleport && move.remaining > 0 &&
+    // card.tile == tile.id` is the pre (`未在其上[触发结算]` is a still-walking
+    // pass of the card's own tile).
     let tile = ctx::self_tile().unwrap_or(-1);
     let who = trigger::player_id();
     // 规则书: 「当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个"抹茶芭菲"
