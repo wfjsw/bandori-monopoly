@@ -20,40 +20,37 @@ use card_sdk::{key, CardDef, Msg, On};
 pub const POPIPAPAPIPOPA: CardDef = CardDef::new(
     "PPP:[衍生]Popipapapipopa",
     &[
-        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
-        On::Hook(&[HookKind::PayChoose], "", Some(pay_choose_guard), pay_choose),
+        // 规则书[持续]（1）: 「此卡拥有者每次[经过]“东京外”，“江户川乐器店”，
+        // “山吹面包房”，“星之鼓动山丘”或“流星堂”时」 -- the five named spots
+        // are the condition.
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor == owner && (tile.id == tile_named('东京外') || tile.id == tile_named('江户川乐器店') || tile.id == tile_named('山吹面包房') || tile.id == tile_named('星之鼓动山丘') || tile.id == tile_named('流星堂'))",
+            None,
+            pass_tile,
+        ),
+        // 规则书[持续]（2）: 「消耗或支付时可使用此卡多个奇迹水晶」 -- a payment
+        // the owner owes, with a crystal to spend.
+        On::Hook(
+            &[HookKind::PayChoose],
+            "card.placed && actor == owner && value > 0 && card.cp > 0",
+            None,
+            pay_choose,
+        ),
     ],
 );
 
-/// C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal.
-const SPOTS: [&str; 5] = [
-    "东京外",
-    "江户川乐器店",
-    "山吹面包房",
-    "星之鼓动山丘",
-    "流星堂",
-];
+// C# `CardPopipapapipopa.Spots` -- the five tiles that feed a crystal (now the
+// `PassTile` pre's `tile_named` disjunction).
 
 /// C# `MaxCrystals = 10`.
 const MAX_CRYSTALS: i32 = 10;
 
 /// `Fx.PassTile` (C# `CardPopipapapipopa.PassTile`) -- the owner passing one of
 /// the five named tiles banks a crystal on this card.
-/// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all. C# `m.Seat != Seat` and the spot
-/// list are applicability, not effect.
-fn pass_tile_guard(player_id: i32) -> bool {
-    if !ctx::is_placed() || trigger::player_id() != player_id {
-        return false;
-    }
-    let t = trigger::tile();
-    if t < 0 {
-        return false;
-    }
-    SPOTS.iter().any(|&name| ctx::tile_named(name) == t)
-}
-
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    // `card.placed && actor == owner && (tile.id == tile_named('…') || …)` is
+    // the pre.
     let t = trigger::tile();
     // 规则书[持续]（1）: 「每次[经过]…时为此卡添加1个[奇迹水晶]（上限10个）。」
     let before = ctx::crystals();
@@ -72,17 +69,8 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 
 /// `Fx.PayChoose` (C# `CardPopipapapipopa.PayChoose` -> `Use`) -- the owner may
 /// spend crystals to shrink the pending payment by 150 each.
-/// Pure guard for [`pay_choose`] -- the activation gate. `false`
-/// means the card is not activated at all. C# `p.from != Player`, a non-zero
-/// payment and the crystal count decide whether there is anything to ask.
-fn pay_choose_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-        && trigger::player_id() == player_id
-        && trigger::value() > 0
-        && ctx::crystals() > 0
-}
-
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
+    // `card.placed && actor == owner && value > 0 && card.cp > 0` is the pre.
     let amount = trigger::value();
     let have = ctx::crystals();
     // C# `max = Math.Min(Crystals, (p.amount + 149) / 150)` -- never ask for

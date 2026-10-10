@@ -18,8 +18,8 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::MoveBefore],
-            "actor == owner && move.kind == Walk",
-            Some(legacy_can_counteract),
+            "actor == owner && move.kind == Walk && move.main && slot('skill.sayoThorns.used') != turn_key",
+            Some(can_counteract),
             counteract,
         ),
         On::Play("", Some(counter_only), no_play),
@@ -36,7 +36,15 @@ fn no_play(_player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`can_counteract`] -- `skill_blocked` stays here (not
+/// yet in the condition vocabulary).
+fn can_counteract(player_id: i32) -> bool {
+    !ctx::skill_blocked(player_id, "")
+}
+
 /// 规则书: 「[反击] 时机合适时打出」 -- counteraction-only (C# `Normal => false`).
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard (kept full, including
+/// the clauses now in the pre).
 fn legacy_can_counteract(player_id: i32) -> bool {
     if trigger::kind() != TriggerKind::MoveBefore || trigger::player_id() != player_id {
         return false;
@@ -52,6 +60,9 @@ fn legacy_can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && move.kind == Walk && move.main &&
+    // slot('skill.sayoThorns.used') != turn_key` is the pre;
+    // `!skill_blocked` is the residual guard.
     // Announce the user's character skill. Running its press body again would
     // add a second paid skill offer before this card's free extension.
     if let Some(skill) = ctx::character_skill(player_id) {

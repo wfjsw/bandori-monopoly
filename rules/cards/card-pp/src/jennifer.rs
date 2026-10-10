@@ -14,15 +14,21 @@
 //! The [持续] runs in the `PassTile` hook; the user is kept in a player slot
 //! (stand-in for the C# per-card `Card.User`).
 
-use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::HookKind;
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const JENNIFER: CardDef = CardDef::new(
     "PP:找回珍妮弗",
     &[
         On::Play("", Some(cant_play), jennifer),
-        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
+        // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')",
+            None,
+            pass_tile,
+        ),
     ],
 );
 
@@ -75,17 +81,8 @@ fn jennifer(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardJennifer.PassTile` -- the owner walks past 「偶像经纪公司」.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
-    // 规则书[持续]: 「[拥有者][经过]“偶像经纪公司”时」
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
-    let agency = ctx::tile_named("偶像经纪公司");
-    if agency < 0 || trigger::tile() != agency {
-        return Ok(());
-    }
+    // `card.placed && actor == owner && tile.id == tile_named('偶像经纪公司')`
+    // is the pre.
     let user = ctx::slot(player_id, SLOT_USER);
     // 规则书[持续]3: 「此卡[移除]」 -- C# `H.Unplace(this, "gone", ...)`.
     ctx::send_to_dest(ctx::Dest::Banished);

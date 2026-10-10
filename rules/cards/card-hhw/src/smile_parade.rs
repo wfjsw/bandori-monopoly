@@ -8,7 +8,7 @@
 //!
 //! 弦卷集团, the move settles as the agent tile; the card then swaps tiles around.
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::{ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,7 +19,12 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
     &[
         On::Hook(&[card_sdk::abi::HookKind::SettleBody], card_sdk::pre::MINE, None, settle_instead),
         On::Hook(&[card_sdk::abi::HookKind::SettleAfter], "actor == owner && card.placed", None, move_after),
-        On::Counteract(&[ChainKind::Pass], "", Some(can_counteract), counteract),
+        On::Counteract(
+            &[ChainKind::Pass],
+            "actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null",
+            None,
+            counteract,
+        ),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
         On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
@@ -31,19 +36,10 @@ fn group_tile() -> i32 {
     ctx::tile_named("弦卷集团")
 }
 
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书（1）[反击]: 「经过“弦卷集团”（#29格）时可将此卡放置在其上」
-    let group = group_tile();
-    if group < 0 {
-        return false;
-    }
-    trigger::kind() == TriggerKind::Pass
-        && trigger::player_id() == player_id
-        && trigger::tile() == group
-        && trigger::move_kind().is_some()
-}
-
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && tile.id == tile_named('弦卷集团') && move.kind != null`
+    // is the pre; no residual guard (`tile_named` is -1 when unknown and
+    // `tile.id == -1` is false).
     let group = group_tile();
     // 规则书（1）[反击]: 「可将此卡放置在其上」 -- C# `H.PlaceFromPlay(c, c.Seat,
     // Group, 3)` places the card on the 弦卷集团 tile, charged with 3 crystals.

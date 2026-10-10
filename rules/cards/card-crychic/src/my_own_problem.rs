@@ -10,13 +10,24 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::ChainKind;
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MY_OWN_PROBLEM: CardDef = CardDef::new(
     "CRYCHIC:是我自己的问题",
-    &[On::Counteract(&[ChainKind::SettleBefore], "", Some(can_counteract), counteract)],
+    // 规则书[反击]（1）: 「主要移动结束时，[触发结算]前打出此卡」 -- C#
+    // `t.Kind == "settleBefore" && t.Seat == seat && t.Move != null && t.Move.Main`.
+    // The body-top applicability checks are the condition now: our own seat's
+    // settle-before, and the move that ended was the main one (`move.main`).
+    // The "needs a second player to move away from" scan stays a residual
+    // guard (outside the CEL schema).
+    &[On::Counteract(
+        &[ChainKind::SettleBefore],
+        "actor == owner && move.main",
+        Some(can_counteract),
+        counteract,
+    )],
 );
 
 /// `H.Nearest(seat)` -- every other player at the smallest ring distance.
@@ -36,20 +47,11 @@ fn nearest(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
+/// Residual guard for [`counteract`] -- 规则书[反击]（1）: needs a second player
+/// to move away from (C# `H.Others(seat).Count > 0`). A derived seat scan
+/// outside the CEL schema (docs/GUARDS.md §4.2c). The `actor == owner &&
+/// move.main` applicability is the entry's condition.
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]（1）: 「主要移动结束时，[触发结算]前打出此卡」 -- C#
-    // `t.Kind == "settleBefore" && t.Seat == seat && t.Move != null && t.Move.Main`.
-    // `SETTLE-STAGES.md` §4 M1: the anchor is 「主要移动结束时」 (行动阶段 13)
-    // but the window is 「[触发结算]前」 (行动阶段 14), so this stays on
-    // `settleBefore` and reads "the move ended" as a **fact** (`move_is_main`),
-    // not as "a settle is happening".
-    if trigger::player_id() != player_id {
-        return false;
-    }
-    if !trigger::move_is_main() {
-        return false;
-    }
-    // 规则书[反击]（1）: needs a second player to move away from (C# `H.Others(seat).Count > 0`).
     !ctx::others(player_id).is_empty()
 }
 

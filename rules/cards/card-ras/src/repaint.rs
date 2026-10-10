@@ -11,8 +11,14 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const REPAINT: CardDef = CardDef::new(
     "RAS:Repaint",
-    &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::MoveRoll],
+        "actor != owner && move.kind != Teleport && move.roll != null && move.roll > 0",
+        Some(can_counteract),
+        counteract,
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
 /// `CardRepaint.OnPath` -- tiles of `me` on `them`'s planned path.
 ///
@@ -33,8 +39,17 @@ fn on_path(me: i32, them: i32, roll: i32) -> i32 {
     count
 }
 
-/// 规则书: 「[反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡」
+/// Residual guard for [`can_counteract`] -- the `on_path` tile-count scan
+/// stays here (not yet in the condition vocabulary).
 fn can_counteract(player_id: i32) -> bool {
+    let them = trigger::player_id();
+    let roll = trigger::move_roll().unwrap_or(0);
+    on_path(player_id, them, roll) > 0
+}
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
+    // 规则书: 「[反击] 当任意其他玩家进行移动掷骰并进入移动阶段后，打出此卡」
     // 规则书: 「当任意其他玩家进行移动掷骰」 -- a move-roll window by someone else.
     if !matches!(trigger::kind(), TriggerKind::MoveRoll) {
         return false;
@@ -57,15 +72,14 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor != owner && move.kind != Teleport && move.roll != null &&
+    // move.roll > 0` is the pre; `on_path` is the residual guard.
     let Some(roll) = trigger::move_roll() else {
         return Ok(());
     };
     let them = trigger::player_id();
     // 规则书: 「X为对方原本预计路径上你拥有的格子数」
     let x = on_path(player_id, them, roll);
-    if x <= 0 {
-        return Ok(());
-    }
     // C# `H.Target(c, m.Seat, r)` then `if (r.yes && r.index == m.Seat)` -- the
     // mover must still be the hit (EXIST's redirect can move it) and the
     // `target` [反击] window must not have cancelled it.

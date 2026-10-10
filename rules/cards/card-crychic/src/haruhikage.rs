@@ -24,13 +24,19 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
                 ChainKind::MoveRoll,
                 ChainKind::SettleBefore,
             ],
-            "",
+            // Per-kind applicability as a disjunction; the kind match in
+            // [`can_counteract`] only routes the residual, never rejects.
+            "(kind == MoveRoll && actor == owner && move.roll != null) \
+             || (kind == SettleBefore && actor == owner) \
+             || (kind == Effect && pay_is_rent && actor != owner \
+                 && target == owner && tile.id >= 0 && value > 0)",
             Some(can_counteract),
             counteract
         ),
         On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
     ],
-);
+)
+.legacy(&[(1, legacy_can_counteract)]);
 
 const ID: &str = "CRYCHIC:春日影";
 
@@ -141,7 +147,20 @@ fn on_drawn(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`can_counteract`] -- the within5 path scan stays here
+/// (not yet in the condition vocabulary). The kind match only routes that
+/// residual per arm; the pre already rejected the other kinds' applicability.
 fn can_counteract(player_id: i32) -> bool {
+    match trigger::kind() {
+        // 规则书（2）[反击]: C# `H.Within(player, 5, includeSame: false).Count > 0`
+        // runs 丰川祥子（CRYCHIC）'s skill (needs a player to step toward).
+        TriggerKind::SettleBefore => !within5(player_id).is_empty(),
+        _ => true,
+    }
+}
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     match trigger::kind() {
         // 规则书（2）[反击]: 「使用一次Crychic角色的技能」 -- C# `t.Kind == "moveRoll"
         // && t.Seat == player` runs 椎名立希（CRYCHIC）'s skill.
@@ -176,6 +195,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::MoveRoll => reroll_skill(player_id),
         TriggerKind::SettleBefore => step_toward_skill(player_id)?,
+        // BUG?: the payment [反击] window is `TriggerKind::Effect` (Pay is a
+        // settlement hook only, see abi on `Pay`), so this arm never runs and
+        // `cancel_pay_skill` is unreachable. Left as-is pending a ruling.
         TriggerKind::Pay => cancel_pay_skill(player_id),
         _ => {}
     }

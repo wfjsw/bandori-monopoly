@@ -14,11 +14,24 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const LISA_BOND: CardDef = CardDef::new(
     "R:必然的联系（莉莎）",
-    &[On::Counteract(&[ChainKind::SkillTeleport], "", Some(can_counteract), counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::SkillTeleport],
+        "actor == owner",
+        Some(can_counteract),
+        counteract,
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-/// 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」
+/// Residual guard for [`can_counteract`] -- the same-tile player scan stays
+/// here (not yet in the condition vocabulary).
 fn can_counteract(player_id: i32) -> bool {
+    !ctx::players_on(ctx::player_pos(player_id), player_id).is_empty()
+}
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
+    // 规则书[反击]: 「【反击】当你使用技能进行传送后，你可以打出此卡」
     // 规则书[反击]: 「当你使用技能进行传送后」 -- C# `t.Kind == "skillTeleport" && t.Seat == seat`.
     if trigger::kind() != TriggerKind::SkillTeleport || trigger::player_id() != player_id {
         return false;
@@ -29,10 +42,9 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner` is the pre; the same-tile player scan is the residual
+    // guard.
     let candidates: Vec<i32> = ctx::players_on(ctx::player_pos(player_id), player_id);
-    if candidates.is_empty() {
-        return Ok(());
-    }
     // 规则书[反击]: 「并指定一个和你在同一地块的角色」 -- C# `H.PickTarget` over the
     // same-tile players: `H.AskSeat` then the `H.Target` gate (`SingleTarget`).
     let who = ctx::ask_player(

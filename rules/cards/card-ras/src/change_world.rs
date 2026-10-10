@@ -16,7 +16,14 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
     "RAS:Change the world",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::PassTile], "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key", None, pass_tile),
+        // 规则书: 「期间每经过一个不属于你的livehouse格子」 -- the owner's main
+        // walk this turn, over a buyable Live House the owner does not hold.
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key && is_live_house(tile.id) && is_buyable(tile.id) && tile.owner != owner",
+            None,
+            pass_tile,
+        ),
         On::Hook(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner", None, pay_choose),
         On::Hook(&[HookKind::PayAfter], "card.placed && pay_is_rent && target == owner", None, pay_after),
     ],
@@ -96,16 +103,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// C# `CardChangeWorld.PassTile` -- while the card is placed, its owner's main
 /// move passing a non-owned buyable Live House adds a crystal.
-/// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Seat != Seat || !m.Main || Mem["turn"] != H.TurnKey`.
+    // `actor == owner && move.main && card.placed &&
+    // slot('change_world_turn') == turn_key && is_live_house(tile.id) &&
+    // is_buyable(tile.id) && tile.owner != owner` is the pre.
     let t = trigger::tile();
-    // 规则书: 「期间每经过一个不属于你的livehouse格子，此卡获得一个奇迹水晶」
-    // -- C# `H.IsLiveHouse(Seat, t) && H._tiles[t].IsBuyable && owners[t] == Seat`.
-    if t < 0 || !ctx::is_live_house(t) || !ctx::is_buyable(t) || ctx::tile_owner(t) == player_id {
-        return Ok(());
-    }
     ctx::add_crystals(1, 0)?;
     ctx::log(
         player_id,

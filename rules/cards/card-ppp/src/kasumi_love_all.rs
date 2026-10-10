@@ -9,7 +9,7 @@
 //!
 //! park on 星之鼓动山丘; anyone who passes it is force-stopped there at half rent.
 
-use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -17,7 +17,14 @@ pub const KASUMI_LOVE_ALL: CardDef = CardDef::new(
     "PPP:（香澄）大家我都喜欢哦",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "card.placed && actor != owner", None, pass_tile),
+        // 规则书[持续]: 「其他玩家[经过]且[移动终点]不为此卡所在格子时」 -- a
+        // still-walking (non-teleport) pass by someone other than the owner.
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor != owner && move.remaining > 0 && move.kind != Teleport",
+            None,
+            pass_tile,
+        ),
     ],
 );
 
@@ -48,8 +55,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 此次[结算]如果[支付]地租则地租只算作原本的一半。」
 /// -- C# `CardKasumiLoveAll.PassTile` -> `Stop`.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    // `card.placed && actor != owner` is the pre; `self_tile` is a derived
-    // lookup (the tile this card is bound to).
+    // `card.placed && actor != owner && move.remaining > 0 &&
+    // move.kind != Teleport` is the pre; `self_tile` is a derived lookup (the
+    // tile this card is bound to).
     let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
         return Ok(());
@@ -60,16 +68,6 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     // the mover is immune, or they are [不可阻挡] (「可选择受到的…[强制停下]…
     // 效果是否生效」).
     let mover = trigger::player_id();
-    // 「其他玩家[经过]」 is `actor != owner` on the pre.
-    // C# `m.Remaining <= 0` -- 「[移动终点]不为此卡所在格子」: only a still-walking
-    // pass is intercepted (the walk would otherwise end here).
-    if trigger::move_remaining() <= 0 {
-        return Ok(());
-    }
-    // C# `m.Teleport` -- a teleport does not walk past the tile.
-    if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return Ok(());
-    }
     if !ctx::gate(mover, card_sdk::abi::AbKind::Stop) {
         return Ok(());
     }

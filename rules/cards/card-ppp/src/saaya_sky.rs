@@ -19,7 +19,7 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
     "PPP:（沙绫）总有一天要给这片天空命名",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "actor == owner", Some(pass_tile_guard), pass_tile),
+        On::Hook(&[HookKind::PassTile], "actor == owner && card.placed", None, pass_tile),
         On::Hook(&[HookKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", None, turn_end_after),
     ],
 );
@@ -44,19 +44,11 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书（2）: 「[使用者][经过]此卡后」 -- C# `CardSaayaSky.PassTile` sets `_passed`.
-/// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn pass_tile_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && card.placed` is the pre. `self_tile` is a derived
+    // lookup (the tile this card is bound to).
     let tile = ctx::self_tile().unwrap_or(-1);
     if tile < 0 || trigger::tile() != tile {
-        return Ok(());
-    }
-    // C# `m.Seat == User` -- only the placer's own pass counts.
-    if trigger::player_id() != player_id {
         return Ok(());
     }
     ctx::set_slot(player_id, SLOT_PASSED, 1);

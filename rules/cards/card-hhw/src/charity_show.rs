@@ -33,7 +33,15 @@ pub const CHARITY_SHOW: CardDef = CardDef::new(
     "HHW:爱心义演",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile], "", Some(hook_guard), hook),
+        // `card.placed && actor == owner` is uniform across the three kinds;
+        // per-kind clauses (the turn-key latch, the pay target, the walk shape,
+        // the first-pass marker) stay in the arms below.
+        On::Hook(
+            &[HookKind::PayMul, HookKind::TurnEndAfter, HookKind::PassTile],
+            "card.placed && actor == owner",
+            None,
+            hook,
+        ),
     ],
 );
 
@@ -83,13 +91,8 @@ fn mine(player_id: i32, t: i32) -> bool {
 
 /// C# `CharityFx.PassTile` / `CharityFx.PayMul` / `CharityFx.TurnEndAfter`
 /// (MatchHost.cs:4211-4231, `H._turnCtx.HalfPayToOthers` applied in `SettleFactor`).
-/// Pure guard for [`hook`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn hook(player_id: i32) -> card_sdk::Asked {
+    // `card.placed && actor == owner` is the pre.
     match trigger::kind() {
         // 规则书: 「本回合中向其他玩家支付时你的付款减半（向上取整10）」 -- C#
         // `SettleFactor`: `p.amount = CeilTo(p.amount / 2.0, 10)` for any
@@ -101,8 +104,9 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             }
             // C# `HalfPayToOthers` only halves payments *to other players*
             // (`p.to >= 0 && p.to != Player`); a bank payment is untouched.
+            // (`actor == owner` is the pre.)
             let to = trigger::target();
-            if to < 0 || to == player_id || trigger::player_id() != player_id {
+            if to < 0 || to == player_id {
                 return Ok(());
             }
             let amount = trigger::value();
@@ -128,10 +132,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
             if ctx::prop(PROP_TURN) != ctx::turn_key() {
                 return Ok(());
             }
-            // C# `m.Seat != Seat` -- only the owner's own walk.
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
+            // C# `m.Seat != Seat` -- `actor == owner` is the pre.
             // C# `m.Teleport || m.TeleportWalk` -- not a teleport.
             if trigger::move_kind() == Some(MoveKind::Teleport) {
                 return Ok(());
@@ -179,9 +180,6 @@ fn hook(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「打出此卡的回合内」 -- C# `CharityFx.TurnEndAfter` (`turn ==
         // Player` -> `H.RemoveExtra(this)`): both effects end with the turn.
         TriggerKind::TurnEndAfter => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
             ctx::set_prop(PROP_TURN, 0);
             ctx::set_dest(ctx::Dest::Graveyard);
         }

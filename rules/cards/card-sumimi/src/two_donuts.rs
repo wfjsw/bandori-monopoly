@@ -16,7 +16,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::{HookKind, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -24,7 +24,9 @@ pub const TWO_DONUTS: CardDef = CardDef::new(
     "Sumimi:一人两个甜甜圈",
     &[
         On::Play("", None, two_donuts),
-        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], "", Some(fx_guard), fx),
+        // `card.placed` is the uniform gate; per-kind clauses (the other-passer
+        // latch, the `move_dir` read) stay in the arms below.
+        On::Hook(&[HookKind::PassTile, HookKind::SettleAfter], "card.placed", None, fx),
     ],
 );
 
@@ -58,13 +60,8 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
 
 /// C# `DonutFx.PassTile` / `DonutFx.SettleAfter` -- run through the Fx hook
 /// dispatch while this card is placed.
-/// Pure guard for [`fx`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn fx_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn fx(player_id: i32) -> card_sdk::Asked {
+    // `card.placed` is the pre.
     match trigger::kind() {
         // 规则书（1）: 「直至你原本所在格子被其他玩家经过」 -- C# `DonutFx.PassTile`
         // records the first other player that steps on `Orig`.

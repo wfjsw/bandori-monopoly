@@ -7,7 +7,7 @@
 //! plant this card on the current tile; passers-by who do not settle there
 //! grow a miracle crystal on it, and at 5+ the next foreign passer is trapped.
 
-use card_sdk::abi::{HookKind, MoveKind, TriggerKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -15,7 +15,15 @@ pub const RANA_FUNNY: CardDef = CardDef::new(
     "MyGO:（乐奈）有趣的女人",
     &[
         On::Play("", None, rana_funny),
-        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
+        // 规则书: 「将此卡置于当前格子上，每当有人经过且未在其上[触发结算]时」
+        // -- placed, a still-walking pass (not a teleport, not the walk's end).
+        // The "is this the card's own tile" check is the residual guard.
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && move.kind != Teleport && move.remaining > 0",
+            Some(pass_tile_guard),
+            pass_tile,
+        ),
     ],
 );
 
@@ -43,29 +51,21 @@ fn rana_funny(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`pass_tile`] -- `self_tile` is the tile this card is
+/// bound to (an instance binding, not yet in the condition vocabulary).
+fn pass_tile_guard(_player_id: i32) -> bool {
+    ctx::self_tile()
+        .map(|t| t == ctx::trigger::tile())
+        .unwrap_or(false)
+}
+
 /// C# `CardRanaFunny.PassTile` -- a passer who does not settle here grows a
 /// miracle crystal on the card; at 5+ crystals a foreign passer is trapped.
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
-    // 规则书: 「将此卡置于当前格子上」 -- the instance carries its tile;
-    // `self_tile()` reads it back (works for a `place_on_tile` arrangement too).
+    // `card.placed && move.kind != Teleport && move.remaining > 0` is the pre
+    // (`未在其上[触发结算]` is a still-walking pass); the card's own tile is
+    // the residual guard.
     let tile = ctx::self_tile().unwrap_or(-1);
-    if tile < 0 || trigger::tile() != tile {
-        return Ok(());
-    }
-    // C# `m.Teleport` never grows a crystal (`t.Move` flags).
-    if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return Ok(());
-    }
-    // 规则书: 「未在其上[触发结算]」 -- C# grows a crystal only when
-    // `m.Remaining > 0` (the walker is passing through); the last tile of the
-    // walk (`m.Remaining <= 0`) is where they stop to settle, so it is not a
-    // pass.
-    if trigger::move_remaining() <= 0 {
-        return Ok(());
-    }
     let who = trigger::player_id();
     // 规则书: 「当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家选择失去一个"抹茶芭菲"
     // 或强制停下并[触发结算]」 -- C# `Crystals >= 5 && m.Seat != User` branches

@@ -9,15 +9,22 @@
 //!
 //! the card stays in play; the 流星堂 stop is live on the `PassTile` hook.
 
-use card_sdk::abi::{HookKind, MoveKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::HookKind;
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RANDOM_STAR: CardDef = CardDef::new(
     "PPP:仓库里的Random Star",
     &[
         On::Play("", None, random_star),
-        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
+        // 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸」 -- the owner's
+        // still-walking (non-teleport) pass of 流星堂, with two stickers in hand.
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor == owner && tile.id == tile_named('流星堂') && move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2",
+            None,
+            pass_tile,
+        ),
     ],
 );
 
@@ -48,30 +55,10 @@ fn random_star(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书（2）: 「[经过]“流星堂”时可使用2星星贴纸在“流星堂”强制停下并[结算]」
 /// -- C# `CardRandomStar.PassTile` -> `Stop`.
-/// Pure guard for [`pass_tile`] -- the activation gate. `false`
-/// means the card is not activated at all. C# `m.Seat != Seat || t != Ryuseido
-/// || m.Remaining <= 0 || m.Teleport || H.Tok(...) < 2` is the applicability
-/// (the ask itself is the effect).
-fn pass_tile_guard(player_id: i32) -> bool {
-    if !ctx::is_placed() || trigger::player_id() != player_id {
-        return false;
-    }
-    let ryuseido = ctx::tile_named("流星堂");
-    if ryuseido < 0 || trigger::tile() != ryuseido {
-        return false;
-    }
-    // C# `m.Remaining <= 0` -- only a still-walking pass can be intercepted.
-    if trigger::move_remaining() <= 0 {
-        return false;
-    }
-    // C# `m.Teleport` -- a teleport does not walk past the tile.
-    if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return false;
-    }
-    ctx::tok(player_id, "星星贴纸") >= 2
-}
-
 fn pass_tile(player_id: i32) -> card_sdk::Asked {
+    // `card.placed && actor == owner && tile.id == tile_named('流星堂') &&
+    // move.remaining > 0 && move.kind != Teleport && tok('星星贴纸') >= 2` is
+    // the pre (the ask itself is the effect).
     let ryuseido = ctx::tile_named("流星堂");
     // 规则书（2）: 「可使用2星星贴纸」 -- C# `H.AskYes(..., "经过流星堂：要用 2 个
     // 星星贴纸在这里 [强制停下] 并结算吗？")`.

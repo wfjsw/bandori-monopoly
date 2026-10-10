@@ -7,14 +7,20 @@
 //! move roll, keep re-rolling movement dice until the total passes the next
 //! player in the direction of travel.
 
-use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MEET_AGAIN: CardDef = CardDef::new(
     "MyGO:若能再次交汇",
-    &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::MoveRoll],
+        "actor == owner && move.kind != Teleport && move.roll != null",
+        Some(can_counteract),
+        counteract,
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
 /// Distance in the direction of travel to the nearest other player who can be
 /// passed (C# `CardMeetAgain.Next` over `H.Forward`, picked by `MoveCtx.Dir`).
@@ -48,7 +54,14 @@ fn next_dist(player_id: i32, dir: i32) -> i32 {
     }
 }
 
+/// Residual guard for [`can_counteract`] -- `next_dist`'s geometry scan stays
+/// here (not yet in the condition vocabulary).
 fn can_counteract(player_id: i32) -> bool {
+    next_dist(player_id, trigger::move_dir()) > 0
+}
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书: 「[反击]移动掷骰后」 -- C# `t.Kind == "moveRoll" && t.Seat == seat`.
     if trigger::player_id() != player_id {
         return false;
@@ -62,14 +75,13 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && move.kind != Teleport && move.roll != null` is the
+    // pre; `next_dist` is the residual guard.
     // 规则书: 「持续进行移动掷骰直至[经过]下一名玩家」
     let Some(mut roll) = trigger::move_roll() else {
         return Ok(());
     };
     let dist = next_dist(player_id, trigger::move_dir());
-    if dist <= 0 {
-        return Ok(());
-    }
     // 规则书: 「（最多掷骰至移动超过原本移动终点的20格以后）」 -- the original
     // endpoint is the roll this card answered; re-rolls may push at most 20 past it.
     let origin_end = roll;

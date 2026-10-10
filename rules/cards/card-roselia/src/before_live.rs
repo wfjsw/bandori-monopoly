@@ -12,11 +12,18 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const BEFORE_LIVE: CardDef = CardDef::new(
     "R:live前的准备",
-    &[On::Counteract(&[ChainKind::Pass], "", Some(can_counteract), counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::Pass],
+        "actor == owner && move.remaining > 0 && tile.id == tile_named('江户川乐器店')",
+        None,
+        counteract,
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
-/// 规则书[反击]: 「[反击] 经过江户川乐器店时可打出此卡」
-fn can_counteract(player_id: i32) -> bool {
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
+    // 规则书[反击]: 「[反击] 经过江户川乐器店时可打出此卡」
     // 规则书[反击]: 「经过江户川乐器店时」 -- C# `t.Kind == "pass" && t.Seat == seat &&
     // H.Name(t.Tile) == "江户川乐器店"`.
     if trigger::kind() != TriggerKind::Pass || trigger::player_id() != player_id {
@@ -32,6 +39,8 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && move.remaining > 0 && tile.id ==
+    // tile_named('江户川乐器店')` is the pre; no residual guard.
     // 规则书[反击]: 「使自己在江户川乐器店强制停下并触发结算」
     ctx::log(
         player_id,

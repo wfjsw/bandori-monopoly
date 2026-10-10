@@ -12,8 +12,8 @@
 //! `tile:agent` body. It is not an after-hook: a body replace must not leave a
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 /// The mark kind standing in for the 「奇迹水晶」 this card parks on 弦卷集团
@@ -23,22 +23,28 @@ const MARK: &str = "黑衣人的补给";
 pub const BLACK_SUITS: CardDef = CardDef::new(
     "HHW:黑衣人的补给",
     &[
-        On::Hook(&[HookKind::PassTile], "", None, pass_tile),
-        On::Counteract(&[ChainKind::PassBefore], "", Some(can_counteract), counteract),
+        // 规则书: 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- the tile
+        // and the owner's own pass are the condition; the crystal mark count is
+        // the residual guard.
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && tile.id == tile_named('弦卷集团')",
+            Some(pass_tile_guard),
+            pass_tile,
+        ),
+        // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
+        // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
+        // `PassBefore` is the category; the owner's own pass of CiRCLE is the
+        // condition. The `circle < 0` defensive check is dropped (`tile_named`
+        // missing = -1 never equals a live `tile.id`).
+        On::Counteract(
+            &[ChainKind::PassBefore],
+            "actor == owner && tile.id == tile_named('CiRCLE')",
+            None,
+            counteract,
+        ),
     ],
 );
-
-fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「经过“CiRCLE”格子（#1）时可打出此卡」 -- C# `CanCounteract`:
-    // `t.Kind == "pass" && t.Seat == seat && H.Tile(t.Tile)?.kind == "circle"`.
-    let circle = ctx::tile_named("CiRCLE");
-    if circle < 0 {
-        return false;
-    }
-    trigger::kind() == TriggerKind::PassBefore
-        && trigger::player_id() == player_id
-        && trigger::tile() == circle
-}
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
@@ -90,17 +96,19 @@ fn sync_circle_instance(group: i32) {
     }
 }
 
+/// Residual guard for [`pass_tile`] -- the crystal mark count on the tile
+/// (`count_marks`) stays here (not yet in the condition vocabulary).
+fn pass_tile_guard(_player_id: i32) -> bool {
+    ctx::count_marks(ctx::trigger::tile(), MARK, -2) > 0
+}
+
 /// 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s
 /// `mark.count--`, which is `bump_mark`'s single-tick form. Dropping the last
 /// crystal takes the borrowed `tile:circle` instance with it.
 fn pass_tile(_player_id: i32) -> card_sdk::Asked {
+    // `actor == owner && tile.id == tile_named('弦卷集团')` is the pre; the
+    // crystal mark count is the residual guard.
     let t = ctx::trigger::tile();
-    if t < 0 {
-        return Ok(());
-    }
-    if ctx::count_marks(t, MARK, -2) <= 0 {
-        return Ok(());
-    }
     ctx::bump_mark(t, MARK, -2, -1);
     sync_circle_instance(t);
     Ok(())
