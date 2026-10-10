@@ -114,11 +114,94 @@ pub struct Deal {
 /// the tile. This is what `CardRules::buy_quote`'s default returns, and what
 /// the sim and `StubRules` run -- the price stages (`BuyAdd` → `BuyMul` →
 /// `BuySet`) sit on top of it in the rules crate.
+///
+/// **Single source** for the land + standing-houses figure: `Cx::buy_price`,
+/// `World::buy_price` and the tile quotes all call this, so the caption can
+/// never disagree with the charge.
 pub fn quote_native(data: &GameData, st: &MatchState, t: usize) -> i32 {
     let Some(tile) = data.tiles.get(t) else {
         return -1;
     };
     tile.price + st.houses.get(t).copied().unwrap_or(0) * tile.house
+}
+
+/// The next-building cost (「建造费」). **Single source** for `Cx::build_cost`
+/// and `World::build_cost`.
+pub fn build_cost(data: &GameData, t: usize) -> i32 {
+    data.tiles.get(t).map(|tile| tile.house.max(0)).unwrap_or(0)
+}
+
+/// The mortgage payout: half the land price. **Single source** for
+/// `Cx::mortgage_value` and `World::mortgage_value`.
+pub fn mortgage_value(data: &GameData, t: usize) -> i32 {
+    data.tiles.get(t).map(|tile| tile.price / 2).unwrap_or(0)
+}
+
+/// The deed's redeem price: 60% of the land price, ties even
+/// (`DoRedeem`'s charge). **Single source** for `Cx::redeem_cost` and the
+/// tile quotes -- the caption can never disagree with the charge.
+pub fn redeem_cost(data: &GameData, t: usize) -> i32 {
+    data.tiles
+        .get(t)
+        .map(|tile| (tile.price as f64 * 0.6).round_ties_even() as i32)
+        .unwrap_or(0)
+}
+
+/// The property rent-table entry at the **counted** house count
+/// (`H.RentHouses`; `pay_rent`'s lookup). RiNG is not on this table -- see
+/// [`ring_rent_unit`]. **Single source** for `pay_rent`, `World::rent_of`'s
+/// property branch and the tile quotes.
+pub fn table_rent(data: &GameData, w: &World, t: usize) -> i32 {
+    let Some(tile) = data.tiles.get(t) else {
+        return 0;
+    };
+    if tile.kind == "ring" {
+        return 0;
+    }
+    let h = w.rent_houses(t as i32);
+    if tile.rent.is_empty() {
+        0
+    } else {
+        tile.rent[(h as usize).min(tile.rent.len() - 1)]
+    }
+}
+
+/// RiNG rent's per-die unit: `rings × ring_multiplier`. The payment is
+/// `unit × 1d20` (`pay_rent`); the tile quotes show `(unit, unit × 20)`.
+/// **Single source** for both.
+pub fn ring_rent_unit(data: &GameData, w: &World, owner: usize) -> i32 {
+    count_rings(data, w, owner).max(1) * data.match_rules.ring_multiplier.max(1)
+}
+
+/// How many RiNG tiles `player` owns. **Single source** for
+/// `Cx::count_rings` and [`ring_rent_unit`].
+pub fn count_rings(data: &GameData, w: &World, player: usize) -> i32 {
+    (0..data.tiles.len())
+        .filter(|&t| {
+            data.tiles[t].kind == "ring"
+                && w.st.owners.get(t).copied().unwrap_or(-1) == player as i32
+        })
+        .count() as i32
+}
+
+/// The persistent tile half of `Play::scale_settle_payment`: `RENT_FACTOR` /
+/// `PAY_FACTOR` milli-units on the tile's rule instance (`0` = no scale).
+/// The plan's turn-scoped factors are *not* included -- those shape one
+/// settle, not a standing tile quote. **Single source** for
+/// `scale_settle_payment`'s tile branch and the tile quotes.
+pub fn tile_money_scale(w: &World, t: usize, rent: bool) -> f64 {
+    let mut f = 1.0f64;
+    if rent {
+        let r = w.tile_prop(t as i32, crate::state::prop::RENT_FACTOR);
+        if r > 0 {
+            f *= f64::from(r) / 1000.0;
+        }
+    }
+    let p = w.tile_prop(t as i32, crate::state::prop::PAY_FACTOR);
+    if p > 0 {
+        f *= f64::from(p) / 1000.0;
+    }
+    f
 }
 
 /// The base a quote starts from, before the `BuyAdd` / `BuyMul` / `BuySet`
@@ -298,7 +381,7 @@ pub fn tile_quotes(
                     out[t] = Some(TileQuote {
                         kind: TileQuoteKind::Build,
                         flow: MoneyFlow::MayPay,
-                        value: tile.house.max(0),
+                        value: build_cost(data, t),
                         max: None,
                     });
                 } else {
@@ -396,17 +479,8 @@ pub fn tile_quotes(
     out
 }
 
-/// The deed's redeem price: 60% of the land price, ties even (the same
-/// figure [`crate::engine::Cx::redeem_cost`] charges).
-fn redeem_cost(data: &crate::data::GameData, t: usize) -> i32 {
-    let Some(tile) = data.tiles.get(t) else {
-        return 0;
-    };
-    (tile.price as f64 * 0.6).round_ties_even() as i32
-}
-
 /// The rent a landing on `t` would move, as a `(min, max)` pair. `max` is
-/// `Some` only for RiNG dice (`rings × ring_multiplier × 1d20`).
+/// `Some` only for RiNG dice (`unit × 1d20`).
 ///
 /// RiNG rent always counts the **owner's** rings (`pay_rent`), which is
 /// public state -- so Rent, OwnRent and the seat-independent quote share one
@@ -423,37 +497,13 @@ fn rent_quote(
     if tile.kind == "ring" {
         // RiNG rent is rolled at payment time; show the honest dice range.
         let owner = w.st.owners.get(t).copied().unwrap_or(-1);
-        let rings = count_rings(data, w, owner.max(0) as usize).max(1);
-        let mult = data.match_rules.ring_multiplier.max(1);
-        (rings * mult, Some(rings * mult * 20))
+        let unit = ring_rent_unit(data, w, owner.max(0) as usize);
+        (unit, Some(unit * 20))
     } else {
-        let h = w.rent_houses(t as i32);
-        let rent = if tile.rent.is_empty() {
-            0
-        } else {
-            tile.rent[(h as usize).min(tile.rent.len() - 1)]
-        };
+        let rent = table_rent(data, w, t);
         // The persistent tile scalars of `scale_settle_payment` (「支付减半」 /
-        // 「地租」 as tile props). Milli-units; `0` means no scale.
-        let mut f = 1.0f64;
-        let r = w.tile_prop(t as i32, crate::state::prop::RENT_FACTOR);
-        if r > 0 {
-            f *= f64::from(r) / 1000.0;
-        }
-        let p = w.tile_prop(t as i32, crate::state::prop::PAY_FACTOR);
-        if p > 0 {
-            f *= f64::from(p) / 1000.0;
-        }
-        (((rent as f64 * f) as i32), None)
+        // 「地租」 as tile props). The turn plan's factors are not included:
+        // they shape one settle, not a standing quote.
+        (((rent as f64 * tile_money_scale(w, t, true)) as i32), None)
     }
-}
-
-/// How many RiNG tiles `player` owns (the RiNG rent multiplier's count).
-fn count_rings(data: &crate::data::GameData, w: &World, player: usize) -> i32 {
-    (0..data.tiles.len())
-        .filter(|&t| {
-            data.tiles[t].kind == "ring"
-                && w.st.owners.get(t).copied().unwrap_or(-1) == player as i32
-        })
-        .count() as i32
 }

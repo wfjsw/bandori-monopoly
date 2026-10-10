@@ -2114,10 +2114,11 @@ impl Cx<'_> {
         let tile = self.tile(t);
         let (mut amount, detail) = if tile.kind == "ring" {
             let d = self.w.rng.d(20);
+            let unit = purchase::ring_rent_unit(self.data, &self.w, owner);
             let rings = self.count_rings(owner).max(1);
             let mult = self.data.match_rules.ring_multiplier.max(1);
             (
-                rings * mult * d,
+                unit * d,
                 Some(
                     Msg::new("log.part.rent_ring")
                         .i("rings", rings)
@@ -2129,11 +2130,7 @@ impl Cx<'_> {
             // The counted house count (`H.RentHouses`): a 「房屋数视为…」
             // override rides here, and real `st.houses` is untouched.
             let h = self.w.rent_houses(t as i32);
-            let rent = if tile.rent.is_empty() {
-                0
-            } else {
-                tile.rent[(h as usize).min(tile.rent.len() - 1)]
-            };
+            let rent = purchase::table_rent(self.data, &self.w, t);
             (
                 rent,
                 (h > 0).then(|| Msg::new("log.part.rent_houses").i("h", h)),
@@ -2218,18 +2215,10 @@ impl Cx<'_> {
         f *= self.w.turn.plan.pay_factor;
         // A prop the tile does not carry reads as its default `0`, which here
         // means 「no scale」 (×1.0) rather than ×0 -- only a positive milli value
-        // is a scale.
+        // is a scale. [`purchase::tile_money_scale`] is the single source for
+        // that tile half (the standing quote reads the same figure).
         if let Some(t) = tile {
-            if rent {
-                let r = self.w.tile_prop(t as i32, crate::state::prop::RENT_FACTOR);
-                if r > 0 {
-                    f *= f64::from(r) / 1000.0;
-                }
-            }
-            let p = self.w.tile_prop(t as i32, crate::state::prop::PAY_FACTOR);
-            if p > 0 {
-                f *= f64::from(p) / 1000.0;
-            }
+            f *= purchase::tile_money_scale(&self.w, t, rent);
         }
         if (f - 1.0).abs() <= f64::EPSILON {
             return amount;
@@ -2445,28 +2434,26 @@ impl Cx<'_> {
     // =============================================================== property
 
     /// `BuyPrice` -- land price plus houses already standing on it.
+    /// [`purchase::quote_native`] is the single source.
     pub(crate) fn buy_price(&self, t: usize) -> i32 {
-        let tile = self.tile(t);
-        tile.price + self.w.st.houses.get(t).copied().unwrap_or(0) * tile.house
+        purchase::quote_native(self.data, &self.w.st, t).max(0)
     }
 
     pub(crate) fn build_cost(&self, t: usize) -> i32 {
-        self.tile(t).house.max(0)
+        purchase::build_cost(self.data, t)
     }
 
     pub(crate) fn mortgage_value(&self, t: usize) -> i32 {
-        self.tile(t).price / 2
+        purchase::mortgage_value(self.data, t)
     }
 
-    /// 60% of the land price.
+    /// 60% of the land price. [`purchase::redeem_cost`] is the single source.
     pub(crate) fn redeem_cost(&self, t: usize) -> i32 {
-        (self.tile(t).price as f64 * 0.6).round_ties_even() as i32
+        purchase::redeem_cost(self.data, t)
     }
 
     fn count_rings(&self, player_id: usize) -> i32 {
-        (0..self.data.tiles.len())
-            .filter(|&t| self.tile(t).kind == "ring" && self.w.st.owners[t] == player_id as i32)
-            .count() as i32
+        purchase::count_rings(self.data, &self.w, player_id)
     }
 
     /// Deeds a player could mortgage (not RiNG, not already mortgaged).

@@ -286,46 +286,43 @@ impl World {
     /// Rent of a tile as it stands right now (houses included; `H.RentOf`).
     /// The house count is the **counted** one ([`Self::rent_houses`]).
     pub fn rent_of(&self, data: &GameData, tile: i32) -> i32 {
-        let Some(t) = usize::try_from(tile).ok().and_then(|i| data.tiles.get(i)) else {
+        let Ok(i) = usize::try_from(tile) else {
             return 0;
         };
-        let houses = self.rent_houses(tile) as usize;
+        let Some(t) = data.tiles.get(i) else {
+            return 0;
+        };
         if t.kind == "ring" {
             // RiNG rent is rolled at payment time; the table value is the base.
             t.price
         } else {
-            t.rent
-                .get(houses.min(t.rent.len().saturating_sub(1)))
-                .copied()
-                .unwrap_or(0)
+            super::play::purchase::table_rent(data, self, i)
         }
     }
 
     /// Price to buy a tile now (land + houses standing on it; `H.BuyPriceFor`).
+    /// [`super::play::purchase::quote_native`] is the single source.
     pub fn buy_price(&self, data: &GameData, tile: i32) -> i32 {
-        let Some(t) = usize::try_from(tile).ok().and_then(|i| data.tiles.get(i)) else {
+        let Ok(t) = usize::try_from(tile) else {
             return 0;
         };
-        let houses = usize::try_from(tile)
-            .ok()
-            .and_then(|i| self.st.houses.get(i))
-            .copied()
-            .unwrap_or(0);
-        t.price + houses * t.house
+        super::play::purchase::quote_native(data, &self.st, t).max(0)
     }
 
+    /// [`super::play::purchase::build_cost`] is the single source.
     pub fn build_cost(&self, data: &GameData, tile: i32) -> i32 {
-        usize::try_from(tile)
-            .ok()
-            .and_then(|i| data.tiles.get(i))
-            .map_or(0, |t| t.house)
+        let Ok(t) = usize::try_from(tile) else {
+            return 0;
+        };
+        super::play::purchase::build_cost(data, t)
     }
 
+    /// [`super::play::purchase::mortgage_value`] is the single source.
     pub fn mortgage_value(&self, data: &GameData, tile: i32) -> i32 {
-        usize::try_from(tile)
-            .ok()
-            .and_then(|i| data.tiles.get(i))
-            .map_or(0, |t| t.price / 2)
+        let Ok(t) = usize::try_from(tile) else {
+            return 0;
+        };
+        super::play::purchase::mortgage_value(data, t)
     }
 
     /// Cash plus mortgageable deeds; construction cannot fund itself.
