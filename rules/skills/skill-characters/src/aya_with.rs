@@ -19,7 +19,7 @@
 //! cut applies to the whole, and the split happens afterwards.
 
 use card_sdk::abi::HookKind;
-use card_sdk::ctx::{self, state};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 const FANS_UP: &str = "P✽P粉丝(正)";

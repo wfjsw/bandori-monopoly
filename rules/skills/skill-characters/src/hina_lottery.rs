@@ -15,7 +15,7 @@
 //! and unplacing it at the next turn start is the same shape as （1）, with an
 //! expiry -- which is what the keyed state's `expires` is for.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 

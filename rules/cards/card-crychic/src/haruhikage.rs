@@ -28,7 +28,7 @@ pub const HARUHIKAGE: CardDef = CardDef::new(
             Some(can_counteract),
             counteract
         ),
-        On::Hook(&[HookKind::Drawn], "", None, on_drawn),
+        On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, on_drawn),
     ],
 );
 
@@ -98,9 +98,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 依次抽牌直至你的手牌数为6，若受到弃牌效果则中断此效果。」 -- C#
 /// `CardHaruhikage.Drawn` -> `Special`.
 fn on_drawn(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
-        return Ok(());
-    }
+    // `trigger_card == card.id` owns "this card was drawn"; the kind list
+    // owns `Drawn`. 「若抽到此卡时你的总资产大于等于20000」 is a derived-list
+    // residual (assets = money + land) and stays.
     // 规则书（1）: 「若抽到此卡时你的总资产大于等于20000」 -- C# `H.AssetsOf(seat) < 20000`.
     if assets_of(player_id) < 20000 {
         return Ok(());

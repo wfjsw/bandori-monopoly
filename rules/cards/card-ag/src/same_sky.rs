@@ -6,14 +6,14 @@
 //!
 //! [反击] auto-plays when drawn: money by hand size, else draw.
 
-use card_sdk::abi::{HookKind, TriggerKind};
-use card_sdk::ctx::{self, trigger};
+use card_sdk::abi::HookKind;
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAME_SKY: CardDef = CardDef::new(
     "AG:朝同一片天空迈进",
     &[
-        On::Hook(&[HookKind::Drawn], "", None, counteract),
+        On::Hook(&[HookKind::Drawn], "trigger_card == card.id", None, counteract),
         On::Hook(&[HookKind::DeckAtGameStart], "", None, return_at_opening),
     ],
 );
@@ -44,9 +44,7 @@ fn return_at_opening(player_id: i32) -> card_sdk::Asked {
 /// 规则书[反击]: 「抽出此卡时立刻打出」 -- C# `CardSameSky.Drawn` auto-plays it
 /// the moment it is drawn; it never answers the [反击] window.
 fn counteract(player_id: i32) -> card_sdk::Asked {
-    if trigger::kind() != TriggerKind::Drawn || !trigger::card_is(ID) {
-        return Ok(());
-    }
+    // `trigger_card == card.id` owns "this card was drawn".
     // C# `Drawn` pulls the card out of hand first (`hand.Remove(Id)`).
     if !ctx::take_from_hand(player_id, ID) {
         return Ok(());
