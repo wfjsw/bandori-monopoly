@@ -1,0 +1,40 @@
+/* Shared primitives (docs/CSS.md). Component modules compose these skeletons
+   and keep their own size / colour. `composes: floatCard from
+   "../ui/primitives.module.css"` (adjust the relative path per module). */
+
+/* White floating peek / preview card: surface, soft float shadow, click-through.
+   Adopted by Players `.peek` / `.cardPeek`, Side `.peek` / `.preview`,
+   CardPreview `.preview`. */
+.floatCard {
+  background: var(--surface);
+  border-radius: var(--r-lg);
+  box-shadow: var(--float-shadow);
+  padding: var(--sp-2);
+  pointer-events: none;
+}
+
+/* Full-round pill skeleton: rounded, centred, bold. Sizes and fills stay in
+   the component. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-pill);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* Small rounded label (tag / badge / marker chip). */
+.chip {
+  display: inline-block;
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--r-pill);
+}
+
+/* Surface panel: the white card every scene panel copies. */
+.panel {
+  background: var(--panel);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+}

@@ -10,7 +10,7 @@
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
    holds both without spilling. */
-.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 4px; row-gap: 3px; overflow: hidden; box-sizing: border-box; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; }
+.panel { position: relative; flex: none; display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: center; column-gap: 4px; row-gap: 3px; overflow: hidden; box-sizing: border-box; background: var(--panel); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 0 12px 0 6px; text-align: left; border: 3px solid transparent; }
 .turn { border-color: var(--pink); background: #fff7f9; }
 /* Your own seat: a fixed blue (never the pink of the turn frame, and not your
    seat colour, which may be pink too) -- a thick bar down the left edge, a
@@ -38,13 +38,13 @@
 .hand i { color: var(--tag-red); width: 17px; height: 17px; }
 .fire img { width: 18px; }
 /* Per-player graveyard, at the right of the module. */
-.grave { display: flex; align-items: center; gap: 3px; cursor: pointer; padding-left: 10px; border-left: 2px solid var(--line, rgba(0, 0, 0, 0.1)); }
+.grave { display: flex; align-items: center; gap: 3px; cursor: pointer; padding-left: 10px; border-left: 2px solid var(--line); }
 .grave img { width: 18px; height: 24px; object-fit: cover; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
 .grave b { font-size: 16px; }
 .compact .grave img { width: 14px; height: 18px; }
 .compact .grave b { font-size: 13px; }
 .status { flex: none; font-size: 12px; padding: 0 6px; border-radius: 8px; background: var(--purple); color: #fff; }
-.outMark { position: absolute; right: 70px; top: 50%; transform: translateY(-50%) rotate(-12deg); border: 3px solid var(--tag-red); color: var(--tag-red); border-radius: 6px; padding: 0 8px; font-size: 20px; font-weight: 700; }
+.outMark { position: absolute; right: 70px; top: 50%; transform: translateY(-50%) rotate(-12deg); border: 3px solid var(--tag-red); color: var(--tag-red); border-radius: var(--r-sm); padding: 0 8px; font-size: 20px; font-weight: 700; }
 .compact { grid-template-columns: 46px minmax(0, 1fr) auto; padding-right: 10px; }
 .compact .who b { font-size: 14px; }
 .compact .money b { font-size: 17px; }
@@ -52,7 +52,7 @@
 .compact .sub { font-size: 13px; gap: 8px; }
 .compact .n { width: 18px; height: 18px; line-height: 18px; font-size: 11px; left: 2px; top: 2px; }
 
-.log { position: relative; flex: 1; min-height: 0; width: 100%; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px 8px; display: flex; flex-direction: column; align-items: flex-start; }
+.log { position: relative; flex: 1; min-height: 0; width: 100%; background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow); padding: 12px 14px 8px; display: flex; flex-direction: column; align-items: flex-start; }
 .lines { flex: 1; align-self: stretch; overflow: auto; margin-top: 8px; font-size: 14px; line-height: 1.55; }
 .lines::-webkit-scrollbar { width: 5px; }
 /* A turn block: bold round/turn heading over that turn's entries, barred in
@@ -68,7 +68,18 @@
 .compact .clock { width: 24px; height: 24px; line-height: 24px; font-size: 11px; }
 
 /* Graveyard hover peek: beside the column, over the ring (like Side's draw-pile peek). */
-.peek { position: absolute; left: calc(100% + 12px); width: 240px; max-height: 520px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 30; pointer-events: none; opacity: 0; transform: translateX(-10px); transition: opacity 0.12s, transform 0.12s; }
+.peek {
+  composes: floatCard from "../../ui/primitives.module.css";
+  position: absolute;
+  left: calc(100% + 12px);
+  width: 240px;
+  max-height: 520px;
+  overflow: hidden;
+  z-index: var(--z-dock);
+  opacity: 0;
+  transform: translateX(-10px);
+  transition: opacity var(--dur-fast), transform var(--dur-fast);
+}
 .peekOn { opacity: 1; transform: none; }
 .peekHead { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; margin: 2px 4px 6px; }
 .peekHead b { color: var(--pink); }
@@ -84,7 +95,13 @@
 
 /* The hovered log card's details: face + title + effect text. Fixed, anchored
    under the reference (viewport coordinates from the hover target). */
-.cardPeek { position: fixed; z-index: 60; max-width: 340px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 10px; pointer-events: none; }
+.cardPeek {
+  composes: floatCard from "../../ui/primitives.module.css";
+  position: fixed;
+  z-index: var(--z-hosted);
+  max-width: 340px;
+  padding: 10px;
+}
 .cardPeekRow { display: flex; gap: 10px; align-items: flex-start; }
 .cardPeekHead { min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; line-height: 1.5; }
 .cardPeekHead b { color: var(--pink); font-size: 15px; }
