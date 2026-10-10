@@ -49,6 +49,13 @@ Two more book facts that decide the model:
 
 ## 2. Our stages today (`crates/game-core/src/engine/play.rs`)
 
+> **STACK-01 (2026-10-10):** the stages below are unchanged, but they now run
+> as a **work-stack state machine** (`step_settle` / `engine/work.rs`) so a
+> nested `card_settle_at` suspends and resumes instead of recursing. Order is
+> the old synchronous nest (the nested settle finishes before the outer
+> settle's next stage). See `docs/ENGINE.md` "Settle work stack".
+
+
 ```
 walk, per step:            passBefore → passTile → pass          (行动阶段 12)
   teleport (resolve):      passTile → passPlayer → after_walk

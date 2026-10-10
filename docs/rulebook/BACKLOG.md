@@ -31,6 +31,19 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 # HIGH
 
 ## STACK-01 — nested `card_settle_at` recursion overflows the stack (engine defect)
+- **status**: **fixed** (2026-10-10, `stack-01-settle-queue`) — nested settles run on an
+  explicit work stack (`game-core/src/engine/work.rs`); `card_settle_at` enqueues and
+  `Cx::drain_work` pumps. A drive that needs a nested settle while the pump is running
+  suspends (`Halt::Suspended`) and resumes after — same order as the old synchronous
+  nest, one Rust frame deep. `flush_deferred → start → execute` is also iterative
+  (guard flag). Rulebook-level `MAX_SETTLE_DEPTH` = 64 logs and stops a rules infinite
+  loop (two cards settling each other); it is **not** the stack-safety mechanism.
+  Regression: `crates/game-rules/tests/settle_depth.rs` (120-deep chain on a 512 KiB
+  thread). `ckpt_equiv -- out 8 4 120 standard|chaos` now completes.
+  Remaining: a nested-settle **resume** still re-walks `counteract` from scratch, so
+  checkpoints diverge from 7e8bf78 starting at the first nested settle (~round 26 in
+  `4 4 60`); the first 101 checkpoints are byte-identical. Follow-up: adopt
+  `counteract_resume` (job list) on the resume path so completed hooks are not re-run.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (any long bot game / real match that nests a settle hook; already aborts `ckpt_equiv`)
@@ -330,6 +343,10 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **question**: C-Q7.
 
 ## SETTLE-01 — 笑容大游行 tile-swap overflows the stack
+- **status**: stack overflow half **fixed** by STACK-01 (the work stack flattens the
+  `SettleBody` self-nest); the swap-axes bug (「交换位置」 modeled as colour override /
+  SettleBody instead of a board position exchange) remains. `t13_smile_parade` may
+  still be wrong on the swap, but it no longer aborts the process.
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (HHW signature continuous)
@@ -1451,7 +1468,7 @@ L162 "latent bug" on 凑友希那 force-stop may be stale (M4 done / m4_kokoro p
 | skills: Mujica | SETTLE-03, SKILL-04, CH-08 | |
 | HHW cards | SETTLE-01, CRYSTAL-05..07 | |
 | settle stages | SETTLE-04, SETTLE-05, MOVE-08, HOST-02 | |
-| engine: settle recursion / stack safety | STACK-01, (then SETTLE-01) | 1 high A |
+| engine: settle recursion / stack safety | STACK-01 **fixed**; SETTLE-01 swap-axes remains | 0 (stack) |
 | events | EVENT-01..04, ABI-09 | |
 | fuzz/determinism | FUZZ-01, HOST-03 | 1 high A |
 | tiles | TILE-06, HOST-04, LOW-02 | |
@@ -1462,7 +1479,7 @@ L162 "latent bug" on 凑友希那 force-stop may be stale (M4 done / m4_kokoro p
 
 Do these in order; each batch should be a PR that does not share files with the next.
 
-1. **high-A engine: settle recursion / stack safety** (STACK-01)
+1. ~~**high-A engine: settle recursion / stack safety** (STACK-01)~~ **fixed** — see the STACK-01 entry
    - Unblocks `ckpt_equiv`, long bot games, server `spawn_blocking` workers (~2 MiB), and the browser host stack. Preferred fix: queue nested `card_settle_at` jobs and pump them iteratively (also unroll `flush_deferred` → `start` → `execute`). Stopgap: `MAX_SETTLE_DEPTH`. Then re-check SETTLE-01 (笑容大游行). Files: `crates/game-core/src/engine/{play,mod}.rs`, `crates/game-rules/src/wasm_rules.rs` (`HostRequest::SettleAt`).
 2. **high-A engine bugs — movement** (MOVE-01, MOVE-02, MOVE-04, SKILL-08, SKILL-09, TILE-04, TILE-05)
    - Unblocks the most ignored `rb_cross_move` tests. Files: `game-core/engine/{play,ops,move_ctx}.rs`, `skill-characters/{rana_parking,kaoru_prince}.rs`.

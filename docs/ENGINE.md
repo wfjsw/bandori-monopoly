@@ -59,6 +59,35 @@ the body. `CardRules::settle_tile` then runs the tile's instances in order; the
 **default** impl is the built-in `land_at_built_in` (the plain BanG Dream
 Monopoly settlement), which is what `StubRules` and an unbound kind get.
 
+### Settle work stack (STACK-01)
+
+Nested `[触发结算]` used to recurse
+`card_settle_at → settle_at → raise → counteract → drive → apply_host_request → card_settle_at`
+with no depth bound. Long bot games overflowed the stack (`ckpt_equiv`), and a
+server `spawn_blocking` worker (~2 MiB) crashed at a quarter of that depth.
+
+Now:
+
+* `Cx` carries an explicit **work stack** (`engine/work.rs`).
+  `card_settle_at` / `settle_at` enqueue a [`SettleFrame`] and enter
+  `Cx::drain_work` -- the only pump.
+* A drive that needs a nested settle **while the pump is running** suspends:
+  it pushes a resume work item (the drive's saved answers) and the settle job,
+  then returns `Halt::Suspended`. The pump runs the settle first, then the
+  resume -- the same order as the old synchronous nest, one Rust frame deep.
+* `settle_at` is a stage machine (`step_settle`): `settle → settleBody →
+  settle_tile → settleAfter → tileResolved`. A raise that suspends parks a
+  `ContinueSettleWork` at the suspension-group base.
+* `flush_deferred` is iterative (a re-entrancy guard). `Deferred::Leave →
+  start(Act) → execute` no longer re-enters the drain -- that was the second
+  unbounded host-stack shape.
+* Rulebook-level `MAX_SETTLE_DEPTH = 64` (logged) stops a rules infinite loop
+  (two cards settling each other). It is **not** the stack-safety mechanism;
+  the structure is. `TODO(规则书)`: the book states no settle-depth bound.
+
+Regression: `crates/game-rules/tests/settle_depth.rs` (120-deep
+`TEST:settleNest` chain on a 512 KiB thread).
+
 Board-owned instances also hear the **field hooks** they declare: the hook
 dispatch in `game-rules/src/wasm_rules.rs` visits `board_field` after the
 player fields (so a suppressing card can arm a prop before the tile reads it),
