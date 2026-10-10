@@ -1,7 +1,10 @@
-/* Global layer: theme variables (BDTheme), reset, the scaled 1600 x 900 stage.
-   Everything else lives in the components' CSS modules. */
+/* Global layer: design tokens (BDTheme), reset, the scaled 1600 x 900 stage.
+   Everything else lives in the components' CSS modules, which read these
+   tokens and compose the primitives in ui/primitives.module.css.
+   See docs/CSS.md for the hierarchy. */
 
 :root {
+  /* ---- colour ---- */
   --pink: #ed4e76;
   --pink-light: #f7688c;
   --pink-deep: #cd3860;
@@ -20,15 +23,106 @@
   --green: #4cc38a;
   --shield: #5bb6f2;
   --note: #7b5cc4;
+  --danger: #d23a3a;
+  --ok: #6c6;
+  --ok-deep: #3a3;
+  --me-blue: #2f7df6;
+  --ink: #4b2233;
+  --surface: #fff;
   --panel: rgba(255, 255, 255, 0.93);
+  --backdrop: #f4e4ea;
+  --scrim: rgba(60, 40, 50, 0.38);
+  --line: #ddd;
+
+  /* ---- radius ---- */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-pill: 999px;
+
+  /* ---- shadow ---- */
   --shadow: 0 4px 14px rgba(80, 40, 60, 0.12);
+  --card-shadow: 0 3px 8px rgba(80, 40, 60, 0.12);
+  --float-shadow: 0 12px 30px rgba(60, 20, 40, 0.28);
+  --peek-lift: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
+  --pop-shadow: 0 20px 60px rgba(60, 20, 40, 0.3);
+  --lift: 0 4px 0 #d9d9df, 0 6px 14px rgba(0, 0, 0, 0.08);
+  --lift-down: 0 1px 0 #d9d9df;
+
+  /* ---- spacing (4px base) ---- */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* ---- type ---- */
+  --fs-xs: 11px;
+  --fs-sm: 13px;
+  --fs-md: 15px;
+  --fs-lg: 17px;
+  --fs-xl: 19px;
+  --fs-2xl: 22px;
+  --fs-3xl: 26px;
+
+  /* ---- motion ---- */
+  --dur-fast: 0.12s;
+  --dur-mid: 0.16s;
+  --dur-slow: 0.28s;
+  --ease-out: ease-out;
+  --ease-sheet: cubic-bezier(0.22, 0.7, 0.25, 1);
+  --ease-snap: cubic-bezier(0.2, 1.4, 0.4, 1);
+
+  /* ---- layout: the shared stage geometry (docs/CSS.md) ----
+     Mirrored in styles/layout.ts for TypeScript. */
+  --stage-w: 1600px;
+  --stage-h: 900px;
+  --topbar-h: 110px;
+  --board-inset-x: 38px;
+  --board-col-left: 350px;
+  --board-col-right: 300px;
+  --board-gap: 9px;
+  --board-chrome-x: calc(var(--board-inset-x) * 2 + var(--board-col-left) + var(--board-col-right) + var(--board-gap) * 2);
+  --board-mid: calc(var(--stage-w) - var(--board-chrome-x));
+  --board-mid-offset: 25px;
+  --sheet-strip: 60px;
+  --field-peek: 60px;
+  --hand-peek: 30px;
+  --skill-peek: 28px;
+  --map-margin-top: 18px;
+
+  /* ---- z-index scale: one place; modules reference names ---- */
+  --z-lift: 1;
+  --z-topbar: 5;
+  --z-chrome: 6;
+  --z-chrome-banner: 7;
+  --z-field: 15;
+  --z-fx: 20;
+  --z-fx-banner: 20;
+  --z-fx-phase: 22;
+  --z-fx-flash: 25;
+  --z-dock: 30;
+  --z-peek: 31;
+  --z-preview: 32;
+  --z-modal: 40;
+  --z-auto-float: 41;
+  --z-modal-fore: 42;
+  --z-auto-banner: 45;
+  --z-hosted: 60;
+  --z-toast: 80;
+  --z-fader: 90;
+  --z-console: 1000;
+
   font-family: "BDRounded", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   font-weight: 500;
   color: var(--text);
 }
 
 * { box-sizing: border-box; }
-html, body, #root { margin: 0; height: 100%; overflow: hidden; background: #f4e4ea; }
+html, body, #root { margin: 0; height: 100%; overflow: hidden; background: var(--backdrop); }
 /* Pin the document. Mobile browsers still scroll an `overflow: hidden` body
    (keyboard, address-bar collapse, rubber-banding); the fixed, scaled stage
    then paints at its place while touches hit-test against the scrolled
