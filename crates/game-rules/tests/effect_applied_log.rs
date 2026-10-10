@@ -318,3 +318,40 @@ fn be_strongest_rolls_only_with_a_livehouse() {
         .count();
     assert_eq!(dice, 1, "owns a livehouse -> exactly one 1d10 roll");
 }
+
+/// HostRequest replay semantics (BACKLOG HOST-01): a body that reads state X,
+/// performs a host effect that changes X, then reads X again. The **landing
+/// pass** reads `live + host_effects` for both reads -- the re-run is rebased
+/// onto the updated live world, so the first read already sees the post-effect
+/// value. The discarded learn pass's pre-effect read never reaches the stream.
+#[test]
+fn reread_after_host_effect_sees_the_updated_value() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.set_money(0, 10_000);
+    let mark = t.mark();
+    t.give_play(0, "TEST:readHostRead").unwrap();
+    drain(&mut t);
+    let evs = t.events_since(mark);
+    let house_arg = |name: &str| -> Option<i64> {
+        evs.iter()
+            .find(|e| e.msg.key().contains(name))
+            .and_then(|e| match e.msg.a.get("houses") {
+                Some(game_core::msg::Arg::N(v) | game_core::msg::Arg::I(v)) => Some(*v),
+                _ => None,
+            })
+    };
+    let h0 = house_arg("rhr_before").expect("before line");
+    let h1 = house_arg("rhr_after").expect("after line");
+    eprintln!("rhr houses before={h0} after={h1} keys={:?}", evs.iter().map(|e| e.msg.key()).collect::<Vec<_>>());
+    // HOST-01: the landing pass reads `live + host_effects` for both reads --
+    // the re-run is rebased onto the updated live world, so a host effect that
+    // changed X is visible to *both* the pre- and post-effect reads on the
+    // pass that lands. The discarded learn pass's pre-effect read never
+    // reaches the stream (write-through replace-on-rerun).
+    assert_eq!(
+        h0, h1,
+        "landing pass reads are rebased onto live+host_effects (HOST-01)"
+    );
+}

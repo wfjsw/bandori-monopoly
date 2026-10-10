@@ -652,3 +652,33 @@ allocator surface changed in 5.x). Bot-game loop through the glue API under node
 | total / median per game | 1554.2 ms / 43.40 ms | 1426–1436 ms / 37.3–37.8 ms |
 
 Adopted: better on both size and speed (~8% faster mean, ~14% faster median).
+
+
+## Drive replay semantics (HostRequest rebase)
+
+A card body runs under the learn/commit (or replay multi-pass) model: the body
+is interrupted by a [`HostRequest`] (pay, move, …), the host routine is applied
+against the **live** world, and the body re-runs from the top.
+
+**What a re-run reads.** Each pass starts from `Cx::share_world()` -- the live
+world *after* every host routine the earlier passes discovered. The pass that
+lands (`commit_after`) is therefore a snapshot of `live + host_effects`, with
+the guest's own writes on top. A query in the body (money, ownership, …) on
+that pass sees the post-effect value. This is BACKLOG **HOST-01**'s expected
+contract for the values the *player* sees.
+
+**What the stream shows.** Body lines are write-through (posted to the live
+event tail at the call site) and **replace-on-rerun**: the k-th log call of a
+re-run rewrites the k-th line the previous pass posted. The log therefore
+carries the landing pass's wording (post-effect reads), not the discarded learn
+pass's. The activation header is posted once at the first body entry and
+consumes its replace-log slot on later passes.
+
+**Gap (HOST-01 remainder).** A write that happens *inside* a host routine's
+own nested settle (e.g. the agent-tile offer buying a deed during
+`HostRequest::Move`) may not be on live until that routine finishes prompting.
+A body whose next read is after that nested write can still see the pre-write
+value on the pass that lands. Closing that needs the write journal HOST-01
+names: commit nested settle writes to live before the next pass shares.
+Pinned for the top-level `pay` path by
+`effect_applied_log::reread_after_host_effect_sees_the_updated_value`.

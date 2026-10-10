@@ -989,11 +989,37 @@ fn deck_once(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Reads money, pays (host effect changes money), reads money again.
+/// Pins HostRequest replay semantics: the second read sees the post-pay
+/// amount (replay re-run rebases onto live+host_effects) or the pre-pay
+/// amount (learn pass keeps its first-pass snapshot).
+const READ_HOST_READ: CardDef = CardDef::new(
+    "TEST:readHostRead",
+    &[On::Play("", None, read_host_read)],
+);
+
+fn read_host_read(player_id: i32) -> card_sdk::Asked {
+    let houses = |p: i32| {
+        ctx::owned_tiles(p)
+            .into_iter()
+            .filter(|&t| ctx::is_live_house_for(p, t))
+            .count() as i64
+    };
+    let h0 = houses(player_id);
+    ctx::log(player_id, &Msg::new(key!("rhr_before")).i("houses", h0).i("n", 0));
+    // Host effect: teleport to the agent tile; its settle may buy a livehouse.
+    ctx::plan::set_teleport_to(ctx::tile_named("地产商"));
+    let _ = ctx::card_move(player_id);
+    let h1 = houses(player_id);
+    ctx::log(player_id, &Msg::new(key!("rhr_after")).i("houses", h1).i("n", 0));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
-    ROLL_THEN_PAY, DECK_ONCE
+    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ
 ]);
