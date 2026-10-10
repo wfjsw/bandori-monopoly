@@ -252,10 +252,31 @@ fn ref_on_path(w: &TestWorld, me: i32, them: i32, roll: i32) -> i32 {
         .count() as i32
 }
 
+/// Set the world's move payload (`Trigger.mv`) -- roll face and direction.
+/// The guest-visible values (`move.roll`, `move.dir`) are unchanged: `dir`
+/// is `1` forward / `-1` backward (`Dir::as_i32`).
+fn set_move(w: &mut TestWorld, roll: Option<i32>, dir: i32) {
+    w.trigger.mv = Some(game_rules::TriggerMove {
+        kind: game_rules::MoveKind::Walk,
+        resolve: true,
+        tags: vec![],
+        main: true,
+        dir: if dir < 0 {
+            game_core::engine::rules::Dir::Backward
+        } else {
+            game_core::engine::rules::Dir::Forward
+        },
+        from: -1,
+        remaining: roll.map(|r| r.abs()).unwrap_or(0),
+        total: roll.map(|r| r.abs()).unwrap_or(0),
+        roll,
+    });
+}
+
 #[test]
 fn on_path_matches_ctx() {
     let mut w = world(12, &[0, 2, 5, 9], &[-1, -1, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1]);
-    w.trigger.move_roll = Some(5);
+    set_move(&mut w, Some(5), 1);
     for (me, them) in [(0, 1), (0, 2), (1, 0), (1, 1)] {
         let c = ref_on_path(&w, me, them, 5);
         assert!(
@@ -264,7 +285,7 @@ fn on_path_matches_ctx() {
         );
     }
     // No face -> 0.
-    w.trigger.move_roll = None;
+    set_move(&mut w, None, 1);
     assert!(ask(&w, "on_path(0, 1) == 0", 0, "TEST:x", false));
 }
 
@@ -296,8 +317,7 @@ fn ref_between(w: &TestWorld, p: i32, roll: i32, dir: i32) -> i32 {
 #[test]
 fn between_matches_ctx() {
     let mut w = world(12, &[0, 2, 5, 11], &[-1; 12]);
-    w.trigger.move_roll = Some(5);
-    w.trigger.move_dir = 1;
+    set_move(&mut w, Some(5), 1);
     for p in 0..4 {
         let c = ref_between(&w, p, 5, 1);
         assert!(
@@ -305,7 +325,7 @@ fn between_matches_ctx() {
             "between({p}) forward should be {c}"
         );
     }
-    w.trigger.move_dir = -1;
+    set_move(&mut w, Some(5), -1);
     for p in 0..4 {
         let c = ref_between(&w, p, 5, -1);
         assert!(
