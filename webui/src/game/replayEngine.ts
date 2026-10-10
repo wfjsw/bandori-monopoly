@@ -114,6 +114,8 @@ export function normalizeMatchView(raw: unknown): MatchView {
   v.draw = def(v.draw, []);
   v.you = def(v.you, 0);
   v.playerId = def(v.playerId, -1);
+  // Older engine bundles have no `tileQuotes`; the board falls back to the
+  // static `tile.price` caption when the array is missing.
   return v as unknown as MatchView;
 }
 

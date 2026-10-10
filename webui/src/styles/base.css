@@ -27,6 +27,14 @@
   --ok: #6c6;
   --ok-deep: #3a3;
   --me-blue: #2f7df6;
+  /* Money-direction discriminators (tile quotes, future price chips).
+     Three classes, coloured by `TileQuote.flow`. Distinguishable for common
+     colour-vision deficiencies (red/green are not the only channel: lightness
+     and the optional −/+ glyph carry the same split) and legible on every
+     tile colour band / the white face. */
+  --money-pay: #9e2b1f;
+  --money-optional: #a67c00;
+  --money-receive: #0a5f7a;
   --ink: #4b2233;
   --surface: #fff;
   --panel: rgba(255, 255, 255, 0.93);

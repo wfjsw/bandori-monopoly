@@ -36,6 +36,7 @@ numbers. Anything shared is a token or a primitive.
 | `--danger` | `#d23a3a` | destructive / error text |
 | `--ok` / `--ok-deep` | `#6c6` / `#3a3` | success |
 | `--me-blue` | `#2f7df6` | "your seat" ring |
+| `--money-pay` / `--money-optional` / `--money-receive` | `#9e2b1f` / `#a67c00` / `#0a5f7a` | money-direction discriminators (`TileQuote.flow`: must pay / may pay / receive) |
 | `--ink` | `#4b2233` | text on coloured flashes |
 
 Colour literals inside component modules are bugs; use the token (or

@@ -7,7 +7,7 @@ import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
 import { isLight, plain } from "../../core/format";
-import type { TileData } from "../../core/types";
+import type { TileData, TileQuote } from "../../core/types";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
 import { showEventPile } from "./Popups";
@@ -177,26 +177,71 @@ function fitName(name: string, u: number, avail: number, special: boolean): { ti
   return { tier: s.nameXS, lines: [name], boost };
 }
 
+/** Caption text for a quote: `−` / `+` as a redundant flow cue, `min–max` for
+ *  a RiNG dice range. Colour (`.flowMustPay` / …) is the primary channel. */
+function quoteCaption(q: TileQuote): string {
+  const n = q.max != null ? `${q.value}–${q.max}` : String(q.value);
+  if (q.flow === "mustPay") return q.max != null ? n : `−${n}`;
+  if (q.flow === "receive") return q.max != null ? n : `+${n}`;
+  return n;
+}
+
+/** Tooltip line for a quote, spelled out in words (i18n). */
+function quoteTip(q: TileQuote): string {
+  const label = tr(`tileQuote.${q.kind}`);
+  const n =
+    q.max != null
+      ? tr("tileQuote.range", { min: q.value, max: q.max })
+      : String(q.value);
+  return tr("tileQuote.line", { label, n });
+}
+
 /** A tile's face, drawn from the same data the deeds and engine use -- no board
  *  texture. The `#index` chip is the colour band (top), the name sits in the
- *  middle (≤ 2 pre-split lines), and the caption (price / dealer / draw /
- *  corner event) is centred on a common bottom baseline. CiRCLE carries its
- *  pass / stop notes in place of the caption. Sizes are fractions of the
- *  measured cell (`--cell-h` / `--cell-w` on `.ring`), so the scale holds from
- *  the narrow 1366 cells up to the wide 2560 ones. */
-function TileFace({ tile, cellW, cellH }: { tile: TileData; cellW: number; cellH: number }) {
+ *  middle (≤ 2 pre-split lines), and the caption (the viewer's standing quote
+ *  / dealer / draw / corner event) is centred on a common bottom baseline.
+ *  CiRCLE carries its pass / stop notes in place of the caption. Sizes are
+ *  fractions of the measured cell (`--cell-h` / `--cell-w` on `.ring`), so the
+ *  scale holds from the narrow 1366 cells up to the wide 2560 ones. */
+function TileFace({
+  tile,
+  quote,
+  cellW,
+  cellH,
+}: {
+  tile: TileData;
+  quote?: TileQuote | null;
+  cellW: number;
+  cellH: number;
+}) {
   const name = plain(tile.name);
   const corner = ["circle", "cafe", "edogawa", "ryuseido"].includes(tile.kind);
   const special = corner || tile.kind === "agent";
-  const caption = tile.price > 0 ? String(tile.price)
-    : tile.kind === "agent" ? tr("deed.dealer")
-    : tile.kind === "edogawa" ? tr("deed.draw")
-    : tile.kind === "cafe" || tile.kind === "ryuseido" ? tr("board.cornerEvent")
-    : "";
+  // A live quote wins; otherwise the old static price / kind caption (corners,
+  // dealer, and frames from an engine bundle that predates `tileQuotes`).
+  const caption = quote
+    ? quoteCaption(quote)
+    : tile.price > 0
+      ? String(tile.price)
+      : tile.kind === "agent"
+        ? tr("deed.dealer")
+        : tile.kind === "edogawa"
+          ? tr("deed.draw")
+          : tile.kind === "cafe" || tile.kind === "ryuseido"
+            ? tr("board.cornerEvent")
+            : "";
   const u = Math.min(cellH * 0.18, cellW * 0.17);
   // Matches `.tileName` / `.tileBody` horizontal padding.
   const avail = cellW - u * 0.12 * 2 - u * 0.08 * 2 - 2;
   const { tier, lines, boost } = fitName(name, u, avail, special);
+  const flowCls =
+    quote?.flow === "mustPay"
+      ? s.flowMustPay
+      : quote?.flow === "receive"
+        ? s.flowReceive
+        : quote
+          ? s.flowMayPay
+          : undefined;
   return (
     <>
       <span
@@ -215,7 +260,13 @@ function TileFace({ tile, cellW, cellH }: { tile: TileData; cellW: number; cellH
             <span>{tr("board.circlePassing")}</span>
             <span>{tr("board.circleStopping")}</span>
           </span>
-        ) : <span className={s.tileCaption}>{caption}</span>}
+        ) : (
+          <span
+            className={cx(s.tileCaption, flowCls, caption.length > 5 && s.captionLong)}
+          >
+            {caption}
+          </span>
+        )}
       </span>
     </>
   );
@@ -290,6 +341,8 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
             const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
             const marks = (S.marks ?? []).filter((x) => x.tile === i).slice(0, 3);
             const embers = S.embers?.[i] ?? 0;
+            const quote = m.v.tileQuotes?.[i] ?? null;
+            const quoteTipLine = quote ? quoteTip(quote) : t.price > 0 ? `${tr("deed.price")} ${t.price}` : "";
             const extras = (
               <>
                 <div className={s.houses}>{Array.from({ length: Math.min(S.houses[i] ?? 0, 4) }, (_, k) => <img key={k} src={sceneImg("house")} alt="" />)}</div>
@@ -329,10 +382,10 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
                 className={cls}
                 style={style}
                 aria-label={`${t.index}. ${plain(t.name)}`}
-                title={`${t.index}. ${plain(t.name)}${t.price > 0 ? ` · ${t.price}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
+                title={`${t.index}. ${plain(t.name)}${quoteTipLine ? ` · ${quoteTipLine}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
                 onClick={() => onTile(i)}
               >
-                <TileFace tile={t} cellW={cellW} cellH={cellH} />
+                <TileFace tile={t} quote={quote} cellW={cellW} cellH={cellH} />
                 {owner >= 0 && <span className={s.ownerStrip} />}
                 {extras}
               </button>

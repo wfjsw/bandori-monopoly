@@ -117,6 +117,13 @@
   color: color-mix(in srgb, #25342f 74%, #fff);
   font-variant-numeric: tabular-nums;
 }
+/* Money-direction cue (`TileQuote.flow`): colour is the primary channel, the
+   − / + glyph the redundant one. Long RiNG ranges step the size down one notch
+   so `20–400` still fits the narrow 1366 cell. */
+.flowMustPay { color: var(--money-pay); }
+.flowMayPay { color: var(--money-optional); }
+.flowReceive { color: var(--money-receive); }
+.captionLong { font-size: calc(var(--u) * 0.68); }
 /* CiRCLE pass / stop notes: same baseline slot as the caption, two centred lines. */
 .tileNote {
   flex: 0 0 auto;

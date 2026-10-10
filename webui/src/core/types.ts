@@ -126,6 +126,24 @@ export interface MatchState {
   eventDeck: number; eventTop: string[]; eventDiscard: string[]; eventActive: ActiveEvent[]; prompt: MatchPrompt; vote: MatchVote; events: MatchEvent[];
   endReason: string; winner: number; scoreMoney: number; scoreProperty: number; scoreHouses: number;
 }
+/**
+ * Which way money flows for the viewer of a {@link TileQuote}. The UI's colour
+ * channel (`--money-pay` / `--money-optional` / `--money-receive`); `kind`
+ * carries the tooltip wording.
+ */
+export type MoneyFlow = "mustPay" | "mayPay" | "receive";
+/** What a {@link TileQuote}'s number means. See `purchase::tile_quotes`. */
+export type TileQuoteKind = "buy" | "build" | "rent" | "ownRent" | "forceBuy" | "redeem";
+/**
+ * One tile's "what to expect" number, from the viewer's seat. `value` is the
+ * figure; `max` is the upper bound of a dice range (RiNG rent).
+ */
+export interface TileQuote {
+  kind: TileQuoteKind;
+  flow: MoneyFlow;
+  value: number;
+  max?: number;
+}
 /** What one player sees: the shared state plus their own hand and deck. */
 export interface MatchView {
   state: MatchState;
@@ -150,6 +168,13 @@ export interface MatchView {
    * as a reserve check -- never legality. `0` = unknown / assume free.
    */
   estCost?: number[];
+  /**
+   * Parallel to the board's tiles: the standing "what to expect" caption
+   * (`Match::tile_quotes`). `null` / missing entry = no quote (a corner /
+   * dealer tile, or a frame from an older engine bundle -- fall back to the
+   * static `tile.price` caption).
+   */
+  tileQuotes?: (TileQuote | null)[];
 }
 
 export interface ScoreWeights { money: number; property: number; houses: number }
