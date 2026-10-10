@@ -16,7 +16,7 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
     "RAS:Change the world",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::PassTile], "actor == owner && move.main && card.placed && slot('change_world_turn') != turn_key", None, pass_tile),
+        On::Hook(&[HookKind::PassTile], "actor == owner && move.main && card.placed && slot('change_world_turn') == turn_key", None, pass_tile),
         On::Hook(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner", None, pay_choose),
         On::Hook(&[HookKind::PayAfter], "card.placed && pay_is_rent && target == owner", None, pay_after),
     ],

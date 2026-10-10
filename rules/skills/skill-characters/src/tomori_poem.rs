@@ -31,7 +31,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], "actor == owner && is_ring(tile.id)", None, on_pass),
         On::Hook(&[HookKind::SettleBefore], "", None, before_settle),
         On::Hook(&[HookKind::PayMul], "", Some(half), on_pay),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )
     .legacy(&[(1, legacy_mine), (4, legacy_mine)]);
@@ -134,9 +134,6 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
 
 /// 「并在自己的下回合结束时[触发结算]」 -- the owed settle.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, DUE) == 0 {
-        return Ok(());
-    }
     state::set(player_id, DUE, 0);
     let at = ctx::player_pos(player_id);
     if at < 0 {

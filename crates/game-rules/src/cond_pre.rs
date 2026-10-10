@@ -1116,6 +1116,14 @@ pub const SLOT_NAMES: &[&str] = &[
     "diceCastActive",
     // `Change the world` once-per-turn tag (`ctx::set_slot(player_id, SLOT_TURN, turn_key)`).
     "change_world_turn",
+    // `here_the_world` held-cards count (`ctx::set_slot(player_id, SLOT_HELD_LEN, n)`).
+    "here_held_len",
+    // `（灯）诗超绊` due-payment latch (`state::set(player_id, DUE, ...)`).
+    "skill.tomoriPoem.due",
+    // `（莉莉）坚定决心` passed-this-turn latch (`state::set(player_id, PASSED, ...)`).
+    "skill.rimiResolve.passed",
+    // `（鸫）素日日常` owed-money latch (`state::set(player_id, OWED, ...)`).
+    "skill.tsugumiPlain.owed",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read

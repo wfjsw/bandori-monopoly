@@ -90,9 +90,9 @@ pub const HERE_THE_WORLD: CardDef = CardDef::new(
             counteract,
         ),
         // 规则书（2）: the hold at the owner's next draw (C# `CardHereTheWorld.Drew`).
-        On::Hook(&[HookKind::Drew], "actor == owner && card.placed", None, drew),
+        On::Hook(&[HookKind::Drew], "actor == owner && card.placed && slot('here_held_len') <= 0", None, drew),
         // 规则书（2）: the crystal tick at the owner's turn start (C# `TurnStart` -> `Tick`).
-        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
+        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed && slot('here_held_len') > 0", None, turn_start),
     ],
 )
 .legacy(&[(0, legacy_can_counteract)]);
@@ -136,12 +136,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// watches the owner's draw batch (`Fx.Drew`, `t.value` = count) and holds the
 /// first card face-down with 3 miracle crystals.
 fn drew(player_id: i32) -> card_sdk::Asked {
-    // The `pre` already filters to the owner's own draws on a placed copy
-    // (`actor == owner && card.placed`); the category owns `HookKind::Drew`.
-    // C# `if (... || Mem.ContainsKey("held"))` -- already holding one.
-    if ctx::slot(player_id, SLOT_HELD_LEN) > 0 {
-        return Ok(());
-    }
     let got = trigger::value();
     if got <= 0 {
         return Ok(());
@@ -170,11 +164,6 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 /// 加入手牌，并使此卡使用者抽一张卡。」 -- C# `CardHereTheWorld.TurnStart` -> `Tick`
 /// (MatchHost.cs:11375-11406).
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    // The `pre` already filters to the owner's own turn start on a placed copy
-    // (`actor == owner && card.placed`); the category owns `HookKind::TurnStart`.
-    if ctx::slot(player_id, SLOT_HELD_LEN) <= 0 {
-        return Ok(());
-    }
     // C# `AddCrystals(-1, "回合开始")`.
     let left = ctx::add_crystals(-1, 0)?;
     if left > 0 {
