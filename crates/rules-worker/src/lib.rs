@@ -327,28 +327,41 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
         }
 
         // Read-only ops: the blob comes back unchanged, so it is not echoed.
+        // `needExtras` (default false): compute the per-viewer `view_extra`
+        // fields (`aiAnswer` / `playable` / `estCost` / `skills`). A human
+        // client derives those itself from the seat view (the seat-view
+        // engine, `docs/BOT.md` §1) -- skipping here is pure saved work. The
+        // bot service asks for them.
         "view" => {
             let m = restore(ctx, req)?;
             let member = req.get("member").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let need_extras = req
+                .get("needExtras")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
             let state = m.state();
             let player_id = state.player_of(member);
-            let extra = m.view_extra(member);
-            Ok(json!({
-                "ok": true,
-                "view": {
-                    "state": state,
-                    "hand": m.hand_of(member),
-                    "handNotes": m.hand_notes_of(member),
-                    "draw": m.draw_of(member),
-                    "you": member,
-                    "playerId": player_id,
-                    "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(Value::Null),
-                    "playable": extra.get("playable").cloned().unwrap_or(Value::Null),
-                    "estCost": extra.get("estCost").cloned().unwrap_or(Value::Null),
-                    "tileQuotes": m.tile_quotes(member),
-                    "skills": extra.get("skills").cloned().unwrap_or(Value::Null),
-                }
-            }))
+            let extra = if need_extras {
+                m.view_extra(member)
+            } else {
+                Value::Null
+            };
+            let mut view = json!({
+                "state": state,
+                "hand": m.hand_of(member),
+                "handNotes": m.hand_notes_of(member),
+                "draw": m.draw_of(member),
+                "you": member,
+                "playerId": player_id,
+                "tileQuotes": m.tile_quotes(member),
+            });
+            if need_extras {
+                view["aiAnswer"] = extra.get("aiAnswer").cloned().unwrap_or(Value::Null);
+                view["playable"] = extra.get("playable").cloned().unwrap_or(Value::Null);
+                view["estCost"] = extra.get("estCost").cloned().unwrap_or(Value::Null);
+                view["skills"] = extra.get("skills").cloned().unwrap_or(Value::Null);
+            }
+            Ok(json!({ "ok": true, "view": view }))
         }
         "changed" => {
             let mut m = restore(ctx, req)?;

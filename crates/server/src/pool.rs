@@ -372,8 +372,15 @@ impl Pool {
         Out::unit(v)
     }
 
-    pub fn view(&self, state: &str, member: i32) -> Result<Value, String> {
-        let v = self.call(json!({"op": "view", "state": state, "member": member}))?;
+    /// One member's view frame. `need_extras` asks for the per-viewer
+    /// `view_extra` fields (`aiAnswer` / `playable` / `estCost` / `skills`).
+    /// Human clients compute those themselves from the seat view (the
+    /// seat-view engine, `docs/BOT.md` §1) -- pass `false` and the worker
+    /// skips the work. The bot service passes `true`.
+    pub fn view(&self, state: &str, member: i32, need_extras: bool) -> Result<Value, String> {
+        let v = self.call(
+            json!({"op": "view", "state": state, "member": member, "needExtras": need_extras}),
+        )?;
         v.get("view")
             .cloned()
             .ok_or_else(|| "worker returned no view".to_string())

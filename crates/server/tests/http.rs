@@ -604,7 +604,7 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
         let room = server.room(&id).unwrap();
         let r = room.lock().unwrap();
         let m = r.game.as_ref().unwrap();
-        let v = m.view(b_member as i32).unwrap();
+        let v = m.view(b_member as i32, false).unwrap();
         let pid = v["playerId"].as_i64().expect("member seated") as usize;
         assert!(
             v["state"]["players"][pid]["ai"].as_bool().expect("player"),
@@ -627,7 +627,7 @@ async fn silent_players_are_handed_to_the_ai_and_come_back() {
     let room = server.room(&id).unwrap();
     let r = room.lock().unwrap();
     let m = r.game.as_ref().unwrap();
-    let v = m.view(b_member as i32).unwrap();
+    let v = m.view(b_member as i32, false).unwrap();
     let pid = v["playerId"].as_i64().expect("member seated") as usize;
     assert!(
         !v["state"]["players"][pid]["ai"].as_bool().expect("player"),
@@ -1581,7 +1581,7 @@ async fn the_openings_never_reach_a_client_payload() {
         let r = room.lock().unwrap();
         let m = r.game.as_ref().expect("match started");
         for member in r.info.members.iter().map(|x| x.id) {
-            let v = m.view(member).unwrap();
+            let v = m.view(member, true).unwrap();
             payloads.push(v.to_string());
         }
     }

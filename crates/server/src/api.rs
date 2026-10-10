@@ -416,21 +416,23 @@ pub struct MatchView {
     /// ([`game_core::engine::Match::tile_quotes`]). Optional so a frame from
     /// an older worker still deserializes.
     ///
-    /// NB: the worker's `aiAnswer` / `playable` / `estCost` extras are **not**
-    /// re-typed here and are dropped on the online path today. Whether
-    /// `aiAnswer` may reach a human seat online is a fairness question
-    /// (`docs/FAIRNESS.md`) that is still open.
+    /// NB: the worker's `aiAnswer` / `playable` / `estCost` / `skills` extras
+    /// are **not** re-typed here and are dropped on the online path. A human
+    /// client derives those itself from the seat view (the seat-view engine,
+    /// `docs/BOT.md` §1, `bot-glue`'s `extras`) -- what it already legitimately
+    /// knows. Whether `aiAnswer` may reach a human seat online is a fairness
+    /// question (`docs/FAIRNESS.md`); the client-side computation answers it:
+    /// the seat's own prompt is its own business, and the server never ships
+    /// another seat's entry.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tile_quotes: Option<Vec<Option<game_core::state::TileQuote>>>,
-    /// The member's pressable skills (`Match::view_extra`'s `skills`).
-    /// Absent when the worker predates the field.
-    #[serde(default)]
-    pub skills: Vec<game_core::state::SkillAction>,
 }
 
 /// Ask the worker for one member's view. Blocking; see `pool`.
 pub fn match_view(m: &crate::room::MatchHandle, member: i32) -> ApiResult<MatchView> {
-    let v = m.view(member).map_err(|e| ApiError::bad(e.as_str()))?;
+    // Human clients compute the per-viewer extras themselves (the seat-view
+    // engine, `docs/BOT.md` §1) -- do not pay the worker for them here.
+    let v = m.view(member, false).map_err(|e| ApiError::bad(e.as_str()))?;
     serde_json::from_value(v).map_err(|e| ApiError::bad(format!("view: {e}").as_str()))
 }
 

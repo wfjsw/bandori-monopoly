@@ -299,8 +299,11 @@ impl MatchHandle {
         self.run(|_| Input::Back { m: member }, |s, e| e.member_back(s, member))
     }
 
-    pub fn view(&self, member: i32) -> Result<Value, String> {
-        self.peek(|s, e| e.view(s, member))
+    /// One member's view frame. `need_extras` = the caller wants the
+    /// per-viewer `view_extra` fields (the bot service does; a human client
+    /// computes them itself from the seat view).
+    pub fn view(&self, member: i32, need_extras: bool) -> Result<Value, String> {
+        self.peek(|s, e| e.view(s, member, need_extras))
     }
 
     pub fn events(&self, since: i32) -> Result<Vec<Value>, String> {
@@ -427,7 +430,7 @@ impl MatchHandle {
         // Any seated view carries the whole public `MatchState`; the seats'
         // ranks and scores are what the results screen showed.
         let member = members.first().copied().unwrap_or(0);
-        let view = self.engine.view(&blob, member)?;
+        let view = self.engine.view(&blob, member, false)?;
         let st: game_core::state::MatchState = serde_json::from_value(
             view.get("state").cloned().unwrap_or(Value::Null),
         )
