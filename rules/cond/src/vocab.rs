@@ -226,6 +226,16 @@ pub const VOCAB: &[Name] = &[
         doc: "the trigger's card id hash; comparable to `card.id`",
     },
     Name {
+        cel: "counter_name",
+        aliases: &["trigger_name"],
+        flat: "counter_name",
+        scope: Scope::Window,
+        ty: Ty::Int,
+        get: |v| v.counter_name(),
+        fx: NO_FX,
+        doc: "the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling",
+    },
+    Name {
         cel: "tile.id",
         aliases: &[],
         flat: "tile_id",
@@ -384,7 +394,7 @@ pub const VOCAB: &[Name] = &[
         ty: Ty::Int,
         get: |v| v.owner_crystals(),
         fx: NO_FX,
-        doc: "the owner's band crystals",
+        doc: "the owner's band crystals (the band-skill pool, not on-card)",
     },
     Name {
         cel: "owner.hand",
@@ -514,7 +524,7 @@ pub const VOCAB: &[Name] = &[
         ty: Ty::Int,
         get: |v| v.card_cp(),
         fx: NO_FX,
-        doc: "crystals on the candidate instance",
+        doc: "crystals on the candidate instance (legacy name)",
     },
     // -- functions ----------------------------------------------------------
     Name {
@@ -558,6 +568,40 @@ pub const VOCAB: &[Name] = &[
             fill: |v| v.move_tag_table(),
         },
         doc: "move.tag('name') -> the move's tag counter; missing = 0",
+    },
+    Name {
+        cel: "card_counter",
+        aliases: &["card.counter"],
+        flat: "card_counter",
+        scope: Scope::Func { arity: 1, cand: true },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::StrInt {
+            var: "_card_counters",
+            missing: 0,
+            fill: |v| v.card_counter_table(),
+        },
+        doc: "card.counter('name') -> the candidate instance's named counter ('cp' / 'crystals' / any); missing = 0",
+    },
+    Name {
+        cel: "counter_is",
+        aliases: &[],
+        flat: "counter_is",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Bool,
+        get: NO_GET,
+        fx: Fx::IntHas {
+            var: "_counter_name",
+            fill: |v| {
+                let h = v.counter_name();
+                if h == 0 {
+                    Vec::new()
+                } else {
+                    vec![h]
+                }
+            },
+        },
+        doc: "counter_is('name') -> this window's `Trigger.name` is that counter / message",
     },
     Name {
         cel: "tile_named",
@@ -662,7 +706,7 @@ pub const VOCAB: &[Name] = &[
             var: "_crystals",
             field: |v, s| v.crystals(s),
         },
-        doc: "crystals(p) -> seat's band crystals",
+        doc: "crystals(p) -> seat's band crystals (the band-skill pool)",
     },
     Name {
         cel: "hand",

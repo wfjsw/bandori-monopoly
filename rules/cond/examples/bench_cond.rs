@@ -47,6 +47,7 @@ fn window() -> WindowCtx {
         turn_player: 1,
         turn_key: 7,
         trigger_card: 0,
+        name: String::new(),
         players: (0..4)
             .map(|i| PlayerSnap {
                 money: 500 + i * 100,

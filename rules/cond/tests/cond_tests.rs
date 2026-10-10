@@ -47,6 +47,7 @@ fn win() -> WindowCtx {
         turn_player: 1,
         turn_key: 7,
         trigger_card: 0,
+        name: String::new(),
         players: vec![
             PlayerSnap {
                 money: 1200,
@@ -414,6 +415,44 @@ fn trigger_card_matches_card_id() {
     let mut w = win();
     w.trigger_card = lit;
     assert!(compile(&format!("trigger_card == {lit}")).unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn counter_name_and_counter_is() {
+    // `counter_name` is the `id_of` hash of `Trigger.name`; `counter_is('…')`
+    // is the string spelling (a `CounterChanged` counter name, or an
+    // `On::Message` message name).
+    let mut w = win();
+    w.name = "cp".to_string();
+    assert!(compile("counter_is('cp')").unwrap().eval(&w, &cand(0)));
+    assert!(!compile("counter_is('crystals')").unwrap().eval(&w, &cand(0)));
+    // The hash form mirrors `trigger_card`.
+    let h = rules_cond::id_of("cp");
+    assert!(compile(&format!("counter_name == {h}")).unwrap().eval(&w, &cand(0)));
+    // Empty name -> 0, and `counter_is` is false for every spelling.
+    assert!(!compile("counter_is('cp')").unwrap().eval(&win(), &cand(0)));
+}
+
+#[test]
+fn card_counter_lookup() {
+    // `card.counter('name')` is the candidate instance's named counter:
+    // `"cp"` / `"crystals"` map to the two on-card wire names, anything else
+    // to `FieldCard::counters`. Missing = 0. The CEL spelling is
+    // `card.counter('…')`; the flat `card_counter('…')` is the same call.
+    let mut c = cand(0);
+    c.card_counters.insert("cp".to_string(), 6);
+    c.card_counters.insert("crystals".to_string(), 2);
+    c.card_counters.insert("星星贴纸".to_string(), 3);
+    assert!(compile("card.counter('cp') == 6").unwrap().eval(&win(), &c));
+    assert!(compile("card.counter('crystals') == 2").unwrap().eval(&win(), &c));
+    assert!(compile("card.counter('星星贴纸') == 3").unwrap().eval(&win(), &c));
+    assert!(compile("card_counter('cp') == 6").unwrap().eval(&win(), &c));
+    // Missing names answer 0 (same as `tok`).
+    assert!(compile("card.counter('抹茶芭菲') == 0").unwrap().eval(&win(), &c));
+    // Legacy `card.cp` reads the `card_cp` snapshot field (crystals), not
+    // the name-keyed table -- same meaning, different storage row.
+    c.card_cp = 2;
+    assert!(compile("card.cp == 2").unwrap().eval(&win(), &c));
 }
 
 #[test]

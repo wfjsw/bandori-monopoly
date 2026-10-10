@@ -189,6 +189,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             id_of(&self.trigger.card)
         }
     }
+    fn counter_name(&self) -> i64 {
+        if self.trigger.name.is_empty() {
+            0
+        } else {
+            id_of(&self.trigger.name)
+        }
+    }
 
     // -- candidate / owner --------------------------------------------------
     fn owner(&self) -> i64 {
@@ -256,6 +263,13 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
     fn card_cp(&self) -> i64 {
         if self.owner_seat >= 0 {
             self.src.card_crystals(self.owner_seat, self.card) as i64
+        } else {
+            0
+        }
+    }
+    fn card_counter(&self, name: &str) -> i64 {
+        if self.owner_seat >= 0 {
+            self.src.card_counter(self.owner_seat, self.card, name) as i64
         } else {
             0
         }
@@ -372,6 +386,19 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
             })
             .collect()
     }
+    fn card_counter_table(&self) -> Vec<(String, i64)> {
+        if self.owner_seat < 0 {
+            return Vec::new();
+        }
+        self.src
+            .card_counter_names(self.owner_seat, self.card)
+            .into_iter()
+            .map(|n| {
+                let v = self.src.card_counter(self.owner_seat, self.card, &n) as i64;
+                (n, v)
+            })
+            .collect()
+    }
     fn blocked_bands(&self) -> Vec<i64> {
         Vec::new()
     }
@@ -446,6 +473,23 @@ pub trait SnapSrc {
     fn tok_names(&self, player_id: i32, prefix: &str) -> Vec<String>;
     fn owned_count(&self, player_id: i32) -> i32;
     fn card_crystals(&self, player_id: i32, card: &str) -> i32;
+    /// Named counter `name` on the instance of `card` at `player_id`
+    /// (`"cp"` / `"crystals"` / any `FieldCard::counters` key). Missing = 0.
+    fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
+        let _ = (player_id, card, name);
+        0
+    }
+    /// Non-zero named counters on that instance (`card.counter('name')`;
+    /// missing = 0). The two on-card wire names are always listed when
+    /// non-zero. A host that tracks extra `FieldCard::counters` keys
+    /// overrides this.
+    fn card_counter_names(&self, player_id: i32, card: &str) -> Vec<String> {
+        let _ = (player_id, card);
+        vec![
+            game_core::state::counter::CP.to_string(),
+            game_core::state::counter::CRYSTALS.to_string(),
+        ]
+    }
     fn tile_owner(&self, tile: i32) -> i32;
     fn houses_of(&self, tile: i32) -> i32;
     fn mortgaged_of(&self, tile: i32) -> i32;
@@ -558,6 +602,10 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
         CardWorld::card_crystals(self, player_id, card)
+    }
+    #[inline]
+    fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
+        CardWorld::card_counter(self, player_id, card, name)
     }
     #[inline]
     fn tile_owner(&self, tile: i32) -> i32 {
@@ -1018,6 +1066,7 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         turn_player: world.turn_player() as i64,
         turn_key: world.turn_key() as i64,
         trigger_card: if t.card.is_empty() { 0 } else { id_of(&t.card) },
+        name: t.name.clone(),
         players,
         tile_ids,
         circle_tiles,
@@ -1094,6 +1143,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         turn_key: world.turn_key() as i64,
         // No trigger: no card. `trigger_card == card.id` is false here.
         trigger_card: 0,
+        // No trigger: no counter / message name either.
+        name: String::new(),
         players,
         tile_ids,
         circle_tiles,
@@ -1154,6 +1205,14 @@ pub fn fill_candidate<S: SnapSrc>(
         card_id: id_of(card),
         card_placed: placed,
         card_cp: world.card_crystals(p, card) as i64,
+        card_counters: world
+            .card_counter_names(p, card)
+            .into_iter()
+            .map(|n| {
+                let v = world.card_counter(p, card, &n) as i64;
+                (n, v)
+            })
+            .collect(),
         slots: Default::default(),
         // Non-zero named counters only: `tok('name')` missing = 0, so the
         // zero entries are exactly the absent ones. Same data

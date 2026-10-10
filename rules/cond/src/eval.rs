@@ -273,10 +273,25 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
         }
         Fx::IntHas { var, .. } => {
             let var = var.to_string();
+            // The arg is an int id or a string name: a string hashes through
+            // `id_of` -- the same name-stable id `counter_is('cp')` /
+            // `character_is(p, "名")` compare against. Int callers
+            // (`chain_has(roll)`, `is_circle(t)`, `blocked(band)`) pass the
+            // wire value directly and are unaffected.
             ctx.add_function(
                 fname,
-                move |ftx: &FunctionContext, x: i64| -> Result<bool, ExecutionError> {
-                    Ok(list_contains(ftx, &var, x))
+                move |ftx: &FunctionContext, x: Value| -> Result<bool, ExecutionError> {
+                    let want = match &x {
+                        Value::Int(i) => *i,
+                        Value::String(s) => crate::id_of(s.as_str()),
+                        other => {
+                            return Err(ExecutionError::FunctionError {
+                                function: fname.into(),
+                                message: format!("expected int or string id, got {other:?}"),
+                            })
+                        }
+                    };
+                    Ok(list_contains(ftx, &var, want))
                 },
             )
             .expect(fname);

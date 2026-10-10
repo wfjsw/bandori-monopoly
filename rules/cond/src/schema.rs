@@ -203,8 +203,9 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                 }
                 // `effect.has(x)` / `chain.has(x)` -> `chain_has(x)`
                 // `effect.hits(x)` / `chain.hits(x)` -> `chain_hits(x)`
-                // `move.tag(x)` -> `move_tag(x)` (any `root.name` whose
-                // `root.name` spelling is a VOCAB Func rewrites to its flat).
+                // `move.tag(x)` -> `move_tag(x)`, `card.counter(x)` ->
+                // `card_counter(x)`: any `root.name` whose spelling is a VOCAB
+                // Func rewrites to its flat.
                 if let Some(target) = &call.target {
                     if let Expr::Ident(root) = &target.expr {
                         if (root == "effect" || root == "chain")
@@ -225,7 +226,8 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                                 }),
                             });
                         }
-                        // General dotted function: `move.tag(x)` and friends.
+                        // General dotted function: `move.tag(x)`,
+                        // `card.counter(x)` and friends.
                         let dotted = format!("{root}.{name}");
                         if let Some(n) = vocab::by_cel(&dotted) {
                             if let Scope::Func { arity, .. } = n.scope {

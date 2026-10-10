@@ -76,6 +76,11 @@ pub trait CondView {
     /// [`CondView::card_id`] -- comparable to `card.id` and to a card-id
     /// literal (`id_of("…")`). `0` when the trigger carries no card.
     fn trigger_card(&self) -> i64;
+    /// The trigger's counter / message name hash (`counter_name`), same
+    /// encoding as [`crate::id_of`] -- `Trigger.name` on a `CounterChanged`
+    /// hook (the counter name) or an `On::Message` entry (the message name).
+    /// `0` when empty. `counter_is('cp')` is the string spelling.
+    fn counter_name(&self) -> i64;
 
     // -- candidate / owner --------------------------------------------------
     /// The candidate's owner seat (`owner` / `owner.id`).
@@ -99,8 +104,15 @@ pub trait CondView {
     fn card_id(&self) -> i64;
     /// Is the candidate's running instance in play (`card.placed`)?
     fn card_placed(&self) -> bool;
-    /// Crystals on the candidate instance (`card.cp`).
+    /// Crystals on the candidate instance (`card.cp`, the legacy name --
+    /// it reads **crystals**, not CP).
     fn card_cp(&self) -> i64;
+    /// Named counter `name` on the candidate instance (`card.counter('name')`).
+    /// `"cp"` → `FieldCard::cp`, `"crystals"` → `FieldCard::crystals`, else
+    /// `FieldCard::counters[name]`. Missing = 0. (The wire names of
+    /// `card-sdk`'s `counter` module; kept as a plain `&str` here so
+    /// `rules-cond` stays free of the SDK.)
+    fn card_counter(&self, name: &str) -> i64;
     /// Per-card latch (`slot(name)`); missing = 0.
     fn slot(&self, name: &str) -> i64;
     /// Per-card token counter (`tok('name')`, the guest's `ctx::tok(owner,
@@ -146,6 +158,10 @@ pub trait CondView {
     fn slot_table(&self) -> Vec<(String, i64)>;
     /// Every `tok('name')` counter (non-zero ones; missing = 0).
     fn tok_named_table(&self) -> Vec<(String, i64)>;
+    /// Every `card.counter('name')` counter on the candidate instance
+    /// (non-zero ones; missing = 0). The two on-card wire names (`"cp"` /
+    /// `"crystals"`) are always present when non-zero.
+    fn card_counter_table(&self) -> Vec<(String, i64)>;
     /// Bands blocked for this candidate.
     fn blocked_bands(&self) -> Vec<i64>;
     /// Every `tile_named` spelling the host registers.

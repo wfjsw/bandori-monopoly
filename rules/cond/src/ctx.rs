@@ -129,6 +129,10 @@ pub struct WindowCtx {
     /// The trigger's card id hash (`trigger_card`), same encoding as
     /// [`CandidateCtx::card_id`]. `0` when the trigger carries no card.
     pub trigger_card: i64,
+    /// `Trigger.name` -- the counter name on a `CounterChanged` hook, or the
+    /// message name on an `On::Message` entry. Empty otherwise. Binds
+    /// `counter_name` (a hash) / `counter_is('…')`.
+    pub name: String,
     /// Index = seat id.
     pub players: Vec<PlayerSnap>,
     /// `tile_named(name) -> id`, resolved at load. Empty is fine if no
@@ -183,7 +187,14 @@ pub struct CandidateCtx {
     /// `card.*`
     pub card_id: i64,
     pub card_placed: bool,
+    /// Crystals on the candidate instance (`card.cp`, the legacy name -- it
+    /// reads **crystals**, not CP).
     pub card_cp: i64,
+    /// `card.counter('name')` lookup -- the candidate instance's named
+    /// counters (`"cp"` / `"crystals"` map to `FieldCard::cp` /
+    /// `FieldCard::crystals`, anything else to `FieldCard::counters`).
+    /// Missing name = `0`.
+    pub card_counters: BTreeMap<String, i64>,
     /// `slot(name)` lookup. Missing name evaluates to `0` (matches the
     /// "unset slot" guards such as `slot('asUsualTurn') != turn_key`).
     pub slots: BTreeMap<String, i64>,
@@ -197,6 +208,10 @@ pub struct CandidateCtx {
 impl CandidateCtx {
     pub fn slot(&self, name: &str) -> i64 {
         self.slots.get(name).copied().unwrap_or(0)
+    }
+
+    pub fn card_counter(&self, name: &str) -> i64 {
+        self.card_counters.get(name).copied().unwrap_or(0)
     }
 
     pub fn tok_named(&self, name: &str) -> i64 {

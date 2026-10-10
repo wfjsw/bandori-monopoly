@@ -101,6 +101,13 @@ impl CondView for SnapshotView<'_> {
     fn trigger_card(&self) -> i64 {
         self.win.trigger_card
     }
+    fn counter_name(&self) -> i64 {
+        if self.win.name.is_empty() {
+            0
+        } else {
+            crate::id_of(&self.win.name)
+        }
+    }
     fn owner(&self) -> i64 {
         self.cand.owner
     }
@@ -151,6 +158,9 @@ impl CondView for SnapshotView<'_> {
     }
     fn card_cp(&self) -> i64 {
         self.cand.card_cp
+    }
+    fn card_counter(&self, name: &str) -> i64 {
+        self.cand.card_counter(name)
     }
     fn slot(&self, name: &str) -> i64 {
         self.cand.slot(name)
@@ -224,6 +234,13 @@ impl CondView for SnapshotView<'_> {
     fn tok_named_table(&self) -> Vec<(String, i64)> {
         self.cand
             .tok_names
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect()
+    }
+    fn card_counter_table(&self) -> Vec<(String, i64)> {
+        self.cand
+            .card_counters
             .iter()
             .map(|(k, v)| (k.clone(), *v))
             .collect()
