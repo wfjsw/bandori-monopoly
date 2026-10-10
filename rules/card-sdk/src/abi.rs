@@ -435,11 +435,11 @@ impl MarkFilter {
         }
     }
     pub fn kind(mut self, k: &str) -> Self {
-        self.kind = k.to_string();
+        self.kind = String::from(k);
         self
     }
     pub fn category(mut self, c: &str) -> Self {
-        self.category = c.to_string();
+        self.category = String::from(c);
         self
     }
     pub fn owner(mut self, o: i32) -> Self {
