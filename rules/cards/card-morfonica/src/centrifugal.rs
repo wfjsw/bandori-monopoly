@@ -23,7 +23,10 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             Some(can_counteract),
             counteract,
         ),
-        On::Gate(&[GateKind::ImmuneAll], "", None, immune_all),
+        // The body-top `trigger::player_id() != player_id` early-out is
+        // `actor == owner` (`pre::MINE`): the gate only claims immunity for
+        // the seat it protects.
+        On::Gate(&[GateKind::ImmuneAll], card_sdk::pre::MINE, None, immune_all),
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 );
@@ -55,13 +58,9 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// `Fx.ImmuneAll` (C# `CardCentrifugal.ImmuneAll`): while placed, the owner is
 /// untouchable by other players' effects. The engine checks ImmuneAll before
 /// targeting, before abnormals, and before card-driven payments, so this one
-/// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`).
+/// hook covers all three (C# `AnyFx(seat, f => f.ImmuneAll(seat))`). The
+/// "only our own seat" check is the entry's condition (`pre::MINE`).
 fn immune_all(player_id: i32) -> card_sdk::Asked {
-    // The hook runs on every placed card across all players; only claim
-    // immunity for our own seat (`t.player` = the protected seat).
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
     trigger::set_cancelled();
     ctx::log(
         player_id,

@@ -20,7 +20,10 @@ pub const DETOUR: CardDef = CardDef::new(
         // G4: kind (MoveRoll) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
         On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
-        On::RollPlan("", None, next_roll),
+        // The body-top applicability check (`state::get(NEXT_ROLL) == 0`) is
+        // the condition now: the routine runs -- and flashes -- only when the
+        // counteraction armed it.
+        On::RollPlan("slot('detour_next_roll') != 0", None, next_roll),
         On::AtEnd("", None, clear_no_reward),
     ],
 )
@@ -133,11 +136,9 @@ const NEXT_ROLL: &str = "detour_next_roll";
 
 /// 规则书(2): 「下一次的移动掷骰变更为1d6」 -- `RollPlan` is the moment the dice
 /// plan is being built, so this is where the override belongs. `set_base_dice`
-/// replaces the table; 1d6 is the clause's.
+/// replaces the table; 1d6 is the clause's. The `NEXT_ROLL == 0` early-out is
+/// the entry's condition (`slot('detour_next_roll') != 0`).
 fn next_roll(player_id: i32) -> card_sdk::Asked {
-    if ctx::state::get(player_id, NEXT_ROLL) == 0 {
-        return Ok(());
-    }
     ctx::state::set(player_id, NEXT_ROLL, 0);
     plan::set_base_dice(1, 6, "detour");
     Ok(())

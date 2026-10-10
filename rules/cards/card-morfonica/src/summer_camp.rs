@@ -19,7 +19,16 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
         On::Play("", None, summer_camp),
-        On::Gate(&[GateKind::Untargetable], "", None, untargetable),
+        // The body-top applicability checks are the condition now: only our own
+        // seat, and only against another player's card (C#
+        // `if (seat != Seat || by == Seat) return false;`). `by` binds -1 when
+        // the targeting is not card-caused, so `by >= 0` is "there is a card".
+        On::Gate(
+            &[GateKind::Untargetable],
+            "actor == owner && by >= 0 && by != owner",
+            None,
+            untargetable,
+        ),
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 );
@@ -42,18 +51,9 @@ fn summer_camp(player_id: i32) -> card_sdk::Asked {
 
 /// `Fx.Untargetable` (C# `CardSummerCamp.Untargetable`): while placed, only the
 /// owner's own effects may target them. Counts negations for the draw gate.
+/// Applicability is the entry's condition (`actor == owner && by >= 0 &&
+/// by != owner` -- C# `if (seat != Seat || by == Seat) return false;`).
 fn untargetable(player_id: i32) -> card_sdk::Asked {
-    // The hook runs on every placed card across all players; only guard our own
-    // seat (`t.player` = the target).
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
-    // 规则书: 「只会被自己发动的效果指定」 -- C# `if (seat != Seat || by == Seat)
-    //   return false;` self-targeting passes (the engine already allows it).
-    let by = trigger::by_card();
-    if by.is_none_or(|b| b == player_id) {
-        return Ok(());
-    }
     // C# `Mem["blocked"] = Blocked + 1; return true;`.
     ctx::inc_slot(player_id, SLOT_BLOCKED, 1);
     trigger::set_cancelled();

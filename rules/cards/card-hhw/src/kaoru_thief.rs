@@ -31,7 +31,16 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
             None,
             pass_player,
         ),
-        On::RollPlan("", None, roll_plan),
+        // The body-top applicability checks are the condition / residual guard
+        // now (C# `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos &&
+        // m.FixedRoll < 0`): a placed card whose tile the mover shares, and no
+        // fixed roll yet. `fixed_roll` is derived plan state outside the CEL
+        // schema (docs/GUARDS.md §4.2c), so it stays a residual guard.
+        On::RollPlan(
+            "card.placed && turn_player >= 0 && turn_player != owner && pos(turn_player) == owner.pos",
+            Some(roll_plan_unfixed),
+            roll_plan,
+        ),
         On::Hook(
             &[HookKind::CrystalsChanged],
             "actor == owner && card.placed && trigger_card == card.id && card.cp == 0 && value <= 0",
@@ -148,21 +157,10 @@ fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
 /// 和1d10（距离）进行结算」 -- C# `CardKaoruThief.RollPlan`: when anyone but the
 /// owner starts a main move standing on the card's tile (and the plan has no
 /// fixed roll yet), the dice become 1d2 (direction) + 1d10 (distance).
+/// Applicability is the entry's condition + [`roll_plan_unfixed`]; `mover` is
+/// the plan's `turn_player` (C# `m.Seat`).
 fn roll_plan(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     let mover = ctx::turn_player();
-    // C# `m.Main && m.Seat != Seat && seats[m.Seat].pos == Me.pos && m.FixedRoll < 0`.
-    if mover == player_id || mover < 0 {
-        return Ok(());
-    }
-    if ctx::player_pos(mover) != ctx::player_pos(player_id) {
-        return Ok(());
-    }
-    if ctx::fixed_roll().is_some() {
-        return Ok(());
-    }
     // 规则书: 「投掷1d2（前后）」 -- C# `H.Roll(m.Seat, 1, 2, ...)` sets
     // `m.Reverse = num == 2`.
     let dir = ctx::roll(mover, 1, 2);
@@ -181,4 +179,11 @@ fn roll_plan(player_id: i32) -> card_sdk::Asked {
             .i("dir", dir as i64),
     );
     Ok(())
+}
+
+/// C# `m.FixedRoll < 0` -- the plan still has no fixed face, so the dice table
+/// is still the one to rewrite. Derived plan state, outside the CEL schema
+/// (docs/GUARDS.md §4.2c): the residual guard of [`roll_plan`].
+fn roll_plan_unfixed(_player_id: i32) -> bool {
+    ctx::fixed_roll().is_none()
 }

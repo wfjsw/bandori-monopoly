@@ -16,7 +16,11 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], "", Some(counteract_guard), counteract),
-        On::RollPlan("", None, roll_plan),
+        // The body-top applicability checks are the condition / residual guard
+        // now (C# `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's
+        // own main move, with no fixed face yet. `fixed_roll` is derived plan
+        // state outside the CEL schema (docs/GUARDS.md §4.2c).
+        On::RollPlan("card.placed && turn_player == owner", Some(roll_plan_unfixed), roll_plan),
         On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
@@ -100,20 +104,18 @@ fn reward(player_id: i32) -> card_sdk::Asked {
 /// `MoveCtx.MinRoll` clamps the final face up to 10 after the counteractions
 /// (`if (!m.Signed) m.Roll = max(m.MinRoll, m.Roll)`); `set_min_roll` is that
 /// plan field, shaped here before the dice (`On::RollPlan`). Same gate as the
-/// C# `RollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`).
-fn roll_plan(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
-    // `On::RollPlan` runs on the move being planned; `turn_player` is its mover.
-    if ctx::turn_player() != player_id {
-        return Ok(());
-    }
-    if ctx::fixed_roll().is_some() {
-        return Ok(());
-    }
+/// C# `RollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`) -- now the
+/// entry's condition + [`roll_plan_unfixed`].
+fn roll_plan(_player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_min_roll(10);
     Ok(())
+}
+
+/// C# `m.FixedRoll < 0` -- no fixed face yet, so the min-roll clamp applies.
+/// Derived plan state, outside the CEL schema (docs/GUARDS.md §4.2c): the
+/// residual guard of [`roll_plan`].
+fn roll_plan_unfixed(_player_id: i32) -> bool {
+    ctx::fixed_roll().is_none()
 }
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with

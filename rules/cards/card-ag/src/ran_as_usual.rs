@@ -34,7 +34,10 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::AtEnd("", None, at_end),
+        // The body-top applicability checks are the condition / residual guard
+        // now: a seat still in the game (`owner.out == 0`) that actually took
+        // an abnormal effect this turn (`at_end_something_to_undo`).
+        On::AtEnd("owner.out == 0", Some(at_end_something_to_undo), at_end),
     ],
 )
     .legacy(&[(1, legacy_can_counteract)]);
@@ -79,16 +82,9 @@ fn arm(player_id: i32) {
 }
 
 /// C# `CardRanAsUsual.Undo`, queued on `H._turnCtx.AtEnd`. The scheduling half
-/// is live; the restore body is held (see the TODO in `arm`).
+/// is live; the restore body is held (see the TODO in `arm`). Applicability is
+/// the entry's condition + [`at_end_something_to_undo`].
 fn at_end(player_id: i32) -> card_sdk::Asked {
-    if ctx::player_out(player_id) {
-        return Ok(());
-    }
-    // `ctx::abnormal_count(player_id)` (C# `H._abnormalTurn[i]`) is the no-op
-    // gate: nothing abnormal landed, nothing to undo.
-    if ctx::abnormal_count(player_id) <= 0 {
-        return Ok(());
-    }
     // 规则书（2）: 「回到起始地点并取消所有受到的效果（不进行任何结算）」 --
     // restore the four things the turn-start snapshot recorded (C#
     // `H._turnSnap[i]`). The teleport is a plain position write, so nothing
@@ -110,4 +106,12 @@ fn at_end(player_id: i32) -> card_sdk::Asked {
             .tile("tile", pos),
     );
     Ok(())
+}
+
+/// `ctx::abnormal_count(player_id)` (C# `H._abnormalTurn[i]`) -- something
+/// abnormal landed this turn, so there is something to undo. Derived turn
+/// state outside the CEL schema (docs/GUARDS.md §4.2c): the residual guard of
+/// [`at_end`].
+fn at_end_something_to_undo(player_id: i32) -> bool {
+    ctx::abnormal_count(player_id) > 0
 }

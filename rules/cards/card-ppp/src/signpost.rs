@@ -10,8 +10,14 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const SIGNPOST: CardDef = CardDef::new(
     "PPP:向着未来的路标",
-    &[On::Play("", Some(cant_play), play), On::AtEnd("", None, at_end)],
-).props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
+    // The body-top `player_out(owner)` early-out is the condition now: a
+    // bankrupt seat pays nobody, so the callback must not run (or flash).
+    &[
+        On::Play("", Some(cant_play), play),
+        On::AtEnd("owner.out == 0", None, at_end),
+    ],
+)
+.props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
 
 /// C# `CardSignpost.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
@@ -45,11 +51,9 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// `On::AtEnd` (C# `H._turnCtx.AtEnd` -> `H.LoseR(i, 1000, ...)`) -- scheduled by
-/// `ctx::before_turn_end` in `play`; runs once when the turn ends.
+/// `ctx::before_turn_end` in `play`; runs once when the turn ends. The
+/// "still in the game" gate is the entry's condition (`owner.out == 0`).
 fn at_end(player_id: i32) -> card_sdk::Asked {
-    if ctx::player_out(player_id) {
-        return Ok(());
-    }
     ctx::pay(player_id, 1000, &Msg::new(key!("signpost_lose")))?;
     Ok(())
 }

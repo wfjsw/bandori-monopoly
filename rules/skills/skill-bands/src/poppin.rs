@@ -49,28 +49,37 @@ pub const POPPIN: CardDef = CardDef::new(
         // （3）「星之鼓动山丘不可被抵押双倍支付购买，只有全部Poppin' Party角色
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
-        // too (`docs/PURCHASE.md`).
-        On::Gate(&[GateKind::BuyGate], "", None, lock_hill),
+        // too (`docs/PURCHASE.md`). The body-top tile check is the condition
+        // (`tile.id == tile_named('星之鼓动山丘')` -- an unknown name reads -1 and so
+        // never matches a real buy tile); 「只有全部…破产后」 is the residual
+        // guard, a derived scan outside the CEL schema (docs/GUARDS.md §4.2c).
+        On::Gate(
+            &[GateKind::BuyGate],
+            "tile.id == tile_named('星之鼓动山丘')",
+            Some(lock_hill_applies),
+            lock_hill,
+        ),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
 
-/// （3）'s purchase lock.
+/// （3）'s purchase lock. The tile is the entry's condition; whether any
+/// Poppin' Party character is still in the game is [`lock_hill_applies`].
 fn lock_hill(player_id: i32) -> card_sdk::Asked {
-    let hill = ctx::tile_named("星之鼓动山丘");
-    if hill < 0 || ctx::trigger::tile() != hill {
-        return Ok(());
-    }
-    // 「只有全部Poppin' Party角色破产后才可被正常购买」
-    for p in 0..ctx::player_count() {
-        if ctx::in_band(p, "Poppin' Party") && !ctx::player_out(p) {
-            ctx::trigger::set_cancelled();
-            ctx::trigger::set_reason(key!("poppin_locked"));
-            ctx::log(player_id, &Msg::new(key!("poppin_locked")));
-            return Ok(());
-        }
-    }
+    // 「只有全部Poppin' Party角色破产后才可被正常购买」 -- someone is still
+    // standing, so the lock holds.
+    ctx::trigger::set_cancelled();
+    ctx::trigger::set_reason(key!("poppin_locked"));
+    ctx::log(player_id, &Msg::new(key!("poppin_locked")));
     Ok(())
+}
+
+/// 「只有全部Poppin' Party角色破产后才可被正常购买」 -- the lock is in play
+/// while any Poppin' Party character has not gone bankrupt. A derived scan
+/// over every seat (there is no `out(seat)` in the CEL schema), so it is the
+/// residual guard of [`lock_hill`] (docs/GUARDS.md §4.2c).
+fn lock_hill_applies(_player_id: i32) -> bool {
+    (0..ctx::player_count()).any(|p| ctx::in_band(p, "Poppin' Party") && !ctx::player_out(p))
 }
 
 fn legacy_mine(player_id: i32) -> bool {

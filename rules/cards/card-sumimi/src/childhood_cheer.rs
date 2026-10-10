@@ -27,7 +27,10 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
         On::Hook(&[HookKind::MoveAfter], "actor == owner && move.main && card.placed", None, after_move),
-        On::AtEnd("", None, at_end),
+        // The body-top `!is_placed` early-out is the condition now: a card the
+        // move already landed (or that otherwise left the field) has nothing
+        // left to discard, so the callback must not run (or flash) for it.
+        On::AtEnd("card.placed", None, at_end),
     ],
 );
 
@@ -79,10 +82,8 @@ fn after_move(player_id: i32) -> card_sdk::Asked {
 
 /// C# `AfterMoveFireFx.TurnEndAfter` -- drop the attachment at the owner's turn
 /// end if `Arrive` never ran. Scheduled by `ctx::at_turn_end` in the play body.
-fn at_end(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
+/// Still-on-the-field is the entry's condition (`card.placed`).
+fn at_end(_player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     Ok(())
 }

@@ -13,7 +13,9 @@ pub const EXIST: CardDef = CardDef::new(
     "RAS:EXIST",
     &[
         On::Play("", None, exist),
-        On::Gate(&[GateKind::Redirect], "", None, redirect),
+        // The body-top `target == owner` early-out is the condition now (C#
+        // `return target != Seat`): already aimed at us, nothing to retarget.
+        On::Gate(&[GateKind::Redirect], "target != owner", None, redirect),
         On::Hook(&[HookKind::TurnStart], "", Some(turn_start_guard), turn_start),
     ],
 );
@@ -45,10 +47,7 @@ fn exist(player_id: i32) -> card_sdk::Asked {
 /// `card.Seat != p && card.Seat != c.Seat`).
 fn redirect(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「场上及打出的所有对单一玩家生效的手卡（包括其他玩家指向自身的卡）的目标将改为你」
-    // -- C# `return target != Seat`: already aimed at us, nothing to retarget.
-    if trigger::target() == player_id {
-        return Ok(());
-    }
+    // -- already aimed at us is the entry's condition (`target != owner`).
     trigger::set_target(player_id);
     // C# calls `Used()` only when the redirect actually lands (`card.Seat != p
     // && card.Seat != c.Seat`) -- never when the play is our own.

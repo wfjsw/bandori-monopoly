@@ -15,7 +15,9 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
         // 「并在回合结束时额外进行一次[触发结算]」 is a **scheduling** clause
         // (`docs/TILES.md`), not a tile fact: `On::AtEnd` runs it at the turn
         // end, and its body is a plain `ctx::settle`.
-        On::AtEnd("", None, settle_now),
+        // The body-top `player_pos < 0` early-out is the condition now: a
+        // player not standing on a square has nothing to settle.
+        On::AtEnd("owner.pos >= 0", None, settle_now),
     ],
 );
 
@@ -32,12 +34,10 @@ fn rinne_rain(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「并在回合结束时额外进行一次[触发结算]」 -- `H.SettleAt` on the
 /// square the player is standing on. The engine's `ctx::settle` primitive, not
-/// a counter the engine ticks (`docs/TILES.md`).
+/// a counter the engine ticks (`docs/TILES.md`). Standing on a square is the
+/// entry's condition (`owner.pos >= 0`).
 fn settle_now(player_id: i32) -> card_sdk::Asked {
     let at = ctx::player_pos(player_id);
-    if at < 0 {
-        return Ok(());
-    }
     ctx::card_settle_at(player_id, at, false);
     Ok(())
 }
