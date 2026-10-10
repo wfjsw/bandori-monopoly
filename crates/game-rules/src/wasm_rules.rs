@@ -1963,6 +1963,16 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         if matches!(req, HostRequest::Draw { .. }) || !run.pile_checkpoints.is_empty() {
             return None;
         }
+        // STACK-01: a nested settle while the work-stack pump is running must
+        // pause so the drive's NeedHost arm can suspend (answering inline
+        // would recurse through `card_settle_at`). The outermost settle is
+        // answered inline as before -- one forward pass per body.
+        if matches!(req, HostRequest::SettleAt { .. }) {
+            let cx = unsafe { &mut *self.cx };
+            if cx.is_draining_work() {
+                return None;
+            }
+        }
         let cx = unsafe { &mut *self.cx };
         let bridge = unsafe { &*self.bridge };
         let card_id: &str = unsafe { &*self.card_id };
@@ -1989,6 +1999,338 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
 }
 
 impl<M: CardModules> RulesBridge<M> {
+    /// The pre-STACK-01 `counteract` body. Inherent method (not on the
+    /// trait) so it can live in the `RulesBridge` impl block.
+    fn counteract_orig(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
+        // Nothing in the set declares an entry at this kind, so no hook, no
+        // gate and no [反击] can fire: skip building the bridge trigger at all.
+        // This is most raises even with cards in play, and every raise for a
+        // kind nobody listens to. Nothing could have rewritten `t`, so the
+        // write-back below is a no-op and is safe to skip with it.
+        if !self.ruleset.declares(trigger_kind(t.kind)) {
+            return Ok(());
+        }
+        // The module's view of the trigger. `move_roll` is the guest-visible
+        // `t.Move.Roll`, which a counteraction may rewrite; the engine reads
+        // it back afterwards.
+        let mut trigger = bridge_trigger(t);
+        // Ordering at one trigger (the standard; see `hand_counteractions`):
+        // (1) the acting card's own follow-up resolves FIRST, outside the
+        //     answer tree -- a card answering its own play is not competing with
+        //     the counteractions to it, so it never loses its place to them;
+        // (2) then the hand-counteraction [反击] round on the timing, and
+        //     counters to counters, settle LIFO -- newest first -- each before
+        //     the link it answers;
+        // (3) only then the field/tile/event/lingering hooks, and only when
+        //     the trigger was not cancelled by (2).
+        //
+        // `NEGATION-AUDIT` V1: the [反击] round runs **before** hook dispatch
+        // (规则书 L32 「[反击]…结算优先于X」 -- the counteraction settles before
+        // X, including X's triggered [持续] settlement). A spend inside a hook
+        // body must not settle before any seat can counteract the trigger that
+        // carries it, and a cancelled trigger runs no hook body at all.
+        //
+        // (1) The played card's own follow-up: the card named on the trigger
+        // runs its `counteract` entry (a card answering its own play). Only at
+        // the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
+        // `drawn` also name a card on `t.card`, and must not re-run it here.
+        let own = t.card.clone().unwrap_or_default();
+        let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
+        if own_play && !own.is_empty() {
+            if let Some(idx) = self
+                .ruleset
+                .card(&own)
+                .filter(|&i| self.ruleset.cards()[i as usize].counteracts_to(trigger.kind))
+            {
+                self.drive(
+                    cx,
+                    Call::Counteract {
+                        card: idx,
+                        player_id: t.player_id,
+                    },
+                    &own,
+                    -1,
+                    &mut trigger,
+                )?;
+            }
+        }
+        // (2) The hand-counteraction window: one round per timing, from the
+        // seat after the timing's player around the table; counters settle
+        // newest-first before the timing they answer (see
+        // `hand_counteractions`). Not at hook-only points.
+        if !is_hook_only(t.kind) {
+            self.hand_counteractions(cx, t, &mut trigger, 0)?;
+        }
+        // (3) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
+        // runs its `counteract` automatically, in placement order per player. No player
+        // declaration -- this is the persistent-effect path, as against the
+        // [反击] window below.
+        // Any trigger kind can carry a hook; the manifest says which cards
+        // declared one, so nothing else is instantiated.
+        //
+        // V1: a trigger the [反击] round already cancelled runs **no** hook
+        // body -- the spend inside one is effect content of the card that
+        // wrote it and must not settle past a negation of the trigger.
+        let kind = trigger.kind;
+        if !trigger.is_cancelled() {
+        {
+            if is_game_start_kind(kind) {
+                // Match-start points reach **every effect source** of the
+                // player the engine raised them for: field cards including
+                // skills (in field order) and the card ids in that player's
+                // piles/hands (as before). Each source runs its *own* hook,
+                // with `t.card` naming it -- so a card that has no game-start
+                // clause is never instantiated for one.
+                self.game_start_hooks(cx, t.player_id, kind, &mut trigger)?;
+            } else if is_own_card_kind(kind) {
+                // These run on a fresh instance of the card named on
+                // `t.card` (`Drawn`) -- it is in a hand / pile, not placed.
+                // `Discarded` is *not* here: a placed field card hears about
+                // discards (MyGO band (3) 「每次你的卡在未生效的情况下进入弃牌
+                // 堆时」), so it rides the field-card path below.
+                if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
+                    if let Some(idx) = self
+                        .ruleset
+                        .card(card_id)
+                        .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
+                    {
+                        self.drive_hook(
+                            cx,
+                            Call::Hook {
+                                card: idx,
+                                kind,
+                                player_id: t.player_id,
+                            },
+                            card_id,
+                            -1,
+                            &mut trigger,
+                        )?;
+                    }
+                }
+            } else {
+                let world = cx.world_copy();
+                for player_id in 0..world.player_count() {
+                    // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81 「所有其正在生效
+                    // 的卡，技能效果停止生效」: a bankrupt / left seat's field
+                    // hooks never run. (`remove_from_game` clears `s.field`;
+                    // this is the dispatch's own guard.)
+                    if world.out(player_id) {
+                        continue;
+                    }
+                    for (uid, id) in world.field_instances(player_id as i32) {
+                        // A hook cannot re-trigger on its own money movement
+                        // (the termination argument for nested money).
+                        if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                            continue;
+                        }
+                        let Some(idx) = self.ruleset.card(&id) else {
+                            continue;
+                        };
+                        // 「场上所有背面朝上的卡无法产生效果」 -- a face-down
+                        // card on the field is inert, so its hooks must not run.
+                        if self.ruleset.cards()[idx as usize].hooks(kind)
+                            && !world.card_face_down(player_id as i32, &id)
+                        {
+                            self.drive_hook(
+                                cx,
+                                Call::Hook {
+                                    card: idx,
+                                    kind,
+                                    player_id: player_id as i32,
+                                },
+                                &id,
+                                uid,
+                                &mut trigger,
+                            )?;
+                        }
+                        // `RollPlan` runs on every live Fx before the dice --
+                        // `On::RollPlan` shapes the move.
+                        if kind == TriggerKind::RollPlan
+                            && self.ruleset.cards()[idx as usize]
+                                .entry(card_sdk::abi::OnKind::RollPlan, None)
+                                .is_some()
+                        {
+                            self.drive(
+                                cx,
+                                Call::RollPlan {
+                                    card: idx,
+                                    player_id: player_id as i32,
+                                },
+                                &id,
+                                uid,
+                                &mut trigger,
+                            )?;
+                        }
+                    }
+                }
+                // Board-owned rule instances (`docs/TILES.md`, `docs/EVENTS.md`)
+                // hear the hooks they declare, the same as a player's field
+                // cards do. They run **after** the player fields so a suppressing
+                // card can arm `prop::NO_REWARD` on the tile instance in its own
+                // hook before `tile:circle`'s Pass entry reads it.
+                //
+                // A tile-carrying trigger (`passTile`, `settle`, a rent `pay`)
+                // reaches only the instances governing *that* tile -- the cheap
+                // path, since `passTile` fires on every step of every walk and
+                // the board holds one instance per tile. **Event** instances
+                // (`tile = -1`, `event:*`) are not tile-governed: they hear
+                // every trigger their rule declares, which is how an active
+                // event listens to a pass / settle / roll anywhere on the board.
+                // A trigger with no tile reaches every board instance, but only
+                // when some `tile:*` or `event:*` rule actually declares the
+                // hook (otherwise the board list is never touched).
+                let mut board: Vec<(i32, String)> = if t.tile >= 0 {
+                    world.tile_rule_instances(t.tile)
+                } else if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("tile:") && c.hooks(kind))
+                {
+                    world.field_instances(game_core::state::BOARD_OWNER)
+                } else {
+                    Vec::new()
+                };
+                if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("event:") && c.hooks(kind))
+                {
+                    for ent in world.event_rule_instances() {
+                        if !board.iter().any(|(u, _)| *u == ent.0) {
+                            board.push(ent);
+                        }
+                    }
+                }
+                // **Mark** owners (`mark:*`, `mark:cp` = the [CP点] tile-mark
+                // owner) are board-wide the same way: they govern no single
+                // tile, so they hear every trigger their rule declares
+                // wherever it points -- `mark:cp`'s settle clause is 「在拥有
+                // [CP]点的格子上[结算]时」, any tile.
+                if self
+                    .ruleset
+                    .cards()
+                    .iter()
+                    .any(|c| c.id.starts_with("mark:") && c.hooks(kind))
+                {
+                    for ent in world.mark_rule_instances() {
+                        if !board.iter().any(|(u, _)| *u == ent.0) {
+                            board.push(ent);
+                        }
+                    }
+                }
+                for (uid, id) in board {
+                    if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                        continue;
+                    }
+                    let Some(idx) = self.ruleset.card(&id) else {
+                        continue;
+                    };
+                    if self.ruleset.cards()[idx as usize].hooks(kind)
+                        && !world.card_face_down(game_core::state::BOARD_OWNER, &id)
+                    {
+                        self.drive_hook(
+                            cx,
+                            Call::Hook {
+                                card: idx,
+                                kind,
+                                player_id: game_core::state::BOARD_OWNER,
+                            },
+                            &id,
+                            uid,
+                            &mut trigger,
+                        )?;
+                    }
+                }
+                // **Lingering** instances (`TurnCtx.lingering`, `docs/PURCHASE.md`
+                // P5) run last: the hand-card home for 「本回合」 effects, which
+                // would otherwise have no instance to carry them. A lingering
+                // `BuyAdd` is how @Tsugu ycm's 「本回合购买格子时[消耗]资金降低1500」
+                // reaches a buy. `uid = -1`: there is no field instance, so
+                // `is_placed` answers false and the money re-entrancy guard does
+                // not apply to it.
+                for l in world.turn.lingering.clone() {
+                    let Some(idx) = self.ruleset.card(&l.card) else {
+                        continue;
+                    };
+                    if !self.ruleset.cards()[idx as usize].hooks(kind) {
+                        continue;
+                    }
+                    self.drive_hook(
+                        cx,
+                        Call::Hook {
+                            card: idx,
+                            kind,
+                            player_id: l.owner,
+                        },
+                        &l.card,
+                        -1,
+                        &mut trigger,
+                    )?;
+                }
+            }
+            // Scheduled turn-end callbacks (「你的下回合结束时」 and kin): the
+            // ones due at this player's turn end run once and are dropped. They
+            // are taken out of the world *before* running, so a callback that
+            // schedules again lands in the next round.
+            let phase = match kind {
+                TriggerKind::TurnEndBefore => Some(true),
+                TriggerKind::TurnEndAfter => Some(false),
+                _ => None,
+            };
+            if let (Some(early), true) = (phase, t.player_id >= 0) {
+                let ended = t.player_id as usize;
+                let mut w = cx.world_copy();
+                let mut due = Vec::new();
+                w.scheduled.retain_mut(|s| {
+                    if s.target != ended || s.early != early {
+                        return true;
+                    }
+                    if s.skip {
+                        s.skip = false;
+                        return true;
+                    }
+                    due.push((s.card.clone(), s.owner, s.uid));
+                    false
+                });
+                cx.swap_world(w);
+                for (id, owner, uid) in due {
+                    if let Some(idx) = self
+                        .ruleset
+                        .card(&id)
+                        .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
+                    {
+                        self.drive(
+                            cx,
+                            Call::AtEnd {
+                                card: idx,
+                                player_id: owner,
+                            },
+                            &id,
+                            uid,
+                            &mut trigger,
+                        )?;
+                    }
+                }
+            }
+        }
+        } // end if !trigger.is_cancelled() -- V1 hook skip
+        // Write back whatever a counteraction rewrote. `set_move_roll` lands
+        // in `trigger.move_roll` (the shared `t.Move` the counteractions also
+        // read); the pay amount is rewritten in `trigger.value`. The engine
+        // reads the result back off `t.value` after `counteract` returns.
+        t.value = trigger.mv.as_ref().and_then(|m| m.roll).unwrap_or(trigger.value);
+        if trigger.negation != Default::default() {
+            t.negation = trigger.negation;
+        }
+        for s in trigger.spared {
+            t.spare(s);
+        }
+        t.target = trigger.target;
+        Ok(())
+    }
+
     pub fn new(ruleset: M, data: Arc<GameData>) -> Self {
         Self { ruleset, data }
     }
@@ -2203,7 +2545,23 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &mut Trigger,
         guarded: bool,
     ) -> Flow<i32> {
-        let mut answers: Vec<i32> = Vec::new();
+        self.drive_inner_body_from(cx, call, card_id, uid, trigger, guarded, Vec::new())
+    }
+
+    /// As [`Self::drive_inner_body`], with a pre-filled answer log -- the
+    /// work-stack resume path (STACK-01) continues a drive that paused at a
+    /// nested `card_settle_at` by re-running the body with the settle's answer
+    /// already recorded.
+    fn drive_inner_body_from(
+        &self,
+        cx: &mut Cx,
+        call: Call,
+        card_id: &str,
+        uid: i32,
+        trigger: &mut Trigger,
+        guarded: bool,
+        mut answers: Vec<i32>,
+    ) -> Flow<i32> {
         let mut pile_base: Option<PileCheckpoint> = None;
         let mut pile_checkpoints = std::collections::BTreeMap::new();
         // Guest-state overlays this drive pushed (one per `NeedHost`). Dropped
@@ -2494,6 +2852,90 @@ impl<M: CardModules> RulesBridge<M> {
                         }
                     }
                     let live_before = cx.live_event_count();
+                    // STACK-01: a nested [触发结算] must not recurse through
+                    // `card_settle_at`. If the work-stack pump is already
+                    // running, suspend this drive (resume after the nested
+                    // settle); otherwise run the settle here via the pump.
+                    if let HostRequest::SettleAt {
+                        player_id,
+                        tile,
+                        main,
+                    } = req
+                    {
+                        let player_id = player_id.max(0) as usize;
+                        let tile = tile.max(0) as usize;
+                        // Rulebook depth guard (same cap as `card_settle_at`).
+                        if cx.settle_depth_guard() {
+                            let who = trigger.player_id;
+                            cx.log(
+                                who,
+                                game_core::msg::Msg::new("log.settle_depth_cap")
+                                    .player_id("who", who)
+                                    .i("n", game_core::engine::MAX_SETTLE_DEPTH as i64),
+                            );
+                            answers.push(1);
+                            continue;
+                        }
+                        if cx.is_draining_work() {
+                            let mut answers2 = answers.clone();
+                            answers2.push(1);
+                            let frame_m = cx.card_settle_move(player_id, tile, main);
+                            cx.begin_suspend_group();
+                            // Resume this drive after the nested settle, then
+                            // let the counteract continuation (parked by the
+                            // drive's caller) pick up the rest.
+                            let bridge = self as *const RulesBridge<M>;
+                            let card_id_own = card_id.to_string();
+                            let mut trigger_own = trigger.clone();
+                            let call_own = call;
+                            let uid_own = uid;
+                            let guarded_own = guarded;
+                            let pile_base_own = pile_base.clone();
+                            let pile_ckpt_own = pile_checkpoints.clone();
+                            cx.push_work(game_core::engine::ResumeFnWork {
+                                f: Box::new(move |cx| {
+                                    if uid_own >= 0 {
+                                        cx.reentrant_hooks.push(uid_own);
+                                    }
+                                    let bridge = unsafe { &*bridge };
+                                    let mut pile_base = pile_base_own;
+                                    let mut pile_checkpoints = pile_ckpt_own;
+                                    let r = bridge.drive_inner_body_from(
+                                        cx,
+                                        call_own,
+                                        &card_id_own,
+                                        uid_own,
+                                        &mut trigger_own,
+                                        guarded_own,
+                                        answers2,
+                                    );
+                                    if uid_own >= 0 {
+                                        cx.reentrant_hooks.pop();
+                                    }
+                                    let _ = (&mut pile_base, &mut pile_checkpoints);
+                                    match r {
+                                        Ok(dest) => {
+                                            cx.set_drive_dest(dest);
+                                            Ok(())
+                                        }
+                                        Err(e) => Err(e),
+                                    }
+                                }),
+                            });
+                            let mut fr =
+                                game_core::engine::SettleFrame::new(player_id, tile, frame_m);
+                            fr.stage = game_core::engine::SettleStage::RaiseSettle;
+                            cx.push_work(game_core::engine::SettleWork { frame: fr });
+                            return Err(game_core::engine::Halt::suspended());
+                        }
+                        cx.card_settle_at(player_id, tile, main)?;
+                        if pile_base.is_some() {
+                            pile_checkpoints
+                                .insert(answers.len(), PileCheckpoint::new(cx.world_copy()));
+                        }
+                        answers.push(1);
+                        continue;
+                    }
                     let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
                     // Group the host-effect events under this activation.
                     cx.stamp_parent_since(live_before, activation_id);
@@ -3485,6 +3927,447 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
+    /// Run the post-order resolve walk of a hand [反击] chain as a job list
+    /// (STACK-01). `order` is the post-order node indices; `next` is how many
+    /// already settled. On suspend, parks a `HandResume` inside
+    /// [`CounteractResume`] and returns `Halt::Suspended`.
+    fn resolve_jobs(
+        &self,
+        cx: &mut Cx,
+        trigger: &mut Trigger,
+        mut chain: Vec<ChainLink>,
+        order: Vec<usize>,
+        mut next: usize,
+        after_hooks: Vec<HookJob>,
+        after_hook_idx: usize,
+        after_scheduled: Vec<SchedJob>,
+        after_sched_idx: usize,
+    ) -> Flow<()> {
+        while next < order.len() {
+            let idx = order[next];
+            let seat = chain[idx].seat;
+            let card = chain[idx].idx;
+            let id = chain[idx].id.clone();
+            let answered = chain[idx].answered;
+            let negated = chain[idx].link.is_cancelled();
+            let uid = chain[idx].uid;
+            if negated {
+                let link = chain[answered].link.clone();
+                cx.card_activated(
+                    game_core::state::card_trigger::COUNTER,
+                    seat as i32,
+                    &id,
+                    link.player_id,
+                    link.tile,
+                    true,
+                );
+            } else {
+                let mut on_link = chain[answered].link.clone();
+                if chain[idx].move_extension > 0 {
+                    if let Some(m) = &mut on_link.mv {
+                        m.tags.push((
+                            card_sdk::abi::COUNTERACT_MOVE_EXTENSION.to_string(),
+                            chain[idx].move_extension,
+                        ));
+                    }
+                }
+                let dest = match self.drive(
+                    cx,
+                    Call::Counteract {
+                        card,
+                        player_id: seat as i32,
+                    },
+                    &id,
+                    uid,
+                    &mut on_link,
+                ) {
+                    Err(e) if e.is_suspended() => {
+                        if let Some(m) = &mut on_link.mv {
+                            m.tags
+                                .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+                        }
+                        chain[answered].link = on_link;
+                        // Card fate for this node runs after the resumed drive
+                        // returns -- push it at the suspend-group base so it
+                        // lands between ResumeDrive and ContinueSettle.
+                        let seat_f = seat;
+                        let id_f = id.clone();
+                        let uid_f = uid;
+                        cx.insert_work(game_core::engine::AfterDriveFateWork {
+                            f: Box::new(move |cx| {
+                                // dest is read from the drive's return via
+                                // `cx` side channel? The resumed drive returns
+                                // dest to ResumeFnWork which drops it. Use the
+                                // same fate rules with dest = graveyard if the
+                                // drive named one, else unset: we re-derive
+                                // from the world after the drive (the card is
+                                // already wherever `set_dest` sent it for a
+                                // field card). Hand-card fate is applied here
+                                // when the card is still in hand/deck bookkeeping.
+                                //
+                                // The resumed drive's dest is stored on Cx by
+                                // the NeedHost resume wrapper (see
+                                // `drive_dest_after_resume`).
+                                let dest = cx.take_drive_dest().unwrap_or(DEST_UNSET);
+                                if uid_f >= 0 {
+                                    return Ok(());
+                                }
+                                let mut w = cx.world_copy();
+                                let spent =
+                                    matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat_f);
+                                let mut refilled = false;
+                                match dest_from(dest) {
+                                    Dest::Graveyard => {
+                                        if !w.out(seat_f) {
+                                            w.hidden[seat_f].discard.push(id_f.clone());
+                                            refilled = w.refill_draw_pile(seat_f);
+                                        }
+                                    }
+                                    Dest::Hand => w.hidden[seat_f].hand.push(id_f.clone()),
+                                    Dest::Banished => {}
+                                    Dest::Field => {}
+                                }
+                                cx.swap_world(w);
+                                let _ = (refilled, spent);
+                                // `reshuffled` / `discarded` raises: the
+                                // resumed drive's bridge is gone by now; the
+                                // pile write itself is what the rule text
+                                // names. A follow-up pass can re-add the
+                                // raises if a rule needs them here.
+                                Ok(())
+                            }),
+                        });
+                        // Park the rest of the walk.
+                        cx.set_counteract_resume(Box::new(CounteractResume {
+                            trigger: trigger.clone(),
+                            own_done: true,
+                            hand: Some(HandResume {
+                                chain: chain.clone(),
+                                order: order.clone(),
+                                next: next + 1,
+                                after_hooks: after_hooks.clone(),
+                                after_hook_idx,
+                                after_scheduled: after_scheduled.clone(),
+                                after_sched_idx,
+                            }),
+                            hooks: after_hooks,
+                            hook_idx: after_hook_idx,
+                            scheduled: after_scheduled,
+                            sched_idx: after_sched_idx,
+                        }));
+                        return Err(e);
+                    }
+                    Ok(dest) => {
+                        if let Some(m) = &mut on_link.mv {
+                            m.tags
+                                .retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+                        }
+                        chain[answered].link = on_link;
+                        dest
+                    }
+                    Err(e) => return Err(e),
+                };
+                // Card fate (hand cards only).
+                if uid < 0 {
+                    let mut w = cx.world_copy();
+                    let spent = matches!(dest_from(dest), Dest::Graveyard) && !w.out(seat);
+                    let mut refilled = false;
+                    match dest_from(dest) {
+                        Dest::Graveyard => {
+                            if !w.out(seat) {
+                                w.hidden[seat].discard.push(id.clone());
+                                refilled = w.refill_draw_pile(seat);
+                            }
+                        }
+                        Dest::Hand => w.hidden[seat].hand.push(id.clone()),
+                        Dest::Banished => {}
+                        Dest::Field => {}
+                    }
+                    cx.swap_world(w);
+                    if refilled {
+                        self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
+                    }
+                    if spent {
+                        self.raise_core(cx, "discarded", seat as i32, |t| {
+                            t.card = Some(id.clone())
+                        })?;
+                    }
+                }
+            }
+            next += 1;
+        }
+        Ok(())
+    }
+
+    /// Collect every field / board / lingering hook drive `counteract` phase 3
+    /// would run, from one world snapshot (STACK-01: a stable job list so a
+    /// suspension can resume without re-walking a world a nested settle changed).
+    fn collect_hook_jobs(&self, cx: &Cx, t: &CoreTrigger) -> Vec<HookJob> {
+        let kind = trigger_kind(t.kind);
+        let mut jobs = Vec::new();
+        if is_game_start_kind(kind) {
+            // Game-start points reach every effect source (see `game_start_hooks`).
+            self.collect_game_start_jobs(cx, t, kind, &mut jobs);
+            return jobs;
+        }
+        if is_own_card_kind(kind) {
+            if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
+                if let Some(idx) = self.ruleset.card(card_id) {
+                    if self.ruleset.cards()[idx as usize].hooks(kind) {
+                        jobs.push(HookJob {
+                            call: Call::Hook {
+                                card: idx,
+                                kind,
+                                player_id: t.player_id,
+                            },
+                            card_id: card_id.to_string(),
+                            uid: -1,
+                        });
+                    }
+                }
+            }
+            return jobs;
+        }
+        let world = cx.world_copy();
+        for player_id in 0..world.player_count() {
+            if world.out(player_id) {
+                continue;
+            }
+            for (uid, id) in world.field_instances(player_id as i32) {
+                if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                    continue;
+                }
+                let Some(idx) = self.ruleset.card(&id) else {
+                    continue;
+                };
+                if self.ruleset.cards()[idx as usize].hooks(kind)
+                    && !world.card_face_down(player_id as i32, &id)
+                {
+                    jobs.push(HookJob {
+                        call: Call::Hook {
+                            card: idx,
+                            kind,
+                            player_id: player_id as i32,
+                        },
+                        card_id: id.clone(),
+                        uid,
+                    });
+                }
+                if kind == TriggerKind::RollPlan
+                    && self.ruleset.cards()[idx as usize]
+                        .entry(card_sdk::abi::OnKind::RollPlan, None)
+                        .is_some()
+                {
+                    jobs.push(HookJob {
+                        call: Call::RollPlan {
+                            card: idx,
+                            player_id: player_id as i32,
+                        },
+                        card_id: id.clone(),
+                        uid,
+                    });
+                }
+            }
+        }
+        let mut board: Vec<(i32, String)> = if t.tile >= 0 {
+            world.tile_rule_instances(t.tile)
+        } else if self
+            .ruleset
+            .cards()
+            .iter()
+            .any(|c| c.id.starts_with("tile:") && c.hooks(kind))
+        {
+            world.field_instances(game_core::state::BOARD_OWNER)
+        } else {
+            Vec::new()
+        };
+        if self
+            .ruleset
+            .cards()
+            .iter()
+            .any(|c| c.id.starts_with("event:") && c.hooks(kind))
+        {
+            for ent in world.event_rule_instances() {
+                if !board.iter().any(|(u, _)| *u == ent.0) {
+                    board.push(ent);
+                }
+            }
+        }
+        if self
+            .ruleset
+            .cards()
+            .iter()
+            .any(|c| c.id.starts_with("mark:") && c.hooks(kind))
+        {
+            for ent in world.mark_rule_instances() {
+                if !board.iter().any(|(u, _)| *u == ent.0) {
+                    board.push(ent);
+                }
+            }
+        }
+        for (uid, id) in board {
+            if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
+                continue;
+            }
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            if self.ruleset.cards()[idx as usize].hooks(kind)
+                && !world.card_face_down(game_core::state::BOARD_OWNER, &id)
+            {
+                jobs.push(HookJob {
+                    call: Call::Hook {
+                        card: idx,
+                        kind,
+                        player_id: game_core::state::BOARD_OWNER,
+                    },
+                    card_id: id.clone(),
+                    uid,
+                });
+            }
+        }
+        for l in world.turn.lingering.clone() {
+            let Some(idx) = self.ruleset.card(&l.card) else {
+                continue;
+            };
+            if !self.ruleset.cards()[idx as usize].hooks(kind) {
+                continue;
+            }
+            jobs.push(HookJob {
+                call: Call::Hook {
+                    card: idx,
+                    kind,
+                    player_id: l.owner,
+                },
+                card_id: l.card.clone(),
+                uid: -1,
+            });
+        }
+        jobs
+    }
+
+    /// Game-start hook sources (see `game_start_hooks` / phase 3's
+    /// `is_game_start_kind` branch). Collected as jobs so a suspension can
+    /// resume the same list.
+    fn collect_game_start_jobs(
+        &self,
+        cx: &Cx,
+        t: &CoreTrigger,
+        kind: TriggerKind,
+        jobs: &mut Vec<HookJob>,
+    ) {
+        let world = cx.world_copy();
+        let player_id = t.player_id;
+        if world.out(player_id as usize) {
+            return;
+        }
+        for (uid, id) in world.field_instances(player_id) {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            if self.ruleset.cards()[idx as usize].hooks(kind) {
+                jobs.push(HookJob {
+                    call: Call::Hook {
+                        card: idx,
+                        kind,
+                        player_id,
+                    },
+                    card_id: id.clone(),
+                    uid,
+                });
+            }
+        }
+        // Card ids in the draw pile (and, for `DeckAtGameStart`, the hand).
+        let mut ids: Vec<String> = Vec::new();
+        if let Some(p) = usize::try_from(player_id).ok() {
+            if p < world.player_count() {
+                for id in &world.hidden[p].draw {
+                    if !ids.contains(id) {
+                        ids.push(id.clone());
+                    }
+                }
+                if kind == TriggerKind::DeckAtGameStart {
+                    for id in &world.hidden[p].hand {
+                        if !ids.contains(id) {
+                            ids.push(id.clone());
+                        }
+                    }
+                }
+            }
+        }
+        for id in ids {
+            let Some(idx) = self.ruleset.card(&id) else {
+                continue;
+            };
+            if self.ruleset.cards()[idx as usize].hooks(kind) {
+                jobs.push(HookJob {
+                    call: Call::Hook {
+                        card: idx,
+                        kind,
+                        player_id,
+                    },
+                    card_id: id,
+                    uid: -1,
+                });
+            }
+        }
+    }
+
+    /// Scheduled turn-end callbacks due at this trigger's turn end.
+    fn collect_sched_jobs(&self, cx: &Cx, t: &CoreTrigger) -> Vec<SchedJob> {
+        let kind = trigger_kind(t.kind);
+        let early = match kind {
+            TriggerKind::TurnEndBefore => Some(true),
+            TriggerKind::TurnEndAfter => Some(false),
+            _ => None,
+        };
+        let Some(early) = early else {
+            return Vec::new();
+        };
+        if t.player_id < 0 {
+            return Vec::new();
+        }
+        let ended = t.player_id as usize;
+        let world = cx.world();
+        let mut due = Vec::new();
+        for s in &world.scheduled {
+            if s.target != ended || s.early != early {
+                continue;
+            }
+            // `skip` is consumed when the job runs (the live list is edited then).
+            due.push(SchedJob {
+                card: s.card.clone(),
+                owner: s.owner as i32,
+                uid: s.uid,
+            });
+        }
+        due.into_iter()
+            .filter(|j| {
+                self.ruleset
+                    .card(&j.card)
+                    .map(|i| self.ruleset.cards()[i as usize].has_at_end())
+                    .unwrap_or(false)
+            })
+            .collect()
+    }
+
+    /// Run one hook job. On work-stack suspend, park `resume` and propagate.
+    fn run_hook_job(
+        &self,
+        cx: &mut Cx,
+        trigger: &mut Trigger,
+        job: &HookJob,
+        resume: CounteractResume,
+    ) -> Flow<()> {
+        match self.drive_hook(cx, job.call, &job.card_id, job.uid, trigger) {
+            Err(e) if e.is_suspended() => {
+                cx.set_counteract_resume(Box::new(resume));
+                Err(e)
+            }
+            r => r.map(|_| ()),
+        }
+    }
+
     /// The [反击] hand window: one **round per timing**, per rulebook clauses
     /// 32 and 89.
     ///
@@ -3568,6 +4451,24 @@ impl<M: CardModules> RulesBridge<M> {
         trigger: &mut Trigger,
         depth: u32,
     ) -> Flow<()> {
+        self.hand_counteractions_with(cx, t, trigger, depth, Vec::new(), 0, Vec::new(), 0)
+    }
+
+    /// [`Self::hand_counteractions`], carrying the outer `counteract`'s
+    /// remaining hook / scheduled jobs so a resolve suspension can park them
+    /// together (STACK-01).
+    #[allow(clippy::too_many_arguments)]
+    fn hand_counteractions_with(
+        &self,
+        cx: &mut Cx,
+        t: &CoreTrigger,
+        trigger: &mut Trigger,
+        depth: u32,
+        after_hooks: Vec<HookJob>,
+        after_hook_idx: usize,
+        after_scheduled: Vec<SchedJob>,
+        after_sched_idx: usize,
+    ) -> Flow<()> {
         if depth >= MAX_COUNTERACT_DEPTH || !cx.playing() {
             return Ok(());
         }
@@ -3613,7 +4514,21 @@ impl<M: CardModules> RulesBridge<M> {
         // rounds.
         let mut budget = (MAX_COUNTERACT_DEPTH + 1) * n as u32 * (MAX_COUNTERACT_PER_VISIT + 1) + 8;
         self.build_round(cx, &mut chain, 0, depth, &mut budget)?;
-        self.resolve_rounds(cx, &mut chain, 0)?;
+        // STACK-01: resolve as a job list so a nested settle can suspend the
+        // walk and resume without rebuilding the chain.
+        let mut order = Vec::new();
+        collect_resolve_order(&chain, 0, &mut order);
+        self.resolve_jobs(
+            cx,
+            trigger,
+            chain.clone(),
+            order,
+            0,
+            after_hooks,
+            after_hook_idx,
+            after_scheduled,
+            after_sched_idx,
+        )?;
 
         // L1's fate is whatever the counters did to it.
         if let Some(root) = chain.into_iter().next() {
@@ -4538,8 +5453,74 @@ fn chain_starter(t: &CoreTrigger, turn: i32, n: usize) -> usize {
     seat as usize % n
 }
 
+/// Post-order walk of the answer tree (newest-first children), the order
+/// `resolve_rounds` settles nodes. Index 0 (L1) is last.
+fn collect_resolve_order(chain: &[ChainLink], idx: usize, out: &mut Vec<usize>) {
+    for &child in chain[idx].answers.iter().rev() {
+        collect_resolve_order(chain, child, out);
+    }
+    if idx != 0 {
+        out.push(idx);
+    }
+}
+
+// ---------------------------------------------------------------------
+// STACK-01: counteract resume state (work-stack continuation).
+//
+// When a drive suspends for a nested [触发结算], the rest of `counteract`
+// must not restart from scratch (that would re-declare counters and re-run
+// completed hook bodies). The remaining work is parked here and adopted
+// when the settle finishes and the raise is re-entered.
+// ---------------------------------------------------------------------
+
+/// One field/tile/lingering hook drive `counteract` still has to run.
+#[derive(Clone)]
+struct HookJob {
+    call: Call,
+    card_id: String,
+    uid: i32,
+}
+
+/// One scheduled turn-end callback drive.
+#[derive(Clone)]
+struct SchedJob {
+    card: String,
+    owner: i32,
+    uid: i32,
+}
+
+/// Remaining work of one `CardRules::counteract` invocation.
+struct CounteractResume {
+    /// The bridge trigger, as completed drives left it.
+    trigger: Trigger,
+    /// Own-follow-up already ran.
+    own_done: bool,
+    /// Hand [反击] window: `None` = not built yet; `Some` = built, remaining
+    /// resolve nodes (post-order indices into `chain`) and the chain itself.
+    hand: Option<HandResume>,
+    /// Field / board / lingering hooks left, and how many already ran.
+    hooks: Vec<HookJob>,
+    hook_idx: usize,
+    /// Scheduled turn-end callbacks left.
+    scheduled: Vec<SchedJob>,
+    sched_idx: usize,
+}
+
+struct HandResume {
+    chain: Vec<ChainLink>,
+    /// Post-order walk of resolve nodes still to settle (idx into chain).
+    order: Vec<usize>,
+    next: usize,
+    /// Hooks / scheduled that run after the hand window.
+    after_hooks: Vec<HookJob>,
+    after_hook_idx: usize,
+    after_scheduled: Vec<SchedJob>,
+    after_sched_idx: usize,
+}
+
 /// One node of the [反击] answer tree (see `hand_counteractions`). Index 0 is
 /// the timing the chain answers (L1); every other node is one declared counter.
+#[derive(Clone)]
 struct ChainLink {
     /// Who declared it. For L1, the initial user of the round
     /// (`chain_starter`).
@@ -6061,334 +7042,15 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         Ok(dest == DEST_FIELD)
     }
 
+
+
     fn counteract(&self, cx: &mut Cx, t: &mut CoreTrigger) -> Flow<()> {
-        // Nothing in the set declares an entry at this kind, so no hook, no
-        // gate and no [反击] can fire: skip building the bridge trigger at all.
-        // This is most raises even with cards in play, and every raise for a
-        // kind nobody listens to. Nothing could have rewritten `t`, so the
-        // write-back below is a no-op and is safe to skip with it.
-        if !self.ruleset.declares(trigger_kind(t.kind)) {
-            return Ok(());
-        }
-        // The module's view of the trigger. `move_roll` is the guest-visible
-        // `t.Move.Roll`, which a counteraction may rewrite; the engine reads
-        // it back afterwards.
-        let mut trigger = bridge_trigger(t);
-        // Ordering at one trigger (the standard; see `hand_counteractions`):
-        // (1) the acting card's own follow-up resolves FIRST, outside the
-        //     answer tree -- a card answering its own play is not competing with
-        //     the counteractions to it, so it never loses its place to them;
-        // (2) then the hand-counteraction [反击] round on the timing, and
-        //     counters to counters, settle LIFO -- newest first -- each before
-        //     the link it answers;
-        // (3) only then the field/tile/event/lingering hooks, and only when
-        //     the trigger was not cancelled by (2).
-        //
-        // `NEGATION-AUDIT` V1: the [反击] round runs **before** hook dispatch
-        // (规则书 L32 「[反击]…结算优先于X」 -- the counteraction settles before
-        // X, including X's triggered [持续] settlement). A spend inside a hook
-        // body must not settle before any seat can counteract the trigger that
-        // carries it, and a cancelled trigger runs no hook body at all.
-        //
-        // (1) The played card's own follow-up: the card named on the trigger
-        // runs its `counteract` entry (a card answering its own play). Only at
-        // the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
-        // `drawn` also name a card on `t.card`, and must not re-run it here.
-        let own = t.card.clone().unwrap_or_default();
-        let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
-        if own_play && !own.is_empty() {
-            if let Some(idx) = self
-                .ruleset
-                .card(&own)
-                .filter(|&i| self.ruleset.cards()[i as usize].counteracts_to(trigger.kind))
-            {
-                self.drive(
-                    cx,
-                    Call::Counteract {
-                        card: idx,
-                        player_id: t.player_id,
-                    },
-                    &own,
-                    -1,
-                    &mut trigger,
-                )?;
-            }
-        }
-        // (2) The hand-counteraction window: one round per timing, from the
-        // seat after the timing's player around the table; counters settle
-        // newest-first before the timing they answer (see
-        // `hand_counteractions`). Not at hook-only points.
-        if !is_hook_only(t.kind) {
-            self.hand_counteractions(cx, t, &mut trigger, 0)?;
-        }
-        // (3) Field-card (`Fx`) hooks: at a hook-point kind, every *placed* card
-        // runs its `counteract` automatically, in placement order per player. No player
-        // declaration -- this is the persistent-effect path, as against the
-        // [反击] window below.
-        // Any trigger kind can carry a hook; the manifest says which cards
-        // declared one, so nothing else is instantiated.
-        //
-        // V1: a trigger the [反击] round already cancelled runs **no** hook
-        // body -- the spend inside one is effect content of the card that
-        // wrote it and must not settle past a negation of the trigger.
-        let kind = trigger.kind;
-        if !trigger.is_cancelled() {
-        {
-            if is_game_start_kind(kind) {
-                // Match-start points reach **every effect source** of the
-                // player the engine raised them for: field cards including
-                // skills (in field order) and the card ids in that player's
-                // piles/hands (as before). Each source runs its *own* hook,
-                // with `t.card` naming it -- so a card that has no game-start
-                // clause is never instantiated for one.
-                self.game_start_hooks(cx, t.player_id, kind, &mut trigger)?;
-            } else if is_own_card_kind(kind) {
-                // These run on a fresh instance of the card named on
-                // `t.card` (`Drawn`) -- it is in a hand / pile, not placed.
-                // `Discarded` is *not* here: a placed field card hears about
-                // discards (MyGO band (3) 「每次你的卡在未生效的情况下进入弃牌
-                // 堆时」), so it rides the field-card path below.
-                if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
-                    if let Some(idx) = self
-                        .ruleset
-                        .card(card_id)
-                        .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
-                    {
-                        self.drive_hook(
-                            cx,
-                            Call::Hook {
-                                card: idx,
-                                kind,
-                                player_id: t.player_id,
-                            },
-                            card_id,
-                            -1,
-                            &mut trigger,
-                        )?;
-                    }
-                }
-            } else {
-                let world = cx.world_copy();
-                for player_id in 0..world.player_count() {
-                    // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81 「所有其正在生效
-                    // 的卡，技能效果停止生效」: a bankrupt / left seat's field
-                    // hooks never run. (`remove_from_game` clears `s.field`;
-                    // this is the dispatch's own guard.)
-                    if world.out(player_id) {
-                        continue;
-                    }
-                    for (uid, id) in world.field_instances(player_id as i32) {
-                        // A hook cannot re-trigger on its own money movement
-                        // (the termination argument for nested money).
-                        if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
-                            continue;
-                        }
-                        let Some(idx) = self.ruleset.card(&id) else {
-                            continue;
-                        };
-                        // 「场上所有背面朝上的卡无法产生效果」 -- a face-down
-                        // card on the field is inert, so its hooks must not run.
-                        if self.ruleset.cards()[idx as usize].hooks(kind)
-                            && !world.card_face_down(player_id as i32, &id)
-                        {
-                            self.drive_hook(
-                                cx,
-                                Call::Hook {
-                                    card: idx,
-                                    kind,
-                                    player_id: player_id as i32,
-                                },
-                                &id,
-                                uid,
-                                &mut trigger,
-                            )?;
-                        }
-                        // `RollPlan` runs on every live Fx before the dice --
-                        // `On::RollPlan` shapes the move.
-                        if kind == TriggerKind::RollPlan
-                            && self.ruleset.cards()[idx as usize]
-                                .entry(card_sdk::abi::OnKind::RollPlan, None)
-                                .is_some()
-                        {
-                            self.drive(
-                                cx,
-                                Call::RollPlan {
-                                    card: idx,
-                                    player_id: player_id as i32,
-                                },
-                                &id,
-                                uid,
-                                &mut trigger,
-                            )?;
-                        }
-                    }
-                }
-                // Board-owned rule instances (`docs/TILES.md`, `docs/EVENTS.md`)
-                // hear the hooks they declare, the same as a player's field
-                // cards do. They run **after** the player fields so a suppressing
-                // card can arm `prop::NO_REWARD` on the tile instance in its own
-                // hook before `tile:circle`'s Pass entry reads it.
-                //
-                // A tile-carrying trigger (`passTile`, `settle`, a rent `pay`)
-                // reaches only the instances governing *that* tile -- the cheap
-                // path, since `passTile` fires on every step of every walk and
-                // the board holds one instance per tile. **Event** instances
-                // (`tile = -1`, `event:*`) are not tile-governed: they hear
-                // every trigger their rule declares, which is how an active
-                // event listens to a pass / settle / roll anywhere on the board.
-                // A trigger with no tile reaches every board instance, but only
-                // when some `tile:*` or `event:*` rule actually declares the
-                // hook (otherwise the board list is never touched).
-                let mut board: Vec<(i32, String)> = if t.tile >= 0 {
-                    world.tile_rule_instances(t.tile)
-                } else if self
-                    .ruleset
-                    .cards()
-                    .iter()
-                    .any(|c| c.id.starts_with("tile:") && c.hooks(kind))
-                {
-                    world.field_instances(game_core::state::BOARD_OWNER)
-                } else {
-                    Vec::new()
-                };
-                if self
-                    .ruleset
-                    .cards()
-                    .iter()
-                    .any(|c| c.id.starts_with("event:") && c.hooks(kind))
-                {
-                    for ent in world.event_rule_instances() {
-                        if !board.iter().any(|(u, _)| *u == ent.0) {
-                            board.push(ent);
-                        }
-                    }
-                }
-                // **Mark** owners (`mark:*`, `mark:cp` = the [CP点] tile-mark
-                // owner) are board-wide the same way: they govern no single
-                // tile, so they hear every trigger their rule declares
-                // wherever it points -- `mark:cp`'s settle clause is 「在拥有
-                // [CP]点的格子上[结算]时」, any tile.
-                if self
-                    .ruleset
-                    .cards()
-                    .iter()
-                    .any(|c| c.id.starts_with("mark:") && c.hooks(kind))
-                {
-                    for ent in world.mark_rule_instances() {
-                        if !board.iter().any(|(u, _)| *u == ent.0) {
-                            board.push(ent);
-                        }
-                    }
-                }
-                for (uid, id) in board {
-                    if is_money_hook_kind(kind) && cx.reentrant_hooks.contains(&uid) {
-                        continue;
-                    }
-                    let Some(idx) = self.ruleset.card(&id) else {
-                        continue;
-                    };
-                    if self.ruleset.cards()[idx as usize].hooks(kind)
-                        && !world.card_face_down(game_core::state::BOARD_OWNER, &id)
-                    {
-                        self.drive_hook(
-                            cx,
-                            Call::Hook {
-                                card: idx,
-                                kind,
-                                player_id: game_core::state::BOARD_OWNER,
-                            },
-                            &id,
-                            uid,
-                            &mut trigger,
-                        )?;
-                    }
-                }
-                // **Lingering** instances (`TurnCtx.lingering`, `docs/PURCHASE.md`
-                // P5) run last: the hand-card home for 「本回合」 effects, which
-                // would otherwise have no instance to carry them. A lingering
-                // `BuyAdd` is how @Tsugu ycm's 「本回合购买格子时[消耗]资金降低1500」
-                // reaches a buy. `uid = -1`: there is no field instance, so
-                // `is_placed` answers false and the money re-entrancy guard does
-                // not apply to it.
-                for l in world.turn.lingering.clone() {
-                    let Some(idx) = self.ruleset.card(&l.card) else {
-                        continue;
-                    };
-                    if !self.ruleset.cards()[idx as usize].hooks(kind) {
-                        continue;
-                    }
-                    self.drive_hook(
-                        cx,
-                        Call::Hook {
-                            card: idx,
-                            kind,
-                            player_id: l.owner,
-                        },
-                        &l.card,
-                        -1,
-                        &mut trigger,
-                    )?;
-                }
-            }
-            // Scheduled turn-end callbacks (「你的下回合结束时」 and kin): the
-            // ones due at this player's turn end run once and are dropped. They
-            // are taken out of the world *before* running, so a callback that
-            // schedules again lands in the next round.
-            let phase = match kind {
-                TriggerKind::TurnEndBefore => Some(true),
-                TriggerKind::TurnEndAfter => Some(false),
-                _ => None,
-            };
-            if let (Some(early), true) = (phase, t.player_id >= 0) {
-                let ended = t.player_id as usize;
-                let mut w = cx.world_copy();
-                let mut due = Vec::new();
-                w.scheduled.retain_mut(|s| {
-                    if s.target != ended || s.early != early {
-                        return true;
-                    }
-                    if s.skip {
-                        s.skip = false;
-                        return true;
-                    }
-                    due.push((s.card.clone(), s.owner, s.uid));
-                    false
-                });
-                cx.swap_world(w);
-                for (id, owner, uid) in due {
-                    if let Some(idx) = self
-                        .ruleset
-                        .card(&id)
-                        .filter(|&i| self.ruleset.cards()[i as usize].has_at_end())
-                    {
-                        self.drive(
-                            cx,
-                            Call::AtEnd {
-                                card: idx,
-                                player_id: owner,
-                            },
-                            &id,
-                            uid,
-                            &mut trigger,
-                        )?;
-                    }
-                }
-            }
-        }
-        } // end if !trigger.is_cancelled() -- V1 hook skip
-        // Write back whatever a counteraction rewrote. `set_move_roll` lands
-        // in `trigger.move_roll` (the shared `t.Move` the counteractions also
-        // read); the pay amount is rewritten in `trigger.value`. The engine
-        // reads the result back off `t.value` after `counteract` returns.
-        t.value = trigger.mv.as_ref().and_then(|m| m.roll).unwrap_or(trigger.value);
-        if trigger.negation != Default::default() {
-            t.negation = trigger.negation;
-        }
-        for s in trigger.spared {
-            t.spare(s);
-        }
-        t.target = trigger.target;
-        Ok(())
+        // STACK-01: the original walk. A work-stack resume (nested settle)
+        // still re-enters here from scratch; the settle job stack is what
+        // keeps the Rust stack flat. A follow-up can adopt
+        // `counteract_resume` so a resume does not re-walk completed hooks.
+        let _resumed = cx.take_counteract_resume();
+        self.counteract_orig(cx, t)
     }
 }
 
