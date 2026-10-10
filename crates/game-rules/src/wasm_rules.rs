@@ -152,6 +152,22 @@ pub struct Run {
     /// A fresh activation (a hand play, a [反击] declaration, a skill press,
     /// a drawn event) logs its own action and leaves its outcome lines bare.
     wrap_effect: bool,
+    /// Live-stream sink for write-through logs (`ctx::log`, the activation
+    /// header). `None` outside a drive (probes, quotes). Each post appends to
+    /// the **live** event tail at the call site, so a body that logs → pays →
+    /// logs shows log, pay, log in code order. A multi-pass re-run's k-th log
+    /// replaces [`Self::posted`]\[k\] instead of appending (same shape as the
+    /// pre-filled `answers` log).
+    live: Option<*mut Cx<'static>>,
+    /// Event ids this drive has posted to the live stream, in call order.
+    /// Survives across passes (the drive hands it back at each pause).
+    posted: Vec<i32>,
+    /// How many log calls this pass has consumed (index into [`Self::posted`]).
+    log_idx: usize,
+    /// The `"card"` activation event id this run groups under (`-1` = none).
+    /// Every write-through event carries it, so the log nests the outcome
+    /// under the header.
+    parent: i32,
 }
 
 impl Run {
@@ -167,6 +183,84 @@ impl Run {
         } else {
             msg
         }
+    }
+
+    /// Post one log line **write-through** to the live event stream (the
+    /// activation header, `ctx::log`, `ctx::effect`). Walk flushes happen on
+    /// the live world first (`World::log`), so an approach always precedes the
+    /// line that interrupted it.
+    ///
+    /// A multi-pass re-run's k-th call replaces the k-th already-posted line
+    /// (same shape as the pre-filled `answers` log) instead of appending a
+    /// duplicate. Without a live sink (probe / quote) the line lands on the
+    /// guest copy only, as before.
+    fn post_log(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str) {
+        if let Some(live) = self.live {
+            let cx = unsafe { &mut *live };
+            let parent = self.parent;
+            if self.log_idx < self.posted.len() {
+                let id = self.posted[self.log_idx];
+                self.log_idx += 1;
+                if !cx.relog_event(id, msg.clone()) {
+                    // Truncated tail -- append a fresh one and retarget the slot.
+                    let id = cx.log_event(kind, player_id, msg, parent, card);
+                    self.posted[self.log_idx - 1] = id;
+                }
+                return;
+            }
+            self.log_idx += 1;
+            let id = cx.log_event(kind, player_id, msg, parent, card);
+            self.posted.push(id);
+            return;
+        }
+        // No live sink: guest-copy only (probe / quote).
+        let e = self.world.log(kind, player_id, msg);
+        if !card.is_empty() {
+            e.card = card.to_string();
+        }
+        if self.parent >= 0 {
+            e.parent = self.parent;
+        }
+    }
+
+    /// Post a `"card"` activation (the 「效果适用」 header / a skill 「发动」 /
+    /// a negated flash) write-through. Returns the event id.
+    fn post_card(
+        &mut self,
+        kind: &str,
+        owner: i32,
+        msg: Msg,
+        card: &str,
+        target: i32,
+        tile: i32,
+        negated: bool,
+    ) -> i32 {
+        if let Some(live) = self.live {
+            let cx = unsafe { &mut *live };
+            let parent = self.parent;
+            if self.log_idx < self.posted.len() {
+                let id = self.posted[self.log_idx];
+                self.log_idx += 1;
+                if cx.relog_event(id, msg.clone()) {
+                    return id;
+                }
+                let id = cx.log_card_activation(
+                    kind, owner, card, target, tile, negated, msg, parent,
+                );
+                self.posted[self.log_idx - 1] = id;
+                return id;
+            }
+            self.log_idx += 1;
+            let id =
+                cx.log_card_activation(kind, owner, card, target, tile, negated, msg, parent);
+            self.posted.push(id);
+            return id;
+        }
+        let e = self
+            .world
+            .card_activation(kind, owner, card, target, tile, negated, msg);
+        e.parent = self.parent;
+        e.id
     }
 
     /// Record a crystal write on the instance at `uid` so the commit point can
@@ -239,8 +333,7 @@ impl CardWorld for Run {
             .strip_prefix("event:")
             .unwrap_or(&self.current_card)
             .to_string();
-        let e = self.world.log("effect", player_id, msg);
-        e.card = src;
+        self.post_log("effect", player_id, msg, &src);
     }
 
     fn extreme(&self) -> i32 {
@@ -278,7 +371,7 @@ impl CardWorld for Run {
 
     fn log(&mut self, player_id: i32, msg: Msg) {
         let msg = self.attribute(msg);
-        self.world.log("text", player_id, msg);
+        self.post_log("text", player_id, msg, "");
     }
 
     // board -----------------------------------------------------------------
@@ -1696,8 +1789,10 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
         cx.adopt_turn_policy(&run.world);
         cx.overlay_guest_state(&run.world);
         let linger = run.linger_props.clone();
+        let live_before = cx.live_event_count();
         match bridge.apply_host_request(cx, req, &linger, self.call, card_id) {
             Ok(v) => {
+                cx.stamp_parent_since(live_before, run.parent);
                 self.answers.push(v);
                 Some(v)
             }
@@ -1735,25 +1830,27 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// Does this drive's log lines name their source (「<卡名> 的效果：…」)?
-    /// An already-in-play card applying its effect: a hook, a card placed on a
-    /// tile's settle body, a dice-shaping `RollPlan`, a scheduled `AtEnd`. A
-    /// fresh activation (hand play, [反击], skill press, drawn event) leaves
-    /// its outcome lines bare.
-    fn wraps_effect(call: Call, card_id: &str) -> bool {
-        match call {
-            Call::Hook { .. } | Call::RollPlan { .. } | Call::AtEnd { .. } => true,
-            Call::Settle { .. } => !card_id.starts_with("tile:"),
-            _ => false,
-        }
+    ///
+    /// **No.** The 「效果适用」 header at body entry names the card and the
+    /// trigger; the body's own lines sit under that header as its results, so
+    /// repeating 「<卡名> 的效果：」 on every line is noise. A fresh activation
+    /// (hand play, [反击], skill press, drawn event) already logged its action
+    /// and likewise leaves its outcome lines bare.
+    fn wraps_effect(_call: Call, _card_id: &str) -> bool {
+        false
     }
 
     /// One `"card"` activation event for a body that is about to run: the
-    /// client's card flash plus its log line. `call` / `card_id` / `uid` are the
-    /// drive's own context; `target` / `tile` name who and where it is about.
+    /// client's card flash plus its 「效果适用」 line. `call` / `card_id` /
+    /// `uid` are the drive's own context; `trigger` says why it ran; `entry`
+    /// names which clause of a multi-entry card (its manifest label, if any).
     ///
-    /// Written to `w` -- the **guest's own world copy** -- not to the live
-    /// world: [`Self::commit_after`] swaps that copy in wholesale, so an event
-    /// logged on `cx` between the copy and the swap would be dropped.
+    /// Written into the world copy `w` (the guest's), then captured as a
+    /// guest-side burst ([`Run::capture_guest`]) so [`Self::commit_after`] can
+    /// re-insert it **before** the host-effect events the learn pass already
+    /// logged -- the same code-order merge that sequences body logs around
+    /// pays. The return value is the event's id, used as the `parent` of
+    /// everything this body produces.
     ///
     /// Called exactly at **body entry** (the `on_body` callback
     /// [`Self::drive_inner_body`] hands to `run` / `run_hook`): after the CEL
@@ -1764,18 +1861,21 @@ impl<M: CardModules> RulesBridge<M> {
     /// pass).
     ///
     /// A tile's own settle body (`tile:*`) is a board square, not a card, so it
-    /// does not flash -- a *card* placed on the square still does.
+    /// does not flash -- a *card* placed on the square still does. `On::Message`
+    /// never reaches here (internal plumbing, no `Call::Message`).
     fn announce_drive(
         &self,
-        w: &mut game_core::engine::World,
+        w: &mut crate::Run,
         call: Call,
         card_id: &str,
         uid: i32,
         target: i32,
         tile: i32,
-    ) {
+        trigger: &Trigger,
+        entry: i32,
+    ) -> i32 {
         if matches!(call, Call::Settle { .. }) && card_id.starts_with("tile:") {
-            return;
+            return -1;
         }
         use game_core::state::card_trigger;
         let kind = match call {
@@ -1797,25 +1897,64 @@ impl<M: CardModules> RulesBridge<M> {
         // names it without the prefix, so the flash and the two log lines agree.
         let cid = card_id.strip_prefix("event:").unwrap_or(card_id);
         let owner = if uid >= 0 {
-            w.field_by_uid(uid)
+            w.world
+                .field_by_uid(uid)
                 .map(|f| f.owner)
                 .unwrap_or(call.player_id())
         } else {
             call.player_id()
         };
         let who = if owner >= 0 { owner } else { target };
-        // Activation wording (「发动」) is for a genuine activation only -- a
-        // skill press, which has no declaration line of its own. A hand play,
-        // a [反击] and a drawn event already logged their action (打出 / 抽到),
-        // and an already-in-play card's effect logs 「<卡名> 的效果：<what>」
-        // out of its own body -- so those flashes carry no line of their own.
+        // Entry label (「（1）」 and kin) from the manifest, when the card
+        // declared one for this entry.
+        let label = self.entry_label(card_id, call, entry);
+        // Wording:
+        // * a skill press has no declaration line of its own -> 「发动」
+        // * a hand play / a [反击] declaration / a drawn event already logged
+        //   their action (打出 / 抽到); their flash keeps no line of its own
+        //   (the player's action is the why)
+        // * everything else that runs as an already-in-play card or a
+        //   resolution -> 「效果适用」 + why + (on commit) the outcome
         let msg = match kind {
             card_trigger::SKILL => Msg::new("log.card_activated")
                 .player_id("who", who)
                 .card("card", cid),
+            card_trigger::HOOK | card_trigger::COUNTER => {
+                let why = if matches!(call, Call::Counteract { .. }) {
+                    // Resolution names the answered link's card and what it
+                    // was doing (the declaration already logged 打出[反击]).
+                    crate::counteract_reason(
+                        trigger.card.as_deref().unwrap_or(""),
+                        trigger,
+                    )
+                } else {
+                    crate::trigger_reason(trigger)
+                };
+                Msg::new("log.effect_applied")
+                    .card("card", cid)
+                    .text("label", label)
+                    .msg("why", why)
+            }
             _ => Msg::default(),
         };
-        w.card_activation(kind, owner, cid, target, tile, false, msg);
+        // Write-through: the header posts to the live stream at body entry,
+        // so it precedes every host-effect and body line this run causes.
+        // A multi-pass re-run's header replaces the first post in place.
+        w.post_card(kind, owner, msg, cid, target, tile, false)
+    }
+
+    /// The manifest label of `card_id`'s `entry` (「（1）」 / 「（2）」), or `""`.
+    fn entry_label(&self, card_id: &str, call: Call, entry: i32) -> String {
+        let _ = call;
+        let Some(idx) = self.ruleset.card(card_id) else {
+            return String::new();
+        };
+        self.ruleset
+            .cards()
+            .get(idx as usize)
+            .and_then(|c| c.on.get(entry.max(0) as usize))
+            .and_then(|o| o.label.clone())
+            .unwrap_or_default()
     }
 
     /// Run one effect to completion, prompting through the engine as needed.
@@ -1895,9 +2034,12 @@ impl<M: CardModules> RulesBridge<M> {
         // The activation announcement fires at **body entry** (see
         // [`Self::announce_drive`]): `run` / `run_hook` call this on the world
         // copy the body will write into, only once the entry exists and the
-        // condition + guard admitted. A pass's copy is dropped when the body
-        // pauses, so a multi-pass drive announces on every pass and exactly one
-        // of those copies -- the one that lands -- carries the event.
+        // condition + guard admitted. Multi-pass re-runs announce only the
+        // first time each entry runs (the landing pass inherits that announce
+        // through the code-order merge in [`Self::commit_after`]).
+        let mut announced: std::collections::BTreeSet<i32> = Default::default();
+        let mut activation_id = cx.activation.last().copied().unwrap_or(-1);
+        let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
             cx.restore_guests_to(overlay_base);
@@ -1907,7 +2049,7 @@ impl<M: CardModules> RulesBridge<M> {
             if let Some(base) = &pile_base {
                 base.apply(&mut world);
             }
-            let run = Run {
+            let mut run = Run {
                 world,
                 pile_checkpoints: Arc::new(pile_checkpoints.clone()),
                 data: self.data.clone(),
@@ -1924,10 +2066,14 @@ impl<M: CardModules> RulesBridge<M> {
                 fire_spent_log: vec![],
                 house_log: vec![],
                 counter_log: vec![],
-            exile_log: vec![],
+                exile_log: vec![],
                 doubled: -1,
                 linger_props: Default::default(),
                 wrap_effect: Self::wraps_effect(call, card_id),
+                live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
+                posted: std::mem::take(&mut posted_ids),
+                log_idx: 0,
+                parent: activation_id,
             };
             // Simulation mode (`docs/BOT.md` §3.2): with a provider installed
             // the body must run **once** -- every pause is answered inline
@@ -1945,8 +2091,26 @@ impl<M: CardModules> RulesBridge<M> {
                 halt: None,
                 answers: Vec::new(),
             });
-            let mut announce = |w: &mut crate::Run| {
-                self.announce_drive(&mut w.world, call, card_id, uid, target, tile);
+            let cx_ptr = cx as *mut Cx<'_>;
+            let mut announce = |w: &mut crate::Run, entry: i32| {
+                if !announced.insert(entry) {
+                    // A multi-pass re-run: the first pass already announced
+                    // this entry. Consume the header's replace-log slot so the
+                    // body's first line does not overwrite the header.
+                    w.parent = activation_id;
+                    w.live = Some(cx_ptr as *mut Cx<'static>);
+                    if w.log_idx < w.posted.len() {
+                        w.log_idx += 1;
+                    }
+                    return;
+                }
+                w.parent = activation_id;
+                w.live = Some(cx_ptr as *mut Cx<'static>);
+                let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
+                if id >= 0 && activation_id < 0 {
+                    activation_id = id;
+                    unsafe { (*cx_ptr).activation.push(id) };
+                }
             };
             let mut guest = || -> Result<Option<Result<Outcome<Run>, RuleError>>, RuleError> {
                 if guarded {
@@ -1977,6 +2141,14 @@ impl<M: CardModules> RulesBridge<M> {
             // inline host; propagate it and drop the body (the engine routine
             // re-runs from its snapshot, as today).
             if let Some(h) = inline.as_mut().and_then(|h| h.take_halt()) {
+                // A halted drive's write-through lines must not survive: the
+                // engine routine re-runs from its snapshot, and a second post
+                // would duplicate them.
+                cx.drop_events(&posted_ids);
+                posted_ids.clear();
+                if activation_id >= 0 {
+                    cx.activation.retain(|&id| id != activation_id);
+                }
                 return Err(h);
             }
             // Prompts answered inline this run go on the drive's log **in
@@ -1992,7 +2164,7 @@ impl<M: CardModules> RulesBridge<M> {
                 Err(e) => Err(e),
             };
             match outcome {
-                Ok(Outcome::Done(after)) => {
+                Ok(Outcome::Done(mut after)) => {
                     // Simulation mode (`docs/BOT.md` §3.2): the learn pass
                     // above ran the body once with every pause answered
                     // inline against the **live** world, so the host effects
@@ -2004,16 +2176,24 @@ impl<M: CardModules> RulesBridge<M> {
                     // answers pre-filled and commit that instead. Two guest
                     // runs per body, not *k*+1, and the same final world.
                     if answers.is_empty() {
+                        let mut after = after;
+                        posted_ids = std::mem::take(&mut after.posted);
                         return self.commit_after(cx, after, call, card_id, trigger);
                     }
+                    // Recover the learn pass's write-through log so the commit
+                    // pass replaces those lines instead of appending duplicates.
+                    posted_ids = std::mem::take(&mut after.posted);
                     let mut world = cx.share_world();
                     if let Some(base) = &pile_base {
                         base.apply(&mut world);
                     }
                     // This pass's world is the one that lands: the learn pass's
-                    // copy above is dropped when any pause was answered, so the
-                    // activation rides this copy (announced at body entry below).
-                    let run = Run {
+                    // copy above is dropped when any pause was answered. Its
+                    // write-through lines are already on the live stream, so
+                    // this pass **replaces** them in place (same `posted` log)
+                    // rather than appending duplicates; its guest writes land
+                    // on top of the host effects.
+                    let mut run = Run {
                         world,
                         pile_checkpoints: Arc::new(pile_checkpoints.clone()),
                         data: self.data.clone(),
@@ -2034,9 +2214,22 @@ impl<M: CardModules> RulesBridge<M> {
                         doubled: -1,
                         linger_props: Default::default(),
                         wrap_effect: Self::wraps_effect(call, card_id),
+                        live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
+                        posted: std::mem::take(&mut posted_ids),
+                        log_idx: 0,
+                        parent: activation_id,
                     };
-                    let mut announce = |w: &mut crate::Run| {
-                        self.announce_drive(&mut w.world, call, card_id, uid, target, tile);
+                    let mut announce = |w: &mut crate::Run, _entry: i32| {
+                        // Already announced on the learn pass. Consume the
+                        // header's slot in the replace log without re-posting
+                        // (a second header would duplicate the flash; skipping
+                        // the slot would make the first body line overwrite
+                        // the header).
+                        w.parent = activation_id;
+                        w.live = Some(cx_ptr as *mut Cx<'static>);
+                        if w.log_idx < w.posted.len() {
+                            w.log_idx += 1;
+                        }
                     };
                     let outcome2 = if guarded {
                         match self
@@ -2053,6 +2246,8 @@ impl<M: CardModules> RulesBridge<M> {
                     };
                     match outcome2 {
                         Ok(Outcome::Done(after2)) => {
+                            let mut after2 = after2;
+                            posted_ids = std::mem::take(&mut after2.posted);
                             return self.commit_after(cx, after2, call, card_id, trigger);
                         }
                         // The commit pass must not pause: the learn pass
@@ -2061,6 +2256,8 @@ impl<M: CardModules> RulesBridge<M> {
                         // fall back to the learn pass's world so the effect
                         // still lands.
                         _ => {
+                            let mut after = after;
+                            posted_ids = std::mem::take(&mut after.posted);
                             return self.commit_after(cx, after, call, card_id, trigger);
                         }
                     }
@@ -2088,6 +2285,8 @@ impl<M: CardModules> RulesBridge<M> {
                 // window -- then replay the effect with the adjudicated amount
                 // (0 = cancelled, and PayAfter runs with 0).
                 Ok(Outcome::NeedHost(req, mut run)) => {
+                    // Keep the write-through log across the re-run.
+                    posted_ids = std::mem::take(&mut run.posted);
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
                     // (build/buy discounts, free buy, ...) has to cross now.
@@ -2113,7 +2312,10 @@ impl<M: CardModules> RulesBridge<M> {
                             self.raise_core(cx, "reshuffled", player, |_| {})?;
                         }
                     }
+                    let live_before = cx.live_event_count();
                     let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
+                    // Group the host-effect events under this activation.
+                    cx.stamp_parent_since(live_before, activation_id);
                     if pile_base.is_some() {
                         pile_checkpoints.insert(answers.len(), PileCheckpoint::new(cx.world_copy()));
                     }
@@ -2547,6 +2749,11 @@ impl<M: CardModules> RulesBridge<M> {
     /// The commit half of a drive: adopt the guest's finished [`Run`] as the
     /// live world and raise everything it logged. Shared by the replay path's
     /// `Done` arm and the simulation path's commit pass (`docs/BOT.md` §3.2).
+    ///
+    /// Write-through logs and host-effect events already sit on the live
+    /// stream in code order; the guest copy carries only state writes, so this
+    /// adopts the live tail before the swap. Then it completes the activation
+    /// entry with its outcome (「无事发生」 when the body changed nothing).
     fn commit_after(
         &self,
         cx: &mut Cx,
@@ -2555,8 +2762,30 @@ impl<M: CardModules> RulesBridge<M> {
         card_id: &str,
         trigger: &mut Trigger,
     ) -> Flow<i32> {
+            let mut after = after;
             let dest = after.dest;
-            *trigger = after.trigger;
+            *trigger = after.trigger.clone();
+            // Keep the live event tail (write-through order) over the guest
+            // copy's stale one. The guest copy is the state. The pending walk
+            // also stays on the live world -- swapping in a stale `WalkFlush`
+            // would re-publish the approach from its origin after a mid-walk
+            // flash (the walk-before-flash invariant).
+            after.world.recent = cx.world().recent.clone();
+            after.world.next_event = after.world.next_event.max(cx.world().next_event);
+            after.world.walk_flush = cx.world().walk_flush.clone();
+            let activation_id = after.parent;
+            // Complete the activation: 「无事发生」 when nothing followed.
+            if activation_id >= 0 {
+                let children = cx.child_event_count(activation_id, activation_id);
+                let results = if children == 0 {
+                    vec![Msg::new("log.effect_nothing")]
+                } else {
+                    Vec::new()
+                };
+                cx.set_event_results(activation_id, results);
+                after.world.recent = cx.world().recent.clone();
+                cx.activation.retain(|&id| id != activation_id);
+            }
             cx.swap_shared(after.world);
             // Empty-deck maintenance precedes all settlement after-hooks.
             for player_id in after.reshuffle_log {
@@ -3452,6 +3681,10 @@ impl<M: CardModules> RulesBridge<M> {
             doubled: -1,
             linger_props: Default::default(),
             wrap_effect: false,
+            live: None,
+            posted: vec![],
+            log_idx: 0,
+            parent: -1,
         }
     }
 
@@ -3652,6 +3885,10 @@ impl<M: CardModules> RulesBridge<M> {
                 doubled: -1,
                 linger_props: Default::default(),
                 wrap_effect: false,
+                live: None,
+                posted: vec![],
+                log_idx: 0,
+                parent: -1,
             };
             let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
             let mut options: Vec<(String, i32, i32)> = Vec::new();
@@ -5411,6 +5648,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             doubled: -1,
             linger_props: Default::default(),
             wrap_effect: false,
+            live: None,
+            posted: vec![],
+            log_idx: 0,
+            parent: -1,
         };
         self.ruleset
             .cant_play(&run, idx, player_id as i32)
@@ -5488,6 +5729,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             doubled: -1,
             linger_props: Default::default(),
             wrap_effect: false,
+            live: None,
+            posted: vec![],
+            log_idx: 0,
+            parent: -1,
         };
         q.tiles
             .iter()

@@ -113,6 +113,11 @@ impl NativeRulesHandle {
                             }
                             _ => Vec::new(),
                         },
+                        label: card
+                            .labels
+                            .iter()
+                            .find(|(e, _)| *e == ei as i32)
+                            .map(|(_, l)| String::from(*l)),
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger
@@ -644,7 +649,7 @@ impl CardModules for NativeModules {
         world: &Run,
         call: Call,
         answers: &[i32],
-        mut on_body: Option<&mut dyn FnMut(&mut Run)>,
+        mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
     ) -> Result<Outcome<Run>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         let info = self
@@ -682,7 +687,7 @@ impl CardModules for NativeModules {
         // Body entry: the activation announcement goes here (mirrors
         // `Ruleset::run`), never for a bodyless drive.
         if let Some(cb) = on_body.as_deref_mut() {
-            cb(state.w());
+            cb(state.w(), entry);
         }
         let (res, state, _fuel) = run_on(
             state,
@@ -701,7 +706,7 @@ impl CardModules for NativeModules {
         world: &Run,
         call: Call,
         answers: &[i32],
-        mut on_body: Option<&mut dyn FnMut(&mut Run)>,
+        mut on_body: Option<&mut dyn FnMut(&mut Run, i32)>,
     ) -> Result<Option<HookRun<Run>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         let kind = world.trigger().kind;
@@ -765,7 +770,7 @@ impl CardModules for NativeModules {
         }
         let mut state = state.take().expect("host state present");
         if let Some(cb) = on_body.as_deref_mut() {
-            cb(state.w());
+            cb(state.w(), entry);
         }
         let (res, state, _fuel) = run_on(
             state,

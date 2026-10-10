@@ -156,6 +156,34 @@ impl Default for Trigger {
 }
 
 impl Trigger {
+    /// A trigger with the given kind and actor, everything else at its default
+    /// (no move / pay / buy payload, `target = player_id`, `tile = -1`).
+    pub fn new(kind: crate::TriggerKind, player_id: i32) -> Self {
+        Self {
+            kind,
+            player_id,
+            target: player_id,
+            tile: -1,
+            value: 0,
+            step: 0,
+            by_card: None,
+            main: false,
+            mv: None,
+            pay: None,
+            buy: None,
+            roll_source: game_core::engine::rules::RollSource::Unattributed,
+            negation: game_core::engine::rules::Negation::None,
+            spared: Vec::new(),
+            seq: 0,
+            answers: 0,
+            effects: Vec::new(),
+            cards: Vec::new(),
+            card: None,
+            name: None,
+            reason: None,
+        }
+    }
+
     /// Did a counter negate this link at all?
     pub fn is_cancelled(&self) -> bool {
         self.negation != game_core::engine::rules::Negation::None

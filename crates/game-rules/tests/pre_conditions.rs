@@ -145,7 +145,7 @@ fn pre_gate_does_not_answer() {
         player_id: 0,
     };
     let mut flashed = false;
-    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let fired = r.run_hook(&w, call, &[], Some(&mut on_body)).unwrap();
     assert!(
         fired.is_none(),
@@ -173,7 +173,7 @@ fn pre_rollplan_does_not_shape_the_move() {
         player_id: 0,
     };
     let mut flashed = false;
-    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
     assert!(
         matches!(out, Outcome::Done(_)),
@@ -201,7 +201,7 @@ fn pre_at_end_does_not_run() {
         player_id: 0,
     };
     let mut flashed = false;
-    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
     assert!(
         matches!(out, Outcome::Done(_)),
@@ -229,7 +229,7 @@ fn pre_settle_does_not_govern() {
         player_id: 0,
     };
     let mut flashed = false;
-    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let mut on_body = |_w: &mut TestWorld, _e: i32| flashed = true;
     let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
     assert!(
         matches!(out, Outcome::Done(_)),

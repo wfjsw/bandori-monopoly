@@ -908,7 +908,7 @@ impl Ruleset {
         world: &W,
         call: Call,
         answers: &[i32],
-        mut on_body: Option<&mut dyn FnMut(&mut W)>,
+        mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
     ) -> Result<Outcome<W>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         self.check(card)?;
@@ -939,7 +939,7 @@ impl Ruleset {
         }
         let mut store = self.store(world.clone(), answers)?;
         if let Some(cb) = on_body.as_deref_mut() {
-            cb(store.data_mut().w());
+            cb(store.data_mut().w(), entry);
         }
         let res = call_card(
             &self.inner,
@@ -1032,7 +1032,7 @@ impl Ruleset {
         world: &W,
         call: Call,
         answers: &[i32],
-        mut on_body: Option<&mut dyn FnMut(&mut W)>,
+        mut on_body: Option<&mut dyn FnMut(&mut W, i32)>,
     ) -> Result<Option<HookRun<W>>, RuleError> {
         let (card, player_id) = (call.card(), call.player_id());
         self.check(card)?;
@@ -1065,7 +1065,7 @@ impl Ruleset {
             announced = true;
             let mut store = self.store(cur, answers)?;
             if let Some(cb) = on_body.as_deref_mut() {
-                cb(store.data_mut().w());
+                cb(store.data_mut().w(), entry);
             }
             let res = call_card(&self.inner, &mut store, card, entry, export::OP_RUN, player_id);
             let outcome = finish(store, res)?;
@@ -1615,14 +1615,14 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         world: &crate::Run,
         call: Call,
         answers: &[i32],
-        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
+        on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Outcome<crate::Run>, RuleError>;
     fn run_hook(
         &self,
         world: &crate::Run,
         call: Call,
         answers: &[i32],
-        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
+        on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError>;
     fn can_counteract(
         &self,
@@ -1710,7 +1710,7 @@ impl CardModules for Ruleset {
         world: &crate::Run,
         call: Call,
         answers: &[i32],
-        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
+        on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Outcome<crate::Run>, RuleError> {
         Ruleset::run::<crate::Run>(self, world, call, answers, on_body)
     }
@@ -1719,7 +1719,7 @@ impl CardModules for Ruleset {
         world: &crate::Run,
         call: Call,
         answers: &[i32],
-        on_body: Option<&mut dyn FnMut(&mut crate::Run)>,
+        on_body: Option<&mut dyn FnMut(&mut crate::Run, i32)>,
     ) -> Result<Option<HookRun<crate::Run>>, RuleError> {
         Ruleset::run_hook::<crate::Run>(self, world, call, answers, on_body)
     }

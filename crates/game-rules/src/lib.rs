@@ -53,7 +53,10 @@ pub use inline::{with_inline_host, InlineHost};
 /// fuel budget the nested-call plumbing shares.
 pub use host::{engine_msg, DEFAULT_FUEL};
 pub use wasm_rules::{RulesBridge, Run, WasmRules};
+mod trigger_why;
 pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
+/// The 「效果适用」 why-clause builder.
+pub use trigger_why::{counteract_reason, trigger_reason};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0); see `host::bot_cost`.
 #[cfg(feature = "bot-cost")]
