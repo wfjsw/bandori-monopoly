@@ -1,6 +1,6 @@
 //! A card's effect activation is one `"card"` match event -- the client's card
-//! flash -- and its outcome is logged as the card's own: 「<卡名> 的效果：
-//! <what happened>」. Exactly one per real body run --
+//! flash -- and its 「效果适用」 line names what applied and why. Exactly one
+//! per real body run --
 //!
 //! * a field-card hook on a tile fires once when its guard admits the landing,
 //!   and stays completely silent when the guard rejects;
@@ -9,8 +9,9 @@
 //! * a play a [反击] negated likewise shows, marked negated.
 //!
 //! Guard rejects and pre-scan skips run no body and so emit nothing. A fresh
-//! activation (hand play, [反击], skill press) keeps its own 「打出」 line; an
-//! already-in-play card's effect never says 「发动」.
+//! activation (hand play, [反击], skill press) keeps its own 「打出」 / 「发动」
+//! line; an already-in-play card's effect says 「效果适用」 + why, with the
+//! body's own lines and the host effects it caused grouped under that header.
 
 mod common;
 
@@ -78,14 +79,22 @@ fn field_card_hook_on_a_tile_activates_once_and_stays_silent_when_the_guard_reje
     assert!(!fired[0].negated, "a hook that ran is not negated");
     assert_eq!(fired[0].player_id, 0, "the card's owner bars the flash");
     assert_eq!(fired[0].value, 3, "the tile it fired on rides the event");
-    // An already-in-play card's effect never says 「发动」: its flash carries no
-    // line of its own -- the outcome is logged as 「<卡名> 的效果：<what>」.
-    assert_eq!(fired[0].msg.key(), "", "the flash adds no generic line");
-    let effects = effects_since(&t, mark, "TEST:tileHook");
+    // An already-in-play card's effect logs 「效果适用」 + why (not 「发动」).
     assert_eq!(
-        effects.len(),
-        1,
-        "the outcome names the card as its source: {}",
+        fired[0].msg.key(),
+        "log.effect_applied",
+        "the header names what applied and why"
+    );
+    // The body's own line is a child of the header (bare -- the header names
+    // the card), so the log groups it under the activation.
+    let children: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.parent == fired[0].id)
+        .collect();
+    assert!(
+        !children.is_empty(),
+        "the body line groups under the header: {}",
         t.recent_keys(20).join(", ")
     );
 
