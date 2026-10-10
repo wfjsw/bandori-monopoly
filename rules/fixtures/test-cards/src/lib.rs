@@ -839,10 +839,82 @@ fn deny_play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A `passTile` hook that only announces itself (a `"card"` flash plus one log
+/// line) and lets the walk continue. Pins the lazy-flush order: the walk's
+/// `roll`/`move` event covering the hook's tile must land **before** the flash,
+/// and the remainder of the walk continues from that tile.
+///
+/// Guard: fires on the tile named by `TEST.pass_flash.tile` (set by the test;
+/// unset/`-1` never fires), once per walk (`TEST.pass_flash.done`).
+const PASS_FLASH: CardDef = CardDef::new(
+    "TEST:pass_flash",
+    &[
+        On::Play("", None, pass_flash_place),
+        On::Hook(&[HookKind::PassTile], "", Some(pass_flash_guard), pass_flash_body),
+    ],
+);
+
+fn pass_flash_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:pass_flash", &Msg::new(key!("pass_flash_note")));
+    Ok(())
+}
+
+fn pass_flash_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::tile() == ctx::state::get(player_id, "TEST.pass_flash.tile")
+        && ctx::state::get(player_id, "TEST.pass_flash.done") == 0
+}
+
+fn pass_flash_body(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.pass_flash.done", 1);
+    ctx::log(player_id, &Msg::new(key!("pass_flash_ran")));
+    Ok(())
+}
+
+/// [`PASS_FLASH`]'s pre-half: a `passBefore` hook that only announces itself.
+/// The flush it forces covers steps up to the **previous** tile (`passBefore`
+/// fires before the step onto `next`).
+///
+/// Guard: `TEST.pass_before_flash.tile` / `TEST.pass_before_flash.done`, the
+/// same shape as [`PASS_FLASH`].
+const PASS_BEFORE_FLASH: CardDef = CardDef::new(
+    "TEST:pass_before_flash",
+    &[
+        On::Play("", None, pass_before_flash_place),
+        On::Hook(
+            &[HookKind::PassBefore],
+            "",
+            Some(pass_before_flash_guard),
+            pass_before_flash_body,
+        ),
+    ],
+);
+
+fn pass_before_flash_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:pass_before_flash", &Msg::new(key!("pass_flash_note")));
+    Ok(())
+}
+
+fn pass_before_flash_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::player_id() == player_id
+        && trigger::tile() == ctx::state::get(player_id, "TEST.pass_before_flash.tile")
+        && ctx::state::get(player_id, "TEST.pass_before_flash.done") == 0
+}
+
+fn pass_before_flash_body(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.pass_before_flash.done", 1);
+    ctx::log(player_id, &Msg::new(key!("pass_flash_ran")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
-    PASS_TELE, TILE_HOOK, DENY_PLAY
+    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH
 ]);
