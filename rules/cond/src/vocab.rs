@@ -830,7 +830,16 @@ pub fn func_names() -> Vec<&'static str> {
     VOCAB
         .iter()
         .filter(|n| matches!(n.scope, Scope::Func { .. }))
-        .map(|n| n.cel)
+        .flat_map(|n| {
+            // Both the CEL spelling (`move.tag`) and the flat id (`move_tag`)
+            // are callable: the rewrite lowers dotted calls to the flat, and
+            // a bare flat spelling is accepted as-is.
+            if n.cel == n.flat {
+                vec![n.cel]
+            } else {
+                vec![n.cel, n.flat]
+            }
+        })
         .collect()
 }
 

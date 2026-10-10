@@ -371,6 +371,35 @@ fn tok_lookup() {
 }
 
 #[test]
+fn move_dir() {
+    // `win()` carries `dir: 1` (forward). `move.dir < 0` is the backward filter
+    // kanon_march uses.
+    assert!(!compile("move.dir < 0").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("move.dir > 0").unwrap().eval(&win(), &cand(0)));
+    let mut w = win();
+    w.mv.dir = -1;
+    assert!(compile("move.dir < 0").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn move_tag_lookup() {
+    // `move.tag('name')` is the move's per-card tag counter
+    // (`trigger::move_tag(name)`); missing names answer 0. Both the dotted
+    // CEL spelling and the flat id are callable.
+    let cond = compile("move.tag('fireRoll') != 0").unwrap();
+    assert!(!cond.eval(&win(), &cand(0)));
+
+    let cond_flat = compile("move_tag('fireRoll') != 0").unwrap();
+    assert!(!cond_flat.eval(&win(), &cand(0)));
+
+    let mut w = win();
+    w.mv.tags.push(("fireRoll".to_string(), 1));
+    assert!(cond.eval(&w, &cand(0)));
+    assert!(cond_flat.eval(&w, &cand(0)));
+    assert!(!compile("move.tag('other') != 0").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
 fn trigger_card_matches_card_id() {
     // `trigger_card` shares `card.id`'s encoding: the self-check form is
     // `trigger_card == card.id`.

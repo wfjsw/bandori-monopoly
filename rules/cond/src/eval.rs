@@ -213,7 +213,7 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
     if !matches!(n.scope, Scope::Func { .. }) {
         return;
     }
-    let fname = n.cel;
+    let fname = n.flat;
     match n.fx {
         Fx::SeatIntIs { var, .. } => {
             let var = var.to_string();

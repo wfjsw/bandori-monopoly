@@ -203,6 +203,8 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                 }
                 // `effect.has(x)` / `chain.has(x)` -> `chain_has(x)`
                 // `effect.hits(x)` / `chain.hits(x)` -> `chain_hits(x)`
+                // `move.tag(x)` -> `move_tag(x)` (any `root.name` whose
+                // `root.name` spelling is a VOCAB Func rewrites to its flat).
                 if let Some(target) = &call.target {
                     if let Expr::Ident(root) = &target.expr {
                         if (root == "effect" || root == "chain")
@@ -222,6 +224,29 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                                     args: vec![arg],
                                 }),
                             });
+                        }
+                        // General dotted function: `move.tag(x)` and friends.
+                        let dotted = format!("{root}.{name}");
+                        if let Some(n) = vocab::by_cel(&dotted) {
+                            if let Scope::Func { arity, .. } = n.scope {
+                                if call.args.len() != arity {
+                                    return Err(CondError::UnknownVar(format!(
+                                        "{dotted} takes exactly {arity} argument(s)"
+                                    )));
+                                }
+                                let mut args = Vec::with_capacity(call.args.len());
+                                for a in &call.args {
+                                    args.push(rewrite(a)?);
+                                }
+                                return Ok(IdedExpr {
+                                    id: e.id,
+                                    expr: Expr::Call(cel::common::ast::CallExpr {
+                                        func_name: n.flat.into(),
+                                        target: None,
+                                        args,
+                                    }),
+                                });
+                            }
                         }
                     }
                 }

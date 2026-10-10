@@ -7,14 +7,23 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{ChainKind, MoveKind, TriggerKind};
+use card_sdk::abi::{ChainKind, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const MISAKI_CARD: CardDef = CardDef::new(
     "HHW:（美咲）",
-    &[On::Counteract(&[ChainKind::MoveRoll], "", Some(can_counteract), counteract)],
-);
+    &[On::Counteract(
+        &[ChainKind::MoveRoll],
+        // 规则书[反击]: 「使用火罐进行移动掷骰后」 -- the [火罐] roll is
+        // card-owned state: the card that armed one tagged the move
+        // (`ctx::plan::set_tag("fireRoll", 1)`).
+        "actor == owner && move.tag('fireRoll') != 0",
+        Some(can_counteract),
+        counteract,
+    )],
+)
+.legacy(&[(0, legacy_can_counteract)]);
 
 /// C# `CardMisakiCard.Between` -- the other players standing in the move's span,
 /// in the direction the move actually travels (`t.Move.Dir`).
@@ -37,7 +46,14 @@ fn between(player_id: i32) -> Vec<i32> {
         .collect()
 }
 
+/// Residual guard for [`can_counteract`] -- `between`'s path scan stays here
+/// (geometry outside the condition vocabulary).
 fn can_counteract(player_id: i32) -> bool {
+    !between(player_id).is_empty()
+}
+
+/// G3 audit (GUARDS.md §5.1): the pre-migration guard.
+fn legacy_can_counteract(player_id: i32) -> bool {
     // 规则书[反击]: 「使用火罐进行移动掷骰后，触发结算前可打出此卡」 -- C#
     // `CanCounteract`: `t.Kind == "moveRoll" && t.Seat == seat && t.Move != null &&
     // t.Move.FireRoll && Between(t.Move).Count > 0`.
@@ -53,10 +69,9 @@ fn can_counteract(player_id: i32) -> bool {
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `actor == owner` is the pre; the fireRoll tag and `between`'s path scan
+    // are the residual guard.
     let list = between(player_id);
-    if list.is_empty() {
-        return Ok(());
-    }
     // 规则书[反击]: 「使你传送至你选择的一名位于你的移动起点与预定移动终点之间的玩家所在的格子」
     // -- C# `H.AskSeat(i, "另一个我", ..., list)`.
     let who = ctx::ask_player(
