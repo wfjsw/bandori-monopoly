@@ -3330,7 +3330,11 @@ pub fn skill_blocked(player_id: i32, band: &str) -> bool {
         }
     }
     let t = player_pos(player_id);
-    t >= 0 && count_marks(t, "skillBlock", -2) > 0
+    t >= 0
+        && count_marks(
+            t,
+            &crate::abi::MarkFilter::any().kind("skillBlock"),
+        ) > 0
 }
 
 /// Where **this instance** sits, or -1 for "with its owner" / gone
