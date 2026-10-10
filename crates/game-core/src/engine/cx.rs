@@ -555,6 +555,13 @@ impl<'a> Cx<'a> {
         self.w.recent.replace_msg(id, msg)
     }
 
+    /// Set `value` on already-posted events (a `"dice"` face, a `"fire"` spend).
+    pub fn replace_event_values(&mut self, pairs: &[(i32, i32)]) {
+        for &(id, value) in pairs {
+            self.w.recent.set_value(id, value);
+        }
+    }
+
     /// Drop events by id (a halted drive's write-through lines). Rebuilds the
     /// tail without them.
     pub fn drop_events(&mut self, ids: &[i32]) {

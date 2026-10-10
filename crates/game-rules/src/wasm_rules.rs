@@ -354,7 +354,24 @@ impl CardWorld for Run {
         }
     }
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
-        self.world.roll(player_id, count, sides)
+        // Roll on the guest copy (its RNG), then post the `"dice"` event
+        // write-through so it survives `commit_after`'s adoption of the live
+        // tail. A re-run replaces the already-posted line (same roll -- the
+        // guest RNG restarts from the same share point).
+        let total = self.world.roll(player_id, count, sides);
+        let msg = Msg::new("log.dice")
+            .player_id("who", player_id)
+            .i("count", count as i64)
+            .i("sides", sides as i64)
+            .i("sum", total as i64);
+        self.post_log("dice", player_id, msg, "");
+        if let Some(live) = self.live {
+            if let Some(&id) = self.posted.last() {
+                let cx = unsafe { &mut *live };
+                cx.replace_event_values(&[(id, total)]);
+            }
+        }
+        total
     }
 
     fn effect(&mut self, player_id: i32, msg: Msg) {
@@ -1475,7 +1492,13 @@ impl CardWorld for Run {
             return 0;
         }
         s.state_add(game_core::state::key::FIRE, -n);
-        self.world.log("fire", player_id, why).value = -n;
+        self.post_log("fire", player_id, why.clone(), "");
+        if self.live.is_none() {
+            self.world.log("fire", player_id, why).value = -n;
+        } else if let Some(&id) = self.posted.last() {
+            let cx = unsafe { &mut *self.live.unwrap() };
+            cx.replace_event_values(&[(id, -n)]);
+        }
         self.fire_spent_log.push((player_id, n));
         1
     }

@@ -40,18 +40,26 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
 }
 
 /// Strip the event tail and its presentation fields from a save, so the hash
-/// covers game state only. `--state` mode.
+/// covers game state only. `--state` mode. Recurses into `pending.snapshot`
+/// (a halted routine's world) as well as the top-level `world`.
 fn strip_events(save: &str) -> String {
     let Ok(mut v) = serde_json::from_str::<serde_json::Value>(save) else {
         return save.to_string();
     };
-    if let Some(world) = v.get_mut("world").and_then(|w| w.as_object_mut()) {
-        world.remove("recent");
-        world.remove("next_event");
+    if let Some(obj) = v.as_object_mut() {
+        // Presentation pacing (walk-flush delays and the like) is allowed to
+        // differ; game state is not.
+        obj.remove("wait");
+        obj.remove("shield");
     }
     fn scrub(v: &mut serde_json::Value) {
         match v {
             serde_json::Value::Object(o) => {
+                // Event tail (and its id counter) at every world level.
+                if o.contains_key("recent") || o.contains_key("next_event") {
+                    o.remove("recent");
+                    o.remove("next_event");
+                }
                 o.remove("parent");
                 o.remove("results");
                 for (_, x) in o.iter_mut() {
@@ -90,6 +98,9 @@ fn load_rules(data: &Arc<GameData>) -> Arc<dyn CardRules> {
 fn main() {
     let raw: Vec<String> = std::env::args().skip(1).collect();
     let state_only = raw.iter().any(|a| a == "--state");
+    let dump_dir = raw
+        .iter()
+        .find_map(|a| a.strip_prefix("--dump=").map(|s| s.to_string()));
     let mentality = raw
         .iter()
         .find_map(|a| BotMentality::parse(a))
@@ -98,7 +109,7 @@ fn main() {
     // First bare arg is the games count only when it is not the out path.
     let out = raw
         .iter()
-        .find(|a| a.ends_with(".txt") || a.contains('/') || a.contains('\\'))
+        .find(|a| !a.starts_with("--") && (a.ends_with(".txt") || a.contains('/') || a.contains('\\')))
         .cloned()
         .unwrap_or_else(|| "target/scratch/ckpt.txt".to_string());
     let games = args.first().copied().unwrap_or(8) as u32;
@@ -156,6 +167,13 @@ fn main() {
                 } else {
                     save
                 };
+                if let Some(dir) = &dump_dir {
+                    let _ = std::fs::create_dir_all(dir);
+                    let _ = std::fs::write(
+                        Path::new(dir).join(format!("seed{seed}-turn{}-round{}.json", st.turn, st.round)),
+                        &save,
+                    );
+                }
                 let h = fnv1a64(save.as_bytes());
                 game_hash = game_hash
                     .wrapping_mul(0x0000_0100_0000_01b3)

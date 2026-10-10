@@ -501,6 +501,19 @@ impl EventTail {
         true
     }
 
+    /// Set `value` on the event with `id`. No-op when not found.
+    pub fn set_value(&mut self, id: i32, value: i32) {
+        let mut evs: Vec<MatchEvent> = self.iter().cloned().collect();
+        let Some(e) = evs.iter_mut().find(|e| e.id == id) else {
+            return;
+        };
+        e.value = value;
+        *self = EventTail::default();
+        for e in evs {
+            self.push_back(e);
+        }
+    }
+
     /// Drop every event whose id is in `ids`. Rebuilds the tail.
     pub fn drop_ids(&mut self, ids: &[i32]) {
         if ids.is_empty() {
