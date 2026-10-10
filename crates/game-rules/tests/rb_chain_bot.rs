@@ -138,7 +138,7 @@ fn vanilla_seed(n: usize, seed: u64) -> Table {
 // Bot seats are offered and answered
 // =====================================================================
 
-// The C# carry-over ("out / AI / exiled players never open a window") dropped
+// A previous "out / AI / exiled players never open a window" rule dropped
 // the AI half: a bot is a player, so the window opens and the seat answers
 // through `fill_ai`.
 //

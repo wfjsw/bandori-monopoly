@@ -327,9 +327,9 @@ fn tomoe_savior_on_your_own_mortgage_pays_twice_and_unmortgages() {
 // "CRYCHIC"卡，将你剩余的所有手牌放入抽牌堆，并向抽牌堆中加入角色对应的自选"MyGO"
 // 或"Ave Mujica"卡至抽牌堆中总共有10张卡并洗切；获得角色对应的"MyGO"或"Ave Mujica"
 // 乐队技能卡，然后抽2张卡。」
-// 「立即执行…（2）效果」 runs that effect body now (the C# port is
-// `BandCrychic.TransformNow()`), so the CRYCHIC band card goes away, a MyGO /
-// Ave Mujica band skill arrives and two cards are drawn.
+// 「立即执行…（2）效果」 runs that effect body now, so the CRYCHIC band
+// card goes away, a MyGO / Ave Mujica band skill arrives and two cards are
+// drawn.
 #[test]
 fn mutsumi_never_2_runs_the_band_skill_2() {
     let mut t = Table::new(&["若叶睦（CRYCHIC）", "长崎素世（CRYCHIC）"]);

@@ -210,7 +210,8 @@ pub enum PromptOption {
     Tile { tile: i32, label: crate::Msg },
 }
 
-/// A prompt the effect is blocked on. Maps onto the C# `MatchPrompt`.
+/// A prompt the effect is blocked on -- the engine surfaces it to the
+/// player (or bot) and logs the answer for the replay.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Prompt {
     pub kind: PromptKind,
@@ -233,7 +234,7 @@ pub struct Prompt {
 // `Move` carries a `MoveCtx`, which has `f64` factors: no `Eq`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum HostRequest {
-    /// A payment (`t.Pay`): the engine runs the C# `Money` pipeline on it and
+    /// A payment (`t.Pay`): the engine runs the money pipeline on it and
     /// answers with the final amount (0 = cancelled). `from < 0` is a print
     /// (game -> `to`), `to < 0` a delete (`from` -> game), both >= 0 a
     /// pay-player. `src` is the reason line the money log carries.
@@ -261,42 +262,40 @@ pub enum HostRequest {
         amount: i32,
         src: Option<crate::Msg>,
     },
-    /// An abnormal effect about to hit `player_id`: the engine runs the C#
-    /// `AbnormalGate` and answers 1 (it goes through) or 0 (blocked).
+    /// An abnormal effect about to hit `player_id`: the engine runs the
+    /// abnormal [反击] gate and answers 1 (it goes through) or 0 (blocked).
     Gate { player_id: i32, kind: AbKind },
-    /// A card targeting a player (`tile < 0`) or a tile: the engine runs the C#
-    /// `H.Target` / `H.TargetTile` pipeline and answers with the player (or tile)
-    /// actually targeted, or -1 when the targeting failed. `single` lets a
-    /// field `redirect` hook move the hit (C# `CardDef.SingleTarget`).
+    /// A card targeting a player (`tile < 0`) or a tile: the engine runs the
+    /// targeting pipeline and answers with the player (or tile) actually
+    /// targeted, or -1 when the targeting failed. `single` lets a field
+    /// `redirect` hook move the hit (single-target plays only).
     Target {
         player_id: i32,
         tile: i32,
         single: bool,
     },
-    /// C# `H.CardMove(c, m)`: the card shaped the move (via the plan ops) and
-    /// asked for it to run now. The engine runs `Cx::card_move` -- it may open
-    /// prompts -- and the effect then replays past this call. `plan` is the
-    /// plan as the card left it.
+    /// The card shaped the move (via the plan ops) and asked for it to run
+    /// now. The engine runs `Cx::card_move` -- it may open prompts -- and the
+    /// effect then replays past this call. `plan` is the plan as the card
+    /// left it.
     Move {
         player_id: i32,
         plan: game_core::engine::MoveCtx,
     },
-    /// C# `H.ForceTeleport(..., resolve: false)` / a bare `pos` write: move a
-    /// player with no settle and no move bookkeeping. The engine runs the
-    /// `AbnormalGate` and applies the write to the **live** world, so a move
-    /// that follows in the same effect starts at the destination -- and the
-    /// replay skips the call (an answer is logged), so it cannot re-teleport
-    /// over a move that already ran. Answers 1 (it went through) or 0 (the
-    /// gate blocked it).
+    /// A position write with no settle and no move bookkeeping (a forced
+    /// teleport). The engine runs the abnormal [反击] gate and applies the
+    /// write to the **live** world, so a move that follows in the same effect
+    /// starts at the destination -- and the replay skips the call (an answer
+    /// is logged), so it cannot re-teleport over a move that already ran.
+    /// Answers 1 (it went through) or 0 (the gate blocked it).
     Teleport { player_id: i32, tile: i32 },
-    /// C# `H.SettleAt`: a full [触发结算] of `tile` for this player. The player
-    /// does not move.
+    /// A full [触发结算] of `tile` for this player, without moving them.
     SettleAt {
         player_id: i32,
         tile: i32,
         main: bool,
     },
-    /// C# `H.BuyRoutine`: the purchase itself.
+    /// The purchase itself (`docs/PURCHASE.md`).
     Buy {
         player_id: i32,
         tile: i32,
@@ -319,24 +318,24 @@ pub enum HostRequest {
     },
     /// v40: bind the running card as a turn-scoped lingering instance.
     Linger { player_id: i32, expires: i32 },
-    /// C# `H.BuildRoutine`: pay and raise one house on `tile`.
+    /// Pay and raise one house on `tile`.
     Build { player_id: i32, tile: i32 },
-    /// C# `H.OfferBuildAmong`: prompt to build on one of `tiles`, then build.
+    /// Prompt to build on one of `tiles`, then build.
     OfferBuild { player_id: i32, tiles: Vec<i32> },
-    /// C# `H.MortgageRoutine`: mortgage one of the player's deeds.
+    /// Mortgage one of the player's deeds.
     Mortgage { player_id: i32, tile: i32 },
-    /// `H.DrawR`: draw `n` cards. The engine runs the draw itself -- one card at
+    /// Draw `n` cards. The engine runs the draw itself -- one card at
     /// a time, raising the per-draw points (`drewBefore` / `drawn` / `drew`) on
     /// each, so a `drewBefore` hook may replace a card of it -- and answers with
     /// how many were actually drawn. The effect then replays past this call and
     /// does **not** move the cards again (they are already in the live world).
     Draw { player_id: i32, n: i32 },
-    /// `H.DrawEvent` -- draw the top event and resolve it (「抽取一个事件卡」).
+    /// Draw the top event and resolve it (「抽取一个事件卡」).
     /// The engine runs the whole event pipeline (public reveal, immediate
     /// effect, filing to the event discard, the reshuffle-when-empty half).
     /// `docs/TILES.md`'s `ctx::draw_event`, what `tile:event`'s body calls.
     DrawEvent { player_id: i32 },
-    /// `H.PayRent`: 「[支付]拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
+    /// 「[支付]拥有格子的玩家格子地契所标记的现等级地租」 -- the rent
     /// pipeline (rent table / RiNG dice / the agent's 「半价收费」 half-flag).
     /// `docs/TILES.md`'s `ctx::pay_rent`, what `tile:property` / `tile:ring` /
     /// `tile:agent` bodies call.
@@ -345,13 +344,13 @@ pub enum HostRequest {
         tile: i32,
         half: bool,
     },
-    /// `H.OfferBuy`: 「可选择[消耗]购买格子地契和建造已有房子的资金总价」 on a
+    /// 「可选择[消耗]购买格子地契和建造已有房子的资金总价」 on a
     /// non-main landing on unowned land. `ctx::offer_buy`.
     OfferBuy { player_id: i32, tile: i32 },
-    /// `H.OfferForceBuy`: 「可选择[支付]…资金总价的两倍，从该玩家处强行购买」
+    /// 「可选择[支付]…资金总价的两倍，从该玩家处强行购买」
     /// on a mortgaged deed. `ctx::offer_force_buy`.
     OfferForceBuy { player_id: i32, tile: i32 },
-    /// `H.OfferBuild`: 「可选择[消耗]…房屋建筑费进行升级建造」 on a non-main
+    /// 「可选择[消耗]…房屋建筑费进行升级建造」 on a non-main
     /// landing on one's own land. `ctx::offer_build`.
     OfferBuildOne { player_id: i32, tile: i32 },
     /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
@@ -366,11 +365,11 @@ pub enum HostRequest {
         sides: i32,
         source: i32,
     },
-    /// C# `f.Bought(i, t)` -- a card handed a deed over (tomoe_savior's
-    /// 「从该玩家处收购该地契」) and is announcing the acquisition: the engine
-    /// raises the `bought` hook chain over the field (`TriggerKind::Bought`),
-    /// with `by_card` = the run's own player. `buy()` raises the same hook
-    /// itself after an ordinary purchase; this is the card-driven half.
+    /// A card handed a deed over (tomoe_savior's 「从该玩家处收购该地契」) and
+    /// is announcing the acquisition: the engine raises the `bought` hook chain
+    /// over the field (`TriggerKind::Bought`), with `by_card` = the run's own
+    /// player. `buy()` raises the same hook itself after an ordinary purchase;
+    /// this is the card-driven half.
     RaiseBought { player_id: i32, tile: i32 },
     /// Raise a trigger point from a guest body (`ctx::raise`). `kind` is a
     /// [`TriggerKind`] as `i32` (mapped through `TriggerKind::as_str` for the
@@ -2157,9 +2156,9 @@ fn inspect(engine: &Engine, wasm: &[u8]) -> Result<(Module, Vec<CardInfo>), Rule
     Ok((module, cards))
 }
 
-/// The C# `AbnormalGate` from inside a card run: on replay the logged answer
-/// says whether the effect went through; otherwise the run is paused with a
-/// `Gate` request and the engine adjudicates it.
+/// The abnormal [反击] gate, from inside a card run: on replay the logged
+/// answer says whether the effect went through; otherwise the run is paused
+/// with a `Gate` request and the engine adjudicates it.
 ///
 /// Pauses by **trapping** with [`need_input`], unlike `ask`/`pay`/`play_card`.
 /// `ctx::gate` reads this as a plain `bool`, so a sentinel here would read as

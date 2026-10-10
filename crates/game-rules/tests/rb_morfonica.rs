@@ -105,10 +105,10 @@ fn tritone_gains_amount_and_places_with_crystals() {
 #[test]
 fn tritone_countdown_discards_and_pays_back() {
     // 规则书: 「三回合后（奇迹水晶3，每回合结束时移除1）弃置此卡并支付由此卡获得的资金」
-    // 「三回合后」 is three of the **owner's** turns (C# `DecayCard.DecayOn` =
-    // the player the card sits at): an opponent's turn end does not tick the
-    // countdown. The harness's `end_quiet` re-rolls after the counteract (the
-    // player already rolled), so drive the turns by hand with
+    // 「三回合后」 is three of the **owner's** turns (the countdown is keyed
+    // to the player the card sits at): an opponent's turn end does not tick
+    // the countdown. The harness's `end_quiet` re-rolls after the counteract
+    // (the player already rolled), so drive the turns by hand with
     // `begin_turn` / `roll` / `end`.
     let mut t = Table::vanilla(2);
     t.own(1, &[7]);

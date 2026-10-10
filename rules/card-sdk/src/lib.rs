@@ -16,7 +16,7 @@
 //! this time with an answer.
 //!
 //! Consequences for card authors:
-//! * no coroutines, no async, no callbacks -- write it top to bottom like the C#;
+//! * no coroutines, no async, no callbacks -- write it top to bottom;
 //! * **all** randomness and world access must go through `ctx` (never keep your
 //!   own state in `static mut`; the module is re-instantiated for every run);
 //! * guards (`can_counteract`) run against a throwaway copy of the world, so they are
@@ -89,10 +89,10 @@ pub mod rt;
 ///
 /// ```ignore
 /// use card_sdk::abi::prop;
-/// // 规则书[持续]（1）: 「手卡上限数量减1」 -- C# `Card.HandLimitDelta`
+/// // 规则书[持续]（1）: 「手卡上限数量减1」
 /// pub const CUT: CardDef = CardDef::new("PP:不要背负期待", &[...])
 ///     .props(&[(prop::HAND_LIMIT_DELTA, -1)]);
-/// // 规则书: 「（此卡可在眩晕时打出）」 -- C# `Card.PlayableStunned`
+/// // 规则书: 「（此卡可在眩晕时打出）」
 /// pub const H: CardDef = CardDef::new("MyGO:壱雫空", &[...])
 ///     .props(&[(prop::PLAYABLE_STUNNED, 1)]);
 /// ```
@@ -148,7 +148,7 @@ impl CardDef {
     }
 }
 
-/// One entry point of a card (a C# `Card` override). The variant says what the
+/// One entry point of a card. The variant says what the
 /// entry is for, and its kind list is typed to match -- a counteraction can only be
 /// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
 /// at a [`abi::GateKind`]. An empty list is never dispatched.
@@ -162,9 +162,9 @@ impl CardDef {
 /// before the wasm guard is instantiated.
 #[derive(Clone, Copy)]
 pub enum On {
-    /// `Card.Play` -- play this card from hand. The first field is the gate's
+    /// Play this card from hand. The first field is the gate's
     /// condition (see the type doc). The second is the gate
-    /// (`Card.WhyNot`, the old `On::CantPlay`): a pure query with no prompts,
+    /// (the old `On::CantPlay`): a pure query with no prompts,
     /// `None` = playable, `Some(why)` = blocked and `why` is the reason to
     /// show. `None` for the gate itself means no gate. The third field is the
     /// effect.
@@ -202,7 +202,7 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
-    /// `Card.RollPlan` -- this card has a movement routine. Same shape as
+    /// This card has a movement routine ([移动] shaping). Same shape as
     /// [`On::Hook`]; the condition sees the move being planned (docs/GUARDS.md
     /// §4.2c).
     RollPlan(

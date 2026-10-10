@@ -39,7 +39,8 @@ fn props_of(
 }
 
 /// One run of a card module against a copy of the match world.
-/// C# `PlayCtx.Dest` values the module returns.
+/// Dest fates the module returns via `set_dest` (see [`DEST_GRAVEYARD`] /
+/// [`DEST_FIELD`] / [`DEST_UNSET`]).
 const DEST_GRAVEYARD: i32 = 0;
 const DEST_FIELD: i32 = 2;
 /// The run never named a fate. Distinct from [`DEST_GRAVEYARD`] on purpose: a
@@ -47,8 +48,8 @@ const DEST_FIELD: i32 = 2;
 /// but a field effect with no opinion must leave its card where it is.
 const DEST_UNSET: i32 = -1;
 
-/// C# `MatchHost._counteractDepth > 4` is a runaway net; a counter-war is bounded by
-/// hands shrinking as cards declare. 16 is plenty for a legal exchange.
+/// A counter-war is bounded by hands shrinking as cards declare; 16 is
+/// plenty for a legal exchange. A deeper nest is a runaway net.
 const MAX_COUNTERACT_DEPTH: u32 = 16;
 
 /// Hard cap on the offers one seat gets in a single visit of the ask ring
@@ -98,14 +99,15 @@ pub struct Run {
     /// concrete so the native backend can hold one in a thread-local.
     props: Arc<std::collections::HashMap<String, std::collections::BTreeMap<String, i32>>>,
     trigger: Trigger,
-    /// The card whose effect is running (`PlaceFromPlay(c)` / `Unplace(this)`).
+    /// The card whose effect is running -- the one `place_card` /
+    /// `unplace_self` act on.
     current_card: String,
     /// The **instance** this run is for. A card's name is not an identity --
     /// one player may hold several copies of the same card in play -- so the
     /// uid is. It is the one the dispatch named, and it follows the card if
-    /// this run re-places it (C# `PlaceFromPlay(c)` moves the same object).
+    /// this run re-places it (the same object moves with it).
     current_uid: i32,
-    /// `PlayCtx.Dest`, set by the module (`set_dest`).
+    /// Where this card goes when the run finishes, set by `set_dest`.
     dest: i32,
     /// Whose pile the fate lands in, set by `set_transfer_to_dest`. `None` is
     /// the owner the instance leaves -- what `set_dest` names.
@@ -114,7 +116,7 @@ pub struct Run {
     /// raises `payAfter` / `paid` for each once the run commits.
     paid_log: Vec<(i32, i32, i32)>,
     /// Cards this run put into a discard pile, `(player_id, id)` -- the engine
-    /// raises `discarded` for each once the run commits (C# `Discarded`).
+    /// raises `discarded` for each once the run commits.
     discard_log: Vec<(i32, String)>,
     /// Cards this run drew, `(player_id, id)` -- the engine raises `drawn` /
     /// `drew` for each once the run commits (the per-draw after points).
@@ -136,8 +138,8 @@ pub struct Run {
     /// Players this run granted [除外] layers to -- the engine raises `exile`
     /// for each once the run commits (「任意玩家获得[除外]…时」 handlers).
     exile_log: Vec<i32>,
-    /// C# `PlayCtx.Doubled`: which of the card's numbers this play doubles, or
-    /// -1. Set by the doubling band skill, which is not ported yet.
+    /// Which of the card's numbers this play doubles, or -1. Set by the
+    /// doubling band skill, which is not ported yet.
     doubled: i32,
     /// Props the running card wants on the lingering instance `ctx::linger`
     /// binds (`docs/PURCHASE.md` P5). A hand play has no field instance for
@@ -190,12 +192,12 @@ impl Run {
     /// raises nothing.
 
 
-    /// Move the running instance to `dest` **now** -- `H.Unplace(this, "discard")`
-    /// and kin, applied mid-effect rather than at the run's commit, for a card
-    /// that must be gone before the rest of the effect runs. `to` is whose pile
-    /// it lands in; `None` is the owner it leaves. Returns that owner, or `None`
-    /// when it was not in play. Clears `current_uid`, so a later deferred fate
-    /// finds no instance to move.
+    /// Move the running instance to `dest` **now** -- unplace-and-send, applied
+    /// mid-effect rather than at the run's commit, for a card that must be gone
+    /// before the rest of the effect runs. `to` is whose pile it lands in;
+    /// `None` is the owner it leaves. Returns that owner, or `None` when it was
+    /// not in play. Clears `current_uid`, so a later deferred fate finds no
+    /// instance to move.
     fn move_now(&mut self, to: Option<i32>, dest: i32) -> Option<i32> {
         let left = self.unplace_card();
         if left < 0 {
@@ -426,8 +428,8 @@ impl CardWorld for Run {
         self.world.add_to_deck(player_id, card, shuffle);
     }
     fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32) {
-        // C# `H.AddToDeck(seat, card, where)`: "top" = draw.Add (the end of the
-        // vec is the top), "bottom" = Insert(0), anything else = add + shuffle.
+        // `pos`: top = draw.Add (the end of the vec is the top),
+        // bottom = Insert(0), anything else = add + shuffle.
         let idx = player_id.max(0) as usize;
         if self.world.hidden.get(idx).is_none() {
             return;
@@ -874,7 +876,7 @@ impl CardWorld for Run {
             .is_some_and(|t| t.is_buyable()) as i32
     }
     fn is_shop(&self, tile: i32) -> i32 {
-        // C# `H.IsShop`: buyable and colour group 10 (the 商店街 deeds).
+        // A 「商店街」 deed: buyable and colour group 10.
         self.data
             .tiles
             .get(tile.max(0) as usize)
@@ -949,8 +951,8 @@ impl CardWorld for Run {
             .is_some_and(|t| t.kind == game_core::data::TileKind::Agent) as i32
     }
     fn is_live_house(&self, tile: i32) -> i32 {
-        // C# `H.IsLiveHouse` = `IsColor(t, 6) && IsBuyable(t)`. The per-player
-        // colour override is a tile prop, so see `is_live_house_for`.
+        // Live House: buyable and colour group 6. The per-player colour
+        // override is a tile prop, so see `is_live_house_for`.
         self.data
             .tiles
             .get(tile.max(0) as usize)
@@ -972,7 +974,7 @@ impl CardWorld for Run {
             .unwrap_or(-1)
     }
     fn tile_price(&self, tile: i32) -> i32 {
-        // `H._tiles[t].price` -- land alone (`buy_price` adds houses).
+        // Land price alone (`buy_price` adds houses).
         self.data
             .tiles
             .get(tile.max(0) as usize)
@@ -1002,8 +1004,8 @@ impl CardWorld for Run {
         }
     }
     fn add_house(&mut self, tile: i32, n: i32) -> i32 {
-        // C# `AddHouse` caps at `rent.Length - 1` (the board's house max; RiNG
-        // deeds have no rent table and never hold houses).
+        // Cap at `rent.Length - 1` (the board's house max; RiNG deeds have no
+        // rent table and never hold houses).
         let cap = self
             .data
             .tiles
@@ -1048,7 +1050,7 @@ impl CardWorld for Run {
         }
     }
     fn dist(&self, a: i32, b: i32) -> i32 {
-        // C# `H.Dist` -- the shorter way around the ring.
+        // The shorter way around the ring.
         let n = self.data.tiles.len() as i32;
         if n <= 0 {
             return 0;
@@ -1057,7 +1059,7 @@ impl CardWorld for Run {
         d.min(n - d)
     }
     fn tile_forward(&self, a: i32, b: i32) -> i32 {
-        // C# `H.Forward` -- steps forward from a to b.
+        // Steps forward from a to b around the ring.
         let n = self.data.tiles.len() as i32;
         if n <= 0 {
             return 0;
@@ -1065,7 +1067,7 @@ impl CardWorld for Run {
         ((b - a) % n + n) % n
     }
     fn neighbor(&self, player_id: i32, dir: i32) -> i32 {
-        // C# `H.Neighbor` -- the next present player in turn order, wrapping.
+        // The next present player in turn order, wrapping.
         let n = self.world.st.players.len();
         if n == 0 {
             return -1;
@@ -1120,7 +1122,7 @@ impl CardWorld for Run {
             .unwrap_or(0)
     }
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32 {
-        // C# `H.DiscardFromHand` -- one copy, hand -> discard pile.
+        // One copy, hand -> discard pile.
         let Some(h) = self.world.hidden.get_mut(player_id.max(0) as usize) else {
             return 0;
         };
@@ -1136,7 +1138,7 @@ impl CardWorld for Run {
         1
     }
     fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32 {
-        // C# `H.ShuffleAllIntoDeck(seat, hand, discard)`.
+        // Shuffle the requested piles into the draw pile.
         let idx = player_id.max(0) as usize;
         if self.world.hidden.get(idx).is_none() {
             return 0;
@@ -1172,9 +1174,9 @@ impl CardWorld for Run {
         self.world.gains_this_turn(player_id)
     }
     fn designations(&self, player_id: i32) -> Vec<i32> {
-        // `Card.Def.Targeting` + `H.Others`: a play that names recipients names
-        // the other living players of its user (「[指定][使用者]以外的所有玩家」
-        // / 「其他玩家[分摊]」). The play's card is the one the trigger names.
+        // A play whose card declares recipients (`DESIGNATES`) names the other
+        // living players of its user (「[指定][使用者]以外的所有玩家」 /
+        // 「其他玩家[分摊]」). The play's card is the one the trigger names.
         let card = self.trigger.card.as_deref().unwrap_or("");
         let designates = props_of(&self.props, card)
             .get(game_core::state::prop::DESIGNATES)
@@ -1211,14 +1213,14 @@ impl CardWorld for Run {
 
     // status extensions -----------------------------------------------------
     fn can_pay(&self, player_id: i32) -> i32 {
-        // C# `H.CanPay`: not out, not stunned, not exiled.
+        // Not out, not stunned, not exiled.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
         (!s.out() && !s.stunned() && s.exile() == 0) as i32
     }
     fn cant_move(&self, player_id: i32) -> i32 {
-        // C# `H.MoveWhyNot`.
+        // Why the [主要移动] is still unavailable (0 = free).
         if self.world.st.turn != player_id {
             return 1;
         }
@@ -1231,8 +1233,8 @@ impl CardWorld for Run {
         0
     }
     fn spend_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        // C# `H.SpendFire` -- pots first; logs the spend with its reason (the
-        // caller's message is the log line, like `gain`/`pay`).
+        // Spend pots first; logs the spend with its reason (the caller's
+        // message is the log line, like `gain`/`pay`).
         if n <= 0 {
             return 1;
         }
@@ -1256,7 +1258,7 @@ impl CardWorld for Run {
         self.world.st.round
     }
     fn turn_key(&self) -> i32 {
-        // C# `H.TurnKey => State.round * 100 + State.turn + 1`.
+        // `round * 100 + turn + 1` -- once-per-turn latches.
         self.world.st.round * 100 + self.world.st.turn + 1
     }
     fn character_is(&self, player_id: i32, name: &str) -> i32 {
@@ -1267,7 +1269,7 @@ impl CardWorld for Run {
             .is_some_and(|s| s.character == name) as i32
     }
     fn in_band(&self, player_id: i32, name: &str) -> i32 {
-        // C# `H.BandOf(seat)` -- the character's band.
+        // The character's band.
         let Some(s) = self.world.st.players.get(player_id.max(0) as usize) else {
             return 0;
         };
@@ -1359,8 +1361,7 @@ impl CardWorld for Run {
             target,
             skip,
             early,
-            // The instance asking for the callback, captured now -- the C#
-            // `AtEnd.Add(() => ...)` closure captures that card object, so the
+            // The instance asking for the callback, captured now. The
             // identity belongs to the entry rather than being resolved from the
             // field at fire time (which copy would it be?). `-1` when the card
             // is not in play: `On::AtEnd` may run for a card in a hand or pile.
@@ -1395,8 +1396,8 @@ impl CardWorld for Run {
         let card = std::mem::replace(&mut self.current_card, id.to_string());
         let dest = std::mem::replace(&mut self.dest, DEST_UNSET);
         let dest_to = std::mem::replace(&mut self.dest_to, None);
-        // Fresh instance (C# `NewCard`): the nested run is not the outer card's
-        // field card, so it starts with no uid of its own until it places one.
+        // Fresh instance: the nested run is not the outer card's field card,
+        // so it starts with no uid of its own until it places one.
         let uid = std::mem::replace(&mut self.current_uid, -1);
         (card, dest, dest_to, uid)
     }
@@ -1535,7 +1536,7 @@ impl CardWorld for Run {
 }
 
 impl Run {
-    /// C# `H.Present(p)` -- in the game and not exiled.
+    /// In the game and not exiled.
     fn present(&self, s: i32) -> bool {
         self.world
             .st
@@ -1544,7 +1545,7 @@ impl Run {
             .is_some_and(|x| !x.out() && x.exile() == 0)
     }
 
-    /// C# `H.SeatsOn(tile, except)` -- present players standing on the tile.
+    /// Present players standing on the tile, minus `except`.
     fn players_on_list(&self, tile: i32, except: i32) -> Vec<i32> {
         (0..self.world.st.players.len() as i32)
             .filter(|&p| {
@@ -1553,7 +1554,7 @@ impl Run {
             .collect()
     }
 
-    /// The player's hand (C# `_hidden[s].hand`).
+    /// The player's private hand, in order.
     fn hands(&self, player_id: i32) -> Option<&Vec<String>> {
         self.world
             .hidden
@@ -1818,8 +1819,9 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
     /// Run one effect to completion, prompting through the engine as needed.
-    /// Returns the card's destination (`PlayCtx.Dest`). A reroll the module made
-    /// (`set_move_roll`) is written back to `trigger` (C# shares `t.Move`).
+    /// Returns the card's destination (`set_dest`). A reroll the module made
+    /// (`set_move_roll`) is written back to `trigger` -- the shared `t.Move` the
+    /// counteractions also read.
     fn drive(
         &self,
         cx: &mut Cx,
@@ -2081,10 +2083,10 @@ impl<M: CardModules> RulesBridge<M> {
                     answers.push(recorded_answer(kind, &items, v));
                     let _ = player_id;
                 }
-                // A card-driven payment: the same C# `Money` pipeline as
-                // `money()` -- PayAdd -> PayMul -> PayChoose -> PayAt -> the
-                // `pay` [反击] window -- then replay the effect with the
-                // adjudicated amount (0 = cancelled, and PayAfter runs with 0).
+                // A card-driven payment: the same money pipeline as `money()`
+                // -- PayAdd -> PayMul -> PayChoose -> PayAt -> the `pay` [反击]
+                // window -- then replay the effect with the adjudicated amount
+                // (0 = cancelled, and PayAfter runs with 0).
                 Ok(Outcome::NeedHost(req, mut run)) => {
                     // The host routine runs against the **live** world and is
                     // not replayed, so the turn-ctx policy the card just set up
@@ -2181,9 +2183,9 @@ impl<M: CardModules> RulesBridge<M> {
             };
             return Ok(got);
         }
-        // C# `H.CardMove(c, m)`: the card shaped the plan and asked for
-        // the move to run now. The engine runs it (it may prompt), then
-        // the effect replays past this call.
+        // The card shaped the plan and asked for the move to run now.
+        // The engine runs it (it may prompt), then the effect replays past
+        // this call.
         HostRequest::Move { player_id, mut plan } => {
             // An event-driven move is not a main move (`docs/EVENTS.md`):
             // 「移动X」 / 「移动1d20」 go through even when the turn's
@@ -2206,12 +2208,11 @@ impl<M: CardModules> RulesBridge<M> {
             }
             return Ok(allowed as i32);
         }
-        // C# `H.ForceTeleport(..., resolve: false)` / a bare `pos`
-        // write: the gate and the write land on the **live** world here
-        // (not on the run's copy), so a `card_move` that follows in the
-        // same body starts at the destination -- and the replay skips
-        // the call (the answer below), so it cannot re-teleport over a
-        // move the engine already ran.
+        // A position write with no settle: the gate and the write land on
+        // the **live** world here (not on the run's copy), so a `card_move`
+        // that follows in the same body starts at the destination -- and
+        // the replay skips the call (the answer below), so it cannot
+        // re-teleport over a move the engine already ran.
         HostRequest::Teleport { player_id, tile } => {
             let allowed = self.abnormal_gate(
                 cx,
@@ -2266,13 +2267,13 @@ impl<M: CardModules> RulesBridge<M> {
             tile,
             kind,
         } => {
-            // The chosen branch of the agent offer (`H.AgentLanding`'s
-            // post-pick commit): buy the unowned tile, or build one level on
-            // an own one. `kind` names the branch the body saw (0 = buy,
-            // 1 = build); the engine re-checks the tile's current state so a
-            // commit-pass re-run of the body -- whose options list the
-            // just-committed effect already reshaped -- cannot double-act
-            // (the answer is in the log, so this arm does not re-execute).
+            // The chosen branch of the agent offer (the post-pick commit):
+            // buy the unowned tile, or build one level on an own one. `kind`
+            // names the branch the body saw (0 = buy, 1 = build); the engine
+            // re-checks the tile's current state so a commit-pass re-run of
+            // the body -- whose options list the just-committed effect already
+            // reshaped -- cannot double-act (the answer is in the log, so this
+            // arm does not re-execute).
             let p = player_id.max(0) as usize;
             let t = tile.max(0) as usize;
             match kind {
@@ -2365,9 +2366,9 @@ impl<M: CardModules> RulesBridge<M> {
             })?;
             return Ok(t.value.max(0));
         }
-        // C# `f.Bought(i, t)` -- the card announces an acquisition it
-        // performed outside the buy routine (tomoe_savior). The `bought`
-        // hook chain runs over the field; `by_card` is the run's player.
+        // The card announces an acquisition it performed outside the buy
+        // routine (tomoe_savior). The `bought` hook chain runs over the
+        // field; `by_card` is the run's player.
         HostRequest::RaiseBought { player_id, tile } => {
             cx.card_raise_bought(
                 player_id.max(0) as usize,
@@ -2464,9 +2465,9 @@ impl<M: CardModules> RulesBridge<M> {
             total_stage,
         } => {
             let by = Some(call.player_id());
-            // C# `Money`: a player immune to others' effects (`ImmuneAll`)
-            // is neither charged nor paid by another player's card --
-            // the payment simply does not happen.
+            // A player immune to others' effects (`ImmuneAll`) is neither
+            // charged nor paid by another player's card -- the payment
+            // simply does not happen.
             let mut immune = false;
             for x in [from, to] {
                 if x >= 0
@@ -2556,15 +2557,15 @@ impl<M: CardModules> RulesBridge<M> {
                 self.raise_core(cx, "reshuffled", player_id, |_| {})?;
             }
             // What the effect did, raised now that it has committed --
-            // the same points `money()` / `discard()` raise (C# `Money`
-            // PayAfter + `paid`, and `Discarded`).
+            // the same points `money()` / `discard()` raise (PayAfter +
+            // `paid`, and `discarded`).
             let by = Some(call.player_id());
             for (from, to, amount) in after.paid_log {
                 // 资金变动 (rulebook 支付阶段 7) fires on **any** money
                 // change, merged into `payAfter` per the doc's
                 // 「合并到[支付后]?」 -- a print (game -> player) included.
                 // The `paid` [反击] window opens only when money left a
-                // player (C# 25234), matching 再次牵起手来 / 游击演出.
+                // player, matching 再次牵起手来 / 游击演出.
                 let side = if from >= 0 { from } else { to };
                 self.raise_core(cx, "payAfter", side, |t| {
                     t.player_id = from;
@@ -2751,10 +2752,10 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
-    /// C# `AbnormalGate`, for an effect a card run wants to apply to `player_id`
-    /// (`by` = the card's player): an out player is never hit; field cards guard
-    /// (`abnormalGuard`, block with `set_cancelled`); then, if another player
-    /// caused it, the `abnormal` [反击] window (C# `CounteractAbnormal`). What gets
+    /// The abnormal-move gate, for an effect a card run wants to apply to
+    /// `player_id` (`by` = the card's player): an out player is never hit;
+    /// field cards guard (`abnormalGuard`, block with `set_cancelled`); then,
+    /// if another player caused it, the `abnormal` [反击] window. What gets
     /// through bumps `player_id`'s abnormal counter for this turn.
     fn abnormal_gate(
         &self,
@@ -2833,9 +2834,8 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(true)
     }
 
-    /// C# `AnyFx(player_id, f => f.ImmuneAll(player_id))`: does a field card make `player_id`
-    /// untouchable by `by`'s effects? (`immuneAll` hook, claimed with
-    /// `set_cancelled`.) Logged when it holds.
+    /// Does a field card make `player_id` untouchable by `by`'s effects?
+    /// (`immuneAll` hook, claimed with `set_cancelled`.) Logged when it holds.
     fn immune(&self, cx: &mut Cx, player_id: i32, by: i32) -> Flow<bool> {
         let t = self.raise_core(cx, "immuneAll", player_id, |t| t.by_card = Some(by))?;
         if t.is_cancelled() {
@@ -2847,10 +2847,10 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(t.is_cancelled())
     }
 
-    /// C# `H.Target(c, p)`: `by`'s card `card` tries to target player `p`.
-    /// Answers the player actually targeted (a `redirect` hook may move a
-    /// single-target hit), or -1. Not ported: the per-play `immune<p>` tags
-    /// (C# `c.Tags`) and the `PendingCounteract` / `TargetsChosen` pass.
+    /// `by`'s card `card` tries to target player `p`. Answers the player
+    /// actually targeted (a `redirect` hook may move a single-target hit), or
+    /// -1. Not ported: the per-play `immune<p>` tags and the
+    /// `PendingCounteract` / `TargetsChosen` pass.
     fn target_player(&self, cx: &mut Cx, p: i32, by: i32, card: &str, single: bool) -> Flow<i32> {
         let Ok(s) = usize::try_from(p) else {
             return Ok(-1);
@@ -2858,8 +2858,9 @@ impl<M: CardModules> RulesBridge<M> {
         if s >= cx.state().players.len() || cx.world().out(s) {
             return Ok(-1);
         }
-        // Per-pair cancel (「取消其对目标之一的[指定]」, C# `play.Tags["immune"+
-        // seat]`): this designation was cancelled; the rest still land.
+        // Per-pair cancel (「取消其对目标之一的[指定]」,
+        // `play.Tags["immune"+seat]`): this designation was cancelled; the
+        // rest still land.
         if cx.world().turn.cancelled_designations.contains(&p) {
             return Ok(-1);
         }
@@ -2926,8 +2927,8 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(p)
     }
 
-    /// C# `H.TargetTile(c, tile)`: `by`'s card targets `tile`; another player's
-    /// tile targets its owner too. Answers the tile, or -1.
+    /// `by`'s card targets `tile`; another player's tile targets its owner
+    /// too. Answers the tile, or -1.
     ///
     /// A tile marked [`card_sdk::abi::mark::NO_TARGET`] cannot be named at all --
     /// that is 「有标记时此地块不能被指定」. Not ported: the per-play `immune<p>` tags.
@@ -3019,10 +3020,10 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(t)
     }
 
-    /// Apply a field effect's `Dest` to the instance its run was for -- C#
-    /// `H.Unplace(this, "discard" / "hand" / "gone")`, the fate `set_dest` names.
-    /// `to` is whose pile it lands in; `None` is the owner it leaves, the target
-    /// `set_transfer_to_dest` names.
+    /// Apply a field effect's `Dest` to the instance its run was for -- the
+    /// unplace-and-send fate `set_dest` names (discard / hand / gone).
+    /// `to` is whose pile it lands in; `None` is the owner it leaves, the
+    /// target `set_transfer_to_dest` names.
     fn apply_dest(
         &self,
         cx: &mut Cx,
@@ -3062,8 +3063,8 @@ impl<M: CardModules> RulesBridge<M> {
         Ok(())
     }
 
-    /// The [反击] hand window (C# `MatchHost.Counteract(Trigger)`): one **round
-    /// per timing**, per rulebook clauses 32 and 89.
+    /// The [反击] hand window: one **round per timing**, per rulebook clauses
+    /// 32 and 89.
     ///
     /// **32:** 「[反击]：带有"[反击]X：Y"效果在X发生时打出并触发效果Y，且结算优先于X」.
     /// **89:** 「如果有多名玩家可在同一时间发动[反击]效果则从行动顺序上在触发[反击]时点
@@ -3261,7 +3262,7 @@ impl<M: CardModules> RulesBridge<M> {
                         // ends and priority advances.
                         break;
                     };
-                    // The declaration leaves the hand now (C# `_hidden[s].hand.Remove`).
+                    // The declaration leaves the hand now.
                     if uid < 0 {
                         let mut w = cx.world_copy();
                         if let Some(pos) = w.hidden[cursor].hand.iter().position(|c| c == &id) {
@@ -3546,12 +3547,12 @@ impl<M: CardModules> RulesBridge<M> {
         memo: &mut ProbeMemo,
         groups: &[i32],
     ) -> Flow<Option<(String, i32, i32, i32)>> {
-        // Hand cards that answer this link (C# `_hidden[s].hand.Distinct()`).
+        // Hand cards that answer this link, deduped to one entry per id.
         // Ordered by `effect_order_key` (Q5): group `Hand`, source = the card's
         // index in the hand `Vec` (the authoritative state list), decl = 0 (one
-        // entry per card after the `Distinct` dedupe). The sort is stable and
-        // the source component *is* today's hand order, so the offer list is
-        // unchanged -- the key just makes the guarantee explicit.
+        // entry per card after the dedupe). The sort is stable and the source
+        // component *is* today's hand order, so the offer list is unchanged --
+        // the key just makes the guarantee explicit.
         //
         // Stage 1 is the cheap static index (BOT-RESEARCH.md #1): the per-card
         // kind bitmask, no world copy, no scope, no `Run`. A hand with nothing
@@ -3792,7 +3793,7 @@ impl<M: CardModules> RulesBridge<M> {
             // Payment order: dedicated card, fire pots, then back.
             options.sort_by_key(|(_, _, uid)| *uid >= 0);
         }
-        // C#: labels "打出「...」" + "不打"; the hint is the first CounteractHint or
+        // Labels "打出「...」" + "不打"; the hint is the first CounteractHint or
         // the trigger's description. CounteractHint is not in the ABI yet (TODO).
         let mut labels: Vec<Msg> = options
             .iter()
@@ -3905,8 +3906,8 @@ impl<M: CardModules> RulesBridge<M> {
 }
 
 /// The module's view of an engine trigger (the bridge `Trigger`). The move
-/// payload's `roll` is C# `t.Move.Roll`, which a counteraction may rewrite;
-/// the engine reads it back.
+/// payload's `roll` is the guest-visible `t.Move.Roll`, which a counteraction
+/// may rewrite; the engine reads it back.
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     let is_roll_kind = matches!(
         trigger_kind(t.kind),
@@ -4171,9 +4172,8 @@ fn counteract_slow_path() -> bool {
     *SLOW.get_or_init(|| std::env::var("BGD_COUNTERACT_SLOW").is_ok_and(|v| v == "1"))
 }
 
-/// C# `MatchHost.CanCounteractNow(s, t)`: out / exiled players cannot declare a
-/// counteraction. (The C# also checks `CannotPlay` and a one-turn mute; neither has
-/// an engine field yet.)
+/// May this seat declare a counteraction right now? Out / exiled players
+/// cannot. (`CannotPlay` and a one-turn mute have no engine field yet.)
 fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     let Some(player_id) = cx.state().players.get(s) else {
         return false;
@@ -4181,11 +4181,10 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     // Rulebook eligibility only: out / [除外] cannot declare, and `CannotPlay`
     // (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
     // `_noCounteractTurn` and Fx.CantPlayHand have no engine field yet (TODO).
-    // The C# also rejected "AI" seats here; that is **not** a rulebook reason --
-    // a bot is still a player, so the window opens for every mentality and the
-    // seat answers through `Cx::fill_ai` (standard: `CounterParams` propensity,
-    // default never; chaos: `CHAOS_COUNTER_CHANCE`) exactly like a human's
-    // offer. Out / exiled remain skipped.
+    // A bot is still a player, so the window opens for every mentality and
+    // the seat answers through `Cx::fill_ai` (standard: `CounterParams`
+    // propensity, default never; chaos: `CHAOS_COUNTER_CHANCE`) exactly like
+    // a human's offer. Out / exiled remain skipped.
     // `World::out` is `st.players[i].out()`, so the live state answers it --
     // no world copy (this runs on every visit of every ring).
     !player_id.out()
@@ -4194,7 +4193,7 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
         && player_id.no_hand() == 0
 }
 
-/// C# `_hidden[s].hand` -- the player's private hand (order preserved).
+/// The player's private hand (order preserved).
 fn hand_of<'a>(cx: &'a Cx, s: usize) -> &'a [String] {
     cx.world()
         .hidden
@@ -4898,8 +4897,7 @@ impl ProbeMemo {
     }
 }
 
-/// The one-line description of the answered link the [反击] prompt shows (C#
-/// `DescribeTrigger`).
+/// The one-line description of the answered link the [反击] prompt shows.
 ///
 /// The key is kind-specific so the client can say **what** is being answered
 /// (「{{who}} 打出了「{{card}}」」 / 「{{who}} 将支付 {{n}} 给 {{to}}」 /
@@ -4946,7 +4944,7 @@ fn describe_trigger(t: &Trigger) -> Msg {
     m
 }
 
-/// Every C# `Trigger.Kind` string the engine raises (turnStart / pass /
+/// Every wire `Trigger.Kind` string the engine raises (turnStart / pass /
 /// settleBefore / settle / mortgage / pay / paid / bankrupt / card / event /
 /// abnormal / target / stop / teleport / ...) maps through the shared table.
 /// Folding unknown kinds to `None` would make `can_counteract` guards silently
@@ -5182,10 +5180,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
     }
 
     fn cant_play(&self, cx: &Cx, player_id: usize, card: &str) -> Option<Msg> {
-        // A pure query (C# `Card.WhyNot`): a guard that prompts, or a module
-        // that fails, never blocks play. Fix B -- the probe shares the live
-        // world handle (`share_world`, no copy); the gate body detaches a
-        // private copy only if it writes.
+        // A pure query ("why can this not be played?"): a guard that prompts,
+        // or a module that fails, never blocks play. Fix B -- the probe shares
+        // the live world handle (`share_world`, no copy); the gate body
+        // detaches a private copy only if it writes.
         let idx = self.ruleset.card(card)?;
         // Fix A cheap pre-filter: no `On::Play` entry, or G4-deleted gate with
         // no condition -- the verdict is always "playable". Skip the uid
@@ -5435,8 +5433,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         if !self.ruleset.declares(trigger_kind(t.kind)) {
             return Ok(());
         }
-        // The module's view of the trigger. `move_roll` is C# `t.Move.Roll`,
-        // which a counteraction may rewrite; the engine reads it back afterwards.
+        // The module's view of the trigger. `move_roll` is the guest-visible
+        // `t.Move.Roll`, which a counteraction may rewrite; the engine reads
+        // it back afterwards.
         let mut trigger = bridge_trigger(t);
         // Ordering at one trigger (the standard; see `hand_counteractions`):
         // (1) the acting card's own follow-up resolves FIRST, outside the
@@ -5454,9 +5453,9 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // body must not settle before any seat can counteract the trigger that
         // carries it, and a cancelled trigger runs no hook body at all.
         //
-        // (1) The played card's own follow-up: the card named on the trigger runs
-        // its `counteract` (C# `PlayCtx.AsCounteraction` for a card answering its own play).
-        // Only at the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
+        // (1) The played card's own follow-up: the card named on the trigger
+        // runs its `counteract` entry (a card answering its own play). Only at
+        // the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
         // `drawn` also name a card on `t.card`, and must not re-run it here.
         let own = t.card.clone().unwrap_or_default();
         let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
@@ -5478,10 +5477,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 )?;
             }
         }
-        // (2) The hand-counteraction window (C# `MatchHost.Counteract(Trigger)`): one
-        // round per timing, from the seat after the timing's player around the
-        // table; counters settle newest-first before the timing they answer
-        // (see `hand_counteractions`). Not at hook-only points.
+        // (2) The hand-counteraction window: one round per timing, from the
+        // seat after the timing's player around the table; counters settle
+        // newest-first before the timing they answer (see
+        // `hand_counteractions`). Not at hook-only points.
         if !is_hook_only(t.kind) {
             self.hand_counteractions(cx, t, &mut trigger, 0)?;
         }
@@ -5507,7 +5506,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 // clause is never instantiated for one.
                 self.game_start_hooks(cx, t.player_id, kind, &mut trigger)?;
             } else if is_own_card_kind(kind) {
-                // C# runs these on a fresh instance of the card named on
+                // These run on a fresh instance of the card named on
                 // `t.card` (`Drawn`) -- it is in a hand / pile, not placed.
                 // `Discarded` is *not* here: a placed field card hears about
                 // discards (MyGO band (3) 「每次你的卡在未生效的情况下进入弃牌
@@ -5567,8 +5566,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                                 &mut trigger,
                             )?;
                         }
-                        // C# `RollMove`: `RollPlan` runs on every live Fx before
-                        // the dice -- `On::RollPlan` shapes the move.
+                        // `RollPlan` runs on every live Fx before the dice --
+                        // `On::RollPlan` shapes the move.
                         if kind == TriggerKind::RollPlan
                             && self.ruleset.cards()[idx as usize]
                                 .entry(card_sdk::abi::OnKind::RollPlan, None)
@@ -5694,10 +5693,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     )?;
                 }
             }
-            // Scheduled turn-end callbacks (C# `TurnCtx.AfterEnd` and "the end
-            // of your next turn"): the ones due at this player's turn end run once
-            // and are dropped. They are taken out of the world *before* running,
-            // so a callback that schedules again lands in the next round.
+            // Scheduled turn-end callbacks (「你的下回合结束时」 and kin): the
+            // ones due at this player's turn end run once and are dropped. They
+            // are taken out of the world *before* running, so a callback that
+            // schedules again lands in the next round.
             let phase = match kind {
                 TriggerKind::TurnEndBefore => Some(true),
                 TriggerKind::TurnEndAfter => Some(false),
@@ -5740,10 +5739,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             }
         }
         } // end if !trigger.is_cancelled() -- V1 hook skip
-        // Write back whatever a counteraction rewrote. `set_move_roll` lands in
-        // `trigger.move_roll` (C# shares `t.Move` with the counteractions); the pay
-        // amount is rewritten in `trigger.value`. The engine reads the result
-        // back off `t.value` after `counteract` returns.
+        // Write back whatever a counteraction rewrote. `set_move_roll` lands
+        // in `trigger.move_roll` (the shared `t.Move` the counteractions also
+        // read); the pay amount is rewritten in `trigger.value`. The engine
+        // reads the result back off `t.value` after `counteract` returns.
         t.value = trigger.mv.as_ref().and_then(|m| m.roll).unwrap_or(trigger.value);
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
@@ -5870,7 +5869,7 @@ fn is_hook_only(kind: &str) -> bool {
     )
 }
 
-/// Kinds C# runs on a fresh instance of one card (named on `t.card`) rather
+/// Kinds that run on a fresh instance of one card (named on `t.card`) rather
 /// than on the cards in play.
 fn is_own_card_kind(kind: TriggerKind) -> bool {
     // `Drawn` is the drawn card's own hook (it is still in hand). `Discarded`

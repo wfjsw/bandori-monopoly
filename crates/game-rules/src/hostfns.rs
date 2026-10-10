@@ -32,7 +32,7 @@ pub fn guest_str<C: HostCtx>(c: &mut C, ptr: i32, len: i32) -> Result<String, Ho
     String::from_utf8(bytes).map_err(|_| HostErr::trap("guest string is not UTF-8"))
 }
 
-/// The C# `AbnormalGate` from inside a card run (see `host.rs`).
+/// The abnormal-move [反击] gate, from inside a card run (see `host.rs`).
 pub fn abnormal_gate<C: HostCtx>(c: &mut C, player_id: i32, kind: AbKind) -> Result<bool, HostErr> {
     let v = crate::inline::request_or_pause(
         c,
@@ -1451,7 +1451,7 @@ pub fn add_ring_bonus<C: HostCtx>(c: &mut C, n: i32) -> Result<i32, HostErr> {
 }
 
 pub fn teleport_to<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<(), HostErr> {
-            // C# `H.ForceTeleport(..., resolve: false)` / a bare `pos` write.
+            // A position write with no settle (`resolve: false`).
             // Paused like `card_move` rather than written to the run's world
             // copy: a host routine that follows (`card_move`) runs against the
             // live world, and a copy-only write left the move starting from
@@ -1540,8 +1540,8 @@ pub fn target<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, single: i32) -> 
 }
 
 pub fn card_move<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
-            // C# `H.CardMove(c, m)` -- the card shaped the plan and wants the move
-            // to run *now*. Paused like the others: the engine runs `Cx::card_move`
+            // The card shaped the plan and wants the move to run *now*.
+            // Paused like the others: the engine runs `Cx::card_move`
             // (which may prompt) and the replay reads the answer. The plan is
             // captured here because the run's world copy is discarded on pause
             // (in simulation mode it is not -- the engine runs the move against

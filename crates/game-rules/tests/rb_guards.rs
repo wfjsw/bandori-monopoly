@@ -108,7 +108,7 @@ fn ran_as_usual_matches_only_abnormal() {
 // MyGO:普通与理所当然 -- 「受到异常移动效果影响后可打出」
 // =====================================================================
 
-/// 规则书: 「[反击] 受到异常移动效果影响后可打出」. Plus the C# `lastWalk > 0`
+/// 规则书: 「[反击] 受到异常移动效果影响后可打出」. Plus the `lastWalk > 0`
 /// gate (a previous non-teleport main move whose length can be copied).
 #[test]
 fn ordinary_matches_only_abnormal() {

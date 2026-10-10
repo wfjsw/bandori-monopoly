@@ -137,10 +137,9 @@ fn a_two_donuts_settle_teleport_lands_on_the_chosen_tile() {
 // 规则书 (Mor:纯真振翅):
 // 「传送到移动方向20格后（不触发结算），立刻进行移动掷骰」.
 //
-// The jump is 「（不触发结算）」 and does not say 视为你的主要移动 -- it is the
-// C# `H.ForceTeleport(..., resolve: false)`, a position write with no settle
-// and no main-move consumption. 「立刻进行移动掷骰」 then rolls the main move
-// from the jump's destination.
+// The jump is 「（不触发结算）」 and does not say 视为你的主要移动 -- it is a
+// position write with no settle and no main-move consumption. 「立刻进行
+// 移动掷骰」 then rolls the main move from the jump's destination.
 #[test]
 fn b_wing_roll_starts_from_the_teleport_destination() {
     let mut t = Table::vanilla(2);

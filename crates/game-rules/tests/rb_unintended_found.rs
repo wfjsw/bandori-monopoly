@@ -20,7 +20,7 @@ use common::*;
 // turn.play_from_hand leaks past the play and past the turn
 // =====================================================================
 
-/// `TurnCtx.play_from_hand` (C# `PlayCtx.FromDeck`) is set by
+/// `TurnCtx.play_from_hand` is set by
 /// `play_from_hand` and only cleared by a nested `ctx::play_card`. It is
 /// never reset when the play ends or when the turn ends, so after any hand
 /// press the flag stays `true` for the rest of the match. 「若此卡从手牌

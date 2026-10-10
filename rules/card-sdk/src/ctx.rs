@@ -1,4 +1,4 @@
-//! Host functions available to card effects (the Rust port of the C# `H.*` surface).
+//! Host functions available to card effects (the host surface a card body sees).
 //!
 //! Every piece of text a card shows (log lines, mark notes, prompts, options) is a
 //! [`Msg`]: a key in the card crate's `locales/*.json` plus typed arguments. The
@@ -98,7 +98,7 @@ fn out_read(p: i32, n: i32, scratch: alloc::vec::Vec<u8>) -> alloc::vec::Vec<u8>
 
 // ------------------------------------------------------------- dice & log
 
-/// `H.Roll(seat, count, sides, what)` -- sum of `count` d`sides`, logged as a dice event.
+/// Sum of `count` d`sides`, logged as a dice event.
 ///
 /// **No [反击] window.** A roll that 「掷骰结算前」 [反击]s must answer (Y.O.L.O
 /// 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」) goes through
@@ -124,13 +124,13 @@ pub fn do_move_roll_ask(player_id: i32, source: i32) -> i32 {
     unsafe { sys::roll_ask(player_id, 0, 0, source) }
 }
 
-/// `H.Log("text", seat, text)`.
+/// Log a message line for `player_id`.
 pub fn log(player_id: i32, msg: &Msg) {
     let (p, l) = mj(msg);
     unsafe { sys::log(player_id, p, l) }
 }
 
-/// `H.Effect` -- announce which effect was applied. Reaches the player as a
+/// Announce which effect was applied. Reaches the player as a
 /// popup as well as a log line; use this where the card has just picked a
 /// branch (e.g. a 1d10 that names the branch taken) and the player should see
 /// which. Additive with [`log`], not a replacement for it.
@@ -145,7 +145,7 @@ pub fn tile_count() -> i32 {
     unsafe { sys::tile_count() }
 }
 
-/// Tile index of a name (a data key), or -1 (`H.TileNamed`).
+/// Tile index of a name (a data key), or -1.
 pub fn tile_named(name: &str) -> i32 {
     let (p, l) = s(name);
     unsafe { sys::tile_named(p, l) }
@@ -155,7 +155,7 @@ pub fn tile_owner(tile: i32) -> i32 {
     unsafe { sys::tile_owner(tile) }
 }
 
-/// The player's tile on the ring (`H.State.seats[seat].pos`).
+/// The player's tile on the ring.
 pub fn player_pos(player_id: i32) -> i32 {
     unsafe { sys::player_pos(player_id) }
 }
@@ -189,55 +189,55 @@ pub fn owned_at(player_id: i32, index: i32) -> i32 {
     unsafe { sys::owned_at(player_id, index) }
 }
 
-/// The player's deeds as tile indices (`H.OwnedBy`-style walks).
+/// The player's deeds as tile indices.
 pub fn owned_tiles(player_id: i32) -> Vec<i32> {
     (0..owned_count(player_id))
         .map(|i| owned_at(player_id, i))
         .collect()
 }
 
-/// `TileData.IsBuyable` -- a deed tile (property / RiNG).
+/// A deed tile (property / RiNG).
 pub fn is_buyable(tile: i32) -> bool {
     unsafe { sys::is_buyable(tile) != 0 }
 }
 
-/// C# `H.IsShop` -- a 商店街 deed (buyable and colour group 10).
+/// A 「商店街」 deed (buyable and colour group 10).
 pub fn is_shop(tile: i32) -> bool {
     unsafe { sys::is_shop(tile) != 0 }
 }
 
-/// `TileData.kind == "ring"` -- a RiNG deed (never holds houses).
+/// A RiNG deed (never holds houses).
 pub fn is_ring(tile: i32) -> bool {
     unsafe { sys::is_ring(tile) != 0 }
 }
 
-/// `TileData.kind == "circle"` -- the CiRCLE tile.
+/// The CiRCLE tile.
 pub fn is_circle(tile: i32) -> bool {
     unsafe { sys::is_circle(tile) != 0 }
 }
 
-/// C# `H.IsLiveHouse` -- a Live House deed (buyable, colour group 6). The
+/// A Live House deed (buyable, colour group 6). The
 /// `ExtraColor` band-skill colours are not visible here (TODO in the cards).
 pub fn is_live_house(tile: i32) -> bool {
     unsafe { sys::is_live_house(tile) != 0 }
 }
 
-/// `TileData.group` -- the colour group (-1 for no tile).
+/// The colour group (-1 for no tile).
 pub fn tile_group(tile: i32) -> i32 {
     unsafe { sys::tile_group(tile) }
 }
 
-/// `H._tiles[t].price` -- the land price alone (houses are extra; cf. [`buy_price`]).
+/// The land price alone (houses are extra; cf. [`buy_price`]).
 pub fn tile_price(tile: i32) -> i32 {
     unsafe { sys::tile_price(tile) }
 }
 
-/// `H.State.houses[t]` -- houses standing on the tile.
+/// Houses standing on the tile.
 pub fn houses_of(tile: i32) -> i32 {
     unsafe { sys::houses_of(tile) }
 }
 
-/// The house count a **rent** lookup reads (`H.RentHouses`) -- the counted
+/// The house count a **rent** lookup reads -- the counted
 /// value, which a 「房屋数视为…」 override may lift above [`houses_of`].
 /// Real houses are untouched; build caps, raze and sale still see
 /// [`houses_of`]. 「X为你收费格上的房屋数」 reads this.
@@ -250,12 +250,12 @@ pub fn set_houses(tile: i32, n: i32) {
     unsafe { sys::set_houses(tile, n) }
 }
 
-/// `H.AddHouse` -- move the house count by `n`; returns the new count.
+/// Move the house count by `n`; returns the new count.
 pub fn add_house(tile: i32, n: i32) -> i32 {
     unsafe { sys::add_house(tile, n) }
 }
 
-/// Is the deed mortgaged? (C# `H.State.mortgaged[t]`.)
+/// Is the deed mortgaged?
 pub fn mortgaged_of(tile: i32) -> bool {
     unsafe { sys::mortgaged_of(tile) != 0 }
 }
@@ -265,28 +265,28 @@ pub fn set_mortgaged(tile: i32, v: bool) {
     unsafe { sys::set_mortgaged(tile, v as i32) }
 }
 
-/// Hand a deed to another player outright (C# `H.State.owners[t] = seat`; deed
-/// transfer effects). The caller logs the transfer.
+/// Hand a deed to another player outright (deed transfer effects). The caller
+/// logs the transfer.
 pub fn set_owner(tile: i32, player_id: i32) {
     unsafe { sys::set_owner(tile, player_id) }
 }
 
-/// C# `H.Dist` -- undirected ring distance between two tiles.
+/// Undirected ring distance between two tiles.
 pub fn dist(a: i32, b: i32) -> i32 {
     unsafe { sys::dist(a, b) }
 }
 
-/// C# `H.Forward` -- steps forward from `a` to `b` around the ring.
+/// Steps forward from `a` to `b` around the ring.
 pub fn tile_forward(a: i32, b: i32) -> i32 {
     unsafe { sys::tile_forward(a, b) }
 }
 
-/// C# `H.Neighbor(seat, dir)` -- the next present player in turn order (`dir` ±1), or -1.
+/// The next present player in turn order (`dir` ±1), or -1.
 pub fn neighbor(player_id: i32, dir: i32) -> i32 {
     unsafe { sys::neighbor(player_id, dir) }
 }
 
-/// C# `H.SeatsOn(tile, except)` -- present players standing on a tile.
+/// Present players standing on a tile.
 pub fn players_on(tile: i32, except: i32) -> Vec<i32> {
     (0..players_on_count(tile, except))
         .map(|i| players_on_at(tile, except, i))
@@ -307,7 +307,7 @@ pub fn player_count() -> i32 {
     unsafe { sys::player_count() }
 }
 
-/// 1 when the player is out of the game (`H.Out`).
+/// 1 when the player is out of the game.
 pub fn player_out(player_id: i32) -> bool {
     unsafe { sys::player_out(player_id) != 0 }
 }
@@ -320,19 +320,19 @@ pub fn others_at(player_id: i32, index: i32) -> i32 {
     unsafe { sys::others_at(player_id, index) }
 }
 
-/// The other players still in the game (`H.Others`).
+/// The other players still in the game.
 pub fn others(player_id: i32) -> Vec<i32> {
     (0..others_count(player_id))
         .map(|i| others_at(player_id, i))
         .collect()
 }
 
-/// The player's current cash (C# `H.Money`).
+/// The player's current cash.
 pub fn money_of(player_id: i32) -> i32 {
     unsafe { sys::money(player_id) }
 }
 
-/// `H.GainR` -- money in, logged with its reason (`src` is a message key).
+/// Money in, logged with its reason (`src` is a message key).
 /// Runs the same `Money` pipeline as [`pay`] (print, game -> player), so
 /// `payAdd` / `payChoose` and the `effect` [反击] window see it; the answer is
 /// the amount that actually moved (0 = cancelled).
@@ -351,7 +351,7 @@ pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<
     asked(unsafe { sys::gain_typed(player_id, amount, tp, tl, xp, xl) })
 }
 
-/// `H.PayR` -- money out (what the player could pay), logged.
+/// Money out (what the player could pay), logged.
 pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(src);
     asked(unsafe { sys::pay(player_id, amount, p, l) })
@@ -391,7 +391,7 @@ pub fn pay_leg(from: i32, to: i32, amount: i32, src: &Msg) -> Result<i32, Prompt
     asked(unsafe { sys::pay_leg(from, to, amount, p, l) })
 }
 
-/// `H.SplitPay` -- 「[分摊][支付]」: shape `total` with the command-wide
+/// 「[分摊][支付]」: shape `total` with the command-wide
 /// pre-split stage, then charge each of `payers` `ceil10(ceil(total/n))` to
 /// `to` (the 规则书 「向上取整10」 share). Returns the per-leg amounts, or an
 /// empty list when the command was cancelled.
@@ -423,7 +423,7 @@ pub fn split_pay(payers: &[i32], to: i32, total: i32, src: &Msg) -> Result<Vec<i
 
 // ------------------------------------------------------------- hand / deck
 
-/// `H.DrawR` -- draw `n` cards; returns how many were drawn.
+/// Draw `n` cards; returns how many were drawn.
 ///
 /// One **before-draw** point per single card (an N-card draw is N iterations):
 /// each card is adjudicated host-side (`drewBefore` may replace it), and the
@@ -438,7 +438,7 @@ pub fn draw(player_id: i32, n: i32) -> Result<i32, Prompt> {
     Ok(got)
 }
 
-/// `H.DrawEvent` -- draw the top event and resolve it (「抽取一个事件卡」).
+/// Draw the top event and resolve it (「抽取一个事件卡」).
 /// The card does not enter the hand: it is revealed to every player, its
 /// effect takes effect at once, and it goes to the event discard (reshuffling
 /// that into a new event deck when the deck runs dry). Rulebook 「基础[结算]规则」.
@@ -448,7 +448,7 @@ pub fn draw_event(player_id: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
-/// `H.PayRent` -- 「[支付]拥有格子的玩家格子地契所标记的现等级地租」. The engine's
+/// 「[支付]拥有格子的玩家格子地契所标记的现等级地租」. The engine's
 /// rent pipeline: the rent table at the tile's current level, or the RiNG
 /// dice-rent (「地主拥有的 RiNG 数量 × ringMultiplier × 1d20」, TODO(规则书)),
 /// and with `half` the agent's 「半价收费（向上取整10）」 cut. Raises `pay`.
@@ -458,14 +458,14 @@ pub fn pay_rent(player_id: i32, tile: i32, half: bool) -> Result<(), Prompt> {
     Ok(())
 }
 
-/// `H.OfferBuy` -- 「可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子
+/// 「可选择[消耗]购买格子地契和建造已有房子的资金总价，获得格子
 /// 地契和拥有权」 on a non-main landing on unowned land. Pauses; `?` it.
 pub fn offer_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
     asked(unsafe { sys::offer_buy(player_id, tile) })?;
     Ok(())
 }
 
-/// `H.OfferForceBuy` -- 「可选择[支付]…资金总价的两倍，从该玩家处强行购买该格
+/// 「可选择[支付]…资金总价的两倍，从该玩家处强行购买该格
 /// 地契，获得的地契仍为抵押状态」 on a mortgaged deed. 「此次购买的价格不受任何
 /// 资金变动效果影响」 is the engine's (it moves money directly). Pauses; `?` it.
 pub fn offer_force_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
@@ -473,7 +473,7 @@ pub fn offer_force_buy(player_id: i32, tile: i32) -> Result<(), Prompt> {
     Ok(())
 }
 
-/// `H.OfferBuild` -- 「可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 on
+/// 「可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 on
 /// one's own land. Pauses; `?` it.
 pub fn offer_build(player_id: i32, tile: i32) -> Result<(), Prompt> {
     asked(unsafe { sys::offer_build(player_id, tile) })?;
@@ -490,8 +490,8 @@ pub fn add_to_deck(player_id: i32, card: &str, shuffle: bool) {
     unsafe { sys::add_to_deck(player_id, p, l, shuffle as i32) }
 }
 
-/// Where `add_to_deck_at` inserts into the draw pile (C# `H.AddToDeck`'s
-/// `where` argument -- note the C# default is [`DeckPos::Random`]).
+/// Where `add_to_deck_at` inserts into the draw pile. The default is
+/// [`DeckPos::Random`].
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum DeckPos {
     /// `"top"` -- the next `draw` gets it.
@@ -502,7 +502,7 @@ pub enum DeckPos {
     Random = 2,
 }
 
-/// C# `H.AddToDeck(seat, card, where)` -- put one specific card into the draw
+/// Put one specific card into the draw
 /// pile at a position. (`add_to_deck(player_id, card, shuffle)` is the older
 /// top/shuffle shape and stays.)
 pub fn add_to_deck_at(player_id: i32, card: &str, pos: DeckPos) {
@@ -510,9 +510,8 @@ pub fn add_to_deck_at(player_id: i32, card: &str, pos: DeckPos) {
     unsafe { sys::add_to_deck_at(player_id, p, l, pos as i32) }
 }
 
-/// Take one copy of `card` out of `pile` *without* sending it anywhere (C#
-/// `_hidden[s].hand.Remove(card)` / `.discard.Remove(card)`) -- the caller
-/// decides where it goes next. Returns whether it was there.
+/// Take one copy of `card` out of `pile` *without* sending it anywhere -- the
+/// caller decides where it goes next. Returns whether it was there.
 pub fn take_card(player_id: i32, pile: CardPile, card: &str) -> bool {
     let (p, l) = s(card);
     unsafe { sys::take_card(player_id, pile as i32, p, l) != 0 }
@@ -545,13 +544,13 @@ pub fn to_discard(player_id: i32, card: &str) {
     unsafe { sys::to_discard(player_id, p, l) }
 }
 
-/// Copies of `card` in the player's hand (C# `_hidden[s].hand` count).
+/// Copies of `card` in the player's hand.
 pub fn hand_count(player_id: i32, card: &str) -> i32 {
     let (p, l) = s(card);
     unsafe { sys::hand_count(player_id, p, l) }
 }
 
-/// Total cards in hand (C# `_hidden[s].hand.Count`).
+/// Total cards in hand.
 pub fn hand_size(player_id: i32) -> i32 {
     unsafe { sys::hand_size(player_id) }
 }
@@ -577,7 +576,7 @@ pub fn discard_count(player_id: i32, card: &str) -> i32 {
     unsafe { sys::discard_count(player_id, p, l) }
 }
 
-/// Draw-pile size (C# `_hidden[s].draw.Count`).
+/// Draw-pile size.
 pub fn deck_count(player_id: i32) -> i32 {
     unsafe { sys::deck_count(player_id) }
 }
@@ -587,33 +586,33 @@ pub fn discard_size(player_id: i32) -> i32 {
     unsafe { sys::discard_size(player_id) }
 }
 
-/// C# `H.DiscardFromHand` -- drop one copy of `card` from hand into the discard
+/// Drop one copy of `card` from hand into the discard
 /// pile. True when the player held one.
 pub fn discard_from_hand(player_id: i32, card: &str) -> bool {
     let (p, l) = s(card);
     unsafe { sys::discard_from_hand(player_id, p, l) != 0 }
 }
 
-/// C# `H.ShuffleAllIntoDeck(seat, hand: true, discard: true)` -- sweep hand +
-/// discard into the draw pile and shuffle. Returns how many cards moved.
+/// Sweep hand + discard into the draw pile and shuffle. Returns how many
+/// cards moved.
 pub fn sweep_to_deck(player_id: i32) -> i32 {
     shuffle_into_deck(player_id, true, true)
 }
 
-/// C# `H.ShuffleAllIntoDeck(seat, hand, discard)` -- move the hand and/or the
-/// discard pile into the draw pile, then shuffle it. Returns how many moved.
+/// Move the hand and/or the discard pile into the draw pile, then shuffle it.
+/// Returns how many moved.
 pub fn shuffle_into_deck(player_id: i32, hand: bool, discard: bool) -> i32 {
     unsafe { sys::shuffle_into_deck(player_id, hand as i32, discard as i32) }
 }
 
 // ------------------------------------------------------------ field cards
 
-/// `H.PlaceFromPlay` -- this card stays in play at the player.
+/// This card stays in play at the player.
 pub fn place_card(player_id: i32, card: &str, note: &Msg) -> i32 {
     place_card_at(player_id, card, note)
 }
 
-/// `H.PlaceCard` -- put a specific card (a derived one) into play at a player.
+/// Put a specific card (a derived one) into play at a player.
 /// Returns the new instance's uid, which is what addresses it afterwards: the
 /// *name* is not an identity, so a rule meaning "the copy I just placed" has to
 /// hold this rather than re-resolving by name.
@@ -623,7 +622,7 @@ pub fn place_card_at(player_id: i32, card: &str, note: &Msg) -> i32 {
     unsafe { sys::place_card_at(player_id, cp, cl, p, l) }
 }
 
-/// `PlayCtx.Dest` -- where this card goes afterwards (see [`Dest`]). For a
+/// Where this card goes afterwards (see [`Dest`]). For a
 /// play it is the hand card's fate; for a field effect, the instance's.
 pub fn set_dest(dest: Dest) {
     unsafe { sys::set_dest(dest as i32) }
@@ -651,22 +650,21 @@ pub fn transfer_to_dest(to: i32, dest: Dest) -> Option<i32> {
     (v >= 0).then_some(v)
 }
 
-/// `H.RingMultiplier`.
+/// The RiNG rent multiplier.
 pub fn ring_multiplier() -> i32 {
     unsafe { sys::ring_multiplier() }
 }
 
-/// `H._ringBonus += n`; returns the new multiplier.
+/// Add `n` to the RiNG rent multiplier; returns the new multiplier.
 pub fn add_ring_bonus(n: i32) -> i32 {
     unsafe { sys::add_ring_bonus(n) }
 }
 
-/// `H.ForceTeleport(..., resolve: false)` -- move a player without settling.
+/// Move a player without settling (no [触发结算] at the landing).
 pub fn teleport_to(player_id: i32, tile: i32) {
     unsafe { sys::teleport_to(player_id, tile) }
 }
 
-/// `H.Unplace` -- take this card out of play. True when it was there.
 /// Take **this instance** off the field; returns the owner it left (or -1).
 /// [`unplace_card_named`] is the form for some *other* card.
 pub fn unplace_self() -> i32 {
@@ -707,7 +705,7 @@ pub fn is_placed() -> bool {
     unsafe { sys::is_placed() != 0 }
 }
 
-/// Miracle crystals on **this card instance** (C# `Card.Crystals`). The
+/// Miracle crystals on **this card instance**. The
 /// instance is the one running -- its placement is not a parameter, because the
 /// host knows it from the dispatch and the same card id can sit on several
 /// players' fields at once. [`card_crystals`] is the form for a *named* other
@@ -716,13 +714,12 @@ pub fn crystals() -> i32 {
     counter(crate::abi::counter::CRYSTALS)
 }
 
-/// Set this card instance's crystals (C# `Card.Crystals = n`); returns the new
-/// count.
+/// Set this card instance's crystals; returns the new count.
 pub fn set_crystals(n: i32) -> i32 {
     set_counter(crate::abi::counter::CRYSTALS, n)
 }
 
-/// `H.AddCrystals` -- adjust this card instance's crystals by `n`, clamped at 0
+/// Adjust this card instance's crystals by `n`, clamped at 0
 /// and at `max` (`0` = uncapped); returns the new count.
 pub fn add_crystals(n: i32, max: i32) -> Result<i32, Prompt> {
     add_counter(crate::abi::counter::CRYSTALS, n, max)
@@ -1063,7 +1060,7 @@ pub fn set_tok(player_id: i32, name: &str, value: i32) {
     unsafe { sys::set_held_name(p, l, player_id, value) }
 }
 
-/// `H.AddTok` -- bind `by` more units of `name` to `player_id`. Returns how
+/// Bind `by` more units of `name` to `player_id`. Returns how
 /// much actually moved. Marker window can pause.
 pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Prompt> {
     add_held(name, player_id, by, max)
@@ -1157,7 +1154,7 @@ pub mod state {
 
 // ------------------------------------------------------ per-player slots (V)
 
-/// A free-form counter (C# `H.V`). Sugar over [`state`].
+/// A free-form counter. Sugar over [`state`].
 pub fn slot(player_id: i32, key: &str) -> i32 {
     let (p, l) = s(key);
     unsafe { sys::slot(player_id, p, l) }
@@ -1194,8 +1191,8 @@ pub fn add_band_crystals(player_id: i32, n: i32, max: i32) -> i32 {
     unsafe { sys::add_band_crystals(player_id, n, max) }
 }
 
-/// The rule id of `player_id`'s **band skill** attachment (C# `H._fx[i].bands`'s
-/// own band card -- `skill:<band>:<skill>`, `FieldCard::band_skill`), or `None`
+/// The rule id of `player_id`'s **band skill** attachment
+/// (`skill:<band>:<skill>`, `FieldCard::band_skill`), or `None`
 /// when the player has none. This is 「乐队技能」: 「立即执行乐队技能的（2）效果」
 /// names it, and [`invoke_skill`] runs a numbered effect on it.
 pub fn band_skill(player_id: i32) -> Option<String> {
@@ -1214,9 +1211,9 @@ pub fn band_skill(player_id: i32) -> Option<String> {
     }
 }
 
-/// The rule id of `player_id`'s **character skill** (C# `H._fx[i].skill` --
-/// `skill:<character>:<skill>`), or `None`. A card that reaches 「你的技能」
-/// (pareo_far's 「视为你的房屋总数增加」 -> `SkillPareo -> Offer()`) names it and
+/// The rule id of `player_id`'s **character skill**
+/// (`skill:<character>:<skill>`), or `None`. A card that reaches 「你的技能」
+/// (pareo_far's 「视为你的房屋总数增加」) names it and
 /// [`invoke_skill`] runs its offer.
 pub fn character_skill(player_id: i32) -> Option<String> {
     let cap = 1024;
@@ -1235,7 +1232,7 @@ pub fn character_skill(player_id: i32) -> Option<String> {
 }
 
 /// One band-skill attachment: `(uid, rule id, extra)` in placement order.
-/// `extra` is a 「拿取」ed copy (C# `MakeBand(.., extra: true)`): 「相同乐队技能卡
+/// `extra` is a 「拿取」ed copy: 「相同乐队技能卡
 /// 的效果不可叠加」 and 「不视为那个乐队的角色」.
 pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
     let cap = 8192;
@@ -1248,8 +1245,8 @@ pub fn band_skills(player_id: i32) -> Vec<(i32, String, i32)> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// Attach a band-skill instance to `player_id` (C# `H.MakeBand(band, user,
-/// extra)`). `extra` marks a 「拿取」ed copy (「相同乐队技能卡的效果不可叠加」 /
+/// Attach a band-skill instance to `player_id`. `extra` marks a 「拿取」ed copy
+/// (「相同乐队技能卡的效果不可叠加」 /
 /// 「不视为那个乐队的角色」). Returns the new instance's uid, or -1 when the id
 /// is not a band skill or the player is gone. Idempotent per id: a second
 /// attach of an id already present (extra or not) is refused, which is the
@@ -1260,8 +1257,8 @@ pub fn add_band_skill(player_id: i32, id: &str, extra: bool) -> i32 {
 }
 
 /// Run a skill rule's **press entry** (`On::Play`) for `player_id`, nested in
-/// this run the way [`play_card`] is (C# `BandCrychic.TransformNow()` /
-/// `SkillPareo -> Offer()`). Returns where the skill says it goes ([`Dest`]);
+/// this run the way [`play_card`] is. Returns where the skill says it goes
+/// ([`Dest`]);
 /// skills normally leave their own instance in place. Unlike the engine's
 /// `use_skill` (the player pressing the skill button) this raises **no**
 /// `skillUsed` -- it is a card executing the body, not the player using it.
@@ -1271,7 +1268,7 @@ pub fn invoke_skill(player_id: i32, id: &str) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
-/// C# `f.Bought(i, t)` -- announce that `player_id` just became the owner of
+/// Announce that `player_id` just became the owner of
 /// `tile`, so the `bought` hook chain (「购买」 hooks: Afterglow's free
 /// house, ...) hears it. A card that hands a deed over outside the buy routine
 /// (tomoe_savior's 「从该玩家处收购该地契」) calls this after the ownership
@@ -1296,7 +1293,7 @@ pub fn fire_max(player_id: i32) -> i32 {
     unsafe { sys::fire_max(player_id) }
 }
 
-/// `H.GainFire` -- fire pots, capped by the player's own cap.
+/// Gain fire pots, capped by the player's own cap.
 pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(why);
     asked(unsafe { sys::gain_fire(player_id, n, p, l) })
@@ -1310,22 +1307,22 @@ pub fn give_stun(player_id: i32, n: i32) {
     unsafe { sys::give_stun(player_id, n) }
 }
 
-/// `H.GiveExile(seat, layers, back_to)`.
+/// Give `[除外]` layers to the player, returning them after.
 pub fn give_exile(player_id: i32, n: i32, to: i32) {
     unsafe { sys::give_exile(player_id, n, to) }
 }
 
-/// `H.GiveExtraTurn`.
+/// Give the player an extra turn.
 pub fn give_extra_turn(player_id: i32) {
     unsafe { sys::give_extra_turn(player_id) }
 }
 
-/// `H.CanPay` -- not out, not stunned, not exiled.
+/// Can the player pay? Not out, not stunned, not exiled.
 pub fn can_pay(player_id: i32) -> bool {
     unsafe { sys::can_pay(player_id) != 0 }
 }
 
-/// C# `H.MoveWhyNot` -- `None` when the player may still make this turn's main
+/// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
 pub fn cant_move(player_id: i32) -> Option<Msg> {
     match unsafe { sys::cant_move(player_id) } {
@@ -1336,7 +1333,7 @@ pub fn cant_move(player_id: i32) -> Option<Msg> {
     }
 }
 
-/// C# `H.CardMove(c, m)` -- run the move being planned **now**. Shape it with
+/// Run the move being planned **now**. Shape it with
 /// [`plan`] first (`set_steps` / `set_kind` / `set_tag` / ...), then call this:
 /// the engine runs the move (it may prompt, and the usual move triggers fire)
 /// and the effect continues after it. Like `play_card`, the run pauses for it.
@@ -1344,7 +1341,7 @@ pub fn card_move(player_id: i32) -> bool {
     unsafe { sys::card_move(player_id) != 0 }
 }
 
-/// C# `H.SpendFire` -- spend `n` [火罐]; false when the player has fewer. Logs
+/// Spend `n` [火罐]; false when the player has fewer. Logs
 /// the spend (`why` is the reason message).
 ///
 /// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
@@ -1355,12 +1352,12 @@ pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
     asked(unsafe { sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
 }
 
-/// `[停留]` layers on the player (C# `H.State.seats[s].stay`).
+/// `[停留]` layers on the player.
 pub fn stay_of(player_id: i32) -> i32 {
     unsafe { sys::stay_of(player_id) }
 }
 
-/// `[晕眩]` layers on the player (C# `H.State.seats[s].stun`).
+/// `[晕眩]` layers on the player.
 pub fn stun_of(player_id: i32) -> i32 {
     unsafe { sys::stun_of(player_id) }
 }
@@ -1370,52 +1367,49 @@ pub fn exile_of(player_id: i32) -> i32 {
     unsafe { sys::exile_of(player_id) }
 }
 
-/// `H.State.turn` -- whose turn it is (-1 when none).
+/// Whose turn it is (-1 when none).
 pub fn turn_player() -> i32 {
     unsafe { sys::turn_player() }
 }
 
-/// `H.State.round` -- the round counter.
+/// The round counter.
 pub fn round_no() -> i32 {
     unsafe { sys::round_no() }
 }
 
-/// C# `H.TurnKey` -- `round * 100 + turn + 1`: a per-turn id for once-per-turn
+/// `round * 100 + turn + 1`: a per-turn id for once-per-turn
 /// latches (`set_slot(player_id, key, turn_key())` then compare).
 pub fn turn_key() -> i32 {
     unsafe { sys::turn_key() }
 }
 
-/// Is the player's character exactly `name`? (C# `H.CharacterOf`-style checks.)
+/// Is the player's character exactly `name`?
 pub fn character_is(player_id: i32, name: &str) -> bool {
     let (p, l) = s(name);
     unsafe { sys::character_is(player_id, p, l) != 0 }
 }
 
-/// C# `H.BandOf(seat) == name` -- is the player's character in this band?
+/// Is the player's character in this band?
 pub fn in_band(player_id: i32, name: &str) -> bool {
     let (p, l) = s(name);
     unsafe { sys::in_band(player_id, p, l) != 0 }
 }
 
-/// `PlayCtx.Dest` -- where a card goes when its effect finishes (C# fates
-/// "discard" / "hand" / "placed" / "gone"). The port names them Graveyard /
-/// Hand / Field / Banished; wire values 0..=3 are the C# order.
+/// Where a card goes when its effect finishes. Wire values 0..=3 are the
+/// Graveyard / Hand / Field / Banished order; 4..=6 are the draw-pile fates.
 ///
 /// One fate, two movers. A **play** names where its hand card ends and the
 /// engine applies it (`play_from_hand`); a **field effect** names where the
 /// instance it is running for ends and the host applies it when the run
-/// commits (C# `H.Unplace(this, "discard")` and kin). 「将此卡放入[使用者]
-/// 弃卡区」 is `Dest::Graveyard` either way -- no separate unplace-plus-discard
-/// dance. A run that names nothing leaves a placed card where it is.
+/// commits. 「将此卡放入[使用者]弃卡区」 is `Dest::Graveyard` either way -- no
+/// separate unplace-plus-discard dance. A run that names nothing leaves a
+/// placed card where it is.
 ///
-/// Planned: the draw-pile fates, one per insert position -- C# `c.Dest =
-/// "deck"` -> `H.AddToDeck(player, card, where)` with `where` = `"top"` /
-/// `"bottom"` / `"shuffle"` (note the C# default is **shuffle**, not top):
-/// `DeckTop` = 4, `DeckBottom` = 5, `DeckRandom` = 6. When they land they need
-/// arms in `game-rules`'s `dest_from` and `game-core`'s play-from-hand dest
-/// handling. (`ctx::add_to_deck`'s `shuffle` flag already covers top vs random;
-/// bottom-insert is still missing there.)
+/// Planned: the draw-pile fates, one per insert position -- `DeckTop` = 4,
+/// `DeckBottom` = 5, `DeckRandom` = 6 (the default is **shuffle**, not top).
+/// When they land they need arms in `game-rules`'s `dest_from` and
+/// `game-core`'s play-from-hand dest handling. (`ctx::add_to_deck`'s `shuffle`
+/// flag already covers top vs random; bottom-insert is still missing there.)
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Dest {
     /// The discard pile (弃卡区) -- the default.
@@ -1426,11 +1420,11 @@ pub enum Dest {
     Field = 2,
     /// 「[移除]」 -- out of the game entirely.
     Banished = 3,
-    /// Onto the top of the draw pile (C# `H.AddToDeck(seat, card, "top")`).
+    /// Onto the top of the draw pile.
     DeckTop = 4,
-    /// Under the draw pile (C# `"bottom"`).
+    /// Under the draw pile.
     DeckBottom = 5,
-    /// Shuffled into the draw pile (C# `"shuffle"`, the `AddToDeck` default).
+    /// Shuffled into the draw pile (the default insert position).
     DeckRandom = 6,
 }
 
@@ -1468,7 +1462,7 @@ fn ask_raw(kind: PromptKind, player_id: i32, title: &Msg, text: &Msg) -> Result<
     asked(unsafe { sys::ask(kind as i32, player_id, tp, tl, xp, xl) })
 }
 
-/// `H.AskTileOf` -- returns the chosen **tile**, not the index.
+/// Returns the chosen **tile**, not the index.
 /// Falls back to the first option if the answer is out of range.
 pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Result<i32, Prompt> {
     for &t in tiles {
@@ -1479,7 +1473,7 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
 }
 
 /// Tile ask with per-option labels, prices, and an AI choice hint
-/// (`H.AgentLanding`'s `ask.view.prices` + `with_ai`).
+/// (the agent-landing prompt's `ask.view.prices` + `with_ai`).
 ///
 /// Returns the chosen **tile id**, or `-1` for the 「不选」 / none answer
 /// (`Ask::tile`'s `fallback = tiles.len()`). The id is what the answer log
@@ -1506,7 +1500,7 @@ pub fn ask_tiles(
     ask_raw(PromptKind::TileId, player_id, title, text)
 }
 
-/// `H.AskPick` -- returns the chosen option index.
+/// Returns the chosen option index.
 pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Result<usize, Prompt> {
     for o in options {
         let (p, l) = mj(o);
@@ -1516,12 +1510,12 @@ pub fn ask_pick(player_id: i32, title: &Msg, text: &Msg, options: &[Msg]) -> Res
     Ok((i.max(0) as usize).min(options.len().saturating_sub(1)))
 }
 
-/// `H.AskYes`.
+/// A yes/no ask.
 pub fn ask_yes(player_id: i32, title: &Msg, text: &Msg) -> Result<bool, Prompt> {
     Ok(ask_raw(PromptKind::YesNo, player_id, title, text)? == 0)
 }
 
-/// `H.AskSeat` -- returns the chosen player.
+/// Returns the chosen player.
 pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> Result<i32, Prompt> {
     for &x in players {
         unsafe { sys::opt_int(x) }
@@ -1530,15 +1524,14 @@ pub fn ask_player(player_id: i32, title: &Msg, text: &Msg, players: &[i32]) -> R
     Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
 }
 
-/// `H.AskSeat` where each option also names a **card** to show with it (Returns
+/// A player ask where each option also names a **card** to show with it (returns
 /// 「复制哪名玩家的团卡？」 -- the player's band card rides the option). The
 /// answer is still the chosen player; only the label gains a `card` argument,
 /// so a client renders the card in the option instead of a bare name.
 ///
 /// Built on [`ask_pick`] (`PromptKind::Choice`) rather than `PromptKind::Player`
-/// because only the string-option path can carry a card per option. C#'s own
-/// `H.AskSeat` is an `AskPick` over player-name options too, so this is the
-/// faithful shape; bot / autopilot answering is unchanged (an index either way).
+/// because only the string-option path can carry a card per option. Bot /
+/// autopilot answering is unchanged (an index either way).
 pub fn ask_player_cards(
     player_id: i32,
     title: &Msg,
@@ -1558,7 +1551,7 @@ pub fn ask_player_cards(
     Ok(players[(i.max(0) as usize).min(players.len().saturating_sub(1))])
 }
 
-/// `H.AskCard` -- pick one of `cards` (ids); returns the index.
+/// Pick one of `cards` (ids); returns the index.
 pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Result<usize, Prompt> {
     for c in cards {
         // `opt_str` takes a serialized `Msg`, not a raw string -- a card id
@@ -1570,9 +1563,9 @@ pub fn ask_card(player_id: i32, title: &Msg, text: &Msg, cards: &[&str]) -> Resu
     Ok((i.max(0) as usize).min(cards.len().saturating_sub(1)))
 }
 
-/// `H.AskNumber` -- a number in `min..=max`. The C# builds this as an `AskPick`
-/// over the range, so the option list is the faithful shape (ranges in the card
-/// pool are small; for a wide range, narrow the candidates yourself first).
+/// A number in `min..=max`, built as an [`ask_pick`] over the range (ranges in
+/// the card pool are small; for a wide range, narrow the candidates yourself
+/// first).
 pub fn ask_number(
     player_id: i32,
     title: &Msg,
@@ -1593,8 +1586,7 @@ pub fn ask_number(
     Ok(min + i as i32)
 }
 
-/// Run another card's `play` effect right now (C# `NewCard` + `Play`).
-/// `H.PlayCard` -- run another card's `play` inside this run, as that card.
+/// Run another card's `play` inside this run, as that card.
 /// Returns where it says it goes (its `Dest`); moving it there is the caller's
 /// job, since only the caller knows where the card came from.
 pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
@@ -1603,21 +1595,21 @@ pub fn play_card(id: &str, player_id: i32) -> Result<Dest, Prompt> {
     Ok(Dest::from_i32(v))
 }
 
-/// `H.CanReplay` -- could `player_id` play `id` right now (it has a `play` effect and
+/// Could `player_id` play `id` right now (it has a `play` effect and
 /// its `cant_play` gate is open)?
 pub fn card_replayable(player_id: i32, id: &str) -> bool {
     let (p, l) = s(id);
     unsafe { sys::card_replayable(player_id, p, l) != 0 }
 }
 
-/// The move being planned (C# `TurnCtx.Plan`, a `MoveCtx`): what an
+/// The move being planned: what an
 /// `On::RollPlan` body shapes before the dice, and what a card shapes before
 /// running a move of its own. (`trigger::move_*` is different: it describes the
 /// move that *caused* the current trigger.)
 pub mod plan {
     use super::*;
 
-    /// C# `SetSteps` -- the planned length; keeps the sign of a reverse walk.
+    /// The planned length; keeps the sign of a reverse walk.
     pub fn set_steps(n: i32) {
         unsafe { sys::set_steps(n) }
     }
@@ -1629,85 +1621,84 @@ pub mod plan {
         unsafe { sys::set_roller(player_id) }
     }
 
-    /// C# `Reverse` -- walk backwards.
+    /// Walk backwards.
     pub fn set_reverse(on: bool) {
         unsafe { sys::set_reverse(on as i32) }
     }
 
-    /// C# `Signed` -- a negative roll walks backwards instead of clamping to 0.
+    /// A negative roll walks backwards instead of clamping to 0.
     pub fn set_signed(on: bool) {
         unsafe { sys::set_signed(on as i32) }
     }
 
-    /// C# `StopAt` -- force the walk to stop on this tile; -1 clears.
+    /// Force the walk to stop on this tile; -1 clears.
     pub fn set_stop_at(n: i32) {
         unsafe { sys::set_stop_at(n) }
     }
 
-    /// C# `Parity` -- only odd (1) / even (0) tiles count; -1 either.
+    /// Only odd (1) / even (0) tiles count; -1 either.
     pub fn set_parity(n: i32) {
         unsafe { sys::set_parity(n) }
     }
 
-    /// C# `Resolve` -- settle where the walk lands.
+    /// Settle where the walk lands.
     pub fn set_resolve(on: bool) {
         unsafe { sys::set_resolve(on as i32) }
     }
 
-    /// C# `SettleTile` -- settle on this tile instead of the landing; -1 clears.
+    /// Settle on this tile instead of the landing; -1 clears.
     pub fn set_settle_tile(n: i32) {
         unsafe { sys::set_settle_tile(n) }
     }
 
-    /// C# `PayFactor` in milli-units (500 = x0.5): money paid on this walk.
+    /// Money paid on this walk, in milli-units (500 = x0.5).
     pub fn set_pay_factor(n: i32) {
         unsafe { sys::set_pay_factor(n) }
     }
 
-    /// C# `RentFactor` in milli-units (500 = x0.5): rent paid on this walk.
+    /// Rent paid on this walk, in milli-units (500 = x0.5).
     pub fn set_rent_factor(n: i32) {
         unsafe { sys::set_rent_factor(n) }
     }
 
-    /// C# `NoBuy` -- the walk cannot buy where it lands.
+    /// The walk cannot buy where it lands.
     pub fn set_no_buy(on: bool) {
         unsafe { sys::set_no_buy(on as i32) }
     }
 
-    /// C# `NoBuild` -- the walk cannot build where it lands.
+    /// The walk cannot build where it lands.
     pub fn set_no_build(on: bool) {
         unsafe { sys::set_no_build(on as i32) }
     }
 
-    /// C# `BuildAnywhere` -- the walk may build anywhere it lands.
+    /// The walk may build anywhere it lands.
     pub fn set_build_anywhere(on: bool) {
         unsafe { sys::set_build_anywhere(on as i32) }
     }
 
-    /// How the move gets there (C# `m.Teleport`): [`MoveKind::Walk`] goes by
-    /// the path, [`MoveKind::Teleport`] jumps to its destination (with
-    /// `set_teleport_to` naming it, or the roll deriving it -- the old
-    /// `TeleportWalk`, 「视为 [传送]（只触发终点）」).
+    /// How the move gets there: [`MoveKind::Walk`] goes by the path,
+    /// [`MoveKind::Teleport`] jumps to its destination (with `set_teleport_to`
+    /// naming it, or the roll deriving it -- 「视为 [传送]（只触发终点）」).
     pub fn set_kind(kind: MoveKind) {
         unsafe { sys::set_kind(kind as i32) }
     }
 
-    /// C# `MinRoll` -- clamp the final face up to this, after the counteractions.
+    /// Clamp the final face up to this, after the counteractions.
     pub fn set_min_roll(n: i32) {
         unsafe { sys::set_min_roll(n) }
     }
 
-    /// C# `ExtraSteps`.
+    /// Extra steps added to the walk length.
     pub fn set_extra_steps(n: i32) {
         unsafe { sys::set_extra_steps(n) }
     }
 
-    /// C# `MoreSteps`.
+    /// Further steps appended to the walk length.
     pub fn set_more_steps(n: i32) {
         unsafe { sys::set_more_steps(n) }
     }
 
-    /// `MoveCtx.Tags` -- a free-form per-card counter on this move. Card rules
+    /// A free-form per-card counter on this move. Card rules
     /// own effects like [火罐] rolls through these instead of an engine flag:
     /// the card that arms one tags the move (`set_tag("fireRoll", 1)`) and
     /// readers ask [`trigger::move_tag`].
@@ -1716,15 +1707,15 @@ pub mod plan {
         unsafe { sys::set_tag(p, l, value) }
     }
 
-    /// C# `NoCircleReward` -- passing CiRCLE pays nothing on this walk.
+    /// Passing CiRCLE pays nothing on this walk.
 
-    /// C# `SettleAsAgent`.
+    /// Settle this move as the 地产商 landing.
     pub fn set_settle_as_agent(on: bool) {
         unsafe { sys::set_settle_as_agent(on as i32) }
     }
 
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record `player_id` as a
-    /// **follower** of the move being planned (C# `LeadFx.Who` + `Follow`).
+    /// **follower** of the move being planned.
     /// After the mover settles, the engine replays this move's result for each
     /// follower in the order they were added (「你先触发结算，此后其他玩家按
     /// 行动顺序依次触发结算」 -- add them in action order). The follower's
@@ -1734,7 +1725,7 @@ pub mod plan {
         unsafe { sys::plan_add_follower(player_id) }
     }
 
-    /// C# `TeleportTo` -- the teleport's destination. -1 derives it from the
+    /// The teleport's destination. -1 derives it from the
     /// roll (the 「视为 [传送]（只触发终点）」 shape).
     pub fn set_teleport_to(tile: i32) {
         unsafe { sys::set_teleport_to(tile) }
@@ -1747,7 +1738,7 @@ pub mod plan {
         unsafe { sys::set_start(tile, p, l) }
     }
 
-    /// C# `Base` -- replace the roll's dice table with `count`d`sides`.
+    /// Replace the roll's dice table with `count`d`sides`.
     pub fn set_base_dice(count: i32, sides: i32, why: &str) {
         let (p, l) = s(why);
         unsafe { sys::set_base_dice(count, sides, p, l) }
@@ -1760,7 +1751,7 @@ pub mod plan {
     }
 
     /// Append `count`d`sides` to the roll as an extra term. A flat add is a
-    /// `0`-sided term: `add_extra_dice(n, 0, why)` is what C# `Bonus` did.
+    /// A flat add is a `0`-sided term (`add_extra_dice(n, 0, why)`).
     pub fn add_extra_dice(count: i32, sides: i32, why: &str) {
         let (p, l) = s(why);
         unsafe { sys::add_extra_dice(count, sides, p, l) }
@@ -1772,37 +1763,37 @@ pub mod plan {
         unsafe { sys::move_stopped() != 0 }
     }
 
-    /// C# `StopAt`, or -1.
+    /// The forced stop tile, or -1.
     pub fn stop_at() -> i32 {
         unsafe { sys::move_stop_at() }
     }
 
-    /// C# `Parity`: -1 either, 0 even, 1 odd.
+    /// The parity filter: -1 either, 0 even, 1 odd.
     pub fn parity() -> i32 {
         unsafe { sys::move_parity() }
     }
 
-    /// C# `Resolve`.
+    /// Does the walk settle where it lands?
     pub fn resolve() -> bool {
         unsafe { sys::move_resolve() != 0 }
     }
 
-    /// The planned length (`MovePlan.Landing` is where it ends).
+    /// The planned length.
     pub fn steps() -> i32 {
         unsafe { sys::move_steps() }
     }
 
-    /// C# `Remaining` -- steps left to walk.
+    /// Steps left to walk.
     pub fn remaining() -> i32 {
         unsafe { sys::move_remaining() }
     }
 
-    /// C# `Total` -- steps walked (`lastWalk` is written from this).
+    /// Steps walked.
     pub fn total() -> i32 {
         unsafe { sys::move_total() }
     }
 
-    /// C# `Dir` -- +1 forwards, -1 backwards.
+    /// Walk direction: +1 forwards, -1 backwards.
     pub fn dir() -> i32 {
         unsafe { sys::move_dir() }
     }
@@ -1810,22 +1801,22 @@ pub mod plan {
     pub fn clear_dice() {
         unsafe { sys::clear_dice() }
     }
-    /// C# `MoveCtx.CanBuild` -- may this move build where it lands?
+    /// May this move build where it lands?
     pub fn set_can_build(on: bool) {
         unsafe { sys::set_can_build(on as i32) }
     }
 }
 
-/// C# `H.Target(c, seat)` for a single-target card -- try to target `player_id`.
+/// For a single-target card -- try to target `player_id`.
 /// `None` when the targeting failed (out, exiled, immune, untargetable, or the
 /// `target` [反击] window cancelled it); otherwise the player actually targeted,
-/// which a field `redirect` hook may have changed (C# `IRedirect`).
+/// which a field `redirect` hook may have changed.
 pub fn target(player_id: i32) -> Option<i32> {
     let r = unsafe { sys::target(player_id, -1, 1) };
     (r >= 0).then_some(r)
 }
 
-/// C# `H.TargetAll(c, seats, got)` -- target each player in turn (no redirect);
+/// Target each player in turn (no redirect);
 /// returns the players that were targeted, in order, without duplicates.
 pub fn target_all(players: &[i32]) -> Vec<i32> {
     let mut got = Vec::new();
@@ -1838,13 +1829,13 @@ pub fn target_all(players: &[i32]) -> Vec<i32> {
     got
 }
 
-/// C# `H.TargetTile(c, tile)` -- try to target `tile` (and so its owner, when
+/// Try to target `tile` (and so its owner, when
 /// someone else owns it). False when the targeting failed.
 pub fn target_tile(tile: i32) -> bool {
     unsafe { sys::target(-1, tile, 0) >= 0 }
 }
 
-/// C# `H._targeted[player_id]` -- times other players' cards targeted `player_id` since its
+/// Times other players' cards targeted `player_id` since its
 /// own turn last started.
 pub fn targeted_count(player_id: i32) -> i32 {
     unsafe { sys::targeted_count(player_id) }
@@ -1859,7 +1850,7 @@ pub fn gains_this_turn(player_id: i32) -> i32 {
 }
 
 /// The **static targeting query**: which players the play being resolved (by
-/// `player_id`) designates (C# `H.Db.Card(id).Targeting` + `H.Others`). Empty
+/// `player_id`) designates. Empty
 /// when the play names nobody. This is what 「有[指定]目标」 /
 /// 「取消其对目标之一的[指定]」 branches on, before the play's body has run.
 pub fn designations(player_id: i32) -> Vec<i32> {
@@ -1873,7 +1864,7 @@ pub fn designations(player_id: i32) -> Vec<i32> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// Per-pair cancel (「取消其对目标之一的[指定]」, C# `play.Tags["immune"+seat]`):
+/// Per-pair cancel (「取消其对目标之一的[指定]」):
 /// mark `seat`'s designation on the play being resolved as cancelled. The rest
 /// of the play's designations still land.
 pub fn cancel_designation(seat: i32) {
@@ -1885,7 +1876,7 @@ pub fn designation_cancelled(seat: i32) -> bool {
     unsafe { sys::designation_cancelled(seat) != 0 }
 }
 
-/// C# `_abnormalTurn[player_id]` -- abnormal effects that got through to `player_id`
+/// Abnormal effects that got through to `player_id`
 /// this turn (reset for every player at each turn start).
 pub fn abnormal_count(player_id: i32) -> i32 {
     unsafe { sys::abnormal_count(player_id) }
@@ -1900,15 +1891,15 @@ pub fn placed_tile(player_id: i32, id: &str) -> Option<i32> {
 }
 
 /// Arm the doubling for the run in progress -- the *playing* card's
-/// `PlayCtx.Doubled`. CiRCLE's band skill sets it from outside that card, which
+/// doubled-number slot. CiRCLE's band skill sets it from outside that card, which
 /// is why it is a world setter and not something the card owns. `-1` clears.
 pub fn set_play_doubled(n: i32) {
     unsafe { sys::set_play_doubled(n) }
 }
 
-/// C# `PlayCtx.N(k, value)` -- a number from this card's text, doubled when the
-/// play doubles its `k`-th number (C# `PlayCtx.Doubled`). Use it instead of a
-/// bare literal for the numbers a doubling effect can target.
+/// A number from this card's text, doubled when the play doubles its `k`-th
+/// number (「将…一个数字变为两倍」). Use it instead of a bare literal for the
+/// numbers a doubling effect can target.
 pub fn n(k: i32, value: i32) -> i32 {
     if unsafe { sys::play_doubled() } == k {
         // One-shot: 「将…一个数字变为两倍」 doubles a single tagged number,
@@ -1922,7 +1913,7 @@ pub fn n(k: i32, value: i32) -> i32 {
 
 // ------------------------------------------------- turn plan & scheduling
 
-/// C# `TurnCtx.AfterEnd` -- run this card's `On::AtEnd` (for `player_id`) when the
+/// Run this card's `On::AtEnd` (for `player_id`) when the
 /// current turn ends, *after* the end-of-turn status wear-off (so a [停留] it
 /// grants lasts through the next turn). The card need not be in play.
 /// Scheduling twice runs it twice.
@@ -1930,7 +1921,7 @@ pub fn at_turn_end(player_id: i32) {
     unsafe { sys::schedule_turn_end(player_id, 0) }
 }
 
-/// C# `TurnCtx.AtEnd` -- run this card's `On::AtEnd` (for `player_id`) when the
+/// Run this card's `On::AtEnd` (for `player_id`) when the
 /// current turn ends, *before* the status wear-off (「回合结束时」 money losses,
 /// discarding down to a hand size).
 pub fn before_turn_end(player_id: i32) {
@@ -1943,13 +1934,13 @@ pub fn at_next_turn_end(player_id: i32) {
     unsafe { sys::schedule_turn_end(player_id, 1) }
 }
 
-/// C# `TurnCtx.NoMoneyLoss` -- `player_id`'s money cannot drop for the rest of this
+/// `player_id`'s money cannot drop for the rest of this
 /// turn (payments it would make are waived; auctions are not payments).
 pub fn set_no_money_loss(player_id: i32) {
     unsafe { sys::set_no_money_loss(player_id) }
 }
 
-/// C# `TurnCtx.Plan.FixedRoll` -- this turn's main-move roll is `n`.
+/// This turn's [主要移动] roll is `n`.
 pub fn set_fixed_roll(n: i32) {
     unsafe { sys::set_fixed_roll(n) }
 }
@@ -1960,23 +1951,23 @@ pub fn fixed_roll() -> Option<i32> {
     (v >= 0).then_some(v)
 }
 
-/// C# `NextStepsFx` -- `player_id`'s next main move walks exactly `n` steps.
+/// `player_id`'s next [主要移动] walks exactly `n` steps.
 pub fn set_next_steps(player_id: i32, n: i32) {
     unsafe { sys::set_next_steps(player_id, n) }
 }
 
-/// C# `TurnCtx.LastMain` -- steps this turn's main move walked (0 = none yet).
+/// Steps this turn's [主要移动] walked (0 = none yet).
 pub fn turn_main_steps() -> i32 {
     unsafe { sys::turn_main_steps() }
 }
 
-/// C# `Card.FireMaxDelta` -- raise (or, negative, lower) `player_id`'s [火罐] cap;
+/// Raise (or, negative, lower) `player_id`'s [火罐] cap;
 /// returns the new cap.
 pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
     unsafe { sys::add_fire_max(player_id, n) }
 }
 
-/// C# `DecayCard` tick -- burn one of this card's crystals. Returns the count
+/// Burn one of this card's crystals (the decay tick). Returns the count
 /// left.
 ///
 /// The 「…为0时放入弃牌堆」 half of a decay clause is **not** here: it is the
@@ -1993,7 +1984,7 @@ pub fn decay() -> Result<i32, Prompt> {
     add_crystals(-1, 0)
 }
 
-/// The trigger a counteraction is being checked against (C# `Trigger`).
+/// The trigger a counteraction is being checked against.
 pub mod trigger {
     use super::*;
 
@@ -2036,24 +2027,24 @@ pub mod trigger {
 
     /// `t.ByCard` -- the player whose card caused this trigger, or `None` when the
     /// trigger was not card-caused (board-driven: rent, buy, build, turn flow).
-    /// This is what C# `H.HitByOtherCard` keys on: `by_card().is_some_and(|by|
-    /// by != player)` means "another player's card did this to me". Distinct from
-    /// `player_id()` (the mover/payer/target), which on a `pay` trigger is the
-    /// *payer*, not the card that forced the payment.
+    /// `by_card().is_some_and(|by| by != player)` means "another player's card
+    /// did this to me". Distinct from `player_id()` (the mover/payer/target),
+    /// which on a `pay` trigger is the *payer*, not the card that forced the
+    /// payment.
     pub fn by_card() -> Option<i32> {
         let v = unsafe { sys::trig_by_card() };
         (v >= 0).then_some(v)
     }
 
-    /// `t.Pay.IsRent` -- is this `pay`/`paid` trigger rent (C# `t.Pay.kind == "rent"`),
+    /// `t.Pay.IsRent` -- is this `pay`/`paid` trigger rent,
     /// as opposed to a buy, a build, or a forced loss. Always false on a
     /// card-driven payment.
     pub fn pay_is_rent() -> bool {
         unsafe { sys::trig_pay_is_rent() != 0 }
     }
 
-    /// `t.Move` -- how the move that caused this trigger got there (C#
-    /// `m.Teleport`): `None` when the move did not cause it. Present on
+    /// `t.Move` -- how the move that caused this trigger got there:
+    /// `None` when the move did not cause it. Present on
     /// `moveRoll` / `pass` / `settleBefore` / `settle` / `settleAfter` raised
     /// while a player is moving. A walk enters every tile it steps on; a teleport
     /// enters only its destination.
@@ -2061,13 +2052,13 @@ pub mod trigger {
         MoveKind::from_i32(unsafe { sys::trig_move_kind() })
     }
 
-    /// `t.Move.Resolve` -- does that move settle where it lands (C#
-    /// `m.Resolve`)? False = a card effect prevented settle at all.
+    /// `t.Move.Resolve` -- does that move settle where it lands?
+    /// False = a card effect prevented settle at all.
     pub fn move_resolve() -> bool {
         unsafe { sys::trig_move_resolve() != 0 }
     }
 
-    /// `t.Move.Tags[key]` -- a per-card counter the move carries (C# `m.Tags`).
+    /// `t.Move.Tags[key]` -- a per-card counter the move carries.
     /// A [火罐] roll is card-owned state: whoever armed it tagged the move
     /// (`"fireRoll"` by convention).
     pub fn move_tag(key: &str) -> i32 {
@@ -2075,7 +2066,7 @@ pub mod trigger {
         unsafe { sys::trig_move_tag(p, l) }
     }
 
-    /// `t.Move.Main` -- was this the turn's main move (C# `MoveCtx.main`)?
+    /// `t.Move.Main` -- was this the turn's [主要移动]?
     pub fn move_is_main() -> bool {
         unsafe { sys::trig_move_main() != 0 }
     }
@@ -2200,15 +2191,15 @@ pub mod trigger {
         unsafe { sys::trig_set_move_roll(v) }
     }
 
-    /// Rewrite the amount of a pending `pay`/`paid` trigger (C# `PayCtx.amount`).
-    /// `0` cancels the payment outright (C# `t.Pay.cancel = true`). The engine
+    /// Rewrite the amount of a pending `pay`/`paid` trigger.
+    /// `0` cancels the payment outright. The engine
     /// honours whatever this leaves on the trigger once the counteraction window
     /// resolves.
     pub fn set_pay_amount(v: i32) {
         unsafe { sys::trig_set_pay_amount(v) }
     }
 
-    /// Redirect the payee of a pending `pay` (C# `PayCtx.to`); `-1` sends the
+    /// Redirect the payee of a pending `pay` (`t.Pay.to`); `-1` sends the
     /// money to the bank instead. Combine with [`set_pay_amount`] to reshape a
     /// payment completely.
     pub fn set_pay_target(to: i32) {
@@ -2216,7 +2207,7 @@ pub mod trigger {
     }
 
     /// Rewrite `t.target` -- on a `redirect` hook, the player that takes the hit
-    /// instead (C# `IRedirect`).
+    /// instead.
     pub fn set_target(player_id: i32) {
         unsafe { sys::trig_set_pay_target(player_id) }
     }
@@ -2330,13 +2321,12 @@ pub mod effect {
 
 // ------------------------------------------------------------- placement & skills
 
-/// C# `H.IsColor` -- does `tile` count as colour `group` for `player_id`?
+/// Does `tile` count as colour `group` for `player_id`?
 pub fn is_color(player_id: i32, tile: i32, group: i32) -> bool {
     unsafe { sys::is_color(player_id, tile, group) != 0 }
 }
 
-/// `H.Unplace` -- take this card out of play. True when it was there.
-/// Take a *named* card off the player's field (C# `H.Unplace(card, ...)`).
+/// Take a *named* card off the player's field. True when it was there.
 /// [`unplace_card`] is the special case where the named card is the one running.
 pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
     let (p, l) = s(card);
@@ -2357,7 +2347,7 @@ pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// The C# `H.AbnormalGate` -- ask the engine whether an abnormal effect of
+/// Ask the engine whether an abnormal effect of
 /// `kind` (`[强制停下]`, `[传送]`, ...) may land on `player_id`. Returns `false`
 /// when a field card guarded it, the player is immune, or they are
 /// `unstoppable`. Call this **before** applying the effect, and skip on `false`.
@@ -2365,14 +2355,14 @@ pub fn gate(player_id: i32, kind: crate::abi::AbKind) -> bool {
     unsafe { sys::gate(player_id, kind as i32) != 0 }
 }
 
-/// `H.SettleAt` -- a full [触发结算] of `tile` for this player. The player does
+/// A full [触发结算] of `tile` for this player. The player does
 /// not move; the tile's own effect resolves. `main` marks it as the turn's
 /// landing (it writes `landed`).
 pub fn card_settle_at(player_id: i32, tile: i32, main: bool) -> bool {
     unsafe { sys::card_settle_at(player_id, tile, main as i32) != 0 }
 }
 
-/// `H.OfferBuildAmong` -- prompt to build on one of `tiles`, then build there.
+/// Prompt to build on one of `tiles`, then build there.
 /// Silently skips when none of them can take a house.
 pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
     let mut buf = alloc::vec![0u8; tiles.len() * 4];
@@ -2383,14 +2373,15 @@ pub fn card_offer_build(player_id: i32, tiles: &[i32]) -> bool {
     unsafe { sys::card_offer_build(player_id, p, l) != 0 }
 }
 
-/// `H.DoMoveRoll` -- sum the planned move's dice tables into one face. The
+/// Sum the planned move's dice tables into one face. The
 /// `rollAfter` / `moveRoll` hooks are **not** raised: a re-roll is usually being
 /// requested from inside one of them, and re-raising would recurse.
 pub fn do_move_roll(player_id: i32) -> i32 {
     unsafe { sys::do_move_roll(player_id) }
 }
 
-/// `H.IsLiveHouse` for one player: the base check plus their `Fx.ExtraColor`.
+/// Live-House check for one player: the base check plus their extra-colour
+/// band-skill colours.
 pub fn is_live_house_for(player_id: i32, tile: i32) -> bool {
     unsafe { sys::is_live_house_for(player_id, tile) != 0 }
 }
@@ -2414,19 +2405,19 @@ pub fn set_build_cost_pct(pct: i32) {
     unsafe { sys::set_build_cost_pct(pct) }
 }
 
-/// Flip a placed card face-down / face-up (C# `H.SwitchState`).
+/// Flip a placed card face-down / face-up.
 pub fn set_card_face_down(player_id: i32, card: &str, down: bool) -> bool {
     let (cp, cl) = s(card);
     unsafe { sys::set_card_face_down(player_id, cp, cl, down as i32) != 0 }
 }
 
-/// C# `Card.AddCrystals` on a named placed card; `max` caps (0 = uncapped).
+/// Adjust [奇迹水晶] on a named placed card; `max` caps (0 = uncapped).
 pub fn add_card_crystals(player_id: i32, card: &str, n: i32, max: i32) -> i32 {
     add_card_counter(player_id, card, crate::abi::counter::CRYSTALS, n, max)
 }
 
-/// Is this placed card face-down? The `!p.FaceDown` half of the C# field
-/// filters; [`cards_in`] lists face-down cards too.
+/// Is this placed card face-down? Field filters use this half of the
+/// face-down test; [`cards_in`] lists face-down cards too.
 pub fn card_face_down(player_id: i32, card: &str) -> bool {
     let (p, l) = s(card);
     unsafe { sys::card_face_down(player_id, p, l) != 0 }
@@ -2434,15 +2425,14 @@ pub fn card_face_down(player_id: i32, card: &str) -> bool {
 
 // ------------------------------------------------------------- placement & skills
 
-/// `H.PlaceCard` -- put a specific card (a derived one) into play at a player.
-/// `WhyNotBuildOn` -- may this player build on this tile? The same gate the
+/// May this player build on this tile? The same gate the
 /// build step uses, so a card choosing a destination cannot pick one the engine
 /// would then refuse.
 pub fn can_build_on(player_id: i32, tile: i32) -> bool {
     unsafe { sys::can_build_on(player_id, tile) != 0 }
 }
 
-/// `H.BuyRoutine` -- buy `tile` now (the 「必须购买」 clauses).
+/// Buy `tile` now (the 「必须购买」 clauses).
 /// Kept as the P0 alias of [`buy`] with [`crate::abi::BuyKind::Card`].
 pub fn card_buy(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_buy(player_id, tile) != 0 }
@@ -2472,8 +2462,7 @@ pub fn buy_quotes(player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> 
 }
 
 /// Which option `player_id`'s AI would take among `tiles` on an agent offer.
-/// Returns the index; `tiles.len()` = skip. `H.AgentLanding`'s
-/// `ai_agent_choice`.
+/// Returns the index; `tiles.len()` = skip.
 pub fn ai_agent_choice(player_id: i32, tiles: &[i32]) -> i32 {
     let mut buf = alloc::vec![0u8; tiles.len() * 4];
     for (i, &t) in tiles.iter().enumerate() {
@@ -2503,8 +2492,8 @@ pub fn agent_offer(player_id: i32, agent: i32, tile: i32, kind: i32) -> bool {
     unsafe { sys::agent_offer(player_id, agent, tile, kind) != 0 }
 }
 
-/// Bind the running card's own def as a **turn-scoped** instance in
-/// `TurnCtx.lingering` (`docs/PURCHASE.md`). `expires` is the turn count it
+/// Bind the running card's own def as a **turn-scoped** lingering instance
+/// (`docs/PURCHASE.md`). `expires` is the turn count it
 /// survives (`0` = this turn only). This is the hand-card home for 「本回合」
 /// effects: a `BuyAdd` / `BuyMul` / `BuySet` / `BuyAssign` hook on the card's
 /// own def reaches the buy pipeline, and a [`set_prop`] made before this call
@@ -2520,7 +2509,7 @@ pub fn card_immune(player_id: i32, card: &str) -> bool {
     unsafe { sys::card_immune(player_id, cp, cl) != 0 }
 }
 
-/// `H.MortgageRoutine` -- mortgage one of the player's deeds.
+/// Mortgage one of the player's deeds.
 pub fn card_mortgage(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_mortgage(player_id, tile) != 0 }
 }
@@ -2533,24 +2522,22 @@ pub fn card_text_mentions(card: &str, needle: &str) -> bool {
     unsafe { sys::card_text_mentions(cp, cl, np, nl) != 0 }
 }
 
-/// A gain that used to bypass the pipeline (C# `fixedAmount`).
+/// A gain that goes through the full money pipeline.
 ///
 /// `NEGATION-AUDIT` V4 (user ruling 2026-10-07): Tritone's 「立刻获得此次失去
 /// 的资金金额」 is money movement and goes through the same pipeline as any
 /// other gain -- the `effect` [反击] window, the modifier stages and the `pay`
-/// settlement all see it. The C# `fixedAmount` bypass is gone; this is now
-/// [`gain`] under a name the cards already use.
+/// settlement all see it. This is [`gain`] under a name the cards already use.
 pub fn gain_fixed(player_id: i32, amount: i32, why: &Msg) -> Result<i32, Prompt> {
     gain(player_id, amount, why)
 }
 
-/// Is this the 地产商 tile (C# `kind == "agent"`)?
+/// Is this the 地产商 tile?
 pub fn is_agent(tile: i32) -> bool {
     unsafe { sys::is_agent(tile) != 0 }
 }
 
-/// What this turn's [触发结算]s have cost the player so far (C#
-/// `TurnCtx.PaidInSettle`).
+/// What this turn's [触发结算]s have cost the player so far.
 pub fn paid_in_settle() -> i32 {
     unsafe { sys::paid_in_settle() }
 }
@@ -2575,14 +2562,14 @@ pub fn set_build_discount(n: i32, layers: i32) {
     unsafe { sys::set_build_discount(n, layers) }
 }
 
-/// C# `Card.Immune` -- 「此卡不受…效果影响」. Set it at play time; effects that
+/// 「此卡不受…效果影响」. Set it at play time; effects that
 /// would touch the card read [`card_immune`] and skip.
 pub fn set_card_immune(player_id: i32, card: &str, on: bool) -> bool {
     let (cp, cl) = s(card);
     unsafe { sys::set_card_immune(player_id, cp, cl, on as i32) != 0 }
 }
 
-/// Move a placed field card to `tile` (C# `card.Tile = t`). The card is already
+/// Move a placed field card to `tile`. The card is already
 /// in play; this only changes where it sits. `tile: -1` puts it back with its
 /// owner.
 pub fn set_card_tile(player_id: i32, card: &str, tile: i32) -> bool {
@@ -2596,7 +2583,7 @@ pub fn set_extreme(v: i32) {
     unsafe { sys::set_extreme(v) }
 }
 
-/// C# `_turnCtx.Rolls` -- every face rolled this turn, in order.
+/// Every face rolled this turn, in order.
 /// 「与本回合内你骰出过的所有骰点都不同」 compares against this.
 pub fn turn_rolls() -> Vec<i32> {
     let cap = 4096;
@@ -2609,7 +2596,7 @@ pub fn turn_rolls() -> Vec<i32> {
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
 }
 
-/// C# `_turnSnap[i]` -- `(pos, stay, stun, exile)` when the turn started. The
+/// `(pos, stay, stun, exile)` when the turn started. The
 /// four things 「回到起始地点并取消所有受到的效果」 restores.
 pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
     let (p, scratch) = out_buf(16);
@@ -2622,7 +2609,7 @@ pub fn turn_snap(player_id: i32) -> (i32, i32, i32, i32) {
     (g(0), g(4), g(8), g(12))
 }
 
-/// Where the player stood when this turn started (C# `_turnSnap[i].pos`).
+/// Where the player stood when this turn started.
 /// 「在Livehouse地块开始回合时」 is a question about that square.
 pub fn turn_start_pos(player_id: i32) -> i32 {
     unsafe { sys::turn_start_pos(player_id) }
@@ -2630,12 +2617,12 @@ pub fn turn_start_pos(player_id: i32) -> i32 {
 
 // --------------------------------------------- card crystals & build
 
-/// C# `Card.Crystals` on a named placed card.
+/// [奇迹水晶] on a named placed card.
 pub fn card_crystals(player_id: i32, card: &str) -> i32 {
     card_counter(player_id, card, crate::abi::counter::CRYSTALS)
 }
 
-/// `H.BuildRoutine` -- pay `tile`'s build cost and raise one house.
+/// Pay `tile`'s build cost and raise one house.
 pub fn card_build(player_id: i32, tile: i32) -> bool {
     unsafe { sys::card_build(player_id, tile) != 0 }
 }
@@ -2663,8 +2650,8 @@ pub fn skill_blocked(player_id: i32, band: &str) -> bool {
         ) > 0
 }
 
-/// Where **this instance** sits, or -1 for "with its owner" / gone
-/// (C# `Card.Tile`). [`placed_tile`] is the form for some *other* card.
+/// Where **this instance** sits, or -1 for "with its owner" / gone.
+/// [`placed_tile`] is the form for some *other* card.
 pub fn self_tile() -> Option<i32> {
     let v = unsafe { sys::self_tile() };
     (v >= -1).then_some(v)
@@ -2716,7 +2703,7 @@ pub fn crystals_at(uid: i32) -> i32 {
     counter_at(uid, crate::abi::counter::CRYSTALS)
 }
 
-/// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
+/// Adjust [奇迹水晶] on the instance at `uid`; `max` caps (0 = uncapped).
 pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
     add_counter_at(uid, crate::abi::counter::CRYSTALS, n, max)
 }

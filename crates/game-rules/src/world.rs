@@ -5,9 +5,10 @@
 //! snapshot, and only a run that finishes replaces the real state. The RNG
 //! **must** live inside the world so that a replayed run draws the same numbers.
 //!
-//! The methods mirror the C# `H.*` vocabulary the card classes use. Anything
-//! that needs a player decision is deliberately absent: the host surfaces it as
-//! a [`crate::Prompt`] and the run is replayed with the answer.
+//! The methods are the card-facing vocabulary of the match: dice, board,
+//! players, piles, field cards. Anything that needs a player decision is
+//! deliberately absent: the host surfaces it as a [`crate::Prompt`] and the run
+//! is replayed with the answer.
 
 use game_core::msg::Msg;
 
@@ -190,15 +191,16 @@ impl Trigger {
 pub trait CardWorld: Clone + 'static {
     // ---------------------------------------------------------- dice & log
     /// Sum of `count` d`sides` from the match RNG; also records a dice event.
-    /// Announce which effect a card just applied (`H.Effect`). Unlike [`Self::log`]
-    /// this reaches the player as a popup as well as a log line -- the two are
+    /// Announce which effect a card just applied. Unlike [`Self::log`] this
+    /// reaches the player as a popup as well as a log line -- the two are
     /// additive. Defaults to a plain log so test worlds need not implement it.
     fn effect(&mut self, player_id: i32, msg: Msg) {
         self.log(player_id, msg);
     }
 
     fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32;
-    /// C# `PlayCtx.Extreme` -- 1 = settle number ranges at their max, -1 = min.
+    /// 1 = settle number ranges at their max, -1 = min. 「以理论最大值或
+    /// 最小值结算」.
     fn extreme(&self) -> i32 {
         0
     }
@@ -208,15 +210,15 @@ pub trait CardWorld: Clone + 'static {
         true
     }
     fn set_play_from_hand(&mut self, _v: bool) {}
-    /// A gain skills / crits may not bend (C# `fixedAmount`).
+    /// A gain whose amount skills and crits may not bend.
     fn gain_fixed(&mut self, _player_id: i32, _amount: i32, _why: crate::Msg) -> i32 {
         0
     }
-    /// Flip a placed card face-down / face-up (C# `H.SwitchState`).
+    /// Flip a placed card face-down / face-up.
     fn set_card_face_down(&mut self, _player_id: i32, _card: &str, _down: bool) -> bool {
         false
     }
-    /// `H.DoMoveRoll` -- sum the planned move's dice tables into one face.
+    /// Sum the planned move's dice tables into one face.
     fn do_move_roll(&mut self, _player_id: i32) -> i32 {
         0
     }
@@ -243,15 +245,15 @@ pub trait CardWorld: Clone + 'static {
     fn mortgage_value(&self, tile: i32) -> i32;
     fn owned_count(&self, player_id: i32) -> i32;
     fn owned_at(&self, player_id: i32, index: i32) -> i32;
-    /// `TileData.IsBuyable` (a deed tile).
+    /// A deed tile (`TileData::is_buyable`).
     fn is_buyable(&self, tile: i32) -> i32;
-    /// C# `H.IsShop` -- a 商店街 deed (buyable, colour group 10).
+    /// A 「商店街」 deed (buyable, colour group 10).
     fn is_shop(&self, tile: i32) -> i32;
-    /// `TileData.kind == "ring"` -- a RiNG deed.
+    /// A RiNG deed (`TileKind::Ring`).
     fn is_ring(&self, tile: i32) -> i32;
-    /// `TileData.kind == "circle"` -- the CiRCLE tile.
+    /// The CiRCLE tile (`TileKind::Circle`).
     fn is_circle(&self, tile: i32) -> i32;
-    /// C# `H.IsColor` -- does `tile` count as colour `group` for `player_id`?
+    /// Does `tile` count as colour `group` for `player_id`?
     /// Reads the tile props (`prop::ANY_COLOR` / `prop::colorFor:<p>`).
     fn is_color(&self, _player_id: i32, _tile: i32, _group: i32) -> bool {
         false
@@ -260,11 +262,11 @@ pub trait CardWorld: Clone + 'static {
     fn paid_in_settle(&self) -> i32 {
         0
     }
-    /// C# `_turnSnap[i].pos` -- where the player stood when the turn started.
+    /// Where the player stood when the turn started.
     fn turn_start_pos(&self, _player_id: i32) -> i32 {
         -1
     }
-    /// C# `_turnCtx.Rolls` -- every face rolled this turn.
+    /// Every face rolled this turn.
     fn turn_rolls(&self) -> Vec<i32> {
         Vec::new()
     }
@@ -272,49 +274,49 @@ pub trait CardWorld: Clone + 'static {
     fn set_build_discount(&mut self, _n: i32, _layers: i32) {}
     /// 「加盖房屋时半价」 -- 100 = full, 50 = half, 0 = free.
     fn set_build_cost_pct(&mut self, _pct: i32) {}
-    /// C# `_turnSnap[i]` -- the four status values a turn-end undo restores.
+    /// The four status values a turn-end undo restores.
     fn turn_snap(&self, _player_id: i32) -> (i32, i32, i32, i32) {
         (-1, 0, 0, 0)
     }
-    /// C# `H._tiles[t].kind == "agent"` -- the 地产商 tile.
+    /// The 「地产商」 tile (`TileKind::Agent`).
     fn is_agent(&self, _tile: i32) -> i32 {
         0
     }
-    /// C# `H.IsLiveHouse` -- a Live House deed (buyable, colour group 6).
+    /// A Live House deed (buyable, colour group 6).
     fn is_live_house(&self, tile: i32) -> i32;
-    /// `H.IsLiveHouse` for one player: the base check plus their colour
-    /// override (「使其对你视为live house格子」).
+    /// [`Self::is_live_house`] for one player: the base check plus their
+    /// colour override (「使其对你视为live house格子」).
     fn is_live_house_for(&self, _player_id: i32, tile: i32) -> i32 {
         self.is_live_house(tile)
     }
-    /// `TileData.group` -- colour group (-1 for no tile).
+    /// Colour group (`TileData::group`; -1 for no tile).
     fn tile_group(&self, tile: i32) -> i32;
-    /// `H._tiles[t].price` -- the land price alone (cf. `buy_price`).
+    /// The land price alone (cf. `buy_price`, which adds houses).
     fn tile_price(&self, tile: i32) -> i32;
-    /// `H.State.houses[t]`.
+    /// House count on the tile.
     fn houses_of(&self, tile: i32) -> i32;
-    /// `H.RentHouses` -- the house count a **rent** lookup reads (the counted
-    /// value a 「房屋数视为…」 override may lift). Real houses are untouched.
+    /// The house count a **rent** lookup reads (the counted value a
+    /// 「房屋数视为…」 override may lift). Real houses are untouched.
     fn rent_houses_of(&self, tile: i32) -> i32 {
         self.houses_of(tile)
     }
     /// Set the tile's house count (house transfer effects).
     fn set_houses(&mut self, tile: i32, n: i32);
-    /// `H.AddHouse` -- returns the new count.
+    /// Add (or remove, with negative `n`) houses; returns the new count.
     fn add_house(&mut self, tile: i32, n: i32) -> i32;
-    /// `H.State.mortgaged[t]` (1 = mortgaged).
+    /// Is the tile mortgaged? (1 = mortgaged.)
     fn mortgaged_of(&self, tile: i32) -> i32;
     /// Mortgage/redeem outright (transfer effects; no money moves).
     fn set_mortgaged(&mut self, tile: i32, v: i32);
-    /// `H.State.owners[t] = seat` -- hand a deed over outright.
+    /// Hand a deed over outright (no money moves).
     fn set_owner(&mut self, tile: i32, player_id: i32);
-    /// C# `H.Dist` -- undirected ring distance.
+    /// Undirected ring distance between two tiles.
     fn dist(&self, a: i32, b: i32) -> i32;
-    /// C# `H.Forward` -- steps forward from `a` to `b`.
+    /// Steps forward from `a` to `b` around the ring.
     fn tile_forward(&self, a: i32, b: i32) -> i32;
-    /// C# `H.Neighbor` -- next present player in direction `dir` (±1), or -1.
+    /// Next present player in direction `dir` (±1), or -1.
     fn neighbor(&self, player_id: i32, dir: i32) -> i32;
-    /// C# `H.SeatsOn` -- present players on a tile, minus `except` (-1 = none).
+    /// Present players on a tile, minus `except` (-1 = none).
     fn players_on_count(&self, tile: i32, except: i32) -> i32;
     fn players_on_at(&self, tile: i32, except: i32, index: i32) -> i32;
 
@@ -324,9 +326,9 @@ pub trait CardWorld: Clone + 'static {
     fn others_count(&self, player_id: i32) -> i32;
     fn others_at(&self, player_id: i32, index: i32) -> i32;
     fn money(&self, player_id: i32) -> i32;
-    /// `H.GainR` -- money in, logged with its reason. Returns what was gained.
+    /// Money in, logged with its reason. Returns what was gained.
     fn gain(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
-    /// `H.PayR` -- money out (what the player could pay), logged.
+    /// Money out (what the player could pay), logged.
     fn pay(&mut self, player_id: i32, amount: i32, src: Msg) -> i32;
 
     /// Adopt the recorded pile state of an already-applied host request.
@@ -334,22 +336,22 @@ pub trait CardWorld: Clone + 'static {
     fn after_host(&mut self, _answer: usize) {}
 
     // ------------------------------------------------------------ hand/deck
-    /// `H.DrawR` -- draw `n` cards (reshuffles when needed). Returns drawn count.
+    /// Draw `n` cards (reshuffles when needed). Returns drawn count.
     fn draw(&mut self, player_id: i32, n: i32) -> i32;
     fn add_to_hand(&mut self, player_id: i32, card: &str);
     fn add_to_deck(&mut self, player_id: i32, card: &str, shuffle: bool);
-    /// C# `H.AddToDeck(seat, card, where)` -- `pos`: 0 = top, 1 = bottom,
-    /// 2 = shuffle in (the C# default).
+    /// Add a card to the draw pile at a position: `pos` 0 = top, 1 = bottom,
+    /// 2 = shuffle in (the default).
     fn add_to_deck_at(&mut self, player_id: i32, card: &str, pos: i32);
-    /// Take one copy of `card` out of `pile` *without* sending it anywhere
-    /// (C# `_hidden[s].hand.Remove(card)`); returns whether it was there.
+    /// Take one copy of `card` out of `pile` *without* sending it anywhere;
+    /// returns whether it was there.
     fn take_card(&mut self, player_id: i32, pile: crate::CardPile, card: &str) -> bool;
     /// Every card id in a player's `pile`, in pile order (the deck top first).
     fn cards_in(&self, player_id: i32, pile: crate::CardPile) -> Vec<String>;
     fn to_discard(&mut self, player_id: i32, card: &str);
-    /// Copies of `card` in hand (C# `_hidden[s].hand` count).
+    /// Copies of `card` in hand.
     fn hand_count(&self, player_id: i32, card: &str) -> i32;
-    /// Total cards in hand (C# `_hidden[s].hand.Count`).
+    /// Total cards in hand.
     fn hand_size(&self, player_id: i32) -> i32;
     /// Copies of `card` in the discard pile.
     fn discard_count(&self, player_id: i32, card: &str) -> i32;
@@ -357,19 +359,17 @@ pub trait CardWorld: Clone + 'static {
     fn deck_count(&self, player_id: i32) -> i32;
     /// Discard-pile size (all ids).
     fn discard_size(&self, player_id: i32) -> i32;
-    /// C# `H.DiscardFromHand` -- one copy hand -> discard; 1 when it was held.
+    /// One copy hand -> discard; 1 when it was held.
     fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32;
-    /// C# `H.ShuffleAllIntoDeck(seat, hand, discard)` -- the hand and/or the
-    /// discard pile into the draw pile, shuffled.
+    /// Shuffle the hand and/or the discard pile into the draw pile.
     fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32;
 
     // -------------------------------------------------------- field cards
-    /// `H.PlaceCard` -- a card (usually this one) stays in play at the player.
     /// `WhyNotBuildOn` -- may this player build here? `true` = yes.
     fn can_build_on(&self, _player_id: i32, _tile: i32) -> bool {
         true
     }
-    /// Is this placed card face-down? (`!p.FaceDown` in the C# field filters.)
+    /// Is this placed card face-down? (Field filters ignore face-down cards.)
     fn card_face_down(&self, _player_id: i32, _card: &str) -> bool {
         false
     }
@@ -377,11 +377,10 @@ pub trait CardWorld: Clone + 'static {
     /// addresses it afterwards. The *name* is not an identity -- one player may
     /// hold several copies of the same card in play.
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32;
-    /// Place the card **on a tile** rather than with its owner (C#
-    /// `H.PlaceFromPlay(c, i, tile)`); `tile: -1` is [`Self::place_card`].
-    /// Place a field card on a tile; returns the new instance's uid.
+    /// Place the card **on a tile** rather than with its owner;
+    /// `tile: -1` is [`Self::place_card`]. Returns the new instance's uid.
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32;
-    /// `PlayCtx.Dest` -- where this card goes when its effect finishes.
+    /// Where this card goes when its effect finishes.
     fn set_dest(&mut self, dest: i32);
     /// [`Self::set_dest`] aimed at another player's pile: `to` is whose
     /// discard/hand/deck it lands in, for 「将此卡放入[使用者]弃卡区」 when
@@ -394,11 +393,10 @@ pub trait CardWorld: Clone + 'static {
     fn send_to_dest(&mut self, dest: i32) -> Option<i32>;
     /// [`Self::send_to_dest`] aimed at another player's pile: `to` is whose.
     fn transfer_to_dest(&mut self, to: i32, dest: i32) -> Option<i32>;
-    /// `H.Unplace` -- take the card out of play (`true` when it was there).
     /// Take the *running* instance off the field; returns the owner it left
     /// (or -1). No locator: the instance is the one the run was dispatched for.
     fn unplace_card(&mut self) -> i32;
-    /// Take a *named* card off the player's field (C# `H.Unplace(card, ...)`).
+    /// Take a *named* card off the player's field.
     fn unplace_card_named(&mut self, _player_id: i32, _card: &str) -> bool {
         false
     }
@@ -448,11 +446,11 @@ pub trait CardWorld: Clone + 'static {
     fn card_text_mentions(&self, _card: &str, _needle: &str) -> bool {
         false
     }
-    /// C# `Card.Crystals` on a named placed card.
+    /// [奇迹水晶] on a named placed card.
     fn card_crystals(&self, _player_id: i32, _card: &str) -> i32 {
         0
     }
-    /// C# `Card.AddCrystals` on a named placed card; `max` caps (0 = uncapped).
+    /// Add [奇迹水晶] on a named placed card; `max` caps (0 = uncapped).
     fn add_card_crystals(&mut self, _player_id: i32, _card: &str, _n: i32, _max: i32) -> i32 {
         0
     }
@@ -691,7 +689,7 @@ pub trait CardWorld: Clone + 'static {
     fn tick_state(&mut self, player_id: i32, when: game_core::state::Tick) -> Vec<(String, i32)>;
 
     // -------------------------------------------------- per-player slots (V)
-    /// A free-form counter (C# `H.V`). Sugar over the keyed state.
+    /// A free-form counter. Sugar over the keyed state.
     fn slot(&self, player_id: i32, key: &str) -> i32 {
         self.state_get(player_id, key)
     }
@@ -735,7 +733,7 @@ pub trait CardWorld: Clone + 'static {
         }
     }
     // -------------------------------------------- skill / band attachments
-    // C# `H._fx[i].bands` / `.skill` and `H.MakeBand`. The *bound* band skill
+    // Band attachments on a placed card, and the bound band skill
     // (the first in placement order, [`Self::band_skill_uid`]) and the character
     // skill are named; `band_skills` lists every band attachment, including the
     // 「拿取」ed `extra` copies.
@@ -776,7 +774,7 @@ pub trait CardWorld: Clone + 'static {
     fn band_skills(&self, _player_id: i32) -> Vec<(i32, String, i32)> {
         Vec::new()
     }
-    /// Attach a band-skill instance (C# `H.MakeBand(band, user, extra)`).
+    /// Attach a band-skill instance to a player's field.
     /// Returns the new uid, or -1 when refused (not a band skill, player gone,
     /// or 「相同乐队技能卡的效果不可叠加」 -- an attachment of the same id is
     /// already there).
@@ -797,18 +795,18 @@ pub trait CardWorld: Clone + 'static {
     fn give_stun(&mut self, player_id: i32, n: i32);
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32);
     fn give_extra_turn(&mut self, player_id: i32);
-    /// `H.CanPay` -- not out, not stunned, not exiled.
+    /// May this player act at all? Not out, not stunned, not exiled.
     fn can_pay(&self, player_id: i32) -> i32;
-    /// C# `H.MoveWhyNot` -- 0 = the main move is still available, 1 = not your
+    /// May this player still take the [主要移动]? 0 = available, 1 = not your
     /// turn, 2 = already moved, 3 = cannot move this turn.
     fn cant_move(&self, player_id: i32) -> i32;
-    /// C# `H.SpendFire` -- spend `n` [火罐]; 1 when the player had enough (logged).
+    /// Spend `n` [火罐]; 1 when the player had enough (logged).
     fn spend_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32;
-    /// `[停留]` layers (C# `H.State.seats[s].stay`). Sugar over the keyed state.
+    /// `[停留]` layers. Sugar over the keyed state.
     fn stay_of(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::STAY)
     }
-    /// `[晕眩]` layers (C# `H.State.seats[s].stun`). Sugar over the keyed state.
+    /// `[晕眩]` layers. Sugar over the keyed state.
     fn stun_of(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::STUN)
     }
@@ -816,34 +814,34 @@ pub trait CardWorld: Clone + 'static {
     fn exile_of(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::EXILE)
     }
-    /// `H.State.turn` -- whose turn (-1 when none).
+    /// Whose turn (-1 when none).
     fn turn_player(&self) -> i32;
-    /// `H.State.round`.
+    /// Current round number.
     fn round_no(&self) -> i32;
-    /// C# `H.TurnKey` -- `round * 100 + turn + 1` (once-per-turn latches).
+    /// `round * 100 + turn + 1` (once-per-turn latches).
     fn turn_key(&self) -> i32;
     /// Is the player's character exactly `name`?
     fn character_is(&self, player_id: i32, name: &str) -> i32;
-    /// C# `H.BandOf(seat) == name`.
+    /// Does this player's character belong to band `name`?
     fn in_band(&self, player_id: i32, name: &str) -> i32;
 
     // --------------------------------------------------- ring & movement
-    /// `H.RingMultiplier` -- the RiNG rent multiplier right now.
+    /// The RiNG rent multiplier right now.
     fn ring_multiplier(&self) -> i32;
-    /// `H._ringBonus` -- nudge the RiNG multiplier; returns the new value.
+    /// Nudge the RiNG multiplier; returns the new value.
     fn add_ring_bonus(&mut self, n: i32) -> i32;
-    /// `H.ForceTeleport(..., resolve: false)` -- move a player without settling.
+    /// Move a player without settling (`resolve: false`).
     fn teleport_to(&mut self, player_id: i32, tile: i32);
 
     // ---------------------------------------------------------- trigger
     fn trigger(&self) -> Trigger;
     fn set_trigger_move_roll(&mut self, roll: i32);
-    /// Rewrite the pending amount on a `pay`/`paid` trigger (C# `PayCtx.amount`);
-    /// 0 cancels the payment (C# `t.Pay.cancel`).
+    /// Rewrite the pending amount on a `pay`/`paid` trigger (`PayCtx.amount`);
+    /// 0 cancels the payment (`t.Pay.cancel`).
     fn set_trigger_value(&mut self, value: i32);
-    /// Redirect the payee of a pending pay (C# `PayCtx.to`); -1 = the bank.
+    /// Redirect the payee of a pending pay (`PayCtx.to`); -1 = the bank.
     fn set_trigger_target(&mut self, to: i32);
-    /// Negate the trigger's effect (C# `trigger.Cancelled = true`).
+    /// Negate the trigger's effect (`trigger.Cancelled = true`).
     fn set_trigger_cancelled(&mut self);
     /// Yu-Gi-Oh's *negate the effect*: the link happened, but settles to nothing.
     fn set_trigger_negate_effect(&mut self);
@@ -872,28 +870,28 @@ pub trait CardWorld: Clone + 'static {
 
     /// Call the running card's `counteract` (kind `turnEnd`) for `player_id` at a turn
     /// end: this turn's end, or -- `next_of_player` -- the end of `player_id`'s next
-    /// turn (C# `TurnCtx.AfterEnd` / "你的下回合结束时").
+    /// turn (「你的下回合结束时」).
     fn schedule_turn_end(&mut self, _player: i32, _next_of_player: bool, _early: bool) {}
-    /// C# `TurnCtx.NoMoneyLoss` -- `player_id`'s money cannot drop this turn.
+    /// `player_id`'s money cannot drop this turn.
     fn set_no_money_loss(&mut self, _player: i32) {}
-    /// C# `TurnCtx.Plan.FixedRoll` -- this turn's main-move roll.
+    /// This turn's main-move roll (a fixed face, not a dice table).
     fn set_fixed_roll(&mut self, _n: i32) {}
     /// The fixed main-move roll, or -1 when none is set.
     fn fixed_roll(&self) -> i32 {
         -1
     }
-    /// C# `NextStepsFx` -- `player_id`'s next main move walks exactly `n` steps.
+    /// `player_id`'s next main move walks exactly `n` steps.
     fn set_next_steps(&mut self, _player: i32, _n: i32) {}
-    /// C# `TurnCtx.LastMain` -- steps this turn's main move walked (0 = none).
+    /// Steps this turn's main move walked (0 = none).
     fn turn_main_steps(&self) -> i32 {
         0
     }
-    /// C# `Card.FireMaxDelta` -- adjust `player_id`'s [火罐] cap; returns the new cap.
+    /// Adjust `player_id`'s [火罐] cap; returns the new cap.
     fn add_fire_max(&mut self, _player: i32, _n: i32) -> i32 {
         0
     }
     /// Make `id` the running card for a nested `play_card`: a **fresh** instance
-    /// (C# `NewCard`), with a fresh `Dest`. The uid goes to -1 rather than being
+    /// a fresh instance, with a fresh `Dest`. The uid goes to -1 rather than being
     /// inherited -- otherwise the inner run would read the *outer* instance's
     /// crystals under its own name, which is not what "the inner card runs as
     /// itself" means. Returns what to hand back to [`Self::leave_card`]:
@@ -909,11 +907,11 @@ pub trait CardWorld: Clone + 'static {
         0
     }
 
-    /// C# `_abnormalTurn[player_id]`.
+    /// Whether `player_id` is mid-abnormal-move this turn.
     fn abnormal_count(&self, _player: i32) -> i32 {
         0
     }
-    /// C# `H._targeted[player_id]`.
+    /// Whether `player_id` was named as a [指定] target this play.
     fn targeted_count(&self, _player: i32) -> i32 {
         0
     }
@@ -922,12 +920,12 @@ pub trait CardWorld: Clone + 'static {
         0
     }
     /// The **static targeting query**: which players the play being resolved
-    /// (by `player_id`) designates (C# `H.Db.Card(id).Targeting` + `H.Others`).
+    /// (by `player_id`) designates (card `Targeting` + other players).
     /// Empty when the play names nobody.
     fn designations(&self, _player_id: i32) -> Vec<i32> {
         Vec::new()
     }
-    /// Per-pair cancel (C# `play.Tags["immune"+seat]`): mark `seat`'s
+    /// Per-pair cancel (`play.Tags["immune"+seat]`): mark `seat`'s
     /// designation on the play being resolved as cancelled. The rest land.
     fn cancel_designation(&mut self, _seat: i32) {}
     /// Is `seat`'s designation on the play being resolved cancelled?
@@ -939,15 +937,15 @@ pub trait CardWorld: Clone + 'static {
     fn placed_tile(&self, _player: i32, _id: &str) -> i32 {
         -2
     }
-    /// C# `PlayCtx.Doubled`, or -1.
+    /// Which of the play's tagged `ctx::n` numbers the band skill doubled, or -1.
     fn play_doubled(&self) -> i32 {
         -1
     }
 
-    /// Arm the doubling for the run in progress (`PlayCtx.Doubled = n`). A
-    /// third party -- CiRCLE's band skill -- sets this on the *playing* card's
-    /// context, which is why it is a setter on the shared world rather than a
-    /// field the card owns. Default no-op so test worlds need not implement it.
+    /// Arm the doubling for the run in progress. A third party -- CiRCLE's
+    /// band skill -- sets this on the *playing* card's context, which is why it
+    /// is a setter on the shared world rather than a field the card owns.
+    /// Default no-op so test worlds need not implement it.
     fn set_play_doubled(&mut self, n: i32) {
         let _ = n;
     }
@@ -971,21 +969,21 @@ pub trait CardWorld: Clone + 'static {
     //   - `settle_tile` -- the settle target is where the walk stops, so
     //     `stop_at` already names it.
     //   - `no_build` -- folded into `can_build = false`; one flag is enough.
-    /// C# `SetSteps` -- the planned length; keeps the sign of a reverse walk.
+    /// The planned length; keeps the sign of a reverse walk.
     fn set_steps(&mut self, _v: i32) {}
     /// 「上一名玩家代替进行此次投掷」 (幻觉来了) -- attribute the roll to another
     /// seat. Shown on the log line as 「by」; the move still belongs to the
     /// original player (and 「影响投掷的效果服从于原本进行投掷的玩家」).
     fn set_roller(&mut self, _v: i32) {}
-    /// C# `Reverse` -- walk backwards.
+    /// Walk backwards.
     fn set_reverse(&mut self, _v: bool) {}
-    /// C# `Signed` -- a negative roll walks backwards instead of clamping to 0.
+    /// A negative roll walks backwards instead of clamping to 0.
     fn set_signed(&mut self, _v: bool) {}
-    /// C# `StopAt` -- force the walk to stop on this tile; -1 clears.
+    /// Force the walk to stop on this tile; -1 clears.
     fn set_stop_at(&mut self, _v: i32) {}
-    /// C# `Parity` -- only odd (1) / even (0) tiles count; -1 either.
+    /// Only odd (1) / even (0) tiles count; -1 either.
     fn set_parity(&mut self, _v: i32) {}
-    /// C# `Resolve` -- settle where the walk lands. Clear it for 「不触发结算」.
+    /// Settle where the walk lands. Clear it for 「不触发结算」.
     fn set_resolve(&mut self, _v: bool) {}
     /// How the move gets there (0 = walk, 1 = teleport).
     fn set_kind(&mut self, _v: i32) {}
@@ -1013,41 +1011,41 @@ pub trait CardWorld: Clone + 'static {
     fn add_base_dice(&mut self, _count: i32, _sides: i32, _why: &str) {}
     /// Add an extra die group to the roll.
     fn add_extra_dice(&mut self, _count: i32, _sides: i32, _why: &str) {}
-    /// C# `SettleTile` -- settle on this tile instead of the landing; -1 clears.
+    /// Settle on this tile instead of the landing; -1 clears.
     fn set_settle_tile(&mut self, _v: i32) {}
-    /// C# `PayFactor` -- scale money paid for this walk. Milli-units (500 = x0.5).
+    /// Scale money paid for this walk. Milli-units (500 = x0.5).
     fn set_pay_factor(&mut self, _v: i32) {}
-    /// C# `RentFactor` -- scale rent paid for this walk, same units.
+    /// Scale rent paid for this walk, same units.
     fn set_rent_factor(&mut self, _v: i32) {}
-    /// C# `CanBuild` -- may build away from the landing.
+    /// May build away from the landing.
     fn set_can_build(&mut self, _v: bool) {}
-    /// C# `SettleAsAgent`.
+    /// Settle this walk as if landing on the 「地产商」.
     fn set_settle_as_agent(&mut self, _v: bool) {}
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record a follower of the
-    /// move being planned (C# `LeadFx.Who` / `Follow`). After the mover settles
+    /// move being planned (the lead / follow pairing). After the mover settles
     /// the engine replays this move's result for each follower, in the order
     /// they were added.
     fn plan_add_follower(&mut self, _player_id: i32) {}
-    /// C# `MoreSteps` -- a queued second walk, in steps.
+    /// A queued second walk, in steps.
     fn set_more_steps(&mut self, _v: i32) {}
     /// Card-owned per-move state (fire-roll counters etc.).
     fn set_tag(&mut self, _key: &str, _v: i32) {}
     fn move_tag(&self, _key: &str) -> i32 {
         0
     }
-    /// C# `StopAt` -- where the walk is forced to stop, or -1.
+    /// Where the walk is forced to stop, or -1.
     fn move_stop_at(&self) -> i32 {
         -1
     }
-    /// C# `Parity`: -1 either, 0 even, 1 odd.
+    /// Parity: -1 either, 0 even, 1 odd.
     fn move_parity(&self) -> i32 {
         -1
     }
-    /// C# `m.Resolve` -- does the planned move settle where it lands?
+    /// Does the planned move settle where it lands?
     fn move_resolve(&self) -> bool {
         true
     }
-    /// The move being planned (C# `TurnCtx.Plan`), captured whole so a
+    /// The move being planned, captured whole so a
     /// `card_move` host request can hand it to the engine (the shaping a card
     /// did via the plan ops lives on this run's world copy, which is discarded
     /// when the run suspends).
@@ -1062,15 +1060,15 @@ pub trait CardWorld: Clone + 'static {
     fn move_steps(&self) -> i32 {
         0
     }
-    /// C# `Remaining` -- steps left to walk.
+    /// Steps left to walk.
     fn move_remaining(&self) -> i32 {
         0
     }
-    /// C# `Total` -- steps walked (`lastWalk` is written from this).
+    /// Steps walked (`lastWalk` is written from this).
     fn move_total(&self) -> i32 {
         0
     }
-    /// C# `Dir` -- +1 forwards, -1 backwards.
+    /// +1 forwards, -1 backwards.
     fn move_dir(&self) -> i32 {
         0
     }

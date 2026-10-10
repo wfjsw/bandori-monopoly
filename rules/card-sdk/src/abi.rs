@@ -11,17 +11,17 @@ use alloc::{string::String, vec::Vec};
 /// v7: board/hand/status query + op wave (is_buyable ... in_band, spend_fire,
 ///     sweep_to_deck, trig_card_is; `Trigger.card`).
 /// v8: `bandori_cant_play` export (`CardDef.cant_play`) + `add_to_deck_at`.
-/// v9: `cant_move` (H.MoveWhyNot), `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
+/// v9: `cant_move`, `hand_size`, `is_ring`/`is_circle`/`is_live_house`.
 /// v10: `trig_step` (`Trigger.step`) so a counteraction can tell which turn step
 ///      (0/1/2/3) it fired in, for kinds that aren't step-specific (e.g.
 ///      `mortgage` fires during both step 1 and step 3); paired
 ///      `*Before`/`*After` kinds filling in the missing half of every
 ///      trigger point, plus new hooks for buy/build/discard/end turn/leave.
 /// v11: `trig_by_card` (`Trigger.by_card`) -- the player whose card caused this
-///      trigger, or -1 when it was not card-caused. This is what `H.HitByOtherCard`
-///      keys on (`by_card >= 0 && by_card != player_id`).
+///      trigger, or -1 when it was not card-caused. "Hit by another card" is
+///      `by_card >= 0 && by_card != player_id`.
 /// v12: `trig_set_pay_amount` -- a counteraction to a `pay`/`paid` trigger may rewrite
-///      the pending amount (0 = cancel the payment, C# `t.Pay.cancel` / `PayCtx.amount`).
+///      the pending amount (0 = cancel the payment).
 ///      Also: `set_move_roll` now actually reaches the engine (the write-back from
 ///      the counteraction's trigger to `Trigger.value` was missing).
 /// v13: `trig_pay_is_rent` (`t.Pay.IsRent`) -- is this `pay`/`paid` trigger rent,
@@ -30,12 +30,12 @@ use alloc::{string::String, vec::Vec};
 ///      `trig_move_main` and `trig_move_dir`. A move-caused trigger (moveRoll /
 ///      pass / settle*) can now say what kind of move it was, and any number of
 ///      orthogonal modifiers on it. Replaces the bespoke `trig_move_fire_roll`.
-/// v15: `trig_set_cancelled` / `trig_cancelled` (`Trigger.Cancelled`) -- a
-///      counteraction may negate the trigger's effect outright (C# `trigger.Cancelled
-///      = true`): the engine then skips the effect body (land / event / play)
+/// v15: `trig_set_cancelled` / `trig_cancelled` -- a
+///      counteraction may negate the trigger's effect outright: the engine then
+///      skips the effect body (land / event / play)
 ///      but still runs the point's Before/After hooks.
 /// v16: `trig_set_pay_target` -- a counteraction may also redirect the payee of a
-///      pending `pay` (C# `PayCtx.to`; -1 = the bank). The transfer amount
+///      pending `pay` (`t.Pay.to`; -1 = the bank). The transfer amount
 ///      follows `set_pay_amount`, so a reduced payment credits the payee less too.
 /// v17: field-card (`Fx`) hooks + per-card crystals. New `TriggerKind`s
 ///      (`TurnEnd`, `Drawn`, `PassTile`, `PayAfter`, `RollAfter`, `CardPlayed`,
@@ -51,7 +51,7 @@ use alloc::{string::String, vec::Vec};
 /// v20: turn plan + scheduling -- `schedule_turn_end` (a card asks for a
 ///      `turnEnd` call at this turn's end or at the end of a player's next turn),
 ///      `set_no_money_loss`, `set_fixed_roll` / `fixed_roll`, `set_next_steps`,
-///      `turn_main_steps`, `add_fire_max`, `card_replayable` (C# `H.CanReplay`).
+///      `turn_main_steps`, `add_fire_max`, `card_replayable`.
 ///      `play_card` now returns the inner card's `Dest`, and the inner card runs
 ///      as itself (its own id and `Dest`, no longer the outer card's).
 /// v21: `CardDef` standardized like triggers -- `id` + a table of `On` entry
@@ -61,13 +61,13 @@ use alloc::{string::String, vec::Vec};
 ///      the kind at hand; one export `bandori_on(card, entry, op, player_id)`
 ///      replaces `bandori_play` / `_can_react` / `_react` / `_cant_play` (the
 ///      pre-v21 names, kept here as history).
-/// v23: hook kinds from the C# call sites -- TurnEndBefore / TurnEndAfter,
+/// v23: hook kinds for the remaining raise points -- TurnEndBefore / TurnEndAfter,
 ///      PayAdd / PayMul / PayAt (the Money pipeline), Discarded, DeckBeforeGame /
 ///      DeckAtGameStart, Drew, Reshuffled, Bought, SettleBody, BeforeOut,
 ///      Teleported. Move payload `trig_move_remaining` / `trig_move_total` and
 ///      `MoveFlags::TELEPORT_WALK`. `schedule_turn_end` takes a mode (bit 1 =
-///      the player's next turn, bit 2 = before the wear-off, C# `AtEnd`).
-///      RollAfter now fires before the moveRoll [反击] window (C# order).
+///      the player's next turn, bit 2 = before the wear-off).
+///      RollAfter now fires before the moveRoll [反击] window.
 ///      `RollPlan` is the point `On::RollPlan` (v22) is dispatched at.
 /// v24: movement shaping -- `set_steps` / `set_reverse` / `set_signed` /
 ///      `set_stop_at` / `set_parity` / `set_resolve` / `set_settle_tile` /
@@ -77,29 +77,29 @@ use alloc::{string::String, vec::Vec};
 ///      `set_no_circle_reward` / `set_settle_as_agent` and the `move_*` getters,
 ///      on the move being planned (guest: `ctx::plan::*`).
 /// v25: card-driven `give_stay` / `give_stun` / `give_exile` / `teleport_to`
-///      go through the C# `AbnormalGate`: the `abnormalGuard` hook (new kind),
+///      go through the abnormal gate: the `abnormalGuard` hook (new kind),
 ///      then the `abnormal` [反击] window when another player caused it; a blocked
-///      effect does not apply. `abnormal_count(player_id)` (C# `_abnormalTurn`),
-///      `placed_tile(player_id, id)`, `play_doubled()` (C# `PlayCtx.Doubled`) and
+///      effect does not apply. `abnormal_count(player_id)`,
+///      `placed_tile(player_id, id)`, `play_doubled()` and
 ///      `trig_cards` (the drawn cards on a `drew` trigger).
-/// v26: the C# targeting pipeline -- `target(player_id, tile, single)` pauses the
-///      run with a `Target` host request (`H.Target` / `H.TargetTile`): exile,
+/// v26: the targeting pipeline -- `target(player_id, tile, single)` pauses the
+///      run with a `Target` host request (`target` / `target_tile`): exile,
 ///      the `immuneAll` / `untargetable` / `redirect` guard hooks (new kinds),
-///      the `_targeted` counter (`targeted_count`), then the `targeted` hooks
+///      the `targeted_count` counter, then the `targeted` hooks
 ///      and the `target` [反击] window. `immuneAll` also gates card-driven
-///      abnormal effects and payments (C# `ImmuneAll`). `sweep_to_deck`
+///      abnormal effects and payments. `sweep_to_deck`
 ///      became `shuffle_into_deck(player_id, hand, discard)`.
 /// v27: the move model. `MoveFlags` is gone: a move is exactly one `MoveKind`
 ///      (Walk | Teleport), and what it resolves is a separate category,
 ///      `Settle` (ROUTE = the tiles it passes resolve [经过]; DEST = the landing
-///      resolves [结算]). C# `TeleportWalk` becomes a Teleport whose destination
-///      is computed from the roll; C# `Resolve = false` clears DEST. FIRE_ROLL
+///      resolves [结算]). A teleport-walk becomes a Teleport whose destination
+///      is computed from the roll; no-Resolve clears DEST. FIRE_ROLL
 ///      is card-owned state now (`plan::set_tag` / `trigger::move_tag`), not an
 ///      engine flag. `ctx::card_move` / `ctx::agent_landing` run a move or an
 ///      agent landing from inside a card; the plan gained `set_kind` / `set_tag`
 ///      / `set_start` / `set_teleport_to` and the Base/Dice roll tables
 ///      (`set_base_dice` / `add_base_dice` / `add_extra_dice` -- a flat add is a
-///      `0`-sided term, which is what C# `Bonus` was).
+///      `0`-sided term, a flat add).
 ///      NOT yet in v27, though named in earlier drafts of this line: the play
 ///      context (`CardDef.targeting`, `trigger::play_*`, `set_immune`,
 ///      `add_mark_flags(.., NO_TARGET)`) and `plan::set_stopped`. Targeting is
@@ -113,7 +113,7 @@ use alloc::{string::String, vec::Vec};
 /// v29: two semantic breaks share this bump.
 ///      (a) **Band crystals are the band-skill field instance's crystals.**
 ///      `band_crystals` / `add_band_crystals` no longer touch the keyed state
-///      `bandCrystals` (deleted, along with `MatchPlayer::band_crystals`): they
+///      `bandCrystals` (deleted, along with the old per-player store): they
 ///      are sugar over the player's band-skill field card (`skill:<band>:<skill>`,
 ///      `FieldCard::band_skill`) -- the same instance `crystals` / `add_crystals`
 ///      touch from inside a band skill's own handler, so 「乐队卡 / 团卡」 crystal
@@ -129,8 +129,7 @@ use alloc::{string::String, vec::Vec};
 ///      by `CardDef::props`, replacing the engine's rulebook-prose matching
 ///      (「手卡上限数量减1」 / 「可在眩晕时打出」). The keys the engine reads are
 ///      named constants in [`prop`] (mirrored in `game_core::state::prop`):
-///      `handLimitDelta` (C# `Card.HandLimitDelta`) and `playableStunned`
-///      (C# `Card.PlayableStunned`). The host keeps them on `CardInfo`, the
+///      `handLimitDelta` and `playableStunned`. The host keeps them on `CardInfo`, the
 ///      engine queries `CardRules::card_prop(card, key)` (default 0) and
 ///      stamps the whole map onto the `FieldCard` at placement.
 /// v31: tile rule instances (`docs/TILES.md`) -- `OnKind::Settle` (a rule's
@@ -161,20 +160,20 @@ use alloc::{string::String, vec::Vec};
 ///      (a) `invoke_skill(player_id, id)` -- run a skill rule's press entry
 ///      (`On::Play`) for a player, nested like `play_card`. This is 「立即执行
 ///      乐队技能的（2）效果」 (mutsumi_never) and 「触发其技能的发动」 (pareo_far):
-///      the C# direct method calls (`BandCrychic.TransformNow()` /
-///      `SkillPareo -> Offer()`). No `skillUsed` raise -- that is the player's
+///      the card runs the skill's press entry directly. No `skillUsed` raise --
+///      that is the player's
 ///      own press (`use_skill`), not a card running the body.
-///      (b) the skill **attachment surface** (C# `H._fx[i].bands` / `.skill`):
+///      (b) the skill **attachment surface**:
 ///      `band_skill(player_id)` / `character_skill(player_id)` name the bound
 ///      rule id, `band_skills(player_id)` lists every band attachment as
-///      `(uid, id, extra)`, `add_band_skill(player_id, id, extra)` attaches one
-///      (C# `H.MakeBand`). `extra` is 「拿取」's borrowed copy: 「相同乐队技能卡
+///      `(uid, id, extra)`, `add_band_skill(player_id, id, extra)` attaches one.
+///      `extra` is 「拿取」's borrowed copy: 「相同乐队技能卡
 ///      的效果不可叠加」 (the hook dispatch skips an extra when a non-extra copy
 ///      of the same id is already attached) and 「不视为那个乐队的角色」
 ///      (`in_band` still reads only the character).
 ///      (c) `raise_bought(player_id, tile)` -- a card that hands a deed over
 ///      (tomoe_savior's 「从该玩家处收购该地契」) announces the acquisition so
-///      the `bought` hook chain hears it (C# `f.Bought(i, t)`).
+///      the `bought` hook chain hears it.
 ///      (d) `plan::add_follower(player_id)` -- 「使你的下次主要移动结果对那些
 ///      玩家一起执行」 (sakiko_lead): the move's result is replayed for each
 ///      follower after the mover settles, in the recorded order (「你先触发结算，
@@ -217,10 +216,10 @@ use alloc::{string::String, vec::Vec};
 ///      `colorFor:` prefix. `ctx::buy_quotes` / `ctx::buy` / `ctx::acquire` /
 ///      `ctx::agent_offer` / `ctx::linger`. The retired props
 ///      `BUY_DISCOUNT` / `FREE_BUY` / `RAZE_ON_BUY` stay for one ABI (P5
-///      deletes them and the `TurnCtx` flags together). SAVE_VERSION 3 → 4
-///      (the `TurnCtx.lingering` field enters the save).
+///      deletes them and the lingering-turn flags together). SAVE_VERSION 3 → 4
+///      (the lingering-instance field enters the save).
 /// v41: the **removals**. `ctx::set_buy_discount` / `ctx::set_free_buy` /
-///      `ctx::set_raze_on_buy` and the `TurnCtx` fields they wrote are gone,
+///      `ctx::set_raze_on_buy` and the fields they wrote are gone,
 ///      replaced by `ctx::linger` + the `BuyAdd` / `BuyMul` / `BuySet` /
 ///      `BuyAssign` hooks. The old global / per-player colour writers and
 ///      their state key are gone, replaced by the `prop::ANY_COLOR` /
@@ -281,7 +280,7 @@ use alloc::{string::String, vec::Vec};
 /// v50: the tile-body guest primitives (`rules/tiles/src/agent.rs` /
 ///      `circle.rs`). `ask_tiles` / `opt_tile` / `opt_price` / `opt_ai` -- the
 ///      tile ask with per-option labels, prices and an AI choice hint
-///      (`H.AgentLanding`'s `ask.view.prices` + `with_ai`); `PromptKind::TileId`
+///      (the agent-landing ask's `ask.view.prices` + `with_ai`); `PromptKind::TileId`
 ///      records the **tile id** (or -1 for 「不选」) in the answer log, so a
 ///      commit-pass re-run of a body whose options the just-committed host
 ///      effect reshaped still maps the pick to the same tile. `agent_offer` --
@@ -385,7 +384,7 @@ pub mod state_key {
 
 /// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
 /// responds to these two by name so a card can arm a gate without the engine
-/// hardcoding the card's own name (the C# checked `CountMarks(t, "高贵的微蓝")`).
+/// hardcoding the card's own name in the engine.
 pub mod counter {
     /// On-card [CP点] (「自己[场上]N个[CP点]」). Storage `FieldCard::cp`.
     pub const CP: &str = "cp";
@@ -394,7 +393,7 @@ pub mod counter {
 }
 
 pub mod mark {
-    /// Carrying tiles cannot be named as a target (`H.TargetTile` answers -1).
+    /// Carrying tiles cannot be named as a target (`target_tile` answers -1).
     pub const NO_TARGET: &str = "noTarget";
 
     /// Tile-mark **category**: [CP点], 「放置于路面上的指示物」
@@ -517,12 +516,12 @@ pub mod prop {
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     /// Fire-pot cost shown on a field counteraction's source-choice label.
     pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
-    /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`) while the card
+    /// Continuous 「手卡上限数量减1」 while the card
     /// sits on the field. Stamped onto the field instance at placement and
     /// gone with the card. `-1` cuts the owner's hand limit; a positive value
     /// lifts it; `0` (the default) does nothing.
     pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
-    /// 「可在眩晕时打出」 (C# `Card.PlayableStunned`): `1` = the card skips the
+    /// 「可在眩晕时打出」: `1` = the card skips the
     /// stun gate when played from hand. The exile and no-hand gates have no
     /// such exception in the pool. Default `0` (blocked by stun).
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
@@ -532,13 +531,13 @@ pub mod prop {
     /// Constant for now; an X-dependent cost may later become a `rules-cond`
     /// expression. `0` (the default) means "unknown / assume free".
     pub const EST_COST: &str = "estCost";
-    /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
+    /// 「有[指定]目标」: `1` = this play names
     /// recipients, so 「取消其对目标之一的[指定]」 applies instead of 「抵消其
     /// 所有的效果」. The named set is the play's **other living players** (the
     /// 「[指定][使用者]以外的所有玩家」 / 「其他玩家[分摊]」 shape). Default `0`
     /// (names nobody).
     pub const DESIGNATES: &str = "designates";
-    /// Virtual **rent** house count (「房屋数视为…」, C# `H.RentHouses` + `boosted`).
+    /// Virtual **rent** house count (「房屋数视为…」).
     /// Presence is the override -- a house count of `0` is a legitimate value,
     /// so the read is `props.get`, not `unwrap_or(0)`. Real `st.houses` is
     /// untouched: build caps, raze, sale and asset value still see the standing
@@ -556,19 +555,19 @@ pub mod prop {
     // `TileData`), read back by the settle bodies and the end-step buy/build
     // gates. Mirrors `game_core::state::prop`; see `docs/TILES.md`.
 
-    /// Land price (houses are extra). `TileData.price`.
+    /// Land price (houses are extra).
     pub const PRICE: &str = "price";
-    /// Build cost per level. `TileData.house`.
+    /// Build cost per level.
     pub const HOUSE: &str = "house";
-    /// Colour group (`TileData.group`). [`ALL_COLORS`] is 「该格获得所有颜色」.
+    /// Colour group. [`ALL_COLORS`] is 「该格获得所有颜色」.
     pub const GROUP: &str = "group";
     /// The tile's value that means 「该格获得所有颜色」.
     pub const ALL_COLORS: i32 = -2;
-    /// 「每块地有标注的等级上限」 -- max houses. `TileData.rent.len() - 1`.
+    /// 「每块地有标注的等级上限」 -- max houses (`rentLen - 1`).
     pub const BUILD_MAX: &str = "buildMax";
     /// Length of the rent table (levels = houses + 1).
     pub const RENT_LEN: &str = "rentLen";
-    /// Rent at level N: `rent:0` … `rent:rentLen-1` (`TileData.rent`).
+    /// Rent at level N: `rent:0` … `rent:rentLen-1`.
     pub const RENT_PREFIX: &str = "rent:";
     /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
     pub const RING_MULT: &str = "ringMult";
@@ -640,20 +639,19 @@ pub mod roll_source {
 /// Never observed by the guest.
 pub const EXIT_NEED_INPUT: i32 = 0x0B_A0_D0;
 
-/// Prompt kinds, mirroring `MatchPrompt.kind` in the C# (`MatchPrompt.cs`).
+/// Prompt kinds, one per host ask shape.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PromptKind {
-    /// One of the pushed options (`AskPick`).
+    /// One of the pushed options (`ask_pick`).
     Choice = 0,
-    /// A yes / no question (`AskYes`); the options are implicit.
+    /// A yes / no question (`ask_yes`); the options are implicit.
     YesNo = 1,
-    /// Pick a tile index (`AskTileOf`).
+    /// Pick a tile index (`ask_tile`).
     Tile = 2,
-    /// Pick a player. C# `H.AskSeat` has no kind of its own -- it is
-    /// `AskPick` over player-name options -- so this one is ours.
+    /// Pick a player (`ask_player`).
     Player = 3,
-    /// Pick a card id (`AskCard`).
+    /// Pick a card id (`ask_card`).
     Card = 4,
     /// Pick a tile, answering with the **tile id** (or -1 for 「不选」) rather
     /// than the option index (`ask_tiles`). The id is what the answer log
@@ -676,7 +674,7 @@ impl PromptKind {
         })
     }
 
-    /// The C# `MatchPrompt.kind` string (the C# names: `"pick"`, `"yes"`, ...).
+    /// The prompt-kind wire string (`"pick"`, `"yes"`, ...).
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Choice => "pick",
@@ -690,17 +688,16 @@ impl PromptKind {
     }
 }
 
-/// How the player gets there -- a move is exactly one of these (C# `MoveCtx.Teleport`
-/// vs the walk loop). Mirrors `game_core::engine::move_ctx::MoveKind`.
+/// How the player gets there -- a move is exactly one of these (walk the path
+/// vs jump to the destination). Mirrors `game_core::engine::move_ctx::MoveKind`.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum MoveKind {
     /// The player steps along the board, tile by tile.
     #[default]
     Walk = 0,
-    /// The player jumps straight to the destination (C# `TeleportMove`). A C#
-    /// `TeleportWalk` (「视为 [传送]（只触发终点）」) is this kind with the
-    /// destination derived from the roll instead of named.
+    /// The player jumps straight to the destination. 「视为 [传送]（只触发终点）」
+    /// is this kind with the destination derived from the roll instead of named.
     Teleport = 1,
 }
 
@@ -723,8 +720,7 @@ impl MoveKind {
 
 bitflags::bitflags! {
     /// What a move resolves as it goes -- the settle axis, its own category
-    /// beside [`MoveKind`] (C# `m.Resolve` / `m.TeleportWalk` decomposed).
-    /// An ordinary move settles both.
+    /// beside [`MoveKind`]. An ordinary move settles both.
     ///
     /// The wire is a flat `i32`; [`Self::bits`] / [`Self::from_bits`] flatten it.
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -732,11 +728,11 @@ bitflags::bitflags! {
         /// The tiles the move goes through resolve their [经过] effects. A walk:
         /// every tile it steps on. A teleport: the destination counts as passed
         /// when the teleport actually moves the player (`From != to`), or when
-        /// this bit is forced (C# `TeleportWalk`, 「原地也算 [经过]」).
+        /// this bit is forced (「原地也算 [经过]」).
         const ROUTE = 1;
-        /// The landing resolves (C# `m.Resolve`): `settleBefore` -> `settle` ->
+        /// The landing resolves: `settleBefore` -> `settle` ->
         /// `land` -> `settleAfter`. On a teleport this gates the destination's
-        /// [经过] too (C# 24371 returns before the pass block when `!m.Resolve`).
+        /// [经过] too (a move that does not resolve returns before the pass block).
         const DEST = 2;
     }
 }
@@ -786,8 +782,8 @@ impl BuyKind {
     }
 }
 
-/// An abnormal effect (C# `Abnormal.Kind`), carried on `abnormalGuard` /
-/// `abnormal` triggers. C# `AbName` gives their names: [停留] / [晕眩] / [除外] /
+/// An abnormal effect, carried on `abnormalGuard` /
+/// `abnormal` triggers. Rulebook names: [停留] / [晕眩] / [除外] /
 /// [传送] / [强制移动] / [强制停下] / 反方向移动.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -815,7 +811,7 @@ impl AbKind {
         })
     }
 
-    /// The C# `Abnormal.Kind` string.
+    /// The wire string for this abnormal kind.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Stay => "stay",
@@ -829,8 +825,8 @@ impl AbKind {
     }
 }
 
-/// One of a player's card piles (C# `_hidden[s].hand` / `.discard` / `.draw`,
-/// and the placed field cards).
+/// One of a player's card piles: hand / discard / draw, and the placed field
+/// cards.
 #[repr(i32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CardPile {
@@ -1333,7 +1329,7 @@ impl TriggerKind {
         }
     }
 
-    /// The C# `Trigger.Kind` string.
+    /// The trigger-kind wire string.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::None => "",

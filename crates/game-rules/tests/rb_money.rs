@@ -65,10 +65,10 @@ fn card_payment_opens_the_counteract_window() {
 
 /// Per-pair cancel: a multi-target payment's individual entries can be
 /// cancelled one at a time. `通用:网络链接异常`'s 「取消其对目标之一的[指定]」
-/// is the archetype. The static targeting query (`ctx::designations`, C#
-/// `H.Db.Card(id).Targeting`) names the play's recipients before its body runs;
-/// `ctx::cancel_designation` drops one (C# `play.Tags["immune"+seat]`), and the
-/// rest of the play's designations still land.
+/// is the archetype. The static targeting query (`ctx::designations`) names
+/// the play's recipients before its body runs; `ctx::cancel_designation`
+/// drops one (`play.Tags["immune"+seat]`), and the rest of the play's
+/// designations still land.
 ///
 /// 规则书（网络链接异常）: 「取消其对目标之一的[指定]」
 #[test]

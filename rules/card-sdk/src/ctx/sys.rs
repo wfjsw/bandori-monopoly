@@ -468,7 +468,7 @@ extern "C-unwind" {
     pub fn card_move(player_id: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_replayable")]
     pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32;
-    // movement shaping: the move being planned (C# `TurnCtx.Plan`)
+    // movement shaping: the move being planned
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_roller")]
     pub fn set_roller(player_id: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_steps")]
