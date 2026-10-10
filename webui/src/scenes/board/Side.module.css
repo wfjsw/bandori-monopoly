@@ -1,12 +1,14 @@
 /* Two deed controls, anchored below the player column. The die moved into the
    board's roll zone (Ring); skills live in the hand dock's left stack. Two
    controls leave the last one alone on its row -- let it span, so the grid
-   stays tidy either way. */
+   stays tidy either way. A replay transport docked at the bottom edge raises
+   every bottom-anchored strip by its height (`--replay-bar-bottom`, 0 when
+   the transport floats or is hidden) so nothing hides behind it. */
 .actions {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 22px;
+  bottom: calc(22px + var(--replay-bar-bottom, 0px));
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
@@ -134,12 +136,15 @@
    fanned row of full card faces retracted behind the bottom edge (only the top
    strip peeks), raising on hover / keyboard focus. The container itself never
    takes pointer events -- only the visible card tops and the bar do -- so map
-   clicks near the bottom pass through the gaps and the hidden part of the fan. */
+   clicks near the bottom pass through the gaps and the hidden part of the fan.
+   A bottom-docked replay transport raises the whole dock (fan, bar, skill
+   stack, the retracted-sheet strip logic -- all relative to this box) by its
+   measured height (`--replay-bar-bottom`). */
 .dock {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--replay-bar-bottom, 0px);
   z-index: var(--z-dock);
   display: flex;
   flex-direction: column;
@@ -436,12 +441,13 @@
   filter: grayscale(0.6) var(--peek-lift);
 }
 
-/* Draw-pile peek grows upward above the hand dock. */
+/* Draw-pile peek grows upward above the hand dock (and rides up with a
+   bottom-docked replay transport, same as the dock itself). */
 .peek {
   composes: floatCard from "../../ui/primitives.module.css";
   position: absolute;
   right: 0;
-  bottom: 56px;
+  bottom: calc(56px + var(--replay-bar-bottom, 0px));
   width: 260px;
   max-height: 740px;
   overflow: hidden;

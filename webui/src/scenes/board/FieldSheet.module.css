@@ -3,11 +3,17 @@
    upward behind the top edge so each face's bottom zone -- name + live markers
    -- peeks below it; hover / focus lowers the row. Sits under the FX layer
    (Board `.fx`) so banners and the card flash still read over it, and only
-   the card boxes take the pointer -- the board stays clickable in the gaps. */
+   the card boxes take the pointer -- the board stays clickable in the gaps.
+   A replay transport docked at the top edge lowers the whole strip by its
+   measured height (`--replay-bar-top`, 0 when the transport floats or is
+   hidden) so the peek lands under the bar, not behind it. */
 
 .sheet {
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: var(--replay-bar-top, 0px);
   z-index: var(--z-field);
   display: flex;
   flex-direction: column;

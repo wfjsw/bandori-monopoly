@@ -1,13 +1,16 @@
 // Replay transport: play / pause, speed, skip-idle, prev / next turn, the scrub
 // bar with turn marks, and the perspective dropdown (any seat or spectator).
 // The bar itself can be docked (compact floating, or full-width flush to the
-// top / bottom edge) and hidden away behind a small handle; both choices stick
-// in localStorage. Transport shortcuts (Space / arrows / H) keep working while
-// the bar is hidden -- the handler lives here, not in the chrome.
+// top / bottom edge) and hidden; both choices stick in localStorage. The hide
+// control is the strip's leftmost item in every dock mode, and the show handle
+// takes that same slot when the strip is gone -- toggle without moving the
+// pointer. Transport shortcuts (Space / arrows / H) keep working while the bar
+// is hidden -- the handler lives here, not in the chrome.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useSessionOther, useTick } from "../../core/hooks";
 import { useHotkeys } from "../../hooks/dom";
+import { useResizeObserver } from "../../hooks/measure";
 import { D } from "../../core/data";
 import { cx } from "../../core/cx";
 import type { ReplaySession } from "../../game/replay";
@@ -70,6 +73,22 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
     rs.seek(tick);
   };
 
+  // The transport's measured height becomes edge insets on the player root
+  // (the common ancestor of this bar and the Board): bottom-edge chrome --
+  // the hand dock, its peek / skill stack / sheet strip, the left column's
+  // actions, the log -- rides up by it when the bar is docked at the bottom,
+  // and the top-edge field row rides down by it when docked at the top.
+  // Floating or hidden: both insets stay 0, nothing has to make room.
+  const barRef = useRef<HTMLDivElement>(null);
+  useResizeObserver(barRef, (el) => {
+    const root = el.parentElement;
+    if (!root) return;
+    const h = prefs.hidden ? 0 : el.offsetHeight;
+    root.style.setProperty("--replay-bar-h", `${h}px`);
+    root.style.setProperty("--replay-bar-bottom", !prefs.hidden && prefs.dock === "bottom" ? `${h}px` : "0px");
+    root.style.setProperty("--replay-bar-top", !prefs.hidden && prefs.dock === "top" ? `${h}px` : "0px");
+  }, [prefs.hidden, prefs.dock]);
+
   // Transport shortcuts, alive whether or not the bar is on screen. Editable
   // fields (the console, the scrub range, the perspective select) keep their
   // own keys; a focused button keeps Space so it can be activated that way.
@@ -126,22 +145,36 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
     },
   ]);
 
-  if (prefs.hidden) {
-    // A small handle on the bar's own edge brings it back (or press H).
-    return (
-      <button
-        type="button"
-        className={cx(s.handle, prefs.dock === "top" && s.handleTop)}
-        onClick={() => patch({ hidden: false })}
-        title={tr("replay.barHint")}
-      >
-        {tr("replay.showBar")}
-      </button>
-    );
-  }
-
+  // One strip in every dock mode. The toggle lives in the leftmost slot in
+  // both states -- hide at the head of the bar, the show handle in that same
+  // slot once the strip is gone -- so the pointer does not have to travel
+  // between the two. Hidden, the strip keeps its box (the rest goes
+  // `visibility: hidden`) so the handle lands exactly on the hide button.
   return (
-    <div className={cx(s.bar, prefs.dock === "bottom" && s.dockBottom, prefs.dock === "top" && s.dockTop)} title={tr("replay.barHint")}>
+    <div
+      ref={barRef}
+      className={cx(
+        s.bar,
+        prefs.dock === "bottom" && s.dockBottom,
+        prefs.dock === "top" && s.dockTop,
+        prefs.hidden && s.barHidden,
+      )}
+      title={tr("replay.barHint")}
+    >
+      {prefs.hidden ? (
+        <Btn
+          size="small"
+          icon="add"
+          className={s.handle}
+          onClick={() => patch({ hidden: false })}
+          title={tr("replay.barHint")}
+        >
+          {tr("replay.showBar")}
+        </Btn>
+      ) : (
+        <Btn size="small" icon="remove" onClick={() => patch({ hidden: true })} title={tr("replay.barHint")}>{tr("replay.hideBar")}</Btn>
+      )}
+
       <div className={s.transport}>
         <Btn size="small" onClick={() => rs.setPlaying(!rs.playing)}>
           {rs.playing ? tr("replay.pause") : tr("replay.play")}
@@ -213,7 +246,6 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
             ))}
           </select>
         </label>
-        <Btn size="small" icon="remove" onClick={() => patch({ hidden: true })} title={tr("replay.barHint")}>{tr("replay.hideBar")}</Btn>
         <Btn size="small" icon="home" onClick={onExit}>{tr("replay.back")}</Btn>
       </div>
     </div>

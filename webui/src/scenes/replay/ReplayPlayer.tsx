@@ -156,7 +156,7 @@ function PlayerLive({ rs }: { rs: ReplaySession }) {
         </div>
       )}
       {!verify && (
-        <div className={s.btns} style={{ position: "absolute", right: "0.6em", top: "0.6em", zIndex: 5 }}>
+        <div className={cx(s.btns, s.corner)}>
           <Btn size="small" onClick={runVerify}>
             {tr("replay.verify")}
           </Btn>

@@ -65,7 +65,10 @@
   left: 0;
   right: 0;
   top: calc(50% + 6px);
-  bottom: 22px;
+  /* A bottom-docked replay transport covers the window's bottom edge; the log
+     rides up by its height (`--replay-bar-bottom`) with the rest of the
+     bottom-anchored chrome. */
+  bottom: calc(22px + var(--replay-bar-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 10px;

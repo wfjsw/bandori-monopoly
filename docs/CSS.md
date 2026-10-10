@@ -89,6 +89,7 @@ the ring, a dialogue over a stand that owns a stacking context) is exempt.
 | --- | --- | --- |
 | `--z-lift` | `1` | inside-widget stacking (tile, dialogue over stand) |
 | `--z-topbar` | `5` | TopBar |
+| `--z-chrome` | `6` | loose scene chrome (select quick-filter) |
 | `--z-field` | `15` | field sheet (cards-in-play row) |
 | `--z-fx` | `20` | match FX base |
 | `--z-fx-banner` | `20` | status banner |
@@ -97,6 +98,8 @@ the ring, a dialogue over a stand that owns a stacking context) is exempt.
 | `--z-dock` | `30` | hand dock, player peek, mark tip, hover preview |
 | `--z-peek` | `31` | draw-pile peek |
 | `--z-preview` | `32` | hand-card preview |
+| `--z-transport` | `35` | replay transport bar + show handle |
+| `--z-chrome-banner` | `36` | replay status banners (divergence / verify) |
 | `--z-modal` | `40` | modal back, inline modal, prompt sheet, zoom control |
 | `--z-auto-float` | `41` | 托管 float, "thinking" pill |
 | `--z-modal-fore` | `42` | restore tray over the log |
@@ -105,6 +108,32 @@ the ring, a dialogue over a stand that owns a stacking context) is exempt.
 | `--z-toast` | `80` | toasts |
 | `--z-fader` | `90` | scene fader |
 | `--z-console` | `100` | dev console (fixed, over everything) |
+
+`--z-transport` is the replay playback bar (and its show handle). It sits
+above every in-board surface the viewer may still be inspecting -- hand dock
+(30), field row (15), peeks / previews (31–32), card flash (25) -- so
+play / pause / seek stay clickable while a hand card is up. It sits below the
+interruptions: a modal (40), toast (80) or the scene fader (90) covers the
+transport, because those own the screen until answered. The status banners
+(`--z-chrome-banner`) ride one step above the transport so a divergence /
+verify notice is never buried under the bar.
+
+### Runtime layout variables
+
+Not design tokens -- measured or state-driven values a scene publishes on a
+common ancestor; modules read them with a `0` fallback so a scene that does
+not set them is unchanged.
+
+| Variable | Set by | Meaning |
+| --- | --- | --- |
+| `--replay-bar-h` | `ReplayBar` (ResizeObserver on the bar) | measured transport height, `0` when hidden |
+| `--replay-bar-bottom` | `ReplayBar` | height while the transport is docked at the **bottom**, else `0` |
+| `--replay-bar-top` | `ReplayBar` | height while the transport is docked at the **top**, else `0` |
+
+Bottom-edge chrome (hand dock / peek / skill stack / sheet strip, the left
+column's actions and player list, the log) adds `--replay-bar-bottom` to its
+`bottom`; the field-card row adds `--replay-bar-top` to its `top`. Floating
+transport: both are `0`, no offset.
 
 ## (b) Shared primitives — `ui/primitives.module.css`
 

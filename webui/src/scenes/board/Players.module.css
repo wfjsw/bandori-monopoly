@@ -6,7 +6,7 @@
 /* Scrolls vertically only. Your own seat's ring (`.me`: 3px outline + 2px
    offset) sits 5px outside its panel; the padding keeps it inside the scroll
    box, so it neither clips nor makes the list scroll sideways. */
-.players { position: absolute; left: 0; top: 107px; bottom: 160px; width: 100%; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+.players { position: absolute; left: 0; top: 107px; bottom: calc(160px + var(--replay-bar-bottom, 0px)); width: 100%; box-sizing: border-box; padding: 5px; display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }
 /* Two lines beside the avatar: character … money, then status /
    hand / fire / graveyard. Each line is one row high, so a 54-70px panel
    holds both without spilling. */

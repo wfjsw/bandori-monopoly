@@ -81,7 +81,10 @@
   inset: 0;
 }
 /* The transport rides at the bottom of the board; docked it goes full-width
-   and flush to an edge. Hidden, only a small handle is left on that edge. */
+   and flush to an edge. The hide control is the strip's leftmost item in every
+   dock mode; hidden, the show handle takes that same slot (the rest of the
+   strip is `visibility: hidden` so the box -- and the toggle's place -- does
+   not move). Rides over every in-board surface (`--z-transport`). */
 .bar {
   position: absolute;
   left: 40px;
@@ -94,7 +97,7 @@
   border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 12px 20px;
-  z-index: var(--z-chrome);
+  z-index: var(--z-transport);
 }
 .bar.dockBottom {
   left: 0;
@@ -111,27 +114,32 @@
   border-radius: 0 0 16px 16px;
   padding-top: 14px;
 }
-.handle {
-  position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 0;
-  border-radius: var(--r-pill);
+/* Hidden: same box, no surface, and only the handle takes the pointer. */
+.barHidden {
+  background: transparent;
+  box-shadow: none;
+  pointer-events: none;
+}
+.barHidden > :not(:first-child) {
+  visibility: hidden;
+}
+.barHidden > :first-child {
+  pointer-events: auto;
+}
+/* The show handle: the hide button's stand-in in the same leftmost slot. Same
+   Btn small metrics (icon + label) so the hit target does not jump between the
+   two states; only the surface is quieter. Scoped under `.bar` so it outranks
+   the shared `.white` button surface. */
+.bar .handle {
+  color: var(--sub);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
-  padding: 8px 18px;
   font-size: 13px;
-  font-weight: 700;
-  color: var(--sub);
-  cursor: pointer;
-  z-index: var(--z-chrome);
 }
-.handle:hover { color: var(--pink); }
-.handle.handleTop { top: 14px; bottom: auto; }
+.bar .handle:hover {
+  color: var(--pink);
+  filter: none;
+}
 .transport { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .speeds { display: flex; gap: 4px; background: var(--surface); border-radius: var(--r-md); padding: 3px; }
 .speed {
@@ -202,6 +210,14 @@
 @keyframes bannerOut { to { opacity: 0; transform: translateX(-50%) translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .transient { animation: none; } }
 .btns { display: flex; gap: 8px; }
+/* The lone 校验 button, top-right. Drops below a top-docked transport so it
+   stays reachable; sits in the banner layer with the notices. */
+.corner {
+  position: absolute;
+  right: 0.6em;
+  top: calc(0.6em + var(--replay-bar-top, 0px));
+  z-index: var(--z-chrome-banner);
+}
 
 /* Load / compat screens. */
 .error {

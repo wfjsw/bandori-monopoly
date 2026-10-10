@@ -110,7 +110,6 @@
   --z-lift: 1;
   --z-topbar: 5;
   --z-chrome: 6;
-  --z-chrome-banner: 7;
   --z-field: 15;
   --z-fx: 20;
   --z-fx-banner: 20;
@@ -119,6 +118,13 @@
   --z-dock: 30;
   --z-peek: 31;
   --z-preview: 32;
+  /* Replay transport (bar + show handle): over every in-board surface the user
+     is still inspecting -- hand dock, field row, peeks, previews, flashes --
+     so play / pause / seek stay reachable mid-look. Below the interruptions
+     (modal, toast, fader): a dialog owns the screen until it is answered. */
+  --z-transport: 35;
+  /* Status banners (replay divergence / verify) ride over the transport. */
+  --z-chrome-banner: 36;
   --z-modal: 40;
   --z-auto-float: 41;
   --z-modal-fore: 42;
