@@ -320,8 +320,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * ~~游击演出 lands one tile past the chosen one.~~ **Fixed 2026-10-09**
     (`card_settle_at` no longer inherits the turn's walk).
   * 游击演出's [特] never opens at turn end.
-  * Repaint halves a shaped settlement payment only partially (the Tomorrow's
-    Door surcharge joins at full price) -- §6.
+  * ~~Repaint halves a shaped settlement payment only partially (the
+    Tomorrow's Door surcharge joins at full price).~~ **Fixed 2026-10-10**
+    (`MONEY-03`; the pipeline already did the right thing -- the test's dice
+    put the hill off-path so Repaint was never offered. Un-ignored, green).
 * **mygo** (4)
   * 灯 不再迷茫: a crystal cannot pay a skill's fire cost (B -- wants a
     pre-spend `FirePaying` hook), so the card is never [移除]d when its

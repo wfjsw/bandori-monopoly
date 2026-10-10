@@ -104,17 +104,24 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **question**: C-Q2.
 
 ## MONEY-03 — Repaint (「对方此次结算的支付减半」) does not halve the shaped total
-- **kind**: implementation bug
+- **kind**: test-setup bug (implementation already correct)
 - **class**: A
 - **severity**: high
 - **suggested batch**: payment pipeline
+- **status**: **fixed** (this batch, `fix: MONEY-03 …`) — the pipeline
+  already halves the shaped total (`payAdd` runs Tomorrow's Door's surcharge,
+  `payMul` applies `plan::set_pay_factor(500)`). The test's dice math put
+  the hill off the planned path (`hill - 1 - 5 - 2` → X = 0, Repaint never
+  offered), so the discrepancy was never actually observed. Dice is now
+  `(hill − 5) + X` from a close start. Un-ignored, green twice.
 - **locations**
-  - `crates/game-rules/tests/rb_ras.rs:937` `repaint_halves_a_shaped_settlement_payment` `#[ignore = "DISCREPANCY: ruling 2026-10-06: 「对方此次结算的支付减半」 -- a Tomorrow's Door surcharge is added at full price instead of halving the shaped settlement payment"]`
-  - related tests `rb_cross_tiles.rs:163` `t03_anon_link_plus_repaint` (same shaped-payment path)
+  - `crates/game-rules/tests/rb_ras.rs` `repaint_halves_a_shaped_settlement_payment` (un-ignored)
+  - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `payAdd`)
+  - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `payMul`)
+  - related tests `rb_cross_tiles.rs:163` `t03_anon_link_plus_repaint` (Anon link arrangement, still ignored)
 - **rulebook**: ruling 2026-10-06 + sheet 「对方此次结算的支付减半」 — the *settlement payment* (post-shape) is halved.
-- **current**: Tomorrow's Door surcharge joins at full price after the half.
-- **expected**: half applies to the whole shaped settlement payment (surcharge included).
-- **class A** because a later ruling already cites the wording.
+- **was**: test dice put the hill off-path; X = 0 so Repaint was never offered.
+- **expected**: half applies to the whole shaped settlement payment (surcharge included). **Confirmed.**
 
 ## MONEY-04 — 强制购买 / auction money sits outside the money pipeline
 - **kind**: rulebook divergence

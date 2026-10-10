@@ -931,23 +931,24 @@ fn repaint_halves_the_settle_payment() {
 // Ruling 2026-10-06 (the 祥，移动 reading, which applies here because the
 // sheet wording is 「对方此次结算的支付减半」 -- the settlement payment): a
 // payment shaped by another card effect is halved too. Tomorrow's Door (3)
-// adds (houses on 星之鼓动山丘)×100 on top of the rent; the whole shaped
-// payment is halved.
+// adds (houses on 星之鼓动山丘)×100 on top of the rent at `payAdd`; the
+// `payMul` scale (Repaint's `set_pay_factor(500)`) sees the shaped total.
 #[test]
-#[ignore = "DISCREPANCY: ruling 2026-10-06: 「对方此次结算的支付减半」 -- a Tomorrow's Door surcharge is added at full price instead of halving the shaped settlement payment"]
 fn repaint_halves_a_shaped_settlement_payment() {
     let mut t = Table::vanilla(3);
     let hill = tile("星之鼓动山丘"); // rent[1] = 280; surcharge 1*100 = 100
     t.own(0, &[hill]);
     t.set_houses(hill, 1);
     t.place_raw(0, "PPP:Tomorrow's Door");
-    t.set_pos(1, 5);
     t.set_money(0, 20_000);
     t.set_money(1, 20_000);
     t.give(0, &["RAS:Repaint"]);
     t.begin_turn(1);
     drain(&mut t);
-    t.dice(&[(hill - 1 - 5 - 2) as i32]); // reduced by X=2 lands on the hill
+    // Path 1..=3 ahead of hill−2 contains `hill` (X = 1 owned tile); after
+    // the −X cut the walk lands on `hill`.
+    t.set_pos(1, hill - 2);
+    t.dice(&[3]);
     t.roll(1).unwrap();
     t.counteract(0, "RAS:Repaint").unwrap();
     drain(&mut t);
