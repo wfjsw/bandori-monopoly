@@ -1,91 +1,312 @@
-.back { position: absolute; inset: 0; z-index: 40; background: rgba(60, 40, 50, 0.38); display: flex; align-items: center; justify-content: center; animation: fade 0.15s; }
-.back[hidden] { display: none; }
+/* Modal / prompt-sheet chrome. Geometry that shares the board's centre column
+   reads the layout tokens (docs/CSS.md), not copies of Board.module.css. */
+
+.back {
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-modal);
+  background: var(--scrim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade 0.15s;
+}
+.back[hidden] {
+  display: none;
+}
 /* Inline: a floating card over the board centre. No backdrop -- the ring stays
-   visible and clickable around it. The +25px keeps the card centred on the
-   tile ring (Board.module.css: 38px inset + 350px left column + 9px gap +
-   half of the 856px middle column = 825px on a 1600px stage). */
-.inline { position: absolute; left: calc(50% + 25px); top: 50%; transform: translate(-50%, -50%); z-index: 40; display: flex; justify-content: center; max-width: 856px; animation: fade 0.15s; }
-.inline[hidden] { display: none; }
+   visible and clickable around it. The board-mid-offset keeps the card centred
+   on the tile ring (see styles/layout.ts). */
+.inline {
+  position: absolute;
+  left: calc(50% + var(--board-mid-offset));
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: var(--z-modal);
+  display: flex;
+  justify-content: center;
+  max-width: var(--board-mid);
+  animation: fade 0.15s;
+}
+.inline[hidden] {
+  display: none;
+}
 /* Prompt sheets: a bottom sheet over the hand (Master Duel). The wrapper is the
-   centre column's width (1600px stage - 744px of side chrome, Board.module.css)
-   centred on that column (+25px), and clips the slide; the window inside is
-   content-sized and carries the slide / retract transforms. `pointer-events:
-   none` on the wrapper: the board beside a narrow sheet stays clickable.
-   It stands on the bottom edge of the screen, over the hand bar / fan
-   (the dock is z-index 30). */
+   centre column's width (stage minus the side chrome) centred on that column,
+   and clips the slide; the window inside is content-sized and carries the
+   slide / retract transforms. `pointer-events: none` on the wrapper: the board
+   beside a narrow sheet stays clickable. It stands on the bottom edge of the
+   screen, over the hand bar / fan. */
 .sheet {
-  position: absolute; left: calc(50% + 25px); bottom: 0; z-index: 40;
-  width: calc(100% - 744px);
+  position: absolute;
+  left: calc(50% + var(--board-mid-offset));
+  bottom: 0;
+  z-index: var(--z-modal);
+  width: calc(100% - var(--board-chrome-x));
   transform: translateX(-50%);
-  display: flex; justify-content: center;
+  display: flex;
+  justify-content: center;
   overflow: hidden;
   pointer-events: none;
 }
-.sheet[hidden] { display: none; }
-.sheet .window { pointer-events: auto; }
+.sheet[hidden] {
+  display: none;
+}
+.sheet .window {
+  pointer-events: auto;
+}
 @keyframes fade { from { opacity: 0; } }
-.window { width: 834px; max-height: 840px; display: flex; flex-direction: column; background: #fff; border-radius: 20px; padding: 8px; box-shadow: 0 20px 60px rgba(60, 20, 40, 0.3); animation: pop 0.18s ease-out; }
+.window {
+  width: 834px;
+  max-height: 840px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-radius: var(--r-2xl);
+  padding: var(--sp-2);
+  box-shadow: var(--pop-shadow);
+  animation: pop 0.18s ease-out;
+}
 @keyframes pop { from { transform: scale(0.94); opacity: 0; } }
 .small { width: 520px; }
 .mid { width: 660px; }
 .normal { width: 834px; }
 .wide { width: 1000px; }
 .xl { width: 1250px; }
-.fit { width: fit-content; min-width: 380px; max-width: 856px; }
-.head { position: relative; flex: none; height: 54px; border-radius: 14px; background: linear-gradient(var(--pink-light), var(--pink)); display: flex; align-items: center; justify-content: center; }
-.head h2 { color: #fff; font-size: 25px; font-weight: 700; letter-spacing: 1px; max-width: calc(100% - 220px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.x { position: absolute; right: 6px; top: 5px; width: 44px; height: 44px; border-radius: 50%; background: #fff; color: var(--pink); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12); }
-.x i { width: 24px; height: 24px; }
-.minimize { right: 58px; }
-.minus { width: 20px; height: 3px; background: currentColor; border-radius: 2px; }
-.x:hover { background: #fff0f5; }
-.x:focus-visible, .restore:focus-visible { outline: 3px solid var(--pink); outline-offset: 3px; }
+.fit {
+  width: fit-content;
+  min-width: 380px;
+  max-width: var(--board-mid);
+}
+.head {
+  position: relative;
+  flex: none;
+  height: 54px;
+  border-radius: var(--r-xl);
+  background: linear-gradient(var(--pink-light), var(--pink));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.head h2 {
+  color: #fff;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  max-width: calc(100% - 220px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.x {
+  position: absolute;
+  right: 6px;
+  top: 5px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--pink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+.x i {
+  width: 24px;
+  height: 24px;
+}
+.minimize {
+  right: 58px;
+}
+.minus {
+  width: 20px;
+  height: 3px;
+  background: currentColor;
+  border-radius: 2px;
+}
+.x:hover {
+  background: #fff0f5;
+}
+.x:focus-visible,
+.restore:focus-visible {
+  outline: 3px solid var(--pink);
+  outline-offset: 3px;
+}
 /* A small restore list over the log column leaves the entire map visible. */
-.restoreTray { position: absolute; top: 14px; right: 14px; z-index: 42; display: flex; flex-direction: column; gap: 6px; width: 300px; max-height: 260px; padding: 4px; overflow: auto; }
-.restore { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 7px 10px; border: 2px solid var(--pink); border-radius: 12px; background: #fff; color: var(--pink); box-shadow: var(--shadow); font-size: 14px; }
-.restore:hover { background: #fff0f5; }
-.restoreTitle { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: left; font-weight: 700; }
-.restoreHint { flex: none; font-size: 12px; }
-.restoreIcon { flex: none; width: 16px; height: 14px; border: 2px solid currentColor; border-top-width: 5px; border-radius: 2px; }
-.body { overflow: auto; padding: 18px 18px 14px; font-size: 17px; line-height: 1.6; }
+.restoreTray {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: var(--z-modal-fore);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 300px;
+  max-height: 260px;
+  padding: 4px;
+  overflow: auto;
+}
+.restore {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: 40px;
+  padding: 7px 10px;
+  border: 2px solid var(--pink);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  color: var(--pink);
+  box-shadow: var(--shadow);
+  font-size: var(--fs-sm);
+}
+.restore:hover {
+  background: #fff0f5;
+}
+.restoreTitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-weight: 700;
+}
+.restoreHint {
+  flex: none;
+  font-size: 12px;
+}
+.restoreIcon {
+  flex: none;
+  width: 16px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-width: 5px;
+  border-radius: 2px;
+}
+.body {
+  overflow: auto;
+  padding: 18px 18px 14px;
+  font-size: var(--fs-lg);
+  line-height: 1.6;
+}
 /* Prompt card chrome: the old popup's look -- white rounded panel with a pink
    border, the source · tile named in pink above the body. The head is the
    retract strip: title, the countdown (headExtra), and the raise chevron. */
-.promptWin { padding: 14px 18px 16px; border: 3px solid var(--pink); box-shadow: 0 14px 44px rgba(60, 20, 40, 0.24); }
-.promptWin .head { height: 42px; min-height: 42px; background: none; border-radius: 0; display: flex; align-items: center; gap: 10px; justify-content: flex-start; padding: 0 52px 0 2px; }
-.promptWin .head h2 { flex: 0 1 auto; min-width: 0; max-width: none; color: var(--pink); font-size: 21px; letter-spacing: 0; text-align: left; }
-.headToggle { cursor: pointer; }
+.promptWin {
+  padding: 14px 18px 16px;
+  border: 3px solid var(--pink);
+  box-shadow: 0 14px 44px rgba(60, 20, 40, 0.24);
+}
+.promptWin .head {
+  height: 42px;
+  min-height: 42px;
+  background: none;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+  padding: 0 52px 0 2px;
+}
+.promptWin .head h2 {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: none;
+  color: var(--pink);
+  font-size: var(--fs-2xl);
+  letter-spacing: 0;
+  text-align: left;
+}
+.headToggle {
+  cursor: pointer;
+}
 /* Retract / raise chevron in the strip's round button. */
-.chev { width: 11px; height: 11px; border-right: 3px solid currentColor; border-bottom: 3px solid currentColor; border-radius: 1px; transform: rotate(45deg) translate(-1px, -1px); }
-.chevUp { transform: rotate(-135deg) translate(-1px, -1px); }
-.promptWin .x { width: 32px; height: 32px; background: var(--pink-pale); box-shadow: none; }
-.promptWin .x i { width: 18px; height: 18px; }
-.promptWin .minus { width: 16px; height: 3px; }
-.promptWin .x:hover { background: #ffd0dc; }
+.chev {
+  width: 11px;
+  height: 11px;
+  border-right: 3px solid currentColor;
+  border-bottom: 3px solid currentColor;
+  border-radius: 1px;
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+.chevUp {
+  transform: rotate(-135deg) translate(-1px, -1px);
+}
+.promptWin .x {
+  width: 32px;
+  height: 32px;
+  background: var(--pink-pale);
+  box-shadow: none;
+}
+.promptWin .x i {
+  width: 18px;
+  height: 18px;
+}
+.promptWin .minus {
+  width: 16px;
+  height: 3px;
+}
+.promptWin .x:hover {
+  background: #ffd0dc;
+}
 /* The sheet caps its height and scrolls the body: the floating hover preview
    is hosted on the stage (CardPreview InspectPreviewHost), so it escapes the
    scroll box. */
-.promptWin .body { padding: 0; overflow: auto; }
-.ask { display: flex; flex-direction: column; gap: 16px; align-items: center; text-align: center; }
-.ask p { font-size: 19px; white-space: pre-wrap; }
-.row { display: flex; gap: 14px; justify-content: center; }
+.promptWin .body {
+  padding: 0;
+  overflow: auto;
+}
+.ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  align-items: center;
+  text-align: center;
+}
+.ask p {
+  font-size: var(--fs-xl);
+  white-space: pre-wrap;
+}
+.row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
 /* The sheet's window: content-sized (up to the centre column), capped height
    with the body scrolling, and the slide / retract transforms. Kept last so it
    wins over `.window`'s fixed widths and `pop`. */
 .sheetWin {
-  width: fit-content; min-width: 380px; max-width: 100%; max-height: 640px;
-  --sheet-strip: 60px;
-  animation: sheetIn 0.22s cubic-bezier(0.22, 0.7, 0.25, 1);
-  transition: transform 0.22s cubic-bezier(0.22, 0.7, 0.25, 1);
+  width: fit-content;
+  min-width: 380px;
+  max-width: 100%;
+  max-height: 640px;
+  animation: sheetIn 0.22s var(--ease-sheet);
+  transition: transform 0.22s var(--ease-sheet);
 }
-.sheetWin.retracted { transform: translateY(calc(100% - var(--sheet-strip))); }
+.sheetWin.retracted {
+  transform: translateY(calc(100% - var(--sheet-strip)));
+}
 /* Attached to the screen's bottom edge: no bottom border, square bottom corners. */
-.sheetWin { border-bottom: none; border-radius: 20px 20px 0 0; }
-.sheetWin.sheetOut { animation: sheetOut 0.18s ease-in forwards; }
-.sheetOut .body { pointer-events: none; }
+.sheetWin {
+  border-bottom: none;
+  border-radius: var(--r-2xl) var(--r-2xl) 0 0;
+}
+.sheetWin.sheetOut {
+  animation: sheetOut 0.18s ease-in forwards;
+}
+.sheetOut .body {
+  pointer-events: none;
+}
 @keyframes sheetIn { from { transform: translateY(100%); opacity: 0.35; } }
 @keyframes sheetOut { to { transform: translateY(100%); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .sheetWin { animation: none; transition: none; }
-  .sheetWin.sheetOut { animation: none; opacity: 0; }
+  .sheetWin {
+    animation: none;
+    transition: none;
+  }
+  .sheetWin.sheetOut {
+    animation: none;
+    opacity: 0;
+  }
 }

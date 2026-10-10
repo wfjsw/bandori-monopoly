@@ -1,5 +1,5 @@
 .deed { display: flex; flex-direction: column; gap: 12px; }
-.deedHead { display: flex; align-items: baseline; justify-content: space-between; border-radius: 10px; padding: 12px 18px; }
+.deedHead { display: flex; align-items: baseline; justify-content: space-between; border-radius: var(--r-md); padding: 12px 18px; }
 .deedHead b { font-size: 26px; }
 .deedHead span { font-size: 14px; }
 .deedArt { align-self: center; height: 140px; }
@@ -20,7 +20,7 @@
 .list { display: flex; flex-direction: column; gap: 12px; }
 .hint { font-size: 14px; color: var(--sub); white-space: pre-wrap; }
 .rows { display: flex; flex-direction: column; gap: 8px; max-height: 440px; overflow: auto; }
-.row { display: flex; align-items: center; gap: 12px; background: var(--light-pill); border-radius: 10px; padding: 8px 12px; }
+.row { display: flex; align-items: center; gap: 12px; background: var(--light-pill); border-radius: var(--r-md); padding: 8px 12px; }
 .strip { width: 8px; height: 40px; border-radius: 4px; flex: none; }
 .rowName { flex: 1; display: flex; flex-direction: column; }
 .rowName small { color: var(--sub); font-size: 13px; }
@@ -36,9 +36,9 @@
 /* The two skill bodies: one size for the whole block, so the list items match
    the lead paragraphs instead of inheriting the modal's base type. */
 .skills { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; font-size: 14px; }
-.lines { background: var(--light-pill); border-radius: 10px; padding: 10px 14px; font-size: 15px; }
+.lines { background: var(--light-pill); border-radius: var(--r-md); padding: 10px 14px; font-size: 15px; }
 .deeds { display: flex; flex-wrap: wrap; gap: 6px; }
-.deedChip { border-left: 6px solid; background: #fff; border-radius: 4px; padding: 2px 8px; font-size: 13px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
+.deedChip { border-left: 6px solid; background: var(--surface); border-radius: 4px; padding: 2px 8px; font-size: 13px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08); }
 .muted { color: var(--sub); }
 .pink { color: var(--pink); }
 .pre { white-space: pre-wrap; }
@@ -51,7 +51,7 @@
 /* 场上的卡: a card face (the graveyard's size) with its live note (crystals, counters) under it. */
 .fieldSlot { display: flex; flex-direction: column; gap: 3px; width: 120px; }
 .fieldSlot small { font-size: 11px; line-height: 1.3; color: var(--sub); overflow-wrap: anywhere; }
-.faceDown img { width: 120px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 6px; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.12); }
+.faceDown img { width: 120px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: var(--card-shadow); }
 
 .confirm { display: flex; flex-direction: column; gap: 18px; align-items: center; text-align: center; }
 .confirm p { white-space: pre-wrap; font-size: 18px; }

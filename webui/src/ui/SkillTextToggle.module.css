@@ -1,2 +1,2 @@
-.toggle { border: 1px solid var(--line, #ddd); border-radius: 999px; padding: 2px 12px; font-size: 12px; line-height: 20px; color: var(--sub, #666); background: #fff; cursor: pointer; }
-.toggle:hover { color: var(--pink, #e5245e); border-color: var(--pink, #e5245e); }
+.toggle { border: 1px solid var(--line); border-radius: var(--r-pill); padding: 2px 12px; font-size: 12px; line-height: 20px; color: var(--sub); background: var(--surface); cursor: pointer; }
+.toggle:hover { color: var(--pink); border-color: var(--pink); }

@@ -1,4 +1,4 @@
-.panel { position: fixed; inset: 0 0 auto; z-index: 1000; height: min(56vh, 560px); min-height: 250px; display: flex; flex-direction: column; color: #e9e7ef; background: rgba(19, 20, 29, .97); border-bottom: 2px solid var(--pink); box-shadow: 0 12px 40px #0006; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", monospace; }
+.panel { position: fixed; inset: 0 0 auto; z-index: var(--z-console); height: min(56vh, 560px); min-height: 250px; display: flex; flex-direction: column; color: #e9e7ef; background: rgba(19, 20, 29, .97); border-bottom: 2px solid var(--pink); box-shadow: 0 12px 40px #0006; font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, "PingFang SC", monospace; }
 .header { display: flex; align-items: center; gap: 16px; padding: 10px 18px; background: #252530; border-bottom: 1px solid #ffffff12; }
 .header strong { font-size: 15px; color: #fff; }
 .symbol { color: #ff8aad; }

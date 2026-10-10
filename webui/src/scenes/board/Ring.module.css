@@ -30,45 +30,213 @@
 .overlay { position: absolute; inset: 0; pointer-events: none; }
 .ring { position: relative; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(10, minmax(0, 1fr)); }
 
-/* tiles: a generated face per cell (TileFace) plus every live overlay */
-.tile { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; cursor: pointer; color: #25342f; background: #fff; border: 0.5px solid #52635f; overflow: hidden; transition: background 0.2s; padding: 0; font: inherit; text-align: inherit; }
+/* tiles: a generated face per cell (TileFace) plus every live overlay.
+   Type scale: one unit `--u` off the measured cell (`--cell-w` / `--cell-h`,
+   set on .ring from the board rect), so name / caption / index hold their
+   proportions from the narrow 1366 cells up to the wide 2560 ones. Name size
+   then steps down by a width tier (`.nameL`..`.nameXS`) and up for corners /
+   agents (`.specialName`). */
+.tile { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; cursor: pointer; color: #25342f; background: var(--surface); border: 0.5px solid #52635f; overflow: hidden; transition: background 0.2s; padding: 0; font: inherit; text-align: center;
+  /* Type unit: the cell's height drives the scale, but a narrow cell (the
+     square 1366 board) is width-bound -- min() keeps long Latin words like
+     「Live House」 from wrapping one-per-line and ellipsising. */
+  --u: min(calc(var(--cell-h, 80px) * 0.18), calc(var(--cell-w, 80px) * 0.17));
+  --name-k: 1;
+  --kind-k: 1;
+}
 .tile:hover { background: #ffeef3; }
 .tile:focus-visible { outline: 3px solid var(--pink); outline-offset: -3px; }
-/* The `#index` chip wears the tile's colour -- what the colour strip used to
-   carry. */
-.tileNumber { flex: 0 0 17px; width: 100%; font-size: 11px; line-height: 17px; color: #17221e; }
-.tileBody { flex: 1; min-height: 0; width: 100%; padding: 2px 3px 3px; display: flex; flex-direction: column; gap: 1px; pointer-events: none; }
-.tileName { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; line-height: 1.12; }
-.specialName { font-size: 14px; font-weight: 700; }
-.longName { font-size: 9px; }
-.tileCaption { flex: 0 0 auto; font-size: 11px; line-height: 13px; }
-.tileNote { flex: 0 0 auto; font-size: 8px; line-height: 10px; }
-/* Ownership: a tint, an inner ring, and the colour strip along the bottom. */
+/* The `#index` chip IS the colour band (what the old colour strip carried).
+   Text colour flips on dark tile colours; a hairline under the band keeps the
+   chip legible on the white corner faces. */
+.tileNumber {
+  flex: 0 0 auto;
+  width: 100%;
+  height: calc(var(--u) * 1.45);
+  padding: 0 calc(var(--u) * 0.22);
+  font-size: calc(var(--u) * 0.78);
+  font-weight: 700;
+  line-height: calc(var(--u) * 1.45);
+  letter-spacing: 0.02em;
+  text-align: left;
+  box-shadow: inset 0 -1px 0 rgba(23, 34, 30, 0.14);
+}
+.tileBody {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  /* Bottom gutter: room for the owner strip / mortgage band / marks row so
+     they never sit on the caption. */
+  padding: calc(var(--u) * 0.1) calc(var(--u) * 0.12) calc(var(--u) * 1.1);
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+/* Name: centred in the body, at most two balanced lines. */
+.tileName {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 calc(var(--u) * 0.08);
+  font-size: calc(var(--u) * var(--name-k) * var(--kind-k));
+  font-weight: 600;
+  line-height: 1.14;
+}
+/* Name lines are pre-split in JS (`splitNameLines`) so CJK does not break
+   mid-word. Each line clips with an ellipsis if the tier still overflows. */
+.nameText {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  /* Soft halo so tokens / marks sliding over the name stay readable. */
+  text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff, 0 1px 0 #fff;
+}
+.nameLine {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.specialName { font-weight: 700; }
+/* Short corners / agents only: 「CiRCLE」 gets a step up, 「Live House」 does not. */
+.nameBoost { --kind-k: 1.12; }
+.nameL { --name-k: 1.1; }
+.nameM { --name-k: 1; }
+.nameS { --name-k: 0.92; }
+.nameXS { --name-k: 0.8; }
+/* Caption on a common bottom baseline, centred under the name. */
+.tileCaption {
+  flex: 0 0 auto;
+  font-size: calc(var(--u) * 0.78);
+  font-weight: 600;
+  line-height: 1.15;
+  color: color-mix(in srgb, #25342f 74%, #fff);
+  font-variant-numeric: tabular-nums;
+}
+/* CiRCLE pass / stop notes: same baseline slot as the caption, two centred lines. */
+.tileNote {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+  font-size: calc(var(--u) * 0.62);
+  line-height: 1.2;
+  color: color-mix(in srgb, #25342f 78%, #fff);
+}
+/* Ownership: a tint, an inner ring, and the colour strip along the bottom
+   (inside the body's bottom gutter, never on the caption). */
 .owned { background: color-mix(in srgb, var(--owner) 12%, #fff); box-shadow: inset 0 0 0 2px var(--owner); }
-.ownerStrip { position: absolute; left: 4px; right: 4px; bottom: 2px; height: 4px; border-radius: 2px; background: var(--owner); pointer-events: none; }
+.ownerStrip {
+  position: absolute;
+  left: calc(var(--u, 12px) * 0.3);
+  right: calc(var(--u, 12px) * 0.3);
+  bottom: calc(var(--u, 12px) * 0.12);
+  height: calc(var(--u, 12px) * 0.22);
+  border-radius: var(--r-pill);
+  background: var(--owner);
+  pointer-events: none;
+}
 .mortgaged { background: #e2e2e2; }
-.mortgaged::after { content: "抵押"; position: absolute; inset: auto 0 2px 0; text-align: center; font-size: 10px; color: #fff; background: rgba(90, 90, 90, 0.7); }
+/* 抵押 sits in the same bottom gutter as the owner strip -- not over the caption. */
+.mortgaged::after {
+  content: "抵押";
+  position: absolute;
+  left: 0; right: 0;
+  bottom: calc(var(--u, 12px) * 0.1);
+  text-align: center;
+  font-size: calc(var(--u, 12px) * 0.72);
+  font-weight: 700;
+  line-height: calc(var(--u, 12px) * 0.9);
+  color: #fff;
+  background: rgba(90, 90, 90, 0.72);
+  pointer-events: none;
+}
 .landed { box-shadow: inset 0 0 0 3px var(--pink); z-index: 2; }
 .pickable { animation: glow 0.9s ease-in-out infinite alternate; z-index: 3; }
 @keyframes glow { from { box-shadow: inset 0 0 0 3px var(--gold); } to { box-shadow: inset 0 0 0 3px var(--gold), 0 0 16px 4px rgba(246, 178, 30, 0.8); background: rgba(246, 178, 30, 0.16); } }
 
-.houses { position: absolute; top: 20px; left: 3px; display: flex; gap: 1px; pointer-events: none; }
-.houses img { width: 12px; height: 12px; }
-.marks { position: absolute; left: 3px; bottom: 7px; z-index: 4; display: flex; gap: 1px; pointer-events: none; }
+/* Houses tuck under the colour band, left; the name keeps a little inline pad
+   so text does not run under them. */
+.houses {
+  position: absolute;
+  top: calc(var(--u, 12px) * 1.55);
+  left: calc(var(--u, 12px) * 0.16);
+  display: flex;
+  gap: 1px;
+  pointer-events: none;
+}
+.houses img { width: calc(var(--u, 12px) * 1.05); height: calc(var(--u, 12px) * 1.05); }
+/* Marks share the bottom gutter with the owner strip -- never the name. */
+.marks {
+  position: absolute;
+  left: calc(var(--u, 12px) * 0.16);
+  bottom: calc(var(--u, 12px) * 0.42);
+  z-index: 4;
+  display: flex;
+  gap: 1px;
+  pointer-events: none;
+}
 .marks .mark { pointer-events: auto; cursor: help; box-shadow: 0 0 0 1px #fff; }
-.mark { width: 14px; height: 14px; border-radius: 50%; color: #fff; font-size: 9px; text-align: center; line-height: 14px; }
+.mark {
+  width: calc(var(--u, 12px) * 1.15);
+  height: calc(var(--u, 12px) * 1.15);
+  border-radius: 50%;
+  color: #fff;
+  font-size: calc(var(--u, 12px) * 0.68);
+  text-align: center;
+  line-height: calc(var(--u, 12px) * 1.15);
+}
 /* [CP点] is its own tile-mark category: no seat owns one, so it does not wear a
    seat colour. A gold rounded square keeps it visually apart from the player
    marks beside it. */
-.mark.cp { border-radius: 3px; background: var(--gold); color: #4a3400; font-size: 8px; font-weight: 700; letter-spacing: -0.2px; }
+.mark.cp {
+  border-radius: 3px;
+  background: var(--gold);
+  color: #4a3400;
+  font-size: calc(var(--u, 12px) * 0.58);
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
 .ember { background: var(--tag-red); }
 
-/* tokens: chibi SD art standing on the tile center */
+/* tokens: chibi SD art standing in the tile's lower third (off the name) */
 .tokens { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 .token { position: absolute; width: 0; height: 0; transition: left 0.13s ease, top 0.13s ease; }
-.sd { position: absolute; left: -22px; bottom: -4px; width: 44px; filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25)); }
-.shadow { position: absolute; left: -16px; top: -8px; width: 32px; opacity: 0.6; }
-.dot { position: absolute; left: -15px; top: -30px; width: 30px; height: 30px; border-radius: 50%; color: #fff; text-align: center; line-height: 30px; font-weight: 700; box-shadow: 0 0 0 2px #fff; }
+.sd {
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  width: min(calc(var(--cell-w, 80px) * 0.42), 44px);
+  transform: translateX(-50%);
+  filter: drop-shadow(0 0 1px #fff) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.25));
+}
+.shadow {
+  position: absolute;
+  left: 0;
+  top: -8px;
+  width: min(calc(var(--cell-w, 80px) * 0.32), 32px);
+  transform: translateX(-50%);
+  opacity: 0.6;
+}
+.dot {
+  position: absolute;
+  left: 0;
+  top: -30px;
+  width: 30px;
+  height: 30px;
+  margin-left: -15px;
+  border-radius: 50%;
+  color: #fff;
+  text-align: center;
+  line-height: 30px;
+  font-weight: 700;
+  box-shadow: 0 0 0 2px #fff;
+}
 .current .sd { animation: bob 1.2s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(-3px); } }
 .hop.sd { animation: hop 0.13s ease-out; }
@@ -97,7 +265,7 @@
 .stack img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; box-shadow: 4px 4px 0 #fff, 5px 5px 0 #f0b3c3, 0 6px 14px rgba(0, 0, 0, 0.18); }
 .stack img.face { border: 3px solid #fff; }
 .pileEmpty { position: absolute; inset: 0; border-radius: 8px; border: 3px dashed rgba(237, 78, 118, 0.5); display: flex; align-items: center; justify-content: center; color: var(--pink); background: rgba(255, 255, 255, 0.5); }
-.pileLabel { position: relative; height: 26px; padding: 0 12px; border-radius: 13px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 13px; font-weight: 700; line-height: 26px; white-space: nowrap; }
+.pileLabel { position: relative; height: 26px; padding: 0 12px; border-radius: 13px; background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1); font-size: 13px; font-weight: 700; line-height: 26px; white-space: nowrap; }
 .pileLabel b { color: var(--pink); margin-left: 6px; }
 .hint { position: absolute; left: 66.6667%; top: 70%; width: 25%; height: 20%; box-sizing: border-box; padding: 0 16px; display: flex; align-items: center; justify-content: center; text-align: center; color: var(--sub); font-size: 15px; line-height: 1.5; pointer-events: none; }
 /* The die button, in the roll zone's centre band (cols 6-8 / rows 4-8 of the
@@ -134,13 +302,13 @@
    sliver; size it by its text instead. Ring.tsx clamps its `left` by the
    measured width so the 220px box stays fully inside the board window, and
    flips it below the marker near the top edge. */
-.markTip { position: absolute; z-index: 30; transform: translate(-50%, calc(-100% - 6px)); width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: rgba(40, 30, 40, 0.92); color: #fff; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: normal; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
+.markTip { position: absolute; z-index: var(--z-dock); transform: translate(-50%, calc(-100% - 6px)); width: max-content; max-width: 220px; padding: 6px 10px; border-radius: 8px; background: rgba(40, 30, 40, 0.92); color: #fff; font-size: 12px; line-height: 1.4; display: flex; flex-direction: column; gap: 2px; pointer-events: none; white-space: normal; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25); }
 .markTip b { font-size: 13px; }
 
 /* Pan/zoom buttons, top-right of the board window. Same pill language as the
    animation-speed control (Side.module.css): small, white, pink on hover. */
-.zoomCtl { position: absolute; right: 8px; top: 8px; z-index: 40; display: flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: 14px; background: rgba(255, 255, 255, 0.82); border: 1.5px solid var(--line); opacity: 0.72; transition: opacity 0.15s, background 0.15s; pointer-events: auto; }
-.zoomCtl:hover, .zoomCtl:focus-within { opacity: 1; background: #fff; }
+.zoomCtl { position: absolute; right: 8px; top: 8px; z-index: var(--z-modal); display: flex; align-items: center; gap: 2px; height: 28px; padding: 2px; border-radius: var(--r-xl); background: rgba(255, 255, 255, 0.82); border: 1.5px solid var(--line); opacity: 0.72; transition: opacity 0.15s, background 0.15s; pointer-events: auto; }
+.zoomCtl:hover, .zoomCtl:focus-within { opacity: 1; background: var(--surface); }
 .zoomCtl button { width: 30px; height: 23px; border-radius: 11px; color: var(--sub); font-size: 13px; font-weight: 700; line-height: 23px; text-align: center; padding: 0; }
 .zoomCtl button:hover { color: var(--pink); background: var(--light-pill); }
 .zoomCtl button:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }

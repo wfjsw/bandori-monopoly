@@ -3,8 +3,8 @@
   align-items: center;
   gap: 0.35em;
   padding: 0.15em 0.55em;
-  border: 1px solid var(--line, #6664);
-  border-radius: 999px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
   background: transparent;
   color: inherit;
   font: inherit;

@@ -67,7 +67,7 @@ export function CharCard({ c, onClick, dim, chosen, stamp, stampKind = "pink", c
 /** Round avatar cropped from the SD art, ringed in the character color. */
 export function Avatar({ c, size = 64, className }: { c: CharacterData | undefined; size?: number; className?: string }) {
   return (
-    <div className={cx(s.avatar, !c && s.empty, className)} style={{ borderColor: c?.color ?? "#ddd", width: size, height: size, borderWidth: size < 50 ? 2 : size < 70 ? 3 : 4 }}>
+    <div className={cx(s.avatar, !c && s.empty, className)} style={{ ["--av-border" as string]: c?.color ?? "var(--line)", width: size, height: size, borderWidth: size < 50 ? 2 : size < 70 ? 3 : 4 }}>
       {c && <img src={charArt(D.artId(c), "sdThumb")} alt="" draggable={false} />}
     </div>
   );

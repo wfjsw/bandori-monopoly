@@ -1,20 +1,20 @@
 /* The bar spans the whole stage width, but only its own pieces take the
    pointer: its empty middle must not swallow clicks meant for what sits under
    it (the board's turn card, for one). */
-.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: 5; pointer-events: none; }
+.bar { position: absolute; left: 0; right: 0; top: 0; height: 110px; z-index: var(--z-topbar); pointer-events: none; }
 .bar > * { pointer-events: auto; }
 /* The breadcrumb is a label: it lets clicks through to anything under it (only
    its help button takes the pointer). */
 .bar > .crumb { pointer-events: none; }
 .crumb .help { pointer-events: auto; }
-.squareBtn { display: flex; align-items: center; justify-content: center; border-radius: 10px; color: var(--pink); background: linear-gradient(#fff, #f2f2f5); box-shadow: 0 4px 0 #d9d9df, 0 8px 16px rgba(0, 0, 0, 0.08); }
-.squareBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 #d9d9df; }
+.squareBtn { display: flex; align-items: center; justify-content: center; border-radius: var(--r-md); color: var(--pink); background: linear-gradient(#fff, #f2f2f5); box-shadow: var(--lift); }
+.squareBtn:active { transform: translateY(3px); box-shadow: var(--lift-down); }
 .back { composes: squareBtn; position: absolute; left: 38px; top: 18px; width: 82px; height: 80px; }
 .menu { composes: squareBtn; position: absolute; right: 38px; top: 17px; width: 82px; height: 82px; }
 .back i, .menu i { width: 40px; height: 40px; }
 .crumb { position: absolute; left: 145px; top: 16px; width: 386px; }
 .section { height: 38px; width: 352px; border-radius: 19px 19px 19px 4px; background: var(--pink); color: #fff; font-size: 18px; font-weight: 700; padding: 6px 24px 0; white-space: nowrap; overflow: hidden; }
-.title { margin-top: -4px; height: 52px; border-radius: 26px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 20px; font-size: 24px; }
+.title { margin-top: -4px; height: 52px; border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 20px; font-size: 24px; }
 .title > span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .help { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; font-weight: 700; font-size: 17px; flex: none; }
 
@@ -23,7 +23,7 @@
 .compact .crumb { left: 125px; width: 263px; }
 .compact .section { width: 208px; }
 
-.status { position: absolute; right: 140px; top: 17px; width: 547px; height: 84px; border-radius: 42px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 12px 0 34px; gap: 14px; }
+.status { position: absolute; right: 140px; top: 17px; width: 547px; height: 84px; border-radius: 42px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; padding: 0 12px 0 34px; gap: 14px; }
 .level { width: 68px; text-align: center; font-size: 16px; }
 .level b { display: block; font-size: 30px; line-height: 1.1; }
 .mid { width: 150px; display: flex; flex-direction: column; gap: 8px; }
@@ -34,7 +34,7 @@
 .right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 6px; }
 .row img, .fire img { width: 34px; height: 34px; object-fit: contain; flex: none; position: relative; z-index: 1; }
-.val { flex: 1; height: 28px; border-radius: 14px; background: var(--light-pill); margin-left: -18px; padding: 0 12px; text-align: right; font-size: 18px; line-height: 28px; }
+.val { flex: 1; height: 28px; border-radius: var(--r-xl); background: var(--light-pill); margin-left: -18px; padding: 0 12px; text-align: right; font-size: 18px; line-height: 28px; }
 .plus { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .plus i { width: 20px; height: 20px; }
 .fire { display: flex; align-items: center; gap: 4px; height: 34px; border-radius: 17px; background: var(--dark-pill); color: #fff; padding-right: 3px; }

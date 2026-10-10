@@ -1,7 +1,7 @@
 .history { display: flex; flex-direction: column; gap: 8px; }
 .sum { color: var(--sub); text-align: center; margin-bottom: 4px; }
 .empty { padding: 30px; text-align: center; color: var(--sub); }
-.histRow { display: grid; grid-template-columns: 80px 1fr 150px 160px 92px; align-items: center; gap: 12px; border-radius: 10px; background: var(--light-pill); padding: 8px 16px; }
+.histRow { display: grid; grid-template-columns: 80px 1fr 150px 160px 92px; align-items: center; gap: 12px; border-radius: var(--r-md); background: var(--light-pill); padding: 8px 16px; }
 .rank { font-size: 30px; font-weight: 700; text-align: center; }
 .rank small { font-size: 15px; color: var(--sub); }
 .first { color: var(--gold); }
@@ -15,7 +15,7 @@
 
 .fire { display: flex; flex-direction: column; gap: 18px; text-align: center; }
 .fireOpts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
-.fireOpt { height: 90px; border-radius: 12px; background: var(--light-pill); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 20px; }
+.fireOpt { height: 90px; border-radius: var(--r-lg); background: var(--light-pill); display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 20px; }
 .fireOpt small { color: var(--sub); }
 .on { background: var(--pink); color: #fff; }
 .on small { color: #fff; }
@@ -29,7 +29,7 @@
 .switch { width: 22px; height: 22px; accent-color: var(--pink); }
 .grow { flex: 1; }
 .end { display: flex; justify-content: flex-end; }
-.danger { color: #d23a3a; }
+.danger { color: var(--danger); }
 
 .langs { display: flex; gap: 8px; }
 .lang, .langOn { height: 38px; padding: 0 18px; border-radius: 19px; font-size: 15px; font-weight: 700; background: var(--light-pill); }

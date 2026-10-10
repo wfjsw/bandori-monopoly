@@ -9,7 +9,7 @@
 .left { position: relative; flex: 0 0 549px; }
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 
-.steps { position: absolute; right: 37px; top: 20px; width: 466px; height: 60px; border-radius: 30px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+.steps { position: absolute; right: 37px; top: 20px; width: 466px; height: 60px; border-radius: 30px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px; padding: 0 12px; }
 /* The 托管 pill, just left of the steps pill (steps: right 37 + width 466). */
 .autoSlot { right: 515px; top: 22px; }
 .steps > i { font-style: normal; color: var(--faint); font-size: 12px; }
@@ -20,14 +20,14 @@
 .stepDone { background: var(--pink-pale); color: var(--pink-light); }
 .stepOn { background: var(--pink); color: #fff; }
 .skip { opacity: 0.6; }
-.quick { position: absolute; left: 560px; top: 40px; z-index: 6; }
+.quick { position: absolute; left: 560px; top: 40px; z-index: var(--z-chrome); }
 
 .band { position: absolute; left: 3px; top: 8px; z-index: 2; }
 /* The figure is centred on the model canvas, so the stand box's centre is the
    figure's centre -- parked on the skill card's, not 30px left of it. */
 .stand { position: absolute; left: 0; top: 3px; height: 860px; }
 .plate { position: absolute; left: 5px; top: 448px; z-index: 2; }
-.skill { position: absolute; left: 1px; top: 558px; width: 548px; height: 195px; background: var(--panel); border-radius: 10px; box-shadow: var(--shadow); padding: 0.85em 1.28em 0.85em 2.28em; z-index: 3; font-size: 14px; }
+.skill { position: absolute; left: 1px; top: 558px; width: 548px; height: 195px; background: var(--panel); border-radius: var(--r-md); box-shadow: var(--shadow); padding: 0.85em 1.28em 0.85em 2.28em; z-index: 3; font-size: 14px; }
 .skill::before { content: ""; position: absolute; left: 12px; top: 14px; bottom: 14px; width: 6px; border-radius: 3px; background: var(--accent); }
 .skillHead { display: flex; align-items: center; gap: 0.57em; }
 .skillHead b { font-size: 1.5em; color: var(--pink); margin-left: 0.43em; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -37,15 +37,15 @@
 .skillText { margin-top: 0.57em; font-size: 1em; line-height: 1.7; max-height: 128px; overflow: auto; }
 
 .tabs { position: absolute; left: 0; right: 0; top: 0; }
-.gridPanel { position: absolute; left: 0; right: 0; top: 48px; height: 550px; background: rgba(255, 255, 255, 0.6); border-radius: 12px; padding: 18px 18px 18px 20px; }
+.gridPanel { position: absolute; left: 0; right: 0; top: 48px; height: 550px; background: rgba(255, 255, 255, 0.6); border-radius: var(--r-lg); padding: 18px 18px 18px 20px; }
 .grid { height: 100%; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 124px); gap: 14px 13px; align-content: start; padding: 4px; }
 
-.order { position: absolute; left: 0; right: 274px; top: 618px; height: 110px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); }
+.order { position: absolute; left: 0; right: 274px; top: 618px; height: 110px; background: var(--panel); border-radius: var(--r-lg); box-shadow: var(--shadow); }
 .orderTab { position: absolute; left: 20px; top: -22px; height: 30px; font-size: 14px; }
 .strip { display: flex; gap: 14px; padding: 16px 16px 0; overflow-x: auto; }
 .seat { width: 86px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .av { position: relative; }
-.turn .av > div { border-color: var(--pink) !important; box-shadow: 0 0 0 3px var(--pink-pale); }
+.turn .av > div { border-color: var(--pink); box-shadow: 0 0 0 3px var(--pink-pale); }
 .n { position: absolute; left: -8px; top: -6px; width: 24px; height: 24px; border-radius: 50%; background: var(--pink); color: #fff; font-size: 13px; text-align: center; line-height: 24px; box-shadow: 0 0 0 2px #fff; }
 .bot, .ok { position: absolute; right: -6px; bottom: -4px; width: 24px; height: 24px; border-radius: 50%; background: var(--sub); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px #fff; }
 .ok { background: var(--green); left: -6px; right: auto; }

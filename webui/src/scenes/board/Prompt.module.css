@@ -8,7 +8,7 @@
 /* Side panel: a single related-card detail. A panel that is just a row of
    cards (the hand) or more than one detail stacks above instead -- see
    `.stacked` / `.sideTop`. */
-.side { width: 220px; flex: none; background: var(--light-pill); border-radius: 12px; padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
+.side { width: 220px; flex: none; background: var(--light-pill); border-radius: var(--r-lg); padding: 12px 12px 10px; display: flex; flex-direction: column; gap: 8px; }
 .sideTitle { font-size: 17px; font-weight: 700; }
 /* Up-down layout: the panel goes above the question and takes the full width,
    so a row of equal cards lays out across it instead of stacking into a tall
@@ -19,7 +19,7 @@
 .cardStrip { display: flex; flex-wrap: wrap; gap: 10px; }
 /* Several related-card details: one row across the stacked panel. */
 .relatedRow { display: flex; flex-wrap: wrap; gap: 12px; align-items: stretch; }
-.relatedRow .sideCardWrap { flex: 1 1 240px; min-width: 220px; max-width: 420px; background: #fff; border-radius: 10px; padding: 8px; }
+.relatedRow .sideCardWrap { flex: 1 1 240px; min-width: 220px; max-width: 420px; background: var(--surface); border-radius: var(--r-md); padding: 8px; }
 .sideHint { margin-top: auto; font-size: 13px; color: var(--sub); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
 /* The answer deadline as a thin pink progress bar (online matches only), laid
@@ -41,11 +41,11 @@
 /* Optional content a prompt can drop in before its options -- e.g. a strip of
    landing-tile previews. Kept generic: any block may sit here. */
 .previews { width: 100%; display: flex; flex-wrap: wrap; gap: 8px; }
-.previewChip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: 12px; background: var(--light-pill); font-size: 14px; color: var(--text); }
+.previewChip { display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px 5px 5px; border-radius: var(--r-lg); background: var(--light-pill); font-size: 14px; color: var(--text); }
 .previewChip img { width: 36px; height: 36px; object-fit: cover; border-radius: 8px; flex: none; }
 .previewChip i { width: 6px; height: 22px; border-radius: 3px; flex: none; }
 /* An option pill may lead with a thumbnail (tile / card preview). */
-.opt img { width: 28px; height: 28px; object-fit: cover; border-radius: 6px; flex: none; }
+.opt img { width: 28px; height: 28px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .opt i { width: 6px; height: 20px; border-radius: 3px; flex: none; }
 /* Card options: a row of uniform tiles (the standard 96px prompt card, the
    same width the multi-select grid uses -- see Card.module.css `.tile`). The
@@ -59,7 +59,7 @@
 .cardTray {
   width: 100%; display: flex; flex-wrap: nowrap; gap: 12px; align-items: stretch;
   overflow-x: auto; overflow-y: hidden;
-  background: var(--light-pill); border-radius: 12px; padding: 12px;
+  background: var(--light-pill); border-radius: var(--r-lg); padding: 12px;
 }
 /* A short row centres in the tray; an overflowing one starts at the first card
    (auto margins resolve to 0 when there is no free space -- plain
@@ -73,15 +73,15 @@
 /* Why the focused card may be declared: its [反击] trigger clause. */
 .reason {
   width: 100%; font-size: 14px; line-height: 1.55;
-  background: var(--pink-pale); border-radius: 10px; padding: 8px 12px;
+  background: var(--pink-pale); border-radius: var(--r-md); padding: 8px 12px;
 }
 .reason b { color: var(--pink-deep); margin-right: 6px; }
 .cardOpt { display: flex; flex-direction: column; gap: 4px; width: 96px; }
 .cardOptFace { cursor: zoom-in; flex: 1 1 auto; }
 .cardOptFace:hover { transform: translateY(-3px); }
 .cardOptCap {
-  width: 100%; min-height: 32px; padding: 4px 6px; border-radius: 999px;
-  border: 2px solid var(--pink-pale); background: #fff; color: var(--text);
+  width: 100%; min-height: 32px; padding: 4px 6px; border-radius: var(--r-pill);
+  border: 2px solid var(--pink-pale); background: var(--surface); color: var(--text);
   font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
@@ -92,8 +92,8 @@
 /* Outline pill: every choice reads as an equal option (「不选」 included). */
 .opt {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  min-height: 42px; padding: 8px 20px; border-radius: 999px;
-  border: 2px solid var(--pink-pale); background: #fff; color: var(--text);
+  min-height: 42px; padding: 8px 20px; border-radius: var(--r-pill);
+  border: 2px solid var(--pink-pale); background: var(--surface); color: var(--text);
   font-size: 16px; font-weight: 500; line-height: 1.3; text-align: center;
   transition: border-color 0.12s, background 0.12s, color 0.12s;
 }
@@ -118,8 +118,8 @@
 .cardGrid { flex: 1; min-width: 0; height: 100%; display: flex; flex-wrap: wrap; gap: 10px; align-content: flex-start; overflow: auto; padding: 8px 4px; }
 .cardGrid .choiceCard { cursor: pointer; }
 .choiceCheck { position: absolute; right: 5px; top: 5px; width: 22px; height: 22px; accent-color: var(--pink); cursor: pointer; }
-.detail { width: 250px; height: 100%; flex: none; background: var(--light-pill); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 4px; }
-.dArt { flex: none; border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
+.detail { width: 250px; height: 100%; flex: none; background: var(--light-pill); border-radius: var(--r-lg); padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.dArt { flex: none; border-radius: var(--r-sm); overflow: hidden; border-bottom: 5px solid; }
 .dArt img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; object-position: center; }
 .dTitle { font-size: 17px; font-weight: 700; margin: 4px 2px 0; }
 .dTags { display: flex; gap: 4px; flex-wrap: wrap; margin: 0 2px; }

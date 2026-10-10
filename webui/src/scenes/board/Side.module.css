@@ -2,140 +2,478 @@
    moved into the board's roll zone (Ring); what stays here are the skill and
    deed buttons plus the occasional continue. Three controls leave the last
    one alone on its row -- let it span, so the grid stays tidy either way. */
-.actions { position: absolute; left: 0; right: 0; bottom: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.actions > *:last-child:nth-child(odd) { grid-column: 1 / -1; }
-.act { height: 64px; min-height: 64px; padding: 0 8px; font-size: 18px; gap: 6px; }
-.dim { opacity: 0.75; }
-.dice { position: relative; min-width: 0; height: 64px; border-radius: 12px; background: linear-gradient(#ef5a80, #e64671); color: #fff; box-shadow: var(--shadow); cursor: default; text-align: left; }
-.diceImg { position: absolute; left: 10px; top: 12px; width: 40px; transition: transform 0.1s; }
-.diceNum { position: absolute; left: 10px; top: 13px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; color: var(--pink); -webkit-text-stroke: 1px #fff; }
-.advanceIcon { position: absolute; left: 15px; top: 17px; width: 30px; height: 30px; color: #fff; }
-.diceCap { position: absolute; left: 60px; right: 8px; top: 11px; font-size: 16px; font-weight: 700; white-space: nowrap; }
-.diceCap small { font-size: 11px; font-weight: 400; }
-.diceHint { position: absolute; left: 60px; right: 8px; top: 35px; line-height: 16px; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.9; }
-.can { cursor: pointer; }
-.can::after { content: ""; position: absolute; inset: 4px; border-radius: 9px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7); animation: ready 1s ease-in-out infinite alternate; }
+.actions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 22px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.actions > *:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+.act {
+  height: 64px;
+  min-height: 64px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-xl);
+  gap: 6px;
+}
+.dim {
+  opacity: 0.75;
+}
+.dice {
+  position: relative;
+  min-width: 0;
+  height: 64px;
+  border-radius: var(--r-lg);
+  background: linear-gradient(#ef5a80, #e64671);
+  color: #fff;
+  box-shadow: var(--shadow);
+  cursor: default;
+  text-align: left;
+}
+.diceImg {
+  position: absolute;
+  left: 10px;
+  top: 12px;
+  width: 40px;
+  transition: transform 0.1s;
+}
+.diceNum {
+  position: absolute;
+  left: 10px;
+  top: 13px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+  color: var(--pink);
+  -webkit-text-stroke: 1px #fff;
+}
+.advanceIcon {
+  position: absolute;
+  left: 15px;
+  top: 17px;
+  width: 30px;
+  height: 30px;
+  color: #fff;
+}
+.diceCap {
+  position: absolute;
+  left: 60px;
+  right: var(--sp-2);
+  top: 11px;
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.diceCap small {
+  font-size: var(--fs-xs);
+  font-weight: 400;
+}
+.diceHint {
+  position: absolute;
+  left: 60px;
+  right: var(--sp-2);
+  top: 35px;
+  line-height: 16px;
+  font-size: var(--fs-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+.can {
+  cursor: pointer;
+}
+.can::after {
+  content: "";
+  position: absolute;
+  inset: 4px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7);
+  animation: ready 1s ease-in-out infinite alternate;
+}
 @keyframes ready { to { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1); } }
-.can:hover .diceImg { transform: rotate(-8deg) scale(1.05); }
-.dice:disabled { opacity: 0.5; }
-.rolling .diceImg { animation: shake 0.11s linear infinite; }
+.can:hover .diceImg {
+  transform: rotate(-8deg) scale(1.05);
+}
+.dice:disabled {
+  opacity: 0.5;
+}
+.rolling .diceImg {
+  animation: shake 0.11s linear infinite;
+}
 @keyframes shake { 50% { transform: rotate(12deg) scale(1.06); } }
+
 /* Active settlement votes are part of the log, not a second right-side panel. */
-.vote { flex: none; align-self: stretch; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; font-size: 14px; background: var(--light-pill); border-radius: 8px; padding: 8px; }
-.voteActions { display: flex; gap: 8px; }
-.voteActions > button { flex: 1; }
+.vote {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: 10px;
+  font-size: var(--fs-sm);
+  background: var(--light-pill);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2);
+}
+.voteActions {
+  display: flex;
+  gap: var(--sp-2);
+}
+.voteActions > button {
+  flex: 1;
+}
 
 /* The hand docks at the bottom of the centre column like Master Duel's: a
    fanned row of full card faces retracted behind the bottom edge (only the top
    strip peeks), raising on hover / keyboard focus. The container itself never
    takes pointer events -- only the visible card tops and the bar do -- so map
    clicks near the bottom pass through the gaps and the hidden part of the fan. */
-.dock { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; display: flex; flex-direction: column; align-items: stretch; pointer-events: none; }
-/* Over a retracted prompt sheet (its title strip, `--sheet-strip` 60px in
-   Modal.module.css, holds the bottom edge): the cards' peek rides above the
-   strip; the bar stays where it is. */
-.aboveSheet:not(.dockUp) .fan { transform: translateY(calc(100% - 30px - var(--fan-rise, 0px) - 60px)); }
-.aboveSheet:not(.dockUp) .skillAside { transform: translateY(calc(100% - 28px - 60px)); }
+.dock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: var(--z-dock);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;
+}
+/* State: a retracted prompt sheet holds the bottom edge (`--sheet-strip`),
+   so the cards' peek rides above the strip; the bar stays where it is.
+   Driven by a data-attribute on the dock (not a class chain). */
+.dock[data-sheet="down"] .fan {
+  transform: translateY(calc(100% - var(--hand-peek) - var(--fan-rise, 0px) - var(--sheet-strip)));
+}
+.dock[data-sheet="down"] .skillAside {
+  transform: translateY(calc(100% - var(--skill-peek) - var(--sheet-strip)));
+}
 /* The fan: overlapping cards, anchored to the bottom, arranged as a circular
    sector (Master Duel's arc): each card is rotated a little around a pivot
    below the hand (`--fan-a`), the outer ones lower and tilted outward, the
    centre one highest (`--fan-y`). The spread adapts to the hand size through
    `--fan-slot` (the step between card centres), so 1-10 cards read the same.
-   Retracted by default (`translateY` drops all but the top 30px of the arc --
-   the highest, centre card -- behind the bar); the raised state slides the
-   whole row up. The fan itself is click-through -- only the cards' own boxes
-   capture -- so the map stays clickable between and below them. */
+   Retracted by default (`translateY` drops all but the top `--hand-peek` of
+   the arc -- the highest, centre card -- behind the bar); the raised state
+   slides the whole row up. The fan itself is click-through -- only the cards'
+   own boxes capture -- so the map stays clickable between and below them. */
 /* `align-items: stretch` + a flex `.fanCard`: every face in the hand takes the
    height of the tallest one (the longest name), so the row is one size. */
 .fan {
-  display: flex; justify-content: center; align-items: stretch;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
   pointer-events: none;
-  transform: translateY(calc(100% - 30px - var(--fan-rise, 0px)));
-  transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
+  transform: translateY(calc(100% - var(--hand-peek) - var(--fan-rise, 0px)));
+  transition: transform var(--dur-slow) var(--ease-sheet);
 }
-.dockUp .fan { transform: translateY(0); }
+.dock[data-state="raised"] .fan {
+  transform: translateY(0);
+}
 .fanCard {
-  position: relative; flex: none; display: flex;
+  position: relative;
+  flex: none;
+  display: flex;
   margin: 0 calc((var(--fan-slot, 108px) - var(--card-w, 120px)) / 2);
   transform: translateY(var(--fan-y, 0px)) rotate(var(--fan-a, 0deg));
   transform-origin: 50% 100%;
   pointer-events: auto;
-  transition: transform 0.16s ease, filter 0.16s ease;
+  transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
 }
-.fanCard:first-child { margin-left: 0; }
-.fanCard:last-child { margin-right: 0; }
+.fanCard:first-child {
+  margin-left: 0;
+}
+.fanCard:last-child {
+  margin-right: 0;
+}
 /* Hover straightens the card in place, lifts it and brings it to the front. */
-.fanCard:hover, .fanCard:focus-within {
+.fanCard:hover,
+.fanCard:focus-within {
   transform: translateY(calc(var(--fan-y, 0px) - 12px)) rotate(0deg);
   z-index: 2;
-  filter: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
+  filter: var(--peek-lift);
 }
 
 /* The slim bar under the fan: always visible, so the hand count, hint, draw
    pile and 托管 stay reachable while the hand is retracted. */
 .bar {
-  position: relative; z-index: 2; pointer-events: auto;
-  display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+  position: relative;
+  z-index: 2;
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 4px 6px;
   background: linear-gradient(rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.92) 42%);
 }
 /* No stacking context on the hand: the auto switch must stay above modals. */
-.handTools { position: relative; flex: none; display: flex; align-items: center; min-height: 30px; }
-.handTools.withAuto { padding-right: 206px; }
-.autoSlot { right: 0; top: 0; display: flex; align-items: center; gap: 8px; }
-.speeds { display: flex; align-items: center; gap: 2px; height: 30px; padding: 2px; background: #fff; border: 1.5px solid var(--line); border-radius: 15px; }
-.speed { width: 32px; height: 23px; border-radius: 12px; color: var(--sub); font-size: 13px; font-weight: 700; }
-.speed:hover { color: var(--pink); background: var(--light-pill); }
-.speed.speedOn { background: var(--pink); color: #fff; }
-.speed:focus-visible { outline: 2px solid var(--pink); outline-offset: 2px; }
-.thinkingSlot { position: absolute; right: 0; bottom: calc(100% + 8px); z-index: 41; pointer-events: none; white-space: nowrap; }
-.bar > span:first-child { height: 28px; font-size: 15px; }
+.handTools {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  min-height: var(--hand-peek);
+}
+.handTools.withAuto {
+  padding-right: 206px;
+}
+.autoSlot {
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+.speeds {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--hand-peek);
+  padding: 2px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: 15px;
+}
+.speed {
+  width: 32px;
+  height: 23px;
+  border-radius: var(--r-lg);
+  color: var(--sub);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+}
+.speed:hover {
+  color: var(--pink);
+  background: var(--light-pill);
+}
+.speed.speedOn {
+  background: var(--pink);
+  color: #fff;
+}
+.speed:focus-visible {
+  outline: 2px solid var(--pink);
+  outline-offset: 2px;
+}
+.thinkingSlot {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--sp-2));
+  z-index: var(--z-auto-float);
+  pointer-events: none;
+  white-space: nowrap;
+}
+.bar > span:first-child {
+  height: 28px;
+  font-size: var(--fs-md);
+}
 /* Shares the row with the draw pile, so the longer hints (over the hand limit)
    wrap to a second line inside the tab's 28px instead of pushing it out. */
-.handHint { flex: 1; min-width: 0; font-size: 12px; line-height: 1.15; color: var(--text); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.handHint {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.15;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
 /* Your draw pile: the same card-back-and-count chip as each player's graveyard. */
-.deck { flex: none; display: flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 9px; background: var(--panel); cursor: pointer; }
-.deck img { width: 18px; height: 24px; object-fit: cover; border-radius: 3px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); transition: transform 0.12s; }
-.deck:hover img { transform: translateY(-2px); }
-.deck b { font-size: 16px; }
-.warn { color: var(--tag-red); font-weight: 700; }
+.deck {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px var(--sp-2);
+  border-radius: 9px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.deck img {
+  width: 18px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  transition: transform var(--dur-fast);
+}
+.deck:hover img {
+  transform: translateY(-2px);
+}
+.deck b {
+  font-size: 16px;
+}
+.warn {
+  color: var(--tag-red);
+  font-weight: 700;
+}
 
-.preview { position: absolute; right: 6px; bottom: calc(100% + 8px); width: 260px; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 32; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
-.previewOn { opacity: 1; transform: none; }
-.pArt { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; }
-.pArt img { width: 100%; display: block; }
-.pTitle { font-size: 17px; font-weight: 700; margin: 6px 2px 2px; }
-.pTags { display: flex; gap: 4px; margin: 0 2px 4px; }
-.pText { font-size: 13px; line-height: 1.6; max-height: 190px; overflow: hidden; white-space: pre-wrap; }
-.pNote { font-size: 12px; color: var(--note); margin-top: 4px; }
+.preview {
+  composes: floatCard from "../../ui/primitives.module.css";
+  position: absolute;
+  right: 6px;
+  bottom: calc(100% + var(--sp-2));
+  width: 260px;
+  z-index: var(--z-preview);
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity var(--dur-fast), transform var(--dur-fast);
+}
+.previewOn {
+  opacity: 1;
+  transform: none;
+}
+.pArt {
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  border-bottom: 5px solid;
+}
+.pArt img {
+  width: 100%;
+  display: block;
+}
+.pTitle {
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  margin: 6px 2px 2px;
+}
+.pTags {
+  display: flex;
+  gap: 4px;
+  margin: 0 2px 4px;
+}
+.pText {
+  font-size: var(--fs-sm);
+  line-height: 1.6;
+  max-height: 190px;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+.pNote {
+  font-size: 12px;
+  color: var(--note);
+  margin-top: 4px;
+}
 
 /* The skill aside: the player's pressable skills as cards, a separated strip
    to the right of the hand fan that rises and retracts with it (only its
    header peeks while down). */
 .skillAside {
-  position: absolute; right: 0; bottom: 40px; width: 150px;
-  display: flex; flex-direction: column; gap: 6px; align-items: stretch;
+  position: absolute;
+  right: 0;
+  bottom: 40px;
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
   pointer-events: none;
-  transform: translateY(calc(100% - 28px));
-  transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
+  transform: translateY(calc(100% - var(--skill-peek)));
+  transition: transform var(--dur-slow) var(--ease-sheet);
 }
-.dockUp .skillAside { transform: translateY(0); }
+.dock[data-state="raised"] .skillAside {
+  transform: translateY(0);
+}
 .skillHead {
-  flex: none; pointer-events: auto; align-self: flex-end;
-  padding: 3px 10px; border-radius: 10px 10px 0 0;
-  background: var(--panel); border: 1.5px solid var(--line, #ddd); border-bottom: none;
-  color: var(--sub); font-size: 12px; font-weight: 700; white-space: nowrap;
+  flex: none;
+  pointer-events: auto;
+  align-self: flex-end;
+  padding: 3px 10px;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+  background: var(--panel);
+  border: 1.5px solid var(--line);
+  border-bottom: none;
+  color: var(--sub);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
 }
-.skillSlot { position: relative; pointer-events: auto; display: flex; justify-content: center; }
-.skillCard { cursor: pointer; }
-.skillOff { opacity: 0.55; filter: grayscale(0.6); }
+.skillSlot {
+  position: relative;
+  pointer-events: auto;
+  display: flex;
+  justify-content: center;
+}
+.skillCard {
+  cursor: pointer;
+}
+.skillOff {
+  opacity: 0.55;
+  filter: grayscale(0.6);
+}
 
 /* Draw-pile peek grows upward above the hand dock. */
-.peek { position: absolute; right: 0; bottom: 56px; width: 260px; max-height: 740px; overflow: hidden; background: #fff; border-radius: 12px; box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28); padding: 8px; z-index: 31; pointer-events: none; opacity: 0; transform: translateX(10px); transition: opacity 0.12s, transform 0.12s; }
-.peekOn { opacity: 1; transform: none; }
-.peekHead { display: flex; align-items: baseline; justify-content: space-between; font-size: 15px; font-weight: 700; margin: 2px 4px 6px; }
-.peekHead b { color: var(--pink); }
-.peekRow { display: flex; align-items: center; gap: 8px; padding: 3px 4px; font-size: 13px; }
-.peekRow + .peekRow { border-top: 1px solid var(--light-pill); }
-.peekRow img { flex: none; width: 26px; height: 26px; object-fit: cover; border-radius: 3px; }
-.peekRow span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.peekEmpty { font-size: 13px; color: var(--sub); padding: 4px; }
+.peek {
+  composes: floatCard from "../../ui/primitives.module.css";
+  position: absolute;
+  right: 0;
+  bottom: 56px;
+  width: 260px;
+  max-height: 740px;
+  overflow: hidden;
+  z-index: var(--z-peek);
+  opacity: 0;
+  transform: translateX(10px);
+  transition: opacity var(--dur-fast), transform var(--dur-fast);
+}
+.peekOn {
+  opacity: 1;
+  transform: none;
+}
+.peekHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  margin: 2px 4px 6px;
+}
+.peekHead b {
+  color: var(--pink);
+}
+.peekRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: 3px 4px;
+  font-size: var(--fs-sm);
+}
+.peekRow + .peekRow {
+  border-top: 1px solid var(--light-pill);
+}
+.peekRow img {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  border-radius: 3px;
+}
+.peekRow span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.peekEmpty {
+  font-size: var(--fs-sm);
+  color: var(--sub);
+  padding: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fan,
+  .skillAside {
+    transition: none;
+  }
+}

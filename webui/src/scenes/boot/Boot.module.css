@@ -1,15 +1,15 @@
 .boot { position: absolute; inset: 0; cursor: pointer; }
 .art { position: absolute; inset: 0; background: center / cover no-repeat #fff; }
-.panel { position: absolute; left: 50px; bottom: 50px; width: 460px; background: rgba(255, 255, 255, 0.92); border-radius: 20px; padding: 20px 26px; display: flex; flex-direction: column; gap: 12px; align-items: center; box-shadow: var(--shadow); }
+.panel { position: absolute; left: 50px; bottom: 50px; width: 460px; background: rgba(255, 255, 255, 0.92); border-radius: var(--r-2xl); padding: 20px 26px; display: flex; flex-direction: column; gap: 12px; align-items: center; box-shadow: var(--shadow); }
 .logo { max-width: 260px; max-height: 80px; }
 .tip { color: var(--sub); text-align: center; font-size: 16px; }
 .progress { width: 100%; height: 10px; background: var(--pink-pale); border-radius: 5px; overflow: hidden; }
 .progress div { height: 100%; background: var(--pink); transition: width 0.2s; }
 .status { font-size: 18px; }
-.error { font-size: 16px; color: #d23a3a; text-align: center; }
-.createBack { position: absolute; inset: 0; background: rgba(60, 40, 50, 0.38); display: flex; align-items: center; justify-content: center; cursor: default; }
-.create { width: 560px; background: #fff; border-radius: 20px; padding: 0 0 26px; display: flex; flex-direction: column; gap: 16px; align-items: center; overflow: hidden; box-shadow: 0 20px 60px rgba(60, 20, 40, 0.3); }
-.create h2 { align-self: stretch; height: 54px; line-height: 54px; text-align: center; color: #fff; font-size: 25px; background: linear-gradient(var(--pink-light), var(--pink)); margin: 8px 8px 0; border-radius: 14px; }
+.error { font-size: 16px; color: var(--danger); text-align: center; }
+.createBack { position: absolute; inset: 0; background: var(--scrim); display: flex; align-items: center; justify-content: center; cursor: default; }
+.create { width: 560px; background: var(--surface); border-radius: var(--r-2xl); padding: 0 0 26px; display: flex; flex-direction: column; gap: 16px; align-items: center; overflow: hidden; box-shadow: var(--pop-shadow); }
+.create h2 { align-self: stretch; height: 54px; line-height: 54px; text-align: center; color: #fff; font-size: 25px; background: linear-gradient(var(--pink-light), var(--pink)); margin: 8px 8px 0; border-radius: var(--r-xl); }
 .create p { padding: 0 30px; text-align: center; }
 .input { width: 440px; height: 50px; border: none; border-radius: 25px; background: var(--light-pill); padding: 0 20px; font-size: 19px; outline: none; }
 .input:focus { box-shadow: 0 0 0 2px var(--pink-light); }

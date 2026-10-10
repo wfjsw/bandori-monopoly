@@ -31,6 +31,9 @@ export interface CardPreviewProps {
   place?: "right" | "left" | "auto";
   className?: string;
   style?: CSSProperties;
+  /** A docked, interactive panel (the standing preview): the text takes keyboard
+   *  focus so arrows / PageUp / PageDown scroll it. */
+  scrollable?: boolean;
 }
 
 /**
@@ -39,14 +42,14 @@ export interface CardPreviewProps {
  * and clipped by nothing -- the prompt window keeps `overflow: visible` so the
  * panel can sit outside the card row without being cut.
  */
-export function CardPreview({ id, note, place = "auto", className, style }: CardPreviewProps) {
+export function CardPreview({ id, note, place = "auto", className, style, scrollable }: CardPreviewProps) {
   if (!id) return null;
   const c = D.card(id);
   return (
     <div
       className={cx(s.preview, place === "auto" && s.auto, place === "left" && s.left, className)}
       style={style}
-      role="img"
+      role={scrollable ? "region" : "img"}
       aria-label={cardTitle(id)}
     >
       <div className={s.art} style={{ borderColor: cardColor(id) }}>
@@ -54,7 +57,7 @@ export function CardPreview({ id, note, place = "auto", className, style }: Card
       </div>
       <div className={s.title}>{cardTitle(id)}</div>
       {!!c?.tags.length && <div className={s.tags}>{c.tags.map((t) => <PreviewTag key={t} tag={t} />)}</div>}
-      <div className={s.text}><SkillBody text={cardText(id)} /></div>
+      <div className={s.text} tabIndex={scrollable ? 0 : undefined}><SkillBody text={cardText(id)} /></div>
       {!!note && <div className={s.note}>{note}</div>}
     </div>
   );

@@ -5,7 +5,7 @@
 .left { position: relative; flex: 0 0 390px; }
 .right { position: relative; flex: 1 1 auto; min-width: 0; }
 
-.char { position: absolute; left: 0; top: 0; width: 390px; height: 440px; border-radius: 14px; background: #fff; box-shadow: var(--shadow); overflow: hidden; }
+.char { position: absolute; left: 0; top: 0; width: 390px; height: 440px; border-radius: var(--r-xl); background: var(--surface); box-shadow: var(--shadow); overflow: hidden; }
 .glow { position: absolute; inset: 20% 10% -10%; border-radius: 50%; opacity: 0.25; filter: blur(50px); }
 .stand { position: absolute; left: 50%; top: 0; height: 100%; transform: translateX(-50%); }
 .band { position: absolute; left: 14px; top: 14px; }
@@ -14,7 +14,7 @@
 .side { position: absolute; right: 16px; top: 16px; width: 160px; font-size: 17px; }
 .second { top: 74px; }
 
-.slots { position: absolute; left: 0; top: 455px; width: 390px; height: 295px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.slots { position: absolute; left: 0; top: 455px; width: 390px; height: 295px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .slotsHead { display: flex; align-items: center; gap: 8px; padding-left: 4px; }
 .slotsHead > span { height: 28px; font-size: 14px; }
 .slotsHead img { width: 20px; }
@@ -23,7 +23,7 @@
 .slotsFoot { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .slotsFoot button { min-width: 0; padding: 0 8px; }
 .moveBtn { min-width: 28px; padding: 0 6px; }
-.slot { display: flex; align-items: center; gap: 10px; height: 42px; border-radius: 21px; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); padding: 0 18px 0 8px; cursor: pointer; flex: none; }
+.slot { display: flex; align-items: center; gap: 10px; height: 42px; border-radius: 21px; background: var(--surface); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); padding: 0 18px 0 8px; cursor: pointer; flex: none; }
 .slot b { font-size: 19px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slot small { color: var(--sub); font-size: 14px; }
 .on { background: var(--pink); color: #fff; }
@@ -32,7 +32,7 @@
 .starOn { color: var(--gold); }
 .on .star:not(.starOn) { color: rgba(255, 255, 255, 0.5); }
 
-.strip { position: absolute; left: 0; right: 0; top: 0; height: 213px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 12px 20px; }
+.strip { position: absolute; left: 0; right: 0; top: 0; height: 213px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 12px 20px; }
 .stripHead { display: flex; align-items: center; gap: 20px; height: 40px; }
 .stripHead > b { font-size: 21px; width: 440px; }
 .count { font-size: 24px; font-weight: 700; flex: 1; }
@@ -41,13 +41,13 @@
 .stripCards { display: grid; grid-template-columns: repeat(10, 1fr); gap: 8px; margin-top: 6px; }
 .hint { margin-top: 6px; font-size: 13px; color: var(--sub); }
 
-.pool { position: absolute; left: 0; right: 0; top: 227px; height: 523px; border-radius: 14px; background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
+.pool { position: absolute; left: 0; right: 0; top: 227px; height: 523px; border-radius: var(--r-xl); background: var(--panel); box-shadow: var(--shadow); padding: 14px 18px; display: flex; flex-direction: column; gap: 12px; }
 .poolHead { display: flex; align-items: center; justify-content: space-between; }
 .poolHead button { min-width: 104px; }
 .poolHead > small { color: var(--sub); }
 .grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, 164px); gap: 12px 10px; align-content: start; padding: 4px; }
 .kind { position: absolute; left: 10px; top: 10px; font-size: 12px; line-height: 20px; }
-.toggle { position: absolute; right: 8px; top: 8px; width: 36px; height: 36px; border-radius: 50%; background: #fff; color: var(--pink); border: 2px solid var(--pink); display: flex; align-items: center; justify-content: center; }
+.toggle { position: absolute; right: 8px; top: 8px; width: 36px; height: 36px; border-radius: 50%; background: var(--surface); color: var(--pink); border: 2px solid var(--pink); display: flex; align-items: center; justify-content: center; }
 .toggle i { width: 22px; height: 22px; }
 .toggleOn { background: var(--pink); color: #fff; border-color: #fff; }
 

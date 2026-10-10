@@ -1,5 +1,5 @@
 .chips { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.chip { height: 40px; padding: 0 16px; border-radius: 20px; background: #fff; color: var(--text); font-size: 17px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); transition: background 0.15s; }
+.chip { height: 40px; padding: 0 16px; border-radius: var(--r-2xl); background: var(--surface); color: var(--text); font-size: 17px; font-weight: 700; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06); transition: background 0.15s; }
 .chip small { font-size: 0.8em; }
 .on { background: var(--pink); color: #fff; }
 .tab { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 18px; border-radius: 16px; background: var(--pink); color: #fff; font-size: 15px; font-weight: 700; flex: none; }

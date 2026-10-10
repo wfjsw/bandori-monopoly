@@ -1,5 +1,5 @@
 .backdrop { position: fixed; inset: -40px; background: #f6e7ec center / cover no-repeat; filter: blur(14px) saturate(1.05); transform: scale(1.04); transition: background-image 0.3s; }
 .backdrop::after { content: ""; position: absolute; inset: 0; background: rgba(255, 255, 255, 0.3); }
 .stage { position: fixed; left: 50%; top: 50%; transform-origin: 50% 50%; }
-.fader { position: absolute; inset: -2000px; background: #fff; opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: 90; }
+.fader { position: absolute; inset: -2000px; background: var(--surface); opacity: 0; pointer-events: none; transition: opacity 0.18s; z-index: var(--z-fader); }
 .on { opacity: 1; pointer-events: all; }

@@ -3,25 +3,20 @@
    hover it is describing. */
 
 .preview {
+  composes: floatCard from "./primitives.module.css";
   position: absolute;
   left: calc(100% + 14px);
   top: 0;
   width: 260px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(60, 20, 40, 0.28);
-  padding: 8px;
-  z-index: 30;
-  pointer-events: none;
+  z-index: var(--z-dock);
   animation: fade 0.12s ease-out;
 }
 @keyframes fade { from { opacity: 0; transform: translateX(-6px); } }
 /* Near the stage's right edge, flip to the other side of the anchor. */
 .left { left: auto; right: calc(100% + 14px); animation-name: fadeLeft; }
 @keyframes fadeLeft { from { opacity: 0; transform: translateX(6px); } }
-.auto { }
 
-.art { border-radius: 6px; overflow: hidden; border-bottom: 5px solid; background: #eee; }
+.art { border-radius: var(--r-sm); overflow: hidden; border-bottom: 5px solid; background: #eee; }
 /* Card art is 4:3; the preview shows it at 75% of that height (16:9), cropped
    around the centre, so the text below gets the room. */
 .art img { width: 100%; display: block; aspect-ratio: 16 / 9; object-fit: cover; object-position: center; }
@@ -35,7 +30,7 @@
 .tagRed { background: var(--tag-red); }
 
 /* The shared host: pinned beside the hovered card inside the stage. */
-.hosted { z-index: 60; }
+.hosted { z-index: var(--z-hosted); }
 
 /* The standing board panel: this same detail docked in the right sidebar --
    full height, scrolling text, no floating chrome. */
@@ -44,8 +39,11 @@
   width: 100%; height: 100%; min-height: 0;
   padding: 0; box-shadow: none; background: none; border-radius: 0;
   animation: none; z-index: auto;
-  display: flex; flex-direction: column; overflow: auto;
+  /* The floating `.preview` is click-through; the docked panel is not -- its
+     text has to take the wheel, the keyboard and the scrollbar. */
+  pointer-events: auto;
+  display: flex; flex-direction: column; overflow: hidden;
 }
-.stand .text { max-height: none; flex: 1; overflow: auto; }
+.stand .text { max-height: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .stand .art { border-bottom-width: 6px; }
 .stand .title { font-size: 19px; }

@@ -1,4 +1,4 @@
-.card { position: relative; display: flex; flex-direction: column; width: 124px; background: #fff; border-radius: 6px; padding: 5px 5px 0; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.1); transition: transform 0.1s, box-shadow 0.15s; }
+.card { position: relative; display: flex; flex-direction: column; width: 124px; background: var(--surface); border-radius: var(--r-sm); padding: 5px 5px 0; box-shadow: 0 3px 8px rgba(80, 40, 60, 0.1); transition: transform 0.1s, box-shadow 0.15s; }
 .card:hover { transform: translateY(-2px); box-shadow: 0 6px 14px rgba(80, 40, 60, 0.16); }
 .art { height: 128px; overflow: hidden; border-radius: 3px; background: linear-gradient(#f6f2f8, #eceaf2); }
 .art img { width: 100%; height: 190%; object-fit: cover; object-position: 50% 4%; }
@@ -14,7 +14,15 @@
 .home { background: var(--gold); }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, 124px); gap: 14px; align-content: start; }
 
-.avatar { position: relative; border-radius: 50%; border-style: solid; background: #f3eff4; overflow: hidden; flex: none; }
+.avatar {
+  position: relative;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: var(--av-border, var(--line));
+  background: #f3eff4;
+  overflow: hidden;
+  flex: none;
+}
 .avatar img { position: absolute; left: 50%; top: -4%; width: 150%; transform: translateX(-50%); }
 .empty::after { content: ""; position: absolute; inset: 20% 26% 0; border-radius: 50% 50% 0 0; background: #cfcfd6; }
 

@@ -7,10 +7,10 @@
 import { type ReactNode, useEffect, useState, useSyncExternalStore } from "react";
 import { sceneImg } from "../core/assets";
 import { useEventListener } from "../hooks/dom";
+import { STAGE_H, STAGE_W } from "../styles/layout";
 import s from "./Stage.module.css";
 
-export const STAGE_W = 1600;
-export const STAGE_H = 900;
+export { STAGE_H, STAGE_W };
 
 let backdrop: string | null = null;
 const listeners = new Set<() => void>();

@@ -13,7 +13,7 @@
 .empty b { font-size: 26px; }
 .empty span { color: var(--sub); font-size: 17px; }
 .grid { flex: 1 1 auto; min-height: 0; overflow: auto; display: grid; grid-template-columns: repeat(3, 1fr); align-content: start; gap: 16px; padding: 4px; }
-.card { background: rgba(255, 255, 255, 0.92); border-radius: 14px; padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; text-align: left; box-shadow: var(--shadow); border-left: 8px solid var(--teal); transition: transform 0.1s; }
+.card { background: rgba(255, 255, 255, 0.92); border-radius: var(--r-xl); padding: 14px 18px; display: flex; flex-direction: column; gap: 10px; text-align: left; box-shadow: var(--shadow); border-left: 8px solid var(--teal); transition: transform 0.1s; }
 .card:hover { transform: translateY(-2px); }
 .ranked { border-left-color: var(--purple); }
 .playing { opacity: 0.7; }
@@ -27,10 +27,10 @@
 .state { color: var(--pink); font-weight: 700; }
 
 .foot { position: relative; flex: 0 0 100px; margin: 0 50px; }
-.joinPill { position: absolute; left: 0; top: 5px; width: 582px; height: 86px; border-radius: 43px; background: #fff; box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; padding: 0 22px 0 30px; font-size: 19px; font-weight: 700; }
+.joinPill { position: absolute; left: 0; top: 5px; width: 582px; height: 86px; border-radius: 43px; background: var(--surface); box-shadow: var(--shadow); display: flex; align-items: center; gap: 12px; padding: 0 22px 0 30px; font-size: 19px; font-weight: 700; }
 .joinInput { flex: 1; height: 52px; border-radius: 26px; }
 .joinBtn { width: 116px; height: 54px; }
-.bigTile { position: absolute; top: 0; height: 92px; border-radius: 10px; color: #fff; font-size: 28px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 5px 0 rgba(0, 0, 0, 0.12), 0 8px 18px rgba(0, 0, 0, 0.12); }
+.bigTile { position: absolute; top: 0; height: 92px; border-radius: var(--r-md); color: #fff; font-size: 28px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 5px 0 rgba(0, 0, 0, 0.12), 0 8px 18px rgba(0, 0, 0, 0.12); }
 .bigTile img { height: 80px; }
 .bigTile:active { transform: translateY(3px); }
 .blue { left: 625px; width: 250px; background: linear-gradient(#7fc6f6, #4fa3e8); }
