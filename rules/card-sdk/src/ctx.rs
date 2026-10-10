@@ -391,6 +391,8 @@ mod sys {
         pub fn trig_tile() -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_value")]
         pub fn trig_value() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_name")]
+        pub fn trig_name(p: i32, n: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_step")]
         pub fn trig_step() -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_by_card")]
@@ -2691,6 +2693,12 @@ pub mod trigger {
     /// `t.Value` -- the amount involved (`t.Pay.amount` on pay triggers), or 0.
     pub fn value() -> i32 {
         unsafe { sys::trig_value() }
+    }
+
+    /// `t.Name` -- the counter name on a `CounterChanged` hook, or the
+    /// message name on a `Message` entry. Empty otherwise.
+    pub fn name() -> String {
+        read_str(|b, c| unsafe { sys::trig_name(b, c) })
     }
 
     /// `t.Step` -- the turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
