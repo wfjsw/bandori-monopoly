@@ -1015,11 +1015,38 @@ fn read_host_read(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// STACK-01 regression: a placed card whose `SettleBody` re-settles the same
+/// tile while its crystal counter lasts. N nested settles, then stop. The
+/// engine's work stack must run the chain on a small thread stack.
+const SETTLE_NEST: CardDef = CardDef::new(
+    "TEST:settleNest",
+    &[On::Hook(
+        &[HookKind::SettleBody],
+        "actor == owner && card.placed && card.counter('crystals') > 0",
+        None,
+        settle_nest,
+    )],
+);
+
+fn settle_nest(player_id: i32) -> card_sdk::Asked {
+    let n = ctx::crystals();
+    if n <= 0 {
+        return Ok(());
+    }
+    ctx::set_crystals(n - 1);
+    let at = ctx::trigger::tile();
+    if at < 0 {
+        return Ok(());
+    }
+    ctx::card_settle_at(player_id, at, true);
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
-    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ
+    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST
 ]);
