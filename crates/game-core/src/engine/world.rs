@@ -463,6 +463,60 @@ impl EventTail {
         Arc::make_mut(&mut self.tail).last_mut()
     }
 
+    /// Stamp `parent` on every event from index `since` onward that does not
+    /// already carry one. Rebuilds the tail (O(window)) so a frozen chunk can
+    /// be rewritten; the window is small and this runs once per host request.
+    pub fn stamp_parent_since(&mut self, since: usize, parent: i32) {
+        if parent < 0 || since >= self.len {
+            return;
+        }
+        let mut evs: Vec<MatchEvent> = self.iter().cloned().collect();
+        let mut touched = false;
+        for e in evs.iter_mut().skip(since) {
+            if e.parent < 0 {
+                e.parent = parent;
+                touched = true;
+            }
+        }
+        if !touched {
+            return;
+        }
+        *self = EventTail::default();
+        for e in evs {
+            self.push_back(e);
+        }
+    }
+
+    /// Replace the message of the event with `id`. `false` when not found.
+    pub fn replace_msg(&mut self, id: i32, msg: crate::msg::Msg) -> bool {
+        let mut evs: Vec<MatchEvent> = self.iter().cloned().collect();
+        let Some(e) = evs.iter_mut().find(|e| e.id == id) else {
+            return false;
+        };
+        e.msg = msg;
+        *self = EventTail::default();
+        for e in evs {
+            self.push_back(e);
+        }
+        true
+    }
+
+    /// Drop every event whose id is in `ids`. Rebuilds the tail.
+    pub fn drop_ids(&mut self, ids: &[i32]) {
+        if ids.is_empty() {
+            return;
+        }
+        let keep: Vec<MatchEvent> = self
+            .iter()
+            .filter(|e| !ids.contains(&e.id))
+            .cloned()
+            .collect();
+        *self = EventTail::default();
+        for e in keep {
+            self.push_back(e);
+        }
+    }
+
     pub fn push_back(&mut self, e: MatchEvent) {
         if self.tail.len() >= CHUNK {
             // Freeze what has been written and start a fresh chunk. O(1): the
@@ -757,6 +811,7 @@ impl World {
     /// `kind` is the trigger kind ([`crate::state::card_trigger`]), `owner` the
     /// card's player, `target` the affected player and `tile` where it fired
     /// (`-1` when not applicable). `msg` names the card via [`Msg::card`].
+    /// `parent` groups this activation under another one (`-1` = top-level).
     pub fn card_activation(
         &mut self,
         kind: &str,

@@ -383,6 +383,9 @@ pub struct Cx<'a> {
     /// Card uids whose hooks are currently running and must not re-trigger on
     /// their own movement (the termination argument for nested money). Transient.
     pub reentrant_hooks: Vec<i32>,
+    /// `"card"` activation event ids currently open, innermost last. A nested
+    /// drive groups under the top of this stack; `-1` at the bottom.
+    pub activation: Vec<i32>,
     /// The 移动起点 of the move currently being walked / teleported, or `-1`
     /// when no move is in flight. 「[经过]CiRCLE且[移动起点]不为CiRCLE」 reads it
     /// (`circle_reward`). Transient (not serialized) -- the walk sets it as it
@@ -492,6 +495,100 @@ impl<'a> Cx<'a> {
         crate::engine::bot_cost::WORLD_SHARES
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.w.share()
+    }
+
+    /// Publish every pending walk segment (see [`crate::engine::world::World::flush_walk`]).
+    /// A guest-side log's re-insert mark must sit **after** the approach it
+    /// interrupted, so the drive flushes before reading [`Self::live_event_count`].
+    pub fn flush_walk(&mut self) {
+        self.w.flush_walk();
+    }
+
+    /// How many events the live tail holds right now (the re-insert mark).
+    pub fn live_event_count(&self) -> usize {
+        self.w.recent.len()
+    }
+
+    /// Post one event onto the **live** stream now (write-through). Flushes a
+    /// pending walk first so the approach precedes the line. Stamps `parent`
+    /// (`-1` = top-level) and an optional `card` tag (the `"effect"` ride).
+    /// Returns the event id.
+    pub fn log_event(
+        &mut self,
+        kind: &str,
+        player_id: i32,
+        msg: Msg,
+        parent: i32,
+        card: &str,
+    ) -> i32 {
+        self.w.flush_walk();
+        let e = self.w.log(kind, player_id, msg);
+        e.parent = parent;
+        if !card.is_empty() {
+            e.card = card.to_string();
+        }
+        e.id
+    }
+
+    /// Post a `"card"` activation onto the **live** stream (write-through).
+    /// See [`World::card_activation`]. Returns the event id.
+    pub fn log_card_activation(
+        &mut self,
+        kind: &str,
+        owner: i32,
+        card: &str,
+        target: i32,
+        tile: i32,
+        negated: bool,
+        msg: Msg,
+        parent: i32,
+    ) -> i32 {
+        self.w.flush_walk();
+        let e = self.w.card_activation(kind, owner, card, target, tile, negated, msg);
+        e.parent = parent;
+        e.id
+    }
+
+    /// Replace the message of an already-posted event (a re-run's correction).
+    /// `false` when the id is gone (truncated tail) -- the caller then appends.
+    pub fn relog_event(&mut self, id: i32, msg: Msg) -> bool {
+        self.w.recent.replace_msg(id, msg)
+    }
+
+    /// Drop events by id (a halted drive's write-through lines). Rebuilds the
+    /// tail without them.
+    pub fn drop_events(&mut self, ids: &[i32]) {
+        self.w.recent.drop_ids(ids);
+    }
+
+    /// Stamp `parent` on live events from index `since` onward (the host-effect
+    /// events a drive just caused, grouped under its activation).
+    pub fn stamp_parent_since(&mut self, since: usize, parent: i32) {
+        self.w.recent.stamp_parent_since(since, parent);
+    }
+
+    /// Attach outcome lines to a `"card"` activation (and drop a negated
+    /// activation's would-be results). No-op when the id is gone.
+    pub fn set_event_results(&mut self, id: i32, results: Vec<Msg>) {
+        let mut evs: Vec<crate::state::MatchEvent> = self.w.recent.iter().cloned().collect();
+        let Some(e) = evs.iter_mut().find(|e| e.id == id) else {
+            return;
+        };
+        e.results = results;
+        let mut tail = crate::engine::world::EventTail::default();
+        for e in evs {
+            tail.push_back(e);
+        }
+        self.w.recent = tail;
+    }
+
+    /// How many events carry `parent` (excluding the activation itself).
+    pub fn child_event_count(&self, parent: i32, self_id: i32) -> usize {
+        self.w
+            .recent
+            .iter()
+            .filter(|e| e.parent == parent && e.id != self_id)
+            .count()
     }
 
     /// The stamp of the live world right now (changes on every write).
@@ -699,6 +796,7 @@ impl<'a> Cx<'a> {
             delay: 0.0,
             money_depth: 0,
             reentrant_hooks: Vec::new(),
+            activation: Vec::new(),
             move_start: -1,
             guest_overlays: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),

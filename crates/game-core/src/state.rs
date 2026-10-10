@@ -975,6 +975,27 @@ pub struct MatchEvent {
     /// (marked 无效) and its log line says so, but its body did not run.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub negated: bool,
+    /// Parent `"card"` activation event id this event groups under (the log
+    /// nests it beneath that header; the flash rides the parent's face).
+    /// `-1` = top-level. Child events stay in the stream in code order so
+    /// walks, coin SFX and the like still animate -- the grouping is
+    /// presentational.
+    #[serde(default = "no_parent", skip_serializing_if = "is_no_parent")]
+    pub parent: i32,
+    /// Presentational outcome lines on a `"card"` activation: the explicit
+    /// 「无事发生」 / 「被…无效」 notes and the flash's one-line summary. The
+    /// body's own `ctx::log` lines and the host effects it caused are **child
+    /// events** ([`Self::parent`]), not copies here.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub results: Vec<Msg>,
+}
+
+fn is_no_parent(p: &i32) -> bool {
+    *p < 0
+}
+
+fn no_parent() -> i32 {
+    -1
 }
 
 /// The [`MatchEvent::kind`] values of a `"card"` activation event.
@@ -1006,6 +1027,8 @@ impl Default for MatchEvent {
             msg: Msg::default(),
             kind: String::new(),
             negated: false,
+            parent: -1,
+            results: Vec::new(),
         }
     }
 }
