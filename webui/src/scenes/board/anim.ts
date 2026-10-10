@@ -7,7 +7,7 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { sfx } from "../../core/audio";
 import { namesOf, turnNamesOf } from "../../core/names";
 import { D, cardTitle } from "../../core/data";
-import { fmtMsg, fmtMsgParts, partsText, type LogPart, type Names } from "../../i18n/msg";
+import { fmtMsg, fmtMsgParts, partsText, type LogPart, type Names, type Msg } from "../../i18n/msg";
 import type { MatchEvent, MatchView } from "../../core/types";
 import { showEffect } from "./Popups";
 
@@ -143,12 +143,24 @@ export class Animator {
     const names = e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names();
     const parts = fmtMsgParts(e.msg, names);
     const line = partsText(parts) || fmtMsg(e.msg, names);
-    if (!line) return;
-    this.log = [...this.log.slice(-199), {
-      id: e.id, text: line, turn: e.type === "turn",
-      who: e.type === "turn" ? e.playerId : undefined,
-      parts: parts.length ? parts : undefined,
-    }];
+    // Group a child event (and an activation's explicit outcome notes) under
+    // its 「效果适用」 header. The child events themselves stay in the stream
+    // in code order for animations; the indent is presentational.
+    const under = (e.parent ?? -1) >= 0;
+    const rows: LogLine[] = [];
+    if (line) {
+      rows.push({
+        id: e.id, text: under ? `  ${line}` : line, turn: e.type === "turn",
+        who: e.type === "turn" ? e.playerId : undefined,
+        parts: parts.length ? parts : undefined,
+      });
+    }
+    for (const r of e.results ?? []) {
+      const rt = fmtMsg(r, names);
+      if (rt) rows.push({ id: e.id, text: `  ${rt}`, turn: false });
+    }
+    if (!rows.length) return;
+    this.log = [...this.log.slice(-199), ...rows];
   }
 
   /** Names for message arguments (players/tiles/cards of the running match). */
@@ -219,13 +231,21 @@ export class Animator {
   private async cardFlash(e: MatchEvent, fast: boolean): Promise<void> {
     while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
     if (this.disposed) return;
-    // An already-in-play card's effect is captioned 「<卡名> 的效果」 -- its
-    // outcome lines, logged alongside, ride along and say what happened. A
-    // genuine activation (play / [反击] / skill / event) names who did it.
+    // A genuine activation (play / [反击] / skill / event) names who did it.
+    // An already-in-play card's 「效果适用」 line carries the why; the flash
+    // shows that short why (plus a one-line outcome summary when there is
+    // one) so the player sees why the card flashed.
     const kind = e.kind ?? "";
-    const caption = KIND_KEY[kind]
-      ? tr(KIND_KEY[kind], { who: e.playerId >= 0 ? this.player(e.playerId) : tr("board.cardNeutral") })
-      : tr("board.cardEffect", { card: cardTitle(e.card) });
+    let caption: string;
+    if (KIND_KEY[kind]) {
+      caption = tr(KIND_KEY[kind], { who: e.playerId >= 0 ? this.player(e.playerId) : tr("board.cardNeutral") });
+    } else if (e.msg?.k === "log.effect_applied") {
+      const why = e.msg.a?.why as { msg?: Msg } | undefined;
+      const whyText = why && typeof why === "object" && "msg" in why ? fmtMsg(why.msg, this.names()) : "";
+      caption = whyText || tr("board.cardEffect", { card: cardTitle(e.card) });
+    } else {
+      caption = tr("board.cardEffect", { card: cardTitle(e.card) });
+    }
     if (!fast) sfx(e.negated ? "prompt" : "card_play");
     this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, [], fast);
   }

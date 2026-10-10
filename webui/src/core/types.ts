@@ -115,6 +115,14 @@ export interface MatchEvent {
   /** A `card` activation a counteraction negated: the card still flashes,
    *  marked 无效, but its body did not run. */
   negated?: boolean;
+  /** Parent `"card"` activation event id this event groups under (the log
+   *  nests it beneath that header). `-1` / absent = top-level. Absent on
+   *  records written before the field existed. */
+  parent?: number;
+  /** Presentational outcome lines on a `"card"` activation -- the explicit
+   *  「无事发生」 / 「被…无效」 notes and the flash's one-line summary. Absent
+   *  on old records. */
+  results?: Msg[];
 }
 /** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */
