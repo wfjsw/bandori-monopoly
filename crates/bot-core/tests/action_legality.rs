@@ -290,7 +290,7 @@ fn a_deed_rich_broke_bot_does_not_mortgage_to_buy_land() {
         w.st.houses = vec![0; data.tiles.len()];
         w.st.mortgaged = vec![false; data.tiles.len()];
         for (u, t) in data.tiles.iter().enumerate() {
-            if u != tile && t.kind == "property" {
+            if u != tile && t.kind == game_core::data::TileKind::Property {
                 w.st.owners[u] = me as i32;
             }
         }
