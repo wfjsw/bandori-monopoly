@@ -19,8 +19,12 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
     &[
         On::Counteract(
             &[ChainKind::Effect],
-            "chain_has(Target) && target == owner && by >= 0 && by != owner",
-            Some(can_counteract),
+            // `chain_has(Target) && target == owner && by >= 0 && by != owner` is
+            // the `target` effect entry, aimed at the owner, from another
+            // player's card. 「第二次」 -- C# `H._targeted[seat] >= 2` --
+            // `targeted_count(owner) >= 2` (a derived-list counter).
+            "chain_has(Target) && target == owner && by >= 0 && by != owner && targeted_count(owner) >= 2",
+            None,
             counteract,
         ),
         // The body-top `trigger::player_id() != player_id` early-out is
@@ -30,14 +34,6 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 );
-
-fn can_counteract(player_id: i32) -> bool {
-    // `chain_has(Target) && target == owner && by >= 0 && by != owner` is the
-    // pre (the `target` effect entry, aimed at the owner, from another
-    // player's card). 「第二次」 -- C# `H._targeted[seat] >= 2` -- is a
-    // derived-list residual.
-    ctx::targeted_count(player_id) >= 2
-}
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
     // 规则书[反击]: 「你可以打出此卡，直到下个你的回合开始时，无效化你受到的所有效果」

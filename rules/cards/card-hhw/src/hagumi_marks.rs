@@ -32,8 +32,14 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
         ),
         On::Counteract(
             &[ChainKind::EndTurnAfter],
-            "actor != owner",
-            Some(can_counteract2),
+            // 「你回合外」 is `actor != owner`. 「收到资金」 -- at least one gain
+            // this turn -- is `gains_this_turn(owner) > 0`, the engine's
+            // per-turn gain counter (rulebook 支付阶段 7 「资金变动」). It counts
+            // every money-in whatever the cause (C# `H.GainR` covers 「获得」 and
+            // payments landing in this player's favour alike), so a pure-hand
+            // (2) sees the count too -- nothing needs to be placed.
+            "actor != owner && gains_this_turn(owner) > 0",
+            None,
             counteract2,
         ),
     ],
@@ -165,20 +171,6 @@ fn mark_filter(owner: i32) -> MarkFilter {
 fn any_marks(player_id: i32) -> bool {
     let n = ctx::tile_count();
     (0..n).any(|t| ctx::count_marks(t, &mark_filter(player_id)) > 0)
-}
-
-/// 规则书（2）: 「当前回合内你每获得过一次资金」 -- the engine's per-turn gain
-/// counter (`ctx::gains_this_turn`, rulebook 支付阶段 7 「资金变动」) counts every
-/// money-in whatever the cause (C# `H.GainR` covers 「获得」 and payments landing
-/// in this player's favour alike). Reading it here, rather than latching it on
-/// a field stand-in, means a pure-hand (2) sees the count too -- nothing needs
-/// to be placed for the card to observe the turn's gains.
-
-/// 规则书（2）: 「此卡可在你回合外收到资金的回合结束时打出」.
-fn can_counteract2(player_id: i32) -> bool {
-    // 「你回合外」 is `actor != owner` on the pre. 「收到资金」 -- at least one
-    // gain this turn -- is a derived-list residual.
-    ctx::gains_this_turn(player_id) > 0
 }
 
 /// 规则书（2）: 「当前回合内你每获得过一次资金，此卡的投掷次数+1」 -- the (1)

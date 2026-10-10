@@ -18,7 +18,17 @@ pub const HEY_KIDS: CardDef = CardDef::new(
     // is a **body replacement**, so it answers the body link and `settleAfter`
     // still runs. Answering the outer `settle` would mean 「the settle never
     // happened」.
-    &[On::Counteract(&[ChainKind::SettleBody], "", Some(can_counteract), counteract)],
+    &[On::Counteract(
+        &[ChainKind::SettleBody],
+        // 规则书[反击]: 「在属于你的格子上结算时」 -- on *another* player's
+        // settle on my unmortgaged, house-bearing tile. A mortgaged deed
+        // charges no rent (the settle offers a forced purchase instead), so it
+        // does not open this. 「将本格上的房屋转移到…」 -- the tile must have
+        // houses to transfer (C# `H.State.houses[t.Tile] > 0`).
+        "actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0",
+        Some(can_counteract),
+        counteract,
+    )],
 );
 
 /// C# `Targets(player_id, from)` -- owned tiles (≠ `from`) that `WhyNotBuildOn`
@@ -38,26 +48,9 @@ fn buildable_targets(player_id: i32, from: i32) -> Vec<i32> {
 /// my square, not my own. A non-rent payment (a card's [支付] that is not a
 /// tile [结算]) does not open the window.
 fn can_counteract(player_id: i32) -> bool {
-    // The settler is someone else -- the window is on *their* rent landing.
-    let settler = trigger::player_id();
-    if settler == player_id {
-        return false;
-    }
-    let t = trigger::tile();
-    if t < 0 || ctx::tile_owner(t) != player_id {
-        return false;
-    }
-    // 「settles rent on my tiles」 -- a mortgaged deed charges no rent (the
-    // settle offers a forced purchase instead), so it does not open this.
-    if ctx::mortgaged_of(t) {
-        return false;
-    }
-    // 规则书[反击]: 「将本格上的房屋转移到…」 -- the tile must have houses to
-    // transfer (C# `H.State.houses[t.Tile] > 0`).
-    if ctx::houses_of(t) <= 0 {
-        return false;
-    }
-    !buildable_targets(player_id, t).is_empty()
+    // The settler / tile shape is the pre; there must be a buildable target to
+    // transfer the houses onto (`can_build_on` is an engine predicate).
+    !buildable_targets(player_id, trigger::tile()).is_empty()
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {

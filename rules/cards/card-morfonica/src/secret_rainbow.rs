@@ -10,13 +10,24 @@
 //! Counteraction-only (`Normal => false`). Grades are static data shipped with
 //! the rule (see [`GRADES`] below).
 
-use card_sdk::abi::{ChainKind, TriggerKind};
+use card_sdk::abi::ChainKind;
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SECRET_RAINBOW: CardDef = CardDef::new(
     "Mor:秘密与青春的虹彩",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        // 规则书[反击]: 「支付」 -- a player-to-player payment of a positive
+        // amount. A print (game -> player, `actor == -1`) is a [获得], not a
+        // 「支付」, and must not open this window; nor may the causer's own
+        // `abnormal` (`actor` = the causer). `value > 0` also covers C#
+        // `!t.Pay.cancel` -- a payment an earlier counteraction already
+        // reduced to 0 reads as `value() == 0`.
+        "value > 0 && chain_has(Pay) && actor >= 0 && target >= 0 && actor != target",
+        Some(can_counteract),
+        counteract,
+    )],
 );
 
 // ============ NORMALIZED GRADE ORDINALS ================================
@@ -112,27 +123,13 @@ fn grade_of(player_id: i32) -> Option<i32> {
 fn can_counteract(player_id: i32) -> bool {
     // 规则书[反击]（1）: 「当你向学妹或同级生支付时」
     // 规则书[反击]（2）: 「当学姐或同级生向你支付的时候」
-    if trigger::kind() != ChainKind::Effect || trigger::value() <= 0 {
-        return false;
-    }
-    // 规则书[反击]: 「支付」 -- a player-to-player payment. The money pipeline
-    // declares a `pay` effect on every [支付]/[获得]/[扣除]; a print (game ->
-    // player, `from == -1`) is a [获得], not a 「支付」, and must not open this
-    // window. Nor may the causer's own `abnormal` (`from` = the causer).
-    if !ctx::effect::has(TriggerKind::Pay) {
-        return false;
-    }
-    let from = trigger::player_id();
-    let to = trigger::target();
-    // Both sides are players: `PayToOther` (C# `Pay.from >= 0 && Pay.to >= 0`).
-    if from < 0 || to < 0 || from == to {
-        return false;
-    }
-    // C# `!t.Pay.cancel` -- a payment an earlier counteraction already reduced to 0
-    // reads as `value() == 0`, so the >0 guard above covers it.
+    // The payment's shape (a positive `Pay` between two distinct players) is
+    // the pre; the grade-direction comparison is the residual.
     let Some(my) = grade_of(player_id) else {
         return false;
     };
+    let from = trigger::player_id();
+    let to = trigger::target();
     // （1）「当你向学妹或同级生支付时」 -- the holder is the payer and the payee
     // is junior-or-same (payee grade <= holder grade).
     if from == player_id {

@@ -13,7 +13,21 @@ use card_sdk::{key, CardDef, Msg, On};
 
 pub const DREAM_RETURN: CardDef = CardDef::new(
     "HHW:梦幻的回礼",
-    &[On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract)],
+    &[On::Counteract(
+        &[ChainKind::Effect],
+        // 规则书[反击]: 「在场上其他玩家即将被不属于你的格子收费时打出」 -- a
+        // rent payment (`pay_is_rent`) from a player who is not the holder, to a
+        // payee who is not the holder (`actor >= 0 && actor != owner &&
+        // target != owner`; C# `t.Pay.from >= 0 && t.Pay.from != player &&
+        // t.Pay.to != player`). `H.CanPay` and the `Targets` count stay
+        // residual: `H.CanPay` is `!out && !stunned() && exile == 0` where
+        // `stunned()` counts `stun + stunStart`, and `stunStart` is not in the
+        // CEL schema -- `owner.stun == 0` would wrongly admit a stunStart seat.
+        // The rent-table `Targets` loop is engine logic.
+        "pay_is_rent && actor >= 0 && actor != owner && target != owner",
+        Some(can_counteract),
+        counteract,
+    )],
 );
 
 /// C# `CardDreamReturn.Targets` -- tiles you may pay at: owned by another living
@@ -37,26 +51,11 @@ fn targets(player_id: i32) -> Vec<i32> {
 }
 
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「在场上其他玩家即将被不属于你的格子收费时打出」 -- C#
-    // `CanCounteract`: `t.Kind == "pay" && t.Pay != null && t.Pay.IsRent &&
-    // t.Pay.from >= 0 && t.Pay.from != player && t.Pay.to != player &&
-    // Targets(player).Count > 0 && H.CanPay(player)`.
-    // On pay triggers `t.Seat == t.Pay.from` and `t.Target == t.Pay.to`.
-    let from = trigger::player_id();
-    let to = trigger::target();
-    if from < 0 || from == player_id || to == player_id {
-        return false;
-    }
-    if !trigger::pay_is_rent() {
-        return false;
-    }
     // 规则书[反击]: 「向场上你以外的任意一名玩家的一个格子进行一次支付」 -- there
-    // must be such a tile (C# `Targets(player_id).Count > 0`).
-    if targets(player_id).is_empty() {
-        return false;
-    }
-    // C# `H.CanPay(seat)`.
-    ctx::can_pay(player_id)
+    // must be such a tile (C# `Targets(player_id).Count > 0`). The rent / seat
+    // shape is the pre; `H.CanPay` (a stunStart-aware composite) and the
+    // `Targets` scan stay here.
+    !targets(player_id).is_empty() && ctx::can_pay(player_id)
 }
 
 fn counteract(player_id: i32) -> card_sdk::Asked {
