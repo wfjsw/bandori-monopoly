@@ -38,8 +38,18 @@ export interface MatchPlayer {
   mentality: BotMentality;
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
-  skillCharacter: string; bands: string; tokens: { name: string; value: number }[];
+  skillCharacter: string; bands: string; tokens: Counter[];
   skillNote: Msg; field: FieldCard[];
+}
+/**
+ * `Counter.cs` -- named units a player carries. Under the bound-counter model
+ * these are units of some card instance's named counter, bound to a holder.
+ */
+export interface Counter {
+  name: string; value: number;
+  /** Owning card instance (`FieldCard.uid`) whose named counter these units
+   *  are bound to; -1 = legacy / unknown. */
+  instance: number;
 }
 /**
  * One keyed state item: `value` plus the bounds a consumer may enforce, and
@@ -59,6 +69,9 @@ export interface FieldCard {
    *  card (user ruling 2026-10-07). The other [CP点] kind is the tile mark
    *  (`TileMark.category === "cp"`). Shown as the field card's counter badge. */
   cp: number;
+  /** Extra named on-card counters beyond `cp` / `crystals` (those two stay
+   *  their own fields). Serde-defaulted `{}` on older frames. */
+  counters: Record<string, number>;
   faceDown: boolean;
   /** This instance is a band skill (`skill:<band>:<skill>`); its `crystals` are the band-card pool. */
   bandSkill?: boolean;
@@ -77,7 +90,11 @@ export interface ActiveEvent { id: string; playerId: number; counter: number; co
  *  provenance is `src` (the placing card instance) / `card` (its id, 「来自」). */
 export interface TileMark {
   uid: number; tile: number; kind: string; category: string; owner: number;
-  count: number; card: string; src: number; note: Msg;
+  count: number; card: string; src: number;
+  /** Owning counter's card instance (`FieldCard.uid`) whose named counter
+   *  these units are bound to; -1 = legacy / unknown. */
+  instance: number;
+  note: Msg;
 }
 export interface MatchPrompt {
   id: number; kind: string; title: Msg; text: Msg; card: string; options: Msg[];
