@@ -1,5 +1,5 @@
-// Board popups: deed card (DeedCardView), deed lists (DeedListView), skills,
-// player info, event / discard piles, settle and leave. Popups that act on the
+// Board popups: deed card (DeedCardView), deed lists (DeedListView), player
+// info, event / discard piles, settle and leave. Popups that act on the
 // match read the live state themselves, so they stay correct while open.
 
 import { useState } from "react";
@@ -151,30 +151,6 @@ function DeedList({ sess, redeem, close }: { sess: GameSession; redeem: boolean;
 
 export function showDeedList(sess: GameSession, redeem: boolean): void {
   openModal(redeem ? tr("board.redeemDeeds") : tr("board.mortgageDeeds"), (close) => <DeedList sess={sess} redeem={redeem} close={close} />, { size: "mid" });
-}
-
-function Skills({ sess, close }: { sess: GameSession; close: () => void }) {
-  const m = useModel(sess);
-  const auto = useAutoplay(sess); // 托管
-  const list = m?.me.actions ?? [];
-  if (!list.length) return <div className={s.empty}>{tr("skills.none")}</div>;
-  return (
-    <div className={s.rows}>
-      {list.map((a) => (
-        <div key={a.id} className={s.row}>
-          <div className={s.rowName}><b>{fmtMsg(a.title, namesOf(sess.view?.state))}<small> {a.source}</small></b><p>{fmtMsg(a.text, namesOf(sess.view?.state))}</p></div>
-          {/* Replay: skill text stays readable, the use button is hidden. */}
-          {!sess.readOnly && (
-            <Btn kind="pink" size="small" disabled={!a.enabled || auto} title={fmtMsg(a.reason, namesOf(sess.view?.state))} onClick={async () => { if (await act(sess, { act: "skill", card: a.id })) close(); }}>{a.enabled ? tr("common.use") : a.reason?.k ? fmtMsg(a.reason, namesOf(sess.view?.state)) : tr("skills.unavailable")}</Btn>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function showSkills(sess: GameSession): void {
-  openModal(tr("board.useSkill"), (close) => <Skills sess={sess} close={close} />, { size: "mid" });
 }
 
 export function showPlayerInfo(m: Model, i: number): void {

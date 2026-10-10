@@ -68,7 +68,10 @@ These are the numbers that used to be duplicated across `Board`, `Side`,
 | `--board-mid-offset` | `25px` | centre column's centre − the stage's |
 | `--sheet-strip` | `60px` | prompt sheet's retracted title strip |
 | `--hand-peek` | `30px` | hand fan peek above the bottom edge |
-| `--skill-peek` | `28px` | skill-aside header peek |
+| `--skill-peek` | `28px` | skill-stack header peek |
+| `--skill-card-w` | `96px` | skill-stack card face width |
+| `--skill-step` | `34px` | skill-stack dense horizontal step |
+| `--skill-fan-gap` | `24px` | gap between the skill stack and the fan |
 | `--map-margin-top` | `18px` | map window's top margin |
 
 `--board-mid-offset` is width-invariant: the centre column's centre sits at

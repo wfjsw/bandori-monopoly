@@ -101,6 +101,9 @@
   --field-peek: 60px;
   --hand-peek: 30px;
   --skill-peek: 28px;
+  --skill-card-w: 96px;
+  --skill-step: 34px;
+  --skill-fan-gap: 24px;
   --map-margin-top: 18px;
 
   /* ---- z-index scale: one place; modules reference names ---- */

@@ -1,7 +1,7 @@
-/* Four equally sized controls, anchored below the player column. The die
-   moved into the board's roll zone (Ring); what stays here are the skill and
-   deed buttons plus the occasional continue. Three controls leave the last
-   one alone on its row -- let it span, so the grid stays tidy either way. */
+/* Two deed controls, anchored below the player column. The die moved into the
+   board's roll zone (Ring); skills live in the hand dock's left stack. Two
+   controls leave the last one alone on its row -- let it span, so the grid
+   stays tidy either way. */
 .actions {
   position: absolute;
   left: 0;
@@ -20,9 +20,6 @@
   padding: 0 var(--sp-2);
   font-size: var(--fs-xl);
   gap: 6px;
-}
-.dim {
-  opacity: 0.75;
 }
 .dice {
   position: relative;
@@ -155,7 +152,7 @@
 .dock[data-sheet="down"] .fan {
   transform: translateY(calc(100% - var(--hand-peek) - var(--fan-rise, 0px) - var(--sheet-strip)));
 }
-.dock[data-sheet="down"] .skillAside {
+.dock[data-sheet="down"] .skillStack {
   transform: translateY(calc(100% - var(--skill-peek) - var(--sheet-strip)));
 }
 /* The fan: overlapping cards, anchored to the bottom, arranged as a circular
@@ -163,16 +160,19 @@
    below the hand (`--fan-a`), the outer ones lower and tilted outward, the
    centre one highest (`--fan-y`). The spread adapts to the hand size through
    `--fan-slot` (the step between card centres), so 1-10 cards read the same.
-   Retracted by default (`translateY` drops all but the top `--hand-peek` of
-   the arc -- the highest, centre card -- behind the bar); the raised state
-   slides the whole row up. The fan itself is click-through -- only the cards'
-   own boxes capture -- so the map stays clickable between and below them. */
+   `--skill-stack-w` (set by Hand) is the left reserve for the skill stack: the
+   fan recentres in what remains and never runs under the stack. Retracted by
+   default (`translateY` drops all but the top `--hand-peek` of the arc -- the
+   highest, centre card -- behind the bar); the raised state slides the whole
+   row up. The fan itself is click-through -- only the cards' own boxes capture
+   -- so the map stays clickable between and below them. */
 /* `align-items: stretch` + a flex `.fanCard`: every face in the hand takes the
    height of the tallest one (the longest name), so the row is one size. */
 .fan {
   display: flex;
   justify-content: center;
   align-items: stretch;
+  padding-left: var(--skill-stack-w, 0px);
   pointer-events: none;
   transform: translateY(calc(100% - var(--hand-peek) - var(--fan-rise, 0px)));
   transition: transform var(--dur-slow) var(--ease-sheet);
@@ -366,29 +366,29 @@
   margin-top: 4px;
 }
 
-/* The skill aside: the player's pressable skills as cards, a separated strip
-   to the right of the hand fan that rises and retracts with it (only its
-   header peeks while down). */
-.skillAside {
+/* The skill stack: the player's pressable skills as a dense horizontal row on
+   the left of the hand fan, rising and retracts with it (only its header peeks
+   while down). Straight -- no arc -- and overlapped tighter than the fan so
+   1-4 cards read as one short strip. Hover lifts a card to the top of the
+   stack; the fan's left reserve (`--skill-stack-w`) keeps the two apart. */
+.skillStack {
   position: absolute;
-  right: 0;
+  left: 0;
   bottom: 40px;
-  width: 150px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  align-items: stretch;
+  align-items: flex-start;
   pointer-events: none;
   transform: translateY(calc(100% - var(--skill-peek)));
   transition: transform var(--dur-slow) var(--ease-sheet);
 }
-.dock[data-state="raised"] .skillAside {
+.dock[data-state="raised"] .skillStack {
   transform: translateY(0);
 }
 .skillHead {
   flex: none;
   pointer-events: auto;
-  align-self: flex-end;
+  align-self: flex-start;
   padding: 3px 10px;
   border-radius: var(--r-md) var(--r-md) 0 0;
   background: var(--panel);
@@ -399,11 +399,30 @@
   font-weight: 700;
   white-space: nowrap;
 }
+.skillRow {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  pointer-events: none;
+}
+/* Dense overlap: each card after the first starts `--skill-step` from the
+   previous centre, so only a strip of the covered ones shows. Later cards
+   paint on top; the hovered one jumps above them all and lifts like a hand
+   card. */
 .skillSlot {
   position: relative;
   pointer-events: auto;
   display: flex;
-  justify-content: center;
+  transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
+}
+.skillSlot + .skillSlot {
+  margin-left: calc(var(--skill-step, 34px) - var(--skill-card-w, 96px));
+}
+.skillSlot:hover,
+.skillSlot:focus-within {
+  z-index: 2;
+  transform: translateY(-12px);
+  filter: var(--peek-lift);
 }
 .skillCard {
   cursor: pointer;
@@ -411,6 +430,10 @@
 .skillOff {
   opacity: 0.55;
   filter: grayscale(0.6);
+}
+.skillOff:hover,
+.skillOff:focus-within {
+  filter: grayscale(0.6) var(--peek-lift);
 }
 
 /* Draw-pile peek grows upward above the hand dock. */
@@ -473,7 +496,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fan,
-  .skillAside {
+  .skillStack {
     transition: none;
   }
 }

@@ -3,7 +3,7 @@
 import { useRef, useState, type CSSProperties } from "react";
 import { cardArt, sceneImg } from "../../core/assets";
 import { cx } from "../../core/cx";
-import { D, cardTitle } from "../../core/data";
+import { D, cardTitle, cardText } from "../../core/data";
 import { useAutoplay, useSessionOther } from "../../core/hooks";
 import { useEventListener, useHotkeys } from "../../hooks/dom";
 import { useDockRaise } from "../../hooks/dock";
@@ -11,7 +11,7 @@ import { useResetScroll } from "../../hooks/measure";
 import type { GameSession } from "../../game/session";
 import { AutoToggle, ThinkingPill, autoFloat } from "../../ui/AutoToggle";
 import { Btn } from "../../ui/Button";
-import { CardFace, type CardAction, InspectCard, showCard, TagChip } from "../../ui/Card";
+import { CardFace, type CardAction, showCard, TagChip } from "../../ui/Card";
 import { bandColor } from "../../ui/Character";
 import { PanelTab } from "../../ui/Chips";
 import { Icon } from "../../ui/Icon";
@@ -20,7 +20,8 @@ import { useStandingMode, stickCard } from "../../ui/CardPreview";
 import { SkillBody } from "../../ui/SkillBody";
 import type { Animator } from "./anim";
 import { act, type Model } from "./model";
-import { byTitle, showDeck, showDeedList, showSkills } from "./Popups";
+import { byTitle, showDeck, showDeedList } from "./Popups";
+import { BOARD_MID, SKILL_CARD_W, SKILL_FAN_GAP, SKILL_STEP } from "../../styles/layout";
 import { movementControl } from "./turnFlow";
 import s from "./Side.module.css";
 import { t as tr } from "../../i18n/t";
@@ -52,11 +53,9 @@ export function Side({ m, sess, anim }: { m: Model; sess: GameSession; anim: Ani
   else if (m.myTurn) hint = S.step === 2 ? tr("board.clickRoll") : S.step >= 3 ? tr("board.moved") : tr("board.turnStart");
   else hint = tr("board.waiting", { who: names.playerId(S.turn), bot: cur?.bot ? tr("board.botSuffix") : "" });
 
-  const hasSkill = m.me.actions?.some((a) => a.enabled);
   const caption = advance ? tr(S.skipMove ? "board.skipMovement" : "board.continueTurn") : tr("board.dice");
   return (
     <div className={s.actions}>
-      <Btn icon="auto_awesome" className={cx(s.act, !hasSkill && m.myTurn && s.dim)} disabled={auto} onClick={() => showSkills(sess)}>{tr("board.useSkill")}</Btn>
       {/* The die itself lives in the board's roll zone (Ring). This slot keeps
           only the "skip movement / continue" step, and collapses away when
           there is nothing to advance. */}
@@ -92,49 +91,120 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
 }
 
 /**
- * The player's pressable skills as cards, docked to the right of the hand fan
- * and rising with it -- the `使用技能` list, moved out of the popup. Only
- * `SkillAction` entries appear: the engine's activatable set (each carries
- * `enabled` / `reason` for cooldown, cost and marker gates). Passive / hook
- * rules never land here -- they have no activation and are read from the
- * character's skill text instead. A usable card opens the detail sheet with a
- * 「使用」 action; an unusable one (or any card while a prompt sheet is up) is
- * inspect-only, like the hand.
+ * One pressable skill on the stack. The engine's `SkillAction` carries the
+ * live gate (`enabled` / `reason`); when that list is empty (the Rust port
+ * does not yet fill it) the field's `skill:*` stand-ins stand in, gated only
+ * on the OPS window. Title / body come from the same place the card face and
+ * the standing preview read.
  */
-function SkillAside({ m, sess }: { m: Model; sess: GameSession }) {
+type SkillSlot = {
+  id: string;
+  enabled: boolean;
+  /** Already-formatted reason, or empty when the card is usable. */
+  reason: string;
+  /** Already-formatted skill body (the hover preview's text). */
+  text: string;
+  /** Tooltip: body when usable, the refusal when not. */
+  tip: string;
+};
+
+/** The player's pressable skills: engine `actions` overlaid on field `skill:*`. */
+export function skillSlots(m: Model): SkillSlot[] {
+  const names = namesOf(m.S);
+  const fromEngine = m.me.actions ?? [];
+  const byId = new Map(fromEngine.map((a) => [a.id, a]));
+  // Character / band / granted skills live on the field as `skill:*` stand-ins
+  // (`bind_skills`); the engine's `actions` is the same set with gates filled.
+  // Prefer the engine row when it is there, and fall back to the field so the
+  // stack still lists the skills a player can press.
+  const phaseOk = m.S.phase === "play" && m.S.step === 2 && !m.S.busy;
+  const out: SkillSlot[] = [];
+  for (const fc of m.me.field ?? []) {
+    if (!fc.card.startsWith("skill:")) continue;
+    const a = byId.get(fc.card);
+    if (a) {
+      byId.delete(fc.card);
+      const text = fmtMsg(a.text, names);
+      const reason = a.enabled ? "" : fmtMsg(a.reason, names) || tr("skills.unavailable");
+      out.push({ id: a.id, enabled: a.enabled, reason, text, tip: a.enabled ? text : reason });
+      continue;
+    }
+    const text = cardText(fc.card);
+    const reason = phaseOk ? "" : tr("skills.unavailable");
+    out.push({ id: fc.card, enabled: phaseOk, reason, text, tip: phaseOk ? text : reason });
+  }
+  for (const a of byId.values()) {
+    const text = fmtMsg(a.text, names);
+    const reason = a.enabled ? "" : fmtMsg(a.reason, names) || tr("skills.unavailable");
+    out.push({ id: a.id, enabled: a.enabled, reason, text, tip: a.enabled ? text : reason });
+  }
+  return out;
+}
+
+/**
+ * The player's pressable skills as a dense horizontal stack on the left of the
+ * hand fan, inside the dock so it rises and retracts with the hand. Straight
+ * row -- no arc, no rotation -- overlapping tighter than the fan so 1-4 skills
+ * (character + band + any granted) read as one short strip. Hover lifts a card
+ * to the top of the stack and feeds the same standing preview the hand uses;
+ * click uses the skill directly. A click that cannot use (disabled, 托管,
+ * replay, a prompt sheet up, or a use already in flight) is inspect-only,
+ * matching how a hand card behaves while a sheet owns the bottom edge.
+ * Passive / hook rules never land here -- they have no activation and are read
+ * from the character's skill text instead.
+ */
+function SkillStack({ m, sess, peek, unpeek }: {
+  m: Model;
+  sess: GameSession;
+  peek: (id: string, note: string, text?: string) => void;
+  unpeek: () => void;
+}) {
   const auto = useAutoplay(sess);
   const sheet = usePromptSheet();
-  const names = namesOf(m.S);
-  const acts = m.me.actions ?? [];
-  if (!acts.length) return null;
+  const slots = skillSlots(m);
+  // One use in flight: a second click before the engine answers is dropped.
+  const [using, setUsing] = useState(false);
+  if (!slots.length) return null;
+  const fire = async (id: string) => {
+    if (using) return;
+    setUsing(true);
+    try {
+      await act(sess, { act: "skill", card: id });
+    } finally {
+      setUsing(false);
+    }
+  };
   return (
-    <div className={s.skillAside}>
-      <div className={s.skillHead}>{tr("board.skillCards", { n: acts.length })}</div>
-      {acts.map((a) => {
-        const usable = a.enabled && !auto && !sess.readOnly && !sheet.open;
-        const note = fmtMsg(a.text, names);
-        return (
-          <div
-            key={a.id}
-            className={cx(s.skillSlot, !a.enabled && s.skillOff)}
-            title={a.enabled ? note : fmtMsg(a.reason, names) || tr("skills.unavailable")}
-          >
-            <InspectCard
-              id={a.id}
-              size="tile"
-              className={s.skillCard}
-              title={fmtMsg(a.title, names)}
-              note={note}
-              actions={usable ? [{
-                label: tr("common.use"),
-                kind: "pink",
-                enabled: true,
-                run: () => act(sess, { act: "skill", card: a.id }),
-              }] : []}
-            />
-          </div>
-        );
-      })}
+    <div className={s.skillStack}>
+      <div className={s.skillHead}>{tr("board.skillCards", { n: slots.length })}</div>
+      <div className={s.skillRow}>
+        {slots.map((a) => {
+          const usable = a.enabled && !auto && !sess.readOnly && !sheet.open;
+          return (
+            <div
+              key={a.id}
+              className={cx(s.skillSlot, !a.enabled && s.skillOff)}
+              title={a.tip}
+            >
+              <CardFace
+                id={a.id}
+                size="tile"
+                width={SKILL_CARD_W}
+                className={s.skillCard}
+                onClick={() => {
+                  if (using) return;
+                  if (usable) return void fire(a.id);
+                  showCard(a.id, [], a.enabled ? a.text : a.reason);
+                }}
+                onMouseEnter={() => peek(a.id, a.enabled ? "" : a.reason, a.text)}
+                onMouseLeave={unpeek}
+                onFocus={() => peek(a.id, a.enabled ? "" : a.reason, a.text)}
+                onBlur={unpeek}
+              />
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -143,9 +213,11 @@ function SkillAside({ m, sess }: { m: Model; sess: GameSession }) {
  * One card's place in the hand's circular-sector fan: a tilt around a pivot
  * below the hand, a gentle vertical arc (outer cards lower, centre highest),
  * and a spread that tightens as the hand grows so 1-10 cards all fit the
- * centre column. Returns the CSS custom properties `.fanCard` reads.
+ * centre column. `spread` is the budget for the gaps between card centres --
+ * the caller shrinks it to whatever the skill stack leaves free. Returns the
+ * CSS custom properties `.fanCard` reads.
  */
-export function fanArc(n: number, k: number): Record<string, string> {
+export function fanArc(n: number, k: number, spread = 660): Record<string, string> {
   const step = n > 1 ? Math.min(8, 52 / (n - 1)) : 0; // degrees per card, total ≤ 52°
   const a = (k - (n - 1) / 2) * step;
   const aMax = ((n - 1) / 2) * step;
@@ -153,7 +225,7 @@ export function fanArc(n: number, k: number): Record<string, string> {
   // outer cards sit on the baseline and the centre one rides highest.
   const drop = (deg: number) => 420 * (1 - Math.cos((deg * Math.PI) / 180));
   const rise = drop(aMax) - drop(a);
-  const slot = n > 1 ? Math.min(112, 660 / (n - 1)) : 0; // px between card centres
+  const slot = n > 1 ? Math.min(112, spread / (n - 1)) : 0; // px between card centres
   return {
     "--fan-a": `${a.toFixed(2)}deg`,
     "--fan-y": `${(-rise).toFixed(1)}px`,
@@ -163,8 +235,8 @@ export function fanArc(n: number, k: number): Record<string, string> {
 
 /** How high the centre card rides above the outer ones -- the retracted peek
  *  measures from there, so the fan shows 30px of its tallest point. */
-export function fanRise(n: number): string {
-  return `${Math.abs(parseFloat(fanArc(n, (n - 1) / 2)["--fan-y"]))}px`;
+export function fanRise(n: number, spread = 660): string {
+  return `${Math.abs(parseFloat(fanArc(n, (n - 1) / 2, spread)["--fan-y"]))}px`;
 }
 
 /**
@@ -181,7 +253,9 @@ export function fanRise(n: number): string {
  * hand raises again for looking; once the question is answered it is normal.
  */
 export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boolean }) {
-  const [hover, setHover] = useState<{ k: number; id: string; note: string } | null>(null);
+  // One hover target for both the hand fan and the skill stack: the dock's own
+  // floating preview and the standing card panel read this.
+  const [hover, setHover] = useState<{ id: string; note: string; text?: string } | null>(null);
   const [peek, setPeek] = useState(false);
   const auto = useAutoplay(sess); // 托管: play / discard are locked (inspect stays)
   const sheet = usePromptSheet();
@@ -193,12 +267,12 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   const S = m.S;
   const limit = stateOf(m.me, "handLimit") || 5;
   const canPlay = m.myTurn && S.step === 2 && !S.busy && !m.asking && !busy && !auto;
-  // Hovering a hand card lifts it and feeds the standing card panel.
-  const peekHand = (k: number, id: string) => {
-    const note = fmtMsg(m.v.handNotes[k], namesOf(S));
-    setHover({ k, id, note });
+  // Hovering a card lifts it and feeds the standing card panel.
+  const peekCard = (id: string, note: string, text?: string) => {
+    setHover({ id, note, text });
     stickCard(id, note);
   };
+  const peekHand = (k: number, id: string) => peekCard(id, fmtMsg(m.v.handNotes[k], namesOf(S)));
   const detail = (id: string, k: number) => {
     setHover(null);
     const note = fmtMsg(m.v.handNotes[k], namesOf(m.S));
@@ -211,17 +285,25 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
   };
   const hc = hover ? D.card(hover.id) : undefined;
   const deck = byTitle(m.v.draw ?? []);
+  // Left skill stack: its width is reserved out of the fan's budget so the two
+  // never collide. `--skill-stack-w` pads the fan's centring box; `spread`
+  // tightens the fan's own slot step to whatever is left of the centre column.
+  const skillN = skillSlots(m).length;
+  const skillStep = skillN > 1 ? Math.min(SKILL_STEP, (240 - SKILL_CARD_W) / (skillN - 1)) : SKILL_STEP;
+  const skillW = skillN ? SKILL_CARD_W + (skillN - 1) * skillStep + SKILL_FAN_GAP : 0;
+  const fanSpread = Math.min(660, Math.max(0, BOARD_MID - skillW - 120));
   // The preview is `pointer-events: none` (it sits above the hand, not under
-  // the cursor), so a long card text is scrolled from the hovered hand card:
-  // the wheel over the hand, or PgUp/PgDn/↑/↓ while a card is hovered.
-  const fanRef = useRef<HTMLDivElement>(null);
+  // the cursor), so a long card text is scrolled from the hovered card:
+  // the wheel over the dock (fan or skill stack), or PgUp/PgDn/↑/↓ while a
+  // card is hovered.
+  const dockRef = useRef<HTMLDivElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   useResetScroll(textRef, hover?.id);
   const scrollableText = () => {
     const el = textRef.current;
     return el && el.scrollHeight > el.clientHeight ? el : null;
   };
-  useEventListener(fanRef, "wheel", (e) => {
+  useEventListener(dockRef, "wheel", (e) => {
     const el = scrollableText();
     if (!el) return;
     e.preventDefault();
@@ -249,11 +331,13 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
         className={s.dock}
         data-state={dock.raised ? "raised" : "retracted"}
         data-sheet={sheet.open && !sheet.raised ? "down" : "up"}
+        style={{ ["--skill-stack-w" as string]: `${skillW}px`, ["--skill-step" as string]: `${skillStep}px` }}
+        ref={dockRef}
         {...dock.hover}
       >
-        <div className={s.fan} ref={fanRef} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length) }}>
+        <div className={s.fan} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length, fanSpread) }}>
           {m.v.hand.map((id, k) => (
-            <div key={`${id}:${k}`} className={s.fanCard} style={fanArc(m.v.hand.length, k) as CSSProperties}>
+            <div key={`${id}:${k}`} className={s.fanCard} style={fanArc(m.v.hand.length, k, fanSpread) as CSSProperties}>
               <CardFace
                 id={id}
                 size="mini"
@@ -291,13 +375,13 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
               <div className={s.pArt} style={{ borderColor: hc ? bandColor(hc.band) : "#ED4E76" }}><img src={cardArt(hover.id)} alt="" /></div>
               <div className={s.pTitle}>{cardTitle(hover.id)}</div>
               {!!hc?.tags.length && <div className={s.pTags}>{hc.tags.map((t) => <TagChip key={t} tag={t} />)}</div>}
-              <div className={s.pText} ref={textRef}><SkillBody text={hc?.text ?? ""} /></div>
+              <div className={s.pText} ref={textRef}><SkillBody text={hover.text ?? hc?.text ?? ""} /></div>
               {hover.note && <div className={s.pNote}>{hover.note}</div>}
             </>
           )}
         </div>
-        {/* Pressable skills as cards, in their own strip beside the fan. */}
-        <SkillAside m={m} sess={sess} />
+        {/* Pressable skills as a dense stack on the left of the fan. */}
+        <SkillStack m={m} sess={sess} peek={peekCard} unpeek={() => setHover(null)} />
       </div>
       {/* The draw pile, alphabetical -- never in the order it will be drawn. */}
       <div className={cx(s.peek, peek && s.peekOn)}>

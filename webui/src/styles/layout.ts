@@ -37,7 +37,13 @@ export const SHEET_STRIP = 60;
 export const FIELD_PEEK = 60;
 /** Hand fan peek above the bottom edge (Side `.fan`). */
 export const HAND_PEEK = 30;
-/** Skill-aside header peek (Side `.skillAside`). */
+/** Skill-stack header peek (Side `.skillStack`). */
 export const SKILL_PEEK = 28;
+/** Skill-stack card face width (Side `.skillCard`, Card `tile`). */
+export const SKILL_CARD_W = 96;
+/** Skill-stack dense horizontal step: px between neighbouring card centres. */
+export const SKILL_STEP = 34;
+/** Gap the skill stack leaves between itself and the hand fan. */
+export const SKILL_FAN_GAP = 24;
 /** Map window's top margin (Board `.mapSlot`). */
 export const MAP_MARGIN_TOP = 18;
