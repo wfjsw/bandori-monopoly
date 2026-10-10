@@ -31,11 +31,16 @@ pub const DREAM_AHEAD: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_buy), buy_one),
         On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
-        On::Hook(&[HookKind::Drew], "", Some(drew_guard), drew),
+        On::Hook(&[HookKind::Drew], "actor == owner && card.placed", None, drew),
         // （3）「[结算]时额外[支付]」 is 行动阶段 15 -- an entry in the settle's
         // effect list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」
         // window. A field card that replaces the body skips this entry.
-        On::Hook(&[HookKind::SettleBody], "", None, settle_body),
+        On::Hook(
+            &[HookKind::SettleBody],
+            "card.placed && actor != owner && slot('dream_ahead_x') > 0 && tile.id >= 0 && tile.owner == owner",
+            None,
+            settle_body,
+        ),
     ],
 )
 // 规则书[持续]（2）: 「[拥有者]不可盖房且手卡上限数量减1」 -- two continuous
@@ -83,12 +88,7 @@ fn deck_before_game(player_id: i32) -> card_sdk::Asked {
 /// cap each further card bumps X instead.
 /// 规则书[持续]（1）: 「[拥有者]每次抽牌时为此卡添加1个[奇迹水晶]（上限5），此卡每
 /// 获得一个超出上限的[奇迹水晶]就为此卡的X加1（X初始0）」
-/// Pure guard for [`drew`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn drew_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
+/// `actor == owner && card.placed` is the pre.
 /// `drew` fires **per single card** (an N-card draw raises it N times), so
 /// 「每次抽牌时」 is one crystal per raise.
 fn drew(player_id: i32) -> card_sdk::Asked {
@@ -113,21 +113,19 @@ fn drew(player_id: i32) -> card_sdk::Asked {
 /// (`SETTLE-STAGES.md` §4 M2): an entry in the settle's effect list, so a body
 /// replace (`trigger::cancelled()`) skips it.
 fn settle_body(player_id: i32) -> card_sdk::Asked {
-    if trigger::cancelled() || !ctx::is_placed() {
+    // `card.placed && actor != owner && slot('dream_ahead_x') > 0 &&
+    // tile.id >= 0 && tile.owner == owner` is the pre; `cancelled()` is
+    // resolution-time and stays. `player_out` of the mover is a derived-list
+    // residual.
+    if trigger::cancelled() {
         return Ok(());
     }
     let mover = trigger::player_id();
-    if mover == player_id || ctx::player_out(mover) {
+    if ctx::player_out(mover) {
         return Ok(());
     }
     let x = x(player_id);
-    if x <= 0 {
-        return Ok(());
-    }
     let t = trigger::tile();
-    if t < 0 || ctx::tile_owner(t) != player_id {
-        return Ok(());
-    }
     // 规则书[持续]（3）: 「额外[支付][拥有者]“[拥有者]拥有的[P✽P粉丝]数量”×X+MIN(X×30, 300)」
     let amount = fans(player_id) * x + (x * 30).min(300);
     if amount <= 0 {

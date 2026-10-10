@@ -24,8 +24,18 @@ pub const HAGUMI_MARKS: CardDef = CardDef::new(
     "HHW:（育美）",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "", Some(hook_guard), hook),
-        On::Counteract(&[ChainKind::EndTurnAfter], "", Some(can_counteract2), counteract2),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && card.placed && move.kind != Teleport && tile.id >= 0",
+            None,
+            hook,
+        ),
+        On::Counteract(
+            &[ChainKind::EndTurnAfter],
+            "actor != owner",
+            Some(can_counteract2),
+            counteract2,
+        ),
     ],
 );
 
@@ -86,25 +96,11 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
 }
 
 /// C# `HagumiMarkFx.PassTile` / `Stop` (MatchHost.cs:4314-4384).
-/// Pure guard for [`hook`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn hook(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Seat != Seat` -- only the owner's own walk.
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
-    // C# `m.Teleport` -- not a teleport.
-    if trigger::move_kind() == Some(MoveKind::Teleport) {
-        return Ok(());
-    }
+    // `actor == owner && card.placed && move.kind != Teleport && tile.id >= 0`
+    // is the pre. C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on
+    // this tile -- is a derived-list residual.
     let t = trigger::tile();
-    if t < 0 {
-        return Ok(());
-    }
     // C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on this tile.
     if ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) <= 0 {
         return Ok(());
@@ -167,11 +163,8 @@ fn any_marks(player_id: i32) -> bool {
 
 /// 规则书（2）: 「此卡可在你回合外收到资金的回合结束时打出」.
 fn can_counteract2(player_id: i32) -> bool {
-    // 「你回合外」 -- someone else's turn end.
-    if trigger::player_id() == player_id {
-        return false;
-    }
-    // 「收到资金」 -- at least one gain this turn.
+    // 「你回合外」 is `actor != owner` on the pre. 「收到资金」 -- at least one
+    // gain this turn -- is a derived-list residual.
     ctx::gains_this_turn(player_id) > 0
 }
 

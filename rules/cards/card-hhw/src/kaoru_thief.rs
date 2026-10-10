@@ -19,10 +19,25 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
     "HHW:（薰）怪盗hello happy",
     &[
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::TurnEnd], "", Some(turn_end_guard), turn_end),
-        On::Hook(&[HookKind::PassPlayer], "", Some(pass_player_guard), pass_player),
+        On::Hook(
+            &[HookKind::TurnEnd],
+            "actor == owner && card.placed",
+            None,
+            turn_end,
+        ),
+        On::Hook(
+            &[HookKind::PassPlayer],
+            "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
+            None,
+            pass_player,
+        ),
         On::RollPlan(roll_plan),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(
+            &[HookKind::CrystalsChanged],
+            "actor == owner && card.placed && trigger_card == card.id && card.cp == 0 && value <= 0",
+            None,
+            on_crystals_changed,
+        ),
     ],
 );
 
@@ -73,28 +88,13 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
 /// -- C# `CardKaoruThief.PassSeat` -> `Stop` (MatchHost.cs:3834-3860).
-/// Pure guard for [`pass_player`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn pass_player_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn pass_player(player_id: i32) -> card_sdk::Asked {
-    // C# `m.Seat != Seat` -- only the owner's own walk.
-    if trigger::player_id() != player_id {
-        return Ok(());
-    }
-    // C# `other != Marked` -- only when passing the marked player.
+    // `actor == owner && card.placed && move.remaining > 0 &&
+    // slot('kaoru_thief_turn') == turn_key` is the pre. `other != Marked`
+    // keeps its `slot` sentinel (`kaoru_thief_marked` uses -1 = unmarked and
+    // `slot()`'s missing = 0 does not match).
     let marked = ctx::slot(player_id, "kaoru_thief_marked");
     if marked < 0 || trigger::target() != marked {
-        return Ok(());
-    }
-    // C# `m.Remaining <= 0` -- only mid-move.
-    if trigger::move_remaining() <= 0 {
-        return Ok(());
-    }
-    // C# `Mem["turn"] != H.TurnKey` -- only the turn the mark was placed.
-    if ctx::slot(player_id, "kaoru_thief_turn") != ctx::turn_key() {
         return Ok(());
     }
     // 规则书: 「可以选择在经过该玩家时使自己强制停下并触发结算」 -- C#
@@ -122,13 +122,8 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 规则书: 「（充能3，衰减1）」 -- C# `DecayCard.TurnEnd` (`turn == DecayOn` =
-/// the owner's turn) -> `AddCrystals(-1)`.
-/// Pure guard for [`turn_end`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn turn_end_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
+/// the owner's turn) -> `AddCrystals(-1)`. `actor == owner && card.placed` is
+/// the pre.
 fn turn_end(_player_id: i32) -> card_sdk::Asked {
     ctx::decay()?;
     Ok(())
@@ -140,19 +135,6 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// says what happens at 0, while every other crystal card spells out 「为0时
 /// 置入弃牌堆」. This keeps the C# behaviour (it decays out) -- the book may
 /// intend something else, e.g. leaving a spent card on the field.
-///
-/// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn crystals_changed_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-        && trigger::player_id() == player_id
-        && trigger::card_is(ID)
-        && ctx::crystals() == 0
-        // Only a write that did not raise the count speaks for the empty
-        // state; see AG:绯红之魂 (3).
-        && trigger::value() <= 0
-}
-
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

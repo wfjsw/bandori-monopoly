@@ -1197,6 +1197,12 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.uikaIdol.fire",
     "skill.takiCrychic.armed",
     "skill.tamade.builtThis",
+    // `kaoru_thief` mark-turn latch (`ctx::set_slot(player_id, TURN, turn_key)`).
+    "kaoru_thief_turn",
+    // `umiri_card` user seat+1 (`ctx::set_slot(holder, USER_KEY, user + 1)`).
+    "umiri_user",
+    // `dream_ahead` overflow counter (`ctx::inc_slot(player_id, SLOT_X, 1)`).
+    "dream_ahead_x",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read

@@ -23,8 +23,13 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
     "PP:不要背负期待",
     &[
         On::Play("", None, no_expectation),
-        On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], "", Some(hook_guard), hook),
-        On::Hook(&[HookKind::Reshuffled], "", Some(reshuffled_guard), reshuffled),
+        On::Hook(&[HookKind::RollAfter, HookKind::PayAdd], "card.placed", None, hook),
+        On::Hook(
+            &[HookKind::Reshuffled],
+            "actor == owner && card.placed",
+            None,
+            reshuffled,
+        ),
     ],
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
@@ -67,13 +72,8 @@ fn no_expectation(player_id: i32) -> card_sdk::Asked {
 }
 
 /// C# `CardNoExpectation.RollAfter` / `PayAdd` -- both [持续] halves that the
-/// hook surface can express.
-/// Pure guard for [`hook`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn hook_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
+/// hook surface can express. `card.placed` is the pre; the arms keep their
+/// kind-specific relations.
 fn hook(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书[持续]（1）: 「非回合开始时进行投掷的投掷结果减少2」 -- C#
@@ -135,12 +135,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
 /// C# `CardNoExpectation.Reshuffled` -- each time the owner's discard pile is
 /// shuffled back into the draw pile, the pay/gain bend gains 2 more stacks.
 /// 规则书[持续]（2）: 「每次[拥有者]弃卡区洗入抽卡区时对[拥有者]生效2次」
-/// Pure guard for [`reshuffled`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn reshuffled_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
+/// `actor == owner && card.placed` is the pre.
 fn reshuffled(player_id: i32) -> card_sdk::Asked {
     ctx::inc_slot(player_id, SLOT_STACKS, 2);
     Ok(())

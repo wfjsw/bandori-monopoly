@@ -22,7 +22,7 @@ pub const FEVER: CardDef = CardDef::new(
     &[
         On::Play("", None, fever),
         // C# `CardFever.PayAdd` / `CardFever.TurnStart` -- field hooks, not [反击].
-        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], "", Some(counteract_guard), counteract),
+        On::Hook(&[HookKind::PayAdd, HookKind::TurnStart], "card.placed", None, counteract),
     ],
 );
 
@@ -48,13 +48,9 @@ fn x_of(player_id: i32) -> i32 {
     ctx::n(0, 600) - 200 * n
 }
 
-/// Pure guard for [`counteract`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn counteract_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
 fn counteract(player_id: i32) -> card_sdk::Asked {
+    // `card.placed` is the pre. The arms keep their kind-specific relations
+    // (PayAdd wants `target == owner`, TurnStart wants `actor == owner`).
     match trigger::kind() {
         // 规则书（1）[持续]: 「[拥有者]被[支付]或[获得]资金时将金额额外提高X；X为600，
         // [拥有者]场上每拥有一张卡则X降低200（可小于0）」 -- C# `CardFever.PayAdd`

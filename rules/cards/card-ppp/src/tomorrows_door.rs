@@ -21,15 +21,30 @@ pub const TOMORROWS_DOOR: CardDef = CardDef::new(
     "PPP:Tomorrow's Door",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "", Some(pass_tile_guard), pass_tile),
+        On::Hook(
+            &[HookKind::PassTile],
+            "card.placed && actor == owner",
+            Some(pass_tile_guard),
+            pass_tile,
+        ),
         // (3)'s surcharge joins the rent payment at `payAdd` (before `payMul`),
         // so a 「支付减半」 scaler sees the shaped total.
-        On::Hook(&[HookKind::PayAdd], "", Some(pay_add_guard), pay_add),
+        On::Hook(
+            &[HookKind::PayAdd],
+            "card.placed && pay_is_rent && actor != owner && tile.id >= 0 && tile.owner == owner",
+            Some(pay_add_guard),
+            pay_add,
+        ),
         // （3）「…[结算]时额外支付」 is 行动阶段 15 (`SETTLE-STAGES.md` §4 M2)
         // -- an entry in the settle's effect list, for the shapes no rent
         // payment carries (梦开始的地方, a mortgaged owner tile). A field card
         // that replaces the body skips this entry.
-        On::Hook(&[HookKind::SettleBody], "", Some(settle_body_guard), settle_body),
+        On::Hook(
+            &[HookKind::SettleBody],
+            "card.placed && actor != owner && tile.id >= 0",
+            Some(settle_body_guard),
+            settle_body,
+        ),
     ],
 );
 
@@ -81,9 +96,8 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// "am I on the tile being passed" checks -- applicability, not effect (a
 /// hook body that ran and returned still flashes).
 fn pass_tile_guard(player_id: i32) -> bool {
-    if !ctx::is_placed() || trigger::player_id() != player_id {
-        return false;
-    }
+    // `card.placed && actor == owner` is the pre. The route cursor and
+    // "am I on the tile being passed" are residuals (`self_tile`).
     let step = ctx::slot(player_id, SLOT_STEP);
     if step < 0 || step >= ROUTE.len() as i32 {
         return false;
@@ -120,22 +134,13 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
 /// surcharge to add. `TriggerKind::PayAdd` is the category's job -- not
 /// re-checked here (docs/GUARDS.md).
 fn pay_add_guard(player_id: i32) -> bool {
-    if !ctx::is_placed() {
-        return false;
-    }
-    // Still travelling: no tax.
+    // `card.placed && pay_is_rent && actor != owner && tile.id >= 0 &&
+    // tile.owner == owner` is the pre. Still travelling / player_out /
+    // tax_due are residuals.
     if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
         return false;
     }
-    if !trigger::pay_is_rent() {
-        return false;
-    }
-    let payer = trigger::player_id();
-    if payer == player_id || ctx::player_out(payer) {
-        return false;
-    }
-    let at = trigger::tile();
-    if at < 0 || ctx::tile_owner(at) != player_id {
+    if ctx::player_out(trigger::player_id()) {
         return false;
     }
     tax_due() > 0
@@ -177,22 +182,20 @@ fn pay_add(player_id: i32) -> card_sdk::Asked {
 /// on 梦开始的地方 or a mortgaged owner tile, a surcharge due): the body is
 /// the transfer.
 fn settle_body_guard(player_id: i32) -> bool {
-    if !ctx::is_placed() || trigger::cancelled() {
+    // `card.placed && actor != owner && tile.id >= 0` is the pre;
+    // `cancelled()` is resolution-time and stays.
+    if trigger::cancelled() {
         return false;
     }
     if !in_play_area() && ctx::slot(player_id, SLOT_STEP) < ROUTE.len() as i32 {
         return false;
     }
-    let payer = trigger::player_id();
-    if payer == player_id || ctx::player_out(payer) {
+    if ctx::player_out(trigger::player_id()) {
         return false;
     }
     // 规则书（3）: 「[拥有者]以外的玩家在[拥有者]拥有的格子或梦开始的地方[结算]时
     //   额外支付[拥有者]星之鼓动山丘上房子数量×100的资金。」
     let at = trigger::tile();
-    if at < 0 {
-        return false;
-    }
     let dream = ctx::tile_named("梦开始的地方");
     let is_dream = dream >= 0 && at == dream;
     let is_owner_tile = ctx::tile_owner(at) == player_id;

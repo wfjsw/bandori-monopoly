@@ -20,7 +20,7 @@ pub const LAYER_KEEP: CardDef = CardDef::new(
         // that spends a 火罐 on a kept die. The gate admits whenever either
         // branch is available.
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::RollAfter], "", Some(roll_after_guard), roll_after),
+        On::Hook(&[HookKind::RollAfter], "actor == owner && card.placed", None, roll_after),
         // 规则书 [反击]: 「当你使用火罐进行掷骰时，可打出此卡并保留（写下）未被
         // 选择的另一个骰点」 -- the window opens on a `Roll` chain link whose
         // source is `roll_source::FIRE` (「使用火罐进行掷骰」).
@@ -89,12 +89,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// C# `CardLayerKeep.RollAfter` -- after a fire-pot roll, keep the unchosen die.
-/// Pure guard for [`roll_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn roll_after_guard(player_id: i32) -> bool {
-    ctx::is_placed() && trigger::player_id() == player_id
-}
-
+/// `actor == owner && card.placed` is the pre.
 /// 规则书 [反击]: 「当你使用火罐进行掷骰时」 -- only a `Roll` chain link whose
 /// source is `roll_source::FIRE` (the fire-pot reroll).
 // (the live guard is the `pre` on the Counteract entry; `legacy_can_counter_fire`

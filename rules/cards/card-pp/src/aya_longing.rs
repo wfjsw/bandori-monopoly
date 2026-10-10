@@ -25,7 +25,7 @@ pub const AYA_LONGING: CardDef = CardDef::new(
     "PP:[丸山彩]憧憬的前方",
     &[
         On::Play("", None, aya_longing),
-        On::Hook(&[HookKind::PayAdd], "", None, pay_add),
+        On::Hook(&[HookKind::PayAdd], "actor == owner && value > 0", None, pay_add),
     ],
 );
 
@@ -88,11 +88,11 @@ fn aya_longing(player_id: i32) -> card_sdk::Asked {
 /// C# `CardAyaLonging.PayAdd` -- while the owner is
 /// the poorest alive player, every [消耗]/[支付] drops by X (floor 0).
 fn pay_add(player_id: i32) -> card_sdk::Asked {
-        if trigger::player_id() != player_id
-        || trigger::value() <= 0
-        || !poorest(player_id) {
+    // `actor == owner && value > 0` is the pre; `poorest` is a derived-list
+    // residual (every alive player's money).
+    if !poorest(player_id) {
         return Ok(());
-        }
+    }
     let x = shave_x(player_id);
     let amount = trigger::value();
     trigger::set_pay_amount((amount - x).max(0));

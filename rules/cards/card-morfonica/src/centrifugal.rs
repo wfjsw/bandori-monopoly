@@ -17,34 +17,22 @@ const ID: &str = "Mor:离心力，不为所动";
 pub const CENTRIFUGAL: CardDef = CardDef::new(
     "Mor:离心力，不为所动",
     &[
-        On::Counteract(&[ChainKind::Effect], "", Some(can_counteract), counteract),
+        On::Counteract(
+            &[ChainKind::Effect],
+            "chain_has(Target) && target == owner && by >= 0 && by != owner",
+            Some(can_counteract),
+            counteract,
+        ),
         On::Gate(&[GateKind::ImmuneAll], immune_all),
-        On::Hook(&[HookKind::TurnStart], "", None, turn_start),
+        On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 );
 
 fn can_counteract(player_id: i32) -> bool {
-    // 规则书[反击]: 「第二次成为其他角色技能或卡牌的目标时」
-    // C# `t.Kind == "target" && t.Target == seat && t.ByCard >= 0 && t.ByCard != seat`
-    //   and `H._targeted[player_id] >= 2` (the counter is bumped on every target raise
-    //   between the player's turns, `MatchHost.cs:19138` / reset at `:25775`).
-    // 规则书[反击]: 「成为其他角色技能或卡牌的目标」 -- the `target` effect entry
-    // (the designation), not just any effect aimed at the player. The money
-    // pipeline declares a `pay` effect on every [支付]/[获得] and must not open
-    // this window.
-    if !ctx::effect::has(TriggerKind::Target) {
-        return false;
-    }
-    // `t.Target` is the one being aimed at (C# `t.Target == seat`).
-    if trigger::target() != player_id {
-        return false;
-    }
-    // 「其他角色」 -- the targeting must come from another player's card.
-    if !trigger::by_card().is_some_and(|by| by != player_id) {
-        return false;
-    }
-    // 规则书[反击]: 「第二次」 -- C# `H._targeted[seat] >= 2`; the engine bumps
-    //   the counter on every `H.Target` of this player (before the [反击] window).
+    // `chain_has(Target) && target == owner && by >= 0 && by != owner` is the
+    // pre (the `target` effect entry, aimed at the owner, from another
+    // player's card). 「第二次」 -- C# `H._targeted[seat] >= 2` -- is a
+    // derived-list residual.
     ctx::targeted_count(player_id) >= 2
 }
 
@@ -85,9 +73,7 @@ fn immune_all(player_id: i32) -> card_sdk::Asked {
 /// `Fx.TurnStart` (C# `CardCentrifugal.TurnStart` -> `H.Unplace`): the immunity
 /// ends at the owner's next turn start.
 fn turn_start(player_id: i32) -> card_sdk::Asked {
-    if trigger::player_id() != player_id || !ctx::is_placed() {
-        return Ok(());
-    }
+    // `actor == owner && card.placed` is the pre.
     // 规则书[反击]: 「直到下个你的回合开始时」 -- C# `H.Unplace(this, "discard",
     //   "效果结束了")`.
     ctx::set_dest(ctx::Dest::Graveyard);

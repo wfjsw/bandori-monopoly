@@ -30,7 +30,7 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         // 经过 (行动阶段 12, a mid-route pass of my tile) or 重叠 (`passPlayer`,
         // the end-tile overlap)? The C# `GrabFx` used `PassPlayer`; the text
         // says 「经过」. Pending ruling -- left as `PassPlayer` (C#-carried).
-        On::Hook(&[HookKind::PassPlayer], "", None, on_pass),
+        On::Hook(&[HookKind::PassPlayer], "actor != owner && actor >= 0", None, on_pass),
         On::Hook(&[HookKind::SettleBefore], "", None, grab),
     ],
 );
@@ -50,13 +50,12 @@ fn want_to_grab(player_id: i32) -> card_sdk::Asked {
 
 /// 「当第一位其他玩家经过你」 -- remember the *first* passer only.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    let passer = ctx::trigger::player_id();
-    if passer == player_id || passer < 0 {
-        return Ok(());
-    }
+    // `actor != owner && actor >= 0` is the pre. The PASSER latch keeps its
+    // -1 = unset sentinel (`slot()`'s missing = 0 does not match), so it stays.
     if ctx::state::get(player_id, PASSER) >= 0 {
         return Ok(());
     }
+    let passer = ctx::trigger::player_id();
     ctx::state::set(player_id, PASSER, passer);
     Ok(())
 }

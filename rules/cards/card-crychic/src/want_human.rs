@@ -17,7 +17,12 @@ pub const WANT_HUMAN: CardDef = CardDef::new(
     "CRYCHIC:想要成为人类",
     &[
         On::Play("", None, want_human),
-        On::Hook(&[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd], "", Some(counteract_guard), counteract),
+        On::Hook(
+            &[HookKind::TurnStart, HookKind::RollAfter, HookKind::TurnEnd],
+            "actor == owner && card.placed",
+            None,
+            counteract,
+        ),
     ],
 );
 
@@ -68,20 +73,12 @@ const SLOT_AB_BEFORE: &str = "want_human_ab_before";
 
 /// `Fx.RollAfter` / `Fx.TurnStart` (C# `CardWantHuman.RollAfter` / `TurnStart`).
 /// Runs through the Fx hook dispatch, so this is a field effect, not a [反击].
-/// Pure guard for [`counteract`] -- the activation gate. `false`
-/// means the card is not activated at all.
-fn counteract_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
+/// `actor == owner && card.placed` is the pre; the arms branch on kind.
 fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         // 规则书（1）(sheet 2026-10-06 新卡组卡 M2): 「每当你的移动掷骰小于等于X，
         // 为此卡添加一个奇迹水晶。」 (was 「小于X」).
         TriggerKind::RollAfter => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
             let roll = trigger::value();
             let x = ctx::slot(player_id, SLOT_X);
             if x > 0 && roll <= x {
@@ -116,9 +113,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // 规则书（2）: 「若你的回合开始时此卡上拥有两个或以上的奇迹水晶，移除此卡上全部
         // 奇迹水晶并使你下次的移动掷骰结果额外增加20-X。」
         TriggerKind::TurnStart => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
             if ctx::crystals() < 2 {
                 return Ok(());
             }
@@ -136,9 +130,6 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
         // 水晶。」 -- C# `TurnEnd`: `H._abnormalTurn[Player] > Mem["abBefore"]` when
         // the boost was consumed this turn.
         TriggerKind::TurnEnd => {
-            if trigger::player_id() != player_id {
-                return Ok(());
-            }
             let ab_before = ctx::slot(player_id, SLOT_AB_BEFORE);
             if ab_before <= 0 {
                 return Ok(());
