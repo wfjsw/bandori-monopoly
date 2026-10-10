@@ -410,11 +410,11 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   - `crates/game-rules/tests/rb_fuzz_found.rs:160` `negation_not_total` (negating a no-target [手] did not reduce to never playing it)
   - `crates/game-rules/tests/rb_fuzz_found.rs:186` `monotonicity_break` (a +N roll modifier shortened a move)
   - **D**: `card_trap_reachable`, `immunity_gap` ignores already removed
-  - `crates/game-rules/tests/inline_provider.rs:247` B2 HostRequest learn-pass gap (see HOST-01)
+  - `crates/game-rules/tests/inline_provider.rs:247` B2 HostRequest learn-pass gap (see HOST-01 -- top-level pay path now pinned green; nested-settle remainder)
 - **rulebook**: general engine invariants (same answers → same world; save/restore round-trip; negation is total; +N never shortens).
 - **current**: each shape is a latent fuzz repro still ignored.
 - **expected**: green under the existing `rb_fuzz_found` assertions.
-- **note**: may share one pipeline root cause (guest/world overlay + HostRequest ordering); investigate as one batch.
+- **note**: may share one pipeline root cause (guest/world overlay + HostRequest ordering); investigate as one batch. HOST-01's top-level rebase is in (see its entry); the nested-settle remainder is the open part.
 
 ## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects)
 - **kind**: ABI defect / implementation bug
@@ -425,9 +425,9 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   - `crates/game-rules/tests/inline_provider.rs:247` (B2 equivalence gap TODO), `:343` (cross-ref)
   - `docs/BOT.md` §3.2
 - **rulebook**: n/a — ABI contract: inline learn pass must see the same world as the replay model's last pass (`live + host_effects`).
-- **current**: learn pass runs on a copy taken *before* the HostRequests it discovers; a body that queries state a host routine changed (money after a `pay`) sees the pre-effect value.
-- **expected**: rebase the guest's writes onto the updated live world between passes.
-- **capability**: two-pass drive rebase / overlay_guest_state extended to HostRequest sequencing.
+- **current**: PARTIAL (top-level done; nested-settle remainder). Each pass shares `live` after `NeedHost`, so the **landing** pass reads `live + host_effects`; write-through replace-on-rerun means the event stream carries that pass's lines (`docs/ENGINE.md` "Drive replay semantics"). Pinned for the top-level `pay` path by `effect_applied_log::reread_after_host_effect_sees_the_updated_value`. **Remaining gap:** a write inside a host routine's *nested settle* (the agent-tile offer buying a deed during `HostRequest::Move`) may not be on live before the next pass shares -- `RAS:成为最强`'s ownership check still sees the pre-buy deed (`be_strongest_rolls_only_with_a_livehouse`).
+- **expected**: rebase onto the updated live world between passes, including nested settle writes (the write journal this item names).
+- **capability**: write journal on `Run` for nested settle writes. Top-level HostRequest sequencing is in.
 
 ---
 
