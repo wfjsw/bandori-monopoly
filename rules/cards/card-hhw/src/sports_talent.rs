@@ -16,11 +16,11 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], "", Some(counteract_guard), counteract),
-        // The body-top applicability checks are the condition / residual guard
-        // now (C# `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's
-        // own main move, with no fixed face yet. `fixed_roll` is derived plan
-        // state outside the CEL schema (docs/GUARDS.md §4.2c).
-        On::RollPlan("card.placed && turn_player == owner", Some(roll_plan_unfixed), roll_plan),
+        // The body-top applicability checks are the condition now (C#
+        // `m.Seat == Seat && m.Main && m.FixedRoll < 0`): the owner's own main
+        // move, with no fixed face yet. `plan.fixed_roll` carries the "no fixed
+        // face" half now.
+        On::RollPlan("card.placed && turn_player == owner && plan.fixed_roll == null", None, roll_plan),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
@@ -104,18 +104,11 @@ fn reward(player_id: i32) -> card_sdk::Asked {
 /// `MoveCtx.MinRoll` clamps the final face up to 10 after the counteractions
 /// (`if (!m.Signed) m.Roll = max(m.MinRoll, m.Roll)`); `set_min_roll` is that
 /// plan field, shaped here before the dice (`On::RollPlan`). Same gate as the
-/// C# `RollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`) -- now the
-/// entry's condition + [`roll_plan_unfixed`].
+/// C# `RollAfter` (`m.Seat == Seat && m.Main && m.FixedRoll < 0`) -- the
+/// entry's condition.
 fn roll_plan(_player_id: i32) -> card_sdk::Asked {
     ctx::plan::set_min_roll(10);
     Ok(())
-}
-
-/// C# `m.FixedRoll < 0` -- no fixed face yet, so the min-roll clamp applies.
-/// Derived plan state, outside the CEL schema (docs/GUARDS.md §4.2c): the
-/// residual guard of [`roll_plan`].
-fn roll_plan_unfixed(_player_id: i32) -> bool {
-    ctx::fixed_roll().is_none()
 }
 
 /// 规则书: 「每次移动掷骰时，重骰移动掷骰直至结果为10以上为止」 -- reroll with

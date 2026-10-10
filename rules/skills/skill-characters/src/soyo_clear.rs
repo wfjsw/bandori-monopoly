@@ -32,12 +32,11 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         // （2）「移动掷骰后可消耗一个火罐」 -- only with a pot to spend, and
-        // only on a free roll (`fixed_roll` is not in the condition vocabulary,
-        // so it is the residual guard).
+        // only on a free roll.
         On::Hook(
             &[HookKind::RollAfter],
-            "actor == owner && fire(owner) >= 1",
-            Some(offer_unfixed),
+            "actor == owner && fire(owner) >= 1 && plan.fixed_roll == null",
+            None,
             offer,
         ),
         On::Hook(&[HookKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", None, on_settle),
@@ -64,12 +63,6 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("soyo_clear_gain")))?;
     Ok(())
-}
-
-/// Residual guard for （2） -- `fixed_roll` stays here (not yet in the condition
-/// vocabulary). `fire(owner) >= 1` is the pre.
-fn offer_unfixed(_player_id: i32) -> bool {
-    ctx::fixed_roll().is_none()
 }
 
 /// （2） 「移动掷骰后可消耗一个火罐」 -- the moment the face exists.
