@@ -17,7 +17,7 @@
 //! figure is untouched. That is a per-party bend, which `PayMul` carries as the
 //! amount seen from one side.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{counter, state_key, HookKind};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -130,8 +130,8 @@ fn halve(player_id: i32) -> card_sdk::Asked {
     let mut n = 1;
     // 「每当乐队技能需要移除[奇迹水晶]时，可移除「#L11」上的一个[奇迹水晶]代替」
     if let Some(uid) = ctx::find_card(player_id, "Sumimi:#L11") {
-        while n > 0 && ctx::crystals_at(uid) > 0 {
-            ctx::add_crystals_at(uid, -1, i32::MAX);
+        while n > 0 && ctx::counter_at(uid, counter::CRYSTALS) > 0 {
+            ctx::add_counter_at(uid, counter::CRYSTALS, -1, i32::MAX);
             n -= 1;
         }
     }

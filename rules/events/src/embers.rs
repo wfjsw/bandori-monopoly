@@ -3,7 +3,7 @@
 //! 事件文本（data/events.json, id `火种燃尽之后会怎么样呢？`）:
 //! > （1）将此卡的复制品放置于所有玩家所在格子上，触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格，触发结算时，格子上每有一张此卡的复制品，那名玩家失去10资金。任意玩家获得[除外]或破产时，移除所有此卡的复制品。
 
-use card_sdk::abi::{state_key, AbKind, HookKind, TriggerKind};
+use card_sdk::abi::{state_key, AbKind, HookKind, MarkFilter, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -49,7 +49,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
     for p in all_players() {
         let at = ctx::player_pos(p);
         if at >= 0 {
-            ctx::add_mark(at, -1, EMBER, &note);
+            // One row per copy (`place_mark_new`): the old `add_mark` pushed a
+            // fresh row, and tests pin separate rows when two players share a
+            // tile.
+            ctx::place_mark_new(at, EMBER, "", -1, ctx::self_uid(), 1, &note);
         }
     }
     ctx::log(player_id, &note);
@@ -79,7 +82,9 @@ fn on_turn_start(_player_id: i32) -> card_sdk::Asked {
         for steps in [1, -1] {
             let at = ctx::tile_steps_ahead(p, steps);
             if at >= 0 {
-                ctx::add_mark(at, -1, EMBER, &note);
+                // Fresh row per copy (`place_mark_new`): two players sharing a
+                // neighbour must land as separate rows, not one stacked count.
+                ctx::place_mark_new(at, EMBER, "", -1, ctx::self_uid(), 1, &note);
             }
         }
     }
@@ -96,7 +101,8 @@ fn any_exiled() -> bool {
 /// 「移除所有此卡的复制品」
 fn clear_copies(who: i32) {
     for t in 0..ctx::tile_count() {
-        ctx::remove_marks(t, EMBER, -2);
+        // `MarkFilter::any()` keeps the old `owner: -2` "any owner" match.
+        ctx::remove_marks(t, &MarkFilter::any().kind(EMBER));
     }
     ctx::log(
         who,
@@ -117,7 +123,7 @@ fn on_settle(_owner: i32) -> card_sdk::Asked {
     if at < 0 || who < 0 {
         return Ok(());
     }
-    let n = ctx::count_marks(at, EMBER, -1);
+    let n = ctx::count_marks(at, &MarkFilter::any().kind(EMBER).owner(-1));
     if n <= 0 {
         return Ok(());
     }

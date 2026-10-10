@@ -12,7 +12,7 @@
 //! 「星星贴纸」 is a player counter; 「为此卡添加1个[奇迹水晶]」 is a band-card
 //! crystal. （3） is the hill's ownership shared across the band.
 
-use card_sdk::abi::{state_key, GateKind, HookKind};
+use card_sdk::abi::{counter, state_key, GateKind, HookKind};
 use card_sdk::ctx::{self, plan, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -284,8 +284,8 @@ fn cash(player_id: i32) -> card_sdk::Asked {
     let mut n = 2;
     // 「每当乐队技能需要移除[奇迹水晶]时，可移除「#L11」上的一个[奇迹水晶]代替」
     if let Some(uid) = ctx::find_card(player_id, "Sumimi:#L11") {
-        while n > 0 && ctx::crystals_at(uid) > 0 {
-            ctx::add_crystals_at(uid, -1, i32::MAX);
+        while n > 0 && ctx::counter_at(uid, counter::CRYSTALS) > 0 {
+            ctx::add_counter_at(uid, counter::CRYSTALS, -1, i32::MAX);
             n -= 1;
         }
     }
