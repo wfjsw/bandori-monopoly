@@ -81,6 +81,7 @@ pub struct SettleWork {
 
 impl WorkItem for SettleWork {
     fn run(self: Box<Self>, cx: &mut Cx) -> Flow<()> {
+        // `step_settle` notes the op (rulebook depth cap).
         let mut frame = self.frame;
         cx.step_settle(&mut frame)
     }
@@ -161,14 +162,34 @@ impl<'a> Cx<'a> {
         self.counteract_resume.take()
     }
 
-    /// Bump the nested-settle depth and report whether the rulebook cap
-    /// ([`MAX_SETTLE_DEPTH`](super::MAX_SETTLE_DEPTH)) has been hit.
+    /// True when this pump has already started [`MAX_SETTLE_DEPTH`] settles
+    /// (rulebook runaway guard -- two cards settling each other). The work
+    /// stack keeps the **Rust stack** flat; this is only the rules-level cap.
     pub fn settle_depth_guard(&mut self) -> bool {
-        if self.settle_depth >= super::MAX_SETTLE_DEPTH {
-            return true;
+        self.settle_ops >= super::MAX_SETTLE_DEPTH
+    }
+
+    /// Note that a settle is starting (drives [`Self::settle_depth_guard`]).
+    pub fn note_settle_op(&mut self) -> bool {
+        if self.settle_ops >= super::MAX_SETTLE_DEPTH {
+            return false;
         }
-        self.settle_depth += 1;
-        false
+        self.settle_ops += 1;
+        true
+    }
+
+    /// Skip the next `n` drive calls on a resumed counteract walk.
+    pub fn set_drive_skip(&mut self, n: u32) {
+        self.drive_skip = n;
+    }
+    /// Consume one drive-skip slot. `true` = this drive already ran.
+    pub fn take_drive_skip(&mut self) -> bool {
+        if self.drive_skip > 0 {
+            self.drive_skip -= 1;
+            true
+        } else {
+            false
+        }
     }
 
     /// Store / take the dest a resumed drive returned (card fate).
@@ -189,6 +210,7 @@ impl<'a> Cx<'a> {
         }
         self.draining_work = true;
         self.suspend_base = 0;
+        self.settle_ops = 0;
         let mut result = Ok(());
         while let Some(w) = self.work_stack.pop() {
             self.suspend_base = 0;

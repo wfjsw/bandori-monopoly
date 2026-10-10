@@ -825,17 +825,8 @@ impl Cx<'_> {
         // mechanism -- the work stack is -- but the rules themselves can loop
         // forever (two cards settling each other). Log and stop after
         // [`MAX_SETTLE_DEPTH`] nested settles.
-        if self.settle_depth >= MAX_SETTLE_DEPTH {
-            self.w.log(
-                "text",
-                player_id as i32,
-                Msg::new("log.settle_depth_cap")
-                    .player_id("who", player_id)
-                    .i("n", MAX_SETTLE_DEPTH as i64),
-            );
-            return Ok(());
-        }
-        self.settle_depth += 1;
+        // Depth cap lives in `step_settle` (both this path and a work-stack
+        // `SettleWork` go through it).
         let m = self.card_settle_move(player_id, tile, main);
         let frame = crate::engine::work::SettleFrame::new(player_id, tile, m);
         // Always go through the pump: nested jobs suspend and resume on the
@@ -847,9 +838,7 @@ impl Cx<'_> {
             return Ok(());
         }
         self.push_work(crate::engine::work::SettleWork { frame });
-        let r = self.drain_work();
-        self.settle_depth = self.settle_depth.saturating_sub(1);
-        r?;
+        self.drain_work()?;
         self.wait(0.6);
         Ok(())
     }
@@ -1779,84 +1768,101 @@ impl Cx<'_> {
     /// where `card_settle_at` returned to the hook body.
     pub fn step_settle(&mut self, frame: &mut crate::engine::work::SettleFrame) -> Flow<()> {
         use crate::engine::work::ContinueSettleWork;
-        loop {
-            match self.step_settle_stage(frame) {
-                Ok(true) => continue,
-                Ok(false) => return Ok(()),
-                Err(e) if e.is_suspended() => {
-                    // Stage not advanced: the re-entered raise adopts
-                    // `counteract_resume` and continues the same stage.
-                    self.insert_work(ContinueSettleWork {
-                        frame: frame.clone(),
-                    });
-                    return Err(e);
-                }
-                Err(e) => return Err(e),
-            }
+        // Rulebook runaway guard (not stack safety): two cards can settle each
+        // other forever. Count only while a settle is actually in flight.
+        // Rulebook runaway guard: cap settles per pump chain.
+        if !self.note_settle_op() {
+            self.w.log(
+                "text",
+                frame.player as i32,
+                Msg::new("log.settle_depth_cap")
+                    .player_id("who", frame.player as i32)
+                    .i("n", MAX_SETTLE_DEPTH as i64),
+            );
+            return Ok(());
         }
+        let r = self.step_settle_run(frame);
+        if r.is_err() && r.as_ref().err().map(|e| e.is_suspended()).unwrap_or(false) {
+            // Stage not advanced: the re-entered raise adopts
+            // `counteract_resume`. Park this settle to resume after the
+            // nested work.
+            self.insert_work(crate::engine::work::ContinueSettleWork {
+                frame: frame.clone(),
+            });
+        }
+        r
     }
 
-    /// One settle stage. `Ok(true)` = more stages remain; `Ok(false)` = done.
-    fn step_settle_stage(
-        &mut self,
-        frame: &mut crate::engine::work::SettleFrame,
-    ) -> Flow<bool> {
+    fn step_settle_run(&mut self, frame: &mut crate::engine::work::SettleFrame) -> Flow<()> {
+        use crate::engine::work::ContinueSettleWork;
         use crate::engine::work::SettleStage;
-        let i = frame.player;
-        let at = frame.at;
-        let m = frame.m.clone();
-        match frame.stage {
-            SettleStage::RaiseSettle => {
-                if frame.owner < 0 {
-                    frame.owner = self.w.st.owners.get(at).copied().unwrap_or(-1);
+        loop {
+            let more = match frame.stage {
+                SettleStage::RaiseSettle => {
+                    if frame.owner < 0 {
+                        frame.owner = self.w.st.owners.get(frame.at).copied().unwrap_or(-1);
+                    }
+                    let owner = frame.owner;
+                    let (i, at) = (frame.player, frame.at);
+                    let m = frame.m.clone();
+                    let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
+                    if self.out(i) || t.is_cancelled() {
+                        frame.stage = SettleStage::RaiseTileResolved;
+                    } else {
+                        frame.stage = SettleStage::RaiseSettleBody;
+                    }
+                    true
                 }
-                let owner = frame.owner;
-                let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
-                if self.out(i) || t.is_cancelled() {
-                    frame.stage = SettleStage::RaiseTileResolved;
-                } else {
+                SettleStage::AfterSettle => {
                     frame.stage = SettleStage::RaiseSettleBody;
+                    true
                 }
-                Ok(true)
-            }
-            SettleStage::AfterSettle => {
-                // Unused: RaiseSettle advances directly to the next raise.
-                frame.stage = SettleStage::RaiseSettleBody;
-                Ok(true)
-            }
-            SettleStage::RaiseSettleBody => {
-                let owner = frame.owner;
-                let si = raise!(self, "settleBody", i, @m m, tile = at as i32, target = owner)?;
-                if si.is_cancelled() {
+                SettleStage::RaiseSettleBody => {
+                    let owner = frame.owner;
+                    let (i, at) = (frame.player, frame.at);
+                    let m = frame.m.clone();
+                    let si = raise!(self, "settleBody", i, @m m, tile = at as i32, target = owner)?;
+                    if si.is_cancelled() {
+                        frame.stage = SettleStage::RaiseSettleAfter;
+                    } else {
+                        frame.stage = SettleStage::SettleTile;
+                    }
+                    true
+                }
+                SettleStage::SettleTile => {
+                    let rules = self.rules;
+                    rules.settle_tile(self, frame.player, frame.at, frame.m.main)?;
                     frame.stage = SettleStage::RaiseSettleAfter;
-                } else {
-                    frame.stage = SettleStage::SettleTile;
+                    true
                 }
-                Ok(true)
-            }
-            SettleStage::SettleTile => {
-                let rules = self.rules;
-                rules.settle_tile(self, i, at, m.main)?;
-                frame.stage = SettleStage::RaiseSettleAfter;
-                Ok(true)
-            }
-            SettleStage::RaiseSettleAfter => {
-                if self.out(i) || !self.playing() {
-                    frame.stage = SettleStage::RaiseTileResolved;
-                    return Ok(true);
+                SettleStage::RaiseSettleAfter => {
+                    if self.out(frame.player) || !self.playing() {
+                        frame.stage = SettleStage::RaiseTileResolved;
+                    } else {
+                        let owner = frame.owner;
+                        let (i, at) = (frame.player, frame.at);
+                        let m = frame.m.clone();
+                        raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
+                        frame.stage = SettleStage::RaiseTileResolved;
+                    }
+                    true
                 }
-                let owner = frame.owner;
-                raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
-                frame.stage = SettleStage::RaiseTileResolved;
-                Ok(true)
+                SettleStage::RaiseTileResolved => {
+                    let owner = frame.owner;
+                    let (i, at) = (frame.player, frame.at);
+                    let m = frame.m.clone();
+                    raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
+                    frame.stage = SettleStage::Done;
+                    false
+                }
+                SettleStage::Done => false,
+            };
+            // A raise that suspended: park the current stage (not advanced)
+            // and let the pump run the nested settle first.
+            // (The `?` above already returned; this match completes stages.)
+            if !more {
+                return Ok(());
             }
-            SettleStage::RaiseTileResolved => {
-                let owner = frame.owner;
-                raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
-                frame.stage = SettleStage::Done;
-                Ok(false)
-            }
-            SettleStage::Done => Ok(false),
         }
     }
 

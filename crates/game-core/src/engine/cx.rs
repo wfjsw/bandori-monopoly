@@ -438,6 +438,12 @@ pub struct Cx<'a> {
     pub(crate) last_drive_dest: Option<i32>,
     /// Nested-settle depth (STACK-01 rulebook guard [`MAX_SETTLE_DEPTH`]).
     pub(crate) settle_depth: u32,
+    /// STACK-01: skip this many `drive` calls on the next counteract
+    /// walk (they already completed before a nested-settle suspend).
+    pub(crate) drive_skip: u32,
+    /// Settles started in the current `drain_work` pump (STACK-01
+    /// rulebook cap [`MAX_SETTLE_DEPTH`]).
+    pub(crate) settle_ops: u32,
 }
 
 /// The play-gate memo: verdicts keyed by `(player, card id)`, valid only for
@@ -853,6 +859,8 @@ impl<'a> Cx<'a> {
             counteract_resume: None,
             last_drive_dest: None,
             settle_depth: 0,
+            drive_skip: 0,
+            settle_ops: 0,
         }
     }
 
