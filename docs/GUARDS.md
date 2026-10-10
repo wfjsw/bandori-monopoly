@@ -71,8 +71,9 @@ per-card probes.
 | tile owner / named / houses / mortgaged | 9 | 6 | `hey_kids.rs:40` `tile.owner == owner && houses > 0` |
 | player-exists (others / neighbor / on tile) | 6 | 3 | `hold_hands_again.rs:28` `actor == neighbor(owner,-1)` |
 | character / band identity | 2 | 2 | `two_in_one.rs:28` `character_is(owner, …)` |
-| geometry (`next_dist`, `on_path`, `within5`, `near`, `dist`) | 6 | 0 → prefix only | `meet_again.rs:51`, `repaint.rs:37` |
-| derived accounting / lists (`gains_this_turn`, `targeted_count`, `price_tag`, `grade_of`, `buildable_targets`) | 7 | 0 → prefix only | `secret_rainbow.rs:112`, `hagumi_marks.rs:172` |
+| geometry (`next_dist`, `on_path`, `within5`, `near`, `dist`, `players_on`, `between`, `card.tile`) | 8 | 8 | `meet_again.rs:51`, `repaint.rs:37` |
+| derived accounting / lists (`gains_this_turn`, `targeted_count`, `repeated_digits`, `plan.fixed_roll`) | 8 | 8 | `secret_rainbow.rs:112`, `hagumi_marks.rs:172` |
+| derived accounting / lists (`price_tag`, `grade_of`, `buildable_targets`) | 3 | 0 → prefix only | `secret_rainbow.rs:112` |
 
 **FULL** (every body condition in the atom set): **~30/50 (60 %)**. **PARTIAL**
 (cheap prefix — usually kind + actor + move/effect — is the dominant rejector):
@@ -138,14 +139,19 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264) |
+| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `plan.fixed_roll`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264); `plan.fixed_roll` from `TurnCtx.fixed_roll` |
 | window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
 | candidate | `owner` (= `player_id` arg), `owner.money/fire/crystals/hand/pos/out/stay/stun/exile/no_hand`, `owner.character`, `owner.band`, `owner.tiles` (count). `owner.crystals` is the owner's **band** crystals (the band-skill field instance's `crystals`), not an on-card counter | `World`/`Player` |
-| candidate | `card.id`, `card.placed`, `card.cp` (legacy -- reads **crystals**, see §4.2b), `card.counter('name')`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks |
+| candidate | `card.id`, `card.placed`, `card.cp` (legacy -- reads **crystals**, see §4.2b), `card.counter('name')`, `card.tile`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks; `card.tile` from the running instance (`ctx::self_tile`) |
 
-Not in the schema (residual, stays in the wasm guard): geometry, list builders,
-`gains_this_turn` / `targeted_count` / `price_tag` / `grade_of`, `skill_blocked`
-semantics beyond a `blocked(band)` int mirror.
+Not in the schema (residual, stays in the wasm guard): `price_tag` (rent-table
+lookup), `grade_of` (a 48-row character→grade table local to the card),
+`buildable_targets` (the engine's `WhyNotBuildOn`), `skill_blocked` semantics
+beyond a `blocked(band)` int mirror, and `cant_move` (a 3-valued engine status
+whose refusal message must stay specific). Geometry (`dist`, `next_dist`,
+`on_path`, `between`, `near`/`owned_within`, `within5`/`others_within`,
+`players_on`), the turn counters (`gains_this_turn`, `targeted_count`) and the
+pure int predicate `repeated_digits` **are** in the schema now.
 
 ### 4.2b The condition vocabulary (one definition per name)
 
@@ -378,7 +384,13 @@ a hand (`build_round`), so:
 
 * a verdict that reads **no** hand field is stable for the whole window —
   `cond_reads_hand` (the condition names `owner_hand` or calls `hand(p)`) and
-  any residual wasm guard (it may read anything) are the hand-sensitive ones;
+  any residual wasm guard (it may read anything) are the hand-sensitive ones.
+  The 2026-10-10 native names are **none** of them hand-sensitive: `dist` /
+  `players_on` / `next_dist` / `others_within` / `owned_within` / `on_path` /
+  `between` / `card.tile` read board geometry and instance binding,
+  `plan.fixed_roll` / `gains_this_turn` / `targeted_count` read turn state, and
+  `repeated_digits` is pure math — a declaration mid-ring cannot flip any of
+  them;
 * only hand-sensitive verdicts are stamped with a `hand_gen` that bumps on
   every declaration; the rest are reused on later laps and on the re-offer
   after a seat declares;
@@ -436,12 +448,25 @@ Engine-shell share (82 %, BOT.md §5) is only partially touched (the bookkeeping
 around each probe still runs); this is a **direct fire-up cut**, complementary
 to B2 (inline answers), which removes the halt/replay amplification.
 
-**Not expressible** (wasm residual; listed in §2.1): `meet_again` next_dist,
-`repaint` on_path, `misaki_card` between, `council_check` near, `haruhikage`
-within5, `secret_rainbow` grades, `hagumi_marks` gains_this_turn, `centrifugal`
-targeted_count, `now_sumimi` price_tag, `dream_return` targets/can_pay,
-`hey_kids` buildable_targets, `no_breakup` repeated_digits, `tsugushi_monitor`
-all-player token scan. Each still gets its kind/actor prefix.
+**Not expressible** (wasm residual; listed in §2.1): `secret_rainbow` grades
+(a 48-row character→grade table local to the card; the body still needs it, so
+lifting it to the host would duplicate it), `now_sumimi` price_tag (a rent-table
+lookup + `ring_multiplier`, engine logic), `dream_return` targets (a tile loop
+over `rent_of`, the rent table), `hey_kids` buildable_targets (the engine's
+`WhyNotBuildOn` -- colour-group completeness, house caps, build-block props),
+`tsugushi_monitor` all-player token scan, and the mark-count residuals
+(`hagumi_marks`, `hagumi_homerun`, `uika_idol`, `black_suits`, `tae_police`) --
+**deferred** to the `mark-counter-api` branch, which is replacing the whole
+mark/token API with card-instance counters. Each residual keeps its
+kind/actor prefix (and, for the partials, the expressible head is now in
+`pre`).
+
+**Moved into the schema** (2026-10-10, this batch): `meet_again` next_dist,
+`repaint` on_path, `misaki_card` between, `council_check` near/owned_within,
+`haruhikage` within5/others_within, `your_light` dist, `lisa_bond` players_on,
+`rana_funny` card.tile, `hagumi_marks` gains_this_turn, `centrifugal`
+targeted_count, `no_breakup` repeated_digits, and `plan.fixed_roll`
+(sports_talent / kaoru_thief / soyo_clear / kanon_lost).
 
 ## 7. Phases (after purchasing; sizes are LOC-ish)
 
@@ -605,7 +630,11 @@ the manifest stays postcard and the browser never sees a `String` of CEL.
 * `Cond::eval(&WindowCtx, &CandidateCtx) -> bool`, plus `WindowScope` for the
   §4.4 (1) hot path. `eval_checked` surfaces type errors for the G3 audit.
 * `slot` / `tok` are CEL functions (as in §4.2); `tile_named`, `money(p)`,
-  `character_is`, `band_is`, `blocked`, `neighbor` likewise.
+  `character_is`, `band_is`, `blocked`, `neighbor` likewise. The 2026-10-10
+  native batch adds `dist`, `players_on`, `next_dist`, `others_within`,
+  `owned_within`, `on_path`, `between`, `gains_this_turn`, `targeted_count`
+  and the pure predicate `repeated_digits` (three new `Fx` shapes:
+  `IntIntConst` / `BinInt` / `IntPred`).
 * Unit tests (`tests/cond_tests.rs`, 29 + 4 wire + doctest): parse errors,
   unknown vars, float / kind rejection, truth tables for the sample
   conditions, function lookups, scope-reuse equivalence, **postcard

@@ -54,6 +54,23 @@ pub struct TestWorld {
     pub marks: Vec<(i32, i32, Msg)>,
     pub events: Vec<String>,
     pub trigger: Trigger,
+    /// Per-seat board position. Empty -> `player_pos` answers -1.
+    pub pos: Vec<i32>,
+    /// Per-tile owner seat (-1 = unowned). Empty -> `tile_owner` answers -1.
+    pub owners: Vec<i32>,
+    /// Per-seat out flag. Empty -> nobody is out.
+    pub out: Vec<bool>,
+    /// Per-seat exile flag. Empty -> nobody is exiled.
+    pub exile: Vec<bool>,
+    /// Per-seat money-ins this turn (`gains_this_turn`).
+    pub gains: Vec<i32>,
+    /// Per-seat hostile targetings this turn (`targeted_count`).
+    pub targeted: Vec<i32>,
+    /// This turn's fixed main-move roll (`fixed_roll`); `None` = unset.
+    pub fixed_roll: Option<i32>,
+    /// Field instances as `(card id, tile)`; `-2` = not placed. Backs
+    /// `field_instances` / `tile_at` so `card_tile` resolves.
+    pub field: Vec<(String, i32)>,
 }
 
 impl TestWorld {
@@ -64,6 +81,14 @@ impl TestWorld {
             marks: vec![],
             events: vec![],
             trigger: Trigger::default(),
+            pos: vec![],
+            owners: vec![],
+            out: vec![],
+            exile: vec![],
+            gains: vec![],
+            targeted: vec![],
+            fixed_roll: None,
+            field: vec![],
         }
     }
     pub fn d(&mut self, sides: i32) -> i32 {
@@ -84,7 +109,14 @@ impl CardWorld for TestWorld {
     fn state_var(&self, _: i32, _: &str) -> game_core::state::StateVar {
         game_core::state::StateVar::default()
     }
-    fn state_get(&self, _: i32, _: &str) -> i32 {
+    fn state_get(&self, player_id: i32, key: &str) -> i32 {
+        if key == game_core::state::key::EXILE {
+            return self
+                .exile
+                .get(player_id.max(0) as usize)
+                .copied()
+                .unwrap_or(false) as i32;
+        }
         0
     }
     fn state_min(&self, _: i32, _: &str) -> i32 {
@@ -118,7 +150,11 @@ impl CardWorld for TestWorld {
         self.events.push(format!("log player_id={player_id} {msg}"));
     }
     fn tile_count(&self) -> i32 {
-        60
+        if !self.owners.is_empty() {
+            self.owners.len() as i32
+        } else {
+            60
+        }
     }
     fn place_mark(
         &mut self,
@@ -139,6 +175,8 @@ impl CardWorld for TestWorld {
     }
     fn gain(&mut self, player_id: i32, amount: i32, _: Msg) -> i32 {
         self.money[player_id as usize] += amount;
+        self.gains.resize(player_id.max(0) as usize + 1, 0);
+        self.gains[player_id as usize] += 1;
         amount
     }
     fn pay(&mut self, player_id: i32, amount: i32, _: Msg) -> i32 {
@@ -148,11 +186,17 @@ impl CardWorld for TestWorld {
     fn tile_named(&self, _: &str) -> i32 {
         -1
     }
-    fn tile_owner(&self, _: i32) -> i32 {
-        -1
+    fn tile_owner(&self, tile: i32) -> i32 {
+        self.owners
+            .get(tile.max(0) as usize)
+            .copied()
+            .unwrap_or(-1)
     }
-    fn player_pos(&self, _: i32) -> i32 {
-        -1
+    fn player_pos(&self, player_id: i32) -> i32 {
+        self.pos
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(-1)
     }
     fn tile_steps_ahead(&self, _: i32, _: i32) -> i32 {
         -1
@@ -178,16 +222,20 @@ impl CardWorld for TestWorld {
     fn player_count(&self) -> i32 {
         4
     }
-    fn player_out(&self, _: i32) -> i32 {
-        0
+    fn player_out(&self, player_id: i32) -> i32 {
+        self.out
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(false) as i32
     }
-    fn others_count(&self, _: i32) -> i32 {
-        3
+    fn others_count(&self, player_id: i32) -> i32 {
+        (0..self.money.len() as i32)
+            .filter(|&i| i != player_id && self.player_out(i) == 0)
+            .count() as i32
     }
     fn others_at(&self, player_id: i32, index: i32) -> i32 {
-        [0, 1, 2, 3]
-            .into_iter()
-            .filter(|&i| i != player_id)
+        (0..self.money.len() as i32)
+            .filter(|&i| i != player_id && self.player_out(i) == 0)
             .nth(index.max(0) as usize)
             .unwrap_or(-1)
     }
@@ -436,5 +484,33 @@ impl CardWorld for TestWorld {
     }
     fn in_band(&self, _: i32, _: &str) -> i32 {
         0
+    }
+    fn fixed_roll(&self) -> i32 {
+        self.fixed_roll.unwrap_or(-1)
+    }
+    fn gains_this_turn(&self, player_id: i32) -> i32 {
+        self.gains
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }
+    fn targeted_count(&self, player_id: i32) -> i32 {
+        self.targeted
+            .get(player_id.max(0) as usize)
+            .copied()
+            .unwrap_or(0)
+    }
+    fn field_instances(&self, _: i32) -> Vec<(i32, String)> {
+        self.field
+            .iter()
+            .enumerate()
+            .map(|(uid, (id, _))| (uid as i32, id.clone()))
+            .collect()
+    }
+    fn tile_at(&self, uid: i32) -> i32 {
+        self.field
+            .get(uid.max(0) as usize)
+            .map(|(_, t)| *t)
+            .unwrap_or(-2)
     }
 }
