@@ -90,10 +90,15 @@ export class Animator {
     /** The activation's trigger kind (`card_trigger`); `hook` and kin caption
      *  generically, and their detail lines already name the card. */
     kind: string;
+    /** The `"card"` event id this flash is, so body lines can ride it. */
+    actId: number;
   } | null = null;
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
+  /** Activation event id -> indent depth, for nesting a child activation
+   *  (and its children) under the parent that caused it. */
+  private actDepth = new Map<number, number>();
   /** Animation speed scales every sleep and timer. A 4x replay additionally
    *  takes the instant path; live matches still show each movement step. */
   speed = 1;
@@ -143,21 +148,35 @@ export class Animator {
     const names = e.type === "turn" ? turnNamesOf(this.view()?.state) : this.names();
     const parts = fmtMsgParts(e.msg, names);
     const line = partsText(parts) || fmtMsg(e.msg, names);
-    // Group a child event (and an activation's explicit outcome notes) under
-    // its 「效果适用」 header. The child events themselves stay in the stream
-    // in code order for animations; the indent is presentational.
-    const under = (e.parent ?? -1) >= 0;
+    // Group under the 「效果适用」 header: children indent one level past
+    // their parent; a nested activation (a `"card"` event with a parent) and
+    // its children nest one level deeper still. The child events stay in the
+    // stream in code order for animations; the indent is presentational.
+    const parent = e.parent ?? -1;
+    let depth = 0;
+    if (parent >= 0) depth = (this.actDepth.get(parent) ?? 0) + 1;
+    if (e.type === "card") this.actDepth.set(e.id, depth);
+    const indent = "  ".repeat(depth);
     const rows: LogLine[] = [];
     if (line) {
       rows.push({
-        id: e.id, text: under ? `  ${line}` : line, turn: e.type === "turn",
+        id: e.id, text: indent + line, turn: e.type === "turn",
         who: e.type === "turn" ? e.playerId : undefined,
         parts: parts.length ? parts : undefined,
       });
     }
     for (const r of e.results ?? []) {
       const rt = fmtMsg(r, names);
-      if (rt) rows.push({ id: e.id, text: `  ${rt}`, turn: false });
+      if (rt) rows.push({ id: e.id, text: `${indent}  ${rt}`, turn: false });
+    }
+    // A body line that belongs to the activation currently on the flash rides
+    // its face as the outcome summary (first two only).
+    if (parent >= 0 && e.type !== "card" && this.flash && !this.flash.out
+        && this.flash.actId === parent
+        && this.flash.detail.length < 2 && line) {
+      const f = this.flash;
+      this.flash = { ...f, detail: [...f.detail, line], out: false };
+      this.armFlash(f.id, this.fast());
     }
     if (!rows.length) return;
     this.log = [...this.log.slice(-199), ...rows];
@@ -247,13 +266,16 @@ export class Animator {
       caption = tr("board.cardEffect", { card: cardTitle(e.card) });
     }
     if (!fast) sfx(e.negated ? "prompt" : "card_play");
-    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, [], fast);
+    // A negated activation's `results` name what negated it; a live one's
+    // outcome lines ride the face as they arrive (`addLog`).
+    const detail = (e.results ?? []).map((r) => fmtMsg(r, this.names())).filter(Boolean);
+    this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, fast, e.id);
   }
 
   /** Put a card face up; `armFlash` starts its hold. */
-  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], fast: boolean): void {
+  private showFlash(card: string, owner: number, caption: string, negated: boolean, kind: string, detail: string[], fast: boolean, actId = -1): void {
     const id = ++this.seq;
-    this.flash = { card, owner, caption, negated, out: false, id, detail, kind };
+    this.flash = { card, owner, caption, negated, out: false, id, detail, kind, actId };
     this.armFlash(id, fast);
     this.bump();
   }

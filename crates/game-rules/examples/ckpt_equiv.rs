@@ -5,10 +5,16 @@
 //!
 //!   CARGO_TARGET_DIR=target/coord CARGO_INCREMENTAL=0 \
 //!     cargo run -p game-rules --release --example ckpt_equiv -- \
-//!       [out.txt] [games] [players] [max_rounds] [standard|chaos]
+//!       [out.txt] [games] [players] [max_rounds] [standard|chaos] [--state]
 //!
 //! Defaults: `target/scratch/ckpt.txt`, 8 games, 4 players, 120 rounds,
 //! `standard`. The trailing word picks every bot's mentality.
+//!
+//! `--state` hashes the save with the **event tail excluded** (`world.recent`,
+//! `world.next_event`, and every `parent` / `results` field) so a change that
+//! only reshapes the log still shows identical game state (money, positions,
+//! ownership, hands, field, turn). Compare a `--state` run before and after to
+//! prove state equivalence; the full run's deltas should be events only.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -33,6 +39,37 @@ fn fnv1a64(bytes: &[u8]) -> u64 {
     h
 }
 
+/// Strip the event tail and its presentation fields from a save, so the hash
+/// covers game state only. `--state` mode.
+fn strip_events(save: &str) -> String {
+    let Ok(mut v) = serde_json::from_str::<serde_json::Value>(save) else {
+        return save.to_string();
+    };
+    if let Some(world) = v.get_mut("world").and_then(|w| w.as_object_mut()) {
+        world.remove("recent");
+        world.remove("next_event");
+    }
+    fn scrub(v: &mut serde_json::Value) {
+        match v {
+            serde_json::Value::Object(o) => {
+                o.remove("parent");
+                o.remove("results");
+                for (_, x) in o.iter_mut() {
+                    scrub(x);
+                }
+            }
+            serde_json::Value::Array(a) => {
+                for x in a.iter_mut() {
+                    scrub(x);
+                }
+            }
+            _ => {}
+        }
+    }
+    scrub(&mut v);
+    serde_json::to_string(&v).unwrap_or_else(|_| save.to_string())
+}
+
 fn load_data() -> Arc<GameData> {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
     Arc::new(
@@ -52,6 +89,7 @@ fn load_rules(data: &Arc<GameData>) -> Arc<dyn CardRules> {
 
 fn main() {
     let raw: Vec<String> = std::env::args().skip(1).collect();
+    let state_only = raw.iter().any(|a| a == "--state");
     let mentality = raw
         .iter()
         .find_map(|a| BotMentality::parse(a))
@@ -113,6 +151,11 @@ fn main() {
                     m.finish();
                 }
                 let save = m.save();
+                let save = if state_only {
+                    strip_events(&save)
+                } else {
+                    save
+                };
                 let h = fnv1a64(save.as_bytes());
                 game_hash = game_hash
                     .wrapping_mul(0x0000_0100_0000_01b3)
@@ -131,7 +174,13 @@ fn main() {
             }
         }
         let st = m.state();
-        let final_h = fnv1a64(m.save().as_bytes());
+        let save = m.save();
+        let save = if state_only {
+            strip_events(&save)
+        } else {
+            save
+        };
+        let final_h = fnv1a64(save.as_bytes());
         game_hash = game_hash
             .wrapping_mul(0x0000_0100_0000_01b3)
             .wrapping_add(final_h);
