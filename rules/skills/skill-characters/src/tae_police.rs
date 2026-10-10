@@ -7,15 +7,15 @@
 //! > （2）在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个
 //! > [火罐]将其抵消，然后你获得500资金且被抵消的玩家获得2000资金
 //!
-//! （1）'s 「[多惠兔子]」 is a tile mark, which is what `add_mark` / `bump_mark`
-//! carry; 「[移除]该格子上的所有[多惠兔子]并获得等量的[火罐]」 is a count-and-
-//! clear on the pass.
+//! （1）'s 「[多惠兔子]」 is a tile mark, which is what `place_mark_new` /
+//! `bump_mark` carry; 「[移除]该格子上的所有[多惠兔子]并获得等量的[火罐]」 is a
+//! count-and-clear on the pass.
 //!
 //! （2） 「将其抵消」 is a [反击]: the effect is named and then voided, which is
 //! `trigger::set_cancelled`. 「使用角色/团技能的[主]效果或使用手牌的[手]效果」
 //! is the `card` chain for a hand play and `skillUsed` for a skill press.
 
-use card_sdk::abi::{state_key, ChainKind, HookKind};
+use card_sdk::abi::{state_key, ChainKind, HookKind, MarkFilter};
 use card_sdk::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -57,7 +57,16 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
     if t == ctx::tile_named("星空齿科") {
         return Ok(());
     }
-    ctx::add_mark(t, player_id, RABBIT, &Msg::new(key!("tae_police_note")));
+    // One rabbit per placement, each its own row (tests pin row identity).
+    ctx::place_mark_new(
+        t,
+        RABBIT,
+        "",
+        player_id,
+        ctx::self_uid(),
+        1,
+        &Msg::new(key!("tae_police_note")),
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("tae_police_placed"))
@@ -69,15 +78,15 @@ fn on_circle(player_id: i32) -> card_sdk::Asked {
 
 /// 「经过有[多惠兔子]的格子」 -- the applicability of the `Pass` hook.
 fn on_pass_has_rabbits(_player_id: i32) -> bool {
-    ctx::count_marks(ctx::trigger::tile(), RABBIT, -2) > 0
+    ctx::count_marks(ctx::trigger::tile(), &MarkFilter::any().kind(RABBIT)) > 0
 }
 
 /// （1）「当你经过有[多惠兔子]的格子时[移除]该格子上的所有[多惠兔子]并获得
 /// 等量的[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    let n = ctx::count_marks(t, RABBIT, -2);
-    ctx::remove_marks(t, RABBIT, -2);
+    let n = ctx::count_marks(t, &MarkFilter::any().kind(RABBIT));
+    ctx::remove_marks(t, &MarkFilter::any().kind(RABBIT));
     ctx::gain_fire(player_id, n, &Msg::new(key!("tae_police_gain")))?;
     Ok(())
 }

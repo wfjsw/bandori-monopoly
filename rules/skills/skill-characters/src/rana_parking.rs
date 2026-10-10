@@ -25,10 +25,10 @@ use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-/// The mark kind 「抹茶芭菲」 parked on space.
-const ON_TILE: &str = "抹茶芭菲";
-/// A player's held parfaits -- a counter.
-const HELD: &str = "抹茶芭菲";
+/// The 「抹茶芭菲」 counter on this skill instance. Tile units (parked on
+/// space) and held units (a player's tokens) are the same counter bound to
+/// different locations.
+const PARFAIT: &str = "抹茶芭菲";
 
 pub const RANA_PARKING: CardDef = CardDef::new(
     "skill:要乐奈:投币式停车场的猫",
@@ -76,13 +76,13 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         ctx::gain_fire(player_id, 1, &Msg::new(key!("rana_parking_gain")))?;
         return Ok(());
     }
-    if ctx::is_ring(t) && ctx::tok(player_id, HELD) >= 1 {
+    if ctx::is_ring(t) && ctx::tok(player_id, PARFAIT) >= 1 {
         if ctx::ask_yes(
             player_id,
             &Msg::new(key!("rana_parking_title")),
             &Msg::new(key!("rana_parking_ring")),
         )? {
-            ctx::add_tok(player_id, HELD, -1, i32::MAX)?;
+            ctx::add_tok(player_id, PARFAIT, -1, i32::MAX)?;
             ctx::gain(player_id, 400, &Msg::new(key!("rana_parking_ring_gain")))?;
         }
     }
@@ -139,6 +139,11 @@ fn exempt_pay(player_id: i32) -> card_sdk::Asked {
     }
     let mover = trigger::player_id();
     if mover != player_id {
+        // TODO(规则书): 「其他人在space触发结算时可将自己拥有的一个"抹茶芭菲"
+        //   转移到该格上以免除当次付款」 is not implemented. A non-owner mover
+        //   holding a parfait should be offered
+        //   `ctx::move_units(PARFAIT, -1, mover, space, -1, 1)` in exchange for
+        //   cancelling this payment; today this branch lets the payment run.
         return Ok(());
     }
     let owner = ctx::tile_owner(space);
@@ -197,7 +202,17 @@ fn replace_body(player_id: i32) -> card_sdk::Asked {
     // 「将该次结算改为…」 -- replace the body: the tile's own effect list is
     // skipped and the parfait is what the settle does instead.
     trigger::set_cancelled();
-    ctx::add_mark(space, player_id, ON_TILE, &Msg::new(key!("rana_parking_note")));
+    // One unit of this instance's 「抹茶芭菲」 counter bound to space. Stacks
+    // onto the tile row -- 「每个将使其收费增加500资金」 reads the summed count.
+    ctx::place_mark(
+        space,
+        PARFAIT,
+        "",
+        player_id,
+        ctx::self_uid(),
+        1,
+        &Msg::new(key!("rana_parking_note")),
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("rana_parking_placed")).tile("tile", space),
@@ -217,7 +232,7 @@ fn on_overlap(player_id: i32) -> card_sdk::Asked {
         800,
         &Msg::new(key!("rana_parking_overlap")),
     )?;
-    ctx::add_tok(other, HELD, 1, i32::MAX)?;
+    ctx::add_tok(other, PARFAIT, 1, i32::MAX)?;
     ctx::log(
         player_id,
         &Msg::new(key!("rana_parking_gave")).player_id("who", other),

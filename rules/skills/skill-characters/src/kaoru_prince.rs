@@ -18,7 +18,7 @@
 //! （3） 「不会经过…所拥有的格子」 is a walk that skips another player's deeds
 //! when they hold a mark -- the plan's route filter.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, HookKind, MarkFilter};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -73,9 +73,9 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 /// 一个[怪盗标记]」.
 fn settle(player_id: i32) -> card_sdk::Asked {
     for t in 0..ctx::tile_count() {
-        if ctx::count_marks(t, THIEF, -2) > 0 {
+        if ctx::count_marks(t, &MarkFilter::any().kind(THIEF)) > 0 {
             // 「移除场上的一个[怪盗标记]」 -- one tick off a single mark.
-            ctx::bump_mark(t, THIEF, -2, -1);
+            ctx::bump_mark(t, &MarkFilter::any().kind(THIEF), -1);
             ctx::log(
                 player_id,
                 &Msg::new(key!("kaoru_prince_removed")).tile("tile", t),
@@ -141,7 +141,16 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     };
     for _ in 0..3 {
-        ctx::add_mark(tile, player_id, THIEF, &Msg::new(key!("kaoru_prince_note")));
+        // Three separate rows (tests pin row identity) -- `place_mark_new`.
+        ctx::place_mark_new(
+            tile,
+            THIEF,
+            "",
+            player_id,
+            ctx::self_uid(),
+            1,
+            &Msg::new(key!("kaoru_prince_note")),
+        );
     }
     // 「使你的本次移动以微笑号为起点」
     let ship = ctx::tile_named("微笑号");

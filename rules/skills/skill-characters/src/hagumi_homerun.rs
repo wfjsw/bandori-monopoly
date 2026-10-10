@@ -17,7 +17,7 @@
 //! cap; 「每拥有一个可乐饼，移动时多投掷1个1d2」 is one extra die per croquette,
 //! which rides on the plan's dice table.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{HookKind, MarkFilter};
 use card_sdk::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -48,7 +48,16 @@ fn on_pass_has_croquette(_player_id: i32) -> bool {
 fn spawn(_player_id: i32) -> card_sdk::Asked {
     let t = ctx::tile_named("北泽精肉店");
     if t >= 0 {
-        ctx::add_mark(t, -1, ON_TILE, &Msg::new(key!("hagumi_homerun_note")));
+        // One fresh row per turn -- croquettes accumulate as separate units.
+        ctx::place_mark_new(
+            t,
+            ON_TILE,
+            "",
+            -1,
+            ctx::self_uid(),
+            1,
+            &Msg::new(key!("hagumi_homerun_note")),
+        );
     }
     Ok(())
 }
@@ -91,7 +100,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         }
     }
     // The croquette moves from the tile to the collector.
-    ctx::bump_mark(t, ON_TILE, -2, -1);
+    ctx::bump_mark(t, &MarkFilter::any().kind(ON_TILE), -1);
     let who = mover;
     ctx::add_tok(who, HELD, 1, 10)?;
     // 「你将可乐饼转移至自己场上时可用其替换掉一个其他不位于[持续]卡上的标记」 --

@@ -12,7 +12,7 @@
 //! on the band or the player. 「每回合限一次」 is a latch, which is what the
 //! keyed state is for.
 
-use card_sdk::abi::{state_key, AbKind, HookKind};
+use card_sdk::abi::{counter, state_key, AbKind, HookKind};
 use card_sdk::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -96,7 +96,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     state::set(player_id, USED, 1);
-    ctx::add_crystals_at(uid, 1, 0);
+    ctx::add_counter_at(uid, counter::CRYSTALS, 1, 0);
     ctx::log(
         player_id,
         &Msg::new(key!("taki_meeting_added")).card("card", card),

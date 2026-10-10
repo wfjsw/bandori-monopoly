@@ -10,7 +10,7 @@
 //! pay is `X*30` where X is how many steps were left *after* passing it. The
 //! mark is spent when it pays out.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::{state_key, HookKind, MarkFilter};
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -101,7 +101,16 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if !ctx::spend_fire(player_id, 1, &Msg::new(key!("uika_idol_spend")))? {
         return Ok(());
     }
-    ctx::add_mark(tile, player_id, POT, &Msg::new(key!("uika_idol_note")));
+    // One pot per placement, its own row (`place_mark_new`).
+    ctx::place_mark_new(
+        tile,
+        POT,
+        "",
+        player_id,
+        ctx::self_uid(),
+        1,
+        &Msg::new(key!("uika_idol_note")),
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("uika_idol_placed")).tile("tile", tile),
@@ -117,7 +126,7 @@ fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
     let mover = ctx::trigger::player_id();
     let x = ctx::trigger::move_remaining().max(0);
-    ctx::bump_mark(t, POT, -2, -1);
+    ctx::bump_mark(t, &MarkFilter::any().kind(POT), -1);
     let due = x * 30;
     ctx::transfer(
         mover,
