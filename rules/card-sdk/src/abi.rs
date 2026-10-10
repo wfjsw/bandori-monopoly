@@ -1937,15 +1937,15 @@ declare_kinds! {
         SkillUsed = 74,
         /// See [`TriggerKind::HouseAdded`] -- a house was just added to `t.tile`.
         HouseAdded = 75,
-        /// See [`TriggerKind::CrystalsChanged`] -- a placed card's [奇迹水晶]
-        /// count was just written. Hook-only.
-        CrystalsChanged = 76,
+        /// v50: a named on-card counter on a placed instance was just written.
+        /// `t.name` is the counter name ([`counter::CRYSTALS`], [`counter::CP`],
+        /// …); filter on it in the residual guard (`trigger::name() == …`).
+        /// Replaces the v29 `CrystalsChanged` (76) and v36 `CpChanged` (78)
+        /// hooks (same payload plus the name). Hook-only.
+        CounterChanged = 76,
         /// See [`TriggerKind::DrewBefore`] -- the per-draw *replacement* point
         /// (「此次加手视为抽卡动作」). Hook-only.
         DrewBefore = 77,
-        /// See [`TriggerKind::CpChanged`] -- a card instance's on-card [CP点]
-        /// count was just written. Hook-only.
-        CpChanged = 78,
         /// v40: the buy price's first modifier stage (`docs/PURCHASE.md`) --
         /// fixed ±, before [`Self::BuyMul`] / [`Self::BuySet`]. `t.value` /
         /// `set_price` on the run; each stage floors the price at 0.
