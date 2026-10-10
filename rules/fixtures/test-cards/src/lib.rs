@@ -126,7 +126,7 @@ const CRYSTAL: CardDef = CardDef::new(
     "TEST:crystal",
     &[
         On::Play("", None, crystal_play),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystal_changed_guard), crystal_changed),
+        On::Hook(&[HookKind::CounterChanged], "", Some(crystal_changed_guard), crystal_changed),
     ],
 );
 
@@ -911,10 +911,56 @@ fn pass_before_flash_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// -- cross-card messages (v50) ------------------------------------------------
+
+/// Answers `"ping"` with `a + b`, logging the sender. The worked example of
+/// `On::Message` + `ctx::send`.
+const PING: CardDef = CardDef::new(
+    "TEST:ping",
+    &[
+        On::Message(&["ping"], "", None, on_ping),
+        On::Play("", None, ping_send),
+    ],
+);
+
+fn on_ping(player_id: i32) -> card_sdk::Asked {
+    let sum = ctx::message::a() + ctx::message::b();
+    ctx::message::reply(sum);
+    ctx::log(player_id, &Msg::new(key!("ping_got")).i("n", sum as i64));
+    Ok(())
+}
+
+fn ping_send(player_id: i32) -> card_sdk::Asked {
+    let reply = ctx::send(
+        &card_sdk::abi::Target::Board("mark:cp".into()),
+        "ping",
+        &card_sdk::abi::Message {
+            name: "ping".into(),
+            a: 2,
+            b: 3,
+            ..Default::default()
+        },
+    )?;
+    ctx::log(player_id, &Msg::new(key!("ping_reply")).i("n", reply as i64));
+    Ok(())
+}
+
+/// Declares `"ping"` but its `pre` rejects every sender -- never answers.
+const PING_REJECT: CardDef = CardDef::new(
+    "TEST:pingReject",
+    &[On::Message(&["ping"], "actor == owner", None, on_ping_reject)],
+);
+
+fn on_ping_reject(player_id: i32) -> card_sdk::Asked {
+    ctx::message::reply(-99);
+    ctx::log(player_id, &Msg::new(key!("ping_got")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
-    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH
+    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT
 ]);
