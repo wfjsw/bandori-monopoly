@@ -223,6 +223,10 @@ impl Run {
     /// duplicate. Without a live sink (probe / quote) the line lands on the
     /// guest copy only, as before.
     fn post_log(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str) {
+        self.post_log_value(kind, player_id, msg, card, 0)
+    }
+
+    fn post_log_value(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str, value: i32) {
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
             let parent = self.parent;
@@ -231,13 +235,13 @@ impl Run {
                 self.log_idx += 1;
                 if !cx.relog_event(id, msg.clone()) {
                     // Truncated tail -- append a fresh one and retarget the slot.
-                    let id = cx.log_event(kind, player_id, msg, parent, card);
+                    let id = cx.log_event(kind, player_id, msg, parent, card, value);
                     self.posted[self.log_idx - 1] = id;
                 }
                 return;
             }
             self.log_idx += 1;
-            let id = cx.log_event(kind, player_id, msg, parent, card);
+            let id = cx.log_event(kind, player_id, msg, parent, card, value);
             self.posted.push(id);
             return;
         }
@@ -364,13 +368,7 @@ impl CardWorld for Run {
             .i("count", count as i64)
             .i("sides", sides as i64)
             .i("sum", total as i64);
-        self.post_log("dice", player_id, msg, "");
-        if let Some(live) = self.live {
-            if let Some(&id) = self.posted.last() {
-                let cx = unsafe { &mut *live };
-                cx.replace_event_values(&[(id, total)]);
-            }
-        }
+        self.post_log_value("dice", player_id, msg, "", total);
         total
     }
 
@@ -494,14 +492,28 @@ impl CardWorld for Run {
         self.world.player_money(player_id)
     }
     fn gain(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
-        let got = self.world.gain_money(player_id, amount, src);
+        let got = self.world.gain_money(player_id, amount, src.clone());
+        if got != 0 {
+            let msg = Msg::new("log.gain")
+                .player_id("who", player_id)
+                .n("amount", got as i64)
+                .msg("src", Msg::new("log.part.why").msg("why", src));
+            self.post_log_value("gain", player_id, msg, "", got);
+        }
         if got > 0 {
             self.paid_log.push((-1, player_id, got));
         }
         got
     }
     fn pay(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
-        let paid = self.world.pay_money(player_id, amount, src);
+        let paid = self.world.pay_money(player_id, amount, src.clone());
+        if paid != 0 {
+            let msg = Msg::new("log.lose")
+                .player_id("who", player_id)
+                .n("amount", paid as i64)
+                .msg("src", Msg::new("log.part.why").msg("why", src));
+            self.post_log_value("lose", player_id, msg, "", -paid);
+        }
         if paid > 0 {
             self.paid_log.push((player_id, -1, paid));
         }
@@ -1072,7 +1084,20 @@ impl CardWorld for Run {
             .add_band_skill(&self.data, player_id, id, extra, props)
     }
     fn gain_fire(&mut self, player_id: i32, n: i32, why: Msg) -> i32 {
-        self.world.gain_fire(player_id, n, why)
+        let got = self.world.gain_fire(player_id, n, why.clone());
+        if got != 0 {
+            let s = self.world.st.players.get(player_id.max(0) as usize);
+            let cap = s.map(|p| p.fire_max()).unwrap_or(0);
+            let fire = s.map(|p| p.fire()).unwrap_or(0);
+            let msg = Msg::new("log.gain_fire")
+                .text("who", s.map(|p| p.player.clone()).unwrap_or_default())
+                .i("n", got as i64)
+                .msg("why", why)
+                .i("fire", fire as i64)
+                .i("max", cap as i64);
+            self.post_log_value("fire", player_id, msg, "", got);
+        }
+        got
     }
     fn give_stay(&mut self, player_id: i32, n: i32) {
         if n > 0 {
@@ -1492,12 +1517,9 @@ impl CardWorld for Run {
             return 0;
         }
         s.state_add(game_core::state::key::FIRE, -n);
-        self.post_log("fire", player_id, why.clone(), "");
+        self.post_log_value("fire", player_id, why.clone(), "", -n);
         if self.live.is_none() {
             self.world.log("fire", player_id, why).value = -n;
-        } else if let Some(&id) = self.posted.last() {
-            let cx = unsafe { &mut *self.live.unwrap() };
-            cx.replace_event_values(&[(id, -n)]);
         }
         self.fire_spent_log.push((player_id, n));
         1
@@ -2233,6 +2255,7 @@ impl<M: CardModules> RulesBridge<M> {
                 log_idx: 0,
                 parent: activation_id,
             };
+            run.world.skip_log = true;
             // Simulation mode (`docs/BOT.md` §3.2): with a provider installed
             // the body must run **once** -- every pause is answered inline
             // (see `crate::inline` / [`DriveInline`]), so the loop below runs
@@ -2944,6 +2967,8 @@ impl<M: CardModules> RulesBridge<M> {
                 after.world.recent = cx.world().recent.clone();
                 cx.activation.retain(|&id| id != activation_id);
             }
+            after.world.skip_log = false;
+            after.world.stub = Default::default();
             cx.swap_shared(after.world);
             // Empty-deck maintenance precedes all settlement after-hooks.
             for player_id in after.reshuffle_log {

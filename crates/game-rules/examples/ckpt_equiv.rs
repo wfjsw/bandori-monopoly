@@ -101,6 +101,9 @@ fn main() {
     let dump_dir = raw
         .iter()
         .find_map(|a| a.strip_prefix("--dump=").map(|s| s.to_string()));
+    let dump_events = raw
+        .iter()
+        .find_map(|a| a.strip_prefix("--dump-events=").map(|s| s.to_string()));
     let mentality = raw
         .iter()
         .find_map(|a| BotMentality::parse(a))
@@ -175,6 +178,19 @@ fn main() {
                         Path::new(dir).join(format!("seed{seed}-turn{}-round{}.json", st.turn, st.round)),
                         &save,
                     );
+                }
+                if let Some(dir) = &dump_events {
+                    if seed == 0 {
+                        let _ = std::fs::create_dir_all(dir);
+                        let mut lines = Vec::new();
+                        for e in m.events_since(-1) {
+                            lines.push(format!(
+                                "id={} type={} card={:?} value={} msg={} parent={}",
+                                e.id, e.r#type, e.card, e.value, e.msg.key(), e.parent
+                            ));
+                        }
+                        let _ = std::fs::write(Path::new(dir).join("seed0-events.txt"), lines.join("\n"));
+                    }
                 }
                 let h = fnv1a64(save.as_bytes());
                 game_hash = game_hash

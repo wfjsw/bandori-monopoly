@@ -635,6 +635,12 @@ pub struct World {
     /// serialized, not compared.
     #[serde(skip)]
     pub walk_flush: WalkFlush,
+    /// When set, `log` does not push an event (the caller posts write-through).
+    #[serde(skip)]
+    pub skip_log: bool,
+    /// Stub event returned when [`Self::skip_log`] is set.
+    #[serde(skip)]
+    pub stub: MatchEvent,
 }
 
 impl World {
@@ -664,6 +670,8 @@ impl World {
             gains: vec![],
             marker_owner: std::collections::BTreeMap::new(),
             walk_flush: WalkFlush::default(),
+            skip_log: false,
+            stub: MatchEvent::default(),
         }
     }
 
@@ -722,6 +730,11 @@ impl World {
     pub fn log(&mut self, kind: &str, player_id: i32, msg: Msg) -> &mut MatchEvent {
         let _tg = crate::engine::rtimer::guard(&crate::engine::rtimer::LOG_NS);
         self.flush_walk();
+        if self.skip_log {
+            // The caller posts write-through; keep a stub so `.value =` works.
+            self.stub = MatchEvent::default();
+            return &mut self.stub;
+        }
         let e = MatchEvent {
             id: self.next_event,
             r#type: kind.into(),

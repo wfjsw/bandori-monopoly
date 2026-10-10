@@ -520,12 +520,16 @@ impl<'a> Cx<'a> {
         msg: Msg,
         parent: i32,
         card: &str,
+        value: i32,
     ) -> i32 {
         self.w.flush_walk();
         let e = self.w.log(kind, player_id, msg);
         e.parent = parent;
         if !card.is_empty() {
             e.card = card.to_string();
+        }
+        if value != 0 {
+            e.value = value;
         }
         e.id
     }
