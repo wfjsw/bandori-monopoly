@@ -3,13 +3,30 @@
 mod common;
 
 use common::*;
-use game_core::msg::Arg;
+use game_core::engine::CardRules;
+use game_core::msg::{Arg, Msg};
 
 const FILL: &str = "R:[衍生] 觉悟";
 
 fn set_draw_n(t: &mut Table, who: usize, n: usize) {
     let cards: Vec<&str> = vec![FILL; n];
     t.set_draw(who, &cards);
+}
+
+/// Place `card` on `who`'s field at board `tile` (the arrangement for cards the
+/// sheet drops on a square). `place_raw` leaves `tile: -1`, so a
+/// `card.placed && self_tile() == tile.id` pre never matches.
+fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
+    let d = data();
+    let props = rules().card_props(card);
+    t.m.world_mut().place_card_on(
+        &d,
+        who as i32,
+        tile as i32,
+        card,
+        Msg::default(),
+        props,
+    );
 }
 
 fn drain(t: &mut Table) {
@@ -543,7 +560,9 @@ fn m11_rinko_plus_yolo() {
 // =====================================================================
 
 // 规则书: 凑友希那 (3): 「当其他玩家移动[经过]您时…使用一个[火罐]令该玩家强制停下并[触发结算]」.
-#[ignore = "DISCREPANCY: 凑友希那 (3) stop-pot stops P1 at 37, not 36 (or does not force the stop)"]
+// The offer is `ask_yes` (options `ask.yes` / `ask.no`); the i18n keys sit on
+// the prompt title/text, so match the dump -- same drive as
+// `m4_kokoro_force_stop_stops_a_passer`.
 #[test]
 fn m12a_yukina_forced_stop() {
     let mut t = Table::new(&["凑友希那", "花园多惠"]);
@@ -555,11 +574,11 @@ fn m12a_yukina_forced_stop() {
     // P1 walks past 36 (32 + 5 = 37).
     t.dice(&[5]);
     t.roll(1).unwrap();
-    loop {
-        let Some(_) = t.prompt() else { break };
-        let k = t.option("凑友希那").or_else(|| t.option("强制停下"));
-        if let Some(k) = k {
-            t.answer(0, k).unwrap();
+    while let Some(p) = t.prompt() {
+        if format!("{p:?}").contains("kokoro_practice_force")
+            || format!("{p:?}").contains("force")
+        {
+            let _ = t.answer_one(0);
         } else {
             t.decline();
         }
@@ -569,7 +588,8 @@ fn m12a_yukina_forced_stop() {
 }
 
 // 规则书: 同上 + 安可. RULING: whether P0's fire is spent.
-#[ignore = "DISCREPANCY: 凑友希那 (3) stop-pot vs 安可: the stop does not land on 36"]
+// Accept the force-stop first so the AbnormalGate opens for 安可; a countered
+// stop leaves the rolled destination 32+5 = 37.
 #[test]
 fn m12b_yukina_stop_countered() {
     let mut t = Table::new(&["凑友希那", "花园多惠"]);
@@ -581,25 +601,23 @@ fn m12b_yukina_stop_countered() {
     t.give(1, &["通用:安可"]);
     t.dice(&[5]);
     t.roll(1).unwrap();
-    loop {
-        let Some(_) = t.prompt() else { break };
+    while let Some(p) = t.prompt() {
         if t.counteract_offered("通用:安可") {
             t.counteract(1, "通用:安可").unwrap();
+        } else if format!("{p:?}").contains("kokoro_practice_force")
+            || format!("{p:?}").contains("force")
+        {
+            let _ = t.answer_one(0);
         } else {
-            let k = t.option("凑友希那").or_else(|| t.option("强制停下"));
-            if let Some(k) = k {
-                t.answer(0, k).unwrap();
-            } else {
-                t.decline();
-            }
+            t.decline();
         }
     }
     eprintln!(
-        "m12b record (RULING: fire spent?): pos1 = {} (want 41), fire0 = {}",
+        "m12b record (RULING: fire spent?): pos1 = {} (want 37), fire0 = {}",
         t.pos(1),
         t.fire(0)
     );
-    assert_eq!(t.pos(1), 41, "P1 continues to its rolled destination");
+    assert_eq!(t.pos(1), 37, "P1 continues to its rolled destination 32+5");
 }
 
 // =====================================================================
@@ -712,7 +730,8 @@ fn m14b_kasumi_card_countered() {
 // =====================================================================
 
 // 规则书: 86 -- 「如果某个格子的[经过]效果会改变[移动终点]则重新计算[路径]」.
-#[ignore = "DISCREPANCY: （香澄） card does not force a stop at 44 when arranged via place_raw"]
+// Both stop-pot cards must be tile-bound (`place_on_tile`); `place_raw` leaves
+// `tile: -1` so the `card.placed && self_tile() == tile.id` pre never matches.
 #[test]
 fn m15_first_forced_stop_wins() {
     let mut t = Table::new(&["户山香澄", "花园多惠", "要乐奈"]);
@@ -720,8 +739,9 @@ fn m15_first_forced_stop_wins() {
     t.begin_turn(1);
     t.own(0, &[44]);
     t.set_pos(1, 40);
-    // （乐奈） on 48 with 5 crystals -- use a mark stand-in via place_raw + crystals.
-    t.place_raw(2, "MyGO:（乐奈）有趣的女人");
+    // （香澄） on the hill at 44; （乐奈） further along at 48 with 5 crystals.
+    place_on_tile(&mut t, 0, "PPP:（香澄）大家我都喜欢哦", 44);
+    place_on_tile(&mut t, 2, "MyGO:（乐奈）有趣的女人", 48);
     t.set_crystals(2, "MyGO:（乐奈）有趣的女人", 5);
     t.dice(&[10]);
     t.roll(1).unwrap();

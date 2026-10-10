@@ -1112,6 +1112,10 @@ or A/B items that need a wider surface than this batch:
 * **A, engine:** 要乐奈 (3) / 凑友希那 (3) stop-pot landing (`t.pos == 36`)
   and the `rb_cross_move` stop-pot cases -- `plan::set_stop_at` during a
   `PassTile` hook does not land the piece on the hook's tile.
+  ~~**Mis-diagnosed.**~~ **D (test), fixed 2026-10-10:** the engine landing is
+  correct (green `m4_kokoro_*` / `g11` / `g12` / `m16` / roselia yukina).
+  m12a/m12b declined the `ask_yes` offer (option matcher missed `ask.yes`);
+  m15 used `place_raw` (tile:-1). Un-ignored and green twice.
 * **A, engine:** 游击演出 ends on chosen+1 after `teleport_to` +
   `card_settle_at` (the settle inherits the turn's walk plan). Fix:
   `card_settle_at` must not clone `turn.plan` for an arbitrary tile.
@@ -1148,3 +1152,7 @@ or A/B items that need a wider surface than this batch:
   `rana_cat_overlap_takes_800_and_gives_a_parfait`. Amount 800 (sheet).
 * **SKILL-09 (stale):** kaoru_prince Pass half is already `pre::MINE` +
   filtered `PassTile`; live `kaoru_skill_1_*` tests pin it.
+* **MOVE-01 (2026-10-10, test drive / arrangement):** `m12a_yukina_forced_stop`
+  / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` un-ignored.
+  Engine `set_stop_at` landing was already correct. m12 declined the `ask_yes`
+  offer; m15 used `place_raw` (tile:-1). m12b asserts 37 (the rolled dest).

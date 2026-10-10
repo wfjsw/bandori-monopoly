@@ -270,21 +270,16 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **capability (after the ruling)**: routine return value for took-effect + `CardWasted` (C# `H.CardWasted`).
 
 ## MOVE-01 — forced stop (`plan::set_stop_at`) does not land the piece on the hook tile
-- **kind**: implementation bug
-- **class**: A
+- **kind**: test-harness drive / arrangement (not an engine defect)
+- **class**: D (fixed 2026-10-10; see D-08)
 - **severity**: high (凑友希那 (3) / 香澄 stop-pots are common)
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs:527` `m12a_yukina_forced_stop` (stops P1 at 37, want 36)
-  - `crates/game-rules/tests/rb_cross_move.rs:553` `m12b_yukina_stop_countered` (stop does not land on 36)
-  - `crates/game-rules/tests/rb_cross_move.rs:696` `m15_first_forced_stop_wins` (（香澄） card does not force a stop at 44 via `place_raw`)
-  - `crates/game-core/src/engine/play.rs:1400-1416` (`plan::set_stop_at` / `m.stop_at`)
-  - `crates/game-core/src/engine/ops.rs:38` `set_stop_at`; `crates/game-core/src/engine/move_ctx.rs:142-143`
-  - `rules/skills/skill-characters` 凑友希那 practice force-stop
-  - **D**: `g11_forced_stop_beats_lock_end_rewrite` ignore already removed
+  - `crates/game-rules/tests/rb_cross_move.rs` `m12a_yukina_forced_stop` / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` (un-ignored, green twice)
+  - engine landing already correct: `rb_settle_stages.rs` `m4_kokoro_force_stop_stops_a_passer`, `rb_gap_move.rs` `g11`/`g12`, `rb_roselia.rs` yukina stop-pot
 - **rulebook**: 「令该玩家强制停下并[触发结算]」 — the passer stops on the named tile and settles there.
-- **current**: `set_stop_at` during a `PassTile` hook does not land the piece on the hook's tile (off-by-one / never fires).
-- **expected**: piece stops on the hook tile and settles.
+- **was**: m12a/m12b declined the `ask_yes` offer (option matcher missed `ask.yes`/`ask.no`); m15 used `place_raw` (tile:-1) so the `card.placed && self_tile()` pre never matched. m12b also pinned 41 instead of the rolled dest 37.
+- **fixed**: match the `kokoro_practice_force` dump and `answer_one(0)`; `place_on_tile` both stop-pot cards; assert 37 for the countered stop. Un-ignored, green twice.
 
 ## MOVE-02 — 白金燐子 (2) spends fire / prompts X but never moves
 - **kind**: test-harness drive shape (not an engine defect)
@@ -1404,6 +1399,13 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 - Root cause: `on_overlap` sat on `PassPlayer` with `pre::MINE` (owner is the mover) but read `trigger::player_id()` as "the other" and bailed when it equalled the owner — always. `target` is the other player already on the landing tile (`abi.rs` PassPlayer payload).
 - Fix: read `trigger::target()`. New test `rana_cat_overlap_takes_800_and_gives_a_parfait` (rb_mygo) pins +800/−800 and a 抹茶芭菲 on the other. Green twice.
 - Amount: 800 (sheet / `characters.json`). Older `rulebook.txt` prose says 1000 — sheet wins.
+
+## D-08 — MOVE-01 forced-stop landing (test drive / arrangement; 2026-10-10)
+- Root cause: the engine `set_stop_at` path is already correct (see green `m4_kokoro_force_stop_stops_a_passer`, `g11`, `g12`, `m16`, roselia yukina). The three rb_cross_move ignores were test bugs:
+  - m12a/m12b: `ask_yes` options are `ask.yes`/`ask.no`; the matcher looked for 「凑友希那」/「强制停下」 in options (they live on the prompt dump) and `decline()` answered no. Same bug class as the 2026-10-09 yukina prompt-match fix.
+  - m12b: also pinned 41 instead of the rolled dest 32+5 = 37; the 安可 window only opens after the force-stop is accepted (AbnormalGate).
+  - m15: `place_raw` leaves `tile: -1`, so `card.placed && self_tile() == tile.id` never matches. Both stop-pot cards need `place_on_tile`.
+- Fix: dump-match `kokoro_practice_force` + `answer_one(0)`; assert 37 for the countered stop; `place_on_tile` for 香澄@44 and 乐奈@48. Un-ignored, green twice. m12b records fire spent even when countered (RULING recorded, not decided).
 
 ---
 
