@@ -278,7 +278,22 @@ use alloc::{string::String, vec::Vec};
 ///      `g.is_some()`). The window variables meaningful per kind are
 ///      documented in `docs/GUARDS.md` §4.2c. SAVE_VERSION unchanged (no save
 ///      field).
-pub const ABI_VERSION: i32 = 49;
+/// v50: the tile-body guest primitives (`rules/tiles/src/agent.rs` /
+///      `circle.rs`). `ask_tiles` / `opt_tile` / `opt_price` / `opt_ai` -- the
+///      tile ask with per-option labels, prices and an AI choice hint
+///      (`H.AgentLanding`'s `ask.view.prices` + `with_ai`). `raise` --
+///      guest-raised trigger points (`circleAffected` from `tile:circle`);
+///      returns whether the link settled. `gain_typed` -- a bank print through
+///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
+///      `typ` and a replacement log line (`Pay::text`). `prop_at` /
+///      `set_prop_at` (one declared property of a field instance), `exile_of`
+///      (`[除外]` layers, mirroring `stun_of`), `ai_agent_choice` (the AI's
+///      preferred index among agent-offer tiles), `trigger::move_from`
+///      (`t.Move.From`, the 移动起点). `ctx::agent_landing` and
+///      `ctx::settle_circle_reward` are **removed** -- the tile bodies carry
+///      the logic (`land_at_built_in` / `Play::circle_reward` stay the
+///      `StubRules` fallback). SAVE_VERSION unchanged (no save field).
+pub const ABI_VERSION: i32 = 50;
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.

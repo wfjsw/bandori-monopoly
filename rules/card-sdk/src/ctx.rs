@@ -107,6 +107,16 @@ mod sys {
         pub fn money(player_id: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_gain")]
         pub fn gain(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
+        // v50: bank print with the Pay's event `typ` and a replacement log line.
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_gain_typed")]
+        pub fn gain_typed(
+            player_id: i32,
+            amount: i32,
+            tp: i32,
+            tl: i32,
+            xp: i32,
+            xl: i32,
+        ) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_pay")]
         pub fn pay(player_id: i32, amount: i32, ptr: i32, len: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_pay_to")]
@@ -212,8 +222,11 @@ mod sys {
         pub fn tile_prop(tile: i32, kp: i32, kl: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_tile_prop")]
         pub fn set_tile_prop(tile: i32, kp: i32, kl: i32, v: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_settle_circle_reward")]
-        pub fn settle_circle_reward(player_id: i32, landing: i32) -> i32;
+        // v50: one declared property of a field instance (`crystals_at` naming).
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_prop_at")]
+        pub fn prop_at(uid: i32, kp: i32, kl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_prop_at")]
+        pub fn set_prop_at(uid: i32, kp: i32, kl: i32, v: i32) -> i32;
         // marks & tokens
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_mark")]
         pub fn add_mark(tile: i32, player_id: i32, kp: i32, kl: i32, np: i32, nl: i32);
@@ -278,6 +291,9 @@ mod sys {
         pub fn invoke_skill(player_id: i32, p: i32, n: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_raise_bought")]
         pub fn raise_bought(player_id: i32, tile: i32) -> i32;
+        // v50: guest-raised trigger points (e.g. `circleAffected` from tile:circle).
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_raise")]
+        pub fn raise(player_id: i32, kind: i32, value: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_fire")]
         pub fn fire(player_id: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_fire_max")]
@@ -302,6 +318,9 @@ mod sys {
         pub fn stay_of(player_id: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_stun_of")]
         pub fn stun_of(player_id: i32) -> i32;
+        // v50: `[除外]` layers (mirrors `stun_of`).
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_exile_of")]
+        pub fn exile_of(player_id: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_turn_player")]
         pub fn turn_player() -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_round_no")]
@@ -317,6 +336,13 @@ mod sys {
         pub fn opt_int(v: i32);
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_opt_str")]
         pub fn opt_str(ptr: i32, len: i32);
+        // v50: tile ask with per-option labels, prices, and an AI choice hint.
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_opt_tile")]
+        pub fn opt_tile(tile: i32, lp: i32, ll: i32);
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_opt_price")]
+        pub fn opt_price(price: i32);
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_opt_ai")]
+        pub fn opt_ai(ai: i32);
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_ask")]
         pub fn ask(
             kind: i32,
@@ -354,6 +380,9 @@ mod sys {
         pub fn trig_move_dir() -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_move_remaining")]
         pub fn trig_move_remaining() -> i32;
+        // v50: `t.Move.From` -- the move's 移动起点, or -1 when no move is in flight.
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_move_from")]
+        pub fn trig_move_from() -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_move_total")]
         pub fn trig_move_total() -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_trig_cards")]
@@ -423,8 +452,6 @@ mod sys {
         pub fn play_card(id_ptr: i32, id_len: i32, player_id: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_move")]
         pub fn card_move(player_id: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_agent_landing")]
-        pub fn agent_landing(player_id: i32, agent: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_replayable")]
         pub fn card_replayable(player_id: i32, ptr: i32, len: i32) -> i32;
         // movement shaping: the move being planned (C# `TurnCtx.Plan`)
@@ -540,6 +567,9 @@ mod sys {
         // v40 purchase surface (`docs/PURCHASE.md`)
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_buy_quotes")]
         pub fn buy_quotes(player_id: i32, kind: i32, buf: i32, n: i32, out: i32) -> i32;
+        // v50: which option the player's AI would take among agent-offer tiles.
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_ai_agent_choice")]
+        pub fn ai_agent_choice(player_id: i32, buf: i32, n: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_buy")]
         pub fn buy(player_id: i32, tile: i32, kind: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_acquire")]
@@ -965,6 +995,16 @@ pub fn gain(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     asked(unsafe { sys::gain(player_id, amount, p, l) })
 }
 
+/// A bank gain whose log line is `text` (a full `Pay::text`) and whose money
+/// event type is `typ` (the `Pay`'s event `typ`, e.g. `"pass"`). Runs the same
+/// `Money` pipeline as [`gain`], as `Pay::new(amount, "gain")` so the 「支付」
+/// scalars (`scale_settle_payment`) do not reach a print.
+pub fn gain_typed(player_id: i32, amount: i32, typ: &str, text: &Msg) -> Result<i32, Prompt> {
+    let (tp, tl) = s(typ);
+    let (xp, xl) = mj(text);
+    asked(unsafe { sys::gain_typed(player_id, amount, tp, tl, xp, xl) })
+}
+
 /// `H.PayR` -- money out (what the player could pay), logged.
 pub fn pay(player_id: i32, amount: i32, src: &Msg) -> Result<i32, Prompt> {
     let (p, l) = mj(src);
@@ -1377,15 +1417,18 @@ pub fn set_tile_prop(tile: i32, key: &str, value: i32) -> i32 {
     unsafe { sys::set_tile_prop(tile, p, l, value) }
 }
 
-/// The [经过] CiRCLE reward -- `H.CircleReward`, the body of `tile:circle`'s
-/// Pass entry. 规则书: 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]」.
-/// The engine runs the whole step: it consults `prop::NO_REWARD` on this
-/// instance, offers 「获得2000资金或抽1张卡」, raises `circleAffected`, and
-/// pays out. `landing` picks the 「获得」 wording for a stop on CiRCLE as
-/// against a pass over it. Pauses; `?` it.
-pub fn settle_circle_reward(player_id: i32, landing: bool) -> Result<(), Prompt> {
-    asked(unsafe { sys::settle_circle_reward(player_id, landing as i32) })?;
-    Ok(())
+/// One declared property of the instance at `uid` (`FieldCard::props`,
+/// [`crate::abi::prop`] keys). Default 0. Mirrors [`crystals_at`]'s naming:
+/// the instance is named by uid, not by tile or by the running card.
+pub fn prop_at(uid: i32, key: &str) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::prop_at(uid, p, l) }
+}
+
+/// Write [`prop_at`] on the instance at `uid`. Returns the stored value.
+pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
+    let (p, l) = s(key);
+    unsafe { sys::set_prop_at(uid, p, l, value) }
 }
 
 // --------------------------------------------------------- marks & tokens
@@ -1717,6 +1760,13 @@ pub fn raise_bought(player_id: i32, tile: i32) -> bool {
     unsafe { sys::raise_bought(player_id, tile) != 0 }
 }
 
+/// Raise a trigger point from a guest body. `kind` is a [`TriggerKind`]
+/// (e.g. [`TriggerKind::CircleAffected`]); `value` is the trigger's `value`.
+/// Returns true when the link settled (nobody cancelled it).
+pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> bool {
+    unsafe { sys::raise(player_id, kind as i32, value) != 0 }
+}
+
 pub fn fire(player_id: i32) -> i32 {
     unsafe { sys::fire(player_id) }
 }
@@ -1773,12 +1823,6 @@ pub fn card_move(player_id: i32) -> bool {
     unsafe { sys::card_move(player_id) != 0 }
 }
 
-/// C# `H.AgentLanding` -- `player_id` lands on `agent` as a 「星光代理」: the
-/// buy-or-pay-rent routine runs engine-side.
-pub fn agent_landing(player_id: i32, agent: i32) -> bool {
-    unsafe { sys::agent_landing(player_id, agent) != 0 }
-}
-
 /// C# `H.SpendFire` -- spend `n` [火罐]; false when the player has fewer. Logs
 /// the spend (`why` is the reason message).
 ///
@@ -1798,6 +1842,11 @@ pub fn stay_of(player_id: i32) -> i32 {
 /// `[晕眩]` layers on the player (C# `H.State.seats[s].stun`).
 pub fn stun_of(player_id: i32) -> i32 {
     unsafe { sys::stun_of(player_id) }
+}
+
+/// `[除外]` layers on the player (mirrors [`stun_of`]).
+pub fn exile_of(player_id: i32) -> i32 {
+    unsafe { sys::exile_of(player_id) }
 }
 
 /// `H.State.turn` -- whose turn it is (-1 when none).
@@ -1906,6 +1955,29 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
     }
     let i = ask_raw(PromptKind::Tile, player_id, title, text)?;
     Ok(tiles[(i.max(0) as usize).min(tiles.len().saturating_sub(1))])
+}
+
+/// Tile ask with per-option labels, prices, and an AI choice hint
+/// (`H.AgentLanding`'s `ask.view.prices` + `with_ai`).
+///
+/// Returns the chosen **index**; `tiles.len()` is the 「不选」 / none answer
+/// (`Ask::tile`'s `fallback = tiles.len()`). Do **not** clamp to the first tile.
+pub fn ask_tiles(
+    player_id: i32,
+    title: &Msg,
+    text: &Msg,
+    tiles: &[i32],
+    labels: &[Msg],
+    prices: &[i32],
+    ai: i32,
+) -> Result<i32, Prompt> {
+    for (i, &t) in tiles.iter().enumerate() {
+        let (lp, ll) = mj(&labels[i]);
+        unsafe { sys::opt_tile(t, lp, ll) }
+        unsafe { sys::opt_price(*prices.get(i).unwrap_or(&0)) }
+    }
+    unsafe { sys::opt_ai(ai) }
+    ask_raw(PromptKind::Tile, player_id, title, text)
 }
 
 /// `H.AskPick` -- returns the chosen option index.
@@ -2510,6 +2582,11 @@ pub mod trigger {
         unsafe { sys::trig_move_remaining() }
     }
 
+    /// `t.Move.From` -- the move's 移动起点, or -1 when no move is in flight.
+    pub fn move_from() -> i32 {
+        unsafe { sys::trig_move_from() }
+    }
+
     /// `t.Move.Path.Count` -- the move's path length so far.
     pub fn move_total() -> i32 {
         unsafe { sys::trig_move_total() }
@@ -2866,6 +2943,18 @@ pub fn buy_quotes(player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> 
     }
     let buf = out_read(op, n, scratch);
     postcard::from_bytes(&buf[..n as usize]).unwrap_or_default()
+}
+
+/// Which option `player_id`'s AI would take among `tiles` on an agent offer.
+/// Returns the index; `tiles.len()` = skip. `H.AgentLanding`'s
+/// `ai_agent_choice`.
+pub fn ai_agent_choice(player_id: i32, tiles: &[i32]) -> i32 {
+    let mut buf = alloc::vec![0u8; tiles.len() * 4];
+    for (i, &t) in tiles.iter().enumerate() {
+        buf[i * 4..i * 4 + 4].copy_from_slice(&t.to_le_bytes());
+    }
+    let (p, l) = in_bytes(&buf);
+    unsafe { sys::ai_agent_choice(player_id, p, l) }
 }
 
 /// Buy `tile` as `kind` (`docs/PURCHASE.md`). Replaces [`card_buy`] for new
