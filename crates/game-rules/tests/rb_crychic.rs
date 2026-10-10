@@ -181,6 +181,117 @@ fn haruhikage_special_draw_gate() {
     assert!(t.hand(0).contains(&"CRYCHIC:春日影".to_string()));
 }
 
+/// 规则书（2）: 「（此卡可作为[反击]打出）使用一次Crychic角色的技能」 -- against a
+/// rent [支付] window the borrowed skill is 长崎素世（CRYCHIC）'s 「取消那次支付」:
+/// offered to the payee, and the rent is cancelled.
+#[test]
+fn haruhikage_counteracts_a_rent_payment() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["CRYCHIC:春日影"]);
+    let blue = tile("江户川公园");
+    t.own(0, &[blue]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, (blue + 59) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    assert!(t.counteract_offered("CRYCHIC:春日影"), "{}", t.dump_prompt());
+    t.counteract(0, "CRYCHIC:春日影").unwrap();
+    drain(&mut t);
+    assert_eq!(t.money(1), 10_000, "the rent was cancelled: keys={:?}", t.recent_keys(15));
+    assert_eq!(t.money(0), 10_000, "the payee received nothing");
+}
+
+/// 规则书（2）: the MoveRoll branch is 椎名立希（CRYCHIC）'s reroll -- still offered
+/// and playable on the owner's own move roll.
+#[test]
+fn haruhikage_counteracts_a_move_roll() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["CRYCHIC:春日影"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 0);
+    t.dice(&[3, 11]);
+    t.roll(0).unwrap();
+    assert!(t.counteract_offered("CRYCHIC:春日影"), "{}", t.dump_prompt());
+    t.counteract(0, "CRYCHIC:春日影").unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), 11, "the reroll became the move: keys={:?}", t.recent_keys(15));
+}
+
+/// 规则书（2）: the SettleBefore branch is 丰川祥子（CRYCHIC）'s step-toward --
+/// still offered when a player to step toward is within 5. The MoveRoll window
+/// opens first on the same roll; decline it so the settle window is the one
+/// being tested.
+#[test]
+fn haruhikage_counteracts_settle_before() {
+    let mut t = Table::vanilla(2);
+    t.give(0, &["CRYCHIC:春日影"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 0);
+    t.set_pos(1, 3); // within 5
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    // Two [反击] windows on this roll: moveRoll first, then settleBefore.
+    let mut saw_move_roll = false;
+    let mut saw_settle = false;
+    while let Some(_) = t.prompt() {
+        if t.counteract_offered("CRYCHIC:春日影") {
+            if !saw_move_roll {
+                saw_move_roll = true;
+                t.decline();
+            } else {
+                saw_settle = true;
+                t.counteract(0, "CRYCHIC:春日影").unwrap();
+            }
+        } else if t.dump_prompt().contains("haruhikage_toward") {
+            let _ = t.answer_one(0);
+        } else {
+            t.decline();
+        }
+    }
+    assert!(saw_move_roll, "the moveRoll window came up first: {:?}", t.recent_keys(20));
+    assert!(saw_settle, "the settleBefore window came up: {:?}", t.recent_keys(20));
+    assert_eq!(t.pos(0), 2, "stepped one tile toward P1: keys={:?}", t.recent_keys(15));
+}
+
+/// 规则书（2）: each branch has its own window -- the card is not offered where
+/// none of reroll / step-toward / cancel-rent applies (another player's move
+/// roll, and rent paid to someone else).
+#[test]
+fn haruhikage_not_offered_outside_its_windows() {
+    // Another player's move roll: `actor == owner` fails.
+    let mut t = Table::vanilla(2);
+    t.give(0, &["CRYCHIC:春日影"]);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.dice(&[3]);
+    t.roll(1).unwrap();
+    assert!(
+        !t.counteract_offered("CRYCHIC:春日影"),
+        "not offered on another player's move roll: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+    // Rent paid to someone else: `target == owner` fails.
+    let mut t = Table::vanilla(3);
+    t.give(0, &["CRYCHIC:春日影"]);
+    let blue = tile("江户川公园");
+    t.own(1, &[blue]);
+    t.begin_turn(2);
+    drain(&mut t);
+    t.set_pos(2, (blue + 59) % 60);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    assert!(
+        !t.counteract_offered("CRYCHIC:春日影"),
+        "not offered on rent to another player: {}",
+        t.dump_prompt()
+    );
+    drain(&mut t);
+}
+
 // -- CRYCHIC:去唱卡拉ok吧 ----------------------------------------------
 
 #[test]

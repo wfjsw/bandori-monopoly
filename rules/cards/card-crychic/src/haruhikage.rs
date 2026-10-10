@@ -183,10 +183,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     match trigger::kind() {
         TriggerKind::MoveRoll => reroll_skill(player_id),
         TriggerKind::SettleBefore => step_toward_skill(player_id)?,
-        // BUG?: the payment [反击] window is `TriggerKind::Effect` (Pay is a
-        // settlement hook only, see abi on `Pay`), so this arm never runs and
-        // `cancel_pay_skill` is unreachable. Left as-is pending a ruling.
-        TriggerKind::Pay => cancel_pay_skill(player_id),
+        // 规则书（2）[反击]: the payment window is the `effect` chain whose link
+        // declares a `Pay` (`TriggerKind::Effect` -- `Pay` itself is the post-chain
+        // settlement hook and never opens a [反击]). The entry's pre already
+        // pinned it to the holder's own incoming rent (`pay_is_rent && actor !=
+        // owner && target == owner`), matching 长崎素世（CRYCHIC）'s 「取消那次支付」.
+        TriggerKind::Effect => cancel_pay_skill(player_id),
         _ => {}
     }
     Ok(())
