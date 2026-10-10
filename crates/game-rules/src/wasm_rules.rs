@@ -358,7 +358,7 @@ impl CardWorld for Run {
         // write-through so it survives `commit_after`'s adoption of the live
         // tail. A re-run replaces the already-posted line (same roll -- the
         // guest RNG restarts from the same share point).
-        let total = self.world.roll(player_id, count, sides);
+        let total = self.world.roll_silent(player_id, count, sides);
         let msg = Msg::new("log.dice")
             .player_id("who", player_id)
             .i("count", count as i64)
@@ -3072,10 +3072,14 @@ impl<M: CardModules> RulesBridge<M> {
             }
             // Field cards including skills, in field order.
             for (uid, id) in world.field_instances(player_id) {
-                if seen_uids.contains(&uid) {
+                // A pile card that placed itself last pass is now a field
+                // instance; its id is already in `seen_ids`, so do not
+                // dispatch it a second time (two headers for one body).
+                if seen_uids.contains(&uid) || seen_ids.contains(&id) {
                     continue;
                 }
                 seen_uids.push(uid);
+                seen_ids.push(id.clone());
                 fresh = true;
                 let Some(idx) = self.ruleset.card(&id) else {
                     continue;

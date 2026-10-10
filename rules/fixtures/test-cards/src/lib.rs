@@ -963,10 +963,37 @@ fn on_ping_reject(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// A body that rolls (a `"dice"` event) and then pays (a host request that
+/// pauses and re-runs). Exactly one dice event must land.
+const ROLL_THEN_PAY: CardDef = CardDef::new(
+    "TEST:rollThenPay",
+    &[On::Play("", None, roll_then_pay)],
+);
+
+fn roll_then_pay(player_id: i32) -> card_sdk::Asked {
+    let _ = ctx::roll(player_id, 1, 6);
+    ctx::pay(player_id, 100, &Msg::new(key!("roll_then_pay_why")))?;
+    Ok(())
+}
+
+/// A `deckBeforeGame` hook that places itself -- the pile->field transition
+/// must not dispatch it twice (two headers for one body).
+const DECK_ONCE: CardDef = CardDef::new(
+    "TEST:deckOnce",
+    &[On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_once)],
+);
+
+fn deck_once(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:deckOnce", &Msg::new(key!("deck_once_note")));
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
-    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT
+    PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
+    ROLL_THEN_PAY, DECK_ONCE
 ]);

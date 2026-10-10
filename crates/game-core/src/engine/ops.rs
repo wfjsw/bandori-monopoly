@@ -499,19 +499,7 @@ impl World {
 
     /// One `count`d`sides` roll, honouring [`TurnCtx::extreme`].
     pub fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
-        let count = count.max(0);
-        let sides = sides.max(1);
-        let total = if self.turn.extreme == Extreme::Max {
-            count * sides
-        } else if self.turn.extreme == Extreme::Min {
-            count
-        } else {
-            let mut sum = 0;
-            for _ in 0..count {
-                sum += self.rng.d(sides);
-            }
-            sum
-        };
+        let total = self.roll_silent(player_id, count, sides);
         self.log(
             "dice",
             player_id,
@@ -526,6 +514,26 @@ impl World {
         // The event carries the result so the client can show it on the dice
         // rather than only in the log line (same as `Cx::roll`).
         .value = total;
+        total
+    }
+
+    /// [`Self::roll`] without the `"dice"` event -- for a caller that posts the
+    /// event itself (write-through) and must not double-log.
+    pub fn roll_silent(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
+        let _ = player_id;
+        let count = count.max(0);
+        let sides = sides.max(1);
+        let total = if self.turn.extreme == Extreme::Max {
+            count * sides
+        } else if self.turn.extreme == Extreme::Min {
+            count
+        } else {
+            let mut sum = 0;
+            for _ in 0..count {
+                sum += self.rng.d(sides);
+            }
+            sum
+        };
         self.turn.turn_rolls.push(total);
         total
     }

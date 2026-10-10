@@ -211,3 +211,60 @@ fn every_listened_trigger_kind_has_a_real_why() {
         assert!(!why.key().is_empty(), "{k:?} why must not be blank");
     }
 }
+/// A body that rolls and then pays (host request -> multi-pass) emits exactly
+/// one `"dice"` event -- write-through replaces on re-run, never appends.
+#[test]
+fn roll_then_host_request_emits_exactly_one_dice() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    let mark = t.mark();
+    t.give_play(0, "TEST:rollThenPay").unwrap();
+    drain(&mut t);
+    let dice: Vec<_> = t
+        .events_since(mark)
+        .into_iter()
+        .filter(|e| e.r#type == "dice")
+        .collect();
+    assert_eq!(
+        dice.len(),
+        1,
+        "exactly one dice event across the learn+commit passes: {:?}",
+        dice.iter().map(|e| (e.id, e.value)).collect::<Vec<_>>()
+    );
+}
+
+/// A `deckBeforeGame` hook that places itself announces exactly once per
+/// source -- the pile->field transition must not dispatch it a second time.
+/// `PPP:Returns` is in the opening deck and self-places (`returns_added` /
+/// `returns_placed`); one `returns_added` line means one source.
+#[test]
+fn deck_before_game_self_place_announces_once() {
+    let mut t = Table::vanilla(2);
+    drain(&mut t);
+    let events = t.events_since(0);
+    let added = events
+        .iter()
+        .filter(|e| e.msg.key() == "cards:card-ppp.returns_added")
+        .count();
+    assert!(added >= 1, "the opening deck carries PPP:Returns: {}", t.recent_keys(30).join(", "));
+    let headers = events
+        .iter()
+        .filter(|e| {
+            e.r#type == "card"
+                && e.card == "PPP:Returns"
+                && e.msg.key() == "log.effect_applied"
+                && e
+                    .msg
+                    .a
+                    .get("why")
+                    .map(|w| format!("{w:?}").contains("deck_before"))
+                    .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(
+        headers, added,
+        "one header per self-placing deckBeforeGame source (pile->field must not re-dispatch): {}",
+        t.recent_keys(40).join(", ")
+    );
+}

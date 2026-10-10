@@ -94,6 +94,68 @@ impl Table {
         Self::with_seed(chars, SEED)
     }
 
+    /// [`Self::new`] with extra cards on top of each player's opening draw
+    /// pile **before** `quick_start`, so a `deckBeforeGame` hook sees them.
+    pub fn with_opening_draw(chars: &[&str], top_first: &[&str]) -> Self {
+        let names = characters();
+        let cs: Vec<&str> = names.iter().take(chars.len()).map(String::as_str).collect();
+        let mut t = Self::new_with_draw(&cs, top_first);
+        t.strip_skills();
+        t.clean();
+        t.begin_turn(0);
+        t
+    }
+
+    fn new_with_draw(chars: &[&str], top_first: &[&str]) -> Self {
+        use game_core::engine::{CardRules, Match};
+        use game_core::net::RoomMember;
+        use game_core::scoring::ScoreWeights;
+        let n = chars.len();
+        let members: Vec<RoomMember> = (1..=n as i32)
+            .map(|id| RoomMember {
+                id,
+                player: format!("P{}", id - 1),
+                bot: false,
+                ..Default::default()
+            })
+            .collect();
+        let mut m = Match::new(
+            data(),
+            rules(),
+            &members,
+            SEED,
+            MatchMode::Solo,
+            ScoreWeights::default(),
+        );
+        {
+            let w = m.world_mut();
+            w.st.players.sort_by_key(|p| p.member);
+        }
+        for (k, c) in chars.iter().enumerate() {
+            if !c.is_empty() {
+                m.set_character(k as i32 + 1, c);
+            }
+        }
+        {
+            // Deterministic piles, then seed the draw pile **below** the
+            // opening deal so `deckBeforeGame` sees the card and it is still
+            // in the pile when the hook runs (the deal takes from the top).
+            let w = m.world_mut();
+            for h in w.hidden.iter_mut() {
+                h.hand.clear();
+                h.draw.clear();
+                h.discard.clear();
+            }
+            for card in top_first.iter().rev() {
+                w.hidden[0].draw.insert(0, card.to_string());
+            }
+        }
+        m.quick_start();
+        let mut t = Table { m, n };
+        t.settle_answering_defaults();
+        t
+    }
+
     pub fn with_seed(chars: &[&str], seed: u64) -> Self {
         Self::with_data(data(), chars, seed, MatchMode::Solo)
     }
