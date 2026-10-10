@@ -394,6 +394,7 @@
   "log.rent": "{{who}} stopped on {{tile}} and paid {{owner}} rent {{amount}}{{note}}",
   "log.reshuffle": "{{who}}'s draw pile ran out -- the graveyard was shuffled back in",
   "log.roll": "{{who}} rolled {{n}}{{by}}{{nores}}{{still}}",
+"log.settle_depth_cap": "Nested settlement stopped at depth {{n}} (runaway settle loop)",
   "log.settle_redirect_cap": "{{who}}'s settlement was re-targeted {{n}} times -- settling where they stand",
   "log.stay_skip": "{{who}} is [Staying] -- cannot move this turn",
   "log.stunned_skip": "{{who}} is [Stunned] -- skipping operations and movement",

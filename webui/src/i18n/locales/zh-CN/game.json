@@ -394,6 +394,7 @@
   "log.rent": "{{who}} 停在 {{tile}}，向 {{owner}} 支付地租 {{amount}}{{note}}",
   "log.reshuffle": "{{who}} 的抽卡区抽光了，弃卡区洗回抽卡区",
   "log.roll": "{{who}} 掷出了 {{n}}{{by}}{{nores}}{{still}}",
+"log.settle_depth_cap": "嵌套结算在深度 {{n}} 处停止（结算死循环）",
   "log.settle_redirect_cap": "{{who}} 的结算被改向 {{n}} 次，停在原地结算",
   "log.stay_skip": "{{who}} 处于 [停留]，本回合不能移动",
   "log.stunned_skip": "{{who}} 处于 [晕眩]，跳过运营和移动阶段",
