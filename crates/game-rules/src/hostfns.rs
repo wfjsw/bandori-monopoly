@@ -136,6 +136,28 @@ pub fn gain<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) 
             }
 }
 
+pub fn gain_typed<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    amount: i32,
+    tp: i32,
+    tl: i32,
+    xp: i32,
+    xl: i32,
+) -> Result<i32, HostErr> {
+            let typ = guest_str(c, tp, tl)?;
+            let text = guest_msg(c, xp, xl)?;
+                        {
+                let req = HostRequest::GainTyped {
+                player_id,
+                amount,
+                typ,
+                text: Some(text),
+            };
+                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
+            }
+}
+
 pub fn pay<C: HostCtx>(c: &mut C, player_id: i32, amount: i32, p: i32, n: i32) -> Result<i32, HostErr> {
             let src = guest_msg(c, p, n)?;
                         // A card-driven payment is paused so the engine can raise a `pay`
@@ -805,14 +827,14 @@ pub fn set_tile_prop<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32, v: i32)
             Ok(c.st_mut().w().set_tile_prop(tile, &key, v))
 }
 
-pub fn settle_circle_reward<C: HostCtx>(c: &mut C, player_id: i32, landing: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::CircleReward {
-                player_id,
-                landing: landing != 0,
-            };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Sentinel);
-            }
+pub fn prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32) -> Result<i32, HostErr> {
+            let key = guest_str(c, kp, kl)?;
+            Ok(c.st().wr().prop_at(uid, &key))
+}
+
+pub fn set_prop_at<C: HostCtx>(c: &mut C, uid: i32, kp: i32, kl: i32, v: i32) -> Result<i32, HostErr> {
+            let key = guest_str(c, kp, kl)?;
+            Ok(c.st_mut().w().set_prop_at(uid, &key, v))
 }
 
 pub fn count_marks<C: HostCtx>(c: &mut C, tile: i32, kp: i32, kl: i32, owner: i32) -> Result<i32, HostErr> {
@@ -1041,6 +1063,17 @@ pub fn raise_bought<C: HostCtx>(c: &mut C, player_id: i32, tile: i32) -> Result<
             }
 }
 
+pub fn raise<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, value: i32) -> Result<i32, HostErr> {
+                        {
+                let req = HostRequest::Raise {
+                player_id,
+                kind,
+                value,
+            };
+                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+            }
+}
+
 pub fn fire<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
     Ok({
         c.st().wr().fire(player_id)
@@ -1157,6 +1190,12 @@ pub fn stay_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
 pub fn stun_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
     Ok({
         c.st().wr().stun_of(player_id)
+    })
+}
+
+pub fn exile_of<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {
+    Ok({
+        c.st().wr().exile_of(player_id)
     })
 }
 
@@ -1438,13 +1477,6 @@ pub fn roll_ask<C: HostCtx>(c: &mut C, player_id: i32, count: i32, sides: i32, s
             }
 }
 
-pub fn agent_landing<C: HostCtx>(c: &mut C, player_id: i32, agent: i32) -> Result<i32, HostErr> {
-                        {
-                let req = HostRequest::AgentLanding { player_id, agent };
-                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
-            }
-}
-
 pub fn card_settle_at<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, main: i32) -> Result<i32, HostErr> {
                         {
                 let req = HostRequest::SettleAt {
@@ -1491,6 +1523,18 @@ pub fn buy_quotes<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, buf: i32, n:
                 tiles,
                 out,
             };
+                return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
+            }
+}
+
+pub fn ai_agent_choice<C: HostCtx>(c: &mut C, player_id: i32, buf: i32, n: i32) -> Result<i32, HostErr> {
+            let bytes = c.read_guest( buf, n)?;
+            let tiles: Vec<i32> = bytes
+                .chunks_exact(4)
+                .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                .collect();
+                        {
+                let req = HostRequest::AiAgentChoice { player_id, tiles };
                 return crate::inline::request_or_pause(c, req, crate::inline::Pause::Trap);
             }
 }
@@ -1590,18 +1634,36 @@ pub fn opt_str<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<(), HostErr> {
             Ok(())
 }
 
+pub fn opt_tile<C: HostCtx>(c: &mut C, tile: i32, lp: i32, ll: i32) -> Result<(), HostErr> {
+            let label = guest_msg(c, lp, ll)?;
+            c.st_mut().options.push(PromptOption::Tile { tile, label });
+            Ok(())
+}
+
+pub fn opt_price<C: HostCtx>(c: &mut C, price: i32) -> Result<(), HostErr> {
+        c.st_mut().prices.push(price);
+    Ok(())
+}
+
+pub fn opt_ai<C: HostCtx>(c: &mut C, ai: i32) -> Result<(), HostErr> {
+        c.st_mut().ai_hint = ai;
+    Ok(())
+}
+
 pub fn ask<C: HostCtx>(c: &mut C, kind: i32, player_id: i32, tp: i32, tl: i32, xp: i32, xl: i32) -> Result<i32, HostErr> {
             let kind =
                 PromptKind::from_i32(kind).ok_or_else(|| HostErr::trap(format!("bad prompt kind {kind}")))?;
             let title = guest_msg(c, tp, tl)?;
             let text = guest_msg(c, xp, xl)?;
-            let (options, answer_slot) = {
+            let (options, prices, ai_hint, answer_slot) = {
                 let st = c.st_mut();
                 let options = std::mem::take(&mut st.options);
                 if kind != PromptKind::YesNo && options.is_empty() {
                     return Err(HostErr::trap(format!("{} prompt with no options", kind.as_str())));
                 }
-                (options, st.next_answer)
+                let prices = std::mem::take(&mut st.prices);
+                let ai_hint = std::mem::replace(&mut st.ai_hint, -1);
+                (options, prices, ai_hint, st.next_answer)
             };
             // Like `pay`: the pause is the sentinel as the return value, so
             // `ctx::ask_*` can hand the card `Err(Prompt)` instead of unwinding.
@@ -1616,6 +1678,8 @@ pub fn ask<C: HostCtx>(c: &mut C, kind: i32, player_id: i32, tp: i32, tl: i32, x
                     text,
                     options,
                     answer_slot,
+                    prices,
+                    ai_hint,
                 },
             )
 }
@@ -1698,6 +1762,12 @@ pub fn trig_move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 pub fn trig_move_remaining<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok({
         c.st().wr().trigger().move_remaining
+    })
+}
+
+pub fn trig_move_from<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok({
+        c.st().wr().trigger().move_from
     })
 }
 

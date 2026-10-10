@@ -2206,11 +2206,6 @@ impl<M: CardModules> RulesBridge<M> {
             }
             return Ok(allowed as i32);
         }
-        // C# `H.AgentLanding`: the 「星光代理」 landing routine.
-        HostRequest::AgentLanding { player_id, agent } => {
-            cx.agent_landing(player_id.max(0) as usize, agent.max(0) as usize)?;
-            return Ok(1);
-        }
         // The rest of the routine family -- see `HostRequest`.
         HostRequest::SettleAt {
             player_id,
@@ -2321,17 +2316,6 @@ impl<M: CardModules> RulesBridge<M> {
             cx.card_offer_build_one(player_id.max(0) as usize, tile.max(0) as usize)?;
             return Ok(1);
         }
-        // `H.CircleReward`: the [经过] CiRCLE reward. The engine runs
-        // the whole step -- suppression via `prop::NO_REWARD` on the
-        // tile's `tile:circle` instance, the choice, the `circleAffected`
-        // window, the payout. `docs/TILES.md`'s `ctx::settle_circle_reward`.
-        HostRequest::CircleReward {
-            player_id,
-            landing,
-        } => {
-            cx.card_circle_reward(player_id.max(0) as usize, landing)?;
-            return Ok(1);
-        }
         // A card- or skill-driven dice roll. The engine rolls and raises
         // the `Roll` chain link -- the 「掷骰结算前」 [反击] window (Y.O.L.O
         // 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行掷骰时」)
@@ -2366,6 +2350,52 @@ impl<M: CardModules> RulesBridge<M> {
                 call.player_id().max(0) as usize,
             )?;
             return Ok(1);
+        }
+        // Guest-raised trigger points (`ctx::raise`): `circleAffected` from
+        // `tile:circle` and kin. The kind is the wire name
+        // (`TriggerKind::as_str`); the link settles unless a counteraction
+        // cancelled it.
+        HostRequest::Raise {
+            player_id,
+            kind,
+            value,
+        } => {
+            let kind = card_sdk::abi::TriggerKind::from_i32(kind).as_str();
+            let t = self.raise_core(cx, kind, player_id, |t| {
+                t.value = value;
+            })?;
+            return Ok((!t.is_cancelled()) as i32);
+        }
+        // Which option the player's AI would take among agent-offer tiles.
+        HostRequest::AiAgentChoice { player_id, tiles } => {
+            let tiles: Vec<usize> = tiles
+                .into_iter()
+                .filter(|&t| t >= 0)
+                .map(|t| t as usize)
+                .collect();
+            let pick = cx.ai_agent_choice(player_id.max(0) as usize, &tiles);
+            return Ok(pick);
+        }
+        // `ctx::gain_typed`: a bank print through the money pipeline as
+        // `Pay::new(_, "gain")` (so the 「支付」 scalars do not reach a print),
+        // carrying the Pay's event `typ` and a replacement log line.
+        HostRequest::GainTyped {
+            player_id,
+            amount,
+            typ,
+            text,
+        } => {
+            let mut p = game_core::engine::Pay::new(amount, "gain");
+            p.to = Some(player_id.max(0) as usize);
+            // `Pay::typ` is `&'static str`; the guest's event-type key is a
+            // short fixed vocabulary ("pass" / "lose" / ...). Leak the box --
+            // one per gain_typed call, never reclaimed, matching the static
+            // `Some("pass")` the engine's own circle money uses.
+            p.typ = Some(&*Box::leak(typ.into_boxed_str()));
+            p.text = text;
+            p.by_card = Some(call.player_id());
+            let paid = cx.money(p)?;
+            return Ok(paid.moved());
         }
         // Marker spend / gain (user ruling 2026-10-07): the marker's own
         // [反击] window opens **before** the markers move. A counteraction
@@ -3864,6 +3894,7 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         move_tags: t.move_tags.clone(),
         move_main: t.move_main,
         move_dir: t.move_dir,
+        move_from: t.move_from,
         negation: t.negation,
         spared: t.spared.clone(),
         seq: t.seq,
@@ -3905,6 +3936,8 @@ fn prompt_to_ask(p: Prompt) -> Ask {
         text,
         options,
         answer_slot: _,
+        prices,
+        ai_hint,
     } = p;
     match kind {
         PromptKind::YesNo => Ask::choice(
@@ -3921,23 +3954,39 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 .map(|o| match o {
                     PromptOption::Str(m) => m,
                     PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                    PromptOption::Tile { label, .. } => label,
                 })
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
         }
         PromptKind::Tile => {
-            let tiles: Vec<usize> = options
-                .iter()
-                .map(|o| match o {
-                    PromptOption::Int(i) => *i as usize,
-                    PromptOption::Str(_) => 0,
-                })
-                .collect();
-            let labels = tiles
-                .iter()
-                .map(|&t| Msg::new("ask.tileOption").tile("tile", t as i32))
-                .collect();
-            Ask::tile(player_id as usize, title, text, &tiles, labels)
+            // Bare-Int options keep the auto `ask.tileOption` labels so
+            // existing `ask_tile` callers are unchanged; `PromptOption::Tile`
+            // carries its own label (`ask_tiles` / `opt_tile`).
+            let mut tiles: Vec<usize> = Vec::new();
+            let mut labels: Vec<Msg> = Vec::new();
+            for o in options {
+                match o {
+                    PromptOption::Int(i) => {
+                        tiles.push(i as usize);
+                        labels.push(Msg::new("ask.tileOption").tile("tile", i));
+                    }
+                    PromptOption::Str(_) => {
+                        tiles.push(0);
+                        labels.push(Msg::new("ask.tileOption").tile("tile", 0));
+                    }
+                    PromptOption::Tile { tile, label } => {
+                        tiles.push(tile as usize);
+                        labels.push(label);
+                    }
+                }
+            }
+            let mut ask = Ask::tile(player_id as usize, title, text, &tiles, labels);
+            ask.view.prices = prices;
+            if ai_hint >= 0 {
+                ask = ask.with_ai(|_| ai_hint);
+            }
+            ask
         }
         PromptKind::Card => {
             // Pick one card out of a list; the options are ready-made labels.
@@ -3946,6 +3995,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 .map(|o| match o {
                     PromptOption::Str(m) => m,
                     PromptOption::Int(i) => Msg::new("ask.intOption").i("n", i),
+                    PromptOption::Tile { label, .. } => label,
                 })
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
@@ -3956,6 +4006,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 .map(|o| match o {
                     PromptOption::Int(s) => Msg::new("ask.player").player_id("who", *s),
                     PromptOption::Str(_) => Msg::new("ask.player").player_id("who", -1),
+                    PromptOption::Tile { tile, .. } => Msg::new("ask.player").player_id("who", *tile),
                 })
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
@@ -5010,6 +5061,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             move_tags: Vec::new(),
             move_main: main,
             move_dir: 1,
+            move_from: -1,
             negation: Default::default(),
             spared: Vec::new(),
             seq: 0,
@@ -5246,6 +5298,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             move_tags: Vec::new(),
             move_main: false,
             move_dir: 1,
+            move_from: -1,
             negation: Default::default(),
             spared: Vec::new(),
             seq: 0,
@@ -5311,6 +5364,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             move_tags: Vec::new(),
             move_main: false,
             move_dir: 1,
+            move_from: -1,
             negation: Default::default(),
             spared: Vec::new(),
             seq: 0,

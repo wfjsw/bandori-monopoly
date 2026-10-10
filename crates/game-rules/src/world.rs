@@ -25,7 +25,7 @@ pub(crate) fn skill_id_owner(id: &str) -> Option<String> {
 }
 
 /// The trigger a counteraction is checked against (C# `Trigger`).
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Trigger {
     pub kind: crate::TriggerKind,
     pub player_id: i32,
@@ -54,6 +54,9 @@ pub struct Trigger {
     pub move_main: bool,
     /// `t.Move.Dir` -- 1 forward, -1 backward. Only meaningful when the move caused it.
     pub move_dir: i32,
+    /// `t.Move.From` -- the move's 移动起点 (C# `m.from`), or -1 when no move
+    /// is in flight.
+    pub move_from: i32,
     /// How a counter invalidated this link -- see [`game_core::engine::rules::Negation`].
     pub negation: game_core::engine::rules::Negation,
     /// Recipients a counter spared from settlement.
@@ -93,6 +96,45 @@ pub struct Trigger {
     pub deal_mortgaged: bool,
     /// A `BuyGate` refusal's reason key.
     pub reason: String,
+}
+
+impl Default for Trigger {
+    fn default() -> Self {
+        Self {
+            kind: crate::TriggerKind::None,
+            player_id: 0,
+            target: 0,
+            tile: 0,
+            value: 0,
+            step: 0,
+            by_card: None,
+            pay_is_rent: false,
+            move_kind: None,
+            move_resolve: false,
+            move_tags: Vec::new(),
+            move_main: false,
+            move_dir: 0,
+            move_from: -1,
+            negation: Default::default(),
+            spared: Vec::new(),
+            seq: 0,
+            answers: 0,
+            effects: Vec::new(),
+            move_remaining: 0,
+            move_total: 0,
+            cards: Vec::new(),
+            roll_source: 0,
+            move_roll: None,
+            card: String::new(),
+            buy_kind: 0,
+            seller: -1,
+            price: 0,
+            deal_owner: -1,
+            deal_houses: 0,
+            deal_mortgaged: false,
+            reason: String::new(),
+        }
+    }
 }
 
 impl Trigger {
@@ -433,13 +475,6 @@ pub trait CardWorld: Clone + 'static {
     fn set_tile_prop(&mut self, _tile: i32, _key: &str, _value: i32) -> i32 {
         0
     }
-    /// The [经过] CiRCLE reward (`H.CircleReward`) -- `docs/TILES.md`'s
-    /// `ctx::settle_circle_reward`, the body of `tile:circle`'s Pass entry.
-    /// The engine runs the whole reward step (suppression, the choice, the
-    /// `circleAffected` window, the payout) and answers `1`.
-    fn settle_circle_reward(&mut self, _player_id: i32, _landing: bool) -> i32 {
-        1
-    }
     fn unplace_at(&mut self, _uid: i32) -> i32 {
         -1
     }
@@ -712,6 +747,10 @@ pub trait CardWorld: Clone + 'static {
     /// `[晕眩]` layers (C# `H.State.seats[s].stun`). Sugar over the keyed state.
     fn stun_of(&self, player_id: i32) -> i32 {
         self.state_get(player_id, game_core::state::key::STUN)
+    }
+    /// `[除外]` layers (mirrors [`Self::stun_of`]). Sugar over the keyed state.
+    fn exile_of(&self, player_id: i32) -> i32 {
+        self.state_get(player_id, game_core::state::key::EXILE)
     }
     /// `H.State.turn` -- whose turn (-1 when none).
     fn turn_player(&self) -> i32;

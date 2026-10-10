@@ -206,6 +206,8 @@ pub enum PromptOption {
     Int(i32),
     /// A labelled option (`ask_pick`).
     Str(crate::Msg),
+    /// A tile ask option carrying its own label (`ask_tiles` / `opt_tile`).
+    Tile { tile: i32, label: crate::Msg },
 }
 
 /// A prompt the effect is blocked on. Maps onto the C# `MatchPrompt`.
@@ -218,6 +220,10 @@ pub struct Prompt {
     pub options: Vec<PromptOption>,
     /// Position in the effect's answer log this prompt will fill.
     pub answer_slot: usize,
+    /// Per-option prices for a tile ask (`opt_price` / `ask_tiles`).
+    pub prices: Vec<i32>,
+    /// The AI's preferred index on a tile ask (`opt_ai`); -1 = let the host fill.
+    pub ai_hint: i32,
 }
 
 /// Engine work a card effect needs mid-run (it may open [反击] windows or
@@ -283,9 +289,6 @@ pub enum HostRequest {
     /// over a move that already ran. Answers 1 (it went through) or 0 (the
     /// gate blocked it).
     Teleport { player_id: i32, tile: i32 },
-    /// C# `H.AgentLanding`: the player lands on `agent` as a 「星光代理」 (the
-    /// buy-or-pay-rent routine). Runs engine-side; the effect replays past it.
-    AgentLanding { player_id: i32, agent: i32 },
     /// C# `H.SettleAt`: a full [触发结算] of `tile` for this player. The player
     /// does not move.
     SettleAt {
@@ -358,12 +361,6 @@ pub enum HostRequest {
     /// `H.OfferBuild`: 「可选择[消耗]…房屋建筑费进行升级建造」 on a non-main
     /// landing on one's own land. `ctx::offer_build`.
     OfferBuildOne { player_id: i32, tile: i32 },
-    /// `H.CircleReward`: 「[经过]CiRCLE且[移动起点]不为CiRCLE时获得[CiRCLE奖励]」
-    /// -- the whole reward step (suppression, the choice, the `circleAffected`
-    /// window, the payout). `docs/TILES.md`'s `ctx::settle_circle_reward`, the
-    /// body of `tile:circle`'s Pass entry. `landing` picks the 「获得」 wording
-    /// for a stop on CiRCLE as against a pass over it.
-    CircleReward { player_id: i32, landing: bool },
     /// A card- or skill-driven dice roll (`ctx::roll_ask` / `ctx::do_move_roll_ask`).
     /// The engine rolls, raises the `Roll` chain link (the 「掷骰结算前」 [反击]
     /// window -- Y.O.L.O 「你的任意掷骰结算前」, 寄于指尖的执念 「当你使用火罐进行
@@ -382,6 +379,31 @@ pub enum HostRequest {
     /// with `by_card` = the run's own player. `buy()` raises the same hook
     /// itself after an ordinary purchase; this is the card-driven half.
     RaiseBought { player_id: i32, tile: i32 },
+    /// Raise a trigger point from a guest body (`ctx::raise`). `kind` is a
+    /// [`TriggerKind`] as `i32` (mapped through `TriggerKind::as_str` for the
+    /// wire name, e.g. `CircleAffected` → `"circleAffected"`); `value` is the
+    /// trigger's `value`. Answers 1 when the link settled, 0 when a
+    /// counteraction cancelled it.
+    Raise {
+        player_id: i32,
+        kind: i32,
+        value: i32,
+    },
+    /// Which option `player_id`'s AI would take among `tiles` on an agent offer
+    /// (`ctx::ai_agent_choice`). Answers the index; `tiles.len()` = skip.
+    AiAgentChoice {
+        player_id: i32,
+        tiles: Vec<i32>,
+    },
+    /// A bank gain with the Pay's event `typ` and a replacement log line
+    /// (`Pay::text`) -- `ctx::gain_typed`. Builds `Pay::new(amount, "gain")` so
+    /// the 「支付」 scalars (`scale_settle_payment`) do not reach a print.
+    GainTyped {
+        player_id: i32,
+        amount: i32,
+        typ: String,
+        text: Option<crate::Msg>,
+    },
     /// Marker spend / gain (user ruling 2026-10-07): the engine raises
     /// `markerSpend` / `markerGain` -- the marker's own [反击] window --
     /// **before** the markers move. Answers `1` (the move goes through) or `0`
@@ -1831,6 +1853,10 @@ pub struct HostState<W, R = Arc<Inner>> {
     pub answers: Vec<i32>,
     pub next_answer: usize,
     pub options: Vec<PromptOption>,
+    /// Per-option prices for the next tile ask (`opt_price`).
+    pub prices: Vec<i32>,
+    /// The AI's preferred index for the next tile ask (`opt_ai`); -1 = unset.
+    pub ai_hint: i32,
     pub asked: Option<Prompt>,
     pub host_request: Option<HostRequest>,
     pub depth: u32,
@@ -1863,6 +1889,8 @@ impl<W, R: RulesHandle> HostState<W, R> {
             answers,
             next_answer: 0,
             options: vec![],
+            prices: vec![],
+            ai_hint: -1,
             asked: None,
             host_request: None,
             depth,
@@ -2359,6 +2387,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "gain",
         |mut c: C<W>, player_id: i32, amount: i32, p: i32, n: i32| -> Result<i32, Error> {
             hostfns::gain(&mut c, player_id, amount, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "gain_typed",
+        |mut c: C<W>, player_id: i32, amount: i32, tp: i32, tl: i32, xp: i32, xl: i32| -> Result<i32, Error> {
+            hostfns::gain_typed(&mut c, player_id, amount, tp, tl, xp, xl).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3049,9 +3084,16 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "settle_circle_reward",
-        |mut c: C<W>, player_id: i32, landing: i32| -> Result<i32, Error> {
-            hostfns::settle_circle_reward(&mut c, player_id, landing).map_err(HostErr::into_err)
+        "prop_at",
+        |mut c: C<W>, uid: i32, kp: i32, kl: i32| -> Result<i32, Error> {
+            hostfns::prop_at(&mut c, uid, kp, kl).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "set_prop_at",
+        |mut c: C<W>, uid: i32, kp: i32, kl: i32, v: i32| -> Result<i32, Error> {
+            hostfns::set_prop_at(&mut c, uid, kp, kl, v).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3189,6 +3231,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
+        "raise",
+        |mut c: C<W>, player_id: i32, kind: i32, value: i32| -> Result<i32, Error> {
+            hostfns::raise(&mut c, player_id, kind, value).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
         "fire",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::fire(&mut c, player_id).map_err(HostErr::into_err)
@@ -3269,6 +3318,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "stun_of",
         |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
             hostfns::stun_of(&mut c, player_id).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "exile_of",
+        |mut c: C<W>, player_id: i32| -> Result<i32, Error> {
+            hostfns::exile_of(&mut c, player_id).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3546,13 +3602,6 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
     )?;
     l.func_wrap(
         m,
-        "agent_landing",
-        |mut c: C<W>, player_id: i32, agent: i32| -> Result<i32, Error> {
-            hostfns::agent_landing(&mut c, player_id, agent).map_err(HostErr::into_err)
-        },
-    )?;
-    l.func_wrap(
-        m,
         "card_settle_at",
         |mut c: C<W>, player_id: i32, tile: i32, main: i32| -> Result<i32, Error> {
             hostfns::card_settle_at(&mut c, player_id, tile, main).map_err(HostErr::into_err)
@@ -3577,6 +3626,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "buy_quotes",
         |mut c: C<W>, player_id: i32, kind: i32, buf: i32, n: i32, out: i32| -> Result<i32, Error> {
             hostfns::buy_quotes(&mut c, player_id, kind, buf, n, out).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "ai_agent_choice",
+        |mut c: C<W>, player_id: i32, buf: i32, n: i32| -> Result<i32, Error> {
+            hostfns::ai_agent_choice(&mut c, player_id, buf, n).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3661,6 +3717,27 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "opt_str",
         |mut c: C<W>, p: i32, n: i32| -> Result<(), Error> {
             hostfns::opt_str(&mut c, p, n).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "opt_tile",
+        |mut c: C<W>, tile: i32, lp: i32, ll: i32| -> Result<(), Error> {
+            hostfns::opt_tile(&mut c, tile, lp, ll).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "opt_price",
+        |mut c: C<W>, price: i32| -> Result<(), Error> {
+            hostfns::opt_price(&mut c, price).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "opt_ai",
+        |mut c: C<W>, ai: i32| -> Result<(), Error> {
+            hostfns::opt_ai(&mut c, ai).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -3766,6 +3843,13 @@ fn build_linker<W: CardWorld>(engine: &Engine) -> Result<Linker<HostState<W>>, E
         "trig_move_remaining",
         |mut c: C<W>| -> Result<i32, Error> {
             hostfns::trig_move_remaining(&mut c).map_err(HostErr::into_err)
+        },
+    )?;
+    l.func_wrap(
+        m,
+        "trig_move_from",
+        |mut c: C<W>| -> Result<i32, Error> {
+            hostfns::trig_move_from(&mut c).map_err(HostErr::into_err)
         },
     )?;
     l.func_wrap(
@@ -4312,6 +4396,8 @@ impl HostState<NullWorld> {
             answers: vec![],
             next_answer: 0,
             options: vec![],
+            prices: vec![],
+            ai_hint: -1,
             asked: None,
             host_request: None,
             depth: 0,
@@ -4612,6 +4698,9 @@ impl CardWorld for NullWorld {
         0
     }
     fn stun_of(&self, _: i32) -> i32 {
+        0
+    }
+    fn exile_of(&self, _: i32) -> i32 {
         0
     }
     fn turn_player(&self) -> i32 {
