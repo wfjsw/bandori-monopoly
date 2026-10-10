@@ -244,6 +244,8 @@ mod sys {
         pub fn add_card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_place_mark")]
         pub fn place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_place_mark_new")]
+        pub fn place_mark_new(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, np: i32, nl: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_marks_f")]
         pub fn count_marks_f(tile: i32, fp: i32, fl: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_bump_mark_f")]
@@ -1543,6 +1545,24 @@ pub fn place_mark(
     let (cp, cl) = s(category);
     let (np, nl) = mj(note);
     unsafe { sys::place_mark(tile, kp, kl, cp, cl, owner, src, count, np, nl) }
+}
+
+/// Like [`place_mark`] but always pushes a **fresh** row (the old `add_mark`
+/// semantics). Use where the rules count rows (embers' copies, kaoru's 3
+/// 「怪盗标记」, tae_police stacking) rather than a summed `count`.
+pub fn place_mark_new(
+    tile: i32,
+    kind: &str,
+    category: &str,
+    owner: i32,
+    src: i32,
+    count: i32,
+    note: &Msg,
+) -> i32 {
+    let (kp, kl) = s(kind);
+    let (cp, cl) = s(category);
+    let (np, nl) = mj(note);
+    unsafe { sys::place_mark_new(tile, kp, kl, cp, cl, owner, src, count, np, nl) }
 }
 
 /// Units on `tile` matching `filter` (empty kind/category, `mark::ANY` owner

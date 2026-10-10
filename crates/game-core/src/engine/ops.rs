@@ -1739,6 +1739,45 @@ impl World {
         count
     }
 
+    /// Like [`Self::place_mark`] but always pushes a **fresh** row (the old
+    /// `add_mark` semantics: one object per call, `count` = `count`). Used
+    /// where the rules count **rows** (embers' copies, kaoru's 3 marks,
+    /// tae_police stacking) rather than a summed `count`.
+    pub fn place_mark_new(
+        &mut self,
+        instance: i32,
+        kind: &str,
+        category: &str,
+        tile: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> i32 {
+        if count <= 0 {
+            return 0;
+        }
+        let cat = if category.is_empty() {
+            crate::state::mark_category::PLAYER
+        } else {
+            category
+        };
+        let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
+        self.st.marks.push(TileMark {
+            uid,
+            tile,
+            kind: kind.to_string(),
+            category: cat.to_string(),
+            owner,
+            count,
+            card: String::new(),
+            src,
+            instance,
+            note,
+        });
+        count
+    }
+
     /// Move one matching mark's `count` by `delta`; the row is dropped at 0.
     /// Returns the count now stored on that row (0 when nothing matched).
     pub fn bump_mark(&mut self, tile: i32, filter: &MarkFilter<'_>, delta: i32) -> i32 {

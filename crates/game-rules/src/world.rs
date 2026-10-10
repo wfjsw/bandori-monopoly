@@ -81,6 +81,9 @@ pub struct Trigger {
     pub move_roll: Option<i32>,
     /// `t.Card` -- the card id on card/event/counteracted triggers (`""` otherwise).
     pub card: String,
+    /// `t.Name` -- the counter name on a `CounterChanged` raise, or the message
+    /// name on an `On::Message` dispatch. Empty otherwise.
+    pub name: String,
     // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
     /// `t.Buy.Kind` -- a [`card_sdk::abi::BuyKind`] as `i32` (`0` = land).
     pub buy_kind: i32,
@@ -555,6 +558,20 @@ pub trait CardWorld: Clone + 'static {
     }
     /// Bind `count` units of the running instance's counter `kind` to `tile`.
     fn place_mark(
+        &mut self,
+        tile: i32,
+        kind: &str,
+        category: &str,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> i32 {
+        let _ = (tile, kind, category, owner, src, count, note);
+        0
+    }
+    /// Like [`Self::place_mark`] but always pushes a fresh row.
+    fn place_mark_new(
         &mut self,
         tile: i32,
         kind: &str,

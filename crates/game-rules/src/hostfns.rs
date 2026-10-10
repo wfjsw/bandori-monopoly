@@ -85,6 +85,28 @@ pub fn place_mark<C: HostCtx>(
     Ok(c.st_mut().w().place_mark(tile, &kind, &category, owner, src, count, note))
 }
 
+/// Like [`place_mark`] but always pushes a fresh row.
+pub fn place_mark_new<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    kp: i32,
+    kl: i32,
+    cp: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    np: i32,
+    nl: i32,
+) -> Result<i32, HostErr> {
+    let kind = guest_str(c, kp, kl)?;
+    let category = guest_str(c, cp, cl)?;
+    let note = guest_msg(c, np, nl)?;
+    Ok(c.st_mut().w().place_mark_new(
+        tile, &kind, &category, owner, src, count, note,
+    ))
+}
+
 fn guest_filter<C: HostCtx>(c: &mut C, fp: i32, fl: i32) -> Result<game_core::state::MarkFilter<'static>, HostErr> {
     let bytes = c.read_guest(fp, fl)?;
     let f: card_sdk::abi::MarkFilter = postcard::from_bytes(&bytes)
