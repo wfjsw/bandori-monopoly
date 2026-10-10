@@ -1132,3 +1132,8 @@ or A/B items that need a wider surface than this batch:
   `choose_your_stage_answers_an_abnormal_move`,
   `sweet_escape_gate_requires_high_rent`. Two meta ignores stay
   (`q4_soak`, `q4_print_coverage_section`).
+* **MOVE-04 (2026-10-10, test-harness sequencing):** `m06_reunion_20_tile_cap`
+  / `m06b_reunion_stops_on_passing` un-ignored. The `world_mut` panic was
+  `Table::dice` after `t.roll` (the `moveRoll` [反击] window is a pending
+  routine). Faces must be queued before `t.roll` — routines replay from their
+  start-time snapshot. Card / `do_move_roll` / `set_move_roll` unchanged.

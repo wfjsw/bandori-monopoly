@@ -255,16 +255,18 @@ fn m05_repaint_plus_half_speed() {
 // =====================================================================
 
 // 规则书: 若能再次交汇: 「持续进行移动掷骰直至[经过]下一名玩家（最多…超过原本移动终点的20格以后）」.
-#[ignore = "DISCREPANCY: 若能再次交汇 re-roll loop hits world_mut while a routine is pending"]
+// Faces are queued before `t.roll`: the moveRoll [反击] window is a pending
+// routine, and `world_mut` (what `Table::dice` uses) is illegal under one.
+// The routine also replays from its start-time snapshot, so mid-window loads
+// would not reach the re-roll anyway.
 #[test]
 fn m06_reunion_20_tile_cap() {
     let mut t = Table::vanilla(2);
     t.set_pos(1, 30);
     t.give(0, &["MyGO:若能再次交汇"]);
-    t.dice(&[3, 1, 1]);
+    // Main 1d20 = 3; re-rolls add 5 each. 3 + 5k >= 23 -> the cap applies.
+    t.dice(&[3, 5, 5, 5, 5, 5]);
     t.roll(0).unwrap();
-    // Re-rolls: 5, 5, 5, 5, 5. 3 + 5k > 23 -> the cap applies.
-    t.dice(&[5, 5, 5, 5, 5]);
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("MyGO:若能再次交汇") {
@@ -281,15 +283,15 @@ fn m06_reunion_20_tile_cap() {
 }
 
 // 规则书: 同上. Variant: P1 at 10 -- P0 stops on passing P1.
-#[ignore = "DISCREPANCY: 若能再次交汇 re-roll loop hits world_mut while a routine is pending"]
+// Faces queued before `t.roll` (same snapshot / `world_mut` reason as m06).
 #[test]
 fn m06b_reunion_stops_on_passing() {
     let mut t = Table::vanilla(2);
     t.set_pos(1, 10);
     t.give(0, &["MyGO:若能再次交汇"]);
-    t.dice(&[3, 1, 1]);
+    // Main 1d20 = 3; re-rolls add 5. 3 → 8 → 13 >= dist 10.
+    t.dice(&[3, 5, 5, 5, 5, 5]);
     t.roll(0).unwrap();
-    t.dice(&[5, 5, 5, 5, 5]);
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("MyGO:若能再次交汇") {
