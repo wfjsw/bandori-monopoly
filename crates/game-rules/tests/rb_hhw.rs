@@ -484,6 +484,79 @@ fn misaki_skill_1_gains_fire_pots_after_passing_the_tsuzumi_group() {
     assert_eq!(t.fire(0), 2, "events: {:?}", t.recent_keys(10));
 }
 
+#[test]
+fn kaoru_skill_1_own_walk_gains_one_pot_per_step() {
+    // 规则书: 「（1）每次[经过]或被[经过]时，若场上不存在[怪盗标记]，获得1火罐（上限7）」
+    // -- "每次[经过]" is the owner's own step; a walk of N steps fires N times.
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 0);
+    t.set_pos(1, 30); // far from the path
+    let before = t.fire(0);
+    t.dice(&[4]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.fire(0),
+        before + 4,
+        "four steps, four pots: keys={:?}",
+        t.recent_keys(15)
+    );
+}
+
+#[test]
+fn kaoru_skill_1_another_players_walk_gives_nothing() {
+    // 规则书: 「每次[经过]或被[经过]时」 -- the `Pass` half is "I pass", not
+    // "anyone passes". Another player's N-step walk, none of them onto kaoru's
+    // tile, must not fire the owner's `Pass` branch.
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(0, 30); // off P1's path
+    t.set_pos(1, 0);
+    let before = t.fire(0);
+    let marks_before = t.marks().len();
+    t.dice(&[5]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.fire(0),
+        before,
+        "P1's walk gives kaoru nothing via [经过]: fire {} -> {} keys={:?}",
+        before,
+        t.fire(0),
+        t.recent_keys(15)
+    );
+    assert_eq!(t.marks().len(), marks_before, "no marks touched");
+}
+
+#[test]
+fn kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step() {
+    // 规则书: 「…或被[经过]时」 -- the `PassTile` half fires once when another
+    // player steps onto kaoru's tile. A walk that only *passes* that tile must
+    // not also pay one pot per remaining step (`Pass` is not the passer's).
+    let mut t = Table::new(&["濑田薰", "户山香澄"]);
+    t.clean();
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(0, 10);
+    t.set_pos(1, 7);
+    let before = t.fire(0);
+    t.dice(&[5]); // 7 -> 8,9,10,11,12: passes 10 mid-route
+    t.roll(1).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(1), 12, "the walk ended past P0");
+    assert_eq!(
+        t.fire(0),
+        before + 1,
+        "exactly one 被[经过] pot, not one per step: keys={:?}",
+        t.recent_keys(15)
+    );
+}
+
 // ================================================================ band skill
 
 #[test]
