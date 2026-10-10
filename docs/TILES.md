@@ -128,41 +128,53 @@ trigger its rule declares wherever the trigger points -- the hook dispatch adds
 `mark:*` instances to the board list for a tile-carrying trigger too.
 
 `mark:cp` owns the **tile-mark** half of the [CP点] lifecycle (「CP点：放置于
-路面上的指示物」, `data/rules.txt` 125). There are **two kinds of [CP点]**
-(user ruling 2026-10-07: 「自己[场上]1个[CP点] referred to the cp point
-attached to the card. There are points on the tile (which mandated by
+路面上的指示物」, `data/rules.txt` 125). Tile marks are **units of a card
+instance's named counter** (user ruling 2026-10-10), not free-floating:
+`mark:cp` is the standing pseudo card that owns every tile [CP点] unit
+(`TileMark.category == "cp"`, `TileMark.instance` = the `mark:cp` instance
+uid). Destroying that instance destroys its units. There are **two kinds of
+[CP点]** (user ruling 2026-10-07: 「自己[场上]1个[CP点] referred to the cp
+point attached to the card. There are points on the tile (which mandated by
 tilemark) and points on the card (mandated by the card rule)」):
 
-* **Tile [CP点]** -- the [`TileMark`]s of category `mark_category::CP`, owned
-  by this rule instance. That is the `data/rules.txt` 125 object.
-* **On-card [CP点]** -- `FieldCard::cp` on the 该清CP了 card instance, the card
-  rule's own stock (crystals-like; 通用:该清CP了 [手] 「在自己[场上]添加6个
-  [CP点]」 seeds it at 6). The view shows it as the field card's counter badge.
+* **Tile [CP点]** -- the [`TileMark`]s of category `mark_category::CP`, units
+  of `mark:cp`'s named `cp` counter bound to tiles. That is the
+  `data/rules.txt` 125 object.
+* **On-card [CP点]** -- `FieldCard::cp` on the 该清CP了 card instance (the
+  named `'cp'` counter of *that* instance), the card rule's own stock
+  (crystals-like; 通用:该清CP了 [手] 「在自己[场上]添加6个[CP点]」 seeds it at
+  6). The view shows it as the field card's counter badge.
 
 | step | clause | API |
 |---|---|---|
-| placement | 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 | `ctx::place_cp(tile)` -- the *where* is the placer's gate |
+| placement | 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 | 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`; this owner's `On::Message` runs `ctx::place_mark(tile, mark::CP_KIND, mark::CP_CATEGORY, -1, src, 1, …)` -- the *where* is the placer's gate |
 | stacking | 「添加1个[CP点]」 onto a 「没有[CP点]的格子」 | one mark object per tile, `count` is the [CP点] there |
-| landing | 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | `On::Hook(SettleAfter)` on this instance -- spends **both** kinds |
-| removal | 「移除格子上的个[CP点]」 | `ctx::clear_cp(tile)` (a tile-mark write) |
-| on-card seed | 「并在自己[场上]添加6个[CP点]」 | the card rule's `ctx::add_cp(6, 0)` -- not this owner |
-| on-card spend | 「自己[场上]1个[CP点]」 | `ctx::add_cp_at(src, -1, 0)`, `src` = the mark's `TileMark.src` |
+| landing | 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 | `On::Hook(SettleBody)` on this instance -- spends **both** kinds |
+| removal | 「移除格子上的个[CP点]」 | `ctx::bump_mark` / `remove_marks` over `MarkFilter::any().category("cp")` (a tile-mark write) |
+| on-card seed | 「并在自己[场上]添加6个[CP点]」 | the card rule's `ctx::add_counter(counter::CP, 6, 0)` -- not this owner |
+| on-card spend | 「自己[场上]1个[CP点]」 | `ctx::add_counter_at(src, counter::CP, -1, 0)`, `src` = the mark's `TileMark.src` |
 
-Cards reach the tile marks **only** through that small API (`ctx::place_cp` /
-`count_cp` / `count_cp_from` / `clear_cp` / `cp_src_at`), never through the
-generic mark ops, and the on-card count through `ctx::cp_attached` /
-`add_cp` / `cp_at` / `add_cp_at`. A [CP点] mark is **not owned by any player**:
-`TileMark.owner` is always `BOARD_OWNER` (`-1`). Provenance is
-`TileMark.src` (the placing card instance, what 「此卡在格子上添加的[CP点]及其
-产物」 keys on) plus `TileMark.card` (its id, the view's 「来自」).
+Cards reach the tile marks through the generic mark API
+(`ctx::place_mark` / `count_marks` / `bump_mark` / `remove_marks` /
+`mark_src_at`, selected by `MarkFilter`), and the on-card count through
+`ctx::counter` / `add_counter` / `counter_at` / `add_counter_at` -- the old
+CP helpers (`place_cp` / `count_cp` / `clear_cp` / `cp_attached`) are gone.
+A [CP点] mark is **not owned by any player**: `TileMark.owner` is always
+`BOARD_OWNER` (`-1`). Provenance is `TileMark.src` (the placing card instance,
+what 「此卡在格子上添加的[CP点]及其产物」 keys on) plus `TileMark.card` (its
+id, the view's 「来自」); `TileMark.instance` is the **owning counter** (the
+`mark:cp` instance), a different fact.
 
 `TileMark.category` is what says which category a mark is (`""` = a
 player/generic mark coloured by `owner`'s seat; `mark_category::CP` for [CP点]).
-Both `category` and `src` are serde-defaulted, so a pre-category save still
-loads -- `Match::restore` re-reads the old CP `kind`
-(`cards:card-general.clear_cp_mark`) into the category and drops its player
-owner. The old per-player 「自己[场上]」 counter `mark::CP_FIELD_TOK` is gone:
-the card's own `FieldCard::cp` replaces it (ABI v38).
+`category` / `src` / `instance` are serde-defaulted, so a pre-category save
+still loads -- `Match::restore` re-reads the old CP `kind`
+(`cards:card-general.clear_cp_mark`) into the category, drops its player
+owner, and attaches the mark to the standing `mark:cp` instance (SAVE_VERSION
+5 → 6; a legacy row whose creator cannot be determined keeps
+`instance == -1` and is never auto-purged). The old per-player 「自己[场上]」
+counter `mark::CP_FIELD_TOK` is gone: the card's own `FieldCard::cp` replaces
+it (ABI v38).
 
 **The settle clause's reading** (recorded; see `rules/tile_marks/src/cp.rs` for the
 long form). 「在拥有[CP]点的格子上[结算]时移除格子上的个[CP点]和自己[场上]1个
@@ -173,8 +185,10 @@ attached to (`TileMark.src`, which must hold ≥1), and the **settler** gains
 「吃多个CP点达到2000以上收益」 has the eater profit). C# instead kept a
 per-player `Tok(Seat, "CP点")` and gated the clause on `m.Seat == Seat`; the
 2026-10-07 ruling replaces the counter with the card's own count and this
-reading drops the gate. The 该清CP了 graveyard rule is the on-card count
-hitting 0 (`HookKind::CpChanged`), not the tile marks running out.
+reading drops the gate. The landing hook lives on `mark:cp`. The 该清CP了
+graveyard rule is the on-card count hitting 0
+(`On::Hook(&[HookKind::CounterChanged], …)` filtering `counter_is('cp')`),
+not the tile marks running out.
 
 ### The bodies stay thin
 

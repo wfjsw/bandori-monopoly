@@ -138,10 +138,10 @@ every candidate; the owner overlay is per candidate.
 
 | layer | variables (ints / string ids) | source |
 |---|---|---|
-| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264) |
+| window | `kind`, `actor`, `target`, `tile`, `value`, `step`, `by`, `pay_is_rent`, `move.roll`, `move.kind`, `move.remaining`, `move.main`, `move.dir`, `move.tag('name')`, `roll_source`, `abnormal`, `trigger_card`, `counter_name`, `chain.count/kind[i]/hits(seat)/from[i]` | `Trigger` + effect-link list (same data `effect::*` imports read, ctx.rs:2218-2264) |
 | window | `turn_player`, `turn_key` | `Cx` / `TurnCtx` |
-| candidate | `owner` (= `player_id` arg), `owner.money/fire/crystals/hand/pos/out/stay/stun/exile/no_hand`, `owner.character`, `owner.band`, `owner.tiles` (count) | `World`/`Player` |
-| candidate | `card.id`, `card.placed`, `card.cp`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks |
+| candidate | `owner` (= `player_id` arg), `owner.money/fire/crystals/hand/pos/out/stay/stun/exile/no_hand`, `owner.character`, `owner.band`, `owner.tiles` (count). `owner.crystals` is the owner's **band** crystals (the band-skill field instance's `crystals`), not an on-card counter | `World`/`Player` |
+| candidate | `card.id`, `card.placed`, `card.cp` (legacy -- reads **crystals**, see §4.2b), `card.counter('name')`, `slot(name)`, `tok('name')`, `tile_named(name) -> id` (every board name registered; `-1` when unknown, matching the guest) | `World` field instances + marks |
 
 Not in the schema (residual, stays in the wasm guard): geometry, list builders,
 `gains_this_turn` / `targeted_count` / `price_tag` / `grade_of`, `skill_blocked`
@@ -165,6 +165,22 @@ implementations). No edits to `schema.rs` / `eval.rs` tables.
 | `get` | scalar fetch: `fn(&dyn CondView) -> i64` |
 | `fx` | function shape (`Fx::SeatInt` / `StrInt` / `IntHas` / `Neighbor` / …), including the hidden table the eager evaluator bakes |
 | `doc` | one line, mirrored in this table |
+
+**Named counters / messages (v50).** Three names ride the same table; their
+`doc` text is the definition:
+
+| name | shape | doc |
+|---|---|---|
+| `card.counter('name')` (flat `card_counter`) | `Fx::StrInt`, candidate | `card.counter('name')` -> the candidate instance's named counter (`'cp'` / `'crystals'` / any); missing = 0. `counter::CP` reads `FieldCard::cp`, `counter::CRYSTALS` reads `FieldCard::crystals`, anything else `FieldCard::counters[name]` |
+| `counter_name` (alias `trigger_name`) | window `Ty::Int` | the trigger's counter / message name hash (`Trigger.name`); `counter_is('…')` is the string spelling. Same encoding as `trigger_card` (`id_of`); `0` when empty |
+| `counter_is('name')` | `Fx::IntHas` | `counter_is('name')` -> this window's `Trigger.name` is that counter / message |
+
+`card.cp` (flat `card_cp`) is the **legacy** name and actually reads
+**crystals** on the candidate instance (`FieldCard::crystals`) -- not
+`FieldCard::cp`. Keep it; do not break it. Use `card.counter('cp')` for the
+real on-card [CP点] count. `owner.crystals` / `crystals(p)` are the seat's
+**band** crystals (the band-skill field instance's `crystals`, `World::
+band_crystals`), not an on-card counter.
 
 Accessors go through [`crate::view::CondView`] (`rules-cond/src/view.rs`): a
 read-only query trait covering the trigger fields, the player/tile/card
@@ -236,6 +252,17 @@ reading its default / sentinel):
 | `RollPlan` | `rollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
 | `AtEnd` | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
 | `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.main` | `actor`, `target`, `tile.*`, `move.main`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
+| `Message` | the `On::Message` dispatch (a `ctx::send` nested in the sender's run) | `actor` = sender seat, `target` = receiver owner seat, `value` = 0 (unused), `name` / `counter_name` = the message name (`Trigger.name`), `trigger_card` = the sender's card id hash if known else 0 | `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text}` carry the payload; `message::reply(v)` is the answer the sender's `ctx::send` returns. Does not flash the card |
+
+A `CounterChanged` hook (`On::Hook(&[HookKind::CounterChanged], …)`, wire
+names `counterChanged`|`crystalsChanged`|`cpChanged`) sees: `actor` = the
+owner of the instance whose counter changed (board-owned instances read
+`-1`), `target` = `-1` (not seat-scoped -- the counter lives on a card, not
+on a seat), `value` = the **signed delta** applied, `card` / `trigger_card` =
+the instance's card id hash, `name` / `counter_name` = the counter name
+(`'cp'` / `'crystals'` / any). The count after the write is
+`card.counter(name)` on that instance. Filter with `counter_is('cp')` /
+`card.counter('cp') == 0`.
 
 `pay.*` fields are meaningful only where the dispatch trigger carries them (a
 `pay`/`paid` raise); a `Settle` / `AtEnd` / `RollPlan` window reads `value = 0`

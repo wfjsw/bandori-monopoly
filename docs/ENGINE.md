@@ -76,15 +76,22 @@ dispatch adds them to the board list for a tile-carrying trigger as well.
 (`TileMark.category`, 「放置于路面上的指示物」, `data/rules.txt` 125), held by the
 neutral board owner and **never by a player** (`TileMark.owner = -1`);
 provenance is `TileMark.src` (the placing card instance) and `TileMark.card`
-(its id). Cards place / count / clear through `ctx::place_cp` / `count_cp` /
-`clear_cp` / `cp_src_at` -- the small API that owner implements. The other
-[CP点] kind is the **on-card** count (`FieldCard::cp`, 「自己[场上]N个[CP点]」,
-user ruling 2026-10-07): the card rule's own stock, written with `ctx::add_cp`
-/ `add_cp_at` and read with `ctx::cp_attached` / `cp_at` (ABI v38).
-`HookKind::CpChanged` / `TriggerKind::CpChanged` (`cpChanged`, ABI v36/38)
-fires whenever a card instance's **on-card** [CP点] count is written, the same
-shape as v29's `crystalsChanged`, so 「…时」 clauses on the count live in one
-event handler (通用:该清CP了's graveyard rule) instead of at each spend site.
+(its id). Tile marks are units of a card instance's named counter (user ruling
+2026-10-10): `TileMark.instance` is the owning counter's instance -- for every
+tile [CP点] the standing `mark:cp` instance -- and dies with it. Cards place /
+count / clear through the generic mark API (`ctx::place_mark` / `count_marks` /
+`bump_mark` / `remove_marks` / `mark_src_at` over `MarkFilter`); the old CP
+helpers are gone. The other [CP点] kind is the **on-card** count
+(`FieldCard::cp`, 「自己[场上]N个[CP点]」, user ruling 2026-10-07): the card
+rule's own stock, the named `'cp'` counter of that instance
+(`ctx::counter` / `add_counter` / `counter_at` / `add_counter_at`, ABI v50).
+`HookKind::CounterChanged` / `TriggerKind::CounterChanged` (wire names
+`counterChanged`|`crystalsChanged`|`cpChanged`, ABI v50; one hook replaces
+`CpChanged` / `CrystalsChanged`) fires whenever a card instance's named
+counter is written: `Trigger.name` = the counter name, `Trigger.value` = the
+signed delta. 「…时」 clauses on a count live in one event handler
+(通用:该清CP了's graveyard rule) instead of at each spend site. Cross-card
+writes go through `ctx::send` / `On::Message` (below).
 
 The engine keeps the money/deck work as primitives the bodies call
 (`ctx::pay_rent` / `offer_buy` / `offer_build` / `offer_force_buy` /
@@ -170,6 +177,31 @@ A marker is owned by the **rule that creates it**, wherever its copies sit
 (`World::marker_owner`) -- `skill:要乐奈` owns every 抹茶芭菲. Bankruptcy
 clears everything the player holds plus every marker their rules own,
 wherever it sits; neutral board marks ([CP点], owner -1) stay.
+
+### Named counters, bound units, messages (ABI v50)
+
+Counter storage is three places, one model (user ruling 2026-10-10): every
+tile mark and player token is a unit of some card instance's named counter,
+bound to a tile or a holder; destroying the instance destroys its units.
+
+* `FieldCard::{cp, crystals, counters}` -- the on-card pool. Wire names
+  `counter::CP` / `counter::CRYSTALS` keep their storage fields; anything else
+  lives in `counters`.
+* `TileMark.instance` -- the owning counter's card instance (`src` stays
+  provenance: which instance placed the mark).
+* `Counter.instance` -- same for a holder-bound token.
+
+Engine ops (`crates/game-core/src/engine/ops.rs`): `counter_at` /
+`add_counter_at`, `place_mark` / `count_marks` / `bump_mark` / `remove_marks` /
+`mark_src_at`, `count_held` / `bind_held` / `move_units`.
+
+`On::Message` + `ctx::send(Target, name, &Message)` is the generic cross-card
+channel: a nested run against the receiver (a uid, a card id on a seat, or a
+standing board-owned pseudo card like `mark:cp`), same condition / residual
+guard / body layering as `On::Hook`. `Trigger.name` carries the message name;
+`ctx::message::*` reads the payload and sets the reply. The 该清CP了 →
+`mark:cp` placement is the worked example (`docs/CARDS.md` → 「Cross-card
+messages」).
 
 ### Money pipeline depth
 
@@ -527,6 +559,13 @@ both defaulted that way, so a pre-category save still loads; `Match::restore`
 then re-reads the old [CP点] `kind` (`cards:card-general.clear_cp_mark`) into
 `mark_category::CP` and drops the player owner it used to carry (a [CP点] has
 none). New writes never use that `kind`.
+
+**SAVE_VERSION 5 → 6** (ABI v50): marks / tokens carry `instance`
+(`TileMark.instance` / `Counter.instance`, serde default `-1` for legacy
+rows). `Match::restore` attaches CP marks to the standing `mark:cp` and other
+rows to the creating rule's field instance when it can be found
+(`marker_owner` name → rule id); a row whose creator cannot be determined
+keeps `instance == -1` and is **never auto-purged**.
 
 ## Records
 

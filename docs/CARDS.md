@@ -189,21 +189,215 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 | players & money | `player_count`, `player_out`, `others`, `money`, `gain`, `pay`, `can_pay`, `cant_move`, `character_is`, `in_band`, `turn_player`, `round_no`, `turn_key`, `gains_this_turn` (「当前回合内你每获得过一次资金」 -- the engine's per-turn money-in counter, reset at each turn start) |
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
-| marks & tokens | `add_mark`, `count_marks`, `remove_marks`, `tok`, `set_tok`, `add_tok` |
-| [CP点] (ABI v36/38) | **Tile marks** (`mark:cp` owner in `rules/tile_marks`, `docs/TILES.md` → 「Board marks」): `place_cp`, `count_cp`, `count_cp_from`, `clear_cp`, `cp_src_at` -- [CP点] is its own tile-mark category with **no player owner**; the writer stamps the running card instance as provenance. **On-card** [CP点] (`FieldCard::cp`, 「自己[场上]N个[CP点]」): `cp_attached`, `add_cp`, `cp_at`, `add_cp_at` -- the card rule's own stock (user ruling 2026-10-07). Never reach [CP点] through the generic mark ops. |
+| marks & tokens | `place_mark`, `place_mark_new`, `count_marks`, `bump_mark`, `remove_marks`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
+| named counters (ABI v50) | `counter` / `add_counter` / `set_counter` (this instance), `counter_at` / `add_counter_at` (by uid), `card_counter` / `add_card_counter` (a placed card by id). Wire names `cp` / `crystals` map to `FieldCard::cp` / `FieldCard::crystals`; anything else lives in `FieldCard::counters`. The old CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` / `cp_attached`) are **gone** -- use the mark / counter API, and see 「Cross-card messages」 for the 该清CP了 ↔ `mark:cp` shape |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
-| pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
+| pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`, i.e. its named `'crystals'` counter), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
 | skills & band attachments (ABI v35) | `band_skill` / `character_skill` (the bound rule id, C# `H._fx[i].bands` / `.skill`), `band_skills` (every band attachment as `(uid, id, extra)`), `add_band_skill` (C# `H.MakeBand`; `extra` = 「拿取」 copy: 「相同乐队技能卡的效果不可叠加」 / 「不视为那个乐队的角色」), `invoke_skill` (run a skill rule's press entry `On::Play` for a player -- 「立即执行乐队技能的（2）效果」 / `SkillPareo -> Offer()`. No `skillUsed`: that is the player's own press (`use_skill`).) |
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
 | prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
-| field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals`, `decay` |
+| field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals` (sugar over this instance's named `'crystals'` counter), `decay` |
+| cross-card messages (ABI v51) | `send(Target, name, &Message)`, `On::Message(names, pre, guard, body)`, `ctx::message::{sender_uid, sender_seat, name, a, b, c, tile, seat, text, reply}` -- see 「Cross-card messages」 |
 | tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `prop_at`, `set_prop_at`, `draw`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `buy`, `buy_quotes`, `card_build`, `ask_tiles`, `ai_agent_choice`, `is_color`, `raise`, `gain_typed`, `exile_of`, `stun_of`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 | event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
 
 Prompts can carry an AI preference (`ask_tiles`'s `ai` hint, or the prompt
 fallback when it is -1).
+
+## Named counters and bound units (ABI v51)
+
+Every tile mark and player token is a **unit of some card instance's named
+counter**, bound to a tile or a holder; destroying the instance destroys its
+units (user ruling 2026-10-10). There is one model, not two:
+
+* **On-card pool** -- the count on the instance itself. The two known names
+  keep their wire names and storage: `counter::CP` (`"cp"`) → `FieldCard::cp`
+  (「自己[场上]N个[CP点]」), `counter::CRYSTALS` (`"crystals"`) →
+  `FieldCard::crystals` (奇迹水晶). Anything else lives in
+  `FieldCard::counters[name]`.
+* **Tile marks** (`TileMark`) -- units bound to a tile. `TileMark.instance` is
+  the owning counter's card instance; `TileMark.src` stays **provenance**
+  (which card instance placed it). A mark dies with its instance, not with its
+  placer.
+* **Held tokens** (`Counter`) -- units bound to a holder (a player).
+  `Counter.instance` is the owning counter's card instance.
+
+The guest surface is the generic verb set:
+
+```rust
+// on-card named counter of this instance
+ctx::counter("cp");
+ctx::add_counter("cp", 6, 0)?;          // max 0 = uncapped; raises CounterChanged
+ctx::set_counter("cp", 0);
+// another instance / a placed card by id
+ctx::counter_at(uid, "cp");
+ctx::add_counter_at(uid, "cp", -1, 0);
+ctx::card_counter(player, "通用:该清CP了", "cp");
+
+// tile marks, selected by MarkFilter (kind / category / owner / src / instance;
+// empty / mark::ANY = any)
+ctx::place_mark(tile, "mark:cp", "cp", -1, self_uid(), 1, &note);
+ctx::count_marks(tile, &MarkFilter::any().category("cp"));
+ctx::bump_mark(tile, &filter, -1);
+ctx::remove_marks(tile, &filter);
+ctx::mark_src_at(tile, &filter);        // provenance (TileMark.src)
+
+// holder-bound units of this instance's counter
+ctx::count_held("抹茶芭菲", player);
+ctx::add_held("抹茶芭菲", player, 1, 0)?;
+ctx::move_units("抹茶芭菲", -1, other, space, -1, 1);
+```
+
+`tok` / `add_tok` / `set_tok` are the holder-binding verbs of the creating
+instance's counter (`add_tok` = `add_held`). `crystals` / `set_crystals` /
+`add_crystals` are sugar over this instance's named `'crystals'` counter;
+`band_crystals` / `add_band_crystals` are sugar over the band-skill field
+instance's. The CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` /
+`cp_attached`) are **gone**.
+
+SAVE_VERSION 5 → 6: `TileMark.instance` / `Counter.instance` are new
+(serde default `-1` for legacy rows; a row whose creator cannot be determined
+is kept, never auto-purged). `Match::restore` attaches CP marks to the standing
+`mark:cp` and other rows to the creating rule's field instance when it can be
+found.
+
+One `CounterChanged` hook (wire names `counterChanged`|`crystalsChanged`|
+`cpChanged`) replaces `CpChanged` / `CrystalsChanged`; it carries
+`Trigger.name` = the counter name and `Trigger.value` = the signed delta.
+「…时」 clauses on a count (「此卡上不再拥有[奇迹水晶]时」, 通用:该清CP了's
+graveyard rule) live in one event handler on that hook, not at each spend site.
+
+## Cross-card messages (ABI v51)
+
+`ctx::send(Target, name, &Message)` is the generic cross-card channel.
+`On::Message(names, pre, guard, body)` is the answering entry -- same
+condition / residual guard / body layering as `On::Hook`. The handler reads
+the sender and payload from `ctx::message::*` and returns a reply value via
+`ctx::message::reply(v)`; the sender's `ctx::send` returns it (0 when no
+receiver admitted the message). Handling a message does not flash the card.
+
+Addressing (`abi::Target`): `Uid(i32)` (a specific field instance),
+`Card { player, card }` (the instance of a card id on a seat), or
+`Board(String)` (a standing board-owned pseudo card, e.g. `mark:cp`).
+Multiple receivers of a name: the first admitted one in field order answers;
+a handler whose `pre` / guard rejects is not a receiver.
+
+`Message` is a few typed ints plus an optional name -- `name`, `a`, `b`, `c`,
+`tile`, `seat`, `text`. `ctx::message::{sender_uid, sender_seat, name, a, b,
+c, tile, seat, text}` read them; `Trigger.name` is the message name (the same
+field a `CounterChanged` hook uses for the counter name).
+
+### 该清CP了 ↔ `mark:cp` (before / after)
+
+通用:该清CP了 seeds tile [CP点] and an on-card stock; `mark:cp` owns the tile
+marks and the landing clause that spends both kinds. The card files are
+mid-migration (`rules/cards/card-general/src/clear_cp.rs` already uses the new
+API; `rules/tile_marks/src/cp.rs` still calls the old CP helpers). The shape:
+
+**Before** -- 该清CP了 called the CP helpers directly and listened to
+`HookKind::CpChanged`:
+
+```rust
+// 通用:该清CP了
+On::Play("", Some(cant_play), clear_cp),
+On::Hook(&[HookKind::CpChanged], "", Some(cp_empty_guard), on_cp_empty),
+
+fn clear_cp(player_id: i32) -> Asked {
+    // ...
+    ctx::place_cp(tile);            // tile [CP点], stamped onto this instance
+    ctx::add_cp(6, 0);              // on-card [CP点] stock
+    // ...
+}
+fn cp_empty_guard(player_id: i32) -> bool {
+    ctx::is_placed() && trigger::card_is(ID) && ctx::cp_attached() == 0
+        && trigger::value() <= 0
+}
+```
+
+**After** -- 该清CP了 `ctx::send`s a message to `Target::Board("mark:cp")`
+asking it to place CP units; `mark:cp`'s `On::Message` handler runs
+`ctx::place_mark`. The landing hook spends the placer's on-card CP via
+`ctx::add_counter_at`. The graveyard rule is an `On::Hook` on
+`HookKind::CounterChanged` filtering `counter_is('cp')` /
+`card.counter('cp') == 0`:
+
+```rust
+// 通用:该清CP了
+On::Play("", Some(cant_play), clear_cp),
+On::Hook(&[HookKind::CounterChanged], "", Some(cp_empty_guard), on_cp_empty),
+
+fn clear_cp(player_id: i32) -> Asked {
+    // ...
+    place_tile_cp(tile);                        // the message, below
+    ctx::add_counter(counter::CP, 6, 0)?;       // on-card [CP点] stock
+    // ...
+}
+
+/// Ask the `mark:cp` standing rule to put `count` [CP点] on `tile`.
+fn place_tile_cp(tile: i32) -> Asked {
+    ctx::send(
+        &Target::Board("mark:cp".into()),
+        "place",
+        &Message {
+            name: "place".into(),
+            tile,
+            a: 1,                               // 「添加1个[CP点]」
+            ..Default::default()
+        },
+    )?;
+    Ok(())
+}
+
+fn cp_empty_guard(player_id: i32) -> bool {
+    ctx::is_placed()
+        && trigger::card_is(ID)
+        && trigger::name() == counter::CP     // or counter_is('cp') in `pre`
+        && ctx::counter(counter::CP) == 0
+        && trigger::value() <= 0
+}
+
+// rules/tile_marks/src/cp.rs
+On::Message(&["place"], "", Some(places_cp), place_cp),
+On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+
+fn place_cp(_owner: i32) -> Asked {
+    let tile = ctx::message::tile();
+    let src = ctx::message::sender_uid();       // provenance 「此卡在格子上添加的」
+    ctx::place_mark(
+        tile, mark::CP_KIND, mark::CP_CATEGORY,
+        /* owner */ -1, src, ctx::message::a().max(1), &Msg::new("log.cp_placed"),
+    );
+    ctx::message::reply(1);
+    Ok(())
+}
+
+fn on_land(_owner: i32) -> Asked {
+    let seat = trigger::player_id();
+    let tile = trigger::tile();
+    let src = ctx::mark_src_at(
+        tile,
+        &MarkFilter::any().category(mark::CP_CATEGORY),
+    );
+    ctx::bump_mark(
+        tile,
+        &MarkFilter::any().category(mark::CP_CATEGORY),
+        -1,
+    );
+    // 「自己[场上]1个[CP点]」 -- the placer's on-card stock
+    if src >= 0 {
+        ctx::add_counter_at(src, counter::CP, -1, 0);
+    }
+    ctx::gain(seat, 800, &Msg::new("log.cp_clean").player_id("who", seat))?;
+    Ok(())
+}
+```
+
+The landing clause (settle on a CP tile: remove the tile unit + one on-card
+CP of the placer, gain 800) lives on `mark:cp`; the spread clause (「此卡在
+格子上添加的[CP点]及其产物」) keys on `TileMark.src` provenance the same way
+it does today.
 
 ## Trigger points (`trigger::kind()`)
 
@@ -341,13 +535,17 @@ cannot ship with a raw key showing to players.
   [反击] window; `turnStart` / `settleAfter` are both a hook and a [反击] point,
   so a card there tells which by `is_placed(player_id)`.
   Per-card miracle crystals (`crystals` / `set_crystals` / `add_crystals`) are
-  the decay counter `DecayCard.TurnEnd` uses. **Band-card (「乐队卡 / 团卡」)
-  crystals are one pool with them**: they live on the band skill's own field
-  instance (`skill:<band>:<skill>`), so `band_crystals` / `add_band_crystals`
-  are sugar over that instance's count. No keyed-state side store. Edge cases:
-  a player with no band skill reads 0 and every write is a no-op; several band
-  cards (PPP:Returns) target the first in placement order; a swapped or removed
-  band card takes its crystals with it.
+  the decay counter `DecayCard.TurnEnd` uses -- sugar over this instance's
+  named `'crystals'` counter (`FieldCard::crystals`). **Band-card (「乐队卡 /
+  团卡」) crystals are one pool with them**: they live on the band skill's own
+  field instance (`skill:<band>:<skill>`), so `band_crystals` /
+  `add_band_crystals` are sugar over that instance's count. No keyed-state
+  side store. Edge cases: a player with no band skill reads 0 and every write
+  is a no-op; several band cards (PPP:Returns) target the first in placement
+  order; a swapped or removed band card takes its crystals with it. The
+  empty-out clause (「此卡上不再拥有[奇迹水晶]时」) is an `On::Hook` on
+  `HookKind::CounterChanged` filtering `counter_is('crystals')`, not a check
+  at each spend site.
 * A counteraction can reshape the trigger it answered: `set_move_roll` rewrites a
   move roll, `set_pay_amount` reduces or cancels (0) a payment, `set_pay_target`
   redirects its payee (-1 = the bank), and `set_cancelled` / `negate_effect` / `spare` shape what settles. The engine honours all four once the counteraction window closes.
