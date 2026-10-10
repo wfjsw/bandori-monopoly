@@ -1137,3 +1137,8 @@ or A/B items that need a wider surface than this batch:
   `Table::dice` after `t.roll` (the `moveRoll` [反击] window is a pending
   routine). Faces must be queued before `t.roll` — routines replay from their
   start-time snapshot. Card / `do_move_roll` / `set_move_roll` unchanged.
+* **MOVE-02 (2026-10-10, test drive shape):** `m10_rinko_while_stunned` /
+  `m11_rinko_plus_yolo` un-ignored. The press is a pre-roll shape
+  (`set_fixed_roll`); the tests omitted the main `t.roll(0)`. Same drive as the
+  green `rinko_skill_2_fixes_the_move_roll_to_x_times_six` / `g09_*` twins.
+  m11 records 14 (Y.O.L.O +2 over the fixed 12).

@@ -287,17 +287,16 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: piece stops on the hook tile and settles.
 
 ## MOVE-02 — 白金燐子 (2) spends fire / prompts X but never moves
-- **kind**: implementation bug
-- **class**: A
+- **kind**: test-harness drive shape (not an engine defect)
+- **class**: D (fixed 2026-10-10; see D-06)
 - **severity**: high (Roselia staple)
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs:458` `m10_rinko_while_stunned` (`prompts for X but never moves (0 instead of 12) while stunned`)
-  - `crates/game-rules/tests/rb_cross_move.rs:491` `m11_rinko_plus_yolo` (`never moves (pos 0 instead of 12 or 14)`)
-  - `rules/skills/skill-characters/src/rinko_1cm.rs:58` (「此技能可以正常使用或在[晕眩]状态下使用」 stun-waiver flag is B — see SKILL-03)
-- **rulebook**: 白金燐子 (2) — spend X fire before the move roll to move X (works while stunned).
-- **current**: X prompt appears; the piece never moves (stunned and not).
-- **expected**: after paying X the piece moves as stated (stun waived by 「可以正常使用」).
+  - `crates/game-rules/tests/rb_cross_move.rs` `m10_rinko_while_stunned` / `m11_rinko_plus_yolo` (un-ignored, green twice)
+  - green twins already pin the drive: `rb_roselia.rs` `rinko_skill_2_fixes_the_move_roll_to_x_times_six`, `rb_gap_move.rs` `g09_fixed_roll_plus_starlit_reroll`
+- **rulebook**: 白金燐子 (2) — 「你可以在移动掷骰前消耗X个火罐，使这回合移动掷骰的结果固定为X*6」. The press is a **pre-roll shape**; the player still takes the main roll.
+- **was**: m10/m11 pressed the skill and drained prompts, then asserted pos without `t.roll(0)`.
+- **fixed**: take the main roll after the X prompt (same drive as the green roselia/gap twins). Un-ignored, green twice. m11 records 14 (Y.O.L.O adds +2 over the fixed 12; the 「固定」 vs additives question stays open as C-Q24-adjacent RULING in the test).
 
 ## MOVE-03 — MyGO band (2) move-1 replacement never fires / multi-activation `On::Play`
 - **kind**: implementation bug + ABI defect
@@ -1394,6 +1393,12 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 - Root cause: `Table::dice` → `Match::world_mut` after `t.roll` left the `moveRoll` [反击] window pending (`mod.rs:783` assert). The card body's `do_move_roll` / `set_move_roll` / `log` never touches `world_mut`; real matches never do either.
 - Secondary: routines replay from their start-time snapshot, so faces loaded after the halt never reach the re-roll. All faces must be queued before `t.roll` (same pattern as `rb_gap_move` G08 / `rb_hhw` 运动的天赋).
 - Fix: merge the re-roll faces into the pre-roll `t.dice` load in `m06` / `m06b`. Un-ignored, green twice. No engine/card change.
+
+## D-06 — MOVE-02 白金燐子 (2) (test drive shape; 2026-10-10)
+- Root cause: m10/m11 pressed the skill and asserted pos without taking the main roll. `set_fixed_roll` is a **pre-roll shape** of the upcoming main move; it does not auto-run the walk. The press-is-the-move pattern (`ctx::card_move`) is for 「代替本回合的移动」 skills (要乐奈 (2) etc.), not this clause.
+- Green twins already pin the drive: `rinko_skill_2_fixes_the_move_roll_to_x_times_six` (rb_roselia), `g09_fixed_roll_plus_starlit_reroll` (rb_gap_move).
+- Fix: `t.roll(0)` after the X prompt. m10 (stunned mid-turn) and m11 (Y.O.L.O) un-ignored, green twice. m11 records 14 (Y.O.L.O +2 over the fixed 12).
+- Related (not this item): `fixed_roll` is not one-shot-cleared after consumption (latent, no test); the 「固定」 vs later additives question stays a RULING (starry_night / eve_unify already refuse additives over a fixed face; Y.O.L.O does not).
 
 ---
 

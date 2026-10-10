@@ -457,7 +457,8 @@ fn m09_ras_band_first_abnormal_only() {
 // =====================================================================
 
 // 规则书: 白金燐子 (2): 「可在[晕眩]状态下使用…固定为X*6。本次移动不受异常移动效果影响」.
-#[ignore = "DISCREPANCY: 白金燐子 (2) prompts for X but never moves (0 instead of 12) while stunned"]
+// The press is a pre-roll shape (`set_fixed_roll`); the main move is still the
+// player's `t.roll` (same drive as `rinko_skill_2_fixes_the_move_roll_to_x_times_six`).
 #[test]
 fn m10_rinko_while_stunned() {
     let mut t = Table::new(&["白金燐子", "花园多惠"]);
@@ -481,6 +482,9 @@ fn m10_rinko_while_stunned() {
             t.decline();
         }
     }
+    // 「使这回合移动掷骰的结果固定为X*6」 -- the roll is still taken; the face is pinned.
+    t.roll(0).unwrap();
+    drain(&mut t);
     assert_eq!(t.pos(0), 12, "moves exactly 12");
     assert_eq!(t.fire(0), 0, "fire spent");
 }
@@ -490,7 +494,7 @@ fn m10_rinko_while_stunned() {
 // =====================================================================
 
 // 规则书: 同上 + Y.O.L.O. RULING: whether 「固定为X*6」 overrides later additions.
-#[ignore = "DISCREPANCY: 白金燐子 (2) never moves (pos 0 instead of 12 or 14)"]
+// Drive: press (X prompt) → `t.roll` (fixed face) → Y.O.L.O [反击] on moveRoll.
 #[test]
 fn m11_rinko_plus_yolo() {
     let mut t = Table::new(&["白金燐子", "花园多惠"]);
@@ -498,9 +502,11 @@ fn m11_rinko_plus_yolo() {
     t.begin_turn(0);
     t.set_fire(0, 2, 3);
     t.give(0, &["AG:Y.O.L.O"]);
-    t.dice(&[2]);
+    // Loaded 1d4 face for Y.O.L.O's +2, and a spare for any table fallback.
+    t.dice(&[2, 2]);
     let sid = t.skill_id(0, "即使1cm也要前进");
     t.skill(0, &sid).unwrap();
+    // X = 2 (spend 2 fire, fix the face at 12).
     loop {
         let Some(_) = t.prompt() else { break };
         if t.counteract_offered("AG:Y.O.L.O") {
@@ -514,6 +520,17 @@ fn m11_rinko_plus_yolo() {
             }
         }
     }
+    // The main move: the face is the fixed 12; Y.O.L.O may still add on moveRoll.
+    t.roll(0).unwrap();
+    loop {
+        let Some(_) = t.prompt() else { break };
+        if t.counteract_offered("AG:Y.O.L.O") {
+            t.counteract(0, "AG:Y.O.L.O").unwrap();
+        } else {
+            t.decline();
+        }
+    }
+    drain(&mut t);
     eprintln!(
         "m11 record (RULING: fixed-12 vs 12+2): pos = {} (12 or 14)",
         t.pos(0)
