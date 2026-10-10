@@ -54,6 +54,14 @@ pub trait CondView {
     fn move_remaining(&self) -> i64;
     /// `t.Move.Main` (`move.main`).
     fn move_main(&self) -> bool;
+    /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward; `1` when the
+    /// window has no move (matches the guest's `trigger::move_dir()`).
+    fn move_dir(&self) -> i64;
+    /// `move.tag(name)` -- the move's per-card tag counter
+    /// (`t.Move.Tags`, `trigger::move_tag(name)`); missing name = 0.
+    fn move_tag_named(&self, name: &str) -> i64;
+    /// Eager table for `move.tag(name)` (window-scope, not per-candidate).
+    fn move_tag_table(&self) -> Vec<(String, i64)>;
     fn roll_source(&self) -> i64;
     fn abnormal(&self) -> bool;
     fn turn_player(&self) -> i64;

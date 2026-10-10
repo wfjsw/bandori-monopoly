@@ -62,6 +62,21 @@ impl CondView for SnapshotView<'_> {
     fn move_main(&self) -> bool {
         self.win.mv.main
     }
+    fn move_dir(&self) -> i64 {
+        self.win.mv.dir
+    }
+    fn move_tag_named(&self, name: &str) -> i64 {
+        self.win
+            .mv
+            .tags
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| *v)
+            .unwrap_or(0)
+    }
+    fn move_tag_table(&self) -> Vec<(String, i64)> {
+        self.win.mv.tags.clone()
+    }
     fn roll_source(&self) -> i64 {
         self.win.roll_source
     }

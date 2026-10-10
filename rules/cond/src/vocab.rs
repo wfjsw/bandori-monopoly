@@ -316,6 +316,16 @@ pub const VOCAB: &[Name] = &[
         doc: "was this the turn's main move",
     },
     Name {
+        cel: "move.dir",
+        aliases: &[],
+        flat: "move_dir",
+        scope: Scope::Window,
+        ty: Ty::Int,
+        get: |v| v.move_dir(),
+        fx: NO_FX,
+        doc: "1 forward, -1 backward; 1 when no move",
+    },
+    Name {
         cel: "effect.count",
         aliases: &["chain.count"],
         flat: "effect_count",
@@ -534,6 +544,20 @@ pub const VOCAB: &[Name] = &[
             fill: |v| v.tok_named_table(),
         },
         doc: "tok('name') -> the owner's token counter; missing = 0",
+    },
+    Name {
+        cel: "move.tag",
+        aliases: &[],
+        flat: "move_tag",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::StrInt {
+            var: "_move_tags",
+            missing: 0,
+            fill: |v| v.move_tag_table(),
+        },
+        doc: "move.tag('name') -> the move's tag counter; missing = 0",
     },
     Name {
         cel: "tile_named",

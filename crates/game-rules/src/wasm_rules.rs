@@ -4369,6 +4369,24 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
     fn move_main(&self) -> bool {
         self.trigger.move_main
     }
+    fn move_dir(&self) -> i64 {
+        self.trigger.move_dir as i64
+    }
+    fn move_tag_named(&self, name: &str) -> i64 {
+        self.trigger
+            .move_tags
+            .iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| *v as i64)
+            .unwrap_or(0)
+    }
+    fn move_tag_table(&self) -> Vec<(String, i64)> {
+        self.trigger
+            .move_tags
+            .iter()
+            .map(|(k, v)| (k.clone(), *v as i64))
+            .collect()
+    }
     fn roll_source(&self) -> i64 {
         self.trigger.roll_source as i64
     }

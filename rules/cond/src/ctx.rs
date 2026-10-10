@@ -65,7 +65,7 @@ pub struct TileSnap {
 }
 
 /// The move a window is answering (`move.*`).
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct MoveSnap {
     /// Face shown, if any. `None` binds CEL `null` (`move.roll != null`).
@@ -76,6 +76,26 @@ pub struct MoveSnap {
     /// `t.Move.Main` -- was this the turn's main move (`move.main`)? `false`
     /// when the window has no move.
     pub main: bool,
+    /// `t.Move.Dir` (`move.dir`) -- 1 forward, -1 backward. `1` when the
+    /// window has no move (the trigger default, matching the guest).
+    pub dir: i64,
+    /// `t.Move.Tags` (`move.tag(name)`) -- per-card counters on the move.
+    pub tags: Vec<(String, i64)>,
+}
+
+impl Default for MoveSnap {
+    fn default() -> Self {
+        Self {
+            roll: None,
+            kind: None,
+            remaining: 0,
+            main: false,
+            // Matches `Trigger::new`'s `move_dir: 1` -- forward when no move
+            // caused the window (the guest's `trigger::move_dir()` reads 1).
+            dir: 1,
+            tags: Vec::new(),
+        }
+    }
 }
 
 /// Built **once per trigger / chain window** (the `declare_one` / `run_hook`
