@@ -568,18 +568,22 @@ impl World {
             .map_or(0, |c| c.value)
     }
 
-    pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32) {
+    /// Set a name-keyed held counter. `instance` is the owning card instance
+    /// stamped on a **new** row (user ruling 2026-10-10: every held unit is a
+    /// unit of some instance's counter). An existing row keeps its instance.
+    pub fn set_tok(&mut self, player_id: i32, name: &str, value: i32, instance: i32) {
         if let Some(s) = self.player_mut(player_id) {
-            set_named(&mut s.tokens, name, value);
+            set_named(&mut s.tokens, name, value, instance);
         }
     }
 
     /// Returns how much it actually moved by (`H.AddTok`). This is a *consumer*
     /// of the cap passed in -- the engine is not the one deciding to clamp.
-    pub fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+    /// `instance` is stamped on a new row.
+    pub fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32, instance: i32) -> i32 {
         let was = self.tok(player_id, name);
         let now = (was + n).clamp(0, max);
-        self.set_tok(player_id, name, now);
+        self.set_tok(player_id, name, now, instance);
         now - was
     }
 
@@ -2052,7 +2056,7 @@ impl World {
 }
 
 /// Zero-terminated named counters: keep only positive values (`H.SetTok`).
-fn set_named(list: &mut Vec<Counter>, name: &str, value: i32) {
+fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32) {
     let v = value.max(0);
     match list.iter_mut().find(|c| c.name == name) {
         Some(c) => c.value = v,
@@ -2061,7 +2065,7 @@ fn set_named(list: &mut Vec<Counter>, name: &str, value: i32) {
                 list.push(Counter {
                     name: name.to_string(),
                     value: v,
-                    instance: -1,
+                    instance,
                 });
             }
         }

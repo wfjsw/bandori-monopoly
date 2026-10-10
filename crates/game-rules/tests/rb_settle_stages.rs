@@ -325,7 +325,7 @@ fn rana_transfer_setup() -> Table {
 #[test]
 fn rana_parfait_transfer_voids_the_space_payment() {
     let mut t = rana_transfer_setup();
-    t.m.world_mut().set_tok(2, "抹茶芭菲", 1);
+    t.m.world_mut().set_tok(2, "抹茶芭菲", 1, -1); // arrange-only row
     let money_before = t.money(2);
     let owner_before = t.money(1);
     t.begin_turn(2);
@@ -361,7 +361,7 @@ fn rana_parfait_transfer_voids_the_space_payment() {
 #[test]
 fn rana_parfait_transfer_declined_pays_the_rent() {
     let mut t = rana_transfer_setup();
-    t.m.world_mut().set_tok(2, "抹茶芭菲", 1);
+    t.m.world_mut().set_tok(2, "抹茶芭菲", 1, -1); // arrange-only row
     let money_before = t.money(2);
     t.begin_turn(2);
     drain(&mut t);

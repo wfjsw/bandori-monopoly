@@ -744,7 +744,8 @@ impl CardWorld for Run {
     fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
         let who = self.current_card.clone();
         self.world.note_marker_owner(name, &who);
-        self.world.set_tok(player_id, name, v);
+        // Stamp the owning instance on a new row (user ruling 2026-10-10).
+        self.world.set_tok(player_id, name, v, self.current_uid);
     }
     fn move_units(
         &mut self,

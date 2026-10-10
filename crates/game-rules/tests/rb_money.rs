@@ -538,7 +538,7 @@ fn bankruptcy_clears_owned_markers_wherever_they_sit() {
     {
         let w = t.m.world_mut();
         w.note_marker_owner("抹茶芭菲", "skill:要乐奈:投币式停车场的猫");
-        w.set_tok(1, "抹茶芭菲", 2);
+        w.set_tok(1, "抹茶芭菲", 2, -1); // arrange-only row; name-keyed lookup
         // One parfait row on Space (fresh row, owner seat 1).
         w.place_mark(
             -1,

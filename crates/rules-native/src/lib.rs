@@ -23,6 +23,7 @@ use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::sync::Arc;
 
 use card_sdk::abi::{export, ManifestOn, OnKind, ABI_VERSION};
+use card_sdk::On;
 use game_rules::{
     Call, CallOut, CardInfo, CardModules, HookRun, HostCtx, HostErr, HostState, Outcome,
     RuleError, RulesHandle, Run, TriggerKind, DEFAULT_FUEL, MAX_NESTING,
@@ -105,6 +106,12 @@ impl NativeRulesHandle {
                         },
                         has_guard: o.has_guard(),
                         has_legacy: card.legacy.iter().any(|(e, _)| *e == ei as i32),
+                        messages: match o {
+                            On::Message(names, ..) => {
+                                names.iter().map(|s| String::from(*s)).collect()
+                            }
+                            _ => Vec::new(),
+                        },
                     })
                     .collect();
                 // Same bitset the sandbox builds (): trigger
