@@ -129,6 +129,7 @@ impl CardWorld for TestWorld {
         _src: i32,
         _count: i32,
         note: Msg,
+        _fresh: bool,
     ) -> i32 {
         self.marks.push((tile, owner, note));
         1

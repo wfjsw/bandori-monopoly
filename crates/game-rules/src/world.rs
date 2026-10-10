@@ -129,6 +129,7 @@ impl Default for Trigger {
             roll_source: 0,
             move_roll: None,
             card: String::new(),
+            name: String::new(),
             buy_kind: 0,
             seller: -1,
             price: 0,
