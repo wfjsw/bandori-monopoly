@@ -18,9 +18,10 @@
 //! * **Tile [CP点]** -- the `TileMark`s of category [`card_sdk::abi::mark::
 //!   CP_CATEGORY`], owned by this rule instance. That is what `data/rules.txt`
 //!   125 defines (「放置于路面上的指示物」) and what the board sees.
-//! * **On-card [CP点]** -- `FieldCard::cp` on the 该清CP了 card instance, the
-//!   card rule's own stock (`rules/cards/card-general/src/clear_cp.rs`). This
-//!   rule only *spends* it (the settle clause) and never owns it.
+//! * **On-card [CP点]** -- the named counter [`card_sdk::abi::counter::CP`] on
+//!   the 该清CP了 card instance, the card rule's own stock
+//!   (`rules/cards/card-general/src/clear_cp.rs`). This rule only *spends* it
+//!   (the settle clause) and never owns it.
 //!
 //! This board-owned rule instance owns the **tile-mark** lifecycle, so no card
 //! has to:
@@ -28,7 +29,8 @@
 //! * **Placement** -- 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」: a
 //!   [CP点] goes on a tile with no character on it and no [CP点] yet. The
 //!   *where* is the placer's gate (it knows its own targets); the *what* is
-//!   `ctx::place_cp`, which stamps the category and the attachment.
+//!   the `"place"` message this rule answers ([`on_place`]), which stamps the
+//!   category and the attachment.
 //! * **Stacking** -- 「添加1个[CP点]」 per placement, and only onto a 「没有
 //!   [CP点]的格子」, so a tile carries one [CP点] mark whose `count` is how many
 //!   [CP点] sit there (in practice 1).
@@ -36,8 +38,8 @@
 //!   [场上]1个[CP点]，[获得]800资金」, the `On::Hook` below. It spends **both**
 //!   kinds: the tile's mark and one on-card [CP点] of the card the mark is
 //!   attached to (`TileMark.src`).
-//! * **Removal** -- 「移除格子上的个[CP点]」, `ctx::clear_cp` (one per [结算];
-//!   C# `tileMark.count--`).
+//! * **Removal** -- 「移除格子上的个[CP点]」, `ctx::bump_mark(..., -1)` (one per
+//!   [结算]; C# `tileMark.count--`).
 //!
 //! A [CP点] mark is **not owned by any player**: `TileMark.owner` is always
 //! [`BOARD_OWNER`] (`-1`). Provenance is `TileMark.src` (the placing card
@@ -71,7 +73,7 @@
 //!   here takes the settler. (C# paid `Seat`, but its `m.Seat == Seat` gate
 //!   made settler and card controller the same player.)
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{counter, mark, HookKind, MarkFilter};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{CardDef, Msg, On};
 
@@ -79,7 +81,60 @@ use card_sdk::{CardDef, Msg, On};
 /// single tile (`tile = -1`): [CP点] is a board-wide category, not a tile kind.
 /// Registered in this crate's [`crate::CARDS`] (a sibling of the `tile:*`
 /// rules); `bind_tiles` places it (see `docs/TILES.md`).
-pub const MARK_CP: CardDef = CardDef::new("mark:cp", &[On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land)]);
+///
+/// Answers the cross-card `"place"` message (a placer asks for [CP点] on a
+/// tile; see [`on_place`]) and the landing settle body (spends one).
+pub const MARK_CP: CardDef = CardDef::new(
+    "mark:cp",
+    &[
+        On::Message(&["place"], "", Some(place_ok), on_place),
+        On::Hook(&[HookKind::SettleBody], "", Some(lands_on_cp), on_land),
+    ],
+);
+
+/// The tile-mark filter every clause here uses: [CP点] is its own category
+/// (`data/rules.txt` 125), neutral, and the first matching row is the one.
+fn cp_on(tile: i32) -> i32 {
+    ctx::count_marks(tile, &MarkFilter::any().category(mark::CP_CATEGORY))
+}
+
+/// Pure guard for [`on_place`] -- the message is a well-formed placement ask.
+/// The 「没有[CP点]的格子」 gate is the **placer's** (it knows its own targets
+/// and character occupancy); this owner only rejects a malformed payload.
+fn place_ok(_player_id: i32) -> bool {
+    let tile = ctx::message::tile();
+    let count = ctx::message::a();
+    tile >= 0 && tile < ctx::tile_count() && count > 0
+}
+
+/// Cross-card `"place"` -- the one way a card puts a tile [CP点] down.
+///
+/// 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 and
+/// （1）'s spread both arrive here (`ctx::send` -> [`Target::Board`]). The
+/// handler is the owner: it stamps the neutral owner, [`mark::CP_CATEGORY`],
+/// and **provenance = the sender** (`message::sender_uid()`, 「此卡在格子上
+/// 添加的[CP点]」). Stacking [`ctx::place_mark`] (not `place_mark_new`): the
+/// placement gate is 「没有[CP点]的格子」, so one row in practice.
+///
+/// Replies with the new tile count so the sender can log what landed.
+fn on_place(_owner: i32) -> card_sdk::Asked {
+    let tile = ctx::message::tile();
+    let count = ctx::message::a();
+    let src = ctx::message::sender_uid();
+    ctx::place_mark(
+        tile,
+        mark::CP_KIND,
+        mark::CP_CATEGORY,
+        // `owner` is the display owner seat; a [CP点] has no player owner
+        // (`data/rules.txt` 125 「放置于路面上的指示物」).
+        -1,
+        src,
+        count,
+        &Msg::new("log.cp_place"),
+    );
+    ctx::message::reply(cp_on(tile));
+    Ok(())
+}
 
 /// 规则书: 「在拥有[CP]点的格子上[结算]时」 -- the tile must actually carry a
 /// [CP点], and 「自己[场上]1个[CP点]」 -- the on-card [CP点] of the card the
@@ -98,19 +153,19 @@ fn lands_on_cp(_owner: i32) -> bool {
     }
     let seat = trigger::player_id();
     let tile = trigger::tile();
-    if seat < 0 || tile < 0 || ctx::count_cp(tile) <= 0 {
+    if seat < 0 || tile < 0 || cp_on(tile) <= 0 {
         return false;
     }
     // 「自己[场上]1个[CP点]」 -- the card this tile's mark is attached to.
-    let src = ctx::cp_src_at(tile);
-    src >= 0 && ctx::cp_at(src) > 0
+    let src = ctx::mark_src_at(tile, &MarkFilter::any().category(mark::CP_CATEGORY));
+    src >= 0 && ctx::counter_at(src, counter::CP) > 0
 }
 
 /// 规则书: 「移除格子上的个[CP点]和自己[场上]1个[CP点]，[获得]800资金」 --
 /// C# `CPControl.SettleAfter` -> `Clean`. The tile-mark write goes through the
 /// owner API; the on-card write goes to the mark's `src` card and raises
-/// `cpChanged` against it (the 该清CP了 graveyard rule hears about it like any
-/// other write). The 800 goes to the settler -- see the reading above.
+/// `counterChanged` against it (the 该清CP了 graveyard rule hears about it like
+/// any other write). The 800 goes to the settler -- see the reading above.
 fn on_land(_owner: i32) -> card_sdk::Asked {
     let seat = trigger::player_id();
     let tile = trigger::tile();
@@ -119,14 +174,14 @@ fn on_land(_owner: i32) -> card_sdk::Asked {
     }
     // Read the attachment **before** the write: dropping the last mark takes
     // its provenance with it.
-    let src = ctx::cp_src_at(tile);
+    let src = ctx::mark_src_at(tile, &MarkFilter::any().category(mark::CP_CATEGORY));
     // 「移除格子上的个[CP点]」 -- C# `tileMark.count--`, one per [结算]. A
     // tile-mark write: it does not touch the on-card count.
-    ctx::clear_cp(tile);
+    ctx::bump_mark(tile, &MarkFilter::any().category(mark::CP_CATEGORY), -1);
     // 「自己[场上]1个[CP点]」 -- one on-card [CP点] of the attached 该清CP了
     // card (user ruling 2026-10-07).
     if src >= 0 {
-        ctx::add_cp_at(src, -1, 0);
+        ctx::add_counter_at(src, counter::CP, -1, 0);
     }
     // 「[获得]800资金」 -- the settling player (see the reading above). C# was
     // `H.GainR(Seat, Reward, …)`, `Reward = c.N(0, 800)`.
