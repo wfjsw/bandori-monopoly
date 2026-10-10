@@ -78,9 +78,8 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// 「当水母标记到达9个时可以清除所有标记传送到#4水族馆或者 #30弦卷豪宅，视为本次
 /// 主要移动(喊出呼诶诶～!)，然后置入弃牌堆」.
 fn jump(player_id: i32) -> card_sdk::Asked {
-    if ctx::tok(player_id, JELLY) < 9 {
-        return Ok(());
-    }
+    // 「至少9个水母标记」 is the play gate's (`cant_play`) clause; the gate
+    // runs before this body (and again at play time).
     let a = ctx::tile_named("水族馆");
     let b = ctx::tile_named("弦卷豪宅");
     let mut pool: Vec<i32> = Vec::new();

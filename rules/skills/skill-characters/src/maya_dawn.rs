@@ -28,9 +28,19 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const MAYA_DAWN: CardDef = CardDef::new(
     "skill:大和麻弥:朝阳照耀的片刻",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            "band_is(owner, 'Pastel✽Palettes')",
+            None,
+            at_start,
+        ),
         // （2） replaces the draw, so it runs at the per-card **before** point.
-        On::Hook(&[HookKind::DrewBefore], card_sdk::pre::MINE, None, on_draw),
+        On::Hook(
+            &[HookKind::DrewBefore],
+            "actor == owner && tok('P✽P粉丝(正)') >= 1",
+            None,
+            on_draw,
+        ),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -43,10 +53,7 @@ fn legacy_mine(player_id: i32) -> bool {
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- their copies must not re-fire it.
-    if !ctx::in_band(player_id, "Pastel✽Palettes") {
-        return Ok(());
-    }
+    // the grantees of the (2) below -- the `band_is(owner, …)` pre owns that.
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -65,9 +72,6 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// Y+1张卡…」.
 fn on_draw(player_id: i32) -> card_sdk::Asked {
     let up = ctx::tok(player_id, FANS_UP);
-    if up < 1 {
-        return Ok(());
-    }
     let y = ctx::ask_number(
         player_id,
         &Msg::new(key!("maya_dawn_title")),

@@ -21,32 +21,36 @@ const FANS_DOWN: &str = "P✽P粉丝(反)";
 pub const CHISATO_FRANK: CardDef = CardDef::new(
     "skill:白鹭千圣:保持坦率的你",
     &[
-        On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        On::Hook(
+            &[HookKind::DeckAtGameStart],
+            "band_is(owner, 'Pastel✽Palettes')",
+            None,
+            at_start,
+        ),
         // 「此次获得的分摊前数量增加Y×100」 -- the **pre-split** total (「分摊前」),
         // so this rides `payTotalAdd` (PIPELINE-AUDIT Q2), not the per-share
-        // `payChoose`.
-        On::Hook(&[HookKind::PayTotalAdd], "", Some(mine), on_gain),
+        // `payChoose`. 「自己每次收取资金时」 -- the skill fires on *receiving*
+        // money, so the hook's `target` (the payee) is the skill owner. A print
+        // (game -> player) carries `target = me`, `player_id = -1`.
+        On::Hook(
+            &[HookKind::PayTotalAdd],
+            "target == owner && value > 0 && tok('P✽P粉丝(正)') >= 1",
+            Some(mine),
+            on_gain,
+        ),
     ],
 );
 
 fn mine(player_id: i32) -> bool {
-    if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
-        return false;
-    }
-    // 「自己每次收取资金时」 -- the skill fires on *receiving* money, so the
-    // hook's `target` (the payee) is the skill owner, not `player_id` (the
-    // payer). A print (game -> player) carries `target = me`, `player_id = -1`.
-    ctx::trigger::target() == player_id && ctx::trigger::value() > 0
+    // 「[持续]：[拥有者]不可使用任何Pastel✽Palettes角色的（2）技能」 -- residual.
+    !card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes")
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得白鹭千圣的
 /// （2）技能」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
     // （1） belongs to the skill's own Pastel✽Palettes character, not to
-    // the grantees of the (2) below -- their copies must not re-fire it.
-    if !ctx::in_band(player_id, "Pastel✽Palettes") {
-        return Ok(());
-    }
+    // the grantees of the (2) below -- the `band_is(owner, …)` pre owns that.
     ctx::add_tok(player_id, FANS_UP, 5, i32::MAX)?;
     for p in 0..ctx::player_count() {
         if p == player_id || ctx::player_out(p) || ctx::in_band(p, "Pastel✽Palettes") {
@@ -65,13 +69,7 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
 /// 数量增加Y×100」 -- the gain is `to == me` and the figure is the amount.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
-    if amount <= 0 || ctx::trigger::target() != player_id {
-        return Ok(());
-    }
     let up = ctx::tok(player_id, FANS_UP);
-    if up < 1 {
-        return Ok(());
-    }
     let mut y = ctx::ask_number(
         player_id,
         &Msg::new(key!("chisato_frank_title")),
