@@ -40,10 +40,9 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   loop (two cards settling each other); it is **not** the stack-safety mechanism.
   Regression: `crates/game-rules/tests/settle_depth.rs` (120-deep chain on a 512 KiB
   thread). `ckpt_equiv -- out 8 4 120 standard|chaos` now completes.
-  Remaining: a nested-settle **resume** still re-walks `counteract` from scratch, so
-  checkpoints diverge from 7e8bf78 starting at the first nested settle (~round 26 in
-  `4 4 60`); the first 101 checkpoints are byte-identical. Follow-up: adopt
-  `counteract_resume` (job list) on the resume path so completed hooks are not re-run.
+  Equivalence: `ckpt_equiv` `4 4 60` and `8 4 40` standard+chaos and `card_events`
+  are **byte-identical** to master af2e1a1. `8 4 120` standard+chaos complete.
+  Resume keeps completed hook bodies exactly once (`settle_tail_once`).
 - **kind**: implementation bug
 - **class**: A
 - **severity**: high (any long bot game / real match that nests a settle hook; already aborts `ckpt_equiv`)
