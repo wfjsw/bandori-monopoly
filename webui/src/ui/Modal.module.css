@@ -278,7 +278,7 @@
    wins over `.window`'s fixed widths and `pop`. */
 .sheetWin {
   width: fit-content;
-  min-width: 380px;
+  min-width: 480px;
   max-width: 100%;
   max-height: 640px;
   animation: sheetIn 0.22s var(--ease-sheet);
