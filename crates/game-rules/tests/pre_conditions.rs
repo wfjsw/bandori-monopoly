@@ -123,6 +123,125 @@ fn pre_hook_does_not_fire() {
     assert!(guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1);
 }
 
+// ------------------------------------------------ v49: Gate / AtEnd / RollPlan / Settle --
+// docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
+// pair as `On::Hook`, and the host evaluates category → condition → guard →
+// body. A rejecting entry runs no body and so emits no `card` flash --
+// `on_body` is exactly that flash (host.rs `run` / `run_hook`).
+
+/// `On::Gate` whose condition rejects: the gate raise reaches no body, so the
+/// card never answers (and never flashes).
+#[test]
+fn pre_gate_does_not_answer() {
+    let _guard = lock_guard_cost();
+    guard_cost::reset();
+    let r = fixtures();
+    let card = r.card("TEST:preGate").expect("fixture present");
+    let mut w = effect_window(1, 1);
+    w.trigger.kind = TriggerKind::ImmuneAll;
+    let call = Call::Hook {
+        card,
+        kind: TriggerKind::ImmuneAll,
+        player_id: 0,
+    };
+    let mut flashed = false;
+    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let fired = r.run_hook(&w, call, &[], Some(&mut on_body)).unwrap();
+    assert!(
+        fired.is_none(),
+        "condition `false` must keep the gate from answering"
+    );
+    assert!(!flashed, "a rejecting gate must not flash");
+    assert!(
+        guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1,
+        "the condition was evaluated and rejected"
+    );
+}
+
+/// `On::RollPlan` whose condition rejects: the move being planned reaches no
+/// routine (and no flash).
+#[test]
+fn pre_rollplan_does_not_shape_the_move() {
+    let _guard = lock_guard_cost();
+    guard_cost::reset();
+    let r = fixtures();
+    let card = r.card("TEST:preRollPlan").expect("fixture present");
+    let mut w = effect_window(0, 0);
+    w.trigger.kind = TriggerKind::RollPlan;
+    let call = Call::RollPlan {
+        card,
+        player_id: 0,
+    };
+    let mut flashed = false;
+    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
+    assert!(
+        matches!(out, Outcome::Done(_)),
+        "a rejecting routine must not pause"
+    );
+    assert!(!flashed, "a rejecting RollPlan must not flash");
+    assert!(
+        guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1,
+        "the condition was evaluated and rejected"
+    );
+}
+
+/// `On::AtEnd` whose condition rejects: the scheduled turn-end callback runs
+/// no body (and no flash).
+#[test]
+fn pre_at_end_does_not_run() {
+    let _guard = lock_guard_cost();
+    guard_cost::reset();
+    let r = fixtures();
+    let card = r.card("TEST:preAtEnd").expect("fixture present");
+    let mut w = effect_window(0, 0);
+    w.trigger.kind = TriggerKind::TurnEndAfter;
+    let call = Call::AtEnd {
+        card,
+        player_id: 0,
+    };
+    let mut flashed = false;
+    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
+    assert!(
+        matches!(out, Outcome::Done(_)),
+        "a rejecting AtEnd must not pause"
+    );
+    assert!(!flashed, "a rejecting AtEnd must not flash");
+    assert!(
+        guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1,
+        "the condition was evaluated and rejected"
+    );
+}
+
+/// `On::Settle` whose condition rejects: the settle body does not govern the
+/// settle (no body, no flash).
+#[test]
+fn pre_settle_does_not_govern() {
+    let _guard = lock_guard_cost();
+    guard_cost::reset();
+    let r = fixtures();
+    let card = r.card("TEST:preSettle").expect("fixture present");
+    let mut w = effect_window(0, 0);
+    w.trigger.kind = TriggerKind::Settle;
+    let call = Call::Settle {
+        card,
+        player_id: 0,
+    };
+    let mut flashed = false;
+    let mut on_body = |_w: &mut TestWorld| flashed = true;
+    let out = r.run(&w, call, &[], Some(&mut on_body)).unwrap();
+    assert!(
+        matches!(out, Outcome::Done(_)),
+        "a rejecting settle body must not pause"
+    );
+    assert!(!flashed, "a rejecting settle body must not flash");
+    assert!(
+        guard_cost::SKIPPED_BY_CONDITION.load(Relaxed) >= 1,
+        "the condition was evaluated and rejected"
+    );
+}
+
 /// Compile errors fail closed (docs/GUARDS.md §5.3): a parse / unknown-var /
 /// float condition is never "treat as true".
 #[test]

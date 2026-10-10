@@ -657,6 +657,90 @@ fn pre_hook_body(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+// v49 (docs/GUARDS.md §4.2c): `On::Gate` / `On::AtEnd` / `On::RollPlan` /
+// `On::Settle` carry the same `pre` + residual-guard pair. Each fixture below
+// declares `pre: "false"` on one of those kinds, so the entry must run no body
+// (and so emit no `card` flash) whenever the kind is asked.
+
+/// `On::Gate` with a rejecting condition: a gate raise must not reach the body
+/// (and so must not claim the answer).
+const PRE_GATE: CardDef = CardDef::new(
+    "TEST:preGate",
+    &[
+        On::Play("", None, pre_gate_place),
+        On::Gate(&[GateKind::ImmuneAll], "false", None, pre_gate_body),
+    ],
+);
+
+fn pre_gate_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:preGate", &Msg::new(key!("pre_gate_note")));
+    Ok(())
+}
+
+fn pre_gate_body(player_id: i32) -> card_sdk::Asked {
+    trigger::set_cancelled();
+    ctx::log(player_id, &Msg::new(key!("pre_gate_ran")));
+    Ok(())
+}
+
+/// `On::RollPlan` with a rejecting condition: the move being planned must not
+/// reach the routine.
+const PRE_ROLLPLAN: CardDef = CardDef::new(
+    "TEST:preRollPlan",
+    &[
+        On::Play("", None, pre_rollplan_place),
+        On::RollPlan("false", None, pre_rollplan_body),
+    ],
+);
+
+fn pre_rollplan_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:preRollPlan", &Msg::new(key!("pre_rollplan_note")));
+    Ok(())
+}
+
+fn pre_rollplan_body(player_id: i32) -> card_sdk::Asked {
+    ctx::plan::set_tag("preRollPlan", 1);
+    ctx::log(player_id, &Msg::new(key!("pre_rollplan_ran")));
+    Ok(())
+}
+
+/// `On::AtEnd` with a rejecting condition: the scheduled turn-end callback
+/// must not run.
+const PRE_ATEMD: CardDef = CardDef::new(
+    "TEST:preAtEnd",
+    &[
+        On::Play("", None, pre_at_end_place),
+        On::AtEnd("false", None, pre_at_end_body),
+    ],
+);
+
+fn pre_at_end_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:preAtEnd", &Msg::new(key!("pre_at_end_note")));
+    // Schedule `On::AtEnd` at this player's turn end (C# `TurnCtx.AtEnd`).
+    ctx::at_turn_end(player_id);
+    Ok(())
+}
+
+fn pre_at_end_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("pre_at_end_ran")));
+    Ok(())
+}
+
+/// `On::Settle` with a rejecting condition: the settle body must not govern
+/// the settle (no body, no flash).
+const PRE_SETTLE: CardDef = CardDef::new(
+    "TEST:preSettle",
+    &[On::Settle("false", None, pre_settle_body)],
+);
+
+fn pre_settle_body(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("pre_settle_ran")));
+    Ok(())
+}
+
 /// A `passTile` hook that teleports the mover 3 tiles ahead with a bare
 /// `ctx::teleport_to` (no settle, no `teleport` event), once per walk. Pins
 /// the walk-announce / `passTile` order: the walk's `roll`/`move` event must be
@@ -759,5 +843,6 @@ card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
-    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PASS_TELE, TILE_HOOK, DENY_PLAY
+    PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
+    PASS_TELE, TILE_HOOK, DENY_PLAY
 ]);

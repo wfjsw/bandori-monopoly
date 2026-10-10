@@ -382,3 +382,116 @@ fn a_negated_play_emits_exactly_one_negated() {
     assert!(aimer[0].negated);
     assert_eq!(aimer[0].kind, "play");
 }
+
+// ------------------------------------------------ v49: Gate / AtEnd / RollPlan --
+// docs/GUARDS.md §4.2c: these kinds carry the same `pre` + residual-guard
+// pair as `On::Hook` (ABI v49). A rejecting entry runs no body and so emits
+// no `card` flash -- exactly like `hook_whose_cel_pre_rejects_stays_silent`
+// above. (`On::Settle` is a tile rule's body and is covered at the host layer
+// in `pre_conditions.rs`.)
+
+/// `TEST:preGate`'s `On::Gate(ImmuneAll)` declares `pre: "false"`. The stun
+/// raise asks every field card's `ImmuneAll`; the rejecting entry must not
+/// answer (so the stun lands) and must not flash.
+#[test]
+fn gate_whose_cel_pre_rejects_stays_silent() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:preGate").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "TEST:preGate"), "{}", t.dump_prompt());
+
+    let mark = t.mark();
+    // P1 (on their own turn) stuns P0 -> `abnormalGuard` -> `effect` ->
+    // `ImmuneAll` asked of every card on P0's field.
+    t.begin_turn(1);
+    t.give_play(1, "TEST:stunner").unwrap();
+    drain(&mut t);
+
+    let fired = activations_since(&t, mark, "TEST:preGate");
+    assert!(
+        fired.is_empty(),
+        "a rejecting gate condition must not flash: {:?} / {}",
+        fired,
+        t.recent_keys(20).join(", ")
+    );
+    // The body never ran, so nothing about the card reached the log either.
+    assert!(
+        !t.recent_keys(40).iter().any(|k| k.contains("pre_gate_ran")),
+        "a rejecting gate body must not run: {}",
+        t.recent_keys(20).join(", ")
+    );
+    // And the stun landed: the gate did not answer (it was never asked).
+    assert!(
+        !t.recent_keys(40).iter().any(|k| k.contains("shield_held")),
+        "the rejecting gate must not have cancelled anything: {}",
+        t.recent_keys(20).join(", ")
+    );
+}
+
+/// `TEST:preRollPlan`'s `On::RollPlan` declares `pre: "false"`. The mover's
+/// walk raises `rollPlan` for every field card; the rejecting routine must
+/// not shape the move and must not flash.
+#[test]
+fn rollplan_whose_cel_pre_rejects_stays_silent() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:preRollPlan").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "TEST:preRollPlan"), "{}", t.dump_prompt());
+
+    let mark = t.mark();
+    // A plain move raises `rollPlan` before the dice.
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+
+    let fired = activations_since(&t, mark, "TEST:preRollPlan");
+    assert!(
+        fired.is_empty(),
+        "a rejecting RollPlan condition must not flash: {:?} / {}",
+        fired,
+        t.recent_keys(20).join(", ")
+    );
+    assert!(
+        !t.recent_keys(40).iter().any(|k| k.contains("pre_rollplan_ran")),
+        "a rejecting RollPlan body must not run: {}",
+        t.recent_keys(20).join(", ")
+    );
+}
+
+/// `TEST:preAtEnd`'s `On::AtEnd` declares `pre: "false"`; its play schedules
+/// the callback at the owner's turn end. The scheduled callback must run no
+/// body and emit no flash.
+#[test]
+fn atend_whose_cel_pre_rejects_stays_silent() {
+    let mut t = Table::vanilla(2);
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.give_play(0, "TEST:preAtEnd").unwrap();
+    drain(&mut t);
+    assert!(t.on_field(0, "TEST:preAtEnd"), "{}", t.dump_prompt());
+
+    let mark = t.mark();
+    // End P0's turn: the scheduled `On::AtEnd` is asked here.
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    t.end(0).unwrap();
+    drain(&mut t);
+
+    let fired = activations_since(&t, mark, "TEST:preAtEnd");
+    assert!(
+        fired.is_empty(),
+        "a rejecting AtEnd condition must not flash: {:?} / {}",
+        fired,
+        t.recent_keys(20).join(", ")
+    );
+    assert!(
+        !t.recent_keys(40).iter().any(|k| k.contains("pre_at_end_ran")),
+        "a rejecting AtEnd body must not run: {}",
+        t.recent_keys(20).join(", ")
+    );
+}
