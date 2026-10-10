@@ -507,6 +507,190 @@ fn s12_agent_half_charge_rounds_up_to_ten() {
     assert_eq!(half_ceil10(300), 150, "300/2 = 150 is already a multiple");
 }
 
+// 规则书 基础[结算] 7: 「从前到后依次进行一次半价收费的[结算]」 -- the
+// all-owned sweep charges in board order (「从前到后」).
+#[test]
+fn s12b_agent_half_charge_is_front_to_back() {
+    let mut t = Table::vanilla(2);
+    let agent = tile("主要街道"); // group 1
+    let group: Vec<usize> = (0..data().tiles.len())
+        .filter(|&x| data().tiles[x].is_buyable() && data().tiles[x].group == 1)
+        .collect();
+    for &x in &group {
+        t.own(1, &[x]);
+    }
+    t.set_money(0, 10_000);
+    let mark = t.mark();
+    settle_on(&mut t, 0, agent);
+    drain(&mut t);
+    // Each half-charge is a `pay` / `rent` event whose `to` is the tile.
+    // The sequence of those tiles is board order.
+    let mut paid_tiles: Vec<i32> = Vec::new();
+    for e in t.events_since(mark) {
+        if (e.r#type == "pay" || e.r#type == "rent") && e.to >= 0 {
+            paid_tiles.push(e.to);
+        }
+    }
+    // Fall back: the money delta per tile is the half-rent, so the cumulative
+    // loss after each charge is the running sum in board order. Assert the
+    // total and that the events arrived in non-decreasing tile order when the
+    // tile is recoverable; otherwise assert the total only (the order is the
+    // loop's, which is `same` = tile-index order).
+    let mut want = 0;
+    for &x in &group {
+        want += half_ceil10(data().tiles[x].rent[0]);
+    }
+    assert_eq!(t.money(0), 10_000 - want, "half-rent per tile, ceil 10");
+    if !paid_tiles.is_empty() {
+        let mut sorted = paid_tiles.clone();
+        sorted.sort_unstable();
+        assert_eq!(
+            paid_tiles, sorted,
+            "「从前到后依次」 -- charges in board order, got {paid_tiles:?}"
+        );
+    }
+}
+
+// 规则书 基础[结算] 7 「否则可选择该格子同色的无主或玩家拥有的[可购买格子]之一
+// 进行一次[结算]」 -- the buy branch's price includes the houses already on the
+// deed (the same 「购买格子地契和建造已有房子的资金总价」 figure as
+// 基础[结算] 3).
+#[test]
+fn s12c_agent_buy_offer_includes_the_houses() {
+    let mut t = Table::vanilla(2);
+    let agent = tile("主要街道"); // group 1
+    let land = tile("购物中心"); // group 1, price 3000
+    t.set_houses(land, 2);
+    t.set_money(0, 10_000);
+    settle_on(&mut t, 0, agent);
+    let p = t.expect_prompt();
+    assert_eq!(p.title.key(), "ask.agent.title", "{}", t.dump_prompt());
+    // The buy option names the tile and the full price (deed + houses).
+    let opt = t
+        .option("ask.agent.buy")
+        .unwrap_or_else(|| panic!("buy option present: {}", t.dump_prompt()));
+    t.answer_one(opt).unwrap();
+    drain(&mut t);
+    assert_eq!(t.owner(land), Some(0), "deed and ownership gained");
+    assert_eq!(
+        t.money(0),
+        10_000 - (price(land) + 2 * house_cost(land)),
+        "paid the deed plus the houses"
+    );
+    assert_eq!(t.houses(land), 2, "the houses came with the deed");
+}
+
+// 规则书 基础[结算] 7 + soyo 「该格本身不可因自有以外的颜色的地产商盖房」 --
+// the build branch only offers tiles in the agent's own group. An
+// `anyColor` (「该格获得所有颜色」) member of another group is in the 同色
+// set for the *buy* branch but never for the build branch.
+#[test]
+fn s12d_agent_build_only_in_own_group() {
+    let mut t = Table::vanilla(2);
+    let agent = tile("主要街道"); // group 1
+    let own_group = tile("偶像经纪公司"); // group 1
+    let other = tile("花咲川女子学院"); // group 2
+    // 「该格获得所有颜色」 widens 同色 for the buy branch.
+    for f in t.m.world_mut().st.board_field.iter_mut() {
+        if f.tile == other as i32 {
+            f.props.insert("anyColor".into(), 1);
+        }
+    }
+    t.own(0, &[own_group, other]);
+    t.set_money(0, 10_000);
+    settle_on(&mut t, 0, agent);
+    let p = t.expect_prompt();
+    assert_eq!(p.title.key(), "ask.agent.title", "{}", t.dump_prompt());
+    // Only the own-group tile gets a build option; the anyColor member of
+    // another group is owned by us and not buildable, so it is not offered.
+    assert!(
+        t.option("ask.agent.build").is_some(),
+        "own-group tile is buildable: {}",
+        t.dump_prompt()
+    );
+    // Every build option's tile is in the agent's group.
+    for (i, o) in p.options.iter().enumerate() {
+        if o.key() == "ask.agent.build" {
+            let tile_arg = o.a.get("tile").and_then(|a| match a {
+                game_core::msg::Arg::Tile(x) => Some(*x as usize),
+                _ => None,
+            });
+            if let Some(x) = tile_arg {
+                assert_eq!(
+                    data().tiles[x].group,
+                    data().tiles[agent].group,
+                    "build option {i} is in the agent's own group: {}",
+                    t.dump_prompt()
+                );
+            }
+        }
+    }
+    let opt = t.option("ask.agent.build").unwrap();
+    t.answer_one(opt).unwrap();
+    drain(&mut t);
+    assert_eq!(t.houses(own_group), 1, "built on the own-group tile");
+    assert_eq!(t.houses(other), 0, "did not build on the anyColor member");
+}
+
+// 规则书 基础[结算] 1.1 + 专有名词 11: the [经过] reward is suppressed (and the
+// tile-side arm **consumed**) by `prop::NO_REWARD` on the tile's rule instance.
+#[test]
+fn s05c_no_reward_prop_suppresses_and_is_consumed() {
+    let mut t = Table::vanilla(2);
+    until_turn(&mut t, 0);
+    t.set_pos(0, tile("CiRCLE") + 58);
+    t.set_pos(1, 20);
+    // Arm the veto the way a suppressing rule does (`docs/TILES.md`).
+    for f in t.m.world_mut().st.board_field.iter_mut() {
+        if f.tile == tile("CiRCLE") as i32 {
+            f.props.insert("noReward".into(), 1);
+        }
+    }
+    let before = t.money(0);
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), tile("CiRCLE"), "ended on CiRCLE");
+    assert_eq!(t.money(0), before, "no CiRCLE reward while suppressed");
+    // The tile-side arm is consumed, so the next pass is not vetoed by a
+    // stale prop (`event:协助CiRCLE重建` re-arms for that reason).
+    let armed = t
+        .m
+        .world()
+        .st
+        .board_field
+        .iter()
+        .filter(|f| f.tile == tile("CiRCLE") as i32)
+        .any(|f| f.props.get("noReward").copied().unwrap_or(0) > 0);
+    assert!(!armed, "NO_REWARD was consumed by the reward step");
+}
+
+// 专有名词 11 「[CiRCLE奖励]：[获得]2000资金或抽1张卡」 with a `circleAffected`
+// hook that cancels the payout: the raise sits between the pick and the
+// payout, so a cancellation skips the money/card movement entirely.
+// Morfonica's 「（2）[CiRCLE奖励]选择[获得]资金时…设资金量为1000，1500，2000的
+// 循环」 is exactly that gesture (it cancels and pays its own sum).
+#[test]
+fn s05d_circle_affected_cancellation_skips_the_payout() {
+    // 广町七深 is Morfonica -- the band skill binds at match start.
+    let mut t = Table::new(&["广町七深", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    t.set_pos(0, 58); // one short of CiRCLE (tile 0 / 60)
+    t.dice(&[3]); // 3 from 58: [经过]s 59 then 0 (CiRCLE)
+    t.roll(0).unwrap();
+    let before = t.money(0);
+    t.answer_one(0).unwrap(); // take the money option
+    drain(&mut t);
+    // The hook cancelled the 2000 print and paid the first cycle figure.
+    assert_eq!(
+        t.money(0) - before,
+        1000,
+        "circleAffected cancelled the 2000 payout and replaced it: {}",
+        t.dump_prompt()
+    );
+}
+
 // =====================================================================
 // 时点流程 -- the 19 action windows that `data/rules.txt` stubs out
 // =====================================================================

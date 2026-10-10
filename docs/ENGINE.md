@@ -64,8 +64,8 @@ dispatch in `game-rules/src/wasm_rules.rs` visits `board_field` after the
 player fields (so a suppressing card can arm a prop before the tile reads it),
 tile-filtered for a tile-carrying trigger like `passTile`. That is how
 `tile:circle`'s **Pass entry** runs the [经过] CiRCLE reward
-(`ctx::settle_circle_reward`), with the walk's `circle_reward` as the built-in
-fallback when no instance is bound.
+(`circle::settle_reward`, the body itself), with the walk's `circle_reward` as
+the built-in fallback when no instance is bound.
 
 Two other kinds of board-owned instance sit beside the `tile:*` ones
 ([TILES.md](TILES.md)): **event** rules (`event:*`, `tile = -1`, bound while the
@@ -88,10 +88,11 @@ event handler (通用:该清CP了's graveyard rule) instead of at each spend sit
 
 The engine keeps the money/deck work as primitives the bodies call
 (`ctx::pay_rent` / `offer_buy` / `offer_build` / `offer_force_buy` /
-`agent_landing` / `draw` / `draw_event` / `settle_circle_reward`), so a tile
-body is a list of rulebook citations. Cards bend tiles by attaching, swapping
-or retuning instances -- `ctx::prop` / `ctx::set_prop` on the running instance,
-`ctx::tile_prop` / `ctx::set_tile_prop` on the instance governing a tile --
+`buy` / `card_build` / `ask_tiles` / `raise` / `gain_typed` / `draw` /
+`draw_event`), so a tile body is a list of rulebook citations. Cards bend
+tiles by attaching, swapping or retuning instances -- `ctx::prop` /
+`ctx::set_prop` on the running instance, `ctx::tile_prop` /
+`ctx::set_tile_prop` on the instance governing a tile --
 not by engine flags (`docs/TILES.md`'s Phase 3; the flags still to go are
 listed there).
 

@@ -90,11 +90,12 @@ fn on_pass(_owner: i32) -> card_sdk::Asked {
     }
     // 「CiRCLE原本的所有效果迁移至CiRCLE咖啡厅并覆盖其原本效果」 -- the [经过]
     // reward is one of them. `tile:circle`'s own Pass entry only fires on
-    // CiRCLE, so the cafe's pass pays it out here.
+    // CiRCLE, so the cafe's pass runs the same reward body here
+    // (`rules_tiles::circle::settle_reward`).
     let who = trigger::player_id();
     if who >= 0 {
         let landing = trigger::move_resolve() && trigger::move_remaining() <= 0;
-        ctx::settle_circle_reward(who, landing)?;
+        rules_tiles::circle::settle_reward(who, landing)?;
     }
     Ok(())
 }

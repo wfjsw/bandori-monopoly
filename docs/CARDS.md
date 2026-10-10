@@ -158,7 +158,7 @@ Two write surfaces, matching the two clause shapes (ABI v32):
   **tile** (a tile-scoped or walk-scoped veto: 「[经过]CiRCLE时不获得[CiRCLE奖励]」
   arms `prop::NO_REWARD` on CiRCLE's `tile:circle` instance).
 
-`prop::NO_REWARD` is the CiRCLE-reward veto (`ctx::settle_circle_reward` reads
+`prop::NO_REWARD` is the CiRCLE-reward veto (`tile:circle`'s Pass entry reads
 and consumes the tile-scoped one); `prop::NO_BUILD` gates `why_not_build_on`;
 `prop::RENT_FACTOR` / `PAY_FACTOR` scale a settlement payment at the money
 pipeline's `payMul` stage. A rule body's own instance is the one running
@@ -194,15 +194,15 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 | pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
 | skills & band attachments (ABI v35) | `band_skill` / `character_skill` (the bound rule id, C# `H._fx[i].bands` / `.skill`), `band_skills` (every band attachment as `(uid, id, extra)`), `add_band_skill` (C# `H.MakeBand`; `extra` = 「拿取」 copy: 「相同乐队技能卡的效果不可叠加」 / 「不视为那个乐队的角色」), `invoke_skill` (run a skill rule's press entry `On::Play` for a player -- 「立即执行乐队技能的（2）效果」 / `SkillPareo -> Offer()`. No `skillUsed`: that is the player's own press (`use_skill`).) |
 | ring | `ring_multiplier`, `add_ring_bonus`, `teleport_to` |
-| prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_player`, `ask_card`, `ask_number` |
+| prompts | `ask_yes`, `ask_pick`, `ask_tile`, `ask_tiles` (labels + prices + AI hint), `ask_player`, `ask_card`, `ask_number` |
 | nesting & trigger | `play_card`, `invoke_skill`, `raise_bought` (C# `f.Bought(i, t)` -- a card that handed a deed over announces it), `trigger::{kind, player_id, target, tile, value, step, by_card, move_roll, set_move_roll, set_pay_amount, set_pay_target, set_cancelled, cancelled, card_is, move_flags, move_is_main, move_dir}` |
 | purchase (ABI v40/41) | `buy_quotes(player, kind, &[tile])` (batched quote), `buy(player, tile, kind)` (replaces `card_buy`), `acquire(player, from, tile, price)` (「收购」: pipeline pay, then assign → `bought` → `buyAfter`), `agent_offer`, `linger(player, expires)` (bind the running def as a turn-scoped instance in `TurnCtx.lingering` -- the hand-card home for 「本回合」 effects; a `set_prop` before it lands on the instance's props), `buy_price(t)` (the deed's base value). `trigger::{buy_kind, seller, price, set_price, deal_owner, set_deal_owner, deal_houses, set_deal_houses, deal_mortgaged, set_deal_mortgaged, set_reason}` carry the `BuyGate` / `BuyAdd` → `BuyMul` → `BuySet` / `BuyAssign` payload (`docs/PURCHASE.md`). |
 | field cards | `place_card`, `place_card_at`, `unplace_card`, `is_placed`, `set_dest`, `placed_tile`, `crystals`, `set_crystals`, `add_crystals`, `decay` |
-| tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `settle_circle_reward`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
+| tile rules | `self_tile`, `prop`, `set_prop`, `tile_prop`, `set_tile_prop`, `prop_at`, `set_prop_at`, `draw`, `draw_event`, `pay_rent`, `offer_buy`, `offer_build`, `offer_force_buy`, `buy`, `buy_quotes`, `card_build`, `ask_tiles`, `ai_agent_choice`, `is_color`, `raise`, `gain_typed`, `exile_of`, `stun_of`, `card_settle_at` (the settle / pass primitives; `docs/TILES.md`) |
 | event rules | `event_expire`, `event_is_active`, `event_deck_push`, `event_banish` (the active-list / deck handles; `docs/EVENTS.md`) |
 
-Prompts can carry an AI preference later (`H.AskXxx`'s `ai` parameter); until
-then bots take the prompt fallback.
+Prompts can carry an AI preference (`ask_tiles`'s `ai` hint, or the prompt
+fallback when it is -1).
 
 ## Trigger points (`trigger::kind()`)
 

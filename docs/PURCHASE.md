@@ -38,8 +38,10 @@ how ownership is assigned — are handled by the `rules/` crates.
   covers `buyable_here`, `can_buy_here`, `why_not_act "buy"`, `ai_wants_buy`
   and `ai_agent_choice`. A player who can afford only the discounted price is
   refused (`err.buy_poor`).
-* **Agent:** `agent_landing` ignores `st.tile_colors` / `ALL_COLORS` /
-  `extraColor:`, so （soyo）混合的颜色's 「其他颜色的地产商」 can never fire.
+* **Agent:** the `tile:agent` body's 同色 set (`ctx::is_color`) reads the
+  board `group` plus `prop::ANY_COLOR` / `colorFor:<p>`, so （soyo）混合的颜色's
+  「其他颜色的地产商」 can fire. An `ANY_COLOR`-only member is offered for buy
+  but never for build (soyo 「该格本身不可因自有以外的颜色的地产商盖房」).
 * **Force-buy:** moves money directly at 2×(price + houses). The deed stays
   mortgaged and no buy hooks are raised.
 * **Auction:** moves money directly, clears the mortgage, and raises only

@@ -178,24 +178,31 @@ a list of citations, not a reimplementation:
 
 | primitive | wraps today | used by |
 |---|---|---|
-| `ctx::settle_draw(n, src)` | `draw_r` | circle, edogawa, event |
-| `ctx::settle_event()` | `draw_event` | event |
-| `ctx::settle_buy(t)` | `offer_buy` | property, ring |
-| `ctx::settle_build(t)` | `offer_build` | property |
-| `ctx::settle_rent(t, half)` | `pay_rent` (incl. the RiNG formula and the agent half-charge) | property, ring, agent |
-| `ctx::settle_force_buy(t)` | `offer_force_buy` | property, ring |
-| `ctx::settle_agent()` | `agent_landing` | agent |
-| `ctx::settle_circle_reward(landing)` | `circle_reward` (the `[经过]` half) | circle (via the walk) |
+| `ctx::draw` / `ctx::draw_event` | `draw_r` / `draw_event` | circle, edogawa, event |
+| `ctx::offer_buy` / `ctx::offer_build` / `ctx::offer_force_buy` | `offer_*` | property, ring |
+| `ctx::pay_rent(t, half)` | `pay_rent` (incl. the RiNG formula and the agent's 「半价收费」 half-charge) | property, ring, agent |
+| `ctx::buy` / `ctx::buy_quotes` / `ctx::card_build` | the `BuyKind::Agent` purchase / build | agent |
+| `ctx::ask_tiles` | a tile ask with per-option labels, prices, and an AI choice hint | agent |
+| `ctx::ai_agent_choice` | `ai_agent_choice` (the ask's AI hint) | agent |
+| `ctx::is_color` / `ctx::tile_group` / `ctx::is_buyable` | the 同色 set (colour overrides included) | agent |
+| `ctx::raise` | a guest-raised trigger point (`circleAffected`) | circle |
+| `ctx::gain_typed` | a bank print with the Pay's `typ` + log line | circle |
+| `ctx::prop_at` / `ctx::set_prop_at` | instance props by uid (`NO_REWARD` on a field instance) | circle |
+| `ctx::exile_of` / `ctx::stun_of` | the player's `[除外]` / `[晕眩]` layers | circle |
 
-These are **not** new side channels: each is the routine the engine already
+These are **not** new side channels: each is a named verb the engine already
 runs, published so a rule body can call it. They raise the same `buy*` /
-`build*` / `pay` triggers they raise today.
+`build*` / `pay` / `circleAffected` triggers they raise today.
 
 `tile:property`'s body, in full, is the rulebook's four-way branch (unowned /
 own / other / mortgaged) over those primitives. `tile:ring` is `tile:property`
-plus the dice-rent term. `tile:edogawa` is one `settle_draw`. That is the
-point: once the body is a rule instance, a card can swap it, stack another one
-next to it, or rewrite its props -- without the engine knowing the card's name.
+plus the dice-rent term. `tile:edogawa` is one draw. `tile:agent` is the
+「若…则…否则…」 branch (the 同色 set, the all-owned half-rent sweep, and one
+buy/build offer). `tile:circle` is the landing draw plus the [经过] reward
+(`circle::settle_reward`, shared with `event:协助CiRCLE重建`'s cafe re-home).
+That is the point: once the body is a rule instance, a card can swap it, stack
+another one next to it, or rewrite its props -- without the engine knowing the
+card's name.
 
 ## Binding
 
@@ -322,7 +329,7 @@ Every flag in the table at the top leaves the engine. The home for each:
 
 | flag | home after |
 |---|---|
-| `no_circle_reward` (plan) | prop `noReward` on the tile's `tile:circle` instance; `settle_circle_reward` reads it. A rule that suppresses the reward (PPP band (2), PP band (3), 凑友希那 (1), detour, 赤音, tsugumi) **sets the prop** on the instance, and clears it when its own clause ends (「…时」 goes in an event handler on that state's change). |
+| `no_circle_reward` (plan) | prop `noReward` on the tile's `tile:circle` instance; `tile:circle`'s Pass entry reads it (and consumes the tile-side arm). A rule that suppresses the reward (PPP band (2), PP band (3), 凑友希那 (1), detour, 赤音, tsugumi) **sets the prop** on the instance, and clears it when its own clause ends (「…时」 goes in an event handler on that state's change). |
 | `NO_CIRCLE_REWARD` (state) | same. The "held as data on the source" idiom moves to "held as a prop on the tile" -- the source still owns the arming/disarming, but the reader is the tile instance, not a per-player latch. |
 | `rent_factor` | prop `rentFactor` (milli) on the tile instance; `settle_rent` applies it |
 | `pay_factor` | prop `payFactor` (milli) on the tile instance; `settle_rent` applies it. (Today both are `MoveCtx.plan` scalars read only in `pay_rent`.) |
@@ -412,6 +419,7 @@ Checked: `card_sdk::abi::ABI_VERSION = 40`,
 | **ABI → 31** | Phase 2 first step | `OnKind::Settle` (the settle body), `prop` keys for tile data, `ctx::settle_*` primitives, `place_card` on `BOARD_OWNER` |
 | **SAVE_VERSION → 3** | Phase 2 first step | `World::board_field` (tile rule instances) is part of the world; a v2 save has none and would restore a match with unbound tiles |
 | **ABI → 32** | Phase 3 (engine-fix batch) | `tile_prop` / `set_tile_prop` (write a rule instance's props by tile), `settle_circle_reward`, `ChainKind::SettleBody` (shares `TriggerKind::SettleBody`'s wire value), board-owned instances hearing field hooks. The `MoveCtx` plan is not part of the save, so SAVE_VERSION stays at 3. |
+| **ABI → 50** | agent/circle body migration (2026-10-10) | the tile bodies run the branch themselves. Added: `ask_tiles` (labels + prices + AI hint), `ai_agent_choice`, `raise` (guest-raised `circleAffected`), `gain_typed` (bank print with `typ` + `Pay::text`), `prop_at` / `set_prop_at`, `exile_of`, `trigger::move_from`. **Removed**: `agent_landing` / `settle_circle_reward` and their `HostRequest`s -- the engine keeps `Play::agent_landing` / `Play::circle_reward` as the `StubRules` built-in only. SAVE_VERSION unchanged. |
 
 ## Migration
 
@@ -438,8 +446,8 @@ report it.
 |---|---|---|---|
 | 1 | `tile:edogawa` | one `settle_draw` | **done** -- smallest body; proves bind + dispatch |
 | 2 | `tile:event` | `settle_draw` + `settle_event` | **done** -- added the `ctx::draw_event` primitive |
-| 3 | `tile:circle` | `settle_draw` + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Hook(&[HookKind::PassTile])` -> `ctx::settle_circle_reward`) |
-| 4 | `tile:agent` | `settle_agent` | **done** -- `ctx::agent_landing` |
+| 3 | `tile:circle` | the landing draw + the [经过] reward | **done** -- the landing draw is `On::Settle`; the reward is the instance's **Pass entry** (`On::Hook(&[HookKind::PassTile])` -> `circle::settle_reward`, the body itself). The walk's `circle_reward` is the **built-in fallback** when no instance is bound |
+| 4 | `tile:agent` | the 「若…则…否则…」 branch | **done** -- the body is the branch (同色 set / all-owned half-rent / one buy-build offer). `Play::agent_landing` is the **built-in fallback** |
 | 5 | `tile:ring` | `tile:property` + dice rent | **done** -- the `rent_factor` / `pay_factor` *read* moved to the pipeline's `payMul` stage (step 9) |
 | 6 | `tile:property` | the four-way branch | **done** -- `land_at`'s `match` is now the **built-in fallback** (`land_at_built_in`) for `StubRules` and unbound kinds, not the only path |
 | 7 | flags | card migrations | **done** -- `settleInstead` → `HookKind::SettleBody`, `settleAtEnd` → `On::AtEnd`, the CiRCLE veto → `prop::NO_REWARD`, `noBuild` → `prop::NO_BUILD` (placed) or a linger instance (hand card), `buy_*` → `ctx::linger` + `BuyAdd`/`BuyMul`/`BuySet`/`BuyAssign`, `extraColor` → `colorFor:<p>` / `prop::ANY_COLOR` |
@@ -457,8 +465,10 @@ board owner, and the engine's `land_at` is now the **built-in fallback** rather
 than the only path. Phase 3 landed the following (2026-10-06):
 
 * **The [经过] CiRCLE reward** is `tile:circle`'s **Pass entry** --
-  `On::Hook(&[HookKind::PassTile])` calling `ctx::settle_circle_reward`. The
-  hook dispatch visits `board_field` (tile-filtered, and only for kinds a
+  `On::Hook(&[HookKind::PassTile])` running `circle::settle_reward` (the body
+  itself: suppression, the choice, the `circleAffected` window, the payout).
+  `event:协助CiRCLE重建` re-homes the same function onto 「CiRCLE咖啡厅」.
+  The hook dispatch visits `board_field` (tile-filtered, and only for kinds a
   `tile:*` rule declares), so board-owned instances hear `passTile` and the
   other hooks they declare. Suppression is `prop::NO_REWARD`; `plan::no_circle_reward`
   and `state::key::NO_CIRCLE_REWARD` are gone. The walk's `circle_reward` is
@@ -546,7 +556,7 @@ is unchanged at every step.
 | 1 edogawa | ok (251 rules) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | `On::Settle` + `bind_tiles` + `settle_tile`; ABI v31, SAVE_VERSION 3 |
 | 2 event | ok (252) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | `ctx::draw_event` primitive added |
 | 3 circle | ok (254) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | landing draw only; the [经过] reward stays on the walk |
-| 4 agent | (with 3) | (with 3) | (with 3) | (with 3) | (with 3) | (with 3) | `ctx::agent_landing`; gated in the same run as 3 |
+| 4 agent | (with 3) | (with 3) | (with 3) | (with 3) | (with 3) | (with 3) | the 「若…则…否则…」 body; gated in the same run as 3 |
 | 5 ring | ok (256) | 44 / 0 / 1 | 648 / 0 / 84 | 8 / 0 / 1 | 4 pre-existing | 0 | `ctx::pay_rent` / `offer_buy` / `offer_force_buy` / `offer_build` added |
 | 6 property | (with 5) | (with 5) | (with 5) | (with 5) | (with 5) | (with 5) | the four-way branch; gated in the same run as 5 |
 | 7 flags | | | | | | | **partial** -- see [Left short](#left-short) |

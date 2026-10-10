@@ -1175,7 +1175,7 @@ These block whole classes of clause from ever being asserted.
   `drew` once per single card. `rb_gap_res::g28_*` is re-tagged: Maya (2)'s
   replacement draw does not route the kept card through `drew`.
 * ~~「无法获取[CiRCLE奖励]」 suppression.~~ **Landed:** the [经过] reward is
-  `tile:circle`'s Pass entry (`ctx::settle_circle_reward`), and suppression is
+  `tile:circle`'s Pass entry (`circle::settle_reward`), and suppression is
   `prop::NO_REWARD` on the rule instance -- the tile's own instance (a
   walk-scoped veto) and the passing player's field instance (a per-player
   veto). `plan::set_no_circle_reward` and `state_key::NO_CIRCLE_REWARD` are
@@ -1589,7 +1589,7 @@ override the rulebook (特别注意 3), so a card bending a clause is not a hit.
 | `G:地产商#1` | one agent per colour | **ok** | `tile:agent`; board `group` (TODO on 「同色」) |
 | `G:可购买格子#1` | not CiRCLE / cafe / 江户川 / 流星堂 / agent | **ok** | `TileData::is_buyable` |
 | `G:拍卖#1` | all alive who can spend; first highest wins; min 100, +100 | **ok** | `mod.rs` auction handler `min = bid<=0 ? 100 : bid+100`; `rb_rulebook::b03` |
-| `G:CiRCLE奖励#1` | gain 2000 or draw 1 | **ok** | `play.rs` `circle_reward`; `rb_rulebook::s04`, `game-core play/tests::passing_circle_offers_money_or_a_card` |
+| `G:CiRCLE奖励#1` | gain 2000 or draw 1 | **ok** | `circle::settle_reward` (tile body; `Play::circle_reward` is the built-in fallback); `rb_rulebook::s04`/`s05d`, `game-core play/tests::passing_circle_offers_money_or_a_card` |
 
 ### 专有名词 -- 卡与技能 (12)
 
@@ -1664,7 +1664,7 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | clause | meaning | status | evidence / tests |
 |---|---|---|---|
 | `S:结算#1` | CiRCLE + 江户川 draw 1 | **ok** | `tile:circle`/`tile:edogawa` settle; `rb_rulebook::s01`/`s02` |
-| `S:结算#1.1` | [经过]CiRCLE with start ≠ CiRCLE → [CiRCLE奖励] | **ok** | enforced in `play.rs::circle_reward` (the reward step both the tile body's Pass entry and the walk's fallback call); `rb_rulebook::s05`, `s05b` |
+| `S:结算#1.1` | [经过]CiRCLE with start ≠ CiRCLE → [CiRCLE奖励] | **ok** | `tile:circle`'s Pass-entry residual guard (`pass_pays`, `trigger::move_from`); `rb_rulebook::s05`, `s05b`, `s05c` |
 | `S:结算#2` | cafe + 流星堂 draw 1 + 1 event | **ok** | `tile:event`; `rb_rulebook::s03` |
 | `S:结算#2.1` | the event is public, not in hand, immediate | **ok** | `draw_event` |
 | `S:结算#2.2` | event to the event discard; reshuffle when empty | **ok** | `setup_event_deck` / `draw_event` |
@@ -1673,7 +1673,7 @@ present: `[指定]` (`Effect.target` / `targeted`), `[移除]` (`Dest::Banished`
 | `S:结算#5.2` | own, mortgaged: no effect | **ok** | `property.rs` own branch; `rb_rulebook::s07` |
 | `S:结算#6.1` | other's, unmortgaged: pay the current-level rent (bold) | **ok** | `pay_rent` rent table; `game-core play/tests::rent_follows_the_rent_table` |
 | `S:结算#6.2` | other's, mortgaged: 2×(price+houses) force-buy, stays mortgaged (bold, red); price and payee unaffected | **ok** | `offer_force_buy` moves money directly; `rb_rulebook::s10`/`s11`, `game-core play/tests::mortgaged_land_can_be_force_bought_at_double` |
-| `S:结算#7` | agent: if all same-colour are others' → half-charge each front-to-back (ceil 10); else settle one | **ok** | `agent_landing`; `half_ceil10` in `pay_rent`; `rb_rulebook::s12`, `game-core play/tests::agent_charges_half_rent_...` (TODO on 「同色」/`extraColor`) |
+| `S:结算#7` | agent: if all same-colour are others' → half-charge each front-to-back (ceil 10); else settle one | **ok** | `tile:agent`'s body; `half_ceil10` in `pay_rent`; `rb_rulebook::s12`/`s12b`/`s12c`/`s12d`, `game-core play/tests::agent_charges_half_rent_...` (TODO on 「同色」/`extraColor`) |
 
 ### 时点流程 -- 开始游戏 (8)
 

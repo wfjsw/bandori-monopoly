@@ -11,6 +11,10 @@ crate-type = ["rlib"]
 
 [dependencies]
 card-sdk = { path = "../card-sdk", features = ["guest"] }
+# `event:协助CiRCLE重建` re-homes 「CiRCLE原本的所有效果」 onto the cafe --
+# the [经过] reward body lives in `rules-tiles` (`tile:circle::settle_reward`)
+# so both call sites share one implementation.
+rules-tiles = { path = "../tiles" }
 
 [build-dependencies]
 # build.rs reads data/schools.json into the 上学时间 table.
