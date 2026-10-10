@@ -34,7 +34,7 @@
 .right { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 6px; }
 .row img, .fire img { width: 34px; height: 34px; object-fit: contain; flex: none; position: relative; z-index: 1; }
-.val { flex: 1; height: 28px; border-radius: var(--r-lg); background: var(--light-pill); margin-left: -18px; padding: 0 12px; text-align: right; font-size: 18px; line-height: 28px; }
+.val { flex: 1; height: 28px; border-radius: var(--r-xl); background: var(--light-pill); margin-left: -18px; padding: 0 12px; text-align: right; font-size: 18px; line-height: 28px; }
 .plus { width: 28px; height: 28px; border-radius: 50%; background: var(--pink); color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .plus i { width: 20px; height: 20px; }
 .fire { display: flex; align-items: center; gap: 4px; height: 34px; border-radius: 17px; background: var(--dark-pill); color: #fff; padding-right: 3px; }

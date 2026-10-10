@@ -1,5 +1,5 @@
 .result { display: grid; grid-template-columns: 340px 1fr; grid-template-rows: 1fr auto; gap: 20px; min-height: 500px; }
-.me { border-radius: var(--r-lg); background: linear-gradient(var(--pink-pale), #fff); display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 10px; }
+.me { border-radius: var(--r-xl); background: linear-gradient(var(--pink-pale), #fff); display: flex; flex-direction: column; align-items: center; padding: 20px; gap: 10px; }
 .title { font-size: 20px; font-weight: 700; color: var(--pink); }
 .medal { width: 110px; }
 .big { font-size: 88px; font-weight: 700; line-height: 1; color: var(--pink); }

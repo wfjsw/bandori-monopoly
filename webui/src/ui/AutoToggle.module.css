@@ -68,7 +68,7 @@
   gap: 6px;
   height: 28px;
   padding: 0 12px;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   background: rgba(74, 125, 255, 0.12);
   color: #4a7dff;
   font-size: 13px;

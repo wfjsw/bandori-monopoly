@@ -68,7 +68,7 @@
   bottom: 22px;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: 10px;
 }
 
 /* Match-screen FX layer over the centre column: the stage banner, the action
@@ -90,7 +90,7 @@
   max-width: 600px;
   pointer-events: none;
   background: rgba(255, 255, 255, 0.96);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   box-shadow: 0 10px 30px rgba(80, 30, 50, 0.25);
   padding: var(--sp-3) 26px;
   text-align: center;
@@ -260,7 +260,7 @@
 .flashNegated span {
   transform: rotate(-12deg);
   border: 6px solid rgba(190, 30, 70, 0.75);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   padding: 6px 18px;
   background: rgba(255, 255, 255, 0.72);
   font-size: 44px;

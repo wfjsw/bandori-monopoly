@@ -5,7 +5,7 @@
 .stand {
   display: flex; flex-direction: column;
   min-height: 0; overflow: hidden;
-  background: var(--panel); border-radius: var(--r-lg);
+  background: var(--panel); border-radius: var(--r-xl);
   box-shadow: var(--shadow);
   padding: 12px;
 }

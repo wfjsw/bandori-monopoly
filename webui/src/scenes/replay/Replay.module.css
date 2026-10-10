@@ -54,7 +54,7 @@
   align-items: center;
   gap: 18px;
   background: var(--light-pill);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   padding: 14px 20px;
 }
 .when { width: 210px; display: flex; flex-direction: column; gap: 2px; }
@@ -187,7 +187,7 @@
   align-items: center;
   gap: 16px;
   background: var(--surface);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   box-shadow: var(--shadow);
   padding: 14px 22px;
   font-size: 17px;

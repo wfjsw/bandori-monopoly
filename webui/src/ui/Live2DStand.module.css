@@ -11,5 +11,5 @@
 .window { position: absolute; overflow: hidden; }
 .model { position: absolute; }
 .fill { width: 100%; height: 100%; }
-.loading { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 4px 14px; border-radius: var(--r-lg); background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 14px; white-space: nowrap; }
+.loading { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); padding: 4px 14px; border-radius: var(--r-xl); background: rgba(0, 0, 0, 0.55); color: #fff; font-size: 14px; white-space: nowrap; }
 .missing { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--sub); font-size: 16px; }

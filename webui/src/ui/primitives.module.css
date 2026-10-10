@@ -35,6 +35,6 @@
 /* Surface panel: the white card every scene panel copies. */
 .panel {
   background: var(--panel);
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   box-shadow: var(--shadow);
 }

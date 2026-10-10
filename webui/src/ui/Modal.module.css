@@ -62,7 +62,7 @@
   display: flex;
   flex-direction: column;
   background: var(--surface);
-  border-radius: var(--r-xl);
+  border-radius: var(--r-2xl);
   padding: var(--sp-2);
   box-shadow: var(--pop-shadow);
   animation: pop 0.18s ease-out;
@@ -82,7 +82,7 @@
   position: relative;
   flex: none;
   height: 54px;
-  border-radius: var(--r-lg);
+  border-radius: var(--r-xl);
   background: linear-gradient(var(--pink-light), var(--pink));
   display: flex;
   align-items: center;
@@ -290,7 +290,7 @@
 /* Attached to the screen's bottom edge: no bottom border, square bottom corners. */
 .sheetWin {
   border-bottom: none;
-  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  border-radius: var(--r-2xl) var(--r-2xl) 0 0;
 }
 .sheetWin.sheetOut {
   animation: sheetOut 0.18s ease-in forwards;

@@ -37,8 +37,9 @@
   /* ---- radius ---- */
   --r-sm: 6px;
   --r-md: 10px;
-  --r-lg: 14px;
-  --r-xl: 20px;
+  --r-lg: 12px;
+  --r-xl: 14px;
+  --r-2xl: 20px;
   --r-pill: 999px;
 
   /* ---- shadow ---- */
