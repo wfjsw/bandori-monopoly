@@ -23,6 +23,7 @@ pub mod action;
 pub mod clock;
 pub mod determinize;
 pub mod eval;
+pub mod extras;
 pub mod ismcts;
 pub mod saved;
 pub mod sim;
@@ -33,6 +34,7 @@ pub use clock::Instant;
 pub use action::{action_priors, trivial_decision, Action, Surface, Trivial};
 pub use determinize::{determinize, determinize_json, DeterminizeError, DeterminizerRng, SampleReport};
 pub use eval::{net_worth, relative_worth, terminal_value};
+pub use extras::{view_extras, ViewExtras};
 pub use ismcts::{
     merge_stats, seed_for_thread, ActionStats, Ismcts, SearchConfig, SearchOutcome, Timings,
 };

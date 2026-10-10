@@ -1015,6 +1015,91 @@ impl Match {
         }
     }
 
+    /// The engine's own answer for `member`'s live prompt, **computed** from
+    /// this world -- the seat-view engine's twin of [`Self::view_extra_typed`]'s
+    /// `ai_answer` (which reads the precomputed [`Ask`] fill the live match
+    /// stamped at prompt-open).
+    ///
+    /// A determinized fork has no precomputed fill (`bot-core`'s `stub_pending`
+    /// can only mirror the searching seat's public `aiAnswer`, which the online
+    /// frame no longer carries). This entry runs the same choice functions the
+    /// prompt-open fill ran: [`Cx::ai_auction_worth`] for an auction ceiling,
+    /// [`Cx::auto_mortgage`] for a mortgage selection, and
+    /// [`Cx::ai_answer_for_entry`] for every other prompt (the fallback, or a
+    /// [反击] propensity roll).
+    ///
+    /// `None` when the seat has no open prompt or has already answered. The
+    /// result is **not** bit-identical to the live match's precomputed fill
+    /// whenever that fill drew from the match RNG (auction ceilings, [反击]
+    /// propensity) -- the fork owns a fresh stream. That is expected and
+    /// listed in the hidden-state audit (`docs/BOT.md` §1).
+    pub fn compute_ai_answer(&mut self, member: i32) -> Option<RawAiAnswer> {
+        let i = self.player_index(member)?;
+        let prompt = {
+            let p = self.pending.as_ref()?;
+            let l = &p.live;
+            let k = l.ask.view.player_index(i as i32)?;
+            if l.answers.get(k).copied().unwrap_or(-1) >= 0 {
+                return None;
+            }
+            l.ask.view.clone()
+        };
+        let fallback = prompt.fallback;
+        let mut cx = Cx::new(self.world.clone(), &self.data, &*self.rules, &[]);
+        match prompt.kind.as_str() {
+            "auction" => {
+                let base = if prompt.tile >= 0 {
+                    purchase::quote_native(&self.data, &self.world.st, prompt.tile as usize).max(0)
+                } else {
+                    0
+                };
+                let worth = cx.ai_auction_worth(i, base);
+                Some(RawAiAnswer {
+                    answer: 0,
+                    picked: Vec::new(),
+                    worth,
+                })
+            }
+            "mortgage" => {
+                let need = prompt.bid;
+                let deeds: Vec<usize> = prompt.items.iter().filter_map(|s| s.parse().ok()).collect();
+                let picked = if deeds.is_empty() {
+                    cx.auto_mortgage(i, need)
+                } else {
+                    cx.auto_mortgage_from(i, need, deeds)
+                };
+                Some(RawAiAnswer {
+                    answer: 0,
+                    picked,
+                    worth: 0,
+                })
+            }
+            _ => {
+                // `fill_ai`'s per-seat body, on a throwaway `Ask` view of the
+                // same prompt (the fallback / [反击] propensity path). The
+                // prompt's own `Ask` is already filled on a stubbed fork, so
+                // read the entry through the shared helper rather than
+                // `fill_ai` (which skips non-`AI_UNSET` slots).
+                let ask = Ask {
+                    view: prompt.clone(),
+                    ai: vec![cx::AI_UNSET],
+                    ai_picked: vec![Vec::new()],
+                    worth: vec![0],
+                };
+                let answer = cx.ai_answer_for_entry(&ask, i);
+                Some(RawAiAnswer {
+                    answer: if answer == cx::AI_UNSET {
+                        fallback
+                    } else {
+                        answer
+                    },
+                    picked: Vec::new(),
+                    worth: 0,
+                })
+            }
+        }
+    }
+
     // ------------------------------------------------------- simulation fork
 
     /// Cheap in-memory fork of the whole match -- the simulation's unit of

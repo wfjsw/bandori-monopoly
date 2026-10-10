@@ -2552,11 +2552,11 @@ impl Cx<'_> {
     /// seat's [`crate::strategy::StrategyParams`] key).
     /// Chaos: a random subset that covers `need` -- at least one deed, never a
     /// tidy little list.
-    fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
+    pub(crate) fn auto_mortgage(&mut self, player_id: usize, need: i32) -> Vec<String> {
         self.auto_mortgage_from(player_id, need, self.mortgageable(player_id))
     }
 
-    fn auto_mortgage_from(&mut self, player_id: usize, need: i32, deeds: Vec<usize>) -> Vec<String> {
+    pub(crate) fn auto_mortgage_from(&mut self, player_id: usize, need: i32, deeds: Vec<usize>) -> Vec<String> {
         if self.is_chaos(player_id) {
             let mut rest = deeds;
             let mut got = 0;

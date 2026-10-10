@@ -22,6 +22,10 @@
 //! * `ponder(view_json, budget_ms, seed)` -- speculative search, cached by
 //!   [`SeatView::decision_key`]; a later `decide` on the same key answers
 //!   `reused: true` without spending its budget (BOT-RESEARCH #5).
+//! * `extras(view_json, seed)` -> `{playable, estCost, skills, aiAnswer}` --
+//!   the per-viewer extras the server's `view_extra` computes, derived from
+//!   the viewer's own frame (the seat-view engine). `seed` is the
+//!   determinizer's sampling seed, never the match's.
 //!
 //! Root-parallel ISMCTS runs **across workers** (the page's pool), not inside
 //! one: `std::thread` is unavailable on wasm32, and each worker is its own
@@ -35,7 +39,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use bot_core::{
-    action, heuristic_message_view, Ismcts, MatchSim, SearchConfig, SearchOutcome, SeatView,
+    action, heuristic_message_view, view_extras, Ismcts, MatchSim, SearchConfig, SearchOutcome,
+    SeatView,
 };
 use game_core::data::{GameData, DATA_FILES};
 use game_core::engine::{CardRules, StubRules};
@@ -341,6 +346,30 @@ pub fn info() -> String {
         "ponder": opts.accept_ponder,
         "early_stop": opts.early_stop,
     }))
+}
+
+// ------------------------------------------------------------------ extras
+
+/// `{view, seed}` -> `{playable, estCost, skills, aiAnswer}`.
+///
+/// The per-viewer extras the server's `Match::view_extra` computes, derived
+/// from the viewer's **own** seat frame (the same input `decide` takes). Builds
+/// the determinized world once and runs the same engine gates (`cant_play` /
+/// `why_not_act` / `card_prop`, and the `ai_*` choice functions for
+/// `aiAnswer`). Information boundary unchanged: never a `World`, a match seed,
+/// or another seat's hand / deck order / `aiAnswer`.
+///
+/// `seed` is the determinizer's sampling seed (hidden zones the frame does not
+/// pin) -- derive it from the decision identity (`decisionSeed`), never the
+/// match's.
+#[wasm_bindgen]
+pub fn extras(view_json: &str, seed: u32) -> Result<String, JsError> {
+    let view: SeatView = parse("view", view_json)?;
+    let d = data()?;
+    let r = rules()?;
+    let extras = view_extras(&view, &d, &r, seed as u64)
+        .map_err(|e| JsError::new(&format!("extras: {e}")))?;
+    Ok(json(&extras.to_json()))
 }
 
 // ------------------------------------------------------------------ decide

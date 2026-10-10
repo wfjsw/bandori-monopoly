@@ -815,6 +815,23 @@ impl<'a> Cx<'a> {
     /// the same marker the client's 托管 policies read
     /// (`autopilot.ts`'s `ask.counteract.title`).
     fn fill_ai(&mut self, ask: &mut Ask) {
+        for (k, &s) in ask.view.players.iter().enumerate() {
+            if ask.ai.get(k).copied().unwrap_or(AI_UNSET) != AI_UNSET {
+                continue;
+            }
+            let seat = s as usize;
+            ask.ai[k] = self.ai_answer_for_entry(ask, seat);
+        }
+    }
+
+    /// The answer `seat`'s policy would give for `ask`'s entry `k` -- the
+    /// per-seat body of [`Self::fill_ai`], extracted so the seat-view engine
+    /// (`bot-glue`'s `extras`) can run it on a determinized fork, which has
+    /// no precomputed [`Ask`] fill. Same RNG draws as the prompt-open fill
+    /// (so a live match that re-runs it replays), which is also why a fork's
+    /// answer can differ from the live one: the fork owns a fresh stream
+    /// (`docs/BOT.md` §1, the hidden-state audit).
+    pub fn ai_answer_for_entry(&mut self, ask: &Ask, seat: usize) -> i32 {
         let fallback = ask.view.fallback;
         // A tile prompt carries its targets in `items` (answer == len is
         // "none"); every other prompt's answers index `options`.
@@ -824,26 +841,20 @@ impl<'a> Cx<'a> {
             ask.view.items.len() as i32
         };
         let counteract = ask.view.title.key() == "ask.counteract.title";
-        for (k, &s) in ask.view.players.iter().enumerate() {
-            if ask.ai.get(k).copied().unwrap_or(AI_UNSET) != AI_UNSET {
-                continue;
-            }
-            let seat = s as usize;
-            ask.ai[k] = if self.is_chaos(seat) {
-                if counteract && n > 1 && self.w.rng.f64() >= super::CHAOS_COUNTER_CHANCE {
-                    // This offer it passes (the fallback is the skip option).
-                    fallback
-                } else {
-                    self.chaos_pick(fallback, n)
-                }
-            } else if counteract {
-                // Standard: declare on the seat's per-card propensity
-                // (`docs/BOT.md` §3.8 "counteraction"; default 600‰, user
-                // ruling 2026-10-08). `CounterParams` 0 holds a card back.
-                self.counteract_pick(seat, ask, fallback, n)
-            } else {
+        if self.is_chaos(seat) {
+            if counteract && n > 1 && self.w.rng.f64() >= super::CHAOS_COUNTER_CHANCE {
+                // This offer it passes (the fallback is the skip option).
                 fallback
-            };
+            } else {
+                self.chaos_pick(fallback, n)
+            }
+        } else if counteract {
+            // Standard: declare on the seat's per-card propensity
+            // (`docs/BOT.md` §3.8 "counteraction"; default 600‰, user
+            // ruling 2026-10-08). `CounterParams` 0 holds a card back.
+            self.counteract_pick(seat, ask, fallback, n)
+        } else {
+            fallback
         }
     }
 
