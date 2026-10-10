@@ -20,7 +20,7 @@ pub const KANON_MARCH: CardDef = CardDef::new(
         // first): [场] placement from hand, or the ≥9-marker jump once placed.
         // The gate admits whenever either branch is available.
         On::Play("", Some(cant_play), play),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        On::Hook(&[HookKind::Pass], "actor == owner && move.kind != Teleport", None, on_pass),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -64,9 +64,6 @@ fn legacy_mine(player_id: i32) -> bool {
 /// 「花音每次倒走获得一个水母标记」 -- C# `CardKanonMarch.Arrive`
 /// (`m.Reverse && !m.Teleport`), which is a backward walk that is not a teleport.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if ctx::trigger::move_kind() == Some(MoveKind::Teleport) {
-        return Ok(());
-    }
     if ctx::trigger::move_dir() >= 0 {
         return Ok(());
     }

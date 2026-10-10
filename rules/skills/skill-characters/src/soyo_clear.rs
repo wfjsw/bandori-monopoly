@@ -32,7 +32,7 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, offer),
-        On::Hook(&[HookKind::Settle], card_sdk::pre::MINE, None, on_settle),
+        On::Hook(&[HookKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", None, on_settle),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]);
@@ -86,9 +86,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
 //   below does not expire. Behaviour is kept identical to the old write (which
 //   also had no expiry); the clause is not implemented as stated.
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, ARMED) == 0 {
-        return Ok(());
-    }
+    
     state::set(player_id, ARMED, 0);
     let t = ctx::trigger::tile();
     if t < 0 {

@@ -30,9 +30,9 @@ pub const AVE_MUJICA: CardDef = CardDef::new(
     "skill:Ave Mujica:假面之下的真实",
     &[
         On::Play("", Some(can_halve), halve),
-        On::Hook(&[HookKind::TurnStartBefore], "", None, at_turn_start),
-        On::Hook(&[HookKind::PayMul], "", Some(in_two), bend),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        On::Hook(&[HookKind::TurnStartBefore], "slot('skillState') != 0", None, at_turn_start),
+        On::Hook(&[HookKind::PayMul], "slot('skillState') == 2 && card.placed", None, bend),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skillState') == 2", None, at_turn_end),
     ],
 )
     .legacy(&[(3, legacy_mine)]);

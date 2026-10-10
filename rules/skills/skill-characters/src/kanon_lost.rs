@@ -29,9 +29,9 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // positions.
         On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
         On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
-        On::Hook(&[HookKind::CircleAffected], card_sdk::pre::MINE, None, on_circle),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
-        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, None, on_plan),
+        On::Hook(&[HookKind::CircleAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
+        On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine), (4, legacy_mine)]);
@@ -87,9 +87,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 /// (3) 「下回合移动投掷改为1d20+1d4」 -- the plan's dice table, rewritten while
 /// the silence holds.
 fn on_plan(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, SILENT) < 3 {
-        return Ok(());
-    }
+    
     plan::set_base_dice(1, 20, "真正的迷子");
     plan::add_base_dice(1, 4, "真正的迷子");
     ctx::log(player_id, &Msg::new(key!("kanon_lost_dice")));

@@ -35,7 +35,7 @@ fn is_bathhouse(t: i32) -> bool {
 pub const ASAHI_AIM: CardDef = CardDef::new(
     "skill:朝日六花:瞄准目标",
     &[
-        On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought),
+        On::Hook(&[HookKind::Bought], "actor == owner && slot('skill.asahiAim.first') == 0", None, on_bought),
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
     ],
 )
@@ -47,9 +47,6 @@ fn legacy_mine(player_id: i32) -> bool {
 
 /// （1）「你购买的第一个非"旭汤澡堂"或任意"Live House"格子获得"Live House"的颜色」.
 fn on_bought(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, DONE) != 0 {
-        return Ok(());
-    }
     let t = ctx::trigger::tile();
     if t < 0 || is_bathhouse(t) || ctx::is_live_house_for(player_id, t) {
         return Ok(());

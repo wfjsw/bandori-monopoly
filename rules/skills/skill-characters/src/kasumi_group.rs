@@ -25,16 +25,13 @@ const DONE: &str = "skill.kasumiGroup.start";
 pub const KASUMI_GROUP: CardDef = CardDef::new(
     "skill:弦卷心:弦卷集团",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], "", None, at_start),
+        On::Hook(&[HookKind::TurnStartBefore], "slot('skill.kasumiGroup.start') == 0", None, at_start),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
     ],
 );
 
 /// （1）「开局时获得1000资金」.
 fn at_start(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, DONE) != 0 {
-        return Ok(());
-    }
     state::set(player_id, DONE, 1);
     ctx::gain(player_id, 1000, &Msg::new(key!("kasumi_group_start")))?;
     Ok(())

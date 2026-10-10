@@ -1124,6 +1124,29 @@ pub const SLOT_NAMES: &[&str] = &[
     "skill.rimiResolve.passed",
     // `（鸫）素日日常` owed-money latch (`state::set(player_id, OWED, ...)`).
     "skill.tsugumiPlain.owed",
+    // Standard player-state keys used by skill body-top checks.
+    "skillState",
+    "fire",
+    "skill.aveMujica.inTwo",
+    "skill.ras.taken",
+    "skill.roselia.first",
+    "skill.sumimi.got",
+    "skill.asahiAim.first",
+    "skill.kasumiGroup.start",
+    "skill.kanonLost.silent",
+    "skill.soyoClear.armed",
+    "skill.soyoClear.penalty",
+    "skill.tamade.builtLast",
+    "skill.mumeiStream.state",
+    "skill.mutsumiActor.state",
+    "skill.kaedeSupport.state",
+    "skill.sakikoLife.state",
+    "skill.uikaImprisoned.state",
+    "skill.kokoroPractice.waived",
+    "skill.misakiOther.fire",
+    "skill.uikaIdol.fire",
+    "skill.takiCrychic.armed",
+    "skill.tamade.builtThis",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read

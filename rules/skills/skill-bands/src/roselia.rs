@@ -24,8 +24,8 @@ pub const ROSELIA: CardDef = CardDef::new(
         // （2）/（1）'s 「购买价格减半」 is the buy price's `BuyMul` stage
         // (`docs/PURCHASE.md`), so the quote a player sees is the half they pay.
         On::Hook(&[HookKind::BuyMul], card_sdk::pre::MINE, None, half_price),
-        On::Hook(&[HookKind::Bought], card_sdk::pre::MINE, None, on_bought),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(&[HookKind::Bought], "actor == owner && slot('skill.roselia.first') == 0", None, on_bought),
+        On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
@@ -57,9 +57,7 @@ fn half_price(player_id: i32) -> card_sdk::Asked {
 }
 
 fn on_bought(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, DONE) != 0 {
-        return Ok(());
-    }
+    
     let t = ctx::trigger::tile();
     if t < 0 || ctx::tile_group(t) == LIVE {
         return Ok(());
@@ -72,9 +70,7 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
 /// （1）「在你拥有任意初始Live House格子前，那个格子对你视为Live House」 --
 /// restated each turn while the condition holds.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, DONE) == 0 {
-        return Ok(());
-    }
+    
     if ctx::owned_tiles(player_id)
         .into_iter()
         .any(|t| ctx::tile_group(t) == LIVE)
