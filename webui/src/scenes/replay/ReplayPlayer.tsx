@@ -9,6 +9,7 @@ import { useState } from "react";
 import { navigate } from "../../app/router";
 import { useSessionOther } from "../../core/hooks";
 import { useMountEffect } from "../../hooks/mount";
+import { useTimeout } from "../../hooks/timers";
 import { cx } from "../../core/cx";
 import {
   clearPendingReplay,
@@ -24,6 +25,9 @@ import s from "./Replay.module.css";
 import { t as tr } from "../../i18n/t";
 import type { VerifyReport } from "../../game/record";
 import { useConsoleSession } from "../../console/context";
+
+/** How long a passed fairness check stays up before it fades away (ms). */
+const VERIFY_PASS_MS = 4000;
 
 export function ReplayPlayer() {
   // `openPending` is memoized on the queued record and async (an archived
@@ -92,6 +96,11 @@ function PlayerLive({ rs }: { rs: ReplaySession }) {
         }),
       );
   };
+  // A pass is a transient notice: it stands for a moment, fades, and hands
+  // the corner back to the 校验 button. A failure (or a record with nothing
+  // to check) stays until the user acts on it.
+  const passed = verify !== null && !verify.run && verify.rep.ok;
+  useTimeout(() => setVerify(null), passed ? VERIFY_PASS_MS : null);
   // The replay runs on the bundle that wrote it, so a checkpoint mismatch is
   // engine drift in the record itself -- not "this is a different build".
   const stampNote = rs.stampMismatches.length
@@ -124,7 +133,7 @@ function PlayerLive({ rs }: { rs: ReplaySession }) {
         </div>
       )}
       {verify && (
-        <div className={cx(s.banner, verify.run || verify.rep.ok ? s.verifyOk : s.diverge)} role="status">
+        <div className={cx(s.banner, verify.run || verify.rep.ok ? s.verifyOk : s.diverge, passed && s.transient)} role="status">
           <span>
             {verify.run
               ? tr("replay.verifyRunning")

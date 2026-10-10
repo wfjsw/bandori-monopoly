@@ -196,6 +196,11 @@
 }
 .diverge { border: 2px solid var(--pink); color: var(--pink-deep); }
 .verifyOk { border: 2px solid var(--ok); color: var(--ok-deep); }
+/* A passed check: holds, then fades over its last 0.4 s; ReplayPlayer drops it
+   at VERIFY_PASS_MS (keep the delay + duration equal to that). */
+.transient { animation: bannerOut 0.4s ease-in 3.6s forwards; }
+@keyframes bannerOut { to { opacity: 0; transform: translateX(-50%) translateY(-8px); } }
+@media (prefers-reduced-motion: reduce) { .transient { animation: none; } }
 .btns { display: flex; gap: 8px; }
 
 /* Load / compat screens. */
