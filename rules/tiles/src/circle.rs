@@ -36,7 +36,7 @@ use card_sdk::{CardDef, Msg, On};
 pub const CIRCLE: CardDef = CardDef::new(
     "tile:circle",
     &[
-        On::Settle(settle),
+        On::Settle("", None, settle),
         On::Hook(&[HookKind::PassTile], "", Some(passes_here), on_pass),
     ],
 );

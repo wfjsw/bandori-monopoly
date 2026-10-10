@@ -102,7 +102,11 @@ pub fn on(
     };
     match (*o, op) {
         (On::Counteract(_, _, guard, _), export::OP_GUARD)
-        | (On::Hook(_, _, guard, _), export::OP_GUARD) => match guard {
+        | (On::Hook(_, _, guard, _), export::OP_GUARD)
+        | (On::Gate(_, _, guard, _), export::OP_GUARD)
+        | (On::RollPlan(_, guard, _), export::OP_GUARD)
+        | (On::AtEnd(_, guard, _), export::OP_GUARD)
+        | (On::Settle(_, guard, _), export::OP_GUARD) => match guard {
             // G4-deleted residual: the condition alone decides, and the host
             // normally skips this call (`has_guard == false`). If it does ask,
             // the residual admits.
@@ -134,10 +138,10 @@ pub fn on(
         (On::Counteract(_, _, _, run), _)
         | (On::Play(_, _, run), _)
         | (On::Hook(_, _, _, run), _)
-        | (On::Gate(_, run), _)
-        | (On::AtEnd(run), _)
-        | (On::Settle(run), _)
-        | (On::RollPlan(run), _) => match run(player_id) {
+        | (On::Gate(_, _, _, run), _)
+        | (On::AtEnd(_, _, run), _)
+        | (On::Settle(_, _, run), _)
+        | (On::RollPlan(_, _, run), _) => match run(player_id) {
             Ok(()) => 0,
             // Asked: the host reads the published question and re-runs us with
             // the answer. The old `EXIT_NEED_INPUT` trap, as a return value.

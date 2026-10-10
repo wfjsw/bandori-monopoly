@@ -19,7 +19,7 @@ pub const SUMMER_CAMP: CardDef = CardDef::new(
     "Mor:夏日合宿",
     &[
         On::Play("", None, summer_camp),
-        On::Gate(&[GateKind::Untargetable], untargetable),
+        On::Gate(&[GateKind::Untargetable], "", None, untargetable),
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 );

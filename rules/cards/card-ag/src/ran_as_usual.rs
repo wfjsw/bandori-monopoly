@@ -34,7 +34,7 @@ pub const RAN_AS_USUAL: CardDef = CardDef::new(
             None,
             counteract,
         ),
-        On::AtEnd(at_end),
+        On::AtEnd("", None, at_end),
     ],
 )
     .legacy(&[(1, legacy_can_counteract)]);

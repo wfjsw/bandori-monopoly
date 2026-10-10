@@ -21,7 +21,7 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Hook(&[HookKind::RollPlan], "", Some(always), add_die),
         On::Hook(&[HookKind::RollAfter], "", Some(always), sub_die),
-        On::AtEnd(phase_end),
+        On::AtEnd("", None, phase_end),
     ],
 );
 

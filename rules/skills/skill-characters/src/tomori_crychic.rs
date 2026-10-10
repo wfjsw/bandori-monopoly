@@ -23,7 +23,7 @@ pub const TOMORI_CRYCHIC: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
-        On::AtEnd(settle_now),
+        On::AtEnd("", None, settle_now),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]);

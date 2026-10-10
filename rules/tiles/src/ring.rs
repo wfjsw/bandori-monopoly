@@ -21,7 +21,7 @@
 
 use card_sdk::{CardDef, On};
 
-pub const RING: CardDef = CardDef::new("tile:ring", &[On::Settle(settle)]);
+pub const RING: CardDef = CardDef::new("tile:ring", &[On::Settle("", None, settle)]);
 
 /// 规则书: the [可购买格子] branch (lines 100–106) with 「所有RiNG不可升级」
 /// folded in as `buildMax = 0`.

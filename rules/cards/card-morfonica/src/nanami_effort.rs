@@ -30,7 +30,7 @@ pub const NANAMI_EFFORT: CardDef = CardDef::new(
         // or the placed (3) press (spend 1 crystal to fire the owner's (2)
         // skill). The gate admits whenever either branch is available.
         On::Play("", Some(cant_play), play),
-        On::AtEnd(discard_down_to_five),
+        On::AtEnd("", None, discard_down_to_five),
     ],
 );
 

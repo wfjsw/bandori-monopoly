@@ -16,7 +16,7 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Hook(&[HookKind::RollAfter], "", Some(always), halve),
-        On::AtEnd(expire),
+        On::AtEnd("", None, expire),
     ],
 );
 

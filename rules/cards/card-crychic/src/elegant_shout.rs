@@ -14,7 +14,7 @@ pub const ELEGANT_SHOUT: CardDef = CardDef::new(
     "CRYCHIC:优雅的呐喊",
     &[
         On::Counteract(&[ChainKind::DrawOut], card_sdk::pre::MINE, None, counteract),
-        On::AtEnd(at_end),
+        On::AtEnd("", None, at_end),
     ],
 )
 .legacy(&[(0, legacy_can_counteract)]);

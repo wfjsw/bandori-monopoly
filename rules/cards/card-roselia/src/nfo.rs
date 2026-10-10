@@ -20,7 +20,7 @@ pub const NFO: CardDef = CardDef::new(
         On::Hook(&[card_sdk::abi::HookKind::PayChoose], "", Some(gain_guard), gain_bump),
         On::Play("", None, play),
         On::Hook(&[HookKind::PayAt], "actor == owner && card.placed && value > 0", None, counteract),
-        On::AtEnd(at_end),
+        On::AtEnd("", None, at_end),
     ],
 );
 

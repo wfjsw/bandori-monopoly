@@ -18,7 +18,7 @@ pub const GUERRILLA: CardDef = CardDef::new(
     "RAS:游击演出",
     &[
         On::Counteract(&[ChainKind::Paid], "", Some(can_counteract), counteract),
-        On::AtEnd(check),
+        On::AtEnd("", None, check),
     ],
 );
 

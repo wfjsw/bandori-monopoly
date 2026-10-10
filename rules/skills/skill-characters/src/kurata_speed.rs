@@ -14,7 +14,7 @@ use card_sdk::ctx::{self, plan};
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const KURATA_SPEED: CardDef =
-    CardDef::new("skill:仓田真白:向后全速前进", &[On::RollPlan(roll_plan)]);
+    CardDef::new("skill:仓田真白:向后全速前进", &[On::RollPlan("", None, roll_plan)]);
 
 /// （1）「[主动移动]时移动掷骰变为2d20」, （2）「反方向移动」.
 fn roll_plan(player_id: i32) -> card_sdk::Asked {

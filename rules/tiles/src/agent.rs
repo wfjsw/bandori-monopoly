@@ -22,7 +22,7 @@
 use card_sdk::ctx;
 use card_sdk::{CardDef, On};
 
-pub const AGENT: CardDef = CardDef::new("tile:agent", &[On::Settle(settle)]);
+pub const AGENT: CardDef = CardDef::new("tile:agent", &[On::Settle("", None, settle)]);
 
 /// 规则书: 「[地产商]的[结算]为：若…则需向…依次进行一次半价收费的[结算]…，
 /// 否则可选择…之一进行一次[结算]。」

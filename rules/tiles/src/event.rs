@@ -10,7 +10,7 @@
 use card_sdk::ctx;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle(settle)]);
+pub const EVENT: CardDef = CardDef::new("tile:event", &[On::Settle("", None, settle)]);
 
 /// 规则书: 「[结算]是：抽取一张手卡，然后抽取一个事件卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {

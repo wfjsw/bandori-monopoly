@@ -50,7 +50,7 @@ pub const POPPIN: CardDef = CardDef::new(
         // 破产后才可被正常购买」 -- a `BuyGate`, which the engine runs for **every**
         // [`BuyKind`] (Force included), so the lock covers 「抵押双倍支付购买」
         // too (`docs/PURCHASE.md`).
-        On::Gate(&[GateKind::BuyGate], lock_hill),
+        On::Gate(&[GateKind::BuyGate], "", None, lock_hill),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);

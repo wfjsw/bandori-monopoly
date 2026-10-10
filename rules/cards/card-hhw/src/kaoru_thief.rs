@@ -31,7 +31,7 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
             None,
             pass_player,
         ),
-        On::RollPlan(roll_plan),
+        On::RollPlan("", None, roll_plan),
         On::Hook(
             &[HookKind::CrystalsChanged],
             "actor == owner && card.placed && trigger_card == card.id && card.cp == 0 && value <= 0",

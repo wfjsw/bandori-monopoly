@@ -13,7 +13,7 @@ pub const EXIST: CardDef = CardDef::new(
     "RAS:EXIST",
     &[
         On::Play("", None, exist),
-        On::Gate(&[GateKind::Redirect], redirect),
+        On::Gate(&[GateKind::Redirect], "", None, redirect),
         On::Hook(&[HookKind::TurnStart], "", Some(turn_start_guard), turn_start),
     ],
 );

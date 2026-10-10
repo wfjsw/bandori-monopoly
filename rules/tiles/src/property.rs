@@ -25,7 +25,7 @@ use card_sdk::ctx::{self, trigger};
 use card_sdk::abi::prop;
 use card_sdk::{CardDef, Msg, On};
 
-pub const PROPERTY: CardDef = CardDef::new("tile:property", &[On::Settle(settle)]);
+pub const PROPERTY: CardDef = CardDef::new("tile:property", &[On::Settle("", None, settle)]);
 
 /// 规则书: the whole of lines 100–106 -- who owns the deed, and whether it is
 /// mortgaged, decide which of the five clauses fires.

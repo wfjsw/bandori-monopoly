@@ -27,7 +27,7 @@ pub const CHILDHOOD_CHEER: CardDef = CardDef::new(
         On::Play("", Some(cant_play), childhood_cheer),
         // 「并在移动后获得一个火罐」 -- 行动阶段 13 「移动后」, one `moveAfter`.
         On::Hook(&[HookKind::MoveAfter], "actor == owner && move.main && card.placed", None, after_move),
-        On::AtEnd(at_end),
+        On::AtEnd("", None, at_end),
     ],
 );
 

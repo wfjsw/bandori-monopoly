@@ -221,6 +221,28 @@ guards the flat namespace.
 `Name::get`) and the function registration (via `Name::fx`) all iterate the
 table. Adding a name never edits their bodies.
 
+### 4.2c Window variables per entry kind (ABI v49)
+
+`On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` carry the same
+`pre` + residual-guard pair as `On::Hook` (v49), so their conditions see the
+§4.2 schema. The window is built with `fill_window` from the **trigger / context
+the entry is dispatched on**; the candidate is `owner` = the entry's
+`player_id`. What is meaningful per kind (the rest of the schema still binds,
+reading its default / sentinel):
+
+| kind | dispatch trigger | meaningful window vars | notes |
+|---|---|---|---|
+| `Gate` | the gate's own raise (`ImmuneAll` / `Untargetable` / `Redirect` / `BuyGate` / `AbnormalGuard`, …) | `kind`, `actor` (the protected seat / buyer / named target), `target` (`Redirect`'s current name), `tile` (`BuyGate`'s tile), `value`, `by` (the causing card's seat, `null` when not card-caused), `trigger_card`, `turn_player`, `turn_key` | a gate is asked per raise; `card.placed` is true by construction (only placed instances are asked) |
+| `RollPlan` | `rollPlan` (the move being planned) | `actor` = the mover (`turn_player`), `turn_player`, `turn_key`, `move.*` (kind / main / remaining; `move.roll` is still `null` -- the dice are not cast yet), `card.*` | `pos(seat)` reads a seat's tile, so 「与自己同格」 is `pos(turn_player) == owner.pos` |
+| `AtEnd` | `turnEndBefore` / `turnEndAfter` (the ended turn) | `owner.*` (the scheduled player), `turn_player`, `turn_key`, `actor` (the turn player whose turn ended) | `slot(name)` / `tok('name')` read `owner`'s counters -- the scheduling card's own state |
+| `Settle` | a synthetic trigger (`kind = None`) on the settle: `actor` = the settling player, `target` = the tile's owner, `tile` = the tile being settled, `move.main` | `actor`, `target`, `tile.*`, `move.main`, `owner.*`, `turn_player`, `turn_key` | the settle chain's own `settle` / `settleBefore` / `settleAfter` frames it; a [反击] to those sees the normal chain window |
+
+`pay.*` fields are meaningful only where the dispatch trigger carries them (a
+`pay`/`paid` raise); a `Settle` / `AtEnd` / `RollPlan` window reads `value = 0`
+/ `pay_is_rent = false`. Derived state that the schema does not cover
+(`ctx::fixed_roll()`, `ctx::abnormal_count`, a "every X is out" scan) stays a
+residual wasm guard -- exactly the G3 split.
+
 ### 4.3 ABI / authoring surface
 
 * Manifest: `ManifestOn { kind, triggers, pre: Option<String> }` (postcard,
@@ -232,7 +254,10 @@ table. Adding a name never edits their bodies.
   declaration sites. Sugar consts `pre::MINE` (`actor == owner`) replaces the
   118 `mine` guards outright; the 19 `always` guards are deleted. The condition
   sits beside the (now residual) guard fn, and each clause lives in exactly one
-  of the two.
+  of the two. **v49** extends the pair to `On::Gate` / `On::AtEnd` /
+  `On::RollPlan` / `On::Settle` too (§4.2c): no entry kind is unguarded any
+  more, and an entry whose condition rejects runs no body (and so emits no
+  `card` flash).
 * Load time: `RulesetBuilder::build` parses + compiles every `pre` once
   (TypeRegistry with the §4.2 vars); parse/unknown-var/int-literal errors are
   `RuleError::BadPre` and fail the build-ruleset check.
@@ -242,14 +267,18 @@ table. Adding a name never edits their bodies.
 1. `declare_one` (wasm_rules.rs:2647-2680): after `counteracts_to`, **before**
    the `Run`/`world_copy` and `can_counteract` call. Build one window context
    per `top` trigger; evaluate per (card, seat). This is the 48 900-call path.
-2. `run_hook` (host.rs:566-611) / `drive_inner` guard step: before
+2. `run_hook` (host.rs) / `drive_inner` guard step: before
    `self.store(...)`; window context per trigger, owner = card's player.
-3. `cant_play` (host.rs:648-671, wasm_rules.rs:3099-3136) and the skill gates
+   Since v49 this covers `On::Gate` entries too (they share `hook_entries`).
+3. `run` (host.rs) for `On::AtEnd` / `On::RollPlan` / `On::Settle` (v49):
+   the same category → condition → guard → body, before `on_body` / `OP_RUN`,
+   so a rejecting entry never flashes.
+4. `cant_play` (host.rs:648-671, wasm_rules.rs:3099-3136) and the skill gates
    riding `On::Play`: before the `Run` build. Lower frequency, same schema with
    `kind` absent.
-4. `can_counteract_now` (wasm_rules.rs:2922) and the `declares()` bitmask stay
+5. `can_counteract_now` (wasm_rules.rs:2922) and the `declares()` bitmask stay
    untouched (layer 0).
-5. **Every other path that reaches a guard** (UI `playable` / `why_not_act`,
+6. **Every other path that reaches a guard** (UI `playable` / `why_not_act`,
    `ai_play`, any host request that asks another card's guard, the future
    `rules-native` bot build) goes through one host function
    `admits(entry, ctx) = pre(ctx) && guard(ctx)`. No caller may call a guard

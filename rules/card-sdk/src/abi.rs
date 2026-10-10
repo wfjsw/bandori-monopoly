@@ -265,7 +265,20 @@ use alloc::{string::String, vec::Vec};
 ///      these share the hand-counteraction window without spending a field card.
 /// v48: shared movement counteractions receive the preselected extension in
 ///      `COUNTERACT_MOVE_EXTENSION`; distance is chosen before its payment.
-pub const ABI_VERSION: i32 = 48;
+/// v49: **every** entry kind carries the guard condition (docs/GUARDS.md G0).
+///      `On::Gate` / `On::AtEnd` / `On::RollPlan` / `On::Settle` gain the same
+///      `pre: &'static str` + `Option<fn(i32) -> bool>` residual-guard pair
+///      `On::Hook` has (so `On::Gate(kinds, pre, guard, body)` and
+///      `On::RollPlan(pre, guard, body)` &c.). The host evaluates category →
+///      condition → guard → body and fires the card flash only at body entry,
+///      exactly as for hooks: an entry whose condition rejects runs no body and
+///      emits no `card` event. `ManifestOn` is unchanged -- `pre` / `has_guard`
+///      were already there and simply start carrying these kinds' values (a
+///      pre-v49 module lied `has_guard: true` for them; v49 reports
+///      `g.is_some()`). The window variables meaningful per kind are
+///      documented in `docs/GUARDS.md` §4.2c. SAVE_VERSION unchanged (no save
+///      field).
+pub const ABI_VERSION: i32 = 49;
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.
@@ -1975,23 +1988,26 @@ pub enum OnKind {
     /// The host calls it **automatically** for every placed card (placement
     /// order per player) whenever one of the kinds is raised -- no window.
     Hook = 3,
-    /// `On::AtEnd(body)` -- what `ctx::at_turn_end` / `ctx::at_next_turn_end`
-    /// schedules: `body` runs once at that turn end. `cond`/`guard` are carried
-    /// by the scheduling call, not by the entry.
+    /// `On::AtEnd(pre, guard, body)` -- what `ctx::at_turn_end` /
+    /// `ctx::at_next_turn_end` schedules: `body` runs once at that turn end,
+    /// when the entry's condition / residual guard admit (v49).
     AtEnd = 4,
-    /// `On::RollPlan(body)` -- this card has a movement routine.
+    /// `On::RollPlan(pre, guard, body)` -- this card has a movement routine.
     /// The host calls it on the main-move [`TriggerKind::RollPlan`] pass, before
-    /// the dice, so `body` can shape `turn.plan`.
+    /// the dice, so `body` can shape `turn.plan`. Condition / residual guard (v49)
+    /// decide whether the routine applies to the move being planned.
     RollPlan = 5,
-    /// `On::Gate(kinds, body)` -- a question at those [`GateKind`]s. Not guarded:
-    /// no `cond`/`guard` fields. `body` answers with `set_cancelled` /
-    /// `set_target` / `set_reason`; the host asks every placed card at
-    /// declaration or at resolution, per the kind.
+    /// `On::Gate(kinds, pre, guard, body)` -- a question at those [`GateKind`]s.
+    /// `body` answers with `set_cancelled` / `set_target` / `set_reason`; the
+    /// host asks every placed card at declaration or at resolution, per the
+    /// kind. Since v49 it carries the same condition / residual guard as
+    /// [`Self::Hook`]: a rejecting entry does not answer (and so never flashes).
     Gate = 6,
-    /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(body)`. Tile
-    /// rules (`tile:*`) are one per board tile kind and this is what runs when
-    /// that tile is [结算]d, inside the settle chain (a [`TriggerKind::SettleBody`]
-    /// cancel replaces it).
+    /// v31: a rule's **settle body** (`docs/TILES.md`) -- `On::Settle(pre, guard,
+    /// body)`. Tile rules (`tile:*`) are one per board tile kind and this is what
+    /// runs when that tile is [结算]d, inside the settle chain (a
+    /// [`TriggerKind::SettleBody`] cancel replaces it). Condition / residual
+    /// guard (v49) decide whether the body governs this settle.
     Settle = 7,
 }
 

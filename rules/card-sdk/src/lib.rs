@@ -76,7 +76,7 @@ pub mod rt;
 /// pub const J11: CardDef = CardDef::new("Mujica:#J11", &[
 ///     On::Play("", None, play),
 ///     On::Hook(&[HookKind::TurnEnd], pre::MINE, guard, decay),
-///     On::Gate(&[GateKind::ImmuneAll], immune),
+///     On::Gate(&[GateKind::ImmuneAll], pre::MINE, None, immune),
 /// ]);
 /// ```
 ///
@@ -153,12 +153,13 @@ impl CardDef {
 /// declared at a [`abi::ChainKind`], a field hook at a [`abi::HookKind`], a gate
 /// at a [`abi::GateKind`]. An empty list is never dispatched.
 ///
-/// Guarded entries (`Play` gate / `Counteract` / `Hook`) carry a **condition**
-/// string (`pre`) immediately before the residual guard -- category → condition
-/// → guard → body (docs/GUARDS.md §4.3, the three-layer model). `""` = no
-/// condition. Sugar: [`pre::MINE`] (`actor == owner`); or attach one with
-/// [`On::pre`]. The condition is compiled once at ruleset build (host) and
-/// evaluated natively before the wasm guard is instantiated.
+/// Guarded entries (`Play` gate / `Counteract` / `Hook` / `Gate` / `AtEnd` /
+/// `RollPlan` / `Settle`) carry a **condition** string (`pre`) immediately
+/// before the residual guard -- category → condition → guard → body
+/// (docs/GUARDS.md §4.3, the three-layer model). `""` = no condition. Sugar:
+/// [`pre::MINE`] (`actor == owner`); or attach one with [`On::pre`]. The
+/// condition is compiled once at ruleset build (host) and evaluated natively
+/// before the wasm guard is instantiated.
 #[derive(Clone, Copy)]
 pub enum On {
     /// `Card.Play` -- play this card from hand. The first field is the gate's
@@ -192,19 +193,42 @@ pub enum On {
         fn(player_id: i32) -> Asked,
     ),
     /// A question posed to this placed card at declaration or at resolution.
-    /// Not guarded -- no condition field.
-    Gate(&'static [abi::GateKind], fn(player_id: i32) -> Asked),
-    /// `Card.RollPlan` -- this card has a movement routine.
-    RollPlan(fn(player_id: i32) -> Asked),
-    /// What `ctx::at_turn_end` schedules: run once at that turn end.
-    AtEnd(fn(player_id: i32) -> Asked),
+    /// Same shape as [`On::Hook`]: the condition / residual guard decide
+    /// whether the entry answers at all; a rejecting entry runs no body (and so
+    /// never flashes).
+    Gate(
+        &'static [abi::GateKind],
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
+    /// `Card.RollPlan` -- this card has a movement routine. Same shape as
+    /// [`On::Hook`]; the condition sees the move being planned (docs/GUARDS.md
+    /// §4.2c).
+    RollPlan(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
+    /// What `ctx::at_turn_end` schedules: run once at that turn end. Same shape
+    /// as [`On::Hook`]; the condition sees the owner and the turn fields.
+    AtEnd(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
     /// The rule's **settle body** (`docs/TILES.md`) -- what runs when the tile
     /// this rule instance governs is [结算]d. Tile rules (`tile:*`) are one
     /// `CardDef` per tile kind and this is their body; the engine keeps
     /// rent / buy / build / draw-event as `ctx` primitives so it stays thin.
     /// Runs inside the settle chain: a counteraction to the settle link, or a
-    /// field hook that replaces the body, shapes whether and how it runs.
-    Settle(fn(player_id: i32) -> Asked),
+    /// field hook that replaces the body, shapes whether and how it runs. Same
+    /// shape as [`On::Hook`]; the condition sees the settling tile / actor.
+    Settle(
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
 }
 
 /// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
@@ -227,7 +251,10 @@ impl On {
             On::Play(_, g, r) => On::Play(pre, g, r),
             On::Counteract(k, _, g, r) => On::Counteract(k, pre, g, r),
             On::Hook(k, _, g, r) => On::Hook(k, pre, g, r),
-            other => other,
+            On::Gate(k, _, g, r) => On::Gate(k, pre, g, r),
+            On::RollPlan(_, g, r) => On::RollPlan(pre, g, r),
+            On::AtEnd(_, g, r) => On::AtEnd(pre, g, r),
+            On::Settle(_, g, r) => On::Settle(pre, g, r),
         }
     }
 
@@ -237,6 +264,10 @@ impl On {
         match self {
             On::Counteract(k, pre, _, r) => On::Counteract(k, pre, None, r),
             On::Hook(k, pre, _, r) => On::Hook(k, pre, None, r),
+            On::Gate(k, pre, _, r) => On::Gate(k, pre, None, r),
+            On::RollPlan(pre, _, r) => On::RollPlan(pre, None, r),
+            On::AtEnd(pre, _, r) => On::AtEnd(pre, None, r),
+            On::Settle(pre, _, r) => On::Settle(pre, None, r),
             other => other,
         }
     }
@@ -246,7 +277,12 @@ impl On {
     /// signature -- use [`Self::has_guard`] for the host's skip-the-wasm test.
     pub const fn guard(&self) -> Option<fn(i32) -> bool> {
         match self {
-            On::Counteract(_, _, g, _) | On::Hook(_, _, g, _) => *g,
+            On::Counteract(_, _, g, _)
+            | On::Hook(_, _, g, _)
+            | On::Gate(_, _, g, _)
+            | On::RollPlan(_, g, _)
+            | On::AtEnd(_, g, _)
+            | On::Settle(_, g, _) => *g,
             _ => None,
         }
     }
@@ -256,9 +292,12 @@ impl On {
     pub const fn has_guard(&self) -> bool {
         match self {
             On::Play(_, g, _) => g.is_some(),
-            On::Counteract(_, _, g, _) | On::Hook(_, _, g, _) => g.is_some(),
-            // Unguarded by design (Gate / AtEnd / RollPlan / Settle).
-            _ => true,
+            On::Counteract(_, _, g, _)
+            | On::Hook(_, _, g, _)
+            | On::Gate(_, _, g, _)
+            | On::RollPlan(_, g, _)
+            | On::AtEnd(_, g, _)
+            | On::Settle(_, g, _) => g.is_some(),
         }
     }
 
@@ -266,8 +305,13 @@ impl On {
     /// ruleset build (`docs/GUARDS.md` §4.3).
     pub const fn condition(&self) -> &'static str {
         match self {
-            On::Play(pre, _, _) | On::Counteract(_, pre, _, _) | On::Hook(_, pre, _, _) => *pre,
-            _ => "",
+            On::Play(pre, _, _)
+            | On::Counteract(_, pre, _, _)
+            | On::Hook(_, pre, _, _)
+            | On::Gate(_, pre, _, _)
+            | On::RollPlan(pre, _, _)
+            | On::AtEnd(pre, _, _)
+            | On::Settle(pre, _, _) => *pre,
         }
     }
 
@@ -290,7 +334,7 @@ impl On {
         match self {
             On::Counteract(k, ..) => k.iter().map(|x| *x as i32).collect(),
             On::Hook(k, ..) => k.iter().map(|x| *x as i32).collect(),
-            On::Gate(k, _) => k.iter().map(|x| *x as i32).collect(),
+            On::Gate(k, ..) => k.iter().map(|x| *x as i32).collect(),
             _ => Vec::new(),
         }
     }

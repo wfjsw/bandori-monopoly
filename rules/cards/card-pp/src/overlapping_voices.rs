@@ -21,7 +21,7 @@ pub const OVERLAPPING_VOICES: CardDef = CardDef::new(
     "PP:[衍生]重叠的声音",
     &[
         On::Play("", Some(cant_play), overlapping_voices),
-        On::AtEnd(at_end),
+        On::AtEnd("", None, at_end),
     ],
 );
 

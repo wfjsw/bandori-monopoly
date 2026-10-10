@@ -460,9 +460,8 @@ pub enum Outcome<W> {
 
 /// One card's answer to a hook point, from [`Ruleset::run_hook`].
 pub struct HookRun<W> {
-    /// A guard existed and passed -- the one moment the card shows itself.
-    /// `false` for a card with no guard at this kind (a gate, or an entry that
-    /// simply runs), which runs without announcing.
+    /// The entry's condition + residual guard admitted -- the one moment the
+    /// card shows itself. `false` only when nothing ran at all.
     pub announced: bool,
     /// What the body did. The body ran on the same instantiation as the guard.
     pub outcome: Outcome<W>,
@@ -874,6 +873,11 @@ impl Ruleset {
     /// exists and `OP_RUN` is about to call it -- with the world copy the body
     /// will write into. The activation announcement (the client's card flash)
     /// goes there, so a drive with no entry, a guard reject or a probe is silent.
+    ///
+    /// `AtEnd` / `RollPlan` / `Settle` entries carry their admission here
+    /// (category → condition → guard → body, docs/GUARDS.md §4.3): a rejecting
+    /// entry runs no body and so never flashes. `Play` / `Counteract` keep their
+    /// own separate admission (the play gate / `can_counteract` at offer time).
     pub fn run<W: CardWorld>(
         &self,
         world: &W,
@@ -895,6 +899,19 @@ impl Ruleset {
         let Some(entry) = entry else {
             return Ok(Outcome::Done(world.clone()));
         };
+        // v49: AtEnd / RollPlan / Settle answer "does this entry apply?" here.
+        // (`Play`'s gate and `Counteract`'s `can_counteract` are their own
+        // admission and are not re-checked at body time.)
+        if matches!(
+            call,
+            Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
+        ) {
+            let scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(world));
+            let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, world.is_placed() != 0);
+            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
+                return Ok(Outcome::Done(world.clone()));
+            }
+        }
         let mut store = self.store(world.clone(), answers)?;
         if let Some(cb) = on_body.as_deref_mut() {
             cb(store.data_mut().w());
@@ -910,6 +927,65 @@ impl Ruleset {
         finish(store, res)
     }
 
+    /// Category → condition → guard → body (docs/GUARDS.md §4.3) for one entry:
+    /// does `entry` admit against `world` / `player_id`? A rejecting condition
+    /// skips the wasm guard entirely (`admits_pre`); a residual guard runs on a
+    /// throwaway copy. Used by [`Self::run_hook`] (Hook + Gate) and [`Self::run`]
+    /// (AtEnd / RollPlan / Settle).
+    fn entry_admitted<W: CardWorld>(
+        &self,
+        world: &W,
+        card: i32,
+        entry: i32,
+        player_id: i32,
+        scope: &rules_cond::WindowScope,
+        cand: &crate::cond_pre::CandidateCtx,
+        answers: &[i32],
+    ) -> Result<bool, RuleError> {
+        let info = &self.inner.cards[card as usize];
+        let pre = self
+            .inner
+            .pre
+            .get(card as usize)
+            .and_then(|r| r.get(entry as usize))
+            .and_then(|p| p.as_ref());
+        #[cfg(feature = "guard-audit")]
+        let audit = self.legacy_probe(world, card, entry, player_id);
+        let admitted = if self.guard_is_none(card, entry) {
+            crate::cond_pre::admits_pre(pre, Some(scope), cand)
+        } else {
+            let mut store_for_guard = self.store(world.clone(), answers)?;
+            let asked: Result<bool, ()> = crate::cond_pre::admits(pre, Some(scope), cand, || {
+                match crate::inline::with_no_inline(|| {
+                    call_card(
+                        &self.inner,
+                        &mut store_for_guard,
+                        card,
+                        entry,
+                        export::OP_GUARD,
+                        player_id,
+                    )
+                }) {
+                    Ok(0) => Ok(false),
+                    Ok(_) => Ok(true),
+                    Err(_) => Ok(false),
+                }
+            });
+            matches!(asked, Ok(true))
+        };
+        #[cfg(feature = "guard-audit")]
+        if let Some(legacy) = audit {
+            crate::cond_pre::legacy_audit(
+                &info.id,
+                entry,
+                Some(legacy),
+                admitted,
+                &trigger_dump(&world.trigger()),
+            );
+        }
+        Ok(admitted)
+    }
+
     /// Ask one card's hook guards and run every admitted body -- each entry
     /// on the same instantiation sequence, in declaration order. A card may
     /// carry several independent effects on one timing (「初始1，上限2」 plus
@@ -918,11 +994,14 @@ impl Ruleset {
     ///
     /// Returns `Ok(None)` when no entry is admitted (condition rejected, guard
     /// refused, or the card has no entry at this kind). [`HookRun::announced`]
-    /// is the "a guard existed and passed" moment. `on_body` fires exactly
+    /// is the "the condition + guard admitted" moment. `on_body` fires exactly
     /// when an effect **body** is entered (after that entry's condition and
     /// guard admitted). The first entry whose body pauses (prompt / host) owns
     /// the outcome; the drive's multi-pass loop re-runs this whole sequence
     /// with the new answers.
+    ///
+    /// `On::Gate` entries share this path with `On::Hook` (v49): a gate whose
+    /// condition rejects does not answer at all.
     pub fn run_hook<W: CardWorld>(
         &self,
         world: &W,
@@ -952,59 +1031,13 @@ impl Ruleset {
         let mut announced = false;
         let mut ran_any = false;
         for entry in entries {
-            // `On::Hook` entries carry a guard; `On::Gate` entries are
-            // questions and have none, so they run unasked.
-            let is_hook = info
-                .on
-                .get(entry as usize)
-                .is_some_and(|o| o.kind == OnKind::Hook as i32);
-            if is_hook {
-                let pre = self
-                    .inner
-                    .pre
-                    .get(card as usize)
-                    .and_then(|r| r.get(entry as usize))
-                    .and_then(|p| p.as_ref());
-                #[cfg(feature = "guard-audit")]
-                let audit = self.legacy_probe(world, card, entry, player_id);
-                let mut store_for_guard = self.store(cur.clone(), answers)?;
-                let admitted = if self.guard_is_none(card, entry) {
-                    crate::cond_pre::admits_pre(pre, Some(&scope), &cand)
-                } else {
-                    let asked: Result<bool, ()> =
-                        crate::cond_pre::admits(pre, Some(&scope), &cand, || {
-                            match crate::inline::with_no_inline(|| {
-                                call_card(
-                                    &self.inner,
-                                    &mut store_for_guard,
-                                    card,
-                                    entry,
-                                    export::OP_GUARD,
-                                    player_id,
-                                )
-                            }) {
-                                Ok(0) => Ok(false),
-                                Ok(_) => Ok(true),
-                                Err(_) => Ok(false),
-                            }
-                        });
-                    matches!(asked, Ok(true))
-                };
-                #[cfg(feature = "guard-audit")]
-                if let Some(legacy) = audit {
-                    crate::cond_pre::legacy_audit(
-                        &info.id,
-                        entry,
-                        Some(legacy),
-                        admitted,
-                        &trigger_dump(&world.trigger()),
-                    );
-                }
-                if !admitted {
-                    continue;
-                }
-                announced = true;
+            // v49: `On::Hook` and `On::Gate` both carry the condition /
+            // residual-guard pair; a rejecting entry is skipped (and so never
+            // flashes).
+            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers)? {
+                continue;
             }
+            announced = true;
             let mut store = self.store(cur, answers)?;
             if let Some(cb) = on_body.as_deref_mut() {
                 cb(store.data_mut().w());

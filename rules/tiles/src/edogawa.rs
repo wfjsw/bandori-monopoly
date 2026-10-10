@@ -13,7 +13,7 @@
 use card_sdk::ctx;
 use card_sdk::{CardDef, Msg, On};
 
-pub const EDOGAWA: CardDef = CardDef::new("tile:edogawa", &[On::Settle(settle)]);
+pub const EDOGAWA: CardDef = CardDef::new("tile:edogawa", &[On::Settle("", None, settle)]);
 
 /// 规则书: 「江户川乐器店的[结算]是：抽取一张手卡。」
 fn settle(player_id: i32) -> card_sdk::Asked {

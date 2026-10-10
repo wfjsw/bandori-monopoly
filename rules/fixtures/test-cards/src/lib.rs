@@ -33,7 +33,7 @@ const GUARD: CardDef = CardDef::new(
     "TEST:guard",
     &[
         On::Play("", None, guard_play),
-        On::Gate(&[GateKind::AbnormalGuard], guard),
+        On::Gate(&[GateKind::AbnormalGuard], "", None, guard),
     ],
 );
 
@@ -47,7 +47,7 @@ const SHIELD: CardDef = CardDef::new(
     "TEST:shield",
     &[
         On::Play("", None, shield_play),
-        On::Gate(&[GateKind::ImmuneAll], shield),
+        On::Gate(&[GateKind::ImmuneAll], "", None, shield),
     ],
 );
 

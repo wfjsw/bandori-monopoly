@@ -16,7 +16,7 @@ pub const SPORTS_TALENT: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         On::Hook(&[HookKind::TurnEnd, HookKind::RollAfter], "", Some(counteract_guard), counteract),
-        On::RollPlan(roll_plan),
+        On::RollPlan("", None, roll_plan),
         On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );

@@ -534,6 +534,48 @@ impl NativeModules {
         }
         first_ungated.or(entries.first().copied())
     }
+
+    /// Category → condition → guard for one entry (v49, mirrors
+    /// `game_rules::host::Ruleset::entry_admitted`). A rejecting condition
+    /// skips the wasm guard entirely; a residual guard runs on a throwaway
+    /// copy.
+    fn entry_admitted(
+        &self,
+        world: &Run,
+        card: i32,
+        entry: i32,
+        player_id: i32,
+        scope: &game_rules::cond_pre::WindowScope,
+        cand: &game_rules::cond_pre::CandidateCtx,
+        answers: &[i32],
+    ) -> bool {
+        let pre = self.index.pre(card, entry);
+        if self.entry_guard_is_none(card, entry) {
+            // G4 deleted the residual: the condition alone decides.
+            return game_rules::cond_pre::admits_pre(pre, Some(scope), cand);
+        }
+        let mut state = Some(HostState::new(
+            self.index.clone(),
+            world.clone(),
+            answers.to_vec(),
+            0,
+        ));
+        let asked: Result<bool, ()> = game_rules::cond_pre::admits(pre, Some(scope), cand, || {
+            let st = state.take().expect("host state present");
+            // A guard is a pure query: refuse inline answers (see
+            // `game_rules::inline`).
+            let (res, st, _fuel) = game_rules::inline::with_no_inline(|| {
+                run_on(st, card, entry, export::OP_GUARD, player_id, false, DEFAULT_FUEL)
+            });
+            state = Some(st);
+            Ok(match res {
+                Ok(CallOut::Code(0)) => false,
+                Ok(_) => true,
+                Err(_) => false,
+            })
+        });
+        matches!(asked, Ok(true))
+    }
 }
 
 impl Default for NativeModules {
@@ -604,6 +646,25 @@ impl CardModules for NativeModules {
         let Some(entry) = entry_of(info, &call, world.trigger().kind) else {
             return Ok(Outcome::Done(world.clone()));
         };
+        // v49: AtEnd / RollPlan / Settle answer "does this entry apply?" here
+        // (mirrors `Ruleset::run`). A rejecting entry runs no body and so never
+        // flashes.
+        if matches!(
+            call,
+            Call::AtEnd { .. } | Call::RollPlan { .. } | Call::Settle { .. }
+        ) {
+            let scope =
+                game_rules::cond_pre::window_scope(&game_rules::cond_pre::fill_window(world));
+            let cand = game_rules::cond_pre::fill_candidate(
+                world,
+                player_id,
+                &info.id,
+                world.is_placed() != 0,
+            );
+            if !self.entry_admitted(world, card, entry, player_id, &scope, &cand, answers) {
+                return Ok(Outcome::Done(world.clone()));
+            }
+        }
         let mut state = HostState::new(
             self.index.clone(),
             world.clone(),
@@ -662,13 +723,10 @@ impl CardModules for NativeModules {
             answers.to_vec(),
             0,
         ));
-        // `On::Hook` entries carry a guard; `On::Gate` entries are questions
-        // and have none, so they run unasked.
-        let is_hook = info
-            .on
-            .get(entry as usize)
-            .is_some_and(|o| o.kind == OnKind::Hook as i32);
-        if is_hook {
+        // v49: `On::Hook` and `On::Gate` both carry the condition /
+        // residual-guard pair; a rejecting entry is skipped (and so never
+        // flashes).
+        {
             // docs/GUARDS.md §4.4: every guard call goes through `admits`.
             let pre = self.index.pre(card, entry);
             let admitted = if self.entry_guard_is_none(card, entry) {
@@ -692,11 +750,10 @@ impl CardModules for NativeModules {
                     });
                 matches!(asked, Ok(true))
             };
-            if admitted {
-                announced = true;
-            } else {
+            if !admitted {
                 continue;
             }
+            announced = true;
         }
         let mut state = state.take().expect("host state present");
         if let Some(cb) = on_body.as_deref_mut() {

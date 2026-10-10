@@ -23,7 +23,7 @@ pub const CENTRIFUGAL: CardDef = CardDef::new(
             Some(can_counteract),
             counteract,
         ),
-        On::Gate(&[GateKind::ImmuneAll], immune_all),
+        On::Gate(&[GateKind::ImmuneAll], "", None, immune_all),
         On::Hook(&[HookKind::TurnStart], "actor == owner && card.placed", None, turn_start),
     ],
 );

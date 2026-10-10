@@ -20,8 +20,8 @@ pub const DETOUR: CardDef = CardDef::new(
         // G4: kind (MoveRoll) is the category; `mine` + move fields are the
         // condition. Residual guard deleted -- nothing left.
         On::Counteract(&[ChainKind::MoveRoll], "actor == owner && move.roll != null && move.kind != Teleport", None, counteract),
-        On::RollPlan(next_roll),
-        On::AtEnd(clear_no_reward),
+        On::RollPlan("", None, next_roll),
+        On::AtEnd("", None, clear_no_reward),
     ],
 )
     .legacy(&[(1, legacy_can_counteract)]);
