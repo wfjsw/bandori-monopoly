@@ -143,6 +143,9 @@ pub struct ViewExtra {
     pub ai_answer: Option<RawAiAnswer>,
     pub playable: Vec<bool>,
     pub est_cost: Vec<i32>,
+    /// The viewer's pressable skills (`skill:*` field instances with an
+    /// `On::Play` entry), each gated through [`why_not_act`].
+    pub skills: Vec<SkillAction>,
 }
 
 /// Cheap decision-surface probe: the fields the rollout loop needs, without
@@ -167,7 +170,7 @@ use crate::net::{NetMessage, RoomMember};
 use crate::rng::Rng;
 use crate::scoring::ScoreWeights;
 use crate::state::stage;
-use crate::state::{MatchEvent, MatchPlayer, MatchState, MatchVote};
+use crate::state::{MatchEvent, MatchPlayer, MatchState, MatchVote, SkillAction};
 use crate::MatchMode;
 
 use cx::HaltKind;
@@ -945,7 +948,12 @@ impl Match {
                 "worth": a.worth,
             })
         });
-        serde_json::json!({ "aiAnswer": ai_answer, "playable": p.playable, "estCost": p.est_cost })
+        serde_json::json!({
+            "aiAnswer": ai_answer,
+            "playable": p.playable,
+            "estCost": p.est_cost,
+            "skills": p.skills,
+        })
     }
 
     fn view_extra_parts(&self, member: i32) -> ViewExtra {
@@ -977,10 +985,43 @@ impl Match {
             playable.push(ok);
             est_cost.push(self.rules.card_prop(c, crate::state::prop::EST_COST));
         }
+        // The viewer's pressable skills: every `skill:*` field instance with an
+        // activatable `On::Play`, gated through the same `why_not_act` the
+        // `act: "skill"` request takes -- so "shown enabled" ⇔ "accepted".
+        // Passive / hook-only skills (`has_play` = false) never appear.
+        let busy = self.pending.is_some();
+        let mut skills = Vec::new();
+        for (_uid, id) in self.world.field_instances(i as i32) {
+            if !id.starts_with("skill:") || !self.rules.has_play(&id) {
+                continue;
+            }
+            let m = NetMessage {
+                act: "skill".into(),
+                card: id.clone(),
+                ..Default::default()
+            };
+            let reason = why_not_act(&cx, i, &m, busy);
+            // `skill:<owner>:<name>` -- the owner is the character or band the
+            // skill came from (granted copies keep the original owner).
+            let source = id
+                .strip_prefix("skill:")
+                .and_then(|s| s.split(':').next())
+                .unwrap_or_default()
+                .to_string();
+            skills.push(SkillAction {
+                id: id.clone(),
+                source,
+                title: Msg::new("ask.cardOption").card("card", &id),
+                text: Msg::new("ask.cardOption").card("card", &id),
+                enabled: reason.is_none(),
+                reason: reason.unwrap_or_default(),
+            });
+        }
         ViewExtra {
             ai_answer,
             playable,
             est_cost,
+            skills,
         }
     }
 

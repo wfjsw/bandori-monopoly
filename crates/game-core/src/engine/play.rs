@@ -3700,9 +3700,9 @@ impl Cx<'_> {
         // B2 (`PIPELINE-AUDIT` K6/K14) -- 规则书 L81: 「将其控制的所有棋子，角色卡，
         // 乐队卡，和手卡移出游戏。所有其正在生效的卡，技能效果停止生效。」 The
         // field holds the character cards, band cards and every 「[持续]」 card
-        // (including the bound `skill:*` instances); `actions` are the armed
-        // skill offers. Both leave the game with the seat, so no hook of theirs
-        // can run again. (The hook dispatch also skips `out()` seats -- belt and
+        // (including the bound `skill:*` instances). Both leave the game with
+        // the seat, so no hook of theirs can run again. (The hook dispatch also
+        // skips `out()` seats -- belt and
         // braces for any instance a later path re-places.)
         //
         // Markers (user ruling 2026-10-07, reversing the previous batch's
@@ -3714,7 +3714,6 @@ impl Cx<'_> {
         // shanyao_counter_on_short_payment` pins the fan being cleared.
         s.tokens.clear();
         s.field.clear();
-        s.actions.clear();
         self.w.hidden[i].hand.clear();
         self.w.extra_turns.retain(|&x| x != i);
         // Drop every marker an exiting rule owned, wherever its copies sit.

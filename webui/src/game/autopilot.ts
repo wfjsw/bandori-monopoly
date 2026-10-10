@@ -692,9 +692,9 @@ function skillChoice(view: MatchView, ctx: AutopilotCtx, params: StrategyParams)
 
 const i32max = 2147483647;
 
-/** Enabled character / band skills on `me`'s field. */
+/** Enabled character / band skills from the engine's viewer list. */
 function usableSkills(view: MatchView): string[] {
-  return (view.state.players[view.playerId]?.actions ?? []).filter((a) => a.enabled).map((a) => a.id);
+  return (view.skills ?? []).filter((a) => a.enabled).map((a) => a.id);
 }
 
 export const policies: Record<PolicyName, Policy> = {

@@ -47,7 +47,6 @@ function player(over: Partial<MatchPlayer> = {}): MatchPlayer {
     tokens: [],
     skillNote: { k: "" },
     field: [],
-    actions: [],
     ...over,
   } as MatchPlayer;
 }

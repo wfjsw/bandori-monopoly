@@ -79,7 +79,6 @@ function blankPlayer(): MatchPlayer {
     tokens: [],
     skillNote: { k: "" },
     field: [],
-    actions: [],
     mentality: "standard",
   };
 }

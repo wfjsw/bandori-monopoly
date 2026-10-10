@@ -39,7 +39,7 @@ export interface MatchPlayer {
   /** Keyed state: the counters this player carries. See {@link StateVar}. */
   state: Record<string, StateVar>;
   skillCharacter: string; bands: string; tokens: { name: string; value: number }[];
-  skillNote: Msg; field: FieldCard[]; actions: SkillAction[];
+  skillNote: Msg; field: FieldCard[];
 }
 /**
  * One keyed state item: `value` plus the bounds a consumer may enforce, and
@@ -64,6 +64,12 @@ export interface FieldCard {
   bandSkill?: boolean;
   note: Msg;
 }
+/**
+ * One pressable skill in a viewer's list (`MatchView.skills`). View-only --
+ * not saved state. `id` is the rule id (`skill:<owner>:<name>`); name / body
+ * resolve through `cardTitle` / `cardText`. `enabled` / `reason` come from the
+ * same gate `act: "skill"` is validated with.
+ */
 export interface SkillAction { id: string; source: string; title: Msg; text: Msg; enabled: boolean; reason: Msg }
 export interface ActiveEvent { id: string; playerId: number; counter: number; counter2: number; note: Msg; faceDown: boolean }
 /** A tile marker. `category` sorts it: `""` is a player/generic mark (coloured
@@ -175,6 +181,13 @@ export interface MatchView {
    * static `tile.price` caption).
    */
   tileQuotes?: (TileQuote | null)[];
+  /**
+   * The viewer's pressable skills (`Match::view_extra`'s `skills`): every
+   * `skill:*` field instance with an `On::Play` entry, each gated through the
+   * same `why_not_act` the `act: "skill"` request takes. Absent when the
+   * engine bundle predates the field.
+   */
+  skills?: SkillAction[];
 }
 
 export interface ScoreWeights { money: number; property: number; houses: number }

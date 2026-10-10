@@ -788,6 +788,7 @@ impl SoloMatch {
             "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
             "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
             "tileQuotes": m.tile_quotes(member),
+            "skills": extra.get("skills").cloned().unwrap_or(serde_json::Value::Null),
         }))
     }
 
@@ -942,6 +943,7 @@ impl ReplayMatch {
                 "playable": serde_json::Value::Null,
                 "estCost": serde_json::Value::Null,
                 "tileQuotes": m.tile_quotes(-1),
+                "skills": serde_json::Value::Null,
             }));
         }
         let player_id = state.player_of(member);
@@ -957,6 +959,7 @@ impl ReplayMatch {
             "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
             "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
             "tileQuotes": m.tile_quotes(member),
+            "skills": extra.get("skills").cloned().unwrap_or(serde_json::Value::Null),
         }))
     }
 

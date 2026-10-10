@@ -91,11 +91,10 @@ export function SettleVote({ m, sess }: { m: Model; sess: GameSession }) {
 }
 
 /**
- * One pressable skill on the stack. The engine's `SkillAction` carries the
- * live gate (`enabled` / `reason`); when that list is empty (the Rust port
- * does not yet fill it) the field's `skill:*` stand-ins stand in, gated only
- * on the OPS window. Title / body come from the same place the card face and
- * the standing preview read.
+ * One pressable skill on the stack. `id` / `enabled` / `reason` come from the
+ * engine's `MatchView.skills` (gated through the same `why_not_act` the
+ * `act: "skill"` request takes). Name / body resolve from the rule id so the
+ * skill-text simple/full setting applies.
  */
 type SkillSlot = {
   id: string;
@@ -108,37 +107,14 @@ type SkillSlot = {
   tip: string;
 };
 
-/** The player's pressable skills: engine `actions` overlaid on field `skill:*`. */
+/** The viewer's pressable skills, straight from the engine's list. */
 export function skillSlots(m: Model): SkillSlot[] {
   const names = namesOf(m.S);
-  const fromEngine = m.me.actions ?? [];
-  const byId = new Map(fromEngine.map((a) => [a.id, a]));
-  // Character / band / granted skills live on the field as `skill:*` stand-ins
-  // (`bind_skills`); the engine's `actions` is the same set with gates filled.
-  // Prefer the engine row when it is there, and fall back to the field so the
-  // stack still lists the skills a player can press.
-  const phaseOk = m.S.phase === "play" && m.S.step === 2 && !m.S.busy;
-  const out: SkillSlot[] = [];
-  for (const fc of m.me.field ?? []) {
-    if (!fc.card.startsWith("skill:")) continue;
-    const a = byId.get(fc.card);
-    if (a) {
-      byId.delete(fc.card);
-      const text = fmtMsg(a.text, names);
-      const reason = a.enabled ? "" : fmtMsg(a.reason, names) || tr("skills.unavailable");
-      out.push({ id: a.id, enabled: a.enabled, reason, text, tip: a.enabled ? text : reason });
-      continue;
-    }
-    const text = cardText(fc.card);
-    const reason = phaseOk ? "" : tr("skills.unavailable");
-    out.push({ id: fc.card, enabled: phaseOk, reason, text, tip: phaseOk ? text : reason });
-  }
-  for (const a of byId.values()) {
-    const text = fmtMsg(a.text, names);
+  return (m.v.skills ?? []).map((a) => {
+    const text = cardText(a.id) || fmtMsg(a.text, names);
     const reason = a.enabled ? "" : fmtMsg(a.reason, names) || tr("skills.unavailable");
-    out.push({ id: a.id, enabled: a.enabled, reason, text, tip: a.enabled ? text : reason });
-  }
-  return out;
+    return { id: a.id, enabled: a.enabled, reason, text, tip: a.enabled ? text : reason };
+  });
 }
 
 /**
@@ -150,8 +126,10 @@ export function skillSlots(m: Model): SkillSlot[] {
  * click uses the skill directly. A click that cannot use (disabled, 托管,
  * replay, a prompt sheet up, or a use already in flight) is inspect-only,
  * matching how a hand card behaves while a sheet owns the bottom edge.
- * Passive / hook rules never land here -- they have no activation and are read
- * from the character's skill text instead.
+ * The list is the engine's (`MatchView.skills`): only rules with an
+ * activatable `On::Play` appear, each already gated. Passive / hook rules
+ * never land here -- they have no activation and are read from the
+ * character's skill text instead.
  */
 function SkillStack({ m, sess, peek, unpeek }: {
   m: Model;

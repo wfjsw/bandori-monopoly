@@ -605,7 +605,6 @@ pub struct MatchPlayer {
     /// invent new ones freely.
     pub state: BTreeMap<String, StateVar>,
     pub field: Vec<FieldCard>,
-    pub actions: Vec<SkillAction>,
     pub assets: i32,
     pub score: i32,
     pub rank: i32,
@@ -658,7 +657,6 @@ impl Default for MatchPlayer {
                 m
             },
             field: vec![],
-            actions: vec![],
             assets: 0,
             score: 0,
             rank: 0,
@@ -1190,15 +1188,24 @@ pub struct Counter {
     pub value: i32,
 }
 
-/// `SkillAction.cs` -- a skill button available to a player.
+/// One pressable skill in a viewer's list (`Match::view_extra`'s `skills`).
+/// View-only -- not part of saved state. `id` is the rule id
+/// (`skill:<owner>:<name>`); the client resolves name / body from it
+/// (`cardTitle` / `cardText`). `enabled` / `reason` come from the same gate
+/// `act: "skill"` is validated with, so "shown enabled" ⇔ "accepted".
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SkillAction {
+    /// Rule id (`skill:<owner>:<name>`).
     pub id: String,
+    /// The field instance that holds it, as `owner:skill` (display source).
     pub source: String,
+    /// The skill's name, as a card reference (`{{card}}`).
     pub title: Msg,
+    /// The skill body, as a card reference (the client may prefer `cardText`).
     pub text: Msg,
     pub enabled: bool,
+    /// Why the gate refuses, when `enabled` is false.
     pub reason: Msg,
 }
 

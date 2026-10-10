@@ -17,8 +17,8 @@
 //! A skill is not a third category. Everything it does is either **started by
 //! the user** or **called by a field event**, and both already have a hook:
 //!
-//! - **Started by the user** -- a skill button (C# `SkillAction` on
-//!   `MatchPlayer.actions`). The player presses it, the effect runs. That is
+//! - **Started by the user** -- a skill button (the viewer's `MatchView.skills`
+//!   list). The player presses it, the effect runs. That is
 //!   [`On::Play`], gate and effect: `On::Play("", Some(why_not), run)` where the
 //!   gate is the "can I press this right now?" query (C# `Card.WhyNot`) and
 //!   `run` is what the press does.

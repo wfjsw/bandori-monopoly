@@ -85,8 +85,7 @@ export function normalizeMatchView(raw: unknown): MatchView {
     state: def(p?.state, {}),
     tokens: def(p?.tokens, []),
     field: def(p?.field, []).map((f: any) => ({ crystals: 0, cp: 0, faceDown: false, ...f })),
-    actions: def(p?.actions, []),
-    discard: def(p?.discard, []),
+        discard: def(p?.discard, []),
   }));
   st.events = def(st.events, []);
   st.marks = def(st.marks, []).map((m: any) => ({ category: "", count: 0, owner: -1, ...m }));

@@ -830,6 +830,17 @@ impl Ruleset {
         self.guard_is_none(card, entry) && self.pre_at(card, entry).is_none()
     }
 
+    /// Does this rule declare an activatable `On::Play` entry (a skill button /
+    /// card play)? Passive / hook-only rules answer `false`. Unlike
+    /// [`Self::play_gate_vanishes`] this is only about the entry existing --
+    /// a gated entry whose gate currently refuses still has one.
+    pub fn has_play_entry(&self, card: i32) -> bool {
+        self.inner
+            .cards
+            .get(card as usize)
+            .is_some_and(|info| info.has_play())
+    }
+
     /// Cached counteraction index (BOT-RESEARCH.md #1): does this card declare
     /// a [反击] at `kind`? One shift of the per-card bitmask -- the offer loop
     /// never scans the entry table and never builds a `Run` for a card that
@@ -1587,6 +1598,13 @@ pub trait CardModules: Clone + Send + Sync + 'static {
     fn play_gate_vanishes(&self, card: i32) -> bool {
         let _ = card;
         false
+    }
+    /// Does this rule declare an activatable `On::Play` entry (a skill button /
+    /// card play)? Unlike [`Self::play_gate_vanishes`] this is only about the
+    /// entry existing -- a gated entry whose gate currently refuses still has
+    /// one. Passive / hook-only rules answer `false`.
+    fn has_play_entry(&self, card: i32) -> bool {
+        self.cards().get(card as usize).is_some_and(|c| c.has_play())
     }
     /// Content hash of the loaded set; `None` when there is no module image
     /// (the native build -- the cards are compiled in).

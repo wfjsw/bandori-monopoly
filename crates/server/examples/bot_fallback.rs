@@ -54,6 +54,7 @@ fn view_frame(m: &Match, member: i32) -> Value {
         "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(Value::Null),
         "playable": extra.get("playable").cloned().unwrap_or(Value::Null),
         "estCost": extra.get("estCost").cloned().unwrap_or(Value::Null),
+        "skills": extra.get("skills").cloned().unwrap_or(Value::Null),
     })
 }
 

@@ -346,6 +346,7 @@ fn run(ctx: &Ctx, req: &Value) -> Result<Value, String> {
                     "playable": extra.get("playable").cloned().unwrap_or(Value::Null),
                     "estCost": extra.get("estCost").cloned().unwrap_or(Value::Null),
                     "tileQuotes": m.tile_quotes(member),
+                    "skills": extra.get("skills").cloned().unwrap_or(Value::Null),
                 }
             }))
         }

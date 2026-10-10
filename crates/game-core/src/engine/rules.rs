@@ -296,6 +296,14 @@ pub trait CardRules: Send + Sync {
         None
     }
 
+    /// Does this rule declare an activatable `On::Play` (a skill button / card
+    /// play)? Passive / hook-only rules answer `false` and never appear in a
+    /// viewer's skill list. `WasmRules` answers from the card's Play entry;
+    /// the default `false` is [`StubRules`] (no ruleset, nothing to press).
+    fn has_play(&self, _card: &str) -> bool {
+        false
+    }
+
     /// The card rule's declared static **properties** (`CardDef::props`),
     /// `key -> value`. Keys are [`crate::state::prop`] constants; a key the
     /// card does not declare is simply absent and reads as its default (`0`).

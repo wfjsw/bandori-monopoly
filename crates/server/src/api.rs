@@ -422,6 +422,10 @@ pub struct MatchView {
     /// (`docs/FAIRNESS.md`) that is still open.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tile_quotes: Option<Vec<Option<game_core::state::TileQuote>>>,
+    /// The member's pressable skills (`Match::view_extra`'s `skills`).
+    /// Absent when the worker predates the field.
+    #[serde(default)]
+    pub skills: Vec<game_core::state::SkillAction>,
 }
 
 /// Ask the worker for one member's view. Blocking; see `pool`.

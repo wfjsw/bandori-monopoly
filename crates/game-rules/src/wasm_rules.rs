@@ -5052,6 +5052,14 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         self.ruleset.card(id).is_some()
     }
 
+    /// [`game_core::engine::CardRules::has_play`] -- the rule's `On::Play`
+    /// entry. Passive / hook-only skills never appear in a skill list.
+    fn has_play(&self, card: &str) -> bool {
+        self.ruleset
+            .card(card)
+            .is_some_and(|idx| self.ruleset.has_play_entry(idx))
+    }
+
     /// The settle body (`docs/TILES.md`): run the tile's **rule instances**
     /// (board-owned, placed by `bind_tiles`) in instance order. Falls back to
     /// the engine's built-in `land_at` body for a tile with none -- `StubRules`
