@@ -126,12 +126,15 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    // 「转移至自己身上（仍正常完成本次移动）」 -- the layers move; the walk
-    // is untouched.
+    // 「转移至自己身上（仍正常完成本次移动）」 -- the layers **move**; the
+    // walk is untouched. Take them off the other player first, then land them
+    // here (the self-side `give_*` raises `Abnormal` for the fire-pot clause).
     if stay > 0 {
+        state::add(other, state_key::STAY, -stay);
         ctx::give_stay(player_id, stay);
     }
     if stun > 0 {
+        state::add(other, state_key::STUN, -stun);
         ctx::give_stun(player_id, stun);
     }
     // 「每获得一层停留，眩晕，你获得1500资金」

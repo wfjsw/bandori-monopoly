@@ -265,7 +265,6 @@ fn s07_riki_counts_stays() {
 
 // 规则书: 丰川祥子 (1): 「经过其他玩家时，可将其所有层数的停留，眩晕转移至自己身上…
 // 每获得一层停留，眩晕，你获得1500资金。每次受到停留，眩晕，除外影响…获得一个火罐」.
-#[ignore = "DISCREPANCY: 丰川祥子 (1) does not absorb stays when passing another player"]
 #[test]
 fn s08_sakiko_absorbs_statuses() {
     let mut t = Table::new(&["丰川祥子", "花园多惠", "青叶摩卡"]);
@@ -279,10 +278,14 @@ fn s08_sakiko_absorbs_statuses() {
     t.roll(0).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        let k = t.option("转移").or_else(|| t.option("停留"));
-        if let Some(k) = k {
+        let dump = t.dump_prompt();
+        // The absorb ask_yes (`sakiko_life_take`); YesNo option labels are
+        // `ask.yes` / `ask.no` (prompt_to_ask), so match the message key.
+        if dump.contains("sakiko_life_take") {
+            let k = t.option("ask.yes").unwrap_or(0);
             t.answer(0, k).unwrap();
         } else {
+            eprintln!("s08 declining: {dump}");
             t.decline();
         }
     }

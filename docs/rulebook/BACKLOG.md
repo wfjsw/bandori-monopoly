@@ -353,11 +353,18 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **class**: A
 - **severity**: high
 - **suggested batch**: movement / skills: Mujica
+- **status**: **fixed** (this batch, `fix: SETTLE-03 …`) — two defects: the
+  test declined the YesNo (`option("转移")` never matches `ask.yes`/`ask.no`
+  labels; match `sakiko_life_take` and answer `ask.yes`), and the body
+  *copied* the layers instead of transferring (now `state::add` on the source
+  before `give_stay`/`give_stun`). `s08` green twice. `g21` stays ignored for
+  its separate 夏日合宿 half (P1 still receives a stay).
 - **locations**
-  - `crates/game-rules/tests/rb_cross_status.rs:268` `s08_sakiko_absorbs_statuses`
-  - `crates/game-rules/tests/rb_gap_window.rs:221` `g21_summer_camp_immune_to_the_rains_zone` (same absorb + 夏日合宿 un-designated)
+  - `crates/game-rules/tests/rb_cross_status.rs:268` `s08_sakiko_absorbs_statuses` (un-ignored)
+  - `rules/skills/skill-characters/src/sakiko_life.rs` (`on_pass_player` transfer)
+  - `crates/game-rules/tests/rb_gap_window.rs:221` `g21_summer_camp_immune_to_the_rains_zone` (still ignored: 夏日合宿)
 - **rulebook**: 丰川祥子 (1) absorbs stays when passing another player.
-- **current**: absorb does nothing on a pass.
+- **was**: absorb did nothing on a pass (test declined the ask; body copied).
 - **expected**: stays on the passed player are absorbed / cancelled as the clause says.
 
 ## WINDOW-01 — Welcome to Ave Mujica's World (1) cannot be played (`err.play_phase`)

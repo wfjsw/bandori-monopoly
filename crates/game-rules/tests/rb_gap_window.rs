@@ -217,8 +217,8 @@ fn g20_shut_window_blocks_the_join_window() {
 // 规则书 (夏日合宿): 「直到下个自己的回合开始前，你只会被自己发动的效果指定」.
 // 规则书 (祥子 (1)): 「经过其他玩家时，可将其所有层数的停留，眩晕转移至自己身上…
 // 每获得一层停留，眩晕，你获得1500资金」.
-// Note: `s08` is DISCREPANCY (祥子 absorbs nothing).
-#[ignore = "DISCREPANCY: 祥子 (1) absorbs nothing (s08); also 夏日合宿 should keep P1 un-designated so there is no stay to absorb"]
+// Note: `s08` is green (祥子 absorbs); this stays open for the 夏日合宿 half.
+#[ignore = "DISCREPANCY: 夏日合宿 should keep P1 un-designated so there is no stay to absorb (s08 absorb is fixed)"]
 #[test]
 fn g21_summer_camp_immune_to_the_rains_zone() {
     let mut t = Table::new(&["仓田真白", "花园多惠", "丰川祥子"]);
