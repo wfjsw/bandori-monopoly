@@ -20,7 +20,15 @@ pub const SATO_RED: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        // （1）「每次[经过]"白雪学园"或"银河拉面馆"时」 -- the two named tiles
+        // are the hook's applicability (`tile_named` is in the condition
+        // vocabulary).
+        On::Hook(
+            &[HookKind::Pass],
+            "actor == owner && (tile.id == tile_named('白雪学园') || tile.id == tile_named('银河拉面馆'))",
+            None,
+            on_pass,
+        ),
     ],
 )
     .legacy(&[(2, legacy_mine)]);
@@ -35,12 +43,9 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]」.
+/// （1）「每次[经过]"白雪学园"或"银河拉面馆"时获得1个[火罐]」. The two named
+/// tiles are the pre.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    let t = ctx::trigger::tile();
-    if t != ctx::tile_named("白雪学园") && t != ctx::tile_named("银河拉面馆") {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("sato_red_gain")))?;
     Ok(())
 }

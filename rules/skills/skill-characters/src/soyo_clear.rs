@@ -17,7 +17,7 @@
 //! the payment was avoided by *this* effect, and the engine does not currently
 //! attribute a payment's reduction to one skill. See the TODO.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -31,7 +31,15 @@ pub const SOYO_CLEAR: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, offer),
+        // （2）「移动掷骰后可消耗一个火罐」 -- only with a pot to spend, and
+        // only on a free roll (`fixed_roll` is not in the condition vocabulary,
+        // so it is the residual guard).
+        On::Hook(
+            &[HookKind::RollAfter],
+            "actor == owner && fire(owner) >= 1",
+            Some(offer_unfixed),
+            offer,
+        ),
         On::Hook(&[HookKind::Settle], "actor == owner && slot('skill.soyoClear.armed') != 0", None, on_settle),
     ],
 )
@@ -58,14 +66,14 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for （2） -- `fixed_roll` stays here (not yet in the condition
+/// vocabulary). `fire(owner) >= 1` is the pre.
+fn offer_unfixed(_player_id: i32) -> bool {
+    ctx::fixed_roll().is_none()
+}
+
 /// （2） 「移动掷骰后可消耗一个火罐」 -- the moment the face exists.
 fn offer(player_id: i32) -> card_sdk::Asked {
-    if ctx::fixed_roll().is_some() {
-        return Ok(());
-    }
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("soyo_clear_title")),

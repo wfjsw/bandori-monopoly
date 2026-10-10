@@ -28,7 +28,11 @@ pub const KANON_LOST: CardDef = CardDef::new(
         // (1) is a starting square: the before-match-start point decides start
         // positions.
         On::Hook(&[HookKind::DeckBeforeGame], "", None, at_start),
-        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
+        // (2) 「两次移动掷骰并将它们的结果相减」 -- a fixed face replaces the
+        // dice, so there are not two faces to subtract. `fixed_roll` is derived
+        // plan state outside the CEL schema (docs/GUARDS.md §4.2c): residual
+        // guard, same shape as `sports_talent`'s.
+        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, Some(roll_unfixed), on_roll),
         On::Hook(&[HookKind::CircleAffected], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_circle),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, at_turn_end),
         On::Hook(&[HookKind::RollPlan], "actor == owner && slot('skill.kanonLost.silent') >= 3", None, on_plan),
@@ -53,11 +57,16 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// No fixed face yet, so the default move roll is the one to subtract from.
+/// Derived plan state, outside the CEL schema (docs/GUARDS.md §4.2c): the
+/// residual guard of [`on_roll`].
+fn roll_unfixed(_player_id: i32) -> bool {
+    ctx::fixed_roll().is_none()
+}
+
 /// (2) 「移动阶段进行两次移动掷骰并将它们的结果相减作为你的移动格数」.
+/// Applicability is [`roll_unfixed`] (a fixed face means no pair to subtract).
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    if ctx::fixed_roll().is_some() {
-        return Ok(());
-    }
     let a = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     let b = ctx::do_move_roll(player_id).max(0);
     let face = (a - b).abs();

@@ -30,12 +30,21 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore], "", None, declare_cap),
+        // TODO(规则书): 「每次[经过]或被[经过]时」 -- the `Pass` half is "I pass",
+        // which should filter `actor == owner`. The `""` pre currently fires for
+        // every passer (a suspected bug). Not filtered here: adding the actor
+        // clause would change behaviour for other-actor passes.
         On::Hook(&[HookKind::Pass], "", None, on_pass),
         // （1） 「…或被[经过]时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4), the passer's step onto this player's tile -- not the end-tile
-        // [重叠]. `target` is not on a `passTile` payload, so the guard reads
-        // the tile being entered.
-        On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
+        // [重叠]. `target` is not on a `passTile` payload, so the condition
+        // reads the tile being entered.
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor != owner && tile.id == owner.pos",
+            None,
+            on_passed,
+        ),
     ],
 );
 
@@ -46,10 +55,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「被[经过]」 -- another player's step onto **my** tile (行动阶段 12,
-/// `SETTLE-STAGES.md` §4 M4).
-fn passed_by(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == ctx::player_pos(player_id)
-}
+/// `SETTLE-STAGES.md` §4 M4). `actor != owner && tile.id == owner.pos` is the pre.
 
 /// （1） 「每次[经过]…时」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {

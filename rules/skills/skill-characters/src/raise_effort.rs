@@ -13,8 +13,8 @@
 //! face replaces or is discarded at the player's choice; the choice is the
 //! whole point of spending the pot.
 
-use card_sdk::abi::{roll_source, state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use card_sdk::abi::{roll_source, HookKind};
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const RAISE_EFFORT: CardDef = CardDef::new(
@@ -22,7 +22,15 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::RollAfter], card_sdk::pre::MINE, None, on_roll),
+        // （2）「进行任意掷骰后，可选择使用一个[火罐]再投一次」 -- only with a
+        // pot to spend. `fixed_roll` is derived plan state outside the CEL
+        // schema (docs/GUARDS.md §4.2c): residual guard.
+        On::Hook(
+            &[HookKind::RollAfter],
+            "actor == owner && fire(owner) >= 1",
+            Some(roll_unfixed),
+            on_roll,
+        ),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
@@ -43,14 +51,14 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for （2） -- `fixed_roll` stays here (not yet in the condition
+/// vocabulary). `fire(owner) >= 1` is the pre.
+fn roll_unfixed(_player_id: i32) -> bool {
+    ctx::fixed_roll().is_none()
+}
+
 /// （2）「进行任意掷骰后，可选择使用一个[火罐]再投一次骰子并择其一执行」.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    if ctx::fixed_roll().is_some() {
-        return Ok(());
-    }
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
     let before = ctx::trigger::move_roll().unwrap_or(ctx::trigger::value());
     if !ctx::ask_yes(
         player_id,

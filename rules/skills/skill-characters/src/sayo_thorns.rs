@@ -16,7 +16,7 @@
 //!
 //! （3） is a standing modifier to （1） that lights up once anyone is out.
 
-use card_sdk::abi::{prop, state_key, ChainKind, HookKind, MoveKind};
+use card_sdk::abi::{prop, ChainKind, HookKind};
 use card_sdk::ctx::{self, plan, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -36,10 +36,18 @@ pub const SAYO_THORNS: CardDef = CardDef::new(
         // （1）「每次被别的玩家[经过]时」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4), the passer's step onto this player's
         // tile -- not the end-tile [重叠].
-        On::Hook(&[HookKind::PassTile], "", Some(passed_by), on_passed),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor != owner && tile.id == owner.pos",
+            None,
+            on_passed,
+        ),
+        // （2）「将非[传送]的主要移动添加1或2格」 -- once per turn, only after a
+        // non-teleport main move is determined. The category owns `MoveBefore`;
+        // the residual is the any-band `skill_blocked`.
         On::Counteract(
             &[ChainKind::MoveBefore],
-            card_sdk::pre::MINE,
+            "actor == owner && move.main && move.kind == Walk && slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6",
             Some(can_offer),
             offer,
         ),
@@ -93,10 +101,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「被别的玩家[经过]」 -- another player's step onto **my** tile (行动阶段 12,
-/// `SETTLE-STAGES.md` §4 M4).
-fn passed_by(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id && ctx::trigger::tile() == ctx::player_pos(player_id)
-}
+/// `SETTLE-STAGES.md` §4 M4). `actor != owner && tile.id == owner.pos` is the pre.
 
 /// （1）「每次被别的玩家[经过]时获得1个[火罐]」 -- someone passed *this* player.
 fn on_passed(player_id: i32) -> card_sdk::Asked {
@@ -104,13 +109,11 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Once per turn, and only after a non-teleport main move is determined.
+/// Residual guard for （2）'s offer -- `skill_blocked` (any-band) stays here
+/// (not yet in the condition vocabulary). `move.main && move.kind == Walk &&
+/// slot('skill.sayoThorns.used') != turn_key && fire(owner) >= 6` is the pre.
 fn can_offer(player_id: i32) -> bool {
-    trigger::move_is_main()
-        && trigger::move_kind() == Some(MoveKind::Walk)
-        && !ctx::skill_blocked(player_id, "")
-        && state::get(player_id, USED) != ctx::turn_key()
-        && state::get(player_id, state_key::FIRE) >= 6
+    !ctx::skill_blocked(player_id, "")
 }
 
 /// （2）「将非[传送]的主要移动添加1或2格」.

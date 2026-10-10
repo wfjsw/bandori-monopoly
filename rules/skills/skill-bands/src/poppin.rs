@@ -19,8 +19,6 @@ use card_sdk::{key, CardDef, Msg, On};
 const ID: &str = "skill:Poppin' Party:星之鼓动";
 /// 「星星贴纸」.
 const STICKER: &str = "星星贴纸";
-/// The tiles （1） names, by number.
-const SPOTS: [i32; 4] = [1, 16, 31, 46];
 /// 「使用此卡[奇迹水晶]的效果为1回合1次」.
 const USED: &str = "skill.poppin.used";
 
@@ -29,10 +27,15 @@ pub const POPPIN: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
         // （1）'s 「[经过]第#1，#16，#31，#46号格子时」 is the hook's applicability,
-        // not its effect: the residual guard names the four spots (the condition
-        // layer already has `pre::MINE`). A body that ran and immediately
+        // not its effect. The four spots are fixed tile ids, so the OR is the
+        // condition (docs/GUARDS.md §0); a body that ran and immediately
         // returned still flashed -- one per step of every walk.
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_spots), on_pass),
+        On::Hook(
+            &[HookKind::Pass],
+            "actor == owner && (tile.id == 1 || tile.id == 16 || tile.id == 31 || tile.id == 46)",
+            None,
+            on_pass,
+        ),
         // The settle hook splits two ways: the owner's own settle re-arms the
         // CiRCLE/build vetoes, anyone else's settle on 星之鼓动山丘 splits rent.
         // The guard admits exactly those two shapes (docs/GUARDS.md three-layer).
@@ -84,12 +87,6 @@ fn lock_hill_applies(_player_id: i32) -> bool {
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
-}
-
-/// （1）'s four sticker spots -- the `Pass` hook's applicability (residual
-/// guard; the condition layer has `pre::MINE`).
-fn on_pass_spots(_player_id: i32) -> bool {
-    SPOTS.contains(&ctx::trigger::tile())
 }
 
 /// `SettleBefore`'s applicability: the owner's own settle (the （2）/（4）
@@ -144,7 +141,7 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （1）「[经过]第#1，#16，#31，#46号格子时获得一个星星贴纸」. The spots are
-/// [`on_pass_spots`]'s job -- the body only hands the sticker out.
+/// the pre (`tile.id == 1 || …`) -- the body only hands the sticker out.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     ctx::add_tok(player_id, STICKER, 1, i32::MAX)?;
     ctx::log(

@@ -30,13 +30,18 @@ pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
     "skill:北泽育美:全垒打！",
     &[
         On::Hook(&[HookKind::TurnEnd], "", None, spawn),
-        On::Hook(&[HookKind::Pass], "", None, on_pass),
-        On::Hook(&[HookKind::RollPlan], "", Some(any), on_plan),
+        // 「你经过格子上的可乐饼时」 / 「其他角色经过格子上可乐饼时」 -- a tile
+        // with a croquette is the hook's applicability (`count_marks` is not in
+        // the condition vocabulary, so it is the residual guard).
+        On::Hook(&[HookKind::Pass], "", Some(on_pass_has_croquette), on_pass),
+        On::Hook(&[HookKind::RollPlan], "", None, on_plan),
     ],
 );
 
-fn any(_player_id: i32) -> bool {
-    true
+/// Residual guard for 「经过格子上的可乐饼时」 -- `count_marks` stays here
+/// (not yet in the condition vocabulary).
+fn on_pass_has_croquette(_player_id: i32) -> bool {
+    ctx::count_marks(ctx::trigger::tile(), ON_TILE, -2) > 0
 }
 
 /// 「每个回合在北泽精肉店生成一个可乐饼」.
@@ -49,13 +54,10 @@ fn spawn(_player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「你经过格子上的可乐饼时可以将其转移到自己场上（持有上限10）」, and
-/// 「其他角色经过格子上可乐饼时…并向你支付50*X资金」.
+/// 「其他角色经过格子上可乐饼时…并向你支付50*X资金」. The croquette-on-tile
+/// check is the residual guard (`on_pass_has_croquette`).
 fn on_pass(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    let n = ctx::count_marks(t, ON_TILE, -2);
-    if n <= 0 {
-        return Ok(());
-    }
     let mover = ctx::trigger::player_id();
     let mine = mover == player_id;
     if !mine {

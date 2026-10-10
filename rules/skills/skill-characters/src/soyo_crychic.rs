@@ -20,8 +20,22 @@ const OWED: &str = "skill.soyoCrychic.owed";
 pub const SOYO_CRYCHIC: CardDef = CardDef::new(
     "skill:长崎素世（CRYCHIC）:雨中祈晴",
     &[
-        On::Hook(&[HookKind::PayChoose], card_sdk::pre::MINE, None, on_pay),
-        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, None, on_plan),
+        // 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」 -- the
+        // body-top applicability checks are the condition now: another player
+        // (`actor != owner`, not `MINE` -- the old `mine` guard was inverted
+        // against the body and the rulebook), a tile we own, and a positive
+        // amount. The opt-in ask stays in the body (a player choice).
+        On::Hook(
+            &[HookKind::PayChoose],
+            "actor != owner && tile.owner == owner && value > 0",
+            None,
+            on_pay,
+        ),
+        // 「下回合的主要移动变为传送至…那格」 -- the owner's own plan consumes
+        // the armed one-shot (`MINE` = `turn_player == owner` on `RollPlan`).
+        // `skill.soyoCrychic.owed` is not in SLOT_NAMES, so the latch is the
+        // residual guard.
+        On::Hook(&[HookKind::RollPlan], card_sdk::pre::MINE, Some(on_plan_owed), on_plan),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -31,19 +45,10 @@ fn legacy_mine(player_id: i32) -> bool {
 }
 
 /// 「当其他玩家在属于你的格子上触发结算时，你可取消那次支付」.
+/// Applicability is the entry's condition (`actor != owner && tile.owner ==
+/// owner && value > 0`); the ask is the 「可」 opt-in.
 fn on_pay(player_id: i32) -> card_sdk::Asked {
-    let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
-    let payer = ctx::trigger::player_id();
-    if payer < 0 || payer == player_id {
-        return Ok(());
-    }
     let t = ctx::trigger::tile();
-    if t < 0 || ctx::tile_owner(t) != player_id {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("soyo_crychic_title")),
@@ -62,12 +67,16 @@ fn on_pay(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan.
+/// Residual guard for 「传送至…那格」 -- `skill.soyoCrychic.owed` is not in the
+/// condition vocabulary's SLOT_NAMES, so the latch stays here.
+fn on_plan_owed(player_id: i32) -> bool {
+    state::get(player_id, OWED) >= 0
+}
+
+/// 「下回合的主要移动变为传送至…那格」 -- consumed by the next plan. The latch
+/// is the residual guard (`on_plan_owed`).
 fn on_plan(player_id: i32) -> card_sdk::Asked {
     let t = state::get(player_id, OWED);
-    if t < 0 {
-        return Ok(());
-    }
     state::set(player_id, OWED, -1);
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);
     plan::set_teleport_to(t);

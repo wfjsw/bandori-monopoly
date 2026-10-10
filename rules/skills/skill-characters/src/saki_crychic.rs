@@ -23,7 +23,10 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::SettleBefore], "", Some(any), before_settle),
+        // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
+        // move-main fact is the condition; the within-5 geometry is residual
+        // (`dist` is not in the condition vocabulary).
+        On::Hook(&[HookKind::SettleBefore], "move.main && tile.id >= 0", Some(within5), before_settle),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -32,8 +35,12 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn any(_player_id: i32) -> bool {
-    true
+/// Residual guard for 「若在你的前后5格内」 -- `dist` stays here (not yet in
+/// the condition vocabulary). `move.main && tile.id >= 0` is the pre.
+fn within5(player_id: i32) -> bool {
+    let landing = ctx::trigger::tile();
+    let at = ctx::player_pos(player_id);
+    landing >= 0 && ctx::dist(landing, at) <= 5
 }
 
 /// 「初始1，上限2」.
@@ -52,19 +59,13 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 ///
 /// `SETTLE-STAGES.md` §4 M1: the anchor is 「主要移动结束时」 (行动阶段 13) but
 /// the window is 「[触发结算]前」 (行动阶段 14), so this stays on `settleBefore`
-/// and reads "the move ended" as a **fact** -- `move_is_main()` -- not as "a
+/// and reads "the move ended" as a **fact** -- `move.main` is the pre, not "a
 /// settle is happening". It runs for any completed main move's settle window;
-/// a 「不触发结算」 move has no such window and so never reaches here.
+/// a 「不触发结算」 move has no such window and so never reaches here. The
+/// within-5 geometry is the residual guard (`within5`).
 fn before_settle(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
-    let landing = ctx::trigger::tile();
-    if landing < 0 || !ctx::trigger::move_is_main() {
-        return Ok(());
-    }
     let at = ctx::player_pos(player_id);
-    if ctx::dist(landing, at) > 5 {
-        return Ok(());
-    }
     if mover == player_id {
         // （3） 「你可消耗1火罐，选择其中一名玩家并使自己的移动终点沿最短路径
         // 向其靠近1格」.

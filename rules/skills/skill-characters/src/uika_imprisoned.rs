@@ -36,14 +36,26 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
     "skill:三角初华:Imprisoned XII",
     &[
         On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
-        On::Hook(&[HookKind::RollPlan], "", Some(in_one), on_plan),
+        // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
+        On::Hook(
+            &[HookKind::RollPlan],
+            "actor == owner && slot('skillState') != 2",
+            None,
+            on_plan,
+        ),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
         On::Hook(&[HookKind::Settle], "", Some(any), on_settle),
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
-        On::Hook(&[HookKind::PassTile], "actor == owner && move.main", Some(in_two), on_pass_player),
-        On::Hook(&[HookKind::SettleBefore], "", Some(in_two), before_settle),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && move.main && slot('skillState') == 2",
+            None,
+            on_pass_player,
+        ),
+        // 状态2 「每次成功收取后可选择在[触发结算]前额外移动1d6」.
+        On::Hook(&[HookKind::SettleBefore], "slot('skillState') == 2", None, before_settle),
     ],
 )
     .legacy(&[(0, legacy_mine), (2, legacy_mine)]);
@@ -59,14 +71,6 @@ fn mine(player_id: i32) -> bool {
 
 fn any(_player_id: i32) -> bool {
     true
-}
-
-fn in_one(player_id: i32) -> bool {
-    mine(player_id) && state::get(player_id, state_key::SKILL_STATE) != 2
-}
-
-fn in_two(player_id: i32) -> bool {
-    state::get(player_id, state_key::SKILL_STATE) == 2
 }
 
 /// 状态1's entry offer, and 状态2's cap.

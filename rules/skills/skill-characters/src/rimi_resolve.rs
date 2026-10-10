@@ -26,7 +26,10 @@ pub const RIMI_RESOLVE: CardDef = CardDef::new(
     &[
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, None, on_pass),
+        // （1）「你的回合中[经过]任意Live House颜色格子」 -- `is_live_house_for`
+        // is player-relative (sees a recolour too) and not in the condition
+        // vocabulary, so it is the residual guard. `actor == owner` is the pre.
+        On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_live_house), on_pass),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.rimiResolve.passed') != 0", None, at_turn_end),
     ],
 )
@@ -42,11 +45,17 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「你的回合中[经过]任意Live House颜色格子」 -- latch only.
+/// Residual guard for （1） 「任意Live House颜色格子」 -- `is_live_house_for`
+/// stays here (not yet in the condition vocabulary; it is player-relative and
+/// sees a recolour too).
+fn on_pass_live_house(player_id: i32) -> bool {
+    ctx::is_live_house_for(player_id, ctx::trigger::tile())
+}
+
+/// （1）「你的回合中[经过]任意Live House颜色格子」 -- latch only. The Live
+/// House check is the residual guard; 「你的回合中」 is a conditional effect
+/// (the latch is armed only on this player's own turn).
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_live_house_for(player_id, ctx::trigger::tile()) {
-        return Ok(());
-    }
     if ctx::turn_player() == player_id {
         state::set(player_id, PASSED, 1);
     }

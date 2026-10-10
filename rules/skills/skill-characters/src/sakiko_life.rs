@@ -31,7 +31,12 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
-        On::Hook(&[HookKind::PassTile], "actor == owner && move.main", Some(in_one), on_pass_player),
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor == owner && move.main && slot('skillState') != 2",
+            None,
+            on_pass_player,
+        ),
         // 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐」 -- the
         // outcome of an abnormal effect landing on this player. `Abnormal` is
         // the settlement hook; the legacy `Stay`/`Stun`/`Exile` kinds are never
@@ -49,10 +54,6 @@ fn legacy_mine(player_id: i32) -> bool {
 /// G4: kept as a callable alias for in-body uses of the old guard.
 fn mine(player_id: i32) -> bool {
     legacy_mine(player_id)
-}
-
-fn in_one(player_id: i32) -> bool {
-    state::get(player_id, state_key::SKILL_STATE) != 2
 }
 
 /// The `Abnormal` hook's guard: this player is the *recipient* of the effect

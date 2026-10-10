@@ -29,15 +29,23 @@ pub const EVE_UNIFY: CardDef = CardDef::new(
             None,
             at_start,
         ),
-        On::Hook(&[HookKind::RollAfter], "tok('P✽P粉丝(正)') >= 1", Some(mine), on_roll),
+        On::Hook(
+            &[HookKind::RollAfter],
+            "actor == owner && tok('P✽P粉丝(正)') >= 1",
+            Some(roll_ok),
+            on_roll,
+        ),
     ],
 );
 
-fn mine(player_id: i32) -> bool {
+/// Residual guard for （2） -- `skill_blocked` (band-specific) and `fixed_roll`
+/// (derived plan state) stay here (not yet in the condition vocabulary).
+/// `actor == owner && tok('P✽P粉丝(正)') >= 1` is the pre.
+fn roll_ok(player_id: i32) -> bool {
     if card_sdk::ctx::skill_blocked(player_id, "Pastel✽Palettes") {
         return false;
     }
-    ctx::trigger::player_id() == player_id
+    ctx::fixed_roll().is_none()
 }
 
 /// （1）「游戏开始后获得5个正面[P✽P粉丝]，所有非Pastel✽Palettes玩家获得若宫伊芙的
@@ -59,13 +67,9 @@ fn at_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」.
+/// （2）「将自己Y个正面[P✽P粉丝]变反并为此次投掷结果增加Yd4」. The fixed-face
+/// and has-fans clauses are the residual guard / pre.
 fn on_roll(player_id: i32) -> card_sdk::Asked {
-    // `fixed_roll` is resolution-time (a face the engine already fixed this
-    // roll); the `tok('P✽P粉丝(正)') >= 1` pre owns the "has fans" clause.
-    if ctx::fixed_roll().is_some() {
-        return Ok(());
-    }
     let up = ctx::tok(player_id, FANS_UP);
     let y = ctx::ask_number(
         player_id,

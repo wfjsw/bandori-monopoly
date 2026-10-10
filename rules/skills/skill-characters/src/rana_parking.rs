@@ -43,6 +43,12 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         // settle-body replace gesture (R4), and the 「抽1张卡」 half of the
         // other branch.
         On::Hook(&[HookKind::SettleBody], "", Some(any), replace_body),
+        // TODO(规则书): 「你与其他玩家重合时」 -- the pre is `MINE` (the owner is
+        // the mover), but the body reads `trigger::player_id()` as "the other"
+        // and bails when it equals the owner -- which it always does on this
+        // window (`passPlayer`'s `player_id` is the mover; the other player is
+        // `target`). The clause never fires (a suspected bug). Not fixed here:
+        // correcting the read would change behaviour.
         On::Hook(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
     ],
 )

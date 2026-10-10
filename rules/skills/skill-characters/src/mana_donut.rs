@@ -51,10 +51,10 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // branch. The choice / spend / pay stay in the body.
         On::Hook(&[HookKind::Pass], PASS_PRE, None, on_pass),
         // 「你的资金消耗减半」 -- only the owner's own pays, and only while
-        // the window is armed.
+        // the window is armed. `value > 0` is the amount floor.
         On::Hook(
             &[HookKind::PayChoose],
-            "actor == owner && card.placed && slot('skill.manaDonut.half') > 0",
+            "actor == owner && card.placed && slot('skill.manaDonut.half') > 0 && value > 0",
             None,
             on_pay,
         ),
@@ -119,12 +119,9 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// 「你的资金消耗减半」.
-fn on_pay(player_id: i32) -> card_sdk::Asked {
+/// 「你的资金消耗减半」. `value > 0` is the pre.
+fn on_pay(_player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     ctx::trigger::set_pay_amount((amount + 1) / 2);
     Ok(())
 }

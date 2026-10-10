@@ -28,7 +28,16 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
             None,
             at_turn_start,
         ),
-        On::Hook(&[HookKind::PassTile], "", Some(any), on_pass_tile),
+        // （2）「其他玩家经过该格且到达移动终点后向你支付X*30资金」 -- a pot on
+        // the tile is the applicability (`count_marks` is not in the condition
+        // vocabulary, so it is the residual guard). `actor != owner &&
+        // move.remaining > 0` states the rest of the clause.
+        On::Hook(
+            &[HookKind::PassTile],
+            "actor != owner && move.remaining > 0",
+            Some(on_pass_tile_has_pot),
+            on_pass_tile,
+        ),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
@@ -37,8 +46,10 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn any(_player_id: i32) -> bool {
-    true
+/// Residual guard for 「经过该格」 with a pot on it -- `count_marks` stays here
+/// (not yet in the condition vocabulary).
+fn on_pass_tile_has_pot(_player_id: i32) -> bool {
+    ctx::count_marks(ctx::trigger::tile(), POT, -2) > 0
 }
 
 /// 「初始2，上限2」.
@@ -100,20 +111,12 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
 
 /// （2）「其他玩家经过该格且到达移动终点后向你支付X*30资金并移除那个火罐，X为
 /// 对方经过该格后移动的剩余格数」 -- the pay is at the *end* of the move, so the
-/// remaining count is what the walk has left at the pass.
+/// remaining count is what the walk has left at the pass. `actor != owner &&
+/// move.remaining > 0` is the pre; the pot-on-tile check is the residual guard.
 fn on_pass_tile(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    if ctx::count_marks(t, POT, -2) <= 0 {
-        return Ok(());
-    }
     let mover = ctx::trigger::player_id();
-    if mover == player_id {
-        return Ok(());
-    }
     let x = ctx::trigger::move_remaining().max(0);
-    if x <= 0 {
-        return Ok(());
-    }
     ctx::bump_mark(t, POT, -2, -1);
     let due = x * 30;
     ctx::transfer(

@@ -48,7 +48,12 @@ pub const KOKORO_PRACTICE: CardDef = CardDef::new(
         // （3）「移动终点为任意"RiNG"时，获得一个火罐」 -- 行动阶段 13
         // 「移动终点」 (`SETTLE-STAGES.md` §4 M1): after [重叠], before any
         // settle, for every completed move including a 「不触发结算」 one.
-        On::Hook(&[HookKind::MoveAfter], card_sdk::pre::MINE, None, on_move_end),
+        On::Hook(
+            &[HookKind::MoveAfter],
+            "actor == owner && is_ring(tile.id)",
+            None,
+            on_move_end,
+        ),
         // （3）「获得一个火罐（上限1）」 -- the cap has to hold from match start,
         // or `gain_fire` (cap 0 = no pots) drops the grant on the floor.
         On::Hook(
@@ -164,11 +169,8 @@ fn on_passed(player_id: i32) -> card_sdk::Asked {
 /// （3）「移动终点为任意"RiNG"时，获得一个火罐（上限1）」 -- the move's end
 /// tile, 行动阶段 13 (`SETTLE-STAGES.md` §4 M1). `moveAfter` runs after [重叠]
 /// and before any settle, for every completed move -- a 「不触发结算」 move
-/// grants the pot too.
+/// grants the pot too. `actor == owner && is_ring(tile.id)` is the pre.
 fn on_move_end(player_id: i32) -> card_sdk::Asked {
-    if !is_ring(ctx::trigger::tile()) {
-        return Ok(());
-    }
     ctx::gain_fire(player_id, 1, &Msg::new(key!("kokoro_practice_gain")))?;
     Ok(())
 }
