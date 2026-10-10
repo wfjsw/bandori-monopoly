@@ -110,6 +110,9 @@ pub struct Trigger {
     pub move_main: bool,
     /// `t.Move.Dir` -- 1 forward, -1 backward. Only meaningful when `move_flags.is_move()`.
     pub move_dir: i32,
+    /// `t.Move.From` -- the move's 移动起点 (C# `m.from`), or -1 when no move
+    /// is in flight. Copied by [`Self::with_move`].
+    pub move_from: i32,
     /// How a counter invalidated this link. The effect body is skipped when this
     /// is not [`Negation::None`]; the Before/After hooks still fire.
     pub negation: Negation,
@@ -178,6 +181,7 @@ impl Trigger {
             move_tags: Vec::new(),
             move_main: false,
             move_dir: 1,
+            move_from: -1,
             negation: Negation::None,
             spared: Vec::new(),
             seq: 0,
@@ -239,6 +243,7 @@ impl Trigger {
         self.move_tags = m.tags.clone();
         self.move_main = m.main;
         self.move_dir = m.dir();
+        self.move_from = m.from;
         self.move_remaining = m.remaining;
         self.move_total = m.total;
         self

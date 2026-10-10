@@ -199,7 +199,7 @@ impl Cx<'_> {
     /// `AiAgentChoice` -- standard: first affordable purchase, else first build,
     /// else none. Chaos: a random option it can pay for, never "none" while one
     /// exists.
-    pub(crate) fn ai_agent_choice(&mut self, p: usize, options: &[usize]) -> i32 {
+    pub fn ai_agent_choice(&mut self, p: usize, options: &[usize]) -> i32 {
         if self.is_chaos(p) {
             let ok: Vec<usize> = options
                 .iter()
