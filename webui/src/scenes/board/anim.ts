@@ -111,6 +111,13 @@ export class Animator {
     return sleep(ms / Math.max(1, this.speed)) as Promise<void>;
   }
 
+  /** Above 2x (live speed buttons or the replay transport) card flashes and
+   *  effect popups are skipped: the log still records them, but the board
+   *  does not stop to show them. */
+  private noFlash(): boolean {
+    return this.speed > 2;
+  }
+
   /** The queue plays fast when it is deep, or when a replay is at 4x. */
   private fast(): boolean {
     return this.queue.length > FAST_QUEUE || (this.replay && this.speed >= 4);
@@ -400,6 +407,7 @@ export class Animator {
         // message already produced. An effect with a source card rides that
         // card's flash (正论暴击 and kin: no modal of their own); only an
         // unattributed one keeps the popup window.
+        if (this.noFlash()) break;
         if (e.card) {
           await this.rideEffect(e.card, playerId, body, fast);
           await wait(fast ? 0 : 250);
@@ -463,6 +471,7 @@ export class Animator {
         // bodies and field-card hooks all land here.
         if (!e.card) break;
         this.lastDiscard = e.card;
+        if (this.noFlash()) break;
         await this.cardFlash(e, fast);
         break;
       case "event": if (!fast) sfx("event_card"); this.showBanner(tr("anim.event"), body); await wait(900); break;
