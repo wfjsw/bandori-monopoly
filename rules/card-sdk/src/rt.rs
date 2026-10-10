@@ -35,6 +35,11 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                         On::Message(names, ..) => names.iter().map(|s| String::from(*s)).collect(),
                         _ => Vec::new(),
                     },
+                    label: c
+                        .labels
+                        .iter()
+                        .find(|(e, _)| *e == ei as i32)
+                        .map(|(_, l)| String::from(*l)),
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of

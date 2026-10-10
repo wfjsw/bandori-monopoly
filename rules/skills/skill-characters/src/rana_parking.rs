@@ -52,6 +52,7 @@ pub const RANA_PARKING: CardDef = CardDef::new(
         On::Hook(&[HookKind::PassPlayer], card_sdk::pre::MINE, None, on_overlap),
     ],
 )
+    .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（3）")])
     .legacy(&[(2, legacy_mine), (5, legacy_mine)]);
 
 fn legacy_mine(player_id: i32) -> bool {

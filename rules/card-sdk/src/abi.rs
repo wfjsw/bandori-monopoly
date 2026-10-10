@@ -312,7 +312,11 @@ use alloc::{string::String, vec::Vec};
 ///      `add_tok` / `set_tok` become the holder-binding verbs of the creating
 ///      instance's counter. SAVE_VERSION 5 → 6 (marks/tokens carry
 ///      `instance`).
-pub const ABI_VERSION: i32 = 51;
+/// v52: `ManifestOn::label` -- an entry's rulebook clause label (「（1）」),
+///      carried so the host's 「效果适用」 line can name which clause of a
+///      multi-entry card ran. `CardDef::labels` fills it; `None` = unlabelled.
+///      No host-function change; SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 52;
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.
@@ -2100,6 +2104,11 @@ pub struct ManifestOn {
     /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
     #[serde(default)]
     pub messages: Vec<String>,
+    /// The entry's rulebook clause label -- 「（1）」 / 「（2）」 and kin -- so
+    /// the 「效果适用」 line can name which clause of a multi-entry card ran.
+    /// `None` = unlabelled (the line shows just the card name). v52.
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).

@@ -111,6 +111,11 @@ pub struct CardDef {
     /// while the `guard-audit` host feature is in play; deleted once the card
     /// is clean. Empty for a card that is not under audit.
     pub legacy: &'static [(i32, fn(i32) -> bool)],
+    /// Per-entry labels -- the rulebook's numbered clauses, 「（1）」 / 「（2）」
+    /// and kin -- as `(entry index, label)`. Rides the manifest so the
+    /// 「效果适用」 line can name which clause of a multi-entry card ran.
+    /// An entry with no label shows just the card name.
+    pub labels: &'static [(i32, &'static str)],
 }
 
 impl CardDef {
@@ -120,6 +125,7 @@ impl CardDef {
             on,
             props: &[],
             legacy: &[],
+            labels: &[],
         }
     }
 
@@ -131,6 +137,20 @@ impl CardDef {
             on: self.on,
             props,
             legacy: self.legacy,
+            labels: self.labels,
+        }
+    }
+
+    /// Name this card's entries after their rulebook clauses -- 「（1）」,
+    /// 「（2）」, … -- as `(entry index, label)` pairs. The 「效果适用」 line
+    /// shows the label of the entry that ran; unlabelled entries stay bare.
+    pub const fn labels(self, labels: &'static [(i32, &'static str)]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            legacy: self.legacy,
+            labels,
         }
     }
 
@@ -144,6 +164,7 @@ impl CardDef {
             on: self.on,
             props: self.props,
             legacy,
+            labels: self.labels,
         }
     }
 }

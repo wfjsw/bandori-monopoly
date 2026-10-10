@@ -35,7 +35,9 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         On::Hook(&[HookKind::SkillUsed], "", Some(skill_used_guard), skill_used),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
-).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
+)
+.labels(&[(1, "（1）"), (2, "（1）"), (3, "（2）"), (4, "（3）")])
+.props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
     // 规则书[手]: 「将此卡放置在[使用者]的[场地]」 -- C# `H.PlaceFromPlay(c, -1, -1, num)`.

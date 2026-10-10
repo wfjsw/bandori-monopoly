@@ -47,7 +47,8 @@ pub const KAORU_PRINCE: CardDef = CardDef::new(
             on_passed,
         ),
     ],
-);
+)
+.labels(&[(0, "（2）"), (2, "（1）"), (3, "（1）")]);
 
 /// 「上限7」 -- the clause gives no initial, so it starts empty.
 fn declare_cap(player_id: i32) -> card_sdk::Asked {
