@@ -1,11 +1,10 @@
-//! Player profile and settings (`PlayerProfile.cs`, `ProfileService.cs`,
-//! `SoundSettings.cs`).
+//! Player profile and settings.
 //!
-//! Only the pure logic lives here. The caller supplies anything that came from the
-//! environment in C# -- today's date (`yyyy-MM-dd`), the timestamp
-//! (`yyyy-MM-dd HH:mm`) and a random 9-digit player id -- and persists the result
-//! (server: file/DB; browser: IndexedDB). That keeps `game-core` wasm-safe and the
-//! logic deterministic under test.
+//! Only the pure logic lives here. The caller supplies anything that would
+//! otherwise come from the environment -- today's date (`yyyy-MM-dd`), the
+//! timestamp (`yyyy-MM-dd HH:mm`) and a random 9-digit player id -- and
+//! persists the result (server: file/DB; browser: IndexedDB). That keeps
+//! `game-core` wasm-safe and the logic deterministic under test.
 
 use serde::{Deserialize, Serialize};
 
@@ -31,7 +30,7 @@ pub fn sanitize_deck_name(name: &str) -> String {
     t.chars().take(DECK_NAME_MAX).collect()
 }
 
-/// `PlayerProfile.cs` -- `profile.json`.
+/// The saved player profile (`profile.json`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PlayerProfile {
@@ -99,7 +98,7 @@ impl Default for PlayerProfile {
     }
 }
 
-/// `MatchRecord.cs` -- one line of match history. `mode` is an integer on disk.
+/// One line of match history. `mode` is an integer on disk.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchRecord {
@@ -122,7 +121,7 @@ pub struct MatchRecord {
     pub replay_id: String,
 }
 
-/// `CharacterStat.cs`
+/// Per-character gallery counters.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CharacterStat {
@@ -131,7 +130,7 @@ pub struct CharacterStat {
     pub firsts: i32,
 }
 
-/// `SavedDeck.cs` -- one named deck of one character.
+/// One named deck of one character.
 ///
 /// `slot` is the stable deck id within the character (it used to be the fixed
 /// 1..=3 slot index; profiles from that era keep their numbers as ids). It is
@@ -151,7 +150,7 @@ pub struct SavedDeck {
     pub cards: Vec<String>,
 }
 
-/// `DeckChoice.cs`
+/// Which saved deck a character last picked.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct DeckChoice {
@@ -159,7 +158,7 @@ pub struct DeckChoice {
     pub slot: i32,
 }
 
-/// "NEW" badge areas (`ProfileService.HasNew` keys).
+/// "NEW" badge areas (the [`PlayerProfile::has_new`] keys).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Seen {
     Gallery,
@@ -169,7 +168,7 @@ pub enum Seen {
 }
 
 impl PlayerProfile {
-    /// `ProfileService.Create` -- a fresh profile with everything marked seen.
+    /// A fresh profile with everything marked seen.
     /// `player_id`: random 9-digit string; `now`: `yyyy-MM-dd HH:mm`; `today`: `yyyy-MM-dd`.
     pub fn create(data: &GameData, name: &str, player_id: &str, now: &str, today: &str) -> Self {
         let name = name.trim();
@@ -185,7 +184,7 @@ impl PlayerProfile {
         p
     }
 
-    /// `ProfileService.Normalize` -- repair and migrate a loaded profile. A missing
+    /// Repair and migrate a loaded profile. A missing
     /// or unknown home character falls back to the data's default.
     pub fn normalize(&mut self, data: &GameData) {
         self.level = self.level.clamp(0, MAX_LEVEL);
@@ -299,7 +298,7 @@ impl PlayerProfile {
         }
     }
 
-    /// `ProfileService.ApplyMatch` -- spend fire, grant EXP/stars/coins, update
+    /// Spend fire, grant EXP/stars/coins, update
     /// counters and stats, and prepend to history (capped at 30). `replay_id`
     /// is the local replay-store id of this match's record, if the client kept
     /// one (empty otherwise).
@@ -453,8 +452,8 @@ impl PlayerProfile {
         self.seen_rules_version = data.rules_version;
     }
 
-    /// `ProfileService.Live2DFor` -- chosen Live2D variant, or the character's own.
-    /// `options`: ids valid for this character (`Live2DPortrait.OptionsFor(artId)`).
+    /// Chosen Live2D variant, or the character's own.
+    /// `options`: ids valid for this character (the portrait's options for `art_id`).
     pub fn live2d_for<'a>(&'a self, c: &'a CharacterData, options: &[&str]) -> &'a str {
         let prefix = format!("{}=", c.name);
         match self
@@ -467,7 +466,7 @@ impl PlayerProfile {
         }
     }
 
-    /// `ProfileService.SetLive2D`. Returns whether the profile changed.
+    /// Store a Live2D pick. Returns whether the profile changed.
     pub fn set_live2d(&mut self, c: &CharacterData, id: &str, options: &[&str]) -> bool {
         if self.live2d_for(c, options) == id {
             return false;
@@ -481,7 +480,7 @@ impl PlayerProfile {
     }
 }
 
-/// `SoundSettings.cs` -- `settings.json`. Levels are 0-10.
+/// Sound settings (`settings.json`). Levels are 0-10.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SoundSettings {

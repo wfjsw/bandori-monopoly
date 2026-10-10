@@ -1,11 +1,11 @@
-//! Bot decisions (`AiStep` and friends). Also drives humans who ran out of time.
+//! Bot decisions. Also drives humans who ran out of time.
 //!
 //! Every seat carries a [`BotMentality`] (only `bot` seats take one): **standard**
-//! is the ported C# policy and **chaos** is legal but maximally disruptive. The
-//! thresholds below are the standard policy; chaos replaces the money reserves
-//! with [`CHAOS_RESERVE`] and drops the "sometimes" rolls. The web client's 托管
-//! (auto-play) toggle ports both policies to TypeScript over the public match
-//! view (`webui/src/game/autopilot.ts`); keep the two in sync.
+//! is the standard policy (`docs/BOT.md`) and **chaos** is legal but maximally
+//! disruptive. The thresholds below are the standard policy; chaos replaces the
+//! money reserves with [`CHAOS_RESERVE`] and drops the "sometimes" rolls. The web
+//! client's 托管 (auto-play) toggle ports both policies to TypeScript over the
+//! public match view (`webui/src/game/autopilot.ts`); keep the two in sync.
 //!
 //! A human who times out or disconnects is answered with the **standard**
 //! policy even though `ai` flips on -- see [`Cx::bot_mentality`].
@@ -20,13 +20,13 @@ use super::cx::{Cx, Flow};
 use crate::state::{stage, BotMentality};
 use crate::strategy::StrategyParams;
 
-/// `AiWantsBuy` -- keep at least this much money after buying.
+/// Keep at least this much money after buying.
 pub const BUY_RESERVE: i32 = 2_000;
-/// `AiWantsBuild` -- keep at least this much money after building.
+/// Keep at least this much money after building.
 pub const BUILD_RESERVE: i32 = 3_500;
-/// `AiRedeemChoice` -- keep at least this much money after redeeming.
+/// Keep at least this much money after redeeming.
 pub const REDEEM_RESERVE: i32 = 4_000;
-/// `OfferForceBuy` -- buy out a mortgaged deed only while it leaves this much.
+/// Buy out a mortgaged deed only while it leaves this much.
 pub const FORCE_BUY_RESERVE: i32 = 4_000;
 /// Odds a bot plays a hand card rather than rolling in 运营.
 pub const PLAY_CARD_CHANCE: f64 = 0.7;
@@ -41,12 +41,12 @@ pub const CHAOS_RESERVE: i32 = 1_000;
 /// from the match RNG, so a repeated offer ring naturally stops after a skip.
 pub const CHAOS_COUNTER_CHANCE: f64 = 0.3;
 
-/// `AiWantsBuy` -- would buying `price` leave [`BUY_RESERVE`]?
+/// Would buying `price` leave [`BUY_RESERVE`]?
 pub fn wants_buy(money: i32, price: i32) -> bool {
     money - price >= BUY_RESERVE
 }
 
-/// `AiWantsBuild` -- would building for `cost` leave [`BUILD_RESERVE`]?
+/// Would building for `cost` leave [`BUILD_RESERVE`]?
 pub fn wants_build(money: i32, cost: i32) -> bool {
     money - cost >= BUILD_RESERVE
 }
@@ -155,7 +155,7 @@ impl Cx<'_> {
         })
     }
 
-    /// `AiWantsBuy`. Uses the quoted price (`docs/PURCHASE.md`), so the AI
+    /// Would buying leave the reserve? Uses the quoted price (`docs/PURCHASE.md`), so the AI
     /// decides on the figure a hook-aware ruleset would actually charge; for
     /// `StubRules` the quote is the plain rulebook formula.
     #[inline]
@@ -180,7 +180,7 @@ impl Cx<'_> {
         }
     }
 
-    /// `AiWantsBuild`.
+    /// Would building leave the reserve?
     #[inline]
     pub(crate) fn ai_wants_build(&self, i: usize, t: usize) -> bool {
         if self.is_chaos(i) {
@@ -196,7 +196,7 @@ impl Cx<'_> {
         }
     }
 
-    /// `AiAgentChoice` -- standard: first affordable purchase, else first build,
+    /// Standard: first affordable purchase, else first build,
     /// else none. Chaos: a random option it can pay for, never "none" while one
     /// exists.
     pub fn ai_agent_choice(&mut self, p: usize, options: &[usize]) -> i32 {
@@ -248,7 +248,7 @@ impl Cx<'_> {
         options.len() as i32
     }
 
-    /// `AiRedeemChoice` -- standard: most valuable mortgaged deed that leaves
+    /// Standard: most valuable mortgaged deed that leaves
     /// the reserve (the original sort-then-`find`, which short-circuits).
     /// Chaos: any affordable one, at random.
     fn ai_redeem_choice(&mut self, i: usize) -> Option<usize> {
@@ -275,7 +275,7 @@ impl Cx<'_> {
             .find(|&t| p.wants_redeem(self.w.st.players[i].money, self.redeem_cost(t)))
     }
 
-    /// `AiCardChoice` -- a random playable card the rules say a bot would play.
+    /// A random playable card the rules say a bot would play.
     /// Chaos ignores the rule's `ai_play` heuristic (it will even fire [反击]
     /// cards from hand) and only asks `cant_play`.
     ///
@@ -367,7 +367,7 @@ impl Cx<'_> {
     /// a skill whose body is a no-op must not park the bot in a press loop).
     /// Standard only presses when the seat's [`crate::strategy::SkillParams`]
     /// say so; the default entry is "never", which is the old standard policy
-    /// (the C# left skills to the player). The gate is the rule's own
+    /// (skills were left to the player). The gate is the rule's own
     /// `cant_play` (`why_not_act` asks the same one before honouring a `skill`
     /// command).
     fn ai_skill_choice(&mut self, i: usize) -> Option<String> {
@@ -431,9 +431,9 @@ impl Cx<'_> {
         p.auction_worth(roll, base, money)
     }
 
-    /// `AiStep` -- one decision for the player whose turn it is.
+    /// One decision for the player whose turn it is.
     ///
-    /// The standard path below is the C# bot unchanged -- the chaos branch is
+    /// The standard path below is the standard bot policy -- the chaos branch is
     /// taken *before* it and returns, so a standard seat never pays for it.
     pub(crate) fn ai_step(&mut self, i: usize) -> Flow<()> {
         let bot = self.w.st.players[i].ai;

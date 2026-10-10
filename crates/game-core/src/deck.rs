@@ -1,8 +1,9 @@
-//! `DeckRules.cs` + `DeckService.cs` -- 10-card decks, who may use which card,
-//! and the named saved decks per character (id 0 = the read-only preset).
+//! 10-card decks: who may use which card, and the named saved decks per
+//! character (id 0 = the read-only preset).
 //!
-//! Note `clean` returns cards in **pool order**, not input order, and `fill` cleans
-//! again after padding -- both exactly as in the C#.
+//! Note `clean` returns cards in **pool order**, not input order, and `fill`
+//! cleans again after padding -- so a filled deck's order is always the
+//! pool's, never the submitter's.
 
 use std::collections::HashSet;
 
@@ -16,7 +17,7 @@ pub const SIZE: usize = 10;
 /// profile cannot grow without limit.
 pub const DECKS_MAX: usize = 100;
 
-/// `DeckRules.WhyNot` -- `None` if `c` may put `card` in a starting deck.
+/// `None` if `c` may put `card` in a starting deck.
 pub fn cant_play(data: &GameData, c: &CharacterData, card: &CardData) -> Option<Msg> {
     if card.derived {
         return Some(Msg::new("err.deck_derived"));
@@ -94,7 +95,7 @@ pub fn fill<S: AsRef<str>>(data: &GameData, c: &CharacterData, ids: &[S]) -> Vec
     clean(data, c, &list)
 }
 
-/// The designer's preset (`CharacterData.preset`), filled up to 10.
+/// The designer's preset (`CharacterData::preset`), filled up to 10.
 pub fn preset(data: &GameData, c: &CharacterData) -> Vec<String> {
     fill(data, c, &c.preset)
 }

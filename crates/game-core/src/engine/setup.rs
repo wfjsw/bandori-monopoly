@@ -12,7 +12,7 @@ pub const PICK_SECONDS: f32 = 25.0;
 pub const DECK_SECONDS: f32 = 45.0;
 
 impl Cx<'_> {
-    /// `RollOrder` -- 1d20 each, ties re-roll; players are reordered high to low.
+    /// 1d20 each, ties re-roll; players are reordered high to low.
     pub(crate) fn roll_order(&mut self) {
         let n = self.w.player_count();
         for i in 0..n {
@@ -64,7 +64,7 @@ impl Cx<'_> {
         self.bannable(character) && self.w.st.players.iter().all(|s| s.character != character)
     }
 
-    /// `RandomCharacter` -- prefers characters with their own art set (`cnId`).
+    /// Prefers characters with their own art set (`cnId`).
     pub(crate) fn random_character(&mut self, for_pick: bool) -> String {
         let all: Vec<&str> = self
             .data
@@ -92,7 +92,7 @@ impl Cx<'_> {
         list[k].to_string()
     }
 
-    /// `BeginBan` -- back to front.
+    /// Ban order: back to front.
     pub(crate) fn begin_ban(&mut self) {
         self.w.st.phase = "ban".into();
         self.w.st.turn = self.w.player_count() as i32 - 1;
@@ -100,7 +100,7 @@ impl Cx<'_> {
         self.w.log("text", -1, Msg::new("log.ban_phase"));
     }
 
-    /// `BeginPick` -- front to back.
+    /// Pick order: front to back.
     pub(crate) fn begin_pick(&mut self) {
         self.w.st.phase = "pick".into();
         self.w.st.turn = 0;
@@ -108,7 +108,7 @@ impl Cx<'_> {
         self.w.log("text", -1, Msg::new("log.pick_phase"));
     }
 
-    /// `DoBan`; empty `character` = no ban.
+    /// Record a ban; empty `character` = no ban.
     pub(crate) fn do_ban(&mut self, i: usize, character: &str) {
         let s = &mut self.w.st.players[i];
         s.ban_done = true;
@@ -132,7 +132,7 @@ impl Cx<'_> {
         }
     }
 
-    /// `DoPick`. Bots submit their deck as soon as the deck phase opens.
+    /// Record a pick. Bots submit their deck as soon as the deck phase opens.
     pub(crate) fn do_pick(&mut self, i: usize, character: &str) {
         self.w.st.players[i].character = character.into();
         let d = self.data;
@@ -167,7 +167,7 @@ impl Cx<'_> {
         }
     }
 
-    /// `SubmitDeck` -- a complete legal deck, or the character's preset. A
+    /// A complete legal deck, or the character's preset. A
     /// chaos bot without a supplied list submits a random legal deck instead
     /// of the designer's preset; a standard one takes the deck book's entry
     /// for its public table when the book has one (`docs/BOT.md` §3.7).

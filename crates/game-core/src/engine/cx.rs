@@ -201,7 +201,7 @@ fn option_card(m: &Msg) -> Option<String> {
 }
 
 impl Reply {
-    /// `Ask.Answer(seat)`.
+    /// This seat's recorded answer, or the prompt's fallback.
     pub fn of(&self, player_id: usize) -> i32 {
         match self.players.iter().position(|&s| s == player_id as i32) {
             Some(i) if self.a.answers.get(i).is_some_and(|&v| v >= 0) => self.a.answers[i],
@@ -895,7 +895,7 @@ impl<'a> Cx<'a> {
         k
     }
 
-    /// Presentation pause (C# `yield return <float>`).
+    /// Presentation pause, accumulated for the host to drain.
     pub(crate) fn wait(&mut self, secs: f32) {
         self.delay += secs + self.w.take_walk_delay();
     }
@@ -951,7 +951,7 @@ impl<'a> Cx<'a> {
             .card_activation(kind, owner, card, target, tile, negated, msg);
     }
 
-    /// `H.Roll` -- `count` d`sides`, logged as a dice event.
+    /// Roll `count`d`sides` and log a dice event.
     pub fn roll(&mut self, player_id: i32, count: i32, sides: i32, what: Option<Msg>) -> i32 {
         let faces: Vec<i32> = (0..count).map(|_| self.w.rng.d(sides)).collect();
         let sum = faces.iter().sum();
@@ -988,7 +988,7 @@ impl<'a> Cx<'a> {
         self.w.out(i)
     }
 
-    /// The match is in the play phase (C# `State.phase == "play"`).
+    /// The match is in the play phase.
     pub fn playing(&self) -> bool {
         self.w.st.phase == "play"
     }
@@ -1009,8 +1009,7 @@ impl<'a> Cx<'a> {
         }
     }
 
-    /// Players starting at `from`, wrapping, that are in the game and not exiled
-    /// (C# `From(from)` / `H.PresentFrom`).
+    /// Players starting at `from`, wrapping, that are in the game and not exiled.
     pub fn present_from(&self, from: usize) -> Vec<usize> {
         let n = self.w.player_count();
         (0..n)

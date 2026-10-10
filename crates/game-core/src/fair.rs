@@ -277,7 +277,7 @@ pub fn derive_match_seed(seed: &[u8; 32], nonces: &[(i32, [u8; 32])]) -> [u8; 32
     unhex32(&sha256_hex(&refs)).expect("sha256 is 32 bytes")
 }
 
-/// The public `MatchState.match_id`, hashed out of the derived seed so no
+/// The public `MatchState::match_id`, hashed out of the derived seed so no
 /// seed bits travel in a view. Same shape the legacy u64 path produces
 /// (`((x as i32) & 0x7FFF_FFFF) | 1`), different source.
 pub fn match_id(match_seed: &[u8; 32]) -> i32 {

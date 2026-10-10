@@ -126,7 +126,7 @@ fn cheats_update_views_and_survive_save_restore() {
 
 /// A debug-built engine accepts cheats in **every** match mode -- Solo,
 /// Casual and Ranked alike (online cheats in debug builds) -- and marks the
-/// match (`MatchState.debugOpen`) so the record shows the cheat use.
+/// match (`MatchState::debug_open`) so the record shows the cheat use.
 #[cfg(debug_assertions)]
 #[test]
 fn cheats_apply_in_every_mode_and_mark_the_match() {

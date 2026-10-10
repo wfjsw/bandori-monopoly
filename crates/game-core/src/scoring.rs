@@ -1,8 +1,8 @@
-//! `ScoreWeights.cs` -- end-of-match score weights, adjustable per room.
+//! End-of-match score weights, adjustable per room.
 //!
 //! score = money * w.money + property * w.property + houses * w.houses
 //! (property = land prices, mortgaged at half; houses = build costs).
-//! The RiNG rent multiplier is a separate mechanic (`MatchRulesData.ringMultiplier`).
+//! The RiNG rent multiplier is a separate mechanic ([`MatchRulesData::ring_multiplier`]).
 
 use serde::{Deserialize, Serialize};
 
@@ -32,7 +32,7 @@ impl ScoreWeights {
     /// Upper bound for each weight.
     pub const MAX: f32 = 5.0;
 
-    /// `ScoreWeights.Default` -- from `match_rules.json`.
+    /// Defaults from `match_rules.json`.
     pub fn from_rules(r: &MatchRulesData) -> Self {
         Self {
             money: r.money,
@@ -65,7 +65,7 @@ impl ScoreWeights {
             if !v.is_finite() {
                 return 0.0;
             }
-            // C# Mathf.Round rounds half to even.
+            // Banker's rounding: ties go to even (IEEE-754-style).
             ((v / ScoreWeights::STEP).round_ties_even() * ScoreWeights::STEP)
                 .clamp(0.0, ScoreWeights::MAX)
         }
@@ -81,7 +81,7 @@ impl ScoreWeights {
         }
     }
 
-    /// `ScoreWeights.SameAs` (Mathf.Approximately per weight).
+    /// Approximate equality: each weight within a relative epsilon.
     pub fn same_as(&self, o: &ScoreWeights) -> bool {
         let approx = |a: f32, b: f32| (a - b).abs() < f32::EPSILON.max(1e-6 * a.abs().max(b.abs()));
         approx(self.money, o.money)
@@ -111,7 +111,7 @@ mod tests {
                 houses: 0.0
             }
         );
-        // 0.25 / 0.5 = 0.5 -> ties to even -> 0, like C# Mathf.Round
+        // 0.25 / 0.5 = 0.5 -> ties to even -> 0 (banker's rounding)
         let z = ScoreWeights {
             money: 0.25,
             property: 0.0,

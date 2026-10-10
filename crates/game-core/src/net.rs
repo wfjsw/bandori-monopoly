@@ -1,12 +1,10 @@
-//! Wire types shared by server and client (`NetMessage.cs`, `RoomInfo.cs`,
-//! `RoomMember.cs`, `NetProtocol.cs`).
+//! Wire types shared by server and client: match commands, room listings,
+//! room members, and the join/version protocol constants.
 //!
-//! The transport changed (TCP/Steam -> HTTP + SSE): what the C# sent as one flat
-//! `NetMessage` bag over the socket is now a **match command** (`POST
-//! /api/rooms/{id}/act`), room listings (`RoomInfo`) and SSE state frames. So the
-//! command is the fields the client sends (`webui/src/core/types.ts`
-//! `Command`) -- the 17 join/room/match fields of the C# union are gone rather
-//! than carried as dead weight.
+//! Transport is HTTP + SSE: a **match command** (`POST /api/rooms/{id}/act`),
+//! room listings ([`RoomInfo`]) and SSE state frames. The command is exactly
+//! the fields the client sends (`webui/src/core/types.ts` `Command`) -- the old
+//! join/room/match union fields are gone rather than carried as dead weight.
 
 use serde::{Deserialize, Serialize};
 
@@ -14,19 +12,20 @@ use crate::scoring::ScoreWeights;
 use crate::state::BotMentality;
 use crate::MatchMode;
 
-/// `NetProtocol.Game`
+/// Game name the protocol handshake checks.
 pub const GAME: &str = "bandori-monopoly";
-/// Protocol version. The original is `"8"` (TCP/Steam); this port speaks HTTP + SSE,
-/// so it starts a new number to keep old clients from half-working.
+/// Protocol version. The pre-port TCP/Steam protocol spoke `"8"`; this port
+/// speaks HTTP + SSE, so it starts a new number to keep old clients from
+/// half-working.
 pub const VERSION: &str = "9";
-/// `NetProtocol.MaxMessage` -- request body limit, bytes.
+/// Request body limit, bytes.
 pub const MAX_MESSAGE: usize = 1_048_576;
-/// `NetProtocol.RejoinWindow` -- seconds a dropped player keeps their player.
+/// Seconds a dropped player keeps their player.
 pub const REJOIN_WINDOW: f32 = 120.0;
-/// `NetProtocol.Timeout` -- seconds of silence before a client counts as dropped.
+/// Seconds of silence before a client counts as dropped.
 pub const TIMEOUT: f32 = 20.0;
 
-/// `NetProtocol.Reject*` reason codes.
+/// Join-reject reason codes.
 pub mod reject {
     pub const PASSWORD: &str = "password";
     pub const FULL: &str = "full";
@@ -35,7 +34,7 @@ pub mod reject {
     pub const REJOIN: &str = "rejoin";
 }
 
-/// `NetProtocol.Describe(reason)` -- the message for a reject reason
+/// The message for a reject reason
 /// (`err.join.<reason>`; the client has one per reason code).
 pub fn describe(reason: &str) -> crate::msg::Msg {
     crate::msg::Msg::new(if reason.is_empty() {
@@ -45,7 +44,7 @@ pub fn describe(reason: &str) -> crate::msg::Msg {
     })
 }
 
-/// `NetMessage.cs` as it survives the move to HTTP: one **match command**.
+/// One **match command** from the client.
 /// The client sends exactly these fields; `serde(default)` keeps partial
 /// commands (`{"act":"roll"}`) working and unknown fields from older clients
 /// are ignored rather than rejected.
@@ -102,8 +101,8 @@ impl NetMessage {
     }
 }
 
-/// `RoomInfo.cs`. The C# `[NonSerialized]` transport fields (Steam lobby, address,
-/// port, LAN source) have no equivalent over HTTP and are dropped.
+/// A room listing. Transport-only fields (lobby handle, address, port) have no
+/// equivalent over HTTP and are not carried.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RoomInfo {
@@ -153,7 +152,7 @@ impl RoomInfo {
     }
 }
 
-/// `RoomMember.cs` (the client-local `local` flag is not serialized).
+/// One room seat. A client-local `local` flag is not serialized.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RoomMember {
@@ -170,7 +169,7 @@ pub struct RoomMember {
     pub mentality: BotMentality,
 }
 
-/// `RoomService.Bot` -- the next bot name not already in `taken`: the data's bot
+/// The next bot name not already in `taken`: the data's bot
 /// name list in order, then again with a 2, 3, ... suffix.
 pub fn bot_name<'a, S: AsRef<str>>(
     names: &[S],
@@ -198,10 +197,9 @@ pub fn bot_name<'a, S: AsRef<str>>(
     String::new()
 }
 
-/// `RoomHost.CleanName` (RoomHost.cs:391) -- trim, cap at 16 **UTF-16 code units**
-/// (C# `string.Length`). Unlike C# `Substring`, a surrogate pair cut in half at the
-/// limit is dropped instead of leaving an invalid half character. May return ""
-/// (callers reject empty names).
+/// Clean a display name: trim, then cap at 16 **UTF-16 code units**. A surrogate
+/// pair cut in half at the limit is dropped rather than leaving an invalid half
+/// character. May return "" (callers reject empty names).
 pub fn clean_name(name: &str) -> String {
     let mut out = String::new();
     let mut units = 0;

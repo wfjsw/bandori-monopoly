@@ -29,7 +29,7 @@ use crate::scoring::ScoreWeights;
 use crate::state::{BotMentality, MatchEvent};
 use crate::MatchMode;
 
-/// Record file format version (`EngineStamp.format`). Bump on any change to
+/// Record file format version (`EngineStamp::format`). Bump on any change to
 /// the schema below; a file with a **newer** format is refused outright.
 ///
 /// v2 (2026-10-08): additive commit-reveal fields -- `MatchSetup::seed256`
@@ -44,7 +44,7 @@ pub const RECORD_VERSION: u32 = 2;
 /// so replay recomputes the identical f32.
 pub const STEP: f32 = 0.05;
 
-/// `RecordFile.magic`.
+/// `RecordFile::magic`.
 pub const MAGIC: &str = "bdrec";
 
 /// Keyframe store cap: a seek restores the nearest keyframe and re-simulates
@@ -97,7 +97,7 @@ pub fn fnv1a64(bytes: &[u8]) -> u64 {
     h
 }
 
-/// FNV-1a-64 as 16 lowercase hex digits (the `Checkpoint.hash` / `check` form).
+/// FNV-1a-64 as 16 lowercase hex digits (the `Checkpoint::hash` / `check` form).
 pub fn fnv1a64_hex(bytes: &[u8]) -> String {
     format!("{:016x}", fnv1a64(bytes))
 }
@@ -258,7 +258,7 @@ pub struct RecordHeader {
     /// The record starts at a `save()` snapshot, not at match creation.
     pub partial: bool,
     pub ended: bool,
-    /// `MatchState.end_reason` at export (`""` while still playing).
+    /// `MatchState::end_reason` at export (`""` while still playing).
     pub reason: String,
     pub rounds: i32,
     #[serde(with = "u64_str")]
@@ -297,7 +297,7 @@ impl Default for RecordHeader {
     }
 }
 
-/// `MatchHost(members, seed, mode, weights)` -- the start of a seeded record.
+/// `(members, seed, mode, weights)` -- the start of a seeded record.
 /// `members` carries each bot's [`BotMentality`], which is part of the
 /// deterministic inputs.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -782,7 +782,7 @@ pub struct Recorder {
     /// (`docs/FAIRNESS.md`). Set once at match creation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fair: Option<crate::fair::Fairness>,
-    /// Running total of the recorded tick calls (the sum of every `Ticks.n`).
+    /// Running total of the recorded tick calls (the sum of every `Ticks::n`).
     /// Kept up to date by [`Recorder::push_ticks`] so a checkpoint is O(1);
     /// recomputed by [`Recorder::recount`] after a deserialize.
     #[serde(skip)]
@@ -941,7 +941,7 @@ pub struct RecordedMatch {
 }
 
 impl RecordedMatch {
-    /// `MatchHost(members, seed, mode, weights)`, recorded from the start.
+    /// Built from `(members, seed, mode, weights)`, recorded from the start.
     pub fn new(
         data: Arc<GameData>,
         rules: Arc<dyn CardRules>,

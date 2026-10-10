@@ -1,5 +1,6 @@
-//! Bot mentality: standard is the ported C# policy, chaos is legal but
-//! maximally disruptive. Both must stay deterministic (same seed, same game).
+//! Bot mentality: standard is the standard policy (`docs/BOT.md`), chaos is
+//! legal but maximally disruptive. Both must stay deterministic (same seed,
+//! same game).
 
 use std::sync::{Arc, Mutex};
 
@@ -104,7 +105,7 @@ fn chaos_bot_buys_with_no_reserve() {
             for e in match_.events_since(last) {
                 last = e.id;
                 // Auction wins log as `buy` too; they price from `Ask::worth`,
-                // not `AiWantsBuy`. Only the end-step purchase tests it.
+                // not the buy-reserve gate. Only the end-step purchase tests it.
                 if e.r#type == "buy" && e.player_id >= 0 && !e.msg.to_string().contains("auction") {
                     after.push(st.players[e.player_id as usize].money);
                 }

@@ -1,5 +1,5 @@
 //! The engine-bundle id recipe (`docs/REPLAY.md` §9) must stay in lockstep
-//! with `tools/engine-bundle.mjs` -- a record's `EngineStamp.bundle` is how
+//! with `tools/engine-bundle.mjs` -- a record's `EngineStamp::bundle` is how
 //! the replay player finds the archived engine that wrote it. The known
 //! vector below is produced by the JS twin; `tools/test-replay-archive.mjs`
 //! additionally pins both against a real glue build.

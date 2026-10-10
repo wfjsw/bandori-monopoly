@@ -60,10 +60,10 @@ pub const NEUTRAL_WEIGHT: i32 = 1_000;
 /// per offer; see [`StrategyParams::counteract_propensity`]).
 ///
 /// User ruling 2026-10-08: *"bots must be able to counteract"* -- the old
-/// default was `0` (never declare, the C# parity gap), which meant a standard
-/// bot held every [反击] card forever. The rules expose no per-card counteract
-/// usefulness value (`Card.AiPlay` is a play-window gate and `CardDef` has no
-/// `H.AiPlay` hook yet), so the policy is this propensity, drawn from the
+/// default was `0` (never declare), which meant a standard bot held every
+/// [反击] card forever. The rules expose no per-card counteract usefulness
+/// value (a card's play-window gate is not a usefulness score, and `CardDef`
+/// has no host-side usefulness hook yet), so the policy is this propensity, drawn from the
 /// match RNG exactly like chaos's `CHAOS_COUNTER_CHANCE`. A card the book
 /// wants held back gets an explicit `propensity_milli: 0`.
 pub const DEFAULT_COUNTERACT_PROPENSITY_MILLI: i32 = 600;
@@ -385,12 +385,12 @@ impl StrategyParams {
         }
     }
 
-    /// `AiWantsBuy` under these params (no tile / round context).
+    /// Buy-reserve test under these params (no tile / round context).
     pub fn wants_buy(&self, money: i32, price: i32) -> bool {
         money - price >= self.buy_reserve
     }
 
-    /// `AiWantsBuy` with the tile's colour group and the current round.
+    /// Buy-reserve test with the tile's colour group and the current round.
     ///
     /// * `group` -- [`crate::data::TileData::group`] of the tile.
     /// * `completes_set` -- the buy would complete the buyer's colour group
@@ -440,12 +440,12 @@ impl StrategyParams {
             .unwrap_or(i32::MAX)
     }
 
-    /// `AiWantsBuild` under these params (no tile context).
+    /// Build-reserve test under these params (no tile context).
     pub fn wants_build(&self, money: i32, cost: i32) -> bool {
         money - cost >= self.build_reserve
     }
 
-    /// `AiWantsBuild` with the tile's colour group and the houses already up.
+    /// Build-reserve test with the tile's colour group and the houses already up.
     pub fn wants_build_tile(&self, money: i32, cost: i32, group: i32, houses: i32) -> bool {
         if houses >= self.target_houses_for(group) {
             return false;

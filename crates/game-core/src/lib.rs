@@ -4,8 +4,9 @@
 //! No filesystem, no clock, no ambient randomness: time enters as `tick(dt)` or as
 //! date strings, and randomness is seeded explicitly (`rng`).
 //!
-//! Every serialized type mirrors a C# `[Serializable]` class from the decompiled
-//! game, with the same JSON field names and the same defaults for missing fields.
+//! Every serialized type carries the JSON the data/wire files already use: the
+//! same field names, and `#[serde(default)]` so missing fields take the typed
+//! default.
 
 pub mod data;
 pub mod deck;
@@ -24,7 +25,8 @@ pub mod strategy;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-/// `MatchMode.cs`. Serialized as an integer, like Unity's `JsonUtility` does.
+/// Match flavour. Serialized as an integer on the wire / on disk
+/// (`0` Solo, `1` Casual, `2` Ranked).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash)]
 #[repr(i32)]
 pub enum MatchMode {

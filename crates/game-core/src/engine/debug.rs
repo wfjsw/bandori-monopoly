@@ -5,7 +5,7 @@
 //! production browser glue has no cheat handling at all and a `debug` act is
 //! refused as an unknown command. Debug builds take a cheat input in every
 //! match mode -- Solo, Casual and Ranked alike -- and mark the match
-//! (`MatchState.debugOpen`) so the record shows the cheat use
+//! ([`MatchState::debug_open`]) so the record shows the cheat use
 //! (`docs/SERVER.md`).
 //!
 //! Validate everything before changing the world; a suspended routine would

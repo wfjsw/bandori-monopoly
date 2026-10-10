@@ -1,4 +1,4 @@
-//! `Progression.cs` + `MatchReward.cs` -- levels, EXP, fire (stamina), coins.
+//! Levels, EXP, fire (stamina), coins.
 
 use serde::{Deserialize, Serialize};
 
@@ -40,8 +40,8 @@ pub fn exp_multiplier(fire_used: i32) -> i32 {
 /// Ranked coin change. Top three gain 500/300/100; otherwise the last three lose
 /// 500/300/100 counting from the bottom.
 ///
-/// Faithful to the C#, including its overlap in small games: with 4 players, 4th
-/// place is "last" and loses 500 even though 3rd gains 100.
+/// The two bands overlap in small games by design: with 4 players, 4th place is
+/// "last" and loses 500 even though 3rd gains 100.
 pub fn ranked_coins(rank: i32, players: i32) -> i32 {
     if rank >= 1 && rank as usize <= TOP_COINS.len() && rank <= players {
         return TOP_COINS[rank as usize - 1];
@@ -53,7 +53,7 @@ pub fn ranked_coins(rank: i32, players: i32) -> i32 {
     0
 }
 
-/// `MatchReward.cs` -- what one finished match gave the player.
+/// What one finished match gave the player.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchReward {

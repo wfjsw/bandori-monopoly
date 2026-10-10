@@ -369,7 +369,7 @@ fn buy_count(data: Arc<GameData>, seed: u64) -> usize {
         for e in m.events_since(last) {
             last = e.id;
             // Auction wins log as `buy` too; only the land purchase tests
-            // `AiWantsBuy`.
+            // the buy-reserve gate.
             if e.r#type == "buy" && e.player_id >= 0 && !e.msg.to_string().contains("auction") {
                 buys += 1;
             }

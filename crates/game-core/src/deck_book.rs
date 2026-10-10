@@ -28,8 +28,8 @@
 //! compression is a later file-format bump.
 //!
 //! Field names are snake_case, like [`crate::record::EngineStamp`] and the
-//! ruleset `index.json`, not the camelCase of the C#-mirrored `data/*.json`:
-//! this file is engine-side data, not a Unity `JsonUtility` table.
+//! ruleset `index.json`, not the camelCase the `data/*.json` tables use:
+//! this file is engine-side data, not a game data table.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

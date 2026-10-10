@@ -1,14 +1,15 @@
-//! `MatchHost.MoveCtx` -- the live state of one movement routine.
+//! The live state of one movement routine.
 //!
-//! Runtime-only: it holds roll tables and (in the C#) closures the wire never
-//! carries. The broadcast summary the UI reads is [`MovePlan`]
-//! ([`MoveCtx::to_plan`]), which is what `MatchState::plan` holds.
+//! Runtime-only: it holds the roll tables the wire never carries. The broadcast
+//! summary the UI reads is [`MovePlan`] ([`MoveCtx::to_plan`]), which is what
+//! `MatchState::plan` holds.
 
 use crate::msg::Msg;
 use crate::state::MovePlan;
 
-/// How the player gets there: exactly one per move (C# `MoveCtx.Teleport` vs the
-/// walk loop). Mirrors `card_sdk::abi::MoveKind` bit-for-bit.
+/// How the player gets there: exactly one per move -- a walk that travels a
+/// [路径], or a [传送] to its destination. Mirrors `card_sdk::abi::MoveKind`
+/// bit-for-bit.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum MoveKind {
     #[default]
@@ -28,11 +29,11 @@ impl MoveKind {
 
 // Settling is not its own axis beside [`MoveKind`]: the kind already says
 // *where* resolution happens -- a walk resolves the route it travels and its
-// landing, a teleport only its destination. `MoveCtx::resolve` (C#
-// `m.Resolve`) is the one remaining boolean: *whether* the move settles where
-// it lands, and a card effect can clear it to prevent settle at all.
+// landing, a teleport only its destination. [`MoveCtx::resolve`] is the one
+// remaining boolean: *whether* the move settles where it lands, and a card
+// effect can clear it to prevent settle at all.
 
-/// One term the movement rolls into its total (`MoveCtx.Base` / `Dice`).
+/// One term the movement rolls into its total (the `base` / `dice` tables).
 ///
 /// `count`d`sides`, summed. **`sides == 0` is a flat `count`** -- that is how a
 /// 「+2 to the roll」 effect is expressed, instead of a separate `bonus` field;
@@ -67,10 +68,10 @@ impl Roll {
 
 /// `MoveCtx` -- the live state of one movement, from plan to landing.
 ///
-/// This is the routine's working state, not a mirror of the C# class: it holds
-/// what the walk loop and the settle step actually read, plus what a card needs
-/// to shape the move. The broadcast summary the UI reads is [`MovePlan`]
-/// ([`MoveCtx::to_plan`]), which is what `MatchState::plan` holds.
+/// This is the routine's working state: it holds what the walk loop and the
+/// settle step actually read, plus what a card needs to shape the move. The
+/// broadcast summary the UI reads is [`MovePlan`] ([`MoveCtx::to_plan`]),
+/// which is what `MatchState::plan` holds.
 #[derive(Debug, Clone, PartialEq)]
 pub struct MoveCtx {
     // -- who ---------------------------------------------------------------
@@ -80,7 +81,7 @@ pub struct MoveCtx {
     /// defaults it to the mover, and a substitution (幻觉来了 「上一名玩家代替
     /// 进行此次投掷」) writes the stand-in through `plan::set_roller`.
     pub roller: usize,
-    /// The turn's [main move](C# `Main`), as opposed to a card's side move.
+    /// The turn's [主要移动], as opposed to a card's side move.
     pub main: bool,
     /// An event-driven forced move (「移动X」 / 「移动1d20」): not a main move, so
     /// it goes through even when the turn's main move is already spent
@@ -91,7 +92,7 @@ pub struct MoveCtx {
     pub why: Option<Msg>,
 
     // -- what kind of move ---------------------------------------------------
-    /// How the player gets there: one walk or one teleport (C# `m.Teleport`).
+    /// How the player gets there: one walk or one [传送].
     pub kind: MoveKind,
     /// The teleport's destination, or `-1` (a teleport with no named
     /// destination derives it from the roll).
@@ -129,7 +130,7 @@ pub struct MoveCtx {
     /// The tile the walk begins on, or `-1` for the player's own tile.
     pub start: i32,
     pub start_why: String,
-    /// The walk goes backwards (`Dir` is -1).
+    /// The walk goes backwards ([`Self::dir`] is -1).
     pub reverse: bool,
     /// The tiles the walk visits, in order.
     pub path: Vec<i32>,
@@ -161,7 +162,8 @@ pub struct MoveCtx {
     /// is refused anywhere but where the move settled, and this speaks only to
     /// the landing.
     pub can_build: bool,
-    /// A queued second walk, in steps (the C# `MoreSteps` follow-up phase).
+    /// A queued second walk, in steps (the follow-up walk once the first
+    /// settles).
     pub more_steps: i32,
     /// Passing CiRCLE pays nothing on this walk.
     /// The landing cannot be bought (「该次传送不可进行地契购买」).
@@ -170,15 +172,15 @@ pub struct MoveCtx {
     // -- counteractions ------------------------------------------------------------
     /// A counteraction cancelled the movement.
     pub cancelled: bool,
-    /// Card-owned per-move state, keyed by name (C# held fire-roll counters on
-    /// the engine; the cards track that themselves now). The engine never reads
-    /// it -- it is scratch space for the card that armed the effect.
+    /// Card-owned per-move state, keyed by name. The engine never reads it --
+    /// it is scratch space for the card that armed the effect (e.g. a fire-roll
+    /// counter the card tracks itself).
     pub tags: Vec<(String, i32)>,
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- players who replay this
-    /// move's result after the mover settles (C# `LeadFx.Who` / `Follow`). The
-    /// engine walks each one the same way, in the order recorded here (「你先
-    /// 触发结算，此后其他玩家按行动顺序依次触发结算」), carrying the same plan
-    /// (steps / kind / destination / `pay_factor`).
+    /// move's result after the mover settles. The engine walks each one the
+    /// same way, in the order recorded here (「你先触发结算，此后其他玩家按
+    /// 行动顺序依次触发结算」), carrying the same plan (steps / kind /
+    /// destination / `pay_factor`).
     pub followers: Vec<i32>,
 }
 
@@ -188,10 +190,10 @@ impl MoveCtx {
 }
 
 impl Default for MoveCtx {
-    /// The sentinels a derived `Default` would get wrong: `Resolve = true`,
-    /// `TeleportTo/Start/StopAt/Parity/Steps = -1`, `Base = 1d20`, and
-    /// `roller = ROLLER_UNSET`. Getting these wrong is silent -- the walk just
-    /// never settles, or a teleport goes to tile 0.
+    /// The sentinels a derived `Default` would get wrong: `resolve = true`,
+    /// `teleport_to` / `start` / `stop_at` / `parity` / `steps = -1`,
+    /// `base = 1d20`, and `roller = ROLLER_UNSET`. Getting these wrong is
+    /// silent -- the walk just never settles, or a teleport goes to tile 0.
     fn default() -> Self {
         Self {
             player_id: 0,
@@ -240,7 +242,7 @@ impl Default for MoveCtx {
 }
 
 impl MoveCtx {
-    /// A fresh walk for `player_id` (C# `new MoveCtx { Player = player_id }`).
+    /// A fresh walk for `player_id`.
     pub fn new(player_id: usize) -> Self {
         Self {
             player_id,
@@ -249,17 +251,17 @@ impl MoveCtx {
         }
     }
 
-    /// `SetSteps` -- fix the walk length, so the move walks exactly `n` steps
-    /// and does not roll (C# `Steps >= 0` suppresses `RollMove`; `WalkMoveSteps`
-    /// then reads `Steps` instead of `Roll`). The sign of the current roll is
-    /// kept so a reverse move stays reverse.
+    /// Fix the walk length, so the move walks exactly `n` steps and does not
+    /// roll (a non-negative `steps` suppresses the roll; the walk then reads
+    /// `steps` instead of `roll`). The sign of the current roll is kept so a
+    /// reverse move stays reverse.
     pub fn set_steps(&mut self, n: i32) {
         let n = n.max(0);
         self.steps = n;
         self.roll = if self.roll < 0 { -n } else { n };
     }
 
-    /// `Dir` -- +1 forwards, -1 backwards.
+    /// +1 forwards, -1 backwards.
     pub fn dir(&self) -> i32 {
         if self.reverse {
             -1
@@ -268,8 +270,8 @@ impl MoveCtx {
         }
     }
 
-    /// `WalkDir` -- the direction the current roll actually walks (a negative
-    /// roll flips `Dir`).
+    /// The direction the current roll actually walks (a negative roll flips
+    /// [`Self::dir`]).
     pub fn walk_dir(&self) -> i32 {
         if self.roll >= 0 {
             self.dir()
@@ -278,7 +280,7 @@ impl MoveCtx {
         }
     }
 
-    /// `SetTag` -- write card-owned per-move state.
+    /// Write card-owned per-move state.
     pub fn set_tag(&mut self, key: &str, value: i32) {
         match self.tags.iter_mut().find(|(k, _)| k == key) {
             Some(e) => e.1 = value,
@@ -286,7 +288,7 @@ impl MoveCtx {
         }
     }
 
-    /// `Tag` -- read card-owned per-move state (0 when unset).
+    /// Read card-owned per-move state (0 when unset).
     pub fn tag(&self, key: &str) -> i32 {
         self.tags
             .iter()
@@ -294,7 +296,7 @@ impl MoveCtx {
             .map_or(0, |(_, v)| *v)
     }
 
-    /// `MovePlan` -- the broadcast summary of this walk (`State.plan`).
+    /// The broadcast summary of this walk (`MatchState::plan`).
     ///
     /// `reach` is the path the walk visits; `steps` is how far along it the
     /// player has got, and `landing()` is where it ends.
