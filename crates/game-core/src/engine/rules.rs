@@ -162,6 +162,9 @@ pub struct Trigger {
     /// A `BuyGate` refusal's reason key (a `log.*` message key naming why the
     /// gate refused). Written by the responder alongside `set_cancelled`.
     pub reason: String,
+    /// `t.Name` -- the counter name on a `CounterChanged` hook, or the message
+    /// name on a `Message` entry. Empty otherwise.
+    pub name: String,
 }
 
 impl Trigger {
@@ -198,6 +201,7 @@ impl Trigger {
             deal_houses: 0,
             deal_mortgaged: false,
             reason: String::new(),
+            name: String::new(),
         }
     }
 
