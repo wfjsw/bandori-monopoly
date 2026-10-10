@@ -158,6 +158,34 @@ pub struct Run {
     /// logs shows log, pay, log in code order. A multi-pass re-run's k-th log
     /// replaces [`Self::posted`]\[k\] instead of appending (same shape as the
     /// pre-filled `answers` log).
+    ///
+    /// # Soundness of the raw `Cx` pointer
+    ///
+    /// Same pattern as [`DriveInline`]'s `cx` (see that struct's docs): the
+    /// pointer is installed at `Run` construction from the `Cx` the drive is
+    /// running on, and never outlives it.
+    ///
+    /// * **Lifetime.** `drive_inner_body` holds `cx: &mut Cx` for the whole
+    ///   drive. The `Run` (and every copy `Ruleset::store` makes of it) lives
+    ///   inside that call. `Run` is not `'static` and is not sent across
+    ///   threads; the `'static` bound is the usual launder for a pointer that
+    ///   is only dereferenced inside the frame that created it, exactly as
+    ///   `DriveInline` does.
+    /// * **Aliasing.** While the guest is running, `cx` is only reached through
+    ///   this pointer or `DriveInline`'s -- never as a simultaneous `&mut`.
+    ///   The drive's own `&mut Cx` is used only between guest calls (NeedHost /
+    ///   NeedInput arms), and those arms run after the guest has returned, so
+    ///   no `&mut Cx` is live at the same time as a post through this pointer.
+    ///   (`announce`'s closure holds a second copy of the same pointer; it runs
+    ///   inside `Ruleset::run` / `run_hook`, while the drive is blocked on that
+    ///   call, so the same exclusion holds.)
+    /// * **Panic / trap.** A wasm trap unwinds out of `call_card` as
+    ///   `RuleError::Trap`, which `drive_inner_body` handles **without**
+    ///   unwinding through `Cx` -- the pointer is never left dangling. On the
+    ///   native backend a `catch_unwind` around the guest call turns a panic
+    ///   into the same `RuleError`. A halted drive (`Halt`) drops its posted
+    ///   lines (`drop_events`) before returning, so a discarded pass leaves no
+    ///   orphan events. There is no `Drop` impl that would touch the pointer.
     live: Option<*mut Cx<'static>>,
     /// Event ids this drive has posted to the live stream, in call order.
     /// Survives across passes (the drive hands it back at each pause).
@@ -261,6 +289,14 @@ impl Run {
             .card_activation(kind, owner, card, target, tile, negated, msg);
         e.parent = self.parent;
         e.id
+    }
+
+
+    /// One outcome line for a silent state write (place / mark / counter /
+    /// status), so nothing a body did is invisible under the header. Posted
+    /// write-through like every other body line.
+    fn outcome(&mut self, who: i32, msg: Msg) {
+        self.post_log("text", who, msg, "");
     }
 
     /// Record a crystal write on the instance at `uid` so the commit point can
@@ -557,6 +593,14 @@ impl CardWorld for Run {
     fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, note: Msg) -> i32 {
         let props = props_of(&self.props, card);
         let uid = self.world.place_card_on(&self.data, player_id, tile, card, note, props);
+        if uid >= 0 {
+            self.outcome(
+                player_id,
+                Msg::new("log.outcome.place")
+                    .player_id("who", player_id)
+                    .card("card", card.to_string()),
+            );
+        }
         if card == self.current_card {
             self.current_uid = uid;
         }
@@ -565,6 +609,14 @@ impl CardWorld for Run {
     fn place_card(&mut self, player_id: i32, card: &str, note: Msg) -> i32 {
         let props = props_of(&self.props, card);
         let uid = self.world.place_card(&self.data, player_id, card, note, props);
+        if uid >= 0 {
+            self.outcome(
+                player_id,
+                Msg::new("log.outcome.place")
+                    .player_id("who", player_id)
+                    .card("card", card.to_string()),
+            );
+        }
         if card == self.current_card {
             self.current_uid = uid;
         }
@@ -597,9 +649,11 @@ impl CardWorld for Run {
         self.world.unplace_card(player_id, card).is_some()
     }
     fn unplace_card(&mut self) -> i32 {
+        let card = self.current_card.clone();
         let owner = self.world.unplace_at(self.current_uid);
         if owner >= 0 {
             self.current_uid = -1;
+            self.outcome(owner, Msg::new("log.outcome.unplace").card("card", card));
         }
         owner
     }
@@ -706,6 +760,16 @@ impl CardWorld for Run {
         let was = self.world.counter_at(uid, name);
         let now = self.world.set_counter_at(uid, name, n);
         self.note_counter_changed(uid, was, now, name);
+        if now != was {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.counter")
+                    .card("card", self.current_card.clone())
+                    .text("name", name.to_string())
+                    .i("value", now - was),
+            );
+        }
         now
     }
     fn add_counter(&mut self, name: &str, n: i32, max: i32) -> i32 {
@@ -713,6 +777,16 @@ impl CardWorld for Run {
         let was = self.world.counter_at(uid, name);
         let now = self.world.add_counter_at(uid, name, n, max);
         self.note_counter_changed(uid, was, now, name);
+        if now != was {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.counter")
+                    .card("card", self.current_card.clone())
+                    .text("name", name.to_string())
+                    .i("value", now - was),
+            );
+        }
         now
     }
     fn counter_at(&self, uid: i32, name: &str) -> i32 {
@@ -798,8 +872,20 @@ impl CardWorld for Run {
         self.world.note_marker_owner(kind, &who);
         let me = self.current_uid;
         let src = if src < 0 { me } else { src };
-        self.world
-            .place_mark(me, kind, category, tile, owner, src, count, note, fresh)
+        let uid = self
+            .world
+            .place_mark(me, kind, category, tile, owner, src, count, note, fresh);
+        if uid >= 0 && count > 0 {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.mark_add")
+                    .tile("tile", tile)
+                    .text("kind", kind.to_string())
+                    .i("n", count as i64),
+            );
+        }
+        uid
     }
     fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.count_marks(tile, filter)
@@ -810,10 +896,37 @@ impl CardWorld for Run {
         filter: &game_core::state::MarkFilter<'_>,
         delta: i32,
     ) -> i32 {
-        self.world.bump_mark(tile, filter, delta)
+        let got = self.world.bump_mark(tile, filter, delta);
+        if got != 0 {
+            let who = self.trigger.player_id;
+            let key = if got > 0 {
+                "log.outcome.mark_add"
+            } else {
+                "log.outcome.mark_remove"
+            };
+            self.outcome(
+                who,
+                Msg::new(key)
+                    .tile("tile", tile)
+                    .text("kind", String::new())
+                    .i("n", got.abs() as i64),
+            );
+        }
+        got
     }
     fn remove_marks(&mut self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
-        self.world.remove_marks(tile, filter)
+        let got = self.world.remove_marks(tile, filter);
+        if got != 0 {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.mark_remove")
+                    .tile("tile", tile)
+                    .text("kind", String::new())
+                    .i("n", got.abs() as i64),
+            );
+        }
+        got
     }
     fn mark_src_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
         self.world.mark_src_at(tile, filter)
@@ -945,15 +1058,37 @@ impl CardWorld for Run {
         self.world.gain_fire(player_id, n, why)
     }
     fn give_stay(&mut self, player_id: i32, n: i32) {
+        if n > 0 {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.stay")
+                    .player_id("who", who)
+                    .player_id("target", player_id),
+            );
+        }
         self.world.give_stay(player_id, n);
     }
     fn give_stun(&mut self, player_id: i32, n: i32) {
+        if n > 0 {
+            let who = self.trigger.player_id;
+            self.outcome(
+                who,
+                Msg::new("log.outcome.stun")
+                    .player_id("who", who)
+                    .player_id("target", player_id),
+            );
+        }
         self.world.give_stun(player_id, n);
     }
     fn give_exile(&mut self, player_id: i32, n: i32, to: i32) {
         if n > 0 {
             // 「任意玩家获得[除外]…时」 -- the grant is a raise point (embers).
             self.exile_log.push(player_id);
+            self.outcome(
+                player_id,
+                Msg::new("log.outcome.exile").player_id("target", player_id),
+            );
         }
         self.world.give_exile(player_id, n, to);
     }
@@ -3585,16 +3720,32 @@ impl<M: CardModules> RulesBridge<M> {
         let dest = if negated {
             // The body does not run, so the card has no fate of its own: it was
             // played (it left the hand at declaration) and is spent. It still
-            // flashes -- marked 无效 -- so the negation is visible.
+            // flashes -- marked 无效 -- so the negation is visible -- and names
+            // the counter that negated it.
             let link = &chain[answered].link;
-            cx.card_activated(
+            let negators: Vec<String> = chain[idx]
+                .answers
+                .iter()
+                .map(|&a| chain[a].id.clone())
+                .collect();
+            let msg = Msg::new("log.card_negated").card("card", id.clone());
+            let parent = cx.activation.last().copied().unwrap_or(-1);
+            let ev = cx.log_card_activation(
                 game_core::state::card_trigger::COUNTER,
                 seat as i32,
                 &id,
                 link.player_id,
                 link.tile,
                 true,
+                msg,
+                parent,
             );
+            if let Some(n) = negators.first() {
+                cx.set_event_results(
+                    ev,
+                    vec![Msg::new("log.outcome.negated_by").card("card", n.clone())],
+                );
+            }
             DEST_UNSET
         } else {
             // The counter's body runs against the link it answers, so its

@@ -27,7 +27,6 @@ mod ops;
 mod play;
 pub mod rules;
 mod setup;
-mod trigger_why;
 mod world;
 
 pub use ai::{
@@ -43,7 +42,6 @@ pub use rules::{
     CardRules, Dest, Dir, Effect, Negation, Payee, RollSource, StubRules, Trigger, TriggerBuy,
     TriggerMove, TriggerPay,
 };
-pub use trigger_why::{counteract_reason, trigger_reason};
 pub use world::{Extreme, Hidden, Scheduled, SharedWorld, TurnCtx, World};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
