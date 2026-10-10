@@ -1232,6 +1232,8 @@ pub const SLOT_NAMES: &[&str] = &[
     // `detour` next-roll 1d6 arm (`state::set(player_id, NEXT_ROLL, 1)`); the
     // `On::RollPlan` condition is `slot('detour_next_roll') != 0`.
     "detour_next_roll",
+    // `sayo_thorns` / `sayo_play` once-per-turn lock (`state::set(player_id, USED, turn_key)`).
+    "skill.sayoThorns.used",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read
