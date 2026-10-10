@@ -33,7 +33,7 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayChoose], "", Some(pay_choose_guard), pay_choose),
         On::Hook(&[HookKind::PayAfter], "", Some(pay_after_guard), pay_after),
         On::Hook(&[HookKind::SkillUsed], "", Some(skill_used_guard), skill_used),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
@@ -170,16 +170,17 @@ fn skill_used(player_id: i32) -> card_sdk::Asked {
 /// 规则书[持续]（3）: 「此卡上不再拥有[奇迹水晶]时将此卡放入[使用者]弃卡区」 -- C# `Check` ->
 /// `H.Unplace(this, "discard", "奇迹水晶用完了")`.
 ///
-/// Listens to this card's own [`HookKind::CrystalsChanged`] rather than being
-/// re-checked at each spend site, so a count emptied by *any* write -- a spend
-/// here, another card's `add_card_crystals`, the [手] placing none -- leaves the
-/// field just the same.
+/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// `counter::CRYSTALS`) rather than being re-checked at each spend site, so a
+/// count emptied by *any* write -- a spend here, another card's
+/// `add_card_crystals`, the [手] placing none -- leaves the field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state. A run that writes twice (say up and then back to zero) raises

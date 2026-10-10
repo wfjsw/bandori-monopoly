@@ -10,6 +10,7 @@
 //! crystals, then +1 (or +2 with [共鸣]) on every field card whose text mentions
 //! 「奇迹水晶」.
 
+use card_sdk::abi::counter;
 use card_sdk::{ctx, key, CardDef, Msg, On};
 
 pub const TITLE_IDOL: CardDef = CardDef::new("PP:TITLE IDOL", &[On::Play("", None, title_idol)]);
@@ -37,7 +38,7 @@ fn title_idol(player_id: i32) -> card_sdk::Asked {
         if !ctx::card_text_mentions(&c, "奇迹水晶") {
             continue;
         }
-        ctx::add_crystals_at(uid, n, 0);
+        ctx::add_counter_at(uid, counter::CRYSTALS, n, 0);
     }
     ctx::log(
         player_id,

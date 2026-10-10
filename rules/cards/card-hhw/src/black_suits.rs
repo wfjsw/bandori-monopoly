@@ -12,7 +12,7 @@
 //! `tile:agent` body. It is not an after-hook: a body replace must not leave a
 //! borrowed draw running. The instance lives exactly while the crystal does.
 
-use card_sdk::abi::{ChainKind, HookKind};
+use card_sdk::abi::{ChainKind, HookKind, MarkFilter};
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -50,12 +50,15 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
     let group = ctx::tile_named("弦卷集团");
     // 规则书[反击]: 「在“弦卷集团”（#29格）格子上放置一个奇迹水晶」 -- C#
     // `H.AddMark(tsurumakiAgent, "黑衣人的补给", c.Seat, 1, ...)`: a tile mark
-    // owned by the player of this card.
+    // owned by the player of this card. `place_mark_new`: one row per crystal.
     if group >= 0 {
-        ctx::add_mark(
+        ctx::place_mark_new(
             group,
-            player_id,
             MARK,
+            "",
+            player_id,
+            ctx::self_uid(),
+            1,
             &Msg::new(key!("black_suits_crystal_note")),
         );
         ctx::log(
@@ -77,7 +80,7 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// Attach or drop the borrowed `tile:circle` instance so it exists exactly
 /// while 弦卷集团 carries a crystal.
 fn sync_circle_instance(group: i32) {
-    let has = ctx::count_marks(group, MARK, -2) > 0;
+    let has = ctx::count_marks(group, &MarkFilter::any().kind(MARK)) > 0;
     // `place_card_on(BOARD_OWNER, tile, …)` is the "attach a rule to a tile"
     // gesture (`game_core::state::BOARD_OWNER`, `docs/TILES.md`). The board
     // field is `field_instances(-1)`; a borrowed `tile:circle` on *this* tile
@@ -109,7 +112,8 @@ fn pass_tile(_player_id: i32) -> card_sdk::Asked {
     // `actor == owner && tile.id == tile_named('弦卷集团')` is the pre; the
     // crystal mark count is the residual guard.
     let t = ctx::trigger::tile();
-    ctx::bump_mark(t, MARK, -2, -1);
+    // `MarkFilter::any()` keeps the old `owner: -2` "any owner" match.
+    ctx::bump_mark(t, &MarkFilter::any().kind(MARK), -1);
     sync_circle_instance(t);
     Ok(())
 }

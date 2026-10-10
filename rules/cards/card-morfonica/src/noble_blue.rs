@@ -47,10 +47,14 @@ fn noble_blue(player_id: i32) -> card_sdk::Asked {
     ctx::card_settle_at(player_id, pos, true);
     // 规则书2: 「在该地块上放置一个标记，有标记时此地块不能被指定」 -- the mark kind
     // is the gate: `target_tile` refuses any tile carrying `noTarget`.
-    ctx::add_mark(
+    // `place_mark_new`: the old `add_mark` row-per-call semantics.
+    ctx::place_mark_new(
         pos,
-        player_id,
         card_sdk::abi::mark::NO_TARGET,
+        "",
+        player_id,
+        ctx::self_uid(),
+        1,
         &Msg::new(key!("noble_blue_mark_note")),
     );
     ctx::log(

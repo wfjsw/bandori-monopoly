@@ -12,6 +12,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use card_sdk::abi::counter;
 use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -21,10 +22,10 @@ pub const CRYSTAL_SWAP: CardDef =
 /// One pool entry: a card instance on some player's field.
 ///
 /// C# `CardCrystalSwap.Slots`'s `(label, get, add)` tuple, but per **uid** --
-/// `get` / `add` are [`ctx::crystals_at`] / [`ctx::add_crystals_at`] on this
-/// instance, not on the running card. `band` only picks the label: a band-skill
-/// instance is called 「团卡」 (`crystal_swap_band`), everything else is named by
-/// its card id (`crystal_swap_card`).
+/// `get` / `add` are [`ctx::counter_at`] / [`ctx::add_counter_at`] on this
+/// instance's `counter::CRYSTALS`, not on the running card. `band` only picks
+/// the label: a band-skill instance is called 「团卡」 (`crystal_swap_band`),
+/// everything else is named by its card id (`crystal_swap_card`).
 struct Slot {
     uid: i32,
     player_id: i32,
@@ -35,14 +36,14 @@ struct Slot {
 impl Slot {
     /// C# `get` -- the crystal count on this card.
     fn get(&self) -> i32 {
-        ctx::crystals_at(self.uid)
+        ctx::counter_at(self.uid, counter::CRYSTALS)
     }
 
     /// C# `add` -- `Card.AddCrystals(n, ...)` on this instance. `max = 0` is
     /// uncapped; the C# clamps at the card's own `MaxCrystals`, which the ABI
     /// does not expose.
     fn add(&self, n: i32) {
-        ctx::add_crystals_at(self.uid, n, 0);
+        ctx::add_counter_at(self.uid, counter::CRYSTALS, n, 0);
     }
 
     /// C# `label` -- `"{{who}}'s band card ({{n}})"` / `"{{who}}'s \"{{card}}\"

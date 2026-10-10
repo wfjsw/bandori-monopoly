@@ -14,7 +14,7 @@
 //! *placed* cards, so the play body places this card as the `HagumiMarkFx`
 //! stand-in (same pattern as `HHW:爱心义演`'s `CharityFx`).
 
-use card_sdk::abi::{ChainKind, HookKind, MoveKind};
+use card_sdk::abi::{ChainKind, HookKind, MarkFilter, MoveKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -76,9 +76,18 @@ fn rolls(player_id: i32, times: i32) -> card_sdk::Asked {
         ctx::draw(player_id, 1)?;
         return Ok(());
     }
-    // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」
+    // 规则书（1）[手]: 「将一个育美标记放置到投掷结果之一的格子上」 -- one row per
+    // mark (`place_mark_new`, the old `add_mark` semantics).
     let note = Msg::new(key!("hagumi_marks_mark_note")).n("money", 2000);
-    ctx::add_mark(tile, player_id, key!("hagumi_marks_mark"), &note);
+    ctx::place_mark_new(
+        tile,
+        key!("hagumi_marks_mark"),
+        "",
+        player_id,
+        ctx::self_uid(),
+        1,
+        &note,
+    );
     ctx::log(
         player_id,
         &Msg::new(key!("hagumi_marks_placed")).tile("tile", tile),
@@ -102,7 +111,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     // this tile -- is a derived-list residual.
     let t = trigger::tile();
     // C# `H.CountMarks(t, "育美标记", Seat) <= 0` -- no mark on this tile.
-    if ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) <= 0 {
+    if ctx::count_marks(t, &mark_filter(player_id)) <= 0 {
         return Ok(());
     }
     // 规则书（1）: 「可在那格强制停下并获得2000资金」 -- C# `Stop`:
@@ -127,7 +136,7 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     }
     // 规则书（1）: 「然后移除该标记」 -- C# decrements the mark count and drops
     // the mark when it reaches 0.
-    ctx::remove_marks(t, key!("hagumi_marks_mark"), player_id);
+    ctx::remove_marks(t, &mark_filter(player_id));
     // 规则书（1）: 「获得2000资金」 -- C# `H.GainR(Seat, 2000, "育美标记")`.
     ctx::gain(player_id, 2000, &Msg::new(key!("hagumi_marks_gained")))?;
     ctx::log(
@@ -148,10 +157,15 @@ fn hook(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// The 育美标记 filter: this kind, owned by `player_id`.
+fn mark_filter(owner: i32) -> MarkFilter {
+    MarkFilter::any().kind(key!("hagumi_marks_mark")).owner(owner)
+}
+
 /// Does `player_id` still own any 育美标记 on the board?
 fn any_marks(player_id: i32) -> bool {
     let n = ctx::tile_count();
-    (0..n).any(|t| ctx::count_marks(t, key!("hagumi_marks_mark"), player_id) > 0)
+    (0..n).any(|t| ctx::count_marks(t, &mark_filter(player_id)) > 0)
 }
 
 /// 规则书（2）: 「当前回合内你每获得过一次资金」 -- the engine's per-turn gain

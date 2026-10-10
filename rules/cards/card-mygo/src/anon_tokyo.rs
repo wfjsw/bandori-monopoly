@@ -15,7 +15,7 @@
 
 use alloc::vec::Vec;
 
-use card_sdk::abi::{HookKind, TriggerKind};
+use card_sdk::abi::{HookKind, MarkFilter, TriggerKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -98,13 +98,21 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
         // `AnonLinkFx.Link(here, t)` puts an `Anon Tokyo` mark on both tiles; the
         // sheet's 「（上限1）」 means a tile that already carries the mark gets none.
         for (tile, other) in [(here, t), (t, here)] {
-            if ctx::count_marks(tile, key!("anon_tokyo_mark"), player_id) > 0 {
+            if ctx::count_marks(
+                tile,
+                &MarkFilter::any().kind(key!("anon_tokyo_mark")).owner(player_id),
+            ) > 0
+            {
                 continue;
             }
-            ctx::add_mark(
+            // One row per mark (`place_mark_new`, the old `add_mark` semantics).
+            ctx::place_mark_new(
                 tile,
-                player_id,
                 key!("anon_tokyo_mark"),
+                "",
+                player_id,
+                ctx::self_uid(),
+                1,
                 &Msg::new(key!("anon_tokyo_mark_note")).tile("tile", other),
             );
             // Remember the pairing so the `PayAdd` hook below can find the partner

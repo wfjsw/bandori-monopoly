@@ -20,7 +20,7 @@ pub const J11: CardDef = CardDef::new(
         // `DecayCard.TurnEnd` (the crystal tick) + `CardJ11.PayChoose` +
         // `CardJ11.Targeted` -- all field hooks, not [反击]s.
         On::Hook(&[HookKind::TurnEnd, HookKind::PayChoose, HookKind::Targeted], "card.placed", None, counteract),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -116,11 +116,12 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 /// C# alone. The book needs a clause before this is more than a port of it.
 ///
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// means the card is not activated at all. Name-filtered to `counter::CRYSTALS`.
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).

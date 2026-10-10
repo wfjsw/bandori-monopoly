@@ -119,9 +119,9 @@ fn shield(player_id: i32) -> card_sdk::Asked {
 const MOVER: CardDef = CardDef::new("TEST:mover", &[On::Play("", None, mover)]);
 
 /// Places itself with one [奇迹水晶] and spends it inside the same effect -- the
-/// AG:绯红之魂 (3) shape: 「不再拥有[奇迹水晶]时」 is a `crystalsChanged` handler,
-/// so the write that empties the card is what leaves the field. The spend site
-/// does not re-check the count.
+/// AG:绯红之魂 (3) shape: 「不再拥有[奇迹水晶]时」 is a `counterChanged` handler
+/// name-filtered to `counter::CRYSTALS`, so the write that empties the card is
+/// what leaves the field. The spend site does not re-check the count.
 const CRYSTAL: CardDef = CardDef::new(
     "TEST:crystal",
     &[
@@ -156,6 +156,7 @@ fn crystal_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is("TEST:crystal")
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only the write that did not raise the count speaks for the empty
         // state -- an earlier write in the same run must not speak for the

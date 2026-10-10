@@ -22,7 +22,7 @@ pub const FIRE_BIRD: CardDef = CardDef::new(
         On::Play("", None, play),
         On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
         On::Hook(&[HookKind::PayMul], "card.placed && pay_is_rent && target == owner", None, pay_mul),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1600)]);
 
@@ -114,15 +114,16 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「奇迹水晶耗尽时将此卡放入弃牌堆」 -- C# `H.Unplace(this, "discard")`.
 ///
-/// Listens to this card's own [`HookKind::CrystalsChanged`] rather than being
-/// re-checked at the decay tick, so a count emptied by *any* write leaves the
-/// field just the same.
+/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
+/// count emptied by *any* write leaves the field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
         && ctx::crystals() == 0
         // Only a write that did not raise the count speaks for the empty
         // state; see AG:绯红之魂 (3).

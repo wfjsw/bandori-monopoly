@@ -49,12 +49,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
     // to the player's field.
     ctx::place_card_on(player_id, space, ID, &Msg::new(key!("parking_space_note")));
     // （2）[持续]「位于此卡所在格子上的玩家无法使用角色及乐队技能」 -- the
-    // `skillBlock` mark is what the shared skill-press gate reads.
+    // `skillBlock` mark is what the shared skill-press gate reads
+    // (`ctx::skill_blocked` -> `count_marks(t, &MarkFilter::any().kind("skillBlock"))`).
     if space >= 0 {
-        ctx::add_mark(
+        ctx::place_mark_new(
             space,
-            player_id,
             "skillBlock",
+            "",
+            player_id,
+            ctx::self_uid(),
+            1,
             &Msg::new(key!("parking_space_note")),
         );
     }
