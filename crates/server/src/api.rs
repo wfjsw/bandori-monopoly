@@ -412,6 +412,19 @@ pub struct MatchView {
     pub draw: Vec<String>,
     pub you: i32,
     pub player_id: i32,
+    /// Per-viewer extras the worker already produces (`Match::view_extra`).
+    /// Optional so a frame from an older worker still deserializes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ai_answer: Option<serde_json::Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub playable: Option<Vec<bool>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub est_cost: Option<Vec<i32>>,
+    /// Per-tile board captions from this member's seat
+    /// ([`game_core::engine::Match::tile_quotes`]). Optional so a frame from
+    /// an older worker still deserializes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tile_quotes: Option<Vec<Option<game_core::state::TileQuote>>>,
 }
 
 /// Ask the worker for one member's view. Blocking; see `pool`.

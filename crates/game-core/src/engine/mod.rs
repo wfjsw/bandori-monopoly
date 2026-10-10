@@ -892,6 +892,15 @@ impl Match {
             .collect()
     }
 
+    /// Per-tile "what to expect" quotes from `member`'s seat
+    /// ([`purchase::tile_quotes`]), parallel to the board's tiles.
+    ///
+    /// An unknown member (or a spectator / replay viewer with no seat) gets
+    /// the seat-independent reading: base price, base rent, force-buy.
+    pub fn tile_quotes(&self, member: i32) -> Vec<Option<crate::state::TileQuote>> {
+        purchase::tile_quotes(&self.data, &self.world, &*self.rules, self.player_index(member))
+    }
+
     /// Per-viewer extras the client's 托管 autopilot reads on top of [`Match::state`].
     ///
     /// Two things the shared [`MatchState`] deliberately does not carry:

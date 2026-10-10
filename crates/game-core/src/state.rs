@@ -56,6 +56,53 @@ pub mod stage {
     pub const END: i32 = 4;
 }
 
+/// Which way money flows for the viewer of a [`TileQuote`]. The UI's colour
+/// channel (`--money-pay` / `--money-optional` / `--money-receive`); `kind`
+/// carries the tooltip wording, `flow` the direction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MoneyFlow {
+    /// Forced payment out of the viewer (rent on someone else's tile).
+    MustPay,
+    /// Optional spend the viewer may choose (buy / build / force-buy / redeem).
+    MayPay,
+    /// Income the viewer would collect (rent on their own tile).
+    Receive,
+}
+
+/// What a [`TileQuote`]'s number means -- the tooltip wording, not the colour.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum TileQuoteKind {
+    /// Unowned land: the price to buy it.
+    Buy,
+    /// Mine, next building available: its construction cost.
+    Build,
+    /// Someone else's: the rent I would pay on stepping onto it.
+    Rent,
+    /// Mine, no next building: the rent I would collect (build cap / unbuildable).
+    OwnRent,
+    /// Mortgaged, someone else's: the force-buy price (「强行购买」).
+    ForceBuy,
+    /// Mortgaged, mine: the redeem price. (Force-buy does not apply to one's
+    /// own deed; redeeming is the natural cost to clear the mortgage.)
+    Redeem,
+}
+
+/// One tile's "what to expect" number, from a viewer's seat.
+/// Parallel to the board's tiles in [`MatchView`] (`tileQuotes[i]`).
+/// `value` is the figure; `max` is the upper bound of a dice range (RiNG
+/// rent is `rings × ring_multiplier × 1d20`, so `value` is the minimum).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TileQuote {
+    pub kind: TileQuoteKind,
+    pub flow: MoneyFlow,
+    pub value: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max: Option<i32>,
+}
+
 /// `MatchState.cs`
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]

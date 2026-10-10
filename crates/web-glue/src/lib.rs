@@ -767,9 +767,11 @@ impl SoloMatch {
         }
     }
 
-    /// `{state, hand, handNotes, draw, you, playerId, aiAnswer, playable}` -- the
-    /// same shape as the server's `match` frame. `aiAnswer` / `playable` are the
-    /// per-viewer extras from [`Match::view_extra`] (the 托管 autopilot's inputs).
+    /// `{state, hand, handNotes, draw, you, playerId, aiAnswer, playable,
+    /// tileQuotes}` -- the same shape as the server's `match` frame.
+    /// `aiAnswer` / `playable` are the per-viewer extras from
+    /// [`Match::view_extra`] (the 托管 autopilot's inputs); `tileQuotes` is
+    /// the per-viewer board caption data ([`Match::tile_quotes`]).
     pub fn view(&self, member: i32) -> String {
         let m = self.m.inner();
         let state = m.state();
@@ -785,6 +787,7 @@ impl SoloMatch {
             "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
             "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
             "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
+            "tileQuotes": m.tile_quotes(member),
         }))
     }
 
@@ -922,7 +925,8 @@ impl ReplayMatch {
     }
 
     /// The same frame shape as [`SoloMatch::view`]. `member` 0 is the
-    /// spectator: no hand, no draw, no per-viewer extras.
+    /// spectator: no hand, no draw, no per-viewer extras. `tileQuotes` is
+    /// still filled -- the seat-independent reading.
     pub fn view(&self, member: i32) -> String {
         let m = self.rp.match_ref();
         let state = m.state();
@@ -937,6 +941,7 @@ impl ReplayMatch {
                 "aiAnswer": serde_json::Value::Null,
                 "playable": serde_json::Value::Null,
                 "estCost": serde_json::Value::Null,
+                "tileQuotes": m.tile_quotes(-1),
             }));
         }
         let player_id = state.player_of(member);
@@ -951,6 +956,7 @@ impl ReplayMatch {
             "aiAnswer": extra.get("aiAnswer").cloned().unwrap_or(serde_json::Value::Null),
             "playable": extra.get("playable").cloned().unwrap_or(serde_json::Value::Null),
             "estCost": extra.get("estCost").cloned().unwrap_or(serde_json::Value::Null),
+            "tileQuotes": m.tile_quotes(member),
         }))
     }
 

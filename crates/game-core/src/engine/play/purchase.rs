@@ -232,3 +232,228 @@ pub fn default_deal(
         mortgaged_after,
     }
 }
+// ============================================================ tile quotes
+
+use crate::state::{MoneyFlow, TileQuote, TileQuoteKind};
+
+/// The standing "what to expect" figure for every board tile, from `viewer`'s
+/// seat. `viewer = None` is the seat-independent reading (spectator, replay
+/// with no seat, out-of-seat chrome): base price / base rent / force-buy.
+///
+/// Per-seat rules (`webui` tile captions):
+/// * unowned → [`TileQuoteKind::Buy`] (what buying would cost me);
+/// * mine, next building available → [`TileQuoteKind::Build`];
+/// * mine, no next building (build cap, RiNG 「不可升级」, `NO_BUILD`) →
+///   [`TileQuoteKind::OwnRent`] (rent I would **collect**);
+/// * mine, mortgaged → [`TileQuoteKind::Redeem`] (force-buy does not apply to
+///   one's own deed; redeeming is the natural cost to clear the mortgage);
+/// * other's → [`TileQuoteKind::Rent`] (rent I would **pay**);
+/// * other's, mortgaged → [`TileQuoteKind::ForceBuy`].
+///
+/// Buy / force-buy go through [`quote_for`] so the rules crate's `BuyAdd` /
+/// `BuyMul` / `BuySet` stages are included (quote == charge). Rent is the
+/// pre-pipeline table figure with the `H.RentHouses` override and the tile's
+/// persistent `RENT_FACTOR` / `PAY_FACTOR` scalars -- the same halves
+/// `Play::scale_settle_payment` reads. Card `payAdd` / `payMul` / `payTotal*`
+/// hooks (「支付减半」 riding a card body, payee redirects, …) need the money
+/// pipeline's `raise!` and are **not** included; the caption is the
+/// pre-pipeline rent, a known approximation. The current turn's plan factors
+/// are also excluded: they shape *this* turn's settles, not a hypothetical
+/// later landing.
+///
+/// Only public state is read (ownership, houses, mortgage, field props), so
+/// the quotes respect the hidden-hand rules.
+pub fn tile_quotes(
+    data: &crate::data::GameData,
+    w: &World,
+    rules: &dyn crate::engine::rules::CardRules,
+    viewer: Option<usize>,
+) -> Vec<Option<TileQuote>> {
+    let st = &w.st;
+    let n = data.tiles.len().max(st.owners.len());
+    let mut out: Vec<Option<TileQuote>> = vec![None; n];
+    // Batch the bank-sold Land quotes (seller is always the bank). Force
+    // quotes name a per-tile seller, so they stay one-by-one.
+    let mut land: Vec<usize> = Vec::new();
+    for t in 0..n {
+        let Some(tile) = data.tiles.get(t) else {
+            continue;
+        };
+        if !tile.is_buyable() {
+            continue;
+        }
+        let owner = st.owners.get(t).copied().unwrap_or(-1);
+        let mortgaged = st.mortgaged.get(t).copied().unwrap_or(false);
+        match viewer {
+            Some(me) if owner == me as i32 => {
+                if mortgaged {
+                    // Mortgaged-mine: redeem (see the doc comment above).
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::Redeem,
+                        flow: MoneyFlow::MayPay,
+                        value: redeem_cost(data, t),
+                        max: None,
+                    });
+                } else if w.why_not_build_on(data, me as i32, t as i32).is_none() {
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::Build,
+                        flow: MoneyFlow::MayPay,
+                        value: tile.house.max(0),
+                        max: None,
+                    });
+                } else {
+                    // Build cap / RiNG / `NO_BUILD`: the rent I would collect.
+                    let (value, max) = rent_quote(data, w, t, Some(me));
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::OwnRent,
+                        flow: MoneyFlow::Receive,
+                        value,
+                        max,
+                    });
+                }
+            }
+            Some(_) if owner >= 0 => {
+                if mortgaged {
+                    // Force-buy names the owner as payee -- one quote per tile.
+                    let q = quote_for(
+                        rules,
+                        w,
+                        data,
+                        viewer.unwrap_or(0),
+                        BuyKind::Force,
+                        &[(t, owner)],
+                    );
+                    let q = q.into_iter().next().unwrap_or(Quote {
+                        price: -1,
+                        eligible: false,
+                    });
+                    if q.price >= 0 {
+                        out[t] = Some(TileQuote {
+                            kind: TileQuoteKind::ForceBuy,
+                            flow: MoneyFlow::MayPay,
+                            value: q.price,
+                            max: None,
+                        });
+                    }
+                } else {
+                    let (value, max) = rent_quote(data, w, t, viewer);
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::Rent,
+                        flow: MoneyFlow::MustPay,
+                        value,
+                        max,
+                    });
+                }
+            }
+            Some(_) => land.push(t),
+            // Seat-independent: list prices, no player-scoped modifiers.
+            None => {
+                if owner < 0 {
+                    let price = quote_native(data, st, t);
+                    if price >= 0 {
+                        out[t] = Some(TileQuote {
+                            kind: TileQuoteKind::Buy,
+                            flow: MoneyFlow::MayPay,
+                            value: price,
+                            max: None,
+                        });
+                    }
+                } else if mortgaged {
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::ForceBuy,
+                        flow: MoneyFlow::MayPay,
+                        value: force_price_native(data, st, t),
+                        max: None,
+                    });
+                } else {
+                    let (value, max) = rent_quote(data, w, t, None);
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::Rent,
+                        flow: MoneyFlow::MustPay,
+                        value,
+                        max,
+                    });
+                }
+            }
+        }
+    }
+    if let Some(me) = viewer {
+        if !land.is_empty() {
+            let qs: Vec<(usize, i32)> = land.iter().map(|&t| (t, -1)).collect();
+            let quoted = quote_for(rules, w, data, me, BuyKind::Land, &qs);
+            for (t, q) in land.into_iter().zip(quoted) {
+                if q.price >= 0 {
+                    out[t] = Some(TileQuote {
+                        kind: TileQuoteKind::Buy,
+                        flow: MoneyFlow::MayPay,
+                        value: q.price,
+                        max: None,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The deed's redeem price: 60% of the land price, ties even (the same
+/// figure [`crate::engine::Cx::redeem_cost`] charges).
+fn redeem_cost(data: &crate::data::GameData, t: usize) -> i32 {
+    let Some(tile) = data.tiles.get(t) else {
+        return 0;
+    };
+    (tile.price as f64 * 0.6).round_ties_even() as i32
+}
+
+/// The rent a landing on `t` would move, as a `(min, max)` pair. `max` is
+/// `Some` only for RiNG dice (`rings × ring_multiplier × 1d20`).
+///
+/// RiNG rent always counts the **owner's** rings (`pay_rent`), which is
+/// public state -- so Rent, OwnRent and the seat-independent quote share one
+/// figure. `_viewer` is reserved for future payer-scoped scalars.
+fn rent_quote(
+    data: &crate::data::GameData,
+    w: &World,
+    t: usize,
+    _viewer: Option<usize>,
+) -> (i32, Option<i32>) {
+    let Some(tile) = data.tiles.get(t) else {
+        return (0, None);
+    };
+    if tile.kind == "ring" {
+        // RiNG rent is rolled at payment time; show the honest dice range.
+        let owner = w.st.owners.get(t).copied().unwrap_or(-1);
+        let rings = count_rings(data, w, owner.max(0) as usize).max(1);
+        let mult = data.match_rules.ring_multiplier.max(1);
+        (rings * mult, Some(rings * mult * 20))
+    } else {
+        let h = w.rent_houses(t as i32);
+        let rent = if tile.rent.is_empty() {
+            0
+        } else {
+            tile.rent[(h as usize).min(tile.rent.len() - 1)]
+        };
+        // The persistent tile scalars of `scale_settle_payment` (「支付减半」 /
+        // 「地租」 as tile props). Milli-units; `0` means no scale.
+        let mut f = 1.0f64;
+        let r = w.tile_prop(t as i32, crate::state::prop::RENT_FACTOR);
+        if r > 0 {
+            f *= f64::from(r) / 1000.0;
+        }
+        let p = w.tile_prop(t as i32, crate::state::prop::PAY_FACTOR);
+        if p > 0 {
+            f *= f64::from(p) / 1000.0;
+        }
+        (((rent as f64 * f) as i32), None)
+    }
+}
+
+/// How many RiNG tiles `player` owns (the RiNG rent multiplier's count).
+fn count_rings(data: &crate::data::GameData, w: &World, player: usize) -> i32 {
+    (0..data.tiles.len())
+        .filter(|&t| {
+            data.tiles[t].kind == "ring"
+                && w.st.owners.get(t).copied().unwrap_or(-1) == player as i32
+        })
+        .count() as i32
+}
