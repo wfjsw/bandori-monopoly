@@ -6,7 +6,7 @@ import { useRef, useState } from "react";
 import { useLayoutSize } from "../../hooks/measure";
 import { useBoardViewport, type ViewportApi } from "./viewport";
 import { D, cardTitle } from "../../core/data";
-import { plain } from "../../core/format";
+import { isLight, plain } from "../../core/format";
 import type { TileData } from "../../core/types";
 import type { Animator } from "./anim";
 import type { Model } from "./model";
@@ -68,25 +68,153 @@ export interface RollControl {
 /** What a hovered tile marker says, and where (the wrap's own pixel space). */
 interface MarkTip { x: number; y: number; title: string; lines: string[] }
 
+/** Rough advance width in half-CJK units: fullwidth glyphs count 2, others 1.
+ *  Used to pick a name size tier and to balance the two name lines -- Latin
+ *  `DUB MUSIC EXPERIMENT` and CJK 「瑟罗希亚国际学校」 both need the small end
+ *  even though `.length` differs. */
+function textUnits(s: string): number {
+  let n = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    const wide =
+      (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) ||
+      (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) ||
+      (c >= 0xfe30 && c <= 0xfe6f) || (c >= 0xff00 && c <= 0xff60) ||
+      (c >= 0xffe0 && c <= 0xffe6);
+    n += wide ? 2 : 1;
+  }
+  return n;
+}
+
+/** Trailing noun kept whole on line 2 (full match: 「…/大学」, 「…/女子学院」). */
+const NAME_SUFFIX = /^(?:女子)?(?:学院|大学|中学|学园|高中|学校|公园|公司|咖啡厅|餐厅|车站|乐器店|事务所|面包房|拉面馆|精肉店|澡堂|画室|大厦|豪宅|住宅区|小巷|山丘|商店|中心|公寓)$/;
+
+/** Advance width of `s` at `font` px. CJK ≈ 1em; Latin in this UI face runs
+ *  about 0.64em (measured on 「EXPERIMENT」 / 「CHUCHU的公寓」) -- 0.55em
+ *  under-estimates and the line then clips. */
+function estWidth(s: string, font: number): number {
+  let w = 0;
+  for (const ch of s) {
+    const c = ch.codePointAt(0) ?? 0;
+    const wide =
+      (c >= 0x1100 && c <= 0x115f) || (c >= 0x2e80 && c <= 0xa4cf) ||
+      (c >= 0xac00 && c <= 0xd7a3) || (c >= 0xf900 && c <= 0xfaff) ||
+      (c >= 0xfe30 && c <= 0xfe6f) || (c >= 0xff00 && c <= 0xff60) ||
+      (c >= 0xffe0 && c <= 0xffe6);
+    w += wide ? font : ch === " " ? font * 0.3 : font * 0.64;
+  }
+  return w;
+}
+
+/**
+ * Split a tile name into at most two lines. CSS `text-wrap: balance` alone
+ * breaks CJK per character (「庆鹏女/子大学」), so the split is chosen here:
+ * never inside a Latin word, only when one line cannot fit, balanced by
+ * {@link textUnits}, and biased toward a short trailing noun on line 2.
+ */
+function splitNameLines(name: string, font: number, avail: number): string[] {
+  if (estWidth(name, font) <= avail) return [name];
+  const chars = [...name];
+  if (chars.length < 2) return [name];
+  let best = -1;
+  let bestScore = Infinity;
+  for (let i = 1; i < chars.length; i++) {
+    const prev = chars[i - 1]!;
+    const next = chars[i]!;
+    // Never split inside a Latin/number run.
+    if (/[A-Za-z0-9]/.test(prev) && /[A-Za-z0-9]/.test(next)) continue;
+    const a = chars.slice(0, i).join("").trim();
+    const b = chars.slice(i).join("").trim();
+    if (!a || !b) continue;
+    const ua = textUnits(a);
+    const ub = textUnits(b);
+    let score = Math.abs(ua - ub);
+    // Prefer a 2+ char trailing noun on line 2 (「…/大学」, 「…/女子学院」).
+    if (NAME_SUFFIX.test(b) && ub >= 4) score -= 5;
+    // Prefer a script boundary (「CHUCHU/的公寓」, 「Bandori/车站」).
+    if (/[A-Za-z]/.test(prev) !== /[A-Za-z]/.test(next)) score -= 2;
+    if (score < bestScore) {
+      bestScore = score;
+      best = i;
+    }
+  }
+  if (best < 0) return [name];
+  return [chars.slice(0, best).join("").trim(), chars.slice(best).join("").trim()];
+}
+
+/** Name size tier from the width metric (see {@link textUnits}). */
+function nameTier(text: string): string {
+  const u = textUnits(text);
+  return u <= 8 ? s.nameL : u <= 14 ? s.nameM : u <= 20 ? s.nameS : s.nameXS;
+}
+
+/** Name-size multiplier for a tier class (mirrors `.nameL`..`.nameXS`). */
+const NAME_TIERS: readonly (readonly [string, number])[] = [
+  [s.nameL, 1.1],
+  [s.nameM, 1],
+  [s.nameS, 0.92],
+  [s.nameXS, 0.8],
+];
+
+/**
+ * Pick the largest name tier whose (up to two) lines fit `avail`. Starts from
+ * the width-metric tier so short names stay big, then steps down if a line
+ * like 「EXPERIMENT」 would clip. Corners / agents only get the size boost
+ * when the name is short (「CiRCLE」); a long one (「Live House」) stays on the
+ * shared scale so it can fit one line on the wide board.
+ */
+function fitName(name: string, u: number, avail: number, special: boolean): { tier: string; lines: string[]; boost: boolean } {
+  const start = NAME_TIERS.findIndex(([cls]) => cls === nameTier(name));
+  const boost = special && textUnits(name) <= 8;
+  const kindK = boost ? 1.12 : 1;
+  for (let i = Math.max(0, start); i < NAME_TIERS.length; i++) {
+    const [cls, k] = NAME_TIERS[i]!;
+    const font = u * k * kindK;
+    const lines = splitNameLines(name, font, avail);
+    const ok = lines.every((l) => estWidth(l, font) <= avail * 0.98);
+    if (ok || i === NAME_TIERS.length - 1) return { tier: cls, lines, boost };
+  }
+  return { tier: s.nameXS, lines: [name], boost };
+}
+
 /** A tile's face, drawn from the same data the deeds and engine use -- no board
- *  texture. The `#index` chip wears the tile's colour (the old colour bar);
- *  below the name sits its caption (price / dealer / draw / corner event), and
- *  CiRCLE carries its pass / stop notes. */
-function TileFace({ tile }: { tile: TileData }) {
+ *  texture. The `#index` chip is the colour band (top), the name sits in the
+ *  middle (≤ 2 pre-split lines), and the caption (price / dealer / draw /
+ *  corner event) is centred on a common bottom baseline. CiRCLE carries its
+ *  pass / stop notes in place of the caption. Sizes are fractions of the
+ *  measured cell (`--cell-h` / `--cell-w` on `.ring`), so the scale holds from
+ *  the narrow 1366 cells up to the wide 2560 ones. */
+function TileFace({ tile, cellW, cellH }: { tile: TileData; cellW: number; cellH: number }) {
   const name = plain(tile.name);
   const corner = ["circle", "cafe", "edogawa", "ryuseido"].includes(tile.kind);
+  const special = corner || tile.kind === "agent";
   const caption = tile.price > 0 ? String(tile.price)
     : tile.kind === "agent" ? tr("deed.dealer")
     : tile.kind === "edogawa" ? tr("deed.draw")
     : tile.kind === "cafe" || tile.kind === "ryuseido" ? tr("board.cornerEvent")
     : "";
+  const u = Math.min(cellH * 0.18, cellW * 0.17);
+  // Matches `.tileName` / `.tileBody` horizontal padding.
+  const avail = cellW - u * 0.12 * 2 - u * 0.08 * 2 - 2;
+  const { tier, lines, boost } = fitName(name, u, avail, special);
   return (
     <>
-      <span className={s.tileNumber} style={{ background: tile.color }} aria-hidden="true">#{tile.index}</span>
+      <span
+        className={s.tileNumber}
+        style={{ background: tile.color, color: isLight(tile.color) ? "#17221e" : "#fff" }}
+        aria-hidden="true"
+      >#{tile.index}</span>
       <span className={s.tileBody} aria-hidden="true">
-        <span className={cx(s.tileName, (corner || tile.kind === "agent") && s.specialName, name.length > 18 && s.longName)}>{name}</span>
+        <span className={cx(s.tileName, special && s.specialName, boost && s.nameBoost, tier)}>
+          <span className={s.nameText}>
+            {lines.map((l, i) => <span key={i} className={s.nameLine}>{l}</span>)}
+          </span>
+        </span>
         {tile.kind === "circle" ? (
-          <span className={s.tileNote}>{tr("board.circlePassing")}<br />{tr("board.circleStopping")}</span>
+          <span className={s.tileNote}>
+            <span>{tr("board.circlePassing")}</span>
+            <span>{tr("board.circleStopping")}</span>
+          </span>
         ) : <span className={s.tileCaption}>{caption}</span>}
       </span>
     </>
@@ -143,10 +271,20 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
           fill the window -- on a wide slot the board keeps its aspect and sits
           centred at fit, and the wrap shows the rest of the slot. */}
       <div className={s.viewport} style={{ ...vp.style, width: vp.board.width, height: vp.board.height }}>
-        <div className={s.ring} data-vp-bg>
+        <div
+          className={s.ring}
+          data-vp-bg
+          style={{
+            // Measured cell, so tile type scales with the stretched grid.
+            ["--cell-w" as string]: `${vp.board.width / COLS}px`,
+            ["--cell-h" as string]: `${vp.board.height / ROWS}px`,
+          }}
+        >
           <Center m={m} roll={roll} />
           {D.tiles.map((t, i) => {
             const [col, row] = cell(i);
+            const cellW = vp.board.width / COLS;
+            const cellH = vp.board.height / ROWS;
             const owner = S.owners[i] ?? -1;
             const cls = cx(s.tile, owner >= 0 && s.owned, S.mortgaged[i] && s.mortgaged, S.phase === "play" && S.landed === i && s.landed, pick.has(i) && s.pickable);
             const style = { gridRow: row + 1, gridColumn: col + 1, ["--owner" as string]: owner >= 0 ? m.colorOf(owner) : "transparent" };
@@ -194,7 +332,7 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
                 title={`${t.index}. ${plain(t.name)}${t.price > 0 ? ` · ${t.price}` : ""}${owner >= 0 ? ` · ${m.nameOf(owner)}` : ""}`}
                 onClick={() => onTile(i)}
               >
-                <TileFace tile={t} />
+                <TileFace tile={t} cellW={cellW} cellH={cellH} />
                 {owner >= 0 && <span className={s.ownerStrip} />}
                 {extras}
               </button>
@@ -211,7 +349,9 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
               const dx = n > 1 ? (k - (n - 1) / 2) * Math.min(14, 40 / (n - 1)) : 0;
               const ch = m.charOf(i);
               const hop = anim.hop?.playerId === i ? anim.hop.id : 0;
-              const top = cellY(row, vp.board.height) + 16;
+              // Anchor near the cell's lower third so the SD art sits over the
+              // caption / gutter, not over the name.
+              const top = cellY(row, vp.board.height) + (vp.board.height / ROWS) * 0.22;
               return (
                 <div key={i} className={cx(s.token, i === S.turn && s.current)} style={{ left: cellX(col, vp.board.width) + dx, top, zIndex: Math.round(top) }} title={namesOf(S).playerId(i)}>
                   <img className={s.shadow} src={sceneImg("piece_shadow")} alt="" />
