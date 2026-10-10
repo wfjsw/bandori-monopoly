@@ -22,7 +22,12 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            "actor == owner && fire(owner) >= 1",
+            None,
+            at_turn_start,
+        ),
         On::Hook(&[HookKind::PassTile], "", Some(any), on_pass_tile),
     ],
 )
@@ -51,9 +56,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 -- the
 /// offer is the turn-start moment; the mark is placed then and pays out later.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
+    // `fire(owner) >= 1` is the pre (「可将一个火罐放置在…」).
     let street = ctx::tile_named("主要街道");
     if street < 0 {
         return Ok(());
