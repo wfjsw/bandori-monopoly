@@ -50,8 +50,15 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// （1）「你无法获得或失去资金」 -- a payment in either direction is voided.
+/// （1）「你无法获得或失去资金」 -- a payment in **either direction for this
+/// player** is voided. The lock is the skill owner's money only (`你`); a
+/// payment between two other players is untouched.
 fn lock_pay(player_id: i32) -> card_sdk::Asked {
+    let payer = ctx::trigger::player_id();
+    let payee = ctx::trigger::target();
+    if payer != player_id && payee != player_id {
+        return Ok(());
+    }
     ctx::trigger::set_pay_amount(0);
     ctx::log(player_id, &Msg::new(key!("crychic_locked")));
     Ok(())
@@ -167,9 +174,13 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
 // 「获得角色对应的"MyGO"或"Ave Mujica"乐队技能卡」 is the same pick the reshuffle
 // already offers -- the two band-skill ids are fixed, and the choice names which.
 
-/// （1）「领取CiRCLE奖励时必须选择抽一张卡」 -- the money option is replaced.
+/// （1）「领取CiRCLE奖励时必须选择抽一张卡」 -- the money option is replaced,
+/// for this player's own CiRCLE reward (`你`).
 fn force_card(player_id: i32) -> card_sdk::Asked {
     if ctx::trigger::value() != card_sdk::abi::REWARD_MONEY {
+        return Ok(());
+    }
+    if ctx::trigger::player_id() != player_id {
         return Ok(());
     }
     ctx::trigger::set_cancelled();

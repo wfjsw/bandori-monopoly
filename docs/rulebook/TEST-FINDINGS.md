@@ -341,7 +341,7 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     2026-10-10** (un-ignored, green; gate reads 「收费标价」 as the tile
     price sum).
 * **cross** (`rb_cross_chain` 11, `rb_cross_move` 13, `rb_cross_tiles` 11,
-  `rb_cross_status` 1, `rb_cross_long` 5): the `#[ignore]` reasons in those
+  `rb_cross_status` 0, `rb_cross_long` 5): the `#[ignore]` reasons in those
   files name each case. The big ones: 骰子已经掷下 is placed twice and does
   not shut the windows (c14, g18); 无法将视线移开 cannot be played as a
   counter and does not force the counter-user to move (c16, l01, l04);
@@ -352,6 +352,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   ~~s08 祥子 (1) absorbs nothing~~ **Fixed 2026-10-10** (`SETTLE-03`;
   test declined the YesNo and the body copied layers instead of
   transferring; un-ignored, green twice).
+  ~~s05 CRYCHIC band (1) at 6+ cards lets money move~~ **Fixed 2026-10-10**
+  (`SETTLE-02`; `lock_pay` zeroed every payment in the game -- now scoped
+  to the skill owner's `你` money. The 「无法从手中打出任何牌」 play gate is
+  a **B** capability `cantPlayHand` and stays open).
 * **gap** (`rb_gap_*` 15): the `RULING` ones are in §6. The `DISCREPANCY`
   ones are g18 (c14's shut-window), g19 (真奈's join + 网络链接异常),
   g21 (祥子 (1) absorbs nothing), g23 ([不可阻挡] still gains [除外] from

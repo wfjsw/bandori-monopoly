@@ -338,15 +338,26 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 
 ## SETTLE-02 — CRYCHIC band (1) at 6+ hand cards still lets money move
 - **kind**: implementation bug
-- **class**: A
+- **class**: A (money lock) / B (play gate, split below)
 - **severity**: high
 - **suggested batch**: skills: Roselia / payment pipeline
+- **status**: **money half fixed** (this batch, `fix: SETTLE-02 …`) —
+  `lock_pay` / `force_card` now scope to the skill owner (`你`): a payment
+  between two other players is untouched. `s05` un-ignored, green twice.
 - **locations**
-  - `crates/game-rules/tests/rb_cross_status.rs:159` `s05_crychic_band_six_cards`
-  - `rules/skills/skill-bands/src/crychic.rs:155` (「无法从手中打出任何牌」 is a global play gate — also A/B, see SKILL-05)
+  - `crates/game-rules/tests/rb_cross_status.rs:159` `s05_crychic_band_six_cards` (un-ignored)
+  - `rules/skills/skill-bands/src/crychic.rs` (`lock_pay` / `force_card`)
+  - `rules/skills/skill-bands/src/crychic.rs` (「无法从手中打出任何牌」 — **B**, see below)
 - **rulebook**: CRYCHIC band (1) at 6+ hand cards blocks gain/loss (sheet).
-- **current**: money still moves (gain/loss not blocked).
-- **expected**: no money gain/loss while the gate is up.
+- **was**: `lock_pay` zeroed **every** payment in the game (the empty pre +
+  owner-hand guard fired on any money movement).
+- **expected**: no money gain/loss **for the skill owner** while the gate is up.
+- **B split — 「无法从手中打出任何牌」**: a *global* play gate (any hand card,
+  not one card's `cant_play`). The engine's play path consults the played
+  card's own gate only. Capability: **`cantPlayHand`** (a `GateKind` /
+  standing veto consulted on every hand play, the shape
+  `On::Gate(&[GateKind::CantPlayHand], …)`). Not implemented here. The s05
+  `t.play(1, FILL)` line is a record, not an assertion.
 
 ## SETTLE-03 — 丰川祥子 (1) does not absorb stays when passing another player
 - **kind**: implementation bug

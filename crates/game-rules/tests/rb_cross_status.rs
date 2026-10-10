@@ -156,7 +156,11 @@ fn s04_debut_success() {
 
 // 规则书: CRYCHIC band (1): 「任何时刻拥有手牌数大于等于6时，你无法获得或失去资金，
 // 无法从手中打出任何牌且领取CiRCLE奖励时必须选择抽一张卡」.
-#[ignore = "DISCREPANCY: CRYCHIC band (1) at 6+ hand cards still lets money move; the sheet blocks gain/loss"]
+// The lock is the skill owner's (`你`) money only: P1 carries the CRYCHIC
+// band skill (bound at match start / Returns borrow) and holds 6 cards, so
+// P1 cannot lose money (its leg of 登上武道馆 is void) while P2 still pays.
+// 「无法从手中打出任何牌」 is a global play gate (needs a `cantPlayHand`
+// capability -- BACKLOG SETTLE-02 / B); the `t.play` line records, not asserts.
 #[test]
 fn s05_crychic_band_six_cards() {
     let mut t = Table::new(&["高松灯（CRYCHIC）", "花园多惠", "青叶摩卡"]);
