@@ -3682,6 +3682,13 @@ impl Cx<'_> {
             .iter()
             .map(|f| f.card.clone())
             .collect();
+        // Every bound counter unit dies with its owning card instance (user
+        // ruling 2026-10-10). Collect the uids before the field is cleared.
+        let owned_uids: Vec<i32> = self.w.st.players[i]
+            .field
+            .iter()
+            .map(|f| f.uid)
+            .collect();
         let s = &mut self.w.st.players[i];
         s.ai = true;
         s.money = 0;
@@ -3716,7 +3723,14 @@ impl Cx<'_> {
         s.field.clear();
         self.w.hidden[i].hand.clear();
         self.w.extra_turns.retain(|&x| x != i);
-        // Drop every marker an exiting rule owned, wherever its copies sit.
+        // One cleanup path keyed by instance (user ruling 2026-10-10): every
+        // bound counter unit dies with its owning card instance. The standing
+        // `mark:cp` pseudo card is never on a player field and is never
+        // destroyed, so its tile [CP点] stay. Legacy rows (`instance == -1`)
+        // still go through the name-keyed purge below.
+        for uid in owned_uids {
+            self.w.destroy_instance_units(uid);
+        }
         self.purge_markers_owned_by(&owned_rules);
         let deeds: Vec<usize> = (0..self.data.tiles.len())
             .filter(|&t| self.w.st.owners[t] == i as i32)

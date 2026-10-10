@@ -283,13 +283,34 @@ struct Saved {
 /// v5: `World.marker_owner` (marker ownership, user ruling 2026-10-07).
 /// Public so a match record's [`crate::record::EngineStamp`] can name the save
 /// format it was written against (see `docs/REPLAY.md`).
-pub const SAVE_VERSION: u32 = 5;
+/// v6: every tile mark / player token carries its owning card instance
+/// (`TileMark.instance` / `Counter.instance`). Existing rows migrate in
+/// [`Match::restore_saved`] (CP marks onto the standing `mark:cp`; other rows
+/// onto the creating rule's field instance when it can be found, else `-1`).
+pub const SAVE_VERSION: u32 = 6;
 
 /// The `TileMark.kind` a [CP点] wore before it had a category of its own
 /// (`card-general`'s `key!("clear_cp_mark")`). [`Match::restore`] re-reads one
 /// of these into [`crate::state::mark_category::CP`]; new writes use
 /// [`crate::state::mark_kind::CP`] and never this.
 const LEGACY_CP_KIND: &str = "cards:card-general.clear_cp_mark";
+
+/// Save-migration helper: the first field instance whose card id is `card`.
+fn find_instance_by_card(world: &World, card: &str) -> i32 {
+    for f in &world.st.board_field {
+        if f.card == card {
+            return f.uid;
+        }
+    }
+    for p in &world.st.players {
+        for f in &p.field {
+            if f.card == card {
+                return f.uid;
+            }
+        }
+    }
+    -1
+}
 
 /// A running match.
 pub struct Match {
@@ -386,6 +407,57 @@ impl Match {
                 // No instance provenance survived the old format; these marks
                 // belong to no live card instance.
                 m.src = -1;
+            }
+        }
+        // v6: attach every mark / token to its creating instance where known.
+        // CP marks belong to the standing `mark:cp`; everything else looks up
+        // the creating rule's field instance via `marker_owner` (name -> rule
+        // id). A row whose creator cannot be determined keeps `instance == -1`
+        // and is never auto-purged.
+        let mark_cp = world.mark_cp_uid();
+        // Snapshot the name -> instance lookup first (borrow-split).
+        let mut resolve: std::collections::BTreeMap<String, i32> = std::collections::BTreeMap::new();
+        {
+            let names: Vec<String> = world
+                .st
+                .marks
+                .iter()
+                .map(|m| m.kind.clone())
+                .chain(
+                    world
+                        .st
+                        .players
+                        .iter()
+                        .flat_map(|p| p.tokens.iter().map(|t| t.name.clone())),
+                )
+                .collect();
+            for name in names {
+                if resolve.contains_key(&name) {
+                    continue;
+                }
+                let inst = world
+                    .marker_owner_of(&name)
+                    .map(|rule| find_instance_by_card(&world, rule))
+                    .unwrap_or(-1);
+                resolve.insert(name, inst);
+            }
+        }
+        for m in &mut world.st.marks {
+            if m.instance >= 0 {
+                continue;
+            }
+            if m.is_cp() {
+                m.instance = mark_cp;
+            } else {
+                m.instance = resolve.get(&m.kind).copied().unwrap_or(-1);
+            }
+        }
+        for p in &mut world.st.players {
+            for t in &mut p.tokens {
+                if t.instance >= 0 {
+                    continue;
+                }
+                t.instance = resolve.get(&t.name).copied().unwrap_or(-1);
             }
         }
         Ok(Self {

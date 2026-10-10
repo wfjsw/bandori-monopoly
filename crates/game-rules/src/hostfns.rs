@@ -65,51 +65,200 @@ pub fn tile_count<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
     Ok(c.st().wr().tile_count())
 }
 
-pub fn add_mark<C: HostCtx>(c: &mut C, tile: i32, player_id: i32, kp: i32, kl: i32, p: i32, n: i32) -> Result<(), HostErr> {
-            let kind = guest_str(c, kp, kl)?;
-            let note = guest_msg(c, p, n)?;
-            c.st_mut().w().add_mark(tile, player_id, &kind, note);
-            Ok(())
+/// Bind `count` units of the running instance's counter `kind` to `tile`.
+pub fn place_mark<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    kp: i32,
+    kl: i32,
+    cp: i32,
+    cl: i32,
+    owner: i32,
+    src: i32,
+    count: i32,
+    np: i32,
+    nl: i32,
+) -> Result<i32, HostErr> {
+    let kind = guest_str(c, kp, kl)?;
+    let category = guest_str(c, cp, cl)?;
+    let note = guest_msg(c, np, nl)?;
+    Ok(c.st_mut().w().place_mark(tile, &kind, &category, owner, src, count, note))
 }
 
-pub fn place_cp<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-        Ok(c.st_mut().w().place_cp(tile, crate::Msg::default()))
-}
-
-pub fn count_cp<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().count_cp(tile))
-}
-
-pub fn count_cp_from<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().count_cp_from(tile)
+fn guest_filter<C: HostCtx>(c: &mut C, fp: i32, fl: i32) -> Result<game_core::state::MarkFilter<'static>, HostErr> {
+    let bytes = c.read_guest(fp, fl)?;
+    let f: card_sdk::abi::MarkFilter = postcard::from_bytes(&bytes)
+        .map_err(|_| HostErr::trap("guest mark filter is not MarkFilter postcard"))?;
+    Ok(game_core::state::MarkFilter {
+        kind: Box::leak(f.kind.into_boxed_str()),
+        category: Box::leak(f.category.into_boxed_str()),
+        owner: f.owner,
+        src: f.src,
+        instance: f.instance,
     })
 }
 
-pub fn clear_cp<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().clear_cp(tile))
+pub fn count_marks_f<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
+    let f = guest_filter(c, fp, fl)?;
+    Ok(c.st().wr().count_marks(tile, &f))
 }
 
-pub fn cp_src_at<C: HostCtx>(c: &mut C, tile: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().cp_src_at(tile))
+pub fn bump_mark_f<C: HostCtx>(
+    c: &mut C,
+    tile: i32,
+    fp: i32,
+    fl: i32,
+    delta: i32,
+) -> Result<i32, HostErr> {
+    let f = guest_filter(c, fp, fl)?;
+    Ok(c.st_mut().w().bump_mark(tile, &f, delta))
 }
 
-pub fn cp_attached<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().cp_attached())
+pub fn remove_marks_f<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
+    let f = guest_filter(c, fp, fl)?;
+    Ok(c.st_mut().w().remove_marks(tile, &f))
 }
 
-pub fn add_cp<C: HostCtx>(c: &mut C, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok({
-        c.st_mut().w().add_cp(n, max)
-    })
+pub fn mark_src_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
+    let f = guest_filter(c, fp, fl)?;
+    Ok(c.st().wr().mark_src_at(tile, &f))
 }
 
-pub fn cp_at<C: HostCtx>(c: &mut C, uid: i32) -> Result<i32, HostErr> {
-    Ok(c.st().wr().cp_at(uid))
+pub fn mark_instance_at<C: HostCtx>(c: &mut C, tile: i32, fp: i32, fl: i32) -> Result<i32, HostErr> {
+    let f = guest_filter(c, fp, fl)?;
+    Ok(c.st().wr().mark_instance_at(tile, &f))
 }
 
-pub fn add_cp_at<C: HostCtx>(c: &mut C, uid: i32, n: i32, max: i32) -> Result<i32, HostErr> {
-    Ok(c.st_mut().w().add_cp_at(uid, n, max),)
+pub fn counter_self<C: HostCtx>(c: &mut C, np: i32, nl: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().counter(&name))
+}
+
+pub fn add_counter_self<C: HostCtx>(
+    c: &mut C,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().add_counter(&name, n, max))
+}
+
+pub fn set_counter_self<C: HostCtx>(c: &mut C, np: i32, nl: i32, n: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().set_counter(&name, n))
+}
+
+pub fn counter_at<C: HostCtx>(c: &mut C, uid: i32, np: i32, nl: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().counter_at(uid, &name))
+}
+
+pub fn add_counter_at<C: HostCtx>(
+    c: &mut C,
+    uid: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().add_counter_at(uid, &name, n, max))
+}
+
+pub fn card_counter<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cp: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cp, cl)?;
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().card_counter(player_id, &card, &name))
+}
+
+pub fn add_card_counter<C: HostCtx>(
+    c: &mut C,
+    player_id: i32,
+    cp: i32,
+    cl: i32,
+    np: i32,
+    nl: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let card = guest_str(c, cp, cl)?;
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().add_card_counter(player_id, &card, &name, n, max))
+}
+
+pub fn count_held<C: HostCtx>(c: &mut C, np: i32, nl: i32, player_id: i32) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().count_held(&name, player_id))
+}
+
+pub fn add_held<C: HostCtx>(
+    c: &mut C,
+    np: i32,
+    nl: i32,
+    player_id: i32,
+    n: i32,
+    max: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    // Marker window: `add_tok` historically opened markerSpend/markerGain.
+    let before = c.st().wr().count_held(&name, player_id);
+    let now = {
+        let st = c.st_mut();
+        st.w().add_held(&name, player_id, n, max)
+    };
+    let _ = before;
+    Ok(now)
+}
+
+pub fn count_held_name<C: HostCtx>(
+    c: &mut C,
+    np: i32,
+    nl: i32,
+    player_id: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st().wr().count_held_name(&name, player_id))
+}
+
+pub fn set_held_name<C: HostCtx>(
+    c: &mut C,
+    np: i32,
+    nl: i32,
+    player_id: i32,
+    v: i32,
+) -> Result<(), HostErr> {
+    let name = guest_str(c, np, nl)?;
+    c.st_mut().w().set_held_name(&name, player_id, v);
+    Ok(())
+}
+
+pub fn move_units<C: HostCtx>(
+    c: &mut C,
+    np: i32,
+    nl: i32,
+    from_tile: i32,
+    from_player: i32,
+    to_tile: i32,
+    to_player: i32,
+    n: i32,
+) -> Result<i32, HostErr> {
+    let name = guest_str(c, np, nl)?;
+    Ok(c.st_mut().w().move_units(
+        &name, from_tile, from_player, to_tile, to_player, n,
+    ))
+}
+
+pub fn self_uid<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
+    Ok(c.st().wr().self_uid())
 }
 
 pub fn money<C: HostCtx>(c: &mut C, player_id: i32) -> Result<i32, HostErr> {

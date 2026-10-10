@@ -297,7 +297,23 @@ use alloc::{string::String, vec::Vec};
 ///      `ctx::settle_circle_reward` are **removed** -- the tile bodies carry
 ///      the logic (`land_at_built_in` / `Play::circle_reward` stay the
 ///      `StubRules` fallback). SAVE_VERSION unchanged (no save field).
-pub const ABI_VERSION: i32 = 50;
+/// v51: **named counters + bound units + cross-card messages** (user ruling
+///      2026-10-10). Every tile mark and player token is a unit of some card
+///      instance's named counter, bound to a tile or a holder; destroying the
+///      instance destroys its units. The two on-card counters keep their wire
+///      names ([`counter::CP`], [`counter::CRYSTALS`]); anything else is a
+///      name in `FieldCard::counters`. One `CounterChanged` hook replaces
+///      `CpChanged` / `CrystalsChanged` (carries the counter name + signed
+///      delta). The tile-mark surface is a filter
+///      ([`MarkFilter`]) over `place_mark` (with [`Stack::Merge`] /
+///      [`Stack::Fresh`]) / `count_marks` / `bump_mark` / `remove_marks` /
+///      `mark_src_at` -- the CP helpers are gone. `On::Message` + `ctx::send`
+///      is the generic cross-card channel (该清CP了 -> `mark:cp` places CP
+///      units; the landing hook spends the placer's on-card CP). `tok` /
+///      `add_tok` / `set_tok` become the holder-binding verbs of the creating
+///      instance's counter. SAVE_VERSION 5 → 6 (marks/tokens carry
+///      `instance`).
+pub const ABI_VERSION: i32 = 51;
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.
@@ -370,20 +386,98 @@ pub mod state_key {
 /// Well-known tile-mark kinds. A mark's `kind` is its identity; the engine
 /// responds to these two by name so a card can arm a gate without the engine
 /// hardcoding the card's own name (the C# checked `CountMarks(t, "高贵的微蓝")`).
+pub mod counter {
+    /// On-card [CP点] (「自己[场上]N个[CP点]」). Storage `FieldCard::cp`.
+    pub const CP: &str = "cp";
+    /// 奇迹水晶. Storage `FieldCard::crystals`.
+    pub const CRYSTALS: &str = "crystals";
+}
+
 pub mod mark {
     /// Carrying tiles cannot be named as a target (`H.TargetTile` answers -1).
     pub const NO_TARGET: &str = "noTarget";
 
     /// Tile-mark **category**: [CP点], 「放置于路面上的指示物」
-    /// (`data/rules.txt` 125). Its own category, not a `kind` among the player
-    /// marks. Mirrors `game_core::state::mark_category::CP`. This is the
-    /// **tile** kind of [CP点]; the other kind is the on-card count
-    /// (`FieldCard::cp`, 「自己[场上]N个[CP点]」) -- user ruling 2026-10-07.
+    /// (`data/rules.txt` 125). Mirrors `game_core::state::mark_category::CP`.
+    /// The tile [CP点] are units of the standing `mark:cp` pseudo card's
+    /// [`counter::CP`] counter, bound to tiles.
     pub const CP_CATEGORY: &str = "cp";
-    /// The [CP点] mark's stable `kind`. Its display label comes from
-    /// [`CP_CATEGORY`] (「CP点」), not from this string. Mirrors
+    /// The [CP点] mark's stable `kind`. Mirrors
     /// `game_core::state::mark_kind::CP`.
     pub const CP_KIND: &str = "mark:cp";
+    /// Mark-filter sentinel: any owner / any src / any instance.
+    pub const ANY: i32 = -2;
+}
+
+/// A filter over tile marks (the generic tile-mark API). Empty `kind` /
+/// `category`, and [`mark::ANY`] for `owner` / `src` / `instance`, match
+/// anything. Packed as postcard across the guest/host boundary.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct MarkFilter {
+    pub kind: String,
+    pub category: String,
+    /// Display owner seat, `-1` for a neutral mark, or [`mark::ANY`].
+    pub owner: i32,
+    /// Provenance instance uid, or [`mark::ANY`].
+    pub src: i32,
+    /// Owning counter's instance uid, or [`mark::ANY`].
+    pub instance: i32,
+}
+
+impl MarkFilter {
+    pub fn any() -> Self {
+        Self {
+            kind: String::new(),
+            category: String::new(),
+            owner: mark::ANY,
+            src: mark::ANY,
+            instance: mark::ANY,
+        }
+    }
+    pub fn kind(mut self, k: &str) -> Self {
+        self.kind = k.to_string();
+        self
+    }
+    pub fn category(mut self, c: &str) -> Self {
+        self.category = c.to_string();
+        self
+    }
+    pub fn owner(mut self, o: i32) -> Self {
+        self.owner = o;
+        self
+    }
+    pub fn src(mut self, s: i32) -> Self {
+        self.src = s;
+        self
+    }
+    pub fn instance(mut self, i: i32) -> Self {
+        self.instance = i;
+        self
+    }
+}
+
+/// Cross-card message payload (`ctx::send` / `On::Message`). A few typed ints
+/// plus an optional name -- postcard-friendly.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Message {
+    pub name: String,
+    pub a: i32,
+    pub b: i32,
+    pub c: i32,
+    pub tile: i32,
+    pub seat: i32,
+    pub text: String,
+}
+
+/// How `ctx::send` addresses a receiver.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Target {
+    /// A specific field-card instance uid.
+    Uid(i32),
+    /// The instance of card id `card` held by `player` (first field copy).
+    Card { player: i32, card: String },
+    /// A standing board-owned pseudo card by id (`mark:cp`).
+    Board(String),
 }
 
 /// Named **card properties** -- the keys of a `CardDef`'s `props` map. A
@@ -1014,16 +1108,15 @@ pub enum TriggerKind {
     /// v28: `t.player_id` just used their character skill
     /// (「使用自己原有的技能（2）时」). `t.card` is the skill rule's id.
     SkillUsed = 74,
-    /// v29: a placed card's [奇迹水晶] count was just written (set or add).
-    /// `t.card` is the card whose count moved, `t.player_id` its owner, and
-    /// `t.value` is the **change applied** (0 = a write that landed on the same
-    /// count, e.g. a card placed with none). The count after the write is
-    /// `ctx::crystals()` on the instance itself.
-    ///
-    /// The 「此卡上不再拥有[奇迹水晶]时」 clauses (AG:绯红之魂 (3) and kin) listen
-    /// here instead of testing the count at each spend site, so a count that is
-    /// emptied by *any* path still leaves the field.
-    CrystalsChanged = 76,
+    /// v50: a named on-card counter on a placed instance was just written.
+    /// `t.card` is the card whose count moved, `t.player_id` its owner,
+    /// `t.value` is the **signed change applied**, and `t.name` is the counter
+    /// name ([`counter::CRYSTALS`], [`counter::CP`], …). The count after the
+    /// write is `ctx::counter(name)` on that instance. Replaces the v29
+    /// `CrystalsChanged` and v36 `CpChanged` hooks (same payload shape plus
+    /// the name). 「…时」 clauses on a count (「此卡上不再拥有[奇迹水晶]时」,
+    /// 通用:该清CP了's graveyard rule) listen here and filter on the name.
+    CounterChanged = 76,
     /// v30: **before one card is drawn** (per single card; an N-card draw raises
     /// this N times). `t.card` is the card that would be drawn (the deck's top,
     /// or empty when the pile is dry). This is the per-draw *replacement* point:
@@ -1038,12 +1131,8 @@ pub enum TriggerKind {
     /// (negative when a [CP点] left). The count after the write is
     /// `ctx::cp_attached()` on the instance itself.
     ///
-    /// The 「该清CP了 should be graveyarded as soon as the attached on-card cp
-    /// mark is empty」 rule (user ruling 2026-10-07) listens here rather than
-    /// re-checking at each spend site, so a count emptied by *any* write --
-    /// a settle, another effect's removal -- leaves the field just the same.
-    /// Mirrors [`Self::CrystalsChanged`], which is the same shape for [奇迹水晶].
-    CpChanged = 78,
+    // 78 was `CpChanged`; v50 folds it into [`Self::CounterChanged`] with
+    // `t.name == counter::CP`.
 
     // v40: the purchase surface (`docs/PURCHASE.md`).
     /// May `t.player_id` buy `t.tile` at all? A placed card
@@ -1199,9 +1288,9 @@ impl TriggerKind {
             75 => Self::HouseAdded,
             73 => Self::FireSpent,
             74 => Self::SkillUsed,
-            76 => Self::CrystalsChanged,
+            76 => Self::CounterChanged,
             77 => Self::DrewBefore,
-            78 => Self::CpChanged,
+
             79 => Self::BuyGate,
             80 => Self::BuyAdd,
             81 => Self::BuyMul,
@@ -1300,9 +1389,9 @@ impl TriggerKind {
             Self::HouseAdded => "houseAdded",
             Self::FireSpent => "fireSpent",
             Self::SkillUsed => "skillUsed",
-            Self::CrystalsChanged => "crystalsChanged",
+            Self::CounterChanged => "counterChanged",
             Self::DrewBefore => "drewBefore",
-            Self::CpChanged => "cpChanged",
+
             Self::BuyGate => "buyGate",
             Self::BuyAdd => "buyAdd",
             Self::BuyMul => "buyMul",
@@ -1399,9 +1488,9 @@ impl TriggerKind {
             "houseAdded" => Self::HouseAdded,
             "fireSpent" => Self::FireSpent,
             "skillUsed" => Self::SkillUsed,
-            "crystalsChanged" => Self::CrystalsChanged,
+            "counterChanged" | "crystalsChanged" | "cpChanged" => Self::CounterChanged,
             "drewBefore" => Self::DrewBefore,
-            "cpChanged" => Self::CpChanged,
+
             "buyGate" => Self::BuyGate,
             "buyAdd" => Self::BuyAdd,
             "buyMul" => Self::BuyMul,
@@ -1989,6 +2078,9 @@ pub struct ManifestOn {
     /// panics on any mismatch with `pre ∧ guard`. Deleted once the card's audit
     /// is clean.
     pub has_legacy: bool,
+    /// Message names this [`OnKind::Message`] entry answers (empty otherwise).
+    #[serde(default)]
+    pub messages: Vec<String>,
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).
@@ -2037,6 +2129,13 @@ pub enum OnKind {
     /// [`TriggerKind::SettleBody`] cancel replaces it). Condition / residual
     /// guard (v49) decide whether the body governs this settle.
     Settle = 7,
+    /// v50: `On::Message(names, pre, guard, body)` -- this card answers a
+    /// cross-card message (`ctx::send`). `names` are the message names it
+    /// answers; the same category → condition → residual guard → body layering
+    /// as [`Self::Hook`]. The handler reads the sender and payload from
+    /// `ctx::message` and returns a reply value. Does **not** flash the card
+    /// (internal plumbing); the handler may log.
+    Message = 8,
 }
 
 impl OnKind {
@@ -2049,6 +2148,7 @@ impl OnKind {
             5 => Self::RollPlan,
             6 => Self::Gate,
             7 => Self::Settle,
+            8 => Self::Message,
             _ => return None,
         })
     }

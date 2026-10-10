@@ -5,9 +5,11 @@
 //! stays deterministic. Anything that needs a player decision is *not* here --
 //! those go through `Cx::ask`, which halts and replays like any engine routine.
 
+use std::collections::BTreeMap;
+
 use crate::data::GameData;
 use crate::msg::Msg;
-use crate::state::{key, Counter, FieldCard, StateVar, Tick, TileMark};
+use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
 use super::world::World;
 
@@ -1055,6 +1057,7 @@ impl World {
             tile,
             crystals: 0,
             cp: 0,
+            counters: BTreeMap::new(),
             face_down: false,
             immune: false,
             props,
@@ -1156,36 +1159,27 @@ impl World {
     }
 
     /// Miracle crystals on the instance at `uid` (C# `Card.Crystals`).
+    /// Sugar over [`Self::counter_at`] with [`crate::state::counter::CRYSTALS`].
     pub fn crystals_at(&self, uid: i32) -> i32 {
-        self.field_by_uid(uid).map_or(0, |f| f.crystals)
+        self.counter_at(uid, crate::state::counter::CRYSTALS)
     }
 
     /// On-card [CP点] on the instance at `uid` (`FieldCard::cp`) -- 「自己[场上]
-    /// N个[CP点]」, the CP points attached to *that* card (user ruling
-    /// 2026-10-07). Crystals-like: the card rule's own stock, as against the
-    /// neutral [CP点] tile marks below.
+    /// N个[CP点]」. Sugar over [`Self::counter_at`] with
+    /// [`crate::state::counter::CP`].
     pub fn cp_at(&self, uid: i32) -> i32 {
-        self.field_by_uid(uid).map_or(0, |f| f.cp)
+        self.counter_at(uid, crate::state::counter::CP)
     }
 
-    /// Adjust the on-card [CP点] on the instance at `uid` by `n`, clamped at 0
-    /// and at `max` (`0` = uncapped); returns the new count. The `cpChanged`
-    /// follow-up (通用:该清CP了's graveyard rule) hears about this write like
-    /// any other.
+    /// Adjust the on-card [CP点] on the instance at `uid`. Sugar over
+    /// [`Self::add_counter_at`].
     pub fn add_cp_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
-        let Some(f) = self.field_by_uid_mut(uid) else {
-            return 0;
-        };
-        f.cp = (f.cp + n).max(0);
-        if max > 0 {
-            f.cp = f.cp.min(max);
-        }
-        f.cp
+        self.add_counter_at(uid, crate::state::counter::CP, n, max)
     }
 
     /// Set the on-card [CP点] on the instance at `uid`; returns the new count.
     pub fn set_cp_at(&mut self, uid: i32, n: i32) -> i32 {
-        self.add_cp_at(uid, n - self.cp_at(uid), 0)
+        self.set_counter_at(uid, crate::state::counter::CP, n)
     }
 
     /// One declared property of the instance at `uid` (`FieldCard::props`,
@@ -1241,30 +1235,12 @@ impl World {
     /// `ActiveEvent::counter` is the public view of the instance's crystals,
     /// and the raw row is what clients (and tests) read.
     pub fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
-        let Some(f) = self.field_by_uid_mut(uid) else {
-            return 0;
-        };
-        f.crystals = (f.crystals + n).max(0);
-        if max > 0 {
-            f.crystals = f.crystals.min(max);
-        }
-        let now = f.crystals;
-        let card = f.card.clone();
-        let tile = f.tile;
-        if tile < 0 && card.starts_with("event:") {
-            let short = card.strip_prefix("event:").unwrap_or(&card);
-            for e in self.st.event_active.iter_mut() {
-                if e.id == short {
-                    e.counter = now;
-                }
-            }
-        }
-        now
+        self.add_counter_at(uid, crate::state::counter::CRYSTALS, n, max)
     }
 
     /// Set the instance at `uid`'s crystals; returns the new count.
     pub fn set_crystals_at(&mut self, uid: i32, n: i32) -> i32 {
-        self.add_crystals_at(uid, n - self.crystals_at(uid), 0)
+        self.set_counter_at(uid, crate::state::counter::CRYSTALS, n)
     }
 
     /// Where the instance at `uid` sits, or -1 for "with its owner" / gone.
@@ -1325,6 +1301,9 @@ impl World {
     /// Where it is filed (`event_discard` / `event_removed`) is the body's own
     /// `ctx::event_expire` call -- this only unbinds.
     pub fn unplace_at(&mut self, uid: i32) -> i32 {
+        // One cleanup path keyed by the instance (user ruling 2026-10-10):
+        // every bound counter unit -- tile mark or held token -- dies with it.
+        self.destroy_instance_units(uid);
         if let Some(i) = self.st.board_field.iter().position(|f| f.uid == uid) {
             let card = self.st.board_field.remove(i).card;
             if let Some(id) = card.strip_prefix("event:") {
@@ -1512,7 +1491,9 @@ impl World {
             .iter()
             .position(|f| f.card == rid && f.tile < 0)
         {
+            let uid = self.st.board_field[i].uid;
             self.st.board_field.remove(i);
+            self.destroy_instance_units(uid);
         }
         self.st.event_active.retain(|e| e.id != id);
         if removed {
@@ -1572,7 +1553,10 @@ impl World {
     pub fn unplace_card(&mut self, player_id: i32, card: &str) -> Option<String> {
         let s = self.player_mut(player_id)?;
         let k = s.field.iter().position(|f| f.card == card)?;
-        Some(s.field.remove(k).card)
+        let uid = s.field[k].uid;
+        let id = s.field.remove(k).card;
+        self.destroy_instance_units(uid);
+        Some(id)
     }
 
     pub fn placed_cards(&self, player_id: i32) -> Vec<String> {
@@ -1616,123 +1600,441 @@ impl World {
         true
     }
 
-    /// Miracle crystals on a placed card (C# `Card.Crystals`).
+    /// Miracle crystals on a placed card (C# `Card.Crystals`). Sugar over
+    /// [`Self::card_counter`] with [`crate::state::counter::CRYSTALS`].
     pub fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
-        self.player_id(player_id)
-            .and_then(|s| s.field.iter().find(|f| f.card == card))
-            .map_or(0, |f| f.crystals)
+        self.card_counter(player_id, card, crate::state::counter::CRYSTALS)
     }
 
-    /// `H.AddCrystals` on a placed card; `max` caps the result (0 = uncapped).
+    /// `H.AddCrystals` on a placed card. Sugar over [`Self::add_card_counter`].
     pub fn add_card_crystals(&mut self, player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-        let Some(f) = self
-            .player_mut(player_id)
-            .and_then(|s| s.field.iter_mut().find(|f| f.card == card))
-        else {
-            return 0;
-        };
-        f.crystals = (f.crystals + n).max(0);
-        if max > 0 {
-            f.crystals = f.crystals.min(max);
-        }
-        f.crystals
+        self.add_card_counter(player_id, card, crate::state::counter::CRYSTALS, n, max)
     }
 
     pub fn set_card_crystals(&mut self, player_id: i32, card: &str, n: i32) {
         self.add_card_crystals(player_id, card, n - self.card_crystals(player_id, card), 0);
     }
 
-    // --------------------------------------------------------------- marks
+    /// On-card named counter of a placed card, looked up by card id (first
+    /// field copy wins). Generic form of [`Self::card_crystals`].
+    pub fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
+        self.player_id(player_id)
+            .and_then(|s| s.field.iter().find(|f| f.card == card))
+            .map_or(0, |f| match name {
+                crate::state::counter::CRYSTALS => f.crystals,
+                crate::state::counter::CP => f.cp,
+                other => f.counters.get(other).copied().unwrap_or(0),
+            })
+    }
 
-    /// `H.CountMarks` -- marks on a tile, optionally only one kind/owner.
-    pub fn count_marks(&self, tile: i32, kind: &str, owner: i32) -> i32 {
+    /// Adjust the on-card named counter of a placed card. Generic form of
+    /// [`Self::add_card_crystals`].
+    pub fn add_card_counter(
+        &mut self,
+        player_id: i32,
+        card: &str,
+        name: &str,
+        n: i32,
+        max: i32,
+    ) -> i32 {
+        let Some(f) = self
+            .player_mut(player_id)
+            .and_then(|s| s.field.iter_mut().find(|f| f.card == card))
+        else {
+            return 0;
+        };
+        let uid = f.uid;
+        self.add_counter_at(uid, name, n, max)
+    }
+
+    // --------------------------------------------------------------- marks
+    // Generic tile-mark / bound-counter API (user ruling 2026-10-10).
+    //
+    // A **tile mark** is a unit of some card instance's named counter, bound to
+    // a tile. The same counter may also have units bound to a holder
+    // ([`Self::add_tok`] / `Counter`) or sitting on the card itself
+    // ([`Self::counter_at`]). Destroying the owning instance destroys every
+    // unit, wherever it sits ([`Self::destroy_instance_units`]).
+    //
+    // Filter sentinel: `MarkFilter { kind: "", category: "", owner: -2,
+    // src: -2, instance: -2 }` matches anything (`MarkFilter::ANY`).
+
+    /// Sum of `count` over the matching marks on `tile`.
+    pub fn count_marks(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
         self.st
             .marks
             .iter()
-            .filter(|m| {
-                m.tile == tile
-                    && (kind.is_empty() || m.kind == kind)
-                    && (owner == -2 || m.owner == owner)
-            })
+            .filter(|m| m.tile == tile && filter.matches(m))
             .map(|m| m.count)
             .sum()
     }
 
-    /// Move one matching mark's `count` by `delta` (C# `mark.count--` for
-    /// 「移除一个」). The mark is dropped when its count reaches 0. Returns the
-    /// count now stored. Unlike [`Self::remove_marks`] this touches a single
-    /// mark rather than clearing every match.
-    pub fn bump_mark(&mut self, tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
-        let Some(m) = self
-            .st
+    /// Provenance (`TileMark.src`) of the first matching mark on `tile`, or -1.
+    pub fn mark_src_at(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
+        self.st
             .marks
-            .iter_mut()
-            .find(|m| m.tile == tile && m.kind == kind && (owner < 0 || m.owner == owner))
-        else {
+            .iter()
+            .find(|m| m.tile == tile && filter.matches(m))
+            .map_or(-1, |m| m.src)
+    }
+
+    /// Owning instance (`TileMark.instance`) of the first matching mark on
+    /// `tile`, or -1.
+    pub fn mark_instance_at(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .find(|m| m.tile == tile && filter.matches(m))
+            .map_or(-1, |m| m.instance)
+    }
+
+    /// Bind `count` more units of `instance`'s counter `kind` to `tile`.
+    /// `owner` colours the mark in the view; `src` is provenance (which run
+    /// placed it); `category` is the display category ([`crate::state::mark_category`]).
+    /// Stacks onto an existing match (same tile/kind/category/instance/src)
+    /// when one is there; otherwise pushes a new row. Returns the count now on
+    /// that row.
+    pub fn place_mark(
+        &mut self,
+        instance: i32,
+        kind: &str,
+        category: &str,
+        tile: i32,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> i32 {
+        if count <= 0 {
             return 0;
-        };
-        m.count = (m.count + delta).max(0);
-        let now = m.count;
-        if now == 0 {
-            self.st.marks.retain(|m| {
-                !(m.tile == tile
-                    && m.kind == kind
-                    && (owner < 0 || m.owner == owner)
-                    && m.count == 0)
-            });
         }
-        now
-    }
-
-    pub fn remove_marks(&mut self, tile: i32, kind: &str, owner: i32) -> i32 {
-        let before = self.st.marks.len();
-        self.st.marks.retain(|m| {
-            !(m.tile == tile
-                && (kind.is_empty() || m.kind == kind)
-                && (owner == -2 || m.owner == owner))
-        });
-        (before - self.st.marks.len()) as i32
-    }
-
-    pub fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg) {
+        let cat = if category.is_empty() {
+            crate::state::mark_category::PLAYER
+        } else {
+            category
+        };
+        if let Some(m) = self.st.marks.iter_mut().find(|m| {
+            m.tile == tile
+                && m.kind == kind
+                && m.category == cat
+                && m.instance == instance
+                && m.src == src
+        }) {
+            m.count += count;
+            return m.count;
+        }
         let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
         self.st.marks.push(TileMark {
             uid,
             tile,
             kind: kind.to_string(),
-            category: crate::state::mark_category::PLAYER.to_string(),
-            owner: player_id,
-            count: 1,
+            category: cat.to_string(),
+            owner,
+            count,
             card: String::new(),
-            src: -1,
+            src,
+            instance,
             note,
         });
+        count
+    }
+
+    /// Move one matching mark's `count` by `delta`; the row is dropped at 0.
+    /// Returns the count now stored on that row (0 when nothing matched).
+    pub fn bump_mark(&mut self, tile: i32, filter: &MarkFilter<'_>, delta: i32) -> i32 {
+        let Some(m) = self
+            .st
+            .marks
+            .iter_mut()
+            .find(|m| m.tile == tile && filter.matches(m))
+        else {
+            return 0;
+        };
+        m.count = (m.count + delta).max(0);
+        let now = m.count;
+        let uid = m.uid;
+        if now == 0 {
+            self.st.marks.retain(|m| m.uid != uid);
+        }
+        now
+    }
+
+    /// Drop every matching mark on `tile`; returns how many rows were removed.
+    pub fn remove_marks(&mut self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
+        let before = self.st.marks.len();
+        self.st.marks.retain(|m| !(m.tile == tile && filter.matches(m)));
+        (before - self.st.marks.len()) as i32
+    }
+
+    /// Destroy every counter unit owned by the instance at `uid` -- tile marks
+    /// and player-held tokens alike. Called when the instance leaves the field
+    /// (discard, unplace, player leave / bankrupt, event expire). The standing
+    /// `mark:cp` pseudo card is never destroyed, so its units stay.
+    pub fn destroy_instance_units(&mut self, uid: i32) {
+        if uid < 0 {
+            return;
+        }
+        self.st.marks.retain(|m| m.instance != uid);
+        for p in self.st.players.iter_mut() {
+            p.tokens.retain(|t| t.instance != uid);
+        }
+    }
+
+    // ------------------------------------------------- named card counters
+    // The generic per-instance counter API. `name` is one of
+    // [`crate::state::counter`] or a card-invented string. The **on-card**
+    // location is the instance itself; tile / holder bindings live in
+    // [`crate::state::TileMark`] / [`crate::state::Counter`].
+
+    /// On-card count of `name` on the instance at `uid` (0 when absent).
+    pub fn counter_at(&self, uid: i32, name: &str) -> i32 {
+        let Some(f) = self.field_by_uid(uid) else {
+            return 0;
+        };
+        match name {
+            crate::state::counter::CRYSTALS => f.crystals,
+            crate::state::counter::CP => f.cp,
+            other => f.counters.get(other).copied().unwrap_or(0),
+        }
+    }
+
+    /// Adjust the on-card count of `name` on the instance at `uid` by `n`,
+    /// clamped at 0 and at `max` (`0` = uncapped). Returns the new count.
+    pub fn add_counter_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
+        let Some(f) = self.field_by_uid_mut(uid) else {
+            return 0;
+        };
+        let slot = match name {
+            crate::state::counter::CRYSTALS => &mut f.crystals,
+            crate::state::counter::CP => &mut f.cp,
+            other => f.counters.entry(other.to_string()).or_insert(0),
+        };
+        *slot = (*slot + n).max(0);
+        if max > 0 {
+            *slot = (*slot).min(max);
+        }
+        let now = *slot;
+        // Event instances mirror their crystal count into the public
+        // `ActiveEvent::counter` row (`docs/EVENTS.md`).
+        if name == crate::state::counter::CRYSTALS {
+            let card = f.card.clone();
+            let tile = f.tile;
+            if tile < 0 && card.starts_with("event:") {
+                let short = card.strip_prefix("event:").unwrap_or(&card);
+                for e in self.st.event_active.iter_mut() {
+                    if e.id == short {
+                        e.counter = now;
+                    }
+                }
+            }
+        }
+        now
+    }
+
+    /// Set the on-card count of `name` on the instance at `uid`.
+    pub fn set_counter_at(&mut self, uid: i32, name: &str, n: i32) -> i32 {
+        self.add_counter_at(uid, name, n - self.counter_at(uid, name), 0)
+    }
+
+    /// Units of `instance`'s counter `kind` bound to `tile`.
+    pub fn count_bound_tile(&self, instance: i32, kind: &str, tile: i32) -> i32 {
+        self.st
+            .marks
+            .iter()
+            .filter(|m| m.tile == tile && m.kind == kind && m.instance == instance)
+            .map(|m| m.count)
+            .sum()
+    }
+
+    /// Units of `instance`'s counter `name` held by `player_id`.
+    pub fn count_held(&self, instance: i32, name: &str, player_id: i32) -> i32 {
+        self.player_id(player_id)
+            .and_then(|s| {
+                s.tokens
+                    .iter()
+                    .find(|t| t.name == name && t.instance == instance)
+            })
+            .map_or(0, |t| t.value)
+    }
+
+    /// Bind `n` more units of `instance`'s counter `name` to `player_id`
+    /// (a rule-created player token). Clamped at 0 / `max`. Returns how much
+    /// actually moved.
+    pub fn bind_held(&mut self, instance: i32, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+        let Some(s) = self.player_mut(player_id) else {
+            return 0;
+        };
+        let idx = s
+            .tokens
+            .iter()
+            .position(|t| t.name == name && t.instance == instance);
+        let slot = match idx {
+            Some(i) => &mut s.tokens[i],
+            None => {
+                s.tokens.push(Counter {
+                    name: name.to_string(),
+                    value: 0,
+                    instance,
+                });
+                s.tokens.last_mut().expect("just pushed")
+            }
+        };
+        let before = slot.value;
+        slot.value = (slot.value + n).max(0);
+        if max > 0 {
+            slot.value = slot.value.min(max);
+        }
+        slot.value - before
+    }
+
+    /// Move `n` units of `instance`'s counter `name` from one location to
+    /// another. `from_tile`/`to_tile` >= 0 bind to that tile; use
+    /// `from_player`/`to_player` >= 0 for a holder; the on-card pool is
+    /// `from_tile == to_tile == -1 && from_player == to_player == -1` with the
+    /// `*_on_card` flags. Simpler wire form: see `World::move_units`.
+    pub fn move_units(
+        &mut self,
+        instance: i32,
+        name: &str,
+        from_tile: i32,
+        from_player: i32,
+        to_tile: i32,
+        to_player: i32,
+        n: i32,
+    ) -> i32 {
+        if n <= 0 || instance < 0 {
+            return 0;
+        }
+        // Take from the source.
+        let took = if from_tile >= 0 {
+            let f = MarkFilter {
+                kind: name,
+                category: "",
+                owner: -2,
+                src: -2,
+                instance,
+            };
+            let have = self.count_bound_tile(instance, name, from_tile);
+            let take = n.min(have);
+            if take <= 0 {
+                return 0;
+            }
+            self.bump_mark(from_tile, &f, -take);
+            take
+        } else if from_player >= 0 {
+            let have = self.count_held(instance, name, from_player);
+            let take = n.min(have);
+            if take <= 0 {
+                return 0;
+            }
+            self.bind_held(instance, name, from_player, -take, 0);
+            take
+        } else {
+            let have = self.counter_at(instance, name);
+            let take = n.min(have);
+            if take <= 0 {
+                return 0;
+            }
+            self.add_counter_at(instance, name, -take, 0);
+            take
+        };
+        // Put on the destination.
+        if to_tile >= 0 {
+            self.place_mark(instance, name, "", to_tile, -1, -1, took, Msg::default());
+        } else if to_player >= 0 {
+            self.bind_held(instance, name, to_player, took, 0);
+        } else {
+            self.add_counter_at(instance, name, took, 0);
+        }
+        took
+    }
+
+    // Legacy wrapper: `H.CountMarks` over kind/owner.
+    pub fn count_marks_kind(&self, tile: i32, kind: &str, owner: i32) -> i32 {
+        self.count_marks(
+            tile,
+            &MarkFilter {
+                kind,
+                category: "",
+                owner,
+                src: -2,
+                instance: -2,
+            },
+        )
+    }
+
+    /// Legacy kind/owner form of [`Self::bump_mark`] (C# `mark.count--`).
+    /// Owner `-2` / any negative matches any owner (the old `bump_mark` rule).
+    pub fn bump_mark_kind(&mut self, tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
+        self.bump_mark(
+            tile,
+            &MarkFilter {
+                kind,
+                category: "",
+                owner: if owner < 0 { -2 } else { owner },
+                src: -2,
+                instance: -2,
+            },
+            delta,
+        )
+    }
+
+    /// Legacy kind/owner form of [`Self::remove_marks`].
+    pub fn remove_marks_kind(&mut self, tile: i32, kind: &str, owner: i32) -> i32 {
+        self.remove_marks(
+            tile,
+            &MarkFilter {
+                kind,
+                category: "",
+                owner,
+                src: -2,
+                instance: -2,
+            },
+        )
+    }
+
+    /// Legacy `H.AddMark` -- one player-coloured unit of `kind` on `tile`,
+    /// owner `player_id`, no owning instance (the caller stamps one via
+    /// [`Self::place_mark`] going forward).
+    pub fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg) {
+        self.place_mark(-1, kind, "", tile, player_id, -1, 1, note);
     }
 
     // ------------------------------------------------------- [CP点] marks
-    // `docs/TILES.md` / `rules/tiles/src/cp.rs`: [CP点] is its own tile-mark
-    // category, owned by the `mark:cp` rule instance on the neutral board
-    // owner -- never by a player. Cards touch it only through this small API
-    // (`place_cp` / `count_cp` / `clear_cp` / the attached counts), which is
-    // what stamps the category and keeps `owner` at [`crate::state::BOARD_OWNER`].
-    //
-    // Provenance is `src` (the placing card instance's `FieldCard::uid`) plus
-    // `card` (its card id, for the log / the view's 「来自」) -- not `owner`.
-    // 通用:该清CP了 (1) 「此卡在格子上添加的[CP点]及其产物」 keys on `src`.
+    // Under the bound-counter model (user ruling 2026-10-10) the tile [CP点]
+    // are units of the **standing `mark:cp` pseudo card**'s counter
+    // ([`crate::state::counter::CP`] / [`crate::state::mark_kind::CP`]), bound
+    // to tiles. `mark:cp` lives on the neutral board owner and is never
+    // destroyed, so its units outlive any placer. Provenance (`TileMark.src`)
+    // is the placing card instance -- 通用:该清CP了 (1) 「此卡在格子上添加的
+    // [CP点]及其产物」 and the landing hook's 「自己[场上]1个[CP点]」 spend key
+    // on it. The on-card [CP点] of 该清CP了 is that card's own
+    // [`crate::state::counter::CP`] counter and dies with it.
 
-    /// Place one [CP点] on `tile`, attached to the card instance at `src_uid`
-    /// (provenance; `-1` when not attached to an instance). The mark is neutral
-    /// (`owner` = [`crate::state::BOARD_OWNER`]) regardless of who played the
-    /// card. `card_id` is the provenance string the view shows as 「来自」.
-    ///
-    /// Placement semantics (通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的
-    /// 格子上添加1个[CP点]」) are the *caller's* gate -- the rule that says where
-    /// a CP may go lives with `mark:cp`, not with every writer.
+    /// The uid of the standing `mark:cp` instance on the board owner, or -1
+    /// when the ruleset has no such rule (`StubRules`).
+    pub fn mark_cp_uid(&self) -> i32 {
+        self.mark_rule_instances()
+            .into_iter()
+            .find(|(_, c)| c == "mark:cp")
+            .map(|(uid, _)| uid)
+            .unwrap_or(-1)
+    }
+
+    /// Place one [CP点] on `tile` as a unit of `mark:cp`'s counter, with
+    /// `src_uid` / `card_id` as the placer's provenance. Stacks onto the
+    /// tile's existing CP row (the placement gate is 「没有[CP点]的格子」, so
+    /// in practice one row). Returns the count now on the tile.
     pub fn add_cp_mark(&mut self, tile: i32, src_uid: i32, card_id: &str, note: Msg) -> i32 {
-        // 「添加1个[CP点]」 -- stacking is +1 on the tile's single CP mark, so a
-        // tile holds one mark object whose `count` is the [CP点] it carries.
+        let owner_instance = self.mark_cp_uid();
+        // Stack onto the tile's single CP row, keeping the first placer's
+        // provenance (the old rule; the placement gate forbids a second).
         if let Some(m) = self.st.marks.iter_mut().find(|m| m.tile == tile && m.is_cp()) {
             m.count += 1;
+            if m.card.is_empty() {
+                m.card = card_id.to_string();
+                m.src = src_uid;
+            }
             return m.count;
         }
         let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
@@ -1746,36 +2048,43 @@ impl World {
             count: 1,
             card: card_id.to_string(),
             src: src_uid,
+            instance: owner_instance,
             note,
         });
         1
     }
 
-    /// [CP点] on `tile`, any provenance. `H.CountMarks` for the CP category.
+    /// [CP点] on `tile`, any provenance. Filter form: `MarkFilter { category:
+    /// "cp", ..ANY }`.
     pub fn count_cp(&self, tile: i32) -> i32 {
-        self.st
-            .marks
-            .iter()
-            .filter(|m| m.tile == tile && m.is_cp())
-            .map(|m| m.count)
-            .sum()
+        self.count_marks(
+            tile,
+            &MarkFilter {
+                kind: "",
+                category: crate::state::mark_category::CP,
+                owner: -2,
+                src: -2,
+                instance: -2,
+            },
+        )
     }
 
     /// [CP点] on `tile` that the card instance at `src_uid` placed (and its
-    /// products) -- 通用:该清CP了 (1) 「此卡在格子上添加的[CP点]及其产物」.
+    /// products) -- 通用:该清CP了 (1).
     pub fn count_cp_from(&self, tile: i32, src_uid: i32) -> i32 {
-        self.st
-            .marks
-            .iter()
-            .filter(|m| m.tile == tile && m.is_cp() && m.src == src_uid)
-            .map(|m| m.count)
-            .sum()
+        self.count_marks(
+            tile,
+            &MarkFilter {
+                kind: "",
+                category: crate::state::mark_category::CP,
+                owner: -2,
+                src: src_uid,
+                instance: -2,
+            },
+        )
     }
 
-    /// Total [CP点] the card instance at `src_uid` placed anywhere on the board
-    /// -- the tile marks carrying it as provenance (「此卡在格子上添加的[CP点]
-    /// 及其产物」). Distinct from [`Self::cp_at`], the **on-card** [CP点] on the
-    /// instance itself (user ruling 2026-10-07's two kinds).
+    /// Total [CP点] the card instance at `src_uid` placed anywhere.
     pub fn count_cp_from_all(&self, src_uid: i32) -> i32 {
         self.st
             .marks
@@ -1785,42 +2094,39 @@ impl World {
             .sum()
     }
 
-    /// The card instance a [CP点] on `tile` is attached to (`TileMark.src`),
-    /// or `-1` when the tile has none. Read before a write: dropping the last
-    /// mark takes its provenance with it.
+    /// The card instance a [CP点] on `tile` is attached to (`TileMark.src`).
     pub fn cp_src_at(&self, tile: i32) -> i32 {
-        self.st
-            .marks
-            .iter()
-            .find(|m| m.tile == tile && m.is_cp())
-            .map_or(-1, |m| m.src)
+        self.mark_src_at(
+            tile,
+            &MarkFilter {
+                kind: "",
+                category: crate::state::mark_category::CP,
+                owner: -2,
+                src: -2,
+                instance: -2,
+            },
+        )
     }
 
-    /// Remove one [CP点] from `tile` (通用:该清CP了 [手] 「移除格子上的个[CP点]」
-    /// -- C# `tileMark.count--`, at most one per [结算]). Returns how many are
-    /// left there. The mark is dropped at 0. This is a **tile-mark** write: it
-    /// does not touch the card's on-card [CP点] ([`Self::cp_at`]) and so does
-    /// not raise `cpChanged` -- the graveyard rule watches the on-card count.
+    /// Remove one [CP点] from `tile`; the row is dropped at 0. Returns how
+    /// many are left there. Does **not** touch any card's on-card [CP点].
     pub fn clear_cp(&mut self, tile: i32) -> i32 {
         self.bump_cp(tile, -1)
     }
 
-    /// Move the [CP点] on `tile` by `delta`; the mark is dropped at 0. Returns
-    /// the count now on the tile.
+    /// Move the [CP点] on `tile` by `delta`; the row is dropped at 0.
     pub fn bump_cp(&mut self, tile: i32, delta: i32) -> i32 {
-        let Some(m) = self.st.marks.iter_mut().find(|m| m.tile == tile && m.is_cp())
-        else {
-            return 0;
-        };
-        m.count = (m.count + delta).max(0);
-        let now = m.count;
-        let src = m.src;
-        if now == 0 {
-            self.st
-                .marks
-                .retain(|m| !(m.tile == tile && m.is_cp() && m.src == src && m.count == 0));
-        }
-        now
+        self.bump_mark(
+            tile,
+            &MarkFilter {
+                kind: "",
+                category: crate::state::mark_category::CP,
+                owner: -2,
+                src: -2,
+                instance: -2,
+            },
+            delta,
+        )
     }
 
     // ------------------------------------------------------ status effects
@@ -1917,6 +2223,7 @@ fn set_named(list: &mut Vec<Counter>, name: &str, value: i32) {
                 list.push(Counter {
                     name: name.to_string(),
                     value: v,
+                    instance: -1,
                 });
             }
         }

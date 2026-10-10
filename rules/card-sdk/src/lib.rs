@@ -229,6 +229,18 @@ pub enum On {
         Option<fn(player_id: i32) -> bool>,
         fn(player_id: i32) -> Asked,
     ),
+    /// A **cross-card message** this card answers (`ctx::send`). First field
+    /// is the list of message names it answers (empty is never dispatched).
+    /// Same condition / residual guard / body shape as [`On::Hook`]. The
+    /// handler reads the sender and payload from [`ctx::message`] and returns
+    /// a reply value via `ctx::message::reply`. Handling a message does not
+    /// flash the card (internal plumbing).
+    Message(
+        &'static [&'static str],
+        &'static str,
+        Option<fn(player_id: i32) -> bool>,
+        fn(player_id: i32) -> Asked,
+    ),
 }
 
 /// Condition-authoring sugar (docs/GUARDS.md §4.3). The strings are CEL; the
@@ -255,6 +267,7 @@ impl On {
             On::RollPlan(_, g, r) => On::RollPlan(pre, g, r),
             On::AtEnd(_, g, r) => On::AtEnd(pre, g, r),
             On::Settle(_, g, r) => On::Settle(pre, g, r),
+            On::Message(n, _, g, r) => On::Message(n, pre, g, r),
         }
     }
 
@@ -268,6 +281,7 @@ impl On {
             On::RollPlan(pre, _, r) => On::RollPlan(pre, None, r),
             On::AtEnd(pre, _, r) => On::AtEnd(pre, None, r),
             On::Settle(pre, _, r) => On::Settle(pre, None, r),
+            On::Message(n, pre, _, r) => On::Message(n, pre, None, r),
             other => other,
         }
     }
@@ -282,7 +296,8 @@ impl On {
             | On::Gate(_, _, g, _)
             | On::RollPlan(_, g, _)
             | On::AtEnd(_, g, _)
-            | On::Settle(_, g, _) => *g,
+            | On::Settle(_, g, _)
+            | On::Message(_, _, g, _) => *g,
             _ => None,
         }
     }
@@ -297,7 +312,8 @@ impl On {
             | On::Gate(_, _, g, _)
             | On::RollPlan(_, g, _)
             | On::AtEnd(_, g, _)
-            | On::Settle(_, g, _) => g.is_some(),
+            | On::Settle(_, g, _)
+            | On::Message(_, _, g, _) => g.is_some(),
         }
     }
 
@@ -311,7 +327,8 @@ impl On {
             | On::Gate(_, pre, _, _)
             | On::RollPlan(pre, _, _)
             | On::AtEnd(pre, _, _)
-            | On::Settle(pre, _, _) => *pre,
+            | On::Settle(pre, _, _)
+            | On::Message(_, pre, _, _) => *pre,
         }
     }
 
@@ -324,6 +341,7 @@ impl On {
             On::AtEnd(..) => abi::OnKind::AtEnd,
             On::RollPlan(..) => abi::OnKind::RollPlan,
             On::Settle(..) => abi::OnKind::Settle,
+            On::Message(..) => abi::OnKind::Message,
         }
     }
 
@@ -335,6 +353,18 @@ impl On {
             On::Counteract(k, ..) => k.iter().map(|x| *x as i32).collect(),
             On::Hook(k, ..) => k.iter().map(|x| *x as i32).collect(),
             On::Gate(k, ..) => k.iter().map(|x| *x as i32).collect(),
+            // Message names travel as the manifest's `triggers` string list
+            // packed as hashes? No -- `triggers` is `Vec<i32>` of kind codes.
+            // The names ride a separate manifest field; see `rt.rs`.
+            On::Message(..) => Vec::new(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The message names this [`On::Message`] entry answers (empty otherwise).
+    pub fn message_names(&self) -> Vec<&'static str> {
+        match self {
+            On::Message(names, ..) => names.to_vec(),
             _ => Vec::new(),
         }
     }

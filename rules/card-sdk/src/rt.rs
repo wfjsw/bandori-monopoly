@@ -31,6 +31,10 @@ pub fn manifest(bands: &'static [&'static [CardDef]]) -> i64 {
                     },
                     has_guard: o.has_guard(),
                     has_legacy: c.legacy.iter().any(|(e, _)| *e == ei as i32),
+                    messages: match o {
+                        On::Message(names, ..) => names.iter().map(|s| String::from(*s)).collect(),
+                        _ => Vec::new(),
+                    },
                 })
                 .collect(),
             // Sorted by key so the wire bytes are deterministic regardless of

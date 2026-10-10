@@ -496,16 +496,17 @@ pub trait CardWorld: Clone + 'static {
     fn set_immune_at(&mut self, _uid: i32, _on: bool) -> bool {
         false
     }
-    /// Miracle crystals on the *running card instance* (C# `Card.Crystals`).
-    /// The instance is the one the run was dispatched for -- its placement is
-    /// not a parameter, because the host already knows it from the dispatch and
-    /// the same card id can sit on several players' fields at once.
-    fn crystals(&self) -> i32;
-    /// Set the running card instance's crystals; returns the new count.
-    fn set_crystals(&mut self, n: i32) -> i32;
-    /// `H.AddCrystals` -- adjust the running card instance's crystals by `n`,
-    /// clamped at 0 and at `max` (0 = uncapped); returns the new count.
-    fn add_crystals(&mut self, n: i32, max: i32) -> i32;
+    /// Miracle crystals on the *running card instance*. Sugar over
+    /// [`Self::counter`] with `game_core::state::counter::CRYSTALS`.
+    fn crystals(&self) -> i32 {
+        self.counter(game_core::state::counter::CRYSTALS)
+    }
+    fn set_crystals(&mut self, n: i32) -> i32 {
+        self.set_counter(game_core::state::counter::CRYSTALS, n)
+    }
+    fn add_crystals(&mut self, n: i32, max: i32) -> i32 {
+        self.add_counter(game_core::state::counter::CRYSTALS, n, max)
+    }
 
     /// One declared **property** of the running rule instance
     /// (`FieldCard::props`, `card_sdk::abi::prop` keys). Default `0`.
@@ -519,84 +520,119 @@ pub trait CardWorld: Clone + 'static {
     }
 
     // ------------------------------------------------------ marks & tokens
-    /// `H.AddMark` -- a marker on a tile (`kind` names it, `note` explains it).
-    fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg);
-    fn count_marks(&self, tile: i32, kind: &str, owner: i32) -> i32;
+    // Named counters and their bound units (user ruling 2026-10-10).
 
-    // ---------------------------------------------------------- [CP点] marks
-    // The `mark:cp` rule owner's small API (`rules/tiles/src/cp.rs`). [CP点] is
-    // its own tile-mark category, held by the neutral board owner -- never by a
-    // player. The writer stamps the running card instance as provenance.
-
-    /// Place one [CP点] on `tile`, attached to the running card instance.
-    /// Returns the tile's [CP点] count after the write.
-    fn place_cp(&mut self, _tile: i32, _note: Msg) -> i32 {
+    /// On-card named counter of the running instance.
+    fn counter(&self, name: &str) -> i32 {
+        let _ = name;
         0
     }
-    /// [CP点] on `tile`, any provenance.
-    fn count_cp(&self, _tile: i32) -> i32 {
+    fn set_counter(&mut self, name: &str, n: i32) -> i32 {
+        let _ = (name, n);
         0
     }
-    /// [CP点] on `tile` the running card instance placed (and its products).
-    fn count_cp_from(&self, _tile: i32) -> i32 {
+    fn add_counter(&mut self, name: &str, n: i32, max: i32) -> i32 {
+        let _ = (name, n, max);
         0
     }
-    /// Remove one [CP点] from `tile`; returns how many are left there.
-    fn clear_cp(&mut self, _tile: i32) -> i32 {
+    /// On-card named counter of the instance at `uid`.
+    fn counter_at(&self, uid: i32, name: &str) -> i32 {
+        let _ = (uid, name);
         0
     }
-    /// The card instance a [CP点] on `tile` is attached to (`TileMark.src`), or
-    /// `-1` when the tile has none. The settle clause looks the card up this
-    /// way (「自己[场上]1个[CP点]」 is that card's on-card count).
-    fn cp_src_at(&self, _tile: i32) -> i32 {
+    fn add_counter_at(&mut self, uid: i32, name: &str, n: i32, max: i32) -> i32 {
+        let _ = (uid, name, n, max);
+        0
+    }
+    /// On-card named counter of a placed card (first copy).
+    fn card_counter(&self, player_id: i32, card: &str, name: &str) -> i32 {
+        let _ = (player_id, card, name);
+        0
+    }
+    fn add_card_counter(&mut self, player_id: i32, card: &str, name: &str, n: i32, max: i32) -> i32 {
+        let _ = (player_id, card, name, n, max);
+        0
+    }
+    /// Bind `count` units of the running instance's counter `kind` to `tile`.
+    fn place_mark(
+        &mut self,
+        tile: i32,
+        kind: &str,
+        category: &str,
+        owner: i32,
+        src: i32,
+        count: i32,
+        note: Msg,
+    ) -> i32 {
+        let _ = (tile, kind, category, owner, src, count, note);
+        0
+    }
+    fn count_marks(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        let _ = (tile, filter);
+        0
+    }
+    fn bump_mark(&mut self, tile: i32, filter: &game_core::state::MarkFilter<'_>, delta: i32) -> i32 {
+        let _ = (tile, filter, delta);
+        0
+    }
+    fn remove_marks(&mut self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        let _ = (tile, filter);
+        0
+    }
+    fn mark_src_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        let _ = (tile, filter);
         -1
     }
-    /// On-card [CP点] on the **running card instance** (`FieldCard::cp`) --
-    /// 「自己[场上]N个[CP点]」, the CP points attached to this card (user ruling
-    /// 2026-10-07). Not a tile mark and not a per-player counter.
-    fn cp_attached(&self) -> i32 {
+    fn mark_instance_at(&self, tile: i32, filter: &game_core::state::MarkFilter<'_>) -> i32 {
+        let _ = (tile, filter);
+        -1
+    }
+    /// Units of the running instance's counter `name` held by `player_id`.
+    fn count_held(&self, name: &str, player_id: i32) -> i32 {
+        let _ = (name, player_id);
         0
     }
-    /// Adjust the running card instance's on-card [CP点] by `n`, clamped at 0
-    /// and at `max` (`0` = uncapped); returns the new count.
-    fn add_cp(&mut self, _n: i32, _max: i32) -> i32 {
+    fn add_held(&mut self, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+        let _ = (name, player_id, n, max);
         0
     }
-    /// On-card [CP点] on the instance at `uid` (`FieldCard::cp`). The `mark:cp`
-    /// settle clause spends another card's stock this way -- it identifies the
-    /// card by the tile mark's provenance, not by being that card.
-    fn cp_at(&self, _uid: i32) -> i32 {
+    /// Name-keyed held count (any owner).
+    fn count_held_name(&self, name: &str, player_id: i32) -> i32 {
+        self.count_held(name, player_id)
+    }
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+        let _ = (name, player_id, v);
+    }
+    fn move_units(
+        &mut self,
+        name: &str,
+        from_tile: i32,
+        from_player: i32,
+        to_tile: i32,
+        to_player: i32,
+        n: i32,
+    ) -> i32 {
+        let _ = (name, from_tile, from_player, to_tile, to_player, n);
         0
     }
-    /// Adjust the on-card [CP点] on the instance at `uid`; `max` caps (0 =
-    /// uncapped). Returns the new count.
-    fn add_cp_at(&mut self, _uid: i32, _n: i32, _max: i32) -> i32 {
-        0
+    /// The running instance's `FieldCard::uid`.
+    fn self_uid(&self) -> i32 {
+        -1
     }
-    /// C# `Card.Immune` -- 「此卡不受…效果影响」.
-    fn set_card_immune(&mut self, _player_id: i32, _card: &str, _on: bool) -> bool {
-        false
-    }
-    fn card_immune(&self, _player_id: i32, _card: &str) -> bool {
-        false
-    }
-    /// Move a placed field card to `tile` (`tile: -1` = back with its owner).
-    fn set_card_tile(&mut self, _player_id: i32, _card: &str, _tile: i32) -> bool {
-        false
-    }
-    /// Move one matching mark's `count` by `delta`, dropping it at 0.
-    fn bump_mark(&mut self, _tile: i32, _kind: &str, _owner: i32, _delta: i32) -> i32 {
-        0
-    }
-    fn remove_marks(&mut self, tile: i32, kind: &str, owner: i32) -> i32;
-    /// Names of the counters whose name starts with `prefix` and is non-zero.
+    /// Names of the player's non-zero counters whose name starts with `prefix`.
     fn tok_names(&self, _player_id: i32, _prefix: &str) -> Vec<String> {
         Vec::new()
     }
-    fn tok(&self, player_id: i32, name: &str) -> i32;
-    fn set_tok(&mut self, player_id: i32, name: &str, value: i32);
-    /// Returns how much the counter actually moved by.
-    fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32;
+    /// Legacy name-keyed token read.
+    fn tok(&self, player_id: i32, name: &str) -> i32 {
+        self.count_held_name(name, player_id)
+    }
+    fn set_tok(&mut self, player_id: i32, name: &str, value: i32) {
+        self.set_held_name(name, player_id, value);
+    }
+    fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32) -> i32 {
+        self.add_held(name, player_id, n, max)
+    }
 
     // ---------------------------------------------------------- keyed state
     /// Dumb keyed storage: `{value, min, max, expires}` items. The engine holds

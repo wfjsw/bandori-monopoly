@@ -227,39 +227,68 @@ mod sys {
         pub fn prop_at(uid: i32, kp: i32, kl: i32) -> i32;
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_prop_at")]
         pub fn set_prop_at(uid: i32, kp: i32, kl: i32, v: i32) -> i32;
-        // marks & tokens
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_mark")]
-        pub fn add_mark(tile: i32, player_id: i32, kp: i32, kl: i32, np: i32, nl: i32);
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_marks")]
-        pub fn count_marks(tile: i32, kp: i32, kl: i32, owner: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_remove_marks")]
-        pub fn remove_marks(tile: i32, kp: i32, kl: i32, owner: i32) -> i32;
-        // [CP点] -- the `mark:cp` owner's tile-mark API plus the on-card count
-        // (see `rules/tiles/src/cp.rs` / `docs/TILES.md`)
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_place_cp")]
-        pub fn place_cp(tile: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_cp")]
-        pub fn count_cp(tile: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_cp_from")]
-        pub fn count_cp_from(tile: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_clear_cp")]
-        pub fn clear_cp(tile: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_cp_src_at")]
-        pub fn cp_src_at(tile: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_cp_attached")]
-        pub fn cp_attached() -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_cp")]
-        pub fn add_cp(n: i32, max: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_cp_at")]
-        pub fn cp_at(uid: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_cp_at")]
-        pub fn add_cp_at(uid: i32, n: i32, max: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_tok")]
-        pub fn tok(player_id: i32, ptr: i32, len: i32) -> i32;
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_tok")]
-        pub fn set_tok(player_id: i32, ptr: i32, len: i32, v: i32);
-        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_tok")]
-        pub fn add_tok(player_id: i32, ptr: i32, len: i32, by: i32, max: i32) -> i32;
+        // named counters & bound units (v51)
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_counter_self")]
+        pub fn counter_self(np: i32, nl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_counter_self")]
+        pub fn add_counter_self(np: i32, nl: i32, n: i32, max: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_counter_self")]
+        pub fn set_counter_self(np: i32, nl: i32, n: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_counter_at")]
+        pub fn counter_at(uid: i32, np: i32, nl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_counter_at")]
+        pub fn add_counter_at(uid: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_counter")]
+        pub fn card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_card_counter")]
+        pub fn add_card_counter(player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_place_mark")]
+        pub fn place_mark(tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_marks_f")]
+        pub fn count_marks_f(tile: i32, fp: i32, fl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_bump_mark_f")]
+        pub fn bump_mark_f(tile: i32, fp: i32, fl: i32, delta: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_remove_marks_f")]
+        pub fn remove_marks_f(tile: i32, fp: i32, fl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_mark_src_at")]
+        pub fn mark_src_at(tile: i32, fp: i32, fl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_mark_instance_at")]
+        pub fn mark_instance_at(tile: i32, fp: i32, fl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_held")]
+        pub fn count_held(np: i32, nl: i32, player_id: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_add_held")]
+        pub fn add_held(np: i32, nl: i32, player_id: i32, n: i32, max: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_count_held_name")]
+        pub fn count_held_name(np: i32, nl: i32, player_id: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_set_held_name")]
+        pub fn set_held_name(np: i32, nl: i32, player_id: i32, v: i32);
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_move_units")]
+        pub fn move_units(np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_self_uid")]
+        pub fn self_uid() -> i32;
+        // cross-card messages
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_send")]
+        pub fn send(tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_sender_uid")]
+        pub fn msg_sender_uid() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_sender_seat")]
+        pub fn msg_sender_seat() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_name")]
+        pub fn msg_name(p: i32, n: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_a")]
+        pub fn msg_a() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_b")]
+        pub fn msg_b() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_c")]
+        pub fn msg_c() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_tile")]
+        pub fn msg_tile() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_seat")]
+        pub fn msg_seat() -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_text")]
+        pub fn msg_text(p: i32, n: i32) -> i32;
+        #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_msg_reply")]
+        pub fn msg_reply(v: i32);
         // per-player slots
         #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_state_get")]
         pub fn state_get(player_id: i32, ptr: i32, len: i32, field: i32) -> i32;
@@ -1367,19 +1396,19 @@ pub fn is_placed() -> bool {
 /// players' fields at once. [`card_crystals`] is the form for a *named* other
 /// card, which does need to say whose field to look on.
 pub fn crystals() -> i32 {
-    unsafe { sys::crystals() }
+    counter(crate::abi::counter::CRYSTALS)
 }
 
 /// Set this card instance's crystals (C# `Card.Crystals = n`); returns the new
 /// count.
 pub fn set_crystals(n: i32) -> i32 {
-    unsafe { sys::set_crystals(n) }
+    set_counter(crate::abi::counter::CRYSTALS, n)
 }
 
 /// `H.AddCrystals` -- adjust this card instance's crystals by `n`, clamped at 0
 /// and at `max` (`0` = uncapped); returns the new count.
 pub fn add_crystals(n: i32, max: i32) -> Result<i32, Prompt> {
-    asked(unsafe { sys::add_crystals(n, max) })
+    add_counter(crate::abi::counter::CRYSTALS, n, max)
 }
 
 /// One declared **property** of the running rule instance (`FieldCard::props`,
@@ -1431,121 +1460,285 @@ pub fn set_prop_at(uid: i32, key: &str, value: i32) -> i32 {
     unsafe { sys::set_prop_at(uid, p, l, value) }
 }
 
-// --------------------------------------------------------- marks & tokens
+// ------------------------------------------------------ counters & marks
+// Named counters on a card instance, and their units bound to a tile (a tile
+// mark) or a holder (a player token). One API; see `abi::counter` /
+// `abi::MarkFilter`. User ruling 2026-10-10: every mark/token is a unit of
+// some card instance's counter and dies with that instance.
 
-/// `H.AddMark` -- a marker on a tile. `kind` names it (an i18n key), `note` explains it.
-pub fn add_mark(tile: i32, player_id: i32, kind: &str, note: &Msg) {
+/// On-card named counter of **this** instance (`abi::counter::{CP,CRYSTALS}`
+/// or a card-invented name).
+pub fn counter(name: &str) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::counter_self(p, l) }
+}
+
+/// Adjust this instance's on-card counter `name` by `n`, clamped at 0 / `max`
+/// (`0` = uncapped). Raises `CounterChanged` with `t.name = name`. `?` it
+/// (the marker window can pause).
+pub fn add_counter(name: &str, n: i32, max: i32) -> Result<i32, Prompt> {
+    let (p, l) = s(name);
+    asked(unsafe { sys::add_counter_self(p, l, n, max) })
+}
+
+/// Set this instance's on-card counter `name` to `n`.
+pub fn set_counter(name: &str, n: i32) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::set_counter_self(p, l, n) }
+}
+
+/// On-card named counter of the instance at `uid`.
+pub fn counter_at(uid: i32, name: &str) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::counter_at(uid, p, l) }
+}
+
+/// Adjust the on-card named counter of the instance at `uid`. Raises
+/// `CounterChanged` against that instance. Cross-instance **writes** prefer
+/// `send` (the owner writes its own counters); this is the engine-level form
+/// used when the engine itself is the actor (e.g. the `mark:cp` landing hook
+/// spending the placer's on-card CP).
+pub fn add_counter_at(uid: i32, name: &str, n: i32, max: i32) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::add_counter_at(uid, p, l, n, max) }
+}
+
+/// On-card named counter of the placed card `card` on `player`'s field
+/// (first copy).
+pub fn card_counter(player_id: i32, card: &str, name: &str) -> i32 {
+    let (cp, cl) = s(card);
+    let (np, nl) = s(name);
+    unsafe { sys::card_counter(player_id, cp, cl, np, nl) }
+}
+
+/// Adjust the on-card named counter of a placed card. Prefer `send` when the
+/// receiver should decide; this is the engine-level form.
+pub fn add_card_counter(player_id: i32, card: &str, name: &str, n: i32, max: i32) -> i32 {
+    let (cp, cl) = s(card);
+    let (np, nl) = s(name);
+    unsafe { sys::add_card_counter(player_id, cp, cl, np, nl, n, max) }
+}
+
+// -- bound units (tile marks / held tokens) --------------------------------
+
+/// Bind `count` units of **this** instance's counter `kind` to `tile`.
+/// `owner` colours the mark (a seat, or -1 neutral); `category` is the display
+/// category (`""` player / `abi::mark::CP_CATEGORY`); `src` is provenance
+/// (defaults to this instance when -1). `note` explains it.
+///
+/// This is the one place-mark verb: 通用:该清CP了 asks `mark:cp` to bind CP
+/// units this way via `send`; a skill like 要乐奈 binds 抹茶芭菲 units here.
+pub fn place_mark(
+    tile: i32,
+    kind: &str,
+    category: &str,
+    owner: i32,
+    src: i32,
+    count: i32,
+    note: &Msg,
+) -> i32 {
     let (kp, kl) = s(kind);
+    let (cp, cl) = s(category);
     let (np, nl) = mj(note);
-    unsafe { sys::add_mark(tile, player_id, kp, kl, np, nl) }
+    unsafe { sys::place_mark(tile, kp, kl, cp, cl, owner, src, count, np, nl) }
 }
 
-/// `H.CountMarks` -- marks on a tile (`kind` "" = any; `owner` -2 = any).
-pub fn count_marks(tile: i32, kind: &str, owner: i32) -> i32 {
-    let (kp, kl) = s(kind);
-    unsafe { sys::count_marks(tile, kp, kl, owner) }
+/// Units on `tile` matching `filter` (empty kind/category, `mark::ANY` owner
+/// / src / instance = any).
+pub fn count_marks(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::count_marks_f(tile, fp, fl) }
 }
 
-pub fn remove_marks(tile: i32, kind: &str, owner: i32) -> i32 {
-    let (kp, kl) = s(kind);
-    unsafe { sys::remove_marks(tile, kp, kl, owner) }
+/// Move one matching mark's count by `delta`; the row drops at 0.
+pub fn bump_mark(tile: i32, filter: &crate::abi::MarkFilter, delta: i32) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::bump_mark_f(tile, fp, fl, delta) }
 }
 
-// ------------------------------------------------------------ [CP点]
-// Two kinds (user ruling 2026-10-07). **Tile marks** are the `mark:cp` rule
-// owner's small API (`rules/tiles/src/cp.rs`): [CP点] is a tile-mark category
-// of its own -- 「放置于路面上的指示物」 (`data/rules.txt` 125) -- held by the
-// neutral board owner, **never by a player**. A card places / counts / clears
-// through these and nothing else; the writer stamps the placing card instance
-// as provenance (`TileMark.src`) so 「此卡在格子上添加的[CP点]及其产物」 can be
-// told apart from someone else's. **On-card** [CP点] is `FieldCard::cp` --
-// 「自己[场上]N个[CP点]」, the CP points attached to the card itself (the card
-// rule's own stock, crystals-like) -- `cp_attached` / `add_cp` / `cp_at` /
-// `add_cp_at`.
+/// Drop every matching mark on `tile`; returns rows removed.
+pub fn remove_marks(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::remove_marks_f(tile, fp, fl) }
+}
 
-/// Place one [CP点] on `tile`, attached to **this card instance** (provenance;
-/// not an owner). Returns how many [CP点] the tile now carries.
+/// Provenance (`TileMark.src`) of the first matching mark on `tile`, or -1.
+pub fn mark_src_at(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::mark_src_at(tile, fp, fl) }
+}
+
+/// Owning instance of the first matching mark on `tile`, or -1.
+pub fn mark_instance_at(tile: i32, filter: &crate::abi::MarkFilter) -> i32 {
+    let (fp, fl) = mf(filter);
+    unsafe { sys::mark_instance_at(tile, fp, fl) }
+}
+
+/// Units of **this** instance's counter `kind` bound to `tile`.
+pub fn count_on_tile(kind: &str, tile: i32) -> i32 {
+    count_marks(
+        tile,
+        &crate::abi::MarkFilter::any()
+            .kind(kind)
+            .instance(self_uid()),
+    )
+}
+
+/// Units of **this** instance's counter `name` held by `player_id`.
+pub fn count_held(name: &str, player_id: i32) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::count_held(p, l, player_id) }
+}
+
+/// Bind `n` more units of this instance's counter `name` to `player_id`
+/// (a rule-created token). Returns how much actually moved. Opens the
+/// `markerSpend` / `markerGain` window (user ruling 2026-10-07).
+pub fn add_held(name: &str, player_id: i32, n: i32, max: i32) -> Result<i32, Prompt> {
+    let (p, l) = s(name);
+    asked(unsafe { sys::add_held(p, l, player_id, n, max) })
+}
+
+/// Move `n` units of this instance's counter `name` between locations.
+/// A location is a tile (`tile >= 0`), a holder (`player >= 0`), or the
+/// on-card pool (both -1). Returns how many actually moved.
 ///
-/// 通用:该清CP了 [手] 「在任意一个没有角色和[CP点]的格子上添加1个[CP点]」 --
-/// the *where* is the caller's gate; this only owns the what and the attachment.
-pub fn place_cp(tile: i32) -> i32 {
-    unsafe { sys::place_cp(tile) }
+/// 「将自己拥有的一个"抹茶芭菲"转移到该格上」 (要乐奈 (2)) is
+/// `move_units(name, -1, other, space, -1, 1)`.
+pub fn move_units(
+    name: &str,
+    from_tile: i32,
+    from_player: i32,
+    to_tile: i32,
+    to_player: i32,
+    n: i32,
+) -> i32 {
+    let (p, l) = s(name);
+    unsafe { sys::move_units(p, l, from_tile, from_player, to_tile, to_player, n) }
 }
 
-/// [CP点] on `tile`, any provenance. 通用:该清CP了 [手] 「在拥有[CP]点的格子上
-/// [结算]时」 / 「没有[CP点]的格子」 read this.
-pub fn count_cp(tile: i32) -> i32 {
-    unsafe { sys::count_cp(tile) }
+/// The uid of the running instance (`FieldCard::uid`). Provenance default for
+/// [`place_mark`]; addressing default for [`send`].
+pub fn self_uid() -> i32 {
+    unsafe { sys::self_uid() }
 }
 
-/// [CP点] on `tile` that **this card instance** placed and their products --
-/// 通用:该清CP了 (1) 「此卡在格子上添加的[CP点]及其产物」.
-pub fn count_cp_from(tile: i32) -> i32 {
-    unsafe { sys::count_cp_from(tile) }
-}
+// -- cross-card messages ---------------------------------------------------
 
-/// Remove one [CP点] from `tile` (通用:该清CP了 [手] 「移除格子上的个[CP点]」);
-/// returns how many are left there. A tile-mark write: it does not touch
-/// anyone's on-card count.
-pub fn clear_cp(tile: i32) -> i32 {
-    unsafe { sys::clear_cp(tile) }
-}
-
-/// The card instance a [CP点] on `tile` is attached to (`TileMark.src`), or
-/// `-1` when the tile has none. The settle clause finds 「自己[场上]1个[CP点]」
-/// this way: that card's on-card count.
-pub fn cp_src_at(tile: i32) -> i32 {
-    unsafe { sys::cp_src_at(tile) }
-}
-
-/// On-card [CP点] on **this card instance** (`FieldCard::cp`) -- 「自己[场上]N个
-/// [CP点]」 (user ruling 2026-10-07: 「the cp point attached to the card」). The
-/// 该清CP了 graveyard rule -- 「as soon as the attached on-card cp mark is
-/// empty」 -- is this hitting 0, as a [`crate::abi::HookKind::CpChanged`]
-/// handler and not a re-check at each spend site.
-pub fn cp_attached() -> i32 {
-    unsafe { sys::cp_attached() }
-}
-
-/// Adjust **this card instance's** on-card [CP点] by `n`, clamped at 0 and at
-/// `max` (`0` = uncapped); returns the new count.
+/// Send a message to another card instance. Nested in the caller's run (the
+/// handler may prompt and may raise triggers). Returns the handler's reply,
+/// or 0 when no receiver admitted the message.
 ///
-/// 通用:该清CP了 [手] 「并在自己[场上]添加6个[CP点]」 is `add_cp(6, 0)`.
-pub fn add_cp(n: i32, max: i32) -> i32 {
-    unsafe { sys::add_cp(n, max) }
+/// Addressing (`abi::Target`): a specific uid, the instance of a card id on a
+/// seat, or a standing board-owned pseudo card (`mark:cp`). Multiple receivers
+/// of a name: the first admitted one in field order answers. A handler whose
+/// `pre` / guard rejects is not a receiver.
+pub fn send(
+    target: &crate::abi::Target,
+    name: &str,
+    payload: &crate::abi::Message,
+) -> Result<i32, Prompt> {
+    let (tp, tl) = target_bytes(target);
+    let (np, nl) = s(name);
+    let (pp, pl) = msg_bytes(payload);
+    asked(unsafe { sys::send(tp, tl, np, nl, pp, pl) })
 }
 
-/// On-card [CP点] on the instance at `uid` (`FieldCard::cp`). The `mark:cp`
-/// settle clause reads the card the tile mark is attached to this way.
-pub fn cp_at(uid: i32) -> i32 {
-    unsafe { sys::cp_at(uid) }
+/// The message being handled (`On::Message`). Sender + payload + reply.
+pub mod message {
+    use super::*;
+
+    /// The sender's instance uid.
+    pub fn sender_uid() -> i32 {
+        unsafe { sys::msg_sender_uid() }
+    }
+
+    /// The sender's seat.
+    pub fn sender_seat() -> i32 {
+        unsafe { sys::msg_sender_seat() }
+    }
+
+    /// The message name being handled.
+    pub fn name() -> String {
+        unsafe { sys::msg_name(0, 0) };
+        read_str(|b, c| unsafe { sys::msg_name(b, c) })
+    }
+
+    /// The payload ints.
+    pub fn a() -> i32 {
+        unsafe { sys::msg_a() }
+    }
+    pub fn b() -> i32 {
+        unsafe { sys::msg_b() }
+    }
+    pub fn c() -> i32 {
+        unsafe { sys::msg_c() }
+    }
+    pub fn tile() -> i32 {
+        unsafe { sys::msg_tile() }
+    }
+    pub fn seat() -> i32 {
+        unsafe { sys::msg_seat() }
+    }
+
+    /// The payload text.
+    pub fn text() -> String {
+        read_str(|b, c| unsafe { sys::msg_text(b, c) })
+    }
+
+    /// Set the reply value the sender receives.
+    pub fn reply(v: i32) {
+        unsafe { sys::msg_reply(v) }
+    }
 }
 
-/// Adjust the on-card [CP点] on the instance at `uid`; `max` caps (0 =
-/// uncapped). Returns the new count. 通用:该清CP了 [手] 「自己[场上]1个[CP点]」
-/// (spent by the settle clause against the tile mark's `src` card) is
-/// `add_cp_at(src, -1, 0)`.
-pub fn add_cp_at(uid: i32, n: i32, max: i32) -> i32 {
-    unsafe { sys::add_cp_at(uid, n, max) }
+// -- small serialisation helpers -------------------------------------------
+
+fn mf(f: &crate::abi::MarkFilter) -> (i32, i32) {
+    let bytes = postcard::to_allocvec(f).unwrap_or_default();
+    in_bytes(&bytes)
 }
 
+fn target_bytes(t: &crate::abi::Target) -> (i32, i32) {
+    let bytes = postcard::to_allocvec(t).unwrap_or_default();
+    in_bytes(&bytes)
+}
+
+fn msg_bytes(m: &crate::abi::Message) -> (i32, i32) {
+    let bytes = postcard::to_allocvec(m).unwrap_or_default();
+    in_bytes(&bytes)
+}
+
+fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
+    let need = fill(0, 0);
+    if need <= 0 {
+        return String::new();
+    }
+    let mut buf = alloc::vec![0u8; need as usize];
+    let p = buf.as_mut_ptr() as i32;
+    if fill(p, need) != need {
+        return String::new();
+    }
+    String::from_utf8(buf).unwrap_or_default()
+}
+
+/// Units of counter `name` held by `player_id` (name-keyed; the name is
+/// unique to its creating rule).
 pub fn tok(player_id: i32, name: &str) -> i32 {
     let (p, l) = s(name);
-    unsafe { sys::tok(player_id, p, l) }
+    unsafe { sys::count_held_name(p, l, player_id) }
 }
 
+/// Set the held count of `name` on `player_id`. Prefer [`add_held`] /
+/// [`move_units`].
 pub fn set_tok(player_id: i32, name: &str, value: i32) {
     let (p, l) = s(name);
-    unsafe { sys::set_tok(player_id, p, l, value) }
+    unsafe { sys::set_held_name(p, l, player_id, value) }
 }
 
-/// `H.AddTok` -- returns how much the counter actually moved by.
-///
-/// Marker window (user ruling 2026-10-07): `markerSpend` / `markerGain` open
-/// **before** the counters move; a cancelled link moves nothing (`Ok(0)`).
+/// `H.AddTok` -- bind `by` more units of `name` to `player_id`. Returns how
+/// much actually moved. Marker window can pause.
 pub fn add_tok(player_id: i32, name: &str, by: i32, max: i32) -> Result<i32, Prompt> {
-    let (p, l) = s(name);
-    asked(unsafe { sys::add_tok(player_id, p, l, by, max) })
+    add_held(name, player_id, by, max)
 }
 
 // ---------------------------------------------------------- keyed state
@@ -2816,14 +3009,6 @@ pub fn unplace_card_named(player_id: i32, card: &str) -> bool {
     unsafe { sys::unplace_card_named(player_id, p, l) != 0 }
 }
 
-/// Move one matching mark's `count` by `delta`, dropping it at 0 (C#
-/// `mark.count--`). [`remove_marks`] clears every match; this is the single-tick
-/// form the 「移除一个」 clauses want. Returns the count now stored.
-pub fn bump_mark(tile: i32, kind: &str, owner: i32, delta: i32) -> i32 {
-    let (kp, kl) = s(kind);
-    unsafe { sys::bump_mark(tile, kp, kl, owner, delta) }
-}
-
 /// Names of the player's non-zero counters whose name starts with `prefix`.
 /// The listing half of the counter query; [`tok`] reads one by name.
 pub fn tok_names(player_id: i32, prefix: &str) -> Vec<String> {
@@ -2903,8 +3088,7 @@ pub fn set_card_face_down(player_id: i32, card: &str, down: bool) -> bool {
 
 /// C# `Card.AddCrystals` on a named placed card; `max` caps (0 = uncapped).
 pub fn add_card_crystals(player_id: i32, card: &str, n: i32, max: i32) -> i32 {
-    let (cp, cl) = s(card);
-    unsafe { sys::add_card_crystals(player_id, cp, cl, n, max) }
+    add_card_counter(player_id, card, crate::abi::counter::CRYSTALS, n, max)
 }
 
 /// Is this placed card face-down? The `!p.FaceDown` half of the C# field
@@ -3114,8 +3298,7 @@ pub fn turn_start_pos(player_id: i32) -> i32 {
 
 /// C# `Card.Crystals` on a named placed card.
 pub fn card_crystals(player_id: i32, card: &str) -> i32 {
-    let (cp, cl) = s(card);
-    unsafe { sys::card_crystals(player_id, cp, cl) }
+    card_counter(player_id, card, crate::abi::counter::CRYSTALS)
 }
 
 /// `H.BuildRoutine` -- pay `tile`'s build cost and raise one house.
@@ -3192,12 +3375,12 @@ pub fn field_instances(player_id: i32) -> Vec<(i32, String)> {
 /// The instance at `uid`, wherever it sits. [`crystals`] / [`self_tile`] are
 /// the forms for the running instance; these address some *other* one.
 pub fn crystals_at(uid: i32) -> i32 {
-    unsafe { sys::crystals_at(uid) }
+    counter_at(uid, crate::abi::counter::CRYSTALS)
 }
 
 /// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
 pub fn add_crystals_at(uid: i32, n: i32, max: i32) -> i32 {
-    unsafe { sys::add_crystals_at(uid, n, max) }
+    add_counter_at(uid, crate::abi::counter::CRYSTALS, n, max)
 }
 
 /// Take the instance at `uid` off the field; returns the owner it left.

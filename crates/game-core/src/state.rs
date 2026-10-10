@@ -1042,17 +1042,22 @@ pub struct FieldCard {
     pub owner: i32,
     pub user: i32,
     pub tile: i32,
+    /// Named on-card counter [`counter::CRYSTALS`] (奇迹水晶). The generic
+    /// counter API (`ctx::counter` / `add_counter`) is the only writer; this
+    /// field is that name's storage on the instance. Serde-stable.
     pub crystals: i32,
-    /// On-card [CP点] -- 「自己[场上]N个[CP点]」, the CP points **attached to this
-    /// card** (user ruling 2026-10-07: 「自己[场上]1个[CP点] referred to the cp
-    /// point attached to the card」). One of the two [CP点] kinds: this is the
-    /// card rule's own stock (通用:该清CP了 [手] 「在自己[场上]添加6个[CP点]」),
-    /// as against the neutral [CP点] **tile marks** in [`TileMark`] (category
-    /// [`mark_category::CP`], mandated by `mark:cp`). Crystals-like: lives on
-    /// the instance, rides the view's field-card counter badge, and is what
-    /// `HookKind::CpChanged` watches. Serde-defaulted so pre-CP saves load.
+    /// Named on-card counter [`counter::CP`] -- 「自己[场上]N个[CP点]」, the CP
+    /// points **attached to this card** (user ruling 2026-10-07). Distinct from
+    /// the [CP点] **tile marks** bound to the standing `mark:cp` instance
+    /// (see [`TileMark`]). Dies with this instance. Serde-defaulted so pre-CP
+    /// saves load. Generic name: [`counter::CP`].
     #[serde(default)]
     pub cp: i32,
+    /// Extra named on-card counters beyond [`counter::CP`] /
+    /// [`counter::CRYSTALS`]. The two known names stay as fields so current
+    /// saves load unchanged; anything else lives here (serde-defaulted).
+    #[serde(default)]
+    pub counters: BTreeMap<String, i32>,
     pub face_down: bool,
     /// C# `Card.Immune` -- 「此卡不受…效果影响」. A value on the card, not a
     /// subclass override: effects that would touch it read this and skip.
@@ -1089,6 +1094,7 @@ impl Default for FieldCard {
             tile: -1,
             crystals: 0,
             cp: 0,
+            counters: BTreeMap::new(),
             face_down: false,
             immune: false,
             props: BTreeMap::new(),
@@ -1097,6 +1103,17 @@ impl Default for FieldCard {
             note: Msg::default(),
         }
     }
+}
+
+/// Named counters on a field-card instance (the generic counter API's names).
+/// Mirrors `card_sdk::abi::counter` (the two crates cannot share a definition;
+/// keep them in step). Storage: [`FieldCard::cp`] / [`FieldCard::crystals`] /
+/// [`FieldCard::counters`].
+pub mod counter {
+    /// On-card [CP点] (「自己[场上]N个[CP点]」).
+    pub const CP: &str = "cp";
+    /// 奇迹水晶.
+    pub const CRYSTALS: &str = "crystals";
 }
 
 /// Tile-mark **categories** -- what sort of thing a [`TileMark`] is. A category
@@ -1150,9 +1167,16 @@ pub struct TileMark {
     pub card: String,
     /// Provenance for the rules: the **card instance** (`FieldCard::uid`) that
     /// placed the mark, or `-1`. 「此卡在格子上添加的[CP点]及其产物」
-    /// (通用:该清CP了 (1)) keys on this, not on [`Self::owner`]. Serde-defaulted
-    /// so pre-`src` saves still load.
+    /// (通用:该清CP了 (1)) keys on this, not on [`Self::owner`]. Per-unit
+    /// attribute -- not ownership. Serde-defaulted so pre-`src` saves still load.
     pub src: i32,
+    /// The **owning card instance** (`FieldCard::uid`) whose named counter
+    /// these units are bound to (user ruling 2026-10-10: every tile mark is a
+    /// counter of some card or pseudo card). Destroying that instance destroys
+    /// these units. `-1` = legacy row whose creator could not be determined at
+    /// save-migration time (kept, never auto-purged). Serde-defaulted.
+    #[serde(default)]
+    pub instance: i32,
     pub note: Msg,
 }
 
@@ -1167,6 +1191,7 @@ impl Default for TileMark {
             count: 1,
             card: String::new(),
             src: -1,
+            instance: -1,
             note: Msg::default(),
         }
     }
@@ -1180,12 +1205,58 @@ impl TileMark {
     }
 }
 
-/// `Counter.cs`
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+/// `Counter.cs` -- named units held by a player. Under the bound-counter model
+/// these are units of some card instance's named counter, bound to a holder
+/// (user ruling 2026-10-10). [`Self::instance`] is that owner; `-1` = legacy
+/// row whose creator could not be determined at save-migration time.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Counter {
     pub name: String,
     pub value: i32,
+    /// Owning card instance (`FieldCard::uid`), or `-1` when unknown.
+    pub instance: i32,
+}
+
+impl Default for Counter {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            value: 0,
+            instance: -1,
+        }
+    }
+}
+
+/// A filter over [`TileMark`] rows (the generic tile-mark API). `""` / `-2`
+/// mean "any". `instance` is the owning counter's card instance; `src` is
+/// provenance.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MarkFilter<'a> {
+    pub kind: &'a str,
+    pub category: &'a str,
+    pub owner: i32,
+    pub src: i32,
+    pub instance: i32,
+}
+
+impl MarkFilter<'_> {
+    /// Match every mark on a tile.
+    pub const ANY: MarkFilter<'static> = MarkFilter {
+        kind: "",
+        category: "",
+        owner: -2,
+        src: -2,
+        instance: -2,
+    };
+
+    pub fn matches(&self, m: &TileMark) -> bool {
+        (self.kind.is_empty() || m.kind == self.kind)
+            && (self.category.is_empty() || m.category == self.category)
+            && (self.owner == -2 || m.owner == self.owner)
+            && (self.src == -2 || m.src == self.src)
+            && (self.instance == -2 || m.instance == self.instance)
+    }
 }
 
 /// One pressable skill in a viewer's list (`Match::view_extra`'s `skills`).
