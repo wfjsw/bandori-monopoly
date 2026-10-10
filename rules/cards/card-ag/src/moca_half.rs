@@ -20,7 +20,7 @@ pub const MOCA_HALF: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], "card.placed", None, turn_end),
         On::Hook(&[HookKind::RollAfter], "actor == owner && move.main && card.placed", None, roll_after),
         On::Hook(&[HookKind::PayMul], "actor == owner && card.placed && value > 0", None, pay_mul),
-        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -49,13 +49,13 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// 规则书(1): 「奇迹水晶为0时此卡放入弃牌堆」 -- C# `Empty()` /
 /// `H.Unplace(this, "discard")`.
 ///
-/// Listens to this card's own [`HookKind::CrystalsChanged`] rather than being
-/// re-checked at the decay tick, so a count emptied by *any* write leaves the
-/// field just the same.
-/// Residual guard for [`on_crystals_changed`] -- `card_is` stays here (not yet
-/// in the condition vocabulary).
+/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
+/// count emptied by *any* write leaves the field just the same.
+/// Residual guard for [`on_crystals_changed`] -- `card_is` + the counter name
+/// (`counter_is('crystals')` is also in the pre).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID)
+    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

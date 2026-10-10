@@ -21,7 +21,7 @@ pub const ENDLESS_JOURNEY: CardDef = CardDef::new(
         // list (`SETTLE-STAGES.md` §4 M2), not the 「[触发结算]后」 window. A
         // field card that replaces the body skips this entry.
         On::Hook(&[HookKind::SettleBody], "actor == owner && move.main && card.placed", None, settle_body),
-        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -61,14 +61,15 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// 规则书[手]: 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 -- C#
 /// `H.Unplace(this, "discard", ...)`.
 ///
-/// Listens to this card's own [`HookKind::CrystalsChanged`] rather than being
-/// re-checked at the decay tick, so a count emptied by *any* write leaves the
-/// field just the same.
+/// Listens to this card's own [`HookKind::CounterChanged`] (name-filtered to
+/// `counter::CRYSTALS`) rather than being re-checked at the decay tick, so a
+/// count emptied by *any* write leaves the field just the same.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
-/// Residual guard -- `card_is` stays here (not yet in the condition vocabulary).
+/// Residual guard -- `card_is` + the counter name stay here (the name is not
+/// yet in the condition vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID)
+    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

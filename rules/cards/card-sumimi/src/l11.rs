@@ -12,7 +12,7 @@ pub const L11: CardDef = CardDef::new(
     "Sumimi:#L11",
     &[
         On::Play("", None, l11),
-        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.cp <= 0", None, sweep),
+        On::Hook(&[card_sdk::abi::HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') <= 0", None, sweep),
     ],
 )
     .legacy(&[(1, legacy_mine)]);

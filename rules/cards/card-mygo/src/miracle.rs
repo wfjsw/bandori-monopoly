@@ -11,7 +11,7 @@
 //! instead of money when building; after passing every other player once,
 //! collect the "last three digits" purse of the crystal-closest rival.
 
-use card_sdk::abi::HookKind;
+use card_sdk::abi::{counter, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -19,8 +19,8 @@ pub const MIRACLE: CardDef = CardDef::new(
     "MyGO:难以复刻的奇迹",
     &[
         On::Play("", None, miracle),
-        On::Hook(&[HookKind::BuildBefore], "actor == owner && card.cp >= 1 && card.placed", None, before_build),
-        On::Hook(&[HookKind::BuildAfter], "actor == owner && card.cp >= 1 && card.placed", None, after_build),
+        On::Hook(&[HookKind::BuildBefore], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, before_build),
+        On::Hook(&[HookKind::BuildAfter], "actor == owner && card.counter('crystals') >= 1 && card.placed", None, after_build),
         // （2）「当你[经过]场上的所有玩家各一次」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): each step onto a tile a player stands on
         // counts, not only the end-tile [重叠].
@@ -152,6 +152,6 @@ fn pass_player(player_id: i32) -> card_sdk::Asked {
 fn field_crystals(p: i32) -> i32 {
     ctx::field_instances(p)
         .into_iter()
-        .map(|(uid, _)| ctx::crystals_at(uid))
+        .map(|(uid, _)| ctx::counter_at(uid, counter::CRYSTALS))
         .sum()
 }

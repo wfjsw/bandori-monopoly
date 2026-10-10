@@ -26,7 +26,7 @@ pub const SMILE_PARADE: CardDef = CardDef::new(
             counteract,
         ),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed", None, turn_end),
-        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value <= 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -93,10 +93,13 @@ fn on_group() -> bool {
 /// 「若此卡仍位于"弦卷集团"」 is a real condition, not a restatement of the
 /// tick's own gate: （2） moves the card to the [移动终点] and strips its
 /// crystals, and that emptying is *not* this discard.
-/// Residual guard for [`on_crystals_changed`] -- `card_is` and the group
-/// check stay here (not yet in the condition vocabulary).
+/// Residual guard for [`on_crystals_changed`] -- `card_is`, the group check
+/// and the counter name stay here (the name is not yet in the condition
+/// vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID) && on_group()
+    trigger::card_is(ID)
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
+        && on_group()
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

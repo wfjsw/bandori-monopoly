@@ -25,8 +25,8 @@ pub const STARRY_NIGHT: CardDef = CardDef::new(
         // `money >= 1000` play gate -- an unaffordable in-body payment takes
         // the Q1 shortfall path. C# `CardStarryNight.WhyNot` had one.
         On::Play("", None, starry_night),
-        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], "card.placed && card.cp > 0", None, hook),
-        On::Hook(&[HookKind::CrystalsChanged], "", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::RollAfter, HookKind::PassTile], "card.placed && card.counter('crystals') > 0", None, hook),
+        On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 ).props(&[(card_sdk::abi::prop::EST_COST, 1000)]);
 
@@ -92,11 +92,12 @@ fn remove_crystal(_player_id: i32) -> card_sdk::Asked {
 /// paid and discarded at the spend site, which only covered the two sites that
 /// called it. Both clauses here catch a count changed by *any* write.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// means the card is not activated at all. Name-filtered to `counter::CRYSTALS`.
 fn crystals_changed_guard(player_id: i32) -> bool {
     ctx::is_placed()
         && trigger::player_id() == player_id
         && trigger::card_is(ID)
+        && trigger::name() == card_sdk::abi::counter::CRYSTALS
         // （3） pays for removals; （1） leaves when the count lands on 0.
         && (trigger::value() < 0 || ctx::crystals() == 0)
 }

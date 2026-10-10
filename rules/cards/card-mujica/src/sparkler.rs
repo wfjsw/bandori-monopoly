@@ -20,7 +20,7 @@ pub const SPARKLER: CardDef = CardDef::new(
         // turn end while it is in play (ABI v23 `TurnEndAfter`: after `TurnEnd`,
         // matching the C# `Fx.TurnEndAfter` dispatch).
         On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
-        On::Hook(&[HookKind::CrystalsChanged], "actor == owner && card.placed && card.cp == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed),
+        On::Hook(&[HookKind::CounterChanged], "actor == owner && card.placed && counter_is('crystals') && card.counter('crystals') == 0 && value < 0", Some(crystals_changed_guard), on_crystals_changed),
     ],
 );
 
@@ -65,9 +65,10 @@ fn turn_end(player_id: i32) -> card_sdk::Asked {
 /// sits at 0 without a removal taking it there does not stun its owner.
 /// Pure guard for [`on_crystals_changed`] -- the activation gate. `false`
 /// means the card is not activated at all.
-/// Residual guard -- `card_is` stays here (not yet in the condition vocabulary).
+/// Residual guard -- `card_is` + the counter name stay here (the name is not
+/// yet in the condition vocabulary).
 fn crystals_changed_guard(_player_id: i32) -> bool {
-    trigger::card_is(ID)
+    trigger::card_is(ID) && trigger::name() == card_sdk::abi::counter::CRYSTALS
 }
 
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {

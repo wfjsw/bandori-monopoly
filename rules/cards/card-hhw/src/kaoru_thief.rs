@@ -42,9 +42,9 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
             roll_plan,
         ),
         On::Hook(
-            &[HookKind::CrystalsChanged],
-            "actor == owner && card.placed && trigger_card == card.id && card.cp == 0 && value <= 0",
-            None,
+            &[HookKind::CounterChanged],
+            "actor == owner && card.placed && counter_is('crystals') && trigger_card == card.id && card.counter('crystals') == 0 && value <= 0",
+            Some(crystals_changed_guard),
             on_crystals_changed,
         ),
     ],
@@ -144,6 +144,13 @@ fn turn_end(_player_id: i32) -> card_sdk::Asked {
 /// says what happens at 0, while every other crystal card spells out 「为0时
 /// 置入弃牌堆」. This keeps the C# behaviour (it decays out) -- the book may
 /// intend something else, e.g. leaving a spent card on the field.
+/// Residual guard -- the name is also `counter_is('crystals')` in the pre
+/// (kept here as well). Card identity is already in the CEL pre (`trigger_card ==
+/// card.id`).
+fn crystals_changed_guard(_player_id: i32) -> bool {
+    trigger::name() == card_sdk::abi::counter::CRYSTALS
+}
+
 fn on_crystals_changed(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(

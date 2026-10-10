@@ -21,11 +21,13 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     "MyGO:（灯）不再迷茫",
     &[
         On::Play("", None, tomori_no_longer),
-        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed && card.cp == 0", None, sweep),
-        On::Hook(&[HookKind::FireSpent], "actor == owner && card.cp >= 1", None, cover),
+        On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') == 0", None, sweep),
+        On::Hook(&[HookKind::FireSpent], "actor == owner && card.counter('crystals') >= 1", None, cover),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
-        // 获得等同于减少量的[奇迹水晶]」.
-        On::Hook(&[HookKind::CrystalsChanged], card_sdk::pre::MINE, None, refill),
+        // 获得等同于减少量的[奇迹水晶]」. `HookKind::CounterChanged`
+        // name-filtered to `counter::CRYSTALS` (the name is not yet in the
+        // condition vocabulary).
+        On::Hook(&[HookKind::CounterChanged], card_sdk::pre::MINE, Some(refill_guard), refill),
     ],
 )
     .legacy(&[(1, legacy_mine), (2, legacy_mine), (3, legacy_mine)]);
@@ -60,6 +62,12 @@ fn cover(player_id: i32) -> card_sdk::Asked {
 
 /// Sheet I3 (2): refund any crystal decrease that is not the skill-cost
 /// substitution.
+/// Residual guard -- the name is also `counter_is('crystals')` in the pre
+/// (kept here as well).
+fn refill_guard(_player_id: i32) -> bool {
+    trigger::name() == card_sdk::abi::counter::CRYSTALS
+}
+
 fn refill(player_id: i32) -> card_sdk::Asked {
     let delta = trigger::value();
     if delta >= 0 {
