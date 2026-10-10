@@ -32,11 +32,27 @@ pub enum HaltKind {
     Ask(Box<Ask>),
     /// The match ended mid-routine. Commit what happened so far.
     Ended,
+    /// A nested host routine (a `[触发结算]` a card triggered) must run before
+    /// this call returns. The caller's continuation is on
+    /// [`Cx::work_stack`](super::work::WorkItem); the outermost
+    /// [`Cx::drain_work`] pump runs the nested work then the resume.
+    /// STACK-01: this is how the settle cycle stays on the heap, not the Rust stack.
+    Suspended,
 }
 
 impl Halt {
     pub(crate) fn ended() -> Self {
         Halt(HaltKind::Ended)
+    }
+
+    /// A nested settle (or other work-stack job) must run before we continue.
+    pub fn suspended() -> Self {
+        Halt(HaltKind::Suspended)
+    }
+
+    /// Is this a work-stack suspension (not a prompt / match end)?
+    pub fn is_suspended(&self) -> bool {
+        matches!(self.0, HaltKind::Suspended)
     }
 }
 
@@ -402,6 +418,26 @@ pub struct Cx<'a> {
     /// second look at the same card) reuses the first verdict. Dropped the
     /// moment [`Self::w`] is written (its stamp changes).
     play_memo: std::cell::RefCell<PlayMemo>,
+    /// Explicit work stack for nested host routines (STACK-01). See
+    /// [`crate::engine::work`]. Transient (not serialized).
+    pub(crate) work_stack: Vec<Box<dyn crate::engine::work::WorkItem>>,
+    /// True while [`Self::drain_work`] is pumping. A nested `card_settle_at`
+    /// suspends instead of recursing.
+    pub(crate) draining_work: bool,
+    /// Index in [`Self::work_stack`] where the current suspension group starts.
+    /// A caller that has work after a raise inserts its continuation **here**
+    /// (so it runs after the nested settle and the drive resume).
+    pub(crate) suspend_base: usize,
+    /// Saved card-rules counteract continuation (STACK-01). When a raise
+    /// suspends, the remaining drive jobs and the half-updated trigger live
+    /// here; the re-entered `CardRules::counteract` adopts them instead of
+    /// re-collecting from a world the nested settle already changed.
+    pub(crate) counteract_resume: Option<Box<dyn std::any::Any + Send>>,
+    /// Dest a just-resumed drive returned (STACK-01). The card-fate work
+    /// item reads it after the resume completes.
+    pub(crate) last_drive_dest: Option<i32>,
+    /// Nested-settle depth (STACK-01 rulebook guard [`MAX_SETTLE_DEPTH`]).
+    pub(crate) settle_depth: u32,
 }
 
 /// The play-gate memo: verdicts keyed by `(player, card id)`, valid only for
@@ -811,6 +847,12 @@ impl<'a> Cx<'a> {
             move_start: -1,
             guest_overlays: Vec::new(),
             play_memo: std::cell::RefCell::new(PlayMemo::default()),
+            work_stack: Vec::new(),
+            draining_work: false,
+            suspend_base: 0,
+            counteract_resume: None,
+            last_drive_dest: None,
+            settle_depth: 0,
         }
     }
 

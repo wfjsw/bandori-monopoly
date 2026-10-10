@@ -59,6 +59,10 @@ fn run(d: &GameData, w: &World, answers: &[Answered], f: impl FnOnce(&mut Cx) ->
     match f(&mut cx) {
         Ok(()) | Err(Halt(HaltKind::Ended)) => (cx.into_world(), None),
         Err(Halt(HaltKind::Ask(a))) => (cx.into_world(), Some(a.view)),
+        Err(Halt(HaltKind::Suspended)) => {
+            let _ = cx.drain_work();
+            (cx.into_world(), None)
+        }
     }
 }
 

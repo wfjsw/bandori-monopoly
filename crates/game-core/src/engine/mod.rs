@@ -27,6 +27,7 @@ mod ops;
 mod play;
 pub mod rules;
 mod setup;
+mod work;
 mod world;
 
 pub use ai::{
@@ -43,6 +44,11 @@ pub use rules::{
     TriggerMove, TriggerPay,
 };
 pub use world::{Extreme, Hidden, Scheduled, SharedWorld, TurnCtx, World};
+pub use play::MAX_SETTLE_DEPTH;
+pub use work::{
+    AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,
+    WorkItem,
+};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.
@@ -310,6 +316,9 @@ pub struct Match {
     deferred: Vec<Deferred>,
     seq: i32,
     changed: bool,
+    /// STACK-01: true while [`Self::flush_deferred`] is draining. Nested
+    /// `execute` (Leave → start(Act)) must not re-enter the drain.
+    flushing_deferred: bool,
     /// Simulation-mode answers (`docs/BOT.md` §3.2). `None` on a live match:
     /// the halt/replay model is what recordings and the server protocol ride.
     /// A fork installs one so every prompt is answered inline -- one forward
@@ -396,6 +405,7 @@ impl Match {
             seq: s.seq,
             changed: true,
             provider: None,
+            flushing_deferred: false,
             prompt_log: Vec::new(),
         })
     }
@@ -542,6 +552,7 @@ impl Match {
             seq: 0,
             changed: true,
             provider: None,
+            flushing_deferred: false,
             prompt_log: Vec::new(),
         };
         m.direct(|cx| cx.roll_order());
@@ -1126,6 +1137,7 @@ impl Match {
             seq: self.seq,
             changed: self.changed,
             provider: None,
+            flushing_deferred: false,
             prompt_log: Vec::new(),
         }
     }
@@ -1208,7 +1220,13 @@ impl Match {
                         Signal::TurnBegan => self.timed_out = false,
                     }
                 }
-                self.flush_deferred();
+                // STACK-01: `flush_deferred` is the only drain. `execute` called
+                // from inside it (Deferred::Leave → start(Act)) must not
+                // re-enter the drain -- that was the second unbounded
+                // host-stack shape (`flush_deferred → start → execute` → ...).
+                if !self.flushing_deferred {
+                    self.flush_deferred();
+                }
             }
             Err(Halt(HaltKind::Ask(ask))) => {
                 w.signals.clear();
@@ -1219,6 +1237,26 @@ impl Match {
                     answers,
                     live: Live::new(*ask),
                 });
+            }
+            // STACK-01 safety net: a suspension that escaped the work-stack
+            // pump (should not happen -- `drain_work` is the pump). Drain what
+            // was queued and commit, rather than aborting the match.
+            Err(Halt(HaltKind::Suspended)) => {
+                self.world = w;
+                self.pending = None;
+                let mut cx = Cx::new(
+                    self.world.clone(),
+                    &self.data,
+                    &*self.rules,
+                    &[],
+                );
+                let _ = cx.drain_work();
+                self.world = cx.into_world();
+                self.changed = true;
+                self.seq += 1;
+                if !self.flushing_deferred {
+                    self.flush_deferred();
+                }
             }
         }
     }
@@ -1264,6 +1302,12 @@ impl Match {
     }
 
     fn flush_deferred(&mut self) {
+        // STACK-01: iterative drain. `start` → `execute` must not re-enter
+        // this loop (Leave → Act → Leave → … used to recurse).
+        if self.flushing_deferred {
+            return;
+        }
+        self.flushing_deferred = true;
         while self.pending.is_none() && !self.deferred.is_empty() {
             match self.deferred.remove(0) {
                 Deferred::Log(k, s, t) => self.host_log(&k, s, t),
@@ -1277,6 +1321,7 @@ impl Match {
                 Deferred::Finish(reason) => self.direct(|cx| cx.finish(&reason, None)),
             }
         }
+        self.flushing_deferred = false;
     }
 
     /// Is this prompt player answered by the machine (bot, or a human who left)?

@@ -39,6 +39,12 @@ pub(crate) const MAX_PAY_REVERSALS: u8 = 8;
 /// after this many the settle runs where the mover is standing (and logs).
 /// Same spirit as the engine's other loop caps.
 pub(crate) const MAX_SETTLE_REDIRECTS: u32 = 8;
+/// Rulebook-level runaway guard (STACK-01): two cards can settle each other
+/// forever (笑容大游行's `SettleBody` self-nest is one real instance). The
+/// work-stack keeps the **Rust stack** flat; this cap is only the rules-level
+/// termination rule -- log and stop after N nested settles.
+/// TODO(规则书): the book states no settle-depth bound.
+pub const MAX_SETTLE_DEPTH: u32 = 64;
 
 /// Fold the plan's **shape** writes into the running move -- but only the ones
 /// the `moveBefore` window (or any earlier writer) actually changed.
@@ -806,14 +812,54 @@ impl Cx<'_> {
 
     /// A full [触发结算] of `tile`, wherever the player is standing.
     /// The player does not move; the tile's own effect resolves.
+    ///
+    /// STACK-01: enqueues a settle job and lets [`Self::drain_work`] pump it.
+    /// Nested calls (a card settling from inside another settle) must go
+    /// through the drive's `NeedHost` arm, which suspends instead of recursing;
+    /// this entry is the outermost / non-drive path.
     pub fn card_settle_at(&mut self, player_id: usize, tile: usize, main: bool) -> Flow<()> {
         if self.out(player_id) || !self.playing() {
             return Ok(());
         }
-        // Keep the plan's payment shaping (`pay_factor`, tags) but not its
-        // walk: a settle at an arbitrary tile is not the turn's move, and
-        // inheriting `from`/`to`/`steps` left the piece one tile past a
-        // `teleport_to` + `card_settle_at` (游击演出 ends on chosen+1).
+        // Rulebook-level depth guard (STACK-01): not the stack-safety
+        // mechanism -- the work stack is -- but the rules themselves can loop
+        // forever (two cards settling each other). Log and stop after
+        // [`MAX_SETTLE_DEPTH`] nested settles.
+        if self.settle_depth >= MAX_SETTLE_DEPTH {
+            self.w.log(
+                "text",
+                player_id as i32,
+                Msg::new("log.settle_depth_cap")
+                    .player_id("who", player_id)
+                    .i("n", MAX_SETTLE_DEPTH as i64),
+            );
+            return Ok(());
+        }
+        self.settle_depth += 1;
+        let m = self.card_settle_move(player_id, tile, main);
+        let frame = crate::engine::work::SettleFrame::new(player_id, tile, m);
+        // Always go through the pump: nested jobs suspend and resume on the
+        // work stack (the pump catches `Halt::Suspended` and keeps going).
+        // A call from inside an active pump must not reach here -- the drive's
+        // `NeedHost` arm suspends instead -- but if it does, enqueue only.
+        if self.is_draining_work() {
+            self.push_work(crate::engine::work::SettleWork { frame });
+            return Ok(());
+        }
+        self.push_work(crate::engine::work::SettleWork { frame });
+        let r = self.drain_work();
+        self.settle_depth = self.settle_depth.saturating_sub(1);
+        r?;
+        self.wait(0.6);
+        Ok(())
+    }
+
+    /// The [`Move`] a `card_settle_at` threads through the settle stages:
+    /// the plan's payment shaping (`pay_factor`, tags) but not its walk. A
+    /// settle at an arbitrary tile is not the turn's move, and inheriting
+    /// `from`/`to`/`steps` left the piece one tile past a `teleport_to` +
+    /// `card_settle_at` (游击演出 ends on chosen+1).
+    pub fn card_settle_move(&self, player_id: usize, tile: usize, main: bool) -> Move {
         let mut m = self.w.turn.plan.clone();
         m.player_id = player_id;
         m.main = main;
@@ -824,9 +870,7 @@ impl Cx<'_> {
         m.steps = 0;
         m.extra_steps = 0;
         m.start = tile as i32;
-        self.settle_at(player_id, tile, &m)?;
-        self.wait(0.6);
-        Ok(())
+        m
     }
 
     /// The purchase itself. No tile-kind guard beyond the
@@ -1717,43 +1761,103 @@ impl Cx<'_> {
     /// The [触发结算] of an arbitrary tile. A card that resolves a
     /// tile it is sitting on (rather than the player's square) wants this; the
     /// player does not move.
+    ///
+    /// STACK-01: implemented as a stage machine ([`Self::step_settle`]) so a
+    /// nested settle suspends and resumes on the work stack instead of
+    /// recursing. See `docs/ENGINE.md` "settle work stack".
     fn settle_at(&mut self, i: usize, at: usize, m: &Move) -> Flow<()> {
-        let owner = self.w.st.owners.get(at).copied().unwrap_or(-1);
-        let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
-        // A cancelled settle ends here -- no Land, no SettleAfter.
-        if self.out(i) || t.is_cancelled() {
-            // `tileResolved` (Q6) still fires: the settlement is complete as
-            // nothing. (The spec's `TileResolved` is the terminal of the whole
-            // lifecycle, cancelled or not.)
-            raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
-            return Ok(());
+        let mut frame = crate::engine::work::SettleFrame::new(i, at, m.clone());
+        self.step_settle(&mut frame)
+    }
+
+    /// Run `frame` to completion, or suspend and park a
+    /// [`ContinueSettleWork`](crate::engine::work::ContinueSettleWork) on the
+    /// work stack when a raise needs a nested settle first.
+    ///
+    /// Order is the old synchronous nest: the nested settle (and the drive
+    /// that asked for it) finish before this settle's next stage, exactly
+    /// where `card_settle_at` returned to the hook body.
+    pub fn step_settle(&mut self, frame: &mut crate::engine::work::SettleFrame) -> Flow<()> {
+        use crate::engine::work::ContinueSettleWork;
+        loop {
+            match self.step_settle_stage(frame) {
+                Ok(true) => continue,
+                Ok(false) => return Ok(()),
+                Err(e) if e.is_suspended() => {
+                    // Stage not advanced: the re-entered raise adopts
+                    // `counteract_resume` and continues the same stage.
+                    self.insert_work(ContinueSettleWork {
+                        frame: frame.clone(),
+                    });
+                    return Err(e);
+                }
+                Err(e) => return Err(e),
+            }
         }
-        // `settleBody` (Fx) -- the first field card that
-        // replaces the tile's effect does its own thing and calls
-        // `trigger::set_cancelled()`; a later one should check `cancelled()`.
-        let si = raise!(self, "settleBody", i, @m m, tile = at as i32, target = owner)?;
-        if !si.is_cancelled() {
-            // The settle body: the tile's rule instances (`docs/TILES.md`).
-            // `CardRules::settle_tile` runs them; the default impl (and
-            // `WasmRules` for a tile with no instances) is the built-in
-            // `land_at` body below.
-            let rules = self.rules;
-            rules.settle_tile(self, i, at, m.main)?;
+    }
+
+    /// One settle stage. `Ok(true)` = more stages remain; `Ok(false)` = done.
+    fn step_settle_stage(
+        &mut self,
+        frame: &mut crate::engine::work::SettleFrame,
+    ) -> Flow<bool> {
+        use crate::engine::work::SettleStage;
+        let i = frame.player;
+        let at = frame.at;
+        let m = frame.m.clone();
+        match frame.stage {
+            SettleStage::RaiseSettle => {
+                if frame.owner < 0 {
+                    frame.owner = self.w.st.owners.get(at).copied().unwrap_or(-1);
+                }
+                let owner = frame.owner;
+                let t = raise!(self, "settle", i, @m m, tile = at as i32, target = owner)?;
+                if self.out(i) || t.is_cancelled() {
+                    frame.stage = SettleStage::RaiseTileResolved;
+                } else {
+                    frame.stage = SettleStage::RaiseSettleBody;
+                }
+                Ok(true)
+            }
+            SettleStage::AfterSettle => {
+                // Unused: RaiseSettle advances directly to the next raise.
+                frame.stage = SettleStage::RaiseSettleBody;
+                Ok(true)
+            }
+            SettleStage::RaiseSettleBody => {
+                let owner = frame.owner;
+                let si = raise!(self, "settleBody", i, @m m, tile = at as i32, target = owner)?;
+                if si.is_cancelled() {
+                    frame.stage = SettleStage::RaiseSettleAfter;
+                } else {
+                    frame.stage = SettleStage::SettleTile;
+                }
+                Ok(true)
+            }
+            SettleStage::SettleTile => {
+                let rules = self.rules;
+                rules.settle_tile(self, i, at, m.main)?;
+                frame.stage = SettleStage::RaiseSettleAfter;
+                Ok(true)
+            }
+            SettleStage::RaiseSettleAfter => {
+                if self.out(i) || !self.playing() {
+                    frame.stage = SettleStage::RaiseTileResolved;
+                    return Ok(true);
+                }
+                let owner = frame.owner;
+                raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
+                frame.stage = SettleStage::RaiseTileResolved;
+                Ok(true)
+            }
+            SettleStage::RaiseTileResolved => {
+                let owner = frame.owner;
+                raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
+                frame.stage = SettleStage::Done;
+                Ok(false)
+            }
+            SettleStage::Done => Ok(false),
         }
-        // SettleAfter only while the player is in and the match plays.
-        if self.out(i) || !self.playing() {
-            raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
-            return Ok(());
-        }
-        // `settleAfter` -- the landed tile is fully resolved. (Not raised when
-        // `land` halts on an unanswered prompt; it fires on the successful
-        // replay instead, alongside the rest of the routine.)
-        raise!(self, "settleAfter", i, @m m, tile = at as i32, target = owner)?;
-        // `tileResolved` (Q6 / the spec's `TileResolved`) -- the terminal,
-        // strictly after `settleAfter`. Distinct from it on purpose: a
-        // 「结算完成时」 card wants the terminal, not the After.
-        raise!(self, "tileResolved", i, @m m, tile = at as i32, target = owner)?;
-        Ok(())
     }
 
     // =============================================================== tiles
