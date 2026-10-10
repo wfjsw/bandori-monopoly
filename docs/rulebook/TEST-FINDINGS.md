@@ -302,7 +302,8 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
     2026-10-09** (fire cap 「上限1」 now declared).
   * ~~白金燐子 (2) has no pre-roll pot window.~~ **Fixed 2026-10-09** (it is
     a press; the tests now press before the roll).
-  * 选择自己的舞台 opens no window on a self-inflicted [传送].
+  * ~~选择自己的舞台 opens no window on a self-inflicted [传送].~~
+    **Fixed 2026-10-10** (un-ignored, green).
 * **morfonica** (2)
   * 星月夜's even-roll crystal-removal offer never prompts.
   * 纯真振翅 never rolls after the teleport.
@@ -326,10 +327,14 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * MyGO band (2)'s 2-crystal **draw** half is unreachable: the band skill
     declares two `On::Play` activations and `use_skill` runs only the first
     (the move-1 half). See §6 multi-activation.
-  * `inter_yolo_pushes_haneoka_over_20` (CROSS-AGENT, §6 Y.O.L.O timing).
+  * ~~`inter_yolo_pushes_haneoka_over_20` (CROSS-AGENT, §6 Y.O.L.O timing).~~
+    **Fixed 2026-10-10** (un-ignored, green; the +1d4 is additive on the
+    card's own roll).
 * **mujica** (0)
 * **sumimi** (1)
-  * Sweet Escape's 「收费标价」 gate is a ruling (§6).
+  * ~~Sweet Escape's 「收费标价」 gate is a ruling (§6).~~ **Fixed
+    2026-10-10** (un-ignored, green; gate reads 「收费标价」 as the tile
+    price sum).
 * **cross** (`rb_cross_chain` 11, `rb_cross_move` 13, `rb_cross_tiles` 11,
   `rb_cross_status` 2, `rb_cross_long` 5): the `#[ignore]` reasons in those
   files name each case. The big ones: 骰子已经掷下 is placed twice and does
@@ -346,9 +351,10 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   stack overflow).
 * **fuzz** (`rb_fuzz_found` 14 tests, 8 open): latent shapes the fuzzer
   found, filed with minimal repros -- see [COVERAGE.md](COVERAGE.md) "Fuzz
-  coverage". Still open: `unknown_card_id`, `card_trap_reachable`,
-  `determinism_break`, `save_restore_break`, `negation_not_total`,
-  `multiply_order_matters`, `monotonicity_break`, `immunity_gap`.
+  coverage". Still open: `unknown_card_id`, `determinism_break`,
+  `save_restore_break`, `negation_not_total`, `multiply_order_matters`,
+  `monotonicity_break`. Un-ignored 2026-10-10 (green): `card_trap_reachable`,
+  `immunity_gap`.
   `returns_prompt_storm` (2026-10-08) is fixed and live: a raw
   `state_set("stun", …)` left a permanent [晕眩] that skipped every later
   turn, and PPP:Returns' 「每回合开始时」 band borrow asked once per skipped
@@ -471,13 +477,19 @@ rulings above.
 5. **Sweet Escape 「收费标价」.** Does it mean purchase price or rent?
    * The tiles ±2 of CiRCLE sum to price 8200 (meets ≥2000) but to base
      rent 820 (fails).
-   * Test: `sweet_escape_gate_requires_high_rent` (RULING).
+   * Test: `sweet_escape_gate_requires_high_rent` -- **un-ignored
+     2026-10-10**, green. The engine now reads 「收费标价」 as the tile
+     price sum (8200 ≥ 2000). The ruling is recorded by the green test;
+     if the book meant base rent the test must be flipped.
 6. **Tomorrow's Door (3) on a co-owned 星之鼓动山丘.** Does the co-owned hill
    count as 「[拥有者]拥有的格子」? Test: `rb_cross_tiles::t22_hill_coownership`
    (RULING, record-only).
 7. **Drawing a card several effects respond to.** Is a drawn effect card
    captured by one effect, or auto-played? Test:
-   `rb_cross_long::l06_one_draw_several_effects` (RULING, record-only).
+   `rb_cross_long::l06_one_draw_several_effects` -- **un-ignored
+   2026-10-10**, green (pins the engine's capture-before-auto-play
+   order). Still a live ruling question if the book wants auto-play
+   first; the green test is the current recorded choice.
 8. **Multi-activation selection.** A card with several `On::Play` entries
    (MyGO band (2)/(3), Mor:（NNM）稍微努力了一下): `use_skill` runs the first
    entry only, so a later activation is unreachable and a hand play can be
@@ -572,8 +584,9 @@ rulings above.
 
 * **Y.O.L.O timing (R-4).** Now that Y.O.L.O is own-roll-only, when is its
   +1d4 added relative to the card's own roll and to other additive dice
-  modifiers? `rb_mygo::inter_yolo_pushes_haneoka_over_20` is `CROSS-AGENT`
-  on this. Engine now: the +1d4 is added to the card's own roll result.
+  modifiers? `rb_mygo::inter_yolo_pushes_haneoka_over_20` was `CROSS-AGENT`
+  on this; **un-ignored 2026-10-10**, green. Engine now: the +1d4 is
+  added to the card's own roll result.
   Sheet HINT (`新卡组卡` `C3` 「任意掷骰结算前…使结果增加1d4」) says additive
   before the roll is finalised, but not the order against other adders.
 * **Fan-flip trigger.** PP band (2) is a passive 「你因任意原因受到将X个
@@ -583,16 +596,17 @@ rulings above.
   into the fan-spend / fan-gain points?
   (`rb_pp::band_skill_overflow_to_crystals`, DISCREPANCY.) Sheet NOT FOUND.
 * **R-1 money multiply × multiply:** Fire bird 1.5× vs Ave Mujica 1.5× vs
-  摩卡 half vs HHW band double-pay. (`rb_gap_money::g01_*`,
-  `rb_cross_tiles::t11_*`, both RULING.) Engine now: the multipliers
-  compose in declaration order. Sheet HINT: all live in the one window
+  摩卡 half vs HHW band double-pay. (`rb_gap_money::g01_*` still RULING;
+  `rb_cross_tiles::t11_*` **un-ignored 2026-10-10**, green for the
+  Fire bird × HHW pair.) Engine now: the multipliers compose in
+  declaration order. Sheet HINT: all live in the one window
   `回合階段&註釋` `B30`/`C30`; no product/stack rule.
 * **R-3 money cancel-one × split-share:** does X recompute after a
   designation is dropped? (`rb_gap_money::g03_*`, TODO(ABI); `g04_*`,
   RULING: halving vs cancel-one order on a 分摊 leg.) Sheet NOT FOUND.
 * **R-5 path hook order:** does a per-tile forced stop beat a
-  `SettleBefore` end-rewrite? (`rb_gap_move::g11_*`, RULING.) Engine now:
-  the forced stop wins. Sheet NOT FOUND.
+  `SettleBefore` end-rewrite? (`rb_gap_move::g11_*` **un-ignored
+  2026-10-10**, green.) Engine now: the forced stop wins. Sheet NOT FOUND.
 * **R-6 counteract close vs join:** once a round on X closes, may a
   真奈-style joiner still enter it? Engine now: no. No dedicated test;
   `rb_gap_window::g19_*` is the related DISCREPANCY (join + 网络链接异常).
@@ -1077,11 +1091,10 @@ or A/B items that need a wider surface than this batch:
   Test: `hina_skill_2_borrows_skill` (also asserts the *face* where the
   skill stores the 0-based pool index -- fix the test to pin the face in the
   log, not the scratch key).
-* **A, needs the abnormal-move Effect chain:** 选择自己的舞台 / 安可 vs a
-  self-inflicted [传送] (`choose_your_stage_answers_an_abnormal_move`,
-  `ix_encore_blocks_overlap_teleport`) -- no window opens on
-  `plan::set_teleport_to` + `card_move`. Wants the teleport-as-main-move to
-  raise the `Effect` link with `AbKind::Teleport`.
+* **A (partly done):** 选择自己的舞台 vs a self-inflicted [传送]
+  (`choose_your_stage_answers_an_abnormal_move`) -- **fixed and
+  un-ignored 2026-10-10**. 安可 vs an overlapping teleport
+  (`ix_encore_blocks_overlap_teleport`) is still ignored (rb_pp).
 * **A, engine:** 要乐奈 (3) / 凑友希那 (3) stop-pot landing (`t.pos == 36`)
   and the `rb_cross_move` stop-pot cases -- `plan::set_stop_at` during a
   `PassTile` hook does not land the piece on the hook's tile.
@@ -1093,6 +1106,15 @@ or A/B items that need a wider surface than this batch:
   §6 open list and the Timing / order block. Collected as numbered questions
   in the report.
 * **B, wider:** NNM (2) / MyGO band (2) multi-activation (§6 item 8);
-  笑容大游行 stack overflow; 网络链接异常 drop-one (the ABI landed but two
-  fixtures still see the whole-card negate); 花园多惠 (2) cancel window;
-  骰子已经掷下 shut-window; the `rb_fuzz_found` latent shapes.
+  笑容大游行 stack overflow; 网络链接异常 drop-one (c05 un-ignored
+  2026-10-10; g19 still sees the whole-card negate on the join path);
+  花园多惠 (2) cancel window; 骰子已经掷下 shut-window; the remaining
+  `rb_fuzz_found` latent shapes.
+* **Stale-ignore batch 2026-10-10 (un-ignored, green):**
+  `c05_cancels_one_designation_of_four`, `l06_one_draw_several_effects`,
+  `t11_fire_bird_plus_hhw_double`, `immunity_gap`, `card_trap_reachable`,
+  `g11_forced_stop_beats_lock_end_rewrite`,
+  `inter_yolo_pushes_haneoka_over_20`,
+  `choose_your_stage_answers_an_abnormal_move`,
+  `sweet_escape_gate_requires_high_rent`. Two meta ignores stay
+  (`q4_soak`, `q4_print_coverage_section`).

@@ -261,7 +261,6 @@ fn c04_negates_an_untargeted_hand_effect() {
 // =====================================================================
 
 // 规则书: 网络链接异常 clause 1. X = ceil10(2000÷3) = 670 with 4 players.
-#[ignore = "DISCREPANCY: 网络链接异常 negates the whole multi-target card; the sheet cancels one designation (P2 pays nothing, P1/P3 pay)"]
 #[test]
 fn c05_cancels_one_designation_of_four() {
     let mut t = Table::vanilla(4);

@@ -366,7 +366,6 @@ fn live_prep_stops_at_the_edogawa_store_when_passing() {
 // ----- R:选择自己的舞台
 
 #[test]
-#[ignore = "DISCREPANCY: book says 选择自己的舞台 is a [反击] 「受到[除外]以外的异常移动效果影响时可打出」, engine opens no window on a self-inflicted [传送]"]
 fn choose_your_stage_answers_an_abnormal_move() {
     // 规则书: 「[反击] 受到[除外]以外的异常移动效果影响时可打出此卡，选择自己的本次移动…是否触发结算」
     let mut t = vanilla2();

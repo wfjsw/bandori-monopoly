@@ -105,7 +105,6 @@ fn unknown_card_id() {
 /// a card module. The engine logs it and keeps going; the fuzzer treats it as
 /// an invariant violation.
 #[test]
-#[ignore = "DISCREPANCY: a card module trapped (log.card_trap) under random play"]
 fn card_trap_reachable() {
     // The fuzzer records `Trace::traps`. Any non-zero count is the finding;
     // the failing seed is printed by `fuzz_interactions_invariants`.
@@ -196,7 +195,6 @@ fn monotonicity_break() {
 
 /// An effect on an immune / untargetable player still changed that player.
 #[test]
-#[ignore = "DISCREPANCY: an effect landed on an immune / untargetable player"]
 fn immunity_gap() {
     let seed = 0xF022_F022_F022_F022u64
         .wrapping_add(31)

@@ -181,7 +181,6 @@ fn here_the_world_places_on_opponent() {
 // 规则书: 「回合开始时，若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡」.
 // RULING: 「收费标价」 is not defined in the rulebook. Tiles within ±2 of CiRCLE
 // sum to price 8200 (≥2000 → gate met) but base rent 820 (<2000 → gate fails).
-#[ignore = "RULING: what 「收费标价」 means in Sweet Escape's gate (tile price vs base rent)"]
 #[test]
 fn sweet_escape_gate_requires_high_rent() {
     let mut t = Table::vanilla(2);

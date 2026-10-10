@@ -1376,7 +1376,6 @@ fn inter_haneoka_ineffective_feeds_band_crystal() {
     assert_eq!(crystals(&t, 0, &band), 1, "ineffective card fed the band crystal");
 }
 #[test]
-#[ignore = "CROSS-AGENT: haneoka now checks r > 20 (rulebook) and Y.O.L.O's +1d4 boost no longer lands on the card's own roll; the chain needs a ruling on when Y.O.L.O's die is added"]
 fn inter_yolo_pushes_haneoka_over_20() {
     // AG:Y.O.L.O 「掷骰结算前打出此卡，使结果增加1d4结果的数字」 -- a 1d20 of 20
     // plus 1d4 becomes >20, the only way to reach 羽丘的不可思议女孩's 「大于20」

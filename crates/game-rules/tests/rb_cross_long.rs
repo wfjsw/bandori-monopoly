@@ -467,7 +467,6 @@ fn l05_one_skill_several_counteractions() {
 // 规则书: 大和麻弥 (2) look-at-top; Here the world captures the drawn card;
 // 朝同一片天空迈进 auto-plays; 梦在前方 gains a crystal per draw.
 // RULING: whether Here the world captures the card before the auto-play.
-#[ignore = "RULING: whether Here the world captures a drawn card before that card's auto-play"]
 #[test]
 fn l06_one_draw_several_effects() {
     let mut t = Table::new(&["大和麻弥", "花园多惠"]);

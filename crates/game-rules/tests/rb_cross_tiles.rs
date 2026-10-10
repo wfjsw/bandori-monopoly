@@ -454,7 +454,6 @@ fn t10_ringing_bloom() {
 // =====================================================================
 
 // 规则书: Fire bird 1.5× + HHW band (1) 「支付双倍价格」. RULING: order; both give 3×R.
-#[ignore = "RULING: order of Fire bird 1.5× and HHW band (1) doubling"]
 #[test]
 fn t11_fire_bird_plus_hhw_double() {
     let mut t = Table::new(&["弦卷心", "花园多惠"]);

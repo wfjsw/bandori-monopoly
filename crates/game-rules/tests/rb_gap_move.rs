@@ -266,7 +266,6 @@ fn g10_eve_plus_yd4_on_a_2d20_move() {
 // wins and the path is recomputed only when an effect changes the 终点.
 // RULING: if LOCK's rewrite (SettleBefore) is processed first, does the stop at
 // 33 still count? Assert stop-at-33.
-#[ignore = "RULING: does the per-tile forced stop at 33 beat LOCK's SettleBefore end-rewrite? assert stop-at-33"]
 #[test]
 fn g11_forced_stop_beats_lock_end_rewrite() {
     let mut t = Table::new(&["朝日六花", "要乐奈", "仓田真白"]);
