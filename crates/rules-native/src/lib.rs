@@ -49,6 +49,7 @@ pub static RULESET: &[&[card_sdk::CardDef]] = &[
     skill_bands::CARDS,
     skill_characters::CARDS,
     rules_tiles::CARDS,
+    rules_tile_marks::CARDS,
     rules_events::CARDS,
 ];
 
