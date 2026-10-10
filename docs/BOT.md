@@ -44,6 +44,150 @@ policy, and a static evaluation at the horizon.
 * **Fallback.** Timeout, crash or a missing service → the heuristic answer
   (`aiAnswer` / `autopilot.ts`).
 
+### 1.1 Hidden-state audit (seat-view extras)
+
+The client-side **seat-view engine** (`crates/bot-core/src/extras.rs`
+`view_extras`) recomputes the per-viewer extras -- `playable`, `estCost`,
+`skills`, `aiAnswer` -- from one seat's `MatchView` (public `MatchState` +
+own hand + own sorted draw + open prompt). It builds a determinized fork
+(`bot-core/src/determinize.rs`) and runs the same gates the server's
+`Match::view_extra_parts` (`engine/mod.rs`) runs. The list below is every
+gate those extras depend on that could read state the viewer does **not**
+know. It is the expected-divergence table for the seat-view equivalence
+tests: anything not listed here must match bit-for-bit.
+
+**Legend.** `reads` names the world slice the gate touches. `client vs
+server` is whether the seat-view fork and the live `view_extra` can disagree.
+`blast radius` is what a disagreement does to the player.
+
+#### A. `playable` -- `Cx::cant_play` (`engine/play.rs`)
+
+`view_extra_parts` calls `cant_play(i, id, asking = false)` once per distinct
+hand id (own hand only).
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| hand membership (`hidden[i].hand` contains id) | **own-hand-exact** (determinizer keeps the viewer's hand verbatim) | always equal | grey-out wrong |
+| `playing() && turn == i && step == OPS` (phase / turn / step) | **public** `MatchState` | always equal | grey-out wrong |
+| `asking` -- `cant_play`'s third arg. `view_extra` always passes `false`; the live `act:"play"` path via `why_not_act` passes `busy` (`pending.is_some()`). Not a client/server split -- both extras paths pass `false` -- but the extras `playable` bit is deliberately stricter than the act gate when a prompt is open. | public pending (via caller) | always equal (both pass `false`) | none (shared quirk) |
+| `cannot_play` -- `exile` / `stun` / `no_hand`; stun skipped when `card_prop(PLAYABLE_STUNNED) != 0` | **public** `MatchPlayer` flags + static prop | always equal | grey-out wrong |
+| exclusive-card check (`card.owner` vs `players[i].character` / base / CRYCHIC) | **static** card data + **public** character | always equal | grey-out wrong |
+| `rules.normal(id)` | **static** (`CardRules::normal`, default `true`; no ruleset overrides it) | always equal | grey-out wrong |
+| `rules_cant_play` = `CardRules::cant_play` = CEL `pre` on `On::Play` + wasm `OP_GUARD` (`game-rules/src/host.rs` `cant_play`) | see B / C / D below | see those rows | grey-out wrong |
+
+#### B. `rules_cant_play` -- CEL `pre` (`On::Play`'s condition)
+
+Evaluated against `fill_window_ambient` + `fill_candidate`
+(`game-rules/src/cond_pre.rs`) / `LiveSnap`. Full vocabulary audit is in
+`docs/GUARDS.md` §4.2b; summary:
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| every window / trigger name (`kind`, `actor`, `target`, `value`, `step`, `by`, `pay_is_rent`, `roll_source`, `abnormal`, `move.*`, `effect.count` / `chain.*`, `trigger_card`, `counter_name`) | play-gate window has **no** `Trigger` -- all defaults (`kind = 0`) | always equal | grey-out wrong |
+| `money` / `fire` / `crystals` / `pos` / `out` / `stay` / `stun` / `exile` / `no_hand` / `character` / `band` / `tiles` (and the `owner.*` twins) | **public** `MatchPlayer` / board | always equal | grey-out wrong |
+| `hand(p)` / `owner.hand` | **hand size only** -- `CardWorld::hand_size` = `hidden[p].hand.len()`, kept in sync with the public `MatchPlayer.hand` (`engine/world.rs` sync). **Not** card ids. | always equal (determinizer pins sizes to the public counts) | grey-out wrong |
+| `tile.*`, `tile_named`, `is_circle` / `is_ring` / `is_live_house` / `is_buyable`, `neighbor` | **public** board | always equal | grey-out wrong |
+| `slot(name)`, `tok(name)`, `card.counter(name)`, `card.placed`, `blocked(band)`, `counter_is` | **public** player-state latches / tokens / field-card counters | always equal | grey-out wrong |
+| anything that would name a hand **card id**, a deck **order**, or the RNG | **no such CEL name exists** | n/a -- forbidden | would grey-out wrong / leak |
+
+The only `On::Play` in the live pool with a non-empty CEL `pre` is
+`skill-characters/numazu_maid` (`tok('PAREO标记') >= 1`) -- a public token.
+
+#### C. `rules_cant_play` -- wasm `OP_GUARD` (the card's `cant_play` / `can_*` body)
+
+`host.rs` `cant_play` runs the residual guest guard after (or instead of)
+the CEL `pre`. Every live `On::Play` gate was scanned (`rules/cards/**`,
+`rules/skills/**`). Hidden-relevant readers, and **only** these:
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| `PP:这样就好` `see_you_tomorrow` -- `ctx::hand_count(p, "PP:[衍生]共鸣")` | **own-hand-exact** (specific-card count in the asked seat's hand) | always equal | grey-out wrong |
+| `HHW:相信你` `believe_you` -- `ctx::cards_in(p, Hand)` filter `!= ID` | **own-hand-exact** (the asked seat's hand contents) | always equal | grey-out wrong |
+| `R:饼干时间` `cookie_time` -- `ctx::discard_size(p)` | **public** (discard contents are fully public in `MatchState`) | always equal | grey-out wrong |
+| `HHW:后台巡游` `backstage_tour` -- `ctx::deck_count(p) + ctx::discard_size(p)` | **public counts** (`MatchPlayer.draw` / public discard size). Does **not** read deck order. | always equal | grey-out wrong |
+| `CRYCHIC` skill `can_transform` -- `ctx::deck_count` / `ctx::discard_size` | **public counts** | always equal | grey-out wrong |
+| every other `cant_play` / `can_use` / `can_*` gate in the pool | **public** (`others`, `money_of`, `owned_tiles`, `can_build_on`, `build_cost`, `cant_move`, `state::get`, `tok`, `skill_blocked` / marks, `crystals`, `turn_key`, `player_pos`) | always equal | grey-out wrong |
+
+**What the card-SDK can see in a guard** (`rules/card-sdk/src/ctx.rs`): the
+guest is *capable* of `hand_count` / `cards_in(Hand|Deck|Discard|Field)`,
+`hand_size`, `deck_count`, `discard_count`, `roll` / `roll_ask`, `draw`,
+`shuffle_into_deck`. Of those, a **gate** that reaches
+`cards_in(Deck)` (deck order/contents), `hand_count` / `cards_in` on
+**another** seat's hand, or `ctx::roll` would make `playable` / `skills`
+diverge from the server (the fork samples those zones / owns a fresh RNG).
+No live `On::Play` gate does today. A future gate that does is a
+client/server split -- list it here.
+
+#### D. `skills` -- `why_not_act(cx, i, act:"skill")` (`engine/mod.rs`)
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| `playing() && step == OPS && !busy` (`busy = pending.is_some()`) | **public** -- the fork stubs the same public `MatchState.prompt` the view carries (`bot-core/src/saved.rs` `stub_pending`), so `pending.is_some()` matches | always equal | skill shown enabled wrongly |
+| `m.card` non-empty | public field instance id | always equal | skill shown enabled wrongly |
+| `rules_cant_play(i, card)` | same as B / C | see those rows | skill shown enabled wrongly |
+| skill list source (`field_instances` + `has_play`) | **public** field cards + **static** `has_play` (the rule declares an activatable `On::Play`) | always equal | skill shown / hidden wrongly |
+
+#### E. `estCost` -- `rules.card_prop(c, EST_COST)`
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| `CardRules::card_prop(id, "estCost")` | **static** `CardDef::props` map (`card-sdk::abi::prop::EST_COST`). Never derived from prose, never from the world. Default `0`. | always equal | none |
+
+#### F. `aiAnswer` -- `Ask` fill vs `Match::compute_ai_answer`
+
+The server `view_extra` **reads the precomputed fill** stamped at
+prompt-open (`Ask::ai` / `ai_picked` / `worth`: `Cx::fill_ai` for ordinary
+prompts, `Ask::mortgage`'s `ai_pick` from `auto_mortgage(_from)`,
+`Ask::auction`'s `worth` from `ai_auction_worth` per seat). The seat-view
+engine **recomputes** via `compute_ai_answer` on the fork
+(`ai_auction_worth` / `auto_mortgage(_from)` / `ai_answer_for_entry`). Every
+way those can disagree:
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| **RNG stream** (the umbrella divergence) | the fill draws from the **live match RNG** at prompt-open; the fork draws from a **fresh** `DeterminizerRng`-seeded stream (`determinize.rs`) | **may diverge** whenever the choice fn draws | `aiAnswer` differs (托管 hint only) |
+| `fill_ai` / `ai_answer_for_entry` -- chaos branch (`is_chaos`) | **public** (`bot`, `mentality`) | always equal | -- |
+| `chaos_pick` (chaos non-counteract prompts) | **RNG** (`w.rng.below`) | **may diverge** (RNG) | `aiAnswer.answer` differs |
+| `counteract_pick` (standard, title `ask.counteract.title`) | **RNG** one `f64` per offered card until one fires + `strategy_of(seat).counteract_propensity` (public characters + ruleset sha) + prompt `options` (public to the asked seat) | **may diverge** (RNG) | `aiAnswer.answer` differs |
+| chaos [反击] pass roll (`CHAOS_COUNTER_CHANCE`) | **RNG** (`w.rng.f64`) | **may diverge** (RNG) | `aiAnswer.answer` differs |
+| standard non-counteract / non-chaos | deterministic `fallback` | always equal | -- |
+| `ai_auction_worth` -- standard | **RNG** (`w.rng.f64` into `StrategyParams::auction_worth`) + public money + public tile quote | **may diverge** (RNG) | `aiAnswer.worth` differs (auction ceiling) |
+| `ai_auction_worth` -- chaos | deterministic `money - CHAOS_RESERVE` | always equal (same formula) | -- |
+| `auto_mortgage` / `auto_mortgage_from` -- standard | **public** deeds (`mortgageable` = own buyable unmortgaged tiles), sort key from `StrategyParams` (public). No draw. | always equal | -- |
+| `auto_mortgage_from` -- chaos | **RNG** (`w.rng.below` per pick) over the deed list | **may diverge** (RNG) | `aiAnswer.picked` differs |
+| `Ask::mortgage` / `Ask::auction` fill timing | the fill is stamped once at prompt-open on the live stream; a later recompute on the live match would already see a moved RNG. The fork never shares that stream. | **may diverge** (timing + RNG) | `aiAnswer` differs |
+| stubbed other seats' auction ceilings (`stub_pending`) | approximate (`base.min(money-1000)`) -- **not** used by `compute_ai_answer`, which only fills the viewer's own entry | n/a for extras | none |
+
+No `ai_*` choice fn in the extras path reads another seat's hand, the deck
+order, or a hidden zone. Hidden-state risk is limited to the **RNG**.
+
+#### G. `why_not_act` -- the other branches (not extras, listed for completeness)
+
+Only `act:"skill"` and `act:"play"` feed the seat-view extras. The rest of
+`why_not_act` is public throughout (phase / turn / step / `busy` /
+`st.turn` / `st.step` / `st.bought` / `st.built` / `st.roller` /
+`st.skip_move` / `turn.main_moved` / ownership / money / quote / hand
+**size** vs `hand_limit`). `act:"discard"` is the one other branch that
+reads a hand **contents** check (`hidden[i].hand.contains`) -- own-hand-exact
+for the acting seat; it does not feed extras.
+
+#### H. Static confirmations
+
+| name / gate | reads | client vs server | blast radius |
+|---|---|---|---|
+| `rules.normal(id)` | static (`true` for every ruleset in tree) | always equal | none |
+| `rules.card_prop` / `card_props` | static `CardDef::props` | always equal | none |
+| `rules.has_play(id)` | static (does the rule declare `On::Play`) | always equal | skill list wrong |
+
+#### I. Residual risk (the only thing a player can feel)
+
+A client/server divergence can only (a) grey out a card the server would
+accept, (b) leave a card pressable the server then refuses, or (c) show a
+different 托管 `aiAnswer` than the server's precomputed fill. The server
+still validates every command -- the client cannot force a rules violation.
+No divergence in this list lets a viewer learn another seat's hand, deck
+order, or the match RNG.
+
 ## 2. Architecture readiness (review 2026-10-07)
 
 | requirement | state | evidence |

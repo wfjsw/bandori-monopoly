@@ -305,3 +305,26 @@ fails a gate instead of a player's game.
 * Recipe version tags (`bd-fair-*-v1` / `-v2`) are inside every hash.
   Changing a recipe means a new `fair.v` and new tags; old openings then
   fail verification loudly instead of quietly.
+
+## 7. Client-side derived data (2026-10-10)
+
+**User decision (2026-10-10).** AI for a user runs on **that client only**.
+Per-viewer derived data (`playable` / `estCost` / `skills` / `aiAnswer`) is
+computed **client-side** from what the viewer already legitimately knows
+(public `MatchState` + own hand + own sorted draw + open prompt), and the
+server stops shipping `view_extra` extras to human seats. The bot service
+still receives a seat view and is still advisory (`docs/BOT.md`); it is not
+a second brain for the seat.
+
+This does not weaken the commit-reveal scheme: the derived extras are pure
+functions of the viewer's own information set (plus, for `aiAnswer`, the
+fork's private sampling RNG -- never the match RNG). The hidden-state audit
+(`docs/BOT.md` §1.1) lists every gate those extras read and which of them
+touch a sampled zone.
+
+**Residual risk.** A client divergence from the server's own recomputation
+can only grey out a card the server would accept, leave a card pressable
+that the server then refuses, or show a different 托管 `aiAnswer` than the
+server's precomputed fill. The server still validates every command -- the
+client cannot force a rules violation, cannot bias dice, and cannot learn
+another seat's hand / deck order / the match RNG through this path.

@@ -182,6 +182,24 @@ real on-card [CP点] count. `owner.crystals` / `crystals(p)` are the seat's
 **band** crystals (the band-skill field instance's `crystals`, `World::
 band_crystals`), not an on-card counter.
 
+**Reads hidden state?** No CEL vocabulary name reaches another seat's hand
+**contents**, any deck **order**, or the RNG. `hand(p)` / `owner.hand` are
+hand **sizes** (`CardWorld::hand_size` = `hidden[p].hand.len()`, kept in
+sync with the public `MatchPlayer.hand` count) -- not card ids. Everything
+else (`money` / `pos` / `out` / `stay` / `stun` / `exile` / `no_hand` /
+`character` / `band` / `tiles` / `fire` / `crystals` / `tile.*` / `slot` /
+`tok` / `card.counter` / `move.*` / `chain.*` / `is_*`) is public board /
+player state or trigger ambient. A play-gate window (`fill_window_ambient`)
+carries no `Trigger`, so the trigger names are defaults.
+
+That is the seat-view equivalence contract (`docs/BOT.md` §1.1): a CEL
+`pre` alone can never make `playable` / `skills` diverge between the
+server's `view_extra` and the client's determinized fork. A **residual wasm
+guard** (`OP_GUARD` / the card's `cant_play` body) still can -- the card SDK
+exposes `hand_count` / `cards_in` / `deck_count` / `ctx::roll` -- and those
+call sites are listed in `docs/BOT.md` §1.1.C. Do not add a hidden-state
+reader to VOCAB without updating that audit.
+
 Accessors go through [`crate::view::CondView`] (`rules-cond/src/view.rs`): a
 read-only query trait covering the trigger fields, the player/tile/card
 queries, `slot`/`tok` and the tile-kind predicates -- the same vocabulary the
