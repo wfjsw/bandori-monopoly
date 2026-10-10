@@ -336,6 +336,15 @@ residual wasm guard -- exactly the G3 split.
    directly — with clauses removed from the guards, skipping the condition
    would admit what it should reject.
 
+**Play-gate messages (user ruling 2026-10-10).** A play gate (`On::Play`) must
+not trade a specific refusal `Msg` for the generic `err.play_pre` a `pre`-reject
+surfaces — the player reads that reason when a card will not play. So a clause
+whose old `cant_play` / `can_use` guard returned a *specific* `Msg` stays in the
+residual guard; only a clause whose old refusal was generic or absent (a silent
+body-top, or a guard that already returned `err.play_pre`) may live in the `pre`.
+Counteract / hook residuals are unaffected (they are a plain admit/reject with
+no message).
+
 ### 4.5 Window algorithm (2026-10-08) — valid-option-first + processed set
 
 The [反击] window (`hand_counteractions` / `build_round` / `declare_one`,
@@ -463,10 +472,12 @@ kind/actor prefix (and, for the partials, the expressible head is now in
 
 **Moved into the schema** (2026-10-10, this batch): `meet_again` next_dist,
 `repaint` on_path, `misaki_card` between, `council_check` near/owned_within,
-`haruhikage` within5/others_within, `your_light` dist, `lisa_bond` players_on,
+`haruhikage` within5/others_within, `lisa_bond` players_on,
 `rana_funny` card.tile, `hagumi_marks` gains_this_turn, `centrifugal`
-targeted_count, `no_breakup` repeated_digits, and `plan.fixed_roll`
-(sports_talent / kaoru_thief / soyo_clear / kanon_lost).
+targeted_count, and `plan.fixed_roll` (sports_talent / kaoru_thief /
+soyo_clear / kanon_lost). `dist` and `repeated_digits` are in the vocabulary
+too, but `your_light` / `no_breakup` keep those clauses in their residual
+guard -- they are play gates whose refusal `Msg` is specific (§4.4).
 
 ## 7. Phases (after purchasing; sizes are LOC-ish)
 

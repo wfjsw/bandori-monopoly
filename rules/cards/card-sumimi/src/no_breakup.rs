@@ -13,11 +13,11 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const NO_BREAKUP: CardDef = CardDef::new(
     "Sumimi:Sumimi不会解散哦",
     &[On::Play(
-        // 规则书: 「资金不含有相同数字时可打出」 -- C# refuses with 「资金里有相同的
-        // 数字」 when `RepeatedDigits(money)`. A repeated-digit reject now
-        // surfaces as the generic `err.play_pre` instead of
-        // `no_breakup_repeated`.
-        "!repeated_digits(money(owner))",
+        // The repeated-digit clause stays in the residual guard (not `pre`):
+        // a play gate must not trade its specific refusal
+        // (`no_breakup_repeated`) for the generic `err.play_pre` a pre-reject
+        // surfaces (GUARDS.md §4.4).
+        "",
         Some(cant_play),
         no_breakup,
     )],
@@ -53,9 +53,14 @@ fn predict(player_id: i32, t: i32) -> i32 {
     }
 }
 
-/// C# `CardNoBreakup.WhyNot` -- playability gates. The repeated-digit clause is
-/// the pre.
+/// C# `CardNoBreakup.WhyNot` -- playability gates. The repeated-digit refusal
+/// is the specific `no_breakup_repeated`, so it lives here, not in `pre`.
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「资金不含有相同数字时可打出」 -- C# refuses with 「资金里有相同的数字」
+    // when `RepeatedDigits(H.State.seats[player_id].money)`.
+    if repeated_digits(ctx::money_of(player_id)) {
+        return Some(Msg::new(key!("no_breakup_repeated")));
+    }
     // 规则书: 「当你本回合未进行过抵押/赎回操作」 -- both actions record
     // themselves and clear at the turn end, so the gate is just those records.
     if ctx::state::get(player_id, "mortgaged") != 0 || ctx::state::get(player_id, "redeemed") != 0 {

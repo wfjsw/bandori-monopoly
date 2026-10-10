@@ -11,20 +11,30 @@ use card_sdk::{ctx, key, CardDef, Msg, On};
 pub const YOUR_LIGHT: CardDef = CardDef::new(
     "Mor:你的光芒将照亮前路",
     &[On::Play(
-        // 规则书: 「当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡」
-        // C# `CardYourLight.WhyNot`: refuses outside the 20-tile window
-        // (`H.Dist(H.State.seats[seat].pos, School) <= 20`) and only when
-        // `pos >= 0` (a seat not on the board admits). School unknown admits
-        // (the C# `WhyNot` early-returns `None` then). A dist reject now
-        // surfaces as the generic `err.play_pre` instead of
-        // `your_light_why_not`.
-        "tile_named('月之森女子学院') < 0 || owner.pos < 0 || dist(owner.pos, tile_named('月之森女子学院')) <= 20",
+        // The dist clause stays in the residual guard (not `pre`): a play gate
+        // must not trade its specific refusal (`your_light_why_not`) for the
+        // generic `err.play_pre` a pre-reject surfaces (GUARDS.md §4.4).
+        "",
         Some(cant_play),
         your_light,
     )],
 );
 
 fn cant_play(player_id: i32) -> Option<Msg> {
+    // 规则书: 「当你在“月之森女子学院”格子前后20格之内，可以从手牌中打出此卡」
+    // C# `CardYourLight.WhyNot`: refuses outside the 20-tile window
+    // (`H.Dist(H.State.seats[seat].pos, School) <= 20`) and only when
+    // `pos >= 0` (a seat not on the board admits). School unknown admits
+    // (the C# `WhyNot` early-returns `None` then). The refusal is the specific
+    // `your_light_why_not`, so it lives here, not in `pre`.
+    let school = ctx::tile_named("月之森女子学院");
+    if school < 0 {
+        return None;
+    }
+    let pos = ctx::player_pos(player_id);
+    if pos >= 0 && ctx::dist(pos, school) > 20 {
+        return Some(Msg::new(key!("your_light_why_not")));
+    }
     // 规则书: 「可以从手牌中打出此卡」 -- the C# then defers to `H.MoveWhyNot`
     // (only while the turn's main move is still open). The 3-valued
     // `status.move_*` message stays.
