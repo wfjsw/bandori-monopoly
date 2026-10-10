@@ -1156,3 +1156,9 @@ or A/B items that need a wider surface than this batch:
   / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` un-ignored.
   Engine `set_stop_at` landing was already correct. m12 declined the `ask_yes`
   offer; m15 used `place_raw` (tile:-1). m12b asserts 37 (the rolled dest).
+* **TILE-04 / TILE-05 (2026-10-10, test window / arrangement):**
+  `t12_student_council_check` / `t24_parking_space` un-ignored. t12 played a
+  SettleBefore [反击] as a free [手] (silent no-op) and declined the allowNone
+  stand-in; t24 played Parking Space on the wrong turn and read stay before
+  `TurnEndAfter`. Bodies already matched the green 香澄 / g15 shapes.
+  Owned-Space Parking Space × Rana body-replace order is C-Q43.

@@ -491,20 +491,31 @@ fn t11_fire_bird_plus_hhw_double() {
 
 // 规则书: 学生会的检查: 「支付那格一层房屋的建造价格一半将此卡放于那个格子上…
 // 下一个经过且移动终点不在此格的你以外的玩家强制停下并触发结算…地租价格为原价格一半」.
-#[ignore = "DISCREPANCY: 学生会的检查 placement / forced stop"]
+// The card is a SettleBefore [反击], not a free [手] play -- drive the window
+// like `student_council_check_adds_juewu_not_ya` (rb_general).
 #[test]
 fn t12_student_council_check() {
     let mut t = Table::vanilla(2);
     let t1 = tile("购物中心");
     t.own(0, &[t1]);
-    t.set_pos(0, t1 + 2);
+    t.set_pos(0, t1);
     t.give(0, &["R:学生会的检查"]);
-    t.play(0, "R:学生会的检查").unwrap();
-    // Pay H(t)/2 and place it on t.
-    loop {
-        let Some(p) = t.prompt() else { break };
+    // 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」 --
+    // end the move 2 past the deed so it sits at 「前后三格」 of the endpoint.
+    t.dice(&[2]);
+    t.roll(0).unwrap();
+    assert!(
+        t.counteract_offered("R:学生会的检查"),
+        "window play offered: {}",
+        t.dump_prompt()
+    );
+    t.counteract(0, "R:学生会的检查").unwrap();
+    // Pay H(t)/2 and place it on t. The body uses ask_yes (allowNone stand-in)
+    // then ask_tile -- accept yes, then pick t1.
+    while let Some(p) = t.prompt() {
         if p.kind == "tile" {
-            let k = p.items.iter().position(|s| s == "1").unwrap() as i32;
+            t.answer_tile(0, t1).unwrap();
+        } else if let Some(k) = t.option("yes") {
             t.answer(0, k).unwrap();
         } else {
             t.decline();
@@ -522,20 +533,29 @@ fn t12_student_council_check() {
         "P0 pays half a house cost to place the card"
     );
     // P1 walks past t (end != t): forced to stop, pays R(t)/2.
+    // The path t1-2 → t1+2 wraps through CiRCLE (tile 0) when t1 is 1, so the
+    // pass reward (+2000) rides the same walk as the half-rent.
     until_turn(&mut t, 1);
-    t.set_pos(1, t1 - 2);
+    // t1 is 购物中心 = 1, so t1-2 wraps through CiRCLE (tile 0).
+    t.set_pos(1, (t1 + 58) % 60);
+    let money_before = t.money(1);
     t.dice(&[4]);
     t.roll(1).unwrap();
     drain(&mut t);
     let half_rent = rent(t1, 0) / 2;
+    let circle = 2000; // CIRCLE_MONEY: P1 passes tile 0 on this path
     eprintln!(
-        "t12 record: P1 pos = {} (want {t1}), paid = {} (want R/2 = {half_rent})",
+        "t12 record: P1 pos = {} (want {t1}), net paid = {} (want R/2 = {half_rent})",
         t.pos(1),
-        10_000 - t.money(1)
+        money_before + circle - t.money(1)
     );
     // 「下一个经过且移动终点不在此格的你以外的玩家强制停下并触发结算…地租价格为原价格一半」.
     assert_eq!(t.pos(1), t1, "P1 force-stopped on the card's tile");
-    assert_eq!(10_000 - t.money(1), half_rent, "the forced settle pays half rent");
+    assert_eq!(
+        money_before + circle - t.money(1),
+        half_rent,
+        "the forced settle pays half rent"
+    );
 }
 
 // =====================================================================
@@ -953,16 +973,24 @@ fn t23_riot_hey_kids() {
 
 // 规则书: Parking Space (1)(2): 「此卡所在格子的[结算]改为回合结束后获得一层[停留]」
 // 「位于此卡所在格子上的玩家无法使用角色及乐队技能」.
-#[ignore = "DISCREPANCY: Parking Space + 要乐奈 (2) teleport arrangement"]
+// CROSS-TESTS T24: P0 has placed Parking Space; P1 teleports via 要乐奈 (2).
+// Stay is granted at P1's turn end (`TurnEndAfter`), so it is read after `pass`.
 #[test]
 fn t24_parking_space() {
     let mut t = Table::new(&["都筑诗船", "要乐奈"]);
     t.clean();
-    t.begin_turn(1);
     let space = tile("Space");
+    // Setup on P0's own turn (a [手] play is OPS-of-own-turn only).
+    t.begin_turn(0);
     t.give_play(0, "通用:[都筑诗船]Parking Space").unwrap();
     drain(&mut t);
+    assert!(
+        t.field_ids(0).iter().any(|c| c.contains("Parking Space")),
+        "Parking Space is on the field: {:?}",
+        t.field_ids(0)
+    );
     // P1 teleports to Space via 要乐奈 (2).
+    until_turn(&mut t, 1);
     t.set_fire(1, 3, 3);
     let sid = t.skill_id(1, "投币式停车场的猫");
     t.skill(1, &sid).unwrap();
@@ -976,11 +1004,32 @@ fn t24_parking_space() {
             t.decline();
         }
     }
+    drain(&mut t);
+    assert_eq!(t.pos(1), space, "P1 teleported to Space");
+    assert_ne!(
+        t.owner(space),
+        Some(1),
+        "「该次传送不可进行地契购买」 -- the teleporting player did not buy Space"
+    );
+    // Parking Space (2): the skillBlock mark sits on the tile.
+    assert!(
+        t.marks_on(space).iter().any(|m| m.kind == "skillBlock"),
+        "skillBlock mark on Space: {:?}",
+        t.marks_on(space)
+    );
+    // Parking Space (1): 「[结算]改为回合结束后获得一层[停留]」 -- the stay
+    // counter is deferred to `TurnEndAfter`.
+    pass(&mut t, 1);
     eprintln!(
         "t24 record: P1 pos = {}, stay = {}, marks = {:?}",
         t.pos(1),
         t.state(1, "stay"),
         t.marks()
+    );
+    assert_eq!(
+        t.state(1, "stay"),
+        1,
+        "Parking Space (1): 1 [停留] at P1's turn end"
     );
 }
 

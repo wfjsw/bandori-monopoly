@@ -747,23 +747,29 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **question**: C-Q15.
 
 ## TILE-04 — 学生会的检查 placement / forced stop
-- **kind**: implementation bug
-- **class**: A
+- **kind**: test window / arrangement
+- **class**: D (fixed 2026-10-10; see D-09)
 - **severity**: medium
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_tiles.rs:495` `t12_student_council_check`
+  - `crates/game-rules/tests/rb_cross_tiles.rs` `t12_student_council_check` (un-ignored, green twice)
+  - body already correct (same shape as green 香澄 / `student_council_check_adds_juewu_not_ya`)
 - **rulebook**: 学生会的检查 — placement + forced stop + 「本回合无法加盖房屋」 (linger `NO_BUILD` already landed).
-- **current**: placement / forced stop arrangement wrong.
+- **was**: the test `t.play`'d a SettleBefore [反击] as a free [手] (silent no-op) and declined the allowNone stand-in; `t1 - 2` also usize-underflowed on 购物中心 = 1.
+- **fixed**: drive the SettleBefore window (roll + `counteract`), answer yes then the tile, wrap the start index. Un-ignored, green twice.
 
 ## TILE-05 — Parking Space + 要乐奈 (2) teleport arrangement
-- **kind**: implementation bug
-- **class**: A
+- **kind**: test setup
+- **class**: D (fixed 2026-10-10; see D-09)
 - **severity**: medium
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_tiles.rs:957` `t24_parking_space`
+  - `crates/game-rules/tests/rb_cross_tiles.rs` `t24_parking_space` (un-ignored, green twice)
+  - engine path already green in `g15_parking_space_settle_replaced_plus_rain_extra_settle`
 - **rulebook**: Parking Space body-replace + Rana (2) Space teleport as the main move.
+- **was**: P0 played Parking Space on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`.
+- **fixed**: setup on P0's turn; assert stay after `pass`. Un-ignored, green twice.
+- **open C (owned-Space body-replace order)**: see C-Q43 — only needed when Space has a deed owner; the CROSS-TESTS T24 path is unowned.
 
 ## TILE-06 — 江户川乐器店 / CiRCLE shared body
 - **kind**: rulebook divergence
@@ -1407,6 +1413,11 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
   - m15: `place_raw` leaves `tile: -1`, so `card.placed && self_tile() == tile.id` never matches. Both stop-pot cards need `place_on_tile`.
 - Fix: dump-match `kokoro_practice_force` + `answer_one(0)`; assert 37 for the countered stop; `place_on_tile` for 香澄@44 and 乐奈@48. Un-ignored, green twice. m12b records fire spent even when countered (RULING recorded, not decided).
 
+## D-09 — TILE-04 / TILE-05 (test window / arrangement; 2026-10-10)
+- **TILE-04 学生会的检查**: the card is a SettleBefore [反击], not a free [手]. `t.play` silently no-ops (no `On::Play` entry) and never places. The body's ask_yes (allowNone stand-in) + ask_tile also had to be accepted. `t1 - 2` usize-underflowed on 购物中心 = 1. Fix: roll + `counteract`, answer yes then the tile, wrap the start. Engine forced-stop + rent-half already matched the green 香澄 shape.
+- **TILE-05 Parking Space + 要乐奈 (2)**: P0 played the [手] on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`. Fix: setup on P0's turn; assert stay after `pass`. Engine path (teleport → body-replace → stay at turn end, skillBlock) already green in `g15`.
+- Both un-ignored, green twice.
+
 ---
 
 # Stale sections in TEST-FINDINGS.md / companion docs
@@ -1662,6 +1673,12 @@ Batch of event ambiguities — please answer each:
 
 **C-Q42 (LOW-04, umiri 「置入弃牌堆」).**
 「置入弃牌堆」 for a *taken band-skill card*: a band attachment is not a card in a pile (C# only detaches it). Detach (engine now), or put it in the discard (and is a `skill:` id drawable)?
+
+**C-Q43 (TILE-05 follow-up, Parking Space × 要乐奈 (2) body-replace order).**
+When 「通用:[都筑诗船]Parking Space」 is on Space and 「skill:要乐奈:投币式停车场的猫」（2） also fires on a settle at Space (both are 「将该次结算改为…」 settle-body replaces, `SETTLE-STAGES.md` §9 R4):
+(a) if Rana owns Space, which replace wins — Parking Space's 停留 or Rana's 抹茶芭菲?
+(b) if a third party owns Space, does Parking Space's body-replace also swallow Rana's 「免除付款并抽1张卡」 draw, or does the draw still happen as a skill effect outside the replaced body?
+Engine now: first-to-claim (`trigger::cancelled()`); field hooks run in seat order, so Parking Space (P0) would win over Rana (P1). The CROSS-TESTS T24 path is unowned Space and does not need this answer.
 
 ---
 
