@@ -284,6 +284,11 @@ either no test or a green one (see §7 and [COVERAGE.md](COVERAGE.md)).
   * ~~CiRCLE band (2) doubling is unported.~~ **Fixed 2026-10-09** (GREAT
     tags the 2000 via `ctx::n`, the skill rides the pre-effect `card` hook,
     `PlayCtx.Doubled` lives on `TurnCtx`).
+* **ag** (1)
+  * ~~绯红之魂 (1) pays the 500 after rule (3) may have discarded the card
+    (last-crystal [支付] lost the payee their 500).~~ **Fixed 2026-10-10**
+    (`CRYSTAL-03`; the 500 rides the spend in `pay_choose` itself, before
+    `CounterChanged` can discard; test `soul_last_crystal_still_pays_the_payee_500`).
   * 网络链接异常's drop-one is landed (§3); two cross fixtures still see the
     whole-card negate (c05 / g19) -- see cross below.
 * **pp** (3)

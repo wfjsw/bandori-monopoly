@@ -1022,10 +1022,15 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **class**: A
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting / payment pipeline
+- **status**: **fixed** (this batch, `fix: CRYSTAL-03 …`) — the 500 is paid in
+  `pay_choose` as part of the crystal spend, before `add_crystals` raises
+  `CounterChanged` (which rule (3) answers with the discard). The `PayAfter`
+  tag is gone. Test: `rb_ag::soul_last_crystal_still_pays_the_payee_500`.
 - **locations**
-  - `rules/cards/card-ag/src/crimson_soul.rs:126` (spending the last crystal on a [支付] loses the payee their 500)
+  - `rules/cards/card-ag/src/crimson_soul.rs` (was `:126`; now paid inline in
+    `pay_choose`)
 - **rulebook**: rule (1) — 500 is owed the moment the crystal is spent; not conditioned on the card still being in play.
-- **current**: paid after rule (3) may have discarded the card.
+- **was**: paid after rule (3) may have discarded the card.
 - **expected**: pay 500 as part of the spend, before the discard check.
 
 ## CRYSTAL-04 — NNM (2) 「获得x次经过CiRCLE时的资金奖励」 does not scale with the live reward

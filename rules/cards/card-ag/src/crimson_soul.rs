@@ -31,12 +31,11 @@ pub const CRIMSON_SOUL: CardDef = CardDef::new(
         // takes the Q1 shortfall path. C# `CardCrimsonSoul.WhyNot` had one.
         On::Play("", None, play),
         On::Hook(&[HookKind::PayChoose], "", Some(pay_choose_guard), pay_choose),
-        On::Hook(&[HookKind::PayAfter], "", Some(pay_after_guard), pay_after),
         On::Hook(&[HookKind::SkillUsed], "", Some(skill_used_guard), skill_used),
         On::Hook(&[HookKind::CounterChanged], "", Some(crystals_changed_guard), on_crystals_changed),
     ],
 )
-.labels(&[(1, "（1）"), (2, "（1）"), (3, "（2）"), (4, "（3）")])
+.labels(&[(1, "（1）"), (2, "（2）"), (3, "（3）")])
 .props(&[(card_sdk::abi::prop::EST_COST, 500)]);
 
 fn play(player_id: i32) -> card_sdk::Asked {
@@ -99,6 +98,19 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
     if !ctx::ask_yes(player_id, &Msg::new(key!("crimson_soul_title")), &ask)? {
         return Ok(());
     }
+    // 规则书[持续]（1）: 「若为[支付]则被[支付]玩家[获得]500资金」 -- the 500 is
+    // owed the moment the crystal is spent, not conditioned on the card still
+    // being in play. Rule (3) discards this card when the spend empties it
+    // (via `on_crystals_changed` on the `add_crystals` below), so paying here
+    // -- as part of the spend, before that write -- is what keeps a last-crystal
+    // [支付] from losing the payee their 500.
+    if to >= 0 && to != player_id && !ctx::player_out(to) {
+        ctx::gain(
+            to,
+            500,
+            &Msg::new(key!("crimson_soul_payee")).player_id("who", to),
+        )?;
+    }
     // C# `AddCrystals(-1, "付钱时使用")`.
     ctx::add_crystals(-1, 0)?;
     // 规则书[持续]（1）: 「金额减少1000（最少为0）」 -- C# `p.amount = Math.Max(0, p.amount - 1000)`.
@@ -109,45 +121,8 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
             .player_id("who", player_id)
             .n("n", amount as i64),
     );
-    // 规则书[持续]（1）: 「若为[支付]则被[支付]玩家[获得]500资金」 -- C# tags the
-    // `PayCtx` with "crimson" and `PayAfter` pays the 500. The tag rides a
-    // per-player slot so `pay_after` below can see it; stored as `to + 1` so an
-    // unset slot (0) reads as "no tag" (player 0 is a real player).
-    if to >= 0 && to != player_id {
-        ctx::set_slot(player_id, "crimson_payee", to + 1);
-    }
     // 规则书[持续]（3） follows the `add_crystals` above through
     // [`on_crystals_changed`]; no spend site re-checks the count.
-    Ok(())
-}
-
-/// 规则书[持续]（1）: 「若为[支付]则被[支付]玩家[获得]500资金」 -- C#
-/// `CardCrimsonSoul.PayAfter` (`p.tags["crimson"]` -> `H.GainR(p.to, 500, ...)`).
-/// Pure guard for [`pay_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
-// TODO(规则书): the 500 is owed as part of rule (1) the moment the crystal is
-// spent, but it is paid here -- after rule (3) may have already discarded the
-// card for running out -- so spending the **last** crystal on a [支付] loses
-// the payee their 500. Rule (1) does not condition the payout on the card
-// still being in play.
-fn pay_after_guard(player_id: i32) -> bool {
-    ctx::is_placed()
-}
-
-fn pay_after(player_id: i32) -> card_sdk::Asked {
-    let due = ctx::slot(player_id, "crimson_payee") - 1;
-    if due < 0 {
-        return Ok(());
-    }
-    ctx::set_slot(player_id, "crimson_payee", 0);
-    if ctx::player_out(due) {
-        return Ok(());
-    }
-    ctx::gain(
-        due,
-        500,
-        &Msg::new(key!("crimson_soul_payee")).player_id("who", due),
-    )?;
     Ok(())
 }
 

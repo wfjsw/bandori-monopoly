@@ -255,6 +255,46 @@ fn soul_leaves_when_empty() {
     assert!(gone || empty, "card left or crystals drained");
 }
 
+// 规则书[持续]（1）: 「若为[支付]则被[支付]玩家[获得]500资金」 -- the 500 is owed
+// the moment the crystal is spent (rule (1)), not conditioned on the card still
+// being in play. Spending the **last** crystal on a [支付] still pays the
+// payee their 500; rule (3) then discards the empty card.
+#[test]
+fn soul_last_crystal_still_pays_the_payee_500() {
+    let mut t = Table::vanilla(2);
+    t.give_play(0, "AG:绯红之魂").unwrap();
+    t.answer(0, 0).unwrap(); // 1 crystal
+    skip_all(&mut t);
+    assert_eq!(t.crystals(0, "AG:绯红之魂"), Some(1));
+    // The owner pays: land on P1's tile and pay rent 1520 (3 houses).
+    t.own(1, &[HILL]);
+    t.set_houses(HILL, 3);
+    t.begin_turn(0);
+    t.set_pos(0, HILL - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    if t.prompt().is_some() && t.dump_prompt().contains("crimson_soul") {
+        t.answer(0, 0).unwrap(); // yes, spend the last crystal
+    }
+    skip_all(&mut t);
+    // Rent 1520 − 1000 = 520 paid to P1; the crystal spend also pays P1 +500.
+    // P1 receives both: 10000 + 520 + 500 = 11020.
+    // P0 paid 500 for the crystal load and 520 rent: 10000 − 500 − 520 = 8980.
+    assert_eq!(
+        t.money(1),
+        10_000 + 520 + 500,
+        "payee keeps the 500 on the last-crystal spend: {}",
+        t.money(1)
+    );
+    assert_eq!(t.money(0), 10_000 - 500 - 520, "P0: crystal load + reduced rent");
+    // Rule (3): the empty card is discarded.
+    assert!(
+        !t.on_field(0, "AG:绯红之魂"),
+        "empty card left the field: {:?}",
+        t.field_ids(0)
+    );
+}
+
 // =====================================================================
 // AG:朝同一片天空迈进
 // =====================================================================
