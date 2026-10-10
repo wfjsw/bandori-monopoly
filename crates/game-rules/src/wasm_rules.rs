@@ -638,6 +638,9 @@ impl CardWorld for Run {
     fn self_uid(&self) -> i32 {
         self.current_uid
     }
+    fn set_self_uid(&mut self, uid: i32) {
+        self.current_uid = uid;
+    }
     fn prop_at(&self, uid: i32, key: &str) -> i32 {
         self.world.prop_at(uid, key)
     }

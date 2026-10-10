@@ -452,11 +452,11 @@ pub trait CardWorld: Clone + 'static {
         Vec::new()
     }
     /// The instance at `uid`, wherever it sits.
-    fn crystals_at(&self, _uid: i32) -> i32 {
-        0
+    fn crystals_at(&self, uid: i32) -> i32 {
+        self.counter_at(uid, game_core::state::counter::CRYSTALS)
     }
-    fn add_crystals_at(&mut self, _uid: i32, _n: i32, _max: i32) -> i32 {
-        0
+    fn add_crystals_at(&mut self, uid: i32, n: i32, max: i32) -> i32 {
+        self.add_counter_at(uid, game_core::state::counter::CRYSTALS, n, max)
     }
     /// One declared property of the instance at `uid` (`FieldCard::props`,
     /// `card_sdk::abi::prop` keys). Default `0`.
@@ -639,6 +639,11 @@ pub trait CardWorld: Clone + 'static {
     /// The running instance's `FieldCard::uid`.
     fn self_uid(&self) -> i32 {
         -1
+    }
+    /// Pin the running instance's uid (message dispatch: the handler runs as
+    /// the receiver, not as a fresh nested card).
+    fn set_self_uid(&mut self, uid: i32) {
+        let _ = uid;
     }
     /// Names of the player's non-zero counters whose name starts with `prefix`.
     fn tok_names(&self, _player_id: i32, _prefix: &str) -> Vec<String> {

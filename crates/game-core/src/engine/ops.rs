@@ -1723,6 +1723,10 @@ impl World {
             m.count += count;
             return m.count;
         }
+        let card = self
+            .field_by_uid(src)
+            .map(|f| f.card.clone())
+            .unwrap_or_default();
         let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
         self.st.marks.push(TileMark {
             uid,
@@ -1731,7 +1735,7 @@ impl World {
             category: cat.to_string(),
             owner,
             count,
-            card: String::new(),
+            card,
             src,
             instance,
             note,
@@ -1762,6 +1766,10 @@ impl World {
         } else {
             category
         };
+        let card = self
+            .field_by_uid(src)
+            .map(|f| f.card.clone())
+            .unwrap_or_default();
         let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
         self.st.marks.push(TileMark {
             uid,
@@ -1770,7 +1778,7 @@ impl World {
             category: cat.to_string(),
             owner,
             count,
-            card: String::new(),
+            card,
             src,
             instance,
             note,
@@ -1903,10 +1911,15 @@ impl World {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
         };
+        // Name-keyed (the old `H.AddTok` rule): a token name is unique to its
+        // creating rule (`marker_owner`), so a spend from any instance hits the
+        // same pool. Prefer an exact (name, instance) row; fall back to any row
+        // with that name (legacy `instance == -1` rows from save migration).
         let idx = s
             .tokens
             .iter()
-            .position(|t| t.name == name && t.instance == instance);
+            .position(|t| t.name == name && t.instance == instance)
+            .or_else(|| s.tokens.iter().position(|t| t.name == name));
         let slot = match idx {
             Some(i) => &mut s.tokens[i],
             None => {
@@ -2033,10 +2046,11 @@ impl World {
     }
 
     /// Legacy `H.AddMark` -- one player-coloured unit of `kind` on `tile`,
-    /// owner `player_id`, no owning instance (the caller stamps one via
-    /// [`Self::place_mark`] going forward).
+    /// owner `player_id`. Always a **fresh row** (the old `add_mark`
+    /// semantics: tests count rows). No owning instance; the caller stamps
+    /// one via [`Self::place_mark`] / [`Self::place_mark_new`] going forward.
     pub fn add_mark(&mut self, tile: i32, player_id: i32, kind: &str, note: Msg) {
-        self.place_mark(-1, kind, "", tile, player_id, -1, 1, note);
+        self.place_mark_new(-1, kind, "", tile, player_id, -1, 1, note);
     }
 
     // ------------------------------------------------------- [CP点] marks

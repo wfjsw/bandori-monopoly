@@ -2544,9 +2544,13 @@ pub fn send<C: HostCtx>(
         }
         let fuel = c.fuel()?;
         let st = c.st_mut();
-        // The handler runs as a fresh instance of `rule_id` (same as
-        // `invoke_skill`): `enter_card` gives it its own uid.
+        // The handler runs **as the receiver instance** (user ruling
+        // 2026-10-10: `mark:cp` answers `"place"` and binds units to its own
+        // counter). `enter_card` would start a fresh uid like `invoke_skill`;
+        // pin `current_uid` to the resolved receiver so `ctx::place_mark`
+        // stamps `instance = mark:cp` and `ctx::self_uid()` is that card.
         let saved = st.w().enter_card(&rule_id);
+        st.w().set_self_uid(uid);
         let was_from_hand = st.w().play_from_hand();
         st.w().set_play_from_hand(false);
         let mut nested = HostState::new(
