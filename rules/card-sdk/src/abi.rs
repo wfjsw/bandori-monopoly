@@ -281,7 +281,11 @@ use alloc::{string::String, vec::Vec};
 /// v50: the tile-body guest primitives (`rules/tiles/src/agent.rs` /
 ///      `circle.rs`). `ask_tiles` / `opt_tile` / `opt_price` / `opt_ai` -- the
 ///      tile ask with per-option labels, prices and an AI choice hint
-///      (`H.AgentLanding`'s `ask.view.prices` + `with_ai`). `raise` --
+///      (`H.AgentLanding`'s `ask.view.prices` + `with_ai`); `PromptKind::TileId`
+///      records the **tile id** (or -1 for 「不选」) in the answer log, so a
+///      commit-pass re-run of a body whose options the just-committed host
+///      effect reshaped still maps the pick to the same tile. `agent_offer` --
+///      the chosen branch (buy / build) as one host routine. `raise` --
 ///      guest-raised trigger points (`circleAffected` from `tile:circle`);
 ///      returns whether the link settled. `gain_typed` -- a bank print through
 ///      the money pipeline (`Pay::new(_, "gain")`) carrying the Pay's event
@@ -534,6 +538,12 @@ pub enum PromptKind {
     Player = 3,
     /// Pick a card id (`AskCard`).
     Card = 4,
+    /// Pick a tile, answering with the **tile id** (or -1 for 「不选」) rather
+    /// than the option index (`ask_tiles`). The id is what the answer log
+    /// carries, so a commit-pass re-run of a body whose options list the
+    /// just-committed host effect reshaped still maps the pick to the same
+    /// tile.
+    TileId = 5,
 }
 
 impl PromptKind {
@@ -544,6 +554,7 @@ impl PromptKind {
             2 => Self::Tile,
             3 => Self::Player,
             4 => Self::Card,
+            5 => Self::TileId,
             _ => return None,
         })
     }
@@ -556,6 +567,8 @@ impl PromptKind {
             Self::Tile => "tile",
             Self::Player => "player",
             Self::Card => "card",
+            // Same UI as `Tile` -- only the recorded answer differs.
+            Self::TileId => "tile",
         }
     }
 }

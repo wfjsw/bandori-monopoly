@@ -1960,8 +1960,9 @@ pub fn ask_tile(player_id: i32, title: &Msg, text: &Msg, tiles: &[i32]) -> Resul
 /// Tile ask with per-option labels, prices, and an AI choice hint
 /// (`H.AgentLanding`'s `ask.view.prices` + `with_ai`).
 ///
-/// Returns the chosen **index**; `tiles.len()` is the 「不选」 / none answer
-/// (`Ask::tile`'s `fallback = tiles.len()`). Do **not** clamp to the first tile.
+/// Returns the chosen **tile id**, or `-1` for the 「不选」 / none answer
+/// (`Ask::tile`'s `fallback = tiles.len()`). The id is what the answer log
+/// carries, so it is stable across the commit-pass re-run. Do **not** clamp.
 pub fn ask_tiles(
     player_id: i32,
     title: &Msg,
@@ -1977,7 +1978,11 @@ pub fn ask_tiles(
         unsafe { sys::opt_price(*prices.get(i).unwrap_or(&0)) }
     }
     unsafe { sys::opt_ai(ai) }
-    ask_raw(PromptKind::Tile, player_id, title, text)
+    // `PromptKind::TileId` answers with the **tile id** (or -1 for 「不选」),
+    // not the option index: the commit-pass re-run of a body whose options
+    // list the just-committed host effect reshaped still maps the pick to the
+    // same tile -- an index would slide and log a spurious skip.
+    ask_raw(PromptKind::TileId, player_id, title, text)
 }
 
 /// `H.AskPick` -- returns the chosen option index.

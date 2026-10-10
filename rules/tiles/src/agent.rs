@@ -131,9 +131,12 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // The ask carries the per-option labels, their prices, and the AI's
-    // preferred index (`H.AgentLanding`'s `ai_agent_choice`).
+    // preferred index (`H.AgentLanding`'s `ai_agent_choice`). It answers
+    // with the **tile id** (`PromptKind::TileId`), so the commit-pass re-run
+    // of this body -- whose `set` the just-committed host effect reshaped --
+    // still maps the pick to the same tile.
     let ai = ctx::ai_agent_choice(player_id, &options);
-    let pick = ctx::ask_tiles(
+    let t = ctx::ask_tiles(
         player_id,
         &Msg::new("ask.agent.title").tile("agent", agent),
         &Msg::new("ask.agent.text").player_id("who", player_id),
@@ -142,25 +145,18 @@ fn settle(player_id: i32) -> card_sdk::Asked {
         &prices,
         ai,
     )?;
-    let Some(&t) = usize::try_from(pick).ok().and_then(|p| options.get(p)) else {
+    if t < 0 {
         // The prompt's 「不选」 slot (`fallback = options.len()`).
         ctx::log(
             player_id,
             &Msg::new("log.agent_skip").player_id("who", player_id),
         );
         return Ok(());
-    };
-    // The chosen branch settles once -- 「进行一次[结算]」.
-    if ctx::tile_owner(t) < 0 {
-        // Unowned: a BuyKind::Agent purchase (`docs/PURCHASE.md`).
-        let quotes = ctx::buy_quotes(player_id, BuyKind::Agent as i32, &[t]);
-        let eligible = quotes.first().is_some_and(|&(_, e)| e);
-        if ctx::can_pay(player_id) && eligible {
-            ctx::buy(player_id, t, BuyKind::Agent as i32);
-        }
-    } else if ctx::tile_owner(t) == player_id && ctx::can_build_on(player_id, t) {
-        // Own and buildable: one level (`H.BuildRoutine`).
-        ctx::card_build(player_id, t);
     }
+    // The chosen branch settles once -- 「进行一次[结算]」. `H.AgentOffer`
+    // runs the buy or the build as one host routine, so the commit pass's
+    // pre-filled answer cannot double-act.
+    let kind = if ctx::tile_owner(t) < 0 { 0 } else { 1 };
+    ctx::agent_offer(player_id, agent, t, kind);
     Ok(())
 }

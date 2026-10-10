@@ -1635,7 +1635,9 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
     /// the drive's log so a re-run (caused by a later `HostRequest`) finds it.
     fn answer(&mut self, _any: &mut dyn std::any::Any, p: Prompt) -> Option<i32> {
         let cx = unsafe { &mut *self.cx };
+        let kind = p.kind;
         let ask = prompt_to_ask(p);
+        let items = ask.view.items.clone();
         match cx.ask(ask) {
             Ok(reply) => {
                 let v = reply
@@ -1645,6 +1647,7 @@ impl<M: CardModules> crate::inline::InlineHost for DriveInline<M> {
                     .copied()
                     .filter(|&x| x >= 0)
                     .unwrap_or(reply.fallback);
+                let v = recorded_answer(kind, &items, v);
                 self.answers.push(v);
                 Some(v)
             }
@@ -2047,7 +2050,9 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 Ok(Outcome::NeedInput(p)) => {
                     let player_id = p.player_id;
+                    let kind = p.kind;
                     let ask = prompt_to_ask(p);
+                    let items = ask.view.items.clone();
                     let reply = cx.ask(ask)?;
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
@@ -2058,7 +2063,7 @@ impl<M: CardModules> RulesBridge<M> {
                         .copied()
                         .filter(|&x| x >= 0)
                         .unwrap_or(reply.fallback);
-                    answers.push(v);
+                    answers.push(recorded_answer(kind, &items, v));
                     let _ = player_id;
                 }
                 // A card-driven payment: the same C# `Money` pipeline as
@@ -2241,13 +2246,29 @@ impl<M: CardModules> RulesBridge<M> {
             return Ok(1);
         }
         HostRequest::AgentOffer {
-            player_id: _,
+            player_id,
             agent: _,
-            tile: _,
-            kind: _,
+            tile,
+            kind,
         } => {
-            // P2 wires the agent offer; P0 is a no-op.
-            return Ok(0);
+            // The chosen branch of the agent offer (`H.AgentLanding`'s
+            // post-pick commit): buy the unowned tile, or build one level on
+            // an own one. `kind` names the branch the body saw (0 = buy,
+            // 1 = build); the engine re-checks the tile's current state so a
+            // commit-pass re-run of the body -- whose options list the
+            // just-committed effect already reshaped -- cannot double-act
+            // (the answer is in the log, so this arm does not re-execute).
+            let p = player_id.max(0) as usize;
+            let t = tile.max(0) as usize;
+            match kind {
+                1 => {
+                    cx.card_build(p, t)?;
+                }
+                _ => {
+                    cx.card_buy(p, t, 1)?; // `BuyKind::Agent`
+                }
+            }
+            return Ok(1);
         }
         HostRequest::Linger {
             player_id,
@@ -3914,6 +3935,24 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
     }
 }
 
+/// Map a raw prompt answer to what the answer log should carry.
+/// `PromptKind::TileId` answers with the **tile id** (`Ask::tile`'s
+/// `items[i]`), or `-1` for the 「不选」 fallback -- stable across the
+/// commit-pass re-run of a body whose options the just-committed host
+/// effect reshaped. Every other kind keeps the raw index.
+fn recorded_answer(kind: PromptKind, items: &[String], v: i32) -> i32 {
+    if kind != PromptKind::TileId {
+        return v;
+    }
+    if v < 0 {
+        return -1;
+    }
+    items
+        .get(v as usize)
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(-1)
+}
+
 /// A module prompt -> the engine's `Ask` (the player sees the same prompt style
 /// the engine shows for its own questions).
 fn prompt_to_ask(p: Prompt) -> Ask {
@@ -3948,7 +3987,7 @@ fn prompt_to_ask(p: Prompt) -> Ask {
                 .collect();
             Ask::choice(players, title, text, labels, 0, 15.0)
         }
-        PromptKind::Tile => {
+        PromptKind::Tile | PromptKind::TileId => {
             // Bare-Int options keep the auto `ask.tileOption` labels so
             // existing `ask_tile` callers are unchanged; `PromptOption::Tile`
             // carries its own label (`ask_tiles` / `opt_tile`).
