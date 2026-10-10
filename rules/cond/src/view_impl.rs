@@ -5,7 +5,7 @@
 //! `LiveSnap`) can implement [`CondView`] directly and skip the eager fill.
 
 use crate::ctx::{CandidateCtx, WindowCtx};
-use crate::view::CondView;
+use crate::view::{CondView, TileKind};
 
 /// The view a condition evaluates against: window + candidate overlay.
 pub struct SnapshotView<'a> {
@@ -86,6 +86,45 @@ impl CondView for SnapshotView<'_> {
     fn owner(&self) -> i64 {
         self.cand.owner
     }
+    fn owner_money(&self) -> i64 {
+        self.cand.owner_money
+    }
+    fn owner_fire(&self) -> i64 {
+        self.cand.owner_fire
+    }
+    fn owner_crystals(&self) -> i64 {
+        self.cand.owner_crystals
+    }
+    fn owner_hand(&self) -> i64 {
+        self.cand.owner_hand
+    }
+    fn owner_pos(&self) -> i64 {
+        self.cand.owner_pos
+    }
+    fn owner_out(&self) -> i64 {
+        self.cand.owner_out
+    }
+    fn owner_stay(&self) -> i64 {
+        self.cand.owner_stay
+    }
+    fn owner_stun(&self) -> i64 {
+        self.cand.owner_stun
+    }
+    fn owner_exile(&self) -> i64 {
+        self.cand.owner_exile
+    }
+    fn owner_no_hand(&self) -> i64 {
+        self.cand.owner_no_hand
+    }
+    fn owner_character(&self) -> i64 {
+        self.cand.owner_character
+    }
+    fn owner_band(&self) -> i64 {
+        self.cand.owner_band
+    }
+    fn owner_tiles(&self) -> i64 {
+        self.cand.owner_tiles
+    }
     fn card_id(&self) -> i64 {
         self.cand.card_id
     }
@@ -160,5 +199,25 @@ impl CondView for SnapshotView<'_> {
     }
     fn is_buyable(&self, tile: i64) -> bool {
         self.win.buyable_tiles.contains(&tile)
+    }
+    fn slot_table(&self) -> Vec<(String, i64)> {
+        self.cand.slots.iter().map(|(k, v)| (k.clone(), *v)).collect()
+    }
+    fn tok_table(&self) -> Vec<(i64, i64)> {
+        self.cand.toks.iter().map(|(k, v)| (*k, *v)).collect()
+    }
+    fn blocked_bands(&self) -> Vec<i64> {
+        self.cand.blocked_bands.clone()
+    }
+    fn tile_id_table(&self) -> Vec<(String, i64)> {
+        self.win.tile_ids.iter().map(|(k, v)| (k.clone(), *v)).collect()
+    }
+    fn tile_kind_list(&self, kind: TileKind) -> Vec<i64> {
+        match kind {
+            TileKind::Circle => self.win.circle_tiles.clone(),
+            TileKind::Ring => self.win.ring_tiles.clone(),
+            TileKind::LiveHouse => self.win.live_house_tiles.clone(),
+            TileKind::Buyable => self.win.buyable_tiles.clone(),
+        }
     }
 }

@@ -1,6 +1,10 @@
 //! Variable schema (GUARDS.md §4.2) and the compile-time AST lint/rewrite.
 //!
-//! The walker is the single place that knows the vocabulary. It
+//! Every name list is **derived from [`crate::vocab::VOCAB`]** -- one entry
+//! there is all that is needed to add a variable or function name to the lint.
+//! This module only knows the CEL operators/stdlib that ride along.
+//!
+//! The walker:
 //!
 //! * rejects float literals and float-producing calls (int-only mandate),
 //! * allows `kind` (alias `trigger.kind`) like any other window variable --
@@ -12,84 +16,12 @@
 
 use cel::common::ast::{Expr, IdedExpr, LiteralValue};
 
+use crate::vocab::{self, Scope, VOCAB};
 use crate::CondError;
 
-/// Dotted roots that expand to flat `root_field` bindings.
-pub const STRUCT_ROOTS: &[(&str, &[&str])] = &[
-    (
-        "owner",
-        &[
-            "id",
-            "money",
-            "fire",
-            "crystals",
-            "hand",
-            "pos",
-            "out",
-            "stay",
-            "stun",
-            "exile",
-            "no_hand",
-            "character",
-            "band",
-            "tiles",
-        ],
-    ),
-    ("card", &["id", "placed", "cp"]),
-    ("tile", &["id", "owner", "houses", "mortgaged", "price"]),
-    ("move", &["roll", "kind", "remaining", "main"]),
-    ("effect", &["count"]),
-    ("chain", &["count"]),
-];
-
-/// Bare window-level identifiers (not dotted).
-pub const WINDOW_VARS: &[&str] = &[
-    "kind",
-    "actor",
-    "target",
-    "value",
-    "step",
-    "by",
-    "pay_is_rent",
-    "roll_source",
-    "abnormal",
-    "turn_player",
-    "turn_key",
-];
-
-/// Bare candidate-level identifiers. `owner` and `card.id`-style names are
-/// handled by [`STRUCT_ROOTS`]; `owner` itself is the seat id.
-pub const CANDIDATE_VARS: &[&str] = &["owner"];
-
-/// Functions this language exposes (plus CEL operators, which arrive as
-/// `_==_`-style names and are allowed through).
-pub const FUNCTIONS: &[&str] = &[
-    // schema functions (§4.2)
-    "slot",
-    "tok",
-    "tile_named",
-    // tile-kind predicates (the guest's `is_circle` / `is_ring` / ...)
-    "is_circle",
-    "is_ring",
-    "is_live_house",
-    "is_buyable",
-    // player-table lookups (any seat, not just owner)
-    "money",
-    "fire",
-    "crystals",
-    "hand",
-    "pos",
-    "character",
-    "band",
-    "tiles",
-    "character_is",
-    "band_is",
-    "blocked",
-    "neighbor",
-    // effect-chain (written `effect.has` / `effect.hits`, rewritten to these)
-    "chain_has",
-    "chain_hits",
-    // CEL stdlib kept (int-only: `double` and friends are denied below)
+/// CEL stdlib the lint keeps (int-only: `double` and friends are denied).
+/// Not condition vocabulary -- these arrive as operators or stdlib calls.
+pub const CEL_STDLIB: &[&str] = &[
     "size",
     "contains",
     "startsWith",
@@ -111,8 +43,44 @@ pub const FUNCTIONS: &[&str] = &[
 /// (docs/P0-FINDINGS.md:76-85, CEL does not mix Int/Float).
 const FLOAT_FNS: &[&str] = &["double", "dyn"];
 
+/// Dotted roots that expand to flat `root_field` bindings. Derived from VOCAB
+/// (every dotted CEL spelling and alias).
+pub fn struct_roots() -> Vec<(&'static str, Vec<&'static str>)> {
+    vocab::struct_roots()
+}
+
+/// Bare window-level identifiers (not dotted). Derived from VOCAB.
+pub fn window_vars() -> Vec<&'static str> {
+    VOCAB
+        .iter()
+        .filter(|n| n.scope == Scope::Window && !n.cel.contains('.'))
+        .map(|n| n.flat)
+        .collect()
+}
+
+/// Bare candidate-level identifiers. Derived from VOCAB.
+pub fn candidate_vars() -> Vec<&'static str> {
+    VOCAB
+        .iter()
+        .filter(|n| n.scope == Scope::Candidate && !n.cel.contains('.'))
+        .map(|n| n.flat)
+        .collect()
+}
+
+/// Functions this language exposes (plus CEL operators/stdlib). Derived from
+/// VOCAB plus [`CEL_STDLIB`].
+pub fn functions() -> Vec<&'static str> {
+    let mut fns = vocab::func_names();
+    for s in CEL_STDLIB {
+        if !fns.contains(s) {
+            fns.push(s);
+        }
+    }
+    fns
+}
+
 fn field_ok(root: &str, field: &str) -> bool {
-    STRUCT_ROOTS
+    vocab::struct_roots()
         .iter()
         .any(|(r, fields)| *r == root && fields.contains(&field))
 }
@@ -126,25 +94,27 @@ fn is_macro(name: &str) -> bool {
     matches!(name, "has" | "all" | "exists" | "exists_one" | "map" | "filter")
 }
 
-/// True when `name` is a known constant, window var, candidate var, or a
-/// flattened `root_field` the walker produces.
+/// True when `name` is a known constant, a VOCAB flat identifier (including
+/// the flattened `root_field` forms), or a CEL stdlib name used as an ident.
 pub fn ident_known(name: &str) -> bool {
     if crate::kinds::constants().iter().any(|(n, _)| *n == name) {
         return true;
     }
-    if WINDOW_VARS.contains(&name) || CANDIDATE_VARS.contains(&name) {
+    if VOCAB
+        .iter()
+        .any(|n| n.flat == name && !matches!(n.scope, Scope::Func { .. }))
+    {
         return true;
     }
-    // flattened forms: owner_money, tile_owner, move_roll, card_id, …
-    for (root, fields) in STRUCT_ROOTS {
-        for f in fields.iter() {
+    // flattened forms written literally: owner_money, tile_owner, …
+    for (root, fields) in vocab::struct_roots() {
+        for f in fields {
             if name == format!("{root}_{f}") {
                 return true;
             }
         }
     }
-    // effect/chain share the flat name `effect_count`
-    name == "effect_count"
+    false
 }
 
 /// Walk `expr`, enforcing the lint rules and rewriting dotted roots to flat
@@ -178,25 +148,35 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
             }
             Expr::Select(sel) => {
                 if let Expr::Ident(root) = &sel.operand.expr {
-                    // `trigger.kind` is an alias of the window's `kind`.
-                    if root == "trigger" {
-                        if sel.field == "kind" && !sel.test {
-                            return Ok(IdedExpr { id: e.id, expr: Expr::Ident("kind".into()) });
+                    let dotted = format!("{root}.{}", sel.field);
+                    // VOCAB lookup covers `trigger.kind` (alias of `kind`),
+                    // `chain.count` (alias of `effect.count`), and the plain
+                    // `root.field` spellings -- rewrite to the table's flat id.
+                    if let Some(n) = vocab::by_cel(&dotted) {
+                        if matches!(n.scope, Scope::Func { .. }) {
+                            return Err(CondError::UnknownVar(dotted));
                         }
+                        // Presence tests on schema fields are useless (they
+                        // always exist); reject rather than silently
+                        // mis-evaluate after the flat rewrite.
+                        if sel.test {
+                            return Err(CondError::UnknownVar(format!(
+                                "has({dotted}): schema fields always exist; test the value instead"
+                            )));
+                        }
+                        return Ok(IdedExpr {
+                            id: e.id,
+                            expr: Expr::Ident(n.flat.into()),
+                        });
+                    }
+                    if root == "trigger" {
                         return Err(CondError::UnknownVar(format!("trigger.{}", sel.field)));
                     }
                     if field_ok(root, &sel.field) {
-                        // Rewrite `root.field` -> `root_field`, unless this is
-                        // the test form of `has(root.field)` -- keep the select
-                        // so `has(tile.owner)` still works... actually after
-                        // rewrite the flat name is a plain variable, so
-                        // `has(owner_money)` is not a select. Presence tests on
-                        // schema fields are useless (they always exist); reject
-                        // them rather than silently mis-evaluate.
                         if sel.test {
                             return Err(CondError::UnknownVar(format!(
-                                "has({}.{}): schema fields always exist; test the value instead",
-                                root, sel.field
+                                "has({root}.{}): schema fields always exist; test the value instead",
+                                sel.field
                             )));
                         }
                         return Ok(IdedExpr {
@@ -204,7 +184,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                             expr: Expr::Ident(format!("{root}_{}", sel.field)),
                         });
                     }
-                    if STRUCT_ROOTS.iter().any(|(r, _)| *r == root) {
+                    if vocab::struct_roots().iter().any(|(r, _)| *r == root) {
                         return Err(CondError::UnknownVar(format!("{root}.{}", sel.field)));
                     }
                 }
@@ -245,7 +225,7 @@ fn rewrite(e: &IdedExpr) -> Result<IdedExpr, CondError> {
                         }
                     }
                 }
-                if !is_operator(name) && !is_macro(name) && !FUNCTIONS.contains(&name) {
+                if !is_operator(name) && !is_macro(name) && !functions().contains(&name) {
                     // A member call on a rewritten/unknown target still has a
                     // func_name we must know.
                     return Err(CondError::UnknownFn(name.to_string()));

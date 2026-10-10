@@ -373,6 +373,37 @@ fn card_fields() {
     assert!(!cond.eval(&win(), &c));
 }
 
+#[test]
+fn owner_overlay_fields() {
+    // Every `owner.*` dotted name binds through the candidate overlay.
+    let cond = compile("owner.money >= 500 && owner.fire == 2 && owner.hand == 3").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+    assert!(!cond.eval(&win(), &cand(1)));
+
+    let cond = compile("owner.pos == 7 && owner.out == 0 && owner.no_hand == 0").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+
+    let cond = compile("owner.character == 3 && owner.band == 1 && owner.tiles == 1").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+    assert!(!cond.eval(&win(), &cand(1)));
+
+    // `owner.id` is the seat, same as bare `owner`.
+    let cond = compile("owner.id == owner").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+}
+
+#[test]
+fn effect_count_aliases() {
+    // `chain.count` is an alias of `effect.count`; both flatten to
+    // `effect_count` and read the chain length.
+    let cond = compile("effect.count == 2").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+    let cond = compile("chain.count == 2").unwrap();
+    assert!(cond.eval(&win(), &cand(0)));
+    let cond = compile("chain.count == 0").unwrap();
+    assert!(!cond.eval(&win(), &cand(0)));
+}
+
 // ---------------------------------------------------------------------------
 // context reuse
 // ---------------------------------------------------------------------------
@@ -498,49 +529,67 @@ fn print_wire_sizes() {
 
 #[test]
 fn vocab_matches_schema_lists() {
-    use rules_cond::vocab::{flat_idents, func_names, struct_roots, Scope, VOCAB};
+    use rules_cond::schema;
+    use rules_cond::vocab::{by_cel, flat_idents, func_names, struct_roots, Scope, VOCAB};
     // Every VOCAB window/candidate name is accepted by the lint.
     for f in flat_idents() {
         assert!(
-            rules_cond::schema::ident_known(f),
+            schema::ident_known(f),
             "VOCAB name {f} missing from the schema lint"
         );
     }
-    // Every VOCAB function is in the lint's FUNCTIONS list.
+    // Every VOCAB function is in the lint's function list.
     for fn_ in func_names() {
         assert!(
-            rules_cond::schema::FUNCTIONS.contains(&fn_),
-            "VOCAB fn {fn_} missing from the schema FUNCTIONS list"
+            schema::functions().contains(&fn_),
+            "VOCAB fn {fn_} missing from the schema function list"
         );
     }
-    // ...and every schema FUNCTION is in VOCAB (or is CEL stdlib).
-    const STDLIB: &[&str] = &[
-        "size", "contains", "startsWith", "endsWith", "has", "int", "uint",
-        "string", "bool", "type", "all", "exists", "exists_one",
-    ];
-    for f in rules_cond::schema::FUNCTIONS {
-        if STDLIB.contains(f) {
+    // ...and every schema function is in VOCAB (or is CEL stdlib).
+    for f in schema::functions() {
+        if schema::CEL_STDLIB.contains(&f) {
             continue;
         }
         assert!(
-            func_names().contains(f),
-            "schema FUNCTION {f} missing from VOCAB"
+            func_names().contains(&f),
+            "schema function {f} missing from VOCAB"
         );
     }
-    // The lint's struct roots agree with VOCAB's dotted spellings.
+    // The lint's struct roots agree with VOCAB's dotted spellings (and aliases),
+    // and `by_cel` maps every spelling to the table's flat identifier.
     let roots = struct_roots();
     for n in VOCAB {
         if matches!(n.scope, Scope::Func { .. }) {
             continue;
         }
-        if let Some((root, field)) = n.cel.split_once('.') {
-            assert!(
-                roots.iter().any(|(r, fs)| *r == root && fs.contains(&field)),
-                "VOCAB {cel} missing from struct_roots",
-                cel = n.cel
+        for dotted in std::iter::once(n.cel).chain(n.aliases.iter().copied()) {
+            if let Some((root, field)) = dotted.split_once('.') {
+                assert!(
+                    roots.iter().any(|(r, fs)| *r == root && fs.contains(&field)),
+                    "VOCAB {dotted} missing from struct_roots"
+                );
+            }
+            assert_eq!(
+                by_cel(dotted).map(|n| n.flat),
+                Some(n.flat),
+                "by_cel({dotted}) must land on {}",
+                n.flat
             );
         }
     }
+    // Schema list helpers are pure projections of VOCAB.
+    let window_bare: Vec<_> = VOCAB
+        .iter()
+        .filter(|n| n.scope == Scope::Window && !n.cel.contains('.'))
+        .map(|n| n.flat)
+        .collect();
+    assert_eq!(schema::window_vars(), window_bare);
+    let cand_bare: Vec<_> = VOCAB
+        .iter()
+        .filter(|n| n.scope == Scope::Candidate && !n.cel.contains('.'))
+        .map(|n| n.flat)
+        .collect();
+    assert_eq!(schema::candidate_vars(), cand_bare);
 }
 
 #[test]

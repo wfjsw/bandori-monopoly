@@ -170,6 +170,53 @@ fn main() {
         t0.elapsed().as_nanos() as f64 / 10_000.0 / 1000.0
     );
 
+    // Lazy vs eager (docs/GUARDS.md §4.2b): fetch `money(seat)` through a
+    // `&dyn CondView` at call time versus reading the pre-baked `_money` map
+    // the window scope installs. The lazy path is the "no eager filling"
+    // alternative; if it does not beat the ~1.2 µs/eval eager mean, keep
+    // eager (a CEL Context wants owned 'static values, so lazy still has to
+    // thread a pointer through a side channel).
+    {
+        use rules_cond::view::CondView;
+        let cand0 = candidate(0);
+        let probe = rules_cond::SnapshotView {
+            win: &win,
+            cand: &cand0,
+        };
+        // Warm-up.
+        for _ in 0..1_000 {
+            rules_cond::eval::with_live_view(&probe, || {
+                std::hint::black_box(rules_cond::eval::lazy_money(0))
+            });
+        }
+        let mut sink = 0i64;
+        let t0 = Instant::now();
+        for i in 0..SAMPLES {
+            let seat = (i % 4) as i64;
+            let v = rules_cond::eval::with_live_view(&probe, || {
+                rules_cond::eval::lazy_money(seat)
+            });
+            sink = sink.wrapping_add(v);
+        }
+        println!(
+            "lazy dyn-CondView money(seat)                {:9.1} ns/call  (sink={sink})",
+            t0.elapsed().as_nanos() as f64 / SAMPLES as f64
+        );
+        // Same fetch through the baked WindowScope path (what production does).
+        let scope = WindowScope::new(&win);
+        let cond = compile("money(owner) >= 500").unwrap();
+        let mut sink = 0u64;
+        let t0 = Instant::now();
+        for i in 0..SAMPLES {
+            let c = candidate((i % 4) as i64);
+            sink = sink.wrapping_add(scope.eval(&cond, &c) as u64);
+        }
+        println!(
+            "eager WindowScope money(owner) >= 500       {:9.1} ns/eval  (sink={sink})",
+            t0.elapsed().as_nanos() as f64 / SAMPLES as f64
+        );
+    }
+
     // Runtime-only load path (GUARDS.md §8): the browser never parses. It
     // decodes a postcard `Cond` and evaluates it -- the eval half is the
     // same code as above, the decode half replaces `compile`.
