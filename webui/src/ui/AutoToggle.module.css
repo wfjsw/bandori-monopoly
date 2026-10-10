@@ -80,7 +80,9 @@
 .banner {
   position: absolute;
   left: 50%;
-  top: 118px;
+  /* Drops below a top-docked replay transport (`--replay-bar-top`, 0
+     elsewhere) so the strip does not cover the notice. */
+  top: calc(118px + var(--replay-bar-top, 0px));
   transform: translateX(-50%);
   /* Above the board, the TopBar (5) and open modals (40) -- it is transient
      and click-through, so it may cover anything while it shows; below toasts (80). */

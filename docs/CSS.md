@@ -128,12 +128,15 @@ not set them is unchanged.
 | --- | --- | --- |
 | `--replay-bar-h` | `ReplayBar` (ResizeObserver on the bar) | measured transport height, `0` when hidden |
 | `--replay-bar-bottom` | `ReplayBar` | height while the transport is docked at the **bottom**, else `0` |
-| `--replay-bar-top` | `ReplayBar` | height while the transport is docked at the **top**, else `0` |
+| `--replay-bar-top` | `ReplayBar` | board-body top inset while the transport is docked at the **top**, else `0` |
 
 Bottom-edge chrome (hand dock / peek / skill stack / sheet strip, the left
 column's actions and player list, the log) adds `--replay-bar-bottom` to its
-`bottom`; the field-card row adds `--replay-bar-top` to its `top`. Floating
-transport: both are `0`, no offset.
+`bottom`. A top-docked transport rides **between the TopBar and the board**
+(`.bar.dockTop { top: var(--topbar-h) }`), not over the TopBar; `--replay-bar-top`
+is then `--topbar-h` + the bar's height, and Board `.body` takes it as its
+`top`, dropping the whole board (field row, zoom control, card preview, …)
+below the strip in one move. Floating transport: both are `0`, no offset.
 
 ## (b) Shared primitives — `ui/primitives.module.css`
 

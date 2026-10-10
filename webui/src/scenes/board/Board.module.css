@@ -6,11 +6,19 @@
    (Stage `useStageFill`): the columns stretch to it. The map *window* fills
    the centre column's width and the height above the hand (100% of the slot,
    so the visible range is the whole slot); the board itself keeps a 1..1.6
-   aspect inside it (viewport.ts `boardRect`) and is centred at fit. */
+   aspect inside it (viewport.ts `boardRect`) and is centred at fit.
+   A replay transport docked at the top rides between the TopBar and this
+   body; `--replay-bar-top` (ReplayBar, 0 when it is floating or hidden)
+   lowers the whole body by the strip's share, so every top-anchored piece
+   inside -- field row, zoom control, card preview, player list -- moves with
+   it instead of hiding underneath. */
 
 .body {
   position: absolute;
-  inset: 0 var(--board-inset-x);
+  top: var(--replay-bar-top, 0px);
+  left: var(--board-inset-x);
+  right: var(--board-inset-x);
+  bottom: 0;
   display: flex;
   justify-content: space-between;
   gap: var(--board-gap);

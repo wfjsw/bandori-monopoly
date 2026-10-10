@@ -81,10 +81,15 @@
   inset: 0;
 }
 /* The transport rides at the bottom of the board; docked it goes full-width
-   and flush to an edge. The hide control is the strip's leftmost item in every
-   dock mode; hidden, the show handle takes that same slot (the rest of the
-   strip is `visibility: hidden` so the box -- and the toggle's place -- does
-   not move). Rides over every in-board surface (`--z-transport`). */
+   and flush to an edge of the board area. The hide control is the strip's
+   leftmost item in every dock mode; hidden, the show handle takes that same
+   slot (the rest of the strip is `visibility: hidden` so the box -- and the
+   toggle's place -- does not move). Rides over every in-board surface
+   (`--z-transport`).
+   Top-docked rides *under* the TopBar (between it and the board), not over
+   it: the round title and seat pill stay readable. The board body is then
+   lowered by `--replay-bar-top` so nothing top-anchored (field row, zoom
+   control, card preview) hides behind the strip. */
 .bar {
   position: absolute;
   left: 40px;
@@ -109,7 +114,7 @@
 .bar.dockTop {
   left: 0;
   right: 0;
-  top: 0;
+  top: var(--topbar-h);
   bottom: auto;
   border-radius: 0 0 16px 16px;
   padding-top: 14px;
@@ -185,11 +190,13 @@
   background: var(--surface);
 }
 
-/* Divergence / compat banners. */
+/* Divergence / compat banners. Ride below a top-docked transport (and the
+   TopBar it sits under) via `--replay-bar-top`, which is 0 when the transport
+   floats or is hidden. */
 .banner {
   position: absolute;
   left: 50%;
-  top: 88px;
+  top: calc(88px + var(--replay-bar-top, 0px));
   transform: translateX(-50%);
   display: flex;
   align-items: center;
@@ -210,8 +217,9 @@
 @keyframes bannerOut { to { opacity: 0; transform: translateX(-50%) translateY(-8px); } }
 @media (prefers-reduced-motion: reduce) { .transient { animation: none; } }
 .btns { display: flex; gap: 8px; }
-/* The lone 校验 button, top-right. Drops below a top-docked transport so it
-   stays reachable; sits in the banner layer with the notices. */
+/* The lone 校验 button, top-right. Drops below a top-docked transport (and the
+   TopBar it rides under) so it stays reachable; sits in the banner layer with
+   the notices. */
 .corner {
   position: absolute;
   right: 0.6em;

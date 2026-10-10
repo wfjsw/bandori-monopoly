@@ -1,11 +1,12 @@
 // Replay transport: play / pause, speed, skip-idle, prev / next turn, the scrub
 // bar with turn marks, and the perspective dropdown (any seat or spectator).
 // The bar itself can be docked (compact floating, or full-width flush to the
-// top / bottom edge) and hidden; both choices stick in localStorage. The hide
-// control is the strip's leftmost item in every dock mode, and the show handle
-// takes that same slot when the strip is gone -- toggle without moving the
-// pointer. Transport shortcuts (Space / arrows / H) keep working while the bar
-// is hidden -- the handler lives here, not in the chrome.
+// board's bottom edge, or a second chrome row under the TopBar) and hidden;
+// both choices stick in localStorage. The hide control is the strip's leftmost
+// item in every dock mode, and the show handle takes that same slot when the
+// strip is gone -- toggle without moving the pointer. Transport shortcuts
+// (Space / arrows / H) keep working while the bar is hidden -- the handler
+// lives here, not in the chrome.
 
 import { useRef, useState } from "react";
 import { useSessionOther, useTick } from "../../core/hooks";
@@ -15,6 +16,7 @@ import { D } from "../../core/data";
 import { cx } from "../../core/cx";
 import type { ReplaySession } from "../../game/replay";
 import { Btn } from "../../ui/Button";
+import { TOPBAR_H } from "../../styles/layout";
 import { t as tr } from "../../i18n/t";
 import s from "./Replay.module.css";
 
@@ -74,11 +76,12 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
   };
 
   // The transport's measured height becomes edge insets on the player root
-  // (the common ancestor of this bar and the Board): bottom-edge chrome --
-  // the hand dock, its peek / skill stack / sheet strip, the left column's
-  // actions, the log -- rides up by it when the bar is docked at the bottom,
-  // and the top-edge field row rides down by it when docked at the top.
-  // Floating or hidden: both insets stay 0, nothing has to make room.
+  // (the common ancestor of this bar and the Board). Bottom-docked: bottom-
+  // edge chrome (hand dock, peek, skill stack, sheet strip, actions, player
+  // list, log) rides up by the bar's height. Top-docked: the bar rides *under*
+  // the TopBar, so the inset is `--topbar-h` + the bar -- the whole board body
+  // drops by that, taking the field row, zoom control and card preview with
+  // it. Floating or hidden: both insets stay 0, nothing has to make room.
   const barRef = useRef<HTMLDivElement>(null);
   useResizeObserver(barRef, (el) => {
     const root = el.parentElement;
@@ -86,7 +89,10 @@ export function ReplayBar({ rs, onExit }: { rs: ReplaySession; onExit: () => voi
     const h = prefs.hidden ? 0 : el.offsetHeight;
     root.style.setProperty("--replay-bar-h", `${h}px`);
     root.style.setProperty("--replay-bar-bottom", !prefs.hidden && prefs.dock === "bottom" ? `${h}px` : "0px");
-    root.style.setProperty("--replay-bar-top", !prefs.hidden && prefs.dock === "top" ? `${h}px` : "0px");
+    root.style.setProperty(
+      "--replay-bar-top",
+      !prefs.hidden && prefs.dock === "top" ? `${TOPBAR_H + h}px` : "0px",
+    );
   }, [prefs.hidden, prefs.dock]);
 
   // Transport shortcuts, alive whether or not the bar is on screen. Editable
