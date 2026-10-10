@@ -23,7 +23,8 @@
 .skill::before { content: ""; position: absolute; left: 10px; top: 14px; bottom: 14px; width: 5px; border-radius: 3px; background: var(--accent); }
 .skillTag { display: inline-block; font-size: 13px; padding: 0 10px; border-radius: 11px; background: var(--pink); color: #fff; margin-right: 10px; vertical-align: 3px; }
 .skill b { font-size: 20px; color: var(--pink); }
-.skill p { margin-top: 6px; font-size: 15px; line-height: 1.7; }
+/* The whole body at one size: a `p` rule would miss its list items. */
+.skillBody { margin-top: 6px; font-size: 15px; line-height: 1.7; }
 .bandSkill::before { background: var(--purple); }
 .bandSkill .skillTag { background: var(--purple); }
 .sub { font-weight: 700; color: var(--pink); }

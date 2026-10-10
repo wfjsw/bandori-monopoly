@@ -3,16 +3,17 @@
 // recognises) lives in ./bodyText.ts.
 
 import type { ReactNode } from "react";
+import { cx } from "../core/cx";
 import { parse } from "./bodyText";
 import s from "./SkillBody.module.css";
 
-export function SkillBody({ text, prefix }: { text: string; prefix?: ReactNode }) {
+export function SkillBody({ text, prefix, className }: { text: string; prefix?: ReactNode; className?: string }) {
   const blocks = parse(text);
   // The skill name rides with the first paragraph; when the body opens straight
   // onto a list it gets a line of its own above it.
   let head = prefix != null;
   return (
-    <div className={s.body}>
+    <div className={cx(s.body, className)}>
       {blocks.map((b, i) => {
         if (b.t === "p") {
           const lead = head ? (
