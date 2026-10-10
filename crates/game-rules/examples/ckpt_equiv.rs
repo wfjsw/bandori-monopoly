@@ -125,6 +125,7 @@ fn main() {
     let mut total_turns = 0u64;
 
     for seed in 0..games as u64 {
+        eprintln!("ckpt: start seed={seed}");
         let members: Vec<RoomMember> = (1..=players)
             .map(|i| RoomMember {
                 id: i,
@@ -162,6 +163,7 @@ fn main() {
                     m.finish();
                 }
                 let save = m.save();
+                eprintln!("ckpt: seed={seed} turn={} save_len={}", st.turn, save.len());
                 let save = if state_only {
                     strip_events(&save)
                 } else {
