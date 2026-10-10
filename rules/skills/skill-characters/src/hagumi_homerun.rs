@@ -41,7 +41,7 @@ pub const HAGUMI_HOMERUN: CardDef = CardDef::new(
 /// Residual guard for 「经过格子上的可乐饼时」 -- `count_marks` stays here
 /// (not yet in the condition vocabulary).
 fn on_pass_has_croquette(_player_id: i32) -> bool {
-    ctx::count_marks(ctx::trigger::tile(), ON_TILE, -2) > 0
+    ctx::count_marks(ctx::trigger::tile(), &MarkFilter::any().kind(ON_TILE)) > 0
 }
 
 /// 「每个回合在北泽精肉店生成一个可乐饼」.

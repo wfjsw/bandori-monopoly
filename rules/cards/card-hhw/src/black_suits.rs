@@ -102,7 +102,7 @@ fn sync_circle_instance(group: i32) {
 /// Residual guard for [`pass_tile`] -- the crystal mark count on the tile
 /// (`count_marks`) stays here (not yet in the condition vocabulary).
 fn pass_tile_guard(_player_id: i32) -> bool {
-    ctx::count_marks(ctx::trigger::tile(), MARK, -2) > 0
+    ctx::count_marks(ctx::trigger::tile(), &MarkFilter::any().kind(MARK)) > 0
 }
 
 /// 「你经过"弦卷集团"格子后，移除那格的一个奇迹水晶」 -- `BlackSuitFx.PassTile`'s

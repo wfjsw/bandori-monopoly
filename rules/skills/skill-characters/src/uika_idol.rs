@@ -49,7 +49,7 @@ fn legacy_mine(player_id: i32) -> bool {
 /// Residual guard for 「经过该格」 with a pot on it -- `count_marks` stays here
 /// (not yet in the condition vocabulary).
 fn on_pass_tile_has_pot(_player_id: i32) -> bool {
-    ctx::count_marks(ctx::trigger::tile(), POT, -2) > 0
+    ctx::count_marks(ctx::trigger::tile(), &MarkFilter::any().kind(POT)) > 0
 }
 
 /// 「初始2，上限2」.
