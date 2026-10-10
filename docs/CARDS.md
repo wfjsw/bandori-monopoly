@@ -292,9 +292,9 @@ field a `CounterChanged` hook uses for the counter name).
 ### 该清CP了 ↔ `mark:cp` (before / after)
 
 通用:该清CP了 seeds tile [CP点] and an on-card stock; `mark:cp` owns the tile
-marks and the landing clause that spends both kinds. The card files are
-mid-migration (`rules/cards/card-general/src/clear_cp.rs` already uses the new
-API; `rules/tile_marks/src/cp.rs` still calls the old CP helpers). The shape:
+marks and the landing clause that spends both kinds
+(`rules/cards/card-general/src/clear_cp.rs`, `rules/tile_marks/src/cp.rs`).
+The shape:
 
 **Before** -- 该清CP了 called the CP helpers directly and listened to
 `HookKind::CpChanged`:

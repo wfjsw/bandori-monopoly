@@ -416,8 +416,8 @@ only.
     attached on-card cp mark」 is `FieldCard::cp` on this instance (the same
     ruling), **not** the tile marks it placed (the older reading). When that
     count reaches 0 -- however it drops -- the card goes to its owner's 弃牌区
-    immediately. Implemented as a `HookKind::CpChanged` handler (the same
-    shape as AG:绯红之魂 (3) on `CrystalsChanged`), so it fires however the
+    immediately. Implemented as a `HookKind::CounterChanged (name = `cp`)` handler (the same
+    shape as AG:绯红之魂 (3) on `CounterChanged` (name = `crystals`)), so it fires however the
     count drops -- the `mark:cp` settle clause spending one, another effect
     removing one -- and not as a check at each spend site. Tile marks may
     outlive the card; without a live `src` card holding on-card [CP点] the
