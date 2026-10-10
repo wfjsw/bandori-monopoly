@@ -2,29 +2,37 @@
    mirror of the hand's bottom fan. Straight (no arc), overlapping, retracted
    upward behind the top edge so each face's bottom zone -- name + live markers
    -- peeks below it; hover / focus lowers the row. Sits under the FX layer
-   (Board `.fx` is z-index 20+) so banners and the card flash still read over
-   it, and only the card boxes take the pointer -- the board stays clickable in
-   the gaps. */
+   (Board `.fx`) so banners and the card flash still read over it, and only
+   the card boxes take the pointer -- the board stays clickable in the gaps. */
 
 .sheet {
-  position: absolute; inset: 0; z-index: 15;
-  display: flex; flex-direction: column; align-items: center;
+  position: absolute;
+  inset: 0;
+  z-index: var(--z-field);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   pointer-events: none;
   /* Clips the retracted row at the top edge (the mirror of the hand sliding
      behind the bottom one). */
   overflow: hidden;
 }
-/* Retracted, the row rides up so only its bottom `--peek` px show. That zone
-   is the face's own bottom (Card `.field .title` 38px + `.marks` 18px + the
-   face's 4px padding = 60px) -- name and markers in view either way. */
+/* Retracted, the row rides up so only its bottom `--field-peek` px show.
+   That zone is the face's own bottom (Card `.field .title` 38px + `.marks`
+   18px + the face's 4px padding = 60px) -- name and markers in view either
+   way. */
 .row {
-  display: flex; align-items: stretch; justify-content: center;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
   pointer-events: none;
   max-width: 100%;
-  transform: translateY(calc(-100% + 60px));
-  transition: transform 0.28s cubic-bezier(0.22, 0.7, 0.25, 1);
+  transform: translateY(calc(-100% + var(--field-peek)));
+  transition: transform var(--dur-slow) var(--ease-sheet);
 }
-.up .row { transform: translateY(0); }
+.up .row {
+  transform: translateY(0);
+}
 
 /* One card's slot: equal heights across the row (the face stretches to the
    tallest), the owner's colour on the frame, and a hover that drops the card
@@ -35,72 +43,122 @@
   display: flex;
   flex: none;
   pointer-events: auto;
-  transition: transform 0.16s ease, filter 0.16s ease;
+  transition: transform var(--dur-mid) ease, filter var(--dur-mid) ease;
 }
-.slot + .slot { margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px)); }
-.slot + .sep { margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px) + 14px); }
-.slot:hover, .slot:focus-within {
+.slot + .slot {
+  margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px));
+}
+.slot + .sep {
+  margin-left: calc(var(--row-slot, 112px) - var(--card-w, 120px) + 14px);
+}
+.slot:hover,
+.slot:focus-within {
   transform: translateY(12px);
   z-index: 2;
-  filter: drop-shadow(0 10px 18px rgba(60, 20, 40, 0.28));
+  filter: var(--peek-lift);
 }
 
 /* The face itself: a clear border in the owner's colour, readable whether the
    row is retracted or down. Scoped under `.slot` so it outranks the shared
    face's own shadow / background. */
 .slot .card {
-  box-shadow: 0 0 0 2.5px var(--own, #ddd), 0 3px 8px rgba(80, 40, 60, 0.12);
+  box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
   background: color-mix(in srgb, var(--own, #fff) 12%, #fff);
 }
 
 /* Live markers in the face's bottom zone -- the part that must read while the
    row is retracted: crystals, on-card CP, the note dot. */
-.crystal, .cp, .count {
-  padding: 0 5px; border-radius: 8px;
-  color: #fff; font-size: 10px; line-height: 16px; font-weight: 700;
+.crystal,
+.cp,
+.count {
+  padding: 0 5px;
+  border-radius: var(--r-sm);
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  font-weight: 700;
   box-shadow: 0 0 0 1.5px #fff;
 }
-.crystal, .count { background: var(--purple); }
-.cp { background: var(--teal, #0a8f7c); }
+.crystal,
+.count {
+  background: var(--purple);
+}
+.cp {
+  background: var(--teal);
+}
 .noteDot {
-  flex: none; width: 8px; height: 8px; border-radius: 50%;
-  background: var(--pink); box-shadow: 0 0 0 1.5px #fff;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--pink);
+  box-shadow: 0 0 0 1.5px #fff;
 }
 
 /* Face-down: a card back in the owner's frame (no name or markers leak). */
 .back {
   width: var(--card-w, 120px);
   aspect-ratio: 3 / 4;
-  border-radius: 6px; overflow: hidden;
-  box-shadow: 0 0 0 2.5px var(--own, #ddd), 0 3px 8px rgba(80, 40, 60, 0.12);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  box-shadow: 0 0 0 2.5px var(--own, var(--line)), var(--card-shadow);
 }
-.back img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.back img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
 
 /* Events in effect: the same face shape at the row's end -- art, name and
    counters in a bottom zone that matches the cards' peek. */
 .event {
   width: var(--card-w, 120px);
-  display: flex; flex-direction: column;
+  display: flex;
+  flex-direction: column;
   padding: 4px;
-  border-radius: 6px;
-  background: #fff;
-  box-shadow: 0 0 0 2.5px var(--own, var(--purple)), 0 3px 8px rgba(80, 40, 60, 0.12);
-  cursor: pointer; text-align: left;
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  box-shadow: 0 0 0 2.5px var(--own, var(--purple)), var(--card-shadow);
+  cursor: pointer;
+  text-align: left;
 }
-.eventArt { flex: 1; min-height: 0; border-radius: 3px; overflow: hidden; background: #eee; }
-.eventArt img { width: 100%; height: 100%; object-fit: cover; display: block; filter: hue-rotate(250deg) saturate(0.8); }
+.eventArt {
+  flex: 1;
+  min-height: 0;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #eee;
+}
+.eventArt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  filter: hue-rotate(250deg) saturate(0.8);
+}
 .eventName {
   height: 38px;
   padding: 3px 2px 1px;
-  font-size: 13px; font-weight: 700; line-height: 1.3;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .marks {
   height: 18px;
-  display: flex; align-items: center; gap: 3px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
   padding: 0 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .row, .slot { transition: none; }
+  .row,
+  .slot {
+    transition: none;
+  }
 }

@@ -54,7 +54,7 @@
   align-items: center;
   gap: 18px;
   background: var(--light-pill);
-  border-radius: 14px;
+  border-radius: var(--r-lg);
   padding: 14px 20px;
 }
 .when { width: 210px; display: flex; flex-direction: column; gap: 2px; }
@@ -63,7 +63,7 @@
 .who { flex: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
 .who span { font-size: 15px; }
 .badge {
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 4px 12px;
   font-size: 13px;
   font-weight: 700;
@@ -94,7 +94,7 @@
   border-radius: 16px;
   box-shadow: var(--shadow);
   padding: 12px 20px;
-  z-index: 6;
+  z-index: var(--z-chrome);
 }
 .bar.dockBottom {
   left: 0;
@@ -120,7 +120,7 @@
   align-items: center;
   gap: 6px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: var(--shadow);
   padding: 8px 18px;
@@ -128,12 +128,12 @@
   font-weight: 700;
   color: var(--sub);
   cursor: pointer;
-  z-index: 6;
+  z-index: var(--z-chrome);
 }
 .handle:hover { color: var(--pink); }
 .handle.handleTop { top: 14px; bottom: auto; }
 .transport { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.speeds { display: flex; gap: 4px; background: #fff; border-radius: 10px; padding: 3px; }
+.speeds { display: flex; gap: 4px; background: var(--surface); border-radius: var(--r-md); padding: 3px; }
 .speed {
   border: 0;
   border-radius: 8px;
@@ -174,7 +174,7 @@
   padding: 6px 8px;
   font-size: 14px;
   color: var(--text);
-  background: #fff;
+  background: var(--surface);
 }
 
 /* Divergence / compat banners. */
@@ -186,16 +186,16 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  background: #fff;
-  border-radius: 14px;
+  background: var(--surface);
+  border-radius: var(--r-lg);
   box-shadow: var(--shadow);
   padding: 14px 22px;
   font-size: 17px;
   font-weight: 700;
-  z-index: 7;
+  z-index: var(--z-chrome-banner);
 }
 .diverge { border: 2px solid var(--pink); color: var(--pink-deep); }
-.verifyOk { border: 2px solid var(--ok, #6c6); color: var(--ok-deep, #3a3); }
+.verifyOk { border: 2px solid var(--ok); color: var(--ok-deep); }
 .btns { display: flex; gap: 8px; }
 
 /* Load / compat screens. */

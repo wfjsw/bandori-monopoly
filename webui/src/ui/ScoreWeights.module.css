@@ -1,5 +1,5 @@
 .box { display: flex; flex-direction: column; gap: 14px; align-items: stretch; }
-.row { display: flex; align-items: center; gap: 18px; height: 60px; border-radius: 12px; background: var(--light-pill); padding: 0 18px; }
+.row { display: flex; align-items: center; gap: 18px; height: 60px; border-radius: var(--r-lg); background: var(--light-pill); padding: 0 18px; }
 .label { flex: 1; display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 700; }
 .label i { color: var(--pink); width: 28px; height: 28px; }
 .val { width: 80px; text-align: center; font-size: 24px; font-weight: 700; color: var(--pink); }

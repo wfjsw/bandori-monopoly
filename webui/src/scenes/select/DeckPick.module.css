@@ -1,7 +1,7 @@
 .pick h3 { font-size: 22px; }
 .pick > p { font-size: 14px; color: var(--sub); margin: 4px 0 14px; }
 .rows { display: flex; flex-direction: column; gap: 12px; margin-bottom: 18px; }
-.row { display: flex; align-items: center; gap: 16px; height: 104px; border-radius: 12px; background: #fff; border: 2px solid #f1f1f4; padding: 0 16px; text-align: left; }
+.row { display: flex; align-items: center; gap: 16px; height: 104px; border-radius: var(--r-lg); background: var(--surface); border: 2px solid #f1f1f4; padding: 0 16px; text-align: left; }
 .on { background: var(--pink-pale); border-color: var(--pink-pale); }
 .off { cursor: default; }
 .off .name b { color: var(--faint); }

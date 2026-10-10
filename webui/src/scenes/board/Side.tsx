@@ -246,7 +246,9 @@ export function Hand({ m, sess, busy }: { m: Model; sess: GameSession; busy: boo
       <div
         // A retracted prompt sheet's title strip sits on the bottom edge: lift the
         // whole hand above it so the cards stay easy to reach.
-        className={cx(s.dock, dock.raised && s.dockUp, sheet.open && !sheet.raised && s.aboveSheet)}
+        className={s.dock}
+        data-state={dock.raised ? "raised" : "retracted"}
+        data-sheet={sheet.open && !sheet.raised ? "down" : "up"}
         {...dock.hover}
       >
         <div className={s.fan} ref={fanRef} style={{ ["--fan-rise" as string]: fanRise(m.v.hand.length) }}>
