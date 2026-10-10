@@ -69,6 +69,9 @@ fn win() -> WindowCtx {
         ring_tiles: vec![],
         live_house_tiles: vec![],
         buyable_tiles: vec![],
+        tile_count: 12,
+        tile_owners: vec![0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+        plan_fixed_roll: None,
     }
 }
 
@@ -723,4 +726,177 @@ fn vocab_flats_are_unique() {
     for n in VOCAB {
         assert!(seen.insert(n.flat), "duplicate flat name {}", n.flat);
     }
+}
+
+// ---------------------------------------------------------------------------
+// native geometry / plan / counter names (2026-10-10)
+// ---------------------------------------------------------------------------
+
+/// A window with `n` players at the given positions on a `size`-tile ring.
+fn geo_win(size: i64, pos: &[i64], owners: &[i64]) -> WindowCtx {
+    let mut w = win();
+    w.tile_count = size;
+    w.tile_owners = owners.to_vec();
+    w.players = pos
+        .iter()
+        .map(|&p| PlayerSnap {
+            pos: p,
+            ..PlayerSnap::default()
+        })
+        .collect();
+    w
+}
+
+#[test]
+fn plan_fixed_roll_null_when_unset() {
+    // `plan.fixed_roll` binds `null` when no card fixed this turn's roll --
+    // the sports_talent / kaoru_thief / soyo_clear / kanon_lost
+    // `roll_plan_unfixed` residual is `plan.fixed_roll == null`.
+    assert!(compile("plan.fixed_roll == null").unwrap().eval(&win(), &cand(0)));
+    let mut w = win();
+    w.plan_fixed_roll = Some(10);
+    assert!(!compile("plan.fixed_roll == null").unwrap().eval(&w, &cand(0)));
+    assert!(compile("plan.fixed_roll == 10").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn card_tile_binding() {
+    // Raw `ctx::self_tile()` host value: -2 = not placed, -1 = with owner.
+    // The rana_funny residual is `self_tile() == trigger.tile`.
+    let mut w = win(); // trigger tile id = 3
+    let mut c = cand(0);
+    c.card_tile = Some(3);
+    assert!(compile("card.tile == tile.id").unwrap().eval(&w, &c));
+    c.card_tile = Some(-1);
+    assert!(!compile("card.tile == tile.id").unwrap().eval(&w, &c));
+    c.card_tile = None; // binds -2
+    assert!(!compile("card.tile == tile.id").unwrap().eval(&w, &c));
+    assert!(compile("card.tile == -2").unwrap().eval(&w, &c));
+    // With-owner form: `card.tile == -1`.
+    c.card_tile = Some(-1);
+    assert!(compile("card.tile == -1").unwrap().eval(&w, &c));
+    let _ = &mut w;
+}
+
+#[test]
+fn dist_ring_distance() {
+    // 12-tile ring: 0..6 is 6 either way; 0..1 is 1; 0..11 is 1 (wrap).
+    let w = geo_win(12, &[0, 1, 6, 11], &[0, -1, -1, -1]);
+    // `dist` is int-returning; ask it inside a comparison.
+    assert!(compile("dist(0, 1) == 1").unwrap().eval(&w, &cand(0)));
+    assert!(compile("dist(0, 6) == 6").unwrap().eval(&w, &cand(0)));
+    assert!(compile("dist(0, 11) == 1").unwrap().eval(&w, &cand(0)));
+    assert!(compile("dist(11, 0) == 1").unwrap().eval(&w, &cand(0)));
+    assert!(compile("dist(1, 1) == 0").unwrap().eval(&w, &cand(0)));
+    // your_light's shape: `dist(pos(owner), tile_named('学校')) > 20`.
+    assert!(compile("dist(pos(owner), 0) <= 20").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn players_on_counts_present_standers() {
+    // Two players on tile 5, one on tile 0. `players_on(5, 0)` counts the
+    // *other* present stander on 5 (except seat 0 is not on 5 anyway).
+    let mut w = geo_win(12, &[5, 5, 0, 5], &[-1; 12]);
+    w.players[2].out = 1; // seat 2 is out -> not present
+    // seats 0,1,3 on tile 5. players_on(5, 0) = {1, 3} = 2.
+    assert!(compile("players_on(5, 0) == 2").unwrap().eval(&w, &cand(0)));
+    // players_on(5, -1) excludes nobody: 3 present standers (0,1,3).
+    assert!(compile("players_on(5, -1) == 3").unwrap().eval(&w, &cand(0)));
+    // lisa_bond's shape: `players_on(owner.pos, owner) > 0`.
+    let mut c = cand(0);
+    c.owner_pos = 5;
+    assert!(compile("players_on(owner.pos, owner) > 0").unwrap().eval(&w, &c));
+}
+
+#[test]
+fn next_dist_to_nearest_rival() {
+    // Seat 0 at 1; rivals at 3, 9, 6. Forward: 3-1=2. Backward: 1-9 wrap=4
+    // (the 1->6 way is 7, the 1->3 way is 10).
+    let w = geo_win(12, &[1, 3, 9, 6], &[-1; 12]);
+    assert!(compile("next_dist(0, 1) == 2").unwrap().eval(&w, &cand(0)));
+    assert!(compile("next_dist(0, -1) == 4").unwrap().eval(&w, &cand(0)));
+    // No rival -> -1 (meet_again's `next_dist(player, dir) > 0` is false).
+    let w = geo_win(12, &[1, 1, 1, 1], &[-1; 12]);
+    assert!(compile("next_dist(0, 1) == -1").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn others_within_radius() {
+    // Seat 0 at 0; rivals at 2, 5, 11. within(0, 2) = {11? dist 1, 1 at 2}
+    // dist(0,2)=2, dist(0,5)=5, dist(0,11)=1. within r=2 -> seats at dist 1..=2
+    // = seat 2 (dist 2) and seat 3 (dist 1) = 2.
+    let w = geo_win(12, &[0, 2, 5, 11], &[-1; 12]);
+    assert!(compile("others_within(0, 2) == 2").unwrap().eval(&w, &cand(0)));
+    assert!(compile("others_within(0, 5) == 3").unwrap().eval(&w, &cand(0)));
+    assert!(compile("others_within(0, 0) == 0").unwrap().eval(&w, &cand(0)));
+    // haruhikage's shape.
+    assert!(compile("others_within(owner, 5) > 0").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn owned_within_radius() {
+    // Seat 0 at 0 owns tiles 1 and 6 (and 0). near(3) = dist <= 3 from pos 0:
+    // tile 0 (d 0), tile 1 (d 1), tile 6 (d 6) -> tiles 0,1 = 2.
+    let owners = [0, 0, -1, -1, -1, -1, 0, -1, -1, -1, -1, -1];
+    let w = geo_win(12, &[0, 3, 6, 9], &owners);
+    assert!(compile("owned_within(0, 3) == 2").unwrap().eval(&w, &cand(0)));
+    assert!(compile("owned_within(0, 6) == 3").unwrap().eval(&w, &cand(0)));
+    assert!(compile("owned_within(1, 0) == 0").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn on_path_counts_my_deeds() {
+    // Seat 1 (them) at 2, roll 5 -> forward tiles 3,4,5,6,7. Seat 0 (me)
+    // owns 4 and 7 -> 2.
+    let owners = [-1, -1, -1, -1, 0, -1, -1, 0, -1, -1, -1, -1];
+    let mut w = geo_win(12, &[0, 2, 5, 9], &owners);
+    w.mv.roll = Some(5);
+    assert!(compile("on_path(0, 1) == 2").unwrap().eval(&w, &cand(0)));
+    // No face -> 0 (repaint's residual is `on_path > 0`).
+    w.mv.roll = None;
+    assert!(compile("on_path(0, 1) == 0").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn between_counts_rivals_in_span() {
+    // Seat 0 at 0, roll 5, dir forward -> span 1..=5. Rivals at 2, 5, 11.
+    // 11 is behind (fwd 11) -> out. 2 and 5 are in -> 2.
+    let mut w = geo_win(12, &[0, 2, 5, 11], &[-1; 12]);
+    w.mv.roll = Some(5);
+    w.mv.dir = 1;
+    assert!(compile("between(0) == 2").unwrap().eval(&w, &cand(0)));
+    // Backward: span is 1..=5 behind -> 11 (bwd 1) is in, 2 (bwd 10) and 5
+    // (bwd 7) are out -> 1.
+    w.mv.dir = -1;
+    assert!(compile("between(0) == 1").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn gains_and_targeted_counters() {
+    let mut w = win();
+    w.players[0].gains = 3;
+    w.players[1].targeted = 2;
+    assert!(compile("gains_this_turn(0) == 3").unwrap().eval(&w, &cand(0)));
+    assert!(compile("gains_this_turn(owner) == 3").unwrap().eval(&w, &cand(0)));
+    assert!(compile("targeted_count(1) == 2").unwrap().eval(&w, &cand(0)));
+    assert!(compile("targeted_count(owner) >= 2").unwrap().eval(&w, &cand(1)));
+    // hagumi_marks / centrifugal shapes.
+    assert!(compile("gains_this_turn(owner) > 0").unwrap().eval(&w, &cand(0)));
+    assert!(!compile("targeted_count(owner) >= 2").unwrap().eval(&w, &cand(0)));
+}
+
+#[test]
+fn repeated_digits_predicate() {
+    // no_breakup's `cant_play` filter: money with a repeated digit.
+    assert!(compile("repeated_digits(44)").unwrap().eval(&win(), &cand(0)));
+    assert!(compile("repeated_digits(-444)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("repeated_digits(1234)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("repeated_digits(123)").unwrap().eval(&win(), &cand(0)));
+    assert!(!compile("repeated_digits(0)").unwrap().eval(&win(), &cand(0)));
+    // no_breakup's shape: `!repeated_digits(money(owner))`.
+    let mut w = win();
+    w.players[0].money = 1223;
+    assert!(compile("repeated_digits(money(owner))").unwrap().eval(&w, &cand(0)));
+    w.players[0].money = 1234;
+    assert!(!compile("repeated_digits(money(owner))").unwrap().eval(&w, &cand(0)));
 }

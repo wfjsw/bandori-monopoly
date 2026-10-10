@@ -49,6 +49,10 @@ pub struct PlayerSnap {
     pub band: i64,
     /// Count of tiles the seat owns.
     pub tiles: i64,
+    /// Money-ins this turn (`gains_this_turn(p)`).
+    pub gains: i64,
+    /// Hostile targetings this turn (`targeted_count(p)`).
+    pub targeted: i64,
 }
 
 /// The tile the trigger is about. Field access is `tile.owner`, `tile.houses`, …
@@ -144,6 +148,14 @@ pub struct WindowCtx {
     pub ring_tiles: Vec<i64>,
     pub live_house_tiles: Vec<i64>,
     pub buyable_tiles: Vec<i64>,
+    /// Board tile count (the ring size) -- backs `dist` and the path scans.
+    pub tile_count: i64,
+    /// Per-tile owner seat (`-1` = unowned), index = tile id. Backs
+    /// `owned_within` / `on_path`.
+    pub tile_owners: Vec<i64>,
+    /// This turn's fixed main-move roll (`plan.fixed_roll`, the guest's
+    /// `ctx::fixed_roll()`); `None` = unset (binds CEL `null`).
+    pub plan_fixed_roll: Option<i64>,
 }
 
 impl WindowCtx {
@@ -192,6 +204,10 @@ pub struct CandidateCtx {
     /// `FieldCard::crystals`, anything else to `FieldCard::counters`).
     /// Missing name = `0`.
     pub card_counters: BTreeMap<String, i64>,
+    /// Where the candidate instance sits (`card.tile`). `None` = not placed
+    /// (binds `-2`, matching the raw `ctx::self_tile()` host value); `Some(-1)`
+    /// = with its owner.
+    pub card_tile: Option<i64>,
     /// `slot(name)` lookup. Missing name evaluates to `0` (matches the
     /// "unset slot" guards such as `slot('asUsualTurn') != turn_key`).
     pub slots: BTreeMap<String, i64>,

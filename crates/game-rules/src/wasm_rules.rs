@@ -4390,6 +4390,29 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
     fn turn_key(&self) -> i32 {
         self.world.st.round * 100 + self.world.st.turn + 1
     }
+    #[inline]
+    fn fixed_roll(&self) -> i32 {
+        self.world.turn.fixed_roll.unwrap_or(-1)
+    }
+    #[inline]
+    fn gains_this_turn(&self, player_id: i32) -> i32 {
+        self.world.gains_this_turn(player_id)
+    }
+    #[inline]
+    fn targeted_count(&self, player_id: i32) -> i32 {
+        usize::try_from(player_id)
+            .ok()
+            .and_then(|s| self.world.targeted.get(s).copied())
+            .unwrap_or(0)
+    }
+    #[inline]
+    fn card_tile(&self, player_id: i32, card: &str) -> i32 {
+        self.world
+            .field_instances(player_id)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-2, |(uid, _)| self.world.tile_at(uid))
+    }
 }
 
 /// `CondView` over the live world (docs/GUARDS.md §4.2b). Every method calls
@@ -4838,6 +4861,166 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
             }
         }
         out
+    }
+
+    // -- turn plan / counters ----------------------------------------------
+    fn plan_fixed_roll(&self) -> i64 {
+        self.world.turn.fixed_roll.map(|n| n as i64).unwrap_or(-1)
+    }
+    fn gains_this_turn(&self, seat: i64) -> i64 {
+        if seat < 0 {
+            return 0;
+        }
+        self.world.gains_this_turn(seat as i32) as i64
+    }
+    fn targeted_count(&self, seat: i64) -> i64 {
+        if seat < 0 {
+            return 0;
+        }
+        usize::try_from(seat as i32)
+            .ok()
+            .and_then(|s| self.world.targeted.get(s).copied())
+            .unwrap_or(0) as i64
+    }
+
+    // -- candidate instance -------------------------------------------------
+    fn card_tile(&self) -> i64 {
+        let Some((o, c, _)) = self.cand else {
+            return -2;
+        };
+        if o < 0 {
+            return -2;
+        }
+        self.world
+            .field_instances(o)
+            .into_iter()
+            .find(|(_, id)| id == c)
+            .map_or(-2i64, |(uid, _)| self.world.tile_at(uid) as i64)
+    }
+
+    // -- board geometry ----------------------------------------------------
+    fn tile_count(&self) -> i64 {
+        self.data.tiles.len() as i64
+    }
+    fn dist(&self, a: i64, b: i64) -> i64 {
+        let n = self.data.tiles.len() as i64;
+        if n <= 0 {
+            return 0;
+        }
+        let d = ((b - a) % n + n) % n;
+        d.min(n - d)
+    }
+    fn players_on(&self, tile: i64, except: i64) -> i64 {
+        // Matches `players_on_list`: present (`!out && exile == 0`) standers.
+        (0..self.world.st.players.len() as i64)
+            .filter(|&s| {
+                s != except
+                    && self.out(s) == 0
+                    && self.exile(s) == 0
+                    && self.pos(s) == tile
+            })
+            .count() as i64
+    }
+    fn next_dist(&self, p: i64, dir: i64) -> i64 {
+        let n = self.data.tiles.len() as i64;
+        let pos = self.pos(p);
+        if n <= 0 || pos < 0 {
+            return -1;
+        }
+        let mut best = i64::MAX;
+        for o in 0..self.world.st.players.len() as i64 {
+            if o == p || self.out(o) != 0 {
+                continue;
+            }
+            let q = self.pos(o);
+            if q < 0 {
+                continue;
+            }
+            let fwd = if dir >= 0 {
+                ((q - pos) % n + n) % n
+            } else {
+                ((pos - q) % n + n) % n
+            };
+            if fwd > 0 && fwd < best {
+                best = fwd;
+            }
+        }
+        if best == i64::MAX {
+            -1
+        } else {
+            best
+        }
+    }
+    fn others_within(&self, p: i64, radius: i64) -> i64 {
+        let pos = self.pos(p);
+        if pos < 0 {
+            return 0;
+        }
+        (0..self.world.st.players.len() as i64)
+            .filter(|&o| {
+                if o == p || self.out(o) != 0 {
+                    return false;
+                }
+                let d = self.dist(pos, self.pos(o));
+                d > 0 && d <= radius
+            })
+            .count() as i64
+    }
+    fn owned_within(&self, p: i64, radius: i64) -> i64 {
+        let pos = self.pos(p);
+        if pos < 0 {
+            return 0;
+        }
+        self.world
+            .owned_tiles(p as i32)
+            .into_iter()
+            .filter(|&t| self.dist(pos, t as i64) <= radius)
+            .count() as i64
+    }
+    fn on_path(&self, me: i64, them: i64) -> i64 {
+        let roll = self.move_roll();
+        if roll < 0 {
+            return 0;
+        }
+        let steps = roll.abs();
+        let n = self.data.tiles.len() as i64;
+        let pos = self.pos(them);
+        if n <= 0 || pos < 0 {
+            return 0;
+        }
+        (1..=steps)
+            .filter(|i| {
+                let t = ((pos + i) % n + n) % n;
+                self.world.tile_owner(t as i32) as i64 == me
+            })
+            .count() as i64
+    }
+    fn between(&self, p: i64) -> i64 {
+        let roll = self.move_roll();
+        if roll < 0 {
+            return 0;
+        }
+        let roll = roll.abs();
+        let start = self.pos(p);
+        let n = self.data.tiles.len() as i64;
+        if n <= 0 || start < 0 {
+            return 0;
+        }
+        let backward = self.move_dir() < 0;
+        (0..self.world.st.players.len() as i64)
+            .filter(|&o| {
+                if o == p || self.out(o) != 0 {
+                    return false;
+                }
+                let q = self.pos(o);
+                if q < 0 {
+                    return false;
+                }
+                let fwd = ((q - start) % n + n) % n;
+                let d = if backward { (n - fwd) % n } else { fwd };
+                (1..=roll).contains(&d)
+            })
+            .count() as i64
     }
 }
 

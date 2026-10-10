@@ -425,6 +425,158 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         }
         out
     }
+
+    // -- turn plan / counters ----------------------------------------------
+    fn plan_fixed_roll(&self) -> i64 {
+        self.src.fixed_roll() as i64
+    }
+    fn gains_this_turn(&self, seat: i64) -> i64 {
+        if seat < 0 {
+            return 0;
+        }
+        self.src.gains_this_turn(seat as i32) as i64
+    }
+    fn targeted_count(&self, seat: i64) -> i64 {
+        if seat < 0 {
+            return 0;
+        }
+        self.src.targeted_count(seat as i32) as i64
+    }
+
+    // -- candidate instance -------------------------------------------------
+    fn card_tile(&self) -> i64 {
+        if self.owner_seat < 0 || self.card.is_empty() {
+            return -2;
+        }
+        self.src.card_tile(self.owner_seat, self.card) as i64
+    }
+
+    // -- board geometry ----------------------------------------------------
+    fn tile_count(&self) -> i64 {
+        self.src.tile_count() as i64
+    }
+    fn dist(&self, a: i64, b: i64) -> i64 {
+        let n = self.src.tile_count() as i64;
+        if n <= 0 {
+            return 0;
+        }
+        let d = ((b - a) % n + n) % n;
+        d.min(n - d)
+    }
+    fn players_on(&self, tile: i64, except: i64) -> i64 {
+        // `ctx::players_on` counts present (`!out && exile == 0`) standers.
+        let count = self.src.tile_count() as i64; // unused; seats drive the scan
+        let _ = count;
+        (0..self.src.player_count() as i64)
+            .filter(|&s| {
+                s != except
+                    && self.out(s) == 0
+                    && self.exile(s) == 0
+                    && self.pos(s) == tile
+            })
+            .count() as i64
+    }
+    fn next_dist(&self, p: i64, dir: i64) -> i64 {
+        let n = self.src.tile_count() as i64;
+        let pos = self.pos(p);
+        if n <= 0 || pos < 0 {
+            return -1;
+        }
+        let mut best = i64::MAX;
+        for o in 0..self.src.player_count() as i64 {
+            if o == p || self.out(o) != 0 {
+                continue;
+            }
+            let q = self.pos(o);
+            if q < 0 {
+                continue;
+            }
+            let fwd = if dir >= 0 {
+                ((q - pos) % n + n) % n
+            } else {
+                ((pos - q) % n + n) % n
+            };
+            if fwd > 0 && fwd < best {
+                best = fwd;
+            }
+        }
+        if best == i64::MAX {
+            -1
+        } else {
+            best
+        }
+    }
+    fn others_within(&self, p: i64, radius: i64) -> i64 {
+        let pos = self.pos(p);
+        if pos < 0 {
+            return 0;
+        }
+        (0..self.src.player_count() as i64)
+            .filter(|&o| {
+                if o == p || self.out(o) != 0 {
+                    return false;
+                }
+                let d = self.dist(pos, self.pos(o));
+                d > 0 && d <= radius
+            })
+            .count() as i64
+    }
+    fn owned_within(&self, p: i64, radius: i64) -> i64 {
+        let pos = self.pos(p);
+        if pos < 0 {
+            return 0;
+        }
+        (0..self.src.tile_count() as i64)
+            .filter(|&t| {
+                self.src.tile_owner(t as i32) as i64 == p && self.dist(pos, t) <= radius
+            })
+            .count() as i64
+    }
+    fn on_path(&self, me: i64, them: i64) -> i64 {
+        let roll = self.move_roll();
+        if roll < 0 {
+            return 0;
+        }
+        let steps = roll.abs();
+        let n = self.src.tile_count() as i64;
+        let pos = self.pos(them);
+        if n <= 0 || pos < 0 {
+            return 0;
+        }
+        (1..=steps)
+            .filter(|i| {
+                let t = ((pos + i) % n + n) % n;
+                self.src.tile_owner(t as i32) as i64 == me
+            })
+            .count() as i64
+    }
+    fn between(&self, p: i64) -> i64 {
+        let roll = self.move_roll();
+        if roll < 0 {
+            return 0;
+        }
+        let roll = roll.abs();
+        let start = self.pos(p);
+        let n = self.src.tile_count() as i64;
+        if n <= 0 || start < 0 {
+            return 0;
+        }
+        let backward = self.move_dir() < 0;
+        (0..self.src.player_count() as i64)
+            .filter(|&o| {
+                if o == p || self.out(o) != 0 {
+                    return false;
+                }
+                let q = self.pos(o);
+                if q < 0 {
+                    return false;
+                }
+                let fwd = ((q - start) % n + n) % n;
+                let d = if backward { (n - fwd) % n } else { fwd };
+                (1..=roll).contains(&d)
+            })
+            .count() as i64
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -497,6 +649,16 @@ pub trait SnapSrc {
     fn tile_price(&self, tile: i32) -> i32;
     fn turn_player(&self) -> i32;
     fn turn_key(&self) -> i32;
+    /// This turn's fixed main-move roll (`ctx::fixed_roll()`); `-1` = unset.
+    fn fixed_roll(&self) -> i32;
+    /// Money-ins for `player_id` this turn (`ctx::gains_this_turn`).
+    fn gains_this_turn(&self, player_id: i32) -> i32;
+    /// Hostile targetings of `player_id` this turn (`ctx::targeted_count`).
+    fn targeted_count(&self, player_id: i32) -> i32;
+    /// Where the `card` instance on `player_id`'s field sits
+    /// (`ctx::self_tile()`'s raw host value): `-2` = no such instance,
+    /// `-1` = with its owner.
+    fn card_tile(&self, player_id: i32, card: &str) -> i32;
 }
 
 impl<W: CardWorld> SnapSrc for W {
@@ -631,6 +793,27 @@ impl<W: CardWorld> SnapSrc for W {
     #[inline]
     fn turn_key(&self) -> i32 {
         CardWorld::turn_key(self)
+    }
+    #[inline]
+    fn fixed_roll(&self) -> i32 {
+        CardWorld::fixed_roll(self)
+    }
+    #[inline]
+    fn gains_this_turn(&self, player_id: i32) -> i32 {
+        CardWorld::gains_this_turn(self, player_id)
+    }
+    #[inline]
+    fn targeted_count(&self, player_id: i32) -> i32 {
+        CardWorld::targeted_count(self, player_id)
+    }
+    #[inline]
+    fn card_tile(&self, player_id: i32, card: &str) -> i32 {
+        // First field instance of this card id, same name-based lookup as
+        // `card_crystals`. `tile_at` answers `-2` when the uid is gone.
+        CardWorld::field_instances(self, player_id)
+            .into_iter()
+            .find(|(_, id)| id == card)
+            .map_or(-2, |(uid, _)| CardWorld::tile_at(self, uid))
     }
 }
 
@@ -1007,6 +1190,8 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
+            gains: world.gains_this_turn(p) as i64,
+            targeted: world.targeted_count(p) as i64,
         })
         .collect();
 
@@ -1083,6 +1268,11 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         ring_tiles,
         live_house_tiles,
         buyable_tiles,
+        tile_count: world.tile_count() as i64,
+        tile_owners: (0..world.tile_count())
+            .map(|t| world.tile_owner(t) as i64)
+            .collect(),
+        plan_fixed_roll: (world.fixed_roll() >= 0).then(|| world.fixed_roll() as i64),
     }
 }
 
@@ -1125,6 +1315,8 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
             character: id_of(&world.character_name(p).unwrap_or_default()),
             band: id_of(&world.band_name(p).unwrap_or_default()),
             tiles: world.owned_count(p) as i64,
+            gains: world.gains_this_turn(p) as i64,
+            targeted: world.targeted_count(p) as i64,
         })
         .collect();
     WindowCtx {
@@ -1161,6 +1353,11 @@ pub fn fill_window_ambient<S: SnapSrc>(world: &S, player_id: i32) -> WindowCtx {
         ring_tiles,
         live_house_tiles,
         buyable_tiles,
+        tile_count: world.tile_count() as i64,
+        tile_owners: (0..world.tile_count())
+            .map(|t| world.tile_owner(t) as i64)
+            .collect(),
+        plan_fixed_roll: (world.fixed_roll() >= 0).then(|| world.fixed_roll() as i64),
     }
 }
 
@@ -1222,6 +1419,12 @@ pub fn fill_candidate<S: SnapSrc>(
                 (n, v)
             })
             .collect(),
+        card_tile: if placed {
+            let t = world.card_tile(p, card);
+            (t >= -1).then_some(t as i64)
+        } else {
+            None
+        },
         slots: Default::default(),
         // Non-zero named counters only: `tok('name')` missing = 0, so the
         // zero entries are exactly the absent ones. Same data

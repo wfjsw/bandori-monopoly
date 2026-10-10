@@ -130,6 +130,16 @@ fn table_value(t: &Table) -> Value {
             Value::List(Arc::new(items.iter().map(|i| Value::Int(*i)).collect()))
         }
         Table::Seats(n) => Value::Int(*n),
+        Table::BinMap(rows) => {
+            // `(a, b) -> v` as a map keyed by `a * 1024 + b`. Tile ids and
+            // seat ids (and the small radii) stay well under 1024, so the
+            // packing is injective over the domains the fills produce.
+            let mut m = HashMap::new();
+            for (a, b, v) in rows {
+                m.insert(Key::Int(a * 1024 + b), Value::Int(*v));
+            }
+            Value::Map(Map { map: Arc::new(m) })
+        }
     }
 }
 
@@ -305,6 +315,37 @@ fn install_one(ctx: &mut Context<'static, 'static>, n: &Name) {
                         return Ok(-1);
                     }
                     Ok(((p + delta) % n + n) % n)
+                },
+            )
+            .expect(fname);
+        }
+        Fx::IntIntConst { var, calc } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, a: i64, b: i64| -> Result<i64, ExecutionError> {
+                    let n = int_var(ftx, &var)?;
+                    Ok(calc(a, b, n))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::BinInt { var, .. } => {
+            let var = var.to_string();
+            ctx.add_function(
+                fname,
+                move |ftx: &FunctionContext, a: i64, b: i64| -> Result<i64, ExecutionError> {
+                    let m = map_var(ftx, &var)?;
+                    Ok(int_at_int(&m, a * 1024 + b))
+                },
+            )
+            .expect(fname);
+        }
+        Fx::IntPred { calc } => {
+            ctx.add_function(
+                fname,
+                move |_ftx: &FunctionContext, x: i64| -> Result<bool, ExecutionError> {
+                    Ok(calc(x))
                 },
             )
             .expect(fname);

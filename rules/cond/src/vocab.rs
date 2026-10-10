@@ -77,6 +77,24 @@ pub enum Fx {
     },
     /// `f(p: int, delta: int) -> int` = wrap-around neighbour of `p`.
     Neighbor,
+    /// `f(a: int, b: int) -> int` computed from a hidden int (`_<var>`, the
+    /// ring size) -- pure math, no table. `dist` is the only user.
+    IntIntConst {
+        var: &'static str,
+        calc: fn(i64, i64, i64) -> i64,
+    },
+    /// `f(a: int, b: int) -> int` over a baked `(a, b) -> v` map; missing = 0.
+    /// The geometry scans (`players_on`, `next_dist`, …) whose fill loops the
+    /// view's seats / tiles.
+    BinInt {
+        var: &'static str,
+        fill: fn(&dyn CondView) -> Vec<(i64, i64, i64)>,
+    },
+    /// `f(x: int) -> bool` -- a pure predicate over one int (no view, no
+    /// table). `repeated_digits` is the only user.
+    IntPred {
+        calc: fn(i64) -> bool,
+    },
 }
 
 /// One vocabulary name.
@@ -214,6 +232,16 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.turn_key(),
         fx: NO_FX,
         doc: "once-per-turn key; compared against `slot(…)`",
+    },
+    Name {
+        cel: "plan.fixed_roll",
+        aliases: &[],
+        flat: "plan_fixed_roll",
+        scope: Scope::Window,
+        ty: Ty::OptInt,
+        get: |v| v.plan_fixed_roll(),
+        fx: NO_FX,
+        doc: "this turn's fixed main-move roll; `null` when unset",
     },
     Name {
         cel: "trigger_card",
@@ -515,6 +543,16 @@ pub const VOCAB: &[Name] = &[
         get: |v| v.card_placed() as i64,
         fx: NO_FX,
         doc: "is the running instance in play",
+    },
+    Name {
+        cel: "card.tile",
+        aliases: &[],
+        flat: "card_tile",
+        scope: Scope::Candidate,
+        ty: Ty::Int,
+        get: |v| v.card_tile(),
+        fx: NO_FX,
+        doc: "the instance's tile; -1 = with its owner, -2 = not placed",
     },
     // -- functions ----------------------------------------------------------
     Name {
@@ -838,6 +876,199 @@ pub const VOCAB: &[Name] = &[
         },
         doc: "effect.hits(seat) / chain.hits(seat)",
     },
+    // -- turn counters ------------------------------------------------------
+    Name {
+        cel: "gains_this_turn",
+        aliases: &[],
+        flat: "gains_this_turn",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_gains",
+            field: |v, s| v.gains_this_turn(s),
+        },
+        doc: "gains_this_turn(p) -> money-ins for p this turn",
+    },
+    Name {
+        cel: "targeted_count",
+        aliases: &[],
+        flat: "targeted_count",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_targeted",
+            field: |v, s| v.targeted_count(s),
+        },
+        doc: "targeted_count(p) -> hostile targetings of p this turn",
+    },
+    // -- pure int predicate -------------------------------------------------
+    Name {
+        cel: "repeated_digits",
+        aliases: &[],
+        flat: "repeated_digits",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Bool,
+        get: NO_GET,
+        fx: Fx::IntPred {
+            calc: |n| {
+                let mut x = n.unsigned_abs();
+                let mut seen: u16 = 0;
+                if x == 0 {
+                    return false;
+                }
+                while x > 0 {
+                    let d = (x % 10) as u16;
+                    if seen & (1 << d) != 0 {
+                        return true;
+                    }
+                    seen |= 1 << d;
+                    x /= 10;
+                }
+                false
+            },
+        },
+        doc: "repeated_digits(n) -> |n|'s decimal form repeats a digit",
+    },
+    // -- board geometry -----------------------------------------------------
+    Name {
+        cel: "dist",
+        aliases: &[],
+        flat: "dist",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::IntIntConst {
+            var: "_tile_count",
+            calc: |a, b, n| {
+                if n <= 0 {
+                    return 0;
+                }
+                let d = ((b - a) % n + n) % n;
+                d.min(n - d)
+            },
+        },
+        doc: "dist(a, b) -> undirected ring distance",
+    },
+    Name {
+        cel: "players_on",
+        aliases: &[],
+        flat: "players_on",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::BinInt {
+            var: "_on_tile",
+            fill: |v| {
+                let mut out = Vec::new();
+                for t in 0..v.tile_count() {
+                    for e in -1..v.seat_count() {
+                        out.push((t, e, v.players_on(t, e)));
+                    }
+                }
+                out
+            },
+        },
+        doc: "players_on(tile, except) -> present players standing there",
+    },
+    Name {
+        cel: "next_dist",
+        aliases: &[],
+        flat: "next_dist",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::BinInt {
+            var: "_next_dist",
+            fill: |v| {
+                let mut out = Vec::new();
+                for p in 0..v.seat_count() {
+                    for d in [-1, 1] {
+                        out.push((p, d, v.next_dist(p, d)));
+                    }
+                }
+                out
+            },
+        },
+        doc: "next_dist(p, dir) -> steps to the nearest rival ahead; -1 = none",
+    },
+    Name {
+        cel: "others_within",
+        aliases: &[],
+        flat: "others_within",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::BinInt {
+            var: "_others_within",
+            fill: |v| {
+                let mut out = Vec::new();
+                for p in 0..v.seat_count() {
+                    for r in 0..=v.tile_count() {
+                        out.push((p, r, v.others_within(p, r)));
+                    }
+                }
+                out
+            },
+        },
+        doc: "others_within(p, r) -> rivals still in within r tiles of p",
+    },
+    Name {
+        cel: "owned_within",
+        aliases: &[],
+        flat: "owned_within",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::BinInt {
+            var: "_owned_within",
+            fill: |v| {
+                let mut out = Vec::new();
+                for p in 0..v.seat_count() {
+                    for r in 0..=v.tile_count() {
+                        out.push((p, r, v.owned_within(p, r)));
+                    }
+                }
+                out
+            },
+        },
+        doc: "owned_within(p, r) -> p's deeds within r tiles of p",
+    },
+    Name {
+        cel: "on_path",
+        aliases: &[],
+        flat: "on_path",
+        scope: Scope::Func { arity: 2, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::BinInt {
+            var: "_on_path",
+            fill: |v| {
+                let mut out = Vec::new();
+                for a in 0..v.seat_count() {
+                    for b in 0..v.seat_count() {
+                        out.push((a, b, v.on_path(a, b)));
+                    }
+                }
+                out
+            },
+        },
+        doc: "on_path(me, them) -> my deeds on their move.roll path",
+    },
+    Name {
+        cel: "between",
+        aliases: &[],
+        flat: "between",
+        scope: Scope::Func { arity: 1, cand: false },
+        ty: Ty::Int,
+        get: NO_GET,
+        fx: Fx::SeatInt {
+            var: "_between",
+            field: |v, s| v.between(s),
+        },
+        doc: "between(p) -> rivals standing in p's move span",
+    },
 ];
 
 /// Look a name up by flat identifier (the post-rewrite spelling).
@@ -923,8 +1154,10 @@ pub enum Table {
     StrMap(Vec<(String, i64)>),
     /// membership list (`is_circle`, `blocked`, `chain_has`, …).
     IntList(Vec<i64>),
-    /// just the seat count (`neighbor`).
+    /// a single int (`neighbor`'s seat count, `dist`'s ring size).
     Seats(i64),
+    /// `(a, b) -> v` (`players_on` / `next_dist` / … two-key lookups).
+    BinMap(Vec<(i64, i64, i64)>),
 }
 
 fn opt(v: i64) -> Val {
@@ -987,5 +1220,8 @@ pub fn fn_table(n: &Name, view: &dyn CondView) -> Option<(&'static str, Table)> 
         Fx::IntInt { var, fill } => Some((var, Table::IntMap(fill(view)))),
         Fx::IntHas { var, fill } => Some((var, Table::IntList(fill(view)))),
         Fx::Neighbor => Some(("_seats", Table::Seats(view.seat_count()))),
+        Fx::IntIntConst { var, .. } => Some((var, Table::Seats(view.tile_count()))),
+        Fx::BinInt { var, fill } => Some((var, Table::BinMap(fill(view)))),
+        Fx::IntPred { .. } => None,
     }
 }

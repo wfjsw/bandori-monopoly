@@ -165,4 +165,50 @@ pub trait CondView {
     fn tile_id_table(&self) -> Vec<(String, i64)>;
     /// Tile ids of one kind (the `is_*` family's backing list).
     fn tile_kind_list(&self, kind: TileKind) -> Vec<i64>;
+
+    // -- turn plan / counters ----------------------------------------------
+    /// `plan.fixed_roll` -- this turn's fixed main-move roll
+    /// (`ctx::fixed_roll()`); `-1` = unset (binds CEL `null`).
+    fn plan_fixed_roll(&self) -> i64;
+    /// `gains_this_turn(p)` -- money-ins for `p` this turn
+    /// (`ctx::gains_this_turn`).
+    fn gains_this_turn(&self, seat: i64) -> i64;
+    /// `targeted_count(p)` -- hostile targetings of `p` this turn
+    /// (`ctx::targeted_count`).
+    fn targeted_count(&self, seat: i64) -> i64;
+
+    // -- candidate instance -------------------------------------------------
+    /// `card.tile` -- where the candidate instance sits. `-1` = with its
+    /// owner, `-2` = not placed (the raw `ctx::self_tile()` host value; the
+    /// guest wraps it in `Option` as `Some(-1)` / `None`).
+    fn card_tile(&self) -> i64;
+
+    // -- board geometry ----------------------------------------------------
+    /// Board tile count (the ring size) -- backs `dist` and the path scans.
+    fn tile_count(&self) -> i64;
+    /// `dist(a, b)` -- undirected ring distance (`ctx::dist`).
+    fn dist(&self, a: i64, b: i64) -> i64;
+    /// `players_on(tile, except)` -- count of present players (`!out &&
+    /// exile == 0`, matching `ctx::players_on(...).len()`) standing on
+    /// `tile`, excluding `except`.
+    fn players_on(&self, tile: i64, except: i64) -> i64;
+    /// `next_dist(p, dir)` -- forward steps from `p` to the nearest other
+    /// player still in (`!out`, matching `ctx::others`) in direction `dir`
+    /// (meet_again's `next_dist`); `-1` when none.
+    fn next_dist(&self, p: i64, dir: i64) -> i64;
+    /// `others_within(p, radius)` -- count of other players still in (`!out`)
+    /// with `0 < dist(pos(p), pos(o)) <= radius` (haruhikage's `within5`
+    /// count, `includeSame: false`).
+    fn others_within(&self, p: i64, radius: i64) -> i64;
+    /// `owned_within(p, radius)` -- count of `p`'s deeds with
+    /// `dist(pos(p), t) <= radius` (council_check's `near` count).
+    fn owned_within(&self, p: i64, radius: i64) -> i64;
+    /// `on_path(me, them)` -- count of `me`-owned tiles on `them`'s
+    /// `1..=|move.roll|` forward path (repaint's `on_path` count). `0` when
+    /// the window has no face.
+    fn on_path(&self, me: i64, them: i64) -> i64;
+    /// `between(p)` -- count of other players still in (`!out`) standing in
+    /// `p`'s move span (`1..=|move.roll|` along `move.dir`; misaki_card's
+    /// `between` count). `0` when the window has no face.
+    fn between(&self, p: i64) -> i64;
 }

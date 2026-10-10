@@ -61,6 +61,9 @@ fn window() -> WindowCtx {
         ring_tiles: vec![],
         live_house_tiles: vec![],
         buyable_tiles: vec![],
+        tile_count: 12,
+        tile_owners: vec![0, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+        plan_fixed_roll: None,
     }
 }
 

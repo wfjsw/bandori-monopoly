@@ -256,4 +256,152 @@ impl CondView for SnapshotView<'_> {
             TileKind::Buyable => self.win.buyable_tiles.clone(),
         }
     }
+
+    // -- turn plan / counters ----------------------------------------------
+    fn plan_fixed_roll(&self) -> i64 {
+        self.win.plan_fixed_roll.unwrap_or(-1)
+    }
+    fn gains_this_turn(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.gains).unwrap_or(0)
+    }
+    fn targeted_count(&self, seat: i64) -> i64 {
+        self.win.player(seat).map(|p| p.targeted).unwrap_or(0)
+    }
+
+    // -- candidate instance -------------------------------------------------
+    fn card_tile(&self) -> i64 {
+        // Raw `ctx::self_tile()` host value: -2 = not placed, -1 = with owner.
+        self.cand.card_tile.unwrap_or(-2)
+    }
+
+    // -- board geometry ----------------------------------------------------
+    fn tile_count(&self) -> i64 {
+        self.win.tile_count
+    }
+    fn dist(&self, a: i64, b: i64) -> i64 {
+        let n = self.win.tile_count;
+        if n <= 0 {
+            return 0;
+        }
+        let d = ((b - a) % n + n) % n;
+        d.min(n - d)
+    }
+    fn players_on(&self, tile: i64, except: i64) -> i64 {
+        // `ctx::players_on` counts present (`!out && exile == 0`) standers.
+        (0..self.win.seat_count())
+            .filter(|&s| {
+                s != except
+                    && self.out(s) == 0
+                    && self.exile(s) == 0
+                    && self.pos(s) == tile
+            })
+            .count() as i64
+    }
+    fn next_dist(&self, p: i64, dir: i64) -> i64 {
+        // meet_again's `next_dist`: `ctx::others` = `!out` (exiled still in).
+        let n = self.win.tile_count;
+        let pos = self.pos(p);
+        if n <= 0 || pos < 0 {
+            return -1;
+        }
+        let mut best = i64::MAX;
+        for o in 0..self.win.seat_count() {
+            if o == p || self.out(o) != 0 {
+                continue;
+            }
+            let q = self.pos(o);
+            if q < 0 {
+                continue;
+            }
+            // C# `Next`: `tile_forward(pos, q)` forward, `tile_forward(q, pos)` back.
+            let fwd = {
+                let f = ((q - pos) % n + n) % n;
+                if dir >= 0 {
+                    f
+                } else {
+                    ((pos - q) % n + n) % n
+                }
+            };
+            if fwd > 0 && fwd < best {
+                best = fwd;
+            }
+        }
+        if best == i64::MAX {
+            -1
+        } else {
+            best
+        }
+    }
+    fn others_within(&self, p: i64, radius: i64) -> i64 {
+        // haruhikage's `within5`: `ctx::others` (`!out`), `d > 0 && d <= r`.
+        let pos = self.pos(p);
+        if pos < 0 {
+            return 0;
+        }
+        (0..self.win.seat_count())
+            .filter(|&o| {
+                if o == p || self.out(o) != 0 {
+                    return false;
+                }
+                let d = self.dist(pos, self.pos(o));
+                d > 0 && d <= radius
+            })
+            .count() as i64
+    }
+    fn owned_within(&self, p: i64, radius: i64) -> i64 {
+        // council_check's `near`: the seat's deeds within `radius` of its pos.
+        let pos = self.pos(p);
+        if pos < 0 {
+            return 0;
+        }
+        (0..self.win.tile_count)
+            .filter(|&t| self.win.tile_owners.get(t as usize).copied().unwrap_or(-1) == p
+                && self.dist(pos, t) <= radius)
+            .count() as i64
+    }
+    fn on_path(&self, me: i64, them: i64) -> i64 {
+        // repaint's `on_path`: my deeds on `them`'s 1..=|move.roll| forward path.
+        let Some(roll) = (self.move_roll() >= 0).then_some(self.move_roll()) else {
+            return 0;
+        };
+        let steps = roll.abs();
+        let n = self.win.tile_count;
+        let pos = self.pos(them);
+        if n <= 0 || pos < 0 {
+            return 0;
+        }
+        (1..=steps)
+            .filter(|i| {
+                let t = ((pos + i) % n + n) % n;
+                self.win.tile_owners.get(t as usize).copied().unwrap_or(-1) == me
+            })
+            .count() as i64
+    }
+    fn between(&self, p: i64) -> i64 {
+        // misaki_card's `between`: rivals in the move span along `move.dir`.
+        let Some(roll) = (self.move_roll() >= 0).then_some(self.move_roll()) else {
+            return 0;
+        };
+        let roll = roll.abs();
+        let start = self.pos(p);
+        let n = self.win.tile_count;
+        if n <= 0 || start < 0 {
+            return 0;
+        }
+        let backward = self.move_dir() < 0;
+        (0..self.win.seat_count())
+            .filter(|&o| {
+                if o == p || self.out(o) != 0 {
+                    return false;
+                }
+                let q = self.pos(o);
+                if q < 0 {
+                    return false;
+                }
+                let fwd = ((q - start) % n + n) % n;
+                let d = if backward { (n - fwd) % n } else { fwd };
+                (1..=roll).contains(&d)
+            })
+            .count() as i64
+    }
 }
