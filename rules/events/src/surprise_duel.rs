@@ -20,14 +20,13 @@ pub const SURPRISE_DUEL: CardDef = CardDef::new(
     "event:意外的对邦",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::RollPlan], "", Some(always), on_plan),
-        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
+        // 「所有其他玩家的移动方向」 -- a non-drawer mover. `always` deleted
+        // (a no-op prefetch); the drawer relation is the residual guard (the
+        // instance prop is outside the CEL schema).
+        On::Hook(&[HookKind::RollPlan], "", Some(on_plan_others), on_plan),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
-
-fn always(_player_id: i32) -> bool {
-    true
-}
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下2回合开始时放入事件弃牌」
 /// -- keep the event and remember who drew it; the turn-start hook below counts
@@ -46,16 +45,23 @@ fn play(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// 「所有其他玩家」 -- the plan's mover is not the drawer. The drawer lives on
+/// the instance's props (outside the CEL schema, docs/GUARDS.md §4.2c), so this
+/// is the residual guard of [`on_plan`].
+fn on_plan_others(_player_id: i32) -> bool {
+    let mover = ctx::turn_player();
+    let drawer = ctx::prop(DRAWER);
+    mover >= 0 && mover != drawer
+}
+
 /// 规则书: 「所有其他玩家的移动方向改为向抽到的玩家绝对距离最近的方向移动
 /// （如果距离一样则向正常方向移动）」 -- at `RollPlan`, a non-drawer mover whose
 /// reverse path is strictly closer to the drawer's seat walks backwards; a tie
 /// keeps the normal direction. Only the direction is rewritten, not the length.
+/// Applicability is [`on_plan_others`].
 fn on_plan(_player_id: i32) -> card_sdk::Asked {
     let mover = ctx::turn_player();
     let drawer = ctx::prop(DRAWER);
-    if mover < 0 || mover == drawer {
-        return Ok(());
-    }
     let here = ctx::player_pos(mover);
     let there = ctx::player_pos(drawer);
     let n = ctx::tile_count();

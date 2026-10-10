@@ -20,14 +20,13 @@ pub const MARINA_BOX: CardDef = CardDef::new(
     "event:麻里奈小姐的礼物箱",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::PassTile], "", Some(always), on_pass),
-        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
+        // 「所有玩家[经过]CiRCLE时」 -- the tile is the condition now (the
+        // body-top `!is_circle` early-out). The `always` guard is deleted: it
+        // prefetched every pass of every tile for a no-op.
+        On::Hook(&[HookKind::PassTile], "is_circle(tile.id)", None, on_pass),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
-
-fn always(_player_id: i32) -> bool {
-    true
-}
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的第3回合开始时放入事件弃牌」
 /// -- keep the event and remember who drew it; the turn-start hook below counts
@@ -46,13 +45,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// 规则书: 「所有玩家[经过]CiRCLE时可[消耗]一次500资金，抽到的玩家投掷一次
 /// 1d10（不受任何其他效果影响），如果投掷结果至少为6，那名玩家[获得]1200资金」
 /// -- the passer is asked whether to spend; only a 「yes」 pays 500 and rolls.
+/// The CiRCLE tile is the entry's condition (`is_circle(tile.id)`).
 fn on_pass(_player_id: i32) -> card_sdk::Asked {
     let who = trigger::player_id();
     if who < 0 {
-        return Ok(());
-    }
-    let at = trigger::tile();
-    if at < 0 || !ctx::is_circle(at) {
         return Ok(());
     }
     // 「可[消耗]一次500资金」 -- optional, a player decision. The ask is the

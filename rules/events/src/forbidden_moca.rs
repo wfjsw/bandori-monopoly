@@ -15,14 +15,13 @@ pub const FORBIDDEN_MOCA: CardDef = CardDef::new(
     "event:Forbidden Moca",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::RollAfter], "", Some(always), halve),
+        // 「场上所有移动掷骰/2」 -- every face while the event is up. `always`
+        // deleted (a no-op prefetch); the `move_roll` read in the body is the
+        // face being halved (effect), not applicability.
+        On::Hook(&[HookKind::RollAfter], "", None, halve),
         On::AtEnd("", None, expire),
     ],
 );
-
-fn always(_player_id: i32) -> bool {
-    true
-}
 
 /// 规则书: 「直到你的下个回合结束…」 -- the event stays in play (「你的」 is the
 /// player who drew it) and its expiry is scheduled on that player's next turn

@@ -20,25 +20,28 @@ pub const CIRCLE_REBUILD: CardDef = CardDef::new(
         On::Play("", None, play),
         // 「每次有人经过CiRCLE时」 / 「CiRCLE的[触发结算]」 -- the two tiles this
         // event re-homes are the hooks' applicability, not their effect. The
-        // guard ran `always`, so every pass of every tile flashed the event.
-        On::Hook(&[HookKind::PassTile], "", Some(on_circle_or_cafe), on_pass),
-        On::Hook(&[HookKind::SettleBody], "", Some(settle_applies), on_settle_body),
+        // body-top tile check is the condition now (`is_circle(tile.id)` and
+        // `tile.id == tile_named('CiRCLE 咖啡厅')`); the settle's `cancelled`
+        // bail stays a residual guard (not in the CEL schema).
+        On::Hook(
+            &[HookKind::PassTile],
+            "is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
+            None,
+            on_pass,
+        ),
+        On::Hook(
+            &[HookKind::SettleBody],
+            "is_circle(tile.id) || tile.id == tile_named('CiRCLE 咖啡厅')",
+            Some(settle_applies),
+            on_settle_body,
+        ),
     ],
 );
 
-/// The two tiles this event's effects live on.
-fn on_circle_or_cafe(_owner: i32) -> bool {
-    let at = trigger::tile();
-    if at < 0 {
-        return false;
-    }
-    ctx::is_circle(at) || (ctx::tile_named(CAFE) >= 0 && at == ctx::tile_named(CAFE))
-}
-
-/// [`on_circle_or_cafe`], plus the settle not already claimed by an earlier
-/// replacement in the chain (the `cancelled` bail below).
-fn settle_applies(owner: i32) -> bool {
-    on_circle_or_cafe(owner) && !trigger::cancelled()
+/// The settle not already claimed by an earlier replacement in the chain
+/// (the `cancelled` bail below). The tile is the entry's condition.
+fn settle_applies(_owner: i32) -> bool {
+    !trigger::cancelled()
 }
 
 /// 规则书: 「将此卡放置于场地中央，为其放置5个奇迹水晶」 -- keep the event in

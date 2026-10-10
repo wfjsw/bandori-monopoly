@@ -19,15 +19,15 @@ pub const HEAT_HEAD: CardDef = CardDef::new(
     "event:超燃甩头",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::RollPlan], "", Some(always), add_die),
-        On::Hook(&[HookKind::RollAfter], "", Some(always), sub_die),
+        // 「所有玩家的移动掷骰」 -- every plan / every face. `always` deleted
+        // (a no-op prefetch). The phase split lives in the bodies: the crystal
+        // counter is the event's own phase state (`card.cp` is not a reliable
+        // read on a BOARD_OWNER event instance).
+        On::Hook(&[HookKind::RollPlan], "", None, add_die),
+        On::Hook(&[HookKind::RollAfter], "", None, sub_die),
         On::AtEnd("", None, phase_end),
     ],
 );
-
-fn always(_player_id: i32) -> bool {
-    true
-}
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合结束前所有玩家的移动
 /// 掷骰增加1d6」 -- keep the event, start phase 1, schedule the drawer's next

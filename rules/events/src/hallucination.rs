@@ -20,14 +20,12 @@ pub const HALLUCINATION: CardDef = CardDef::new(
     "event:幻觉来了",
     &[
         On::Play("", None, play),
-        On::Hook(&[HookKind::RollPlan], "", Some(always), on_plan),
-        On::Hook(&[HookKind::TurnStartBefore], "", Some(always), on_turn_start),
+        // 「任何玩家进行投掷前」 -- every plan, so the category filter is the
+        // whole applicability. `always` deleted (a no-op prefetch).
+        On::Hook(&[HookKind::RollPlan], "", None, on_plan),
+        On::Hook(&[HookKind::TurnStartBefore], "", None, on_turn_start),
     ],
 );
-
-fn always(_player_id: i32) -> bool {
-    true
-}
 
 /// 规则书: 「将此卡放置于场地中央，抽到的玩家的下回合开始时放入事件弃牌」
 /// -- keep the event and remember who drew it; the turn-start hook below files
