@@ -1035,11 +1035,17 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
     if need <= 0 {
         return String::new();
     }
-    let mut buf = alloc::vec![0u8; need as usize];
-    let p = buf.as_mut_ptr() as i32;
+    // `out_buf` / `out_read` -- the same two-call out-buffer pattern every
+    // other host string return uses. A raw `buf.as_mut_ptr() as i32` truncates
+    // a 64-bit pointer on native (the host writes into an arena slot, not the
+    // guest's stack buffer), so the read came back as NULs and
+    // `trigger::name() == counter::CRYSTALS` never matched -- the native
+    // build kept a crystal-empty card on the field (drift.rs).
+    let (p, scratch) = out_buf(need as usize);
     if fill(p, need) != need {
         return String::new();
     }
+    let buf = out_read(p, need, scratch);
     String::from_utf8(buf).unwrap_or_default()
 }
 
