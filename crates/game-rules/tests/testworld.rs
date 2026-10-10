@@ -265,7 +265,11 @@ impl CardWorld for TestWorld {
         self.trigger.clone()
     }
     fn set_trigger_move_roll(&mut self, roll: i32) {
-        self.trigger.move_roll = Some(roll);
+        if let Some(m) = &mut self.trigger.mv {
+            m.roll = Some(roll);
+        } else {
+            self.trigger.value = roll;
+        }
     }
     fn set_trigger_value(&mut self, value: i32) {
         self.trigger.value = value;
@@ -307,22 +311,30 @@ impl CardWorld for TestWorld {
         });
     }
     fn trig_card_is(&self, id: &str) -> i32 {
-        (self.trigger.card == id) as i32
+        (self.trigger.card.as_deref() == Some(id)) as i32
     }
     fn set_trigger_price(&mut self, v: i32) {
-        self.trigger.price = v;
+        if let Some(b) = &mut self.trigger.buy {
+            b.price = v;
+        }
     }
     fn set_trigger_deal_owner(&mut self, v: i32) {
-        self.trigger.deal_owner = v;
+        if let Some(b) = &mut self.trigger.buy {
+            b.deal_owner = Some(v);
+        }
     }
     fn set_trigger_deal_houses(&mut self, v: i32) {
-        self.trigger.deal_houses = v;
+        if let Some(b) = &mut self.trigger.buy {
+            b.deal_houses = v;
+        }
     }
     fn set_trigger_deal_mortgaged(&mut self, v: i32) {
-        self.trigger.deal_mortgaged = v != 0;
+        if let Some(b) = &mut self.trigger.buy {
+            b.deal_mortgaged = v != 0;
+        }
     }
     fn set_trigger_reason(&mut self, reason: &str) {
-        self.trigger.reason = reason.to_string();
+        self.trigger.reason = Some(reason.to_string());
     }
     // The test world models money, marks and dice only -- board/hand queries are
     // neutral until a test needs them.

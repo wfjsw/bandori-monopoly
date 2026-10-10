@@ -15,28 +15,28 @@ use crate::msg::Msg;
 use crate::rng::Rng;
 use crate::state::{MatchEvent, MatchState};
 
-/// Money each player starts with (`BeginPlay`).
+/// Money each player starts with.
 pub const START_MONEY: i32 = 10_000;
-/// Opening hand size (`StartHandOf`).
+/// Opening hand size.
 pub const START_HAND: usize = 2;
-/// Base hand limit (`HandLimitOf`).
+/// Base hand limit.
 pub const HAND_LIMIT: usize = 5;
-/// CiRCLE reward in money (`CircleReward`).
+/// CiRCLE reward in money.
 pub const CIRCLE_MONEY: i32 = 2000;
-/// Events kept for `events_since` (`EventKeep`).
+/// Events kept for `events_since`.
 pub const EVENT_KEEP: usize = 400;
 /// Events carried in every `MatchState` snapshot.
 pub const STATE_EVENTS: usize = 80;
 
-/// Per-player private card zones (C# `Hidden`).
+/// Per-player private card zones (hand / draw / discard).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct Hidden {
     pub hand: Vec<String>,
     /// Top of the pile is the **end** of the vec.
     pub draw: Vec<String>,
     pub discard: Vec<String>,
-    /// The player's next main move walks exactly this many steps instead of the
-    /// roll (C# `NextStepsFx.Steps`); consumed by that move.
+    /// The player's next [主要移动] walks exactly this many steps instead of
+    /// the roll; consumed by that move.
     #[serde(default)]
     pub next_steps: Option<i32>,
 }
@@ -45,11 +45,76 @@ fn full_build_cost() -> i32 {
     100
 }
 
-fn no_play_doubled() -> i32 {
-    -1
+/// How a play settles its number-range dice (「以理论最大值或最小值结算」).
+/// The wire encoding is the old `1` / `0` / `-1` triple; only the Rust side is
+/// an enum.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Extreme {
+    /// Settle at the theoretical minimum (the wire `-1`).
+    Min,
+    /// Plain rolls (the wire `0`).
+    #[default]
+    Plain,
+    /// Settle at the theoretical maximum (the wire `1`).
+    Max,
 }
 
-/// One player's `_turnSnap[i]`: the status a turn-end undo restores to.
+impl Extreme {
+    /// The guest / wire encoding.
+    pub fn as_i32(self) -> i32 {
+        match self {
+            Extreme::Min => -1,
+            Extreme::Plain => 0,
+            Extreme::Max => 1,
+        }
+    }
+
+    /// Decode the guest / wire encoding.
+    pub fn from_i32(v: i32) -> Self {
+        if v > 0 {
+            Extreme::Max
+        } else if v < 0 {
+            Extreme::Min
+        } else {
+            Extreme::Plain
+        }
+    }
+}
+
+impl std::fmt::Display for Extreme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_i32())
+    }
+}
+
+impl Serialize for Extreme {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_i32(self.as_i32())
+    }
+}
+
+impl<'de> Deserialize<'de> for Extreme {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(Extreme::from_i32(i32::deserialize(d)?))
+    }
+}
+
+/// `play_doubled`'s wire shape: the old field was an `i32` with `-1` = none.
+/// Serde keeps that spelling so `SAVE_VERSION` need not move.
+mod opt_i32_neg1 {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &Option<i32>, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_i32(v.unwrap_or(-1))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<i32>, D::Error> {
+        let raw = i32::deserialize(d)?;
+        Ok(if raw < 0 { None } else { Some(raw) })
+    }
+}
+
+/// One player's turn-start snapshot: the status a turn-end undo restores to.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TurnSnap {
@@ -59,76 +124,75 @@ pub struct TurnSnap {
     pub exile: i32,
 }
 
-/// Per-turn bookkeeping (the parts of C# `TurnCtx` the shell uses).
+/// Per-turn bookkeeping the shell uses.
 ///
 /// The derived `Default` would zero `build_cost_pct` (only the serde default is
 /// 100), so a fresh turn would build for free; the manual impl keeps full price.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TurnCtx {
-    /// `C# TurnCtx.Plan` -- the movement being planned / walked. Runtime-only:
-    /// it carries roll tables and closures, so it never reaches the wire (the
-    /// broadcast summary is `MatchState::plan`).
+    /// The movement being planned / walked. Runtime-only: it carries roll
+    /// tables, so it never reaches the wire (the broadcast summary is
+    /// `MatchState::plan`).
     #[serde(skip)]
     pub plan: crate::engine::move_ctx::MoveCtx,
     pub player_id: usize,
     pub extra: bool,
     pub main_moved: bool,
     pub played: Vec<String>,
-    /// Players whose money cannot drop for the rest of this turn (C#
-    /// `TurnCtx.NoMoneyLoss`). Auctions are not payments, so they are exempt.
+    /// Players whose money cannot drop for the rest of this turn. Auctions are
+    /// not payments, so they are exempt.
     #[serde(default)]
     pub no_money_loss: Vec<usize>,
-    /// This turn's main-move roll is fixed (C# `TurnCtx.Plan.FixedRoll`).
+    /// This turn's [主要移动] roll is fixed to this face.
     #[serde(default)]
     pub fixed_roll: Option<i32>,
-    /// Steps this turn's main move walked (C# `TurnCtx.LastMain`); 0 = none yet.
+    /// Steps this turn's [主要移动] walked; 0 = none yet.
     #[serde(default)]
     pub main_steps: i32,
-    /// C# `_abnormalTurn` -- abnormal effects that got through to each player
-    /// this turn (indexed by player; a new turn starts them all at 0).
+    /// Abnormal effects that got through to each player this turn (indexed by
+    /// player; a new turn starts them all at 0).
     #[serde(default)]
     pub abnormal: Vec<i32>,
-    /// C# `PlayCtx.Extreme` -- the play being resolved settles its number-range
-    /// dice at the theoretical extreme: `1` = max, `-1` = min, `0` = plain.
-    /// Set mid-play by a [反击] (「以理论最大值或最小值结算」) and cleared when
-    /// the play ends, so it does not leak into the next one.
+    /// The play being resolved settles its number-range dice at the theoretical
+    /// extreme: `1` = max, `-1` = min, `0` = plain. Set mid-play by a [反击]
+    /// (「以理论最大值或最小值结算」) and cleared when the play ends, so it does
+    /// not leak into the next one.
     #[serde(default)]
-    pub extreme: i32,
-    /// C# `PlayCtx.FromDeck` -- the play being resolved came from somewhere
-    /// other than the hand (`false`). 「若此卡从手牌以外的地方打出」 reads this.
+    pub extreme: Extreme,
+    /// Whether the play being resolved came from the hand (`false` when it came
+    /// from somewhere else). 「若此卡从手牌以外的地方打出」 reads this.
     #[serde(default)]
     pub play_from_hand: bool,
-    /// C# `play.Tags["immune"+seat]` -- seats whose designation on the play
-    /// being resolved is cancelled (「取消其对目标之一的[指定]」). A per-pair
-    /// cancel: the rest of the play's designations still land. Cleared at the
-    /// start of each play.
+    /// Seats whose designation on the play being resolved is cancelled
+    /// (「取消其对目标之一的[指定]」). A per-pair cancel: the rest of the play's
+    /// designations still land. Cleared at the start of each play.
     #[serde(default)]
     pub cancelled_designations: Vec<i32>,
-    /// C# `PlayCtx.Doubled` -- which of the play's tagged `ctx::n` numbers the
-    /// CiRCLE band skill has doubled (-1 = none). Lives on the play, not on a
-    /// guest run, so a pre-effect hook can arm it for the body that follows.
-    /// Cleared at the start of each play.
-    #[serde(default = "no_play_doubled")]
-    pub play_doubled: i32,
-    /// C# `TurnCtx.PaidInSettle` -- money paid to other players during this
-    /// turn's [触发结算]s. 「本回合的[结算]向其他玩家支付了至少1000资金」.
+    /// Which of the play's tagged `ctx::n` numbers the CiRCLE band skill has
+    /// doubled (-1 = none). Lives on the play, not on a guest run, so a
+    /// pre-effect hook can arm it for the body that follows. Cleared at the
+    /// start of each play.
+    #[serde(default, with = "opt_i32_neg1")]
+    pub play_doubled: Option<i32>,
+    /// Money paid to other players during this turn's [触发结算]s.
+    /// 「本回合的[结算]向其他玩家支付了至少1000资金」.
     #[serde(default)]
     pub paid_in_settle: i32,
-    /// C# `_turnSnap[i].pos` -- where each player stood when the turn started.
-    /// 「在Livehouse地块开始回合时」 is a question about that square, not the
-    /// one a mid-turn walk has since reached.
+    /// Where each player stood when the turn started. 「在Livehouse地块开始
+    /// 回合时」 is a question about that square, not the one a mid-turn walk has
+    /// since reached.
     #[serde(default)]
     pub turn_start_pos: Vec<i32>,
-    /// C# `_turnSnap[i]` -- each player's pos / stay / stun / exile when the turn
-    /// started. 「回到起始地点并取消所有受到的效果」 restores from here.
+    /// Each player's pos / [停留] / [晕眩] / [除外] when the turn started.
+    /// 「回到起始地点并取消所有受到的效果」 restores from here.
     #[serde(default)]
     pub turn_snap: Vec<TurnSnap>,
-    /// C# `_turnCtx.Rolls` -- every face rolled this turn, in order. 「与本回合内
-    /// 你骰出过的所有骰点都不同」 compares against this.
+    /// Every face rolled this turn, in order. 「与本回合内你骰出过的所有骰点
+    /// 都不同」 compares against this.
     #[serde(default)]
     pub turn_rolls: Vec<i32>,
-    /// C# `BuildDiscountFx` -- 「下次盖房时减免N（可溢出），盖房后减少1层」.
-    /// A layered cut on the build cost; each build pops one layer.
+    /// 「下次盖房时减免N（可溢出），盖房后减少1层」. A layered cut on the build
+    /// cost; each build pops one layer.
     #[serde(default)]
     pub build_discount: i32,
     pub build_discount_layers: i32,
@@ -172,10 +236,10 @@ impl Default for TurnCtx {
             fixed_roll: None,
             main_steps: 0,
             abnormal: Vec::new(),
-            extreme: 0,
+            extreme: Extreme::Plain,
             play_from_hand: false,
             cancelled_designations: Vec::new(),
-            play_doubled: no_play_doubled(),
+            play_doubled: None,
             paid_in_settle: 0,
             turn_start_pos: Vec::new(),
             turn_snap: Vec::new(),
@@ -188,9 +252,9 @@ impl Default for TurnCtx {
     }
 }
 
-/// A card that asked to be called at a turn end (C# `TurnCtx.AfterEnd` /
-/// `AtEnd`, and the "end of your next turn" effects). The host runs the card's
-/// `counteract` with kind `turnEnd` when `target`'s turn ends, then drops it.
+/// A card that asked to be called at a turn end (and the "end of your next
+/// turn" effects). The host runs the card's `counteract` with kind `turnEnd`
+/// when `target`'s turn ends, then drops it.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Scheduled {
     pub card: String,
@@ -201,14 +265,12 @@ pub struct Scheduled {
     /// Let one `target` turn end pass first -- set when "the end of your next
     /// turn" is scheduled during that player's own current turn.
     pub skip: bool,
-    /// C# `AtEnd`: before the status wear-off (`TurnEndBefore`), rather than
-    /// `AfterEnd` after it (`TurnEndAfter`).
+    /// Fire before the status wear-off, rather than after it.
     #[serde(default)]
     pub early: bool,
     /// The card **instance** that asked for the callback, captured at schedule
-    /// time -- the C# `H._turnCtx.AtEnd.Add(() => ...)` closure captures that
-    /// card object, so the instance identity belongs here and not to whatever
-    /// happens to be on the field when the turn ends.
+    /// time: the instance identity belongs here and not to whatever happens to
+    /// be on the field when the turn ends.
     ///
     /// `-1` when the card was not in play when it scheduled (`On::AtEnd` may
     /// run for a card in a hand or pile); the run then reads 0 crystals, which
@@ -472,15 +534,15 @@ pub struct World {
     pub next_turn_pending: bool,
     /// Deeds of players who left, waiting to be auctioned.
     pub leftovers: VecDeque<Vec<usize>>,
-    /// `H._ringBonus` -- added to the RiNG rent multiplier by cards.
+    /// Added to the RiNG rent multiplier by cards.
     pub ring_bonus: i32,
     pub ask_seq: i32,
     pub signals: Vec<Signal>,
     /// Turn-end callbacks waiting for their turn end.
     #[serde(default)]
     pub scheduled: Vec<Scheduled>,
-    /// C# `H._targeted` -- per player, times other players' cards targeted it since
-    /// its own turn last started.
+    /// Per player, times other players' cards targeted it since its own turn
+    /// last started.
     #[serde(default)]
     pub targeted: Vec<i32>,
     /// 「当前回合内你每获得过一次资金」 -- per player, times money landed on them
@@ -584,7 +646,7 @@ impl World {
         self.gains.iter_mut().for_each(|n| *n = 0);
     }
 
-    /// Append an event (`MatchHost.Log`). Returns it for further fields.
+    /// Append an event to the log. Returns it for further fields.
     ///
     /// Lazy walk flush: any other event while a [`WalkSeg`] is pending
     /// publishes the approach first, so the client walks to the tile before
@@ -722,7 +784,7 @@ impl World {
         self.st.players.get(i).is_none_or(|s| s.out())
     }
 
-    /// Public state: hidden-zone sizes and the event tail filled in (`SyncAll`).
+    /// Public state: hidden-zone sizes and the event tail filled in.
     pub fn public_state(&self) -> MatchState {
         let mut st = self.st.clone();
         // `st.buy_price` / `st.build_cost` are view previews (`docs/PURCHASE.md`):

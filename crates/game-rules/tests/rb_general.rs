@@ -532,7 +532,7 @@ fn cp_marks_are_neutral_and_attached_to_the_card() {
     assert_eq!(m.category, "cp", "[CP点] is its own category: {m:?}");
     // Provenance for the log / 「来自」, and the instance 「此卡」 keys on.
     assert_eq!(m.card, "通用:该清CP了", "「来自」 provenance: {m:?}");
-    assert!(m.src > 0, "attached to the placing card instance: {m:?}");
+    assert!(m.src.is_some_and(|s| s > 0), "attached to the placing card instance: {m:?}");
 }
 
 // User ruling 2026-10-07 (on-card vs tile CP): 「该清CP了 should be graveyarded

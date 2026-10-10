@@ -1,7 +1,8 @@
-//! Match state broadcast to clients (`BandoriMonopoly.Net/Match*.cs`).
+//! Match state broadcast to clients.
 //!
-//! Same field names and C# initializer defaults as the original, except that all
-//! display text is a localizable [`Msg`] instead of a finished string.
+//! Field names and defaults mirror the JSON the wire already carries: missing
+//! fields take `#[serde(default)]`, and the camelCase spelling is the contract.
+//! Display text is a localizable [`Msg`] rather than a finished string.
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -9,9 +10,9 @@ use std::sync::Arc;
 
 use crate::msg::Msg;
 
-/// `MovePlan.cs` -- the movement the current turn is taking: the precomputed
-/// `reach[]` of tiles and how far along it the player has walked. `player_id == -1`
-/// when there is no plan (teleports and stay-settle walks may skip it).
+/// The movement the current turn is taking: the precomputed `reach[]` of tiles
+/// and how far along it the player has walked. `player_id == -1` when there is
+/// no plan (teleports and stay-settle walks may skip it).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MovePlan {
@@ -28,7 +29,7 @@ pub struct MovePlan {
 }
 
 impl MovePlan {
-    /// `MovePlan.Landing` -- where the walk ends at the current `steps`.
+    /// Where the walk ends at the current `steps`.
     pub fn landing(&self) -> i32 {
         let n = self.reach.len();
         if self.steps <= 0 || self.steps as usize > n {
@@ -103,7 +104,7 @@ pub struct TileQuote {
     pub max: Option<i32>,
 }
 
-/// `MatchState.cs`
+/// The public match snapshot: board, players, phase, and the recent events.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchState {
@@ -120,14 +121,15 @@ pub struct MatchState {
     pub busy: bool,
     pub skip_move: bool,
     pub landed: i32,
-    /// `ThinkTime` room setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
+    /// Room think-time setting: 0 Standard / 1 Relaxed / 2 VeryRelaxed / 3 Unlimited.
     pub think_time: i32,
-    /// `State.buyPrice` -- a preview of the price to buy where the turn stands
-    /// (`-1` = nothing buyable now); `BuyPriceFor` is the computation behind it.
+    /// A preview of the price to buy where the turn stands
+    /// (`-1` = nothing buyable now); the buy-price quote is the computation
+    /// behind it.
     pub buy_price: i32,
-    /// `State.buildCost` -- the same preview for building (`-1` = cannot build).
+    /// The same preview for building (`-1` = cannot build).
     pub build_cost: i32,
-    /// `State.canBuyHere` -- would `act {act:"buy"}` be accepted at the turn's
+    /// Would `act {act:"buy"}` be accepted at the turn's
     /// position right now? The engine's own gate (`why_not_act`'s buy branch =
     /// `buyable_here` + the quoted funds check): buyable shape, the plan's
     /// no-buy flag, the quote's `eligible` gate, and cash plus mortgageable
@@ -137,21 +139,21 @@ pub struct MatchState {
     /// the check. `false` when nothing is buyable, and when the engine would
     /// refuse (`err.cannot_buy` / `err.buy_poor`).
     pub can_buy_here: bool,
-    /// `State.canBuildHere` -- the same for `act {act:"build"}`
+    /// The same for `act {act:"build"}`
     /// (`why_not_build` + the funds half of `why_not_act`'s build branch).
     /// `false` when the engine would refuse (`err.build_*` / `err.poor`).
     pub can_build_here: bool,
-    /// `State.canRollHere` -- would `act {act:"roll"}` be accepted
+    /// Would `act {act:"roll"}` be accepted
     /// (`why_not_act`'s roll branch: the live `skip_move` latch, the
     /// `main_moved` flag, and the roller).
     pub can_roll_here: bool,
-    /// `State.canEndHere` -- the same for `act {act:"end"}` (the end branch:
+    /// The same for `act {act:"end"}` (the end branch:
     /// `roll_first` while a main move is still owed, `moving`, `over_hand`).
     /// The public [`Self::skip_move`] re-derives from stay / exile and can
     /// disagree with this gate (unstoppable, mid-turn [停留], [除外]) -- a bot
     /// that trusted it sent `end` into `err.roll_first`.
     pub can_end_here: bool,
-    /// `State.plan` -- the movement this turn is taking.
+    /// The movement this turn is taking.
     pub plan: MovePlan,
     pub time_left: f32,
     pub shield: f32,
@@ -295,7 +297,6 @@ impl MatchState {
     }
 }
 
-/// `MatchPlayer.cs`
 /// When a keyed state item wears off (see [`StateVar::expires`]).
 ///
 /// The engine's turn flow ticks every item whose expiry is due, so "this
@@ -305,9 +306,10 @@ impl MatchState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Tick {
-    /// Loses one layer at its owner's start of turn (C# `stun_start`).
+    /// Loses one layer at its owner's start of turn (the [晕眩] that only
+    /// starts counting then).
     TurnStart,
-    /// Loses one layer at its owner's end of turn (C# `stay` / `stun`).
+    /// Loses one layer at its owner's end of turn (「停留」 / 「晕眩」 wear-off).
     TurnEnd,
 }
 
@@ -315,11 +317,10 @@ pub enum Tick {
 /// it wears off.
 ///
 /// The engine holds these and enforces **nothing** -- it is storage, no more. A
-/// character skill that mandates a fire-pot cap writes `max` (C#
-/// `SkillBase.MaxFire`), and whoever moves `value` is free to honour the bounds
-/// or ignore them: enforcement belongs to the consumer, not to the holder.
-/// `min`/`max` default to 0, matching the C# counters, where a declared cap of
-/// 0 means "none yet".
+/// character skill that mandates a fire-pot (火罐) cap writes `max`, and whoever
+/// moves `value` is free to honour the bounds or ignore them: enforcement
+/// belongs to the consumer, not to the holder. `min`/`max` default to 0: a
+/// declared cap of 0 means "none yet" / uncapped.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct StateVar {
@@ -338,37 +339,37 @@ pub struct StateVar {
 /// status gates). Content is free to invent more; these are only the ones the
 /// engine names. Mirrored by `card_sdk::abi::state_key`.
 pub mod key {
-    /// Stay layers -- wear off at end of turn (C# `MatchSeat.stay`).
+    /// 「停留」 layers -- wear off at end of turn.
     pub const STAY: &str = "stay";
-    /// Stun layers -- wear off at end of turn (C# `MatchSeat.stun`).
+    /// 「晕眩」 layers -- wear off at end of turn.
     pub const STUN: &str = "stun";
     /// Stun applied this turn, which only starts counting next turn. A
     /// timed counter: see [`Tick::TurnStart`].
     pub const STUN_START: &str = "stunStart";
-    /// Turns spent off the board (C# `MatchSeat.exile`).
+    /// Turns spent off the board (「除外」).
     pub const EXILE: &str = "exile";
-    /// Tile the exile returns to (C# `MatchSeat.exile_to`), or -1 for none.
+    /// Tile the [除外] return [传送] lands on, or -1 for none.
     pub const EXILE_TO: &str = "exileTo";
     /// 「在[除外]层数归0后[传送]至该格子，视为当回合的主要移动」 -- when the
-    /// exile ticks out, the return teleport **is** that turn's main move
-    /// (MyGO:无路矢, C# `H.SetV(i, "exileMain", 1)`). The expiry tick reads and
-    /// consumes it: `TurnCtx::main_moved` is set so the player cannot also roll.
+    /// exile ticks out, the return teleport **is** that turn's [主要移动]
+    /// (MyGO:无路矢). The expiry tick reads and consumes it:
+    /// `TurnCtx::main_moved` is set so the player cannot also roll.
     pub const EXILE_MAIN: &str = "exileMain";
-    /// Fire pots held. Its `max` is the mandated cap (C# `MatchSeat.fireMax`),
-    /// written by the character skill -- and that is the one number to show:
-    /// there is no separate "effective cap" beside it.
+    /// Fire pots (火罐) held. Its `max` is the mandated cap, written by the
+    /// character skill -- and that is the one number to show: there is no
+    /// separate "effective cap" beside it.
     pub const FIRE: &str = "fire";
-    /// Layers of "may hold no hand cards" (C# `MatchSeat.no_hand`).
+    /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
-    /// Layers of "cannot be stopped" (C# `MatchSeat.unstoppable`).
+    /// Layers of "cannot be stopped" (「不可阻挡」).
     pub const UNSTOPPABLE: &str = "unstoppable";
-    /// Hand size limit (C# `MatchSeat.hand_limit`).
+    /// Hand size limit (base 5; effects may cut or lift it).
     pub const HAND_LIMIT: &str = "handLimit";
     /// The authoritative opening hand size (default 2; effects may lower it,
     /// minimum 0). Written at the before-match-start point and read by the
     /// opening draw. Mirrors `card_sdk::abi::state_key::START_HAND`.
     pub const START_HAND: &str = "startHand";
-    /// Skill-system scratch (C# `MatchSeat.skill_state`).
+    /// Skill-system scratch.
     pub const SKILL_STATE: &str = "skillState";
     /// This player has built this turn (set by the build step).
     pub const BUILT: &str = "built";
@@ -407,12 +408,12 @@ pub mod key {
 /// in step). Every key has a defined default of `0` when a card does not
 /// declare it.
 pub mod prop {
-    /// Continuous 「手卡上限数量减1」 (C# `Card.HandLimitDelta`) while the card
-    /// sits on the field. Stamped onto the field instance at placement and
-    /// gone with the card. `-1` cuts the owner's hand limit.
+    /// Continuous 「手卡上限数量减1」 while the card sits on the field. Stamped
+    /// onto the field instance at placement and gone with the card. `-1` cuts
+    /// the owner's hand limit.
     pub const HAND_LIMIT_DELTA: &str = "handLimitDelta";
-    /// 「可在眩晕时打出」 (C# `Card.PlayableStunned`): `1` = the card skips the
-    /// stun gate when played from hand.
+    /// 「可在眩晕时打出」: `1` = the card skips the [晕眩] gate when played from
+    /// hand.
     pub const PLAYABLE_STUNNED: &str = "playableStunned";
     /// Bot-only **estimated execution cost**. Mirrors
     /// `card_sdk::abi::prop::EST_COST`. Read only by bots / autopilot as a
@@ -422,9 +423,8 @@ pub mod prop {
     pub const COUNTERACT_FROM_FIELD: &str = "counteractFromField";
     pub const COUNTERACT_GROUP: &str = "counteractGroup";
     pub const COUNTERACT_FIRE_COST: &str = "counteractFireCost";
-    /// 「有[指定]目标」 (C# `Card.Def.Targeting`): `1` = this play names
-    /// recipients (the play's other living players). Mirrors
-    /// `card_sdk::abi::prop::DESIGNATES`.
+    /// 「有[指定]目标」: `1` = this play names recipients (the play's other
+    /// living players). Mirrors `card_sdk::abi::prop::DESIGNATES`.
     pub const DESIGNATES: &str = "designates";
     /// Virtual **rent** house count (「房屋数视为…」). Presence is the override
     /// (a count of `0` is legitimate); real `st.houses` is untouched. On a
@@ -438,19 +438,19 @@ pub mod prop {
     // `TileData`), and read back by the settle bodies and by the end-step
     // buy/build gates. Mirrors `card_sdk::abi::prop`; see `docs/TILES.md`.
 
-    /// Land price (houses are extra). `TileData.price`.
+    /// Land price (houses are extra). `TileData::price`.
     pub const PRICE: &str = "price";
-    /// Build cost per level. `TileData.house`.
+    /// Build cost per level. `TileData::house`.
     pub const HOUSE: &str = "house";
-    /// Colour group (`TileData.group`). [`ALL_COLORS`] is 「该格获得所有颜色」.
+    /// Colour group (`TileData::group`). [`ALL_COLORS`] is 「该格获得所有颜色」.
     pub const GROUP: &str = "group";
     /// The tile's value that means 「该格获得所有颜色」.
     pub const ALL_COLORS: i32 = -2;
-    /// 「每块地有标注的等级上限」 -- max houses. `TileData.rent.len() - 1`.
+    /// 「每块地有标注的等级上限」 -- max houses, `rent.len() - 1`.
     pub const BUILD_MAX: &str = "buildMax";
     /// Length of the rent table (levels = houses + 1).
     pub const RENT_LEN: &str = "rentLen";
-    /// Rent at level N: `rent:0` … `rent:rentLen-1` (`TileData.rent`).
+    /// Rent at level N: `rent[0]` … `rent[len - 1]`.
     pub const RENT_PREFIX: &str = "rent:";
     /// RiNG rent multiplier (`match_rules.ring_multiplier`). TODO(规则书).
     pub const RING_MULT: &str = "ringMult";
@@ -528,7 +528,8 @@ fn default_expiry(key: &str) -> Option<Tick> {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum BotMentality {
-    /// The ported C# bot (`ai.rs`) -- reserved money, card-play odds, cap per turn.
+    /// The built-in heuristic bot (`ai.rs`) -- reserved money, card-play odds,
+    /// cap per turn.
     #[default]
     Standard,
     /// Legal but maximally disruptive: play everything, take every offer, spend
@@ -592,10 +593,11 @@ pub struct MatchPlayer {
     pub skill_character: String,
     pub bands: String,
     pub tokens: Vec<Counter>,
-    /// Keyed state: the counters this player carries (C# `MatchPlayer`'s pots
-    /// plus the `H.V` slots) as `{value, min, max}` items. See [`StateVar`] --
-    /// the engine holds these and enforces nothing. Keys are content
-    /// vocabulary; [`key`] names the ones the engine itself reads back.
+    /// Keyed state: the counters this player carries -- status pots plus the
+    /// arbitrary named slots content invents -- as `{value, min, max}` items.
+    /// See [`StateVar`] -- the engine holds these and enforces nothing. Keys
+    /// are content vocabulary; [`key`] names the ones the engine itself reads
+    /// back.
     ///
     /// The key *names* are a wire contract, not just internal labels: the
     /// client reads this map by name and TS types are structural, so renaming
@@ -637,8 +639,8 @@ impl Default for MatchPlayer {
             bands: String::new(),
             tokens: vec![],
             state: {
-                // The two pots whose C# field initializers are not 0. Everything
-                // else falls out of .
+                // The two counters that start non-zero (hand limit 5, no exile
+                // return tile). Everything else is 0.
                 let mut m = BTreeMap::new();
                 m.insert(
                     key::HAND_LIMIT.to_string(),
@@ -763,17 +765,17 @@ impl MatchPlayer {
 
     // ------------------------------------------- the engine's named readers
 
-    /// Stay layers (C# `stay`).
+    /// 「停留」 layers.
     pub fn stay(&self) -> i32 {
         self.state_get(key::STAY)
     }
 
-    /// Stun layers (C# `stun`).
+    /// 「晕眩」 layers.
     pub fn stun(&self) -> i32 {
         self.state_get(key::STUN)
     }
 
-    /// Stun applied this turn (C# `stun_start`).
+    /// 「晕眩」 applied this turn (starts counting next turn).
     pub fn stun_start(&self) -> i32 {
         self.state_get(key::STUN_START)
     }
@@ -782,23 +784,23 @@ impl MatchPlayer {
         self.stun() + self.stun_start() > 0
     }
 
-    /// Turns left off the board (C# `exile`).
+    /// Turns left off the board (「除外」).
     pub fn exile(&self) -> i32 {
         self.state_get(key::EXILE)
     }
 
-    /// Tile the exile returns to (C# `exile_to`), or -1.
+    /// Tile the [除外] return [传送] lands on, or -1.
     pub fn exile_to(&self) -> i32 {
         self.state_get(key::EXILE_TO)
     }
 
-    /// Fire pots held (C# `fire`).
+    /// Fire pots (火罐) held.
     pub fn fire(&self) -> i32 {
         self.state_get(key::FIRE)
     }
 
-    /// The mandated fire-pot cap (C# `fireMax`) -- the `max` of the `fire` item,
-    /// written by a character skill. Not something the engine imposes.
+    /// The mandated fire-pot cap -- the `max` of the `fire` item, written by a
+    /// character skill. Not something the engine imposes.
     pub fn fire_max(&self) -> i32 {
         self.state_max(key::FIRE)
     }
@@ -841,7 +843,7 @@ impl MatchPlayer {
     }
 }
 
-/// `MatchPrompt.cs`
+/// A prompt asking players to choose.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchPrompt {
@@ -912,7 +914,7 @@ impl MatchPrompt {
     }
 }
 
-/// `MatchVote.cs` -- the vote to end the match early.
+/// The vote to end the match early.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchVote {
@@ -949,7 +951,7 @@ impl MatchVote {
     }
 }
 
-/// `MatchEvent.cs` -- one log/animation event. `id` increases monotonically per match,
+/// One log/animation event. `id` increases monotonically per match,
 /// which is what makes SSE `Last-Event-ID` resume work.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
@@ -1008,7 +1010,8 @@ impl Default for MatchEvent {
     }
 }
 
-/// `ActiveEvent.cs`
+/// An event card (事件卡) currently in play: drawn, public, effect running
+/// (`docs/EVENTS.md`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ActiveEvent {
@@ -1033,7 +1036,7 @@ impl Default for ActiveEvent {
     }
 }
 
-/// `FieldCard.cs` -- a card on a player's field.
+/// A card on a player's field.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct FieldCard {
@@ -1059,8 +1062,8 @@ pub struct FieldCard {
     #[serde(default)]
     pub counters: BTreeMap<String, i32>,
     pub face_down: bool,
-    /// C# `Card.Immune` -- 「此卡不受…效果影响」. A value on the card, not a
-    /// subclass override: effects that would touch it read this and skip.
+    /// 「此卡不受…效果影响」. A value on the card, not a subclass override:
+    /// effects that would touch it read this and skip.
     pub immune: bool,
     /// The card rule's declared static **properties** (see [`prop`]), stamped
     /// onto the instance at placement and gone with it. A continuous effect
@@ -1075,10 +1078,10 @@ pub struct FieldCard {
     /// and is *not* flagged, even when it sits on someone else's field.
     #[serde(default)]
     pub band_skill: bool,
-    /// A 「拿取」ed band-skill copy (C# `BandBase.Extra`, `H.MakeBand(.., extra)`).
-    /// 「相同乐队技能卡的效果不可叠加」 -- the hook dispatch skips an extra when
-    /// a non-extra attachment of the same id is already on the field -- and
-    /// 「不视为那个乐队的角色」 (`in_band` reads only the character).
+    /// A 「拿取」ed band-skill copy. 「相同乐队技能卡的效果不可叠加」 -- the
+    /// hook dispatch skips an extra when a non-extra attachment of the same id
+    /// is already on the field -- and 「不视为那个乐队的角色」 (`in_band` reads
+    /// only the character).
     #[serde(default)]
     pub extra: bool,
     pub note: Msg,
@@ -1142,7 +1145,23 @@ pub mod mark_kind {
     pub const CP: &str = "mark:cp";
 }
 
-/// `TileMark.cs` -- a marker placed on a tile.
+
+/// Wire shape of an optional card-instance id: the old field was an `i32`
+/// with `-1` = none. Serde keeps that spelling so `SAVE_VERSION` need not move.
+mod opt_i32_neg1 {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(v: &Option<i32>, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_i32(v.unwrap_or(-1))
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<i32>, D::Error> {
+        let raw = i32::deserialize(d)?;
+        Ok(if raw < 0 { None } else { Some(raw) })
+    }
+}
+
+/// A marker placed on a tile.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TileMark {
@@ -1166,17 +1185,20 @@ pub struct TileMark {
     /// mark (empty when none). Not an owner.
     pub card: String,
     /// Provenance for the rules: the **card instance** (`FieldCard::uid`) that
-    /// placed the mark, or `-1`. 「此卡在格子上添加的[CP点]及其产物」
+    /// placed the mark, or `None`. 「此卡在格子上添加的[CP点]及其产物」
     /// (通用:该清CP了 (1)) keys on this, not on [`Self::owner`]. Per-unit
-    /// attribute -- not ownership. Serde-defaulted so pre-`src` saves still load.
-    pub src: i32,
+    /// attribute -- not ownership. Serde-defaulted so pre-`src` saves still load
+    /// (the wire spelling is still `-1` for none).
+    #[serde(default, with = "opt_i32_neg1")]
+    pub src: Option<i32>,
     /// The **owning card instance** (`FieldCard::uid`) whose named counter
     /// these units are bound to (user ruling 2026-10-10: every tile mark is a
     /// counter of some card or pseudo card). Destroying that instance destroys
-    /// these units. `-1` = legacy row whose creator could not be determined at
-    /// save-migration time (kept, never auto-purged). Serde-defaulted.
-    #[serde(default)]
-    pub instance: i32,
+    /// these units. `None` = legacy row whose creator could not be determined
+    /// at save-migration time (kept, never auto-purged). Serde-defaulted (the
+    /// wire spelling is still `-1` for none).
+    #[serde(default, with = "opt_i32_neg1")]
+    pub instance: Option<i32>,
     pub note: Msg,
 }
 
@@ -1190,8 +1212,8 @@ impl Default for TileMark {
             owner: -1,
             count: 1,
             card: String::new(),
-            src: -1,
-            instance: -1,
+            src: None,
+            instance: None,
             note: Msg::default(),
         }
     }
@@ -1205,7 +1227,7 @@ impl TileMark {
     }
 }
 
-/// `Counter.cs` -- named units held by a player. Under the bound-counter model
+/// Named units held by a player. Under the bound-counter model
 /// these are units of some card instance's named counter, bound to a holder
 /// (user ruling 2026-10-10). [`Self::instance`] is that owner; `-1` = legacy
 /// row whose creator could not be determined at save-migration time.
@@ -1214,8 +1236,10 @@ impl TileMark {
 pub struct Counter {
     pub name: String,
     pub value: i32,
-    /// Owning card instance (`FieldCard::uid`), or `-1` when unknown.
-    pub instance: i32,
+    /// Owning card instance (`FieldCard::uid`), or `None` when unknown (the
+    /// wire spelling is still `-1`).
+    #[serde(default, with = "opt_i32_neg1")]
+    pub instance: Option<i32>,
 }
 
 impl Default for Counter {
@@ -1223,21 +1247,21 @@ impl Default for Counter {
         Self {
             name: String::new(),
             value: 0,
-            instance: -1,
+            instance: None,
         }
     }
 }
 
-/// A filter over [`TileMark`] rows (the generic tile-mark API). `""` / `-2`
-/// mean "any". `instance` is the owning counter's card instance; `src` is
-/// provenance.
+/// A filter over [`TileMark`] rows (the generic tile-mark API). Empty
+/// `kind` / `category` and `None` `owner` / `src` / `instance` mean "any".
+/// `instance` is the owning counter's card instance; `src` is provenance.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MarkFilter<'a> {
     pub kind: &'a str,
     pub category: &'a str,
-    pub owner: i32,
-    pub src: i32,
-    pub instance: i32,
+    pub owner: Option<i32>,
+    pub src: Option<i32>,
+    pub instance: Option<i32>,
 }
 
 impl MarkFilter<'_> {
@@ -1245,17 +1269,17 @@ impl MarkFilter<'_> {
     pub const ANY: MarkFilter<'static> = MarkFilter {
         kind: "",
         category: "",
-        owner: -2,
-        src: -2,
-        instance: -2,
+        owner: None,
+        src: None,
+        instance: None,
     };
 
     pub fn matches(&self, m: &TileMark) -> bool {
         (self.kind.is_empty() || m.kind == self.kind)
             && (self.category.is_empty() || m.category == self.category)
-            && (self.owner == -2 || m.owner == self.owner)
-            && (self.src == -2 || m.src == self.src)
-            && (self.instance == -2 || m.instance == self.instance)
+            && (self.owner.is_none() || self.owner == Some(m.owner))
+            && (self.src.is_none() || self.src == m.src)
+            && (self.instance.is_none() || self.instance == m.instance)
     }
 }
 

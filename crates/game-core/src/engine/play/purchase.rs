@@ -16,8 +16,9 @@
 use super::super::world::World;
 use crate::data::GameData;
 use crate::state::MatchState;
+use crate::data::TileKind;
 
-/// Which kind of purchase this is (C# `Buy.Kind`). Mirrors
+/// Which kind of purchase this is. Mirrors
 /// `card_sdk::abi::BuyKind`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BuyKind {
@@ -53,7 +54,7 @@ impl BuyKind {
         })
     }
 
-    /// The wire name (the `Trigger.buy_kind` string).
+    /// The wire name (the `Trigger::buy_kind` string).
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Land => "land",
@@ -148,14 +149,14 @@ pub fn redeem_cost(data: &GameData, t: usize) -> i32 {
 }
 
 /// The property rent-table entry at the **counted** house count
-/// (`H.RentHouses`; `pay_rent`'s lookup). RiNG is not on this table -- see
+/// ([`World::rent_houses`]; `pay_rent`'s lookup). RiNG is not on this table -- see
 /// [`ring_rent_unit`]. **Single source** for `pay_rent`, `World::rent_of`'s
 /// property branch and the tile quotes.
 pub fn table_rent(data: &GameData, w: &World, t: usize) -> i32 {
     let Some(tile) = data.tiles.get(t) else {
         return 0;
     };
-    if tile.kind == "ring" {
+    if tile.kind == TileKind::Ring {
         return 0;
     }
     let h = w.rent_houses(t as i32);
@@ -178,7 +179,7 @@ pub fn ring_rent_unit(data: &GameData, w: &World, owner: usize) -> i32 {
 pub fn count_rings(data: &GameData, w: &World, player: usize) -> i32 {
     (0..data.tiles.len())
         .filter(|&t| {
-            data.tiles[t].kind == "ring"
+            data.tiles[t].kind == TileKind::Ring
                 && w.st.owners.get(t).copied().unwrap_or(-1) == player as i32
         })
         .count() as i32
@@ -335,7 +336,7 @@ use crate::state::{MoneyFlow, TileQuote, TileQuoteKind};
 ///
 /// Buy / force-buy go through [`quote_for`] so the rules crate's `BuyAdd` /
 /// `BuyMul` / `BuySet` stages are included (quote == charge). Rent is the
-/// pre-pipeline table figure with the `H.RentHouses` override and the tile's
+/// pre-pipeline table figure with the counted-house override and the tile's
 /// persistent `RENT_FACTOR` / `PAY_FACTOR` scalars -- the same halves
 /// `Play::scale_settle_payment` reads. Card `payAdd` / `payMul` / `payTotal*`
 /// hooks (「支付减半」 riding a card body, payee redirects, …) need the money
@@ -494,7 +495,7 @@ fn rent_quote(
     let Some(tile) = data.tiles.get(t) else {
         return (0, None);
     };
-    if tile.kind == "ring" {
+    if tile.kind == TileKind::Ring {
         // RiNG rent is rolled at payment time; show the honest dice range.
         let owner = w.st.owners.get(t).copied().unwrap_or(-1);
         let unit = ring_rent_unit(data, w, owner.max(0) as usize);

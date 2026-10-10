@@ -1,4 +1,4 @@
-//! The match engine: the port of `MatchHost`'s game shell.
+//! The match engine: the game shell that owns a live match.
 //!
 //! [`Match`] is the host. It owns the clocks, the live prompt (bot answers, time-outs,
 //! auction bidding), the end-match vote, and at most one *pending routine*.
@@ -36,10 +36,13 @@ pub use ai::{
 };
 pub use cx::{Answered, AnswerProvider, Ask, Cx, Flow, Halt, HeuristicProvider, Reply, AI_UNSET};
 pub use move_ctx::{MoveCtx, MoveKind, Roll};
-pub use play::{Paid, Pay};
+pub use play::{Paid, Pay, PayEvent, PayKind};
 pub use play::purchase;
-pub use rules::{CardRules, Dest, StubRules, Trigger};
-pub use world::{Hidden, Scheduled, SharedWorld, TurnCtx, World};
+pub use rules::{
+    CardRules, Dest, Dir, Effect, Negation, Payee, RollSource, StubRules, Trigger, TriggerBuy,
+    TriggerMove, TriggerPay,
+};
+pub use world::{Extreme, Hidden, Scheduled, SharedWorld, TurnCtx, World};
 
 /// Measurement counters for `docs/BOT.md` §5 (B0). Compiled out unless the
 /// `bot-cost` feature is on; nothing behavioural either way.
@@ -279,12 +282,12 @@ struct Saved {
 }
 
 /// Bumped whenever [`Saved`] changes shape; older saves are rejected.
-/// v2: `FieldCard.hand_limit_delta` became the generic `FieldCard.props` map.
-/// v5: `World.marker_owner` (marker ownership, user ruling 2026-10-07).
+/// v2: `FieldCard::hand_limit_delta` became the generic `FieldCard::props` map.
+/// v5: `World::marker_owner` (marker ownership, user ruling 2026-10-07).
 /// Public so a match record's [`crate::record::EngineStamp`] can name the save
 /// format it was written against (see `docs/REPLAY.md`).
 /// v6: every tile mark / player token carries its owning card instance
-/// (`TileMark.instance` / `Counter.instance`), stamped **at creation time**.
+/// (`TileMark::instance` / `Counter::instance`), stamped **at creation time**.
 /// `restore_saved` is exact (`version != SAVE_VERSION` is refused) and runs no
 /// re-attach -- rewriting live state would break save → restore identity.
 pub const SAVE_VERSION: u32 = 6;
@@ -397,7 +400,7 @@ impl Match {
         })
     }
 
-    /// `MatchHost(members, seed, mode, weights)`. At most 10 players.
+    /// A match from `(members, seed, mode, weights)`. At most 10 players.
     ///
     /// **Legacy** seeding: xoshiro256\*\* keyed by a `u64`. This is the stream
     /// every record written before the commit-reveal switch runs on, and the
@@ -470,7 +473,7 @@ impl Match {
         // Solo with a character already on every seat (the solo setup screen's
         // picks, its randoms resolved before the match is built) skips the
         // timed ban / pick entirely and opens the deck phase instead. Online
-        // never takes this path: there `RoomMember.character` is the lobby
+        // never takes this path: there `RoomMember::character` is the lobby
         // avatar, not a match pick, and the pick phase must stay. An unknown
         // or duplicated pick is not a preset -- fall through to the pick phase.
         let preset = mode == MatchMode::Solo

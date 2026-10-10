@@ -93,12 +93,14 @@ fn guest_filter<C: HostCtx>(c: &mut C, fp: i32, fl: i32) -> Result<game_core::st
     let bytes = c.read_guest(fp, fl)?;
     let f: card_sdk::abi::MarkFilter = postcard::from_bytes(&bytes)
         .map_err(|_| HostErr::trap("guest mark filter is not MarkFilter postcard"))?;
+    // The guest filter's `-2` means "any"; the host filter uses `None`.
+    let any = |v: i32| if v == -2 { None } else { Some(v) };
     Ok(game_core::state::MarkFilter {
         kind: Box::leak(f.kind.into_boxed_str()),
         category: Box::leak(f.category.into_boxed_str()),
-        owner: f.owner,
-        src: f.src,
-        instance: f.instance,
+        owner: any(f.owner),
+        src: any(f.src),
+        instance: any(f.instance),
     })
 }
 
@@ -1828,88 +1830,84 @@ pub fn trig_by_card<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
 }
 
 pub fn trig_pay_is_rent<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().pay_is_rent as i32
-    })
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .pay
+        .map(|p| p.is_rent)
+        .unwrap_or(false) as i32)
 }
 
 pub fn trig_move_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_kind.map_or(-1, |k| k as i32)
-    })
+    Ok(c.st().wr().trigger().mv.map_or(-1, |m| m.kind as i32))
 }
 
 pub fn trig_move_resolve<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_resolve as i32
-    })
+    Ok(c.st().wr().trigger().mv.map_or(0, |m| m.resolve as i32))
 }
 
 pub fn trig_move_tag<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
-            let key = guest_str(c, p, n)?;
-            Ok(c.st()
-                .wr()
-                .trigger()
-                .move_tags
-                .iter()
-                .find(|(k, _)| *k == key)
-                .map_or(0, |(_, v)| *v))
+    let key = guest_str(c, p, n)?;
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .mv
+        .and_then(|m| m.tags.iter().find(|(k, _)| *k == key).map(|(_, v)| *v))
+        .unwrap_or(0))
 }
 
 pub fn trig_move_main<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_main as i32
-    })
+    Ok(c.st().wr().trigger().main as i32)
 }
 
 pub fn trig_move_dir<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_dir
-    })
+    // 1 when no move (matches CoreTrigger::new / MoveSnap / guest docs).
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .mv
+        .map_or(1, |m| m.dir.as_i32()))
 }
 
 pub fn trig_move_remaining<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_remaining
-    })
+    Ok(c.st().wr().trigger().mv.map_or(0, |m| m.remaining))
 }
 
 pub fn trig_move_from<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_from
-    })
+    Ok(c.st().wr().trigger().mv.map_or(-1, |m| m.from))
 }
 
 pub fn trig_move_total<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_total
-    })
+    Ok(c.st().wr().trigger().mv.map_or(0, |m| m.total))
 }
 
 pub fn trig_move_roll<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().move_roll.unwrap_or(-1)
-    })
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .mv
+        .and_then(|m| m.roll)
+        .unwrap_or(-1))
 }
 
 pub fn trig_roll_source<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().roll_source
-    })
+    Ok(c.st().wr().trigger().roll_source.as_i32())
 }
 
 pub fn trig_buy_kind<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().buy_kind
-    })
+    Ok(c.st().wr().trigger().buy.map_or(0, |b| b.kind as i32))
 }
 
 pub fn trig_seller<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().trigger().seller)
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .buy
+        .map_or(-1, |b| b.seller.as_i32()))
 }
 
 pub fn trig_price<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok(c.st().wr().trigger().price)
+    Ok(c.st().wr().trigger().buy.map_or(0, |b| b.price))
 }
 
 pub fn trig_set_price<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
@@ -1918,9 +1916,12 @@ pub fn trig_set_price<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
 }
 
 pub fn trig_deal_owner<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().deal_owner
-    })
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .buy
+        .and_then(|b| b.deal_owner)
+        .unwrap_or(-1))
 }
 
 pub fn trig_set_deal_owner<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
@@ -1929,9 +1930,7 @@ pub fn trig_set_deal_owner<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr>
 }
 
 pub fn trig_deal_houses<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().deal_houses
-    })
+    Ok(c.st().wr().trigger().buy.map_or(0, |b| b.deal_houses))
 }
 
 pub fn trig_set_deal_houses<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
@@ -1940,9 +1939,11 @@ pub fn trig_set_deal_houses<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr
 }
 
 pub fn trig_deal_mortgaged<C: HostCtx>(c: &mut C) -> Result<i32, HostErr> {
-    Ok({
-        c.st().wr().trigger().deal_mortgaged as i32
-    })
+    Ok(c.st()
+        .wr()
+        .trigger()
+        .buy
+        .map_or(0, |b| b.deal_mortgaged as i32))
 }
 
 pub fn trig_set_deal_mortgaged<C: HostCtx>(c: &mut C, v: i32) -> Result<(), HostErr> {
@@ -2633,6 +2634,6 @@ fn write_str<C: HostCtx>(c: &mut C, s: &str, p: i32, n: i32) -> Result<i32, Host
 /// name on an `On::Message` dispatch. Two-call string pattern like
 /// [`msg_name`].
 pub fn trig_name<C: HostCtx>(c: &mut C, p: i32, n: i32) -> Result<i32, HostErr> {
-    let s = c.st().wr().trigger().name.clone();
+    let s = c.st().wr().trigger().name.clone().unwrap_or_default();
     write_str(c, &s, p, n)
 }

@@ -1457,7 +1457,7 @@ impl Ruleset {
 /// One-line dump of a trigger for the G3 audit panic message.
 fn trigger_dump(t: &crate::Trigger) -> String {
     format!(
-        "kind={:?} actor={} target={} tile={} value={} step={} by={} pay_is_rent={} move_roll={:?} move_kind={:?} abnormal={}",
+        "kind={:?} actor={} target={} tile={} value={} step={} by={} pay_is_rent={} move_roll={:?} move_kind={:?} main={} abnormal={}",
         t.kind,
         t.player_id,
         t.target,
@@ -1465,9 +1465,10 @@ fn trigger_dump(t: &crate::Trigger) -> String {
         t.value,
         t.step,
         t.by_card.unwrap_or(-1),
-        t.pay_is_rent,
-        t.move_roll,
-        t.move_kind,
+        t.pay.map(|p| p.is_rent).unwrap_or(false),
+        t.mv.as_ref().and_then(|m| m.roll),
+        t.mv.as_ref().map(|m| m.kind),
+        t.main,
         matches!(t.kind, crate::TriggerKind::Abnormal),
     )
 }

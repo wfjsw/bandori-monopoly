@@ -411,7 +411,7 @@ fn ras_skill_teleport_then_next_roll_stream_is_continuous() {
     // Latch the livehouse settle: stand on a livehouse and settle there.
     let house = (0..n() as usize)
         .find(|&u| {
-            data().tiles[u].kind == "property"
+            data().tiles[u].kind == game_core::data::TileKind::Property
                 && data()
                     .tiles
                     .get(u)

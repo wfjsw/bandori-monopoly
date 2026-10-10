@@ -23,7 +23,7 @@ fn game_data_counts_match_the_original() {
     assert_eq!(d.match_rules.ring_multiplier, 10);
     assert!(!d.rules_text.is_empty());
 
-    let kind = |k: &str| d.tiles.iter().filter(|t| t.kind == k).count();
+    let kind = |k: &str| d.tiles.iter().filter(|t| t.kind.as_str() == k).count();
     assert_eq!((kind("property"), kind("agent"), kind("ring")), (41, 11, 4));
     assert_eq!(d.tiles.iter().filter(|t| t.is_corner()).count(), 4);
     assert_eq!(d.tiles.iter().filter(|t| t.is_buyable()).count(), 45);
@@ -287,7 +287,7 @@ fn profile_normalize_migrates_v1_saves() {
     assert!(d.character(&p.home_character).is_some());
     assert_eq!(p.history[0].mode, MatchMode::Ranked);
     assert_eq!(p.history[1].mode, MatchMode::Casual);
-    // MatchMode is an integer on disk, like JsonUtility writes it.
+    // MatchMode is an integer on disk (`0`/`1`/`2`).
     assert_eq!(serde_json::to_value(&p.history[0]).unwrap()["mode"], 2);
     // Rows written before replay ids existed load with an empty one.
     assert_eq!(p.history[0].replay_id, "");

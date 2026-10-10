@@ -9,7 +9,7 @@ fn event_tile_refills_the_hand_deck_before_the_event_choice() {
     let cafe = data()
         .tiles
         .iter()
-        .position(|v| v.kind == "cafe")
+        .position(|v| v.kind == game_core::data::TileKind::Cafe)
         .unwrap();
     t.set_pos(0, cafe - 5);
     t.set_draw(0, &["通用:GREAT"]);

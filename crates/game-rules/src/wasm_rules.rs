@@ -24,7 +24,7 @@ use crate::host::{
     Call, CardModules, HookRun, HostRequest, Outcome, Prompt, PromptOption, RuleError, Ruleset,
 };
 use crate::inline::InlineHost;
-use crate::world::{CardWorld, Trigger};
+use crate::world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
 use rules_cond::WindowScope;
@@ -242,10 +242,10 @@ impl CardWorld for Run {
     }
 
     fn extreme(&self) -> i32 {
-        self.world.turn.extreme
+        self.world.turn.extreme.as_i32()
     }
     fn set_extreme(&mut self, v: i32) {
-        self.world.turn.extreme = v.signum();
+        self.world.turn.extreme = game_core::engine::Extreme::from_i32(v.signum());
     }
     fn play_from_hand(&self) -> bool {
         self.world.turn.play_from_hand
@@ -884,13 +884,13 @@ impl CardWorld for Run {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "ring") as i32
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Ring) as i32
     }
     fn is_circle(&self, tile: i32) -> i32 {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "circle") as i32
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Circle) as i32
     }
     fn is_color(&self, player_id: i32, tile: i32, group: i32) -> bool {
         // The tile-prop colour reader (`docs/PURCHASE.md`): the tile's own
@@ -946,7 +946,7 @@ impl CardWorld for Run {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "agent") as i32
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Agent) as i32
     }
     fn is_live_house(&self, tile: i32) -> i32 {
         // C# `H.IsLiveHouse` = `IsColor(t, 6) && IsBuyable(t)`. The per-player
@@ -1175,7 +1175,7 @@ impl CardWorld for Run {
         // `Card.Def.Targeting` + `H.Others`: a play that names recipients names
         // the other living players of its user (「[指定][使用者]以外的所有玩家」
         // / 「其他玩家[分摊]」). The play's card is the one the trigger names.
-        let card = &self.trigger.card;
+        let card = self.trigger.card.as_deref().unwrap_or("");
         let designates = props_of(&self.props, card)
             .get(game_core::state::prop::DESIGNATES)
             .copied()
@@ -1202,11 +1202,11 @@ impl CardWorld for Run {
             .map_or(-2, |f| f.tile.max(-1))
     }
     fn play_doubled(&self) -> i32 {
-        self.world.turn.play_doubled
+        self.world.turn.play_doubled.unwrap_or(-1)
     }
 
     fn set_play_doubled(&mut self, n: i32) {
-        self.world.turn.play_doubled = n;
+        self.world.turn.play_doubled = (n >= 0).then_some(n);
     }
 
     // status extensions -----------------------------------------------------
@@ -1283,7 +1283,14 @@ impl CardWorld for Run {
         self.trigger.clone()
     }
     fn set_trigger_move_roll(&mut self, roll: i32) {
-        self.trigger.move_roll = Some(roll);
+        // Rewrite the face on the move payload when one exists. A card-driven
+        // `roll` raise has no `t.Move`; there the face rides `value` and the
+        // writeback reads it from there (Y.O.L.O on 热气球's 4x3d20).
+        if let Some(m) = &mut self.trigger.mv {
+            m.roll = Some(roll);
+        } else {
+            self.trigger.value = roll;
+        }
     }
     fn set_trigger_value(&mut self, value: i32) {
         self.trigger.value = value;
@@ -1310,22 +1317,30 @@ impl CardWorld for Run {
         });
     }
     fn trig_card_is(&self, id: &str) -> i32 {
-        (self.trigger.card == id) as i32
+        (self.trigger.card.as_deref() == Some(id)) as i32
     }
     fn set_trigger_price(&mut self, v: i32) {
-        self.trigger.price = v;
+        if let Some(b) = &mut self.trigger.buy {
+            b.price = v;
+        }
     }
     fn set_trigger_deal_owner(&mut self, v: i32) {
-        self.trigger.deal_owner = v;
+        if let Some(b) = &mut self.trigger.buy {
+            b.deal_owner = Some(v);
+        }
     }
     fn set_trigger_deal_houses(&mut self, v: i32) {
-        self.trigger.deal_houses = v;
+        if let Some(b) = &mut self.trigger.buy {
+            b.deal_houses = v;
+        }
     }
     fn set_trigger_deal_mortgaged(&mut self, v: i32) {
-        self.trigger.deal_mortgaged = v != 0;
+        if let Some(b) = &mut self.trigger.buy {
+            b.deal_mortgaged = v != 0;
+        }
     }
     fn set_trigger_reason(&mut self, reason: &str) {
-        self.trigger.reason = reason.to_string();
+        self.trigger.reason = Some(reason.to_string());
     }
 
     // turn plan & scheduling -------------------------------------------------
@@ -1400,8 +1415,10 @@ impl CardWorld for Run {
         if self.trigger.kind == TriggerKind::MoveBefore {
             let delta = v.max(0) - self.trigger.value.max(0);
             self.trigger.value = v.max(0);
-            self.trigger.move_total = (self.trigger.move_total + delta).max(0);
-            self.trigger.move_remaining = (self.trigger.move_remaining + delta).max(0);
+            if let Some(m) = &mut self.trigger.mv {
+                m.total = (m.total + delta).max(0);
+                m.remaining = (m.remaining + delta).max(0);
+            }
         }
     }
     fn set_roller(&mut self, v: i32) {
@@ -2344,7 +2361,7 @@ impl<M: CardModules> RulesBridge<M> {
             };
             let t = self.raise_core(cx, "roll", player_id, |t| {
                 t.value = face;
-                t.roll_source = source;
+                t.roll_source = game_core::engine::rules::RollSource::from_i32(source);
             })?;
             return Ok(t.value.max(0));
         }
@@ -2393,13 +2410,18 @@ impl<M: CardModules> RulesBridge<M> {
             typ,
             text,
         } => {
-            let mut p = game_core::engine::Pay::new(amount, "gain");
+            let mut p = game_core::engine::Pay::new(amount, game_core::engine::PayKind::Gain);
             p.to = Some(player_id.max(0) as usize);
-            // `Pay::typ` is `&'static str`; the guest's event-type key is a
-            // short fixed vocabulary ("pass" / "lose" / ...). Leak the box --
-            // one per gain_typed call, never reclaimed, matching the static
-            // `Some("pass")` the engine's own circle money uses.
-            p.typ = Some(&*Box::leak(typ.into_boxed_str()));
+            // `Pay::typ` is a [`game_core::engine::PayEvent`]; the guest's
+            // event-type key is the short fixed vocabulary the wire spelling
+            // names (`"pass"` / `"lose"` / `"gain"` / `"pay"` / `"rent"`).
+            p.typ = Some(match typ.as_str() {
+                "pass" => game_core::engine::PayEvent::Pass,
+                "lose" => game_core::engine::PayEvent::Lose,
+                "pay" => game_core::engine::PayEvent::Pay,
+                "rent" => game_core::engine::PayEvent::Rent,
+                _ => game_core::engine::PayEvent::Gain,
+            });
             p.text = text;
             p.by_card = Some(call.player_id());
             let paid = cx.money(p)?;
@@ -2419,7 +2441,7 @@ impl<M: CardModules> RulesBridge<M> {
             let kind = if delta < 0 { "markerSpend" } else { "markerGain" };
             let t = self.raise_core(cx, kind, player_id, |t| {
                 t.value = delta;
-                t.card = name.clone();
+                t.card = Some(name.clone());
             })?;
             return Ok(if t.is_cancelled() { 0 } else { 1 });
         }
@@ -2468,7 +2490,7 @@ impl<M: CardModules> RulesBridge<M> {
             // any card-caused payment is answerable. The money move
             // happens inside, so the guest's `pay`/`gain` resume is
             // answered with the amount and does not move it again.
-            let mut p = game_core::engine::Pay::new(asked, "card");
+            let mut p = game_core::engine::Pay::new(asked, game_core::engine::PayKind::Card);
             if from >= 0 {
                 p.from = Some(from as usize);
             }
@@ -2559,18 +2581,18 @@ impl<M: CardModules> RulesBridge<M> {
                 }
             }
             for (player_id, id) in after.discard_log {
-                self.raise_core(cx, "discarded", player_id, |t| t.card = id)?;
+                self.raise_core(cx, "discarded", player_id, |t| t.card = Some(id))?;
             }
             // The per-draw after points (`drawn` = the drawn card's own
             // hook, `drew` = the field-card per-draw point), one raise
             // per single card.
             for (player_id, id) in after.draw_log {
                 self.raise_core(cx, "drawn", player_id, |t| {
-                    t.card = id.clone();
+                    t.card = Some(id.clone());
                     t.value = 1;
                 })?;
                 self.raise_core(cx, "drew", player_id, |t| {
-                    t.card = id.clone();
+                    t.card = Some(id.clone());
                     t.value = 1;
                     t.cards = vec![id];
                 })?;
@@ -2589,8 +2611,8 @@ impl<M: CardModules> RulesBridge<M> {
             // count emptied by *any* path still leaves the field.
             for (owner, card, name, change) in after.counter_log {
                 self.raise_core(cx, "counterChanged", owner, |t| {
-                    t.card = card;
-                    t.name = name;
+                    t.card = Some(card);
+                    t.name = Some(name);
                     t.value = change;
                     t.by_card = by;
                 })?;
@@ -2670,7 +2692,7 @@ impl<M: CardModules> RulesBridge<M> {
                 {
                     continue;
                 }
-                trigger.card = id.clone();
+                trigger.card = Some(id.clone());
                 self.drive_hook(
                     cx,
                     Call::Hook {
@@ -2709,7 +2731,7 @@ impl<M: CardModules> RulesBridge<M> {
                 if !self.ruleset.cards()[idx as usize].hooks(kind) {
                     continue;
                 }
-                trigger.card = id.clone();
+                trigger.card = Some(id.clone());
                 self.drive_hook(
                     cx,
                     Call::Hook {
@@ -2863,7 +2885,7 @@ impl<M: CardModules> RulesBridge<M> {
         if single {
             let r = self.raise_core(cx, "redirect", by, |t| {
                 t.target = p;
-                t.card = card.to_string();
+                t.card = Some(card.to_string());
                 t.by_card = Some(by);
             })?;
             let to = r.target;
@@ -2913,9 +2935,9 @@ impl<M: CardModules> RulesBridge<M> {
         let no_target = game_core::state::MarkFilter {
             kind: card_sdk::abi::mark::NO_TARGET,
             category: "",
-            owner: -2,
-            src: -2,
-            instance: -2,
+            owner: None,
+            src: None,
+            instance: None,
         };
         if cx.world_copy().count_marks(tile, &no_target) > 0 {
             return Ok(-1);
@@ -2951,13 +2973,13 @@ impl<M: CardModules> RulesBridge<M> {
         self.raise_core(cx, "targeted", by, |t| {
             t.target = p;
             t.tile = tile;
-            t.card = card.to_string();
+            t.card = Some(card.to_string());
             t.by_card = Some(by);
         })?;
         let declared = self.raise_core(cx, "effect", by, |t| {
             t.target = p;
             t.tile = tile;
-            t.card = card.to_string();
+            t.card = Some(card.to_string());
             t.by_card = Some(by);
             t.effects.push(game_core::engine::rules::Effect {
                 kind: "target",
@@ -2973,7 +2995,7 @@ impl<M: CardModules> RulesBridge<M> {
         self.raise_core(cx, "target", by, |t| {
             t.target = p;
             t.tile = tile;
-            t.card = card.to_string();
+            t.card = Some(card.to_string());
             t.by_card = Some(by);
         })?;
         Ok(true)
@@ -3030,7 +3052,7 @@ impl<M: CardModules> RulesBridge<M> {
             self.raise_core(cx, "reshuffled", who, |_| {})?;
         }
         if dest == DEST_GRAVEYARD {
-            self.raise_core(cx, "discarded", who, |t| t.card = card.to_string())?;
+            self.raise_core(cx, "discarded", who, |t| t.card = Some(card.to_string()))?;
         } else if dest != 1 {
             cx.log(
                 left,
@@ -3153,7 +3175,7 @@ impl<M: CardModules> RulesBridge<M> {
         let mut chain = vec![ChainLink {
             seat: chain_starter(t, cx.state().turn, n),
             idx: -1,
-            id: t.card.clone(),
+            id: t.card.clone().unwrap_or_default(),
             uid: -1,
             move_extension: 0,
             answered: 0,
@@ -3255,7 +3277,7 @@ impl<M: CardModules> RulesBridge<M> {
                     if uid >= 0 {
                         link.cards = vec![id.clone()];
                     }
-                    link.card = id.clone();
+                    link.card = Some(id.clone());
                     link.step = cx.state().step;
                     link.by_card = Some(cursor as i32);
                     let at = chain.len();
@@ -3344,10 +3366,13 @@ impl<M: CardModules> RulesBridge<M> {
             // effect settles only after every counter has had its say.
             let mut on_link = chain[answered].link.clone();
             if chain[idx].move_extension > 0 {
-                on_link.move_tags.push((
-                    card_sdk::abi::COUNTERACT_MOVE_EXTENSION.to_string(),
-                    chain[idx].move_extension,
-                ));
+                // The extension is a move-tag rewrite; it needs a move payload.
+                if let Some(m) = &mut on_link.mv {
+                    m.tags.push((
+                        card_sdk::abi::COUNTERACT_MOVE_EXTENSION.to_string(),
+                        chain[idx].move_extension,
+                    ));
+                }
             }
             let dest = self.drive(
                 cx,
@@ -3359,9 +3384,9 @@ impl<M: CardModules> RulesBridge<M> {
                 uid,
                 &mut on_link,
             )?;
-            on_link.move_tags.retain(|(key, _)| {
-                key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION
-            });
+            if let Some(m) = &mut on_link.mv {
+                m.tags.retain(|(key, _)| key != card_sdk::abi::COUNTERACT_MOVE_EXTENSION);
+            }
             chain[answered].link = on_link;
             dest
         };
@@ -3388,7 +3413,7 @@ impl<M: CardModules> RulesBridge<M> {
             self.raise_core(cx, "reshuffled", seat as i32, |_| {})?;
         }
         if spent {
-            self.raise_core(cx, "discarded", seat as i32, |t| t.card = id.clone())?;
+            self.raise_core(cx, "discarded", seat as i32, |t| t.card = Some(id.clone()))?;
         }
         Ok(())
     }
@@ -3788,8 +3813,9 @@ impl<M: CardModules> RulesBridge<M> {
             .collect();
         if shared_move {
             let landing = |extra: i32| {
-                (top.tile + (top.move_total + extra) * top.move_dir)
-                    .rem_euclid(self.data.tiles.len() as i32)
+                let total = top.mv.as_ref().map(|m| m.total).unwrap_or(0);
+                let dir = top.mv.as_ref().map(|m| m.dir.as_i32()).unwrap_or(1);
+                (top.tile + (total + extra) * dir).rem_euclid(self.data.tiles.len() as i32)
             };
             loop {
                 // No declaration or resource change until the payment is confirmed.
@@ -3809,7 +3835,7 @@ impl<M: CardModules> RulesBridge<M> {
                     vec![s],
                     Msg::new("ask.counteract.title"),
                     Msg::new("ask.counteract.move_extension")
-                        .i("n", top.move_total as i64)
+                        .i("n", top.mv.as_ref().map(|m| m.total).unwrap_or(0) as i64)
                         .tile("tile", landing(0)),
                     distances,
                     2,
@@ -3878,9 +3904,43 @@ impl<M: CardModules> RulesBridge<M> {
     }
 }
 
-/// The module's view of an engine trigger (the bridge `Trigger`). `move_roll`
-/// is C# `t.Move.Roll`, which a counteraction may rewrite; the engine reads it back.
+/// The module's view of an engine trigger (the bridge `Trigger`). The move
+/// payload's `roll` is C# `t.Move.Roll`, which a counteraction may rewrite;
+/// the engine reads it back.
 fn bridge_trigger(t: &CoreTrigger) -> Trigger {
+    let is_roll_kind = matches!(
+        trigger_kind(t.kind),
+        TriggerKind::MoveRoll | TriggerKind::Roll | TriggerKind::RollAfter
+    );
+    // Only a move trigger carries a roll; `paid`/`settle` carry value as an
+    // amount, which must not read as a phantom move. `RollAfter` is the
+    // post-roll hook and does carry the face (「若移动掷骰出目为16及以上」).
+    // A card-driven `roll` raise has no move payload (`mv: None`); its face
+    // stays on `value` and the writeback reads it from there.
+    let mv = t.mv.as_ref().map(|m| TriggerMove {
+        kind: match m.kind {
+            game_core::engine::MoveKind::Walk => card_sdk::abi::MoveKind::Walk,
+            game_core::engine::MoveKind::Teleport => card_sdk::abi::MoveKind::Teleport,
+        },
+        resolve: m.resolve,
+        tags: m.tags.clone(),
+        // Mirror of `Trigger::main`.
+        main: t.main,
+        dir: m.dir,
+        from: m.from,
+        remaining: m.remaining,
+        total: m.total,
+        roll: is_roll_kind.then_some(t.value),
+    });
+    let buy = t.buy.map(|b| TriggerBuy {
+        kind: card_sdk::abi::BuyKind::from_i32(b.kind.as_i32())
+            .unwrap_or(card_sdk::abi::BuyKind::Land),
+        seller: b.seller,
+        price: b.price,
+        deal_owner: b.deal_owner,
+        deal_houses: b.deal_houses,
+        deal_mortgaged: b.deal_mortgaged,
+    });
     Trigger {
         kind: trigger_kind(t.kind),
         player_id: t.player_id,
@@ -3889,43 +3949,19 @@ fn bridge_trigger(t: &CoreTrigger) -> Trigger {
         value: t.value,
         step: t.step,
         by_card: t.by_card,
-        pay_is_rent: t.pay_is_rent,
-        move_kind: t.move_kind.map(|k| match k {
-            game_core::engine::MoveKind::Walk => card_sdk::abi::MoveKind::Walk,
-            game_core::engine::MoveKind::Teleport => card_sdk::abi::MoveKind::Teleport,
-        }),
-        move_resolve: t.move_resolve,
-        move_tags: t.move_tags.clone(),
-        move_main: t.move_main,
-        move_dir: t.move_dir,
-        move_from: t.move_from,
+        main: t.main,
+        mv,
+        pay: t.pay.map(|p| TriggerPay { is_rent: p.is_rent }),
+        buy,
         negation: t.negation,
         spared: t.spared.clone(),
         seq: t.seq,
         answers: t.answers,
         effects: t.effects.clone(),
-        move_remaining: t.move_remaining,
-        move_total: t.move_total,
         cards: t.cards.clone(),
-        // Only a move trigger carries a roll; `paid`/`settle` carry value as an
-        // amount, which must not read as a phantom move.
-        // Only a move trigger carries a roll; `paid`/`settle` carry value as an
-        // amount, which must not read as a phantom move. `RollAfter` is the
-        // post-roll hook and does carry the face (「若移动掷骰出目为16及以上」).
-        move_roll: matches!(
-            trigger_kind(t.kind),
-            TriggerKind::MoveRoll | TriggerKind::Roll | TriggerKind::RollAfter
-        )
-        .then_some(t.value),
         card: t.card.clone(),
         name: t.name.clone(),
         roll_source: t.roll_source,
-        buy_kind: t.buy_kind,
-        seller: t.seller,
-        price: t.price,
-        deal_owner: t.deal_owner,
-        deal_houses: t.deal_houses,
-        deal_mortgaged: t.deal_mortgaged,
         reason: t.reason.clone(),
     }
 }
@@ -4208,14 +4244,14 @@ impl crate::cond_pre::SnapSrc for LiveSnap<'_> {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "circle")
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Circle)
     }
     #[inline]
     fn is_ring(&self, tile: i32) -> bool {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "ring")
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Ring)
     }
     #[inline]
     fn is_live_house(&self, tile: i32) -> bool {
@@ -4425,44 +4461,50 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger.by_card.map(|b| b as i64).unwrap_or(-1)
     }
     fn pay_is_rent(&self) -> bool {
-        self.trigger.pay_is_rent
+        self.trigger.pay.map(|p| p.is_rent).unwrap_or(false)
     }
     fn move_roll(&self) -> i64 {
         self.trigger
-            .move_roll
+            .mv
+            .as_ref()
+            .and_then(|m| m.roll)
             .filter(|&r| r >= 0)
             .map(|r| r as i64)
             .unwrap_or(-1)
     }
     fn move_kind(&self) -> i64 {
-        self.trigger.move_kind.map(|k| k as i64).unwrap_or(-1)
+        self.trigger.mv.as_ref().map(|m| m.kind as i64).unwrap_or(-1)
     }
     fn move_remaining(&self) -> i64 {
-        self.trigger.move_remaining as i64
+        self.trigger.mv.as_ref().map(|m| m.remaining).unwrap_or(0) as i64
     }
     fn move_main(&self) -> bool {
-        self.trigger.move_main
+        self.trigger.main
     }
     fn move_dir(&self) -> i64 {
-        self.trigger.move_dir as i64
+        self.trigger
+            .mv
+            .as_ref()
+            .map(|m| m.dir.as_i32() as i64)
+            .unwrap_or(1)
     }
     fn move_tag_named(&self, name: &str) -> i64 {
         self.trigger
-            .move_tags
-            .iter()
-            .find(|(k, _)| k == name)
+            .mv
+            .as_ref()
+            .and_then(|m| m.tags.iter().find(|(k, _)| k == name))
             .map(|(_, v)| *v as i64)
             .unwrap_or(0)
     }
     fn move_tag_table(&self) -> Vec<(String, i64)> {
         self.trigger
-            .move_tags
-            .iter()
-            .map(|(k, v)| (k.clone(), *v as i64))
-            .collect()
+            .mv
+            .as_ref()
+            .map(|m| m.tags.iter().map(|(k, v)| (k.clone(), *v as i64)).collect())
+            .unwrap_or_default()
     }
     fn roll_source(&self) -> i64 {
-        self.trigger.roll_source as i64
+        self.trigger.roll_source.as_i32() as i64
     }
     fn abnormal(&self) -> bool {
         matches!(self.trigger.kind, crate::TriggerKind::Abnormal)
@@ -4487,18 +4529,16 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.trigger.effects.iter().map(|e| e.target as i64).collect()
     }
     fn trigger_card(&self) -> i64 {
-        if self.trigger.card.is_empty() {
-            0
-        } else {
-            crate::cond_pre::id_of(&self.trigger.card)
+        match self.trigger.card.as_deref() {
+            Some(card) if !card.is_empty() => crate::cond_pre::id_of(card),
+            _ => 0,
         }
     }
     fn counter_name(&self) -> i64 {
         // `t.Name` on a `CounterChanged` hook / `On::Message` entry.
-        if self.trigger.name.is_empty() {
-            0
-        } else {
-            crate::cond_pre::id_of(&self.trigger.name)
+        match self.trigger.name.as_deref() {
+            Some(name) if !name.is_empty() => crate::cond_pre::id_of(name),
+            _ => 0,
         }
     }
     fn owner(&self) -> i64 {
@@ -4722,13 +4762,13 @@ impl rules_cond::view::CondView for LiveSnap<'_> {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "circle")
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Circle)
     }
     fn is_ring(&self, tile: i64) -> bool {
         self.data
             .tiles
             .get(tile.max(0) as usize)
-            .is_some_and(|t| t.kind == "ring")
+            .is_some_and(|t| t.kind == game_core::data::TileKind::Ring)
     }
     fn is_live_house(&self, tile: i64) -> bool {
         self.data
@@ -4868,9 +4908,10 @@ impl ProbeMemo {
 /// for prompts already on the wire, so old replays keep rendering.
 fn describe_trigger(t: &Trigger) -> Msg {
     let effect_kind = t.effects.first().map(|e| e.kind).unwrap_or("");
+    let card = t.card.as_deref().unwrap_or("");
     let mut m = match t.kind {
         // A play (L1) or a declared counter -- both are `card` links.
-        TriggerKind::Card if !t.card.is_empty() => Msg::new("ask.counteract.detail.play"),
+        TriggerKind::Card if !card.is_empty() => Msg::new("ask.counteract.detail.play"),
         TriggerKind::MoveBefore | TriggerKind::MoveAfter | TriggerKind::Roll | TriggerKind::MoveRoll => {
             Msg::new("ask.counteract.detail.move")
         }
@@ -4878,7 +4919,7 @@ fn describe_trigger(t: &Trigger) -> Msg {
         // (`docs` on `TriggerKind::Effect`); the declared effect's own kind
         // says which.
         TriggerKind::Effect if effect_kind == "pay" => {
-            if t.pay_is_rent && t.target >= 0 {
+            if t.pay.map(|p| p.is_rent).unwrap_or(false) && t.target >= 0 {
                 Msg::new("ask.counteract.detail.rent")
             } else if t.target >= 0 {
                 Msg::new("ask.counteract.detail.pay")
@@ -4886,14 +4927,14 @@ fn describe_trigger(t: &Trigger) -> Msg {
                 Msg::new("ask.counteract.detail.pay_out")
             }
         }
-        TriggerKind::Effect if effect_kind != "" && !t.card.is_empty() => {
+        TriggerKind::Effect if effect_kind != "" && !card.is_empty() => {
             Msg::new("ask.counteract.detail.effect")
         }
         _ => Msg::new("ask.counteract.detail"),
     };
     m = m.player_id("who", t.player_id);
-    if !t.card.is_empty() {
-        m = m.card("card", &t.card);
+    if !card.is_empty() {
+        m = m.card("card", card);
     }
     if t.tile >= 0 {
         m = m.tile("tile", t.tile);
@@ -4936,12 +4977,15 @@ fn buy_trigger(
         tile: t as i32,
         value: price,
         step: st.step,
-        buy_kind: q.kind.as_i32(),
-        seller: q.seller,
-        price,
-        deal_owner: q.player as i32,
-        deal_houses: st.houses.get(t).copied().unwrap_or(0),
-        deal_mortgaged: st.mortgaged.get(t).copied().unwrap_or(false),
+        buy: Some(TriggerBuy {
+            kind: card_sdk::abi::BuyKind::from_i32(q.kind.as_i32())
+                .unwrap_or(card_sdk::abi::BuyKind::Land),
+            seller: game_core::engine::rules::Payee::from_i32(q.seller),
+            price,
+            deal_owner: Some(q.player as i32),
+            deal_houses: st.houses.get(t).copied().unwrap_or(0),
+            deal_mortgaged: st.mortgaged.get(t).copied().unwrap_or(false),
+        }),
         ..Trigger::default()
     }
 }
@@ -5103,40 +5147,18 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // trigger kind, so the link's kind is `None` -- it is the body of the
         // settle the engine already raised (`settle` / `settleBefore` /
         // `settleAfter` frame it), not a named point of its own. `docs/TILES.md`.
+        // No move payload (`mv: None`): the tile body reads `main`, not a move.
+        // (The old shape stamped `move_resolve: true` with `move_kind: None`;
+        // `move_resolve` now lives on the move payload and reads false when
+        // there is no move.)
         let mut trigger = Trigger {
             kind: TriggerKind::None,
             player_id: player_id as i32,
             target: owner,
             tile: tile as i32,
-            value: 0,
             step: cx.state().step,
-            by_card: None,
-            pay_is_rent: false,
-            move_kind: None,
-            move_resolve: true,
-            move_tags: Vec::new(),
-            move_main: main,
-            move_dir: 1,
-            move_from: -1,
-            negation: Default::default(),
-            spared: Vec::new(),
-            seq: 0,
-            answers: 0,
-            effects: Vec::new(),
-            move_remaining: 0,
-            move_total: 0,
-            cards: Vec::new(),
-            roll_source: 0,
-            move_roll: None,
-            card: String::new(),
-            name: String::new(),
-            buy_kind: 0,
-            seller: -1,
-            price: 0,
-            deal_owner: -1,
-            deal_houses: 0,
-            deal_mortgaged: false,
-            reason: String::new(),
+            main,
+            ..Trigger::default()
         };
         for (uid, id) in instances {
             let Some(idx) = self.ruleset.card(&id) else {
@@ -5312,7 +5334,11 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                     if !declares(kind) {
                         continue;
                     }
-                    price = at(&mut run, kind, price).price.max(0);
+                    price = at(&mut run, kind, price)
+                        .buy
+                        .map(|b| b.price)
+                        .unwrap_or(price)
+                        .max(0);
                 }
                 Quote {
                     price,
@@ -5343,36 +5369,10 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             player_id: player_id as i32,
             target: player_id as i32,
             tile: -1,
-            value: 0,
             step: cx.state().step,
             // The card is playing itself, so it is its own cause.
             by_card: Some(player_id as i32),
-            pay_is_rent: false,
-            move_kind: None,
-            move_resolve: false,
-            move_tags: Vec::new(),
-            move_main: false,
-            move_dir: 1,
-            move_from: -1,
-            negation: Default::default(),
-            spared: Vec::new(),
-            seq: 0,
-            answers: 0,
-            effects: Vec::new(),
-            move_remaining: 0,
-            move_total: 0,
-            cards: Vec::new(),
-            roll_source: 0,
-            move_roll: None,
-            card: String::new(),
-            name: String::new(),
-            buy_kind: 0,
-            seller: -1,
-            price: 0,
-            deal_owner: -1,
-            deal_houses: 0,
-            deal_mortgaged: false,
-            reason: String::new(),
+            ..Trigger::default()
         };
         let dest = self.drive(
             cx,
@@ -5410,36 +5410,8 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             player_id: player_id as i32,
             target: player_id as i32,
             tile: -1,
-            value: 0,
             step: cx.state().step,
-            // An event is not a card, so nothing "card-caused" this.
-            by_card: None,
-            pay_is_rent: false,
-            move_kind: None,
-            move_resolve: false,
-            move_tags: Vec::new(),
-            move_main: false,
-            move_dir: 1,
-            move_from: -1,
-            negation: Default::default(),
-            spared: Vec::new(),
-            seq: 0,
-            answers: 0,
-            effects: Vec::new(),
-            move_remaining: 0,
-            move_total: 0,
-            cards: Vec::new(),
-            roll_source: 0,
-            move_roll: None,
-            card: String::new(),
-            name: String::new(),
-            buy_kind: 0,
-            seller: -1,
-            price: 0,
-            deal_owner: -1,
-            deal_houses: 0,
-            deal_mortgaged: false,
-            reason: String::new(),
+            ..Trigger::default()
         };
         let dest = self.drive(
             cx,
@@ -5486,7 +5458,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // its `counteract` (C# `PlayCtx.AsCounteraction` for a card answering its own play).
         // Only at the play itself -- `cardAfter` / `cardPlayed` / `eventAfter` /
         // `drawn` also name a card on `t.card`, and must not re-run it here.
-        let own = t.card.clone();
+        let own = t.card.clone().unwrap_or_default();
         let own_play = matches!(trigger_kind(t.kind), TriggerKind::Card | TriggerKind::Event);
         if own_play && !own.is_empty() {
             if let Some(idx) = self
@@ -5540,22 +5512,24 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
                 // `Discarded` is *not* here: a placed field card hears about
                 // discards (MyGO band (3) 「每次你的卡在未生效的情况下进入弃牌
                 // 堆时」), so it rides the field-card path below.
-                if let Some(idx) = self
-                    .ruleset
-                    .card(&t.card)
-                    .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
-                {
-                    self.drive_hook(
-                        cx,
-                        Call::Hook {
-                            card: idx,
-                            kind,
-                            player_id: t.player_id,
-                        },
-                        &t.card,
-                        -1,
-                        &mut trigger,
-                    )?;
+                if let Some(card_id) = t.card.as_deref().filter(|s| !s.is_empty()) {
+                    if let Some(idx) = self
+                        .ruleset
+                        .card(card_id)
+                        .filter(|&i| self.ruleset.cards()[i as usize].hooks(kind))
+                    {
+                        self.drive_hook(
+                            cx,
+                            Call::Hook {
+                                card: idx,
+                                kind,
+                                player_id: t.player_id,
+                            },
+                            card_id,
+                            -1,
+                            &mut trigger,
+                        )?;
+                    }
                 }
             } else {
                 let world = cx.world_copy();
@@ -5770,7 +5744,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
         // `trigger.move_roll` (C# shares `t.Move` with the counteractions); the pay
         // amount is rewritten in `trigger.value`. The engine reads the result
         // back off `t.value` after `counteract` returns.
-        t.value = trigger.move_roll.unwrap_or(trigger.value);
+        t.value = trigger.mv.as_ref().and_then(|m| m.roll).unwrap_or(trigger.value);
         if trigger.negation != Default::default() {
             t.negation = trigger.negation;
         }

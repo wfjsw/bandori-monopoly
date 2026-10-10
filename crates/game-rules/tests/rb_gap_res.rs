@@ -407,7 +407,7 @@ fn g32_eve_fan_flip_leaves_the_matcha_crepe() {
             name: "抹茶芭菲".into(),
             value: 1,
         
-        instance: -1,
+        instance: None,
     });
     t.m.world_mut().st.players[0]
         .tokens
@@ -415,7 +415,7 @@ fn g32_eve_fan_flip_leaves_the_matcha_crepe() {
             name: "P✽P粉丝(正)".into(),
             value: 2,
         
-        instance: -1,
+        instance: None,
     });
     assert_eq!(t.token(0, "抹茶芭菲"), 1);
     assert_eq!(t.token(0, "P✽P粉丝(正)"), 2);

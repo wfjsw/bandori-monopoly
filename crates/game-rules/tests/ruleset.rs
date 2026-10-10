@@ -105,7 +105,17 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
         kind: TriggerKind::MoveRoll,
         // 「**你的**掷骰结算前」 -- the user's own roll (sheet revision).
         player_id: 0,
-        move_roll: Some(12),
+        mv: Some(game_rules::TriggerMove {
+            kind: game_rules::MoveKind::Walk,
+            resolve: true,
+            tags: Vec::new(),
+            main: true,
+            dir: game_core::engine::rules::Dir::Forward,
+            from: 0,
+            remaining: 0,
+            total: 0,
+            roll: Some(12),
+        }),
         ..Default::default()
     };
     assert!(r.can_counteract(&world, card, 0).unwrap());
@@ -116,7 +126,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
     else {
         panic!()
     };
-    let roll = after.trigger.move_roll.unwrap();
+    let roll = after.trigger.mv.and_then(|m| m.roll).unwrap();
     assert!((13..=16).contains(&roll), "12 + 1d4, got {roll}");
     let boost = Msg::new("cards:card-ag.yolo_boost")
         .player_id("who", 0)
@@ -127,7 +137,7 @@ fn yolo_counteracts_only_to_rolls_and_adds_1d4() {
         &format!("log player_id=0 {boost}")
     );
     assert_eq!(
-        world.trigger.move_roll,
+        world.trigger.mv.and_then(|m| m.roll),
         Some(12),
         "input world is never modified"
     );

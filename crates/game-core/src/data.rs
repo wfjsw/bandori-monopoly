@@ -1,8 +1,10 @@
-//! Static game data (`web/data/*.json`) and the lookups `BandoriDatabase` provides.
+//! Static game data (`data/*.json`) and the lookups [`GameData`] provides.
 //!
-//! Field names and defaults mirror the C# `[Serializable]` classes exactly; Unity's
-//! `JsonUtility` fills missing fields from the C# initializers, so `#[serde(default)]`
-//! does the same here. Unknown keys (e.g. the `_说明` notes) are ignored.
+//! Field names and defaults mirror the JSON the data files already carry:
+//! missing fields take `#[serde(default)]`, and unknown keys (e.g. the
+//! `_说明` notes) are ignored. The on-disk / on-wire spelling is the contract
+//! -- where the Rust side is typed ([`TileKind`]), serde round-trips the same
+//! strings.
 //!
 //! `game-core` never touches the filesystem: [`GameData::load`] takes a reader so the
 //! server (fs) and the browser (fetch) can both supply the files.
@@ -14,14 +16,98 @@ use serde::{Deserialize, Serialize};
 use crate::deck_book::{DeckBook, DECK_BOOK_FILE};
 use crate::strategy::{StrategyBook, STRATEGY_BOOK_FILE};
 
-/// `TileData.cs`
+/// What sort of tile this is. The JSON data files carry these as short
+/// strings (`"circle"`, `"property"`, ...); the Rust side is typed and serde
+/// round-trips the wire spelling, so the data format is unchanged. A kind
+/// this build does not model keeps its raw string rather than being flattened
+/// to a generic "unknown" (which would rewrite the JSON).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TileKind {
+    /// CiRCLE (the start square).
+    Circle,
+    /// 「CiRCLE咖啡厅」.
+    Cafe,
+    /// 「江户川乐器店」.
+    Edogawa,
+    /// 「流星堂」.
+    Ryuseido,
+    /// A [可购买格子] in a colour group.
+    Property,
+    /// A RiNG deed.
+    Ring,
+    /// 「[地产商]」.
+    Agent,
+    /// An event square (`tile:event`'s other home).
+    Event,
+    /// A kind the data file names that this build does not model.
+    Other(String),
+}
+
+impl TileKind {
+    /// The data-file / wire spelling.
+    pub fn as_str(&self) -> &str {
+        match self {
+            TileKind::Circle => "circle",
+            TileKind::Cafe => "cafe",
+            TileKind::Edogawa => "edogawa",
+            TileKind::Ryuseido => "ryuseido",
+            TileKind::Property => "property",
+            TileKind::Ring => "ring",
+            TileKind::Agent => "agent",
+            TileKind::Event => "event",
+            TileKind::Other(s) => s,
+        }
+    }
+
+    /// Decode the data-file spelling.
+    pub fn parse(s: &str) -> Self {
+        match s {
+            "circle" => TileKind::Circle,
+            "cafe" => TileKind::Cafe,
+            "edogawa" => TileKind::Edogawa,
+            "ryuseido" => TileKind::Ryuseido,
+            "property" => TileKind::Property,
+            "ring" => TileKind::Ring,
+            "agent" => TileKind::Agent,
+            "event" => TileKind::Event,
+            other => TileKind::Other(other.to_string()),
+        }
+    }
+}
+
+impl Default for TileKind {
+    fn default() -> Self {
+        TileKind::Other(String::new())
+    }
+}
+
+impl std::fmt::Display for TileKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl Serialize for TileKind {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for TileKind {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let raw = String::deserialize(d)?;
+        Ok(TileKind::parse(&raw))
+    }
+}
+
+/// One tile of the board, as the data file names it.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct TileData {
     pub index: i32,
     pub name: String,
     pub short_name: String,
-    pub kind: String,
+    pub kind: TileKind,
     pub group: i32,
     pub color: String,
     pub tier: i32,
@@ -36,17 +122,17 @@ impl TileData {
     /// The four corner tiles (start, café, music store, Ryuseido).
     pub fn is_corner(&self) -> bool {
         matches!(
-            self.kind.as_str(),
-            "circle" | "cafe" | "edogawa" | "ryuseido"
+            self.kind,
+            TileKind::Circle | TileKind::Cafe | TileKind::Edogawa | TileKind::Ryuseido
         )
     }
 
     pub fn is_buyable(&self) -> bool {
-        matches!(self.kind.as_str(), "property" | "ring")
+        matches!(self.kind, TileKind::Property | TileKind::Ring)
     }
 
     pub fn is_agent(&self) -> bool {
-        self.kind == "agent"
+        self.kind == TileKind::Agent
     }
 }
 
@@ -54,14 +140,14 @@ impl TileData {
 /// the kind has no rule (unknown kinds fall through to the engine's built-in
 /// settlement). `cafe` and `ryuseido` share `tile:event` -- the rulebook gives
 /// them one passage (「CiRCLE咖啡厅和流星堂的的[结算]是…」).
-pub fn tile_rule_id(kind: &str) -> &'static str {
+pub fn tile_rule_id(kind: &TileKind) -> &'static str {
     match kind {
-        "property" => "tile:property",
-        "ring" => "tile:ring",
-        "agent" => "tile:agent",
-        "circle" => "tile:circle",
-        "edogawa" => "tile:edogawa",
-        "cafe" | "ryuseido" => "tile:event",
+        TileKind::Property => "tile:property",
+        TileKind::Ring => "tile:ring",
+        TileKind::Agent => "tile:agent",
+        TileKind::Circle => "tile:circle",
+        TileKind::Edogawa => "tile:edogawa",
+        TileKind::Cafe | TileKind::Ryuseido => "tile:event",
         _ => "",
     }
 }
@@ -74,7 +160,7 @@ pub fn mark_rule_ids() -> &'static [&'static str] {
     &["mark:cp"]
 }
 
-/// `CardData.cs`
+/// One card row from `cards.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CardData {
@@ -90,8 +176,8 @@ pub struct CardData {
 }
 
 impl CardData {
-    /// `CardData.Title` -- the name, or the id for unnamed cards (the client shows
-    /// its own "unnamed" label).
+    /// The name, or the id for unnamed cards (the client shows its own
+    /// "unnamed" label).
     pub fn title(&self) -> &str {
         if self.name.is_empty() {
             &self.id
@@ -111,7 +197,7 @@ impl CardData {
     }
 }
 
-/// `CharacterData.cs`
+/// One playable character from `characters.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CharacterData {
@@ -129,7 +215,7 @@ pub struct CharacterData {
 }
 
 impl CharacterData {
-    /// `CharacterData.ArtId` -- key for art and Live2D: `art` if set, else `cnId`.
+    /// Key for art and Live2D: `art` if set, else `cn_id`.
     pub fn art_id(&self) -> &str {
         if self.art.is_empty() {
             &self.cn_id
@@ -139,7 +225,7 @@ impl CharacterData {
     }
 }
 
-/// `BandData.cs`
+/// One band from `bands.json` (skill text + branding).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct BandData {
@@ -151,7 +237,7 @@ pub struct BandData {
     pub logo: String,
 }
 
-/// `EventData.cs`
+/// One event card from `events.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct EventData {
@@ -166,7 +252,7 @@ pub struct EventData {
 /// `cards.json` (the data set is Chinese), not display text.
 pub const GENERAL_BAND: &str = "通用";
 
-/// `SchoolsData.cs` / `SchoolEntry.cs`
+/// Character → school tile-name map.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SchoolsData {
@@ -182,14 +268,14 @@ pub struct SchoolEntry {
     pub school: String,
 }
 
-/// `SongCardsData.cs`
+/// The song-card id list (the data file's `cards` array).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct SongCardsData {
     pub cards: Vec<String>,
 }
 
-/// `HomeLinesData.cs` / `CharacterLines.cs`
+/// Home-screen line tags per character.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct HomeLinesData {
@@ -203,7 +289,7 @@ pub struct CharacterLines {
     pub tag: String,
 }
 
-/// `VoiceLinesData.cs` / `CharacterVoiceLines.cs` / `VoiceLine.cs`
+/// Voice / motion lines per character.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct VoiceLinesData {
@@ -227,7 +313,7 @@ pub struct VoiceLine {
     pub from: String,
 }
 
-/// `MatchRulesData.cs`
+/// Tunable match numbers from `match_rules.json`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchRulesData {
@@ -236,7 +322,7 @@ pub struct MatchRulesData {
     pub property: f32,
     pub houses: f32,
     pub ring_multiplier: i32,
-    /// Names given to bot players, in order (`SoloMatch.BotNames`).
+    /// Names given to bot players, in order.
     pub bot_names: Vec<String>,
     /// Home character of a new profile (a character `name`).
     pub default_home_character: String,
@@ -286,7 +372,7 @@ struct EventFile {
     events: Vec<EventData>,
 }
 
-/// Bump when the rules book changes; drives the "NEW" badge (`BandoriDatabase.rulesVersion`).
+/// Bump when the rules book changes; drives the "NEW" badge (`rules_version`).
 pub const RULES_VERSION: i32 = 1;
 
 /// The rule id of a character or band skill (the crates under `rules/skills`).
@@ -311,7 +397,7 @@ pub fn event_rule_id(id: &str) -> String {
     format!("event:{id}")
 }
 
-/// All static game data plus the `BandoriDatabase` lookups.
+/// All static game data plus the [`GameData`] lookups.
 #[derive(Debug, Clone, Default)]
 pub struct GameData {
     pub tiles: Vec<TileData>,
@@ -414,7 +500,7 @@ impl GameData {
             strategy_book: StrategyBook::default(),
             card_by_id: HashMap::new(),
         };
-        // First card wins on duplicate ids, like the C# GroupBy(...).First().
+        // First card wins on duplicate ids.
         for (i, c) in d.cards.iter().enumerate() {
             if !c.id.is_empty() {
                 d.card_by_id.entry(c.id.clone()).or_insert(i);
@@ -434,12 +520,12 @@ impl GameData {
         Ok(d)
     }
 
-    /// `BandoriDatabase.Card(id)`
+    /// Card by id, first match.
     pub fn card(&self, id: &str) -> Option<&CardData> {
         self.card_by_id.get(id).map(|&i| &self.cards[i])
     }
 
-    /// `BandoriDatabase.Character(name)` -- by `name`, first match.
+    /// Character by `name`, first match.
     pub fn character(&self, name: &str) -> Option<&CharacterData> {
         self.characters.iter().find(|c| c.name == name)
     }
@@ -454,17 +540,17 @@ impl GameData {
             .map_or(name, |c| c.name.as_str())
     }
 
-    /// `BandoriDatabase.Band(name)`
+    /// Band by `name`, first match.
     pub fn band(&self, name: &str) -> Option<&BandData> {
         self.bands.iter().find(|b| b.name == name)
     }
 
-    /// `BandoriDatabase.Event(id)`
+    /// Event card by id.
     pub fn event(&self, id: &str) -> Option<&EventData> {
         self.events.iter().find(|e| e.id == id)
     }
 
-    /// `BandoriDatabase.SchoolOf(character)`
+    /// School tile name for `character`, or [`SchoolsData::fallback`].
     pub fn school_of(&self, character: &str) -> &str {
         self.schools
             .schools
@@ -474,12 +560,12 @@ impl GameData {
             .unwrap_or(&self.schools.fallback)
     }
 
-    /// `BandoriDatabase.IsSongCard(card)` -- matched by title.
+    /// Whether `card` is a song card, matched by title.
     pub fn is_song_card(&self, card: &CardData) -> bool {
         self.song_cards.cards.iter().any(|t| t == card.title())
     }
 
-    /// `BandoriDatabase.HomeTag(c)` -- short name on the home screen.
+    /// Short name on the home screen.
     pub fn home_tag<'a>(&'a self, c: &'a CharacterData) -> &'a str {
         self.home_lines
             .characters
@@ -489,7 +575,7 @@ impl GameData {
             .unwrap_or(&c.display)
     }
 
-    /// `BandoriDatabase.VoiceLinesFor(c)` -- lines with both text and audio.
+    /// Lines with both text and audio.
     pub fn voice_lines_for(&self, c: &CharacterData) -> Vec<&VoiceLine> {
         if c.cn_id.is_empty() {
             return vec![];

@@ -1,20 +1,21 @@
 //! The boundary where card content plugs into the match shell.
 //!
-//! The shell calls these hooks at the same points the C# does; an implementation
-//! decides what cards and events actually do. `game-rules` will implement this over
-//! the WASM card modules. [`StubRules`] gives every card and event no effect, which
-//! leaves a complete, playable game of plain BanG Dream Monopoly.
+//! The shell calls these hooks at the points the rulebook's turn and effect
+//! structure needs them; an implementation decides what cards and events
+//! actually do. `game-rules` will implement this over the WASM card modules.
+//! [`StubRules`] gives every card and event no effect, which leaves a complete,
+//! playable game of plain BanG Dream Monopoly.
 
 use super::cx::{Cx, Flow};
 use crate::msg::Msg;
 
-/// Where a played card goes afterwards (C# `PlayCtx.Dest`).
+/// Where a played card goes afterwards.
 ///
-/// The port's names for the fates: Graveyard (discard pile, 弃卡区), Hand,
-/// Field (stays in play, 场上), Banished (「[移除]」, out of the game).
-/// Planned: the draw-pile fates `DeckTop` / `DeckBottom` / `DeckRandom` (C#
-/// `c.Dest = "deck"` -> `H.AddToDeck(seat, card, where)` with `where` =
-/// `"top"` / `"bottom"` / `"shuffle"`; the C# default is **shuffle**).
+/// The fates: Graveyard (discard pile, 弃卡区), Hand, Field (stays in play,
+/// 场上), Banished (「[移除]」, out of the game).
+/// Planned: the draw-pile fates `DeckTop` / `DeckBottom` / `DeckRandom` (put
+/// the card on top of / on the bottom of / shuffle it into the draw pile; the
+/// default is **shuffle**).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Dest {
     /// The discard pile (弃卡区) -- the default.
@@ -32,10 +33,207 @@ pub enum Dest {
 // what it resolves is `super::move_ctx::Settle` -- two categories, not one flag
 // soup. Card-owned move state (a [火罐] roll, say) rides on the move's tags.
 
+/// Which way a move travels along the ring.
+///
+/// Replaces the ±1 `move_dir` integer: forward and backward are the only two
+/// directions a walk has, so they are two variants, not a sign bit. The guest
+/// ABI and CEL still see `1` / `-1` (see [`Dir::as_i32`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Dir {
+    /// 「前进」 -- towards higher tile indices (the guest / CEL `1`).
+    #[default]
+    Forward,
+    /// 「后退」 -- towards lower tile indices (the guest / CEL `-1`).
+    Backward,
+}
+
+impl Dir {
+    /// The guest / CEL encoding: `1` forward, `-1` backward.
+    pub const fn as_i32(self) -> i32 {
+        match self {
+            Dir::Forward => 1,
+            Dir::Backward => -1,
+        }
+    }
+
+    /// Decode the guest / CEL encoding (`1` / `-1`; anything else reads forward).
+    pub fn from_i32(v: i32) -> Self {
+        if v < 0 {
+            Dir::Backward
+        } else {
+            Dir::Forward
+        }
+    }
+}
+
+/// The move that caused a trigger. [`Trigger::mv`] is `None` when no
+/// move caused it -- a play, a turn-flow raise, a buy, a card's own activation.
+///
+/// Grouping these under one optional struct is what makes "no move" a single
+/// state instead of a pile of individually-defaulted fields that can disagree
+/// with each other (`move_dir: 1, move_from: -1` with `move_kind: None`).
+/// The guest ABI and CEL still see the old flat encoding with its sentinels
+/// (`dir` = 1, `from` = -1, `kind`/`roll` = null) whenever `mv` is `None`;
+/// only the host type is grouped.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TriggerMove {
+    /// How the move got there: one walk or one teleport.
+    pub kind: super::move_ctx::MoveKind,
+    /// Does the move settle where it lands? `false` = a card effect prevented
+    /// settle entirely (the move still happens).
+    pub resolve: bool,
+    /// Free-form per-card counters on the move (a [火罐] roll is card-owned
+    /// state, tagged by whoever armed it).
+    pub tags: Vec<(String, i32)>,
+    /// The direction the move travels.
+    pub dir: Dir,
+    /// The move's 移动起点 (its origin tile).
+    pub from: i32,
+    /// Steps the move has left to walk.
+    pub remaining: i32,
+    /// The move's path length.
+    pub total: i32,
+    /// The face the move rolled. `None` before the dice land (the `roll`
+    /// window) and whenever the face is not this trigger's subject.
+    pub roll: Option<i32>,
+}
+
+/// The payment a `pay` / `paid` trigger is about. `None` on every other kind:
+/// the amount rides the trigger's `value` and the payee its `target`, but
+/// whether the payment is rent is a pay-only fact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct TriggerPay {
+    /// Is this payment rent, as against a buy, a build, or a forced loss?
+    /// Always `false` on a card-driven payment.
+    pub is_rent: bool,
+}
+
+/// Where a purchase's money goes. `-1` on the wire means the bank; that is a
+/// real payee, not "absent", so it gets a variant of its own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Payee {
+    /// The bank (guest / wire `-1`).
+    Bank,
+    /// A seat.
+    Seat(i32),
+}
+
+impl Payee {
+    /// The guest / wire encoding: `-1` for the bank, else the seat.
+    pub fn as_i32(self) -> i32 {
+        match self {
+            Payee::Bank => -1,
+            Payee::Seat(n) => n,
+        }
+    }
+
+    /// Decode the guest / wire encoding (`-1` = bank).
+    pub fn from_i32(v: i32) -> Self {
+        if v < 0 {
+            Payee::Bank
+        } else {
+            Payee::Seat(v)
+        }
+    }
+}
+
+/// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on every
+/// other kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TriggerBuy {
+    /// Which kind of purchase this is.
+    pub kind: super::play::purchase::BuyKind,
+    /// The payee. Force-buy and 收购 name the owner; land / agent / card /
+    /// auction buys name the bank.
+    pub seller: Payee,
+    /// The price the buyer would be charged, post the `BuyAdd` / `BuyMul` /
+    /// `BuySet` stages. A hook rewrites it with `set_price`.
+    pub price: i32,
+    /// Ownership after the deal. `None` = the deal keeps its default (the
+    /// buyer). A `BuyAssign` hook rewrites it with `set_deal_owner`.
+    pub deal_owner: Option<i32>,
+    /// Houses after the deal (default: as standing, unless a hook razes).
+    pub deal_houses: i32,
+    /// Mortgage after the deal (default: cleared, except a Force buy keeps
+    /// `FORCE_STAYS_MORTGAGED`).
+    pub deal_mortgaged: bool,
+}
+
+impl TriggerBuy {
+    /// A buy payload with no deal rewrite yet (`deal_owner` stays `None`, so
+    /// the commit keeps its default owner).
+    pub fn new(
+        kind: super::play::purchase::BuyKind,
+        seller: i32,
+        price: i32,
+    ) -> Self {
+        Self {
+            kind,
+            seller: Payee::from_i32(seller),
+            price,
+            deal_owner: None,
+            deal_houses: 0,
+            deal_mortgaged: false,
+        }
+    }
+
+    /// Attach the deal snapshot a `BuyAssign` window may rewrite.
+    pub fn deal(mut self, owner: i32, houses: i32, mortgaged: bool) -> Self {
+        self.deal_owner = Some(owner);
+        self.deal_houses = houses;
+        self.deal_mortgaged = mortgaged;
+        self
+    }
+}
+
+impl TriggerPay {
+    pub fn new(is_rent: bool) -> Self {
+        Self { is_rent }
+    }
+}
+
+/// Where a `roll` / `moveRoll` face came from (「当你使用火罐进行掷骰时」).
+/// Mirrors `card_sdk::abi::roll_source`'s codes; the guest ABI still sees the
+/// `i32`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RollSource {
+    /// Unattributed, or this is not a roll trigger at all (the guest code `0`).
+    #[default]
+    Unattributed,
+    /// A fire pot (the guest code `1`).
+    Fire,
+    /// A hand / field card (the guest code `2`).
+    Card,
+    /// A skill press (the guest code `3`).
+    Skill,
+}
+
+impl RollSource {
+    /// The guest / CEL encoding.
+    pub const fn as_i32(self) -> i32 {
+        match self {
+            RollSource::Unattributed => 0,
+            RollSource::Fire => 1,
+            RollSource::Card => 2,
+            RollSource::Skill => 3,
+        }
+    }
+
+    /// Decode the guest / CEL encoding.
+    pub fn from_i32(v: i32) -> Self {
+        match v {
+            1 => RollSource::Fire,
+            2 => RollSource::Card,
+            3 => RollSource::Skill,
+            _ => RollSource::Unattributed,
+        }
+    }
+}
+
 /// How a counter invalidated a chain link (Yu-Gi-Oh's two negations, plus the
 /// per-recipient one the rulebook needs).
 ///
-/// This replaces the single `Trigger.Cancelled` flag, which could only ever say
+/// This replaces the single `Trigger::cancelled` flag, which could only ever say
 /// "something cancelled this" and could not distinguish "the effect never
 /// happened" from "it happened and settled to nothing".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -84,35 +282,36 @@ pub struct Trigger {
     pub player_id: i32,
     pub target: i32,
     pub tile: i32,
-    pub card: String,
+    /// The card this trigger is about (`t.Card`), or `None`.
+    pub card: Option<String>,
     pub value: i32,
     /// The turn step (0/1/2/3) active when this trigger fired. Stamped by
     /// `Cx::counteract`, not by the raise site. Only meaningful for kinds that
     /// aren't step-specific (e.g. `mortgage` can fire during both step 1
     /// and step 3).
     pub step: i32,
-    /// The player whose card caused this trigger (C# `t.ByCard`), or `None` when
-    /// it was not card-caused (board-driven: rent, buy, build, turn flow). Set
-    /// at the raise site from the card's own player. `Some(by) if by != player_id` is
-    /// C# `H.HitByOtherCard(t, seat)`.
+    /// The player whose card caused this trigger, or `None` when it was not
+    /// card-caused (board-driven: rent, buy, build, turn flow). Set at the
+    /// raise site from the card's own player. `Some(by) if by != player_id`
+    /// means "another player's card did this to me".
     pub by_card: Option<i32>,
-    /// `t.Pay.IsRent` on `pay`/`paid` triggers -- is this payment rent (C# `t.Pay.kind == "rent"`).
-    pub pay_is_rent: bool,
-    /// `t.Move` -- how the move that caused this trigger got there (C#
-    /// `m.Teleport`); `None` when the move did not cause it.
-    pub move_kind: Option<super::move_ctx::MoveKind>,
-    /// `t.Move.Resolve` -- does that move settle where it lands?
-    pub move_resolve: bool,
-    /// `t.Move.Tags` -- free-form per-card counters on that move (a [火罐] roll
-    /// is card-owned state, tagged by whoever armed it).
-    pub move_tags: Vec<(String, i32)>,
-    /// `t.Move.Main` -- was this the turn's main move (C# `MoveCtx.main`)?
-    pub move_main: bool,
-    /// `t.Move.Dir` -- 1 forward, -1 backward. Only meaningful when `move_flags.is_move()`.
-    pub move_dir: i32,
-    /// `t.Move.From` -- the move's 移动起点 (C# `m.from`), or -1 when no move
-    /// is in flight. Copied by [`Self::with_move`].
-    pub move_from: i32,
+    /// Was this fired as part of the turn's [主要移动]?
+    ///
+    /// Lives on the trigger rather than in [`TriggerMove`] because a raise can
+    /// be "the main move's settle" without carrying a move payload at all --
+    /// the tile `On::Settle` body needs the flag (a main landing only
+    /// announces; the offers come at the end step) and has no `mv`.
+    pub main: bool,
+    /// The move that caused this trigger, when one did. `None` = no move.
+    pub mv: Option<TriggerMove>,
+    /// The payment a `pay` / `paid` trigger is about. `None` on every other kind.
+    pub pay: Option<TriggerPay>,
+    /// The purchase a buy trigger is about (`docs/PURCHASE.md`). `None` on
+    /// every other kind.
+    pub buy: Option<TriggerBuy>,
+    /// Where a `roll` / `moveRoll` face came from. [`RollSource::Unattributed`]
+    /// on every non-roll trigger.
+    pub roll_source: RollSource,
     /// How a counter invalidated this link. The effect body is skipped when this
     /// is not [`Negation::None`]; the Before/After hooks still fire.
     pub negation: Negation,
@@ -128,43 +327,14 @@ pub struct Trigger {
     /// Empty on a bare hook/gate raise, and on a link whose card has not
     /// declared its list (see `ctx::declare_effect`).
     pub effects: Vec<Effect>,
-    /// `t.Move.Remaining` -- steps the move has left to walk.
-    pub move_remaining: i32,
-    /// `t.Move.Total` -- the move's path length (C# `m.Path.Count`).
-    pub move_total: i32,
     /// The cards the trigger is about when there are several (`drew`).
     pub cards: Vec<String>,
-    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
-    /// `card_sdk::abi::roll_source` code (`0` = unattributed, `1` = a fire pot,
-    /// `2` = a hand/field card, `3` = a skill press). 「当你使用火罐进行掷骰时」
-    /// reads this. `0` on every non-roll trigger.
-    pub roll_source: i32,
-    // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
-    /// `t.Buy.Kind` -- a [`super::play::purchase::BuyKind`] as `i32`
-    /// (`0` = land). `0` on every non-buy trigger.
-    pub buy_kind: i32,
-    /// `t.Buy.Seller` -- the payee (`-1` = the bank). Force-buy and 收购 name
-    /// the owner; land / agent / card / auction buys name the bank.
-    pub seller: i32,
-    /// `t.Buy.Price` -- the price the buyer would be charged, post the
-    /// `BuyAdd` / `BuyMul` / `BuySet` stages. A hook rewrites it with
-    /// `set_price`.
-    pub price: i32,
-    /// `t.Buy.DealOwner` -- ownership after the deal (default: the buyer).
-    /// A `BuyAssign` hook rewrites it with `set_deal_owner`.
-    pub deal_owner: i32,
-    /// `t.Buy.DealHouses` -- houses after the deal (default: as standing,
-    /// unless a hook razes). `set_deal_houses`.
-    pub deal_houses: i32,
-    /// `t.Buy.DealMortgaged` -- mortgage after the deal (default: cleared,
-    /// except a Force buy keeps `FORCE_STAYS_MORTGAGED`). `set_deal_mortgaged`.
-    pub deal_mortgaged: bool,
     /// A `BuyGate` refusal's reason key (a `log.*` message key naming why the
     /// gate refused). Written by the responder alongside `set_cancelled`.
-    pub reason: String,
-    /// `t.Name` -- the counter name on a `CounterChanged` hook, or the message
-    /// name on a `Message` entry. Empty otherwise.
-    pub name: String,
+    pub reason: Option<String>,
+    /// The counter name on a `CounterChanged` hook, or the message name on a
+    /// `Message` entry. `None` otherwise.
+    pub name: Option<String>,
 }
 
 impl Trigger {
@@ -174,34 +344,23 @@ impl Trigger {
             player_id: player_id as i32,
             target: player_id as i32,
             tile: -1,
-            card: String::new(),
+            card: None,
             value: 0,
             step: 0,
             by_card: None,
-            pay_is_rent: false,
-            move_kind: None,
-            move_resolve: false,
-            move_tags: Vec::new(),
-            move_main: false,
-            move_dir: 1,
-            move_from: -1,
+            main: false,
+            mv: None,
+            pay: None,
+            buy: None,
+            roll_source: RollSource::Unattributed,
             negation: Negation::None,
             spared: Vec::new(),
             seq: 0,
             answers: 0,
             effects: Vec::new(),
-            move_remaining: 0,
-            move_total: 0,
             cards: Vec::new(),
-            roll_source: 0,
-            buy_kind: 0,
-            seller: -1,
-            price: 0,
-            deal_owner: -1,
-            deal_houses: 0,
-            deal_mortgaged: false,
-            reason: String::new(),
-            name: String::new(),
+            reason: None,
+            name: None,
         }
     }
 
@@ -240,16 +399,26 @@ impl Trigger {
         self.negation == Negation::None && !self.spared.contains(&seat)
     }
 
-    /// Copy the move context (C# `t.Move`) onto this trigger.
+    /// Copy the move context onto this trigger.
+    ///
+    /// Also stamps [`Trigger::main`] from the move, so a raise that carries a
+    /// move and one that does not agree on "was this the turn's main move".
     pub(crate) fn with_move(&mut self, m: &super::play::Move) -> &mut Self {
-        self.move_kind = Some(m.kind);
-        self.move_resolve = m.resolve;
-        self.move_tags = m.tags.clone();
-        self.move_main = m.main;
-        self.move_dir = m.dir();
-        self.move_from = m.from;
-        self.move_remaining = m.remaining;
-        self.move_total = m.total;
+        self.mv = Some(TriggerMove {
+            kind: m.kind,
+            resolve: m.resolve,
+            tags: m.tags.clone(),
+            dir: if m.reverse {
+                Dir::Backward
+            } else {
+                Dir::Forward
+            },
+            from: m.from,
+            remaining: m.remaining,
+            total: m.total,
+            roll: None,
+        });
+        self.main = m.main;
         self
     }
 }
@@ -259,8 +428,10 @@ impl Trigger {
 /// delegates to the card rules). Every raise site should go through this so the
 /// shape of a trigger stays uniform.
 ///
-/// `mv = <move>` copies the move context (C# `t.Move`) on from a `Move`, and
-/// must come before any other field overrides.
+/// `@m <move>` copies the move context onto the trigger from a `Move`
+/// ([`Trigger::with_move`]); `@b <buy>` / `@p <pay>` install the purchase /
+/// payment payload ([`TriggerBuy`] / [`TriggerPay`]). Each must come before
+/// any `field = value` overrides.
 ///
 /// The result is the trigger as `raise` left it, so a counteraction that rewrites a
 /// field (e.g. `moveRoll`'s reroll) can read it back:
@@ -268,16 +439,57 @@ impl Trigger {
 /// ```ignore
 /// raise!(self, "passBefore", i, @m m, tile = next)?;
 /// raise!(self, "roll", i, value = -1)?;
-/// raise!(self, "card", i, card = id.to_string())?;
+/// raise!(self, "card", i, card = Some(id.to_string()))?;
 /// let t = raise!(self, "moveRoll", i, @m m, value = m.roll)?; // keep `t` to read back
 /// ```
 macro_rules! raise {
-    ($cx:expr, $kind:expr, $player_id:expr $(, @m $m:expr)? $(, $field:ident = $value:expr)* $(,)?) => {{
+    ($cx:expr, $kind:expr, $player_id:expr $(, $($rest:tt)*)?) => {{
         let mut __trigger = Trigger::new($kind, $player_id);
-        $( __trigger.with_move(&$m); )?
-        $( __trigger.$field = $value; )*
+        raise!(@set __trigger $(, $($rest)*)?);
         $cx.raise(__trigger)
     }};
+    (@set $t:ident) => {};
+    (@set $t:ident,) => {};
+    (@set $t:ident, @m $m:expr) => {
+        $t.with_move(&$m);
+    };
+    (@set $t:ident, @m $m:expr,) => {
+        $t.with_move(&$m);
+    };
+    (@set $t:ident, @m $m:expr, $($rest:tt)+) => {
+        $t.with_move(&$m);
+        raise!(@set $t, $($rest)+);
+    };
+    (@set $t:ident, @b $b:expr) => {
+        $t.buy = Some($b);
+    };
+    (@set $t:ident, @b $b:expr,) => {
+        $t.buy = Some($b);
+    };
+    (@set $t:ident, @b $b:expr, $($rest:tt)+) => {
+        $t.buy = Some($b);
+        raise!(@set $t, $($rest)+);
+    };
+    (@set $t:ident, @p $p:expr) => {
+        $t.pay = Some($p);
+    };
+    (@set $t:ident, @p $p:expr,) => {
+        $t.pay = Some($p);
+    };
+    (@set $t:ident, @p $p:expr, $($rest:tt)+) => {
+        $t.pay = Some($p);
+        raise!(@set $t, $($rest)+);
+    };
+    (@set $t:ident, $field:ident = $value:expr) => {
+        $t.$field = $value;
+    };
+    (@set $t:ident, $field:ident = $value:expr,) => {
+        $t.$field = $value;
+    };
+    (@set $t:ident, $field:ident = $value:expr, $($rest:tt)+) => {
+        $t.$field = $value;
+        raise!(@set $t, $($rest)+);
+    };
 }
 pub(crate) use raise;
 
@@ -290,12 +502,12 @@ pub trait CardRules: Send + Sync {
         None
     }
 
-    /// `Card.Normal` -- may be played from hand in the operation phase.
+    /// May be played from hand in the operation phase.
     fn normal(&self, _card: &str) -> bool {
         true
     }
 
-    /// `Card.WhyNot` -- extra card-specific reason it can't be played right now.
+    /// Extra card-specific reason it can't be played right now.
     fn cant_play(&self, _cx: &Cx, _player: usize, _card: &str) -> Option<Msg> {
         None
     }
@@ -346,23 +558,22 @@ pub trait CardRules: Send + Sync {
         cx.land_at_built_in(player_id, tile, main)
     }
 
-    /// `Card.AiPlay` -- would a bot play it now?
+    /// Would a bot play it now?
     fn ai_play(&self, _cx: &Cx, _player: usize, _card: &str) -> bool {
         true
     }
 
-    /// `Card.Play` -- the effect. Returns where the card goes afterwards.
+    /// The effect. Returns where the card goes afterwards.
     fn play(&self, cx: &mut Cx, player_id: usize, card: &str) -> Flow<Dest>;
 
     /// Resolve a drawn event card. Returns `true` if the event stays in play
     /// (otherwise it is discarded).
     fn event(&self, cx: &mut Cx, player_id: usize, id: &str) -> Flow<bool>;
 
-    /// Counteraction window at `t` (C# `Counteract(trigger)` -- the counteract window); may raise prompts.
+    /// [反击] window on `t`; may raise prompts.
     ///
-    /// `t` is mutable: a counteraction may rewrite the move roll (`t.value` /
-    /// `t.Move.Roll`) and the engine then uses the new face (C# shares the
-    /// `MoveCtx` with the counteractions).
+    /// `t` is mutable: a counteraction may rewrite the move face (`t.value` /
+    /// `t.mv.roll`) and the engine then uses the new face.
     fn counteract(&self, _cx: &mut Cx, _t: &mut Trigger) -> Flow<()> {
         Ok(())
     }

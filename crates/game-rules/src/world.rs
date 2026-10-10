@@ -24,81 +24,106 @@ pub(crate) fn skill_id_owner(id: &str) -> Option<String> {
     }
 }
 
-/// The trigger a counteraction is checked against (C# `Trigger`).
+/// The trigger a counteraction is checked against.
+///
+/// The card-world's view of [`game_core::engine::rules::Trigger`], with the
+/// same grouping: the move payload is one optional [`TriggerMove`], the pay /
+/// buy payloads one optional struct each. The guest ABI and CEL still see the
+/// old flat encoding with its sentinels whenever the group is `None`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Trigger {
     pub kind: crate::TriggerKind,
     pub player_id: i32,
-    /// `t.Target` (`t.Pay.to` on pay triggers).
+    /// The target seat (`t.Pay.to` on pay triggers).
     pub target: i32,
-    /// `t.Tile` (the tile settled on, passed, mortgaged, ...).
+    /// The tile this trigger is about (settled on, passed, mortgaged, ...).
     pub tile: i32,
-    /// `t.Value` (`t.Pay.amount` on pay triggers).
+    /// The amount (`t.Pay.amount` on pay triggers).
     pub value: i32,
-    /// `t.Step` -- the turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active when this trigger fired.
+    /// The turn stage (0 = no turn; 1 开始 / 2 运营 / 3 移动 / 4 结束) active
+    /// when this trigger fired.
     pub step: i32,
-    /// `t.ByCard` -- the player whose card caused this trigger, or `None`.
+    /// The player whose card caused this trigger, or `None`.
     pub by_card: Option<i32>,
-    /// `t.Pay.IsRent` on `pay`/`paid` triggers.
-    pub pay_is_rent: bool,
-    /// `t.Move` -- flags on the move that caused this trigger (C# `t.Move`);
-    /// `None` when the move did not cause it. See [`card_sdk::abi::MoveKind`].
-    pub move_kind: Option<card_sdk::abi::MoveKind>,
-    /// `t.Move.Resolve` (C# `m.Resolve`) -- does that move settle where it
-    /// lands? False = a card effect prevented settle at all.
-    pub move_resolve: bool,
-    /// `t.Move.Tags` -- per-card counters on the move (a [火罐] roll is
-    /// card-owned state: whoever arms it tags the move, readers ask).
-    pub move_tags: Vec<(String, i32)>,
-    /// `t.Move.Main` -- was this the turn's main move (C# `MoveCtx.main`)?
-    pub move_main: bool,
-    /// `t.Move.Dir` -- 1 forward, -1 backward. Only meaningful when the move caused it.
-    pub move_dir: i32,
-    /// `t.Move.From` -- the move's 移动起点 (C# `m.from`), or -1 when no move
-    /// is in flight.
-    pub move_from: i32,
+    /// Was this fired as part of the turn's [主要移动]? Meaningful even
+    /// without a move payload (a tile settle body needs it).
+    pub main: bool,
+    /// The move that caused this trigger, when one did.
+    pub mv: Option<TriggerMove>,
+    /// The payment a `pay` / `paid` trigger is about.
+    pub pay: Option<TriggerPay>,
+    /// The purchase a buy trigger is about (`docs/PURCHASE.md`).
+    pub buy: Option<TriggerBuy>,
+    /// Where a `roll` / `moveRoll` face came from.
+    pub roll_source: game_core::engine::rules::RollSource,
     /// How a counter invalidated this link -- see [`game_core::engine::rules::Negation`].
     pub negation: game_core::engine::rules::Negation,
     /// Recipients a counter spared from settlement.
     pub spared: Vec<i32>,
     /// Position within the current chain, 1-based. 0 = not on a chain.
     pub seq: u32,
-    /// The link this one answers. 0 = the effect declaration itself.
+    /// The link this one answers. 0 = this is the effect declaration itself.
     pub answers: u32,
     /// The effects this link declares, recipients already named.
     pub effects: Vec<game_core::engine::rules::Effect>,
-    /// `t.Move.Remaining` / `t.Move.Path.Count`.
-    pub move_remaining: i32,
-    pub move_total: i32,
     /// The cards a `drew` trigger is about.
     pub cards: Vec<String>,
-    /// `t.Roll.Source` -- where a `roll` / `moveRoll` face came from, as a
-    /// `card_sdk::abi::roll_source` code (`0` = unattributed, `1` = a fire
-    /// pot, `2` = a hand/field card, `3` = a skill press). 「当你使用火罐进行
-    /// 掷骰时」 reads this.
-    pub roll_source: i32,
-    /// `t.Move.Roll`; `None` when there is no move or it was cancelled.
-    pub move_roll: Option<i32>,
-    /// `t.Card` -- the card id on card/event/counteracted triggers (`""` otherwise).
-    pub card: String,
-    /// `t.Name` -- the counter name on a `CounterChanged` raise, or the message
-    /// name on an `On::Message` dispatch. Empty otherwise.
-    pub name: String,
-    // ---- v40 purchase payload (`docs/PURCHASE.md`) ------------------------
-    /// `t.Buy.Kind` -- a [`card_sdk::abi::BuyKind`] as `i32` (`0` = land).
-    pub buy_kind: i32,
-    /// `t.Buy.Seller` -- the payee (`-1` = the bank).
-    pub seller: i32,
-    /// `t.Buy.Price` -- the price the buyer would be charged.
-    pub price: i32,
-    /// `t.Buy.DealOwner` -- ownership after the deal (default: the buyer).
-    pub deal_owner: i32,
-    /// `t.Buy.DealHouses` -- houses after the deal (default: as standing).
-    pub deal_houses: i32,
-    /// `t.Buy.DealMortgaged` -- mortgage after the deal.
-    pub deal_mortgaged: bool,
+    /// The card id on card/event/counteracted triggers.
+    pub card: Option<String>,
+    /// The counter name on a `CounterChanged` raise, or the message name on
+    /// an `On::Message` dispatch.
+    pub name: Option<String>,
     /// A `BuyGate` refusal's reason key.
-    pub reason: String,
+    pub reason: Option<String>,
+}
+
+/// The move that caused a trigger.
+///
+/// Mirror of [`game_core::engine::rules::TriggerMove`] using the card-sdk
+/// [`card_sdk::abi::MoveKind`], so guest-facing code does not reach into
+/// `game-core`'s copy.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TriggerMove {
+    pub kind: card_sdk::abi::MoveKind,
+    /// Does the move settle where it lands?
+    pub resolve: bool,
+    /// Per-card counters on the move (a [火罐] roll is card-owned state).
+    pub tags: Vec<(String, i32)>,
+    /// Was this the turn's main move?
+    pub main: bool,
+    /// The direction the move travels.
+    pub dir: game_core::engine::rules::Dir,
+    /// The move's 移动起点.
+    pub from: i32,
+    /// Steps the move has left to walk.
+    pub remaining: i32,
+    /// The move's path length.
+    pub total: i32,
+    /// `t.Move.Roll`; `None` when there is no face to show.
+    pub roll: Option<i32>,
+}
+
+/// The payment a `pay` / `paid` trigger is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct TriggerPay {
+    /// Is this payment rent, as against a buy / build / forced loss?
+    pub is_rent: bool,
+}
+
+/// The purchase a buy trigger is about (`docs/PURCHASE.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TriggerBuy {
+    pub kind: card_sdk::abi::BuyKind,
+    /// The payee (the bank for land / agent / card / auction buys).
+    pub seller: game_core::engine::rules::Payee,
+    /// The price the buyer would be charged.
+    pub price: i32,
+    /// Ownership after the deal. `None` = the deal keeps its default (the buyer).
+    pub deal_owner: Option<i32>,
+    /// Houses after the deal.
+    pub deal_houses: i32,
+    /// Mortgage after the deal.
+    pub deal_mortgaged: bool,
 }
 
 impl Default for Trigger {
@@ -111,32 +136,20 @@ impl Default for Trigger {
             value: 0,
             step: 0,
             by_card: None,
-            pay_is_rent: false,
-            move_kind: None,
-            move_resolve: false,
-            move_tags: Vec::new(),
-            move_main: false,
-            move_dir: 0,
-            move_from: -1,
+            main: false,
+            mv: None,
+            pay: None,
+            buy: None,
+            roll_source: Default::default(),
             negation: Default::default(),
             spared: Vec::new(),
             seq: 0,
             answers: 0,
             effects: Vec::new(),
-            move_remaining: 0,
-            move_total: 0,
             cards: Vec::new(),
-            roll_source: 0,
-            move_roll: None,
-            card: String::new(),
-            name: String::new(),
-            buy_kind: 0,
-            seller: -1,
-            price: 0,
-            deal_owner: -1,
-            deal_houses: 0,
-            deal_mortgaged: false,
-            reason: String::new(),
+            card: None,
+            name: None,
+            reason: None,
         }
     }
 }

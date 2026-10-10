@@ -1,4 +1,4 @@
-//! The card-facing operation vocabulary (C# `H.*`) over the replayable [`World`].
+//! The card-facing operation vocabulary over the replayable [`World`].
 //!
 //! A rules host (`game-rules`) runs card modules against a copy of the world and
 //! calls these; they are pure state moves and log lines, so a module's replay
@@ -12,82 +12,83 @@ use crate::msg::Msg;
 use crate::state::{key, Counter, FieldCard, MarkFilter, StateVar, Tick, TileMark};
 
 use super::world::World;
+use crate::data::TileKind;
+use crate::engine::world::Extreme;
 
 impl World {
-    // ------------------------------------------- move shaping (C# `H.*`)
+    // ------------------------------------------- move shaping
 
-    // These shape the movement being planned (C# `MoveCtx` fields, set from a
-    // card's RollPlan routine). They read/write `TurnCtx::plan`, which is the
-    // live routine state; the broadcast summary is `MatchState::plan`
-    // (`MoveCtx::to_plan`).
+    // These shape the movement being planned (set from a card's RollPlan
+    // routine). They read/write `TurnCtx::plan`, which is the live routine
+    // state; the broadcast summary is `MatchState::plan` (`MoveCtx::to_plan`).
 
-    /// `SetSteps` -- the walk's length; keeps the sign of the current roll.
+    /// The walk's length; keeps the sign of the current roll.
     pub fn set_steps(&mut self, n: i32) {
         self.turn.plan.set_steps(n);
     }
-    /// `Reverse` -- walk backwards (`Dir` becomes -1).
+    /// Walk backwards (direction becomes -1).
     pub fn set_reverse(&mut self, on: bool) {
         self.turn.plan.reverse = on;
     }
-    /// `Signed` -- a negative roll walks backwards instead of clamping.
+    /// A negative roll walks backwards instead of clamping.
     pub fn set_signed(&mut self, on: bool) {
         self.turn.plan.signed = on;
     }
-    /// `StopAt` -- force the walk to stop here; `-1` clears.
+    /// Force the walk to stop here; `-1` clears.
     pub fn set_stop_at(&mut self, tile: i32) {
         self.turn.plan.stop_at = tile;
     }
-    /// `Parity` -- restrict the walk to odd/even tiles; `-1` either.
+    /// Restrict the walk to odd/even tiles; `-1` either.
     pub fn set_parity(&mut self, n: i32) {
         self.turn.plan.parity = n;
     }
-    /// C# `m.Resolve` -- settle where the move lands. Clear it to prevent
-    /// settle at all; the player still moves.
+    /// Settle at the [移动终点] (「到达终点后是否[结算]」). Clear it to skip
+    /// settle entirely; the player still moves.
     pub fn set_resolve(&mut self, on: bool) {
         self.turn.plan.resolve = on;
     }
-    /// How the move gets there: 0 = walk the path, 1 = teleport (C# `m.Teleport`).
+    /// How the move gets there: 0 = walk the path, 1 = [传送].
     pub fn set_kind(&mut self, kind: i32) {
         if let Some(k) = super::move_ctx::MoveKind::from_i32(kind) {
             self.turn.plan.kind = k;
         }
     }
-    /// `NoBuy` -- the walk cannot buy where it lands.
+    /// The walk cannot buy where it lands.
     pub fn set_no_buy(&mut self, on: bool) {
         self.turn.plan.no_buy = on;
     }
-    /// `NoBuild` -- the walk cannot build where it lands.
+    /// The walk cannot build where it lands.
 
-    /// `MinRoll` -- clamp the final face up to this after the counteractions.
+    /// Clamp the final face up to this after the counteractions.
     pub fn set_min_roll(&mut self, n: i32) {
         self.turn.plan.min_roll = n;
     }
-    /// `ExtraSteps` -- extra steps added to the walk (it grows as it runs).
+    /// Extra steps added to the walk (it grows as it runs).
     pub fn set_extra_steps(&mut self, n: i32) {
         self.turn.plan.extra_steps = n;
     }
 
-    /// `NoCircleReward` -- passing CiRCLE pays nothing on this walk.
+    /// Passing CiRCLE pays nothing on this walk.
 
-    /// `Start` -- the tile the walk begins on instead of where the player stands
+    /// The tile the walk begins on instead of where the player stands
     /// (`-1` = the player's own tile). `why` names the effect on the log line.
     pub fn set_start(&mut self, tile: i32, why: &str) {
         self.turn.plan.start = tile;
         self.turn.plan.start_why = why.to_string();
     }
-    /// `TeleportTo` -- the movement is a teleport to this tile (`-1` = a walk).
+    /// The movement is a [传送] to this tile (`-1` = a walk).
     /// `card_move` branches on this.
     pub fn set_teleport_to(&mut self, tile: i32) {
         self.turn.plan.teleport_to = tile;
-        // Naming a destination makes it a teleport (C# `m.Teleport`).
+        // Naming a destination makes it a [传送].
         self.turn.plan.kind = if tile >= 0 {
             super::move_ctx::MoveKind::Teleport
         } else {
             super::move_ctx::MoveKind::Walk
         };
     }
-    /// `Base` -- replace the dice the roll starts from (default 1d20). Each
-    /// entry is `count`d`sides`, summed into `Parts`. `sides == 0` is a flat
+    /// Replace the dice the roll starts from (default 1d20). Each
+    /// entry is `count`d`sides`, summed into the face. `sides == 0` is a flat
     /// `count` (see [`crate::engine::move_ctx::Roll`]).
     pub fn set_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         self.turn.plan.base.clear();
@@ -99,7 +100,7 @@ impl World {
             });
         }
     }
-    /// `Base` -- add one more die group to the starting dice (3d20 = three of
+    /// Add one more die group to the starting dice (3d20 = three of
     /// these, or one `count = 3`). `sides == 0` is a flat `count`.
     pub fn add_base_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
@@ -110,13 +111,13 @@ impl World {
             });
         }
     }
-    /// `Dice` -- drop every extra die another effect added. A rewrite that
+    /// Drop every extra die another effect added. A rewrite that
     /// names the whole face (「骰点就是1d10」) means *exactly* that face, not
     /// 1d10 plus whatever else is stacked on.
     pub fn clear_dice(&mut self) {
         self.turn.plan.dice.clear();
     }
-    /// `Dice` -- extra dice added to the roll (summed into `Extra`). A flat add
+    /// Extra dice added to the roll (summed into the face). A flat add
     /// is a `0`-sided term: `add_extra_dice(n, 0, why)`.
     pub fn add_extra_dice(&mut self, count: i32, sides: i32, why: &str) {
         if count > 0 && sides >= 0 {
@@ -128,39 +129,39 @@ impl World {
         }
     }
 
-    /// `SettleTile` -- settle here instead of the landing; -1 clears.
+    /// Settle here instead of the landing; -1 clears.
     pub fn set_settle_tile(&mut self, tile: i32) {
         self.turn.plan.settle_tile = tile;
     }
-    /// `PayFactor` -- scale money paid for this walk. Milli-units (500 = x0.5).
+    /// Scale money paid for this walk. Milli-units (500 = x0.5).
     pub fn set_pay_factor(&mut self, milli: i32) {
         self.turn.plan.pay_factor = f64::from(milli) / 1000.0;
     }
-    /// `RentFactor` -- scale rent paid for this walk, same units.
+    /// Scale rent paid for this walk, same units.
     pub fn set_rent_factor(&mut self, milli: i32) {
         self.turn.plan.rent_factor = f64::from(milli) / 1000.0;
     }
-    /// `CanBuild` -- may build away from the landing (not just on it).
+    /// May build away from the landing (not just on it).
     pub fn set_can_build(&mut self, on: bool) {
         self.turn.plan.can_build = on;
     }
-    /// `SettleAsAgent` -- settle on another player's behalf.
+    /// Settle on another player's behalf.
     pub fn set_settle_as_agent(&mut self, on: bool) {
         self.turn.plan.settle_as_agent = on;
     }
     /// 「使你的下次主要移动结果对那些玩家一起执行」 -- record a follower of the
-    /// move being planned (C# `LeadFx.Who`). After the mover settles, the engine
-    /// replays this move's result for each follower in the order recorded.
+    /// move being planned. After the mover settles, the engine replays this
+    /// move's result for each follower in the order recorded.
     pub fn plan_add_follower(&mut self, player_id: i32) {
         if player_id >= 0 && !self.turn.plan.followers.contains(&player_id) {
             self.turn.plan.followers.push(player_id);
         }
     }
-    /// `MoreSteps` -- a queued second walk, in steps.
+    /// A queued second walk, in steps.
     pub fn set_more_steps(&mut self, n: i32) {
         self.turn.plan.more_steps = n;
     }
-    /// `SetTag` / `Tag` -- card-owned per-move state (fire-roll counters etc.).
+    /// Card-owned per-move state (fire-roll counters etc.).
     pub fn set_tag(&mut self, key: &str, value: i32) {
         self.turn.plan.set_tag(key, value);
     }
@@ -168,21 +169,21 @@ impl World {
         self.turn.plan.tag(key)
     }
 
-    // getters the cards read back off the same MoveCtx
-    /// `StopAt` -- where the walk is forced to stop, or -1.
+    // getters the cards read back off the same move plan
     /// Did the walk stop before its full length? The walk loop sets it.
     pub fn move_stopped(&self) -> bool {
         self.turn.plan.stopped
     }
 
+    /// Where the walk is forced to stop, or -1.
     pub fn move_stop_at(&self) -> i32 {
         self.turn.plan.stop_at
     }
-    /// `Parity` -- -1 either, 0 even, 1 odd.
+    /// -1 either, 0 even, 1 odd.
     pub fn move_parity(&self) -> i32 {
         self.turn.plan.parity
     }
-    /// C# `m.Resolve` -- does the planned move settle where it lands?
+    /// Does the planned move settle at its [移动终点]?
     pub fn move_resolve(&self) -> bool {
         self.turn.plan.resolve
     }
@@ -193,19 +194,21 @@ impl World {
             super::move_ctx::MoveKind::Teleport => 1,
         }
     }
-    /// `Steps` -- the planned length; `MovePlan.Landing` is where it ends.
+    /// The planned length; [`crate::state::MovePlan::landing`] is where it ends.
     pub fn move_steps(&self) -> i32 {
         self.turn.plan.roll
     }
-    /// `Remaining` / `Total` -- how far along the walk is (C# `NoteWalk` writes
-    /// `lastWalk` from `Total`, not from `Roll`: a shortened walk differs).
+    /// How far along the walk is: steps left, and the path
+    /// length (the walk's length, not the face that was rolled -- a
+    /// shortened walk differs).
     pub fn move_remaining(&self) -> i32 {
         self.turn.plan.remaining
     }
+    /// The walk's full length (not the rolled face).
     pub fn move_total(&self) -> i32 {
         self.turn.plan.total
     }
-    /// `Dir` -- +1 forwards, -1 backwards.
+    /// +1 forwards, -1 backwards.
     pub fn move_dir(&self) -> i32 {
         self.turn.plan.dir()
     }
@@ -224,7 +227,7 @@ impl World {
         self.player_id(player_id).map_or(-1, |s| s.pos)
     }
 
-    /// The other players still in the game (`H.Others`).
+    /// The other players still in the game.
     pub fn others(&self, player_id: i32) -> Vec<i32> {
         (0..self.st.players.len() as i32)
             .filter(|&i| i != player_id && !self.player_out(i))
@@ -253,7 +256,7 @@ impl World {
             .collect()
     }
 
-    /// The house count a **rent** lookup reads (`H.RentHouses`). Real
+    /// The house count a **rent** lookup reads. Real
     /// `st.houses` is untouched by the override -- build caps, raze, sale and
     /// asset value all still see the standing houses. See
     /// [`crate::state::prop::RENT_HOUSES`]: presence on the tile's rule
@@ -285,7 +288,7 @@ impl World {
         self.st.houses.get(t).copied().unwrap_or(0)
     }
 
-    /// Rent of a tile as it stands right now (houses included; `H.RentOf`).
+    /// Rent of a tile as it stands right now (houses included).
     /// The house count is the **counted** one ([`Self::rent_houses`]).
     pub fn rent_of(&self, data: &GameData, tile: i32) -> i32 {
         let Ok(i) = usize::try_from(tile) else {
@@ -294,7 +297,7 @@ impl World {
         let Some(t) = data.tiles.get(i) else {
             return 0;
         };
-        if t.kind == "ring" {
+        if t.kind == TileKind::Ring {
             // RiNG rent is rolled at payment time; the table value is the base.
             t.price
         } else {
@@ -302,7 +305,7 @@ impl World {
         }
     }
 
-    /// Price to buy a tile now (land + houses standing on it; `H.BuyPriceFor`).
+    /// Price to buy a tile now (land + houses standing on it).
     /// [`super::play::purchase::quote_native`] is the single source.
     pub fn buy_price(&self, data: &GameData, tile: i32) -> i32 {
         let Ok(t) = usize::try_from(tile) else {
@@ -339,7 +342,7 @@ impl World {
                 .filter(|&(t, tile)| {
                     Some(t) != exclude
                         && tile.is_buyable()
-                        && tile.kind != "ring"
+                        && tile.kind != TileKind::Ring
                         && self.st.owners[t] == player as i32
                         && !self.st.mortgaged[t]
                 })
@@ -347,8 +350,8 @@ impl World {
                 .sum::<i32>()
     }
 
-    /// The tile `steps` ahead of a player without passing others' logic
-    /// (`H.NearestAhead`-lite): pure geometry on the ring.
+    /// The tile `steps` ahead of a player as pure geometry on the ring -- no
+    /// walk shaping, just wrap.
     pub fn tile_steps_ahead(&self, data: &GameData, player_id: i32, steps: i32) -> i32 {
         let n = data.tiles.len() as i32;
         let pos = self.player_pos(player_id);
@@ -360,15 +363,15 @@ impl World {
 
     // -------------------------------------------------------- player slots (V)
 
-    /// C# `TurnCtx.NoMoneyLoss` -- this player's money cannot drop this turn.
+    /// This player's money cannot drop this turn.
     pub fn money_locked(&self, player_id: i32) -> bool {
         usize::try_from(player_id).is_ok_and(|s| self.turn.no_money_loss.contains(&s))
     }
 
     // ------------------------------------------------------ keyed state map
 
-    /// Per-player keyed state as `{value, min, max, expires}` items (C#
-    /// `MatchPlayer`'s pots plus the `H.V` slots). The engine holds these and
+    /// Per-player keyed state as `{value, min, max, expires}` items (status
+    /// counters, fire pots, free-form slots). The engine holds these and
     /// enforces nothing -- see [`crate::state::StateVar`]. There is no
     /// `match key` here and there must never be: which keys mean what, and
     /// what their caps are, belongs to whoever uses them. The `stun_of` / `fire`
@@ -439,7 +442,7 @@ impl World {
 
     // -------------------------------------------------- free-form slots (V)
 
-    /// C# `H.V` -- a free-form per-player counter. Sugar over the keyed map.
+    /// A free-form per-player counter. Sugar over the keyed map.
     pub fn slot(&self, player_id: i32, key: &str) -> i32 {
         self.state_get(player_id, key)
     }
@@ -454,19 +457,19 @@ impl World {
 
     // ------------------------------------------------------------- tokens
 
-    /// Board markers (C# `Counter`), kept out of the keyed state on purpose:
-    /// they render on the board rather than being a value a rule enforces.
+    /// Board markers, kept out of the keyed state on purpose: they render on
+    /// the board rather than being a value a rule enforces.
     /// Names of the player's counters whose name starts with `prefix`, in the
     /// order they were added. The listing half of a counter query -- [`Self::tok`]
     /// reads one of them by name.
-    /// `H.DoMoveRoll` -- sum the move plan's `base` + `dice` tables into one
+    /// Sum the move plan's `base` + `dice` tables into one
     /// face. Flat terms (`sides <= 0`) add their `count` directly, which is how a
     /// 「+2 to the roll」 effect rides along instead of a separate bonus field.
     /// Honours [`TurnCtx::extreme`]: a forced extreme settles the whole table at
     /// its theoretical max or min instead of rolling it.
     pub fn do_move_roll(&mut self, _player_id: i32) -> i32 {
         let plan = self.turn.plan.clone();
-        if self.turn.extreme != 0 {
+        if self.turn.extreme != Extreme::Plain {
             let mut lo = 0;
             let mut hi = 0;
             for t in plan.base.iter().chain(plan.dice.iter()) {
@@ -478,7 +481,7 @@ impl World {
                     hi += t.count.max(0) * t.sides.max(1);
                 }
             }
-            return if self.turn.extreme > 0 { hi } else { lo };
+            return if self.turn.extreme == Extreme::Max { hi } else { lo };
         }
         let mut total = 0;
         for t in plan.base.iter().chain(plan.dice.iter()) {
@@ -498,9 +501,9 @@ impl World {
     pub fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
         let count = count.max(0);
         let sides = sides.max(1);
-        let total = if self.turn.extreme > 0 {
+        let total = if self.turn.extreme == Extreme::Max {
             count * sides
-        } else if self.turn.extreme < 0 {
+        } else if self.turn.extreme == Extreme::Min {
             count
         } else {
             let mut sum = 0;
@@ -527,8 +530,8 @@ impl World {
         total
     }
 
-    /// C# `H.GainR` with `fixedAmount` -- the money moves, but no skill or crit
-    /// may bend the figure (「立刻获得此次失去的资金金额」).
+    /// Money moves, but no skill or crit may bend the figure
+    /// (「立刻获得此次失去的资金金额」).
     ///
     /// The ledger still closes: the movement is logged as a `gain` event with
     /// its bank leg (`value`), even though it bypasses the `payAdd`/`payMul`/
@@ -577,7 +580,7 @@ impl World {
         }
     }
 
-    /// Returns how much it actually moved by (`H.AddTok`). This is a *consumer*
+    /// Returns how much it actually moved by. This is a *consumer*
     /// of the cap passed in -- the engine is not the one deciding to clamp.
     /// `instance` is stamped on a new row.
     pub fn add_tok(&mut self, player_id: i32, name: &str, n: i32, max: i32, instance: i32) -> i32 {
@@ -622,8 +625,8 @@ impl World {
         }
     }
 
-    /// C# `AddBandCrystals` -- a consumer of the passed cap, not the engine
-    /// deciding one (`max` > 0 clamps, `max` = 0 is uncapped, exactly as
+    /// A consumer of the passed cap, not the engine deciding one (`max` > 0
+    /// clamps, `max` = 0 is uncapped, exactly as
     /// [`Self::add_crystals_at`]). Returns the new count; 0 when the player has
     /// no band skill (writes are no-ops).
     pub fn add_band_crystals(&mut self, player_id: i32, n: i32, max: i32) -> i32 {
@@ -646,8 +649,8 @@ impl World {
         self.field_by_uid(uid).map(|f| f.card.clone())
     }
 
-    /// Rule id of the player's **character skill** (`skill:<character>:<skill>`,
-    /// C# `H._fx[i].skill`). A character skill is a `skill:` instance that is
+    /// Rule id of the player's **character skill** (`skill:<character>:<skill>`).
+    /// A character skill is a `skill:` instance that is
     /// *not* a band skill; `bind_skills` places it beside the band one.
     pub fn character_skill_id(&self, player_id: i32) -> Option<String> {
         let s = self.player_id(player_id)?;
@@ -658,7 +661,7 @@ impl World {
     }
 
     /// Every band-skill attachment on the player's field, as
-    /// `(uid, rule id, extra)` in placement order (C# `H._fx[i].bands`).
+    /// `(uid, rule id, extra)` in placement order.
     pub fn band_skills(&self, player_id: i32) -> Vec<(i32, String, i32)> {
         let Some(s) = self.player_id(player_id) else {
             return Vec::new();
@@ -670,7 +673,7 @@ impl World {
             .collect()
     }
 
-    /// Attach a band-skill instance (C# `H.MakeBand(band, user, extra)`).
+    /// Attach a band-skill instance.
     /// `extra` marks a 「拿取」ed copy: 「相同乐队技能卡的效果不可叠加」 (refused
     /// when an attachment of the same id is already there) and 「不视为那个乐队
     /// 的角色」 (`in_band` still reads only the character). Returns the new uid,
@@ -706,20 +709,20 @@ impl World {
 
     // ------------------------------------------------------------- fire pots
 
-    /// Fire pots held (C# `fire`).
+    /// Fire pots held.
     pub fn fire(&self, player_id: i32) -> i32 {
         self.state_get(player_id, key::FIRE)
     }
 
-    /// The mandated fire-pot cap (C# `fireMax`) -- the `max` of the `fire` item,
+    /// The mandated fire-pot cap -- the `max` of the `fire` item,
     /// which a character skill writes. The engine never imposes it.
     pub fn fire_max(&self, player_id: i32) -> i32 {
         self.state_max(player_id, key::FIRE)
     }
 
-    /// `Card.FireMaxDelta` -- move the *cap* up or down (C# `FireMaxDelta`).
-    /// A consumer of the cap, so it is the one that pulls the value back under
-    /// the new ceiling; [`Self::state_add`] would not.
+    /// Move the fire-pot *cap* up or down. A consumer of the cap, so it is
+    /// the one that pulls the value back under the new ceiling;
+    /// [`Self::state_add`] would not.
     pub fn add_fire_max(&mut self, player_id: i32, n: i32) -> i32 {
         let cap = self.fire_max(player_id).saturating_add(n).max(0);
         self.state_set_bounds(player_id, key::FIRE, 0, cap);
@@ -762,7 +765,7 @@ impl World {
 
     // ---------------------------------------------------------- money moves
 
-    /// `H.GainR` -- money in, logged with its reason.
+    /// Money in (「[获得]」), logged with its reason.
     pub fn gain_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         let Some(s) = self.player_mut(player_id) else {
             return 0;
@@ -783,7 +786,7 @@ impl World {
         amount
     }
 
-    /// `H.PayR` -- money out, logged. Routines that may need to raise funds are
+    /// Money out (「[支付]」), logged. Routines that may need to raise funds are
     /// driven through `Cx` instead (they prompt).
     pub fn pay_money(&mut self, player_id: i32, amount: i32, src: Msg) -> i32 {
         if amount > 0 && self.money_locked(player_id) {
@@ -833,7 +836,7 @@ impl World {
         true
     }
 
-    /// `H.DrawR` -- draw `n` cards, refilling as soon as the last card leaves.
+    /// Draw `n` cards, refilling as soon as the last card leaves.
     /// Returns how many were actually drawn.
     pub fn draw_cards(&mut self, player_id: i32, n: i32, over_hand_limit: bool) -> i32 {
         let Some(i) = usize::try_from(player_id).ok() else {
@@ -865,7 +868,7 @@ impl World {
         got
     }
 
-    /// `H.AddToHand` / `AddToDeck` / `ToDiscard` -- move a card id between zones.
+    /// Move a card id between zones (hand / draw pile / discard).
     pub fn add_to_hand(&mut self, player_id: i32, card: &str) {
         if let Ok(i) = usize::try_from(player_id) {
             if let Some(h) = self.hidden.get_mut(i) {
@@ -900,8 +903,7 @@ impl World {
 
     // -------------------------------------------------------- placed cards
 
-    /// `H.PlaceFromPlay` -- the card becomes a field card at the player.
-    /// `WhyNotBuildOn` -- may this player build on this tile at all? The one
+    /// May this player build on this tile at all? The one
     /// build gate, asked both by the engine's build step and by a card choosing
     /// a destination. `None` = yes; otherwise the reason.
     pub fn why_not_build_on(
@@ -971,7 +973,7 @@ impl World {
         {
             return Some(Msg::new("err.build_denied"));
         }
-        if t.kind == "ring" || t.rent.len() < 2 {
+        if t.kind == TileKind::Ring || t.rent.len() < 2 {
             return Some(Msg::new("err.build_ring"));
         }
         if self
@@ -992,8 +994,7 @@ impl World {
         None
     }
 
-    /// Is this placed card face-down? (`!p.FaceDown` in the C# field filters.)
-    /// Flip a placed card face-down / face-up (C# `H.SwitchState`).
+    /// Flip a placed card face-down / face-up.
     pub fn set_card_face_down(&mut self, player_id: i32, card: &str, down: bool) -> bool {
         let Some(s) = self.player_mut(player_id) else {
             return false;
@@ -1005,6 +1006,7 @@ impl World {
         true
     }
 
+    /// Is this placed card face-down?
     pub fn card_face_down(&self, player_id: i32, card: &str) -> bool {
         self.player_id(player_id)
             .and_then(|s| s.field.iter().find(|f| f.card == card))
@@ -1029,7 +1031,7 @@ impl World {
         self.place_card_on(data, player_id, -1, card, note, props)
     }
 
-    /// Place a field card **on a tile** (C# `H.PlaceFromPlay(c, i, tile)`) -- the
+    /// Place a field card **on a tile** -- the
     /// mark sits on the board at `tile` rather than with its owner. `tile: -1`
     /// puts it with the owner, which is [`Self::place_card`].
     ///
@@ -1162,7 +1164,7 @@ impl World {
             .collect()
     }
 
-    /// Miracle crystals on the instance at `uid` (C# `Card.Crystals`).
+    /// Miracle crystals on the instance at `uid`.
     /// Sugar over [`Self::counter_at`] with [`crate::state::counter::CRYSTALS`].
     pub fn crystals_at(&self, uid: i32) -> i32 {
         self.counter_at(uid, crate::state::counter::CRYSTALS)
@@ -1214,7 +1216,7 @@ impl World {
         }
     }
 
-    /// `H.AddCrystals` on the instance at `uid`; `max` caps (0 = uncapped).
+    /// Add miracle crystals on the instance at `uid`; `max` caps (0 = uncapped).
     ///
     /// Also mirrors the count into [`crate::state::MatchState::event_active`]
     /// when the instance is an event's board-owner rule (`docs/EVENTS.md`):
@@ -1306,10 +1308,10 @@ impl World {
         -1
     }
 
-    /// Place the player's skill rules on their field (C# `Fx`). This is the
-    /// binding: see [`crate::data::GameData::skill_rules_of`]. Once placed,
-    /// `On::Hook` reaches them like any other field card and `Card.Crystals`
-    /// works on them. Idempotent -- calling it twice does not double-place.
+    /// Place the player's skill rules on their field. This is the binding:
+    /// see [`crate::data::GameData::skill_rules_of`]. Once placed, `On::Hook`
+    /// reaches them like any other field card and crystal counters work on
+    /// them. Idempotent -- calling it twice does not double-place.
     pub fn bind_skills(
         &mut self,
         data: &crate::data::GameData,
@@ -1373,7 +1375,7 @@ impl World {
             for (n, r) in tile.rent.iter().enumerate() {
                 props.insert(format!("{}{}", prop::RENT_PREFIX, n), *r);
             }
-            if tile.kind == "ring" {
+            if tile.kind == TileKind::Ring {
                 props.insert(prop::RING_MULT.to_string(), data.match_rules.ring_multiplier);
             }
             self.place_card_on(
@@ -1535,7 +1537,7 @@ impl World {
         }
     }
 
-    /// `H.Unplace` -- take a field card off; returns its card id.
+    /// Take a field card off; returns its card id.
     pub fn unplace_card(&mut self, player_id: i32, card: &str) -> Option<String> {
         let s = self.player_mut(player_id)?;
         let k = s.field.iter().position(|f| f.card == card)?;
@@ -1551,8 +1553,8 @@ impl World {
         })
     }
 
-    /// C# `Card.Immune` -- mark a placed field card as unaffected by other
-    /// effects (「此卡不受…效果影响」). Effects that would touch it read
+    /// Mark a placed field card as unaffected by other effects
+    /// (「此卡不受…效果影响」). Effects that would touch it read
     /// [`Self::card_immune`] and skip.
     pub fn set_card_immune(&mut self, player_id: i32, card: &str, on: bool) -> bool {
         let Some(s) = self.player_mut(player_id) else {
@@ -1572,7 +1574,7 @@ impl World {
             .is_some_and(|f| f.immune)
     }
 
-    /// Move a placed field card to `tile` (C# `card.Tile = t` / `H.Touch()`).
+    /// Move a placed field card to `tile`.
     /// The 「将此卡放置于X格子上」 re-placement hop: the card is already in play,
     /// it just sits somewhere else. `tile: -1` puts it back with its owner.
     pub fn set_card_tile(&mut self, player_id: i32, card: &str, tile: i32) -> bool {
@@ -1586,13 +1588,13 @@ impl World {
         true
     }
 
-    /// Miracle crystals on a placed card (C# `Card.Crystals`). Sugar over
+    /// Miracle crystals on a placed card. Sugar over
     /// [`Self::card_counter`] with [`crate::state::counter::CRYSTALS`].
     pub fn card_crystals(&self, player_id: i32, card: &str) -> i32 {
         self.card_counter(player_id, card, crate::state::counter::CRYSTALS)
     }
 
-    /// `H.AddCrystals` on a placed card. Sugar over [`Self::add_card_counter`].
+    /// Add miracle crystals on a placed card. Sugar over [`Self::add_card_counter`].
     pub fn add_card_crystals(&mut self, player_id: i32, card: &str, n: i32, max: i32) -> i32 {
         self.add_card_counter(player_id, card, crate::state::counter::CRYSTALS, n, max)
     }
@@ -1642,8 +1644,8 @@ impl World {
     // ([`Self::counter_at`]). Destroying the owning instance destroys every
     // unit, wherever it sits ([`Self::destroy_instance_units`]).
     //
-    // Filter sentinel: `MarkFilter { kind: "", category: "", owner: -2,
-    // src: -2, instance: -2 }` matches anything (`MarkFilter::ANY`).
+    // `MarkFilter::ANY` (empty kind/category, `None` owner/src/instance)
+    // matches anything.
 
     /// Sum of `count` over the matching marks on `tile`.
     pub fn count_marks(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
@@ -1655,23 +1657,26 @@ impl World {
             .sum()
     }
 
-    /// Provenance (`TileMark.src`) of the first matching mark on `tile`, or -1.
+    /// Provenance (`TileMark::src`) of the first matching mark on `tile`,
+    /// encoded as `i32` (`-1` when none) for the guest ABI.
     pub fn mark_src_at(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
         self.st
             .marks
             .iter()
             .find(|m| m.tile == tile && filter.matches(m))
-            .map_or(-1, |m| m.src)
+            .and_then(|m| m.src)
+            .unwrap_or(-1)
     }
 
-    /// Owning instance (`TileMark.instance`) of the first matching mark on
-    /// `tile`, or -1.
+    /// Owning instance (`TileMark::instance`) of the first matching mark on
+    /// `tile`, encoded as `i32` (`-1` when none) for the guest ABI.
     pub fn mark_instance_at(&self, tile: i32, filter: &MarkFilter<'_>) -> i32 {
         self.st
             .marks
             .iter()
             .find(|m| m.tile == tile && filter.matches(m))
-            .map_or(-1, |m| m.instance)
+            .and_then(|m| m.instance)
+            .unwrap_or(-1)
     }
 
     /// Bind `count` more units of `instance`'s counter `kind` to `tile`.
@@ -1695,6 +1700,8 @@ impl World {
         if count <= 0 {
             return 0;
         }
+        let instance = (instance >= 0).then_some(instance);
+        let src = (src >= 0).then_some(src);
         let cat = if category.is_empty() {
             crate::state::mark_category::PLAYER
         } else {
@@ -1712,8 +1719,8 @@ impl World {
                 return m.count;
             }
         }
-        let card = self
-            .field_by_uid(src)
+        let card = src
+            .and_then(|s| self.field_by_uid(s))
             .map(|f| f.card.clone())
             .unwrap_or_default();
         let uid = self.st.marks.iter().map(|m| m.uid).max().unwrap_or(0) + 1;
@@ -1767,9 +1774,9 @@ impl World {
         if uid < 0 {
             return;
         }
-        self.st.marks.retain(|m| m.instance != uid);
+        self.st.marks.retain(|m| m.instance != Some(uid));
         for p in self.st.players.iter_mut() {
-            p.tokens.retain(|t| t.instance != uid);
+            p.tokens.retain(|t| t.instance != Some(uid));
         }
     }
 
@@ -1831,6 +1838,7 @@ impl World {
 
     /// Units of `instance`'s counter `kind` bound to `tile`.
     pub fn count_bound_tile(&self, instance: i32, kind: &str, tile: i32) -> i32 {
+        let instance = (instance >= 0).then_some(instance);
         self.st
             .marks
             .iter()
@@ -1840,9 +1848,10 @@ impl World {
     }
 
     /// Units of `instance`'s counter `name` held by `player_id`. Name-keyed
-    /// fallback (the old `H.Tok` rule): a token name is unique to its creating
-    /// rule, so a legacy row with `instance == -1` still counts.
+    /// fallback: a token name is unique to its creating rule, so a legacy row
+    /// with `instance == -1` still counts.
     pub fn count_held(&self, instance: i32, name: &str, player_id: i32) -> i32 {
+        let instance = (instance >= 0).then_some(instance);
         self.player_id(player_id)
             .and_then(|s| {
                 s.tokens
@@ -1857,13 +1866,14 @@ impl World {
     /// (a rule-created player token). Clamped at 0 / `max`. Returns how much
     /// actually moved.
     pub fn bind_held(&mut self, instance: i32, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+        let instance = (instance >= 0).then_some(instance);
         let Some(s) = self.player_mut(player_id) else {
             return 0;
         };
-        // Name-keyed (the old `H.AddTok` rule): a token name is unique to its
-        // creating rule (`marker_owner`), so a spend from any instance hits the
-        // same pool. Prefer an exact (name, instance) row; fall back to any row
-        // with that name (legacy `instance == -1` rows from save migration).
+        // Name-keyed: a token name is unique to its creating rule
+        // (`marker_owner`), so a spend from any instance hits the same pool.
+        // Prefer an exact (name, instance) row; fall back to any row with that
+        // name (legacy `instance: None` rows from save migration).
         let idx = s
             .tokens
             .iter()
@@ -1911,9 +1921,9 @@ impl World {
             let f = MarkFilter {
                 kind: name,
                 category: "",
-                owner: -2,
-                src: -2,
-                instance,
+                owner: None,
+                src: None,
+                instance: Some(instance),
             };
             let have = self.count_bound_tile(instance, name, from_tile);
             let take = n.min(have);
@@ -1955,7 +1965,7 @@ impl World {
     // are units of the **standing `mark:cp` pseudo card**'s counter
     // ([`crate::state::counter::CP`] / [`crate::state::mark_kind::CP`]), bound
     // to tiles. `mark:cp` lives on the neutral board owner and is never
-    // destroyed, so its units outlive any placer. Provenance (`TileMark.src`)
+    // destroyed, so its units outlive any placer. Provenance (`TileMark::src`)
     // is the placing card instance -- 通用:该清CP了 (1) 「此卡在格子上添加的
     // [CP点]及其产物」 and the landing hook's 「自己[场上]1个[CP点]」 spend key
     // on it. The on-card [CP点] of 该清CP了 is that card's own
@@ -1973,7 +1983,7 @@ impl World {
 
     // ------------------------------------------------------ status effects
 
-    /// `H.GiveStay` / `GiveStun` / `GiveExile` -- layered status on a player.
+    /// Layered status on a player (「[停留]」 / 「[眩晕]」 / 「[除外]」).
     ///
     /// These are *consumers* of the keyed state, and the two that are timed say
     /// so on the item (`expires: TurnEnd`) rather than the engine remembering
@@ -1987,7 +1997,7 @@ impl World {
             // 「[停留]：处于该状态时[无法移动]」 -- the skip is a *consequence* of
             // the state, not a separate latch. Dropping the last layer (with no
             // [除外] holding the move either) un-skips the turn's main move, the
-            // same as the C#'s `H.State.skipMove = false` when 壱雫空 clears it.
+            // same as when 壱雫空 clears the last layer.
             let unskip = v == 0 && s.exile() == 0;
             if unskip && self.st.turn == player_id {
                 self.st.skip_move = false;
@@ -2011,14 +2021,14 @@ impl World {
         }
     }
 
-    /// `H.GiveExtraTurn` -- the player gets another turn after this one.
+    /// The player gets another turn after this one.
     pub fn give_extra_turn(&mut self, player_id: usize) {
         if !self.extra_turns.contains(&player_id) {
             self.extra_turns.push(player_id);
         }
     }
 
-    /// The RiNG rent multiplier in force (`H.RingMultiplier`).
+    /// The RiNG rent multiplier in force.
     pub fn ring_multiplier(&self, data: &GameData) -> i32 {
         (data.match_rules.ring_multiplier + self.ring_bonus).max(1)
     }
@@ -2028,7 +2038,7 @@ impl World {
         self.ring_bonus
     }
 
-    /// `H.ForceTeleport(..., resolve: false)` -- move a player without settling.
+    /// Move a player to a tile without settling (a bare [传送]).
     pub fn teleport_to(&mut self, player_id: i32, tile: i32) {
         if let Some(s) = self.player_mut(player_id) {
             s.pos = tile;
@@ -2037,7 +2047,8 @@ impl World {
 
     // --------------------------------------------------------------- misc
 
-    /// `H.Touch` -- something changed that only host-side state cares about.
+    /// Something changed that only host-side state cares about -- bump the
+    /// sequence so views and replays notice.
     pub fn touch(&mut self) {
         self.st.seq += 1;
     }
@@ -2055,7 +2066,7 @@ impl World {
     }
 }
 
-/// Zero-terminated named counters: keep only positive values (`H.SetTok`).
+/// Zero-terminated named counters: keep only positive values.
 fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32) {
     let v = value.max(0);
     match list.iter_mut().find(|c| c.name == name) {
@@ -2065,7 +2076,7 @@ fn set_named(list: &mut Vec<Counter>, name: &str, value: i32, instance: i32) {
                 list.push(Counter {
                     name: name.to_string(),
                     value: v,
-                    instance,
+                    instance: (instance >= 0).then_some(instance),
                 });
             }
         }

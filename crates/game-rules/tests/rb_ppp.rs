@@ -968,7 +968,7 @@ fn band_press_offers_both_exchange_and_cash() {
             name: STICKER.into(),
             value: 2,
         
-        instance: -1,
+        instance: None,
     });
     }
     let sid = t.skill_id(0, "星之鼓动");

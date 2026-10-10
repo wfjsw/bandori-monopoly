@@ -124,41 +124,51 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger.by_card.map(|b| b as i64).unwrap_or(-1)
     }
     fn pay_is_rent(&self) -> bool {
-        self.trigger.pay_is_rent
+        self.trigger.pay.map(|p| p.is_rent).unwrap_or(false)
     }
     fn move_roll(&self) -> i64 {
         // Negative face is the pre-cast sentinel; reads as `null`.
-        self.trigger.move_roll.filter(|&r| r >= 0).map(|r| r as i64).unwrap_or(-1)
+        self.trigger
+            .mv
+            .as_ref()
+            .and_then(|m| m.roll)
+            .filter(|&r| r >= 0)
+            .map(|r| r as i64)
+            .unwrap_or(-1)
     }
     fn move_kind(&self) -> i64 {
-        self.trigger.move_kind.map(|k| k as i64).unwrap_or(-1)
+        self.trigger.mv.as_ref().map(|m| m.kind as i64).unwrap_or(-1)
     }
     fn move_remaining(&self) -> i64 {
-        self.trigger.move_remaining as i64
+        self.trigger.mv.as_ref().map(|m| m.remaining).unwrap_or(0) as i64
     }
     fn move_main(&self) -> bool {
-        self.trigger.move_main
+        self.trigger.main
     }
     fn move_dir(&self) -> i64 {
-        self.trigger.move_dir as i64
+        self.trigger
+            .mv
+            .as_ref()
+            .map(|m| m.dir.as_i32() as i64)
+            .unwrap_or(1)
     }
     fn move_tag_named(&self, name: &str) -> i64 {
         self.trigger
-            .move_tags
-            .iter()
-            .find(|(k, _)| k == name)
+            .mv
+            .as_ref()
+            .and_then(|m| m.tags.iter().find(|(k, _)| k == name))
             .map(|(_, v)| *v as i64)
             .unwrap_or(0)
     }
     fn move_tag_table(&self) -> Vec<(String, i64)> {
         self.trigger
-            .move_tags
-            .iter()
-            .map(|(k, v)| (k.clone(), *v as i64))
-            .collect()
+            .mv
+            .as_ref()
+            .map(|m| m.tags.iter().map(|(k, v)| (k.clone(), *v as i64)).collect())
+            .unwrap_or_default()
     }
     fn roll_source(&self) -> i64 {
-        self.trigger.roll_source as i64
+        self.trigger.roll_source.as_i32() as i64
     }
     fn abnormal(&self) -> bool {
         matches!(self.trigger.kind, crate::TriggerKind::Abnormal)
@@ -183,17 +193,15 @@ impl<S: SnapSrc> CondView for SnapView<'_, S> {
         self.trigger.effects.iter().map(|e| e.target as i64).collect()
     }
     fn trigger_card(&self) -> i64 {
-        if self.trigger.card.is_empty() {
-            0
-        } else {
-            id_of(&self.trigger.card)
+        match self.trigger.card.as_deref() {
+            Some(card) if !card.is_empty() => id_of(card),
+            _ => 0,
         }
     }
     fn counter_name(&self) -> i64 {
-        if self.trigger.name.is_empty() {
-            0
-        } else {
-            id_of(&self.trigger.name)
+        match self.trigger.name.as_deref() {
+            Some(name) if !name.is_empty() => id_of(name),
+            _ => 0,
         }
     }
 
@@ -1017,19 +1025,25 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         // negative face is the pre-cast sentinel (`value = -1` on the `roll`
         // pre-trigger) and reads as `null`, so `move.roll != null` means "a
         // real face exists" exactly as the guards wrote it.
-        roll: t.move_roll.filter(|&r| r >= 0).map(|r| r as i64),
-        kind: t.move_kind.map(|k| k as i64),
-        remaining: t.move_remaining as i64,
-        // `t.Move.Main` (`trigger::move_is_main()` in the guest).
-        main: t.move_main,
+        roll: t
+            .mv
+            .as_ref()
+            .and_then(|m| m.roll)
+            .filter(|&r| r >= 0)
+            .map(|r| r as i64),
+        kind: t.mv.as_ref().map(|m| m.kind as i64),
+        remaining: t.mv.as_ref().map(|m| m.remaining).unwrap_or(0) as i64,
+        // `t.Move.Main` (`trigger::move_is_main()` in the guest) lives on the
+        // trigger itself, not the move payload.
+        main: t.main,
         // `t.Move.Dir` (`trigger::move_dir()` in the guest) -- 1 forward,
         // -1 backward; the trigger default is 1 when no move caused it.
-        dir: t.move_dir as i64,
+        dir: t.mv.as_ref().map(|m| m.dir.as_i32() as i64).unwrap_or(1),
         tags: t
-            .move_tags
-            .iter()
-            .map(|(k, v)| (k.clone(), *v as i64))
-            .collect(),
+            .mv
+            .as_ref()
+            .map(|m| m.tags.iter().map(|(k, v)| (k.clone(), *v as i64)).collect())
+            .unwrap_or_default(),
     };
 
     let tile = TileSnap {
@@ -1048,9 +1062,9 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         value: t.value as i64,
         step: t.step as i64,
         by: t.by_card.map(|b| b as i64).unwrap_or(-1),
-        pay_is_rent: t.pay_is_rent,
+        pay_is_rent: t.pay.map(|p| p.is_rent).unwrap_or(false),
         mv,
-        roll_source: t.roll_source as i64,
+        roll_source: t.roll_source.as_i32() as i64,
         // `abnormal` is the AbnormalGate window, not "this link was negated".
         // There is no `t.Abnormal` bool on `Trigger`; the closest signal is the
         // trigger kind itself.
@@ -1058,8 +1072,11 @@ pub fn fill_window<S: SnapSrc>(world: &S) -> WindowCtx {
         chain,
         turn_player: world.turn_player() as i64,
         turn_key: world.turn_key() as i64,
-        trigger_card: if t.card.is_empty() { 0 } else { id_of(&t.card) },
-        name: t.name.clone(),
+        trigger_card: match t.card.as_deref() {
+            Some(card) if !card.is_empty() => id_of(card),
+            _ => 0,
+        },
+        name: t.name.clone().unwrap_or_default(),
         players,
         tile_ids,
         circle_tiles,

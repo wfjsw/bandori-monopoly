@@ -13,6 +13,7 @@ use game_core::net::RoomMember;
 use game_core::scoring::ScoreWeights;
 use game_core::state::{prop, FieldCard, MoneyFlow, TileQuote, TileQuoteKind};
 use game_core::MatchMode;
+use game_core::data::TileKind;
 
 fn data() -> Arc<GameData> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
@@ -74,17 +75,17 @@ fn first_tile(f: impl Fn(&game_core::data::TileData) -> bool) -> usize {
 
 /// A property with a real build ladder (`rent.len() >= 2`).
 fn prop_tile() -> usize {
-    first_tile(|t| t.kind == "property" && t.rent.len() >= 2)
+    first_tile(|t| t.kind == TileKind::Property && t.rent.len() >= 2)
 }
 
 fn ring_tile() -> usize {
-    first_tile(|t| t.kind == "ring")
+    first_tile(|t| t.kind == TileKind::Ring)
 }
 
 fn all_rings() -> Vec<usize> {
     let d = data();
     (0..d.tiles.len())
-        .filter(|&i| d.tiles[i].kind == "ring")
+        .filter(|&i| d.tiles[i].kind == TileKind::Ring)
         .collect()
 }
 

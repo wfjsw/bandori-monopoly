@@ -58,7 +58,7 @@ fn end_quiet(t: &mut Table, who: usize) {
 fn add_token(t: &mut Table, who: usize, name: &str, value: i32) {
     t.m.world_mut().st.players[who]
         .tokens
-        .push(Counter { name: name.into(), value, instance: -1 });
+        .push(Counter { name: name.into(), value, instance: None });
 }
 
 // ============================================================ cards
@@ -387,7 +387,7 @@ fn courage_sums_3d20_for_the_tile_number() {
 fn courage_agent_tile_gives_1000() {
     // 规则书: 「若为地产商地块，获得1000资金」
     let mut t = Table::vanilla(2);
-    assert_eq!(data().tiles[tile("主要街道")].kind, "agent");
+    assert_eq!(data().tiles[tile("主要街道")].kind, game_core::data::TileKind::Agent);
     t.dice(&[2, 2, 1]); // sum 5 -> #5 = 主要街道 (agent)
     t.give_play(0, "Mor:勇气展翅高飞之时").unwrap();
     assert_eq!(t.money(0), 10_000 + 1000);

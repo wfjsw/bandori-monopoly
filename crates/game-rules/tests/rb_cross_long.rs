@@ -213,7 +213,7 @@ fn l02_one_walk_several_pass_effects() {
         name: "星星贴纸".into(),
         value: 2,
     
-        instance: -1,
+        instance: None,
     });
     // 安可 in hand from the start, so the 香澄 forced stop can be countered.
     t.give(0, &["通用:安可"]);
@@ -479,7 +479,7 @@ fn l06_one_draw_several_effects() {
             name: "P✽P粉丝(正)".into(),
             value: 1,
         
-        instance: -1,
+        instance: None,
     });
     }
     t.place_raw(0, "PP:梦在前方，结彩当下");
