@@ -2205,6 +2205,12 @@ impl<M: CardModules> RulesBridge<M> {
             )?;
             if allowed {
                 cx.card_move(player_id.max(0) as usize, plan)?;
+            } else {
+                // The gate refused the move: drop the one-shot `teleport_to`
+                // the body wrote for it so it cannot shape a later move.
+                let mut w = cx.world_copy();
+                w.turn.plan.teleport_to = -1;
+                cx.swap_world(w);
             }
             return Ok(allowed as i32);
         }

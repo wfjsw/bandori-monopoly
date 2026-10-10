@@ -1403,6 +1403,55 @@ fn band_skill_offers_teleport_after_a_livehouse_settle() {
     );
 }
 
+#[test]
+fn band_skill_accept_makes_the_next_main_move_a_teleport() {
+    // 规则书: 「你的下一次主要移动可变为传送至你拥有的一个livehouse格子。」
+    // Accepting the offer writes the move plan; the main move is the teleport
+    // (no dice are cast).
+    let mut t = Table::new(&["和奏瑞依", "珠手知由", "朝日六花"]);
+    t.clean();
+    drain(&mut t);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.own(0, &[BUDOKAN, SPACE]);
+    t.dice(&[6]);
+    t.give_play(0, "RAS:成为最强").unwrap();
+    drain(&mut t);
+    assert_eq!(t.pos(0), BUDOKAN);
+    t.end(0).unwrap();
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    t.end(1).unwrap();
+    drain(&mut t);
+    t.dice(&[1]);
+    t.roll(2).unwrap();
+    drain(&mut t);
+    t.end(2).unwrap();
+    // P0's turn opens: the ras offer is up. Accept it.
+    let mut accepted = false;
+    while let Some(p) = t.prompt() {
+        if p.title.key().contains("ras_") || p.text.key().contains("ras_") {
+            t.answer_one(0).unwrap();
+            accepted = true;
+        } else {
+            t.decline();
+        }
+    }
+    assert!(accepted, "the teleport offer came up: {:?}", t.recent_keys(15));
+    let before = t.pos(0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert!(
+        t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
+        "the main move is the teleport to a livehouse, not a walk: was {before} pos={} keys={:?}",
+        t.pos(0),
+        t.recent_keys(15)
+    );
+}
+
 // ===========================================================================
 // RAS:游击演出 [特]
 // ===========================================================================

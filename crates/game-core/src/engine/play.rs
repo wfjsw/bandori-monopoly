@@ -669,6 +669,9 @@ impl Cx<'_> {
                 i as i32,
                 Msg::new("log.main_move_used").player_id("who", i),
             );
+            // The move did not run: drop the one-shot `teleport_to` the body
+            // wrote for it (see `main_move`) so it cannot shape a later move.
+            self.w.turn.plan.teleport_to = -1;
             return Ok(());
         }
         if as_main {
@@ -691,6 +694,9 @@ impl Cx<'_> {
             let to = plan.teleport_to as usize;
             let resolve = plan.resolve;
             let why = plan.why.clone();
+            // One-shot: see `main_move`. A `card_move` that teleported must not
+            // leave the destination on the shared turn plan for a later move.
+            self.w.turn.plan.teleport_to = -1;
             self.teleport(i, to, resolve, why)?;
         } else {
             if plan.steps < 0 {
@@ -704,6 +710,7 @@ impl Cx<'_> {
                     let to = plan.teleport_to as usize;
                     let resolve = plan.resolve;
                     let why = plan.why.clone();
+                    self.w.turn.plan.teleport_to = -1;
                     self.teleport(i, to, resolve, why)?;
                 } else {
                     plan.roll = match self.w.turn.fixed_roll {
@@ -726,6 +733,9 @@ impl Cx<'_> {
                 self.walk(&mut plan)?;
             }
         }
+        // One-shot: see `main_move`. A mid-move hook write (or a walk that
+        // ignored one) must not shape a later move in this turn.
+        self.w.turn.plan.teleport_to = -1;
         // Record the walked length: `lastWalk` is written from `total`.
         if as_main {
             self.w.turn.main_steps = if plan.kind == MoveKind::Teleport {
@@ -1112,15 +1122,23 @@ impl Cx<'_> {
                 self.w.st.step = stage::END;
                 return Ok(());
             }
+            // `teleport_to` is one-shot: the plan is never reset between moves
+            // in the same turn (only `next_turn` rebuilds `TurnCtx`), so a
+            // write that this move consumed -- or that a mid-move hook left
+            // behind -- must not turn a later move in the same turn into a
+            // teleport (two_donuts' settle hook writes it for the owner while
+            // the turn player still has a main move to take).
             if m.teleport_to >= 0 {
-                // A `rollPlan` body rewrote this move as a [传送] (the same
-                // shape `card_move` gives a plan that already carries
-                // `teleport_to`): the destination is the plan's, and no dice
+                // A `rollPlan` body -- or a Play body before the roll
+                // (kanon_march 「视为本次主要移动」, lisa_goddess 「将此次移动变为
+                // 传送」, ras 「下一次主要移动可变为传送至…」) -- rewrote this
+                // move as a [传送]: the destination is the plan's, and no dice
                 // are cast. 长崎素世（CRYCHIC）'s 「下回合的主要移动变为传送至
-                // …那格」 writes it here.
+                // …那格」 writes it from a `RollPlan` hook.
                 let to = m.teleport_to as usize;
                 let resolve = m.resolve;
                 let why = m.why.clone();
+                self.w.turn.plan.teleport_to = -1;
                 self.teleport(i, to, resolve, why)?;
             } else {
                 // A stored fixed face ([`super::world::TurnCtx`]'s `fixed_roll`)
@@ -1152,6 +1170,10 @@ impl Cx<'_> {
                 }
                 self.walk(&mut m)?;
             }
+            // Discard any `teleport_to` a mid-move hook wrote (saaya_sky's
+            // `RollAfter` floor, saki_crychic's `SettleBefore` nudge): this
+            // move is over and the write must not shape the next one.
+            self.w.turn.plan.teleport_to = -1;
             // 「使你的下次主要移动结果对那些玩家一起执行，你先触发结算，此后其他
             // 玩家按行动顺序依次触发结算」:
             // each follower recorded on the plan replays this move's result,

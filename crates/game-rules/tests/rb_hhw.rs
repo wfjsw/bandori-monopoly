@@ -464,6 +464,40 @@ fn wacha_mocha_jump_at_nine_markers() {
 }
 
 #[test]
+fn wacha_mocha_jump_shapes_the_main_move_into_a_teleport() {
+    // 「传送到#4水族馆或者 #30弦卷豪宅，视为本次主要移动」 -- the jump writes
+    // the move plan (no `card_move`), and the turn's main move is that teleport:
+    // no dice are cast and the piece lands on the pick, not `pos + roll`.
+    let mut t = Table::new(&["松原花音", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    t.place_raw(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲");
+    set_tok(&mut t, 0, "水母标记", 9);
+    t.skill(0, "HHW:（花音）Wacha Mocha 啪嗒进行曲").unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    let aquarium = tile("水族馆");
+    let k = p
+        .items
+        .iter()
+        .position(|s| s == &aquarium.to_string())
+        .expect("aquarium offered");
+    t.answer(0, k as i32).unwrap();
+    drain(&mut t);
+    let before = t.pos(0);
+    assert_ne!(before, aquarium, "the pick is not the starting tile");
+    t.dice(&[5]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        aquarium,
+        "the main move is the jump's teleport, not a walk: was {before} keys={:?}",
+        t.recent_keys(15)
+    );
+}
+
+#[test]
 fn kanon_skill_1_starts_on_the_mansion() {
     // 规则书: 「(1) 游戏开始起点为#30弦卷豪宅」
     let t = Table::new(&["松原花音", "户山香澄"]);

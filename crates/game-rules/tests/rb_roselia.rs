@@ -590,6 +590,36 @@ fn lisa_skill_1_gains_a_fire_pot_passing_circle() {
     assert_eq!(t.fire(0), 1);
 }
 
+#[test]
+fn lisa_skill_2_shapes_the_main_move_into_a_teleport() {
+    // 规则书: 「（2）移动阶段前，你可以消耗一个火罐，将此次移动变为传送到距离你
+    // 正向距离最近的角色所在的格子」 -- the press writes the move plan; the main
+    // move is the teleport (no dice are cast).
+    let mut t = Table::new(&["今井莉莎", "户山香澄"]);
+    t.clean();
+    t.begin_turn(0);
+    drain(&mut t);
+    t.set_pos(0, 0);
+    t.set_pos(1, 10);
+    t.set_fire(0, 2, 2);
+    let skill = t.skill_id(0, "慈爱女神");
+    t.skill(0, &skill).unwrap();
+    // The optional settle-cancel ask may come up (P1 stands on the target).
+    while let Some(_) = t.prompt() {
+        t.decline();
+    }
+    let before = t.pos(0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
+    assert_eq!(
+        t.pos(0),
+        10,
+        "teleported to the nearest character ahead: was {before} keys={:?}",
+        t.recent_keys(15)
+    );
+}
+
 // ================================================================ band skill
 
 #[test]
