@@ -199,6 +199,7 @@ name = "rules-events"
 version = "0.1.0"
 dependencies = [
  "card-sdk",
+ "rules-tiles",
  "serde_json",
 ]
 

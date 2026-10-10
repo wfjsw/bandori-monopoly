@@ -2934,9 +2934,12 @@ pub fn card_buy(player_id: i32, tile: i32) -> bool {
 pub fn buy_quotes(player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> {
     let cap = 4096;
     let (op, scratch) = out_buf(cap as usize);
-    let raw: Vec<i32> = tiles.to_vec();
-    let bytes = postcard::to_allocvec(&raw).unwrap_or_default();
-    let (ip, il) = in_bytes(&bytes);
+    // Raw i32 LE, matching the host's `chunks_exact(4)` reader.
+    let mut raw = alloc::vec![0u8; tiles.len() * 4];
+    for (i, &t) in tiles.iter().enumerate() {
+        raw[i * 4..i * 4 + 4].copy_from_slice(&t.to_le_bytes());
+    }
+    let (ip, il) = in_bytes(&raw);
     let n = unsafe { sys::buy_quotes(player_id, kind, ip, il, op) };
     if n <= 0 || n > cap {
         return Vec::new();

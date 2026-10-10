@@ -2226,17 +2226,6 @@ impl<M: CardModules> RulesBridge<M> {
         // v40 purchase surface. P0: stubs; engine-side dispatch lands
         // with P1 (property buy) / P2 (agent) / P3 (force & acquire) /
         // P5 (linger).
-        HostRequest::BuyQuotes {
-            player_id: _,
-            kind: _,
-            tiles,
-            out: _,
-        } => {
-            // P0: every tile quotes at its native price, eligible if
-            // buyable. The hook-aware quote lands at P1.
-            let _ = tiles;
-            return Ok(1);
-        }
         HostRequest::Acquire {
             player_id,
             from,

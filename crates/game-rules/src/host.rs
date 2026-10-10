@@ -303,13 +303,6 @@ pub enum HostRequest {
         /// A [`card_sdk::abi::BuyKind`] as `i32` (`0` = land).
         kind: i32,
     },
-    /// v40: batched purchase quote (`docs/PURCHASE.md`).
-    BuyQuotes {
-        player_id: i32,
-        kind: i32,
-        tiles: Vec<i32>,
-        out: i32,
-    },
     /// v40: 「收购」 -- take a deed from its owner at a price.
     Acquire {
         player_id: i32,
