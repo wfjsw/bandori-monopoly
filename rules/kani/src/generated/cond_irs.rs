@@ -307,9 +307,9 @@ pub static G_000d_331b38cb778fe582: GuardIr = GuardIr {
     id: 13,
 };
 
-/// `actor != owner && turn_player == owner && slot('diceCastActive') != turn_key`
+/// `actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key`
 /// id = 14
-pub static G_000e_119b8c87502e5143_NODES: &[Node] = &[
+pub static G_000e_4537190ba0ddd48d_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 1, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 0, b: 1, c: 0 },
@@ -317,15 +317,15 @@ pub static G_000e_119b8c87502e5143_NODES: &[Node] = &[
     Node { kind: Kind::Var, payload: 25, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Eq, payload: 0, a: 3, b: 4, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 2, b: 5, c: 0 },
-    Node { kind: Kind::ConstInt, payload: -4339243167598596969, a: 0, b: 0, c: 0 },
+    Node { kind: Kind::ConstInt, payload: -8050516473202599731, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Call, payload: 0, a: 7, b: 1, c: 0 },
     Node { kind: Kind::Var, payload: 10, a: 0, b: 0, c: 0 },
     Node { kind: Kind::Ne, payload: 0, a: 8, b: 9, c: 0 },
     Node { kind: Kind::And, payload: 0, a: 6, b: 10, c: 0 },
 ];
-pub static G_000e_119b8c87502e5143: GuardIr = GuardIr {
-    src: "actor != owner && turn_player == owner && slot('diceCastActive') != turn_key",
-    program: Program { nodes: G_000e_119b8c87502e5143_NODES, root: 11 },
+pub static G_000e_4537190ba0ddd48d: GuardIr = GuardIr {
+    src: "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
+    program: Program { nodes: G_000e_4537190ba0ddd48d_NODES, root: 11 },
     id: 14,
 };
 
@@ -2772,7 +2772,7 @@ pub static BY_ID: &[&GuardIr] = &[
     &G_000b_ca0e24f304d8fdfd,
     &G_000c_69988b75e22589e8,
     &G_000d_331b38cb778fe582,
-    &G_000e_119b8c87502e5143,
+    &G_000e_4537190ba0ddd48d,
     &G_000f_35c45b14c0fc4e13,
     &G_0010_eb58e90051f55abe,
     &G_0011_7bc76dfcb4d6546b,
@@ -2924,7 +2924,7 @@ macro_rules! guard_id {
     ("actor != owner && tile.id == tile_named('流星堂')") => { 11usize };
     ("actor != owner && tile.id >= 0 && tile.owner == owner && tile.mortgaged == 0 && tile.houses > 0") => { 12usize };
     ("actor != owner && tile.owner == owner && value > 0") => { 13usize };
-    ("actor != owner && turn_player == owner && slot('diceCastActive') != turn_key") => { 14usize };
+    ("actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key") => { 14usize };
     ("actor == owner") => { 15usize };
     ("actor == owner && (character_is(owner, \"三角初华（Sumimi）\") || character_is(owner, \"纯田真奈\"))") => { 16usize };
     ("actor == owner && (move.roll != null || value >= 0)") => { 17usize };

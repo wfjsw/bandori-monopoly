@@ -54,12 +54,37 @@ fn intern_msg(key: &str) -> (i32, i32) {
 }
 
 /// The symbolic world is a process-global (`static mut`). Serialize every
-/// model-side touch so parallel `cargo test` threads cannot clobber it.
-fn model_lock() -> MutexGuard<'static, ()> {
+/// model-side touch so parallel `cargo test` threads cannot clobber it. The
+/// lock is REENTRANT per thread: every `#[test]` takes it at entry and helpers
+/// may take it again (a plain `Mutex` deadlocks on that).
+pub struct ModelGuard {
+    _g: Option<MutexGuard<'static, ()>>,
+}
+impl Drop for ModelGuard {
+    fn drop(&mut self) {
+        DEPTH.with(|d| d.set(d.get() - 1));
+    }
+}
+thread_local! {
+    static DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
+}
+fn model_lock() -> ModelGuard {
     static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    LOCK.get_or_init(|| Mutex::new(()))
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    let outer = DEPTH.with(|d| {
+        let v = d.get();
+        d.set(v + 1);
+        v == 0
+    });
+    let g = if outer {
+        Some(
+            LOCK.get_or_init(|| Mutex::new(()))
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()),
+        )
+    } else {
+        None
+    };
+    ModelGuard { _g: g }
 }
 
 // ---------------------------------------------------------------------------
@@ -1254,6 +1279,7 @@ fn diff_op_seq(
 
 #[test]
 fn op_gain_matches_engine() {
+    let _g = model_lock();
     // gain(player, amount, msg) -- immediate credit on the model; Pay pipeline
     // (no hooks) on the real side via ConfInline.
     let (mp, ml) = intern_msg("conf.gain");
@@ -1268,6 +1294,7 @@ fn op_gain_matches_engine() {
 
 #[test]
 fn op_pay_matches_engine() {
+    let _g = model_lock();
     let (mp, ml) = intern_msg("conf.pay");
     diff_op(
         "pay",
@@ -1280,6 +1307,7 @@ fn op_pay_matches_engine() {
 
 #[test]
 fn op_teleport_to_matches_engine() {
+    let _g = model_lock();
     diff_op(
         "teleport_to",
         &[],
@@ -1294,6 +1322,7 @@ fn op_teleport_to_matches_engine() {
 
 #[test]
 fn op_gain_fire_matches_engine() {
+    let _g = model_lock();
     let (mp, ml) = intern_msg("conf.fire");
     diff_op(
         "gain_fire",
@@ -1306,6 +1335,7 @@ fn op_gain_fire_matches_engine() {
 
 #[test]
 fn op_give_stay_matches_engine() {
+    let _g = model_lock();
     diff_op(
         "give_stay",
         &[],
@@ -1320,6 +1350,7 @@ fn op_give_stay_matches_engine() {
 
 #[test]
 fn op_player_pos_money_player_count_player_out_tile_count_match() {
+    let _g = model_lock();
     for (label, op, args, real) in [
         (
             "player_pos",
@@ -1363,6 +1394,7 @@ fn op_player_pos_money_player_count_player_out_tile_count_match() {
 
 #[test]
 fn op_tile_named_matches_engine() {
+    let _g = model_lock();
     // Only 「江户川乐器店」 is modeled; both sides return 31.
     let (np, nl) = intern_str(TILE_SHOP_NAME);
     diff_op(
@@ -1376,6 +1408,7 @@ fn op_tile_named_matches_engine() {
 
 #[test]
 fn op_set_houses_houses_of_match() {
+    let _g = model_lock();
     diff_op_seq(
         "set_houses+houses_of",
         &[],
@@ -1399,6 +1432,7 @@ fn op_set_houses_houses_of_match() {
 
 #[test]
 fn op_set_owner_tile_owner_match() {
+    let _g = model_lock();
     diff_op_seq(
         "set_owner+tile_owner",
         &[],
@@ -1415,6 +1449,7 @@ fn op_set_owner_tile_owner_match() {
 
 #[test]
 fn op_add_to_hand_take_card_cards_in_hand_size_match() {
+    let _g = model_lock();
     // Use a non-resonance card name so the model's pilot-compat `hand_size`
     // (bitset + pile hybrid) is exercised on an empty-start hand.
     let (cp, cl) = intern_str("R:[衍生] 压");
@@ -1440,6 +1475,7 @@ fn op_add_to_hand_take_card_cards_in_hand_size_match() {
 
 #[test]
 fn op_to_discard_and_hand_size() {
+    let _g = model_lock();
     let (cp, cl) = intern_str("R:[衍生] 压");
     diff_op(
         "to_discard",
@@ -1462,6 +1498,7 @@ fn op_to_discard_and_hand_size() {
 
 #[test]
 fn op_set_slot_slot_match() {
+    let _g = model_lock();
     let (kp, kl) = intern_str("conf.key");
     diff_op_seq(
         "set_slot+slot",
@@ -1479,6 +1516,7 @@ fn op_set_slot_slot_match() {
 
 #[test]
 fn op_count_held_set_held_name_match() {
+    let _g = model_lock();
     let (np, nl) = intern_str("P✽P粉丝(正)");
     diff_op_seq(
         "set_held_name+count_held_name",
@@ -1496,6 +1534,7 @@ fn op_count_held_set_held_name_match() {
 
 #[test]
 fn op_set_dest_place_card_at_match() {
+    let _g = model_lock();
     let (cp, cl) = intern_str("PP:[衍生]共鸣");
     let (mp, ml) = intern_msg("conf.place");
     diff_op_seq(
@@ -1514,6 +1553,7 @@ fn op_set_dest_place_card_at_match() {
 
 #[test]
 fn op_trig_set_pay_amount_trig_value_match() {
+    let _g = model_lock();
     diff_op_seq(
         "trig_set_pay_amount+trig_value",
         &[],
@@ -1537,6 +1577,7 @@ fn op_trig_set_pay_amount_trig_value_match() {
 
 #[test]
 fn op_ask_yes_fixed_answers() {
+    let _g = model_lock();
     // ask(kind=YesNo=1, player, title, text) -- fixed answers [1].
     let (tp, tl) = intern_msg("conf.t");
     let (xp, xl) = intern_msg("conf.x");
@@ -1617,6 +1658,7 @@ fn run_hook(id: &str, player: i32) {
 
 #[test]
 fn card_band_ag_conforms() {
+    let _g = model_lock();
     // `AG:即使夕阳落山` -- play entry; ops modeled (gain/log style).
     // Falls back to whatever invoke finds; fail-closed if unknown.
     diff_card("ag", "AG:即使夕阳落山", &[], run_play);
@@ -1624,22 +1666,26 @@ fn card_band_ag_conforms() {
 
 #[test]
 fn card_band_crychic_conforms() {
+    let _g = model_lock();
     diff_card("crychic", "CRYCHIC:（祥子）带领着大家", &[], run_play);
 }
 
 #[test]
 fn card_band_general_conforms() {
+    let _g = model_lock();
     // `通用:10次招募（1回限定）` -- pay + draw.
     diff_card("general", "通用:10次招募（1回限定）", &[], run_play);
 }
 
 #[test]
 fn card_band_hhw_conforms() {
+    let _g = model_lock();
     diff_card("hhw", "HHW:Happy, Lucky, Smile, Yeah！", &[], run_play);
 }
 
 #[test]
 fn card_band_morfonica_conforms() {
+    let _g = model_lock();
     // `Mor:（Rui）正论恶魔` -- four `transfer` legs. Pre-seeded answers are
     // consumed by `pay` *instead of* moving money (see `request_or_pause`), so
     // leave answers empty and let ConfInline apply every Pay.
@@ -1648,6 +1694,7 @@ fn card_band_morfonica_conforms() {
 
 #[test]
 fn card_band_mujica_conforms() {
+    let _g = model_lock();
     // `Mujica:心の雨` -- player_pos / others / tile_forward / roll / give_stay /
     // give_stun / gain. Dice use the shared mid-value formula.
     diff_card("mujica", "Mujica:心の雨", &[], run_play);
@@ -1655,6 +1702,7 @@ fn card_band_mujica_conforms() {
 
 #[test]
 fn card_band_mygo_conforms() {
+    let _g = model_lock();
     // `MyGO:轮符雨` -- give_stay + before_turn_end. The real engine runs
     // `give_stay` through the abnormal [反击] gate; with empty answers
     // ConfInline answers 1 (allow) so both sides grant the stay. Pre-seeding
@@ -1664,40 +1712,47 @@ fn card_band_mygo_conforms() {
 
 #[test]
 fn card_band_pp_conforms() {
+    let _g = model_lock();
     diff_card("pp", "PP:有你与我在这里共度", &[], run_play);
 }
 
 #[test]
 fn card_band_ppp_conforms() {
+    let _g = model_lock();
     // `PPP:[衍生]Pipopa` -- set_dest + gain + place_card.
     diff_card("ppp", "PPP:[衍生]Pipopa", &[], run_play);
 }
 
 #[test]
 fn card_band_ras_conforms() {
+    let _g = model_lock();
     diff_card("ras", "RAS:（MASKING）CRUSH ON THE DRUM!!!", &[], run_play);
 }
 
 #[test]
 fn card_band_roselia_conforms() {
+    let _g = model_lock();
     // `R:[衍生] 压` -- a pure `gain`.
     diff_card("roselia", "R:[衍生] 压", &[], run_play);
 }
 
 #[test]
 fn card_band_sumimi_conforms() {
+    let _g = model_lock();
     // `Sumimi:兼顾偶像与乐队` -- state + money_of + gain.
     diff_card("sumimi", "Sumimi:兼顾偶像与乐队", &[], run_play);
 }
 
 #[test]
 fn card_skill_conforms() {
+    let _g = model_lock();
     // `skill:千早爱音:重新开始` -- first Hook entry (declare_cap / fire pot).
     diff_card("skill", "skill:千早爱音:重新开始", &[], run_hook);
 }
 
 #[test]
 fn card_event_conforms() {
+    let _g = model_lock();
     // `event:很噜的感觉` -- ask_yes + teleport + pay. `ask_yes` is `ask==0`,
     // so answer **1** means "no teleport". With all-no the body is quiet
     // (tile_named("快餐店") is -1 on the model; unused when nobody teleports).
@@ -1753,6 +1808,7 @@ fn rent_model() -> KWorld {
 
 #[test]
 fn op_rent_of_matches_engine() {
+    let _g = model_lock();
     // Property at 2 houses -> table[2]; 0 houses -> table[0]; RiNG -> price;
     // empty table -> 0. (tile 30 = 购物中心-like 3600 land, rent[0]=360.)
     for (tile, expect) in [(1, 3220), (5, 160), (8, 1000), (0, 0), (30, 360)] {
@@ -1768,6 +1824,7 @@ fn op_rent_of_matches_engine() {
 
 #[test]
 fn op_buy_price_matches_engine() {
+    let _g = model_lock();
     // quote_native = land + houses * house_cost.
     for (tile, expect) in [(1, 7000), (5, 1600), (8, 1000), (0, 0)] {
         diff_get_with(
@@ -1782,6 +1839,7 @@ fn op_buy_price_matches_engine() {
 
 #[test]
 fn op_tile_at_set_tile_at_match_engine() {
+    let _g = model_lock();
     let mut conf = base_conf();
     conf.field_uid.push(7);
     conf.field_tile.push(3);
@@ -1882,6 +1940,7 @@ fn trig_get(label: &str, real: impl FnOnce(&mut ConfHost) -> i64, op: Op, args: 
 
 #[test]
 fn op_trig_move_payload_matches_engine() {
+    let _g = model_lock();
     trig_get(
         "trig_move_kind",
         |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
@@ -1941,6 +2000,7 @@ fn op_trig_move_payload_matches_engine() {
 
 #[test]
 fn op_trig_move_sentinels_match_engine() {
+    let _g = model_lock();
     // No-move sentinels: kind=-1, roll=-1, dir=1, from=-1, remaining=0,
     // total=0, resolve=0; main is Trigger::main (independent of mv).
     let conf = base_conf();
@@ -1996,6 +2056,7 @@ fn op_trig_move_sentinels_match_engine() {
 
 #[test]
 fn op_trig_buy_deal_payload_matches_engine() {
+    let _g = model_lock();
     trig_get(
         "trig_buy_kind",
         |c| game_rules::hostfns::trig_buy_kind(c).unwrap() as i64,
@@ -2048,6 +2109,7 @@ fn op_trig_buy_deal_payload_matches_engine() {
 
 #[test]
 fn op_trig_buy_setters_match_engine() {
+    let _g = model_lock();
     let mut conf = trig_conf();
     conf.buy_price = 100;
     conf.buy_deal_owner = -1;
