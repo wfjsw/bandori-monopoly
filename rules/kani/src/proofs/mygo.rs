@@ -126,3 +126,77 @@ pub fn rinpuu_01_mutant_two_layers() {
     );
     let _ = pre;
 }
+
+// ===========================================================================
+// C-MYGO-journey-01
+// 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」
+// `MyGO:哪怕这旅程没有终点` On::Play.
+// Isolation: empty field / hand so stacked hooks cannot fire. `set_crystals(4)`
+// is a counter write (host `set_counter_self`) that logs no Effect; we check
+// it via the world's key map (`"crystals"` on the trig player).
+// ===========================================================================
+
+const JOURNEY_ID: &str = "MyGO:哪怕这旅程没有终点";
+
+fn crystals_key() -> crate::intern::NameId {
+    crate::intern::intern("crystals")
+}
+
+/// Iff: place on Field + the instance holds exactly 4 [奇迹水晶].
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn journey_01_place_four_crystals_iff() {
+    let w = symbolic_play_world();
+    let player = living_player(&w);
+
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+
+    invoke::unwrap_done(invoke::play(JOURNEY_ID, player));
+
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+    let field_n = world::with_world(|ww| ww.field_n);
+
+    // Host `card_slot` maps unknown card names to slot 2 (pilot CARD_OTHER).
+    assert!(
+        spec::mygo::journey_01_log_ok(effects, player, 2),
+        "C-MYGO-journey-01: effect log must be exactly one PlaceCard(Field)"
+    );
+    assert!(post_c == 4, "C-MYGO-journey-01: card must hold exactly 4 crystals");
+    assert!(field_n == 1, "C-MYGO-journey-01: exactly one field instance");
+    assert!(post.money == pre.money, "frame: money unchanged");
+    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(post.stay == pre.stay, "frame: stay unchanged");
+    assert!(post.hand == pre.hand, "frame: hand unchanged (play body does not draw)");
+    let _ = pre_c;
+
+    kani::cover!(pre.stay[player as usize] == 0, "clean pre");
+}
+
+/// Mutant companion: a two-PlaceCard spec must not match.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn journey_01_mutant_is_detected() {
+    let w = symbolic_play_world();
+    let player = living_player(&w);
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play(JOURNEY_ID, player));
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    assert!(
+        !spec::mygo::journey_01_log_ok_mutant(effects, player, 2),
+        "mutant: two-PlaceCard spec must not match the one-place card"
+    );
+}
+
+/// C-MYGO-rinpuu-02 is PROTOCOL-LEVEL: 「并在回合结束时额外进行一次[触发结算]」
+/// is engine scheduling (`On::AtEnd` + `card_settle_at`, a protocol stub).
+/// Documented here so the unit table can cite a harness name.
