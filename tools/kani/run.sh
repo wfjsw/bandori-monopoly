@@ -31,7 +31,13 @@ if [[ "$CARGO_TARGET_DIR" == "/home/monopoly/kani-target" ]]; then
 fi
 
 UNWIND=80
-NO_UNWIND_CHECKS=1
+# Unwinding assertions stay ON by default: with them off (the old default) an
+# insufficient --default-unwind silently truncates paths and CBMC still prints
+# "VERIFICATION:- SUCCESSFUL" with every assert/cover UNREACHABLE (found by the
+# Morfonica unit: unwind 24 over invoke::find's RULESET scan was vacuous).
+# --no-unwind-checks is an explicit, loud opt-out for exploration only; such a
+# run can never be reported as SUCCESSFUL (it is capped at UNSOUND).
+NO_UNWIND_CHECKS=0
 JOBS="${JOBS:-4}"
 TIMEOUT="${TIMEOUT:-900}"
 OUT_DIR=""
@@ -50,7 +56,9 @@ while [[ $# -gt 0 ]]; do
     --jobs)     JOBS="$2"; shift 2 ;;
     --timeout)  TIMEOUT="$2"; shift 2 ;;
     --out)      OUT_DIR="$2"; shift 2 ;;
+    --no-unwind-checks) NO_UNWIND_CHECKS=1; shift ;;
     --unwind)   UNWIND="$2"; shift 2 ;;
+    --no-unwind-checks) NO_UNWIND_CHECKS=1; shift ;;
     -h|--help)  usage 0 ;;
     *)
       echo "unknown arg: $1" >&2
@@ -246,6 +254,15 @@ run_one() {
     # string is compiled into every rules-kani binary and shows up in the
     # check list of every run, so it is NOT evidence of an unmodeled op.
     verdict="SUCCESSFUL"
+    # Vacuity gate: a cover that CBMC proved unreachable means the proof's
+    # interesting path never ran (truncated unwinding, contradictory assumes,
+    # or a dead branch). Fail closed.
+    if grep -qE 'cover properties satisfied \([0-9]+ unreachable\)' "$log" 2>/dev/null \
+       || grep -qE '\*\* 0 of [1-9][0-9]* cover properties satisfied' "$log" 2>/dev/null; then
+      verdict="VACUOUS"
+    elif [[ "$NO_UNWIND_CHECKS" == 1 ]]; then
+      verdict="UNSOUND"
+    fi
   elif grep -qi 'VERIFICATION:- FAILED' "$log" 2>/dev/null; then
     # UNMODELED only when the failing check IS the unmodeled-op assertion.
     if grep -qE 'Failed Checks:.*unmodeled host op' "$log" 2>/dev/null; then
@@ -344,7 +361,7 @@ for line in Path(tsv).read_text().splitlines():
 
 rows.sort(key=lambda r: (r["unit"], r["harness"]))
 summary = collections.Counter(r["verdict"] for r in rows)
-for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED"):
+for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND"):
     summary.setdefault(k, 0)
 
 payload = {
@@ -367,7 +384,7 @@ A("# Kani run results")
 A("")
 A(f"* crate: `rules-kani`")
 A(f"* target: `{target}`")
-A(f"* unwind: `{unwind}` + `--no-unwinding-checks`")
+A(f"* unwind: `{unwind}` (unwinding assertions on unless --no-unwind-checks; covers must be reachable)")
 A(f"* jobs: `{jobs}`  timeout: `{timeout}s` per harness")
 A(f"* generated: {payload['generated_at']}")
 A(f"* fail-closed: any non-SUCCESSFUL is a failure (no ignores)")
@@ -376,7 +393,7 @@ A("## Summary")
 A("")
 A("| verdict | count |")
 A("|---|---:|")
-for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED"):
+for k in ("SUCCESSFUL", "FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND"):
     A(f"| {k} | {summary[k]} |")
 A(f"| **total** | **{len(rows)}** |")
 A("")
@@ -390,11 +407,11 @@ for r in rows:
 A("")
 Path(out_md).write_text("\n".join(lines) + "\n")
 
-bad = sum(summary[k] for k in ("FAILED", "TIMEOUT", "UNMODELED"))
+bad = sum(summary[k] for k in ("FAILED", "TIMEOUT", "UNMODELED", "VACUOUS", "UNSOUND"))
 print(f"wrote {out_json}")
 print(f"wrote {out_md}")
 print(f"SUCCESSFUL={summary['SUCCESSFUL']} FAILED={summary['FAILED']} "
-      f"TIMEOUT={summary['TIMEOUT']} UNMODELED={summary['UNMODELED']}")
+      f"TIMEOUT={summary['TIMEOUT']} UNMODELED={summary['UNMODELED']} VACUOUS={summary['VACUOUS']} UNSOUND={summary['UNSOUND']}")
 sys.exit(1 if bad else 0)
 PY
 STATUS=$?

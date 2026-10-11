@@ -18,7 +18,8 @@ tools/kani/run.sh [--unit pp] [--harness name] [--jobs 4] [--timeout 900] [--out
 | `KANI_GLOBAL_SLOTS` | `3` | machine-wide cap across ALL run.sh invocations (flock slots in `$KANI_SLOT_DIR`, default `~/.kani-slots`); always run proofs through run.sh so they count against it. |
 | `--timeout SEC` / `TIMEOUT` | `900` | wall-clock per harness. |
 | `--out DIR` | `target/kani-results` | JSON + markdown + per-harness logs. |
-| `--unwind N` | `80` | passed as `--default-unwind` (with `--no-unwinding-checks`). |
+| `--unwind N` | `80` | passed as `--default-unwind`. Unwinding assertions are ON (insufficient unwind = FAILED, never a silent vacuous pass). `--no-unwind-checks` is a loud exploration-only opt-out whose runs report UNSOUND. |
+| verdicts | | SUCCESSFUL, FAILED, TIMEOUT, UNMODELED, VACUOUS (a `kani::cover!` was proven unreachable: the proof never reached its interesting path), UNSOUND. Only SUCCESSFUL counts; the runner exits non-zero otherwise. |
 
 ## How it runs
 
@@ -27,7 +28,7 @@ From the worktree root:
 ```sh
 export CARGO_TARGET_DIR=/home/monopoly/kani-target-f   # NOT kani-target
 export CARGO_BUILD_JOBS=8
-cargo kani -p rules-kani --harness <name> --default-unwind 80 --no-unwinding-checks
+cargo kani -p rules-kani --harness <name> --default-unwind 80
 ```
 
 See `docs/rulebook/spec/KANI.md` §1 for the toolchain and flag rationale, and
