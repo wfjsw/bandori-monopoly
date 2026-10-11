@@ -35,6 +35,9 @@ pub mod view;
 pub mod vocab;
 mod view_impl;
 pub use view_impl::SnapshotView;
+/// AST → heap-free IR for Kani (host-only; feature `lower`).
+#[cfg(feature = "lower")]
+pub mod lower;
 /// The §4.2 vocabulary lint/rewrite: only the host (`compile`) walks it.
 #[cfg(feature = "compile")]
 pub mod schema;

@@ -14,6 +14,8 @@ pub mod world;
 pub mod host;
 pub mod invoke;
 pub mod spec;
+pub mod generated;
+pub mod ir_fill;
 
 #[cfg(kani)]
 pub mod proofs;

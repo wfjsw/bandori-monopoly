@@ -1673,8 +1673,13 @@ version = "0.1.0"
 dependencies = [
  "cel",
  "postcard",
+ "rules-cond-ir",
  "serde",
 ]
+
+[[package]]
+name = "rules-cond-ir"
+version = "0.1.0"
 
 [[package]]
 name = "rules-events"
@@ -1694,6 +1699,7 @@ dependencies = [
  "card-ppp",
  "card-sdk",
  "postcard",
+ "rules-cond-ir",
  "serde",
 ]
 

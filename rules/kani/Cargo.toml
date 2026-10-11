@@ -16,6 +16,8 @@ card-sdk = { workspace = true, features = ["guest"] }
 card-pp = { path = "../cards/card-pp" }
 card-ppp = { path = "../cards/card-ppp" }
 card-mygo = { path = "../cards/card-mygo" }
+# Single-source guard IR (heap-free; the translator output).
+rules-cond-ir = { path = "../cond-ir" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 serde = { workspace = true }
 
