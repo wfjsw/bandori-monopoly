@@ -25,6 +25,7 @@ const CARD_FLASH_MS = 1200;
 const CARD_FLASH_FAST_MS = 350;
 import type { GameSession } from "../../game/session";
 import { t as tr } from "../../i18n/t";
+import { activationPresentation } from "./presentation.ts";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -258,9 +259,11 @@ export class Animator {
    *  activation's own follow-ups (its roll, its effect lines) land on the face
    *  instead of waiting it out. */
   private async cardFlash(e: MatchEvent, fast: boolean): Promise<void> {
+    // Ruling 1 + pulse reconciliation: see [`activationPresentation`].
+    if (activationPresentation(e) === "none") return;
     // An in-play card's 「效果适用」 lights its slot in the field row instead
     // of bringing the face to the centre.
-    if (e.msg?.k === "log.effect_applied" && !KIND_KEY[e.kind ?? ""]) {
+    if (activationPresentation(e) === "pulse") {
       const uid = this.fieldUid(e.uid ?? -1);
       if (uid !== null) {
         while (this.pulse && !this.disposed) await sleep(30 / Math.max(1, this.speed));
