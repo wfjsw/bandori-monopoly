@@ -634,7 +634,6 @@ fn c12_exist_vs_summer_camp() {
 
 // 规则书: counters to one timing resolve newest first (ruling on 89).
 // R.I.O.T.: 所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡.
-#[ignore = "DISCREPANCY: R.I.O.T. + 宣战布告 on one timing loses the 500 (nested transfer inside the counter body returns 0; hands/draws land)"]
 #[test]
 fn c13_riot_and_war_declaration() {
     let mut t = Table::vanilla(3);
@@ -659,12 +658,6 @@ fn c13_riot_and_war_declaration() {
     }
     // Newest first: 宣战布告 (P2) resolves first, then R.I.O.T. (P1), then X.
     // After R.I.O.T.: P0 hand 2, P1 hand 1+1, P2 hand 3+1 (redrawn same count).
-    eprintln!(
-        "c13 record: money={}/{}/{} (want 11500/9000/9500)",
-        t.money(0),
-        t.money(1),
-        t.money(2)
-    );
     assert_eq!(t.hand(0).len(), 2, "P0: {:?}", t.hand(0));
     assert_eq!(t.hand(1).len(), 2, "P1 = 1 + 1: {:?}", t.hand(1));
     assert_eq!(t.hand(2).len(), 4, "P2 = 3 + 1: {:?}", t.hand(2));

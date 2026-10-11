@@ -102,7 +102,7 @@ fn rent(t: usize, h: usize) -> i32 {
 // each visit exhausts every eligible counteraction or ends on an explicit
 // pass; laps continue until a quiet lap; a counter's own round starts with its
 // declarer) + the LIFO ruling (unchanged).
-#[ignore = "DISCREPANCY: in a 4-player war the ring skips P1 (宣战布告 is never offered) and nothing settles"]
+#[ignore = "DISCREPANCY: five-link war: E (网络链接异常) should cancel A's designation (P0 pays nothing to P1) and P2 should still pay X; currently both wars charge and P2 skips X"]
 #[test]
 fn l01_counter_war_five_links_deep() {
     let mut t = Table::vanilla(4);

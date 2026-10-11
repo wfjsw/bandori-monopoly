@@ -4680,7 +4680,7 @@ impl<M: CardModules> RulesBridge<M> {
                     let Some(idx) = self.ruleset.card(id) else {
                         return false;
                     };
-                    self.ruleset.counteracts_to(idx, top.kind)
+                    self.counteracts_to_play(idx, top)
                         && self.ruleset.cards()[idx as usize]
                             .props
                             .get(card_sdk::abi::prop::COUNTERACT_FROM_FIELD)
@@ -4689,6 +4689,19 @@ impl<M: CardModules> RulesBridge<M> {
                             != 0
                         && !cx.world().card_face_down(seat as i32, id)
                 })
+    }
+
+    /// Does the play `top` names declare recipients (`DESIGNATES`)? Those are
+    /// the 「被…效果影响」 targets of the play as one timing (CROSS-TESTS C13),
+    /// visible before the body runs.
+    fn counteracts_to_play(&self, idx: i32, top: &Trigger) -> bool {
+        self.ruleset.counteracts_to_play(idx, top)
+    }
+
+    /// The [`On::Counteract`] entry that answers `top` (see
+    /// [`Self::counteracts_to_play`] for the Effect-on-DESIGNATES-play rule).
+    fn counteract_entry(&self, idx: i32, top: &Trigger) -> Option<i32> {
+        self.ruleset.counteract_entry(idx, top)
     }
 
     /// Valid-option-first pre-scan (docs/GUARDS.md §4.5): could **any** seat
@@ -4731,12 +4744,10 @@ impl<M: CardModules> RulesBridge<M> {
                 };
                 // Cached counteraction index (BOT-RESEARCH.md #1): one shift of
                 // the per-card kind bitmask -- no entry-table scan, no `Run`.
-                if !self.ruleset.counteracts_to(idx, top.kind) {
+                if !self.counteracts_to_play(idx, top) {
                     continue;
                 }
-                let Some(entry) = self.ruleset.cards()[idx as usize]
-                    .entry(card_sdk::abi::OnKind::Counteract, Some(top.kind))
-                else {
+                let Some(entry) = self.counteract_entry(idx, top) else {
                     continue;
                 };
                 let Some(pre) = self.ruleset.pre(idx, entry) else {
@@ -4792,7 +4803,7 @@ impl<M: CardModules> RulesBridge<M> {
             let Some(idx) = self.ruleset.card(id) else {
                 continue;
             };
-            if !self.ruleset.counteracts_to(idx, top.kind) {
+            if !self.counteracts_to_play(idx, top) {
                 continue;
             }
             candidates.push((
@@ -4815,7 +4826,7 @@ impl<M: CardModules> RulesBridge<M> {
                     .copied()
                     .unwrap_or(0)
                     == 0
-                    || !self.ruleset.counteracts_to(idx, top.kind)
+                    || !self.counteracts_to_play(idx, top)
                     || cx.world().card_face_down(s as i32, &id)
                 {
                     continue;
@@ -4914,9 +4925,7 @@ impl<M: CardModules> RulesBridge<M> {
             #[cfg(feature = "bot-cost")]
             crate::host::bot_cost::COUNTERACT_PROBES
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            let Some(entry) = self.ruleset.cards()[idx as usize]
-                .entry(card_sdk::abi::OnKind::Counteract, Some(top.kind))
-            else {
+            let Some(entry) = self.counteract_entry(idx, top) else {
                 continue;
             };
             let pre = self.ruleset.pre(idx, entry);

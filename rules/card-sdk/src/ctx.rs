@@ -2398,8 +2398,19 @@ pub mod effect {
     /// Does any declared effect touch `seat`? The whole-list view: 「被…效果
     /// 影响」 without asking which effect. A payment touches both its payer and
     /// its payee.
+    ///
+    /// A hand play's effects are not declared until the body runs; the play's
+    /// own [反击] window is before that. Fall back to the card's static
+    /// `DESIGNATES` list (`designations`) so 「被…效果影响」 of the play works
+    /// there too (CROSS-TESTS C13: one timing on the play).
     pub fn hits(seat: i32) -> bool {
-        (0..count()).any(|i| target(i) == seat || from(i) == seat)
+        if (0..count()).any(|i| target(i) == seat || from(i) == seat) {
+            return true;
+        }
+        if count() == 0 {
+            return super::designations(super::trigger::player_id()).contains(&seat);
+        }
+        false
     }
 
     /// Is any declared effect of `kind`? The per-effect view, for a card that

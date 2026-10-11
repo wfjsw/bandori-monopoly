@@ -915,7 +915,9 @@ impl Ruleset {
         let info = &self.inner.cards[card as usize];
         let entry = match call {
             Call::Play { .. } => info.entry(OnKind::Play, None),
-            Call::Counteract { .. } => info.entry(OnKind::Counteract, Some(world.trigger().kind)),
+            // Effect-on-DESIGNATES-play (CROSS-TESTS C13): the offer scan may
+            // have admitted an `Effect` entry on a `card` raise; resolve it too.
+            Call::Counteract { .. } => self.counteract_entry(card, &world.trigger()),
             Call::Hook { kind, .. } => info.hook_entry(kind),
             Call::AtEnd { .. } => info.entry(OnKind::AtEnd, None),
             Call::RollPlan { .. } => info.entry(OnKind::RollPlan, None),
@@ -1146,9 +1148,7 @@ impl Ruleset {
     ) -> Result<bool, RuleError> {
         self.check(card)?;
         // Only a card that declared a [反击] at this kind is ever asked.
-        let Some(entry) =
-            self.inner.cards[card as usize].entry(OnKind::Counteract, Some(world.trigger().kind))
-        else {
+        let Some(entry) = self.counteract_entry(card, &world.trigger()) else {
             return Ok(false);
         };
         let pre = self
@@ -1207,11 +1207,11 @@ impl Ruleset {
         player_id: i32,
         scope: &rules_cond::WindowScope,
     ) -> Option<i32> {
-        let kind = world.trigger().kind;
-        if !self.counteracts_to(card, kind) {
+        let t = world.trigger();
+        if !self.counteracts_to_play(card, &t) {
             return None;
         }
-        let entry = self.inner.cards[card as usize].entry(OnKind::Counteract, Some(kind))?;
+        let entry = self.counteract_entry(card, &t)?;
         let pre = self
             .inner
             .pre
@@ -1542,6 +1542,45 @@ pub trait CardModules: Clone + Send + Sync + 'static {
             .get(card as usize)
             .is_some_and(|c| c.counteracts_to(kind))
     }
+    /// The trigger's card declares recipients (`DESIGNATES`) -- those plays are
+    /// one [反击] timing (CROSS-TESTS C13): their `Effect` counters also answer
+    /// the play's own `card` raise.
+    fn trigger_designates(&self, t: &crate::Trigger) -> bool {
+        t.kind == crate::TriggerKind::Card
+            && t
+                .card
+                .as_deref()
+                .and_then(|c| self.card(c))
+                .is_some_and(|idx| {
+                    self.cards()
+                        .get(idx as usize)
+                        .is_some_and(|info| {
+                            info.props
+                                .get(game_core::state::prop::DESIGNATES)
+                                .copied()
+                                .unwrap_or(0)
+                                != 0
+                        })
+                })
+    }
+    /// [`Self::counteracts_to`], plus the Effect-on-DESIGNATES-play rule.
+    fn counteracts_to_play(&self, card: i32, t: &crate::Trigger) -> bool {
+        self.counteracts_to(card, t.kind)
+            || (self.trigger_designates(t)
+                && self.counteracts_to(card, crate::TriggerKind::Effect))
+    }
+    /// The [`On::Counteract`] entry answering `t` (see
+    /// [`Self::counteracts_to_play`]).
+    fn counteract_entry(&self, card: i32, t: &crate::Trigger) -> Option<i32> {
+        let info = self.cards().get(card as usize)?;
+        info.entry(OnKind::Counteract, Some(t.kind)).or_else(|| {
+            if self.trigger_designates(t) {
+                info.entry(OnKind::Counteract, Some(crate::TriggerKind::Effect))
+            } else {
+                None
+            }
+        })
+    }
     /// Hook/gate twin of [`Self::counteracts_to`] (fix C's buy-hook index).
     /// Default scans the entry table (`CardInfo::hooks`); [`Ruleset`] overrides
     /// with the per-card `hook_mask` shift.
@@ -1566,12 +1605,12 @@ pub trait CardModules: Clone + Send + Sync + 'static {
         player_id: i32,
         scope: &rules_cond::WindowScope,
     ) -> Option<i32> {
-        let kind = world.trigger().kind;
-        if !self.counteracts_to(card, kind) {
+        let t = world.trigger();
+        if !self.counteracts_to_play(card, &t) {
             return None;
         }
         let info = self.cards().get(card as usize)?;
-        let entry = info.entry(OnKind::Counteract, Some(kind))?;
+        let entry = self.counteract_entry(card, &t)?;
         let pre = self.pre(card, entry);
         let cand = crate::cond_pre::fill_candidate(world, player_id, &info.id, false);
         if crate::cond_pre::condition_allows(pre, Some(scope), &cand) {
