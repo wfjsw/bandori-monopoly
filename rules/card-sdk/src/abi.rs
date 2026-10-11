@@ -385,6 +385,11 @@ pub mod state_key {
     pub const FIRE: &str = "fire";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
+    /// Turn key of a live 「无法从手牌中使用[反击]」 lock (骰子已经掷下). When it
+    /// equals `turn_key()`, every *other* seat is locked out of hand
+    /// counteractions. Field counteractions (`counteractFromField`) are a
+    /// separate path and are not gated here -- the clause names 「从手牌中」.
+    pub const NO_COUNTERACT_TURN: &str = "noCounteractTurn";
     /// Layers of "cannot be stopped".
     pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit.

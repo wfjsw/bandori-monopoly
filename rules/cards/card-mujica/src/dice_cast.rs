@@ -6,13 +6,16 @@
 //!
 //! that places itself and locks other players out of hand [反击]s this turn.
 
-use card_sdk::abi::{ChainKind, HookKind, TriggerKind};
+use card_sdk::abi::state_key;
+use card_sdk::abi::{ChainKind, HookKind};
 use card_sdk::ctx::{self, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
-/// C# `H._noCounteractTurn` stand-in: the turn key of the player that locked hand
-/// [反击]s this turn (C# clears it at that player's turn end).
-const NO_COUNTERACT: &str = "diceCastActive";
+/// Once-per-turn placement latch. `cast` is reached from both `play` and the
+/// played card's own `counteract` follow-up (`a_played_cards_own_counteract_runs_once`)
+/// on a hand play; `is_placed` is uid-based and reads false on both (the hand
+/// play has `current_uid = -1`), so a turn-key slot is the once-guard.
+const PLACED: &str = "diceCastPlaced";
 
 const ID: &str = "Mujica:骰子已经掷下";
 
@@ -20,7 +23,14 @@ pub const DICE_CAST: CardDef = CardDef::new(
     "Mujica:骰子已经掷下",
     &[
         On::Play("", Some(cant_play), play),
-        On::Counteract(&[ChainKind::Card], "actor != owner && turn_player == owner && slot('diceCastActive') != turn_key", None, counteract),
+        // 「（此卡可以被反击）」 -- the play window stays open for counters
+        // before `cast` sets the lock (the lock is armed in the body).
+        On::Counteract(
+            &[ChainKind::Card],
+            "actor != owner && turn_player == owner && slot('noCounteractTurn') != turn_key",
+            None,
+            counteract,
+        ),
         // C# `CardDiceCast.TurnEndAfter` -- off the field at the card's own turn end
         // (ABI v23 `TurnEndAfter`, matching the C# `Fx.TurnEndAfter` dispatch).
         On::Hook(&[HookKind::TurnEndAfter], "actor == owner && card.placed", None, turn_end),
@@ -29,7 +39,7 @@ pub const DICE_CAST: CardDef = CardDef::new(
 
 /// C# `CardDiceCast.WhyNot` -- 「已经在场上了」 while the lock is yours.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    if ctx::slot(player_id, NO_COUNTERACT) == ctx::turn_key() {
+    if ctx::slot(player_id, PLACED) == ctx::turn_key() {
         return Some(Msg::new(key!("x_in_play")));
     }
     None // playable
@@ -48,18 +58,18 @@ fn counteract(player_id: i32) -> card_sdk::Asked {
 fn cast(player_id: i32) {
     // 规则书: 「将此卡放置于自身场上」 -- C# `H.PlaceFromPlay(c)`.
     ctx::set_dest(ctx::Dest::Field);
-    // A played card's own `counteract` also runs (the follow-up; see
-    // `a_played_cards_own_counteract_runs_once`), so `cast` is reached from both
-    // `play` and `counteract` on a hand play. Place at most once.
-    if ctx::is_placed() {
+    // Place at most once per turn (see `PLACED`). `is_placed` is uid-based and
+    // reads false on a hand play, so it cannot be the once-guard here.
+    if ctx::slot(player_id, PLACED) == ctx::turn_key() {
         return;
     }
+    ctx::set_slot(player_id, PLACED, ctx::turn_key());
     ctx::place_card(player_id, ID, &Msg::new(key!("dice_cast_note")));
-    // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」 -- C#
-    // `H._noCounteractTurn = c.Seat` makes `H.CanCounteractNow` refuse every other player.
-    // Latched to the turn key so it expires at the next turn (the C# clears it
-    // in `TurnEndAfter`); the engine must honour it as the no-counteract gate.
-    ctx::set_slot(player_id, NO_COUNTERACT, ctx::turn_key());
+    // 规则书: 「本回合内所有其他玩家无法从手牌中使用[反击]」 -- the engine's
+    // `can_counteract_now` honours `state_key::NO_COUNTERACT_TURN` as the
+    // no-hand-counteract gate (every seat but the latch owner). Latched to the
+    // turn key so it expires at the next turn.
+    ctx::set_slot(player_id, state_key::NO_COUNTERACT_TURN, ctx::turn_key());
     ctx::log(
         player_id,
         &Msg::new(key!("dice_cast_log")).player_id("who", player_id),
@@ -73,8 +83,11 @@ fn cast(player_id: i32) {
 /// effect, not a [反击].
 fn turn_end(player_id: i32) -> card_sdk::Asked {
     // C# `if (H._noCounteractTurn == Player) H._noCounteractTurn = -1`.
-    if ctx::slot(player_id, NO_COUNTERACT) == ctx::turn_key() {
-        ctx::set_slot(player_id, NO_COUNTERACT, 0);
+    if ctx::slot(player_id, state_key::NO_COUNTERACT_TURN) == ctx::turn_key() {
+        ctx::set_slot(player_id, state_key::NO_COUNTERACT_TURN, 0);
+    }
+    if ctx::slot(player_id, PLACED) == ctx::turn_key() {
+        ctx::set_slot(player_id, PLACED, 0);
     }
     // 规则书: 「回合结束后放入弃牌堆」 -- C# `H.Unplace(this, "discard", "回合结束")`.
     ctx::set_dest(ctx::Dest::Graveyard);

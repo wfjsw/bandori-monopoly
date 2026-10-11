@@ -4334,6 +4334,12 @@ impl<M: CardModules> RulesBridge<M> {
                     link.card = Some(id.clone());
                     link.step = cx.state().step;
                     link.by_card = Some(cursor as i32);
+                    // A counter used against someone is the `counteracted`
+                    // timing of 「有玩家对你使用[反击]后」 (无法将视线移开): the
+                    // link's `target` is the seat whose effect is being
+                    // answered, `actor`/`player_id` the counter's declarer.
+                    // `CoreTrigger::new` defaults `target` to the declarer.
+                    link.target = chain[timing].seat as i32;
                     let at = chain.len();
                     link.seq = (at + 1) as u32;
                     link.answers = timing as u32;
@@ -5445,14 +5451,26 @@ fn can_counteract_now(cx: &Cx, s: usize) -> bool {
     };
     // Rulebook eligibility only: out / [除外] cannot declare, and `CannotPlay`
     // (stun, 飞鸟山之战's no-hand, Fx.CantPlayHand) blocks it too.
-    // `_noCounteractTurn` and Fx.CantPlayHand have no engine field yet (TODO).
     // A bot is still a player, so the window opens for every mentality and
     // the seat answers through `Cx::fill_ai` (standard: `CounterParams`
     // propensity, default never; chaos: `CHAOS_COUNTER_CHANCE`) exactly like
     // a human's offer. Out / exiled remain skipped.
     // `World::out` is `st.players[i].out()`, so the live state answers it --
     // no world copy (this runs on every visit of every ring).
-    !player_id.out()
+    //
+    // 骰子已经掷下 「本回合内所有其他玩家无法从手牌中使用[反击]」: another
+    // seat's `noCounteractTurn` latch for this turn key locks this seat out of
+    // *hand* counteractions. Field counteractions (`counteractFromField`) are
+    // offered through `has_field_counter` / the field half of `declare_one`
+    // and are not gated here -- the clause names 「从手牌中」. The latch owner
+    // (the caster) is exempt: 「其他」.
+    let st = cx.state();
+    let turn_key = st.round * 100 + st.turn + 1;
+    let locked_out = st.players.iter().enumerate().any(|(p, pl)| {
+        p != s && pl.state_get(game_core::state::key::NO_COUNTERACT_TURN) == turn_key
+    });
+    !locked_out
+        && !player_id.out()
         && player_id.exile() == 0
         && !player_id.stunned()
         && player_id.no_hand() == 0

@@ -367,6 +367,9 @@ pub mod key {
     pub const FIRE: &str = "fire";
     /// Layers of "may hold no hand cards".
     pub const NO_HAND: &str = "noHand";
+    /// Turn key of a live 「无法从手牌中使用[反击]」 lock (骰子已经掷下). Mirrors
+    /// `card_sdk::abi::state_key::NO_COUNTERACT_TURN`.
+    pub const NO_COUNTERACT_TURN: &str = "noCounteractTurn";
     /// Layers of "cannot be stopped" (「不可阻挡」).
     pub const UNSTOPPABLE: &str = "unstoppable";
     /// Hand size limit (base 5; effects may cut or lift it).

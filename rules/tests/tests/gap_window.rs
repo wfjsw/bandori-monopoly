@@ -106,9 +106,6 @@ fn drain_playing(t: &mut Table, who: usize, card: &str) {
 
 // 规则书 (骰子已经掷下): 「本回合内所有其他玩家无法从手牌中使用[反击]」.
 // 规则书 (网络链接异常) 1: 「取消其对目标之一的[指定]」.
-// Note: `c14` shows 骰子已经掷下 does not shut the windows; this case adds the
-// negate-one leg.
-#[ignore = "DISCREPANCY: 骰子已经掷下 does not shut the counteract windows (c14); 网络链接异常 still drops a 武道馆 target"]
 #[test]
 fn g18_shut_window_blocks_the_negate_one() {
     let mut t = Table::vanilla(2);
