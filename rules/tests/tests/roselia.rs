@@ -723,7 +723,7 @@ fn interaction_nfo_stay_blocks_next_turns_move() {
 fn interaction_yukina_stop_pot_vs_a_passing_player() {
     // 凑友希那 (3): 「当其他玩家移动[经过]您时，您可以选择使用一个[火罐]令该玩家强制停下并触发结算。」
     // The offer is `kokoro_practice_force_*` (i18n keys, not the resolved
-    // Chinese text) -- match the key, the same way `rb_settle_stages::m4_kokoro_force_stop_stops_a_passer` does.
+    // Chinese text) -- match the key, the same way `settle_stages::m4_kokoro_force_stop_stops_a_passer` does.
     let mut t = Table::new(&["凑友希那", "户山香澄"]);
     t.begin_turn(0);
     drain(&mut t);

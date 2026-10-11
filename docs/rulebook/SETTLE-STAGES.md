@@ -402,7 +402,7 @@ window means **the settle did not happen at the old tile and proceeds at the
 new tile**; we re-run the pre-settle window at the new tile, guarded against
 loops. The `TODO(规则书) PIPELINE-AUDIT Q7` marker is removed. At most
 `MAX_SETTLE_REDIRECTS = 8` redirects per settlement (log and settle where
-standing after that). Test: `rb_settle_stages::q7_settle_before_relocation_settles_at_the_new_tile`.
+standing after that). Test: `settle_stages::q7_settle_before_relocation_settles_at_the_new_tile`.
 
 * `moveAfter` / `settleBefore` relocation → the settle targets the new tile;
   re-run `settleBefore` at the new tile. Guard: cap the re-runs (same spirit
@@ -436,7 +436,7 @@ about which tile is being settled.
 * **R1 — does 「移动后」/「主要移动结束时」 fire for a 「不触发结算」 move?**
   **Ruled yes (user 2026-10-07).** 13's move tail (重叠 + `moveAfter`) fires for
   every completed move; the jump to 16 skips only the settle stages (14–15).
-  Implemented. Test: `rb_settle_stages::m1_no_settle_move_still_grants_the_move_after_fire`.
+  Implemented. Test: `settle_stages::m1_no_settle_move_still_grants_the_move_after_fire`.
 * **R2 — no-settle teleport: 经过/重叠?** **Ruled yes (M6a).** Implemented; a teleport's [路径] is just the endpoint.
   B41 + 专名词 9 + 1.2 read together say the path and its 经过 still exist and
   only the settle is gated; `move_ctx.rs`'s comment says otherwise.

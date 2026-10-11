@@ -80,7 +80,7 @@ be left behind by a **later** link.
 * **Nuance (not auto-wrong):** the hook's payment does open its **own** nested
   `effect` window, so a pay-stage cancel can still drop that payment. The gap is
   whole-trigger negation, and the hook/counteraction ordering question.
-* **Proposed test:** `rb_chain::hook_spend_settles_before_the_counteraction_window`
+* **Proposed test:** `chain::hook_spend_settles_before_the_counteraction_window`
   — field card 「当…[结算]时[支付]500」 on `settle`; a 网络链接异常-style counter
   cancels the settle. Assert (per the ruling you pick) either (a) the 500 is
   paid and stands (current), or (b) the 500 never moves because the counter
@@ -101,13 +101,13 @@ be left behind by a **later** link.
   「[消耗]/[支付]」 is effect content; if unaffordable it runs
   `raise_funds` (mortgage offer `play.rs:3298-3344`, then `bankrupt`) with
   `Pay::must = true` (`wasm_rules.rs:2022`, PIPELINE-AUDIT B1 already fixed).
-* **Proposed test:** `rb_money::unaffordable_in_effect_payment_raises_funds`
+* **Proposed test:** `money::unaffordable_in_effect_payment_raises_funds`
   — P0 holds 0 cash + one mortgageable deed, plays 通用:10次招募. Expect the
   mortgage offer, then the draw if the payment settled, or bankruptcy with the
   bank as creditor. Today the play is refused before any of that.
 * **Fixed (2026-10-07):** all six `money_of < N` gates removed. The hand-count
   [限] on 「因为我一直相信着你」 stays. In-body payments run the Q1 shortfall
-  path. Tagged `TODO(规则书)` (NEGATION-AUDIT V2). Tests: `rb_money::
+  path. Tagged `TODO(规则书)` (NEGATION-AUDIT V2). Tests: `money::
   gacha10_playable_while_short_then_bankrupts`,
   `fire_bird_playable_while_short_then_mortgages`,
   `crimson_soul_playable_while_short_then_bankrupts`,
@@ -164,7 +164,7 @@ be left behind by a **later** link.
   `payTotalCancel` windows instead. See PIPELINE-AUDIT **B2**: window-5 cancel
   power sits at window-1 position.)
 * **Gap:** the API invites a counter body to cancel `pay` and get silence.
-* **Proposed test:** `rb_money::pay_window_set_cancelled_stops_the_payment` —
+* **Proposed test:** `money::pay_window_set_cancelled_stops_the_payment` —
   a counter body that `set_cancelled()`s a `pay` link; expect 0 moved. Today it
   moves the full amount.
 * **Fixed (2026-10-07):** `money_inner` treats `t.is_cancelled()` on the `pay`

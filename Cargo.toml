@@ -9,6 +9,7 @@ members = [
     "crates/spec-kit",
     "rules/cond",
     "rules/spec",
+    "rules/tests",
     "crates/rules-native",
     "crates/rules-worker",
     "crates/server",

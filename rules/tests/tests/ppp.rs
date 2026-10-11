@@ -238,7 +238,7 @@ fn returns_borrow_options_carry_band_cards() {
 // 地契未抵押则可选择[消耗]格子地契所标注的房屋建筑费进行升级建造」 — the
 // upgrade IS the settle's 「可选择」, so (4) vetoes that choice and Returns
 // lifts the veto. The engine surfaces the 「可选择」 as the end-step `build`
-// command (rb_rulebook::s06: 「The buy is the end step's offer
+// command (rulebook::s06: 「The buy is the end step's offer
 // (「[主要移动]和所需[结算]完成后进入结束阶段」)」), which is outside
 // 「[主要移动]的[结算]」 -- so (4) has nothing to gate and the neutralisation
 // is unobservable.
