@@ -74,6 +74,7 @@ pub fn band_starts_in_state1() {
     w.symbolic_answers = false;
     let skill_state = crate::intern::intern("skillState");
     w.key_set(user, skill_state, 0);
+    let pre_state = w.key_get(user, skill_state);
     let pre = {
         world::reset_world(w);
         world::snapshot()

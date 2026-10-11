@@ -660,3 +660,65 @@ pub fn mortis_nothing_to_copy_is_inert() {
     );
     assert!(post == pre || post.log_n == 0, "frame untouched (log empty)");
 }
+
+// ===========================================================================
+// C-MUJICA-祥移动-01 (destination arithmetic)
+// 「强制一名玩家向你选择的方向移动3格」
+// The walk itself is `card_move` + `plan::set_steps(3)` (host stubs) —
+// PROTOCOL-LEVEL for the motion. The 3-tile destination arithmetic is the
+// text's determinate part.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn saki_move_dest_is_three_tiles() {
+    let from: i32 = kani::any();
+    kani::assume((0..60).contains(&from));
+    let dir: i32 = kani::any();
+    kani::assume(dir == 1 || dir == -1);
+    let dest = spec::mujica::saki_move_dest(from, dir, 60);
+    kani::cover!(dir == 1, "clockwise 3");
+    kani::cover!(dir == -1, "counter-clockwise 3");
+    assert!(
+        spec::mujica::saki_move_steps() == 3,
+        "C-MUJICA-祥移动-01: walk length is exactly 3"
+    );
+    let expected = if dir >= 0 {
+        (from + 3) % 60
+    } else {
+        (((from - 3) % 60) + 60) % 60
+    };
+    assert!(dest == expected, "C-MUJICA-祥移动-01: dest is from±3 mod 60");
+}
+
+/// MUTANT: 4-tile walk.
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn saki_move_dest_mutant_is_detected() {
+    let from: i32 = kani::any();
+    kani::assume((0..60).contains(&from));
+    let dir = 1i32;
+    assert!(
+        spec::mujica::saki_move_dest(from, dir, 60) != spec::mujica::saki_move_dest_mutant(from, dir, 60),
+        "mutant: 3-tile dest ≠ 4-tile dest"
+    );
+}
+
+// ===========================================================================
+// C-MUJICA-祥移动-03 arithmetic
+// 「触发结算时进行的支付价格减半」
+// OPEN-取整 on odd prices; this spec uses floor.
+// ===========================================================================
+
+#[kani::proof]
+#[kani::unwind(8)]
+pub fn saki_move_halve_pay_amount() {
+    let amount: i32 = kani::any();
+    kani::assume((0..=2_000).contains(&amount));
+    kani::cover!(amount == 320, "even 320 → 160");
+    kani::cover!(amount == 321, "odd 321 → 160 (OPEN-取整 floor)");
+    assert!(
+        spec::mujica::saki_move_halve_pay(amount) == amount / 2,
+        "C-MUJICA-祥移动-03: payment price halved"
+    );
+}
