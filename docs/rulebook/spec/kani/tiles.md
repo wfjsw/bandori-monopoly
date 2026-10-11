@@ -9,7 +9,8 @@ Bodies under proof: `rules/tiles` (6 tile rules) and `rules/tile_marks`
 
 **Method.** Specs in `rules/kani/src/spec/{tiles,tile_marks}.rs` are written
 from the book quotes only. Harnesses in `rules/kani/src/proofs/{tiles,tile_marks}.rs`
-invoke the unmodified bodies via `invoke::`. Fail-closed: no `#[ignore]`,
+invoke the unmodified bodies via the shipped `CardDef` function pointer
+(`call_settle` / `call_mark_cp_land` — see harness-verdicts note). Fail-closed: no `#[ignore]`,
 no weakened specs, no silent zeros on unmodeled `Op`s.
 
 **Host-model gate (why so many rows are not PROVEN).**
