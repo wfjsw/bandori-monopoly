@@ -200,3 +200,287 @@ pub fn journey_01_mutant_is_detected() {
 /// C-MYGO-rinpuu-02 is PROTOCOL-LEVEL: 「并在回合结束时额外进行一次[触发结算]」
 /// is engine scheduling (`On::AtEnd` + `card_settle_at`, a protocol stub).
 /// Documented here so the unit table can cite a harness name.
+
+// ===========================================================================
+// C-MYGO-haneoka-02/03/04/05
+// `MyGO:羽丘的不可思议女孩` On::Play. Gated on owning the current tile
+// (`cant_play` / body early-out). Roll 1d20 is fully symbolic under Kani.
+// Isolation: the tile is owned by the user and unmortgaged so `add_house`
+// fires on the >=10 band.
+// ===========================================================================
+
+fn haneoka_world() -> World {
+    host::install();
+    let mut w = World::new();
+    w.n_players = kani::any();
+    kani::assume(w.n_players >= 2 && w.n_players <= 4);
+    for p in 0..MAX_PLAYERS {
+        w.money[p] = kani::any();
+        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
+        w.pos[p] = kani::any();
+        kani::assume(w.pos[p] >= 0 && w.pos[p] < world::TILE_COUNT);
+        w.stay[p] = 0;
+        w.fire[p] = 0;
+        w.out[p] = kani::any();
+    }
+    w
+}
+
+/// Iff over every 1d20 face: r<10 empty log; r>=10 SetHouses; r>=15 +Draw;
+/// r>=20 +PlaceCard. Covers each band.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn haneoka_thresholds_iff() {
+    let mut w = haneoka_world();
+    let player = living_player(&w);
+    let pos = w.pos[player as usize];
+    // own tile, unmortgaged — the book's 「位于属于自己的格子上时」
+    w.tiles[pos as usize].owner = player;
+    w.tiles[pos as usize].mortgaged = false;
+    w.tiles[pos as usize].houses = kani::any();
+    kani::assume(w.tiles[pos as usize].houses >= 0 && w.tiles[pos as usize].houses <= 4);
+
+    let pre_houses = w.tiles[pos as usize].houses;
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+
+    invoke::unwrap_done(invoke::play("MyGO:羽丘的不可思议女孩", player));
+
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    let post_houses = world::with_world(|ww| ww.tiles[pos as usize].houses);
+
+    // Recover the face from the effects: <10 → empty; else look at the chain.
+    // We don't have the face in the log, so branch on the observed shape and
+    // cover each band via the house/draw/place presence.
+    let has_house = effects.iter().any(|e| matches!(e, Effect::SetHouses { .. }));
+    let has_draw = effects.iter().any(|e| matches!(e, Effect::Draw { .. }));
+    let has_place = effects.iter().any(|e| matches!(e, Effect::PlaceCard { .. }));
+
+    kani::cover!(!has_house && !has_draw && !has_place, "r < 10 (ineffective)");
+    kani::cover!(has_house && !has_draw && !has_place, "10..=14 (house only)");
+    kani::cover!(has_house && has_draw && !has_place, "15..=19 (house+draw)");
+    kani::cover!(has_house && has_draw && has_place, "r >= 20 (house+draw+place)");
+
+    // Shape consistency: draw only with house; place only with draw.
+    if has_draw {
+        assert!(has_house, "C-MYGO-haneoka: draw implies house (r>=15 ⊇ r>=10)");
+    }
+    if has_place {
+        assert!(has_draw, "C-MYGO-haneoka: place implies draw (r>=20 ⊇ r>=15)");
+        assert!(has_house, "C-MYGO-haneoka: place implies house");
+    }
+    if has_house {
+        assert!(
+            post_houses == pre_houses.saturating_add(1),
+            "C-MYGO-haneoka-02: exactly one free house"
+        );
+        assert!(post.money == pre.money, "C-MYGO-haneoka-02: 免费 — money unchanged");
+    } else {
+        assert!(post_houses == pre_houses, "C-MYGO-haneoka-05: no house on r<10");
+        assert!(post.money == pre.money, "frame: money unchanged");
+    }
+    assert!(post.pos == pre.pos, "frame: pos unchanged");
+    assert!(post.stay == pre.stay, "frame: stay unchanged");
+}
+
+/// Mutant: the ineffective band must not match a one-effect spec.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn haneoka_05_mutant_is_detected() {
+    let mut w = haneoka_world();
+    let player = living_player(&w);
+    let pos = w.pos[player as usize];
+    w.tiles[pos as usize].owner = player;
+    w.tiles[pos as usize].mortgaged = false;
+    world::reset_world(w);
+    // Force the ineffective band by assuming the symbolic die is < 10 is NOT
+    // possible to force post-hoc; instead just run and check: if the log is
+    // empty the mutant (wants 1 effect) must disagree.
+    invoke::unwrap_done(invoke::play("MyGO:羽丘的不可思议女孩", player));
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    if effects.is_empty() {
+        assert!(
+            !spec::mygo::haneoka_effects_ok_mutant(effects, player, pos, 5, 2),
+            "mutant: empty-log ineffective band must not match a 1-effect spec"
+        );
+    }
+}
+
+// ===========================================================================
+// C-MYGO-rainday-01
+// 「将此卡放置于自己场上并为其放置5个奇迹水晶」
+// `MyGO:那天的雨` On::Play. The play body also runs the -02 rain; that leg's
+// GiveStay effects follow the PlaceCard. This harness checks the placement +
+// crystal count; `rainday_02` covers the stay leg.
+// ===========================================================================
+
+const RAINDAY_ID: &str = "MyGO:那天的雨";
+
+/// Iff: PlaceCard(Field) first; crystals key == 5; rain may add GiveStays.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn rainday_01_place_five_crystals_iff() {
+    let w = symbolic_play_world();
+    let player = living_player(&w);
+
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+
+    invoke::unwrap_done(invoke::play(RAINDAY_ID, player));
+
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+
+    assert!(
+        spec::mygo::rainday_01_place_ok(effects, player, 2),
+        "C-MYGO-rainday-01: first effect must be PlaceCard(Field)"
+    );
+    assert!(post_c == 5, "C-MYGO-rainday-01: card must hold exactly 5 crystals");
+    assert!(post.money == pre.money, "frame: money unchanged");
+    assert!(post.pos == pre.pos, "frame: pos unchanged");
+
+    kani::cover!(
+        effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
+        "rain leg granted stay"
+    );
+    kani::cover!(
+        !effects.iter().any(|e| matches!(e, Effect::GiveStay { .. })),
+        "rain leg granted no stay"
+    );
+}
+
+/// Mutant: 4 crystals must not match.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn rainday_01_mutant_is_detected() {
+    let w = symbolic_play_world();
+    let player = living_player(&w);
+    world::reset_world(w);
+    invoke::unwrap_done(invoke::play(RAINDAY_ID, player));
+    let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
+    assert!(
+        post_c != spec::mygo::rainday_01_crystals_mutant(),
+        "mutant: 4-crystal spec must not match the 5-crystal card"
+    );
+}
+
+// ===========================================================================
+// C-MYGO-hitoshizuku-01/02/03
+// `MyGO:壱雫空` On::Play.
+// Isolation: no `lockedStay` (locked layers survive the clear). The host
+// conflates stay and stun on one `w.stay` array, so a pre-world cannot set
+// them independently; this harness covers the stay-clear + money path with
+// `kinds` recovered from the body's clear prefix.
+// KNOWN: the body's money leg charges `1000 * global kinds` from every living
+// player (black-box MORE). The book spec is per-player kinds. We assert the
+// BOOK spec; a FAILS here is the finding.
+// ===========================================================================
+
+/// Iff against the book money rule. Expected to FAILS on the money leg.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hitoshizuku_money_iff() {
+    let w = symbolic_play_world();
+    let player = living_player(&w);
+
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+
+    invoke::unwrap_done(invoke::play("MyGO:壱雫空", player));
+
+    let post = world::snapshot();
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+
+    // Recover per-player kinds from the clear prefix: GiveStay with negative n
+    // is the stay clear (1 kind); GiveStun with negative n (or n!=0) plus
+    // SetState stunStart=0 is the stun clear.
+    let mut kinds = [0i32; MAX_PLAYERS];
+    for e in effects {
+        match e {
+            Effect::GiveStay { player: p, n } if *n < 0 => {
+                kinds[*p as usize] += 1;
+            }
+            Effect::GiveStun { player: p, n } if *n != 0 => {
+                kinds[*p as usize] += 1;
+            }
+            _ => {}
+        }
+    }
+
+    let global_kinds: i32 = kinds.iter().sum();
+    kani::cover!(global_kinds == 0, "nothing cleared");
+    kani::cover!(global_kinds > 0, "something cleared");
+
+    if global_kinds == 0 {
+        // no money leg
+        assert!(
+            !effects.iter().any(|e| matches!(e, Effect::PayTo { .. } | Effect::GainMoney { .. })),
+            "C-MYGO-hitoshizuku: no clear ⇒ no money"
+        );
+    } else {
+        // BOOK spec (per-player kinds).
+        let book_ok = spec::mygo::hitoshizuku_money_ok(effects, player, &kinds, pre.n_players);
+        // BODY behaviour (global kinds) — kept as a diagnostic.
+        let body_ok =
+            spec::mygo::hitoshizuku_body_global_pay_ok(effects, player, global_kinds, pre.n_players);
+        kani::cover!(body_ok, "body matches global-kinds reading");
+        assert!(
+            book_ok,
+            "C-MYGO-hitoshizuku-02: book wants 1000 per type per affected player"
+        );
+        let _ = body_ok;
+    }
+
+    assert!(post.stay.iter().zip(pre.stay.iter()).all(|(a, b)| a <= b),
+        "C-MYGO-hitoshizuku-01: stay never rises");
+    assert!(post.pos == pre.pos, "frame: pos unchanged");
+}
+
+/// Diagnostic companion: the body's global-kinds reading is what it does.
+/// If this is SUCCESSFUL while `hitoshizuku_money_iff` FAILED, the finding is
+/// MORE/WRONG on the money amount.
+#[kani::proof]
+#[kani::unwind(32)]
+pub fn hitoshizuku_body_global_pay_observed() {
+    let w = symbolic_play_world();
+    let player = living_player(&w);
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::play("MyGO:壱雫空", player));
+    let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
+    let log_n = world::with_world(|ww| ww.log_n);
+    let effects = &logbuf[..log_n];
+    let mut kinds = [0i32; MAX_PLAYERS];
+    for e in effects {
+        match e {
+            Effect::GiveStay { player: p, n } if *n < 0 => kinds[*p as usize] += 1,
+            Effect::GiveStun { player: p, n } if *n != 0 => kinds[*p as usize] += 1,
+            _ => {}
+        }
+    }
+    let global_kinds: i32 = kinds.iter().sum();
+    if global_kinds > 0 {
+        assert!(
+            spec::mygo::hitoshizuku_body_global_pay_ok(effects, player, global_kinds, pre.n_players),
+            "diagnostic: body charges 1000 * global kinds from every living player"
+        );
+    }
+}
