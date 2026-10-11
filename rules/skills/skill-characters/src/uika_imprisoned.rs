@@ -35,7 +35,16 @@ const BONUS: &str = "skill.uikaImprisoned.bonus";
 pub const UIKA_IMPRISONED: CardDef = CardDef::new(
     "skill:三角初华:Imprisoned XII",
     &[
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        // 状态1's 「未在任何[回忆地块]…触发结算则可在你的下回合开始时进入状态2」
+        // -- the offer exists only while the memory latch stayed clear.
+        // 状态2's cap write still has to run whenever state is 2, so the
+        // residual is the disjunction. Dynamic latch, residual.
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            card_sdk::pre::MINE,
+            Some(state2_or_clean),
+            at_turn_start,
+        ),
         // 状态1 「移动改为10+1d10」 -- only while this player is in 状态1.
         On::Hook(
             &[HookKind::RollPlan],
@@ -85,6 +94,13 @@ fn mine(player_id: i32) -> bool {
     legacy_mine(player_id)
 }
 
+/// Residual guard for [`at_turn_start`]: 状态2 (the cap write must run) or
+/// the memory latch is clear (the 状态2 offer). Dynamic key.
+fn state2_or_clean(player_id: i32) -> bool {
+    state::get(player_id, state_key::SKILL_STATE) == 2
+        || state::get(player_id, DIRTY) == 0
+}
+
 /// 状态1's entry offer, and 状态2's cap.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
@@ -94,11 +110,8 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, state_key::UNSTOPPABLE, 1);
         return Ok(());
     }
-    // 「可在你的下回合开始时进入状态2」 -- offered only when the memory tiles
-    // stayed clear since the last CiRCLE pass.
-    if state::get(player_id, DIRTY) != 0 {
-        return Ok(());
-    }
+    // 「可在你的下回合开始时进入状态2」 -- `state2_or_clean` already promised
+    // the memory latch is clear.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("uika_imprisoned_title")),

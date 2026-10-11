@@ -21,15 +21,18 @@ pub const NUMAZU_MAID: CardDef = CardDef::new(
     "skill:鳰原令王那:梦幻可爱♪女仆",
     &[
         On::Hook(&[HookKind::DeckAtGameStart], "", None, at_start),
+        // （2）「所有你拥有的格子中取最高值」 -- the offer exists only when some
+        // deed carries a positive `build_cost × houses`. Derived scan, residual.
         On::Hook(
             &[HookKind::HouseAdded],
             "actor == owner && tok('PAREO标记') >= 1",
-            None,
+            Some(has_house_product),
             on_built,
         ),
         // （2）'s offer is also a press, so a card can run it out of turn
         // (pareo_far's 「视为你的房屋总数增加」 -- C# `SkillPareo -> Offer()`).
-        On::Play("tok('PAREO标记') >= 1", None, offer),
+        // On::Play's gate is `Option<Msg>` (WhyNot), not a bool residual.
+        On::Play("tok('PAREO标记') >= 1", Some(offer_gate), offer),
     ],
 )
     .legacy(&[(1, legacy_mine)]);
@@ -64,10 +67,9 @@ fn on_built(player_id: i32) -> card_sdk::Asked {
 /// largest `build_cost × houses` among the player's deeds. Reached two ways --
 /// the `houseAdded` hook above, and the press entry (`On::Play`) a card runs
 /// for 「视为你的房屋总数增加」 (pareo_far, C# `SkillPareo -> Offer()`).
-fn offer(player_id: i32) -> card_sdk::Asked {
-    // `tok('PAREO标记') >= 1` lives on both entries' pre.
-    // 「所有你拥有的格子中取最高值」 -- the largest `build_cost × houses` over
-    // the player's own deeds, which is 「格子的房屋造价×格子上的房屋数」.
+/// Largest `build_cost × houses` over the player's deeds -- 「所有你拥有的格子
+/// 中取最高值」.
+fn best_house_product(player_id: i32) -> i32 {
     let mut best = 0;
     for t in ctx::owned_tiles(player_id) {
         let houses = ctx::houses_of(t);
@@ -79,9 +81,29 @@ fn offer(player_id: i32) -> card_sdk::Asked {
             best = v;
         }
     }
-    if best <= 0 {
-        return Ok(());
+    best
+}
+
+/// Residual guard for [`on_built`]: a positive house product exists.
+fn has_house_product(player_id: i32) -> bool {
+    best_house_product(player_id) > 0
+}
+
+/// `On::Play` gate (WhyNot shape): same predicate, generic `err.play_pre`
+/// (the old body-top was a silent return -- docs/GUARDS.md §4.4).
+fn offer_gate(player_id: i32) -> Option<Msg> {
+    if has_house_product(player_id) {
+        None
+    } else {
+        Some(Msg::new(key!("err.play_pre")))
     }
+}
+
+/// Applicability is `tok('PAREO标记') >= 1` + `has_house_product`.
+fn offer(player_id: i32) -> card_sdk::Asked {
+    // 「所有你拥有的格子中取最高值」 -- the largest `build_cost × houses` over
+    // the player's own deeds, which is 「格子的房屋造价×格子上的房屋数」.
+    let best = best_house_product(player_id);
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("numazu_maid_title")),

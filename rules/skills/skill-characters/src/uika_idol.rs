@@ -22,10 +22,13 @@ pub const UIKA_IDOL: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
+        // （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 --
+        // the offer exists only when such a tile exists. The colour-group
+        // scan is residual (`is_color` / `tile_named`).
         On::Hook(
             &[HookKind::TurnStartBefore],
             "actor == owner && fire(owner) >= 1",
-            None,
+            Some(has_street_color_tile),
             at_turn_start,
         ),
         // （2）「其他玩家经过该格且到达移动终点后向你支付X*30资金」 -- a pot on
@@ -64,21 +67,28 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Tiles in 主要街道's colour group -- the offer's destinations.
+fn street_color_tiles(player_id: i32) -> alloc::vec::Vec<i32> {
+    let street = ctx::tile_named("主要街道");
+    if street < 0 {
+        return alloc::vec::Vec::new();
+    }
+    let g = ctx::tile_group(street);
+    (0..ctx::tile_count())
+        .filter(|&t| ctx::is_color(player_id, t, g))
+        .collect()
+}
+
+/// Residual guard for [`at_turn_start`]: at least one such tile exists.
+fn has_street_color_tile(player_id: i32) -> bool {
+    !street_color_tiles(player_id).is_empty()
+}
+
 /// （2）「回合开始时可将一个火罐放置在与"主要街道"颜色相同的任一格」 -- the
 /// offer is the turn-start moment; the mark is placed then and pays out later.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    // `fire(owner) >= 1` is the pre (「可将一个火罐放置在…」).
-    let street = ctx::tile_named("主要街道");
-    if street < 0 {
-        return Ok(());
-    }
-    let g = ctx::tile_group(street);
-    let pool: alloc::vec::Vec<i32> = (0..ctx::tile_count())
-        .filter(|&t| ctx::is_color(player_id, t, g))
-        .collect();
-    if pool.is_empty() {
-        return Ok(());
-    }
+    // `fire(owner) >= 1` + `has_street_color_tile` are the gate.
+    let pool = street_color_tiles(player_id);
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("uika_idol_title")),

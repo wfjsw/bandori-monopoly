@@ -25,10 +25,13 @@ pub const KAORU_THIEF: CardDef = CardDef::new(
             None,
             turn_end,
         ),
+        // 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下」 -- the
+        // offer is about the *marked* player. The mark-match is a dynamic-key
+        // residual (the -1 unmarked sentinel is not CEL's `slot` missing=0).
         On::Hook(
             &[HookKind::PassPlayer],
             "actor == owner && card.placed && move.remaining > 0 && slot('kaoru_thief_turn') == turn_key",
-            None,
+            Some(marked_here),
             pass_player,
         ),
         // The body-top applicability checks are the condition now (C#
@@ -96,15 +99,16 @@ fn play(player_id: i32) -> card_sdk::Asked {
 
 /// 规则书: 「你本回合的移动阶段可以选择在经过该玩家时使自己强制停下并触发结算」
 /// -- C# `CardKaoruThief.PassSeat` -> `Stop` (MatchHost.cs:3834-3860).
-fn pass_player(player_id: i32) -> card_sdk::Asked {
-    // `actor == owner && card.placed && move.remaining > 0 &&
-    // slot('kaoru_thief_turn') == turn_key` is the pre. `other != Marked`
-    // keeps its `slot` sentinel (`kaoru_thief_marked` uses -1 = unmarked and
-    // `slot()`'s missing = 0 does not match).
+/// Residual guard for [`pass_player`]: the passer is the marked player.
+/// `kaoru_thief_marked` uses -1 = unmarked (`slot()`'s missing = 0 does not
+/// match), so this stays out of CEL.
+fn marked_here(player_id: i32) -> bool {
     let marked = ctx::slot(player_id, "kaoru_thief_marked");
-    if marked < 0 || trigger::target() != marked {
-        return Ok(());
-    }
+    marked >= 0 && trigger::target() == marked
+}
+
+fn pass_player(player_id: i32) -> card_sdk::Asked {
+    let marked = ctx::slot(player_id, "kaoru_thief_marked");
     // 规则书: 「可以选择在经过该玩家时使自己强制停下并触发结算」 -- C#
     // `H.AskYes(..., aiYes: false)` then `m.Stopped = true; m.Resolve = true`.
     let who = marked;
