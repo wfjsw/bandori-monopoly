@@ -581,10 +581,17 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
                 _ => String::from("\x03"),
             }
         }
-        // DIAG: always empty — is the non-empty Vec the abort cliff?
-        let _ = need;
-        let _ = &buf;
-        return Vec::new();
+        let mut out = Vec::new();
+        if need >= 2 {
+            out.push(slot_str(&buf, 0));
+            if need >= 3 {
+                out.push(slot_str(&buf, 1));
+                if need >= 4 {
+                    out.push(slot_str(&buf, 2));
+                }
+            }
+        }
+        return out;
     }
     #[cfg(not(kani))]
     {
