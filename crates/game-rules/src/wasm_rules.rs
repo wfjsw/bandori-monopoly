@@ -2731,7 +2731,20 @@ impl<M: CardModules> RulesBridge<M> {
                     let kind = p.kind;
                     let ask = prompt_to_ask(p);
                     let items = ask.view.items.clone();
-                    let reply = cx.ask(ask)?;
+                    // A prompt that suspends the routine (`Halt`) discards this
+                    // pass: drop its write-through lines, including the
+                    // activation header, so the landing pass is the only
+                    // announcement. Without this the first pass leaves an
+                    // orphan 「效果适用」 with no children and no
+                    // 「（无事发生）」 -- the EMPTY bucket in the acceptance dump.
+                    let reply = match cx.ask(ask) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            cx.drop_events(&posted_ids);
+                            posted_ids.clear();
+                            return Err(e);
+                        }
+                    };
                     // A card prompt has one player: the module's i-th answer is that
                     // player's answer to its i-th prompt.
                     let v = reply
@@ -2836,6 +2849,8 @@ impl<M: CardModules> RulesBridge<M> {
                             fr.stage = game_core::engine::SettleStage::RaiseSettle;
                             cx.push_work(game_core::engine::SettleWork { frame: fr });
                             let _ = who;
+                            // A STACK-01 suspend **resumes** this drive; its
+                            // write-through lines must survive.
                             return Err(game_core::engine::Halt::suspended());
                         }
                     }
@@ -3363,23 +3378,33 @@ impl<M: CardModules> RulesBridge<M> {
             after.world.recent = cx.world().recent.clone();
             after.world.next_event = after.world.next_event.max(cx.world().next_event);
             after.world.walk_flush = cx.world().walk_flush.clone();
-            let activation_id = activation_id;
             // Complete the activation: 「无事发生」 when nothing followed.
             // `activation_id` is the header this drive posted (the local from
-            // `drive_inner_body`), not `after.parent` -- the learn-pass Run's
-            // `parent` can still be the outer activation. A silent drive
-            // created no header (`activation_id` stays at the outer / -1) and
-            // must not complete one.
-            if activation_id >= 0 && !silent {
-                let children = cx.child_event_count(activation_id, activation_id);
+            // `drive_inner_body`). Fall back to `after.parent` when the local
+            // was not set (a re-entry that adopted an existing header). A
+            // silent drive created no header and must not complete one.
+            // Complete **this** drive's header. A multi-entry drive that ran
+            // one silent and one non-silent entry still has a header (from the
+            // non-silent one) and must stamp it; a fully silent drive has no
+            // header of its own (`activation_id` stays -1) and must not
+            // complete the outer one.
+            let header = if activation_id >= 0 {
+                activation_id
+            } else if !silent {
+                after.parent
+            } else {
+                -1
+            };
+            if header >= 0 {
+                let children = cx.child_event_count(header, header);
                 let results = if children == 0 {
                     vec![Msg::new("log.effect_nothing")]
                 } else {
                     Vec::new()
                 };
-                cx.set_event_results(activation_id, results);
+                cx.set_event_results(header, results);
                 after.world.recent = cx.world().recent.clone();
-                cx.activation.retain(|&id| id != activation_id);
+                cx.activation.retain(|&id| id != header);
             }
             after.world.skip_log = false;
             after.world.stub = Default::default();
