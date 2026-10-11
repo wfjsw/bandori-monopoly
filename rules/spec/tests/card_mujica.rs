@@ -69,10 +69,10 @@ fn mujica_table(n: usize, who: usize, character: &str) -> Table {
 fn finish_turn(t: &mut Table, who: usize) {
     drain(t);
     if t.step() == 2 {
-        let _ = t.roll(who);
+        t.roll(who).expect("finish_turn: roll the owed main move");
         drain(t);
     }
-    let _ = t.end(who);
+    t.end(who).expect("finish_turn: end the turn");
     drain(t);
 }
 
@@ -106,9 +106,12 @@ fn black_bday_low_pays_800(step: &Step<'_>) -> Result<(), String> {
             continue;
         }
         let pre_m = step.pre_money(i) as i64;
-        if pre_m > 1000 || pre_m < 800 {
-            // Not in this branch, or cannot pay 800 (the book's pay then
-            // bankrupts them -- G-BANKRUPT's clause, not this one).
+        if pre_m > 1000 {
+            continue;
+        }
+        if pre_m < 800 {
+            // The book still says 「支付你800」; a shortfall bankrupts them
+            // (G-BANKRUPT). This clause only pins solvent payers.
             continue;
         }
         let delta = step.post_money(i) as i64 - pre_m;
@@ -152,6 +155,23 @@ fn black_bday_high_pays_400(step: &Step<'_>) -> Result<(), String> {
         if delta != -400 {
             return Err(format!(
                 "P{i} money {pre_m} > 1000: delta {delta}, expected -400 (200 twice)"
+            ));
+        }
+        // 「支付你两次200资金」 is two separate [支付] legs, not one 400.
+        let legs = step
+            .events
+            .iter()
+            .filter(|e| {
+                (e.r#type == "pay" || e.r#type == "rent")
+                    && e.player_id == i as i32
+                    && e.other == user as i32
+                    && e.value == 200
+            })
+            .count();
+        if legs != 2 {
+            return Err(format!(
+                "P{i}: {} pay legs of 200, expected 2 (「支付你两次200资金」)",
+                legs
             ));
         }
     }
@@ -222,26 +242,7 @@ fn black_birthday_contract() {
         t.set_money(2, m2);
         t.give(0, &[BLACK_BDAY]);
         let pre = t.snapshot_world();
-        t.observe(&[
-            Clause::new(
-                "C-MUJICA-黑色生日-01",
-                "cards.json#Mujica:黑色生日",
-                "每名你以外的资金不多于1000的玩家支付你800资金",
-                black_bday_low_pays_800,
-            ),
-            Clause::new(
-                "C-MUJICA-黑色生日-02",
-                "cards.json#Mujica:黑色生日",
-                "每名你以外的资金严格在1000以上的玩家支付你两次200资金。",
-                black_bday_high_pays_400,
-            ),
-            Clause::new(
-                "C-MUJICA-黑色生日-frame",
-                "cards.json#Mujica:黑色生日",
-                "每名你以外的资金不多于1000的玩家支付你800资金，每名你以外的资金严格在1000以上的玩家支付你两次200资金。",
-                black_bday_frame,
-            ),
-        ]);
+        t.observe(CLAUSES);
         t.play(0, BLACK_BDAY)
             .map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
@@ -362,9 +363,11 @@ fn rain_stay_amount(step: &Step<'_>) -> Result<(), String> {
         }
     }
     if rolls.len() < targets.len() {
-        // Engine rolled fewer dice than designated players -- report via the
-        // stay check; do not invent a pairing.
-        return Ok(());
+        return Err(format!(
+            "C-MUJICA-心の雨-01: {} in-range players but only {} dice events              (「各自骰1d20」)",
+            targets.len(),
+            rolls.len()
+        ));
     }
     for (k, &i) in targets.iter().enumerate() {
         let roll = rolls[k];
@@ -440,26 +443,7 @@ fn rain_contract() {
         t.dice(&[roll]);
         t.give(0, &[RAIN]);
         let pre = t.snapshot_world();
-        t.observe(&[
-            Clause::new(
-                "C-MUJICA-心の雨-01",
-                "cards.json#Mujica:心の雨",
-                "使你前方20格内的所有玩家各自骰1d20",
-                rain_stay_layers,
-            ),
-            Clause::new(
-                "C-MUJICA-心の雨-02",
-                "cards.json#Mujica:心の雨",
-                "骰点小于等于12的玩家获得一层[停留]，小于等于3的玩家变为获得2层[停留]。",
-                rain_stay_amount,
-            ),
-            Clause::new(
-                "C-MUJICA-心の雨-03",
-                "cards.json#Mujica:心の雨",
-                "若未能使任何玩家获得[停留]，自身获得一层[晕眩]并获得1000资金",
-                rain_miss_self_stun,
-            ),
-        ]);
+        t.observe(CLAUSES);
         t.play(0, RAIN).map_err(|e| format!("play rejected: {e}"))?;
         drain(&mut t);
 
@@ -620,7 +604,7 @@ fn saki_move_forces_three_tiles() {
 /// (OPEN-取整).
 #[test]
 fn saki_move_halves_settle_pay() {
-    // Tile 1 (购物中心) base rent 300 -> halved 150.
+    // Tile 3 (水族馆) base rent 320 -> halved 160.
     forall(4, 0x5A12, |rng, _i| {
         let mut t = Table::vanilla(2);
         // P1 walks 3 forward from 0 onto tile 3 (水族馆, rent 320 with 0 houses).
@@ -946,6 +930,13 @@ fn sakiko_mortgages_most_expensive_and_teleports() {
         if t.pos(0) != 42 {
             return Err(format!("teleport landed on {}, expected 42", t.pos(0)));
         }
+        // 抵押后[获得]地契购买价格50%的资金 -- tile 3 price 3200 -> +1600.
+        let money = t.money(0);
+        if money != 10_000 + 1600 {
+            return Err(format!(
+                "C-MUJICA-祥子-01: money {money} after mortgaging tile 3                  (price 3200), expected 11600 (50% of the deed price)"
+            ));
+        }
         Ok(())
     })
     .expect("C-MUJICA-祥子-01/02/03");
@@ -1079,9 +1070,10 @@ fn band_starts_in_state1() {
     // default skillState is 0, and the band skill's own placement stamps 1.
     // Check the placed band skill exists and that a fresh arrange leaves the
     // player in (or at) 状态1.
-    if !t.field_ids(0).iter().any(|c| c == SKILL_BAND) {
-        return;
-    }
+    assert!(
+        t.field_ids(0).iter().any(|c| c == SKILL_BAND),
+        "band skill not placed"
+    );
     let s = t.state(0, "skillState");
     // 0 is the un-stamped default; 1 is 状态1. Both mean "not 状态2".
     if s == 2 {
@@ -1095,13 +1087,9 @@ fn band_starts_in_state1() {
 /// optional interrupt on an arbitrary payment, and the Table harness has no
 /// seam to arm "spend a crystal to halve this pay" without driving a full
 /// payment pipeline. The quote is recorded so the clause is not lost.
-#[test]
-fn band_crystal_half_pay_documented() {
-    // Not an executable predicate: see docs/rulebook/spec/cards/mujica.md
-    // C-MUJICA-团技能-03 (untestable -- no harness seam for an optional
-    // crystal-spend interrupt on a payment).
-    assert!(SKILL_BAND.starts_with("skill:"));
-}
+// C-MUJICA-团技能-03 (spend 1 crystal to halve a payment) has no executable
+// predicate: the Table harness has no seam to arm an optional crystal-spend
+// interrupt on a payment. Recorded in the doc so the clause is not lost.
 
 // =====================================================================
 // Character skill smoke contracts (the parts a Table arrange can reach)
@@ -1290,9 +1278,9 @@ fn mortis_nothing_to_copy_is_inert() {
         drain(&mut t);
         let keys = t.keys_since(mark);
         // The engine names the empty copy `mortis_instinct_nothing`.
-        if !keys.iter().any(|k| k.contains("mortis_instinct_nothing") || k.contains("mortis")) {
+        if !keys.iter().any(|k| k.contains("mortis_instinct_nothing")) {
             return Err(format!(
-                "C-MUJICA-睦-01: expected an inert no-copy resolution, keys {keys:?}"
+                "C-MUJICA-睦-01: expected an inert no-copy resolution                  (mortis_instinct_nothing), keys {keys:?}"
             ));
         }
         Ok(())
@@ -1332,4 +1320,66 @@ fn umiri_takes_holders_band_skill() {
         Ok(())
     })
     .expect("C-MUJICA-海铃-03");
+}
+
+// =====================================================================
+// C-MUJICA-欢迎-02 gaps (book includes self; no-状态2 must no-op)
+// =====================================================================
+
+/// 规则书: 「转换任意一名玩家的状态」 -- 「任意一名玩家」 includes the user.
+///
+/// C-MUJICA-欢迎-02 (self): the prompt must offer the user as well. A prompt
+/// that only lists the other players is a plain failing contract.
+#[test]
+fn welcome_offers_self_as_well() {
+    let mut t = Table::vanilla(3);
+    t.set_character_raw(0, "丰川祥子");
+    t.place_raw(0, SKILL_BAND);
+    t.set_state(0, "skillState", 1);
+    t.set_character_raw(1, "三角初华");
+    t.place_raw(1, SKILL_BAND);
+    t.give(0, &[WELCOME]);
+    t.play(0, WELCOME).expect("play");
+    let p = t.expect_prompt();
+    let offers_self = p
+        .options
+        .iter()
+        .any(|o| format!("{o:?}").contains("PlayerId(0)"));
+    if !offers_self {
+        panic!(
+            "C-MUJICA-欢迎-02: 「转换任意一名玩家的状态」 includes the user; \
+             prompt offers only others: {}",
+            t.dump_prompt()
+        );
+    }
+}
+
+/// 规则书: 「（若指定了不存在状态2的玩家则无效果）」.
+///
+/// Designating a player with no 状态2 must be a no-op. This contract drives
+/// the designate of a non-Ave-Mujica seat and checks `skillState` is unchanged.
+#[test]
+fn welcome_no_state2_is_noop() {
+    let mut t = Table::vanilla(3);
+    t.set_character_raw(0, "丰川祥子");
+    t.place_raw(0, SKILL_BAND);
+    // P2 is a vanilla non-Mujica seat (no band skill, no 状态2).
+    t.set_state(2, "skillState", 0);
+    t.give(0, &[WELCOME]);
+    t.play(0, WELCOME).expect("play");
+    let p = t.expect_prompt();
+    let k = p
+        .options
+        .iter()
+        .position(|o| format!("{o:?}").contains("PlayerId(2)"))
+        .unwrap_or_else(|| panic!("P2 not offered: {}", t.dump_prompt())) as i32;
+    t.answer(0, k).expect("designate P2");
+    drain(&mut t);
+    let s = t.state(2, "skillState");
+    if s != 0 {
+        panic!(
+            "C-MUJICA-欢迎-02: designated a player with no 状态2; \
+             skillState became {s}, expected 0 (「则无效果」)"
+        );
+    }
 }

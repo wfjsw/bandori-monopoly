@@ -53,9 +53,12 @@ scope.)
 * **Effect:** the user force-moves the sum of the others' dice; that walk is
   their [主要移动] for the turn (so it settles, and a later roll is closed).
 * **Frame:** the user's `pos`, `turn.main_moved`, settle side-effects.
-* **Rulings & OPEN:** if every other player paid (no dice), the sum is 0 and
-  the user does not move (observed; the quote determines this). OPEN-触发结算
-  applies to the others' walks, not to this one.
+* **Rulings & OPEN:** if every other player paid (no dice), the sum is 0.
+  The quote still says 「视为你本回合的主要移动」 for the sum walk, so a 0-step
+  walk might still close the main move -- OPEN-花火额外回合 is a different
+  gap; record this as **OPEN-箱庭0步**: does a sum-0 forced walk count as the
+  [主要移动] (closing a later roll)? The suite only pins the pay branch.
+  OPEN-触发结算 applies to the others' walks, not to this one.
 * **Executable:** (partially -- the pay branch pins the sum-0 case in
   `doll_garden_pay_amount`).
 
@@ -179,7 +182,11 @@ scope.)
   player without 状态2 does nothing.
 * **Frame:** the designated player's `skillState`.
 * **Rulings & OPEN:** 「状态」 here is the band skill's 状态1 / 状态2 pair.
-* **Executable:** `welcome_switches_designated_state`.
+  「任意一名玩家」 includes the user; 「不存在状态2的玩家则无效果」 is a
+  required no-op. Both gaps are Findings (below).
+* **Executable:** `welcome_switches_designated_state` (happy path);
+  `welcome_offers_self_as_well`, `welcome_no_state2_is_noop` (**failing**;
+  see Findings).
 
 * **ID:** `C-MUJICA-欢迎-03`
 * **Source:** `cards.json#Mujica:欢迎来到ave mujica的世界`
@@ -310,8 +317,9 @@ scope.)
 * **Quote:** 「每名你以外的资金不多于1000的玩家支付你800资金」
 * **Condition:** another player's money `<= 1000` (inclusive) and they can
   pay 800.
-* **Effect:** they pay the user exactly 800. (If they cannot pay, G-BANKRUPT
-  applies; this clause skips them.)
+* **Effect:** they pay the user exactly 800. A shortfall is not a skip: the
+  book's 「支付你800」 still fires and G-BANKRUPT covers the bankruptcy. This
+  clause pins solvent payers only.
 * **Frame:** money of the user and the payers.
 * **Rulings & OPEN:** TEST-FINDINGS §6 sheet-superseded: 「不多于1000」 is
   inclusive.
@@ -367,7 +375,8 @@ scope.)
 * **Source:** `cards.json#Mujica:（喵梦）`
 * **Quote:** 「1. 每当此卡将从正面翻至背面时可选择失去2个火罐。」
 * **Trigger:** a flip of this instance face-down (e.g. 祐天寺若麦 状态2 entry).
-* **Effect:** the owner may lose 2 fire pots (optional).
+* **Effect:** the owner may lose 2 fire pots (optional). The quote does not
+  name a benefit -- **OPEN-喵梦翻面**: does paying the pots cancel the flip?
 * **Frame:** the owner's `fire`.
 * **Rulings & OPEN:** untested -- the flip is driven by another skill's
   state-2 entry, a multi-skill arrange the suite does not yet run.
@@ -531,7 +540,8 @@ scope.)
   after each successful collect the user may walk 1d6 more (≤4 times), before
   the landing settle.
 * **Rulings & OPEN:** OPEN-触发结算. Untested (multi-walk).
-* **Executable:** fire cap only: `uika_fire_cap_is_three`.
+* **Executable:** none. `uika_fire_cap_is_three` only checks the arrange
+  setter (it does **not** read the skill's declared cap).
 
 ### C-MUJICA-睦技能 -- 若叶睦 / 天生的演员
 
@@ -567,7 +577,8 @@ scope.)
 * **Quote:** 「每次受到停留，眩晕，除外影响（并结算其影响），获得一个火罐（初始0，上限3），火罐数达到上限时可在回合开始时选择进入状态2。」
 * **Effect:** +1 fire pot per applied [停留]/[晕眩]/[除外] (cap 3); at cap,
   状态2 is offered at turn start.
-* **Executable:** `sakiko_fire_cap_is_three` (cap only).
+* **Executable:** none. `sakiko_fire_cap_is_three` only checks the arrange
+  setter (it does **not** read the skill's declared cap).
 
 * **ID:** `C-MUJICA-祥子技能-03`
 * **Source:** `characters.json#丰川祥子`
@@ -591,7 +602,8 @@ scope.)
 * **Source:** `characters.json#八幡海铃`
 * **Quote:** 「每两个回合没有玩家发动该技能，你在回合开始时获得1火罐（初始0，上限4），若达到上限，可在你的回合开始时选择进入状态2。」
 * **Effect:** +1 fire pot per two idle turns (cap 4); at cap, 状态2 offered.
-* **Executable:** `umiri_fire_cap_is_four` (cap only).
+* **Executable:** none. `umiri_fire_cap_is_four` only checks the arrange
+  setter (it does **not** read the skill's declared cap).
 
 * **ID:** `C-MUJICA-海铃技能-03`
 * **Source:** `characters.json#八幡海铃`
@@ -610,7 +622,8 @@ scope.)
 * **Quote:** 「状态1：（1）每次其他玩家向你支付资金时，你立即获得1火罐（初始0，上限5），并使那次支付的金额提高X*100，X为你拥有的火罐数。」
 * **Effect:** on every payment to the user, +1 fire pot, then the payment is
   raised by `X*100` with X the new pot count.
-* **Executable:** `nyamu_fire_cap_is_five` (cap only).
+* **Executable:** none. `nyamu_fire_cap_is_five` only checks the arrange
+  setter (it does **not** read the skill's declared cap).
 
 * **ID:** `C-MUJICA-若麦技能-02`
 * **Source:** `characters.json#祐天寺若麦`
@@ -644,7 +657,8 @@ scope.)
 * **Frame:** money of the two sides.
 * **Rulings & OPEN:** the live sheet says **1.5倍**; `rulebook-doc.md:232`
   「翻倍」 is superseded. The parenthetical is the whole point: a symmetric
-  1.5x transfer breaks the quote.
+  1.5x transfer breaks the quote. Only the user-as-payer half is tested; the
+  user-as-payee (「[收取]」) half is the same arithmetic mirrored.
 * **Executable:** `band_state2_pay_is_150_only_on_self` (**failing**; see
   Findings).
 
@@ -685,6 +699,10 @@ scope.)
   book's 分摊 vocabulary is not defined).
 * **OPEN-前方20格** -- 「前方」 is read as clockwise ahead; the book does not
   define a counter-clockwise forward.
+* **OPEN-箱庭0步** -- does a sum-0 forced walk of 人偶的箱庭 still count as
+  the [主要移动] (closing a later roll)?
+* **OPEN-喵梦翻面** -- does paying 2 fire pots cancel the face-down flip
+  (「可选择失去2个火罐」 names a cost and no benefit)?
 
 ## Findings
 
@@ -702,3 +720,11 @@ Genuine engine-vs-book discrepancies. Each is a plain failing test in
 * **C-MUJICA-花火-03** (`sparkler_burn_and_last_stun`) -- book says the last
   crystal 「立刻使你获得2层[眩晕]」. Engine leaves the user at 1 stun layer
   after the last crystal is removed.
+* **C-MUJICA-欢迎-02** (self-target) -- 「转换任意一名玩家的状态」 includes
+  the user; the engine's prompt only offers the other players.
+* **C-MUJICA-欢迎-02** (no 状态2) (`welcome_no_state2_is_noop`) -- 「若指定
+  了不存在状态2的玩家则无效果」 is a required no-op. Engine toggles a
+  non-Ave-Mujica seat into 状态2.
+* **C-MUJICA-海铃-05** -- 「将此卡与使用者拿取的所有乐队技能卡置入弃牌堆」:
+  taken band skills are detached, not put into a discard pile (engine TODO);
+  untested here, recorded as a known shortfall.
