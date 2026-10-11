@@ -119,10 +119,17 @@ pub fn is_property(t: &TileData) -> bool {
     t.kind == 1
 }
 
+/// `TileData::is_buyable` — Property or Ring (game-core `data.rs`).
+pub fn is_buyable(t: &TileData) -> bool {
+    t.kind == 1 || t.kind == 3
+}
+
 /// A 「商店街」 deed: buyable and colour group 10 (wasm_rules `is_shop`).
 /// `kind == 5` is only 「江户川乐器店」 — that is **not** the shop predicate.
+/// The agent tile 「商店街」 itself is the colour-group marker (group 10,
+/// kind agent) and is **not** buyable; the group-10 deeds beside it are.
 pub fn is_shop(t: &TileData) -> bool {
-    is_property(t) && t.group == 10
+    is_buyable(t) && t.group == 10
 }
 
 pub fn is_ring(t: &TileData) -> bool {

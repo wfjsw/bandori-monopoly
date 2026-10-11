@@ -38,8 +38,8 @@ fn crystals_of(w: &World, player: i32) -> i32 {
     w.key_get(player, crystal_name())
 }
 
-fn slot_of(id: &str) -> u8 {
-    world::card_slot_of(id)
+fn slot_of(id: usize) -> u8 {
+    world::card_slot_of(crate::generated::IDS[id])
 }
 
 // ===========================================================================
@@ -193,7 +193,7 @@ fn half_speed_pay_world(amount: i32) -> World {
     // Card is on the field (PayMul pre: `card.placed && value > 0`).
     w.field_n = 1;
     w.field[0].player = player;
-    w.field[0].card = intern::intern(CARD_MOCA_HALF).0;
+    w.field[0].card = intern::intern(crate::generated::IDS[CARD_MOCA_HALF]).0;
     w
 }
 
@@ -273,7 +273,7 @@ fn sky_world(hand_bits: [bool; 8], have_sky: bool) -> World {
         if (slot as usize) < 8 {
             w.hand[slot as usize] = true;
         }
-        world::pile_push(&mut w.hand_pile, &mut w.hand_n, intern::intern(CARD_SAME_SKY).0);
+        world::pile_push(&mut w.hand_pile, &mut w.hand_n, intern::intern(crate::generated::IDS[CARD_SAME_SKY]).0);
     }
     // Deck has room for the optional draw.
     w.deck_n = 4;
@@ -635,7 +635,7 @@ fn soul_pay_world(amount: i32, crystals: i32, payee: i32) -> World {
     w.trig_target = payee;
     w.field_n = 1;
     w.field[0].player = owner;
-    w.field[0].card = intern::intern(CARD_SOUL).0;
+    w.field[0].card = intern::intern(crate::generated::IDS[CARD_SOUL]).0;
     w.key_set(owner, crystal_name(), crystals);
     w.money = [10_000; MAX_PLAYERS];
     // Yes/no prompt: pre-seat opt_n so the host's ask explores both answers.
@@ -724,7 +724,7 @@ pub fn soul_03_skill_used_iff() {
         w.trig_player = owner;
         w.field_n = 1;
         w.field[0].player = owner;
-        w.field[0].card = intern::intern(CARD_SOUL).0;
+        w.field[0].card = intern::intern(crate::generated::IDS[CARD_SOUL]).0;
         w.key_set(owner, crystal_name(), crystals);
         w
     };
