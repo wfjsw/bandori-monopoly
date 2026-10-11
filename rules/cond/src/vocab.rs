@@ -201,7 +201,7 @@ pub const VOCAB: &[Name] = &[
         ty: Ty::Int,
         get: |v| v.roll_source(),
         fx: NO_FX,
-        doc: "where a roll came from, -1 = none",
+        doc: "where a roll came from, 0 = none (roll_source::NONE)",
     },
     Name {
         cel: "abnormal",

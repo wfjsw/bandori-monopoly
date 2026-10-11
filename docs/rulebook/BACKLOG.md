@@ -1324,17 +1324,21 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **expected**: drop the unused linker names. **Confirmed.**
 
 ## HOST-11 — CEL `roll_source` sentinel doc disagrees with guest/host
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-11 …`) —
+  the doc is aligned to the live encoding: `0 = none` (`roll_source::NONE`).
+  The host fills `0` and `layer_keep` already codes against that; no migration.
+  `ty: Ty::Int` is correct (a sentinel, not an optional).
 - **kind**: ABI defect (sentinel mismatch)
-- **class**: C (which sentinel is the contract?) / A to align
+- **class**: A (doc align)
 - **severity**: low
 - **suggested batch**: CEL vocab vs guest readers
 - **locations**
-  - `rules/cond/src/vocab.rs:196-204` — `doc: "where a roll came from, -1 = none"`, `ty: Ty::Int` (not OptInt)
-  - `rules/card-sdk/src/abi.rs:627-629` — `roll_source::NONE = 0`
-  - host fills `0` for unattributed: `hostfns.rs:1893-1894`, `cond_pre.rs:1252`, ambient `:1341`
-  - existing guard uses the guest code: `rules/cards/card-ras/src/layer_keep.rs:29` `"… && roll_source == 1"`
-- **current**: guards written as `roll_source == -1` or `== null` never match
-- **expected**: align docs (and any OptInt) to `0 = none`, or change the fill to `-1` and migrate `NONE`
+  - `rules/cond/src/vocab.rs` — `doc: "where a roll came from, 0 = none (roll_source::NONE)"` (was `-1 = none`)
+  - `rules/card-sdk/src/abi.rs` — `roll_source::NONE = 0` (the contract)
+  - host fills `0` for unattributed: `hostfns.rs`, `cond_pre.rs`
+  - existing guard uses the guest code: `rules/cards/card-ras/src/layer_keep.rs` `"… && roll_source == 1"`
+- **was**: guards written as `roll_source == -1` never matched
+- **expected**: align docs to `0 = none`. **Confirmed.**
 
 ## HOST-12 — stale purchase-surface comments
 - **kind**: stale
