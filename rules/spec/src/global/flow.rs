@@ -583,7 +583,13 @@ const G_FLOW_07: Clause = Clause::new(
 /// Executable form of [`G-FLOW-07`].
 pub fn g_flow_07(step: &Step<'_>) -> Result<(), String> {
     let seats = turns_began(step);
-    if seats.is_empty() || has_card_events(step) {
+    // Skip a window in which the turn-start routine did not complete (a
+    // `turnStartBefore` hook prompted and paused it before the exile tick).
+    // Engine-level: `post_prompt_open`, never the `"card"` presentation
+    // event -- a lazy header must not decide whether this clause runs.
+    // (The old `has_card_events` skip was a presentation dependency that
+    // masked the check on master whenever any bookkeeping hook flashed.)
+    if seats.is_empty() || step.post_prompt_open {
         return Ok(());
     }
     for i in seats {
