@@ -3962,7 +3962,7 @@ impl Cx<'_> {
         // holds** -- 火罐 / 奇迹水晶 / P✽P粉丝 / tokens / statuses -- plus every
         // marker **owned by one of their rules** wherever that copy sits
         // (another player's counter, a tile). Neutral board marks ([CP点],
-        // `owner == -1`) are not player-held and stay. `rb_pp::
+        // `owner == -1`) are not player-held and stay. `pp::
         // shanyao_counter_on_short_payment` pins the fan being cleared.
         s.tokens.clear();
         s.field.clear();

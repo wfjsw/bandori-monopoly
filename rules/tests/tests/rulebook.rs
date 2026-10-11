@@ -3,11 +3,11 @@
 //!
 //! Scope is the **rulebook** itself -- glossary, start/win, game flow, the
 //! 时点流程 tables, payment phase, 基础[结算]规则, markers -- not card or skill
-//! text (those live in the `rb_<group>` suites). Card effects override the
+//! text (those live in the game suite). Card effects override the
 //! rulebook (特别注意 3), so a card that bends a clause is not a discrepancy
 //! here.
 //!
-//! Evidence first from the existing suites (`rb_cross_*`, `rb_gap_*`,
+//! Evidence first from the existing suites (`cross_*`, `gap_*`,
 //! `game-core`'s `play::tests`); this file only adds what those leave open,
 //! plus every clause the 时点流程 / 支付阶段 tables add over `data/rules.txt`
 //! (which stubs those tables out).
@@ -843,7 +843,7 @@ fn t06b_same_tile_teleport_fires_overlap_then_settle() {
 #[test]
 fn t06c_zero_step_move_fires_overlap() {
     // 都筑诗船 (2) 「尽力了吗」 is the suite's 0-move: d20 − d6 = 0 settles
-    // in place (see `rb_general::tsugu_skill_zero_move_settles_in_place`).
+    // in place (see `general::tsugu_skill_zero_move_settles_in_place`).
     let mut t = Table::new(&["都筑诗船", "户山香澄"]);
     t.clean();
     t.set_fire(0, 1, 2);
@@ -1070,7 +1070,7 @@ fn o06_mortgage_and_redeem_ignore_pay_modifiers() {
 
 // 支付阶段 4: 「支付前 支付减半/翻倍」 -- the halver runs on the payment before
 // the money moves. (The add-then-multiply *order* of windows 2 and 4 is the
-// open RULING pinned by `rb_gap_money::g02_half_speed_plus_expectations_floor_on_a_rent`.)
+// open RULING pinned by `gap_money::g02_half_speed_plus_expectations_floor_on_a_rent`.)
 #[test]
 fn p01_pay_mul_halves_a_settle_rent() {
     let mut t = Table::vanilla(2);

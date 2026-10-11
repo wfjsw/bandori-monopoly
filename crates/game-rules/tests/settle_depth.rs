@@ -56,7 +56,7 @@ fn settle_chain_on_small_stack() {
     h.join().expect("settle chain panicked or overflowed");
 }
 
-/// Place `card` on `who`'s field at board `tile` (same seam as rb_cross_tiles).
+/// Place `card` on `who`'s field at board `tile` (same seam as cross_tiles).
 fn place_on_tile(t: &mut Table, who: usize, card: &str, tile: usize) {
     let d = data();
     let props = rules().card_props(card);

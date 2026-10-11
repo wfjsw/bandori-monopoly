@@ -292,7 +292,7 @@ byte-identical (checkpoints, sim counts — `cargo run -p game-core --release
   model answered and the body completed. The pause is now a **trap** (tears
   the stack before the body can swallow it), so both models replay / answer the
   same body. `ctx::decay()` also propagates now instead of `unwrap_or(0)`.
-  `crates/game-rules/tests/inline_provider.rs` pins "no body swallows a
+  `rules/tests/tests/inline_provider.rs` pins "no body swallows a
   prompt".
 
 **The one known equivalence gap.** The learn pass's body runs against a copy
@@ -1134,7 +1134,7 @@ counteract index is the other lever (B3 territory).
 -- 50 4 200` is 285 ms/game over 50 games (avg 196.3 rounds) — inside the
 323 ms budget; prompt and event counts are the halt/replay model's.
 
-**Equivalence.** `crates/game-rules/tests/inline_provider.rs`:
+**Equivalence.** `rules/tests/tests/inline_provider.rs`:
 `stub_rules_inline_matches_halt_replay_exactly` — identical checkpoints for
 3 seeded games (the engine-level provider is exact);
 `real_rules_inline_matches_halt_replay` — no body swallows a prompt, and the
@@ -1198,7 +1198,7 @@ next batch.
 **`slot()` read the wrong key.** `cond_pre::fill_candidate` looked the CEL
 `slot('name')` up under `slot:<name>`, while the guest's `ctx::slot(player_id,
 name)` reads the bare player-state key. Every `slot('lastWalk') > 0` condition
-read 0 and silently closed the window (`rb_guards::ordinary_matches_only_abnormal`
+read 0 and silently closed the window (`guards::ordinary_matches_only_abnormal`
 caught it). Fixed in `cond_pre` (bare key + `SLOT_NAMES` now covers
 `asUsualTurn`/`lastWalk`); `fill_candidate` always fills them.
 
@@ -1557,7 +1557,7 @@ skip count went 11 738 -> 15 714 per game (the extra ~4 000 are the
 index (`counteracts_to`) and the CEL pre-filter already cover these kinds --
 they are ordinary `ChainKind`s. R2 (a no-settle teleport raises `passTile` /
 `passPlayer` at its **destination** only, never mid-route) is unchanged and
-pinned by `rb_ag::glory_counter_opens_only_at_a_teleports_destination`.
+pinned by `ag::glory_counter_opens_only_at_a_teleports_destination`.
 
 Behaviour change (not equivalence-neutral): `sim -- 50 4 200` counts are
 **unchanged** (StubRules has no hand-counteraction cards, so no new window

@@ -476,7 +476,7 @@ fn glory_counter_is_offered_to_a_bot_seat() {
     b.version = STRATEGY_BOOK_VERSION;
     b.policy = POLICY_STANDARD.into();
     b.params_version = PARAMS_VERSION;
-    b.generated_at = "rb_ag".into();
+    b.generated_at = "ag".into();
     b.me.push(StrategyEntry {
         me: bot_char,
         band: String::new(),

@@ -7,7 +7,7 @@ from here; do not merge into the primary branch from this file.
 
 Sources:
 - 144 `TODO(规则书)` tags in `rules/` + `crates/`
-- live `#[ignore = "…"]` set in `crates/game-rules/tests/*.rs` (85 after the un-ignore batch; 69 DISCREPANCY, 13 RULING, 2 meta)
+- live `#[ignore = "…"]` set in `rules/tests/tests/*.rs` and `crates/game-rules/tests/*.rs` (85 after the un-ignore batch; 69 DISCREPANCY, 13 RULING, 2 meta)
 - `docs/rulebook/TEST-FINDINGS.md` (§3 ABI / §4 per-card / §6 rulings / 2026-10-09 triage), `COVERAGE.md`, `CROSS-TESTS.md`, `NEGATION-AUDIT.md`, `PIPELINE-AUDIT.md`, `SETTLE-STAGES.md`, `docs/GUARDS.md`
 - 2026-10-10 ABI audit of `crates/game-rules/src/{host,hostfns,native_shims,wasm_rules}.rs`, `rules/card-sdk/src/{ctx,sys,abi}.rs`, `crates/game-core` purchase/play
 
@@ -93,9 +93,9 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: rent multipliers
 - **locations**
-  - `crates/game-rules/tests/rb_gap_money.rs:117` `g01_fire_bird_times_ave_mujica_on_one_rent` `#[ignore = "RULING: order of two multipliers on one rent (Fire bird 1.5x x Ave Mujica 1.5x)"]`
-  - `crates/game-rules/tests/rb_cross_tiles.rs:457` `t11_fire_bird_plus_hhw_double` — **D note**: ignore already removed (test still records the question; do not re-open as A)
-  - `crates/game-rules/tests/rb_fuzz_found.rs:173` `multiply_order_matters` `#[ignore = "DISCREPANCY: two multiplicative money modifiers do not commute"]`
+  - `rules/tests/tests/gap_money.rs:117` `g01_fire_bird_times_ave_mujica_on_one_rent` `#[ignore = "RULING: order of two multipliers on one rent (Fire bird 1.5x x Ave Mujica 1.5x)"]`
+  - `rules/tests/tests/cross_tiles.rs:457` `t11_fire_bird_plus_hhw_double` — **D note**: ignore already removed (test still records the question; do not re-open as A)
+  - `rules/tests/tests/fuzz_found.rs:173` `multiply_order_matters` `#[ignore = "DISCREPANCY: two multiplicative money modifiers do not commute"]`
   - TEST-FINDINGS §6 Timing/order R-1
 - **rulebook text**: Fire bird 「支付…的1.5倍」, Ave Mujica 状态2 「从[收取]与[支付]的资金改为1.5倍（只对自己结算）」, HHW band double-pay, 摩卡 half. All live in window `回合階段&註釋` `B30`/`C30` with no product/stack rule.
 - **current**: multipliers compose in declaration order; two muls do not commute (fuzz).
@@ -108,7 +108,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: payment pipeline
 - **locations**
-  - `crates/game-rules/tests/rb_gap_money.rs:222` `g04_half_share_then_cancel_one_payer` `#[ignore = "RULING: halving vs cancel-one order on a 分摊 leg (and whether the share recomputes)"]`
+  - `rules/tests/tests/gap_money.rs:222` `g04_half_share_then_cancel_one_payer` `#[ignore = "RULING: halving vs cancel-one order on a 分摊 leg (and whether the share recomputes)"]`
   - related: `rules/events/src/front_or_back.rs:49,56` (「分摊」 remainder) — separate small C, see EVENT-03
 - **rulebook text**: 爱心义演 / 分摊 legs; 网络链接异常 cancel-one designation (sheet: 「取消一个指定」).
 - **current**: share is the pre-drop figure (TEST-FINDINGS §3); halving-vs-cancel order undecided.
@@ -127,10 +127,10 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   offered), so the discrepancy was never actually observed. Dice is now
   `(hill − 5) + X` from a close start. Un-ignored, green twice.
 - **locations**
-  - `crates/game-rules/tests/rb_ras.rs` `repaint_halves_a_shaped_settlement_payment` (un-ignored)
+  - `rules/tests/tests/ras.rs` `repaint_halves_a_shaped_settlement_payment` (un-ignored)
   - `rules/cards/card-ppp/src/tomorrows_door.rs` (`pay_add` at `payAdd`)
   - `crates/game-core/src/engine/play.rs` (`scale_settle_payment` at `payMul`)
-  - related tests `rb_cross_tiles.rs:163` `t03_anon_link_plus_repaint` (Anon link arrangement, still ignored)
+  - related tests `cross_tiles.rs:163` `t03_anon_link_plus_repaint` (Anon link arrangement, still ignored)
 - **rulebook**: ruling 2026-10-06 + sheet 「对方此次结算的支付减半」 — the *settlement payment* (post-shape) is halved.
 - **was**: test dice put the hill off-path; X = 0 so Repaint was never offered.
 - **expected**: half applies to the whole shaped settlement payment (surcharge included). **Confirmed.**
@@ -158,7 +158,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   - `crates/game-core/src/engine/play.rs:899` (ruling 8)
   - `rules/cards/card-ag/src/tomoe_savior.rs:71` (extra mortgage income raw vs `gain`), `:85` (ruling 8 base)
   - `docs/PURCHASE.md` ruling 8; TEST-FINDINGS §6 item 13
-  - tests (green, pin current): `rb_card_paths::tomoe_savior_buy_listener_*`
+  - tests (green, pin current): `card_paths::tomoe_savior_buy_listener_*`
 - **rulebook**: 「立刻支付常规收购价一半的价格从该玩家处收购该地契」 — 「收购」 not 「购买」; base (land / land+houses / 2× force) unnamed.
 - **current**: C# reading `price / 2` (land alone); hand-over runs `raise_bought` so every 「购买…时」 listener hears it; mortgage is cleared before the hook.
 - **expected**: decide the price base, whether 收购 is a 「购买」, and whether the mortgage stays.
@@ -172,11 +172,11 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **locations**
   - `rules/cards/card-general/src/encore.rs:35` (「因任何原因」)
   - `rules/cards/card-ag/src/ran_as_usual.rs:23` (「包括你的技能」), `:27` (C# once-per-turn gate — separate C, see CH-07), `:92` (`Plan.Reverse` skill move is abnormal but `_abnormalTurn` never counted it)
-  - `crates/game-rules/tests/rb_pp.rs:963` `ix_encore_blocks_overlap_teleport` `#[ignore = "DISCREPANCY: book says 安可 counters any abnormal movement on its user; no window opens for 重叠的声音's self-teleport"]`
-  - `crates/game-rules/tests/rb_cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (是我自己的问题 still fires after an abnormal move)
-  - `crates/game-rules/tests/rb_cross_move.rs:404` `m09_ras_band_first_abnormal_only` (RAS band (1) cannot decline a second abnormal — no window)
+  - `rules/tests/tests/pp.rs:963` `ix_encore_blocks_overlap_teleport` `#[ignore = "DISCREPANCY: book says 安可 counters any abnormal movement on its user; no window opens for 重叠的声音's self-teleport"]`
+  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (是我自己的问题 still fires after an abnormal move)
+  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (RAS band (1) cannot decline a second abnormal — no window)
   - `crates/game-rules/src/wasm_rules.rs:2801` (self-applied abnormals note)
-  - **D**: `choose_your_stage_answers_an_abnormal_move` (`rb_roselia.rs:369`) — ignore already removed; keep as a D note only
+  - **D**: `choose_your_stage_answers_an_abnormal_move` (`roselia.rs:369`) — ignore already removed; keep as a D note only
 - **rulebook**: 通用:安可 「[反击][使用者]即将因任何原因受到[异常移动效果]影响时：无效此次…」; （兰）像往常一样 (2) 「受到异常移动效果（包括你的技能）」.
 - **current**: `abnormal` chain only opens when `by != target`; `card_move` / `plan::set_teleport_to` never runs the abnormal gate at all.
 - **expected**: every abnormal move on the user — self-inflicted included — opens the [反击] window before it lands.
@@ -188,9 +188,9 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:1092` `c24_hanae_cancels_a_hand_effect`
-  - `crates/game-rules/tests/rb_cross_chain.rs:1126` `c25_hanae_vs_skill_main`
-  - `crates/game-rules/tests/rb_cross_long.rs:413` `l05_one_skill_several_counteractions`
+  - `rules/tests/tests/cross_chain.rs:1092` `c24_hanae_cancels_a_hand_effect`
+  - `rules/tests/tests/cross_chain.rs:1126` `c25_hanae_vs_skill_main`
+  - `rules/tests/tests/cross_long.rs:413` `l05_one_skill_several_counteractions`
   - `crates/game-core/src/engine/play.rs:759` (comment: cancelled trigger / press negated)
 - **rulebook**: 花园多惠 (2) — cancel a hand effect / skill use (「取消」 window).
 - **current**: card resolves normally; no cancel window.
@@ -202,8 +202,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:678` `c14_dice_cast_shuts_windows`
-  - `crates/game-rules/tests/rb_gap_window.rs:111` `g18_shut_window_blocks_the_negate_one` (also names 网络链接异常 drop-one residue)
+  - `rules/tests/tests/cross_chain.rs:678` `c14_dice_cast_shuts_windows`
+  - `rules/tests/tests/gap_window.rs:111` `g18_shut_window_blocks_the_negate_one` (also names 网络链接异常 drop-one residue)
   - `rules/cards/card-mujica/src/dice_cast.rs:55,85` (「（此卡可以被反击）」 / lock timing)
 - **rulebook**: 骰子已经掷下 — place the lock and shut further [反击] windows for that timing.
 - **current**: placed twice; windows stay open (网络链接异常 can still drop a 武道馆 target).
@@ -215,8 +215,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:743` `c16_cannot_look_away_answers_a_counter` (`does not force the counter-user to move`)
-  - `crates/game-rules/tests/rb_cross_long.rs:336` `l04_forced_move_into_remote_settle` (`err.play_phase`)
+  - `rules/tests/tests/cross_chain.rs:743` `c16_cannot_look_away_answers_a_counter` (`does not force the counter-user to move`)
+  - `rules/tests/tests/cross_long.rs:336` `l04_forced_move_into_remote_settle` (`err.play_phase`)
   - `rules/cards/card-mujica/src/cant_look_away.rs:48` (counteraction history ABI hole — see ABI-04; the play-as-counter half is separate)
 - **rulebook**: 无法将视线移开 — usable as a [反击]; forces the counter-user to move.
 - **current**: `err.play_phase` when played as the counter; even when it runs, the forced move does not happen.
@@ -242,8 +242,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: counteraction windows
 - **locations**
-  - `crates/game-rules/tests/rb_gap_window.rs:145` `g19_manas_join_window_lets_a_third_party_drop_one`
-  - `crates/game-rules/tests/rb_cross_chain.rs:264` (test body of `c05_…` still describes the old whole-card negate; **D**: the ignore on `c05_cancels_one_designation_of_four` was already removed)
+  - `rules/tests/tests/gap_window.rs:145` `g19_manas_join_window_lets_a_third_party_drop_one`
+  - `rules/tests/tests/cross_chain.rs:264` (test body of `c05_…` still describes the old whole-card negate; **D**: the ignore on `c05_cancels_one_designation_of_four` was already removed)
   - ABI already landed: `ctx::designations` / `ctx::cancel_designation` / `designation_cancelled` (TEST-FINDINGS §3)
 - **rulebook**: sheet cancels **one** designation (「取消一个指定」 / 「改为你」), the rest of the play's designations land.
 - **current**: when 真奈's join window is open, the whole 武道馆 is negated (everyone keeps 10000) instead of dropping only P0's designation.
@@ -275,8 +275,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (凑友希那 (3) / 香澄 stop-pots are common)
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs` `m12a_yukina_forced_stop` / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` (un-ignored, green twice)
-  - engine landing already correct: `rb_settle_stages.rs` `m4_kokoro_force_stop_stops_a_passer`, `rb_gap_move.rs` `g11`/`g12`, `rb_roselia.rs` yukina stop-pot
+  - `rules/tests/tests/cross_move.rs` `m12a_yukina_forced_stop` / `m12b_yukina_stop_countered` / `m15_first_forced_stop_wins` (un-ignored, green twice)
+  - engine landing already correct: `settle_stages.rs` `m4_kokoro_force_stop_stops_a_passer`, `gap_move.rs` `g11`/`g12`, `roselia.rs` yukina stop-pot
 - **rulebook**: 「令该玩家强制停下并[触发结算]」 — the passer stops on the named tile and settles there.
 - **was**: m12a/m12b declined the `ask_yes` offer (option matcher missed `ask.yes`/`ask.no`); m15 used `place_raw` (tile:-1) so the `card.placed && self_tile()` pre never matched. m12b also pinned 41 instead of the rolled dest 37.
 - **fixed**: match the `kokoro_practice_force` dump and `answer_one(0)`; `place_on_tile` both stop-pot cards; assert 37 for the countered stop. Un-ignored, green twice.
@@ -287,8 +287,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (Roselia staple)
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs` `m10_rinko_while_stunned` / `m11_rinko_plus_yolo` (un-ignored, green twice)
-  - green twins already pin the drive: `rb_roselia.rs` `rinko_skill_2_fixes_the_move_roll_to_x_times_six`, `rb_gap_move.rs` `g09_fixed_roll_plus_starlit_reroll`
+  - `rules/tests/tests/cross_move.rs` `m10_rinko_while_stunned` / `m11_rinko_plus_yolo` (un-ignored, green twice)
+  - green twins already pin the drive: `roselia.rs` `rinko_skill_2_fixes_the_move_roll_to_x_times_six`, `gap_move.rs` `g09_fixed_roll_plus_starlit_reroll`
 - **rulebook**: 白金燐子 (2) — 「你可以在移动掷骰前消耗X个火罐，使这回合移动掷骰的结果固定为X*6」. The press is a **pre-roll shape**; the player still takes the main roll.
 - **was**: m10/m11 pressed the skill and drained prompts, then asserted pos without `t.roll(0)`.
 - **fixed**: take the main roll after the X prompt (same drive as the green roselia/gap twins). Un-ignored, green twice. m11 records 14 (Y.O.L.O adds +2 over the fixed 12; the 「固定」 vs additives question stays open as C-Q24-adjacent RULING in the test).
@@ -299,10 +299,10 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: movement / skills: MyGO
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs:927` `m22_mygo_band_move1` (`move-1 replacement does not fire`)
-  - `crates/game-rules/tests/rb_mygo.rs` `band_draw_for_two_crystals` (2-crystal draw half unreachable)
+  - `rules/tests/tests/cross_move.rs:927` `m22_mygo_band_move1` (`move-1 replacement does not fire`)
+  - `rules/tests/tests/mygo.rs` `band_draw_for_two_crystals` (2-crystal draw half unreachable)
   - `rules/skills/skill-bands/src/` MyGO (2)/(3) — two `On::Play` entries; `use_skill` runs only the first
-  - also Morfonica NNM: `rules/cards/card-morfonica/src/nanami_effort.rs`, `crates/game-rules/tests/rb_morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`
+  - also Morfonica NNM: `rules/cards/card-morfonica/src/nanami_effort.rs`, `rules/tests/tests/morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`
   - TEST-FINDINGS §6 item 8 (multi-activation selection)
 - **rulebook**: MyGO band (2) has several activations (move-1 replacement and a 2-crystal draw); NNM 「发动以下效果中的一个」.
 - **current**: `use_skill` runs only the first `On::Play`; later activations unreachable; a hand play can be refused (`nanami_effort_not_placed`).
@@ -315,7 +315,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (re-roll cards are common)
 - **suggested batch**: fuzz/determinism / movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs` `m06_reunion_20_tile_cap` / `m06b_reunion_stops_on_passing` (un-ignored, green twice)
+  - `rules/tests/tests/cross_move.rs` `m06_reunion_20_tile_cap` / `m06b_reunion_stops_on_passing` (un-ignored, green twice)
 - **rulebook**: 若能再次交汇 — re-roll the move dice (with a 20-tile cap / stop-on-passing shape).
 - **was**: `t.dice` after `t.roll` called `Match::world_mut` while the `moveRoll` [反击] window was a pending routine.
 - **fixed**: queue all faces before `t.roll` (snapshot replay also means mid-window loads never reach the re-roll). Card (`meet_again.rs`) and host `do_move_roll` / `set_move_roll` write-back are correct and unchanged.
@@ -326,7 +326,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_mygo.rs:285` `rain_stay_blocks_this_turn_move` `#[ignore = "DISCREPANCY: glossary says [停留]=无法移动; engine lets a mid-turn [停留] holder complete the main move anyway"]`
+  - `rules/tests/tests/mygo.rs:285` `rain_stay_blocks_this_turn_move` `#[ignore = "DISCREPANCY: glossary says [停留]=无法移动; engine lets a mid-turn [停留] holder complete the main move anyway"]`
   - `crates/game-core` move-branch selection (prohibition checked once)
   - TEST-FINDINGS §9 (ileuxali: check once at move-branch selection)
 - **rulebook**: glossary 51 「[停留]=无法移动」.
@@ -344,8 +344,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (HHW signature continuous)
 - **suggested batch**: HHW cards / crystal/marker accounting
 - **locations**
-  - `crates/game-rules/tests/rb_cross_tiles.rs:547` `t13_smile_parade` `#[ignore = "DISCREPANCY: 笑容大游行 overflows the stack when it triggers"]`
-  - `crates/game-rules/tests/rb_gap_res.rs:281` `g30_smile_parade_swap_with_a_field_card_in_place`
+  - `rules/tests/tests/cross_tiles.rs:547` `t13_smile_parade` `#[ignore = "DISCREPANCY: 笑容大游行 overflows the stack when it triggers"]`
+  - `rules/tests/tests/gap_res.rs:281` `g30_smile_parade_swap_with_a_field_card_in_place`
   - `rules/cards/card-hhw/src/smile_parade.rs:164` (（3） 「交换位置」 is a board *position* exchange, not a colour override / SettleBody)
   - `rules/card-sdk` / `crates/game-rules/src/wasm_rules.rs:4420` (trait-method recursion overflow note)
 - **rulebook**: 笑容大游行 (3) 「[持续] 当此卡位于格子上时，那格视为与"弦卷集团"格子交换位置，任何玩家在此卡放置的格子上[触发结算]后此卡放入弃牌堆」.
@@ -361,7 +361,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   `lock_pay` / `force_card` now scope to the skill owner (`你`): a payment
   between two other players is untouched. `s05` un-ignored, green twice.
 - **locations**
-  - `crates/game-rules/tests/rb_cross_status.rs:159` `s05_crychic_band_six_cards` (un-ignored)
+  - `rules/tests/tests/cross_status.rs:159` `s05_crychic_band_six_cards` (un-ignored)
   - `rules/skills/skill-bands/src/crychic.rs` (`lock_pay` / `force_card`)
   - `rules/skills/skill-bands/src/crychic.rs` (「无法从手中打出任何牌」 — **B**, see below)
 - **rulebook**: CRYCHIC band (1) at 6+ hand cards blocks gain/loss (sheet).
@@ -387,9 +387,9 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   before `give_stay`/`give_stun`). `s08` green twice. `g21` stays ignored for
   its separate 夏日合宿 half (P1 still receives a stay).
 - **locations**
-  - `crates/game-rules/tests/rb_cross_status.rs:268` `s08_sakiko_absorbs_statuses` (un-ignored)
+  - `rules/tests/tests/cross_status.rs:268` `s08_sakiko_absorbs_statuses` (un-ignored)
   - `rules/skills/skill-characters/src/sakiko_life.rs` (`on_pass_player` transfer)
-  - `crates/game-rules/tests/rb_gap_window.rs:221` `g21_summer_camp_immune_to_the_rains_zone` (still ignored: 夏日合宿)
+  - `rules/tests/tests/gap_window.rs:221` `g21_summer_camp_immune_to_the_rains_zone` (still ignored: 夏日合宿)
 - **rulebook**: 丰川祥子 (1) absorbs stays when passing another player.
 - **was**: absorb did nothing on a pass (test declined the ask; body copied).
 - **expected**: stays on the passed player are absorbed / cancelled as the clause says.
@@ -400,7 +400,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high
 - **suggested batch**: HostRequest handlers / counteraction windows
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:1207` `c27_welcome_state_switch`
+  - `rules/tests/tests/cross_chain.rs:1207` `c27_welcome_state_switch`
   - `rules/cards/card-mujica/src/welcome_mujica.rs:31` (（1） 「若指定了不存在状态2的玩家则无效果」 reading — C, see CH-08)
 - **rulebook**: 「转换任意一名玩家的状态」 (状态1 ↔ 状态2).
 - **current**: play is refused with `err.play_phase`.
@@ -412,8 +412,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (war declaration is a whole-table event)
 - **suggested batch**: counteraction windows / payment pipeline
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:638` `c13_riot_and_war_declaration` (P0 ends 12000, want 11500)
-  - `crates/game-rules/tests/rb_cross_long.rs:105` `l01_counter_war_five_links_deep` (ring skips P1; 宣战布告 never offered; nothing settles)
+  - `rules/tests/tests/cross_chain.rs:638` `c13_riot_and_war_declaration` (P0 ends 12000, want 11500)
+  - `rules/tests/tests/cross_long.rs:105` `l01_counter_war_five_links_deep` (ring skips P1; 宣战布告 never offered; nothing settles)
 - **rulebook**: R.I.O.T. / 宣战布告 — 500 payment and the war ring offers.
 - **current**: 500 missing; in a 4-player war the ring skips P1 and nothing settles.
 - **expected**: payment lands; every eligible seat is offered.
@@ -425,8 +425,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: counteraction windows / draw/discard pipeline
 - **locations**
   - `rules/cards/card-ras/src/exist.rs:55` (「造成影响」 = effect resolved vs declaration)
-  - `crates/game-rules/tests/rb_gap_money.rs:334` `g07_exist_redirect_then_negated_designation` `#[ignore = "RULING: does a negated EXIST redirect count as 「造成影响」? assert draws 1"]`
-  - `crates/game-rules/tests/rb_cross_chain.rs:599` `c12_exist_vs_summer_camp` (找回珍妮弗 does not land on P2 with 夏日合宿 + EXIST)
+  - `rules/tests/tests/gap_money.rs:334` `g07_exist_redirect_then_negated_designation` `#[ignore = "RULING: does a negated EXIST redirect count as 「造成影响」? assert draws 1"]`
+  - `rules/tests/tests/cross_chain.rs:599` `c12_exist_vs_summer_camp` (找回珍妮弗 does not land on P2 with 夏日合宿 + EXIST)
 - **rulebook**: EXIST — 「造成影响」 then draw.
 - **current**: flag written at declaration (redirect re-names the recipient before the chain opens); a later negate still leaves the flag set and the draw unearned.
 - **expected**: decide declaration vs settlement (「nothing landed on me」).
@@ -438,16 +438,16 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (breaks every sim / replay)
 - **suggested batch**: fuzz/determinism
 - **locations**
-  - `crates/game-rules/tests/rb_fuzz_found.rs:85` `unknown_card_id` (unknown card id in hand/draw/discard/field)
-  - `crates/game-rules/tests/rb_fuzz_found.rs:128` `determinism_break` (same seed + answers diverge)
-  - `crates/game-rules/tests/rb_fuzz_found.rs:142` `save_restore_break` (save/restore diverges)
-  - `crates/game-rules/tests/rb_fuzz_found.rs:160` `negation_not_total` (negating a no-target [手] did not reduce to never playing it)
-  - `crates/game-rules/tests/rb_fuzz_found.rs:186` `monotonicity_break` (a +N roll modifier shortened a move)
+  - `rules/tests/tests/fuzz_found.rs:85` `unknown_card_id` (unknown card id in hand/draw/discard/field)
+  - `rules/tests/tests/fuzz_found.rs:128` `determinism_break` (same seed + answers diverge)
+  - `rules/tests/tests/fuzz_found.rs:142` `save_restore_break` (save/restore diverges)
+  - `rules/tests/tests/fuzz_found.rs:160` `negation_not_total` (negating a no-target [手] did not reduce to never playing it)
+  - `rules/tests/tests/fuzz_found.rs:186` `monotonicity_break` (a +N roll modifier shortened a move)
   - **D**: `card_trap_reachable`, `immunity_gap` ignores already removed
-  - `crates/game-rules/tests/inline_provider.rs:247` B2 HostRequest learn-pass gap (see HOST-01 -- top-level pay path now pinned green; nested-settle remainder)
+  - `rules/tests/tests/inline_provider.rs:247` B2 HostRequest learn-pass gap (see HOST-01 -- top-level pay path now pinned green; nested-settle remainder)
 - **rulebook**: general engine invariants (same answers → same world; save/restore round-trip; negation is total; +N never shortens).
 - **current**: each shape is a latent fuzz repro still ignored.
-- **expected**: green under the existing `rb_fuzz_found` assertions.
+- **expected**: green under the existing `fuzz_found` assertions.
 - **note**: may share one pipeline root cause (guest/world overlay + HostRequest ordering); investigate as one batch. HOST-01's top-level rebase is in (see its entry); the nested-settle remainder is the open part.
 
 ## HOST-01 — HostRequest B2 equivalence gap (learn pass vs live+host_effects)
@@ -456,7 +456,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: high (breaks inline guest equivalence under real rules)
 - **suggested batch**: host ABI: out-buffers / HostRequest handlers
 - **locations**
-  - `crates/game-rules/tests/inline_provider.rs:247` (B2 equivalence gap TODO), `:343` (cross-ref)
+  - `rules/tests/tests/inline_provider.rs:247` (B2 equivalence gap TODO), `:343` (cross-ref)
   - `docs/BOT.md` §3.2
 - **rulebook**: n/a — ABI contract: inline learn pass must see the same world as the replay model's last pass (`live + host_effects`).
 - **current**: PARTIAL (top-level done; nested-settle remainder). Each pass shares `live` after `NeedHost`, so the **landing** pass reads `live + host_effects`; write-through replace-on-rerun means the event stream carries that pass's lines (`docs/ENGINE.md` "Drive replay semantics"). Pinned for the top-level `pay` path by `effect_applied_log::reread_after_host_effect_sees_the_updated_value`. **Remaining gap:** a write inside a host routine's *nested settle* (the agent-tile offer buying a deed during `HostRequest::Move`) may not be on live before the next pass shares -- `RAS:成为最强`'s ownership check still sees the pre-buy deed (`be_strongest_rolls_only_with_a_livehouse`).
@@ -522,7 +522,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: host ABI: out-buffers / skills: PP
 - **locations**
-  - `crates/game-rules/tests/rb_pp.rs:877` `band_skill_overflow_to_crystals`
+  - `rules/tests/tests/pp.rs:877` `band_skill_overflow_to_crystals`
 - **rulebook**: PP band (2) 「你因任意原因受到将X个反面[P✽P粉丝]变正的效果且X大于拥有数时」 — passive hook on a fan-*flip*.
 - **current**: no flip-effect trigger; overflow never becomes crystals.
 - **capability**: flip-effect trigger (or fold into fan-spend / fan-gain points — see C-Q9).
@@ -568,7 +568,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: HostRequest handlers
 - **locations**
   - `rules/cards/card-ppp/src/arisa_wait.rs:36` (defer event to owner's turn start + extra 流星堂 draw)
-  - `rules/events/src/bangdream_chan.rs:35` / `crates/game-rules/tests/rb_events.rs:1047` `bangdream_chan_shortens_the_clocks` (免费时间/恢复时间 are host clocks)
+  - `rules/events/src/bangdream_chan.rs:35` / `rules/tests/tests/events.rs:1047` `bangdream_chan_shortens_the_clocks` (免费时间/恢复时间 are host clocks)
   - `rules/events/src/a_a_o.rs:28` (`CannotPlay` / `Fx.CantPlayHand` no engine field)
   - `rules/events/src/tsurumaki_estate.rs:37,53` (「竞价」 auction primitive + free-amount `ask_money`)
   - `rules/events/src/ex_quest.rs:36` (skin-change ask)
@@ -610,7 +610,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: skills: PP
 - **locations**
-  - `crates/game-rules/tests/rb_pp.rs:1078` `accident_blocks_pp_skill_2`
+  - `rules/tests/tests/pp.rs:1078` `accident_blocks_pp_skill_2`
 - **rulebook**: 初次演出事故 blocks the PP skill; 丸山彩 (2) PayChoose hook must not prompt.
 - **current**: `skillBlock` token is set (`tok=1`) but the guard/body `skill_blocked` check does not see it.
 - **expected**: hook-guard dispatch consults the token.
@@ -621,7 +621,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: skills: PP
 - **locations**
-  - `crates/game-rules/tests/rb_pp.rs:1128` `hina_skill_2_borrows_skill` (`skill.hinaLottery.borrowed` stays -1)
+  - `rules/tests/tests/pp.rs:1128` `hina_skill_2_borrows_skill` (`skill.hinaLottery.borrowed` stays -1)
 - **rulebook**: 「每回合开始时投掷1d4…借用对应（2）」.
 - **current**: `place_raw` + `begin_turn` never reaches `borrowed`; the test also pins a 0-based scratch index (fix the test to pin the face in the log).
 - **expected**: roll 1d4 at turn start and borrow the matching (2).
@@ -656,7 +656,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   - `rules/skills/skill-bands/src/crychic.rs:79` (「当此卡移除时」 should fire on the (2)-driven 「移除此卡」; nested run has no running instance so `crystals()` reads 0)
   - `rules/cards/card-crychic/src/mutsumi_never.rs:32` (C# narrows (2) to `BandCrychic` specifically — wider 「乐队技能」 reading taken)
   - `rules/skills/skill-bands/src/crychic.rs:155` (「无法从手中打出任何牌」 global play gate)
-  - tests: `rb_card_paths::mutsumi_never_2_*`
+  - tests: `card_paths::mutsumi_never_2_*`
 - **question**: C-Q12 (does (3) cash out on the (2)-driven removal? is (2) limited to BandCrychic?).
 
 ## SKILL-06 — deck-construction / hand-building rules with no vocabulary
@@ -704,7 +704,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: movement
 - **locations**
   - `rules/skills/skill-characters/src/kaoru_prince.rs` — Pass half is already `pre::MINE`; 被[经过] is a filtered `PassTile`
-  - live pins: `rb_hhw.rs` `kaoru_skill_1_own_walk_gains_one_pot_per_step` / `kaoru_skill_1_another_players_walk_gives_nothing` / `kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step`
+  - live pins: `hhw.rs` `kaoru_skill_1_own_walk_gains_one_pot_per_step` / `kaoru_skill_1_another_players_walk_gives_nothing` / `kaoru_skill_1_being_passed_gains_one_pot_not_one_per_step`
 - **rulebook**: 「每次[经过]或被[经过]时」 — `Pass` half is "I pass" (`actor == owner`).
 - **fixed already**: `On::Hook(&[HookKind::Pass], pre::MINE, …)` + `PassTile` for the 被[经过] half. Nothing to un-ignore.
 
@@ -714,11 +714,11 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: rent multipliers / tiles
 - **locations**
-  - `crates/game-rules/tests/rb_cross_tiles.rs:128` `t02_anon_link_plus_fire_bird`
-  - `crates/game-rules/tests/rb_cross_tiles.rs:163` `t03_anon_link_plus_repaint`
-  - `crates/game-rules/tests/rb_cross_tiles.rs:199` `t04_anon_link_mortgaged_partner` (RULING)
-  - `crates/game-rules/tests/rb_cross_tiles.rs:228` `t05_one_of_us_shares`
-  - `crates/game-rules/tests/rb_cross_tiles.rs:838` `t21_riki_plus_anon_link` (quarter-rent on a linked tile)
+  - `rules/tests/tests/cross_tiles.rs:128` `t02_anon_link_plus_fire_bird`
+  - `rules/tests/tests/cross_tiles.rs:163` `t03_anon_link_plus_repaint`
+  - `rules/tests/tests/cross_tiles.rs:199` `t04_anon_link_mortgaged_partner` (RULING)
+  - `rules/tests/tests/cross_tiles.rs:228` `t05_one_of_us_shares`
+  - `rules/tests/tests/cross_tiles.rs:838` `t21_riki_plus_anon_link` (quarter-rent on a linked tile)
   - `rules/cards/card-ag/src/one_of_us.rs:138,200` (raw money add / 平分 shape)
 - **question**: C-Q13 (mortgaged partner tile's half 收费).
 
@@ -729,7 +729,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: rent multipliers
 - **locations**
   - `rules/tiles/src/agent.rs:19` (「同色」 = board `group`; book never says whether `anyColor` / `colorFor:<p>` widens it)
-  - `crates/game-rules/tests/rb_cross_tiles.rs:638` `t16_soyo_mixed_colors` (（soyo）混合的颜色 agent half-rent)
+  - `rules/tests/tests/cross_tiles.rs:638` `t16_soyo_mixed_colors` (（soyo）混合的颜色 agent half-rent)
   - TEST-FINDINGS §6 item 10
 - **question**: C-Q14.
 
@@ -752,7 +752,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_tiles.rs` `t12_student_council_check` (un-ignored, green twice)
+  - `rules/tests/tests/cross_tiles.rs` `t12_student_council_check` (un-ignored, green twice)
   - body already correct (same shape as green 香澄 / `student_council_check_adds_juewu_not_ya`)
 - **rulebook**: 学生会的检查 — placement + forced stop + 「本回合无法加盖房屋」 (linger `NO_BUILD` already landed).
 - **was**: the test `t.play`'d a SettleBefore [反击] as a free [手] (silent no-op) and declined the allowNone stand-in; `t1 - 2` also usize-underflowed on 购物中心 = 1.
@@ -764,7 +764,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_tiles.rs` `t24_parking_space` (un-ignored, green twice)
+  - `rules/tests/tests/cross_tiles.rs` `t24_parking_space` (un-ignored, green twice)
   - engine path already green in `g15_parking_space_settle_replaced_plus_rain_extra_settle`
 - **rulebook**: Parking Space body-replace + Rana (2) Space teleport as the main move.
 - **was**: P0 played Parking Space on P1's turn (`err.play_phase`); stay was read before `TurnEndAfter`.
@@ -787,7 +787,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline
 - **locations**
-  - `crates/game-rules/tests/rb_gap_res.rs:209` `g28_maya_look_at_top_still_counts_as_a_draw`
+  - `rules/tests/tests/gap_res.rs:209` `g28_maya_look_at_top_still_counts_as_a_draw`
 - **rulebook**: look-at-top + keep is a draw for 「梦在前方」's crystal.
 - **current**: `drew` not raised on the kept card.
 - **expected**: raises `drew` like any draw.
@@ -798,7 +798,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline / skills: Morfonica
 - **locations**
-  - `crates/game-rules/tests/rb_morfonica.rs:304` `starry_even_roll_of_another_player_offers_crystal_removal`
+  - `rules/tests/tests/morfonica.rs:304` `starry_even_roll_of_another_player_offers_crystal_removal`
   - `rules/cards/card-morfonica/src/starry_night.rs`
 - **rulebook**: 「当其他玩家的移动掷骰为偶数时可[支付]1000资金并移除此卡一个[奇迹水晶]」.
 - **current**: engine never prompts.
@@ -809,7 +809,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: skills: RAS
 - **locations**
-  - `crates/game-rules/tests/rb_ras.rs:1411` `guerrilla_special_offers_to_mark_a_deed_as_livehouse`
+  - `rules/tests/tests/ras.rs:1411` `guerrilla_special_offers_to_mark_a_deed_as_livehouse`
 - **rulebook**: [特] (card in discard + ≥1000 paid in settle + no buildable livehouse owned or purchasable) at turn end.
 - **current**: card stays in the discard with no prompt.
 - **expected**: the [特] offer opens at turn end when the gate holds.
@@ -829,7 +829,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
 - **locations**
-  - `crates/game-rules/tests/rb_gap_res.rs:133` `g26_popipa_crystals_and_kasumi_fire_on_one_settle`
+  - `rules/tests/tests/gap_res.rs:133` `g26_popipa_crystals_and_kasumi_fire_on_one_settle`
 - **rulebook**: 「消耗或支付」 — owner's own outlay vs a rent the owner receives.
 - **question**: C-Q18.
 
@@ -849,7 +849,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: movement
 - **locations**
   - `crates/game-core/src/engine/play.rs:1298` (implemented as E14 writes it: 重叠 only)
-  - `crates/game-rules/tests/rb_rulebook.rs:866`
+  - `rules/tests/tests/rulebook.rs:866`
 - **rulebook**: `E14` names only [重叠] for the 0-step case; `B41`+`E13` read as both-fire for a teleport.
 - **question**: C-Q20.
 
@@ -860,7 +860,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: movement
 - **locations**
   - TEST-FINDINGS §6 item 1
-  - `crates/game-rules/tests/rb_general.rs` `tsugu_lt26_choose_move_settles` (pins the immediate offer)
+  - `rules/tests/tests/general.rs` `tsugu_lt26_choose_move_settles` (pins the immediate offer)
 - **question**: C-Q21.
 
 ## MOVE-08 — want_to_grab (2) 「经过你」 = passTile vs passPlayer (R5)
@@ -889,7 +889,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: movement / draw/discard pipeline
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs:140` `m03_eve_then_yolo` (`pos 5 instead of 8`)
+  - `rules/tests/tests/cross_move.rs:140` `m03_eve_then_yolo` (`pos 5 instead of 8`)
 - **note**: may share a root with MOVE-03 / Y.O.L.O additive timing (**D**: `inter_yolo_pushes_haneoka_over_20` ignore already removed).
 
 ## MOVE-11 — 是我自己的问题 still fires after an abnormal move effect
@@ -898,7 +898,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: counteraction windows / movement
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (and `m28a` body)
+  - `rules/tests/tests/cross_move.rs:1166` `m28b_my_own_problem_after_forced_move` (and `m28a` body)
 - **rulebook**: sheet says it does **not** fire after an abnormal move effect.
 - **current**: still fires.
 
@@ -908,7 +908,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: counteraction windows
 - **locations**
-  - `crates/game-rules/tests/rb_cross_move.rs:404` `m09_ras_band_first_abnormal_only` (`err.play_phase` / no window)
+  - `rules/tests/tests/cross_move.rs:404` `m09_ras_band_first_abnormal_only` (`err.play_phase` / no window)
 - **rulebook**: RAS band (1) — first abnormal only; a second is optional.
 
 ## MOVE-13 — 星月夜's re-roll scope (whole dice set vs base die)
@@ -917,7 +917,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_gap_move.rs:122` `g08_starlit_reroll_of_a_whole_3d20_set` (assert full set)
+  - `rules/tests/tests/gap_move.rs:122` `g08_starlit_reroll_of_a_whole_3d20_set` (assert full set)
 - **question**: C-Q23.
 
 ## MOVE-14 — 普通与理所当然 copy signed or unsigned 移动格数
@@ -926,7 +926,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: low
 - **suggested batch**: movement
 - **locations**
-  - `crates/game-rules/tests/rb_gap_move.rs:352` `g13_ordinary_copies_a_reversed_move_distance` (assert unsigned)
+  - `rules/tests/tests/gap_move.rs:352` `g13_ordinary_copies_a_reversed_move_distance` (assert unsigned)
 - **question**: C-Q24.
 
 ## MOVE-15 — heat_head 「减少1d6」
@@ -944,7 +944,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: settle stages
 - **locations**
-  - `crates/game-rules/tests/rb_cross_long.rs:522` `l07_extra_turn_cascade` (want 2 stun layers, get 1)
+  - `rules/tests/tests/cross_long.rs:522` `l07_extra_turn_cascade` (want 2 stun layers, get 1)
   - TEST-FINDINGS §6 items 2 and R-7
 - **question**: C-Q26 (does removing the last crystal grant the extra turn? does 「until your next turn start」 end at an extra turn's start?).
 
@@ -965,7 +965,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: payment pipeline
 - **locations**
   - TEST-FINDINGS §6 item 4 (engine pins ¼)
-  - `crates/game-rules/tests/rb_mujica.rs` `saki_move_halves_a_forced_stop_and_pay` (green)
+  - `rules/tests/tests/mujica.rs` `saki_move_halves_a_forced_stop_and_pay` (green)
 - **question**: C-Q28.
 
 ## SETTLE-07 — [晕眩] vs a card's own follow-on gain
@@ -975,7 +975,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: payment pipeline
 - **locations**
   - TEST-FINDINGS §6 item 9
-  - `crates/game-rules/tests/rb_mujica.rs` `heart_rain_fallback_stun_and_money`, `heart_rain_nobody_in_range_fallback`
+  - `rules/tests/tests/mujica.rs` `heart_rain_fallback_stun_and_money`, `heart_rain_nobody_in_range_fallback`
 - **question**: C-Q29.
 
 ## CH-08 — welcome_mujica (1) 「若指定了不存在状态2的玩家则无效果」
@@ -1011,7 +1011,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:1175` `c26_immunity_vs_crystal_mover`
+  - `rules/tests/tests/cross_chain.rs:1175` `c26_immunity_vs_crystal_mover`
 - **rulebook**: 「此卡不受任何其他效果影响」 — should not be a crystal endpoint.
 - **current**: offered anyway.
 
@@ -1021,7 +1021,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
 - **locations**
-  - `crates/game-rules/tests/rb_gap_window.rs:302` `g23_unstoppable_refuses_the_exile_cost`
+  - `rules/tests/tests/gap_window.rs:302` `g23_unstoppable_refuses_the_exile_cost`
 - **rulebook**: glossary 51 「无法获得新的[除外]层数」.
 - **current**: 无路矢 still grants 2 [除外] to the holder.
 
@@ -1031,7 +1031,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: draw/discard pipeline
 - **locations**
-  - `crates/game-rules/tests/rb_cross_chain.rs:957` `c21_here_the_world`
+  - `rules/tests/tests/cross_chain.rs:957` `c21_here_the_world`
   - **D note**: `l06_one_draw_several_effects` ignore already removed (capture-vs-autoplay is C-Q33)
 - **rulebook**: Here the world captures a drawn / second card.
 
@@ -1041,8 +1041,8 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: crystal/marker accounting
 - **locations**
-  - `crates/game-rules/tests/rb_mygo.rs:126` `light_crystal_pays_skill_fire_cost`
-  - `crates/game-rules/tests/rb_mygo.rs:215` `light_removed_when_crystals_run_out`
+  - `rules/tests/tests/mygo.rs:126` `light_crystal_pays_skill_fire_cost`
+  - `rules/tests/tests/mygo.rs:215` `light_removed_when_crystals_run_out`
   - `rules/cards/card-mygo/src/tomori_no_longer.rs:7,125`
 - **rulebook**: 灯 不再迷茫 (2) 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」; when crystals run out the card is [移除]d.
 - **current**: `spend_fire` has no pre-spend substitution hook (only post-commit `fireSpent`); crystal count never empties.
@@ -1065,7 +1065,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **status**: **fixed** (this batch, `fix: CRYSTAL-03 …`) — the 500 is paid in
   `pay_choose` as part of the crystal spend, before `add_crystals` raises
   `CounterChanged` (which rule (3) answers with the discard). The `PayAfter`
-  tag is gone. Test: `rb_ag::soul_last_crystal_still_pays_the_payee_500`.
+  tag is gone. Test: `ag::soul_last_crystal_still_pays_the_payee_500`.
 - **locations**
   - `rules/cards/card-ag/src/crimson_soul.rs` (was `:126`; now paid inline in
     `pay_choose`)
@@ -1080,7 +1080,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **suggested batch**: crystal/marker accounting / rent multipliers
 - **locations**
   - `rules/cards/card-morfonica/src/nanami_effort.rs:114` (hard-codes 2000)
-  - `crates/game-rules/tests/rb_morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`
+  - `rules/tests/tests/morfonica.rs:468` `nnm_option2_gains_x_times_circle_money_reward`
 - **rulebook**: Sheet 2026-10-06 新卡组卡 G7 (2) 「获得x次经过CiRCLE时的资金奖励」 (was 「获得x*2000资金」); Morfonica rewrites the CiRCLE reward to 1000/1500/2000.
 - **current**: hard-coded 2000.
 - **expected**: query the live CiRCLE money reward (`circleAffected` listeners).
@@ -1139,7 +1139,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **severity**: medium
 - **suggested batch**: events
 - **locations**
-  - `crates/game-rules/tests/rb_events.rs:338` `habinel_teleports_to_smile_ship` `#[ignore = "RULING: …"]`
+  - `rules/tests/tests/events.rs:338` `habinel_teleports_to_smile_ship` `#[ignore = "RULING: …"]`
 - **question**: C-Q38.
 
 ## EVENT-02 — asukayama settle-on-land vs settle-free walk
@@ -1224,9 +1224,9 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   (`tsugu_ycm`'s `tsugu_buy`, `tomoe_savior`'s `tomoe_savior_bought`);
   `dream_ahead` (spend 3 crystals only on success) and `afterglow` (log the
   free house only on success) already checked the bool and are now truthful.
-  ABI v52 → **v53** (return-value meaning). Tests: `rb_ag.rs`
+  ABI v52 → **v53** (return-value meaning). Tests: `ag.rs`
   `band_free_house_skipped_when_build_refused` (NO_BUILD vetoes the free
-  house, no `afterglow_free_house` log), `rb_general.rs`
+  house, no `afterglow_free_house` log), `general.rs`
   `tsugu_buy_gate_refused_does_not_log_a_buy` (Poppin' hill `BuyGate` refuses
   the deed, no `tsugu_buy` log). `DrawEvent` / `PayRent` / `OfferBuy` /
   `OfferForceBuy` / `OfferBuildOne` still answer `1`: their guest wrappers are
@@ -1253,7 +1253,7 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   the pipeline shape (`Force` / `Acquire` name the owner as seller). The
   default `CardWorld` impl stays the native land+houses figure for stub
   worlds. Stale "One `HostRequest::Quote`" doc comments removed
-  (`ctx.rs` / `docs/PURCHASE.md`). ABI v53. Test: `rb_general.rs`
+  (`ctx.rs` / `docs/PURCHASE.md`). ABI v53. Test: `general.rs`
   `agent_quote_carries_the_tsugu_buy_add` (agent offer quotes
   `max(0, native − 1500)` under Tsugu's linger `BuyAdd`).
 - **kind**: ABI defect
@@ -1423,15 +1423,15 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 ## D-01 — nine stale `#[ignore]`s already removed (2026-10-10 triage; run twice, green)
 | test | file | former reason |
 |---|---|---|
-| `c05_cancels_one_designation_of_four` | `crates/game-rules/tests/rb_cross_chain.rs:265` | whole-card negate (ABI per-pair cancel landed) |
-| `l06_one_draw_several_effects` | `crates/game-rules/tests/rb_cross_long.rs:471` | capture-vs-autoplay (record-only) |
-| `t11_fire_bird_plus_hhw_double` | `crates/game-rules/tests/rb_cross_tiles.rs:458` | multiplier order (still a C question, MONEY-01) |
-| `immunity_gap` | `crates/game-rules/tests/rb_fuzz_found.rs:198` | effect on immune player |
-| `card_trap_reachable` | `crates/game-rules/tests/rb_fuzz_found.rs:108` | card module trapped |
-| `g11_forced_stop_beats_lock_end_rewrite` | `crates/game-rules/tests/rb_gap_move.rs:270` | forced stop vs SettleBefore end-rewrite |
-| `inter_yolo_pushes_haneoka_over_20` | `crates/game-rules/tests/rb_mygo.rs:1379` | Y.O.L.O timing CROSS-AGENT |
-| `choose_your_stage_answers_an_abnormal_move` | `crates/game-rules/tests/rb_roselia.rs:369` | self-[传送] window (see CH-01; the encore twin `ix_encore_…` is still open) |
-| `sweet_escape_gate_requires_high_rent` | `crates/game-rules/tests/rb_sumimi.rs:185` | 「收费标价」 (still a C question if reopened) |
+| `c05_cancels_one_designation_of_four` | `rules/tests/tests/cross_chain.rs:265` | whole-card negate (ABI per-pair cancel landed) |
+| `l06_one_draw_several_effects` | `rules/tests/tests/cross_long.rs:471` | capture-vs-autoplay (record-only) |
+| `t11_fire_bird_plus_hhw_double` | `rules/tests/tests/cross_tiles.rs:458` | multiplier order (still a C question, MONEY-01) |
+| `immunity_gap` | `rules/tests/tests/fuzz_found.rs:198` | effect on immune player |
+| `card_trap_reachable` | `rules/tests/tests/fuzz_found.rs:108` | card module trapped |
+| `g11_forced_stop_beats_lock_end_rewrite` | `rules/tests/tests/gap_move.rs:270` | forced stop vs SettleBefore end-rewrite |
+| `inter_yolo_pushes_haneoka_over_20` | `rules/tests/tests/mygo.rs:1379` | Y.O.L.O timing CROSS-AGENT |
+| `choose_your_stage_answers_an_abnormal_move` | `rules/tests/tests/roselia.rs:369` | self-[传送] window (see CH-01; the encore twin `ix_encore_…` is still open) |
+| `sweet_escape_gate_requires_high_rent` | `rules/tests/tests/sumimi.rs:185` | 「收费标价」 (still a C question if reopened) |
 
 ## D-02 — NEGATION-AUDIT V2 "no activation cost" TODOs (already landed)
 - One root cause, already applied: the six text-less money play gates are gone; in-body 「[消耗]/[支付]」 is effect content and takes the Q1 shortfall path.
@@ -1442,7 +1442,7 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
   - `rules/cards/card-morfonica/src/starry_night.rs:23`
   - `rules/cards/card-hhw/src/believe_you.rs:22`
   - `rules/cards/card-hhw/src/kokoro_circle.rs:30`
-  - `crates/game-rules/tests/rb_money.rs:365`
+  - `rules/tests/tests/money.rs:365`
 - Tests green: `gacha10_playable_while_short_then_bankrupts`, `fire_bird_playable_while_short_then_mortgages`, `crimson_soul_playable_while_short_then_bankrupts`, `believe_you_playable_while_short_then_bankrupts`, `kokoro_circle_playable_while_short_then_bankrupts`, `starry_night_playable_while_short_then_bankrupts`.
 - Action: rewrite the TODO as a settled note (or delete) so it stops counting as open.
 
@@ -1455,22 +1455,22 @@ Do **not** put these in the open backlog. Keep as notes so they are not re-filed
 
 ## D-05 — MOVE-04 若能再次交汇 re-roll (test-harness sequencing; 2026-10-10)
 - Root cause: `Table::dice` → `Match::world_mut` after `t.roll` left the `moveRoll` [反击] window pending (`mod.rs:783` assert). The card body's `do_move_roll` / `set_move_roll` / `log` never touches `world_mut`; real matches never do either.
-- Secondary: routines replay from their start-time snapshot, so faces loaded after the halt never reach the re-roll. All faces must be queued before `t.roll` (same pattern as `rb_gap_move` G08 / `rb_hhw` 运动的天赋).
+- Secondary: routines replay from their start-time snapshot, so faces loaded after the halt never reach the re-roll. All faces must be queued before `t.roll` (same pattern as `gap_move` G08 / `hhw` 运动的天赋).
 - Fix: merge the re-roll faces into the pre-roll `t.dice` load in `m06` / `m06b`. Un-ignored, green twice. No engine/card change.
 
 ## D-06 — MOVE-02 白金燐子 (2) (test drive shape; 2026-10-10)
 - Root cause: m10/m11 pressed the skill and asserted pos without taking the main roll. `set_fixed_roll` is a **pre-roll shape** of the upcoming main move; it does not auto-run the walk. The press-is-the-move pattern (`ctx::card_move`) is for 「代替本回合的移动」 skills (要乐奈 (2) etc.), not this clause.
-- Green twins already pin the drive: `rinko_skill_2_fixes_the_move_roll_to_x_times_six` (rb_roselia), `g09_fixed_roll_plus_starlit_reroll` (rb_gap_move).
+- Green twins already pin the drive: `rinko_skill_2_fixes_the_move_roll_to_x_times_six` (roselia), `g09_fixed_roll_plus_starlit_reroll` (gap_move).
 - Fix: `t.roll(0)` after the X prompt. m10 (stunned mid-turn) and m11 (Y.O.L.O) un-ignored, green twice. m11 records 14 (Y.O.L.O +2 over the fixed 12).
 - Related (not this item): `fixed_roll` is not one-shot-cleared after consumption (latent, no test); the 「固定」 vs later additives question stays a RULING (starry_night / eve_unify already refuse additives over a fixed face; Y.O.L.O does not).
 
 ## D-07 — SKILL-08 要乐奈 (3) overlap (pre/body mismatch; 2026-10-10)
 - Root cause: `on_overlap` sat on `PassPlayer` with `pre::MINE` (owner is the mover) but read `trigger::player_id()` as "the other" and bailed when it equalled the owner — always. `target` is the other player already on the landing tile (`abi.rs` PassPlayer payload).
-- Fix: read `trigger::target()`. New test `rana_cat_overlap_takes_800_and_gives_a_parfait` (rb_mygo) pins +800/−800 and a 抹茶芭菲 on the other. Green twice.
+- Fix: read `trigger::target()`. New test `rana_cat_overlap_takes_800_and_gives_a_parfait` (mygo) pins +800/−800 and a 抹茶芭菲 on the other. Green twice.
 - Amount: 800 (sheet / `characters.json`). Older `rulebook.txt` prose says 1000 — sheet wins.
 
 ## D-08 — MOVE-01 forced-stop landing (test drive / arrangement; 2026-10-10)
-- Root cause: the engine `set_stop_at` path is already correct (see green `m4_kokoro_force_stop_stops_a_passer`, `g11`, `g12`, `m16`, roselia yukina). The three rb_cross_move ignores were test bugs:
+- Root cause: the engine `set_stop_at` path is already correct (see green `m4_kokoro_force_stop_stops_a_passer`, `g11`, `g12`, `m16`, roselia yukina). The three cross_move ignores were test bugs:
   - m12a/m12b: `ask_yes` options are `ask.yes`/`ask.no`; the matcher looked for 「凑友希那」/「强制停下」 in options (they live on the prompt dump) and `decline()` answered no. Same bug class as the 2026-10-09 yukina prompt-match fix.
   - m12b: also pinned 41 instead of the rolled dest 32+5 = 37; the 安可 window only opens after the force-stop is accepted (AbnormalGate).
   - m15: `place_raw` leaves `tile: -1`, so `card.placed && self_tile() == tile.id` never matches. Both stop-pot cards need `place_on_tile`.
@@ -1494,7 +1494,7 @@ Checked 2026-10-10 against the tree (including the un-ignore batch). Do **not** 
 4. **L326–328 MyGO band (2) draw half "unreachable".** **Stale.** Commit `e373458` merged 迷途之星 to one press entry; `band_draw_for_two_crystals` is green. The sibling cross-move "move-1 replacement does not fire" remains open (MOVE-03).
 5. **L333–341 cross list.** Partially stale: m27 （祥子）带领着大家 is green; 网络链接异常 "still drops every designation (c05, g19)" — `c05` un-ignored 2026-10-10 (one designation cancels); only `g19` still sees the whole-card negate on the join path (CH-06).
 6. **L481–487 §6 item 8 Multi-activation.** Partially stale (NNM + MyGO merged; dispatch `0fb939b` runs every matching Hook/Gate entry). Remaining question is the general pattern / sheet NOT FOUND for NNM (2) choice-inside-one-entry — C-Q6.
-7. **L947–952 "Known failures at time of writing" (`rb_card_paths` 4 cases).** **Stale** — closed the same day.
+7. **L947–952 "Known failures at time of writing" (`card_paths` 4 cases).** **Stale** — closed the same day.
 8. **L877–887 B2 markers-kept / `shanyao` pin.** Contradicted by L975–976 (P✽P fan now expected **cleared** with bankruptcy). The later statement is live.
 9. **L1095–1098 wider-B "NNM / MyGO band (2) multi-activation".** Same as #3/#4.
 10. **§10 Resolved-summary bullet "ring opens at the next seat".** Superseded by the 2026-10-07 ruling in §10 (ring starts at the **initial user**; exhaust before advance).
@@ -1571,7 +1571,7 @@ Do these in order; each batch should be a PR that does not share files with the 
 1. ~~**high-A engine: settle recursion / stack safety** (STACK-01)~~ **fixed** — see the STACK-01 entry
    - Unblocks `ckpt_equiv`, long bot games, server `spawn_blocking` workers (~2 MiB), and the browser host stack. Preferred fix: queue nested `card_settle_at` jobs and pump them iteratively (also unroll `flush_deferred` → `start` → `execute`). Stopgap: `MAX_SETTLE_DEPTH`. Then re-check SETTLE-01 (笑容大游行). Files: `crates/game-core/src/engine/{play,mod}.rs`, `crates/game-rules/src/wasm_rules.rs` (`HostRequest::SettleAt`).
 2. **high-A engine bugs — movement** (MOVE-01, MOVE-02, MOVE-04, SKILL-08, SKILL-09, TILE-04, TILE-05)
-   - Unblocks the most ignored `rb_cross_move` tests. Files: `game-core/engine/{play,ops,move_ctx}.rs`, `skill-characters/{rana_parking,kaoru_prince}.rs`.
+   - Unblocks the most ignored `cross_move` tests. Files: `game-core/engine/{play,ops,move_ctx}.rs`, `skill-characters/{rana_parking,kaoru_prince}.rs`.
 3. **high-A counteraction windows** (CH-02, CH-03, CH-04 play-as-counter, CH-06, WINDOW-01, WINDOW-02)
    - Files: `game-rules/src/wasm_rules.rs` chain, `card-mujica/*`, `card-roselia` Hanae.
 4. **high-A money** (MONEY-03 Repaint shaped half, CRYSTAL-03 crimson_soul 500 timing, SETTLE-02 CRYCHIC 6-hand block, SETTLE-03 Sakiko absorb)
