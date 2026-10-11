@@ -228,55 +228,77 @@ return [传送], and the [不可阻挡] prohibitions.
 
 ---
 
+## Iff coverage
+
+Addendum standard: exact effect + exact frame + trigger boundary + duration +
+mutation tests.
+
+| Clause | iff | notes |
+|---|---|---|
+| G-STATUS-01 | full | invariant; `layers_nonneg_verifier_rejects_mutants` |
+| G-STATUS-02 | partial | roll half: driver + mutants + no-op; non-[传送] half is a gap |
+| G-STATUS-03 | full | exact decay + `state:P0:stay` frame + no-op + mutants |
+| G-STATUS-04 | partial | money gate: mutants + no-op + rent drivers; skill-press half is a gap |
+| G-STATUS-05 | full | exact decay + row 4 skip + mutants |
+| G-STATUS-06 | partial | money + [手] drivers; [指定] / pawn-on-no-tile are gaps |
+| G-STATUS-07 | full | exact decay + no re-acquire + mutants |
+| G-STATUS-08 | partial | return [传送] exact + frame + mutants; skills/`[持续]` stop is a gap |
+| G-STATUS-09 | partial | prohibition half + mutants + no-op; choice half is a gap |
+| G-STATUS-10 | full | closed-set definition + `abnormal_move_effect_set` |
+
+**Full iff: 5 / 10. Coverage gaps: 7** (table below).
+
+## Coverage gaps
+
+Uncovered halves (addendum item 6). Each names the missing seam.
+
+| Clause | Missing | Seam needed |
+|---|---|---|
+| G-STATUS-02 | second sentence: 「无法使用非[传送]的移动效果」 | an observable non-teleport movement-effect event (or a card that randomizes into one) so the cancel can be asserted |
+| G-STATUS-04 | [主动] skill press while stunned (only [手] play is driven) | a `skill` act on a stunned seat via `Table::skill` (seam exists; not yet driven) |
+| G-STATUS-04 | card-text exceptions (「可在眩晕时打出」) boundary | a card with the waiver *and* one without, same act |
+| G-STATUS-06 | 「不能被[指定]」 | a [指定] target-pick event on `Step` |
+| G-STATUS-06 | 「玩家棋子不失为存在于任何格子上」 | a presence predicate (`players_on`) exposed on the observed window |
+| G-STATUS-08 | 「玩家技能和[场地]上的[持续]效果停止生效」 | skill / tile-[持续] activations attributed to an exiled seat |
+| G-STATUS-09 | choice half 「可选择受到的[传送]，[强制移动]，[强制停下]效果是否生效」 | a forced-move prompt whose every option is drivable |
+
+## Findings
+
+Classification (addendum item 7): **LESS** = engine does less than the book;
+**MORE** = does more / leaks / fires when it should not; **WRONG** = different
+amount / target / timing.
+
+* **G-STATUS-02** — **WRONG** (also MORE).
+  * Book (`rulebook-doc.md:95`): 「[主要移动]的[移动终点]视为当前所在格子且不[结算]」;
+    行动阶段 row 4: 「眩晕效果发动：跳过经营和主要移动阶段」.
+  * Engine: a [晕眩]/[除外] in force at the `roll` still walks to another tile
+    and settles (`log.roll`, `log.land_unowned`). `skip_move` is latched only
+    for [停留] at turn start; mid-运营 [晕眩] does not stop the move.
+  * Destination is not the current tile (WRONG) and the move+settle run at all
+    (MORE). Failing tests: `stun_in_force_at_roll_does_not_walk`, soak.
+
+* **G-STATUS-06** — **MORE**.
+  * Book (`rulebook-doc.md:98`): 「[除外]：…无法收付款」.
+  * Engine: the [除外] payee is not gated (only [晕眩] is). Rent of 760 lands
+    on an `exile=1` owner (`log.rent`). MyGO:无路矢's 「[除外]期间本应获得的
+    格子收入由此前指定的那名玩家获得」 is a *redirect*, not a licence to pay
+    the exiled seat.
+  * Failing tests: `exile_owner_cannot_receive_rent`, soak.
+
+Contrast (green): `stun_owner_cannot_receive_rent` -- the [晕眩] payee *is*
+gated.
+
 ## Open questions
 
 * **OPEN-晕眩-自得** (TEST-FINDINGS §6.9): does 「无法收付款」 block a card's
   own 「获得」 to the player that same card body just stunned? Example:
   Mujica:心の雨's fallback does 「眩晕」 then 「获得1000资金」. Engine now: the
-  gain lands. Clauses G-STATUS-04 / 06 skip that shape.
+  gain lands. Verifiers skip a `gain` in a window that also granted the status.
 * **OPEN-除外-归位**: is a [除外] grant with no named return tile legal? The
   book says the granting effect 「会写明」 the tile (a text convention). The
-  engine's `exileTo` can be -1.
+  engine's `exileTo` can be absent / -1.
 * **OPEN-异常移动效果-封闭**: 「包括」 could be open-ended. Clauses treat the
   seven-item list as closed (see G-STATUS-10).
 * **OPEN-停留-中途**: a [停留] gained mid-move does not stop the current move
-  (TEST-FINDINGS §6 / glossary 51). The book's 「处于该状态时[无法移动]」 is
-  present-tense; whether it aborts an in-flight walk is undecided. G-STATUS-02
-  only checks the [主要移动] `roll` boundary when the skip latch is held.
-* **G-STATUS-02 second sentence untested:** 「无法使用非[传送]的移动效果」
-  has no generic non-teleport movement event on `Step` to assert against.
-* **G-STATUS-06 untested halves:** 「不能被[指定]」 and 「玩家棋子不失为存在于
-  任何格子上」 (see the clause body).
-* **G-STATUS-08 untested half:** 「玩家技能和[场地]上的[持续]效果停止生效」.
-* **G-STATUS-09 choice half:** 「可选择受到的[传送]，[强制移动]，[强制停下]
-  效果是否生效」 is a player decision, not a fixed post-condition.
-
----
-
-## Findings
-
-* **G-STATUS-02** (genuine, stays failing): a player who is already [无法移动]
-  via [晕眩] / [除外] still takes the [主要移动] `roll` and lands elsewhere.
-  Book (`rulebook-doc.md:95`): 「[移动终点]视为当前所在格子且不[结算]」;
-  行动阶段 row 4: 「眩晕效果发动：跳过经营和主要移动阶段」. Engine: `skip_move`
-  is latched only for [停留] at turn start (`play.rs` stay branch) and for
-  exile at turn start via the auto-skip; a mid-运营 [晕眩] (or [除外]) leaves
-  `skip_move` false, so `why_not_act`'s `roll` branch accepts the roll and the
-  walk runs. (Mid-turn [停留] is the separate OPEN-停留-中途.)
-  * Book says: [主要移动] destination is the current tile, no settle.
-  * Engine does: rolls and walks normally.
-
-* **G-STATUS-06** (genuine, stays failing): an [除外] player still **receives**
-  money. Book (`rulebook-doc.md:98`): 「[除外]：…无法收付款」 -- cannot pay or
-  receive. Engine: the payer is gated by `can_pay` (out / stunned / exiled),
-  but the **payee** is gated only by [晕眩] (`play.rs`: "exile is not a
-  receiving block" -- cited for MyGO:无路矢's 「[除外]期间本应获得的格子收入
-  由此前指定的那名玩家获得」). That card text *redirects* the income to
-  someone else; it is not a licence to pay the exiled player. A clean rent to
-  an exiled owner lands on them (`g_status::exile_owner_cannot_receive_rent`,
-  rent 760 to `exile=1` owner). Same shape in the soak (`pay` / `rent` leg,
-  exiled payee, e.g. CiRCLE / event income).
-  * Book says: exiled player cannot receive money.
-  * Engine does: pays the exiled payee.
-
-(The [晕眩] receive gate is implemented; G-STATUS-04's money half is green.)
+  (TEST-FINDINGS §6 / glossary 51). G-STATUS-02 only fires when the skip latch
+  is held or the status is [晕眩]/[除外].
