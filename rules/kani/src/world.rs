@@ -102,16 +102,103 @@ pub fn card_slot_of_bytes(b: &[u8]) -> u8 {
 
 pub const TOK_PP_POS: &str = "P✽P粉丝(正)";
 pub const TOK_PP_NEG: &str = "P✽P粉丝(反)";
+/// `game_core::state::prop::RENT_HOUSES` — house-count override for rent.
+pub const RENT_HOUSES: &str = "rentHouses";
 
 pub const TILE_SHOP_NAME: &str = "江户川乐器店";
-/// `data/board.json` index of 「江户川乐器店」 (1-based) minus one, matching
-/// the pilot's 0-based `TILE_SHOP`. Board index 31 → slot 30.
 /// The pilot used `TILE_SHOP = 3` against a fake 8-tile board; keep that
 /// constant for `teleport.rs` / `spec.rs` compatibility and also expose the
-/// real board slot.
+/// real board index.
 pub const TILE_SHOP: i32 = 3;
-pub const TILE_SHOP_BOARD: i32 = 31;
+/// Real-engine 0-based index of 「江户川乐器店」 (`board.json` index 31 →
+/// position 30). Matches `game_core` `tile_named` = `Vec::position`.
+pub const TILE_SHOP_BOARD: i32 = 30;
 pub const TILE_COUNT: i32 = 60;
+
+// ---------------------------------------------------------------------------
+// Trigger payload (move / buy / deal) — mirrors `game_rules::world::Trigger*
+// `map_or` sentinels in `hostfns.rs`:
+//   no move  → kind=-1, roll=-1, dir=1, from=-1, remaining=0, total=0, resolve=0
+//   no buy   → kind=0, seller=-1, price=0, deal_owner=-1, deal_houses=0,
+//              deal_mortgaged=0
+// ---------------------------------------------------------------------------
+
+/// The move that caused a trigger. `present == false` is "no move" and the
+/// getter ops answer the documented sentinels above (see `hostfns`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct MoveSnap {
+    /// `MoveKind`: 0 walk / 1 teleport. Stored as i32 so `World` stays `Copy`.
+    pub kind: i32,
+    /// Does the move settle where it lands?
+    pub resolve: bool,
+    /// Direction: 1 forward / -1 backward (guest + CEL encoding).
+    pub dir: i32,
+    /// 移动起点 (origin tile, 0-based).
+    pub from: i32,
+    /// Steps the move has left to walk.
+    pub remaining: i32,
+    /// Path length.
+    pub total: i32,
+    /// `t.Move.Roll`; `-1` = no face to show (`None` in the engine).
+    pub roll: i32,
+    /// Per-card counters on the move (a [火罐] roll is card-owned state).
+    pub tags: NameMap,
+}
+
+impl MoveSnap {
+    pub const NONE: MoveSnap = MoveSnap {
+        kind: -1,
+        resolve: false,
+        dir: 1,
+        from: -1,
+        remaining: 0,
+        total: 0,
+        roll: -1,
+        tags: NameMap::new(),
+    };
+
+    /// A move payload is present when kind is a real `MoveKind` (0/1).
+    /// `hostfns` uses `trigger().mv.map_or(sentinel, …)` — `NONE` is the
+    /// no-move case.
+    pub fn present(&self) -> bool {
+        self.kind >= 0
+    }
+}
+
+/// The purchase a buy trigger is about (`docs/PURCHASE.md`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct BuySnap {
+    /// `BuyKind`: 0 land / 1 agent / 2 card / 3 force / 4 acquire / 5 auction.
+    pub kind: i32,
+    /// Payee (guest encoding: `-1` = bank, else seat).
+    pub seller: i32,
+    /// Price the buyer would be charged (post BuyAdd/Mul/Set).
+    pub price: i32,
+    /// Ownership after the deal. `-1` = keep the default (the buyer).
+    pub deal_owner: i32,
+    /// Houses after the deal.
+    pub deal_houses: i32,
+    /// Mortgage after the deal.
+    pub deal_mortgaged: bool,
+}
+
+impl BuySnap {
+    /// "No buy" — matches every `trigger().buy.map_or(default, …)` in hostfns.
+    pub const NONE: BuySnap = BuySnap {
+        kind: 0,
+        seller: -1,
+        price: 0,
+        deal_owner: -1,
+        deal_houses: 0,
+        deal_mortgaged: false,
+    };
+}
+
+/// `RollSource` guest codes (`hostfns::trig_roll_source` / `rules.rs`).
+pub const ROLL_UNATTRIBUTED: i32 = 0;
+pub const ROLL_FIRE: i32 = 1;
+pub const ROLL_CARD: i32 = 2;
+pub const ROLL_SKILL: i32 = 3;
 
 // ---------------------------------------------------------------------------
 // Effect log
@@ -222,6 +309,12 @@ pub enum Effect {
     UnplaceCard {
         uid: i32,
     },
+    /// `set_tile_at` / `set_card_tile` moved a field instance to a tile
+    /// (`-1` = back with its owner).
+    SetCardTile {
+        uid: i32,
+        tile: i32,
+    },
     MoveUnits {
         from: i32,
         to: i32,
@@ -273,11 +366,16 @@ impl NameMap {
     }
 
     pub fn get(&self, key: NameId) -> i32 {
+        self.get_opt(key).unwrap_or(0)
+    }
+
+    /// `Some(value)` when `key` is present (even if the value is 0).
+    pub fn get_opt(&self, key: NameId) -> Option<i32> {
         let mut i = 0usize;
-        let mut v = 0i32;
+        let mut v: Option<i32> = None;
         while i < self.n as usize {
             if self.slots[i].key == key {
-                v = self.slots[i].value;
+                v = Some(self.slots[i].value);
             }
             i += 1;
         }
@@ -459,6 +557,38 @@ pub struct World {
     pub trig_tile: i32,
     pub trig_cancelled: bool,
     pub trig_negate: bool,
+    /// `Trigger::main` — fired as part of the turn's [主要移动]?
+    /// (`hostfns::trig_move_main` reads this, not `mv.main`.)
+    pub trig_main: bool,
+    /// `Trigger::roll_source` guest code (`ROLL_*`).
+    pub trig_roll_source: i32,
+    /// `Trigger::pay.is_rent` — pay-only fact (`hostfns::trig_pay_is_rent`).
+    pub trig_pay_is_rent: bool,
+    /// Move payload (`Trigger::mv`); `MoveSnap::NONE` = no move.
+    pub move_snap: MoveSnap,
+    /// Buy payload (`Trigger::buy`); `BuySnap::NONE` = no buy.
+    pub buy_snap: BuySnap,
+    /// `Trigger::card` name id (0 = none) — `ir_fill` `trigger_card`.
+    pub trig_card: i32,
+    /// `Trigger::name` (counter / message name id, 0 = none) — `counter_name`.
+    pub counter_name: i32,
+    /// Move-plan fixed roll (`-1` = null) — `ir_fill` `plan_fixed_roll`.
+    pub plan_fixed_roll: i32,
+    /// Bands currently blocked from skills (`ir_fill` `BlockedBands`).
+    /// Non-zero entries are band name ids.
+    pub blocked_bands: [i32; 4],
+    pub blocked_bands_n: u8,
+
+    // ---- turn trackers (ir_fill `Gains` / `Targeted` / `Between`) ----
+    /// Money gained this turn per seat (`hostfns::gains_this_turn`).
+    pub gains_this_turn: [i32; MAX_PLAYERS],
+    /// How many times this seat was targeted this turn (`targeted_count`).
+    pub targeted_count: [i32; MAX_PLAYERS],
+    /// `between(p, a, b)` seat-exclusion helper used by some guards; the
+    /// model stores the last "between witness" seat per probe (`-1` = none).
+    /// Documented gap: no turn-scoped between-set; proofs that need the full
+    /// predicate should set this from their own fixture.
+    pub between_seat: [i32; MAX_PLAYERS],
 
     // ---- prompt state ----
     pub opt_n: i32,
@@ -524,6 +654,19 @@ impl World {
             trig_tile: -1,
             trig_cancelled: false,
             trig_negate: false,
+            trig_main: false,
+            trig_roll_source: ROLL_UNATTRIBUTED,
+            trig_pay_is_rent: false,
+            move_snap: MoveSnap::NONE,
+            buy_snap: BuySnap::NONE,
+            trig_card: 0,
+            counter_name: 0,
+            plan_fixed_roll: -1,
+            blocked_bands: [0; 4],
+            blocked_bands_n: 0,
+            gains_this_turn: [0; MAX_PLAYERS],
+            targeted_count: [0; MAX_PLAYERS],
+            between_seat: [-1; MAX_PLAYERS],
             opt_n: 0,
             next_answer: 0,
             answers: [0; MAX_ANSWERS],
@@ -602,6 +745,101 @@ impl World {
     }
 
     // ---- piles (free functions; methods would double-borrow) ----
+
+    // ---- field-card / tile helpers (mirror `game_core::engine::ops`) ----
+
+    /// Field instance at `uid`, or `None`. Mirrors `field_by_uid`.
+    pub fn field_by_uid(&self, uid: i32) -> Option<&FieldCard> {
+        let mut i = 0usize;
+        let mut found: Option<&FieldCard> = None;
+        while i < MAX_FIELD {
+            if self.field[i].uid == uid && self.field[i].player >= 0 {
+                found = Some(&self.field[i]);
+            }
+            i += 1;
+        }
+        found
+    }
+
+    pub fn field_by_uid_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
+        let mut i = 0usize;
+        let mut idx = None;
+        while i < MAX_FIELD {
+            if self.field[i].uid == uid && self.field[i].player >= 0 {
+                idx = Some(i);
+            }
+            i += 1;
+        }
+        idx.map(|i| &mut self.field[i])
+    }
+
+    /// `hostfns::tile_at` — where the instance at `uid` sits, or -1.
+    pub fn tile_at(&self, uid: i32) -> i32 {
+        self.field_by_uid(uid).map_or(-1, |f| f.tile)
+    }
+
+    /// `hostfns::set_tile_at` — move instance to `tile` (-1 = with owner).
+    /// Returns whether the instance exists.
+    pub fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        match self.field_by_uid_mut(uid) {
+            Some(f) => {
+                f.tile = tile;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// `WorldOps::rent_houses` — the house count a rent lookup reads.
+    /// Tile-scoped `RENT_HOUSES` prop wins; then a placed card of the tile's
+    /// owner; else the standing house count. A stored override of `0` still
+    /// wins (matches `if let Some(&v) = …` in `ops.rs`).
+    pub fn rent_houses(&self, tile: i32) -> i32 {
+        let key = intern::intern(RENT_HOUSES);
+        // 1) tile-scoped override (a field card sitting on this tile)
+        let mut i = 0usize;
+        while i < MAX_FIELD {
+            let f = &self.field[i];
+            if f.player >= 0 && f.tile == tile {
+                if let Some(v) = f.props.get_opt(key) {
+                    return v.max(0);
+                }
+            }
+            i += 1;
+        }
+        // 2) placed card of the owner (「你的所有格子上的房屋数视为…」)
+        if tile >= 0 && (tile as usize) < 60 {
+            let owner = self.tiles[tile as usize].owner;
+            if owner >= 0 && (owner as usize) < MAX_PLAYERS {
+                let mut j = 0usize;
+                while j < MAX_FIELD {
+                    let f = &self.field[j];
+                    if f.player == owner {
+                        if let Some(v) = f.props.get_opt(key) {
+                            return v.max(0);
+                        }
+                    }
+                    j += 1;
+                }
+            }
+            return self.tiles[tile as usize].houses;
+        }
+        0
+    }
+
+    /// `WorldOps::rent_of` + `purchase::table_rent` (see `board::table_rent`).
+    /// RiNG rent is the tile's base `price` (rolled at payment time; the
+    /// table value is the base). Empty tables answer 0.
+    pub fn rent_of(&self, tile: i32) -> i32 {
+        let Some(t) = board::data_at(tile) else {
+            return 0;
+        };
+        if board::is_ring(t) {
+            t.price
+        } else {
+            board::table_rent(t, self.rent_houses(tile))
+        }
+    }
 }
 
 /// Push `card` onto a bounded pile.

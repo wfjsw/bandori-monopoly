@@ -27,18 +27,18 @@
 //! | `abnormal` | overlay (`false` = not the Abnormal window) |
 //! | `turn_player` | `w.turn_player` |
 //! | `turn_key` | `w.turn_key` |
-//! | `plan_fixed_roll` | `-1` = null (World has no fixed-roll; overlay) |
-//! | `trigger_card` | `0` (no trigger-card name id in World; overlay) |
-//! | `counter_name` | `0` (no trigger counter name in World; overlay) |
+//! | `plan_fixed_roll` | `w.plan_fixed_roll` (`-1` = null; overlay override) |
+//! | `trigger_card` | `w.trig_card` name id (`0` = none; overlay) |
+//! | `counter_name` | `w.counter_name` (`0` = none; overlay) |
 //! | `tile_id` | `w.trig_tile` |
 //! | `tile_owner` | `w.tiles[tile].owner` |
 //! | `tile_houses` | `w.tiles[tile].houses` |
 //! | `tile_mortgaged` | `w.tiles[tile].mortgaged` as 0/1 |
 //! | `tile_price` | `board::TILES[tile].price` |
-//! | `move_roll` / `move_kind` | `-1` = null (World has no move payload; overlay) |
-//! | `move_remaining` | `0` (overlay) |
-//! | `move_main` | `0` (overlay) |
-//! | `move_dir` | `1` (engine default; overlay) |
+//! | `move_roll` / `move_kind` | `w.move_snap` (`-1` = null; overlay) |
+//! | `move_remaining` | `w.move_snap.remaining` (`0` when no move) |
+//! | `move_main` | `w.trig_main` (`Trigger::main`, not `mv.main`) |
+//! | `move_dir` | `w.move_snap.dir` (`1` when no move; engine default) |
 //! | `effect_count` | `ov.chain_n` (default 0) |
 //! | `owner` / `owner_id` | the candidate seat |
 //! | `owner_money` | `w.money[owner]` |
@@ -61,10 +61,12 @@
 //! ### Per-seat (`SeatField`)
 //!
 //! Same sources as the `owner_*` scalars, for every seat `0..4`. `Hand` uses
-//! the same hand-size view. `Gains` / `Targeted` / `Between` are `0` in
-//! `World` (no turn-gain / targeted / between trackers) — extend `World` when
-//! a guard needs them. The guard-fill differential keeps those fixture fields
-//! at 0 so both sides agree.
+//! the same hand-size view. `Gains` / `Targeted` / `Between` come from
+//! `w.gains_this_turn` / `w.targeted_count` / `w.between_seat`:
+//! * `gains_this_turn` is incremented by `Op::gain` (money credited).
+//! * `targeted_count` is fixture-facing — host status ops do not bump it yet
+//!   (set it on the world before filling).
+//! * `between_seat` is the last between-witness (`-1` = none).
 //!
 //! ### Named counters
 //!
@@ -85,16 +87,16 @@
 //! | `LiveHouse` | buyable ∧ `group == 6` |
 //! | `Buyable` | kind ∈ {property=1, ring=3} |
 //! | `ChainKinds` / `ChainHits` | `TriggerOverlay.chain` |
-//! | `BlockedBands` | empty (World has no band-block list) |
+//! | `BlockedBands` | `w.blocked_bands[..blocked_bands_n]` (band name ids) |
 //!
 //! ### Other
 //!
 //! * `n_players` = `w.n_players`
 //! * `tile_count` = 60 (board)
-//! * `bin` geometry (`players_on`, `next_dist`, …) is left empty (answers 0);
-//!   fill from a `TriggerOverlay` / board walk when a guard needs it. The
-//!   guard-fill differential supplies the same geometry production's
-//!   `CondView` computes from the shared fixture (see `conf_fill_diff.rs`).
+//! * `bin` geometry (`players_on`, `next_dist`, `owned_within`, `on_path`) is
+//!   filled sparsely from world positions / owners / `move_snap.roll`
+//!   (`BIN_CAP` = 64; unanswered pairs read 0). Symbolic-arg guards need
+//!   `conf_fill_diff`-style per-program filling.
 
 use rules_cond_ir::ctx::{FnId, IrCtx, SeatField, SetId, NAMED_CAP};
 use rules_cond_ir::vars::{VarId, VarTy, VARS};
@@ -374,15 +376,19 @@ fn fill_seat(c: &mut IrCtx, w: &World) {
         c.seat[p][SeatField::Character as usize] = id_of_name_id(NameId(w.character_id[p]));
         c.seat[p][SeatField::Band as usize] = id_of_name_id(NameId(w.band_id[p]));
         c.seat[p][SeatField::Tiles as usize] = owned_tiles(w, p as i32);
-        // Not tracked in World yet (see module docs).
-        c.seat[p][SeatField::Gains as usize] = 0;
-        c.seat[p][SeatField::Targeted as usize] = 0;
-        c.seat[p][SeatField::Between as usize] = 0;
+        // Turn trackers (World `gains_this_turn` / `targeted_count` /
+        // `between_seat`). `gains_this_turn` is incremented by `Op::gain`;
+        // `targeted_count` is a fixture-facing counter (host ops that "target"
+        // a seat do not yet bump it — see module docs); `between_seat` is the
+        // last between-witness, `-1` = none.
+        c.seat[p][SeatField::Gains as usize] = w.gains_this_turn[p] as i64;
+        c.seat[p][SeatField::Targeted as usize] = w.targeted_count[p] as i64;
+        c.seat[p][SeatField::Between as usize] = w.between_seat[p] as i64;
     }
 }
 
 /// Board-derived membership sets (static, independent of the world).
-fn fill_board_sets(c: &mut IrCtx) {
+fn fill_board_sets(c: &mut IrCtx, w: &World) {
     let mut i = 0usize;
     while i < 60 {
         let t = board::TILES[i];
@@ -405,6 +411,148 @@ fn fill_board_sets(c: &mut IrCtx) {
             c.set_insert(SetId::LiveHouse, id);
         }
         i += 1;
+    }
+    // `BlockedBands` — band name ids the world currently blocks from skills.
+    let mut b = 0usize;
+    while b < w.blocked_bands_n as usize && b < 4 {
+        let id = w.blocked_bands[b];
+        if id != 0 {
+            c.set_insert(SetId::BlockedBands, id as i64);
+        }
+        b += 1;
+    }
+}
+
+/// Fill the geometry bin for the argument pairs the model can compute from
+/// the world alone (`players_on`, `next_dist`, `owned_within`, `on_path`).
+/// `BIN_CAP` is 64 so this is a **sparse** table: it answers the pairs we
+/// precompute and 0 elsewhere. Guards whose args are symbolic need
+/// `conf_fill_diff`-style per-program filling (see module docs).
+fn fill_geometry_bins(c: &mut IrCtx, w: &World) {
+    let n = 60i64;
+    let n_players = w.n_players as i64;
+    let pos = |s: i64| -> i64 {
+        if s < 0 || s as usize >= world::MAX_PLAYERS {
+            -1
+        } else {
+            w.pos[s as usize] as i64
+        }
+    };
+    let out = |s: i64| -> bool {
+        s < 0 || s as usize >= world::MAX_PLAYERS || w.out[s as usize]
+    };
+    let exile = |s: i64| -> i64 {
+        if s < 0 || s as usize >= world::MAX_PLAYERS {
+            1
+        } else {
+            key_get_name(w, s as i32, KEY_EXILE)
+        }
+    };
+    let owner_of = |t: i64| -> i64 {
+        if t < 0 || t as usize >= 60 {
+            -1
+        } else {
+            w.tiles[t as usize].owner as i64
+        }
+    };
+    let dist = |x: i64, y: i64| -> i64 {
+        if n <= 0 {
+            return 0;
+        }
+        let d = ((y - x) % n + n) % n;
+        d.min(n - d)
+    };
+    // players_on(tile, except) for every occupied tile × every seat.
+    let mut t = 0i64;
+    while t < n {
+        let mut except = -1i64;
+        while except < n_players {
+            let v = (0..n_players)
+                .filter(|&s| s != except && !out(s) && exile(s) == 0 && pos(s) == t)
+                .count() as i64;
+            if v != 0 {
+                c.bin_set(t, except, v);
+            }
+            except += 1;
+        }
+        t += 1;
+    }
+    // next_dist(p, dir) for every seat × {-1, 1}.
+    let mut p = 0i64;
+    while p < n_players {
+        for dir in [-1i64, 1i64] {
+            let mut best = i64::MAX;
+            let mut o = 0i64;
+            while o < n_players {
+                if o != p && !out(o) {
+                    let q = pos(o);
+                    if q >= 0 {
+                        let fwd = if dir >= 0 {
+                            ((q - pos(p)) % n + n) % n
+                        } else {
+                            ((pos(p) - q) % n + n) % n
+                        };
+                        if fwd > 0 && fwd < best {
+                            best = fwd;
+                        }
+                    }
+                }
+                o += 1;
+            }
+            let v = if best == i64::MAX { -1 } else { best };
+            if v != 0 {
+                c.bin_set(p, dir, v);
+            }
+        }
+        p += 1;
+    }
+    // owned_within(p, radius) for radius 1..=6 (inventory uses small radii).
+    let mut p = 0i64;
+    while p < n_players {
+        let ppos = pos(p);
+        if ppos >= 0 {
+            let mut radius = 1i64;
+            while radius <= 6 {
+                let v = (0..n)
+                    .filter(|&ti| owner_of(ti) == p && dist(ppos, ti) <= radius)
+                    .count() as i64;
+                if v != 0 {
+                    c.bin_set(p, radius, v);
+                }
+                radius += 1;
+            }
+        }
+        p += 1;
+    }
+    // on_path(me, them) from `move_snap.roll` (steps = |roll|).
+    let roll = w.move_snap.roll as i64;
+    if roll >= 0 {
+        let steps = roll.abs();
+        let mut me = 0i64;
+        while me < n_players {
+            let mut them = 0i64;
+            while them < n_players {
+                if me != them {
+                    let q = pos(them);
+                    if q >= 0 {
+                        let mut hits = 0i64;
+                        let mut i = 1i64;
+                        while i <= steps {
+                            let ti = ((q + i) % n + n) % n;
+                            if owner_of(ti) == me {
+                                hits += 1;
+                            }
+                            i += 1;
+                        }
+                        if hits != 0 {
+                            c.bin_set(me, them, hits);
+                        }
+                    }
+                }
+                them += 1;
+            }
+            me += 1;
+        }
     }
 }
 
@@ -464,6 +612,8 @@ pub fn fill_from_world(
     }
 
     // ---- window scalars ----
+    // Overlay wins only when explicitly set (non-default); otherwise the
+    // World's trigger payload is the source. See module docs.
     let kind = ov.kind.unwrap_or(w.trig_kind) as i64;
     c.set_scalar(VarId::Kind, kind);
     c.set_scalar(VarId::Actor, w.trig_player as i64);
@@ -472,14 +622,41 @@ pub fn fill_from_world(
     c.set_scalar(VarId::Value, value);
     c.set_scalar(VarId::Step, ov.step);
     c.set_scalar(VarId::By, ov.by);
-    c.set_scalar(VarId::PayIsRent, ov.pay_is_rent as i64);
-    c.set_scalar(VarId::RollSource, ov.roll_source);
+    let pay_is_rent = if ov.pay_is_rent {
+        true
+    } else {
+        w.trig_pay_is_rent
+    };
+    c.set_scalar(VarId::PayIsRent, pay_is_rent as i64);
+    let roll_source = if ov.roll_source >= 0 {
+        ov.roll_source
+    } else {
+        w.trig_roll_source as i64
+    };
+    c.set_scalar(VarId::RollSource, roll_source);
     c.set_scalar(VarId::Abnormal, ov.abnormal as i64);
     c.set_scalar(VarId::TurnPlayer, w.turn_player as i64);
     c.set_scalar(VarId::TurnKey, w.turn_key as i64);
-    c.set_scalar(VarId::PlanFixedRoll, ov.plan_fixed_roll);
-    c.set_scalar(VarId::TriggerCard, ov.trigger_card);
-    c.set_scalar(VarId::CounterName, ov.counter_name);
+    // `plan_fixed_roll` / `trigger_card` / `counter_name` now live on World;
+    // the overlay remains the override for fixtures that have no World twin.
+    let plan_fixed_roll = if ov.plan_fixed_roll != -1 {
+        ov.plan_fixed_roll
+    } else {
+        w.plan_fixed_roll as i64
+    };
+    c.set_scalar(VarId::PlanFixedRoll, plan_fixed_roll);
+    let trigger_card = if ov.trigger_card != 0 {
+        ov.trigger_card
+    } else {
+        w.trig_card as i64
+    };
+    c.set_scalar(VarId::TriggerCard, trigger_card);
+    let counter_name = if ov.counter_name != 0 {
+        ov.counter_name
+    } else {
+        w.counter_name as i64
+    };
+    c.set_scalar(VarId::CounterName, counter_name);
 
     // ---- tile scalars ----
     let tile = w.trig_tile;
@@ -499,12 +676,50 @@ pub fn fill_from_world(
         c.set_scalar(VarId::TilePrice, 0);
     }
 
-    // ---- move scalars (overlay; World has no move payload) ----
-    c.set_scalar(VarId::MoveRoll, ov.move_roll);
-    c.set_scalar(VarId::MoveKind, ov.move_kind);
-    c.set_scalar(VarId::MoveRemaining, ov.move_remaining);
-    c.set_scalar(VarId::MoveMain, ov.move_main as i64);
-    c.set_scalar(VarId::MoveDir, ov.move_dir);
+    // ---- move scalars (World `move_snap` / `trig_main`; overlay override) ----
+    // Sentinels match `hostfns::trig_move_*`: no move → kind/roll = -1,
+    // remaining = 0, dir = 1, and `move_main` is `Trigger::main`.
+    let mv = &w.move_snap;
+    let (move_roll, move_kind, move_remaining, move_main, move_dir) = if mv.present() {
+        (
+            mv.roll as i64,
+            mv.kind as i64,
+            mv.remaining as i64,
+            w.trig_main as i64,
+            mv.dir as i64,
+        )
+    } else {
+        (-1, -1, 0, w.trig_main as i64, 1)
+    };
+    // Overlay still wins when it left its documented default behind.
+    c.set_scalar(
+        VarId::MoveRoll,
+        if ov.move_roll != -1 { ov.move_roll } else { move_roll },
+    );
+    c.set_scalar(
+        VarId::MoveKind,
+        if ov.move_kind != -1 {
+            ov.move_kind
+        } else {
+            move_kind
+        },
+    );
+    c.set_scalar(
+        VarId::MoveRemaining,
+        if ov.move_remaining != 0 {
+            ov.move_remaining
+        } else {
+            move_remaining
+        },
+    );
+    c.set_scalar(
+        VarId::MoveMain,
+        if ov.move_main { 1 } else { move_main },
+    );
+    c.set_scalar(
+        VarId::MoveDir,
+        if ov.move_dir != 1 { ov.move_dir } else { move_dir },
+    );
 
     // ---- chain (overlay; World has no chain list) ----
     let chain_n = (ov.chain_n as usize).min(4);
@@ -552,8 +767,9 @@ pub fn fill_from_world(
     );
 
     fill_seat(&mut c, w);
-    fill_board_sets(&mut c);
+    fill_board_sets(&mut c, w);
     fill_named(&mut c, w, owner);
+    fill_geometry_bins(&mut c, w);
     // `tile_named('…')` — every board name, matching `fill_window`'s `tile_ids`.
     let mut t = 0usize;
     while t < TILE_NAMES.len() {

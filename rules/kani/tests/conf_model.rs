@@ -94,6 +94,29 @@ pub struct ConfWorld {
     pub events: Vec<String>,
     pub rng: u64,
     pub next_uid: i32,
+    // ---- trigger payload (mirrors model `MoveSnap` / `BuySnap`) ----
+    pub trig_main: bool,
+    pub trig_roll_source: i32,
+    pub trig_pay_is_rent: bool,
+    pub move_present: bool,
+    pub move_kind: i32,
+    pub move_resolve: bool,
+    pub move_dir: i32,
+    pub move_from: i32,
+    pub move_remaining: i32,
+    pub move_total: i32,
+    pub move_roll: i32,
+    pub move_tags: BTreeMap<String, i32>,
+    pub buy_present: bool,
+    pub buy_kind: i32,
+    pub buy_seller: i32,
+    pub buy_price: i32,
+    pub buy_deal_owner: i32,
+    pub buy_deal_houses: i32,
+    pub buy_deal_mortgaged: bool,
+    // ---- field instances (uid → tile) for `tile_at` / `set_tile_at` ----
+    pub field_uid: Vec<i32>,
+    pub field_tile: Vec<i32>,
 }
 
 impl ConfWorld {
@@ -122,6 +145,27 @@ impl ConfWorld {
             events: Vec::new(),
             rng: 0x1234_5678_9abc_def0,
             next_uid: 1,
+            trig_main: false,
+            trig_roll_source: 0,
+            trig_pay_is_rent: false,
+            move_present: false,
+            move_kind: -1,
+            move_resolve: false,
+            move_dir: 1,
+            move_from: -1,
+            move_remaining: 0,
+            move_total: 0,
+            move_roll: -1,
+            move_tags: BTreeMap::new(),
+            buy_present: false,
+            buy_kind: 0,
+            buy_seller: -1,
+            buy_price: 0,
+            buy_deal_owner: -1,
+            buy_deal_houses: 0,
+            buy_deal_mortgaged: false,
+            field_uid: Vec::new(),
+            field_tile: Vec::new(),
         }
     }
 
@@ -152,6 +196,7 @@ impl ConfWorld {
 /// Board static data comes from the same table the model uses, so tile_price /
 /// tile_group / build_cost are definitionally equal and the test is about the
 /// host op plumbing, not a second copy of board.json.
+/// **0-based** engine tile index (see `board::tile_slot`).
 fn board_price(tile: i32) -> i32 {
     let s = rules_kani::board::tile_slot(tile);
     if s < 0 {
@@ -180,9 +225,10 @@ fn board_group(tile: i32) -> i32 {
 // A small name table for `tile_named`. The model currently resolves only
 // 「江户川乐器店」; we mirror that so op-level tile_named is a plumbing check.
 // Cards that look up other names will diverge (model gap) and fail -- correctly.
+// 0-based engine index (`board.json` index 31 → position 30).
 fn conf_tile_named(name: &str) -> i32 {
     if name == TILE_SHOP_NAME {
-        31
+        30
     } else {
         -1
     }
@@ -220,11 +266,31 @@ impl CardWorld for ConfWorld {
     fn tile_steps_ahead(&self, player_id: i32, steps: i32) -> i32 {
         (self.player_pos(player_id) + steps).rem_euclid(60)
     }
+    /// `WorldOps::rent_of` + `purchase::table_rent` (see `board::table_rent`).
+    /// RiNG quotes the tile's base `price`; properties use the rent table at
+    /// `rent_houses` (standing houses — ConfWorld has no RENT_HOUSES override).
     fn rent_of(&self, tile: i32) -> i32 {
-        board_price(tile) / 10
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            return 0;
+        }
+        let t = &rules_kani::board::TILES[s as usize];
+        if rules_kani::board::is_ring(t) {
+            t.price
+        } else {
+            let h = self.tiles_houses[s as usize].max(0);
+            rules_kani::board::table_rent(t, h)
+        }
     }
+    /// `purchase::quote_native` = land + houses × house_cost (then `.max(0)`).
     fn buy_price(&self, tile: i32) -> i32 {
-        board_price(tile)
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            return 0;
+        }
+        let t = &rules_kani::board::TILES[s as usize];
+        let h = self.tiles_houses[s as usize].max(0);
+        (t.price + h * t.house_cost).max(0)
     }
     fn build_cost(&self, tile: i32) -> i32 {
         board_house_cost(tile)
@@ -235,13 +301,14 @@ impl CardWorld for ConfWorld {
     fn owned_count(&self, player_id: i32) -> i32 {
         self.tiles_owner.iter().filter(|&&o| o == player_id).count() as i32
     }
+    /// 0-based engine index (matches `WorldOps::owned_tiles`).
     fn owned_at(&self, player_id: i32, index: i32) -> i32 {
         self.tiles_owner
             .iter()
             .enumerate()
             .filter(|(_, &o)| o == player_id)
             .nth(index.max(0) as usize)
-            .map(|(i, _)| i as i32 + 1)
+            .map(|(i, _)| i as i32)
             .unwrap_or(-1)
     }
     fn is_buyable(&self, tile: i32) -> i32 {
@@ -651,9 +718,51 @@ impl CardWorld for ConfWorld {
         0
     }
     fn trigger(&self) -> game_rules::Trigger {
+        use card_sdk::abi::BuyKind;
         let mut t = game_rules::Trigger::default();
         t.value = self.trig_value;
         t.target = self.trig_target;
+        t.main = self.trig_main;
+        t.roll_source = game_core::engine::rules::RollSource::from_i32(self.trig_roll_source);
+        if self.move_present {
+            t.mv = Some(game_rules::TriggerMove {
+                kind: game_rules::MoveKind::from_i32(self.move_kind)
+                    .unwrap_or(game_rules::MoveKind::Walk),
+                resolve: self.move_resolve,
+                tags: self
+                    .move_tags
+                    .iter()
+                    .map(|(k, v)| (k.clone(), *v))
+                    .collect(),
+                main: self.trig_main,
+                dir: game_core::engine::rules::Dir::from_i32(self.move_dir),
+                from: self.move_from,
+                remaining: self.move_remaining,
+                total: self.move_total,
+                roll: if self.move_roll >= 0 {
+                    Some(self.move_roll)
+                } else {
+                    None
+                },
+            });
+        }
+        if self.trig_pay_is_rent {
+            t.pay = Some(game_rules::TriggerPay { is_rent: true });
+        }
+        if self.buy_present {
+            t.buy = Some(game_rules::TriggerBuy {
+                kind: BuyKind::from_i32(self.buy_kind).unwrap_or(BuyKind::Land),
+                seller: game_core::engine::rules::Payee::from_i32(self.buy_seller),
+                price: self.buy_price,
+                deal_owner: if self.buy_deal_owner >= 0 {
+                    Some(self.buy_deal_owner)
+                } else {
+                    None
+                },
+                deal_houses: self.buy_deal_houses,
+                deal_mortgaged: self.buy_deal_mortgaged,
+            });
+        }
         if self.trig_cancelled {
             t.negate_activation();
         }
@@ -682,12 +791,27 @@ impl CardWorld for ConfWorld {
     fn trig_card_is(&self, _id: &str) -> i32 {
         0
     }
-    fn set_trigger_price(&mut self, _v: i32) {}
-    fn set_trigger_deal_owner(&mut self, _v: i32) {}
-    fn set_trigger_deal_houses(&mut self, _v: i32) {}
-    fn set_trigger_deal_mortgaged(&mut self, _v: i32) {}
+    fn set_trigger_price(&mut self, v: i32) {
+        self.buy_price = v;
+        self.buy_present = true;
+    }
+    fn set_trigger_deal_owner(&mut self, v: i32) {
+        self.buy_deal_owner = v;
+        self.buy_present = true;
+    }
+    fn set_trigger_deal_houses(&mut self, v: i32) {
+        self.buy_deal_houses = v;
+        self.buy_present = true;
+    }
+    fn set_trigger_deal_mortgaged(&mut self, v: i32) {
+        self.buy_deal_mortgaged = v != 0;
+        self.buy_present = true;
+    }
     fn set_trigger_reason(&mut self, _reason: &str) {}
-    fn set_trigger_move_roll(&mut self, _roll: i32) {}
+    fn set_trigger_move_roll(&mut self, roll: i32) {
+        self.move_roll = roll;
+        self.move_present = true;
+    }
     fn is_agent(&self, tile: i32) -> i32 {
         let s = rules_kani::board::tile_slot(tile);
         if s < 0 {
@@ -708,8 +832,22 @@ impl CardWorld for ConfWorld {
     fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
         Vec::new()
     }
-    fn tile_at(&self, _uid: i32) -> i32 {
-        -2
+    fn tile_at(&self, uid: i32) -> i32 {
+        self.field_uid
+            .iter()
+            .position(|&u| u == uid)
+            .map(|i| self.field_tile[i])
+            .unwrap_or(-1)
+    }
+    fn set_tile_at(&mut self, uid: i32, tile: i32) -> bool {
+        match self.field_uid.iter().position(|&u| u == uid) {
+            Some(i) => {
+                self.field_tile[i] = tile;
+                self.events.push(format!("set_tile_at {uid} {tile}"));
+                true
+            }
+            None => false,
+        }
     }
 }
 
@@ -1051,7 +1189,10 @@ fn base_model() -> KWorld {
 }
 
 fn install_model_world(answers: &[i32]) {
-    let mut w = base_model();
+    install_model_world_with(base_model(), answers);
+}
+
+fn install_model_world_with(mut w: KWorld, answers: &[i32]) {
     for (i, &a) in answers.iter().enumerate() {
         if i < kworld::MAX_ANSWERS {
             w.answers[i] = a;
@@ -1561,4 +1702,399 @@ fn card_event_conforms() {
     // so answer **1** means "no teleport". With all-no the body is quiet
     // (tile_named("快餐店") is -1 on the model; unused when nobody teleports).
     diff_card("event", "event:很噜的感觉", &[1, 1, 1, 1], run_play);
+}
+
+// ---------------------------------------------------------------------------
+// Host-ops batch: rent_of / tile_at / set_tile_at / trigger payload
+// (modeled 2026-10-11 by HOST-OPS; semantics from `hostfns` + `game-core`
+// `WorldOps::rent_of` / `purchase::table_rent` / `TriggerMove` / `TriggerBuy`.)
+// ---------------------------------------------------------------------------
+
+/// Pure getter with a custom shared pre-state on both sides.
+fn diff_get_with(
+    label: &str,
+    conf: ConfWorld,
+    model: KWorld,
+    real: impl FnOnce(&mut ConfHost) -> i64,
+    model_fn: impl FnOnce() -> i64,
+) {
+    let _g = model_lock();
+    install_model_world_with(model, &[]);
+    let model_ret = model_fn();
+    let mut conf_h = ConfHost::new(conf, Vec::new());
+    let mut inline = ConfInline;
+    let real_ret = with_inline_host(&mut inline, || real(&mut conf_h));
+    if real_ret != model_ret {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [{label}]: return real={real_ret} model={model_ret} (BUG IN THE MODEL unless engine)"
+        );
+    }
+}
+
+fn rent_conf() -> ConfWorld {
+    let mut w = base_conf();
+    w.tiles_owner[1] = 0;
+    w.tiles_houses[1] = 2;
+    w.tiles_owner[5] = 1;
+    w.tiles_houses[5] = 0;
+    w.tiles_owner[8] = 2; // RiNG 1 (board.json index 9)
+    w
+}
+
+fn rent_model() -> KWorld {
+    let mut w = base_model();
+    w.tiles[1].owner = 0;
+    w.tiles[1].houses = 2;
+    w.tiles[5].owner = 1;
+    w.tiles[5].houses = 0;
+    w.tiles[8].owner = 2;
+    w
+}
+
+#[test]
+fn op_rent_of_matches_engine() {
+    // Property at 2 houses -> table[2]; 0 houses -> table[0]; RiNG -> price;
+    // empty table -> 0. (tile 30 = 购物中心-like 3600 land, rent[0]=360.)
+    for (tile, expect) in [(1, 3220), (5, 160), (8, 1000), (0, 0), (30, 360)] {
+        diff_get_with(
+            &format!("rent_of[{tile}]={expect}"),
+            rent_conf(),
+            rent_model(),
+            |c| game_rules::hostfns::rent_of(c, tile).unwrap() as i64,
+            move || rules_kani::host::dispatch(Op::rent_of, [tile, 0, 0, 0, 0, 0]),
+        );
+    }
+}
+
+#[test]
+fn op_buy_price_matches_engine() {
+    // quote_native = land + houses * house_cost.
+    for (tile, expect) in [(1, 7000), (5, 1600), (8, 1000), (0, 0)] {
+        diff_get_with(
+            &format!("buy_price[{tile}]={expect}"),
+            rent_conf(),
+            rent_model(),
+            |c| game_rules::hostfns::buy_price(c, tile).unwrap() as i64,
+            move || rules_kani::host::dispatch(Op::buy_price, [tile, 0, 0, 0, 0, 0]),
+        );
+    }
+}
+
+#[test]
+fn op_tile_at_set_tile_at_match_engine() {
+    let mut conf = base_conf();
+    conf.field_uid.push(7);
+    conf.field_tile.push(3);
+    let mut model = base_model();
+    model.field[0] = kworld::FieldCard {
+        uid: 7,
+        card: 0,
+        player: 0,
+        tile: 3,
+        face_down: false,
+        immune: false,
+        crystals: 0,
+        props: kworld::NameMap::new(),
+    };
+    model.field_n = 1;
+
+    let mut conf_h = ConfHost::new(conf, Vec::new());
+    let mut inline = ConfInline;
+    let real = with_inline_host(&mut inline, || {
+        let a = game_rules::hostfns::tile_at(&mut conf_h, 7).unwrap() as i64;
+        let s = game_rules::hostfns::set_tile_at(&mut conf_h, 7, 20).unwrap() as i64;
+        let b = game_rules::hostfns::tile_at(&mut conf_h, 7).unwrap() as i64;
+        let missing = game_rules::hostfns::set_tile_at(&mut conf_h, 99, 1).unwrap() as i64;
+        (a, s, b, missing)
+    });
+    install_model_world_with(model, &[]);
+    let model = {
+        let a = rules_kani::host::dispatch(Op::tile_at, [7, 0, 0, 0, 0, 0]);
+        let s = rules_kani::host::dispatch(Op::set_tile_at, [7, 20, 0, 0, 0, 0]);
+        let b = rules_kani::host::dispatch(Op::tile_at, [7, 0, 0, 0, 0, 0]);
+        let missing = rules_kani::host::dispatch(Op::set_tile_at, [99, 1, 0, 0, 0, 0]);
+        (a, s, b, missing)
+    };
+    if real != model {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [tile_at/set_tile_at]: real={real:?} model={model:?}"
+        );
+    }
+}
+
+fn trig_conf() -> ConfWorld {
+    let mut w = base_conf();
+    w.trig_main = true;
+    w.trig_roll_source = 2;
+    w.trig_pay_is_rent = true;
+    w.move_present = true;
+    w.move_kind = 0;
+    w.move_resolve = true;
+    w.move_dir = 1;
+    w.move_from = 2;
+    w.move_remaining = 3;
+    w.move_total = 7;
+    w.move_roll = 7;
+    w.move_tags.insert("firePot".to_string(), 4);
+    w.buy_present = true;
+    w.buy_kind = 0;
+    w.buy_seller = -1;
+    w.buy_price = 2500;
+    w.buy_deal_owner = 2;
+    w.buy_deal_houses = 1;
+    w.buy_deal_mortgaged = true;
+    w
+}
+
+fn trig_model() -> KWorld {
+    use rules_kani::world::{BuySnap, MoveSnap};
+    let mut w = base_model();
+    w.trig_main = true;
+    w.trig_roll_source = 2;
+    w.trig_pay_is_rent = true;
+    let mut ms = MoveSnap::NONE;
+    ms.kind = 0;
+    ms.resolve = true;
+    ms.dir = 1;
+    ms.from = 2;
+    ms.remaining = 3;
+    ms.total = 7;
+    ms.roll = 7;
+    ms.tags = kworld::NameMap::new();
+    ms.tags.set(rules_kani::intern::intern("firePot"), 4);
+    w.move_snap = ms;
+    w.buy_snap = BuySnap {
+        kind: 0,
+        seller: -1,
+        price: 2500,
+        deal_owner: 2,
+        deal_houses: 1,
+        deal_mortgaged: true,
+    };
+    w
+}
+
+fn trig_get(label: &str, real: impl FnOnce(&mut ConfHost) -> i64, op: Op, args: Args) {
+    diff_get_with(label, trig_conf(), trig_model(), real, move || {
+        rules_kani::host::dispatch(op, args)
+    });
+}
+
+#[test]
+fn op_trig_move_payload_matches_engine() {
+    trig_get(
+        "trig_move_kind",
+        |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
+        Op::trig_move_kind,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_resolve",
+        |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
+        Op::trig_move_resolve,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_main",
+        |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
+        Op::trig_move_main,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_dir",
+        |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
+        Op::trig_move_dir,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_remaining",
+        |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
+        Op::trig_move_remaining,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_from",
+        |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
+        Op::trig_move_from,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_total",
+        |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
+        Op::trig_move_total,
+        [0; 6],
+    );
+    trig_get(
+        "trig_move_roll",
+        |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
+        Op::trig_move_roll,
+        [0; 6],
+    );
+    let (tp, tl) = intern_str("firePot");
+    trig_get(
+        "trig_move_tag",
+        move |c| game_rules::hostfns::trig_move_tag(c, tp, tl).unwrap() as i64,
+        Op::trig_move_tag,
+        [tp, tl, 0, 0, 0, 0],
+    );
+}
+
+#[test]
+fn op_trig_move_sentinels_match_engine() {
+    // No-move sentinels: kind=-1, roll=-1, dir=1, from=-1, remaining=0,
+    // total=0, resolve=0; main is Trigger::main (independent of mv).
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move kind", conf, model,
+        |c| game_rules::hostfns::trig_move_kind(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_kind, [0; 6]));
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move dir", conf, model,
+        |c| game_rules::hostfns::trig_move_dir(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_dir, [0; 6]));
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move from", conf, model,
+        |c| game_rules::hostfns::trig_move_from(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_from, [0; 6]));
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move roll", conf, model,
+        |c| game_rules::hostfns::trig_move_roll(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]));
+    let mut conf = base_conf();
+    conf.trig_main = true;
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move main", conf, model,
+        |c| game_rules::hostfns::trig_move_main(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_main, [0; 6]));
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move remaining", conf, model,
+        |c| game_rules::hostfns::trig_move_remaining(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_remaining, [0; 6]));
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move total", conf, model,
+        |c| game_rules::hostfns::trig_move_total(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_total, [0; 6]));
+    let conf = base_conf();
+    let mut model = base_model();
+    model.trig_main = true;
+    diff_get_with("no-move resolve", conf, model,
+        |c| game_rules::hostfns::trig_move_resolve(c).unwrap() as i64,
+        || rules_kani::host::dispatch(Op::trig_move_resolve, [0; 6]));
+}
+
+#[test]
+fn op_trig_buy_deal_payload_matches_engine() {
+    trig_get(
+        "trig_buy_kind",
+        |c| game_rules::hostfns::trig_buy_kind(c).unwrap() as i64,
+        Op::trig_buy_kind,
+        [0; 6],
+    );
+    trig_get(
+        "trig_seller",
+        |c| game_rules::hostfns::trig_seller(c).unwrap() as i64,
+        Op::trig_seller,
+        [0; 6],
+    );
+    trig_get(
+        "trig_price",
+        |c| game_rules::hostfns::trig_price(c).unwrap() as i64,
+        Op::trig_price,
+        [0; 6],
+    );
+    trig_get(
+        "trig_deal_owner",
+        |c| game_rules::hostfns::trig_deal_owner(c).unwrap() as i64,
+        Op::trig_deal_owner,
+        [0; 6],
+    );
+    trig_get(
+        "trig_deal_houses",
+        |c| game_rules::hostfns::trig_deal_houses(c).unwrap() as i64,
+        Op::trig_deal_houses,
+        [0; 6],
+    );
+    trig_get(
+        "trig_deal_mortgaged",
+        |c| game_rules::hostfns::trig_deal_mortgaged(c).unwrap() as i64,
+        Op::trig_deal_mortgaged,
+        [0; 6],
+    );
+    trig_get(
+        "trig_roll_source",
+        |c| game_rules::hostfns::trig_roll_source(c).unwrap() as i64,
+        Op::trig_roll_source,
+        [0; 6],
+    );
+    trig_get(
+        "trig_pay_is_rent",
+        |c| game_rules::hostfns::trig_pay_is_rent(c).unwrap() as i64,
+        Op::trig_pay_is_rent,
+        [0; 6],
+    );
+}
+
+#[test]
+fn op_trig_buy_setters_match_engine() {
+    let mut conf = trig_conf();
+    conf.buy_price = 100;
+    conf.buy_deal_owner = -1;
+    conf.buy_deal_houses = 0;
+    conf.buy_deal_mortgaged = false;
+    conf.move_roll = -1;
+    let mut model = trig_model();
+    model.buy_snap.price = 100;
+    model.buy_snap.deal_owner = -1;
+    model.buy_snap.deal_houses = 0;
+    model.buy_snap.deal_mortgaged = false;
+    model.move_snap.roll = -1;
+
+    let mut conf_h = ConfHost::new(conf, Vec::new());
+    let mut inline = ConfInline;
+    let real = with_inline_host(&mut inline, || {
+        game_rules::hostfns::trig_set_price(&mut conf_h, 400).unwrap();
+        game_rules::hostfns::trig_set_deal_owner(&mut conf_h, 1).unwrap();
+        game_rules::hostfns::trig_set_deal_houses(&mut conf_h, 2).unwrap();
+        game_rules::hostfns::trig_set_deal_mortgaged(&mut conf_h, 1).unwrap();
+        game_rules::hostfns::trig_set_move_roll(&mut conf_h, 11).unwrap();
+        (
+            game_rules::hostfns::trig_price(&mut conf_h).unwrap() as i64,
+            game_rules::hostfns::trig_deal_owner(&mut conf_h).unwrap() as i64,
+            game_rules::hostfns::trig_deal_houses(&mut conf_h).unwrap() as i64,
+            game_rules::hostfns::trig_deal_mortgaged(&mut conf_h).unwrap() as i64,
+            game_rules::hostfns::trig_move_roll(&mut conf_h).unwrap() as i64,
+        )
+    });
+    install_model_world_with(model, &[]);
+    let model = {
+        rules_kani::host::dispatch(Op::trig_set_price, [400, 0, 0, 0, 0, 0]);
+        rules_kani::host::dispatch(Op::trig_set_deal_owner, [1, 0, 0, 0, 0, 0]);
+        rules_kani::host::dispatch(Op::trig_set_deal_houses, [2, 0, 0, 0, 0, 0]);
+        rules_kani::host::dispatch(Op::trig_set_deal_mortgaged, [1, 0, 0, 0, 0, 0]);
+        rules_kani::host::dispatch(Op::trig_set_move_roll, [11, 0, 0, 0, 0, 0]);
+        (
+            rules_kani::host::dispatch(Op::trig_price, [0; 6]),
+            rules_kani::host::dispatch(Op::trig_deal_owner, [0; 6]),
+            rules_kani::host::dispatch(Op::trig_deal_houses, [0; 6]),
+            rules_kani::host::dispatch(Op::trig_deal_mortgaged, [0; 6]),
+            rules_kani::host::dispatch(Op::trig_move_roll, [0; 6]),
+        )
+    };
+    if real != model {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [trig setters]: real={real:?} model={model:?}"
+        );
+    }
 }

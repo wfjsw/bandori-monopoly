@@ -157,13 +157,13 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- tiles (static data from board.json + runtime state) ----
         Op::tile_count => world::TILE_COUNT as i64,
         Op::tile_named => {
-            // Real board: resolve by name. 「江户川乐器店」 is board index 31.
+            // Real board: resolve by name. 「江户川乐器店」 is board.json
+            // index 31 → engine position 30 (0-based).
             if name_eq(a0, a1, TILE_SHOP_NAME) {
                 // Pilot proofs use the 0-based TILE_SHOP=3 constant against a
                 // stub board; the general model reports the real board index
                 // when the world was built with the real board (`pos` in 1..=60),
-                // otherwise the pilot constant. We return the pilot constant
-                // when `pos` values are in 0..8 (teleport pilot), else board 31.
+                // otherwise the pilot constant.
                 let pilot = world::with_world(|w| w.pos.iter().all(|&p| p < 8));
                 if pilot {
                     TILE_SHOP as i64
@@ -198,7 +198,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             if s < 0 {
                 0
             } else {
-                board::TILES[s as usize].price as i64
+                // `purchase::quote_native` = land + standing houses × house_cost.
+                // The model's `buy_price` arm historically returned land only;
+                // keep land-only here and note the gap — `quote_native` also
+                // folds house cost, which `houses_of` × `build_cost` exposes.
+                // Faithful quote: land + houses * house_cost (see purchase.rs).
+                let h = world::with_world(|w| w.tiles[tile_idx(a0)].houses).max(0);
+                (board::TILES[s as usize].price
+                    + h * board::TILES[s as usize].house_cost) as i64
             }
         }
         Op::build_cost => {
@@ -217,6 +224,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 (board::TILES[s as usize].price / 2) as i64
             }
         }
+        // `WorldOps::rent_of` — RiNG quotes `price`; otherwise `table_rent`
+        // at `rent_houses` (RENT_HOUSES override → standing houses).
+        Op::rent_of => world::with_world(|w| w.rent_of(a0)) as i64,
         Op::houses_of => world::with_world(|w| w.tiles[tile_idx(a0)].houses) as i64,
         Op::rent_houses_of => world::with_world(|w| w.tiles[tile_idx(a0)].houses) as i64,
         Op::set_houses => {
@@ -281,7 +291,8 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             while i < 60 {
                 if w.tiles[i].owner == p {
                     if n == idx {
-                        found = i as i32 + 1;
+                        // 0-based engine index (was wrongly `i + 1`).
+                        found = i as i32;
                     }
                     n += 1;
                 }
@@ -324,8 +335,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
         }
         Op::is_live_house | Op::is_live_house_for => {
-            // Live House is board index 32 / 51; treat agent tiles as not LH.
-            (a0 == 32 || a0 == 51) as i64
+            // Live House is board.json index 32 (agent) / 51 (property
+            // Live House Galaxy) → engine positions 31 / 50.
+            (a0 == 31 || a0 == 50) as i64
         }
         Op::is_agent => {
             let s = board::tile_slot(a0);
@@ -418,6 +430,22 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::turn_player => world::with_world(|w| w.turn_player) as i64,
         Op::round_no => world::with_world(|w| w.round_no) as i64,
         Op::turn_key => world::with_world(|w| w.turn_key) as i64,
+        // `target(player, tile, single)` is engine scheduling (hooks + the
+        // `target` [反击] window). Model the **admission** half only: a living
+        // seat in range is targeted and returned; out / OOB answers -1.
+        // The counteract window is PROTOCOL-LEVEL (KANI.md §6) — no cancel
+        // path is explored. `targeted_count` is bumped on success.
+        Op::target => {
+            let p = a0;
+            world::with_world_mut(|w| {
+                if p >= 0 && (p as usize) < MAX_PLAYERS && (p as usize) < w.n_players as usize && !w.out[p as usize] {
+                    w.targeted_count[p as usize] = w.targeted_count[p as usize].saturating_add(1);
+                    p as i64
+                } else {
+                    -1
+                }
+            })
+        }
         Op::character_is => {
             // Compare interned character name.
             let want = name_id(a1, a2);
@@ -438,6 +466,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 world::with_world_mut(|w| {
                     let p = player_idx(a0);
                     w.money[p] = w.money[p].saturating_add(a1);
+                    w.gains_this_turn[p] = w.gains_this_turn[p].saturating_add(a1);
                     w.push(Effect::GainMoney {
                         player: a0,
                         n: a1,
@@ -527,7 +556,9 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             a2 as i64
         }
         Op::can_pay => world::with_world(|w| (w.money[player_idx(a0)] > 0) as i64),
-        Op::gains_this_turn => 0,
+        Op::gains_this_turn => {
+            world::with_world(|w| w.gains_this_turn[player_idx(a0)]) as i64
+        }
         Op::paid_in_settle => 0,
 
         // ---- cards / piles ----
@@ -858,11 +889,35 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 w.field[0].tile
             }
         }) as i64,
-        Op::set_card_tile => 0,
-        Op::set_card_face_down => 0,
-        Op::card_face_down => 0,
-        Op::set_card_immune => 0,
-        Op::card_immune => 0,
+        Op::set_card_tile => world::with_world_mut(|w| {
+            let ok = w.set_tile_at(a0, a1);
+            if ok {
+                w.push(Effect::SetCardTile { uid: a0, tile: a1 });
+            }
+            ok as i64
+        }),
+        Op::set_card_face_down => world::with_world_mut(|w| {
+            if let Some(f) = w.field_by_uid_mut(a0) {
+                f.face_down = a1 != 0;
+                1
+            } else {
+                0
+            }
+        }),
+        Op::card_face_down => {
+            world::with_world(|w| w.field_by_uid(a0).map_or(0, |f| f.face_down as i64))
+        }
+        Op::set_card_immune => world::with_world_mut(|w| {
+            if let Some(f) = w.field_by_uid_mut(a0) {
+                f.immune = a1 != 0;
+                1
+            } else {
+                0
+            }
+        }),
+        Op::card_immune => {
+            world::with_world(|w| w.field_by_uid(a0).map_or(0, |f| f.immune as i64))
+        }
         Op::self_tile => world::with_world(|w| {
             if w.field_n == 0 {
                 w.pos[player_idx(w.trig_player)]
@@ -870,15 +925,71 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 w.field[0].tile
             }
         }) as i64,
-        Op::set_self_tile => 0,
-        Op::self_face_down => 0,
-        Op::set_self_face_down => 0,
-        Op::self_immune => 0,
-        Op::set_self_immune => 0,
-        Op::is_face_down_at => 0,
-        Op::set_face_down_at => 0,
-        Op::is_immune_at => 0,
-        Op::set_immune_at => 0,
+        Op::set_self_tile => world::with_world_mut(|w| {
+            if w.field_n == 0 {
+                0
+            } else {
+                let uid = w.field[0].uid;
+                let ok = w.set_tile_at(uid, a0);
+                if ok {
+                    w.push(Effect::SetCardTile { uid, tile: a0 });
+                }
+                ok as i64
+            }
+        }),
+        Op::self_face_down => {
+            world::with_world(|w| if w.field_n == 0 { 0 } else { w.field[0].face_down as i64 })
+        }
+        Op::set_self_face_down => world::with_world_mut(|w| {
+            if w.field_n == 0 {
+                0
+            } else {
+                w.field[0].face_down = a0 != 0;
+                1
+            }
+        }),
+        Op::self_immune => {
+            world::with_world(|w| if w.field_n == 0 { 0 } else { w.field[0].immune as i64 })
+        }
+        Op::set_self_immune => world::with_world_mut(|w| {
+            if w.field_n == 0 {
+                0
+            } else {
+                w.field[0].immune = a0 != 0;
+                1
+            }
+        }),
+        Op::is_face_down_at => {
+            world::with_world(|w| w.field_by_uid(a0).map_or(0, |f| f.face_down as i64))
+        }
+        Op::set_face_down_at => world::with_world_mut(|w| {
+            if let Some(f) = w.field_by_uid_mut(a0) {
+                f.face_down = a1 != 0;
+                1
+            } else {
+                0
+            }
+        }),
+        Op::is_immune_at => {
+            world::with_world(|w| w.field_by_uid(a0).map_or(0, |f| f.immune as i64))
+        }
+        Op::set_immune_at => world::with_world_mut(|w| {
+            if let Some(f) = w.field_by_uid_mut(a0) {
+                f.immune = a1 != 0;
+                1
+            } else {
+                0
+            }
+        }),
+        // `tile_at` / `set_tile_at` — field-instance placement (hostfns 535–543).
+        Op::tile_at => world::with_world(|w| w.tile_at(a0)) as i64,
+        Op::set_tile_at => world::with_world_mut(|w| {
+            let ok = w.set_tile_at(a0, a1);
+            if ok {
+                w.push(Effect::SetCardTile { uid: a0, tile: a1 });
+            }
+            ok as i64
+        }),
 
         // ---- props / counters / tokens / state ----
         Op::self_prop | Op::prop_at | Op::tile_prop => {
@@ -1204,11 +1315,44 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::trig_value => world::with_world(|w| w.pay_amount) as i64,
         Op::trig_target => world::with_world(|w| w.trig_target) as i64,
         Op::trig_tile => world::with_world(|w| w.trig_tile) as i64,
-        Op::trig_name => 0,
+        Op::trig_name => world::with_world(|w| w.counter_name) as i64,
         Op::trig_step => 0,
         Op::trig_by_card => 0,
-        Op::trig_pay_is_rent => 0,
+        Op::trig_pay_is_rent => world::with_world(|w| w.trig_pay_is_rent as i64),
         Op::trig_cancelled => world::with_world(|w| w.trig_cancelled as i64),
+        // ---- move payload (hostfns 1830–1880; sentinels when no move) ----
+        Op::trig_move_kind => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.kind as i64 } else { -1 })
+        }
+        Op::trig_move_resolve => world::with_world(|w| w.move_snap.resolve as i64),
+        Op::trig_move_tag => {
+            let key = name_id(a0, a1);
+            world::with_world(|w| w.move_snap.tags.get(key)) as i64
+        }
+        // `trig_move_main` is `Trigger::main`, not `mv.main` (hostfns 1848).
+        Op::trig_move_main => world::with_world(|w| w.trig_main as i64),
+        Op::trig_move_dir => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.dir as i64 } else { 1 })
+        }
+        Op::trig_move_remaining => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.remaining as i64 } else { 0 })
+        }
+        Op::trig_move_from => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.from as i64 } else { -1 })
+        }
+        Op::trig_move_total => {
+            world::with_world(|w| if w.move_snap.present() { w.move_snap.total as i64 } else { 0 })
+        }
+        // `mv.and_then(|m| m.roll).unwrap_or(-1)` — no-move and no-face are -1.
+        Op::trig_move_roll => world::with_world(|w| w.move_snap.roll) as i64,
+        Op::trig_roll_source => world::with_world(|w| w.trig_roll_source) as i64,
+        // ---- buy payload (hostfns 1886–1936) ----
+        Op::trig_buy_kind => world::with_world(|w| w.buy_snap.kind) as i64,
+        Op::trig_seller => world::with_world(|w| w.buy_snap.seller) as i64,
+        Op::trig_price => world::with_world(|w| w.buy_snap.price) as i64,
+        Op::trig_deal_owner => world::with_world(|w| w.buy_snap.deal_owner) as i64,
+        Op::trig_deal_houses => world::with_world(|w| w.buy_snap.deal_houses) as i64,
+        Op::trig_deal_mortgaged => world::with_world(|w| w.buy_snap.deal_mortgaged as i64),
         Op::trig_set_pay_amount => {
             world::with_world_mut(|w| {
                 w.pay_amount = a0;
@@ -1220,9 +1364,28 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             world::with_world_mut(|w| w.trig_target = a0);
             0
         }
-        Op::trig_set_price | Op::trig_set_reason | Op::trig_set_cancelled
-        | Op::trig_set_negate_effect | Op::trig_set_spare | Op::trig_set_move_roll
-        | Op::trig_set_deal_owner | Op::trig_set_deal_houses | Op::trig_set_deal_mortgaged => {
+        Op::trig_set_price => {
+            world::with_world_mut(|w| w.buy_snap.price = a0);
+            0
+        }
+        Op::trig_set_move_roll => {
+            world::with_world_mut(|w| w.move_snap.roll = a0);
+            0
+        }
+        Op::trig_set_deal_owner => {
+            world::with_world_mut(|w| w.buy_snap.deal_owner = a0);
+            0
+        }
+        Op::trig_set_deal_houses => {
+            world::with_world_mut(|w| w.buy_snap.deal_houses = a0);
+            0
+        }
+        Op::trig_set_deal_mortgaged => {
+            world::with_world_mut(|w| w.buy_snap.deal_mortgaged = a0 != 0);
+            0
+        }
+        Op::trig_set_reason | Op::trig_set_cancelled | Op::trig_set_negate_effect
+        | Op::trig_set_spare => {
             world::with_world_mut(|w| {
                 if op == Op::trig_set_cancelled {
                     w.trig_cancelled = a0 != 0;
@@ -1257,7 +1420,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_total | Op::move_dir | Op::fixed_roll | Op::do_move_roll
         | Op::turn_main_steps | Op::turn_rolls | Op::turn_snap | Op::turn_start_pos
         | Op::play_doubled | Op::schedule_turn_end | Op::linger | Op::gate
-        | Op::target | Op::targeted_count => 0,
+        | Op::targeted_count => 0,
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----
         Op::pay_rent | Op::offer_buy | Op::offer_force_buy | Op::offer_build
