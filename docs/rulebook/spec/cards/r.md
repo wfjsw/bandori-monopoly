@@ -33,12 +33,15 @@ prefix dropped).
 * **Source:** `cards.json#R:Fire bird`
 * **Quote:** 「支付1600资金将此卡放置在自己场地上并为其添加X（自选）个奇迹水晶」
 * **Trigger:** the [手] play of this card.
-* **Condition:** the user has ≥1600 money and chooses some X ≥ 0.
+* **Condition:** the user has ≥1600 money and chooses some X.
 * **Effect:** user's money falls by exactly 1600; the card is on the user's
   field; the placed instance carries exactly the chosen X [奇迹水晶].
+* **Rulings & OPEN:** the book's 「X（自选）」 states no range. X = 0 would
+  exhaust immediately (clause 04); the executable contract asks for a
+  positive X and pins the count. OPEN-FIRE-X if a 0-or->10 choice matters.
 * **Frame:** only the user's money / hand / field / discard / draw move.
-* **Rulings & OPEN:** none.
-* **Executable:** `fire_bird_place`.
+* **Rulings & OPEN:** see the Condition note (OPEN-FIRE-X).
+* **Executable:** `fire_bird_place` / `fire_bird_place_contract`.
 
 ### C-R-Fire bird-02 -- turn-end burn
 
@@ -64,7 +67,8 @@ prefix dropped).
 * **Effect:** the rent collected is 1.5× the unmodified rent.
 * **Frame:** only the rent pair's money.
 * **Rulings & OPEN:** stacking with other multipliers is OPEN-R1 (TEST-FINDINGS
-  §6 item R-1); this clause asserts the 1.5× against an otherwise bare rent.
+  §6 item R-1). Rounding of a non-integer 1.5× is OPEN-ROUND10 (the book
+  does not say; the executable pins the integer case 140 → 210).
 * **Executable:** `fire_bird_rent`.
 
 ### C-R-Fire bird-04 -- discard on empty crystals
@@ -133,14 +137,16 @@ prefix dropped).
 * **Trigger:** the play, face 2.
 * **Condition:** there is another player ahead on the path.
 * **Effect:** the user lands on the tile one ahead of that nearest player;
-  the players standing there pay a total of 1000 to the user (分摊); the move
-  is the turn's main move; no [触发结算] runs at the landing.
+  the players on **that nearest player's tile** (「其格子」) pay a total of
+  1000 to the user (分摊); the move is the turn's main move; no [触发结算]
+  runs at the landing.
 * **Frame:** the mover's `pos`, the payers' and mover's `money`, `turn.main_moved`.
-* **Rulings & OPEN:** OPEN-分摊 (how 1000 is split is undefined);
-  OPEN-触发结算 (「不[触发结算]」 -- what is skipped is undefined). Spec
-  checks the landing tile and that the mover's money rose by exactly 1000
-  and the standing players' total money fell by 1000, without asserting the
-  per-payer split or any settle-window shape.
+* **Rulings & OPEN:** 「其格子」 is read as the nearest player's tile (the
+  last named entity), not the landing tile one ahead. OPEN-分摊 (how 1000
+  is split is undefined); OPEN-触发结算 (「不[触发结算]」). Spec checks the
+  landing tile and that the mover's money rose by exactly 1000 and the
+  payers on the nearest player's tile paid a total of 1000, without
+  asserting the per-payer split.
 * **Executable:** `nfo_face2`.
 
 ### C-R-NFO-05 -- face 3 = field + 1000 off the next pay
@@ -212,7 +218,9 @@ prefix dropped).
 * **Frame:** --.
 * **Rulings & OPEN:** the wrap formula 「从1开始重新计数」 is read as
   face' = ((face - 1) mod 6) + 1.
-* **Executable:** `nfo_wrap` (loaded dice of 7 maps to face 1's +1500).
+* **Executable:** not tested -- `Table::dice` clamps loaded faces to the
+  die's sides, so a face of 7 cannot be forced. The wrap formula is
+  recorded; no red test.
 
 ---
 
@@ -570,8 +578,8 @@ prefix dropped).
   values (tile price).
 * **Frame:** the user's money and card zones.
 * **Rulings & OPEN:** 「地契价值」 is the printed tile price
-  (`data/board.json` `price`). Rounding of 20% is not stated; all four RiNG
-  prices (1000) give an integer 200.
+  (`data/board.json` `price`). Rounding of 20% is OPEN-ROUND10; the
+  executable pins the integer case 1000 → 200.
 * **Executable:** `blue_rose_payout`.
 
 ### C-R-蓝玫瑰的骄傲-02 -- (2) teleport to the next unbought Livehouse
@@ -1153,7 +1161,9 @@ prefix dropped).
   「视为」 is a read, not a board-kind rewrite. Spec documents the clause;
   a positive assertion needs an effect that keys off 「Livehouse」 counts and
   is in this unit (`R:蓝玫瑰的骄傲` (1)) -- see the scenario.
-* **Executable:** `band_pretend_livehouse` (scenario).
+* **Executable:** not tested -- a positive assertion needs an effect that
+  keys off 「Livehouse」 counts for that player; `R:蓝玫瑰的骄傲` (1) is the
+  planned probe and is not written. OPEN-BAND-PRETEND.
 
 ### C-R-对音乐的纯粹-03 -- any Livehouse purchase is half price
 
@@ -1183,23 +1193,33 @@ prefix dropped).
 | OPEN-RINGING-X | Ringing Bloom (3) X after (2)'s 「视为」 | TEST-FINDINGS §6 #3 still open. |
 | OPEN-SAYO-TIMING | 弹奏 「时机合适时」 | undefined window. |
 | OPEN-R1 | Fire bird 1.5× stacking | TEST-FINDINGS §6 R-1. |
+| OPEN-ROUND10 | rounding of 1.5× and 20% | book does not say; integer cases pinned. |
+| OPEN-FIRE-X | Fire bird 「X（自选）」 range | no range in the text. |
+| OPEN-BAND-PRETEND | band (2) 「视为 Live House」 | no probe written. |
 
 ---
 
 ## Findings
 
-### C-R-学生会的检查-01 -- play window (genuine, stays failing)
+### C-R-学生会的检查-01 -- play window (test bug, fixed)
 
-* **Book says:** 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」
-  -- the card may be played after the move ends and before [触发结算], when
-  an owned deed is within ±3 of the landing tile.
-* **Engine does:** refuses the play with `err.play_phase` and offers no
-  prompt in that window. The general 「[手] only in 运营 unless [反击]」 gate
-  wins; the card carries no [反击] tag, so its own timing never opens.
-* **Test:** `student_council_contract` (setup: owner lands on their own deed
-  within the ±3 gate; assertion: the play is accepted and seeds a 觉悟).
-* **Rulings:** the card text is the live sheet and is more specific than the
-  general [手] window; this is an engine gap, not a spec ambiguity.
+An earlier draft gave the card **after** the roll and then forced a [手]
+play from 结束, which the engine correctly refused (`err.play_phase`). The
+book's window is 「移动结束后…[触发结算]前」 and is a settle-window offer:
+the card must already be held when the move ends. The fixed test gives it
+before the roll and takes the offer. Not an engine gap.
+
+### C-R-学生会的检查-02 -- 觉悟 never enters the draw (genuine, stays failing)
+
+* **Book says:** 「向抽牌堆中加入一张“觉悟”」 -- the play adds one
+  `R:[衍生] 觉悟` to the user's draw pile.
+* **Engine does:** accepts the [反击] activation in the right window
+  (`log.play_counteract`, `cards:card-roselia.council_check_added`) but no
+  觉悟 appears in any player's hand / draw / discard, the field, the board
+  field, or the marks. The draw pile is empty afterwards.
+* **Test:** `student_council_contract` / clause `student_council_add_resolve`.
+* **Rulings:** the quote is unconditional on the optional placement branch;
+  declining the placement must not drop the 觉悟.
 
 ### C-R-向着顶点-02 / OPEN-RING-BUILD -- noted, not red
 

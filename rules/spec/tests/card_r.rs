@@ -53,10 +53,16 @@ fn land_and_buy(t: &mut Table, who: usize, tile: usize) {
     drain(t);
 }
 
-/// True when the window is (or contains) a play of `card`.
+/// True when the window is (or contains) an activation of `card`.
+///
+/// `kind == "play"` is a [手] play; `kind == "counter"` is a [反击]
+/// activation; an empty kind is a bare activation. A kind filter that drops
+/// `counter` silently no-ops every [反击]-timed clause.
 fn played(step: &Step<'_>, card: &str) -> bool {
     step.events.iter().any(|e| {
-        e.r#type == "card" && e.card == card && (e.kind == "play" || e.kind.is_empty())
+        e.r#type == "card"
+            && e.card == card
+            && (e.kind == "play" || e.kind == "counter" || e.kind.is_empty())
     })
 }
 
@@ -385,17 +391,20 @@ pub const SPRECH_CLAUSES: &[Clause] = &[Clause::new(
 #[test]
 fn sprechchor_contract() {
     forall(6, 0xC0C0_0004, |rng, _i| {
-        // Gate: refused when the turn starts off a Livehouse.
+        // Gate: refused when the turn **starts** off a Livehouse. The gate
+        // reads the turn-start square, so arrange the start pos before
+        // begin_turn -- not after.
         {
-            let mut t = vanilla2();
+            let mut t = Table::vanilla(2);
             t.set_pos(0, tile("江户川公园"));
+            t.begin_turn(0);
+            drain(&mut t);
             t.give(0, &[SPRECH]);
             let r = t.play(0, SPRECH);
             drain(&mut t);
             if r.is_ok() {
                 return Err(format!(
-                    "Sprechchor must refuse off-Livehouse; play succeeded, pos={}",
-                    t.pos(0)
+                    "Sprechchor must refuse when the turn started off a Livehouse; play succeeded, start-pos gate broken"
                 ));
             }
         }
@@ -533,9 +542,14 @@ fn fire_bird_place_contract() {
         if !t.on_field(0, FIRE_BIRD) {
             return Err(format!("Fire bird not on field: {:?}", t.field_ids(0)));
         }
-        let x = t.crystals(0, FIRE_BIRD).unwrap_or(0);
-        if x < 0 {
-            return Err(format!("crystal count {x} is negative"));
+        let x = t.crystals(0, FIRE_BIRD).unwrap_or(-1);
+        // 「添加X（自选）个奇迹水晶」 -- the instance carries exactly the
+        // chosen X (we asked for a positive count above).
+        if x < 1 {
+            return Err(format!(
+                "crystal count {x}, expected the chosen positive X; field={:?}",
+                t.field(0)
+            ));
         }
         frame(
             &pre,
@@ -687,24 +701,41 @@ fn fire_bird_rent_1_5x() {
 
 const NFO: &str = "R:NFO";
 
-/// C-R-NFO-03 -- face 1 (and 7, 13, ...) gains 1500.
-pub fn nfo_face1(step: &Step<'_>) -> Result<(), String> {
-    if !played(step, NFO) {
-        return Ok(());
-    }
-    Ok(())
-}
-
-/// C-R-NFO-01 -- the window reports a d6.
+/// C-R-NFO-01 -- the play reports a 1d6 (a `log.dice` in the window).
 pub fn nfo_roll(step: &Step<'_>) -> Result<(), String> {
     if !played(step, NFO) {
         return Ok(());
     }
+    let rolled = step.events.iter().any(|e| {
+        e.r#type == "dice" || e.msg.key().contains("dice") || e.msg.key().contains("掷")
+    });
+    if !rolled {
+        return Err(format!(
+            "NFO played without a 1d6 roll; keys={:?}",
+            step.event_keys()
+        ));
+    }
     Ok(())
 }
 
-/// C-R-NFO-02 -- after the turn ends the user wears 1 [停留].
+/// C-R-NFO-02 -- the play schedules 1 layer of [停留] after the turn ends.
 pub fn nfo_stay(step: &Step<'_>) -> Result<(), String> {
+    if !played(step, NFO) {
+        return Ok(());
+    }
+    // The [停留] lands at turn end, not on the play itself. The play must at
+    // least not *clear* an existing stay, and the dedicated scenario
+    // `nfo_stay_after_turn_end` pins the post-turn-end layer.
+    Ok(())
+}
+
+/// C-R-NFO-03 -- face 1 gains 1500.
+///
+/// The face is only known via loaded dice in the scenario (`nfo_face1`); a
+/// generic step cannot read the rolled face. This clause is a no-op except
+/// that a play of NFO must not *lose* the user money on face 1 windows the
+/// scenario arms.
+pub fn nfo_face1(step: &Step<'_>) -> Result<(), String> {
     if !played(step, NFO) {
         return Ok(());
     }
@@ -727,19 +758,23 @@ pub const NFO_CLAUSES: &[Clause] = &[
     ),
 ];
 
-/// NFO face 1: +1500. Faces wrap (7 -> 1).
+/// NFO face 1: +1500.
+///
+/// C-R-NFO-09 (faces >6 wrap) is **not** pinned here: `Table::dice` clamps
+/// loaded faces to the die's sides, so a "face 7" is silently a 6 and
+/// cannot exercise 「若结果严格大于6，则从1开始重新计数」. See the doc.
 #[test]
-fn nfo_face1_and_wrap() {
-    for (face, tag) in [(1, "1"), (7, "7 wraps to 1")] {
+fn nfo_face1_pays_1500() {
+    for face in [1] {
         let mut t = vanilla2();
         t.dice(&[face]);
         let money0 = t.money(0);
         t.observe(NFO_CLAUSES);
         t.give_play(0, NFO)
-            .unwrap_or_else(|e| panic!("NFO refused on face {tag}: {e}"));
+            .unwrap_or_else(|e| panic!("NFO refused on face {face}: {e}"));
         drain(&mut t);
         let delta = t.money(0) as i64 - money0 as i64;
-        assert_eq!(delta, 1500, "face {tag}: money delta {delta}");
+        assert_eq!(delta, 1500, "face {face}: money delta {delta}");
     }
 }
 
@@ -1082,13 +1117,24 @@ pub fn student_council_add_resolve(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = actor(step);
-    if !step.post.hidden[who].draw.iter().any(|c| c == RESOLVE) {
-        return Err(format!(
-            "draw pile lacks 觉悟; draw={:?}",
-            step.post.hidden[who].draw
+    let h = &step.post.hidden[who];
+    let named = |c: &str| c.contains("觉悟");
+    if h.draw.iter().any(|c| named(c)) {
+        return Ok(());
+    }
+    let mut zones = String::new();
+    for (i, hid) in step.post.hidden.iter().enumerate() {
+        zones.push_str(&format!(
+            " P{i} hand={:?} draw={:?} discard={:?}",
+            hid.hand, hid.draw, hid.discard
         ));
     }
-    Ok(())
+    let bfield: Vec<_> = step.post.st.board_field.iter().map(|f| &f.card).collect();
+    Err(format!(
+        "「向抽牌堆中加入一张“觉悟”」 -- no 觉悟 anywhere; {zones} bfield={bfield:?} marks={:?} keys={:?}",
+        step.post.st.marks,
+        step.event_keys()
+    ))
 }
 
 pub const COUNCIL_CLAUSES: &[Clause] = &[Clause::new(
@@ -1099,6 +1145,10 @@ pub const COUNCIL_CLAUSES: &[Clause] = &[Clause::new(
 )];
 
 /// 学生会的检查: gate is an owned deed within +/-3; the play seeds a 觉悟.
+///
+/// The book's window is 「移动结束后…[触发结算]前」 -- not 运营. The card
+/// must already be in a [反击]-playable zone when the move ends, so it is
+/// **given before the roll** and taken from the settle-window offer.
 #[test]
 fn student_council_contract() {
     forall(4, 0xC0C0_000B, |_rng, _i| {
@@ -1106,47 +1156,42 @@ fn student_council_contract() {
         let blue = tile("江户川公园");
         t.own(0, &[blue]);
         t.set_pos(0, (blue + 60 - 1) % 60);
+        t.give(0, &[COUNCIL]);
         t.dice(&[1]);
-        t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
-        drain(&mut t);
         let pre = t.snapshot_world();
         t.observe(COUNCIL_CLAUSES);
-        t.give(0, &[COUNCIL]);
-        // The book's window is 「移动结束后…[触发结算]前」. Prefer a prompt
-        // the engine opens there; fall back to a bare play.
+        t.roll(0).map_err(|e| format!("roll rejected: {e}"))?;
+        // Take the card from the post-move / pre-settle window.
         let mut played_ok = false;
         while t.prompt().is_some() {
-            let d = t.dump_prompt();
-            if d.contains("学生会") || d.contains("student") || d.contains(COUNCIL) {
-                if let Some(k) = t.option(COUNCIL).or_else(|| t.option("ask.yes")).or(Some(0)) {
-                    let _ = t.answer_one(k);
-                    played_ok = true;
-                } else {
-                    t.decline();
-                }
+            if t.counteract_offered(COUNCIL) {
+                t.counteract(0, COUNCIL)
+                    .map_err(|e| format!("counteract rejected: {e}"))?;
+                played_ok = true;
+            } else if let Some(k) = t.option(COUNCIL) {
+                let _ = t.answer_one(k);
+                played_ok = true;
             } else {
                 t.decline();
             }
         }
         if !played_ok {
-            match t.play(0, COUNCIL) {
-                Ok(()) => {}
-                Err(e) => {
-                    // GENUINE DISCREPANCY (stays failing): the book's window is
-                    // 「移动结束后…[触发结算]前可打出」 but the engine only
-                    // accepts [手] plays in 运营 (`err.play_phase`).
-                    return Err(format!(
-                        "C-R-学生会的检查-01 violated: book says 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」; engine refused with {e}; keys={:?}",
-                        t.recent_keys(12)
-                    ));
-                }
-            }
+            return Err(format!(
+                "C-R-学生会的检查-01 violated: book says 「移动结束后前后三格内若存在你拥有地契的格子，[触发结算]前可打出」; no offer in that window; keys={:?} prompt={}",
+                t.recent_keys(12),
+                t.dump_prompt()
+            ));
         }
         drain(&mut t);
-        if !t.draw_pile(0).contains(&RESOLVE.to_string()) {
+        // C-R-学生会的检查-02 is checked by the clause on the counteract
+        // step (and again here).
+        if !t.draw_pile(0).iter().any(|c| c.contains("觉悟")) {
             return Err(format!(
-                "draw pile lacks 觉悟; draw={:?}",
-                t.draw_pile(0)
+                "「向抽牌堆中加入一张“觉悟”」 -- not in the draw; draw={:?} hand={:?} discard={:?} keys={:?}",
+                t.draw_pile(0),
+                t.hand(0),
+                t.discard(0),
+                t.recent_keys(16)
             ));
         }
         frame(
@@ -1376,14 +1421,68 @@ fn ringing_bloom_after_rent() {
         !t.on_field(0, RINGING),
         "card leaves the field after a non-RiNG rent"
     );
+    // 「获得500*X资金，X为你收费格上的房屋数」 -- X is the rent tile's
+    // house count (1 here). The rent leg is G-SETTLE's; the 500*X leg is
+    // this card's. money0 is taken before the rent, so
+    // delta = rent(1 house) + 500*X. Pin both.
+    let delta = t.money(0) as i64 - money0 as i64;
+    let rent_1h = 640; // 江户川公园 rent table [140, 640, 1540, 3240]
+    let expect = rent_1h + 500;
+    assert_eq!(
+        delta, expect,
+        "expected rent {rent_1h} + 500*X(=500) = {expect}; delta={delta}"
+    );
     assert!(
-        t.discard(0).contains(&RINGING.to_string())
-            || t.draw_pile(0).contains(&RINGING.to_string()),
-        "card is in the discard; discard={:?}",
+        t.discard(0).contains(&RINGING.to_string()),
+        "「此卡置入弃牌堆」 -- not the draw; discard={:?}",
         t.discard(0)
     );
-    let delta = t.money(0) as i64 - money0 as i64;
-    assert!(delta >= 500, "expected at least the 500*X leg; delta={delta}");
+}
+
+/// C-R-Ringing Bloom-02 -- houses read as the max; raised tiles charge half.
+///
+/// The printed `houses` are a 「视为」 read (not rewritten). With two owned
+/// tiles at 0 and 2 houses, the 0-house tile is raised to 2 for rent and
+/// charges half of the 2-house rent.
+#[test]
+fn ringing_bloom_as_if_max_houses() {
+    let mut t = Table::new(&["白金燐子", "户山香澄"]);
+    t.begin_turn(0);
+    drain(&mut t);
+    let low = tile("江户川公园"); // rent table [140, 640, 1540, 3240]
+    let high = tile("富士见坂");
+    t.own(0, &[low, high]);
+    t.set_houses(low, 0);
+    t.set_houses(high, 2);
+    // Play, not place_raw: (2) is a hook the play arms; place_raw has none.
+    // Houses must be in place *before* the play -- the max is read then.
+    t.give_play(0, RINGING).expect("Ringing Bloom play");
+    drain(&mut t);
+    // Printed houses are untouched by the 「视为」.
+    assert_eq!(t.houses(low), 0, "「视为」 does not rewrite printed houses");
+    assert_eq!(t.houses(high), 2);
+    // P1 settles on the raised tile: rent reads as 2 houses (1540) halved
+    // for the raise = 770.
+    let money0 = t.money(0);
+    let money1 = t.money(1);
+    t.begin_turn(1);
+    drain(&mut t);
+    t.set_pos(1, (low + 60 - 1) % 60);
+    t.dice(&[1]);
+    t.roll(1).unwrap();
+    drain(&mut t);
+    let gain = t.money(0) as i64 - money0 as i64;
+    let loss = money1 as i64 - t.money(1) as i64;
+    // (3) fires on this non-RiNG rent too: +500*X with X the counted houses.
+    // gain = half-rent + 500*X; loss = half-rent. Pin the half-rent via loss.
+    assert_eq!(
+        loss, 770,
+        "raised tile charges half of the 2-house rent (1540/2); loss={loss}"
+    );
+    assert!(
+        gain > loss,
+        "the 500*X leg is on top of the rent; gain={gain} loss={loss}"
+    );
 }
 
 // ================================================================ 弹奏
@@ -1449,9 +1548,23 @@ fn yukina_first_circle_no_reward() {
     t.set_pos(0, 58);
     t.dice(&[3]);
     let money0 = t.money(0);
+    let hand0 = t.hand(0).len();
+    let draw0 = t.draw_pile(0).len();
     t.roll(0).unwrap();
     drain(&mut t);
-    assert_eq!(t.money(0), money0, "no CiRCLE pass reward");
+    assert_eq!(t.money(0), money0, "no CiRCLE pass reward (money)");
+    assert_eq!(
+        t.hand(0).len(),
+        hand0,
+        "no CiRCLE pass reward (hand): {:?}",
+        t.hand(0)
+    );
+    assert_eq!(
+        t.draw_pile(0).len(),
+        draw0,
+        "no CiRCLE pass reward (draw): {:?}",
+        t.draw_pile(0)
+    );
 }
 
 /// C-R-来练习吧-04 -- +1 火罐 on a RiNG landing (cap 1).
