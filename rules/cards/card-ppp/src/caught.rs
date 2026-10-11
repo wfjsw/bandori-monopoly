@@ -15,7 +15,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // C# `CardCaught.WhyNot`: `H.MoveWhyNot` first (main move still available),
     // then refuses with 「前方没有别的玩家」 unless another present player stands on
     // a different tile.
-    if let Some(why) = ctx::cant_move(player_id) {
+    if let Some(why) = rules_status::move_blocked(player_id) {
         return Some(why);
     }
     let pos = ctx::player_pos(player_id);

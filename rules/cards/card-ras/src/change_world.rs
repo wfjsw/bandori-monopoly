@@ -70,7 +70,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     if spots(player_id).is_empty() {
         return Some(Msg::new(key!("change_world_no_houses")));
     }
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 /// Where the card's tile is written down (C# `Mem` on a tile-bound field card).

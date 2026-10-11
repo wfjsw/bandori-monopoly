@@ -23,7 +23,7 @@ pub const RINNE_RAIN: CardDef = CardDef::new(
 
 fn rinne_rain(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「使自己获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, CardName)`.
-    ctx::give_stay(player_id, 1);
+    rules_status::stay::add(player_id, 1);
     // 规则书: 「并在回合结束时额外进行一次[触发结算]」 -- C# `H._turnCtx.SettleAtEnd++`.
     // A scheduled turn-end rule op (`docs/TILES.md`): `On::AtEnd` runs at the
     // turn end and its body settles the square the player is on.

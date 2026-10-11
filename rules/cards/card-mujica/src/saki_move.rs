@@ -16,7 +16,7 @@ fn saki_move(player_id: i32) -> card_sdk::Asked {
     // yourself only before your main move).
     let mut candidates = ctx::others(player_id);
     // 规则书: 「（可在掷骰前选择自己以代替主要移动）」
-    if ctx::cant_move(player_id).is_none() {
+    if rules_status::move_blocked(player_id).is_none() {
         candidates.insert(0, player_id);
     }
     if candidates.is_empty() {

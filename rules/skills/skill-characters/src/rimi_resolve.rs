@@ -65,7 +65,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// （1）「后在回合结束时获得1个[火罐]」.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, PASSED, 0);
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("rimi_resolve_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("rimi_resolve_gain")))?;
     Ok(())
 }
 
@@ -112,7 +112,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
     let Some(&to) = far.get(pick) else {
         return Ok(());
     };
-    if !ctx::spend_fire(player_id, 3, &Msg::new(key!("rimi_resolve_spend")))? {
+    if !rules_status::fire::spend(player_id, 3, &Msg::new(key!("rimi_resolve_spend")))? {
         return Ok(());
     }
     // 「[传送]…并[结算]」 -- a teleport that settles.

@@ -40,7 +40,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
+        rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     }
     Ok(())
 }
@@ -66,7 +66,7 @@ fn use_skill(player_id: i32) -> card_sdk::Asked {
             Msg::new(key!("himari_step_even")),
         ],
     )?;
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("himari_step_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("himari_step_spend")))? {
         return Ok(());
     }
     state::set(player_id, REST_TURNS, 0);

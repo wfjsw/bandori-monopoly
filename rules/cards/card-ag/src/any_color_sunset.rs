@@ -85,7 +85,7 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
         4 => {
             // C# offers 「补满火罐」 only when `H.HasFireSkill(i) && H.Fire(i) < H.FireMax(i)`.
             let can_fire =
-                ctx::fire_max(player_id) > 0 && ctx::fire(player_id) < ctx::fire_max(player_id);
+                rules_status::fire::max(player_id) > 0 && rules_status::fire::get(player_id) < rules_status::fire::max(player_id);
             let mut take_money = true;
             if can_fire {
                 let pick = ctx::ask_pick(
@@ -101,9 +101,9 @@ fn apply(player_id: i32, k: i32) -> card_sdk::Asked {
             }
             if !take_money {
                 // 规则书: 「补满火罐」 -- C# `H.GainFire(i, H.FireMax(i) - fire, ...)`.
-                let need = ctx::fire_max(player_id) - ctx::fire(player_id);
+                let need = rules_status::fire::max(player_id) - rules_status::fire::get(player_id);
                 if need > 0 {
-                    ctx::gain_fire(player_id, need, &Msg::new(key!("any_color_sunset_why")))?;
+                    rules_status::fire::gain(player_id, need, &Msg::new(key!("any_color_sunset_why")))?;
                 }
             } else {
                 // 规则书: 「获得2000资金」

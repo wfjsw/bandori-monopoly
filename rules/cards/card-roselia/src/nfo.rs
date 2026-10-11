@@ -75,7 +75,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// wear-off (so it survives into the next turn).
 fn at_end(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「并在回合结束后获得一层[停留]」 -- C# `H.GiveStay(i, 1, i, "NFO")`.
-    ctx::give_stay(player_id, 1);
+    rules_status::stay::add(player_id, 1);
     ctx::log(
         player_id,
         &Msg::new(key!("nfo_stay")).player_id("who", player_id),

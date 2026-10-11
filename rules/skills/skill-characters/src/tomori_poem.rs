@@ -62,7 +62,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]任意RiNG时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_poem_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("tomori_poem_gain")))?;
     Ok(())
 }
 
@@ -117,7 +117,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, cost, &Msg::new(key!("tomori_poem_spend")))? {
+    if !rules_status::fire::spend(player_id, cost, &Msg::new(key!("tomori_poem_spend")))? {
         return Ok(());
     }
     if !ctx::gate(mover, AbKind::Teleport) {
@@ -138,7 +138,7 @@ fn before_settle(player_id: i32) -> card_sdk::Asked {
         // 下回合结束时[触发结算]；在此技能影响下的支付价格变为原本的一半」.
         let n = ctx::roll(mover, 1, 20);
         if n <= 6 {
-            ctx::give_stay(mover, 1);
+            rules_status::stay::add(mover, 1);
             state::set(player_id, DUE, 1);
             ctx::log(
                 player_id,

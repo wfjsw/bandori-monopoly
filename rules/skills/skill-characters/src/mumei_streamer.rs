@@ -69,7 +69,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 /// is the pre.
 fn on_pay_add(player_id: i32) -> card_sdk::Asked {
     // 「你立即获得1火罐」 first, so X counts it.
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("mumei_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("mumei_gain")))?;
     // 「使那次支付的金额提高X*100，X为你拥有的火罐数」
     let x = state::get(player_id, state_key::FIRE);
     let amount = ctx::trigger::value();

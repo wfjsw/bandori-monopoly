@@ -66,7 +66,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
+        rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     }
     Ok(())
 }
@@ -95,7 +95,7 @@ fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("moca_self_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("moca_self_spend")))? {
         return Ok(());
     }
     state::set(player_id, &key, state::get(player_id, &key) + 1);

@@ -67,7 +67,7 @@ fn pass_pays(_owner: i32) -> bool {
     if mover < 0 {
         return false;
     }
-    if ctx::exile_of(mover) > 0 {
+    if rules_status::exile::get(mover) > 0 {
         return false;
     }
     let start = trigger::move_from();
@@ -137,7 +137,7 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
             return Ok(());
         }
     }
-    let pick = if ctx::stun_of(mover) > 0 {
+    let pick = if rules_status::stun::get(mover) > 0 {
         // TODO(规则书): card-only while stunned is a ruling (`C44` / `D13`),
         // not a 「[CiRCLE奖励]」 clause.
         ctx::log(

@@ -33,7 +33,7 @@ fn play(_player_id: i32) -> card_sdk::Asked {
         // 「移动到…的格子」 -- a jump, no settle clause in the text.
         ctx::teleport_to(p, tile);
         // 「然后获得1层[除外]」 -- `exile_to` left at -1 (no named return).
-        ctx::give_exile(p, 1, -1);
+        rules_status::exile::send(p, 1, -1);
         ctx::log(
             p,
             &Msg::new("log.event.school_time_to")

@@ -187,7 +187,7 @@ fn reroll(player_id: i32, roll: i32) -> card_sdk::Asked {
 /// sheet says. With （3） paying 1,000 per crystal the owner is out net 0 and
 /// the crystal count drops -- a voluntary decay of this card.
 fn attack(player_id: i32, roller: i32, roll: i32) -> card_sdk::Asked {
-    if ctx::player_out(player_id) || !ctx::can_pay(player_id) || ctx::money_of(player_id) < 1000 {
+    if ctx::player_out(player_id) || !rules_status::can_pay(player_id) || ctx::money_of(player_id) < 1000 {
         return Ok(());
     }
     if !ctx::ask_yes(

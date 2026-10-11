@@ -41,7 +41,7 @@ fn two_donuts(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得[除外]直至你原本所在格子被其他玩家经过」
     // C# `H.GiveExile(i, 99, pos, i, CardName)` -- 99 layers so the per-turn
     // layer tick does not expire it; `DonutFx` clears the exile early.
-    ctx::give_exile(player_id, 99, pos);
+    rules_status::exile::send(player_id, 99, pos);
     ctx::set_slot(player_id, SLOT_ORIG, pos);
     ctx::set_slot(player_id, SLOT_BY, -1);
     // C# `H.ExtraOf<DonutFx>(i).Orig = pos` -- place as the live-effect carrier
@@ -98,7 +98,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
     let orig = ctx::slot(player_id, SLOT_ORIG);
     // C# `me.exile = 0; me.exileTo = -1; me.pos = Orig` -- a plain position set,
     // no settle (`ctx::teleport_to` is `H.ForceTeleport(..., resolve: false)`).
-    ctx::give_exile(player_id, -99, -1);
+    rules_status::exile::send(player_id, -99, -1);
     ctx::teleport_to(player_id, orig);
     ctx::log(
         player_id,
@@ -159,7 +159,7 @@ fn back(player_id: i32, by: i32, dir: i32) -> card_sdk::Asked {
         if ctx::player_out(who) {
             continue;
         }
-        let got = ctx::gain_fire(who, 2, &Msg::new(key!("two_donuts_fire")))?;
+        let got = rules_status::fire::gain(who, 2, &Msg::new(key!("two_donuts_fire")))?;
         let missed = 2 - got;
         if missed > 0 {
             ctx::gain(

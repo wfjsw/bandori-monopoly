@@ -75,7 +75,7 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     // CH-07 minimal -- the card is spent, no place / no designate / no later
     // teleport). C-Q26-adjacent ruling recorded by `g23_unstoppable_refuses_the_exile_cost`.
     let before = ctx::state::get(player_id, card_sdk::abi::state_key::EXILE);
-    ctx::give_exile(player_id, 2, tile);
+    rules_status::exile::send(player_id, 2, tile);
     if ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) <= before {
         ctx::log(
             player_id,

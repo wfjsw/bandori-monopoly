@@ -39,3 +39,15 @@ pub fn tick_end(v: i32) -> i32 {
 pub fn lifts_hand_limit(v: i32) -> bool {
     v > 0
 }
+// ------------------------------------------------------------- canonical API
+
+/// The state key this host owns.
+pub const KEY: &str = "noHand";
+
+pub fn add(player_id: i32, n: i32) {
+    card_sdk::ctx::state::add(player_id, KEY, n);
+}
+
+pub fn get(player_id: i32) -> i32 {
+    card_sdk::ctx::state::get(player_id, KEY)
+}

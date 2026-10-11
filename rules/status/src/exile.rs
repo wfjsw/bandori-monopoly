@@ -85,3 +85,37 @@ pub fn blocks_on_board(exile: i32) -> bool {
 pub fn blocks_targeted(exile: i32) -> bool {
     exile > 0
 }
+// ------------------------------------------------------------- canonical API
+
+/// The state key this host owns (frozen webui wire).
+pub const KEY: &str = "exile";
+/// Tile the return [传送] lands on, or -1 for none.
+pub const KEY_TO: &str = "exileTo";
+/// 「视为当回合的主要移动」 -- the return teleport **is** that turn's
+/// [主要移动] (MyGO:无路矢).
+pub const KEY_MAIN: &str = "exileMain";
+
+/// Give `n` [除外] layers; `to` is the return tile (-1 = none).
+///
+/// TODO(规则书)（1）: 「该效果生效时无法重复获得该效果」 (`data/rules.txt`
+/// 50) -- today layers stack. Conservative reading: an already-exiled
+/// player gains no new layer.
+pub fn send(player_id: i32, n: i32, to: i32) {
+    card_sdk::ctx::give_exile(player_id, n, to);
+}
+
+/// [除外] layers on the player.
+pub fn get(player_id: i32) -> i32 {
+    card_sdk::ctx::exile_of(player_id)
+}
+
+/// Drop every [除外] layer and forget the return tile.
+pub fn clear(player_id: i32) {
+    use card_sdk::ctx;
+    let n = get(player_id);
+    if n > 0 {
+        ctx::state::add(player_id, KEY, -n);
+    }
+    ctx::state::set(player_id, KEY_TO, -1);
+    ctx::state::set(player_id, KEY_MAIN, 0);
+}

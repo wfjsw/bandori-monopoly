@@ -42,7 +42,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书(2): 「进行一次 "afterglow"式的移动」 -- the move is the turn's main
     // move, so the C# `H.MoveWhyNot` gate applies (own turn, main move still
     // available, turn's move not skipped).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {

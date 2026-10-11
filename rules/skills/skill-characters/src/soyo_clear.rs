@@ -61,7 +61,7 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
         ctx::log(player_id, &Msg::new(key!("soyo_clear_denied")));
         return Ok(());
     }
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("soyo_clear_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("soyo_clear_gain")))?;
     Ok(())
 }
 
@@ -74,7 +74,7 @@ fn offer(player_id: i32) -> card_sdk::Asked {
     )? {
         return Ok(());
     }
-    if ctx::spend_fire(player_id, 1, &Msg::new(key!("soyo_clear_spend")))? {
+    if rules_status::fire::spend(player_id, 1, &Msg::new(key!("soyo_clear_spend")))? {
         state::set(player_id, ARMED, 1);
     }
     Ok(())

@@ -134,7 +134,7 @@ fn anon_tokyo(player_id: i32) -> card_sdk::Asked {
             ctx::set_dest(ctx::Dest::Field);
             ctx::place_card(player_id, ID, &Msg::new(key!("anon_tokyo_linked")));
         }
-    } else if ctx::cant_move(player_id).is_none() {
+    } else if rules_status::move_blocked(player_id).is_none() {
         // 规则书[手]2: 「[使用者]不同时拥有上述的两个格子则进入移动阶段并将本回合的[主要移动]
         // 改为向前或后移动1格到被[指定]格子且[结算]」 -- C# gates this branch on
         // `H.MoveWhyNot(i) == null` (else it logs 「这回合不能移动了」 and sets

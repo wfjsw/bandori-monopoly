@@ -22,7 +22,7 @@ fn stayers() -> Vec<i32> {
     // and not exiled"; `player_out` covers the out-of-game half (exile layers are
     // not readable, so an exiled stayer may slip in).
     (0..ctx::player_count())
-        .filter(|&p| !ctx::player_out(p) && ctx::stay_of(p) > 0)
+        .filter(|&p| !ctx::player_out(p) && rules_status::stay::get(p) > 0)
         .collect()
 }
 

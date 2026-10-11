@@ -159,7 +159,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
     }
     let have = state::get(player_id, state_key::FIRE);
     if have > 0 {
-        ctx::spend_fire(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
+        rules_status::fire::spend(player_id, 1, &Msg::new(key!("ave_mujica_burn")))?;
     }
     // 「回合结束后若火罐为0则退出状态2；退出状态2时，失去所有剩余火罐」
     if state::get(player_id, state_key::FIRE) == 0 {
@@ -167,7 +167,7 @@ fn at_turn_end(player_id: i32) -> card_sdk::Asked {
         state::set(player_id, IN_TWO, 0);
         let left = state::get(player_id, state_key::FIRE);
         if left > 0 {
-            ctx::spend_fire(player_id, left, &Msg::new(key!("ave_mujica_exit")))?;
+            rules_status::fire::spend(player_id, left, &Msg::new(key!("ave_mujica_exit")))?;
         }
         ctx::log(player_id, &Msg::new(key!("ave_mujica_left")));
     }

@@ -78,7 +78,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
         ctx::teleport_to(p, dest);
         // 「并获得1层[除外]」 -- one plain exile layer; the engine ticks it off
         // at the player's next turn start (`game-core` exile tick).
-        ctx::give_exile(p, 1, -1);
+        rules_status::exile::send(p, 1, -1);
         ctx::log(
             player_id,
             &Msg::new("log.event.kizuna_tp")

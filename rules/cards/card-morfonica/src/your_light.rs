@@ -38,7 +38,7 @@ fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「可以从手牌中打出此卡」 -- the C# then defers to `H.MoveWhyNot`
     // (only while the turn's main move is still open). The 3-valued
     // `status.move_*` message stays.
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn your_light(player_id: i32) -> card_sdk::Asked {

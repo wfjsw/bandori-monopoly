@@ -64,7 +64,7 @@ fn on_settle_applies(player_id: i32) -> bool {
 /// is the trigger's tile; the clause says *another* player, so this player's own
 /// landing does not pay out ([`on_settle_applies`]).
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("extraordinary_star.gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("extraordinary_star.gain")))?;
     Ok(())
 }
 
@@ -86,7 +86,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 /// is all-or-nothing; the destination is a choice among the tiles this player
 /// owns; 「可选择盖房」 is the move being allowed to build where it lands.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("extraordinary_star.spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("extraordinary_star.spend")))? {
         return Ok(());
     }
     let owned = ctx::owned_tiles(player_id);

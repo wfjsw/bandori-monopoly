@@ -86,7 +86,7 @@ fn deck_at_game_start(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「[传送]到“东京外”」 -- C# `H.Teleport(..., resolve: false)`.
     ctx::teleport_to(player_id, to);
     // 规则书（1）: 「获得3层[除外]」 -- C# `H.GiveExile(Seat, 3, to)`.
-    ctx::give_exile(player_id, 3, to);
+    rules_status::exile::send(player_id, 3, to);
     ctx::log(
         player_id,
         &Msg::new(key!("lock_dream_exiled"))

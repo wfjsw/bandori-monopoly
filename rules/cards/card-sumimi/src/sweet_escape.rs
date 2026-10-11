@@ -87,9 +87,9 @@ fn spots(player_id: i32) -> Vec<i32> {
 /// C# `CardSweetEscape.WhyNot` -- turn-start, price-sum and destination gates.
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「回合开始时」 / 「可打出」 -- C# `H.State.turn == seat &&
-    // !H._turnCtx.MainMoved`, later `H.MoveWhyNot`; `ctx::cant_move` covers
+    // !H._turnCtx.MainMoved`, later `H.MoveWhyNot`; `rules_status::move_blocked` covers
     // off-turn, already-moved and skip-move.
-    if let Some(why) = ctx::cant_move(player_id) {
+    if let Some(why) = rules_status::move_blocked(player_id) {
         return Some(why);
     }
     // 规则书: 「若自身前后两格内的地块[收费标价]之和大于等于2000，可打出此卡」

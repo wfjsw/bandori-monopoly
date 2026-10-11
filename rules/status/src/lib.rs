@@ -70,171 +70,18 @@ pub static CARDS: &[card_sdk::CardDef] = &[
 
 // --------------------------------------------------------------- canonical API
 //
-// One shape for every status. Thin wrappers over the generic `ctx::state`
-// surface and the still-shipped engine verbs (Phase B shims; Phase C drops
-// the old `ctx::{give_stay, …}` names once every card has moved).
-
-pub mod stay_api {
-    //! `status:stay` -- [停留] layers. `docs/STATUS-HOSTS.md` §1.
-    use card_sdk::ctx;
-
-    /// The state key this host owns (frozen webui wire).
-    pub const KEY: &str = "stay";
-
-    /// Add `n` [停留] layers (negative removes; floors at 0). Wear-off is the
-    /// item's own `Tick::TurnEnd`. Un-latching the turn's move gate on the
-    /// last layer is the host's count-changed clause, not this call site.
-    pub fn add(player_id: i32, n: i32) {
-        // Phase B shim: the engine verb still owns the un-latch side effect.
-        // Phase C routes this through `ctx::state` + the stay host's hook.
-        ctx::give_stay(player_id, n);
-    }
-
-    /// [停留] layers on the player.
-    pub fn get(player_id: i32) -> i32 {
-        ctx::stay_of(player_id)
-    }
-
-    /// Drop every [停留] layer.
-    pub fn clear(player_id: i32) {
-        let n = get(player_id);
-        if n > 0 {
-            add(player_id, -n);
-        }
-    }
-}
-
-pub mod stun_api {
-    //! `status:stun` -- [晕眩] layers + `stunStart`. `docs/STATUS-HOSTS.md` §1.
-    use card_sdk::ctx;
-
-    pub const KEY: &str = "stun";
-    /// The layer that only starts counting next turn (`Tick::TurnStart`).
-    pub const KEY_START: &str = "stunStart";
-
-    /// Add `n` [晕眩] layers (floors at 0). Wear-off `Tick::TurnEnd`.
-    pub fn add(player_id: i32, n: i32) {
-        ctx::give_stun(player_id, n);
-    }
-
-    /// [晕眩] layers (`stun` + `stunStart`, what the view shows as 眩晕).
-    pub fn get(player_id: i32) -> i32 {
-        ctx::stun_of(player_id)
-    }
-
-    /// Drop every [晕眩] layer (both counters).
-    pub fn clear(player_id: i32) {
-        let n = ctx::state::get(player_id, KEY);
-        if n > 0 {
-            ctx::state::add(player_id, KEY, -n);
-        }
-        let s = ctx::state::get(player_id, KEY_START);
-        if s > 0 {
-            ctx::state::add(player_id, KEY_START, -s);
-        }
-    }
-}
-
-pub mod exile_api {
-    //! `status:exile` -- [除外] layers + return tile + `exileMain`.
-    //! `docs/STATUS-HOSTS.md` §1.
-    use card_sdk::ctx;
-
-    pub const KEY: &str = "exile";
-    /// Tile the return [传送] lands on, or -1 for none.
-    pub const KEY_TO: &str = "exileTo";
-    /// 「视为当回合的主要移动」 -- the return teleport **is** that turn's
-    /// [主要移动] (MyGO:无路矢).
-    pub const KEY_MAIN: &str = "exileMain";
-
-    /// Give `n` [除外] layers; `to` is the return tile (-1 = none).
-    ///
-    /// TODO(规则书)（1）: 「该效果生效时无法重复获得该效果」 (`data/rules.txt`
-    /// 50) -- today layers stack. Conservative reading: an already-exiled
-    /// player gains no new layer. Phase C flips this in the host.
-    pub fn send(player_id: i32, n: i32, to: i32) {
-        ctx::give_exile(player_id, n, to);
-    }
-
-    /// [除外] layers on the player.
-    pub fn get(player_id: i32) -> i32 {
-        ctx::exile_of(player_id)
-    }
-
-    /// Drop every [除外] layer and forget the return tile.
-    pub fn clear(player_id: i32) {
-        let n = get(player_id);
-        if n > 0 {
-            ctx::state::add(player_id, KEY, -n);
-        }
-        ctx::state::set(player_id, KEY_TO, -1);
-        ctx::state::set(player_id, KEY_MAIN, 0);
-    }
-}
-
-pub mod fire_api {
-    //! `status:fire` -- 火罐 counter + cap. `docs/STATUS-HOSTS.md` §1.
-    use card_sdk::{ctx, Msg, Prompt};
-
-    pub const KEY: &str = "fire";
-
-    /// 火罐 held.
-    pub fn get(player_id: i32) -> i32 {
-        ctx::fire(player_id)
-    }
-
-    /// The mandated cap (0 = none declared).
-    pub fn max(player_id: i32) -> i32 {
-        ctx::fire_max(player_id)
-    }
-
-    /// Gain `n` pots, at most up to the cap; 0 if nothing. Logs the gain.
-    pub fn gain(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
-        ctx::gain_fire(player_id, n, why)
-    }
-
-    /// Spend `n` pots. `markerSpend` opens **before** the pots move; a
-    /// cancelled window spends nothing.
-    pub fn spend(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
-        ctx::spend_fire(player_id, n, why)
-    }
-
-    /// Move the cap by `n`; pulls the value down under the new ceiling.
-    pub fn add_max(player_id: i32, n: i32) -> i32 {
-        ctx::add_fire_max(player_id, n)
-    }
-}
-
-pub mod unstoppable_api {
-    //! `status:unstoppable` -- [不可阻挡]. `docs/STATUS-HOSTS.md` §1.
-    use card_sdk::ctx;
-
-    pub const KEY: &str = "unstoppable";
-
-    /// Add `n` [不可阻挡] layers.
-    pub fn add(player_id: i32, n: i32) {
-        ctx::state::add(player_id, KEY, n);
-    }
-
-    pub fn get(player_id: i32) -> i32 {
-        ctx::state::get(player_id, KEY)
-    }
-}
-
-pub mod no_hand_api {
-    //! `status:no_hand` -- `noHand` companion. `docs/STATUS-HOSTS.md` §1.
-    use card_sdk::ctx;
-
-    pub const KEY: &str = "noHand";
-
-    pub fn add(player_id: i32, n: i32) {
-        ctx::state::add(player_id, KEY, n);
-    }
-
-    pub fn get(player_id: i32) -> i32 {
-        ctx::state::get(player_id, KEY)
-    }
-}
+// One shape for every status, on the host module that owns it:
+//
+// ```ignore
+// status::stay::add(p, n);  status::stay::get(p);  status::stay::clear(p);
+// status::stun::add(p, n);  status::stun::get(p);  status::stun::clear(p);
+// status::exile::send(p, n, to);  status::exile::get(p);  status::exile::clear(p);
+// status::fire::{get, max, gain, spend, add_max};
+// ```
+//
+// Thin wrappers over the generic `ctx::state` surface and the still-shipped
+// engine verbs (Phase B shims; Phase C drops the old `ctx::{give_stay, …}`
+// names once every card has moved).
 
 // -------------------------------------------------------- generic gate readers
 //

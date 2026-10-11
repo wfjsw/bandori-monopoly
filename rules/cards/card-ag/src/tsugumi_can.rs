@@ -23,7 +23,7 @@ pub const TSUGUMI_CAN: CardDef = CardDef::new(
 /// movement rules use (`H.MoveWhyNot`), so the card is refused once the turn's
 /// main move is spent.
 fn cant_play(player_id: i32) -> Option<Msg> {
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn can_counteract(player_id: i32) -> bool {

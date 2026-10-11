@@ -89,3 +89,25 @@ pub fn blocks_act(_stay: i32) -> bool {
 pub fn blocks_pay(_stay: i32) -> bool {
     false
 }
+// ------------------------------------------------------------- canonical API
+
+/// Add `n` [停留] layers (negative removes; floors at 0). Wear-off is the
+/// item's own `Tick::TurnEnd`. Un-latching the turn's move gate on the last
+/// layer is [`unlatch_skip_move`] / the engine's `stay_unlatch`, not this
+/// call site.
+pub fn add(player_id: i32, n: i32) {
+    card_sdk::ctx::give_stay(player_id, n);
+}
+
+/// [停留] layers on the player.
+pub fn get(player_id: i32) -> i32 {
+    card_sdk::ctx::stay_of(player_id)
+}
+
+/// Drop every [停留] layer.
+pub fn clear(player_id: i32) {
+    let n = get(player_id);
+    if n > 0 {
+        add(player_id, -n);
+    }
+}

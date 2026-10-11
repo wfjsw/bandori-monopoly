@@ -42,7 +42,7 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 
 /// （1）「每次[经过]CiRCLE时获得一个[火罐]」.
 fn on_pass(player_id: i32) -> card_sdk::Asked {
-    ctx::gain_fire(player_id, 1, &Msg::new(key!("tomori_crychic_gain")))?;
+    rules_status::fire::gain(player_id, 1, &Msg::new(key!("tomori_crychic_gain")))?;
     Ok(())
 }
 
@@ -52,7 +52,7 @@ fn on_roll(player_id: i32) -> card_sdk::Asked {
     if face > 6 {
         return Ok(());
     }
-    ctx::give_stay(player_id, 1);
+    rules_status::stay::add(player_id, 1);
     // 「并在回合结束时触发结算」 -- a scheduled turn-end rule op
     // (`docs/TILES.md`), not an engine counter.
     ctx::before_turn_end(player_id);
@@ -79,7 +79,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「消耗1火罐清除自身一层[停留]」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("tomori_crychic_spend")))? {
         return Ok(());
     }
     ctx::state::add(player_id, state_key::STAY, -1);

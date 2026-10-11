@@ -50,7 +50,7 @@ fn tick(player_id: i32) -> card_sdk::Asked {
     state::set(player_id, REST_TURNS, n);
     if n >= 3 {
         state::set(player_id, REST_TURNS, 0);
-        ctx::gain_fire(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
+        rules_status::fire::gain(player_id, 1, &Msg::new(key!("afterglow_rest_gain")))?;
     }
     Ok(())
 }
@@ -68,7 +68,7 @@ fn can_use(player_id: i32) -> Option<Msg> {
 
 /// （2）「选择本次移动向后，并且向后移动[经过]CiRCLE时不获得CiRCLE奖励」.
 fn use_skill(player_id: i32) -> card_sdk::Asked {
-    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("ran_red_spend")))? {
+    if !rules_status::fire::spend(player_id, 1, &Msg::new(key!("ran_red_spend")))? {
         return Ok(());
     }
     // A press of any Afterglow (2) resets the band's rest counter.

@@ -19,7 +19,7 @@ pub const CRUSH_DRUM: CardDef = CardDef::new(
 /// C# `CardCrushDrum.WhyNot` = `H.MoveWhyNot(seat)`.
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书[手]: 「移动阶段前打出此卡」 -- refuses the play once the main move is spent.
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {

@@ -30,20 +30,20 @@ fn hitoshizuku(player_id: i32) -> card_sdk::Asked {
         // 规则书: 「清除场上所有[停留]与[眩晕]效果」 -- C# clamps stay down to
         // `H.V(j, "lockedStay")` (locked layers survive the clear) and zeroes
         // stun; `give_stay`/`give_stun` take negative counts to strip layers.
-        let stay = ctx::stay_of(j);
+        let stay = rules_status::stay::get(j);
         let locked = ctx::slot(j, "lockedStay").max(0);
         let keep = locked.min(stay);
         if stay > keep {
-            ctx::give_stay(j, keep - stay);
+            rules_status::stay::add(j, keep - stay);
             n += 1;
         }
         // 「[眩晕]」 is the `stun` counter **plus** a pending `stunStart` -- a stun
         // applied this turn that only starts counting next turn. Clearing the
         // effect clears both; a lone `stun` would leave the pending one behind.
-        let stun = ctx::stun_of(j);
+        let stun = rules_status::stun::get(j);
         let pending = ctx::state::get(j, state_key::STUN_START);
         if stun > 0 || pending > 0 {
-            ctx::give_stun(j, -stun);
+            rules_status::stun::add(j, -stun);
             ctx::state::set(j, state_key::STUN_START, 0);
             n += 1;
         }

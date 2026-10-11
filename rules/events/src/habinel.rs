@@ -22,7 +22,7 @@ fn play(_player_id: i32) -> card_sdk::Asked {
     for p in all_players() {
         let x = roll(p, 1, 2);
         // 规则书: 「结束后传送到微笑号」 -- the return tile is `exile_to`.
-        ctx::give_exile(p, x, smile);
+        rules_status::exile::send(p, x, smile);
         ctx::log(
             p,
             &Msg::new("log.event.habinel_exile")

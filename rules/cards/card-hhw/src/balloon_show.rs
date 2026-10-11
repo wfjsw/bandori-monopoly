@@ -16,7 +16,7 @@ pub const BALLOON_SHOW: CardDef =
 fn cant_play(player_id: i32) -> Option<Msg> {
     // 规则书: 「视为你的主要移动」 -- the teleport is the turn's main move, so the
     // C# `H.MoveWhyNot` gate applies (off-turn / already-moved / skip-move refuse).
-    ctx::cant_move(player_id)
+    rules_status::move_blocked(player_id)
 }
 
 fn play(player_id: i32) -> card_sdk::Asked {
