@@ -201,10 +201,10 @@
 .fanCard:last-child {
   margin-right: 0;
 }
-/* Hover keeps the sector angle, lifts the card and brings it to the front. */
+/* Hover keeps the sector angle, lifts the card along its own axis and brings it to the front. */
 .fanCard:hover,
 .fanCard:focus-within {
-  transform: translateY(calc(var(--fan-y, 0px) - 24px)) rotate(var(--fan-a, 0deg));
+  transform: translateY(var(--fan-y, 0px)) rotate(var(--fan-a, 0deg)) translateY(-24px);
   z-index: 2;
   filter: var(--peek-lift);
 }
