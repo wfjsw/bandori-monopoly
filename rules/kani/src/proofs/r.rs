@@ -327,11 +327,13 @@ pub fn ako_dark_mutant_is_detected() {
 // ===========================================================================
 
 /// IFF: PayMoney 1600 + PlaceCard(Field); money -1600.
+/// Condition from the clause doc: the user has ≥1600 money.
 #[kani::proof]
 #[kani::unwind(32)]
 pub fn fire_bird_place_iff() {
     let mut w = base_world();
     let player = w.trig_player;
+    kani::assume(w.money[player as usize] >= spec::fire_bird_cost());
     // Symbolic pick among the 10 offered numbers (1..=10).
     w.symbolic_answers = true;
     let pre = {
@@ -361,6 +363,7 @@ pub fn fire_bird_place_iff() {
 pub fn fire_bird_place_mutant_is_detected() {
     let mut w = base_world();
     let player = w.trig_player;
+    kani::assume(w.money[player as usize] >= spec::fire_bird_cost());
     w.symbolic_answers = true;
     let _pre = {
         world::reset_world(w);
@@ -382,11 +385,13 @@ pub fn fire_bird_place_mutant_is_detected() {
 // ===========================================================================
 
 /// IFF: the TurnEnd hook pays exactly 400 (crystal decay is a silent write).
+/// Assume the owner can pay the 400 (the book's 「失去400资金」).
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn fire_bird_burn_iff() {
     let mut w = base_world();
     let player = w.trig_player;
+    kani::assume(w.money[player as usize] >= spec::fire_bird_burn_pay());
     // Crystals must be present for the decay half; the pay is unconditional
     // in the body (`ctx::pay(400)` then `decay()`).
     w.key_set(player, crate::intern::intern("crystals"), 1);
