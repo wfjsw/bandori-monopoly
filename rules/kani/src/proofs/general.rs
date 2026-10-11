@@ -66,7 +66,7 @@ pub fn recruit_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("通用:10次招募（1回限定）", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:10次招募（1回限定）"), player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -100,7 +100,7 @@ pub fn recruit_01_mutant_is_detected() {
     let player = w.trig_player;
     kani::assume(w.money[player as usize] >= 1500);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("通用:10次招募（1回限定）", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:10次招募（1回限定）"), player));
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
     assert!(
@@ -129,7 +129,7 @@ pub fn great_01_02_03_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("通用:GREAT", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:GREAT"), player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -169,7 +169,7 @@ pub fn great_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("通用:GREAT", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:GREAT"), player));
     let (log_n, logbuf) = take_log();
     assert!(
         !spec::great_01_log_ok_mutant(&logbuf[..log_n], player),
@@ -196,7 +196,7 @@ pub fn perfect_01_02_03_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("通用:[衍生]PERFECT", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]PERFECT"), player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -237,7 +237,7 @@ pub fn perfect_01_mutant_is_detected() {
     let mut w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("通用:[衍生]PERFECT", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]PERFECT"), player));
     let (log_n, logbuf) = take_log();
     assert!(
         !spec::perfect_01_log_ok_mutant(&logbuf[..log_n], player),
@@ -261,7 +261,7 @@ pub fn fever_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("通用:[衍生]FEVER!", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]FEVER!"), player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -295,7 +295,7 @@ pub fn fever_01_mutant_is_detected() {
     let player = w.trig_player;
     w.field_n = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("通用:[衍生]FEVER!", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("通用:[衍生]FEVER!"), player));
     let (log_n, logbuf) = take_log();
     let this_card = world::card_slot_of("通用:[衍生]FEVER!");
     assert!(
@@ -353,7 +353,7 @@ pub fn fever_04_turn_start_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only("通用:[衍生]FEVER!", "TurnStart", player));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     let effects = &logbuf[..log_n];
@@ -390,7 +390,7 @@ pub fn fever_04_wrong_turn_noop() {
     // The host admits (`card.placed`); the body itself must no-op because
     // `trigger::player_id() != player_id`.
     assert!(admitted, "C-GEN-fever-04: placed card passes the guard");
-    invoke::unwrap_done(invoke::hook_only("通用:[衍生]FEVER!", "TurnStart", player));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
     let post = world::snapshot();
     let (log_n, _) = take_log();
     let post_dest = world::with_world(|ww| ww.dest);
@@ -417,7 +417,7 @@ pub fn fever_04_mutant_is_detected() {
     let w = fever_turn_start_world(true, true);
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only("通用:[衍生]FEVER!", "TurnStart", player));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("通用:[衍生]FEVER!"), "TurnStart", player));
     let post_dest = world::with_world(|ww| ww.dest);
     assert!(
         !spec::fever_04_dest_ok_mutant(post_dest),
@@ -616,7 +616,7 @@ pub fn encore_01_leaf_quiet_frame() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("通用:安可", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("通用:安可"), player));
     let post = world::snapshot();
     let (log_n, logbuf) = take_log();
     assert!(

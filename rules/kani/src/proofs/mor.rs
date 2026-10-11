@@ -69,7 +69,7 @@ pub fn rui_demon_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:（Rui）正论恶魔", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（Rui）正论恶魔"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -113,7 +113,7 @@ pub fn rui_demon_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:（Rui）正论恶魔", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（Rui）正论恶魔"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -134,7 +134,7 @@ pub fn rui_demon_02_x_set_to_5() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:（Rui）正论恶魔", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（Rui）正论恶魔"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -179,7 +179,7 @@ pub fn xiaobai_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:（小白）", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:（小白）"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -218,7 +218,7 @@ pub fn xiaobai_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:（小白）", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:（小白）"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -272,7 +272,7 @@ pub fn rainbow_01_half_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:秘密与青春的虹彩", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:秘密与青春的虹彩"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -304,7 +304,7 @@ pub fn rainbow_02_boost_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:秘密与青春的虹彩", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:秘密与青春的虹彩"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -336,7 +336,7 @@ pub fn rainbow_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:秘密与青春的虹彩", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:秘密与青春的虹彩"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let _ = &pre;
@@ -357,7 +357,7 @@ pub fn rainbow_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:秘密与青春的虹彩", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:秘密与青春的虹彩"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let _ = &pre;
@@ -406,7 +406,7 @@ pub fn garden_01_gain_iff() {
     };
     // The play prompts (settle choice). `symbolic_answers` makes `ask_yes`
     // return a symbolic bool without an engine pause.
-    invoke::unwrap_done(invoke::play("Mor:（筑紫）迷茫的庭园", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（筑紫）迷茫的庭园"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -435,7 +435,7 @@ pub fn garden_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:（筑紫）迷茫的庭园", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（筑紫）迷茫的庭园"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -495,7 +495,7 @@ pub fn courage_03_unowned_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:勇气展翅高飞之时", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:勇气展翅高飞之时"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -526,7 +526,7 @@ pub fn courage_03_empty_when_no_agent_misfire() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:勇气展翅高飞之时", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:勇气展翅高飞之时"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -563,7 +563,7 @@ pub fn courage_01_pay_iff_blocked_host() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:勇气展翅高飞之时", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:勇气展翅高飞之时"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -595,7 +595,7 @@ pub fn courage_02_agent_iff_blocked_host() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:勇气展翅高飞之时", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:勇气展翅高飞之时"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -633,7 +633,7 @@ pub fn courage_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:勇气展翅高飞之时", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:勇气展翅高飞之时"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -683,7 +683,7 @@ pub fn toko_no_pair_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:（toko）", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（toko）"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -731,7 +731,7 @@ pub fn toko_swap_iff_blocked_host() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:（toko）", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:（toko）"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -789,7 +789,7 @@ pub fn starry_01_place_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:蝴蝶飞舞的星月夜", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:蝴蝶飞舞的星月夜"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -832,7 +832,7 @@ pub fn starry_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:蝴蝶飞舞的星月夜", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:蝴蝶飞舞的星月夜"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -892,11 +892,8 @@ pub fn starry_06_payout_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(
-        "Mor:蝴蝶飞舞的星月夜",
-        2, // On::Hook(CounterChanged)
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:蝴蝶飞舞的星月夜"), 2, // On::Hook(CounterChanged)
+        player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -935,11 +932,7 @@ pub fn starry_06_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(
-        "Mor:蝴蝶飞舞的星月夜",
-        2,
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:蝴蝶飞舞的星月夜"), 2, player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -984,11 +977,8 @@ pub fn starry_05_circle_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(
-        "Mor:蝴蝶飞舞的星月夜",
-        1, // On::Hook(RollAfter | PassTile)
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:蝴蝶飞舞的星月夜"), 1, // On::Hook(RollAfter | PassTile)
+        player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1026,11 +1016,7 @@ pub fn starry_05_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(
-        "Mor:蝴蝶飞舞的星月夜",
-        1,
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:蝴蝶飞舞的星月夜"), 1, player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1098,11 +1084,7 @@ pub fn nnm_05_empty_discard_iff_fails_less() {
         world::snapshot()
     };
     // Play press (entry 0): `is_placed` ⇒ `use_skill`; crystals < 1 ⇒ return.
-    invoke::unwrap_done(invoke::entry(
-        "Mor:（NNM）稍微努力了一下",
-        0,
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:（NNM）稍微努力了一下"), 0, player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1130,11 +1112,7 @@ pub fn nnm_05_body_leaves_card_is_reachable() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(
-        "Mor:（NNM）稍微努力了一下",
-        0,
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:（NNM）稍微努力了一下"), 0, player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1164,11 +1142,8 @@ pub fn nnm_05_atend_leaves_field_card() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(
-        "Mor:（NNM）稍微努力了一下",
-        1, // On::AtEnd
-        player,
-    ));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mor:（NNM）稍微努力了一下"), 1, // On::AtEnd
+        player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1259,7 +1234,7 @@ pub fn tritone_01_gain_place_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("Mor:迷茫之蝶们的三全音", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("Mor:迷茫之蝶们的三全音"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1315,11 +1290,7 @@ pub fn tritone_02_tick_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "Mor:迷茫之蝶们的三全音",
-        "TurnEnd",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("Mor:迷茫之蝶们的三全音"), "TurnEnd", player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1374,11 +1345,7 @@ pub fn tritone_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "Mor:迷茫之蝶们的三全音",
-        "TurnEnd",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("Mor:迷茫之蝶们的三全音"), "TurnEnd", player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1431,7 +1398,7 @@ pub fn noble_02_mark_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:高贵的微蓝", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:高贵的微蓝"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1459,7 +1426,7 @@ pub fn noble_02_not_yours_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:高贵的微蓝", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:高贵的微蓝"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1485,7 +1452,7 @@ pub fn noble_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:高贵的微蓝", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:高贵的微蓝"), player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1521,11 +1488,7 @@ pub fn again_02_cancel_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "Mor:再次牵起手来",
-        "PayAt",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("Mor:再次牵起手来"), "PayAt", player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
@@ -1564,11 +1527,7 @@ pub fn again_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "Mor:再次牵起手来",
-        "PayAt",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("Mor:再次牵起手来"), "PayAt", player));
     kani::cover!(true, "body returned");
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];
     let log_n = effects_of(&mut ebuf);
@@ -1612,7 +1571,7 @@ pub fn wing_01_teleport_iff_blocked_host() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mor:纯真振翅", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mor:纯真振翅"), player));
     kani::cover!(true, "body returned");
     let post = world::snapshot();
     let mut ebuf = [Effect::SetPayAmount { to: 0 }; world::MAX_LOG];

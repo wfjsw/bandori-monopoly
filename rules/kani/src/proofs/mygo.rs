@@ -63,7 +63,7 @@ pub fn rinpuu_01_give_stay_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("MyGO:轮符雨", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:轮符雨"), player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -93,7 +93,7 @@ pub fn rinpuu_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("MyGO:轮符雨", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:轮符雨"), player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -116,7 +116,7 @@ pub fn rinpuu_01_mutant_two_layers() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("MyGO:轮符雨", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:轮符雨"), player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -136,7 +136,7 @@ pub fn rinpuu_01_mutant_two_layers() {
 // it via the world's key map (`"crystals"` on the trig player).
 // ===========================================================================
 
-const JOURNEY_ID: &str = "MyGO:哪怕这旅程没有终点";
+const JOURNEY_ID: usize = crate::card_id!("MyGO:哪怕这旅程没有终点");
 
 fn crystals_key() -> crate::intern::NameId {
     crate::intern::intern("crystals")
@@ -155,7 +155,7 @@ pub fn journey_01_place_four_crystals_iff() {
     };
     let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
 
-    invoke::unwrap_done(invoke::play(JOURNEY_ID, player));
+    invoke::unwrap_done(invoke::play_idx(JOURNEY_ID, player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -187,7 +187,7 @@ pub fn journey_01_mutant_is_detected() {
     let w = symbolic_play_world();
     let player = living_player(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(JOURNEY_ID, player));
+    invoke::unwrap_done(invoke::play_idx(JOURNEY_ID, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -246,7 +246,7 @@ pub fn haneoka_thresholds_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("MyGO:羽丘的不可思议女孩", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:羽丘的不可思议女孩"), player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -301,7 +301,7 @@ pub fn haneoka_05_mutant_is_detected() {
     // Force the ineffective band by assuming the symbolic die is < 10 is NOT
     // possible to force post-hoc; instead just run and check: if the log is
     // empty the mutant (wants 1 effect) must disagree.
-    invoke::unwrap_done(invoke::play("MyGO:羽丘的不可思议女孩", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:羽丘的不可思议女孩"), player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -321,7 +321,7 @@ pub fn haneoka_05_mutant_is_detected() {
 // crystal count; `rainday_02` covers the stay leg.
 // ===========================================================================
 
-const RAINDAY_ID: &str = "MyGO:那天的雨";
+const RAINDAY_ID: usize = crate::card_id!("MyGO:那天的雨");
 
 /// Iff: PlaceCard(Field) first; crystals key == 5; rain may add GiveStays.
 #[kani::proof]
@@ -335,7 +335,7 @@ pub fn rainday_01_place_five_crystals_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(RAINDAY_ID, player));
+    invoke::unwrap_done(invoke::play_idx(RAINDAY_ID, player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -368,7 +368,7 @@ pub fn rainday_01_mutant_is_detected() {
     let w = symbolic_play_world();
     let player = living_player(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(RAINDAY_ID, player));
+    invoke::unwrap_done(invoke::play_idx(RAINDAY_ID, player));
     let post_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
     assert!(
         post_c != spec::mygo::rainday_01_crystals_mutant(),
@@ -400,7 +400,7 @@ pub fn hitoshizuku_money_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("MyGO:壱雫空", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:壱雫空"), player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -464,7 +464,7 @@ pub fn hitoshizuku_body_global_pay_observed() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("MyGO:壱雫空", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:壱雫空"), player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -510,7 +510,7 @@ pub fn tomori_card_02_empty_hand_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("MyGO:（灯）不再迷茫", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:（灯）不再迷茫"), player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -546,7 +546,7 @@ pub fn tomori_card_02_mutant_is_detected() {
     w.hand = [false; 8];
     let player = living_player(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("MyGO:（灯）不再迷茫", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("MyGO:（灯）不再迷茫"), player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];

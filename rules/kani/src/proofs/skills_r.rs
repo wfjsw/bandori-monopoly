@@ -57,12 +57,7 @@ pub fn sayo_fire_pass_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:冰川纱夜:踏上荆棘之路的觉悟",
-        "Hook",
-        "Pass",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:冰川纱夜:踏上荆棘之路的觉悟"), "Hook", "Pass", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -92,12 +87,7 @@ pub fn sayo_fire_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:冰川纱夜:踏上荆棘之路的觉悟",
-        "Hook",
-        "Pass",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:冰川纱夜:踏上荆棘之路的觉悟"), "Hook", "Pass", player));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::sayo_circle_gain(false) + 1;
@@ -121,12 +111,7 @@ pub fn rinko_fire_pass_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:白金燐子:即使1cm也要前进",
-        "Hook",
-        "Pass",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:白金燐子:即使1cm也要前进"), "Hook", "Pass", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -151,12 +136,7 @@ pub fn rinko_fire_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:白金燐子:即使1cm也要前进",
-        "Hook",
-        "Pass",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:白金燐子:即使1cm也要前进"), "Hook", "Pass", player));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::rinko_circle_gain() + 1;
@@ -180,12 +160,7 @@ pub fn lisa_fire_pass_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:今井莉莎:慈爱女神",
-        "Hook",
-        "Pass",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:今井莉莎:慈爱女神"), "Hook", "Pass", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -210,12 +185,7 @@ pub fn lisa_fire_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:今井莉莎:慈爱女神",
-        "Hook",
-        "Pass",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:今井莉莎:慈爱女神"), "Hook", "Pass", player));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let wrong = spec::lisa_circle_gain() + 1;

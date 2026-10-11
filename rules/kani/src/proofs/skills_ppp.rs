@@ -29,12 +29,12 @@ use crate::world::{self, Effect, World, MAX_LOG, MAX_PLAYERS};
 // Skill ids / entry indices (READ for entry points only; body ≠ spec)
 // ---------------------------------------------------------------------------
 
-const KASUMI: &str = "skill:户山香澄:非凡之星";
-const MEGUMI: &str = "skill:花园多惠:花园警察，出警！";
-const RIMI: &str = "skill:牛込里美:里美的决心";
-const SAAYA: &str = "skill:山吹沙绫:焕然一新的天空中";
-const AOKI: &str = "skill:市谷有咲:盆栽爱好者";
-const BAND: &str = "skill:Poppin' Party:星之鼓动";
+const KASUMI: usize = crate::card_id!("skill:户山香澄:非凡之星");
+const MEGUMI: usize = crate::card_id!("skill:花园多惠:花园警察，出警！");
+const RIMI: usize = crate::card_id!("skill:牛込里美:里美的决心");
+const SAAYA: usize = crate::card_id!("skill:山吹沙绫:焕然一新的天空中");
+const AOKI: usize = crate::card_id!("skill:市谷有咲:盆栽爱好者");
+const BAND: usize = crate::card_id!("skill:Poppin' Party:星之鼓动");
 
 // Entry indices (On table order in the skill bodies).
 const KASUMI_SETTLE: usize = 2;
@@ -129,7 +129,7 @@ pub fn kasumi_skill_01_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(KASUMI, KASUMI_SETTLE, owner));
+    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_SETTLE, owner));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
@@ -175,7 +175,7 @@ pub fn kasumi_skill_01_noop_own_settle() {
 pub fn kasumi_skill_01_mutant_extra_fire() {
     let (w, owner, _settler) = kasumi_01_world();
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(KASUMI, KASUMI_SETTLE, owner));
+    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_SETTLE, owner));
     let (logbuf, log_n) = take_log();
     assert!(
         spec::kasumi_01_effects_ok_mutant(effects_of(&logbuf, log_n), owner),
@@ -217,7 +217,7 @@ pub fn kasumi_skill_02_spend_fire_iff() {
     };
     // symbolic pick among owned tiles
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(invoke::entry(KASUMI, KASUMI_PLAY, owner));
+    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_PLAY, owner));
     let post = world::snapshot();
     assert!(
         spec::kasumi_02_fire_ok(pre_fire, post.fire[owner as usize]),
@@ -243,7 +243,7 @@ pub fn kasumi_skill_02_noop_no_fire() {
     // Gate: `state::get(FIRE) < 1` refuses. Invoking the body still spends
     // only if the pot has 1 — both stay 0, so post.fire is unchanged.
     let pre_fire = 0;
-    invoke::unwrap_done(invoke::entry(KASUMI, KASUMI_PLAY, owner));
+    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_PLAY, owner));
     let post = world::snapshot();
     assert!(
         post.fire[owner as usize] == pre_fire,
@@ -260,7 +260,7 @@ pub fn kasumi_skill_02_mutant_no_spend() {
     let pre_fire = w.fire[owner as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(invoke::entry(KASUMI, KASUMI_PLAY, owner));
+    invoke::unwrap_done(invoke::entry_idx(KASUMI, KASUMI_PLAY, owner));
     let post = world::snapshot();
     assert!(
         post.fire[owner as usize] == pre_fire,
@@ -289,7 +289,7 @@ pub fn megumi_skill_01a_rabbit_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(MEGUMI, MEGUMI_CIRCLE, me));
+    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_CIRCLE, me));
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
     let post = world::snapshot();
@@ -386,7 +386,7 @@ pub fn megumi_skill_01b_fire_iff() {
         world::snapshot()
     };
     // Residual: tile holds ≥1 rabbit (we seeded it).
-    invoke::unwrap_done(invoke::entry(MEGUMI, MEGUMI_PASS, me));
+    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_PASS, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let effects = effects_of(&logbuf, log_n);
@@ -474,7 +474,7 @@ pub fn megumi_skill_02_leaf_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(MEGUMI, MEGUMI_COUNTERACT, me));
+    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_COUNTERACT, me));
     let post = world::snapshot();
     assert!(
         post.fire[me as usize] == spec::megumi_02_fire_after(pre_fire),
@@ -506,7 +506,7 @@ pub fn megumi_skill_02_mutant_money_swap() {
         w.field_n = 1;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(MEGUMI, MEGUMI_COUNTERACT, me));
+    invoke::unwrap_done(invoke::entry_idx(MEGUMI, MEGUMI_COUNTERACT, me));
     let post = world::snapshot();
     assert!(
         post.money[me as usize] == 2000 && post.money[other as usize] == 500,
@@ -565,7 +565,7 @@ pub fn rimi_skill_01_turn_end_iff() {
     if !admitted {
         return;
     }
-    invoke::unwrap_done(invoke::entry(RIMI, RIMI_TURN_END, me));
+    invoke::unwrap_done(invoke::entry_idx(RIMI, RIMI_TURN_END, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     assert!(
@@ -612,7 +612,7 @@ pub fn rimi_skill_01_mutant_plus_two() {
     });
     let pre_fire = 1;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(RIMI, RIMI_TURN_END, me));
+    invoke::unwrap_done(invoke::entry_idx(RIMI, RIMI_TURN_END, me));
     let post = world::snapshot();
     assert!(
         post.fire[me as usize] == pre_fire + 2,
@@ -657,7 +657,7 @@ pub fn rimi_skill_02_spend_fire_iff() {
     let pre_fire = w.fire[me as usize];
     world::reset_world(w);
     world::with_world_mut(|ww| ww.symbolic_answers = true);
-    invoke::unwrap_done(invoke::entry(RIMI, RIMI_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(RIMI, RIMI_PLAY, me));
     let post = world::snapshot();
     assert!(
         post.fire[me as usize] == spec::rimi_02_fire_after(pre_fire),
@@ -754,7 +754,7 @@ pub fn saaya_skill_01a_accept_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(SAAYA, SAAYA_PAY_AFTER, me));
+    invoke::unwrap_done(invoke::entry_idx(SAAYA, SAAYA_PAY_AFTER, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let mark_key = tok_key(spec::TOK_SAAYA);
@@ -794,7 +794,7 @@ pub fn saaya_skill_01a_noop_self_pay() {
 pub fn saaya_skill_01a_mutant_payee_swap() {
     let (w, me, payer) = saaya_01a_world(true);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(SAAYA, SAAYA_PAY_AFTER, me));
+    invoke::unwrap_done(invoke::entry_idx(SAAYA, SAAYA_PAY_AFTER, me));
     let post = world::snapshot();
     assert!(
         post.money[me as usize] == post.money[payer as usize] + 200,
@@ -848,7 +848,7 @@ pub fn saaya_skill_02_shave_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(SAAYA, SAAYA_PAY_CHOOSE, me));
+    invoke::unwrap_done(invoke::entry_idx(SAAYA, SAAYA_PAY_CHOOSE, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
 
@@ -921,7 +921,7 @@ pub fn aoki_skill_01_iff() {
         world::snapshot()
     };
     // residual is the CEL guard `actor != owner && tile.id == tile_named('流星堂')`
-    invoke::unwrap_done(invoke::entry(AOKI, AOKI_EVENT, me));
+    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_EVENT, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     assert!(
@@ -960,7 +960,7 @@ pub fn aoki_skill_01_mutant_plus_two() {
         w.trig_tile = spec::TILE_RYUSEIDO;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(AOKI, AOKI_EVENT, me));
+    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_EVENT, me));
     let post = world::snapshot();
     assert!(
         post.fire[me as usize] == 2,
@@ -1000,7 +1000,7 @@ pub fn aoki_skill_02_turn_end_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(AOKI, AOKI_TURN_END, me));
+    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_TURN_END, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     assert!(
@@ -1026,7 +1026,7 @@ pub fn aoki_skill_02_noop_end_on_station() {
         "end at 流星堂 must not fire"
     );
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(AOKI, AOKI_TURN_END, me));
+    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_TURN_END, me));
     let (logbuf, log_n) = take_log();
     assert!(log_n == 0, "C-PPP-aoki-skill-02: no-op ⇒ empty log");
 }
@@ -1048,7 +1048,7 @@ pub fn aoki_skill_02_mutant_no_draw() {
         w.deck_pile[0] = 7;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(AOKI, AOKI_TURN_END, me));
+    invoke::unwrap_done(invoke::entry_idx(AOKI, AOKI_TURN_END, me));
     let (logbuf, log_n) = take_log();
     assert!(
         log_n == 1,
@@ -1146,7 +1146,7 @@ pub fn band_skill_01a_sticker_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PASS, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PASS, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let key = tok_key(spec::TOK_STICKER);
@@ -1179,7 +1179,7 @@ pub fn band_skill_01a_mutant_two_stickers() {
         w.trig_tile = 1;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PASS, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PASS, me));
     let (logbuf, log_n) = take_log();
     let key = tok_key(spec::TOK_STICKER);
     assert!(
@@ -1212,7 +1212,7 @@ pub fn band_skill_01b_crystal_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
     let (logbuf, log_n) = take_log();
     let tok = tok_key(spec::TOK_STICKER);
     let crystal_key = tok_key("crystals");
@@ -1234,7 +1234,7 @@ pub fn band_skill_01b_noop_no_stickers() {
         w.player_keys[me as usize].set(crate::intern::intern("crystals"), 0);
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
     let (logbuf, log_n) = take_log();
     assert!(log_n == 0, "C-PPP-band-01b: nothing available ⇒ empty log");
 }
@@ -1252,7 +1252,7 @@ pub fn band_skill_01b_mutant_gains_sticker() {
         w.player_keys[me as usize].set(crate::intern::intern("crystals"), 0);
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
     let (logbuf, log_n) = take_log();
     let mut gained = false;
     let mut i = 0;
@@ -1296,7 +1296,7 @@ pub fn band_skill_01c_crystal_spend_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
     let (logbuf, log_n) = take_log();
     let crystal_key = tok_key("crystals");
     let used_key = tok_key(spec::STATE_POPPIN_USED);
@@ -1323,7 +1323,7 @@ pub fn band_skill_01c_noop_already_used() {
         w.player_keys[me as usize].set(crate::intern::intern(spec::STATE_POPPIN_USED), 1);
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
     let (logbuf, log_n) = take_log();
     assert!(
         log_n == 0,
@@ -1351,7 +1351,7 @@ pub fn band_skill_01c_mutant_cash_branch_reachable() {
         w.opt_n = 2;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, BAND_PLAY, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_PLAY, me));
     let post = world::snapshot();
     let (logbuf, log_n) = take_log();
     let crystal_key = tok_key("crystals");
@@ -1378,7 +1378,7 @@ pub fn band_skill_02_no_reward_prop() {
         w.trig_player = me;
     });
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, 0, me)); // at_turn_start
+    invoke::unwrap_done(invoke::entry_idx(BAND, 0, me)); // at_turn_start
     // prop::NO_REWARD = "noReward" — see card_sdk::abi::prop.
     let armed = world::with_world(|ww| {
         // set_prop writes the running instance's props via key_set on trig_player
@@ -1434,7 +1434,7 @@ pub fn band_skill_03c_buy_gate_iff() {
     kani::cover!(any_ppp_alive, "PPP alive ⇒ lock");
     assert!(spec::band_03c_buy_refused(any_ppp_alive));
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(BAND, BAND_GATE, me));
+    invoke::unwrap_done(invoke::entry_idx(BAND, BAND_GATE, me));
     assert!(
         world::with_world(|ww| ww.trig_cancelled),
         "C-PPP-band-03c: hill buy must be cancelled while PPP lives"

@@ -9,7 +9,7 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const BAND_ID: &str = "skill:MyGO!!!!!:迷途之星";
+const BAND_ID: usize = crate::card_id!("skill:MyGO!!!!!:迷途之星");
 
 fn skills_symbolic_world() -> World {
     host::install();
@@ -63,7 +63,7 @@ pub fn band_02_crystal_on_16_iff() {
     let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
     kani::assume(pre_c >= 0 && pre_c <= 3);
 
-    invoke::unwrap_done(invoke::hook_only(BAND_ID, "RollAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "RollAfter", player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -96,7 +96,7 @@ pub fn band_02_mutant_is_detected() {
     let w = skills_symbolic_world();
     let player = living_player(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(BAND_ID, "RollAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "RollAfter", player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -129,7 +129,7 @@ pub fn band_04_ineffective_overcap_iff() {
     let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
     kani::assume(pre_c >= 0 && pre_c <= 3);
 
-    invoke::unwrap_done(invoke::hook_only(BAND_ID, "Discarded", player));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "Discarded", player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -170,7 +170,7 @@ pub fn band_04_mutant_is_detected() {
     let pre_c = world::with_world(|ww| ww.key_get(player, crystals_key()));
     let _ = pre;
     kani::assume(pre_c == 0); // gain must fire
-    invoke::unwrap_done(invoke::hook_only(BAND_ID, "Discarded", player));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND_ID, "Discarded", player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];

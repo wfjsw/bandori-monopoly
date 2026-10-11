@@ -92,7 +92,7 @@ pub fn aya_with_01_five_fans_iff() {
         return;
     }
 
-    invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 0, me)  /* Hook DeckAtGameStart */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 0, me)  /* Hook DeckAtGameStart */);
     let post = world::snapshot();
     assert!(
         post.fans_pos[me as usize] == spec::skills_pp::char_start_five_fans(pre_pos),
@@ -128,7 +128,7 @@ pub fn aya_with_01_mutant_is_detected() {
     w.band_id[me as usize] = crate::intern::intern("Pastel✽Palettes").0;
     let pre_pos = w.fans_pos[me as usize];
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 0, me)  /* Hook DeckAtGameStart */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 0, me)  /* Hook DeckAtGameStart */);
     let post = world::snapshot();
     assert!(
         post.fans_pos[me as usize] != spec::skills_pp::char_start_five_fans_mutant(pre_pos),
@@ -157,7 +157,7 @@ pub fn aya_with_02_pay_discount_iff() {
     w.pay_amount = pre_amount;
     world::reset_world(w);
 
-    invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize]; // fans flipped reverse
     kani::cover!(y > 0, "chose some Y");
@@ -192,7 +192,7 @@ pub fn aya_with_02_mutant_is_detected() {
     w.trig_value = pre_amount;
     w.pay_amount = pre_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
     let post = world::snapshot();
     let y = up - post.fans_pos[me as usize];
     if y >= 1 {
@@ -243,7 +243,7 @@ pub fn band_idol_02_body_never_overflows() {
     let down = w.fans_neg[me as usize];
     kani::assume(down >= 1);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("skill:Pastel✽Palettes:与偶像一起", me));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("skill:Pastel✽Palettes:与偶像一起"), me));
     // Book allows crystals = min(X - down, 10) when X > down. The body's
     // prompt max is `have`, so X > down is impossible and no AddCounter
     // overflow is produced. Assert the gap is reachable in the *spec*:
@@ -275,7 +275,7 @@ pub fn band_idol_04_tick_iff() {
     w.key_set(me, crate::intern::intern("奇迹水晶"), pre);
     w.trig_player = me;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry("skill:Pastel✽Palettes:与偶像一起", 1, me)  /* Hook TurnStartBefore */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Pastel✽Palettes:与偶像一起"), 1, me)  /* Hook TurnStartBefore */);
     let post = world::snapshot();
     let _ = post;
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
@@ -399,7 +399,7 @@ pub fn band_idol_01_start_grant_iff() {
         ww.next_uid = 2;
     });
     let pre_down = world::with_world(|ww| ww.fans_neg);
-    invoke::unwrap_done(invoke::entry("skill:Pastel✽Palettes:与偶像一起", 0, me)  /* Hook DeckAtGameStart */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Pastel✽Palettes:与偶像一起"), 0, me)  /* Hook DeckAtGameStart */);
     let post_down = world::with_world(|ww| ww.fans_neg);
     for p in 0..MAX_PLAYERS {
         let is_pp = world::with_world(|ww| {
