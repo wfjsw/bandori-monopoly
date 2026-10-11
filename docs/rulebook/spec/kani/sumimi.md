@@ -35,7 +35,16 @@ Classification vocabulary (KANI-FOUNDATION §5):
 
 | harness | verdict | time |
 |---|---|---:|
-| `idolband_reset_iff` | SUCCESSFUL | ~5 min (CBMC symex 128 s + solver) |
+| `idolband_money_formula` | SUCCESSFUL | 11.5 s |
+| `pass_circle_fire_formula` | SUCCESSFUL | 6.9 s |
+| `band_02_rent_bonus_formula` | SUCCESSFUL | 9.6 s |
+| `idolband_reset_iff` | UNMODELED* | 416.1 s / 375.5 s |
+
+\* Two overlapping runner passes recorded UNMODELED: logs end at `Finished
+dev profile` with no `VERIFICATION:-` line (kani warned `caller_location` /
+`foreign function` unsupported constructs). An earlier direct `cargo kani`
+run of the same harness printed `VERIFICATION:- SUCCESSFUL` with full CBMC
+output. Treat the iff as **written, verdict pending**, not a clause FAIL.
 
 Remaining harnesses compile under `cargo kani` (checked) and wait on the
 machine-wide 3-slot cap (`~/.kani-slots`). Re-run:
