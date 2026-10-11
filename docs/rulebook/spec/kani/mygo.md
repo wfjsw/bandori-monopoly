@@ -23,8 +23,9 @@ says UNMODELED*, the log's VERIFICATION line is quoted.
 
 | classification | count |
 |---|---:|
-| PROVEN (harness SUCCESSFUL) | 5 |
-| FAILS (book vs body) | 3 |
+| PROVEN (harness SUCCESSFUL this pass) | 3 |
+| PROVEN-able (specs+proofs landed, verdict pending) | 8 |
+| FAILS (book vs body; specs land, proofs expected to FAILS) | 3 |
 | PROTOCOL-LEVEL | 18 |
 | BLOCKED-HOST | 8 |
 | OPEN (text undefined) | 6 |
@@ -40,9 +41,9 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 
 | ID | book quote (short) | classification | harness | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| `C-MYGO-rinpuu-01` | 「使自己获得一层[停留]」 | **PROVEN** | `rinpuu_01_give_stay_iff`, `rinpuu_01_mutant_is_detected`, `rinpuu_01_mutant_two_layers` | SUCCESSFUL 403s (2/2 covers); mutant pending | — | — |
+| `C-MYGO-rinpuu-01` | 「使自己获得一层[停留]」 | **PROVEN** | `rinpuu_01_give_stay_iff`, `rinpuu_01_mutant_is_detected`, `rinpuu_01_mutant_two_layers` | iff SUCCESSFUL 403s (2/2 covers); `rinpuu_01_mutant_two_layers` SUCCESSFUL (panic as expected) | — | — |
 | `C-MYGO-rinpuu-02` | 「并在回合结束时额外进行一次[触发结算]」 | **PROTOCOL-LEVEL** | — | — | extra settle is engine scheduling (`On::AtEnd` + `card_settle_at` protocol stub) | OPEN-触发结算 |
-| `C-MYGO-journey-01` | 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」 | **PROVEN** | `journey_01_place_four_crystals_iff`, `journey_01_mutant_is_detected` | pending | — | — |
+| `C-MYGO-journey-01` | 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」 | **PROVEN** | `journey_01_place_four_crystals_iff`, `journey_01_mutant_is_detected` | mutant companion SUCCESSFUL; iff verdict pending | — | — |
 | `C-MYGO-journey-02` | 「每回合结束时，若主要移动数严格大于6，失去一个奇迹水晶」 | **BLOCKED-HOST** | — | — | `turn_main_steps` is a protocol stub returning 0; the `>6` drain never runs under Kani. Missing: real `turn_main_steps` / main-move step count | — |
 | `C-MYGO-journey-03` | 「当此卡奇迹水晶数量为0时，将此卡置入弃牌堆」 | **PROTOCOL-LEVEL** | — | — | CounterChanged → set_dest(Graveyard) is a zone move; the emptying write itself is engine-side | — |
 | `C-MYGO-journey-04` | 「（2）[持续] 触发结算时，获得X*60资金」 | **BLOCKED-HOST** | — | — | `trigger::move_total` is a protocol stub returning 0; the `X*60` gain never runs. Missing: `trig_move_total` | OPEN-触发结算 |
@@ -128,21 +129,23 @@ Card unit rows cover every clause id in `mygo.md`. Skill rows cover
 
 | harness | verdict | time (s) | notes |
 |---|---|---:|---|
-| `rinpuu_01_give_stay_iff` | **SUCCESSFUL** (runner said UNMODELED*) | 403.0 | 0/20884 failed, 2/2 covers; runner false-positive on `unmodeled host op` string |
-| `rinpuu_01_mutant_is_detected` | pending | — | queued behind machine-wide slots |
-| `rinpuu_01_mutant_two_layers` | pending | — | |
-| `journey_01_place_four_crystals_iff` | pending | — | |
-| `journey_01_mutant_is_detected` | pending | — | |
-| `haneoka_thresholds_iff` | pending | — | |
-| `haneoka_05_mutant_is_detected` | pending | — | |
-| `rainday_01_place_five_crystals_iff` | pending | — | |
-| `rainday_01_mutant_is_detected` | pending | — | |
-| `hitoshizuku_money_iff` | pending | — | expected FAILS on the money amount |
-| `hitoshizuku_body_global_pay_observed` | pending | — | diagnostic companion |
-| `band_02_crystal_on_16_iff` | pending | — | |
-| `band_02_mutant_is_detected` | pending | — | |
-| `band_04_ineffective_overcap_iff` | pending | — | expected FAILS (LESS) |
-| `band_04_mutant_is_detected` | pending | — | |
+| `rinpuu_01_give_stay_iff` | **SUCCESSFUL** | 403.0 / 563.1 | 0/20884 failed, **2/2 covers** (pre stay 0 / nonzero). Runner labeled UNMODELED* (false positive on the `unmodeled host op` property string); log `VERIFICATION:- SUCCESSFUL`. |
+| `rinpuu_01_mutant_two_layers` | **SUCCESSFUL (panic as expected)** | ~600 | 1/20810 failed = the mutant assert — non-vacuous |
+| `rinpuu_01_mutant_is_detected` | written, verdict pending | — | companion of the should_panic twin |
+| `journey_01_place_four_crystals_iff` | written, verdict pending | — | queued |
+| `journey_01_mutant_is_detected` | **SUCCESSFUL** | ~600 | 0/20745 failed — the two-PlaceCard mutant never matches |
+| `haneoka_thresholds_iff` | written, verdict pending | — | queued |
+| `haneoka_05_mutant_is_detected` | written, verdict pending | — | |
+| `rainday_01_place_five_crystals_iff` | written, verdict pending | — | |
+| `rainday_01_mutant_is_detected` | written, verdict pending | — | |
+| `hitoshizuku_money_iff` | written, verdict pending | — | expected FAILS on the money amount (MORE/WRONG) |
+| `hitoshizuku_body_global_pay_observed` | written, verdict pending | — | diagnostic companion |
+| `tomori_card_02_empty_hand_iff` | written, verdict pending | — | empty-hand isolation (X=0) |
+| `tomori_card_02_mutant_is_detected` | written, verdict pending | — | |
+| `band_02_crystal_on_16_iff` | written, verdict pending | — | |
+| `band_02_mutant_is_detected` | written, verdict pending | — | |
+| `band_04_ineffective_overcap_iff` | written, verdict pending | — | expected FAILS (LESS) |
+| `band_04_mutant_is_detected` | written, verdict pending | — | |
 
 ---
 
