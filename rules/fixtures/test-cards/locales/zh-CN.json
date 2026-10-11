@@ -44,5 +44,10 @@
   "pass_tele_done": "pass tele jumped to {pos}",
   "tail_before": "tail-before",
   "tail_after": "tail-after",
-  "sib_once": "sib-once"
+  "sib_once": "sib-once",
+  "silent_pair_note": "silent-pair placed",
+  "silent_pair_flash": "silent-pair sibling ran",
+  "silent_nest_note": "silent-nest placed",
+  "silent_pay_note": "silent-pay placed",
+  "silent_pay_why": "silent-pay probe gain"
 }

@@ -1079,11 +1079,97 @@ fn settle_sib(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Silent-entry presentation (`CardDef::silent`). Three fixtures pin the
+/// contract:
+/// * `TEST:silentPair` -- a silent bookkeeping hook beside a flashing sibling
+///   on the same settle: only the sibling posts a `"card"` event.
+/// * `TEST:silentNest` -- a silent body that nests a real activation: the
+///   nested card still flashes.
+/// * `TEST:silentPay` -- a silent body that pays: the debug guard records a
+///   violation (`game_rules::take_silent_visible`).
+const SILENT_PAIR: CardDef = CardDef::new(
+    "TEST:silentPair",
+    &[
+        On::Play("", None, silent_pair_place),
+        On::Hook(&[HookKind::Settle], "", Some(silent_hook_yes), silent_pair_book),
+        On::Hook(&[HookKind::Settle], "", Some(silent_hook_yes), silent_pair_flash),
+    ],
+)
+.silent(&[1]);
+
+const SILENT_NEST: CardDef = CardDef::new(
+    "TEST:silentNest",
+    &[
+        On::Play("", None, silent_nest_place),
+        On::Hook(&[HookKind::Settle], "", Some(silent_hook_yes), silent_nest_body),
+    ],
+)
+.silent(&[1]);
+
+const SILENT_PAY: CardDef = CardDef::new(
+    "TEST:silentPay",
+    &[
+        On::Play("", None, silent_pay_place),
+        On::Hook(&[HookKind::Settle], "", Some(silent_hook_yes), silent_pay_body),
+    ],
+)
+.silent(&[1]);
+
+fn silent_pair_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:silentPair", &Msg::new(key!("silent_pair_note")));
+    Ok(())
+}
+
+fn silent_nest_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:silentNest", &Msg::new(key!("silent_nest_note")));
+    Ok(())
+}
+
+fn silent_pay_place(player_id: i32) -> card_sdk::Asked {
+    ctx::set_dest(ctx::Dest::Field);
+    ctx::place_card(player_id, "TEST:silentPay", &Msg::new(key!("silent_pay_note")));
+    Ok(())
+}
+
+/// Shared settle-hook guard: the holder's own land, while the card is placed.
+fn silent_hook_yes(player_id: i32) -> bool {
+    ctx::is_placed() && trigger::player_id() == player_id
+}
+
+/// Pure bookkeeping: a declaration write with no log and no host effect.
+fn silent_pair_book(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.silentPair.declared", 1);
+    Ok(())
+}
+
+/// The flashing sibling: one narration line under its own header.
+fn silent_pair_flash(player_id: i32) -> card_sdk::Asked {
+    ctx::log(player_id, &Msg::new(key!("silent_pair_flash")));
+    Ok(())
+}
+
+/// A silent body that nests a real activation (`TEST:echo`'s play).
+fn silent_nest_body(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.silentNest.declared", 1);
+    ctx::play_card("TEST:echo", player_id)?;
+    Ok(())
+}
+
+/// A silent body that pays -- the debug guard must fire.
+fn silent_pay_body(player_id: i32) -> card_sdk::Asked {
+    ctx::state::set(player_id, "TEST.silentPay.declared", 1);
+    ctx::gain(player_id, 100, &Msg::new(key!("silent_pay_why")))?;
+    Ok(())
+}
+
 card_sdk::bandori_ruleset!(&[
     RELAY, RECURSE, ECHO, LISTER, STUNNER, GUARD, AIMER, SHIELD, MOVER, COUNTER, PROBE, DENY,
     CRYSTAL, DEST_NOW, DEST_TO, TOTAL_CUT, DEAD_PAY, SELF_CHARGE, PAY_ADD_ANY, TELE_NOSOLVE,
     PAY_OVERCUT, XFER_1000, GAIN_1000, LOSE_1000, MARKER_DENY, MARKER_SPEND, FIRE_ROLL,
     PRE_REJECT, PRE_ACCEPT, PRE_PLAY, PRE_HOOK, PRE_GATE, PRE_ROLLPLAN, PRE_ATEMD, PRE_SETTLE,
     PASS_TELE, TILE_HOOK, DENY_PLAY, PASS_FLASH, PASS_BEFORE_FLASH, PING, PING_REJECT,
-    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB
+    ROLL_THEN_PAY, DECK_ONCE, READ_HOST_READ, SETTLE_NEST, SETTLE_TAIL, SETTLE_SIB,
+    SILENT_PAIR, SILENT_NEST, SILENT_PAY
 ]);

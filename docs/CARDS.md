@@ -99,6 +99,51 @@ The compiled lean form (`Cond::to_bytes(false)`) rides the ruleset so the
 browser glue evaluates with `rules-cond`'s `runtime-only` build and never ships
 the CEL parser.
 
+## Silent bookkeeping entries (`CardDef::silent`, ABI v53)
+
+Most entries flash the card and write a 「效果适用」 header when their body
+runs. Some entries are **bookkeeping**: a mechanical declaration or reset the
+player never sees as a clause firing. Those run their body but post no
+`"card"` event and no header -- mark them with `CardDef::silent(&[entry, …])`
+(indices into the `&[On]` table, 0-based):
+
+```rust
+pub const TOMOE_RAMEN: CardDef = CardDef::new(
+    "skill:宇田川巴:豚骨酱油拉面大姐",
+    &[
+        On::Play("", Some(can_use), use_skill),                         // 0: 「发动」 -- flashes
+        // 「初始1，上限1」 -- declares the fire-pot cap; invisible setup
+        On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+                 "", None, declare_cap),                               // 1: bookkeeping
+        On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),      // 2: 「获得[火罐]」 -- flashes
+    ],
+)
+.silent(&[1]);
+```
+
+**When to use it.** An effect the rulebook describes as happening (gain, pay,
+place, move, draw, status, mark, stun, exile, deal, build, destroy) flashes.
+A mechanical declaration or reset does not. Mark silent:
+
+* `declare_cap` / `fire_pot` / `state::set_bounds` / initial values /
+  `DeckAtGameStart` / `DeckBeforeGame` declarations that only install caps or
+  starting counts;
+* `TurnStartBefore` re-arms that only reset counters or flags;
+* latch clears and once-per-turn flag resets;
+* `AtEnd` expiries that only clear state without a rulebook-visible effect;
+* empty bodies kept only so an entry exists (`Ok(())`).
+
+**When not to use it.** If the body can pay / move / draw / place / mark / log
+on any path, leave it flashing (or split the bookkeeping half into its own
+silent entry). The flag exists to hide the flash, not the effect: a silent
+entry that produces a visible result is a bug, and the host's debug guard
+(`game_rules::take_silent_visible` / `debug_assert!`) records it. Nested
+activations from a silent body still announce normally.
+
+Path: `CardDef::silent` → `ManifestOn::silent` (ABI v53) →
+`announce_drive` skips the `"card"` post and the 「效果适用」 header; the body
+runs the full category → pre → guard layering unchanged.
+
 ## Bot-only estimated execution cost
 
 `prop::EST_COST` (`"estCost"`) is a card's **estimated execution cost** (user
