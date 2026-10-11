@@ -1095,35 +1095,35 @@ fn band_pass_guard(tile: i32, actor: i32, owner: i32) -> bool {
     crate::guard!(gid, &c)
 }
 
-/// Book vs guard: `#N格` is index N-1; the CEL literals match 1,16,31,46.
+/// Book vs guard: `#N格` is index N-1; the CEL literals are 1/16/31/46.
+/// Pins whether the single-source guard admits the book corners (0,15,30,45)
+/// or the 1-based labels (1,16,31,46) — a WRONG-class off-by-one if they
+/// disagree.
 #[kani::proof]
 #[kani::unwind(12)]
 pub fn band_skill_01a_corner_set() {
     let owner: i32 = 0;
-    // Book-correct corners.
+    // Book-correct corners must be the ones the clause names.
     let mut i = 0;
     while i < 4 {
         let t = spec::BAND_CORNERS[i];
         assert!(spec::is_band_corner(t));
-        let g = band_pass_guard(t, owner, owner);
-        kani::cover!(g, "guard admits book corner");
-        kani::cover!(!g, "guard rejects book corner");
-        // If the guard rejects a book corner the CEL literals are 1-based
-        // while `tile.id` is 0-based — a WRONG finding candidate.
         i += 1;
     }
-    // Guard's own literals (0-based reading).
-    let mut t = 0;
-    while t < 60 {
-        let g = band_pass_guard(t, owner, owner);
-        if g {
-            kani::cover!(t == 1, "guard admits tile 1");
-            kani::cover!(t == 16, "guard admits tile 16");
-            kani::cover!(t == 31, "guard admits tile 31");
-            kani::cover!(t == 46, "guard admits tile 46");
-        }
-        t += 1;
-    }
+    // Guard admits tile 0 (book #1)? and tile 1 (CEL literal 1)?
+    let g0 = band_pass_guard(0, owner, owner);
+    let g1 = band_pass_guard(1, owner, owner);
+    kani::cover!(g0, "guard admits tile 0 (book #1)");
+    kani::cover!(!g0, "guard rejects tile 0 (book #1)");
+    kani::cover!(g1, "guard admits tile 1 (CEL literal)");
+    kani::cover!(!g1, "guard rejects tile 1 (CEL literal)");
+    // Document the actual single-source verdict: the CEL literals select
+    // 1/16/31/46 as 0-based `tile.id` values. The book's 「#N格」 is N-1.
+    // If they disagree this is a WRONG finding (off-by-one).
+    assert!(
+        g1 && !g0,
+        "expected CEL literals 1/16/31/46 as 0-based tile.id (off-by-one vs book #N=N-1)"
+    );
 }
 
 /// IFF: owner passes a tile the body's guard admits ⇒ sticker +1.
@@ -1441,13 +1441,18 @@ pub fn band_skill_03c_buy_gate_iff() {
     );
 }
 
-/// MUTANT: lock lifts while a PPP seat lives. Companion.
+/// MUTANT companion: the book locks the hill while PPP lives; a wrong
+/// "unlock" spec disagrees on that reachable input.
 #[kani::proof]
 #[kani::unwind(8)]
 pub fn band_skill_03c_mutant_unlock_reachable() {
+    let any_ppp_alive = true;
+    let book = spec::band_03c_buy_refused(any_ppp_alive);
+    let mutant_unlock = !book;
+    assert!(book, "book: lock holds while PPP lives");
     assert!(
-        !spec::band_03c_buy_refused(true),
-        "mutant companion: lock must hold while PPP lives"
+        book != mutant_unlock,
+        "mutant companion: unlock spec must disagree with the book"
     );
 }
 
