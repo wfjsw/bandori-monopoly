@@ -1689,12 +1689,28 @@ dependencies = [
 name = "rules-kani"
 version = "0.1.0"
 dependencies = [
+ "card-ag",
+ "card-crychic",
+ "card-general",
+ "card-hhw",
+ "card-morfonica",
+ "card-mujica",
  "card-mygo",
  "card-pp",
  "card-ppp",
+ "card-ras",
+ "card-roselia",
  "card-sdk",
+ "card-sumimi",
+ "game-core",
+ "game-rules",
  "postcard",
+ "rules-events",
+ "rules-tile-marks",
+ "rules-tiles",
  "serde",
+ "skill-bands",
+ "skill-characters",
 ]
 
 [[package]]

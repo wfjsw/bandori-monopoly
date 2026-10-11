@@ -549,9 +549,10 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Under Kani the host writes `[n, id...]` (see rules-kani). postcard +
-    // String does not unwind under CBMC; rebuild names from fixed ids here.
-    // This stays generic: the host owns the id->name mapping.
+    // Under Kani the host writes `[n, slot…]` where slot is a small card
+    // slot (see rules-kani). postcard + String does not unwind under CBMC.
+    // Rebuild names from the intern table so identity is a `u16` compare on
+    // the host side; the guest still sees `String` (unmodified card bodies).
     #[cfg(kani)]
     {
         if buf.is_empty() {
@@ -561,13 +562,18 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         let mut out = Vec::with_capacity(n);
         let mut i = 0;
         while i < n && 1 + i < buf.len() {
-            out.push(String::from(match buf[1 + i] {
+            let name = match buf[1 + i] {
                 0 => "PP:[丸山彩]憧憬的前方",
                 1 => "PP:[衍生]共鸣",
                 2 => "PP:[标题偶像]",
                 3 => "PP:[强韧之花]",
                 _ => "PP:[标题偶像]",
-            }));
+            };
+            // Intern so later host calls that pass this string match by id.
+            let _id = crate::intern::intern(name);
+            // Unchecked: `name` is a compile-time UTF-8 literal. `String::from`
+            // can still trip CBMC's `run_utf8_validation` unwinding cliff.
+            out.push(unsafe { String::from_utf8_unchecked(name.as_bytes().to_vec()) });
             i += 1;
         }
         return out;
@@ -1082,7 +1088,16 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
         return String::new();
     }
     let buf = out_read(p, need, scratch);
-    String::from_utf8(buf).unwrap_or_default()
+    #[cfg(kani)]
+    {
+        // No UTF-8 validation under CBMC (unwinding cliff). Return empty.
+        let _ = buf;
+        return String::new();
+    }
+    #[cfg(not(kani))]
+    {
+        String::from_utf8(buf).unwrap_or_default()
+    }
 }
 
 /// Units of counter `name` held by `player_id` (name-keyed; the name is

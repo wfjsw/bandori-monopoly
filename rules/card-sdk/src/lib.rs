@@ -36,6 +36,11 @@ use alloc::vec::Vec;
 pub mod abi;
 pub mod msg;
 
+/// Generic interned-name table (`u16` ids). Under `cfg(kani)` the ctx boundary
+/// interns every `&str` so the symbolic host never runs `memcmp`. Game
+/// vocabulary lives in `rules-kani`, not here.
+pub mod intern;
+
 /// Host-import dispatch used by the Kani verifier crate (see module docs).
 /// Compiled always so `rules-kani` typechecks outside `cargo kani`; production
 /// builds never call it (`sys` still uses the `extern` block).

@@ -1,0 +1,96 @@
+//! Generates `conf_sym_ops.rs` (HostOps -> `rules_kani::host::dispatch`).
+//! Run on every build; output lands in OUT_DIR and is `include!`d by
+//! `tests/conf_model.rs` so native card bodies can run against the symbolic
+//! model without a Kani cfg.
+
+use std::env;
+use std::fmt::Write as _;
+use std::fs;
+use std::path::PathBuf;
+
+const ARRAY_OPS: &[&str] = &[
+    "roll", "roll_ask", "log", "effect", "tile_count", "tile_named", "tile_owner", "player_pos",
+    "tile_steps_ahead", "rent_of", "buy_price", "build_cost", "mortgage_value", "owned_count", "owned_at", "is_buyable",
+    "is_shop", "is_ring", "is_circle", "is_live_house", "tile_group", "tile_price", "houses_of", "rent_houses_of",
+    "set_houses", "add_house", "mortgaged_of", "set_mortgaged", "set_owner", "dist", "tile_forward", "neighbor",
+    "players_on_count", "players_on_at", "player_count", "player_out", "others_count", "others_at", "money", "gain",
+    "gain_typed", "pay", "pay_to", "pay_total", "pay_leg", "draw", "draw_event", "pay_rent",
+    "offer_buy", "offer_force_buy", "offer_build", "add_to_hand", "add_to_deck", "add_to_deck_at", "take_card", "cards_in",
+    "to_discard", "hand_count", "hand_size", "discard_count", "deck_count", "discard_size", "discard_from_hand", "shuffle_into_deck",
+    "place_card_at", "set_dest", "set_transfer_to_dest", "send_to_dest", "transfer_to_dest", "ring_multiplier", "add_ring_bonus", "teleport_to",
+    "unplace_card", "event_expire", "event_is_active", "event_deck_push", "event_banish", "self_tile", "set_self_tile", "self_face_down",
+    "set_self_face_down", "self_immune", "set_self_immune", "is_placed", "self_prop", "set_self_prop", "tile_prop", "set_tile_prop",
+    "prop_at", "set_prop_at", "state_get", "state_set", "state_add", "slot", "set_slot", "inc_slot",
+    "band_crystals", "add_band_crystals", "band_skill", "character_skill", "band_skills", "add_band_skill", "invoke_skill", "raise_bought",
+    "raise", "fire", "fire_max", "gain_fire", "give_stay", "give_stun", "give_exile", "give_extra_turn",
+    "can_pay", "cant_move", "spend_fire", "stay_of", "stun_of", "exile_of", "turn_player", "round_no",
+    "turn_key", "character_is", "in_band", "opt_int", "opt_str", "opt_tile", "opt_price", "opt_ai",
+    "ask", "trig_kind", "trig_player", "trig_target", "trig_tile", "trig_value", "trig_step", "trig_by_card",
+    "trig_pay_is_rent", "trig_move_kind", "trig_move_resolve", "trig_move_tag", "trig_move_main", "trig_move_dir", "trig_move_remaining", "trig_move_from",
+    "trig_move_total", "trig_cards", "trig_move_roll", "trig_roll_source", "trig_buy_kind", "trig_seller", "trig_price", "trig_set_price",
+    "trig_deal_owner", "trig_set_deal_owner", "trig_deal_houses", "trig_set_deal_houses", "trig_deal_mortgaged", "trig_set_deal_mortgaged", "trig_set_reason", "trig_set_move_roll",
+    "trig_set_pay_amount", "trig_set_pay_target", "trig_set_cancelled", "trig_set_negate_effect", "trig_set_spare", "trig_cancelled", "trig_seq", "trig_answers",
+    "trig_effect_count", "trig_effect_kind", "trig_effect_target", "trig_effect_from", "trig_effect_tile", "trig_effect_value", "declare_effect", "trig_card_is",
+    "play_card", "card_move", "card_replayable", "set_roller", "set_steps", "set_reverse", "set_signed", "set_stop_at",
+    "set_parity", "set_resolve", "set_settle_tile", "set_pay_factor", "set_rent_factor", "set_no_buy", "set_no_build", "set_build_anywhere",
+    "set_kind", "set_teleport_to", "set_start", "set_base_dice", "add_base_dice", "add_extra_dice", "move_stopped", "set_min_roll",
+    "set_extra_steps", "set_more_steps", "set_tag", "set_settle_as_agent", "plan_add_follower", "move_stop_at", "move_parity", "move_resolve",
+    "move_steps", "move_remaining", "move_total", "move_dir", "abnormal_count", "target", "targeted_count", "gains_this_turn",
+    "placed_tile", "play_doubled", "set_play_doubled", "schedule_turn_end", "set_no_money_loss", "set_fixed_roll", "fixed_roll", "set_next_steps",
+    "turn_main_steps", "add_fire_max", "card_build", "set_can_build", "clear_dice", "can_build_on", "card_buy", "buy_quotes",
+    "ai_agent_choice", "buy", "acquire", "agent_offer", "linger", "card_immune", "card_mortgage", "card_text_mentions",
+    "gain_fixed", "is_agent", "paid_in_settle", "place_card_on", "play_from_hand", "set_build_discount", "set_card_immune", "set_card_tile",
+    "set_extreme", "turn_rolls", "turn_snap", "turn_start_pos", "is_color", "unplace_card_named", "tok_names", "designations",
+    "cancel_designation", "designation_cancelled", "gate", "card_settle_at", "card_offer_build", "do_move_roll", "is_live_house_for", "placed_cards",
+    "field_instances", "unplace_at", "tile_at", "set_tile_at", "is_face_down_at", "set_face_down_at", "is_immune_at", "set_immune_at",
+    "set_build_cost_pct", "set_card_face_down", "card_face_down",
+];
+
+fn main() {
+    let out = PathBuf::from(env::var("OUT_DIR").unwrap()).join("conf_sym_ops.rs");
+    let mut s = String::new();
+    writeln!(s, "// Generated by build.rs. Do not edit.").unwrap();
+    writeln!(s, "use card_sdk::kani_host::Op;").unwrap();
+    writeln!(s, "use game_rules::HostErr;").unwrap();
+    writeln!(s, "use game_rules::native_shims::HostOps;").unwrap();
+    writeln!(s, "use rules_kani::host;").unwrap();
+    writeln!(s, "pub struct SymOps;").unwrap();
+    writeln!(s, "impl HostOps for SymOps {{").unwrap();
+    for name in ARRAY_OPS {
+        writeln!(s, "    fn op_{name}(&mut self, a: [i32; 6]) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::{name}, a)) }}").unwrap();
+    }
+    // Custom-arity methods (packing matches `card_sdk::ctx::sys_kani`).
+    writeln!(s, "    fn op_place_mark(&mut self, tile: i32, kp: i32, kl: i32, cp: i32, cl: i32, owner: i32, src: i32, count: i32, stack: i32, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::place_mark, [tile, kp, kl, cp, cl, owner])) }}").unwrap();
+    writeln!(s, "    fn op_count_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::count_marks_f, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_bump_mark_f(&mut self, tile: i32, fp: i32, fl: i32, delta: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::bump_mark_f, [tile, fp, fl, delta, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_remove_marks_f(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::remove_marks_f, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_mark_src_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_src_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_mark_instance_at(&mut self, tile: i32, fp: i32, fl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::mark_instance_at, [tile, fp, fl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_counter_self(&mut self, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::counter_self, [np, nl, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_add_counter_self(&mut self, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_counter_self, [np, nl, n, max, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_set_counter_self(&mut self, np: i32, nl: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_counter_self, [np, nl, n, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_counter_at(&mut self, uid: i32, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::counter_at, [uid, np, nl, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_add_counter_at(&mut self, uid: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_counter_at, [uid, np, nl, n, max, 0])) }}").unwrap();
+    writeln!(s, "    fn op_card_counter(&mut self, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::card_counter, [player_id, cp, cl, np, nl, 0])) }}").unwrap();
+    writeln!(s, "    fn op_add_card_counter(&mut self, player_id: i32, cp: i32, cl: i32, np: i32, nl: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_card_counter, [player_id, cp, cl, np, nl, n])) }}").unwrap();
+    writeln!(s, "    fn op_count_held(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::count_held, [np, nl, player_id, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_add_held(&mut self, np: i32, nl: i32, player_id: i32, n: i32, max: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::add_held, [np, nl, player_id, n, max, 0])) }}").unwrap();
+    writeln!(s, "    fn op_count_held_name(&mut self, np: i32, nl: i32, player_id: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::count_held_name, [np, nl, player_id, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_set_held_name(&mut self, np: i32, nl: i32, player_id: i32, v: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::set_held_name, [np, nl, player_id, v, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_move_units(&mut self, np: i32, nl: i32, from_tile: i32, from_player: i32, to_tile: i32, to_player: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::move_units, [np, nl, from_tile, from_player, to_tile, to_player])) }}").unwrap();
+    writeln!(s, "    fn op_self_uid(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::self_uid, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_send(&mut self, tp: i32, tl: i32, np: i32, nl: i32, pp: i32, pl: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::send, [tp, tl, np, nl, pp, pl])) }}").unwrap();
+    writeln!(s, "    fn op_msg_sender_uid(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_sender_uid, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_sender_seat(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_sender_seat, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_name(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_name, [p, n, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_a(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_a, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_b(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_b, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_c(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_c, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_tile(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_tile, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_seat(&mut self) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_seat, [0, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_text(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_text, [p, n, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_msg_reply(&mut self, v: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::msg_reply, [v, 0, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "    fn op_trig_name(&mut self, p: i32, n: i32) -> Result<i64, HostErr> {{ Ok(host::dispatch(Op::trig_name, [p, n, 0, 0, 0, 0])) }}").unwrap();
+    writeln!(s, "}}").unwrap();
+    fs::write(&out, s).unwrap();
+}
