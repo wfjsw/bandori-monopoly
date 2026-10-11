@@ -202,6 +202,8 @@ fn native_and_sandbox_agree_on_the_manifest() {
             assert_eq!(oa.triggers, ob.triggers, "card {} entry {j} triggers", a.id);
             assert_eq!(oa.pre, ob.pre, "card {} entry {j} condition", a.id);
             assert_eq!(oa.has_guard, ob.has_guard, "card {} entry {j} guard", a.id);
+            assert_eq!(oa.label, ob.label, "card {} entry {j} label", a.id);
+            assert_eq!(oa.silent, ob.silent, "card {} entry {j} silent", a.id);
             // The compiled condition must be present exactly when the source
             // string is -- the `RulesHandle::pre` default-`None` bug left
             // every condition silently uncompiled on native.

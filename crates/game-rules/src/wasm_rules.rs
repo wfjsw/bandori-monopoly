@@ -29,6 +29,27 @@ use crate::PromptKind;
 use crate::{CardPile, TriggerKind};
 use rules_cond::WindowScope;
 
+// ------------------------------------------------- silent-entry debug guard
+
+thread_local! {
+    /// Violations of the silent-entry contract: a `CardDef::silent` body that
+    /// produced a visible effect (see [`RulesBridge::check_silent_body`]).
+    /// Tests read this via [`take_silent_visible`]; debug builds also
+    /// `debug_assert!` for shipped (non-`TEST:`) card ids.
+    static SILENT_VISIBLE: std::cell::RefCell<Vec<(String, String)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn record_silent_visible(card_id: &str, what: &str) {
+    SILENT_VISIBLE.with(|v| v.borrow_mut().push((card_id.to_string(), what.to_string())));
+}
+
+/// Take the recorded silent-entry violations (`card id`, `what it produced`)
+/// since the last call. Used by tests that pin the debug guard.
+pub fn take_silent_visible() -> Vec<(String, String)> {
+    SILENT_VISIBLE.with(|v| std::mem::take(&mut *v.borrow_mut()))
+}
+
 
 /// Declared static properties of one card, from a [`Run`]'s snapshot.
 fn props_of(
@@ -192,6 +213,11 @@ pub struct Run {
     posted: Vec<i32>,
     /// How many log calls this pass has consumed (index into [`Self::posted`]).
     log_idx: usize,
+    /// How many narration / outcome lines this run has posted (any
+    /// `post_log*` / `post_card`). A silent entry's body must leave this at
+    /// 0 -- see [`RulesBridge::check_silent_body`]. Not taken by the
+    /// multi-pass replace bookkeeping (unlike [`Self::posted`]).
+    logged: u32,
     /// The `"card"` activation event id this run groups under (`-1` = none).
     /// Every write-through event carries it, so the log nests the outcome
     /// under the header.
@@ -227,6 +253,7 @@ impl Run {
     }
 
     fn post_log_value(&mut self, kind: &str, player_id: i32, msg: Msg, card: &str, value: i32) {
+        self.logged = self.logged.saturating_add(1);
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
             let parent = self.parent;
@@ -268,6 +295,7 @@ impl Run {
         negated: bool,
         uid: i32,
     ) -> i32 {
+        self.logged = self.logged.saturating_add(1);
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
             let parent = self.parent;
@@ -2115,6 +2143,16 @@ impl<M: CardModules> RulesBridge<M> {
     /// A tile's own settle body (`tile:*`) is a board square, not a card, so it
     /// does not flash -- a *card* placed on the square still does. `On::Message`
     /// never reaches here (internal plumbing, no `Call::Message`).
+    ///
+    /// A **silent** entry (`ManifestOn::silent`, `CardDef::silent`) is
+    /// bookkeeping -- `declare_cap` / `set_bounds` / initial values / latch
+    /// clears: a mechanical declaration the player never sees as a clause
+    /// firing. It runs its body (the category → pre → guard layers are
+    /// unchanged) but posts no `"card"` event and no 「效果适用」 header;
+    /// returns `-1`. Its body's own visible results (if it wrongly produced
+    /// any) parent to the enclosing activation or top-level, never to a
+    /// synthetic header. Nested activations from a silent body announce
+    /// normally.
     fn announce_drive(
         &self,
         w: &mut crate::Run,
@@ -2127,6 +2165,11 @@ impl<M: CardModules> RulesBridge<M> {
         entry: i32,
     ) -> i32 {
         if matches!(call, Call::Settle { .. }) && card_id.starts_with("tile:") {
+            return -1;
+        }
+        // Silent entry (`CardDef::silent`): bookkeeping. Body runs, no flash
+        // and no 「效果适用」 header. See the method doc.
+        if self.entry_silent(card_id, entry) {
             return -1;
         }
         use game_core::state::card_trigger;
@@ -2207,6 +2250,21 @@ impl<M: CardModules> RulesBridge<M> {
             .and_then(|c| c.on.get(entry.max(0) as usize))
             .and_then(|o| o.label.clone())
             .unwrap_or_default()
+    }
+
+    /// Is `card_id`'s `entry` marked silent (`CardDef::silent`) -- bookkeeping
+    /// that runs but never flashes? `false` when the card or entry is unknown
+    /// (announce as before; a missing manifest entry cannot lie about silence).
+    fn entry_silent(&self, card_id: &str, entry: i32) -> bool {
+        let Some(idx) = self.ruleset.card(card_id) else {
+            return false;
+        };
+        self.ruleset
+            .cards()
+            .get(idx as usize)
+            .and_then(|c| c.on.get(entry.max(0) as usize))
+            .map(|o| o.silent)
+            .unwrap_or(false)
     }
 
     /// Run one effect to completion, prompting through the engine as needed.
@@ -2310,6 +2368,11 @@ impl<M: CardModules> RulesBridge<M> {
         // through the code-order merge in [`Self::commit_after`]).
         let mut announced: std::collections::BTreeSet<i32> = Default::default();
         let mut activation_id = cx.activation.last().copied().unwrap_or(-1);
+        // Set at body entry when the entry is silent (`CardDef::silent`); the
+        // commit pass then checks the run produced no visible effect (the
+        // flag must not hide a real one). `Cell` so the `announce` closure can
+        // share it (same shape as the raw `cx_ptr` write-through).
+        let silent_body = std::cell::Cell::new(false);
         let mut posted_ids: Vec<i32> = Vec::new();
         let (target, tile) = (trigger.player_id, trigger.tile);
         loop {
@@ -2344,6 +2407,7 @@ impl<M: CardModules> RulesBridge<M> {
                 live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
                 posted: std::mem::take(&mut posted_ids),
                 log_idx: 0,
+                logged: 0,
                 parent: activation_id,
             };
             run.world.skip_log = true;
@@ -2378,6 +2442,9 @@ impl<M: CardModules> RulesBridge<M> {
                 }
                 w.parent = activation_id;
                 w.live = Some(cx_ptr as *mut Cx<'static>);
+                if self.entry_silent(card_id, entry) {
+                    silent_body.set(true);
+                }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
                 if id >= 0 && activation_id < 0 {
                     activation_id = id;
@@ -2450,7 +2517,7 @@ impl<M: CardModules> RulesBridge<M> {
                     if answers.is_empty() {
                         let mut after = after;
                         posted_ids = std::mem::take(&mut after.posted);
-                        return self.commit_after(cx, after, call, card_id, trigger);
+                        return self.commit_after(cx, after, call, card_id, trigger, silent_body.get());
                     }
                     // Recover the learn pass's write-through log so the commit
                     // pass replaces those lines instead of appending duplicates.
@@ -2489,6 +2556,7 @@ impl<M: CardModules> RulesBridge<M> {
                         live: Some(cx as *mut Cx<'_> as *mut Cx<'static>),
                         posted: std::mem::take(&mut posted_ids),
                         log_idx: 0,
+                        logged: 0,
                         parent: activation_id,
                     };
                     let mut announce = |w: &mut crate::Run, _entry: i32| {
@@ -2520,7 +2588,7 @@ impl<M: CardModules> RulesBridge<M> {
                         Ok(Outcome::Done(after2)) => {
                             let mut after2 = after2;
                             posted_ids = std::mem::take(&mut after2.posted);
-                            return self.commit_after(cx, after2, call, card_id, trigger);
+                            return self.commit_after(cx, after2, call, card_id, trigger, silent_body.get());
                         }
                         // The commit pass must not pause: the learn pass
                         // already answered everything. Anything else is a
@@ -2530,7 +2598,7 @@ impl<M: CardModules> RulesBridge<M> {
                         _ => {
                             let mut after = after;
                             posted_ids = std::mem::take(&mut after.posted);
-                            return self.commit_after(cx, after, call, card_id, trigger);
+                            return self.commit_after(cx, after, call, card_id, trigger, silent_body.get());
                         }
                     }
                 }
@@ -3080,6 +3148,47 @@ impl<M: CardModules> RulesBridge<M> {
     }
 
 
+    /// Debug guard: a **silent** entry (`CardDef::silent`) is bookkeeping --
+    /// declarations, resets, latch clears the player never sees as a clause
+    /// firing. It must not produce a visible effect (money, cards, marks,
+    /// houses, fire spend, narration lines); the flag exists to hide the
+    /// flash, not the effect. When one does, the flag is lying: record the
+    /// violation (tests read [`take_silent_visible`]) and `debug_assert!` for
+    /// shipped card ids so debug CI trips on a mis-marked entry. `TEST:*`
+    /// fixtures are exempt from the assert so a deliberate-violation fixture
+    /// can exercise the recorder without aborting the test binary.
+    fn check_silent_body(&self, card_id: &str, after: &Run) {
+        let what = if !after.paid_log.is_empty() {
+            Some("pay/gain/transfer")
+        } else if !after.draw_log.is_empty() {
+            Some("draw")
+        } else if !after.discard_log.is_empty() {
+            Some("discard")
+        } else if !after.reshuffle_log.is_empty() {
+            Some("reshuffle")
+        } else if !after.house_log.is_empty() {
+            Some("house")
+        } else if !after.exile_log.is_empty() {
+            Some("exile")
+        } else if !after.fire_spent_log.is_empty() {
+            Some("fire-spend")
+        } else if after.logged > 0 {
+            Some("log line")
+        } else {
+            None
+        };
+        let Some(what) = what else {
+            return;
+        };
+        record_silent_visible(card_id, what);
+        debug_assert!(
+            card_id.starts_with("TEST:"),
+            "silent entry on {card_id} produced a visible effect ({what}); \
+             `CardDef::silent` must not hide a real effect -- drop it from the \
+             silent list or make the body pure bookkeeping"
+        );
+    }
+
     /// The commit half of a drive: adopt the guest's finished [`Run`] as the
     /// live world and raise everything it logged. Shared by the replay path's
     /// `Done` arm and the simulation path's commit pass (`docs/BOT.md` §3.2).
@@ -3088,6 +3197,10 @@ impl<M: CardModules> RulesBridge<M> {
     /// stream in code order; the guest copy carries only state writes, so this
     /// adopts the live tail before the swap. Then it completes the activation
     /// entry with its outcome (「无事发生」 when the body changed nothing).
+    ///
+    /// `silent` marks a bookkeeping body (`CardDef::silent`): it posted no
+    /// activation, and it must not have produced a visible effect either --
+    /// see [`Self::check_silent_body`].
     fn commit_after(
         &self,
         cx: &mut Cx,
@@ -3095,8 +3208,12 @@ impl<M: CardModules> RulesBridge<M> {
         call: Call,
         card_id: &str,
         trigger: &mut Trigger,
+        silent: bool,
     ) -> Flow<i32> {
             let mut after = after;
+            if silent {
+                self.check_silent_body(card_id, &after);
+            }
             let dest = after.dest;
             *trigger = after.trigger.clone();
             // Keep the live event tail (write-through order) over the guest
@@ -4669,6 +4786,7 @@ impl<M: CardModules> RulesBridge<M> {
             live: None,
             posted: vec![],
             log_idx: 0,
+            logged: 0,
             parent: -1,
         }
     }
@@ -4884,6 +5002,7 @@ impl<M: CardModules> RulesBridge<M> {
                 live: None,
                 posted: vec![],
                 log_idx: 0,
+                logged: 0,
                 parent: -1,
             };
             let win_scope = crate::cond_pre::window_scope(&crate::cond_pre::fill_window(&win_run));
@@ -6704,6 +6823,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             live: None,
             posted: vec![],
             log_idx: 0,
+            logged: 0,
             parent: -1,
         };
         self.ruleset
@@ -6785,6 +6905,7 @@ impl<M: CardModules> CardRules for RulesBridge<M> {
             live: None,
             posted: vec![],
             log_idx: 0,
+            logged: 0,
             parent: -1,
         };
         q.tiles

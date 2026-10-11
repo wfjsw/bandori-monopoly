@@ -332,7 +332,15 @@ use alloc::{string::String, vec::Vec};
 ///      surface removed: the `set_bonus` import (HOST-09) and five unused
 ///      host linker names (HOST-10). No wire shape change for live imports;
 ///      SAVE_VERSION unchanged.
-pub const ABI_VERSION: i32 = 53;
+/// v54: `ManifestOn::silent` -- a bookkeeping entry that runs its body but
+///      posts **no** activation flash and **no** 「效果适用」 header (the
+///      `declare_cap` / `set_bounds` / initial-value class: a mechanical
+///      declaration the player never sees as a clause firing). `CardDef::silent`
+///      fills it from a list of entry indices; `false` = announce as before.
+///      The body still runs the full category → pre → guard layering; nested
+///      activations from a silent body announce normally. No host-function
+///      change; SAVE_VERSION unchanged.
+pub const ABI_VERSION: i32 = 54;
 
 /// Temporary trigger tag for the extension selected before source declaration.
 /// The host scopes it to one counteraction body, never the resulting walk.
@@ -2147,6 +2155,13 @@ pub struct ManifestOn {
     /// `None` = unlabelled (the line shows just the card name). v52.
     #[serde(default)]
     pub label: Option<String>,
+    /// Bookkeeping entry (`CardDef::silent`): runs its body but posts no
+    /// activation flash and no 「效果适用」 header. For declarations and resets
+    /// the player never sees as a clause firing (`declare_cap` / `set_bounds` /
+    /// initial values / latch clears). A silent entry that pays/moves/etc. is a
+    /// bug -- the flag must not hide a real effect. v53.
+    #[serde(default)]
+    pub silent: bool,
 }
 
 /// What a card entry point is (`card_sdk::On`'s variants).

@@ -127,5 +127,10 @@ fn count(kinds: &mut BTreeMap<String, usize>, e: &MatchEvent, card_by_kind: &mut
     *kinds.entry(e.r#type.clone()).or_default() += 1;
     if e.r#type == "card" {
         *card_by_kind.entry(e.kind.clone()).or_default() += 1;
+        // 「无事发生」: the activation's body changed nothing. Counted so a
+        // before/after pair can see how often a flash was pure noise.
+        if e.results.iter().any(|r| r.key() == "log.effect_nothing") {
+            *kinds.entry("card:effect_nothing".to_string()).or_default() += 1;
+        }
     }
 }

@@ -52,7 +52,7 @@ pub use inline::{with_inline_host, InlineHost};
 /// Shared with `rules-native`: the engine-side `Msg` decoder and the per-run
 /// fuel budget the nested-call plumbing shares.
 pub use host::{engine_msg, DEFAULT_FUEL};
-pub use wasm_rules::{RulesBridge, Run, WasmRules};
+pub use wasm_rules::{take_silent_visible, RulesBridge, Run, WasmRules};
 mod trigger_why;
 pub use world::{CardWorld, Trigger, TriggerBuy, TriggerMove, TriggerPay};
 /// The 「效果适用」 why-clause builder.

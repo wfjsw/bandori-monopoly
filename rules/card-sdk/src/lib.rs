@@ -126,6 +126,11 @@ pub struct CardDef {
     /// 「效果适用」 line can name which clause of a multi-entry card ran.
     /// An entry with no label shows just the card name.
     pub labels: &'static [(i32, &'static str)],
+    /// Entry indices that are **bookkeeping**: they run their body but post no
+    /// activation flash and no 「效果适用」 header. For declarations and resets
+    /// the player never sees as a clause firing (`declare_cap` / `set_bounds` /
+    /// initial values / latch clears). Fills [`abi::ManifestOn::silent`].
+    pub silent: &'static [i32],
 }
 
 impl CardDef {
@@ -136,6 +141,7 @@ impl CardDef {
             props: &[],
             legacy: &[],
             labels: &[],
+            silent: &[],
         }
     }
 
@@ -148,6 +154,7 @@ impl CardDef {
             props,
             legacy: self.legacy,
             labels: self.labels,
+            silent: self.silent,
         }
     }
 
@@ -161,6 +168,33 @@ impl CardDef {
             props: self.props,
             legacy: self.legacy,
             labels,
+            silent: self.silent,
+        }
+    }
+
+    /// Mark these entry indices **silent** (bookkeeping): they run their body
+    /// but post no activation flash and no 「效果适用」 header. Use for
+    /// declarations and resets the player never sees as a clause firing --
+    /// `declare_cap` / `set_bounds` / initial values / latch clears. An effect
+    /// the rulebook describes as happening (gain, pay, place, move, draw,
+    /// status, mark) must **not** be listed here. Replaces any earlier
+    /// `silent` call.
+    ///
+    /// ```ignore
+    /// pub const T: CardDef = CardDef::new("skill:…", &[
+    ///     On::Play("", None, use_skill),                                     // 0: flashes
+    ///     On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart],
+    ///              "", None, declare_cap),                                   // 1: bookkeeping
+    /// ]).silent(&[1]);
+    /// ```
+    pub const fn silent(self, entries: &'static [i32]) -> Self {
+        Self {
+            id: self.id,
+            on: self.on,
+            props: self.props,
+            legacy: self.legacy,
+            labels: self.labels,
+            silent: entries,
         }
     }
 
@@ -175,7 +209,21 @@ impl CardDef {
             props: self.props,
             legacy,
             labels: self.labels,
+            silent: self.silent,
         }
+    }
+
+    /// Is entry `index` marked silent? The manifest builder and the host both
+    /// ask here, so the two cannot disagree.
+    pub const fn is_silent(&self, index: i32) -> bool {
+        let mut i = 0;
+        while i < self.silent.len() {
+            if self.silent[i] == index {
+                return true;
+            }
+            i += 1;
+        }
+        false
     }
 }
 
