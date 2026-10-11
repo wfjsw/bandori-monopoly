@@ -115,6 +115,7 @@ export class Animator {
   private turnTimer = 0;
   private flashTimer = 0;
   private pulseTimer = 0;
+  private pulseCard = "";
   private disposed = false;
 
   constructor(private bump: () => void, private view: () => MatchView | null, private readonly replay = false) {}
@@ -260,10 +261,11 @@ export class Animator {
     // An in-play card's 「效果适用」 lights its slot in the field row instead
     // of bringing the face to the centre.
     if (e.msg?.k === "log.effect_applied" && !KIND_KEY[e.kind ?? ""]) {
-      const uid = this.fieldUid(e.card, e.playerId);
+      const uid = this.fieldUid(e.uid ?? -1);
       if (uid !== null) {
         while (this.pulse && !this.disposed) await sleep(30 / Math.max(1, this.speed));
         if (this.disposed) return;
+        this.pulseCard = e.card;
         this.showPulse(uid, fast, !e.negated);
         return;
       }
@@ -292,18 +294,14 @@ export class Animator {
     this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, fast, e.id);
   }
 
-  /** The uid of the face-up field instance of `card` (the owner's first), or
-   *  null when the card is not on a field. */
-  private fieldUid(card: string, owner: number): number | null {
-    const players = this.view()?.state.players ?? [];
-    let found: number | null = null;
-    players.forEach((p, i) => {
-      for (const c of p.field ?? []) {
-        if (c.card !== card || c.faceDown) continue;
-        if (found === null || i === owner) found = c.uid;
-      }
-    });
-    return found;
+  /** `uid` when that field instance is still face-up on a field (the event
+   *  recorded it was in play), else null -- the centre flash then plays. */
+  private fieldUid(uid: number): number | null {
+    if (uid < 0) return null;
+    for (const p of this.view()?.state.players ?? []) {
+      for (const c of p.field ?? []) if (c.uid === uid && !c.faceDown) return uid;
+    }
+    return null;
   }
 
   /** Slide the field slot out and light it for its hold. */
@@ -358,10 +356,7 @@ export class Animator {
    *  flash up the card's face comes back, line attached. */
   private async rideEffect(card: string, owner: number, text: string, fast: boolean): Promise<void> {
     // The card is lit in the field row: its effect lines stay in the log.
-    if (this.pulse && !this.flash) {
-      const uid = this.fieldUid(card, owner);
-      if (uid !== null && uid === this.pulse.uid) return;
-    }
+    if (this.pulse && !this.flash && this.pulseCard === card) return;
     const f = this.flash;
     if (f && f.card === card && !f.out) {
       // A hook's generic 「<卡名> 的效果」 caption repeats what the line says;

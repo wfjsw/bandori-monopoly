@@ -266,6 +266,7 @@ impl Run {
         target: i32,
         tile: i32,
         negated: bool,
+        uid: i32,
     ) -> i32 {
         if let Some(live) = self.live {
             let cx = unsafe { &mut *live };
@@ -277,14 +278,14 @@ impl Run {
                     return id;
                 }
                 let id = cx.log_card_activation(
-                    kind, owner, card, target, tile, negated, msg, parent,
+                    kind, owner, card, target, tile, negated, msg, parent, uid,
                 );
                 self.posted[self.log_idx - 1] = id;
                 return id;
             }
             self.log_idx += 1;
             let id =
-                cx.log_card_activation(kind, owner, card, target, tile, negated, msg, parent);
+                cx.log_card_activation(kind, owner, card, target, tile, negated, msg, parent, uid);
             self.posted.push(id);
             return id;
         }
@@ -292,6 +293,7 @@ impl Run {
             .world
             .card_activation(kind, owner, card, target, tile, negated, msg);
         e.parent = self.parent;
+        e.uid = uid;
         e.id
     }
 
@@ -2190,7 +2192,7 @@ impl<M: CardModules> RulesBridge<M> {
         // Write-through: the header posts to the live stream at body entry,
         // so it precedes every host-effect and body line this run causes.
         // A multi-pass re-run's header replaces the first post in place.
-        w.post_card(kind, owner, msg, cid, target, tile, false)
+        w.post_card(kind, owner, msg, cid, target, tile, false, uid)
     }
 
     /// The manifest label of `card_id`'s `entry` (「（1）」 / 「（2）」), or `""`.
@@ -4428,6 +4430,7 @@ impl<M: CardModules> RulesBridge<M> {
                 true,
                 msg,
                 parent,
+                -1,
             );
             if let Some(n) = negators.first() {
                 cx.set_event_results(
@@ -4539,6 +4542,7 @@ impl<M: CardModules> RulesBridge<M> {
                     true,
                     msg,
                     parent,
+                    -1,
                 );
                 if let Some(n) = negators.first() {
                     cx.set_event_results(
