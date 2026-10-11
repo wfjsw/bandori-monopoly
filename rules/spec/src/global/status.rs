@@ -9,6 +9,7 @@
 //! The book spells 眩晕 and 晕眩 interchangeably; both mean the same status
 //! (engine keys `stun` / `stunStart`).
 
+use game_core::engine::World;
 use game_core::state::MatchEvent;
 use spec_kit::{Clause, Step, StepAct};
 
@@ -316,16 +317,7 @@ const G_STATUS_01: Clause = Clause::new(
 
 /// Executable form of [`G_STATUS_01`].
 pub fn g_status_01(step: &Step<'_>) -> Result<(), String> {
-    const KEYS: [&str; 4] = [STAY, STUN, STUN_START, EXILE];
-    for (i, p) in step.post.st.players.iter().enumerate() {
-        for k in KEYS {
-            let v = p.state_get(k);
-            if v < 0 {
-                return Err(format!("player {i} {k}={v} is negative"));
-            }
-        }
-    }
-    Ok(())
+    verify_layers_nonneg(step.post)
 }
 
 // ---------------------------------------------------------------------------
@@ -366,38 +358,8 @@ const G_STATUS_02: Clause = Clause::new(
 /// glossary 51, OPEN-停留-中途) and is left alone here.
 pub fn g_status_02(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
-    if !cannot_move(step.pre, who) {
-        return Ok(());
-    }
-    // [停留] gained mid-turn does not raise the skip latch (OPEN-停留-中途);
-    // [晕眩] / [除外] are present-tense and must block the move even then.
-    let hard = stun_layers(step.pre, who) > 0 || layers(step.pre, who, EXILE) > 0;
-    if !hard && !step.pre.st.skip_move {
-        return Ok(());
-    }
-    // The turn's [主要移动] is the `roll` act. While [无法移动] with the skip
-    // latch held, that move must not land anywhere else and must not settle.
     let is_roll = matches!(step.act, StepAct::Act { msg, .. } if msg.act == "roll");
-    if !is_roll {
-        return Ok(());
-    }
-    let pre_pos = step.pre.st.players[who].pos;
-    let post_pos = step.post.st.players[who].pos;
-    if post_pos != pre_pos {
-        return Err(format!(
-            "G-STATUS-02: player {who} is [无法移动] but [主要移动] landed on {post_pos} (起点 {pre_pos})"
-        ));
-    }
-    // 「且不[结算]」 -- no settle of the landing tile.
-    for e in step.events {
-        let k = msg_key(e);
-        if k == "settle" || k == "settle_after" || k == "landed" {
-            return Err(format!(
-                "G-STATUS-02: player {who} is [无法移动] but the move settled ({k})"
-            ));
-        }
-    }
-    Ok(())
+    verify_main_move_skipped(step.pre, step.post, step.events, who, is_roll)
 }
 
 // ---------------------------------------------------------------------------
@@ -431,31 +393,7 @@ const G_STATUS_03: Clause = Clause::new(
 /// Executable form of [`G_STATUS_03`].
 pub fn g_status_03(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.pre.st.players.len() {
-        let pre = layers(step.pre, i, STAY);
-        let post = layers(step.post, i, STAY);
-        let g = grants(step.events, i, STAY);
-        if !turn_ended(step.events, i) {
-            // No decay due: layers may grow by grants. (A shrink here is a
-            // card's 「清除」, not this clause.)
-            // Stacking is pinned by the clean scenarios; a same-window
-            // [清除] can legally undo a grant, so do not assert `pre + g`
-            // here.
-            continue;
-        }
-        if status_cleared(step.events) || busy_window(step.events) || g > 0 {
-            // A card / [持续] in the same window may grant (or clear) layers
-            // around the wear-off. `grants` counts *lines*, not layer amounts
-            // (give_stay(p, 2) logs once), so exact decay is only required on
-            // a quiet window with no grant line at all.
-            continue;
-        }
-        // 「玩家的每回合结束时移除一层」 -- one layer off, floor 0.
-        let expected = (pre - 1).max(0);
-        if post != expected {
-            return Err(format!(
-                "G-STATUS-03: player {i} [停留] {pre} -> {post} over their turn end (expected {expected})"
-            ));
-        }
+        verify_stay_turn_end(step.pre, step.post, step.events, i)?;
     }
     Ok(())
 }
@@ -494,7 +432,6 @@ pub fn g_status_04(step: &Step<'_>) -> Result<(), String> {
     let who = step.player_of_act();
     let stunned_pre = stun_layers(step.pre, who) > 0;
     if stunned_pre {
-        // 「无法使用[主动]技能和手卡的[手]效果」.
         if act_is_skill(step, who) {
             let skill = match step.act {
                 StepAct::Act { msg, .. } => msg.card.clone(),
@@ -514,10 +451,9 @@ pub fn g_status_04(step: &Step<'_>) -> Result<(), String> {
             }
         }
     }
-    // 「无法收付款」 -- every stunned player named by a money leg.
     for i in 0..step.pre.st.players.len() {
         let pre_stunned = stun_layers(step.pre, i) > 0;
-        no_money_with(step, i, pre_stunned, false, "G-STATUS-04")?;
+        verify_no_money_status(step.pre, step.post, step.events, i, pre_stunned, false)?;
     }
     Ok(())
 }
@@ -553,42 +489,7 @@ const G_STATUS_05: Clause = Clause::new(
 /// Executable form of [`G_STATUS_05`].
 pub fn g_status_05(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.pre.st.players.len() {
-        let pre = layers(step.pre, i, STUN);
-        let post = layers(step.post, i, STUN);
-        let g = grants(step.events, i, STUN);
-        if turn_ended(step.events, i)
-            && !status_cleared(step.events)
-            && !busy_window(step.events)
-            && g == 0
-        {
-            // Exact one-layer wear-off (「每回合结束时移除一层」). Multi-layer
-            // grants log one line for N layers, so any grant line skips the
-            // exact form (pinned by `g_status.rs`).
-            let expected = (pre - 1).max(0);
-            if post != expected {
-                return Err(format!(
-                    "G-STATUS-05: player {i} [晕眩] {pre} -> {post} over their turn end (expected {expected})"
-                ));
-            }
-        }
-        // Row 4: a stunned player's turn skips 运营 and 主要移动 -- the engine
-        // auto-skips the whole turn (`log.stunned_skip`).
-        let stunned_at_start = stun_layers(step.pre, i) > 0;
-        if turn_started(step.events, i) && stunned_at_start {
-            let skipped = step.events.iter().any(|e| {
-                e.r#type == "status" && e.player_id == i as i32 && msg_key(e) == "stunned_skip"
-            });
-            if !skipped {
-                // `stunStart` alone ticks off at turn start and clears before
-                // the check -- then the skip is legitimately absent.
-                let still = stun_layers(step.post, i) > 0;
-                if still {
-                    return Err(format!(
-                        "G-STATUS-05: stunned player {i} started a turn without the 运营/主要移动 skip (row 4)"
-                    ));
-                }
-            }
-        }
+        verify_stun_turn_end(step.pre, step.post, step.events, i)?;
     }
     Ok(())
 }
@@ -643,7 +544,7 @@ pub fn g_status_06(step: &Step<'_>) -> Result<(), String> {
     }
     for i in 0..step.pre.st.players.len() {
         let pre_exiled = layers(step.pre, i, EXILE) > 0;
-        no_money_with(step, i, false, pre_exiled, "G-STATUS-06")?;
+        verify_no_money_status(step.pre, step.post, step.events, i, false, pre_exiled)?;
     }
     Ok(())
 }
@@ -680,30 +581,7 @@ const G_STATUS_07: Clause = Clause::new(
 /// Executable form of [`G_STATUS_07`].
 pub fn g_status_07(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.pre.st.players.len() {
-        let pre = layers(step.pre, i, EXILE);
-        let post = layers(step.post, i, EXILE);
-        let g = grants(step.events, i, EXILE);
-        // 「该效果生效时无法重复获得该效果」 -- any grant while `pre > 0` is a
-        // re-acquisition, even if the same window's turn-start decay cancels
-        // it back to `pre`.
-        if pre > 0 && g > 0 {
-            return Err(format!(
-                "G-STATUS-07: player {i} re-acquired [除外] while active (pre {pre}, post {post}, granted {g})"
-            ));
-        }
-        if turn_started(step.events, i)
-            && !status_cleared(step.events)
-            && !busy_window(step.events)
-            && g == 0
-        {
-            // 「玩家的每回合开始前移除一层」 -- one layer off, floor 0.
-            let expected = (pre - 1).max(0);
-            if post != expected {
-                return Err(format!(
-                    "G-STATUS-07: player {i} [除外] {pre} -> {post} over their turn start (expected {expected})"
-                ));
-            }
-        }
+        verify_exile_turn_start(step.pre, step.post, step.events, i)?;
     }
     Ok(())
 }
@@ -741,35 +619,7 @@ const G_STATUS_08: Clause = Clause::new(
 /// Executable form of [`G_STATUS_08`].
 pub fn g_status_08(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.pre.st.players.len() {
-        let pre = layers(step.pre, i, EXILE);
-        let post = layers(step.post, i, EXILE);
-        if pre == 0 || !turn_started(step.events, i) {
-            continue;
-        }
-        // 「状态结束后在玩家回合开始时要[传送]到的格子」 -- when the counter
-        // ticks out to 0, the pawn lands on the named tile.
-        if post != 0 {
-            continue;
-        }
-        // Absent `exileTo` reads as 0 via `state_get`, but the engine's
-        // "no named tile" sentinel is -1. Only a key that is present and
-        // `>= 0` names a return tile.
-        let has_to = step
-            .pre
-            .st
-            .players
-            .get(i)
-            .is_some_and(|p| p.state.contains_key(EXILE_TO));
-        let to = layers(step.pre, i, EXILE_TO);
-        if !has_to || to < 0 {
-            continue; // OPEN-除外-归位: no named tile.
-        }
-        let pos = step.post.st.players.get(i).map(|p| p.pos).unwrap_or(-1);
-        if pos != to {
-            return Err(format!(
-                "G-STATUS-08: player {i} [除外] expired but landed on {pos}, expected the named tile {to}"
-            ));
-        }
+        verify_exile_return(step.pre, step.post, step.events, i)?;
     }
     Ok(())
 }
@@ -806,33 +656,7 @@ const G_STATUS_09: Clause = Clause::new(
 /// Executable form of [`G_STATUS_09`].
 pub fn g_status_09(step: &Step<'_>) -> Result<(), String> {
     for i in 0..step.pre.st.players.len() {
-        if layers(step.pre, i, UNSTOPPABLE) <= 0 {
-            continue;
-        }
-        // 「[晕眩]效果也不会获得新的层数」/「无法获得新的[除外]层数」.
-        for (key, label) in [(STUN, "[晕眩]"), (STUN_START, "[晕眩]"), (EXILE, "[除外]")] {
-            let pre = layers(step.pre, i, key);
-            let post = layers(step.post, i, key);
-            let g = grants(step.events, i, key);
-            // 「也不会获得新的层数」/「无法获得新的[除外]层数」 -- any grant
-            // line is a violation, even if a same-window decay cancels it.
-            if g > 0 {
-                return Err(format!(
-                    "G-STATUS-09: unstoppable player {i} gained {label} (pre {pre}, post {post}, granted {g})"
-                ));
-            }
-            if post > pre {
-                return Err(format!(
-                    "G-STATUS-09: unstoppable player {i} gained {label} layers ({pre} -> {post})"
-                ));
-            }
-        }
-        // 「无视已存在的[停留]」 -- no stay skip while unstoppable.
-        if stay_skip(step.events, i) {
-            return Err(format!(
-                "G-STATUS-09: unstoppable player {i} was skipped for [停留]"
-            ));
-        }
+        verify_unstoppable(step.pre, step.post, step.events, i)?;
     }
     Ok(())
 }
@@ -901,3 +725,262 @@ pub fn g_status_10(_step: &Step<'_>) -> Result<(), String> {
     }
     Ok(())
 }
+
+
+// ---------------------------------------------------------------------------
+// Pure verifiers (iff). Clauses delegate to these; `g_status.rs` drives them
+// and applies mutants. Signature is (pre, post, events, ...) so a test can
+// build a triple without a live `Step`.
+// ---------------------------------------------------------------------------
+
+/// G-STATUS-01: every layer counter in `post` is `>= 0`.
+pub fn verify_layers_nonneg(post: &World) -> Result<(), String> {
+    const KEYS: [&str; 4] = [STAY, STUN, STUN_START, EXILE];
+    for (i, p) in post.st.players.iter().enumerate() {
+        for k in KEYS {
+            let v = p.state_get(k);
+            if v < 0 {
+                return Err(format!("player {i} {k}={v} is negative"));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// G-STATUS-02: a [主要移动] `roll` by a [无法移动] player (skip latch or
+/// hard stun/exile) stays on the current tile and does not settle.
+pub fn verify_main_move_skipped(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+    is_roll: bool,
+) -> Result<(), String> {
+    if !cannot_move(pre, who) {
+        return Ok(());
+    }
+    let hard = stun_layers(pre, who) > 0 || layers(pre, who, EXILE) > 0;
+    if !hard && !pre.st.skip_move {
+        return Ok(()); // OPEN-停留-中途
+    }
+    if !is_roll {
+        return Ok(());
+    }
+    let pre_pos = pre.st.players[who].pos;
+    let post_pos = post.st.players[who].pos;
+    if post_pos != pre_pos {
+        return Err(format!(
+            "G-STATUS-02: player {who} is [无法移动] but [主要移动] landed on {post_pos} (起点 {pre_pos})"
+        ));
+    }
+    for e in events {
+        let k = msg_key(e);
+        if k == "settle" || k == "settle_after" || k == "landed" || k.starts_with("land") {
+            return Err(format!(
+                "G-STATUS-02: player {who} is [无法移动] but the move settled ({k})"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// G-STATUS-03: [停留] loses exactly one layer at the owner's turn end (quiet
+/// window), never stacks illegally, and is unchanged otherwise.
+pub fn verify_stay_turn_end(pre: &World, post: &World, events: &[MatchEvent], who: usize) -> Result<(), String> {
+    let before = layers(pre, who, STAY);
+    let after = layers(post, who, STAY);
+    let g = grants(events, who, STAY);
+    if !turn_ended(events, who) {
+        // Condition false: the decay must be a no-op (no shrink from this rule).
+        return Ok(());
+    }
+    if status_cleared(events) || busy_window(events) || g > 0 {
+        if after > before + g {
+            return Err(format!(
+                "G-STATUS-03: player {who} [停留] stacked over turn end ({before} -> {after}, grant-lines {g})"
+            ));
+        }
+        return Ok(());
+    }
+    let expected = (before - 1).max(0);
+    if after != expected {
+        return Err(format!(
+            "G-STATUS-03: player {who} [停留] {before} -> {after} over their turn end (expected {expected})"
+        ));
+    }
+    Ok(())
+}
+
+/// G-STATUS-04 / 06 money half: no pay/rent/gain/lose leg to or from a
+/// stunned / exiled seat (per-leg amount, not net).
+pub fn verify_no_money_status(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+    stunned: bool,
+    exiled: bool,
+) -> Result<(), String> {
+    let _ = post;
+    if !stunned && !exiled {
+        return Ok(());
+    }
+    if skip_money_window(events) {
+        return Ok(());
+    }
+    for e in events {
+        if !is_money_leg(e) {
+            continue;
+        }
+        let amount = e.value as i64;
+        if amount == 0 {
+            continue;
+        }
+        for s in [e.player_id, e.other] {
+            if s < 0 || s as usize != who {
+                continue;
+            }
+            if e.r#type == "gain"
+                && (grants(events, who, STUN) > 0 || grants(events, who, EXILE) > 0)
+            {
+                continue; // OPEN-晕眩-自得
+            }
+            let side = if e.player_id == who as i32 && e.r#type != "gain" {
+                "payer"
+            } else {
+                "payee"
+            };
+            return Err(format!(
+                "G-STATUS-04/06: player {who} {side} on a {} leg of {amount} while stunned/exiled",
+                e.r#type
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// G-STATUS-05: [晕眩] loses exactly one layer at the owner's turn end (quiet),
+/// and a turn that starts while still stunned auto-skips (row 4).
+pub fn verify_stun_turn_end(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+) -> Result<(), String> {
+    let before = layers(pre, who, STUN);
+    let after = layers(post, who, STUN);
+    let g = grants(events, who, STUN);
+    if turn_ended(events, who) && !status_cleared(events) && !busy_window(events) && g == 0 {
+        let expected = (before - 1).max(0);
+        if after != expected {
+            return Err(format!(
+                "G-STATUS-05: player {who} [晕眩] {before} -> {after} over their turn end (expected {expected})"
+            ));
+        }
+    }
+    let stunned_at_start = stun_layers(pre, who) > 0;
+    if turn_started(events, who) && stunned_at_start {
+        let skipped = events.iter().any(|e| {
+            e.r#type == "status" && e.player_id == who as i32 && msg_key(e) == "stunned_skip"
+        });
+        if !skipped && stun_layers(post, who) > 0 {
+            return Err(format!(
+                "G-STATUS-05: stunned player {who} started a turn without the 运营/主要移动 skip (row 4)"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// G-STATUS-07: [除外] never re-stacks while active; loses exactly one layer
+/// before the owner's turn start (quiet).
+pub fn verify_exile_turn_start(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+) -> Result<(), String> {
+    let before = layers(pre, who, EXILE);
+    let after = layers(post, who, EXILE);
+    let g = grants(events, who, EXILE);
+    if before > 0 && g > 0 {
+        return Err(format!(
+            "G-STATUS-07: player {who} re-acquired [除外] while active (pre {before}, post {after}, grant-lines {g})"
+        ));
+    }
+    if turn_started(events, who) && !status_cleared(events) && !busy_window(events) && g == 0 {
+        let expected = (before - 1).max(0);
+        if after != expected {
+            return Err(format!(
+                "G-STATUS-07: player {who} [除外] {before} -> {after} over their turn start (expected {expected})"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// G-STATUS-08: when [除外] ticks out at turn start, the pawn lands on the
+/// named return tile (`exileTo` present and `>= 0`).
+pub fn verify_exile_return(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+) -> Result<(), String> {
+    let before = layers(pre, who, EXILE);
+    let after = layers(post, who, EXILE);
+    if before == 0 || !turn_started(events, who) || after != 0 {
+        return Ok(());
+    }
+    let has_to = pre
+        .st
+        .players
+        .get(who)
+        .is_some_and(|p| p.state.contains_key(EXILE_TO));
+    let to = layers(pre, who, EXILE_TO);
+    if !has_to || to < 0 {
+        return Ok(()); // OPEN-除外-归位
+    }
+    let pos = post.st.players.get(who).map(|p| p.pos).unwrap_or(-1);
+    if pos != to {
+        return Err(format!(
+            "G-STATUS-08: player {who} [除外] expired but landed on {pos}, expected the named tile {to}"
+        ));
+    }
+    Ok(())
+}
+
+/// G-STATUS-09: while [不可阻挡], no new [晕眩] / [除外] layers and no [停留]
+/// skip.
+pub fn verify_unstoppable(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    who: usize,
+) -> Result<(), String> {
+    if layers(pre, who, UNSTOPPABLE) <= 0 {
+        return Ok(());
+    }
+    for (key, label) in [(STUN, "[晕眩]"), (STUN_START, "[晕眩]"), (EXILE, "[除外]")] {
+        let b = layers(pre, who, key);
+        let a = layers(post, who, key);
+        let g = grants(events, who, key);
+        if g > 0 {
+            return Err(format!(
+                "G-STATUS-09: unstoppable player {who} gained {label} (pre {b}, post {a}, grant-lines {g})"
+            ));
+        }
+        if a > b {
+            return Err(format!(
+                "G-STATUS-09: unstoppable player {who} gained {label} layers ({b} -> {a})"
+            ));
+        }
+    }
+    if stay_skip(events, who) {
+        return Err(format!(
+            "G-STATUS-09: unstoppable player {who} was skipped for [停留]"
+        ));
+    }
+    Ok(())
+}
+
