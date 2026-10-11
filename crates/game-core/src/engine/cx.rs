@@ -588,10 +588,12 @@ impl<'a> Cx<'a> {
         negated: bool,
         msg: Msg,
         parent: i32,
+        uid: i32,
     ) -> i32 {
         self.w.flush_walk();
         let e = self.w.card_activation(kind, owner, card, target, tile, negated, msg);
         e.parent = parent;
+        e.uid = uid;
         e.id
     }
 

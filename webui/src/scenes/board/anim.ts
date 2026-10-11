@@ -11,6 +11,9 @@ import { fmtMsg, fmtMsgParts, partsText, type LogPart, type Names, type Msg } fr
 import type { MatchEvent, MatchView } from "../../core/types";
 import { showEffect } from "./Popups";
 
+/** How long a field card's slot stays lit for its 「效果适用」. */
+const PULSE_MS = 1100;
+
 /** How long the dice face rolls before it lands. */
 const DICE_ROLL_MS = 10 * 55;
 /** How long the effect popup stays up: just longer than the dice roll it
@@ -93,6 +96,10 @@ export class Animator {
     /** The `"card"` event id this flash is, so body lines can ride it. */
     actId: number;
   } | null = null;
+  /** A field card's 「效果适用」: instead of the centre face, its slot in the
+   *  cards-in-play row slides out and lights up (Master Duel's activated-card
+   *  cue). `uid` is the field instance. */
+  pulse: { uid: number; id: number } | null = null;
   hop: { playerId: number; id: number } | null = null;
   lastDiscard = "";
   log: LogLine[] = [];
@@ -107,6 +114,8 @@ export class Animator {
   private bannerTimer = 0;
   private turnTimer = 0;
   private flashTimer = 0;
+  private pulseTimer = 0;
+  private pulseCard = "";
   private disposed = false;
 
   constructor(private bump: () => void, private view: () => MatchView | null, private readonly replay = false) {}
@@ -142,6 +151,7 @@ export class Animator {
     clearTimeout(this.bannerTimer);
     clearTimeout(this.turnTimer);
     clearTimeout(this.flashTimer);
+    clearTimeout(this.pulseTimer);
   }
 
   addLog(e: MatchEvent): void {
@@ -248,6 +258,18 @@ export class Animator {
    *  activation's own follow-ups (its roll, its effect lines) land on the face
    *  instead of waiting it out. */
   private async cardFlash(e: MatchEvent, fast: boolean): Promise<void> {
+    // An in-play card's 「效果适用」 lights its slot in the field row instead
+    // of bringing the face to the centre.
+    if (e.msg?.k === "log.effect_applied" && !KIND_KEY[e.kind ?? ""]) {
+      const uid = this.fieldUid(e.uid ?? -1);
+      if (uid !== null) {
+        while (this.pulse && !this.disposed) await sleep(30 / Math.max(1, this.speed));
+        if (this.disposed) return;
+        this.pulseCard = e.card;
+        this.showPulse(uid, fast, !e.negated);
+        return;
+      }
+    }
     while (this.flash && !this.disposed) await sleep(30 / Math.max(1, this.speed));
     if (this.disposed) return;
     // A genuine activation (play / [反击] / skill / event) names who did it.
@@ -270,6 +292,31 @@ export class Animator {
     // outcome lines ride the face as they arrive (`addLog`).
     const detail = (e.results ?? []).map((r) => fmtMsg(r, this.names())).filter(Boolean);
     this.showFlash(e.card, e.playerId, caption, !!e.negated, kind, detail, fast, e.id);
+  }
+
+  /** `uid` when that field instance is still face-up on a field (the event
+   *  recorded it was in play), else null -- the centre flash then plays. */
+  private fieldUid(uid: number): number | null {
+    if (uid < 0) return null;
+    for (const p of this.view()?.state.players ?? []) {
+      for (const c of p.field ?? []) if (c.uid === uid && !c.faceDown) return uid;
+    }
+    return null;
+  }
+
+  /** Slide the field slot out and light it for its hold. */
+  private showPulse(uid: number, fast: boolean, sound: boolean): void {
+    const id = ++this.seq;
+    this.pulse = { uid, id };
+    if (!fast && sound) sfx("card_play");
+    clearTimeout(this.pulseTimer);
+    const hold = (fast ? 350 : PULSE_MS) / Math.max(1, this.speed);
+    this.pulseTimer = window.setTimeout(() => {
+      if (this.pulse?.id !== id) return;
+      this.pulse = null;
+      this.bump();
+    }, hold);
+    this.bump();
   }
 
   /** Put a card face up; `armFlash` starts its hold. */
@@ -308,6 +355,8 @@ export class Animator {
    *  effect modal -- 正论暴击 and every other `ctx::effect` land here. With no
    *  flash up the card's face comes back, line attached. */
   private async rideEffect(card: string, owner: number, text: string, fast: boolean): Promise<void> {
+    // The card is lit in the field row: its effect lines stay in the log.
+    if (this.pulse && !this.flash && this.pulseCard === card) return;
     const f = this.flash;
     if (f && f.card === card && !f.out) {
       // A hook's generic 「<卡名> 的效果」 caption repeats what the line says;

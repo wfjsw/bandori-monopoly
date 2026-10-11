@@ -1012,6 +1012,12 @@ pub struct MatchEvent {
     /// events** ([`Self::parent`]), not copies here.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub results: Vec<Msg>,
+    /// The field instance (`FieldCard.uid`) a `"card"` activation belongs to
+    /// -- set when the card was in play at the time, `-1` for a hand play, a
+    /// skill, an event or any card not on a field. Lets the client light the
+    /// card's field slot instead of flashing its face. Absent on old records.
+    #[serde(default = "no_parent", skip_serializing_if = "is_no_parent")]
+    pub uid: i32,
 }
 
 fn is_no_parent(p: &i32) -> bool {
@@ -1053,6 +1059,7 @@ impl Default for MatchEvent {
             negated: false,
             parent: -1,
             results: Vec::new(),
+            uid: -1,
         }
     }
 }
