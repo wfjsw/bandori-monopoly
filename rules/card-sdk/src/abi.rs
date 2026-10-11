@@ -328,8 +328,10 @@ use alloc::{string::String, vec::Vec};
 ///      the native land+houses figure. `plan::set_no_build` /
 ///      `plan::set_build_anywhere` (HOST-08) have host bodies: `set_no_build`
 ///      is `set_can_build(false)` on the move being planned, and
-///      `set_build_anywhere` opens builds past the landing-only rule. No wire
-///      shape change; SAVE_VERSION unchanged.
+///      `set_build_anywhere` opens builds past the landing-only rule. Dead
+///      surface removed: the `set_bonus` import (HOST-09) and five unused
+///      host linker names (HOST-10). No wire shape change for live imports;
+///      SAVE_VERSION unchanged.
 pub const ABI_VERSION: i32 = 53;
 
 /// Temporary trigger tag for the extension selected before source declaration.
