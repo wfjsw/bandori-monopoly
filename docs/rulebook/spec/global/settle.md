@@ -285,7 +285,7 @@ names from `docs/rulebook/SETTLE-STAGES.md` (settleBefore / settle / settleBody
 
 ## Findings
 
-* **G-SETTLE-06 / G-SETTLE-07 timing (genuine, stays failing):** the book
+* **LESS (G-SETTLE-06 / G-SETTLE-07 timing)** -- genuine, stays failing: the book
   makes the optional buy / build *the settle* of an unowned / own buyable
   (「无主的[可购买格子]的[结算]是：可选择[消耗]…」 /
   「玩家拥有的[可购买格子]的[结算]是：…可选择[消耗]…升级建造」). The engine's
