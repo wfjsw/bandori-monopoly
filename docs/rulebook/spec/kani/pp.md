@@ -19,15 +19,21 @@ Classification vocabulary (KANI-FOUNDATION §5):
 
 ## Summary
 
-| class | count |
-|---|---:|
-| PROVEN | (filled as harnesses complete) |
-| FAILS | 2 |
-| PROTOCOL-LEVEL | 8 |
-| BLOCKED-HOST | 6 |
-| OPEN | 22 |
-| pilot PROVEN (do not re-run) | 2 |
-| **total clause IDs** | **~70** |
+Clause IDs: 74 (69 explicit + 5 character (1) expansions of `C-PP-<slug>-01`).
+Two of them (`C-PP-aya-haruka-01/02`) are pilot-owned and already proven.
+
+| class | count | notes |
+|---|---:|---|
+| pilot PROVEN (do not re-run) | 2 | `money_shave` / `prompt` |
+| FAILS | 2 | first-accident-02, band-idol-02 |
+| PROTOCOL-LEVEL | 10 | multi-turn / [反击] / settle / move-plan |
+| BLOCKED-HOST | 6 | `card_text_mentions`, `add_counter` max, `trig_move_roll`, `field_instances` buffer |
+| OPEN | 24 | text undefined (共鸣 / 分摊 / mark / …) |
+| harness written (PROVEN\* pending slot) | 30 | see per-row harness names |
+| **total** | **74** | |
+
+Harness inventory (unit `pp` + `skills_pp`): 40 `#[kani::proof]` functions
+(pure formulas + body iff + no-op + mutant companions).
 
 ---
 
