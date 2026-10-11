@@ -27,7 +27,15 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
     "skill:丰川祥子:请把你们的人生交给我",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        // 状态1's 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the offer
+        // exists only at the pot cap. 状态2's auto-play still has to run
+        // whenever state is 2, so the residual is the disjunction.
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            card_sdk::pre::MINE,
+            Some(state2_or_fire_capped),
+            at_turn_start,
+        ),
         // 状态1 「经过其他玩家时」 -- 行动阶段 12 [经过] (`SETTLE-STAGES.md` §4
         // M4): the step onto a tile another player stands on, not the end-tile
         // [重叠]. The "other player" is read off the tile, not `target`.
@@ -68,6 +76,13 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`at_turn_start`]: 状态2 (auto-play must run) or the
+/// pot is at cap (the 状态2 offer). `state::max` is the declared fire cap.
+fn state2_or_fire_capped(player_id: i32) -> bool {
+    state::get(player_id, state_key::SKILL_STATE) == 2
+        || state::get(player_id, state_key::FIRE) >= state::max(player_id, state_key::FIRE)
+}
+
 /// 状态1's pass clause, and 状态2's entry offer.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     if state::get(player_id, state_key::SKILL_STATE) == 2 {
@@ -75,10 +90,8 @@ fn at_turn_start(player_id: i32) -> card_sdk::Asked {
         play_deck_top(player_id)?;
         return Ok(());
     }
-    // 「火罐数达到上限时可在回合开始时选择进入状态2」
-    if state::get(player_id, state_key::FIRE) < state::max(player_id, state_key::FIRE) {
-        return Ok(());
-    }
+    // 「火罐数达到上限时可在回合开始时选择进入状态2」 -- the residual already
+    // promised the cap.
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("sakiko_life_title")),

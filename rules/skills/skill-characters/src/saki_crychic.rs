@@ -14,8 +14,8 @@
 //! them. 「沿最短路径」 is whichever direction shortens `dist`. The move-end
 //! moment is `settleBefore` -- the settle has not run yet.
 
-use card_sdk::abi::{state_key, HookKind};
-use card_sdk::ctx::{self, state};
+use card_sdk::abi::HookKind;
+use card_sdk::ctx;
 use card_sdk::{key, CardDef, Msg, On};
 
 pub const SAKI_CRYCHIC: CardDef = CardDef::new(
@@ -26,7 +26,22 @@ pub const SAKI_CRYCHIC: CardDef = CardDef::new(
         // （2）/（3）「主要移动结束时，[触发结算]前若在你的前后5格内」 -- the
         // move-main fact is the condition; the within-5 geometry is residual
         // (`dist` is not in the condition vocabulary).
-        On::Hook(&[HookKind::SettleBefore], "move.main && tile.id >= 0", Some(within5), before_settle),
+        // （3） 「你可消耗1火罐…」 -- the self-nudge offer needs a pot. Fire is
+        // CEL; split from (2) so the other-mover arm is not gated on it.
+        On::Hook(
+            &[HookKind::SettleBefore],
+            "actor == owner && move.main && tile.id >= 0 && fire(owner) >= 1",
+            Some(within5),
+            before_settle_self,
+        ),
+        // （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」
+        // -- the other-mover offer (the mover is prompted to pay).
+        On::Hook(
+            &[HookKind::SettleBefore],
+            "actor != owner && move.main && tile.id >= 0",
+            Some(within5),
+            before_settle_other,
+        ),
     ],
 )
     .legacy(&[(1, legacy_mine)]).silent(&[0]);
@@ -63,40 +78,39 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 /// settle is happening". It runs for any completed main move's settle window;
 /// a 「不触发结算」 move has no such window and so never reaches here. The
 /// within-5 geometry is the residual guard (`within5`).
-fn before_settle(player_id: i32) -> card_sdk::Asked {
+/// （3） 「你可消耗1火罐，选择其中一名玩家并使自己的移动终点沿最短路径向其靠近1格」.
+/// Applicability is `fire(owner) >= 1` + `within5`.
+fn before_settle_self(player_id: i32) -> card_sdk::Asked {
+    let at = ctx::player_pos(player_id);
+    if !ctx::ask_yes(
+        player_id,
+        &Msg::new(key!("saki_crychic_title")),
+        &Msg::new(key!("saki_crychic_ask_self")),
+    )? {
+        return Ok(());
+    }
+    if !ctx::spend_fire(player_id, 1, &Msg::new(key!("saki_crychic_spend")))? {
+        return Ok(());
+    }
+    nudge(player_id, at);
+    Ok(())
+}
+
+/// （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」.
+fn before_settle_other(player_id: i32) -> card_sdk::Asked {
     let mover = ctx::trigger::player_id();
     let at = ctx::player_pos(player_id);
-    if mover == player_id {
-        // （3） 「你可消耗1火罐，选择其中一名玩家并使自己的移动终点沿最短路径
-        // 向其靠近1格」.
-        if state::get(player_id, state_key::FIRE) < 1 {
-            return Ok(());
-        }
-        if !ctx::ask_yes(
-            player_id,
-            &Msg::new(key!("saki_crychic_title")),
-            &Msg::new(key!("saki_crychic_ask_self")),
-        )? {
-            return Ok(());
-        }
-        if !ctx::spend_fire(player_id, 1, &Msg::new(key!("saki_crychic_spend")))? {
-            return Ok(());
-        }
-        nudge(player_id, at);
-    } else {
-        // （2） 「可选择向你支付300资金并使自己的移动终点沿最短路径向你靠近1格」.
-        if !ctx::ask_yes(
-            mover,
-            &Msg::new(key!("saki_crychic_title")),
-            &Msg::new(key!("saki_crychic_ask_other")).player_id("who", player_id),
-        )? {
-            return Ok(());
-        }
-        if ctx::transfer(mover, player_id, 300, &Msg::new(key!("saki_crychic_pay")))? <= 0 {
-            return Ok(());
-        }
-        nudge(mover, at);
+    if !ctx::ask_yes(
+        mover,
+        &Msg::new(key!("saki_crychic_title")),
+        &Msg::new(key!("saki_crychic_ask_other")).player_id("who", player_id),
+    )? {
+        return Ok(());
     }
+    if ctx::transfer(mover, player_id, 300, &Msg::new(key!("saki_crychic_pay")))? <= 0 {
+        return Ok(());
+    }
+    nudge(mover, at);
     Ok(())
 }
 

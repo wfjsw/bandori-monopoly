@@ -16,7 +16,7 @@
 //! 「该效果对每个玩家的被动技能和卡存在2次使用cd」 is a per-*source* cooldown of
 //! two uses, which is a counter keyed on the source rather than on the target.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -32,8 +32,12 @@ pub const MOCA_SELF: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
-        On::Hook(&[HookKind::CardPlayed], "", Some(other), on_card),
-        On::Hook(&[HookKind::SkillUsed], "", Some(other), on_skill),
+        // （2）「当他人使用角色技能或打出手牌时，你可以消耗一个[火罐]…该效果对
+        // 每个玩家的被动技能和卡存在2次使用cd」 -- the offer exists only for
+        // another seat, under the per-source CD, with a pot to spend. Fire is
+        // CEL; the dynamic CD key is residual.
+        On::Hook(&[HookKind::CardPlayed], "fire(owner) >= 1", Some(other_and_cooled), on_card),
+        On::Hook(&[HookKind::SkillUsed], "fire(owner) >= 1", Some(other_and_cooled), on_skill),
     ],
 ).silent(&[0]);
 
@@ -41,8 +45,13 @@ fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")
 }
 
-fn other(player_id: i32) -> bool {
-    ctx::trigger::player_id() != player_id
+/// Residual guard for the （2） offer: the actor is another seat and this
+/// player's per-source CD for them is under 2. Dynamic key (`used_key(src)`).
+fn other_and_cooled(player_id: i32) -> bool {
+    let src = ctx::trigger::player_id();
+    src >= 0
+        && src != player_id
+        && state::get(player_id, &used_key(src)) < 2
 }
 
 /// 「初始1，上限1」.
@@ -75,18 +84,10 @@ fn on_skill(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2） 「你可以消耗一个[火罐]传送到其所在格子」.
+/// Applicability is `fire(owner) >= 1` + `other_and_cooled`.
 fn offer(player_id: i32, src: i32) -> card_sdk::Asked {
-    if src < 0 || src == player_id {
-        return Ok(());
-    }
     // 「该效果对每个玩家的被动技能和卡存在2次使用cd」
     let key = used_key(src);
-    if state::get(player_id, &key) >= 2 {
-        return Ok(());
-    }
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("moca_self_title")),

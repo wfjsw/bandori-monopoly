@@ -22,7 +22,15 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
     &[
         On::Play("", None, tomori_no_longer),
         On::Hook(&[HookKind::TurnEnd], "actor == owner && card.placed && card.counter('crystals') == 0", None, sweep),
-        On::Hook(&[HookKind::FireSpent], "actor == owner && card.counter('crystals') >= 1", None, cover),
+        // （2）「可移除此卡上的一个[奇迹水晶]以代替此次技能的火罐消耗」 -- the
+        // offer exists only for a positive spend (nothing to substitute at 0)
+        // with a crystal to trade.
+        On::Hook(
+            &[HookKind::FireSpent],
+            "actor == owner && card.counter('crystals') >= 1 && value > 0",
+            None,
+            cover,
+        ),
         // Sheet I3 (2) 「当此卡上的水晶由于此效果以外的原因减少时，此卡立刻
         // 获得等同于减少量的[奇迹水晶]」. `HookKind::CounterChanged`
         // name-filtered to `counter::CRYSTALS` (the name is not yet in the
@@ -36,12 +44,9 @@ pub const TOMORI_NO_LONGER: CardDef = CardDef::new(
 /// is the skill-cost swap and must not be refunded.
 const SLOT_COVERING: &str = "tomori_no_longer.covering";
 
-/// （2）'s substitution.
+/// （2）'s substitution. Applicability is the entry's condition (`value > 0`).
 fn cover(player_id: i32) -> card_sdk::Asked {
     let spent = ctx::trigger::value();
-    if spent <= 0 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tomori_no_longer_title")),
