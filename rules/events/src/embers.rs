@@ -24,8 +24,9 @@ pub const EMBERS: CardDef = CardDef::new(
     &[
         On::Play("", None, play),
         // Safety net: 「任意玩家获得[除外]…时，移除所有此卡的复制品」 re-checked
-        // at a turn boundary for grants that did not raise `exile`. Silent
-        // bookkeeping -- the clear only runs when someone is exiled.
+        // at a turn boundary for grants that did not raise `exile`. Residual
+        // admits only when someone is actually exiled, so a no-op turn start
+        // does not activate.
         On::Hook(&[HookKind::TurnStartBefore], "", Some(any_exiled_guard), on_turn_start_clear),
         // 「触发事件的玩家回合开始时将此卡的复制品放置于所有玩家的前后各一格」
         // -- one-shot at the drawer's own turn start.
@@ -37,7 +38,7 @@ pub const EMBERS: CardDef = CardDef::new(
         On::Hook(&[HookKind::SettleBody], "", Some(on_settle_applies), on_settle),
         On::Hook(&[HookKind::Exile, HookKind::Bankrupt, HookKind::Abnormal], "", Some(on_out_applies), on_out),
     ],
-).silent(&[1]);
+);
 
 /// Residual guard for [`on_turn_start_clear`]: someone is carrying [除外].
 fn any_exiled_guard(_player_id: i32) -> bool {
@@ -101,7 +102,7 @@ fn play(player_id: i32) -> card_sdk::Asked {
 /// TODO(规则书): the text does not say whether the spread repeats on later turn
 /// starts of the drawer; this body reads it as one-shot.
 /// 「任意玩家获得[除外]…时」 safety net at a turn boundary -- see `on_out`.
-/// Silent bookkeeping (runs only when [`any_exiled_guard`] holds).
+/// Runs only when [`any_exiled_guard`] holds; the clear itself is visible.
 fn on_turn_start_clear(_player_id: i32) -> card_sdk::Asked {
     clear_copies(trigger::player_id());
     Ok(())
