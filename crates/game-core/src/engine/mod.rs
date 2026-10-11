@@ -43,7 +43,7 @@ pub use rules::{
     CardRules, Dest, Dir, Effect, Negation, Payee, RollSource, StubRules, Trigger, TriggerBuy,
     TriggerMove, TriggerPay,
 };
-pub use world::{Extreme, Hidden, Scheduled, SharedWorld, TurnCtx, World};
+pub use world::{Extreme, Hidden, Lingering, Scheduled, SharedWorld, TurnCtx, World};
 pub use play::MAX_SETTLE_DEPTH;
 pub use work::{
     AfterDriveFateWork, ContinueSettleWork, ResumeFnWork, SettleFrame, SettleStage, SettleWork,

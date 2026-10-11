@@ -132,6 +132,59 @@ fn tsugu_buy_gate_refused_does_not_log_a_buy() {
     );
 }
 
+// HOST-07: `ctx::buy_quotes` is the same hook-aware quote `buy` charges.
+// Tsugu's 「本回合购买格子时[消耗]资金时降低1500（最低0）」 is a `BuyAdd` −1500
+// on a linger instance; the agent offer's quoted price must carry it (the
+// native land+houses figure would show the undiscounted 1600).
+#[test]
+fn agent_quote_carries_the_tsugu_buy_add() {
+    let mut t = Table::vanilla(2);
+    // A turn-scoped `BuyAdd` −1500 instance (what `ctx::linger` binds).
+    {
+        let w = t.m.world_mut();
+        w.turn.lingering.push(game_core::engine::Lingering {
+            card: "通用:@Tsugu ycm".into(),
+            owner: 0,
+            expires: w.st.round,
+            props: Default::default(),
+        });
+    }
+    // Land on the agent (偶像经纪公司); the offer quotes each same-colour deed.
+    t.set_pos(0, tile("主要街道") - 1);
+    t.dice(&[1]);
+    t.roll(0).unwrap();
+    let p = t.expect_prompt();
+    assert_eq!(p.kind, "tile", "{}", t.dump_prompt());
+    // The buy branch's quoted prices ride `MatchPrompt.prices`, parallel to
+    // the unowned options. 富士见坂 (600) is in the same colour group as the
+    // agent's offer set; 600 − 1500 floors at 0.
+    // Every unowned (buy) option's quoted price must carry the BuyAdd: the
+    // hook-aware figure is `max(0, native − 1500)`. A native quote would show
+    // the undiscounted land price instead.
+    assert!(!p.prices.is_empty(), "prices empty: {}", t.dump_prompt());
+    for (item, &q) in p.items.iter().zip(p.prices.iter()) {
+        let t_id: usize = item.parse().expect("tile id");
+        let native = t.m.world().buy_price(&data(), t_id as i32).max(0);
+        assert_eq!(
+            q,
+            (native - 1500).max(0),
+            "tile {t_id} quote {q} != max(0, native {native} − 1500): prices={:?} items={:?}",
+            p.prices,
+            p.items
+        );
+    }
+}
+
+fn data() -> std::sync::Arc<game_core::data::GameData> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    std::sync::Arc::new(
+        game_core::data::GameData::load(|f| {
+            std::fs::read_to_string(dir.join(f)).map_err(|e| e.to_string())
+        })
+        .unwrap(),
+    )
+}
+
 // 规则书: 「结果至少为28则本回合购买格子时[消耗]资金时降低1500（最低0）」
 #[test]
 fn tsugu_ge28_buy_discount_1500() {

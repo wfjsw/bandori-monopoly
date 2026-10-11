@@ -1245,20 +1245,30 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
 - **impact was**: `dream_ahead` spent 3 crystals and logged "bought" after a refused buy; `afterglow` always logged a free house even when `card_build` refused; `tsugu_ycm` / `tomoe_savior` logged a buy on a refused commit
 
 ## HOST-07 — `ctx::buy_quotes` is not the hook-aware quote; ignores `player_id`/`kind`
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: HOST-07 …`) —
+  `hostfns::buy_quotes` now calls `CardWorld::buy_quotes`, which `Run`
+  implements through the live `Cx` → `purchase::quote_for` /
+  `CardRules::buy_quote` (the same hook-aware path `buy` charges). Still a
+  query: no pause, no world write. `player_id` and `kind` select the buyer and
+  the pipeline shape (`Force` / `Acquire` name the owner as seller). The
+  default `CardWorld` impl stays the native land+houses figure for stub
+  worlds. Stale "One `HostRequest::Quote`" doc comments removed
+  (`ctx.rs` / `docs/PURCHASE.md`). ABI v53. Test: `rb_general.rs`
+  `agent_quote_carries_the_tsugu_buy_add` (agent offer quotes
+  `max(0, native − 1500)` under Tsugu's linger `BuyAdd`).
 - **kind**: ABI defect
 - **class**: A
 - **severity**: high (common play with buy-hook cards)
 - **suggested batch**: host ABI: queries / quote==charge
 - **locations**
-  - `crates/game-rules/src/hostfns.rs:1613-1638` — `let _ = (player_id, kind);` quotes from `is_buyable` + `buy_price` (`quote_native` = land + standing houses); never `base_quote`, never `BuyGate`/`BuyAdd`/`BuyMul`/`BuySet`
-  - correct path exists: `crates/game-rules/src/wasm_rules.rs:5424+` `CardRules::buy_quote` (hooks) and `crates/game-core/src/engine/play/purchase.rs:211-237` `base_quote` / `quote_for`
+  - `crates/game-rules/src/hostfns.rs` `buy_quotes` — now `c.st().wr().buy_quotes(...)`
+  - `crates/game-rules/src/wasm_rules.rs` `Run::buy_quotes` — `purchase::quote_for(cx.rules(), …)`
+  - `crates/game-rules/src/world.rs` `CardWorld::buy_quotes` default
   - guest caller: `rules/tiles/src/agent.rs:87` `ctx::buy_quotes(player_id, BuyKind::Agent, &same)`
-  - hook cards that change the charge: `card-general/src/tsugu_ycm.rs:48-50` (`BuyAdd` −1500), `card-ppp/src/maze_warehouse.rs:20-21` (`BuySet` 0), Roselia band `BuyMul` ½
-- **ABI contract** (`docs/PURCHASE.md:125-129`, `purchase.rs:83-87`): post-hook price and `BUYABLE + BuyGate`; "The commit re-quotes, so quote == charge."
-- **current**: guest quote = native land+houses; eligibility = `is_buyable` only. Force kind would also be wrong (`base_quote` doubles)
-- **expected**: same `CardRules::buy_quote` / `quote_for` the engine uses (or the cheap path only when `declares_buy()` is false)
-- **impact**: agent offer can show full price when Tsugu's −1500 applies, non-zero when maze_warehouse makes it free, or allow a buy BuyGate would refuse. Engine's built-in `agent_landing` (`play.rs:2068`) *does* use hook-aware `buy_quote_for` → dual-path drift
-- **also stale**: `rules/card-sdk/src/ctx.rs:2445` and `docs/PURCHASE.md:110` still say "One `HostRequest::Quote`" — that variant does not exist (`host.rs:236`)
+  - hook cards that change the charge: `card-general/src/tsugu_ycm.rs` (`BuyAdd` −1500), `card-ppp/src/maze_warehouse.rs` (`BuySet` 0), Roselia band `BuyMul` ½
+- **ABI contract** (`docs/PURCHASE.md`, `purchase.rs`): post-hook price and `BUYABLE + BuyGate`; quote == charge. **Confirmed.**
+- **was**: guest quote = native land+houses; eligibility = `is_buyable` only
+- **expected**: same `CardRules::buy_quote` / `quote_for` the engine uses. **Confirmed.**
 
 ## HOST-08 — `plan::set_no_build` / `plan::set_build_anywhere` trap on native, unregistered on wasm
 - **kind**: ABI defect

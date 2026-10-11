@@ -269,6 +269,26 @@ pub trait CardWorld: Clone + 'static {
     fn tile_steps_ahead(&self, player_id: i32, steps: i32) -> i32;
     fn rent_of(&self, tile: i32) -> i32;
     fn buy_price(&self, tile: i32) -> i32;
+    /// Hook-aware purchase quotes for `tiles` on `player_id`'s behalf at
+    /// `kind` (a [`card_sdk::abi::BuyKind`] as `i32`). Parallel
+    /// `(price, eligible)`; `price = -1` when the tile is not buyable.
+    ///
+    /// The default is the native land+houses figure (`buy_price`) -- what a
+    /// stub world can answer. [`crate::Run`] overrides with
+    /// `CardRules::buy_quote`, the same path `buy` charges, so quote ==
+    /// charge (HOST-07 / ABI v53).
+    fn buy_quotes(&self, _player_id: i32, _kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> {
+        tiles
+            .iter()
+            .map(|&t| {
+                if self.is_buyable(t) != 0 {
+                    (self.buy_price(t), true)
+                } else {
+                    (-1, false)
+                }
+            })
+            .collect()
+    }
     fn build_cost(&self, tile: i32) -> i32;
     fn mortgage_value(&self, tile: i32) -> i32;
     fn owned_count(&self, player_id: i32) -> i32;

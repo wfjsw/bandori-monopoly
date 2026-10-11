@@ -454,6 +454,47 @@ impl CardWorld for Run {
     fn buy_price(&self, tile: i32) -> i32 {
         self.world.buy_price(&self.data, tile)
     }
+
+    /// HOST-07: the same hook-aware quote `buy` charges (`CardRules::buy_quote`
+    /// = `BuyGate` / `BuyAdd` / `BuyMul` / `BuySet`), not the native
+    /// land+houses figure. Reached through the live `Cx` the drive installed
+    /// (`Run::live`, same raw-pointer contract as the log sink). Falls back to
+    /// the native formula outside a drive (probes, quotes).
+    fn buy_quotes(&self, player_id: i32, kind: i32, tiles: &[i32]) -> Vec<(i32, bool)> {
+        use game_core::engine::purchase::{self, BuyKind};
+        let kind = BuyKind::from_i32(kind).unwrap_or(BuyKind::Card);
+        if let Some(live) = self.live {
+            let cx: &game_core::engine::Cx = unsafe { &*live };
+            let w = cx.world();
+            let specs: Vec<(usize, i32)> = tiles
+                .iter()
+                .map(|&t| {
+                    let t = t.max(0) as usize;
+                    let seller = match kind {
+                        BuyKind::Force | BuyKind::Acquire => {
+                            w.st.owners.get(t).copied().unwrap_or(-1)
+                        }
+                        _ => -1,
+                    };
+                    (t, seller)
+                })
+                .collect();
+            return purchase::quote_for(cx.rules(), w, cx.data(), player_id.max(0) as usize, kind, &specs)
+                .into_iter()
+                .map(|q| (q.price, q.eligible))
+                .collect();
+        }
+        tiles
+            .iter()
+            .map(|&t| {
+                if self.is_buyable(t) != 0 {
+                    (self.buy_price(t), true)
+                } else {
+                    (-1, false)
+                }
+            })
+            .collect()
+    }
     fn build_cost(&self, tile: i32) -> i32 {
         self.world.build_cost(&self.data, tile)
     }

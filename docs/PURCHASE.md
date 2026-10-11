@@ -107,7 +107,8 @@ StubRules and the sim run.
   `deal_mortgaged` / `set_deal_mortgaged`. `BuyGate` uses `set_cancelled` plus
   a reason.
 * **`ctx`:**
-  * `buy_quotes(player, kind, &[tile])` — batched, one `HostRequest::Quote`;
+  * `buy_quotes(player, kind, &[tile])` — batched, one hook-aware query
+    (`CardRules::buy_quote` / `quote_for`, no pause); quote == charge;
   * `buy(player, tile, kind) -> bool` — replaces `card_buy`;
   * `acquire(player, from, tile, price)` — 收购: pipeline pay, then assign →
     `bought` → `buyAfter`;
@@ -127,7 +128,9 @@ StubRules and the sim run.
   the hooks in pure guard mode, like `cant_play` (a throwaway copy — no world
   mutation, and a hook that would prompt contributes nothing to the preview).
   The commit re-quotes, so quote == charge. Takes the world by reference so the
-  view's `st.buy_price` preview asks without cloning.
+  view's `st.buy_price` preview asks without cloning. The guest's
+  `ctx::buy_quotes` routes through the same path (HOST-07 / ABI v53): the
+  agent offer's quoted price is the price `buy` charges.
 
 ## Card migrations
 

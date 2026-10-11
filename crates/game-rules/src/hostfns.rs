@@ -1611,27 +1611,16 @@ pub fn buy<C: HostCtx>(c: &mut C, player_id: i32, tile: i32, kind: i32) -> Resul
 }
 
 pub fn buy_quotes<C: HostCtx>(c: &mut C, player_id: i32, kind: i32, buf: i32, n: i32, out: i32) -> Result<i32, HostErr> {
-            let _ = (player_id, kind);
             let bytes = c.read_guest( buf, n)?;
             let tiles: Vec<i32> = bytes
                 .chunks_exact(4)
                 .map(|b| i32::from_le_bytes([b[0], b[1], b[2], b[3]]))
                 .collect();
-            // Native quote (`purchase::quote_native`): `buy_price` is the deed
-            // plus standing houses; `-1` / not-eligible when the tile is not
-            // buyable. Hook-aware quotes (`BuyAdd` / `BuyGate`) re-quote at
-            // commit inside `buy`, so the charge is right even when this
-            // figure is the native one.
-            let quotes: Vec<(i32, bool)> = tiles
-                .iter()
-                .map(|&t| {
-                    if c.st().wr().is_buyable(t) != 0 {
-                        (c.st().wr().buy_price(t), true)
-                    } else {
-                        (-1, false)
-                    }
-                })
-                .collect();
+            // HOST-07: the same hook-aware quote `buy` charges
+            // (`CardWorld::buy_quotes` → `CardRules::buy_quote`), so the
+            // guest's preview is the price the commit will take (quote ==
+            // charge). Still a query -- no pause, no world write.
+            let quotes = c.st().wr().buy_quotes(player_id, kind, &tiles);
             let bytes = postcard::to_allocvec(&quotes)
                 .map_err(|e| HostErr::trap(format!("buy_quotes encode: {e}")))?;
             c.write_guest(out, &bytes)?;
