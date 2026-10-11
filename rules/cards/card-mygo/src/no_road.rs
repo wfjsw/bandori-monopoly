@@ -13,8 +13,8 @@ pub const NO_ROAD: CardDef = CardDef::new(
     &[
         // 「[除外]期间本应获得的格子收入由此前指定的那名玩家获得」 -- only while
         // the exile lasts, only for this player's own tile rent, and only with a
-        // live partner. `pay_is_rent` / `target` / `slot` are the §4.2 schema;
-        // `is_placed` and the exile count stay residual (dynamic).
+        // live partner. The clause is residual (live exile count + the pay
+        // shape); `card.placed` is the `pre`.
         On::Hook(
             &[card_sdk::abi::HookKind::PayAdd],
             "card.placed && pay_is_rent && target == owner && slot('noRoad.who') >= 0 && slot('noRoad.who') != owner",
@@ -110,8 +110,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
-/// Residual guard for [`redirect`]: the live exile count. `turn_snap` is the
-/// turn-start snapshot and is stale for a layer granted mid-turn.
+/// Residual guard for [`redirect`]: the live exile count, a live partner, and
+/// this player's own tile rent. `turn_snap` is the turn-start snapshot and is
+/// stale for a layer granted mid-turn (docs/GUARDS.md §4.2).
 fn redirect_applies(player_id: i32) -> bool {
     ctx::state::get(player_id, card_sdk::abi::state_key::EXILE) > 0
 }

@@ -2573,12 +2573,21 @@ impl<M: CardModules> RulesBridge<M> {
                 w.parent = activation_id;
                 w.live = Some(cx_ptr as *mut Cx<'static>);
                 let pres = self.entry_presentation(card_id, entry);
+                // Per-entry presentation: a multi-entry drive (every
+                // `TurnStartBefore` of one card, say) must not inherit the
+                // previous sibling's silent flag -- otherwise a silent
+                // declare-cap poisons the visible clause that follows it.
                 if pres == card_sdk::abi::Presentation::Silent {
                     silent_body.set(true);
                     w.silent_body = true;
+                } else {
+                    silent_body.set(false);
+                    w.silent_body = false;
                 }
                 if pres == card_sdk::abi::Presentation::QuietWhenEmpty {
                     quiet_when_empty.set(true);
+                } else {
+                    quiet_when_empty.set(false);
                 }
                 let id = self.announce_drive(w, call, card_id, uid, target, tile, trigger, entry);
                 if id >= 0 {
