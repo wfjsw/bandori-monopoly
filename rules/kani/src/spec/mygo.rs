@@ -1,8 +1,374 @@
 //! Unit `mygo`: reference specs FROM the clause docs only.
 //!
-//! Write one pure function per clause (pre + effect-log + post -> bool).
-//! Never derive a spec from engine behaviour.
+//! Source of truth: `docs/rulebook/spec/cards/mygo.md` and the verbatim
+//! `docs/rulebook/cards.json` text. Never derived from engine behaviour.
 //!
-//! Empty until the unit author lands their first clause.
+//! Clause ids are `C-MYGO-<slug>-<n>`. Each pure function is one clause's
+//! Trigger / Condition / Effect / Frame as a predicate over
+//! `(pre, effect-log, post)`.
 
-// (intentionally empty stub — authors append below)
+use crate::world::{Effect, Snapshot, MAX_PLAYERS};
+
+// ===========================================================================
+// C-MYGO-rinpuu-01
+// 「使自己获得一层[停留]」
+// Card: `MyGO:轮符雨` On::Play.
+// Trigger: a play of this card. Condition: none.
+// Effect: the user gains exactly one layer of [停留].
+// Frame: only `stay:P{user}` moves (the effect log is exactly one GiveStay).
+// ===========================================================================
+
+/// Exact effect log of the play body: one `GiveStay { player, n: 1 }`.
+/// `ctx::before_turn_end` is a scheduling op (protocol stub) and logs nothing;
+/// `ctx::log` is narration, not in the frame.
+pub fn rinpuu_01_log_ok(effects: &[Effect], player: i32) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::GiveStay {
+                player: p,
+                n
+            } if p == player && n == 1
+        )
+}
+
+/// Post: user's stay rose by exactly 1; every other snapshot field unchanged.
+pub fn rinpuu_01_post_ok(pre: &Snapshot, post: &Snapshot, player: i32) -> bool {
+    let p = player as usize;
+    post.stay[p] == pre.stay[p].saturating_add(1)
+        && post.money == pre.money
+        && post.pos == pre.pos
+        && post.fire == pre.fire
+        && post.hand == pre.hand
+        && post.discard == pre.discard
+        && post.pay_amount == pre.pay_amount
+        && (0..MAX_PLAYERS).all(|i| i == p || post.stay[i] == pre.stay[i])
+}
+
+/// MUTANT: demands two stay layers instead of one. A correct card must FAIL
+/// this spec (`*_mutant_is_detected` shows the disagreement is reachable).
+pub fn rinpuu_01_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::GiveStay {
+                player: p,
+                n
+            } if p == player && n == 2
+        )
+}
+
+// ===========================================================================
+// C-MYGO-journey-01
+// 「[手] 将此卡放置于当前格子上并为其放置4个奇迹水晶」
+// Card: `MyGO:哪怕这旅程没有终点` On::Play.
+// Trigger: the [手] play. Condition: none beyond a legal play from hand.
+// Effect: the card is placed on the current tile with exactly 4 [奇迹水晶].
+// Frame: only the user's hand/field zones move (PlaceCard); the crystal write
+// is a counter on the instance (host stores it as the player's `crystals` key;
+// `set_crystals` logs no Effect).
+// ===========================================================================
+
+/// Dest::Field discriminant (`card_sdk::ctx::Dest::Field`).
+pub const DEST_FIELD: i32 = 2;
+
+/// Exact effect log: one `PlaceCard` to Field at the user's position.
+/// `set_crystals(4)` is a counter write (no Effect); narration is not the frame.
+pub fn journey_01_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+}
+
+/// MUTANT: demands two PlaceCard effects.
+pub fn journey_01_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 2
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+        && matches!(
+            effects[1],
+            Effect::PlaceCard {
+                player: p,
+                ..
+            } if p == player
+        )
+}
+
+// ===========================================================================
+// C-MYGO-haneoka-02/03/04/05
+// 「若出目至少为10则在当前格子免费加盖一层房屋，若出目至少为15，则额外抽一张卡，
+//  至少为20，则将此卡放置在自己场上…若小于10，此卡放入弃牌堆且视为此卡未生效」
+// Card: `MyGO:羽丘的不可思议女孩` On::Play (gated on own tile).
+// Thresholds inclusive (sheet 2026-10-06). `add_house` is free (no money).
+// The `<10` branch's 「放入弃牌堆」 is the play pipeline's default dest, not a
+// body effect — the body itself logs nothing on that branch.
+// ===========================================================================
+
+/// Effects demanded for a face `r` on an owned, unmortgaged tile.
+/// r < 10: empty log (未生效; discard is the play pipeline).
+/// r >= 10: SetHouses (free +1). r >= 15: also Draw 1. r >= 20: also PlaceCard.
+pub fn haneoka_effects_ok(effects: &[Effect], player: i32, tile: i32, r: i32, card: u8) -> bool {
+    if r < 10 {
+        return effects.is_empty();
+    }
+    let mut i = 0usize;
+    // house
+    if i >= effects.len() {
+        return false;
+    }
+    if !matches!(effects[i], Effect::SetHouses { tile: t, n } if t == tile && n >= 1) {
+        return false;
+    }
+    i += 1;
+    if r >= 15 {
+        if i >= effects.len() {
+            return false;
+        }
+        if !matches!(effects[i], Effect::Draw { player: p, n } if p == player && n == 1) {
+            return false;
+        }
+        i += 1;
+    }
+    if r >= 20 {
+        if i >= effects.len() {
+            return false;
+        }
+        if !matches!(effects[i], Effect::PlaceCard { player: p, dest, card: c }
+            if p == player && dest == DEST_FIELD && c == card) {
+            return false;
+        }
+        i += 1;
+    }
+    i == effects.len()
+}
+
+/// MUTANT: for r >= 10 demands an extra Draw even on the house-only band.
+pub fn haneoka_effects_ok_mutant(effects: &[Effect], player: i32, tile: i32, r: i32, card: u8) -> bool {
+    if r < 10 {
+        // mutant: ineffective branch should have an effect (wrong)
+        return effects.len() == 1;
+    }
+    haneoka_effects_ok(effects, player, tile, r, card) && {
+        // mutant wants an extra Draw always
+        effects.iter().any(|e| matches!(e, Effect::Draw { player: p, .. } if *p == player))
+            || r < 15
+    }
+}
+
+// ===========================================================================
+// C-MYGO-rainday-01
+// 「将此卡放置于自己场上并为其放置5个奇迹水晶」
+// Card: `MyGO:那天的雨` On::Play (the play body also runs the -02 rain; that
+// leg is a separate clause and is asserted by `rainday_02` below).
+// ===========================================================================
+
+/// The placement leg: exactly one PlaceCard(Field). Crystals are a counter
+/// write (`set_crystals(5)`) with no Effect; checked via the key map.
+pub fn rainday_01_place_ok(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.first().is_some_and(|e| {
+        matches!(
+            *e,
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+    })
+}
+
+/// MUTANT: demands 4 crystals instead of 5 (checked by the proof via key map).
+pub fn rainday_01_crystals_mutant() -> i32 {
+    4
+}
+
+// ===========================================================================
+// C-MYGO-rainday-02 (play leg)
+// 「打出此卡时及你的每回合开始时投掷1d10并按地产商格子顺序使（除"东京外"的）
+//  第n个地产商对应的颜色格子及这些格子相邻格子上的所有玩家获得一层[停留]」
+// After the placement leg, the body rolls 1d10 and grants +1 stay to every
+// living player standing on a tile of the n-th agent's colour **or adjacent**.
+// The agent table (excluding 东京外) is the book's board order; the body's
+// AGENTS list is the implementation's reading. Spec: every living player whose
+// `pos` is in the rolled zone gets exactly one GiveStay; nobody else does.
+// OPEN-rainday-d10: face > 10 is unreachable on a plain 1d10 (dead text).
+// ===========================================================================
+
+/// All GiveStay effects after the PlaceCard must be n==1 and cover exactly the
+/// players in `zone` (the rolled colour+adjacent set).
+pub fn rainday_02_stay_ok(effects: &[Effect], after: usize, zone: &[bool]) -> bool {
+    let mut seen = 0;
+    for e in &effects[after..] {
+        match e {
+            Effect::GiveStay { player: p, n } => {
+                let p = *p as usize;
+                if *n != 1 || p >= zone.len() || !zone[p] {
+                    return false;
+                }
+                seen += 1;
+            }
+            _ => return false,
+        }
+    }
+    // every zone player must appear exactly once
+    let expected = zone.iter().filter(|&&b| b).count();
+    seen == expected
+}
+
+/// MUTANT: demands a stay for a player outside the zone.
+pub fn rainday_02_stay_ok_mutant(effects: &[Effect], after: usize, zone: &[bool]) -> bool {
+    let _ = zone;
+    effects[after..].iter().any(|e| matches!(e, Effect::GiveStay { .. })) && {
+        // wrong: require a stay even when the zone is empty
+        true
+    }
+}
+
+// ===========================================================================
+// C-MYGO-hitoshizuku-01/02/03
+// 「清除场上所有[停留]与[眩晕]效果，所有玩家因本效果每清除一种效果则支付此卡使用者
+//  1000资金，若清除了此卡使用者受到的效果则每种效果使用者额外获得1000资金。」
+// Ruling 2026-10-06 (TEST-FINDINGS §6): 「每清除一种效果」 is per effect TYPE
+// per AFFECTED PLAYER (stay=1 + stun=1 → 2000 for one player with both).
+// Spec money: each affected player P pays `1000 * kinds(P)` to the user;
+// the user additionally gains `1000 * kinds(user)` (clause -03).
+// KNOWN black-box finding: the body charges `1000 * GLOBAL kinds` from every
+// living player — MORE/WRONG vs the book. The iff proof is expected to FAILS.
+// ===========================================================================
+
+/// kinds(P) = number of effect types cleared on P (0..=2).
+pub fn hitoshizuku_pay_amount(kinds: i32) -> i32 {
+    1000 * kinds
+}
+
+/// Spec: after the clear leg, every living player `j != user` with `kinds(j)>0`
+/// has a PayTo { from: j, to: user, n: 1000*kinds(j) }; the user's own extra
+/// gain is `GainMoney { player: user, n: 1000*kinds(user) }` when kinds(user)>0.
+/// The clear leg itself is a sequence of GiveStay / GiveStun / SetState.
+pub fn hitoshizuku_money_ok(
+    effects: &[Effect],
+    user: i32,
+    kinds: &[i32],
+    n_players: i32,
+) -> bool {
+    // collect money effects after the status-clear prefix
+    let mut pays = 0;
+    let mut gains = 0;
+    for e in effects {
+        match e {
+            Effect::PayTo { from, to, n } => {
+                if *to != user {
+                    return false;
+                }
+                let j = *from as usize;
+                if j >= kinds.len() {
+                    return false;
+                }
+                if *n != hitoshizuku_pay_amount(kinds[j]) {
+                    return false;
+                }
+                pays += 1;
+            }
+            Effect::GainMoney { player: p, n } => {
+                if *p != user {
+                    return false;
+                }
+                if *n != 1000 * kinds[user as usize] {
+                    return false;
+                }
+                gains += 1;
+            }
+            _ => {}
+        }
+    }
+    let expected_pays = (0..n_players as usize)
+        .filter(|&j| j != user as usize && kinds[j] > 0)
+        .count();
+    let expected_gains = if kinds[user as usize] > 0 { 1 } else { 0 };
+    pays == expected_pays && gains == expected_gains
+}
+
+/// MUTANT: book-wrong reading the body implements — every living player pays
+/// `1000 * global_kinds`. A correct card must NOT match this mutant when the
+/// spec is the per-player reading... wait, this IS what the body does, so
+/// `hitoshizuku_money_ok_mutant` being true while `hitoshizuku_money_ok` is
+/// false is the FAILS evidence. Name it `hitoshizuku_body_global_pay_ok`.
+pub fn hitoshizuku_body_global_pay_ok(
+    effects: &[Effect],
+    user: i32,
+    global_kinds: i32,
+    n_players: i32,
+) -> bool {
+    let each = 1000 * global_kinds;
+    let mut pays = 0;
+    for e in effects {
+        if let Effect::PayTo { from, to, n } = e {
+            if *to != user || *n != each {
+                return false;
+            }
+            let _ = from;
+            pays += 1;
+        }
+    }
+    let expected = (0..n_players as usize)
+        .filter(|&j| j != user as usize)
+        .count();
+    pays == expected
+}
+
+// ===========================================================================
+// C-MYGO-tomori-card-01/02
+// 「（1）获得两层仅能被自然流失效果移除的[停留]，将此卡放置于场上并将所有手卡
+//  置入弃牌堆，在此卡上放置X+1个[奇迹水晶]，X为你弃置的手牌数」
+// Card: `MyGO:（灯）不再迷茫` On::Play.
+// Isolation: empty hand at pre (X=0 ⇒ crystals=1) so the `cards_in` /
+// `discard_from_hand` String loop is a no-op (the prompt pilot's memcmp cliff).
+// The general X>0 case is the same shape plus X DiscardFromHand effects.
+// ===========================================================================
+
+/// Exact effect log when the hand is empty: GiveStay(user, 2) then PlaceCard.
+/// `inc_slot("lockedStay", 2)` and `set_crystals(1)` are counter/slot writes
+/// with no Effect.
+pub fn tomori_card_02_empty_hand_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 2
+        && matches!(effects[0], Effect::GiveStay { player: p, n } if p == player && n == 2)
+        && matches!(
+            effects[1],
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+}
+
+/// MUTANT: demands 1 stay layer instead of 2.
+pub fn tomori_card_02_empty_hand_log_ok_mutant(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 2
+        && matches!(effects[0], Effect::GiveStay { player: p, n } if p == player && n == 1)
+        && matches!(
+            effects[1],
+            Effect::PlaceCard {
+                player: p,
+                dest,
+                card: c
+            } if p == player && dest == DEST_FIELD && c == card
+        )
+}
+
+/// Crystals demanded when X cards were discarded: exactly X + 1.
+pub fn tomori_card_02_crystals(x: i32) -> i32 {
+    x + 1
+}
