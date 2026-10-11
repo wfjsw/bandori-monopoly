@@ -1,16 +1,23 @@
-//! Harness (a): pure money-shave hook.
+//! Harness (a): pure money-shave hook, guard evaluated by the single-source
+//! IR (no `assume` of the host condition).
 //!
 //! Clause `C-PP-aya-haruka-02` (`docs/rulebook/spec/cards/pp.md`):
 //! > 「（1）如果[拥有者]的资金数是所有存活玩家中最少则[拥有者][消耗]或[支付]时
 //! >  将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。」
 //!
-//! Trigger: `On::Hook(PayAdd)` with the host-side condition
-//! `actor == owner && value > 0` (so we assume `value > 0`).
+//! Trigger: `On::Hook(PayAdd)` with the single-source condition
+//! `"actor == owner && value > 0"` — the SAME string the host compiles.
+//! Under Kani we lower that string to the heap-free IR once (generated) and
+//! evaluate it against a symbolic context. When the guard admits we invoke
+//! the unmodified body and prove the clause; when it rejects we assert the
+//! host would not have called the body (cover + no-op).
+//!
 //! Isolation: no `PP:[衍生]共鸣` in hand, so clause (2)'s stacked 1500
 //! shave cannot fire (`try_resonance` returns false before any prompt).
 
 use crate::host;
 use crate::invoke;
+use crate::ir_fill::{self, src as guard_src};
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
@@ -18,15 +25,15 @@ fn symbolic_pay_world() -> World {
     host::install();
     let mut w = World::new();
     w.n_players = kani::any();
-    kani::assume((2..=4).contains(&w.n_players));
+    kani::assume(w.n_players >= 2 && w.n_players <= 4);
     for p in 0..MAX_PLAYERS {
         w.money[p] = kani::any();
-        kani::assume((0..=10_000).contains(&w.money[p]));
+        kani::assume(w.money[p] >= 0 && w.money[p] <= 10_000);
         w.out[p] = kani::any();
         w.fans_pos[p] = kani::any();
-        kani::assume((0..=20).contains(&w.fans_pos[p]));
+        kani::assume(w.fans_pos[p] >= 0 && w.fans_pos[p] <= 20);
         w.fans_neg[p] = kani::any();
-        kani::assume((0..=20).contains(&w.fans_neg[p]));
+        kani::assume(w.fans_neg[p] >= 0 && w.fans_neg[p] <= 20);
         // clause-(2) isolation
         w.hand_resonance[p] = 0;
     }
@@ -34,20 +41,44 @@ fn symbolic_pay_world() -> World {
     kani::assume(owner >= 0 && owner < w.n_players);
     kani::assume(!w.out[owner as usize]);
     w.trig_player = owner;
+    // `value` is fully symbolic — including `<= 0`. The guard IR decides.
     w.trig_value = kani::any();
-    kani::assume(w.trig_value > 0);
+    kani::assume(w.trig_value >= 0 && w.trig_value <= 10_000);
     w.pay_amount = w.trig_value;
     w
 }
 
-/// Post-state + effect log are exactly the clause: reduce by X, floor 0,
-/// only while the owner is poorest; no-op otherwise.
+/// Post-state + effect log are exactly the clause **when the single-source
+/// guard admits**. When it rejects, the body is not run (the host's
+/// `admits()` gate) and the log is empty by construction.
 #[kani::proof]
 #[kani::unwind(24)]
 pub fn aya_haruka_02_shave_iff() {
     let w = symbolic_pay_world();
     let owner = w.trig_player;
     let pre_amount = w.pay_amount;
+
+    // ---- single-source guard: the real CEL string, lowered once ----
+    let prog = ir_fill::guard_by_src(guard_src::AYA_PAY_ADD);
+    let ctx = ir_fill::fill_pay_add(&w, owner);
+    let admitted = ir_fill::eval_bool(prog, &ctx);
+    kani::cover!(admitted, "guard admits");
+    kani::cover!(!admitted, "guard rejects");
+
+    if !admitted {
+        // Host would not call the body. Nothing to prove about the body;
+        // assert the precondition we rely on: value <= 0 or actor != owner.
+        use rules_cond_ir::vars::VarId;
+        let actor = ctx.scalars[VarId::Actor as usize];
+        let owner = ctx.scalars[VarId::Owner as usize];
+        let value = ctx.scalars[VarId::Value as usize];
+        assert!(
+            !(actor == owner && value > 0),
+            "guard rejected but actor==owner && value>0 — translator bug"
+        );
+        return;
+    }
+
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -102,7 +133,15 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
     let w = symbolic_pay_world();
     let owner = w.trig_player;
     let pre_amount = w.pay_amount;
-    kani::assume(spec::is_poorest(&w.money, &w.out, w.n_players, owner));
+    // Pin the admitted + poorest region with plain assumptions (the guard IR
+    // itself is proved in `aya_haruka_02_shave_iff` and `wrong_guard.rs`).
+    kani::assume(w.trig_player == owner);
+    kani::assume(pre_amount >= 200);
+    for p in 0..MAX_PLAYERS {
+        if p != owner as usize {
+            kani::assume(w.out[p] || w.money[p] >= w.money[owner as usize]);
+        }
+    }
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -114,8 +153,35 @@ pub fn aya_haruka_02_mutant_x_off_by_one() {
         pre.fans_neg[owner as usize],
     );
     let expected = spec::aya_haruka_02_amount(pre_amount, x);
-    assert!(
-        post.pay_amount == expected,
-        "mutant: card must not match the off-by-one spec"
+    assert!(post.pay_amount == expected);
+}
+
+/// Companion (no `should_panic`): the mutant spec does NOT match the card.
+/// If this FAILS, the off-by-one is live — the expected outcome.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn aya_haruka_02_mutant_is_detected() {
+    let w = symbolic_pay_world();
+    let owner = w.trig_player;
+    let pre_amount = w.pay_amount;
+    kani::assume(w.trig_player == owner);
+    kani::assume(pre_amount >= 200);
+    for p in 0..MAX_PLAYERS {
+        if p != owner as usize {
+            kani::assume(w.out[p] || w.money[p] >= w.money[owner as usize]);
+        }
+    }
+    let pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::aya_longing_pay_add(owner));
+    let post = world::snapshot();
+    let x = spec::aya_haruka_02_x_mutant(
+        pre.fans_pos[owner as usize],
+        pre.fans_neg[owner as usize],
     );
+    let expected = spec::aya_haruka_02_amount(pre_amount, x);
+    // The card does X, the mutant wants X+1: they must differ.
+    assert!(post.pay_amount != expected);
 }

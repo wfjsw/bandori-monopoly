@@ -21,6 +21,8 @@ serde = { workspace = true }
 # The serialized compiled form is postcard of the cel AST (the same format as
 # the ruleset manifest). Only needed on the `wire` feature.
 postcard = { version = "1", default-features = false, features = ["alloc"], optional = true }
+# Host-only: the heap-free IR the Kani proofs evaluate. Never linked into wasm.
+rules-cond-ir = { path = "../cond-ir", optional = true }
 
 [features]
 # Host default: compile source AND emit the serialized form (G2 caches it
@@ -36,12 +38,28 @@ wire = ["cel/serde-ast", "dep:postcard"]
 # --features runtime-only --target wasm32-unknown-unknown`. Loads a compiled
 # condition from postcard bytes and evaluates it; no parser in the binary.
 runtime-only = ["wire"]
+# Lower the rewritten AST to the Kani-side IR (host-only). Used by the
+# generator, the differential tests, and the per-guard consistency check.
+lower = ["compile", "dep:rules-cond-ir"]
 
 [dev-dependencies]
+rules-cond-ir = { path = "../cond-ir" }
 
 [[example]]
 name = "size_spike"
 crate-type = ["cdylib"]
+
+[[test]]
+name = "cond_ir_diff"
+required-features = ["lower"]
+
+[[test]]
+name = "cond_ir_vocab"
+required-features = ["lower"]
+
+[[test]]
+name = "cond_ir_consistency"
+required-features = ["lower"]
 
 [[example]]
 name = "size_baseline"
@@ -53,3 +71,7 @@ crate-type = ["cdylib"]
 [[example]]
 name = "size_wire"
 crate-type = ["cdylib"]
+
+[[example]]
+name = "gen_cond_ir"
+required-features = ["lower"]

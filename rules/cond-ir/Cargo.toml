@@ -1,0 +1,12 @@
+[package]
+name = "rules-cond-ir"
+version.workspace = true
+edition.workspace = true
+license = "MIT"
+description = "Heap-free condition IR + interpreter + reference semantics for Kani (docs/rulebook/spec/COND-SINGLE-SOURCE.md). Host-only; never linked into wasm."
+publish = false
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
