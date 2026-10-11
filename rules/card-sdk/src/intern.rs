@@ -16,12 +16,12 @@
 
 /// Maximum interned names in one verification run. Bounded so every loop
 /// unwinds; cards under proof only need a handful of card / token / tile names.
-pub const MAX_INTERN: usize = 256;
+pub const MAX_INTERN: usize = 32;
 
 /// Longest name we store. Longer names are truncated for identity purposes
 /// only when comparing; the first 64 bytes decide identity (same bound as the
 /// pilot's `guest_eq`).
-pub const MAX_NAME: usize = 64;
+pub const MAX_NAME: usize = 48;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct NameId(pub u16);
