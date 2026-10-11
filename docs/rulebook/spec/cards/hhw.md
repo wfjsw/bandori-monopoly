@@ -46,7 +46,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   only) to the farthest tile in that direction; the move counts as the turn's
   [主要移动]. **Frame:** play leaves the hand to discard (non-[持续]); `pos`
   and turn main-move bookkeeping may move; nothing else may.
-* **Executable:** `hlsy_teleports_to_farthest` / `hlsy_frame`.
+* **Executable:** `hlsy_teleports_and_is_the_main_move` / `hlsy_frame`.
 * **OPEN-HHW-DIR:** face → direction mapping, `1d4mod4` of face 0, and the
   board geometry of 上/下/左/右 / 「直线距离最远」 are not defined in the
   rulebook body. Only the teleport-as-main-move shape is specified.
@@ -64,7 +64,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   (any order) to the draw pile and the other `2-k` enter the discard.
 * `C-HHW-backstage-02` -- payout. Quote: 「每翻入一张获得1000资金」
   **Effect:** user's money rises by exactly `1000 × (cards flipped to discard)`.
-* **Executable:** `backstage_pays_1000_per_discard` / `backstage_frame`.
+* **Executable:** `backstage_pays_1000_per_discard`.
 * **OPEN-HHW-SHORT-PILE:** fewer than 2 cards in the draw pile.
 
 ### HHW:因为我一直相信着你
@@ -87,7 +87,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「然后从你的卡组中选择两张加入你的手牌，重洗你的抽牌堆。」
   **Effect:** two cards from the draw pile enter the hand; the draw pile is
   reshuffled (order of the remainder is unspecified -- OPEN-HHW-RESHUFFLE).
-* **Executable:** `believe_gate_and_cost` / `believe_frame`.
+* **Executable:** `believe_refuses_with_only_this_card`, `believe_contract` / `believe_cost`, `believe_frame`.
 * **OPEN-HHW-BELIEVE-CHOOSER:** which player chooses the discarded card
   (「选择一名玩家」 -- the user picks the chooser, or any other seat?).
 * **OPEN-HHW-RESHUFFLE:** reshuffle of an already-shuffled pile; only the
@@ -109,7 +109,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   three faces? OPEN-HHW-PATROL-3D20) gains +1 house **for free** when it is
   可建造 (per 「[可购买格子]」 plus build caps -- the exact 「可建造」 set is
   OPEN-HHW-BUILDABLE).
-* **Executable:** `patrol_paid_build_and_free_house` / `patrol_frame`.
+* **Executable:** `patrol_paid_build` / `patrol_frame`. The free 3d20 house is **not scripted**.
 * **OPEN-HHW-PATROL-PRICE:** what 「付款」 amounts to.
 * **OPEN-HHW-PATROL-3D20:** 3d20 as sum vs three separate tiles.
 * **OPEN-HHW-BUILDABLE:** 「可建造格子」 is not defined; the book's nearest
@@ -143,9 +143,9 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「并为将要进行支付的那名玩家减免相当于你支付金额的数额。」
   **Effect:** the charged player's payment falls by the amount the user paid
   in (2).
-* **Executable:** `dream_return_window` (window shape only) /
-  `dream_return_frame`. Full (2)–(5) needs a live rent window plus a
-  successful pay; covered as far as the text determines.
+* **Executable:** `dream_return_is_offered_on_another_players_charge` (window
+  shape only). (2)–(5) **not scripted** -- they need a live rent window plus
+  a successful pay and the band double.
 * **OPEN-HHW-RETURN-AMOUNT:** the amount of 「进行一次支付」.
 * **OPEN-HHW-RETURN-BOOK:** how a crystal 「records」 a player.
 
@@ -162,7 +162,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「选择其中之一，传送至结果对应序号的格子，视为你的主要移动」
   **Effect:** the player picks one of the four; [传送] to that 序号 tile;
   the move is the turn's [主要移动].
-* **Executable:** `balloon_rolls_four_and_teleports` / `balloon_frame`.
+* **Executable:** `balloon_teleports_to_a_chosen_result` / `balloon_frame`.
 
 ### HHW:爱心义演
 
@@ -183,8 +183,10 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「（若弦卷心已将专属卡置于CiRCLE上，则CiRCLE也算作属于弦卷心的格子）」
   **Condition:** 弦卷心's exclusive card 「前往笑容集结的地方！」 is on
   CiRCLE. **Effect:** for that 弦卷心, CiRCLE counts as 「属于」 her for (1).
-* **Executable:** `charity_halves_payment` / `charity_rounds_up` /
-  `charity_frame`.
+* **Executable:** `charity_halves_payment` (140→70). The ceil-to-10 leg is
+  pinned only as the printed formula in
+  `charity_rounds_the_half_up_to_a_multiple_of_ten` -- **not** an engine
+  assertion (no 1.5× rent source lives in this unit).
 * **OPEN-HHW-CHARITY-RECOMPUTE:** whether a path recompute re-fires 「初次经过」.
 
 ### HHW:笑容大游行
@@ -211,7 +213,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 * `C-HHW-parade-05` -- graveyard after settle. Quote (3) second half.
   **Effect:** after any player [触发结算]s on the tile the card sits on, the
   card goes to the discard.
-* **Executable:** `parade_counter_places_and_seeds` / `parade_frame`.
+* **Executable:** **not scripted** ([触发结算] OPEN; known stack overflow).
 * **OPEN-HHW-触发结算:** [触发结算] is undefined in the rulebook body (README
   OPEN-触发结算). Only the placement / crystal / discard arithmetic is
   specified.
@@ -238,8 +240,10 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「每次移动掷骰时，重骰移动掷骰直至结果至少为10为止。」
   **Effect:** a movement roll below 10 is re-rolled until ≥ 10. 10 is
   inclusive (ruling).
-* **Executable:** `athletic_places_three_crystals` / `athletic_re_roll` /
-  `athletic_frame`.
+* **Executable:** `athletic_places_three_crystals`,
+  `athletic_decays_one_per_turn_end`,
+  `athletic_re_rolls_below_ten_and_keeps_ten`,
+  `athletic_pays_700_then_600_on_rolls`.
 
 ### HHW:黑衣人的补给
 
@@ -258,7 +262,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 * `C-HHW-supply-03` -- remove on pass. Quote:
   「你经过“弦卷集团”格子后，移除那格的一个奇迹水晶。」
   **Effect:** after the user passes 弦卷集团, that tile loses 1 crystal.
-* **Executable:** `supply_counter_seeds_crystal` / `supply_frame`.
+* **Executable:** `supply_counter_seeds_a_crystal_on_tsuzumi`. (02)/(03) **not scripted**.
 
 ### HHW:（kkr）前往笑容集结的地方！
 
@@ -279,7 +283,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   pays 6000 to the owner (「所有者」 -- the card's owner / the player who
   placed it; OPEN-HHW-KKR-OWNER if the board owns CiRCLE), treated as a tile
   collection.
-* **Executable:** `kkr_pays_10000_and_places` / `kkr_frame`.
+* **Executable:** `kkr_pays_10000` (cost + CiRCLE placement). (3) **not scripted**.
 * **OPEN-HHW-KKR-OWNER:** who 「所有者」 is when CiRCLE has no deed owner.
 * **OPEN-HHW-触发结算:** as above.
 
@@ -298,7 +302,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   「随后那格及相邻2格上的所有其他玩家[支付]你500资金。」
   **Effect:** every other player on that tile or the two neighbouring tiles
   (each side? OPEN-HHW-NEIGHBOUR) pays the user 500.
-* **Executable:** `misaki_counter_window` / `misaki_frame`.
+* **Executable:** `misaki_card_is_a_counter_not_a_hand_play`. (2)–(3) **not scripted**.
 * **OPEN-HHW-NEIGHBOUR:** 「相邻2格」 -- two tiles each side, or a total of two.
 * **OPEN-HHW-触发结算:** as above.
 
@@ -323,7 +327,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   outside their own turn. **Condition:** the card is in hand.
   **Effect:** the card may be played; its 「投掷次数」 for the current turn
   goes up by 1 per money gain that turn.
-* **Executable:** `hagumi_two_rolls_and_branch` / `hagumi_frame`.
+* **Executable:** `hagumi_two_rolls_place_a_mark` (≤60 branch). >60 / (3) / (4) **not scripted**.
 * **OPEN-HHW-HAGUMI-TIME:** 「投掷次数+1」 -- extra 4d20s on a later activation
   of (1), or extra rolls of some other effect of the same card.
 
@@ -340,7 +344,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Trigger:** 主要阶段, card on field, ≥9 水母标记.
   **Effect:** clear all markers; [传送] to 水族馆 (`#4`) or 弦卷豪宅 (`#30`);
   the teleport is the turn's [主要移动]; the card then goes to the discard.
-* **Executable:** `wacha_places` / `wacha_jump_at_nine` / `wacha_frame`.
+* **Executable:** `wacha_places_from_hand`, `wacha_jump_at_nine_markers`.
 * **OPEN-HHW-BACKWARDS:** 「倒走」 (reverse movement) is not defined in the
   rulebook body (反方向移动 is an 「异常移动效果」, rulebook-doc.md:100).
 
@@ -365,7 +369,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Condition:** the card is on the field; a player who can move sits on
   薰's tile. **Effect:** that player's [主要移动] becomes `1d2` (forward /
   backward) and `1d10` (distance), settled as that move.
-* **Executable:** `phantom_places` / `phantom_frame`.
+* **Executable:** `phantom_places_on_field`. (3)/(4) **not scripted**.
 * **OPEN-HHW-CHARGE:** 「充能3，衰减1」's counter name and whether it is
   奇迹水晶.
 * **OPEN-HHW-触发结算:** as above.
@@ -384,7 +388,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 * `C-HHW-kokoro-02` -- CiRCLE pass. Quote (2).
   **Trigger:** the owner [经过]s CiRCLE. **Effect:** money +1500 **extra**
   (stacks with the base CiRCLE reward of 2000).
-  **Executable:** `kokoro_circle_bonus` / `kokoro_frame`.
+  **Executable:** `kokoro_circle_pass_extra_1500`.
 
 ### 濑田薰 -- 梦幻的王子殿下
 
@@ -394,18 +398,16 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Trigger:** each [经过] or 被[经过] of the owner.
   **Condition:** no / some 怪盗标记 on the field.
   **Effect:** +1 火罐 (cap 7) when none exist; remove one mark when some do.
-  **Executable:** `kaoru_pass_fire`.
+  **Executable:** `kaoru_pass_gives_one_pot_per_step`.
 * `C-HHW-kaoru-02` -- seven-pot plant. Quote (2).
   **Trigger:** 主要阶段, active. **Condition:** 7 fire pots available.
   **Effect:** spend 7; place 3 怪盗标记 on the nearest player's field
   (absolute board distance); this move starts from 微笑号 (`#27`).
-  **Executable:** `kaoru_plant_three_marks`.
+  **Executable:** `kaoru_skill_plants_three_marks_for_seven_fire` (red, Finding).
 * `C-HHW-kaoru-03` -- path filter. Quote (3).
   **Condition:** main move is not [传送]; a player holding a 怪盗标记 owns
   tiles. **Effect:** the path does not [经过] those tiles.
-  **Executable:** not a one-step predicate (it shapes a whole walk); the
-  determined part is documented here and checked only as far as the walk
-  outcome (see `kaoru_path_skips_marked_owners`).
+  **Executable:** **not scripted** (whole-walk shape).
 
 ### 北泽育美 -- 全垒打！
 
@@ -425,7 +427,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 * `C-HHW-hagumi-skill-05` -- extra dice. Quote (1) last sentence.
   **Condition:** a player holds `n` 可乐饼. **Effect:** movement rolls gain
   `n` extra `1d2`.
-* **Executable:** `hagumi_spawn_and_extra_dice` / `hagumi_skill_frame`.
+* **Executable:** `hagumi_extra_d2_per_croquette` (the (5) extra 1d2 only).
 
 ### 松原花音 -- 真正的迷子
 
@@ -438,11 +440,11 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Effect:** the main move rolls two movement dice and moves
   `|a - b|`? or `a - b`? The text is 「将它们的结果相减」 (subtract) -- a
   negative result is OPEN-HHW-KANON-NEG. Determined: two rolls, not one 1d20.
-  **Executable:** `kanon_two_rolls_subtract`.
+  **Executable:** `kanon_moves_by_the_difference_of_two_rolls` (positive difference only).
 * `C-HHW-kanon-03` -- no-reward clock. Quote (3).
   **Condition:** no CiRCLE reward taken within three turns.
   **Effect:** the next turn's movement roll becomes `1d20 + 1d4`.
-  **Executable:** `kanon_no_reward_uses_1d20_plus_1d4`.
+  **Executable:** **not scripted** (three-turn clock).
 
 ### 奥泽美咲 -- 另一个我
 
@@ -460,12 +462,12 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
   **Trigger:** the owner's turn start. **Condition:** may spend 1 fire pot.
   **Effect:** the movement roll gains one extra `1d10` and the move is
   treated as [传送].
-  **Executable:** `misaki_turn_start_extra_d10`.
+  **Executable:** **not scripted**.
 * `C-HHW-misaki-skill-04` -- pre-settle exile. Quote (3).
   **Trigger:** after a fire-pot movement roll, before [触发结算].
   **Condition:** may spend 1 fire pot. **Effect:** gain one layer of [除外]
   that is removed at the start of the owner's **next** turn.
-  **Executable:** `misaki_exile_layer`.
+  **Executable:** **not scripted**.
 
 ---
 
@@ -486,7 +488,7 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 * `C-HHW-band-03` -- build discount. Quote (3).
   **Trigger:** the owner builds. **Effect:** the recorded number may be
   subtracted from the build cost; the record then resets to 0.
-* **Executable:** `band_double_pays_and_gains_crystal` / `band_frame`.
+* **Executable:** `band_offers_a_double_payment`, `band_double_pays_twice_and_gains_a_crystal`. (3) **not scripted**.
 * **OPEN-HHW-BAND-RECORD:** the storage of 「记录」 (player list + running
   price). Only the crystal count and the money / house arithmetic are
   directly observable.
@@ -536,8 +538,10 @@ Rulings that this unit leans on (TEST-FINDINGS §6 / sheet):
 | OPEN-HHW-HAGUMI-TIME | 「投掷次数+1」 meaning | |
 | OPEN-HHW-BACKWARDS | 「倒走」 | |
 | OPEN-HHW-CHARGE | 「充能3，衰减1」 counter name | |
-| OPEN-HHW-KANON-NEG | negative difference on 花音 (2) | |
+| OPEN-HHW-KANON-NEG | negative difference on 花音 (2) | `simple` says signed (first − second; negative walks backward); `text` does not |
 | OPEN-HHW-BAND-RECORD | band skill 「记录」 storage | |
+| OPEN-HHW-TEXT-VS-SIMPLE | `characters.json` `text` vs `simple` | 北泽育美 `simple` also has a gift-on-pass, a 4-croquette trade, and an enemy-at-4 punish; 松原花音 `simple` decides signed subtraction (「用第一次减第二次：正数往前走，负数往后走」); 濑田薰 `text` says 「主要阶段」 while `simple` says 「运营阶段」; 北泽育美 spawn is 「每个回合」 (`text`) vs 「你每个回合开始」 (`simple`). Precedence names `text`; the gap is recorded here. |
+| OPEN-HHW-RETURN-RELIEF | relief = pre-double or post-double (2) amount | (3) forces 「支付双倍」; (5) says 「相当于你支付金额」 |
 
 ## Findings
 

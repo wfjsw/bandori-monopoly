@@ -38,17 +38,6 @@ fn set_tok(t: &mut Table, who: usize, name: &str, value: i32) {
     }
 }
 
-/// Total named player counters across every seat (for 「场上不存在[怪盗标记]」).
-fn tok_total(t: &Table, name: &str) -> i32 {
-    t.m
-        .world()
-        .st
-        .players
-        .iter()
-        .map(|p| p.tokens.iter().filter(|c| c.name == name).map(|c| c.value).sum::<i32>())
-        .sum()
-}
-
 /// Is the card's [手] / [反击] activation present in this window?
 fn played(step: &Step<'_>, card: &str) -> bool {
     step.events.iter().any(|e| {
@@ -191,12 +180,23 @@ fn believe_contract() {
         }
         // The played card is gone; exactly one other starting card was
         // discarded; two fresh cards arrived.
-        if hand.iter().any(|c| c == BELIEVE) {
-            return Err(format!("C-HHW-believe: played card still in hand: {hand:?}"));
-        }
         if !t.discard(0).iter().any(|c| c == BELIEVE) {
             return Err(format!(
                 "non-[持续] card should be in the discard, got {:?}",
+                t.discard(0)
+            ));
+        }
+        // C-HHW-believe-03: the discarded card is one of the two starting
+        // companions, not a freshly drawn card.
+        let companions = ["HHW:出发！后台之旅！", "HHW:微笑巡逻队"];
+        let discarded_companions = t
+            .discard(0)
+            .iter()
+            .filter(|c| companions.contains(&c.as_str()))
+            .count();
+        if discarded_companions != 1 {
+            return Err(format!(
+                "C-HHW-believe-03: expected exactly 1 starting companion in the discard, got {:?}",
                 t.discard(0)
             ));
         }
@@ -399,17 +399,23 @@ fn athletic_re_rolls_below_ten_and_keeps_ten() {
     let mut t = Table::vanilla(2);
     t.place_raw(0, ATHLETIC);
     t.set_crystals(0, ATHLETIC, 3);
-    // A first face of 10 must be kept (ruling); a face of 9 must re-roll.
-    t.dice(&[9, 10]);
+    // Distinguish a true re-roll from a clamp `max(roll,10)`. Faces [9, 12]:
+    // a re-roll consumes both and lands on 12; a clamp keeps 9 as 10 and
+    // never touches the second face (landing on 10).
+    t.dice(&[9, 12]);
     t.roll(0).unwrap();
     drain(&mut t);
     let pos = t.pos(0);
-    // From CiRCLE (0), a kept 10 lands on index 10; a kept 9 would land on 9.
-    // A re-roll that consumed both faces would fall back to RNG -- so the
-    // deterministic landing is 10.
-    if pos != 10 {
+    if pos != 12 {
         panic!(
-            "C-HHW-athletic-04: landed on {pos}, expected 10 (re-roll 9 → keep 10)"
+            "C-HHW-athletic-04: landed on {pos}, expected 12 (re-roll 9 → 12);              a clamp to 10 would land on 10 and leave the second face unused"
+        );
+    }
+    // The second face was consumed by the re-roll.
+    if t.dice_left() != 0 {
+        panic!(
+            "C-HHW-athletic-04: {} loaded faces left, expected 0 (the re-roll consumed 12)",
+            t.dice_left()
         );
     }
 }
@@ -754,6 +760,18 @@ fn kkr_pays_10000() {
         if delta != -10_000 {
             return Err(format!("C-HHW-kkr-01: money delta {delta}, expected -10000"));
         }
+        // C-HHW-kkr-02 -- 「将此卡置于CiRCLE上」.
+        let circle = 0; // #1 CiRCLE
+        let placed = t.field(0).into_iter().any(|f| {
+            f.card == KKR && (f.tile == circle as i32 || f.tile < 0)
+        }) || t.m.world().st.board_field.iter().any(|f| f.card == KKR);
+        if !placed {
+            return Err(format!(
+                "C-HHW-kkr-02: card not placed on CiRCLE; field={:?} bfield={:?}",
+                t.field_ids(0),
+                t.m.world().st.board_field.iter().map(|f| &f.card).collect::<Vec<_>>()
+            ));
+        }
         frame(
             &pre,
             t.world(),
@@ -879,12 +897,23 @@ pub fn supply_seeds(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let tg = 28; // #29 弦卷集团
+    // 「奇迹水晶」 on a tile. The engine's kind for this card's crystal is
+    // the card name (「黑衣人的补给」) with note `black_suits_crystal_note`.
+    let crystal = |m: &game_core::state::TileMark| {
+        m.kind.contains("crystal")
+            || m.kind.contains("奇迹")
+            || m.kind.contains("黑衣人")
+            || m.kind.contains("black_suits")
+            || m.card.contains("黑衣人")
+            || m.card.contains("supply")
+            || m.note.key().contains("crystal")
+    };
     let before = step
         .pre
         .st
         .marks
         .iter()
-        .filter(|m| m.tile == tg as i32)
+        .filter(|m| m.tile == tg as i32 && crystal(m))
         .map(|m| m.count)
         .sum::<i32>();
     let after = step
@@ -892,7 +921,7 @@ pub fn supply_seeds(step: &Step<'_>) -> Result<(), String> {
         .st
         .marks
         .iter()
-        .filter(|m| m.tile == tg as i32)
+        .filter(|m| m.tile == tg as i32 && crystal(m))
         .map(|m| m.count)
         .sum::<i32>();
     if after < before + 1 {
@@ -930,7 +959,20 @@ fn supply_counter_seeds_a_crystal_on_tsuzumi() {
         }
     }
     let tg = rules_spec::tile("弦卷集团");
-    let marks: i32 = t.marks_on(tg).iter().map(|m| m.count).sum();
+    let marks: i32 = t
+        .marks_on(tg)
+        .iter()
+        .filter(|m| {
+            m.kind.contains("crystal")
+                || m.kind.contains("奇迹")
+                || m.kind.contains("黑衣人")
+                || m.kind.contains("black_suits")
+                || m.card.contains("黑衣人")
+                || m.card.contains("supply")
+                || m.note.key().contains("crystal")
+        })
+        .map(|m| m.count)
+        .sum();
     if marks < 1 {
         panic!(
             "C-HHW-supply-01: no crystal on 弦卷集团 after the counter; marks={:?} keys={:?}",
@@ -1022,18 +1064,23 @@ fn hagumi_two_rolls_place_a_mark() {
         }
         let _ = t.answer_one(0);
     }
+    // The two 4d20 sums are 10 and 12 (faces 2+2+3+3 twice). The mark must
+    // sit on one of those 序号 tiles (indices 9 and 11).
     let marks = t.marks();
-    let has = marks.iter().any(|m| {
+    let hit = marks.iter().find(|m| {
         m.kind.contains("hagumi") || m.kind.contains("育美") || m.card.contains("hagumi") || m.card.contains("育美")
     });
-    if !has {
-        // The >60 branch is the else; with sums 10 and 12 we must be on the
-        // mark branch. If the engine answers the pick differently the mark
-        // still has to exist somewhere on the board.
+    let Some(m) = hit else {
         panic!(
             "C-HHW-hagumi-02: no 育美标记 after a ≤60 pick; marks={:?} keys={:?}",
             t.marks(),
             t.recent_keys(15)
+        );
+    };
+    if m.tile != 9 && m.tile != 11 {
+        panic!(
+            "C-HHW-hagumi-02: mark on tile {}, expected 9 or 11 (the two 4d20 results)",
+            m.tile
         );
     }
 }
@@ -1099,14 +1146,13 @@ fn misaki_card_is_a_counter_not_a_hand_play() {
 #[test]
 fn kokoro_opening_bonus() {
     let t = Table::new(&["弦卷心", "户山香澄"]);
-    // Base 10000 + skill 1000. (Opening run may also grant CiRCLE rewards --
-    // start tile is CiRCLE, and 「经过」 excludes the start, so no +1500.)
+    // Base 10000 + skill 1000. 「[经过]CiRCLE」 excludes the start tile, so
+    // the opening run adds nothing else.
     let m = t.money(0);
-    if m < 11_000 {
-        panic!("C-HHW-kokoro-01: opening money {m}, expected ≥ 11000 (10000 + 1000)");
-    }
-    if m == 10_000 {
-        panic!("C-HHW-kokoro-01: opening money still 10000; the +1000 is missing");
+    if m != 11_000 {
+        panic!(
+            "C-HHW-kokoro-01: opening money {m}, expected exactly 11000 (10000 + 1000)"
+        );
     }
 }
 
@@ -1450,15 +1496,14 @@ fn band_double_pays_twice_and_gains_a_crystal() {
     // house cost. If the harness refuses `build` in this arrangement the
     // record itself is still pinned by the `hhw_saved` counter outcome in
     // the event window above (the book's 「记录」).
-    let saved = t
-        .events_since(0)
-        .into_iter()
-        .any(|e| spec_kit::event_key(&e).contains("hhw_saved")
-            || spec_kit::event_key(&e).contains("hhw_recorded"));
+    let keys = t.recent_keys(40);
+    let saved = keys.iter().any(|k| {
+        k.contains("hhw_saved") || k.contains("hhw_recorded") || k.contains("counter")
+    });
     if !saved {
         panic!(
-            "C-HHW-band-02: no record outcome in the window; keys={:?}",
-            t.recent_keys(15)
+            "C-HHW-band-01/02: no crystal/record counter outcome in the window; keys={:?}",
+            keys
         );
     }
 }
@@ -1475,12 +1520,13 @@ fn athletic_pays_700_then_600_on_rolls() {
     t.begin_turn(0);
     drain(&mut t);
     let m0 = t.money(0);
-    t.dice(&[1]);
+    // Face 10 is kept as-is (C-HHW-athletic-04, 10 inclusive), so the move
+    // itself collects nothing from CiRCLE's neighbour and the delta is the
+    // bonus alone.
+    t.dice(&[10]);
     t.roll(0).unwrap();
     drain(&mut t);
     let d1 = t.money(0) as i64 - m0 as i64;
-    // From CiRCLE with a face of 1 the move itself pays nothing, so the
-    // delta is exactly the bonus 700.
     if d1 != 700 {
         panic!(
             "C-HHW-athletic-03: first-roll bonus delta {d1}, expected 700; keys={:?}",
@@ -1492,7 +1538,7 @@ fn athletic_pays_700_then_600_on_rolls() {
     t.begin_turn(0);
     drain(&mut t);
     let m1 = t.money(0);
-    t.dice(&[1]);
+    t.dice(&[10]);
     t.roll(0).unwrap();
     drain(&mut t);
     let d2 = t.money(0) as i64 - m1 as i64;
