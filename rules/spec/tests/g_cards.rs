@@ -32,10 +32,7 @@ fn piles(w: &World, i: usize) -> BTreeMap<String, usize> {
 }
 
 fn piles_str(m: &BTreeMap<String, usize>) -> String {
-    m.iter()
-        .map(|(k, v)| format!("{k}×{v}"))
-        .collect::<Vec<_>>()
-        .join(", ")
+    rules_spec::global::cards::multiset_str(m)
 }
 
 /// A match at the opening mulligan prompt, with `top_first` seeded on P0's
@@ -79,9 +76,37 @@ fn open_at_mulligan(chars: &[&str], top_first: &[&str]) -> Match {
             h.draw.clear();
             h.discard.clear();
         }
-        for card in top_first.iter().rev() {
-            w.hidden[0].draw.insert(0, card.to_string());
+        // `submit_deck` (run by `quick_start` when `!deck_ready`) replaces the
+        // draw pile wholesale. Mark the decks ready so the seed below survives
+        // into `opening()`'s deal.
+        for p in w.st.players.iter_mut() {
+            p.deck_ready = true;
         }
+        // A legal-size pile: the named top_first on top, then filler names
+        // so the deal of 2 and the mulligan redraw of 2 have cards to take.
+        let filler = [
+            "通用:GREAT!",
+            "通用:PERFECT!",
+            "通用:FEVER!",
+            "通用:THANKS PARTY!",
+            "通用:安可",
+            "通用:登上武道馆",
+            "通用:雨啊，快点来吧",
+            "通用:尽力后的收获",
+            "通用:CiRCLE THANKS PARTY!",
+            "通用:网络链接异常",
+        ];
+        let mut pile: Vec<String> = top_first.iter().map(|s| s.to_string()).collect();
+        for f in filler {
+            if pile.len() >= 10 {
+                break;
+            }
+            if !pile.iter().any(|c| c == f) {
+                pile.push(f.to_string());
+            }
+        }
+        // `hidden.draw` top is the **end** of the vec.
+        w.hidden[0].draw = pile.into_iter().rev().collect();
     }
     m.quick_start();
     m

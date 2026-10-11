@@ -70,8 +70,9 @@ mulligans only rearrange it.
 * **Source:** `rulebook-doc.md:126` + `rulebook-doc.md:80`
 * **Quote:** 「使用后的非[持续]手卡进入弃卡区。」 /
   「[持续]：卡在任何玩家的[场地]或格子上时持续生效的效果。」
-* **Trigger:** a hand play (`kind == play`) of a card that is **not** tagged
-  [持续], settled to rest.
+* **Trigger:** a hand play (`type == "play"` / `kind == play`) of a card that
+  is **not** tagged [持续], settled to rest. 「手卡」 is the hand-card **zone**
+  (as in 「抽取2张手卡」), not the [手] timing tag.
 * **Condition:** the card was played from hand. Skip when the card's own text
   [移除]s it or returns it to hand (card effects override -- 特别注意 3), and
   skip when a prompt is still open.

@@ -37,15 +37,9 @@ pub const CLAUSES: &[Clause] = &[
     G_CARDS_13,
 ];
 
-/// G-CARDS-02 is **not** armed on the soak. A "pure" draw window still runs
-/// `drawn` / `drew` hooks on field cards and skills, and those may legally
-/// create cards (「将1张X加入卡组」) without logging a `card` activation -- so
-/// the pile multiset is not conserved across a soak draw even though the
-/// book's *mechanical* moves are. The isolated scenario
-/// (`tests/g_cards.rs::g_cards_02_pure_draw_conserves_the_pile_multiset`)
-/// pins the mechanical conservation on a skill-free table; that is the
-/// executable form of this clause.
-pub const G_CARDS_02_SCENARIO_ONLY: Clause = G_CARDS_02;
+// G-CARDS-02 is **not** armed on the soak (see [`G_CARDS_02`]): a "pure" draw
+// window still runs `drawn` / `drew` hooks that may legally create cards. The
+// isolated scenario pins the mechanical conservation on a skill-free table.
 
 // ---------------------------------------------------------------------------
 // helpers (local to this area; generic kit stays vocabulary-free)
@@ -69,8 +63,24 @@ pub fn pile_multiset(w: &World, i: usize) -> BTreeMap<String, usize> {
     m
 }
 
+/// How many copies of `id` sit in `w` player `i`'s hand / discard / field.
+fn counts(w: &World, i: usize, id: &str) -> (usize, usize, usize) {
+    let Some(h) = w.hidden.get(i) else {
+        return (0, 0, 0);
+    };
+    let hand = h.hand.iter().filter(|c| *c == id).count();
+    let discard = h.discard.iter().filter(|c| *c == id).count();
+    let field = w
+        .st
+        .players
+        .get(i)
+        .map(|p| p.field.iter().filter(|f| f.card == id).count())
+        .unwrap_or(0);
+    (hand, discard, field)
+}
+
 /// Multiset of the three piles as a sorted `name×count` string, for messages.
-fn multiset_str(m: &BTreeMap<String, usize>) -> String {
+pub fn multiset_str(m: &BTreeMap<String, usize>) -> String {
     m.iter()
         .map(|(k, v)| format!("{k}×{v}"))
         .collect::<Vec<_>>()
@@ -85,14 +95,18 @@ fn tagged(data: &game_core::data::GameData, id: &str, tag: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Card id of a `"card"` activation in this window whose kind is a hand play
-/// (`play`, or the bare activation the engine logs when no trigger tag is
-/// stamped). Counteractions log `kind == "counter"` and are out of scope.
+/// The hand play this window is judging: `type == "play"` (the `log.play`
+/// line `play_from_hand` always writes) or a `"card"` activation stamped
+/// `kind == play` / empty. Counteractions log `kind == "counter"` and are out
+/// of scope. A stub / unported body still logs `type == "play"`.
 fn played_card<'s>(step: &'s Step<'_>) -> Option<&'s MatchEvent> {
     step.events.iter().find(|e| {
-        e.r#type == "card"
-            && (e.kind == card_trigger::PLAY || e.kind.is_empty())
-            && !e.card.is_empty()
+        !e.card.is_empty()
+            && match e.r#type.as_str() {
+                "play" => true,
+                "card" => e.kind == card_trigger::PLAY || e.kind.is_empty(),
+                _ => false,
+            }
     })
 }
 
@@ -265,11 +279,10 @@ pub fn g_cards_03(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     };
     let id = ev.card.as_str();
-    // 「使用后的非[持续]**手卡**」 -- the [手]-use shape. A card with no [手]
-    // tag (an untagged / [特] body) is not this clause.
-    if !tagged(step.data, id, "手") {
-        return Ok(());
-    }
+    // 「使用后的非[持续]手卡」 -- **手卡 is the hand-card zone** (as in
+    // 「抽取2张手卡」), not the [手] timing tag (rulebook 97 separates them:
+    // 「手卡的[手]效果」). Any non-[持续] card that left the hand via a play
+    // is in scope.
     if tagged(step.data, id, "持续") {
         return Ok(());
     }
@@ -285,33 +298,25 @@ pub fn g_cards_03(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    let in_discard = step
-        .post
-        .hidden
-        .get(who)
-        .map(|h| h.discard.iter().any(|c| c == id))
-        .unwrap_or(false);
-    let in_hand = step
-        .post
-        .hidden
-        .get(who)
-        .map(|h| h.hand.iter().any(|c| c == id))
-        .unwrap_or(false);
-    let on_field = step
-        .post
-        .st
-        .players
-        .get(who)
-        .map(|p| p.field.iter().any(|f| f.card == id))
-        .unwrap_or(false);
-    if !in_discard {
-        return Err(format!(
-            "non-[持续] {id} finished its play in hand={in_hand} field={on_field} discard=false \
-             (book: 「使用后的非[持续]手卡进入弃卡区」)"
-        ));
+    let (pre_hand, pre_discard, pre_field) = counts(step.pre, who, id);
+    let (post_hand, post_discard, post_field) = counts(step.post, who, id);
+    // The play took one copy out of the hand. After a non-[持续] use that
+    // copy must be in the discard -- as a **count** (two copies of one name
+    // may sit in different zones legally).
+    if pre_hand == 0 {
+        return Ok(()); // not a hand play of this name (arranged oddity)
     }
-    if in_hand {
-        return Err(format!("non-[持续] {id} is still in hand after its play"));
+    if post_field != pre_field {
+        // Self-placement is already skipped above; a field delta here is a
+        // different clause (or a body that moved another copy).
+        return Ok(());
+    }
+    let expected_discard = pre_discard + 1;
+    if post_discard != expected_discard {
+        return Err(format!(
+            "non-[持续] {id}: discard {} -> {} (expected {} after a hand use);              hand {} -> {}, field {} -> {} (book: 「使用后的非[持续]手卡进入弃卡区」)",
+            pre_discard, post_discard, expected_discard, pre_hand, post_hand, pre_field, post_field
+        ));
     }
     Ok(())
 }
@@ -444,11 +449,6 @@ pub fn g_cards_05(step: &Step<'_>) -> Result<(), String> {
     if !tagged(step.data, id, "手") {
         return Ok(());
     }
-    // A counteraction is not an `Act(play)`; if one slipped through as a bare
-    // activation with no play kind it is still not this clause's hand play.
-    if ev.kind == card_trigger::COUNTER {
-        return Ok(());
-    }
     let who = step.player_of_act();
     let step_ok = step.pre.st.step == game_core::state::stage::OPS;
     let turn_ok = step.pre.st.turn == who as i32;
@@ -508,25 +508,17 @@ pub fn g_cards_06(step: &Step<'_>) -> Result<(), String> {
     // and a future per-card X table can hang off this entry.
     if let Some(ev) = played_card(step) {
         if tagged(step.data, &ev.card, "限") {
-            // Accepted. Nothing global to assert beyond "it left the hand"
-            // (the play activation means the engine believed X held).
+            // Accepted. Nothing global to assert beyond "the played copy left
+            // the hand" (the play activation means the engine believed X
+            // held). A body that Dest::Hand's it back is a card override.
             let who = step.player_of_act();
-            let still = step
-                .post
-                .hidden
-                .get(who)
-                .map(|h| h.hand.iter().filter(|c| *c == &ev.card).count())
-                .unwrap_or(0);
-            let pre = step
-                .pre
-                .hidden
-                .get(who)
-                .map(|h| h.hand.iter().filter(|c| *c == &ev.card).count())
-                .unwrap_or(0);
-            if pre > 0 && still >= pre {
+            let (pre_hand, _, _) = counts(step.pre, who, &ev.card);
+            let (post_hand, post_discard, post_field) = counts(step.post, who, &ev.card);
+            let returned = post_hand >= pre_hand && (post_discard > 0 || post_field > 0);
+            if pre_hand > 0 && post_hand >= pre_hand && !returned {
                 return Err(format!(
-                    "[限] card {} was 'played' but never left the hand",
-                    ev.card
+                    "[限] card {} was 'played' but never left the hand                      (hand {} -> {})",
+                    ev.card, pre_hand, post_hand
                 ));
             }
         }
