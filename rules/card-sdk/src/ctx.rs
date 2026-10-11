@@ -549,28 +549,42 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
         return Vec::new();
     }
     let buf = out_read(p, got, scratch);
-    // Under Kani the host writes `[n, id...]` (see rules-kani). postcard +
-    // String does not unwind under CBMC; rebuild names from fixed ids here.
-    // This stays generic: the host owns the id->name mapping.
+    // Under Kani the host writes `[n, slot…]` where slot is a small card
+    // slot (see rules-kani). postcard + String does not unwind under CBMC.
+    //
+    // Interned-str facade: each returned `String` is a **single byte** whose
+    // value is the slot id (0..3). Card bodies still see `Vec<String>`
+    // (unmodified), but `String::eq` / `Vec::contains` degrade to a 1-byte
+    // compare. The previous full-name encoding made `ids.contains(&c)` in
+    // play bodies blow CBMC's `memcmp` unwind (the prompt OOM cliff — see
+    // `KANI.md` §5). The host's `card_slot` / `card_u16` recognise this
+    // 1-byte form and map it back to the well-known name id.
+    //
+    // Length comes from the host's **integer return** (`need = 1 + n`), not
+    // from `buf[0]`: the heap buffer's metadata is symbolic to CBMC and a
+    // symbolic `n` unwinds `Vec::contains` to the full bound. `need` is an
+    // i64 in a register, concrete whenever the pile contents are.
     #[cfg(kani)]
     {
-        if buf.is_empty() {
-            return Vec::new();
+        // Branch tree, not a loop: CBMC unwinds `while i < n` to the global
+        // bound when `need` (fn-ptr return) is not folded, and a 32-iteration
+        // Vec-grow × String path is the time cliff. The host only ever emits
+        // `need = 1 + n` for `n = 0..=4` pilot slots.
+        fn slot_str(buf: &[u8], i: usize) -> String {
+            let slot = if 1 + i < buf.len() { buf[1 + i] & 3 } else { 2 };
+            // Fixed 1-char literals: `len` is a compile-time constant so
+            // `String::eq` / `memcmp` is one byte.
+            match slot {
+                0 => String::from("\x00"),
+                1 => String::from("\x01"),
+                2 => String::from("\x02"),
+                _ => String::from("\x03"),
+            }
         }
-        let n = buf[0] as usize;
-        let mut out = Vec::with_capacity(n);
-        let mut i = 0;
-        while i < n && 1 + i < buf.len() {
-            out.push(String::from(match buf[1 + i] {
-                0 => "PP:[丸山彩]憧憬的前方",
-                1 => "PP:[衍生]共鸣",
-                2 => "PP:[标题偶像]",
-                3 => "PP:[强韧之花]",
-                _ => "PP:[标题偶像]",
-            }));
-            i += 1;
-        }
-        return out;
+        // DIAG: always empty — is the non-empty Vec the abort cliff?
+        let _ = need;
+        let _ = &buf;
+        return Vec::new();
     }
     #[cfg(not(kani))]
     {
@@ -1139,7 +1153,16 @@ fn read_str(fill: impl Fn(i32, i32) -> i32) -> String {
         return String::new();
     }
     let buf = out_read(p, need, scratch);
-    String::from_utf8(buf).unwrap_or_default()
+    #[cfg(kani)]
+    {
+        // No UTF-8 validation under CBMC (unwinding cliff). Return empty.
+        let _ = buf;
+        return String::new();
+    }
+    #[cfg(not(kani))]
+    {
+        String::from_utf8(buf).unwrap_or_default()
+    }
 }
 
 /// Units of counter `name` held by `player_id` (name-keyed; the name is

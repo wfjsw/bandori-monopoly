@@ -93,7 +93,11 @@ pub const SET_BITS: usize = 128;
 /// Named counters (`slot` / `tok` / `card_counter` / `tile_named`): a fixed
 /// linear table of `(name_id, value)`. `name_id` is `rules_cond::id_of`.
 /// Missing name answers the function's documented default.
-pub const NAMED_CAP: usize = 24;
+///
+/// Sized for the full board name table (60) plus the owner's live tokens /
+/// slots / card counters — `fill_window` registers every `tile_named`, so the
+/// IR twin must not drop names (the guard-fill differential pins this).
+pub const NAMED_CAP: usize = 80;
 
 /// Bin-map tables for the geometry scans (`players_on`, `next_dist`,
 /// `others_within`, `owned_within`, `on_path`, `between`, `dist`): packed

@@ -1,0 +1,1564 @@
+//! Model-conformance (trusted-base control) tests for the Kani symbolic host.
+//!
+//! Runs the same card entry / host op on
+//!   (A) the real engine host (`game_rules::hostfns` over a thin `CardWorld`
+//!       adapter -- the task's "thin adapter that calls hostfns with a mock
+//!       HostCtx"), and
+//!   (B) the symbolic model (`rules_kani::host::dispatch` + `world`).
+//!
+//! Compares resulting state + effect events. Any divergence is a **BUG IN THE
+//! MODEL** unless the message says otherwise (engine bug candidate).
+//!
+//! Fail-closed: no `#[ignore]`, no allowlists. Unmodeled ops panic on the
+//! model side and surface as test failures.
+//!
+//! `tests/conf_model.rs` is the entry point. The generated `SymOps` bridge
+//! (HostOps -> dispatch) comes from `build.rs` via OUT_DIR.
+
+use std::collections::BTreeMap;
+use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Mutex, MutexGuard, OnceLock};
+
+use card_sdk::kani_host::{Args, Op};
+use game_rules::native_shims::{install_host, take_host, HostOps};
+use game_rules::{
+    with_inline_host, CardInfo, CardPile, CardWorld, CallOut, HostCtx, HostErr, HostRequest,
+    HostState, InlineHost, Msg as EngineMsg, Prompt as EnginePrompt, RulesHandle,
+};
+
+use rules_kani::world::{self as kworld, World as KWorld, TILE_SHOP_NAME};
+
+// ---------------------------------------------------------------------------
+// Generated HostOps -> dispatch bridge
+// ---------------------------------------------------------------------------
+mod sym_ops {
+    include!(concat!(env!("OUT_DIR"), "/conf_sym_ops.rs"));
+}
+use sym_ops::SymOps;
+
+// ---------------------------------------------------------------------------
+// Guest-arena helpers (names / messages cross the ABI as interned handles)
+// ---------------------------------------------------------------------------
+
+fn intern_bytes(b: &[u8]) -> (i32, i32) {
+    card_sdk::native::intern(b)
+}
+
+fn intern_str(s: &str) -> (i32, i32) {
+    intern_bytes(s.as_bytes())
+}
+
+fn intern_msg(key: &str) -> (i32, i32) {
+    let m = card_sdk::msg::Msg::new(key);
+    intern_bytes(&m.to_bytes())
+}
+
+/// The symbolic world is a process-global (`static mut`). Serialize every
+/// model-side touch so parallel `cargo test` threads cannot clobber it.
+fn model_lock() -> MutexGuard<'static, ()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
+// ---------------------------------------------------------------------------
+// Real-side world: a thin `CardWorld` that stores exactly the state we diff
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug)]
+pub struct ConfWorld {
+    pub n_players: i32,
+    pub money: [i32; 4],
+    pub pos: [i32; 4],
+    pub out: [bool; 4],
+    pub fire: [i32; 4],
+    pub fire_max: [i32; 4],
+    pub stay: [i32; 4],
+    pub tiles_owner: [i32; 60],
+    pub tiles_houses: [i32; 60],
+    pub tiles_mortgaged: [bool; 60],
+    /// Per-player hand card names (multiset).
+    pub hands: Vec<Vec<String>>,
+    pub decks: Vec<Vec<String>>,
+    pub discards: Vec<Vec<String>>,
+    /// Keyed state (slots). Separate from held, matching the real engine.
+    pub state: BTreeMap<(i32, String), i32>,
+    /// Held / tokens.
+    pub held: BTreeMap<(i32, String), i32>,
+    pub dest: i32,
+    pub trig_value: i32,
+    pub trig_target: i32,
+    pub trig_cancelled: bool,
+    pub turn_player: i32,
+    pub events: Vec<String>,
+    pub rng: u64,
+    pub next_uid: i32,
+}
+
+impl ConfWorld {
+    pub fn new() -> Self {
+        Self {
+            n_players: 3,
+            money: [0; 4],
+            pos: [0; 4],
+            out: [false; 4],
+            fire: [0; 4],
+            fire_max: [3; 4],
+            stay: [0; 4],
+            tiles_owner: [-1; 60],
+            tiles_houses: [0; 60],
+            tiles_mortgaged: [false; 60],
+            hands: vec![Vec::new(); 4],
+            decks: vec![Vec::new(); 4],
+            discards: vec![Vec::new(); 4],
+            state: BTreeMap::new(),
+            held: BTreeMap::new(),
+            dest: 0,
+            trig_value: 0,
+            trig_target: -1,
+            trig_cancelled: false,
+            turn_player: 0,
+            events: Vec::new(),
+            rng: 0x1234_5678_9abc_def0,
+            next_uid: 1,
+        }
+    }
+
+    fn d(&mut self, sides: i32) -> i32 {
+        // Same mid-value formula as the model's native `roll_dice`.
+        (1 * (sides.max(1) + 1)) / 2
+    }
+
+    fn pile_of(&mut self, pile: CardPile) -> &mut Vec<Vec<String>> {
+        match pile {
+            CardPile::Hand => &mut self.hands,
+            CardPile::Discard => &mut self.discards,
+            CardPile::Deck => &mut self.decks,
+            _ => &mut self.hands,
+        }
+    }
+
+    fn pile_ref(&self, pile: CardPile) -> &Vec<Vec<String>> {
+        match pile {
+            CardPile::Hand => &self.hands,
+            CardPile::Discard => &self.discards,
+            CardPile::Deck => &self.decks,
+            _ => &self.hands,
+        }
+    }
+}
+
+/// Board static data comes from the same table the model uses, so tile_price /
+/// tile_group / build_cost are definitionally equal and the test is about the
+/// host op plumbing, not a second copy of board.json.
+fn board_price(tile: i32) -> i32 {
+    let s = rules_kani::board::tile_slot(tile);
+    if s < 0 {
+        0
+    } else {
+        rules_kani::board::TILES[s as usize].price
+    }
+}
+fn board_house_cost(tile: i32) -> i32 {
+    let s = rules_kani::board::tile_slot(tile);
+    if s < 0 {
+        0
+    } else {
+        rules_kani::board::TILES[s as usize].house_cost
+    }
+}
+fn board_group(tile: i32) -> i32 {
+    let s = rules_kani::board::tile_slot(tile);
+    if s < 0 {
+        0
+    } else {
+        rules_kani::board::TILES[s as usize].group
+    }
+}
+
+// A small name table for `tile_named`. The model currently resolves only
+// 「江户川乐器店」; we mirror that so op-level tile_named is a plumbing check.
+// Cards that look up other names will diverge (model gap) and fail -- correctly.
+fn conf_tile_named(name: &str) -> i32 {
+    if name == TILE_SHOP_NAME {
+        31
+    } else {
+        -1
+    }
+}
+
+impl CardWorld for ConfWorld {
+    fn roll(&mut self, player_id: i32, count: i32, sides: i32) -> i32 {
+        let mut t = 0;
+        for _ in 0..count.max(0) {
+            t += self.d(sides);
+        }
+        self.events.push(format!("dice {player_id} {count}d{sides}={t}"));
+        t
+    }
+    fn log(&mut self, player_id: i32, msg: EngineMsg) {
+        self.events.push(format!("log {player_id} {msg}"));
+    }
+    fn tile_count(&self) -> i32 {
+        60
+    }
+    fn tile_named(&self, name: &str) -> i32 {
+        conf_tile_named(name)
+    }
+    fn tile_owner(&self, tile: i32) -> i32 {
+        let t = tile.max(0) as usize;
+        if t < 60 {
+            self.tiles_owner[t]
+        } else {
+            -1
+        }
+    }
+    fn player_pos(&self, player_id: i32) -> i32 {
+        self.pos[player_id.max(0) as usize % 4]
+    }
+    fn tile_steps_ahead(&self, player_id: i32, steps: i32) -> i32 {
+        (self.player_pos(player_id) + steps).rem_euclid(60)
+    }
+    fn rent_of(&self, tile: i32) -> i32 {
+        board_price(tile) / 10
+    }
+    fn buy_price(&self, tile: i32) -> i32 {
+        board_price(tile)
+    }
+    fn build_cost(&self, tile: i32) -> i32 {
+        board_house_cost(tile)
+    }
+    fn mortgage_value(&self, tile: i32) -> i32 {
+        board_price(tile) / 2
+    }
+    fn owned_count(&self, player_id: i32) -> i32 {
+        self.tiles_owner.iter().filter(|&&o| o == player_id).count() as i32
+    }
+    fn owned_at(&self, player_id: i32, index: i32) -> i32 {
+        self.tiles_owner
+            .iter()
+            .enumerate()
+            .filter(|(_, &o)| o == player_id)
+            .nth(index.max(0) as usize)
+            .map(|(i, _)| i as i32 + 1)
+            .unwrap_or(-1)
+    }
+    fn is_buyable(&self, tile: i32) -> i32 {
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            return 0;
+        }
+        let t = &rules_kani::board::TILES[s as usize];
+        (rules_kani::board::is_property(t) && self.tile_owner(tile) < 0) as i32
+    }
+    fn is_shop(&self, tile: i32) -> i32 {
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            0
+        } else {
+            rules_kani::board::is_shop(&rules_kani::board::TILES[s as usize]) as i32
+        }
+    }
+    fn is_ring(&self, tile: i32) -> i32 {
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            0
+        } else {
+            rules_kani::board::is_ring(&rules_kani::board::TILES[s as usize]) as i32
+        }
+    }
+    fn is_circle(&self, tile: i32) -> i32 {
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            0
+        } else {
+            rules_kani::board::is_circle(&rules_kani::board::TILES[s as usize]) as i32
+        }
+    }
+    fn is_live_house(&self, tile: i32) -> i32 {
+        (tile == 32 || tile == 51) as i32
+    }
+    fn is_live_house_for(&self, _player_id: i32, tile: i32) -> i32 {
+        self.is_live_house(tile)
+    }
+    fn tile_group(&self, tile: i32) -> i32 {
+        board_group(tile)
+    }
+    fn tile_price(&self, tile: i32) -> i32 {
+        board_price(tile)
+    }
+    fn houses_of(&self, tile: i32) -> i32 {
+        let t = tile.max(0) as usize;
+        if t < 60 {
+            self.tiles_houses[t]
+        } else {
+            0
+        }
+    }
+    fn rent_houses_of(&self, tile: i32) -> i32 {
+        self.houses_of(tile)
+    }
+    fn set_houses(&mut self, tile: i32, n: i32) {
+        let t = tile.max(0) as usize;
+        if t < 60 {
+            self.tiles_houses[t] = n;
+        }
+        self.events.push(format!("set_houses {tile} {n}"));
+    }
+    fn add_house(&mut self, tile: i32, n: i32) -> i32 {
+        let t = tile.max(0) as usize;
+        if t < 60 {
+            self.tiles_houses[t] = self.tiles_houses[t].saturating_add(n);
+            self.events.push(format!("add_house {tile} {n}"));
+            return self.tiles_houses[t];
+        }
+        0
+    }
+    fn mortgaged_of(&self, tile: i32) -> i32 {
+        let t = tile.max(0) as usize;
+        if t < 60 && self.tiles_mortgaged[t] {
+            1
+        } else {
+            0
+        }
+    }
+    fn set_mortgaged(&mut self, tile: i32, v: i32) {
+        let t = tile.max(0) as usize;
+        if t < 60 {
+            self.tiles_mortgaged[t] = v != 0;
+        }
+    }
+    fn set_owner(&mut self, tile: i32, player_id: i32) {
+        let t = tile.max(0) as usize;
+        if t < 60 {
+            self.tiles_owner[t] = player_id;
+        }
+        self.events.push(format!("set_owner {tile} {player_id}"));
+    }
+    fn dist(&self, a: i32, b: i32) -> i32 {
+        (b - a).rem_euclid(60)
+    }
+    fn tile_forward(&self, a: i32, b: i32) -> i32 {
+        self.dist(a, b)
+    }
+    fn neighbor(&self, player_id: i32, dir: i32) -> i32 {
+        let d = if dir == 0 { 1 } else { -1 };
+        (self.player_pos(player_id) + d).rem_euclid(60)
+    }
+    fn players_on_count(&self, tile: i32, except: i32) -> i32 {
+        (0..4)
+            .filter(|&p| p as i32 != except && !self.out[p] && self.pos[p] == tile)
+            .count() as i32
+    }
+    fn players_on_at(&self, tile: i32, except: i32, index: i32) -> i32 {
+        (0..4)
+            .filter(|&p| p as i32 != except && !self.out[p] && self.pos[p] == tile)
+            .nth(index.max(0) as usize)
+            .map(|p| p as i32)
+            .unwrap_or(-1)
+    }
+    fn player_count(&self) -> i32 {
+        self.n_players
+    }
+    fn player_out(&self, player_id: i32) -> i32 {
+        self.out[player_id.max(0) as usize % 4] as i32
+    }
+    fn others_count(&self, player_id: i32) -> i32 {
+        (0..self.n_players)
+            .filter(|&i| i != player_id && !self.out[i as usize])
+            .count() as i32
+    }
+    fn others_at(&self, player_id: i32, index: i32) -> i32 {
+        (0..self.n_players)
+            .filter(|&i| i != player_id && !self.out[i as usize])
+            .nth(index.max(0) as usize)
+            .unwrap_or(-1)
+    }
+    fn money(&self, player_id: i32) -> i32 {
+        self.money[player_id.max(0) as usize % 4]
+    }
+    fn gain(&mut self, player_id: i32, amount: i32, _src: EngineMsg) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.money[p] = self.money[p].saturating_add(amount);
+        self.events.push(format!("gain {player_id} {amount}"));
+        amount
+    }
+    fn pay(&mut self, player_id: i32, amount: i32, _src: EngineMsg) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.money[p] = (self.money[p] - amount).max(0);
+        self.events.push(format!("pay {player_id} {amount}"));
+        amount
+    }
+    fn draw(&mut self, player_id: i32, n: i32) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        let n = n.max(0);
+        for _ in 0..n {
+            self.hands[p].push("<draw>".into());
+        }
+        self.events.push(format!("draw {player_id} {n}"));
+        n
+    }
+    fn add_to_hand(&mut self, player_id: i32, card: &str) {
+        let p = player_id.max(0) as usize % 4;
+        self.hands[p].push(card.to_string());
+        self.events.push(format!("add_to_hand {player_id} {card}"));
+    }
+    fn add_to_deck(&mut self, player_id: i32, card: &str, _shuffle: bool) {
+        let p = player_id.max(0) as usize % 4;
+        self.decks[p].push(card.to_string());
+    }
+    fn add_to_deck_at(&mut self, player_id: i32, card: &str, _pos: i32) {
+        let p = player_id.max(0) as usize % 4;
+        self.decks[p].push(card.to_string());
+    }
+    fn take_card(&mut self, player_id: i32, pile: CardPile, card: &str) -> bool {
+        let p = player_id.max(0) as usize % 4;
+        let v = self.pile_of(pile)[p].clone();
+        if let Some(i) = v.iter().position(|c| c == card) {
+            self.pile_of(pile)[p].remove(i);
+            self.events.push(format!("take_card {player_id} {card}"));
+            true
+        } else {
+            false
+        }
+    }
+    fn cards_in(&self, player_id: i32, pile: CardPile) -> Vec<String> {
+        let p = player_id.max(0) as usize % 4;
+        self.pile_ref(pile)[p].clone()
+    }
+    fn to_discard(&mut self, player_id: i32, card: &str) {
+        let p = player_id.max(0) as usize % 4;
+        self.discards[p].push(card.to_string());
+        self.events.push(format!("to_discard {player_id} {card}"));
+    }
+    fn hand_count(&self, player_id: i32, card: &str) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.hands[p].iter().filter(|c| c.as_str() == card).count() as i32
+    }
+    fn hand_size(&self, player_id: i32) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.hands[p].len() as i32
+    }
+    fn discard_count(&self, player_id: i32, card: &str) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.discards[p].iter().filter(|c| c.as_str() == card).count() as i32
+    }
+    fn deck_count(&self, player_id: i32) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.decks[p].len() as i32
+    }
+    fn discard_size(&self, player_id: i32) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        self.discards[p].len() as i32
+    }
+    fn discard_from_hand(&mut self, player_id: i32, card: &str) -> i32 {
+        if self.take_card(player_id, CardPile::Hand, card) {
+            self.to_discard(player_id, card);
+            1
+        } else {
+            0
+        }
+    }
+    fn shuffle_into_deck(&mut self, player_id: i32, hand: bool, discard: bool) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        let mut n = 0;
+        if hand {
+            let h = std::mem::take(&mut self.hands[p]);
+            n += h.len();
+            self.decks[p].extend(h);
+        }
+        if discard {
+            let d = std::mem::take(&mut self.discards[p]);
+            n += d.len();
+            self.decks[p].extend(d);
+        }
+        n as i32
+    }
+    fn place_card(&mut self, player_id: i32, card: &str, _note: EngineMsg) -> i32 {
+        self.events.push(format!("place_card {player_id} {card}"));
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        uid
+    }
+    fn place_card_on(&mut self, player_id: i32, tile: i32, card: &str, _note: EngineMsg) -> i32 {
+        self.events.push(format!("place_card_on {player_id} {tile} {card}"));
+        let uid = self.next_uid;
+        self.next_uid += 1;
+        uid
+    }
+    fn set_dest(&mut self, dest: i32) {
+        self.dest = dest;
+    }
+    fn set_transfer_to_dest(&mut self, _to: i32, dest: i32) {
+        self.dest = dest;
+    }
+    fn send_to_dest(&mut self, dest: i32) -> Option<i32> {
+        let p = self.turn_player.max(0) as usize % 4;
+        self.pos[p] = dest;
+        self.events.push(format!("send_to_dest {dest}"));
+        Some(1)
+    }
+    fn transfer_to_dest(&mut self, _to: i32, dest: i32) -> Option<i32> {
+        self.send_to_dest(dest)
+    }
+    fn ring_multiplier(&self) -> i32 {
+        10
+    }
+    fn add_ring_bonus(&mut self, _n: i32) -> i32 {
+        0
+    }
+    fn teleport_to(&mut self, player_id: i32, tile: i32) {
+        let p = player_id.max(0) as usize % 4;
+        self.pos[p] = tile;
+        self.events.push(format!("teleport_to {player_id} {tile}"));
+    }
+    fn unplace_card(&mut self) -> i32 {
+        0
+    }
+    fn is_placed(&self) -> i32 {
+        0
+    }
+    // keyed state (slots)
+    fn state_var(&self, _player_id: i32, _key: &str) -> game_core::state::StateVar {
+        game_core::state::StateVar::default()
+    }
+    fn state_get(&self, player_id: i32, key: &str) -> i32 {
+        *self.state.get(&(player_id, key.to_string())).unwrap_or(&0)
+    }
+    fn state_min(&self, _: i32, _: &str) -> i32 {
+        0
+    }
+    fn state_max(&self, _: i32, _: &str) -> i32 {
+        0
+    }
+    fn state_expires(&self, _: i32, _: &str) -> Option<game_core::state::Tick> {
+        None
+    }
+    fn state_set(&mut self, player_id: i32, key: &str, value: i32) -> i32 {
+        self.state.insert((player_id, key.to_string()), value);
+        self.events.push(format!("set_slot {player_id} {key} {value}"));
+        value
+    }
+    fn state_add(&mut self, player_id: i32, key: &str, delta: i32) -> i32 {
+        let e = self.state.entry((player_id, key.to_string())).or_insert(0);
+        *e = e.saturating_add(delta);
+        *e
+    }
+    fn state_set_bounds(&mut self, _: i32, _: &str, _: i32, _: i32) {}
+    fn state_set_expires(&mut self, _: i32, _: &str, _: Option<game_core::state::Tick>) {}
+    fn tick_state(&mut self, _: i32, _: game_core::state::Tick) -> Vec<(String, i32)> {
+        Vec::new()
+    }
+    // held / tokens
+    fn count_held(&self, name: &str, player_id: i32) -> i32 {
+        *self.held.get(&(player_id, name.to_string())).unwrap_or(&0)
+    }
+    fn add_held(&mut self, name: &str, player_id: i32, n: i32, max: i32) -> i32 {
+        let e = self.held.entry((player_id, name.to_string())).or_insert(0);
+        *e = (*e + n).clamp(0, max);
+        self.events.push(format!("add_held {player_id} {name} {n}"));
+        *e
+    }
+    fn set_held_name(&mut self, name: &str, player_id: i32, v: i32) {
+        self.held.insert((player_id, name.to_string()), v);
+        self.events.push(format!("set_held {player_id} {name} {v}"));
+    }
+    fn move_units(
+        &mut self,
+        _name: &str,
+        _from_tile: i32,
+        _from_player: i32,
+        _to_tile: i32,
+        _to_player: i32,
+        _n: i32,
+    ) -> i32 {
+        0
+    }
+    // fire / stay
+    fn fire(&self, player_id: i32) -> i32 {
+        self.fire[player_id.max(0) as usize % 4]
+    }
+    fn fire_max(&self, player_id: i32) -> i32 {
+        self.fire_max[player_id.max(0) as usize % 4]
+    }
+    fn gain_fire(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
+        // Matches `game_core::engine::ops::gain_fire`: return the amount
+        // actually gained (clamped under cap), not the new total.
+        let p = player_id.max(0) as usize % 4;
+        if n <= 0 {
+            return 0;
+        }
+        let got = n.clamp(0, (self.fire_max[p] - self.fire[p]).max(0));
+        if got <= 0 {
+            return 0;
+        }
+        self.fire[p] += got;
+        self.events.push(format!("gain_fire {player_id} {got}"));
+        got
+    }
+    fn spend_fire(&mut self, player_id: i32, n: i32, _why: EngineMsg) -> i32 {
+        let p = player_id.max(0) as usize % 4;
+        if n <= 0 {
+            return 1;
+        }
+        if self.fire[p] >= n {
+            self.fire[p] -= n;
+            1
+        } else {
+            0
+        }
+    }
+    fn give_stay(&mut self, player_id: i32, n: i32) {
+        let p = player_id.max(0) as usize % 4;
+        self.stay[p] = self.stay[p].saturating_add(n);
+        self.events.push(format!("give_stay {player_id} {n}"));
+    }
+    fn give_stun(&mut self, player_id: i32, n: i32) {
+        let p = player_id.max(0) as usize % 4;
+        self.stay[p] = self.stay[p].saturating_add(n);
+        self.events.push(format!("give_stun {player_id} {n}"));
+    }
+    fn give_exile(&mut self, player_id: i32, n: i32, _to: i32) {
+        self.events.push(format!("give_exile {player_id} {n}"));
+    }
+    fn give_extra_turn(&mut self, _player_id: i32) {}
+    fn can_pay(&self, player_id: i32) -> i32 {
+        (self.money(player_id) > 0) as i32
+    }
+    fn cant_move(&self, player_id: i32) -> i32 {
+        (self.stay[player_id.max(0) as usize % 4] > 0) as i32
+    }
+    fn stay_of(&self, player_id: i32) -> i32 {
+        self.stay[player_id.max(0) as usize % 4]
+    }
+    fn stun_of(&self, player_id: i32) -> i32 {
+        self.stay[player_id.max(0) as usize % 4]
+    }
+    fn turn_player(&self) -> i32 {
+        self.turn_player
+    }
+    fn round_no(&self) -> i32 {
+        1
+    }
+    fn turn_key(&self) -> i32 {
+        1
+    }
+    fn character_is(&self, _player_id: i32, _name: &str) -> i32 {
+        0
+    }
+    fn in_band(&self, _player_id: i32, _name: &str) -> i32 {
+        0
+    }
+    fn trigger(&self) -> game_rules::Trigger {
+        let mut t = game_rules::Trigger::default();
+        t.value = self.trig_value;
+        t.target = self.trig_target;
+        if self.trig_cancelled {
+            t.negate_activation();
+        }
+        t
+    }
+    fn set_trigger_value(&mut self, value: i32) {
+        self.trig_value = value;
+    }
+    fn set_trigger_target(&mut self, to: i32) {
+        self.trig_target = to;
+    }
+    fn set_trigger_cancelled(&mut self) {
+        self.trig_cancelled = true;
+    }
+    fn set_trigger_negate_effect(&mut self) {}
+    fn set_trigger_spare(&mut self, _seat: i32) {}
+    fn declare_trigger_effect(
+        &mut self,
+        _kind: i32,
+        _target: i32,
+        _from: i32,
+        _tile: i32,
+        _value: i32,
+    ) {
+    }
+    fn trig_card_is(&self, _id: &str) -> i32 {
+        0
+    }
+    fn set_trigger_price(&mut self, _v: i32) {}
+    fn set_trigger_deal_owner(&mut self, _v: i32) {}
+    fn set_trigger_deal_houses(&mut self, _v: i32) {}
+    fn set_trigger_deal_mortgaged(&mut self, _v: i32) {}
+    fn set_trigger_reason(&mut self, _reason: &str) {}
+    fn set_trigger_move_roll(&mut self, _roll: i32) {}
+    fn is_agent(&self, tile: i32) -> i32 {
+        let s = rules_kani::board::tile_slot(tile);
+        if s < 0 {
+            0
+        } else {
+            rules_kani::board::is_agent(&rules_kani::board::TILES[s as usize]) as i32
+        }
+    }
+    fn paid_in_settle(&self) -> i32 {
+        0
+    }
+    fn gains_this_turn(&self, _player: i32) -> i32 {
+        0
+    }
+    fn targeted_count(&self, _player_id: i32) -> i32 {
+        0
+    }
+    fn field_instances(&self, _player_id: i32) -> Vec<(i32, String)> {
+        Vec::new()
+    }
+    fn tile_at(&self, _uid: i32) -> i32 {
+        -2
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Real-side HostCtx
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+pub struct ConfRules;
+
+impl RulesHandle for ConfRules {
+    fn by_id(&self, _id: &str) -> Option<i32> {
+        None
+    }
+    fn card(&self, _i: i32) -> Option<&CardInfo> {
+        None
+    }
+}
+
+pub struct ConfHost {
+    pub state: HostState<ConfWorld, ConfRules>,
+    pub fuel: u64,
+}
+
+impl ConfHost {
+    pub fn new(world: ConfWorld, answers: Vec<i32>) -> Self {
+        Self {
+            state: HostState::new(ConfRules, world, answers, 0),
+            fuel: 1_000_000,
+        }
+    }
+}
+
+impl HostCtx for ConfHost {
+    type World = ConfWorld;
+    type Rules = ConfRules;
+
+    fn st(&self) -> &HostState<ConfWorld, ConfRules> {
+        &self.state
+    }
+    fn st_mut(&mut self) -> &mut HostState<ConfWorld, ConfRules> {
+        &mut self.state
+    }
+    fn read_guest(&mut self, ptr: i32, len: i32) -> Result<Vec<u8>, HostErr> {
+        Ok(card_sdk::native::read(ptr, len.max(0) as usize))
+    }
+    fn write_guest(&mut self, ptr: i32, bytes: &[u8]) -> Result<(), HostErr> {
+        card_sdk::native::write(ptr, bytes);
+        Ok(())
+    }
+    fn fuel(&mut self) -> Result<u64, HostErr> {
+        Ok(self.fuel)
+    }
+    fn set_fuel(&mut self, v: u64) -> Result<(), HostErr> {
+        self.fuel = v;
+        Ok(())
+    }
+    fn call_entry(
+        &mut self,
+        _nested: HostState<ConfWorld, ConfRules>,
+        _card: i32,
+        _entry: i32,
+        _op: i32,
+        _player_id: i32,
+        _want_msg: bool,
+    ) -> (
+        Result<CallOut, HostErr>,
+        HostState<ConfWorld, ConfRules>,
+        u64,
+    ) {
+        // Nested `play_card` is out of scope for the thin adapter.
+        (
+            Err(HostErr::trap("conf_model: nested call_entry not supported")),
+            HostState::new(ConfRules, ConfWorld::new(), vec![], 0),
+            self.fuel,
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
+// InlineHost: answer prompts / apply host requests immediately (no chain
+// window) -- matches the model's "immediate concrete effects" stance.
+// ---------------------------------------------------------------------------
+
+pub struct ConfInline;
+
+impl InlineHost for ConfInline {
+    fn answer(&mut self, _run: &mut dyn std::any::Any, _p: EnginePrompt) -> Option<i32> {
+        // First option / "no" / index 0. Cards under test are selected so a
+        // fixed 0 is the interesting branch, or the branch is side-effect-free.
+        Some(0)
+    }
+    fn apply(&mut self, run: &mut dyn std::any::Any, req: HostRequest) -> Option<i32> {
+        let w = run.downcast_mut::<ConfWorld>()?;
+        match req {
+            HostRequest::Pay {
+                from,
+                to,
+                amount,
+                total_stage: _,
+                ..
+            } => {
+                if amount <= 0 {
+                    return Some(0);
+                }
+                // Base Pay semantics with no hooks: print / delete / pay-player.
+                if from >= 0 {
+                    let f = from as usize % 4;
+                    w.money[f] = (w.money[f] - amount).max(0);
+                }
+                if to >= 0 {
+                    let t = to as usize % 4;
+                    w.money[t] = w.money[t].saturating_add(amount);
+                }
+                w.events.push(format!("pay_pipeline {from}->{to} {amount}"));
+                Some(amount)
+            }
+            HostRequest::PayTotal { amount, .. } => Some(amount),
+            HostRequest::Teleport { player_id, tile } => {
+                if player_id >= 0 {
+                    w.pos[player_id as usize % 4] = tile;
+                    w.events.push(format!("teleport_to {player_id} {tile}"));
+                }
+                Some(1)
+            }
+            HostRequest::Gate { .. } => Some(1),
+            HostRequest::Marker { .. } => Some(1),
+            HostRequest::Draw { player_id: _, n } => Some(n),
+            HostRequest::Target { player_id, tile, .. } => {
+                if tile >= 0 {
+                    Some(tile)
+                } else {
+                    Some(player_id)
+                }
+            }
+            // Other engine-protocol requests: allow / no-op.
+            _ => Some(1),
+        }
+    }
+    fn take_halt(&mut self) -> Option<game_core::engine::Halt> {
+        None
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Comparable snapshot
+// ---------------------------------------------------------------------------
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Snap {
+    pub n_players: i32,
+    pub money: [i32; 4],
+    pub pos: [i32; 4],
+    pub out: [bool; 4],
+    pub fire: [i32; 4],
+    pub stay: [i32; 4],
+    pub tiles_owner: Vec<i32>,
+    pub tiles_houses: Vec<i32>,
+    pub tiles_mortgaged: Vec<bool>,
+    pub dest: i32,
+    pub trig_value: i32,
+    pub trig_target: i32,
+    /// Normalized effect lines: `gain p n`, `pay p n`, `teleport p t`, ...
+    pub effects: Vec<String>,
+}
+
+fn snap_real(w: &ConfWorld) -> Snap {
+    Snap {
+        n_players: w.n_players,
+        money: w.money,
+        pos: w.pos,
+        out: w.out,
+        fire: w.fire,
+        stay: w.stay,
+        tiles_owner: w.tiles_owner.to_vec(),
+        tiles_houses: w.tiles_houses.to_vec(),
+        tiles_mortgaged: w.tiles_mortgaged.to_vec(),
+        dest: w.dest,
+        trig_value: w.trig_value,
+        trig_target: w.trig_target,
+        effects: w.events.clone(),
+    }
+}
+
+fn snap_model() -> Snap {
+    kworld::with_world(|w| {
+        let mut effects = Vec::new();
+        for e in w.effect_slice() {
+            effects.push(format!("{e:?}"));
+        }
+        Snap {
+            n_players: w.n_players,
+            money: w.money,
+            pos: w.pos,
+            out: w.out,
+            fire: w.fire,
+            stay: w.stay,
+            tiles_owner: w.tiles.iter().map(|t| t.owner).collect(),
+            tiles_houses: w.tiles.iter().map(|t| t.houses).collect(),
+            tiles_mortgaged: w.tiles.iter().map(|t| t.mortgaged).collect(),
+            dest: w.dest,
+            trig_value: w.pay_amount,
+            trig_target: w.trig_target,
+            effects,
+        }
+    })
+}
+
+fn assert_state_eq(label: &str, real: &Snap, model: &Snap) {
+    let mut diffs = Vec::new();
+    if real.n_players != model.n_players {
+        diffs.push(format!("n_players real={} model={}", real.n_players, model.n_players));
+    }
+    if real.money != model.money {
+        diffs.push(format!("money real={:?} model={:?}", real.money, model.money));
+    }
+    if real.pos != model.pos {
+        diffs.push(format!("pos real={:?} model={:?}", real.pos, model.pos));
+    }
+    if real.out != model.out {
+        diffs.push(format!("out real={:?} model={:?}", real.out, model.out));
+    }
+    if real.fire != model.fire {
+        diffs.push(format!("fire real={:?} model={:?}", real.fire, model.fire));
+    }
+    if real.stay != model.stay {
+        diffs.push(format!("stay real={:?} model={:?}", real.stay, model.stay));
+    }
+    if real.tiles_owner != model.tiles_owner {
+        diffs.push("tiles_owner diverged".into());
+    }
+    if real.tiles_houses != model.tiles_houses {
+        diffs.push(format!(
+            "tiles_houses diverged (real sum={}, model sum={})",
+            real.tiles_houses.iter().sum::<i32>(),
+            model.tiles_houses.iter().sum::<i32>()
+        ));
+    }
+    if real.tiles_mortgaged != model.tiles_mortgaged {
+        diffs.push("tiles_mortgaged diverged".into());
+    }
+    if real.dest != model.dest {
+        diffs.push(format!("dest real={} model={}", real.dest, model.dest));
+    }
+    if real.trig_value != model.trig_value {
+        diffs.push(format!(
+            "trig_value real={} model={}",
+            real.trig_value, model.trig_value
+        ));
+    }
+    if real.trig_target != model.trig_target {
+        diffs.push(format!(
+            "trig_target real={} model={}",
+            real.trig_target, model.trig_target
+        ));
+    }
+    // Effect-log comparison is structural on the model's typed Effect vs the
+    // real side's string events. We compare the *counts of money-moving
+    // effects* so a missing gain/pay/teleport fails closed.
+    let count = |s: &[String], pats: &[&str]| {
+        s.iter()
+            .filter(|l| pats.iter().any(|p| l.contains(p)))
+            .count()
+    };
+    let money_pats = ["gain ", "pay ", "pay_pipeline", "GainMoney", "PayMoney", "PayTo"];
+    let tele_pats = ["teleport", "Teleport"];
+    let stay_pats = ["give_stay", "GiveStay", "give_stun", "GiveStun"];
+    if count(&real.effects, &money_pats) != count(&model.effects, &money_pats) {
+        diffs.push(format!(
+            "money-effect count real={} model={}\n  real={:?}\n  model={:?}",
+            count(&real.effects, &money_pats),
+            count(&model.effects, &money_pats),
+            real.effects,
+            model.effects
+        ));
+    }
+    if count(&real.effects, &tele_pats) != count(&model.effects, &tele_pats) {
+        diffs.push(format!(
+            "teleport-effect count real={} model={}",
+            count(&real.effects, &tele_pats),
+            count(&model.effects, &tele_pats)
+        ));
+    }
+    if count(&real.effects, &stay_pats) != count(&model.effects, &stay_pats) {
+        diffs.push(format!(
+            "stay-effect count real={} model={}",
+            count(&real.effects, &stay_pats),
+            count(&model.effects, &stay_pats)
+        ));
+    }
+    if !diffs.is_empty() {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [{label}]:\n  {}\n  (a divergence is a BUG IN THE MODEL unless the message says engine bug)",
+            diffs.join("\n  ")
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Shared pre-state
+// ---------------------------------------------------------------------------
+
+fn base_conf() -> ConfWorld {
+    let mut w = ConfWorld::new();
+    w.n_players = 3;
+    w.money = [1500, 2000, 3000, 0];
+    w.pos = [2, 10, 25, 0];
+    w.out = [false, false, false, true];
+    w.fire = [1, 0, 2, 0];
+    w.fire_max = [3, 3, 3, 3];
+    w.stay = [0, 1, 0, 0];
+    w.tiles_owner[1] = 0; // board index 2
+    w.tiles_houses[1] = 2;
+    w.tiles_owner[5] = 1; // board index 6
+    w.tiles_mortgaged[5] = true;
+    w.trig_value = 7;
+    w.trig_target = 1;
+    w.turn_player = 0;
+    w
+}
+
+fn base_model() -> KWorld {
+    let mut w = KWorld::new();
+    w.n_players = 3;
+    w.money = [1500, 2000, 3000, 0];
+    w.pos = [2, 10, 25, 0];
+    w.out = [false, false, false, true];
+    w.fire = [1, 0, 2, 0];
+    w.fire_max = [3, 3, 3, 3];
+    w.stay = [0, 1, 0, 0];
+    w.tiles[1].owner = 0;
+    w.tiles[1].houses = 2;
+    w.tiles[5].owner = 1;
+    w.tiles[5].mortgaged = true;
+    w.pay_amount = 7;
+    w.trig_target = 1;
+    w.turn_player = 0;
+    w
+}
+
+fn install_model_world(answers: &[i32]) {
+    let mut w = base_model();
+    for (i, &a) in answers.iter().enumerate() {
+        if i < kworld::MAX_ANSWERS {
+            w.answers[i] = a;
+        }
+    }
+    w.next_answer = 0;
+    kworld::reset_world(w);
+}
+
+// ---------------------------------------------------------------------------
+// Op-level differential: hostfns (real) vs dispatch (model)
+// ---------------------------------------------------------------------------
+
+/// Run one op on both sides from the shared pre-state and compare.
+/// Callers intern handles *before* this; the arena is not cleared here.
+fn diff_op(label: &str, answers: &[i32], real: impl FnOnce(&mut ConfHost) -> i64, model: Args, op: Op) {
+    let _g = model_lock();
+    install_model_world(answers);
+    let model_ret = rules_kani::host::dispatch(op, model);
+    let model_snap = snap_model();
+
+    let mut conf = ConfHost::new(base_conf(), answers.to_vec());
+    let mut inline = ConfInline;
+    let real_ret = with_inline_host(&mut inline, || real(&mut conf));
+    let real_snap = snap_real(&conf.st().wr());
+    if real_ret != model_ret {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [{label}]: return real={real_ret} model={model_ret} (BUG IN THE MODEL unless engine)"
+        );
+    }
+    assert_state_eq(label, &real_snap, &model_snap);
+}
+
+/// Run a *sequence* of ops on both sides (model: dispatch each; real: the
+/// matching `hostfns` calls). `real` returns the last hostfns value; `model`
+/// returns the last dispatch value.
+fn diff_op_seq(
+    label: &str,
+    answers: &[i32],
+    real: impl FnOnce(&mut ConfHost) -> i64,
+    model: impl FnOnce() -> i64,
+) {
+    let _g = model_lock();
+    install_model_world(answers);
+    let model_ret = model();
+    let model_snap = snap_model();
+
+    let mut conf = ConfHost::new(base_conf(), answers.to_vec());
+    let mut inline = ConfInline;
+    let real_ret = with_inline_host(&mut inline, || real(&mut conf));
+    let real_snap = snap_real(&conf.st().wr());
+    if real_ret != model_ret {
+        panic!(
+            "MODEL-vs-ENGINE DIVERGENCE [{label}]: return real={real_ret} model={model_ret} (BUG IN THE MODEL unless engine)"
+        );
+    }
+    assert_state_eq(label, &real_snap, &model_snap);
+}
+
+#[test]
+fn op_gain_matches_engine() {
+    // gain(player, amount, msg) -- immediate credit on the model; Pay pipeline
+    // (no hooks) on the real side via ConfInline.
+    let (mp, ml) = intern_msg("conf.gain");
+    diff_op(
+        "gain",
+        &[],
+        |c| game_rules::hostfns::gain(c, 0, 500, mp, ml).unwrap() as i64,
+        [0, 500, mp, ml, 0, 0],
+        Op::gain,
+    );
+}
+
+#[test]
+fn op_pay_matches_engine() {
+    let (mp, ml) = intern_msg("conf.pay");
+    diff_op(
+        "pay",
+        &[],
+        |c| game_rules::hostfns::pay(c, 1, 400, mp, ml).unwrap() as i64,
+        [1, 400, mp, ml, 0, 0],
+        Op::pay,
+    );
+}
+
+#[test]
+fn op_teleport_to_matches_engine() {
+    diff_op(
+        "teleport_to",
+        &[],
+        |c| {
+            game_rules::hostfns::teleport_to(c, 2, 40).unwrap();
+            0
+        },
+        [2, 40, 0, 0, 0, 0],
+        Op::teleport_to,
+    );
+}
+
+#[test]
+fn op_gain_fire_matches_engine() {
+    let (mp, ml) = intern_msg("conf.fire");
+    diff_op(
+        "gain_fire",
+        &[],
+        |c| game_rules::hostfns::gain_fire(c, 0, 2, mp, ml).unwrap() as i64,
+        [0, 2, mp, ml, 0, 0],
+        Op::gain_fire,
+    );
+}
+
+#[test]
+fn op_give_stay_matches_engine() {
+    diff_op(
+        "give_stay",
+        &[],
+        |c| {
+            game_rules::hostfns::give_stay(c, 1, 2).unwrap();
+            0
+        },
+        [1, 2, 0, 0, 0, 0],
+        Op::give_stay,
+    );
+}
+
+#[test]
+fn op_player_pos_money_player_count_player_out_tile_count_match() {
+    for (label, op, args, real) in [
+        (
+            "player_pos",
+            Op::player_pos,
+            [1, 0, 0, 0, 0, 0],
+            (|c: &mut ConfHost| game_rules::hostfns::player_pos(c, 1).unwrap() as i64)
+                as fn(&mut ConfHost) -> i64,
+        ),
+        (
+            "money",
+            Op::money,
+            [2, 0, 0, 0, 0, 0],
+            (|c: &mut ConfHost| game_rules::hostfns::money(c, 2).unwrap() as i64)
+                as fn(&mut ConfHost) -> i64,
+        ),
+        (
+            "player_count",
+            Op::player_count,
+            [0, 0, 0, 0, 0, 0],
+            (|c: &mut ConfHost| game_rules::hostfns::player_count(c).unwrap() as i64)
+                as fn(&mut ConfHost) -> i64,
+        ),
+        (
+            "player_out",
+            Op::player_out,
+            [3, 0, 0, 0, 0, 0],
+            (|c: &mut ConfHost| game_rules::hostfns::player_out(c, 3).unwrap() as i64)
+                as fn(&mut ConfHost) -> i64,
+        ),
+        (
+            "tile_count",
+            Op::tile_count,
+            [0, 0, 0, 0, 0, 0],
+            (|c: &mut ConfHost| game_rules::hostfns::tile_count(c).unwrap() as i64)
+                as fn(&mut ConfHost) -> i64,
+        ),
+    ] {
+        diff_op(label, &[], real, args, op);
+    }
+}
+
+#[test]
+fn op_tile_named_matches_engine() {
+    // Only 「江户川乐器店」 is modeled; both sides return 31.
+    let (np, nl) = intern_str(TILE_SHOP_NAME);
+    diff_op(
+        "tile_named",
+        &[],
+        |c| game_rules::hostfns::tile_named(c, np, nl).unwrap() as i64,
+        [np, nl, 0, 0, 0, 0],
+        Op::tile_named,
+    );
+}
+
+#[test]
+fn op_set_houses_houses_of_match() {
+    diff_op_seq(
+        "set_houses+houses_of",
+        &[],
+        |c| {
+            game_rules::hostfns::set_houses(c, 3, 4).unwrap();
+            game_rules::hostfns::houses_of(c, 3).unwrap() as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::set_houses, [3, 4, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::houses_of, [3, 0, 0, 0, 0, 0])
+        },
+    );
+    diff_op(
+        "houses_of",
+        &[],
+        |c| game_rules::hostfns::houses_of(c, 2).unwrap() as i64,
+        [2, 0, 0, 0, 0, 0],
+        Op::houses_of,
+    );
+}
+
+#[test]
+fn op_set_owner_tile_owner_match() {
+    diff_op_seq(
+        "set_owner+tile_owner",
+        &[],
+        |c| {
+            game_rules::hostfns::set_owner(c, 7, 2).unwrap();
+            game_rules::hostfns::tile_owner(c, 7).unwrap() as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::set_owner, [7, 2, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::tile_owner, [7, 0, 0, 0, 0, 0])
+        },
+    );
+}
+
+#[test]
+fn op_add_to_hand_take_card_cards_in_hand_size_match() {
+    // Use a non-resonance card name so the model's pilot-compat `hand_size`
+    // (bitset + pile hybrid) is exercised on an empty-start hand.
+    let (cp, cl) = intern_str("R:[衍生] 压");
+    diff_op_seq(
+        "add_to_hand+take_card+cards_in",
+        &[],
+        |c| {
+            game_rules::hostfns::add_to_hand(c, 0, cp, cl).unwrap();
+            let ok = game_rules::hostfns::take_card(c, 0, 0, cp, cl).unwrap();
+            let (buf, cap) = card_sdk::native::reserve(64);
+            let _need = game_rules::hostfns::cards_in(c, 0, 0, buf, cap).unwrap();
+            ok as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::add_to_hand, [0, cp, cl, 0, 0, 0]);
+            let ok = rules_kani::host::dispatch(Op::take_card, [0, 0, cp, cl, 0, 0]);
+            let (buf, cap) = card_sdk::native::reserve(64);
+            rules_kani::host::dispatch(Op::cards_in, [0, 0, buf, cap, 0, 0]);
+            ok
+        },
+    );
+}
+
+#[test]
+fn op_to_discard_and_hand_size() {
+    let (cp, cl) = intern_str("R:[衍生] 压");
+    diff_op(
+        "to_discard",
+        &[],
+        |c| {
+            game_rules::hostfns::to_discard(c, 1, cp, cl).unwrap();
+            0
+        },
+        [1, cp, cl, 0, 0, 0],
+        Op::to_discard,
+    );
+    diff_op(
+        "hand_size",
+        &[],
+        |c| game_rules::hostfns::hand_size(c, 0).unwrap() as i64,
+        [0, 0, 0, 0, 0, 0],
+        Op::hand_size,
+    );
+}
+
+#[test]
+fn op_set_slot_slot_match() {
+    let (kp, kl) = intern_str("conf.key");
+    diff_op_seq(
+        "set_slot+slot",
+        &[],
+        |c| {
+            game_rules::hostfns::set_slot(c, 1, kp, kl, 9).unwrap();
+            game_rules::hostfns::slot(c, 1, kp, kl).unwrap() as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::set_slot, [1, kp, kl, 9, 0, 0]);
+            rules_kani::host::dispatch(Op::slot, [1, kp, kl, 0, 0, 0])
+        },
+    );
+}
+
+#[test]
+fn op_count_held_set_held_name_match() {
+    let (np, nl) = intern_str("P✽P粉丝(正)");
+    diff_op_seq(
+        "set_held_name+count_held_name",
+        &[],
+        |c| {
+            game_rules::hostfns::set_held_name(c, np, nl, 2, 5).unwrap();
+            game_rules::hostfns::count_held_name(c, np, nl, 2).unwrap() as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::set_held_name, [np, nl, 2, 5, 0, 0]);
+            rules_kani::host::dispatch(Op::count_held_name, [np, nl, 2, 0, 0, 0])
+        },
+    );
+}
+
+#[test]
+fn op_set_dest_place_card_at_match() {
+    let (cp, cl) = intern_str("PP:[衍生]共鸣");
+    let (mp, ml) = intern_msg("conf.place");
+    diff_op_seq(
+        "set_dest+place_card_at",
+        &[],
+        |c| {
+            game_rules::hostfns::set_dest(c, 12).unwrap();
+            game_rules::hostfns::place_card_at(c, 0, cp, cl, mp, ml).unwrap() as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::set_dest, [12, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::place_card_at, [0, cp, cl, mp, ml, 0])
+        },
+    );
+}
+
+#[test]
+fn op_trig_set_pay_amount_trig_value_match() {
+    diff_op_seq(
+        "trig_set_pay_amount+trig_value",
+        &[],
+        |c| {
+            game_rules::hostfns::trig_set_pay_amount(c, 42).unwrap();
+            game_rules::hostfns::trig_value(c).unwrap() as i64
+        },
+        || {
+            rules_kani::host::dispatch(Op::trig_set_pay_amount, [42, 0, 0, 0, 0, 0]);
+            rules_kani::host::dispatch(Op::trig_value, [0, 0, 0, 0, 0, 0])
+        },
+    );
+    diff_op(
+        "trig_value",
+        &[],
+        |c| game_rules::hostfns::trig_value(c).unwrap() as i64,
+        [0, 0, 0, 0, 0, 0],
+        Op::trig_value,
+    );
+}
+
+#[test]
+fn op_ask_yes_fixed_answers() {
+    // ask(kind=YesNo=1, player, title, text) -- fixed answers [1].
+    let (tp, tl) = intern_msg("conf.t");
+    let (xp, xl) = intern_msg("conf.x");
+    diff_op(
+        "ask",
+        &[1],
+        |c| {
+            game_rules::hostfns::opt_int(c, 1).unwrap();
+            game_rules::hostfns::ask(c, 1, 0, tp, tl, xp, xl).unwrap() as i64
+        },
+        [1, 0, tp, tl, xp, xl],
+        Op::ask,
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Card-level differential: one representative per band + skill + event
+// ---------------------------------------------------------------------------
+
+/// Run `f` on the model side (SymOps installed) and on the real side
+/// (ConfHost installed) from the same pre-state and answers.
+fn diff_card(label: &str, id: &str, answers: &[i32], run: impl Fn(&str, i32) -> ()) {
+    let _g = model_lock();
+    card_sdk::native::clear();
+    // ---- model side ----
+    install_model_world(answers);
+    let prev = install_host(Box::new(SymOps));
+    let model_res = catch_unwind(AssertUnwindSafe(|| run(id, 0)));
+    let _ = take_host();
+    if let Some(p) = prev {
+        let _ = install_host(p);
+    }
+    if let Err(e) = model_res {
+        let msg = e
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| "model panicked".into());
+        panic!("MODEL FAILED [{label}] ({id}): {msg} -- BUG IN THE MODEL (or unmodeled op)");
+    }
+    let model_snap = snap_model();
+
+    // ---- real side ----
+    // ConfHost: HostCtx, so the HostOps blanket applies. Install it, run the
+    // same entry under ConfInline (immediate Pay/Teleport/Gate, matching the
+    // model's no-chain-window stance), then recover the world via the same
+    // fat-to-thin cast rules-native uses.
+    card_sdk::native::clear();
+    let mut inline = ConfInline;
+    let host_box: Box<ConfHost> = Box::new(ConfHost::new(base_conf(), answers.to_vec()));
+    let prev = install_host(host_box);
+    let real_res = with_inline_host(&mut inline, || catch_unwind(AssertUnwindSafe(|| run(id, 0))));
+    let host_box = take_host().expect("conf host installed");
+    if let Some(p) = prev {
+        let _ = install_host(p);
+    }
+    let raw: *mut dyn game_rules::native_shims::HostOps = Box::into_raw(host_box);
+    let conf: Box<ConfHost> = unsafe { Box::from_raw(raw as *mut ConfHost) };
+    if let Err(e) = real_res {
+        let msg = e
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_else(|| "real panicked".into());
+        panic!("ENGINE FAILED [{label}] ({id}): {msg}");
+    }
+    let real_snap = snap_real(conf.st().wr());
+    assert_state_eq(&format!("card {label}"), &real_snap, &model_snap);
+}
+
+fn run_play(id: &str, player: i32) {
+    rules_kani::invoke::unwrap_done(rules_kani::invoke::play(id, player));
+}
+
+fn run_hook(id: &str, player: i32) {
+    rules_kani::invoke::unwrap_done(rules_kani::invoke::hook_only(id, "", player));
+}
+
+#[test]
+fn card_band_ag_conforms() {
+    // `AG:即使夕阳落山` -- play entry; ops modeled (gain/log style).
+    // Falls back to whatever invoke finds; fail-closed if unknown.
+    diff_card("ag", "AG:即使夕阳落山", &[], run_play);
+}
+
+#[test]
+fn card_band_crychic_conforms() {
+    diff_card("crychic", "CRYCHIC:（祥子）带领着大家", &[], run_play);
+}
+
+#[test]
+fn card_band_general_conforms() {
+    // `通用:10次招募（1回限定）` -- pay + draw.
+    diff_card("general", "通用:10次招募（1回限定）", &[], run_play);
+}
+
+#[test]
+fn card_band_hhw_conforms() {
+    diff_card("hhw", "HHW:Happy, Lucky, Smile, Yeah！", &[], run_play);
+}
+
+#[test]
+fn card_band_morfonica_conforms() {
+    // `Mor:（Rui）正论恶魔` -- four `transfer` legs. Pre-seeded answers are
+    // consumed by `pay` *instead of* moving money (see `request_or_pause`), so
+    // leave answers empty and let ConfInline apply every Pay.
+    diff_card("morfonica", "Mor:（Rui）正论恶魔", &[], run_play);
+}
+
+#[test]
+fn card_band_mujica_conforms() {
+    // `Mujica:心の雨` -- player_pos / others / tile_forward / roll / give_stay /
+    // give_stun / gain. Dice use the shared mid-value formula.
+    diff_card("mujica", "Mujica:心の雨", &[], run_play);
+}
+
+#[test]
+fn card_band_mygo_conforms() {
+    // `MyGO:轮符雨` -- give_stay + before_turn_end. The real engine runs
+    // `give_stay` through the abnormal [反击] gate; with empty answers
+    // ConfInline answers 1 (allow) so both sides grant the stay. Pre-seeding
+    // 0 would block the stay on the real side only (the model has no gate).
+    diff_card("mygo", "MyGO:轮符雨", &[], run_play);
+}
+
+#[test]
+fn card_band_pp_conforms() {
+    diff_card("pp", "PP:有你与我在这里共度", &[], run_play);
+}
+
+#[test]
+fn card_band_ppp_conforms() {
+    // `PPP:[衍生]Pipopa` -- set_dest + gain + place_card.
+    diff_card("ppp", "PPP:[衍生]Pipopa", &[], run_play);
+}
+
+#[test]
+fn card_band_ras_conforms() {
+    diff_card("ras", "RAS:（MASKING）CRUSH ON THE DRUM!!!", &[], run_play);
+}
+
+#[test]
+fn card_band_roselia_conforms() {
+    // `R:[衍生] 压` -- a pure `gain`.
+    diff_card("roselia", "R:[衍生] 压", &[], run_play);
+}
+
+#[test]
+fn card_band_sumimi_conforms() {
+    // `Sumimi:兼顾偶像与乐队` -- state + money_of + gain.
+    diff_card("sumimi", "Sumimi:兼顾偶像与乐队", &[], run_play);
+}
+
+#[test]
+fn card_skill_conforms() {
+    // `skill:千早爱音:重新开始` -- first Hook entry (declare_cap / fire pot).
+    diff_card("skill", "skill:千早爱音:重新开始", &[], run_hook);
+}
+
+#[test]
+fn card_event_conforms() {
+    // `event:很噜的感觉` -- ask_yes + teleport + pay. `ask_yes` is `ask==0`,
+    // so answer **1** means "no teleport". With all-no the body is quiet
+    // (tile_named("快餐店") is -1 on the model; unused when nobody teleports).
+    diff_card("event", "event:很噜的感觉", &[1, 1, 1, 1], run_play);
+}

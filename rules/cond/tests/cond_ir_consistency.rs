@@ -176,3 +176,33 @@ fn generated_has_no_stray_entries() {
         );
     }
 }
+
+/// Guard const ids are `0..n` in file order (BY_ID index). `guard_id!` and
+/// `BY_ID[id]` rely on this.
+#[test]
+fn generated_guard_ids_are_dense_and_ordered() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("kani/src/generated/cond_irs.rs");
+    let text = std::fs::read_to_string(&path).expect("generated file missing");
+    let mut ids = Vec::new();
+    for line in text.lines() {
+        let t = line.trim();
+        if t.starts_with("id: ") && t.ends_with(',') {
+            let n: usize = t[4..t.len() - 1].trim().parse().unwrap();
+            ids.push(n);
+        }
+    }
+    assert!(!ids.is_empty(), "no id: fields in generated table");
+    for (i, id) in ids.iter().enumerate() {
+        assert_eq!(*id, i, "guard ids must be dense 0..n in file order");
+    }
+    // BY_ID length matches.
+    let by_id_count = text
+        .lines()
+        .filter(|l| l.trim_start().starts_with("&G_"))
+        .count();
+    assert_eq!(by_id_count, ids.len(), "BY_ID length != number of guards");
+    println!("generated_guard_ids_are_dense_and_ordered: {} ids", ids.len());
+}

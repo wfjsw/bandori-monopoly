@@ -5,31 +5,7 @@
 
 use rules_cond_ir::ctx::{IrCtx, SetId};
 use rules_cond_ir::vars::VarId;
-
-#[path = "../src/generated/mod.rs"]
-mod generated;
-#[path = "../src/ir_fill.rs"]
-mod ir_fill;
-
-// The #[path] includes pull in world via ir_fill; stub the bits ir_fill needs.
-mod world {
-    pub const MAX_PLAYERS: usize = 4;
-    pub const TOK_PP_POS: &str = "P✽P粉丝(正)";
-    pub const TOK_PP_NEG: &str = "P✽P粉丝(反)";
-    pub struct World {
-        pub n_players: i32,
-        pub money: [i32; MAX_PLAYERS],
-        pub out: [bool; MAX_PLAYERS],
-        pub pos: [i32; MAX_PLAYERS],
-        pub fire: [i32; MAX_PLAYERS],
-        pub stay: [i32; MAX_PLAYERS],
-        pub fans_pos: [i32; MAX_PLAYERS],
-        pub fans_neg: [i32; MAX_PLAYERS],
-        pub hand_resonance: [i32; MAX_PLAYERS],
-        pub trig_player: i32,
-        pub trig_value: i32,
-    }
-}
+use rules_kani::{generated, ir_fill};
 
 #[test]
 fn pilot_guards_are_in_the_generated_table() {
@@ -43,6 +19,15 @@ fn pilot_guards_are_in_the_generated_table() {
             "pilot guard missing from generated table: {s}"
         );
     }
+}
+
+/// `guard_id!` resolves at compile time; `BY_ID[id].src` is the same string.
+#[test]
+fn guard_id_is_the_by_id_index() {
+    let id = rules_kani::guard_id!("actor == owner && value > 0");
+    assert_eq!(generated::BY_ID[id].src, "actor == owner && value > 0");
+    assert_eq!(id, generated::guard_id_const(ir_fill::src::AYA_PAY_ADD));
+    assert!(id < generated::GUARD_COUNT);
 }
 
 #[test]

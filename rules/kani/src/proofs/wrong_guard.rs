@@ -113,6 +113,40 @@ pub fn real_guard_matches_clause_iff() {
     kani::cover!(!real);
 }
 
+/// Companion of `wrong_guard_too_loose_is_caught` (no `should_panic`): the
+/// wrong guard is **distinguishable** from the clause — reachable disagreement.
+/// If this FAILS, the mutant is equivalent (vacuous iff).
+#[kani::proof]
+#[kani::unwind(6)]
+pub fn wrong_guard_disagreement_is_reachable() {
+    let actor: i64 = kani::any();
+    let owner: i64 = kani::any();
+    let value: i64 = kani::any();
+    kani::assume(actor >= -4 && actor <= 4);
+    kani::assume(owner >= -4 && owner <= 4);
+    kani::assume(value >= -2 && value <= 2);
+
+    let ctx = fill(actor, owner, value);
+    let wn = wrong_guard_nodes();
+    let wrong = rules_cond_ir::eval_node(&wn, 2, &ctx).as_cond_bool();
+    let book = clause_condition(actor, owner, value);
+    // The disagreement is live at `value == 0` (wrong admits, clause rejects).
+    kani::cover!(wrong && !book, "value == 0: wrong admits, clause rejects");
+    kani::cover!(!wrong && book, "value > 0 && actor==owner: wrong rejects? no — cover other side");
+    kani::cover!(wrong == book, "they agree");
+    assert!(
+        !(wrong == book && value == 0 && actor == owner),
+        "at value==0 the wrong guard must disagree with the clause"
+    );
+    // Stronger: there EXISTS a reachable input where they disagree. Prove by
+    // showing the specific witness is inside the symbolic range.
+    let witness_ctx = fill(1, 1, 0);
+    let w_witness = rules_cond_ir::eval_node(&wn, 2, &witness_ctx).as_cond_bool();
+    let book_witness = clause_condition(1, 1, 0);
+    assert!(w_witness != book_witness, "witness value==0 must disagree");
+    kani::cover!(w_witness != book_witness, "reachable disagreement");
+}
+
 /// Sanity: `#[kani::should_panic]` plumbing works at all.
 #[kani::proof]
 #[kani::unwind(2)]

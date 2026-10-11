@@ -3,7 +3,7 @@ name = "rules-kani"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Kani formal-verification pilot: symbolic host backend + proof harnesses over unmodified card bodies."
+description = "Kani formal-verification foundation: general symbolic host + registry + harness kit over unmodified card bodies."
 publish = false
 
 # Host-only. Lives under rules/ for discoverability but is a ROOT workspace
@@ -12,14 +12,37 @@ publish = false
 
 [dependencies]
 card-sdk = { workspace = true, features = ["guest"] }
-# Unmodified card bodies under proof. Same crates `rules-native` links.
+# Unmodified card / skill / event bodies under proof. Same crates
+# `rules-native` links (the shipped ruleset).
+card-ag = { path = "../cards/card-ag" }
+card-crychic = { path = "../cards/card-crychic" }
+card-general = { path = "../cards/card-general" }
+card-hhw = { path = "../cards/card-hhw" }
+card-morfonica = { path = "../cards/card-morfonica" }
+card-mujica = { path = "../cards/card-mujica" }
+card-mygo = { path = "../cards/card-mygo" }
 card-pp = { path = "../cards/card-pp" }
 card-ppp = { path = "../cards/card-ppp" }
-card-mygo = { path = "../cards/card-mygo" }
+card-ras = { path = "../cards/card-ras" }
+card-roselia = { path = "../cards/card-roselia" }
+card-sumimi = { path = "../cards/card-sumimi" }
+skill-bands = { path = "../skills/skill-bands" }
+skill-characters = { path = "../skills/skill-characters" }
+rules-tiles = { path = "../tiles" }
+rules-tile-marks = { path = "../tile_marks" }
+rules-events = { path = "../events" }
 # Single-source guard IR (heap-free; the translator output).
 rules-cond-ir = { path = "../cond-ir" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 serde = { workspace = true }
+
+# Conformance tests (`tests/conf_model.rs`): thin adapter over the real host
+# (`game_rules::hostfns`) so the symbolic model can be diffed against it.
+# `native_shims` supplies the `bandori_*` symbols card bodies link against on
+# native, so `invoke::play` runs unmodified guest code against either backend.
+[dev-dependencies]
+game-rules = { path = "../../crates/game-rules" }
+game-core = { path = "../../crates/game-core" }
 
 # The `kani` crate is injected by `cargo kani` / kani-compiler from the Kani
 # sysroot (`~/.kani/kani-<ver>/lib/libkani.rlib`). It is NOT the crates.io
@@ -27,4 +50,4 @@ serde = { workspace = true }
 
 [package.metadata.kani]
 # Unwinding: card bodies use bounded Vec loops (discard pick, player_count<=4).
-# 24 is the pilot default; raise per-harness with #[kani::unwind] if CBMC asks.
+# Default 80 + --no-unwinding-checks (see tools/kani/run.sh and KANI.md §5).

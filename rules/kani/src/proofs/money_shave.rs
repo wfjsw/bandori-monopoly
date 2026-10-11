@@ -17,7 +17,7 @@
 
 use crate::host;
 use crate::invoke;
-use crate::ir_fill::{self, src as guard_src};
+use crate::ir_fill;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
@@ -59,9 +59,10 @@ pub fn aya_haruka_02_shave_iff() {
     let pre_amount = w.pay_amount;
 
     // ---- single-source guard: the real CEL string, lowered once ----
-    let prog = ir_fill::guard_by_src(guard_src::AYA_PAY_ADD);
+    // Const id — never a 139-way string scan under CBMC.
+    let gid = crate::guard_id!("actor == owner && value > 0");
     let ctx = ir_fill::fill_pay_add(&w, owner);
-    let admitted = ir_fill::eval_bool(prog, &ctx);
+    let admitted = crate::guard!(gid, &ctx);
     kani::cover!(admitted, "guard admits");
     kani::cover!(!admitted, "guard rejects");
 

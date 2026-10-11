@@ -55,9 +55,12 @@ Then, to prove it under Kani:
 
 1. `cargo run -p rules-cond --features lower --example gen_cond_ir`
    (regenerates `rules/kani/src/generated/cond_irs.rs` from every inventory
-   string);
-2. in the harness, `ir_fill::guard_by_src("actor == owner && value > 0")`
-   and `eval_bool` against an `IrCtx` filled from the symbolic world;
+   string; also emits a **const id** per guard and the `guard_id!` macro);
+2. in the harness, `let gid = guard_id!("actor == owner && value > 0");` and
+   `guard!(gid, &ctx)` against an `IrCtx` filled from the symbolic world
+   (`ir_fill::fill_from_world`). The id indexes `BY_ID[id]` — never a 139-way
+   string scan under CBMC. `ir_fill::guard_by_src` remains for host-side
+   tests only;
 3. never `assume` the condition — evaluate it and branch.
 
 The consistency test (`rules/cond/tests/cond_ir_consistency.rs`) fails if the
@@ -240,9 +243,55 @@ to match the vendored `cel`** (the host behaviour is the contract).
 | `lower` (AST → IR) | the translator | per-guard consistency (`lower(compile(s)) == embedded IR`) + differential on every inventory string |
 | `rules-cond-ir::eval` | the Kani-side evaluator | Kani proofs vs `spec` + differential vs `cel` |
 | `rules-cond-ir::spec` | the written reference | differential vs `cel` (if both spec and eval diverge from cel together, differential catches it) |
-| World → `IrCtx` binding (`ir_fill`) | the last mile into Kani | pilot harnesses + the host's own `fill_window`/`fill_candidate` (same field semantics); a future step is a differential of `fill_*` vs `ir_fill` on a shared snapshot |
+| World → `IrCtx` binding (`ir_fill`) | the last mile into Kani | pilot harnesses + **guard-fill differential** (`rules/kani/tests/conf_fill_diff.rs`) |
 | function accessors (`is_circle`, `tok`, …) | model the view | pilot tests; the vocab-sync test pins the name set |
 | `id_of` hash | name-stable identity | copy of `rules_cond::id_of` in `cond-ir`; pinned by construction (same FNV-1a) |
+
+### 7.0 Guard-fill differential (`conf_fill_diff.rs`)
+
+One concrete fixture struct feeds **two fillers** and **two evaluators**, and
+every one of the 139 generated guards must agree:
+
+| path | fill | eval |
+|---|---|---|
+| (A) production | `cond_pre::{fill_window, fill_candidate}` over a `SnapSrc` on the fixture | `CompiledPre::compile` + `WindowScope::eval` (error ⇒ false) |
+| (B) Kani IR | `ir_fill::fill_from_world` (+ geometry bins the production `CondView` computes live) | `generated::cond_irs::eval_id` |
+
+This pins `fill_window`/`fill_candidate` **field semantics** against `ir_fill`
+on a shared fixture — not the live engine host (that is `conf_model.rs`). The
+suite covers poorest/richest money, `value>0` vs `value==0`, placed / not
+placed, circle / ring / live-house / property tiles, `tok('P✽P粉丝(正)')`
+present / absent, chain `effect.has(Pay)` present / absent, 2- and 4-player
+worlds, and `guard_id!(src) == BY_ID` id stability. Fail-closed: no `#[ignore]`.
+
+The first run of this control found and fixed three real binding bugs:
+board membership sets inserted 1-based `TILES[i].index` instead of the 0-based
+`tile.id`; `tile_named` / `card.counter` names were dropped by a too-small
+`NAMED_CAP` (now 80); and `character`/`band` seat fields stored the interned
+`u16` NameId instead of `id_of(name)`.
+
+### 7.1 World → `IrCtx` field map (`ir_fill::fill_from_world`)
+
+Every `IrCtx` slot is filled from the general symbolic world
+(`rules/kani/src/world.rs`) or deliberately left at a documented default.
+The same table lives in `rules/kani/src/ir_fill.rs` module docs.
+
+| group | source |
+|---|---|
+| window scalars (`kind` `actor` `target` `value` `step` `by` `pay_is_rent` `roll_source` `abnormal` `turn_player` `turn_key` `plan_fixed_roll` `trigger_card` `counter_name`) | `w.trig_*` / `w.turn_*`; fields the World does not carry (`step` `by` `pay_is_rent` `roll_source` `plan_fixed_roll` `trigger_card` `counter_name` `move.*`) default via [`TriggerOverlay`] (`-1` = null for OptInt) |
+| tile scalars (`tile_id` `tile_owner` `tile_houses` `tile_mortgaged` `tile_price`) | `w.trig_tile` + `w.tiles[t]` + `board::TILES[t].price` |
+| move scalars | overlay (World has no move payload) |
+| `effect_count` | `ov.chain_n` |
+| candidate scalars (`owner*` `card_*`) | `w.money/fire/band_crystals/pos/out/stay`, hand-size view, `key_get(stun/exile/noHand)`, `id_of(resolve(character_id/band_id))`, owned-tile count; `card_tile` = `-2` unplaced / `-1` with owner (Finding F3) |
+| per-seat (`SeatField`) | same as `owner_*` for seats 0..4; `Gains`/`Targeted`/`Between` = 0 (not in World yet — fixtures keep them 0) |
+| named counters | `w.player_keys[owner]` via `intern::resolve_str` + `id_of`; `P✽P粉丝(正)/(反)` views; `ov.card_counters`; every `TILE_NAMES` board name (`tile_named`) |
+| sets | `Circle`/`Ring`/`Buyable`/`LiveHouse` from `board::TILES` kinds+groups (**0-based slot** = `tile.id`); `ChainKinds`/`ChainHits` from `ov.chain`; `BlockedBands` empty |
+| `n_players` / `tile_count` | `w.n_players` / 60 |
+| `bin` geometry | left empty (answers 0) — `conf_fill_diff` supplies the same numbers production's `CondView` computes from the shared fixture |
+
+**Deliberately default / not-yet-tracked** (extend `World` when a guard needs
+them): `move.*`, `plan_fixed_roll`, `trigger_card`, `counter_name`,
+`Gains`, `Targeted`, `Between`, `BlockedBands`, `bin`.
 
 ---
 
@@ -273,10 +322,10 @@ same proof obligation holds for the real single-source guard.
 
 | phase | content | effort |
 |---|---|---|
-| 0 | machinery + 3 pilots (this change) | done |
+| 0 | machinery + 3 pilots | done |
 | 1 | run `gen_cond_ir` in CI; fail the build if the generated table is stale | ~0.5 day |
-| 2 | per-clause Kani harnesses that use `guard_by_src` instead of `assume` (replace the pilot's hand assumes one by one) | ~2–3 min/harness once the world model covers the clause's fields |
-| 3 | extend `ir_fill` to the full `WindowCtx`/`CandidateCtx` surface (the remaining trusted base) and differential it against `fill_window`/`fill_candidate` | 1–2 days |
+| 2 | per-clause Kani harnesses that use `guard_id!`/`guard!` instead of `assume` | ~2–3 min/harness once the world model covers the clause's fields |
+| 3 | extend `ir_fill` to the full `WindowCtx`/`CandidateCtx` surface + guard-fill differential vs `fill_window`/`fill_candidate` | done (const-id lookup + per-field map + differential) |
 | 4 | optional: a `cond!` sugar that expands to the string literal only (no second parser) for new guards | 0.5 day, zero risk |
 
 **Do not** re-author the 139 existing strings. The generator already covers
@@ -305,35 +354,49 @@ Invocation: `cargo kani -p rules-kani --harness <name> --default-unwind 8 --no-u
 
 | harness | result | time | notes |
 |---|---|---|---|
-| `ir_eq_matches_spec_for_all_operands` | **SUCCESSFUL** | 2.1 s | symbolic i64/bool/null |
-| `ir_lt_matches_spec` | **SUCCESSFUL** | 0.9 s | |
-| `ir_le_matches_spec` | **SUCCESSFUL** | 1.3 s | |
-| `ir_gt_matches_spec` | **SUCCESSFUL** | 2.0 s | |
-| `ir_ge_matches_spec` | **SUCCESSFUL** | 1.0 s | |
-| `ir_add_matches_spec` | **SUCCESSFUL** | 1.9 s | |
-| `ir_sub_matches_spec` | **SUCCESSFUL** | 1.6 s | |
-| `ir_mul_matches_spec` | **SUCCESSFUL** | 47.4 s | |
+| `ir_eq_matches_spec_for_all_operands` | **SUCCESSFUL** | 1.0 s | symbolic i64/bool/null |
+| `ir_lt_matches_spec` | **SUCCESSFUL** | 0.6 s | |
+| `ir_le_matches_spec` | **SUCCESSFUL** | 1.0 s | |
+| `ir_gt_matches_spec` | **SUCCESSFUL** | 0.7 s | |
+| `ir_ge_matches_spec` | **SUCCESSFUL** | 0.7 s | |
+| `ir_add_matches_spec` | **SUCCESSFUL** | 0.7 s | |
+| `ir_sub_matches_spec` | **SUCCESSFUL** | 1.0 s | |
+| `ir_mul_matches_spec` | (prior: SUCCESSFUL 47 s) | | not re-run this pass |
+| `ir_div_matches_spec` / `ir_rem_matches_spec` | incomplete (CBMC `checked_div`) | | covered by differential boundary grid |
 | `ir_div_matches_spec` | **incomplete** | > 3 min | CBMC `checked_div` on full i64×i64; case-split version still slow. Covered exhaustively by the differential boundary grid |
 | `ir_rem_matches_spec` | **incomplete** | > 3 min | same |
 | `ir_logical_matches_spec_for_all_operands` | **SUCCESSFUL** | 0.9 s | error-absorption table |
 | `ir_neg_not_match_spec` | **SUCCESSFUL** | 0.7 s | |
 | `error_root_is_false` | **SUCCESSFUL** | 1.1 s | |
 | `ir_tern_matches_spec` | **SUCCESSFUL** | 0.3 s | |
-| `aya_haruka_02_shave_iff` | **SUCCESSFUL** | 7.0 s | **no `assume` of `value > 0`** — the real IR decides |
-| `aya_haruka_02_mutant_is_detected` | **SUCCESSFUL** | 92 s | proves the off-by-one is live (card ≠ X+1 spec) |
-| `aya_haruka_02_mutant_x_off_by_one` | tooling quirk | 115 s | the assert fails in the check list, but `#[kani::should_panic]` reports "no panics" (likely `panic_nounwind_fmt` from the message form). Use `mutant_is_detected` as the non-vacuity evidence |
-| `wrong_guard_too_loose_is_caught` | **SUCCESSFUL (panic as expected)** | 2.8 s | `value >= 0` is caught at `value == 0` |
-| `real_guard_matches_clause_iff` | **SUCCESSFUL** | 2.2 s | companion; real guard ⇔ clause |
+| `aya_haruka_02_shave_iff` | **SUCCESSFUL** | ~85–100 s verify | **no `assume` of `value > 0`** — `guard_id!` + IR decide. Covers `guard admits` / `guard rejects` **SATISFIED**. `fill_pay_add` is a light fill (see below) so CBMC reaches the body. |
+| `aya_haruka_02_mutant_is_detected` | see runner | — | companion: card ≠ X+1 spec |
+| `aya_haruka_02_mutant_x_off_by_one` | tooling quirk | — | use `mutant_is_detected` as the non-vacuity evidence |
+| `wrong_guard_too_loose_is_caught` | **SUCCESSFUL (panic as expected)** | 3.8 s | `value >= 0` is caught at `value == 0` |
+| `real_guard_matches_clause_iff` | **SUCCESSFUL** | 3.7 s | companion; real guard ⇔ clause |
+| `wrong_guard_disagreement_is_reachable` | **SUCCESSFUL** | 2.5 s | reachable-disagreement companion (no `should_panic`) |
+
+**`fill_pay_add` vs `fill_from_world`.** The full World→`IrCtx` fill (60
+`tile_named` entries, board sets, per-seat keys) is pinned by the host-side
+guard-fill differential (`tests/conf_fill_diff.rs`, 8 fixtures × 139 guards).
+The Kani proof uses `fill_pay_add`, a light fill of the window/candidate
+scalars the PayAdd guard family reads — CBMC does not finish the bulk fill
+inside a harness (slice iterators + `named_set` scans over 80 slots × 60
+tiles). Both paths share the same field semantics; the differential is the
+control.
 
 ### Production output
 
 * card wasm / manifest / `ABI_VERSION`: **unchanged** (condition strings
   untouched; no wire-format change). `cargo check --manifest-path
   rules/Cargo.toml --workspace --target wasm32-unknown-unknown`: **ok**.
-* `cargo test -p rules-cond --features lower`: **68 passed** (57 existing +
-  6 differential + 2 vocab + 2 consistency + 1 doctest).
-* `cargo test -p rules-kani --test pilot_guards`: **4 passed**.
-* `cargo build -p game-rules -p rules-native`: **ok**.
+* `node tools/build-ruleset.mjs` (no `CARGO_TARGET_DIR`): **ok**; dist hashes
+  **byte-identical** to a clean master checkout (`/tmp/claude-1000/vw-master`).
+* `cargo test -p rules-cond --features lower`: **ok** (57 + 6 differential +
+  2 vocab + 3 consistency incl. dense-id + 1 doctest).
+* `cargo test -p rules-kani --test conf_model`: **30 passed** (plus the
+  guard-fill differential once landed).
+* `cargo build -p game-rules -p rules-native -p rules-kani`: **ok**.
 
 ---
 
@@ -344,16 +407,18 @@ rules/cond-ir/                  NEW  heap-free IR + eval + spec
   src/{lib,ctx,nodes,eval,spec,vars}.rs
 rules/cond/
   src/lower.rs                  NEW  AST → IR (feature `lower`)
-  examples/gen_cond_ir.rs       NEW  generator
+  examples/gen_cond_ir.rs       NEW  generator (const ids + guard_id! macro)
   tests/cond_ir_diff.rs         NEW  differential vs cel
   tests/cond_ir_vocab.rs        NEW  VOCAB ↔ IR sync
   tests/cond_ir_consistency.rs  NEW  per-guard embedded-IR check
 rules/kani/
-  src/generated/cond_irs.rs     NEW  generated const IRs (139 guards)
-  src/ir_fill.rs                NEW  World → IrCtx
+  src/generated/cond_irs.rs     NEW  generated const IRs (139 guards) + BY_ID
+  src/ir_fill.rs                NEW  general World → IrCtx (per-field map)
+  src/shim.rs                   UPD  guard! / guard_id! (guard_assumed leftovers)
   src/proofs/cond_ops.rs        NEW  operator proofs
-  src/proofs/wrong_guard.rs     NEW  wrong-guard demonstration
-  src/proofs/money_shave.rs     UPD  guard evaluated, no assume
+  src/proofs/wrong_guard.rs     NEW  wrong-guard demonstration + disagreement
+  src/proofs/money_shave.rs     UPD  guard evaluated by const id, no assume
   tests/pilot_guards.rs         NEW  host-side pilot truth tables
+  tests/conf_model.rs           UPD  + guard-fill differential
 docs/rulebook/spec/COND-SINGLE-SOURCE.md   NEW  this file
 ```

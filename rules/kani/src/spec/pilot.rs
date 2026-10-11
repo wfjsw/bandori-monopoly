@@ -1,3 +1,8 @@
+//! Pilot reference specs (C-PP-aya-haruka-01/02, PPP tae_sound).
+//!
+//! Moved from `spec.rs` when the per-unit package landed. New specs go in
+//! `spec/<unit>.rs`, not here.
+
 //! Reference specifications written FROM the 规则书 clause docs only.
 //!
 //! Never derived from engine behaviour. Each function is the clause's
