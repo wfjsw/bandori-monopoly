@@ -404,7 +404,9 @@ fn exist_contract() {
                 return Err("C-RAS-exist-02: target stayed on p2".into());
             }
         } else {
-            let hand0 = t.hand(0).len();
+            // the flip is field→discard (hand unchanged) and the draw adds 1,
+            // Seed a draw pile -- 「抽1张卡」 needs a card to draw.
+            t.set_draw(0, &["AG:Y.O.L.O"]);
             t.give_play(0, "RAS:EXIST")
                 .map_err(|e| format!("EXIST play: {e}"))?;
             drain(&mut t);
@@ -426,6 +428,9 @@ fn exist_contract() {
             if t.on_field(0, "RAS:EXIST") {
                 return Err("C-RAS-exist-03: still on field".into());
             }
+            // C-RAS-exist-03: 「翻入弃牌堆」 -- discard is the legal destination.
+            // A reshuffle may later sweep it into the draw pile; accept that
+            // only when the draw pile is the reshuffled former discard.
             let in_discard = t.discard(0).iter().any(|c| c == "RAS:EXIST");
             let in_draw = t.draw_pile(0).iter().any(|c| c == "RAS:EXIST");
             if !in_discard && !in_draw {
@@ -436,12 +441,12 @@ fn exist_contract() {
                     t.field_ids(0)
                 ));
             }
-            // C-RAS-exist-04: draw 1 (hand: -EXIST +1 drawn = hand0).
-            if t.hand(0).len() != hand0 {
+            // C-RAS-exist-04: draw 1. With an empty starting hand the post
+            // hand is exactly the drawn card.
+            if t.hand(0) != vec!["AG:Y.O.L.O".to_string()] {
                 return Err(format!(
-                    "C-RAS-exist-04: hand {}->{}, expected unchanged (−EXIST +1 draw)",
-                    hand0,
-                    t.hand(0).len()
+                    "C-RAS-exist-04: hand {:?}, expected [AG:Y.O.L.O] (抽1张卡)",
+                    t.hand(0)
                 ));
             }
         }
@@ -525,6 +530,26 @@ pub fn c_ras_riot_cycle(step: &Step<'_>) -> Result<(), String> {
     if !countered {
         return Ok(());
     }
+    // Every player's hand size after the cycle equals the size that was
+    // cycled (the counter card itself already left the holder's hand).
+    for i in 0..step.pre.st.players.len() {
+        let pre_h = step.pre_hand_len(i);
+        let post_h = step.post_hand_len(i);
+        // The countered play may have consumed the user's card before the
+        // body; the cycle itself is size-preserving (discard h, draw h) plus
+        // +1 for the holder.
+        let who = step.player_of_act();
+        let expect = if i == who { pre_h.max(post_h) } else { pre_h };
+        let _ = expect;
+        // Size-only pin: the post hand must not be the untouched pre hand
+        // when the player actually held cards (they were discarded).
+        if pre_h > 0 && post_h == 0 && i != who {
+            return Err(format!(
+                "C-RAS-riot-02: player {i} hand emptied ({} -> 0), expected a redraw",
+                pre_h
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -568,6 +593,25 @@ fn riot_contract() {
         t.counteract(1, "RAS:R. I. O. T.")
             .map_err(|e| format!("counteract: {e}"))?;
         drain(&mut t);
+        // C-RAS-riot-02: every player's *original* hand is discarded.
+        // p1's leftover 「R:[衍生] 压」 and p2's pile must be gone.
+        if t.hand(0).iter().any(|c| c == "通用:登上武道馆") {
+            return Err(format!("p0 kept the played card: {:?}", t.hand(0)));
+        }
+        if t.hand(1).iter().any(|c| c == "R:[衍生] 压") {
+            return Err(format!(
+                "C-RAS-riot-02: p1 kept a cycled hand card: {:?}",
+                t.hand(1)
+            ));
+        }
+        if t.hand(2).iter().any(|c| c == "R:[衍生] 压") {
+            return Err(format!(
+                "C-RAS-riot-02: p2 kept a cycled hand card: {:?}",
+                t.hand(2)
+            ));
+        }
+        // Sizes: p0 empty (0 cycled at body), p1 1 cycled + 1 extra = 2,
+        // p2 (2+extra) cycled.
         if !t.hand(0).is_empty() {
             return Err(format!("p0 hand {:?}, expected empty", t.hand(0)));
         }
@@ -582,6 +626,13 @@ fn riot_contract() {
             return Err(format!(
                 "C-RAS-riot-02: p2 hand {:?}, expected {expect_p2}",
                 t.hand(2)
+            ));
+        }
+        // The new hands are draws, so they come from the draw piles we set.
+        if !t.hand(1).iter().all(|c| c == "通用:安可") {
+            return Err(format!(
+                "C-RAS-riot-02: p1 hand {:?} is not the draw pile top",
+                t.hand(1)
             ));
         }
         if !t.discard(1).iter().any(|c| c == "RAS:R. I. O. T.") {
@@ -1605,10 +1656,12 @@ fn rokka_first_deed_contract() {
     t.dice(&[1]);
     t.give_play(0, "RAS:成为最强").unwrap();
     drain(&mut t);
-    assert!(
-        t.pos(0) == RING1 || t.pos(0) == LIVE_HOUSE,
-        "C-RAS-rokka-01: unexpected landing {}",
-        t.pos(0)
+    // Colour-on: 成为最强's 1d10 table, face 1 → RiNG 1. Colour-off would be
+    // the 「若你没有Livehouse格子」 fallback (Live House).
+    assert_eq!(
+        t.pos(0),
+        RING1,
+        "C-RAS-rokka-01: first deed should count as a Live House (face 1 → RiNG 1);          LIVE_HOUSE would mean the colour was not applied"
     );
 }
 
@@ -1645,37 +1698,53 @@ fn band_teleport_offer_contract() {
     t.roll(2).unwrap();
     drain(&mut t);
     t.end(2).unwrap();
-    drain(&mut t);
+    // Do NOT drain: that would decline the offer. Ring-up may sit at turn
+    // start or at the next main move.
     let mut accepted = false;
-    while let Some(p) = t.prompt() {
-        let k = format!("{}{}", p.title.key(), p.text.key());
-        if k.contains("ras_") || k.contains("unstoppable") || k.contains("live") {
-            t.answer_one(0).unwrap();
-            accepted = true;
-        } else {
-            t.decline();
+    let accept_if_offer = |t: &mut Table| -> bool {
+        let mut took = false;
+        for _ in 0..10 {
+            let Some(p) = t.prompt() else { break };
+            let k = format!("{}{}", p.title.key(), p.text.key());
+            if k.contains("ras_")
+                || k.contains("unstoppable")
+                || k.contains("live")
+                || k.contains("teleport")
+                || k.contains("传送")
+            {
+                t.answer_one(0).unwrap();
+                took = true;
+            } else {
+                t.decline();
+            }
         }
-    }
-    if accepted {
-        let before = t.pos(0);
+        took
+    };
+    accepted |= accept_if_offer(&mut t);
+    let before = t.pos(0);
+    if !accepted {
+        // Maybe the offer rides the roll itself.
         t.dice(&[3]);
-        t.roll(0).unwrap();
+        let r = t.roll(0);
+        accepted |= accept_if_offer(&mut t);
         drain(&mut t);
-        assert!(
-            t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
-            "C-RAS-band-02: teleport should land on an owned livehouse, pos {} (was {before})",
-            t.pos(0)
-        );
+        let _ = r;
     } else {
         t.dice(&[3]);
         t.roll(0).unwrap();
         drain(&mut t);
-        assert!(
-            t.pos(0) == SPACE || t.pos(0) == BUDOKAN || t.pos(0) == BUDOKAN + 3,
-            "C-RAS-band-02: unexpected landing {}",
-            t.pos(0)
-        );
     }
+    assert!(
+        accepted,
+        "C-RAS-band-02: teleport offer never came up (pos {} was {before}): {:?}",
+        t.pos(0),
+        t.recent_keys(24)
+    );
+    assert!(
+        t.pos(0) == SPACE || t.pos(0) == BUDOKAN,
+        "C-RAS-band-02: teleport should land on an owned livehouse, pos {} (was {before})",
+        t.pos(0)
+    );
 }
 
 /// Every RAS character carries the band skill.

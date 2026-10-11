@@ -67,7 +67,7 @@ them specifies only the printed behaviour over that set.
 * **Condition:** the passed tile is a livehouse and `owner ≠ user`.
 * **Effect:** +1 [奇迹水晶] on this card (no printed cap).
 * **Frame:** only this card's crystal count.
-* **Executable:** `c_ras_change_the_world_crystal`.
+* **Executable:** asserted in `change_the_world_contract`.
 
 #### C-RAS-change-the-world-04
 
@@ -79,9 +79,12 @@ them specifies only the printed behaviour over that set.
   receives that raised amount (the quote's 「触发时获得等量资金」 is read
   as the owner collecting the raised charge -- the payer's payment rises
   by the same figure); the card then goes to its owner's discard.
-* **Rulings & OPEN:** OPEN-livehouse. 「获得等量资金」 subject is OPEN
-  (see Findings if the engine pays someone else).
-* **Executable:** `c_ras_change_the_world_charge`.
+* **Rulings & OPEN:** OPEN-livehouse. 「触发时获得等量资金」 -- OPEN-
+  change-world-equal: 「等量」 may bind to the increment `50*(y+1)*n`
+  (redundant with the raised charge) or to the whole raised amount; the
+  payee is likewise unprinted. The executable pins the whole raised
+  amount to the tile owner (the reading the charge ledger closes over).
+* **Executable:** asserted in `change_the_world_contract`.
 
 ---
 
@@ -110,7 +113,7 @@ them specifies only the printed behaviour over that set.
 * **Rulings & OPEN:** 「对单一玩家生效」 is determined by the target
   count of the played card's [手] body. OPEN-exist-multi: the sheet does
   not say what happens to a card that *also* has a self branch.
-* **Executable:** `c_ras_exist_redirect`.
+* **Executable:** asserted in `exist_contract`.
 
 #### C-RAS-exist-03
 
@@ -120,7 +123,7 @@ them specifies only the printed behaviour over that set.
 * **Effect:** it leaves the field into the **owner's** discard
   (「翻入弃牌堆」 -- face-down is not observable; the zone is).
 * **Frame:** owner's discard / holder's field.
-* **Executable:** `c_ras_exist_flip`.
+* **Executable:** asserted in `exist_contract`.
 
 #### C-RAS-exist-04
 
@@ -130,7 +133,7 @@ them specifies only the printed behaviour over that set.
 * **Effect:** the owner draws exactly 1 card.
 * **Rulings & OPEN:** OPEN-exist-influence: 「造成影响」 is undefined;
   the executable treats *any* redirect it performed as influence.
-* **Executable:** `c_ras_exist_draw`.
+* **Executable:** asserted in `exist_contract`.
 
 ---
 
@@ -142,12 +145,14 @@ them specifies only the printed behaviour over that set.
 #### C-RAS-please-choose-01
 
 * **Quote:** 「[反击] 当有玩家在livehouse格子上结算时」
-* **Trigger:** another player's `[结算]` on a livehouse tile.
+* **Trigger:** a `[结算]` on a livehouse tile (the quote says 「有玩家」
+  -- **any** player, including the holder; the executable only exercises
+  another player's settle).
 * **Condition:** the counteractor holds this [反击] card.
 * **Effect:** the [反击] window opens (resolves before the settle, per
   `rulebook-doc.md` [反击]); the settler then picks (1) or (2).
 * **Rulings & OPEN:** OPEN-livehouse.
-* **Executable:** `c_ras_please_choose_window`.
+* **Executable:** asserted in `please_choose_contract`.
 
 #### C-RAS-please-choose-02
 
@@ -171,7 +176,7 @@ them specifies only the printed behaviour over that set.
 * **Effect:** the counteractor `[传送]`s to the settler's tile; the
   landing does **not** `[结算]`; band skills may still fire.
 * **Frame:** counteractor's `pos` (and any band-skill follow-on).
-* **Executable:** `c_ras_please_choose_opt2`.
+* **Executable:** asserted in `please_choose_contract`.
 
 ---
 
@@ -233,7 +238,7 @@ them specifies only the printed behaviour over that set.
 * **Condition:** the mover's original planned path (before the cut).
 * **Effect:** the walk length is `roll - X`; `X` counts tiles on that
   original path owned by the Repaint holder (not the shortened path).
-* **Executable:** `c_ras_repaint_cut`.
+* **Executable:** asserted in `repaint_contract`.
 
 #### C-RAS-repaint-03
 
@@ -242,9 +247,11 @@ them specifies only the printed behaviour over that set.
 * **Condition:** --.
 * **Effect:** whatever the settle payment is (base rent, or a shaped
   payment -- see TEST-FINDINGS ruling 2026-10-06 / 祥，移动), it is
-  halved (floor to 10 per the 爱心义演-style rounding is **not**
-  printed here; OPEN-repaint-round for the half of an odd amount).
-* **Executable:** `c_ras_repaint_half`.
+  halved. Rounding is not printed here; the standing 爱心义演 style
+  (round the payment **up** to a multiple of 10, halved first) may or
+  may not apply -- **OPEN-repaint-round**. The executable only covers
+  an even rent (140 → 70).
+* **Executable:** asserted in `repaint_halves_the_payment`.
 
 ---
 
@@ -275,14 +282,14 @@ them specifies only the printed behaviour over that set.
 * **Rulings & OPEN:** TEST-FINDINGS open ruling 1 (teleport-as-main-move
   settle shape) is about the *buy offer*; this clause only pins 「不触发
   结算」 + 「视为你的主要移动」.
-* **Executable:** `c_ras_unstoppable_card_no_settle`.
+* **Executable:** asserted in `unstoppable_card_contract`.
 
 #### C-RAS-unstoppable-card-03
 
 * **Quote:** 「若骰点为1-3获得2000资金，若为4-6则获得1000资金」
 * **Trigger:** the same play.
 * **Effect:** face 1-3 → `[获得] 2000`; face 4-6 → `[获得] 1000`.
-* **Executable:** `c_ras_unstoppable_card_gain`.
+* **Executable:** asserted in `unstoppable_card_contract`.
 
 ---
 
@@ -300,9 +307,11 @@ them specifies only the printed behaviour over that set.
   tile by board index; face `≥ 10` teleports to 「"Live House"」 (tile 31).
 * **Rulings & OPEN:** OPEN-livehouse, OPEN-become-strongest-table: the
   text does not say whether the sorted table is every livehouse on the
-  board or only those the user owns. The executable checks the
-  board-wide reading (9 group-6 tiles sorted by index) when the user
-  owns all of them; the owned-only reading is indistinguishable there.
+  board or only those the user owns. These **are** distinguishable: with
+  8 of 9 group-6 tiles owned (Live House is the agent tile), face 4 is
+  Live House under the board-wide reading and RiNG 3 under owned-only.
+  The executable pins the **board-wide** reading (「livehouse对应的格子
+  （按格子编号排序）」 names the set, not 「你拥有的」).
 * **Executable:** `c_ras_become_strongest_map`.
 
 #### C-RAS-become-strongest-02
@@ -310,13 +319,14 @@ them specifies only the printed behaviour over that set.
 * **Quote:** 「若你没有Livehouse格子，传送到"Live House"」
 * **Condition:** the user owns no livehouse.
 * **Effect:** teleport to tile 31 regardless of the d10 face.
-* **Executable:** `c_ras_become_strongest_none`.
+* **Executable:** asserted in `become_strongest_contract`.
 
 #### C-RAS-become-strongest-03
 
 * **Quote:** 「视为你的主要移动」
 * **Effect:** the teleport is the turn's main move (no second one).
-* **Executable:** `c_ras_become_strongest_main`.
+* **Executable:** documented (「视为你的主要移动」); the single-roll
+  contract does not re-drive a second main move.
 
 ---
 
@@ -335,14 +345,16 @@ them specifies only the printed behaviour over that set.
 * **Rulings & OPEN:** OPEN-livehouse (「可盖房的」 / 「可购买的」);
   「本回合的[结算]向其他玩家支付」 is read as rent paid during this
   turn's settle windows.
-* **Executable:** `c_ras_guerrilla_special_gate`.
+* **Executable:** **untested** -- the [特] gate needs a full-turn setup
+  (pay ≥1000 in settle, no buildable livehouse, none buyable). Documented
+  only; see `guerrilla_counter_contract` for the [手][反击] half.
 
 #### C-RAS-guerrilla-02 ([特] body)
 
 * **Quote:** 「则可选择将此卡置于场上，指定你拥有的一个最贵的地契，使其对你视为live house格子」
 * **Effect:** the card goes to the user's field; the user's most
   expensive deed is designated as a livehouse **for that user**.
-* **Executable:** `c_ras_guerrilla_special_body`.
+* **Executable:** **untested** (same [特] gate setup).
 
 #### C-RAS-guerrilla-03 ([手][反击] window)
 
@@ -382,7 +394,7 @@ them specifies only the printed behaviour over that set.
 * **Quote:** 「将本次结算改为：将本格上的房屋转移到属于你的可建造格子上」
 * **Effect:** the settle is replaced by a house transfer off this tile
   onto the holder's buildable tiles (no rent is charged; no buy offer).
-* **Executable:** `c_ras_hey_kids_replace`.
+* **Executable:** asserted in `hey_kids_replace_contract`.
 
 #### C-RAS-hey-kids-03 (transfer shape)
 
@@ -392,9 +404,11 @@ them specifies only the printed behaviour over that set.
   constraint that the *smaller* side is 1, i.e. you cannot split a stack
   of 3 onto a stack of 3); every target gains at most 1 layer.
 * **Rulings & OPEN:** OPEN-hey-kids-split: the exact split grammar is
-  under-determined; the executable covers the documented cases
-  (1 house → empty target; 2 houses → two empty targets).
-* **Executable:** `c_ras_hey_kids_shape`.
+  under-determined; the executable covers the 1-house → empty-target
+  case (each target gains at most 1 layer). OPEN-hey-kids-sum: 「转移后
+  各格房屋造价总和」 may mean every owned tile or only the tiles the
+  transfer touched; the 1-house case cannot tell them apart.
+* **Executable:** asserted in `hey_kids_replace_contract` (1-house case).
 
 #### C-RAS-hey-kids-04 (money)
 
@@ -403,7 +417,7 @@ them specifies only the printed behaviour over that set.
   gained. If `C_src > C_gain` the holder gains `C_src - C_gain` in cash.
   Then the holder loses `(sum of house costs on the tiles after the
   transfer) − (houses gained × 500)`.
-* **Executable:** `c_ras_hey_kids_money`.
+* **Executable:** asserted in `hey_kids_replace_contract` (1-house case).
 
 ---
 
@@ -426,7 +440,7 @@ them specifies only the printed behaviour over that set.
 * **Quote:** 「每次[使用者]经过CiRCLE时为此卡放置一个[奇迹水晶]（初始0，上限3）」
 * **Trigger:** the user `[经过]` CiRCLE.
 * **Effect:** +1 crystal on the card, capped at 3.
-* **Executable:** `c_ras_storm_crystal`.
+* **Executable:** asserted in `storm_contract`.
 
 #### C-RAS-storm-03
 
@@ -439,7 +453,7 @@ them specifies only the printed behaviour over that set.
   OPEN-storm-price (「普通[结算]的价格」 = base rent, or rent at the
   tile's house level). The executable uses the house-level rent and the
   clockwise distance.
-* **Executable:** `c_ras_storm_charge`.
+* **Executable:** asserted in `storm_contract` (X = 2 only).
 
 ---
 
@@ -455,7 +469,8 @@ them specifies only the printed behaviour over that set.
 * **Condition:** the card is in the opening deck.
 * **Effect:** it is revealed and placed on the owner's field instead of
   being dealt.
-* **Executable:** `c_ras_lock_opening` (via `Table::with_opening_draw`).
+* **Executable:** **untested** as an opening-deal assertion (`place_raw`
+  covers the on-field half); `lock_redirect_contract` covers clause 03.
 
 #### C-RAS-lock-02
 
@@ -463,7 +478,8 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** game start.
 * **Effect:** the owner `[传送]`s to 东京外 (tile 23) and gains 3 layers
   of `[除外]`.
-* **Executable:** `c_ras_lock_start`.
+* **Executable:** **untested** (game-start teleport + 3 [除外]); needs a
+  `with_opening_draw` setup. `lock_redirect_contract` covers clause 03.
 
 #### C-RAS-lock-03
 
@@ -472,7 +488,7 @@ them specifies only the printed behaviour over that set.
 * **Condition:** --.
 * **Effect:** before `[结算]`, the destination becomes 旭汤澡堂 (tile 52);
   the card is then `[移除]`d (removed from the game).
-* **Executable:** `c_ras_lock_redirect`.
+* **Executable:** asserted in `lock_redirect_contract`.
 
 ---
 
@@ -491,7 +507,8 @@ them specifies only the printed behaviour over that set.
   scope (counteractions? own follow-ons?) is not specified. The
   executable only covers the positive case: the +Xd20 of clause 02 is
   not stripped by a plain play.
-* **Executable:** documented; partially `c_ras_crush_hand`.
+* **Executable:** **untested** (「不受任何其他效果影响」 scope is
+  OPEN-crush-immune); `crush_hand_contract` covers clause 02.
 
 #### C-RAS-crush-02 ([手])
 
@@ -502,7 +519,7 @@ them specifies only the printed behaviour over that set.
   the discard-pile size at the moment of the play (the played card is
   spent after, so it is not in the pile when `X` is read -- see
   Findings if the engine counts it).
-* **Executable:** `c_ras_crush_hand`.
+* **Executable:** asserted in `crush_hand_contract`.
 
 ---
 
@@ -517,20 +534,21 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** play from hand.
 * **Effect:** +2 PAREO marks on the user (token name `PAREO标记` /
   `PAREO`).
-* **Executable:** `c_ras_pareo_card_tokens`.
+* **Executable:** asserted in `pareo_card_contract`.
 
 #### C-RAS-pareo-02
 
 * **Quote:** 「视为你的房屋总数增加」
 * **Effect:** the play counts as a house-total increase for listeners
   (notably 鳰原令王那 skill （2）).
-* **Executable:** `c_ras_pareo_card_counts_as_house_gain`.
+* **Executable:** **untested** as a listener check (「视为你的房屋总数
+  增加」 for 鳰原令王那 (2)); `pareo_card_contract` covers clauses 01/03.
 
 #### C-RAS-pareo-03
 
 * **Quote:** 「可选择移除任意你拥有的格子上的一层房屋」
 * **Effect:** optional: remove 1 house layer from any owned tile.
-* **Executable:** `c_ras_pareo_card_remove`.
+* **Executable:** asserted in `pareo_card_contract` (declined branch).
 
 ---
 
@@ -545,14 +563,14 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** play from hand.
 * **Effect:** the card is placed on **another** player's field with 3
   crystals.
-* **Executable:** `c_ras_chuchu_place`.
+* **Executable:** asserted in `chuchu_card_contract`.
 
 #### C-RAS-chuchu-02
 
 * **Quote:** 「那名玩家的每个回合结束时失去一个」
 * **Trigger:** the holder's turn end.
 * **Effect:** −1 crystal on the card.
-* **Executable:** `c_ras_chuchu_decay`.
+* **Executable:** asserted in `chuchu_card_contract`.
 
 #### C-RAS-chuchu-03
 
@@ -560,7 +578,8 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** the holder buys a deed.
 * **Effect:** the user gains 100; the card moves to the next player in
   seat order who is not the user; crystals refill to 3.
-* **Executable:** `c_ras_chuchu_pass`.
+* **Executable:** **untested** (the buy-and-pass leg); `chuchu_card_contract`
+  covers clauses 01/02.
 
 #### C-RAS-chuchu-04
 
@@ -571,14 +590,14 @@ them specifies only the printed behaviour over that set.
 * **Rulings & OPEN:** OPEN-chuchu-which-gain: which 「获得资金」 the
   bonus rides is not named; the executable reads it as the clause-03
   100 itself growing by +100 per past trigger (100, 200, 300, ...).
-* **Executable:** `c_ras_chuchu_bonus`.
+* **Executable:** **untested** (OPEN-chuchu-which-gain).
 
 #### C-RAS-chuchu-05
 
 * **Quote:** 「此卡奇迹水晶为0时，放入[使用者]的弃牌堆并使[使用者]抽一张卡」
 * **Trigger:** the crystal count hits 0 (any cause).
 * **Effect:** the card goes to the **user's** discard; the user draws 1.
-* **Executable:** `c_ras_chuchu_zero`.
+* **Executable:** **untested** (crystal-hits-zero leg).
 
 ---
 
@@ -593,14 +612,15 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** the holder uses a [火罐] to make a roll (e.g. 和奏瑞依
   skill （2）).
 * **Effect:** the [反击] window opens; playing the card keeps a face.
-* **Executable:** `c_ras_layer_window`.
+* **Executable:** **untested** as a [反击] ring-up (`layer_press_contract`
+  covers the press).
 
 #### C-RAS-layer-02
 
 * **Quote:** 「保留（写下）未被选择的另一个骰点」
 * **Effect:** the face that was **not** chosen of the fire-pot roll is
   recorded.
-* **Executable:** `c_ras_layer_keep`.
+* **Executable:** **untested** as a keep-the-other-face write.
 
 #### C-RAS-layer-03
 
@@ -609,14 +629,13 @@ them specifies only the printed behaviour over that set.
 * **Condition:** the holder has ≥1 kept die and ≥1 [火罐].
 * **Effect:** spend 1 [火罐]; the turn's main-move roll is replaced by
   the kept face; that face is deleted.
-* **Executable:** `c_ras_layer_press`.
+* **Executable:** asserted in `layer_press_contract`.
 
 #### C-RAS-layer-04
 
 * **Quote:** 「可保留多个骰点」
 * **Effect:** more than one face may be banked; the press picks one.
-* **Executable:** documented (the pick prompt); `c_ras_layer_press`
-  covers the single-face case.
+* **Executable:** the pick prompt in `layer_press_contract` (single face).
 
 ---
 
@@ -632,7 +651,7 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** `[经过]` CiRCLE.
 * **Effect:** +1 [火罐], initial 1, cap 1 (so a pass at the cap is a
   no-op).
-* **Executable:** `c_ras_rio_fire`.
+* **Executable:** asserted in `rio_fire_contract`.
 
 #### C-RAS-rio-02
 
@@ -640,7 +659,7 @@ them specifies only the printed behaviour over that set.
 * **Condition:** ≥1 [火罐].
 * **Effect:** optional: spend 1 [火罐], roll again, execute one of the
   two faces.
-* **Executable:** `c_ras_rio_reroll`.
+* **Executable:** asserted in `rio_reroll_contract`.
 
 ### 朝日六花 -- 瞄准目标
 
@@ -653,14 +672,14 @@ them specifies only the printed behaviour over that set.
   旭汤澡堂 nor already a Live House.
 * **Effect:** that deed gains 「"Live House" 的颜色」 (counts as a
   livehouse for this user -- OPEN-livehouse).
-* **Executable:** `c_ras_rokka_first`.
+* **Executable:** asserted in `rokka_first_deed_contract`.
 
 #### C-RAS-rokka-02
 
 * **Condition:** the user owns an initial Live House (tile 31, or a
   real group-6 deed -- OPEN).
 * **Effect:** their 旭汤澡堂 also gains the Live House colour.
-* **Executable:** `c_ras_rokka_asahyu`.
+* **Executable:** **untested** (the 旭汤澡堂 colour leg).
 
 ### 佐藤益木 -- 与燃烧的红色一起驰骋
 
@@ -671,13 +690,13 @@ them specifies only the printed behaviour over that set.
 
 * **Trigger:** `[经过]` 白雪学园 or 银河拉面馆.
 * **Effect:** +1 [火罐], initial 0, cap 2.
-* **Executable:** `c_ras_masking_fire`.
+* **Executable:** asserted in `masking_fire_contract`.
 
 #### C-RAS-masking-02
 
 * **Trigger:** before the move phase.
 * **Effect:** spend `X` [火罐]; this turn's main-move roll gains `Xd10`.
-* **Executable:** `c_ras_masking_dice`.
+* **Executable:** asserted in `masking_dice_contract`.
 
 ### 鳰原令王那 -- 梦幻可爱♪女仆
 
@@ -689,7 +708,7 @@ them specifies only the printed behaviour over that set.
 * **Trigger:** game start.
 * **Condition:** a Pastel✽Palettes character is in the match.
 * **Effect:** +1 face-up [P✽P粉丝].
-* **Executable:** `c_ras_pareo_skill_fan`.
+* **Executable:** **untested** (game-start [P✽P粉丝] leg).
 
 #### C-RAS-pareo-skill-02
 
@@ -700,7 +719,7 @@ them specifies only the printed behaviour over that set.
 * **Rulings & OPEN:** OPEN-分摊 (how the ¼ is split among payers).
   The executable checks the total received equals `¼ × max` when the
   engine presents a single figure, and otherwise records the OPEN.
-* **Executable:** `c_ras_pareo_skill_pay`.
+* **Executable:** **untested** (OPEN-分摊).
 
 ### 珠手知由 -- 天才制作人
 
@@ -711,13 +730,15 @@ them specifies only the printed behaviour over that set.
 
 * **Trigger:** any house build.
 * **Effect:** the build cost is half the printed house cost.
-* **Executable:** `c_ras_chuchu_skill_half`.
+* **Executable:** asserted in `chuchu_skill_half_contract` (and the turn-2
+  control `chuchu_skill_half_on_a_later_turn`).
 
 #### C-RAS-chuchu-skill-02
 
 * **Condition:** the user built a house last turn.
 * **Effect:** this turn's builds are free.
-* **Executable:** `c_ras_chuchu_skill_free`.
+* **Executable:** `chuchu_skill_free_contract` (**stays failing** -- see
+  Findings).
 
 ---
 
@@ -737,7 +758,7 @@ them specifies only the printed behaviour over that set.
 * **Effect:** only the **first** such effect this turn applies; later
   ones are ignored.
 * **Rulings & OPEN:** OPEN-band-opt-timing (when the opt-in is taken).
-* **Executable:** `c_ras_band_first_only`.
+* **Executable:** **untested** (OPEN-band-opt-timing).
 
 #### C-RAS-band-02
 
@@ -747,7 +768,7 @@ them specifies only the printed behaviour over that set.
 * **Effect:** the next `[主要移动]` **may** become a `[传送]` to a
   livehouse the player owns.
 * **Rulings & OPEN:** OPEN-触发结算 (undefined), OPEN-livehouse.
-* **Executable:** `c_ras_band_teleport_offer`.
+* **Executable:** asserted in `band_teleport_offer_contract`.
 
 ---
 
@@ -770,6 +791,8 @@ them specifies only the printed behaviour over that set.
 | OPEN-crush-immune | 「不受任何其他效果影响」 scope | C-RAS-crush-01 |
 | OPEN-chuchu-which-gain | which 「获得资金」 the +100 rides | C-RAS-chuchu-04 |
 | OPEN-band-opt-timing | when 「每回合可选择」 is taken | C-RAS-band-01 |
+| OPEN-change-world-equal | 「获得等量资金」 binds to the increment or the whole raised charge | C-RAS-change-the-world-04 |
+| OPEN-hey-kids-sum | 「转移后各格房屋造价总和」 scope | C-RAS-hey-kids-04 |
 
 ## Findings
 
