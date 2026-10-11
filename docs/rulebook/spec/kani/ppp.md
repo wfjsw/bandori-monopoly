@@ -63,9 +63,21 @@ and `proofs/skills_ppp.rs` (pure formulas, body iff, no-op, mutant).
 | `kasumi_skill_01_noop_own_settle` | SUCCESSFUL | ~1 s | |
 
 Body-invoking iff harnesses are CBMC-heavy (RULESET id scan) and queued
-behind the machine-wide 3-slot cap. Re-run:
-`CARGO_TARGET_DIR=/home/monopoly/kani-target-ppp bash tools/kani/run.sh --unit ppp`.
+behind the machine-wide 3-slot cap (150+ waiters from sibling units).
+Re-run: `CARGO_TARGET_DIR=/home/monopoly/kani-target-ppp bash tools/kani/run.sh --unit ppp`.
 Harnesses not run to a verdict are reported as **written, verdict pending**.
+
+Skills agent also confirmed SUCCESSFUL on: `megumi_skill_01a_tile_map`,
+`megumi_skill_01a_mutant_stardust_is_reachable`,
+`megumi_skill_01b_fire_amount_spec`, `megumi_skill_01b_mutant_double_gain_reachable`,
+`rimi_skill_02_abs_dist_spec`, `rimi_skill_02_wrong_class_is_reachable`,
+`rimi_skill_02_mutant_any_tile_reachable`, `saaya_skill_01b_cut_spec`,
+`saaya_skill_01a_noop_self_pay`, `saaya_skill_02_mutant_off_by_one_reachable`,
+`aoki_skill_01_noop`, `aoki_skill_03_spend_spec`, `band_skill_01a_corner_set`,
+`band_skill_01a_noop_other`, `band_skill_03a_co_own_spec`,
+`band_skill_03b_payee_set_spec`, `band_skill_03c_mutant_unlock_reachable`,
+`band_skill_04_no_build_spec`, `skills_ppp_frame_helpers`,
+`kasumi_skill_01_noop_own_settle`.
 
 ---
 
