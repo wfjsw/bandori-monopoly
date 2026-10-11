@@ -15,7 +15,7 @@
 //! `trigger::set_cancelled`. 「使用角色/团技能的[主]效果或使用手牌的[手]效果」
 //! is the `card` chain for a hand play and `skillUsed` for a skill press.
 
-use card_sdk::abi::{state_key, ChainKind, HookKind, MarkFilter};
+use card_sdk::abi::{prop, state_key, ChainKind, HookKind, MarkFilter};
 use card_sdk::ctx::{self, state, trigger};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -30,9 +30,20 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         // 「当你经过有[多惠兔子]的格子时」 -- a tile with rabbits is the hook's
         // applicability (residual guard; `pre::MINE` already states the actor).
         On::Hook(&[HookKind::Pass], card_sdk::pre::MINE, Some(on_pass_has_rabbits), on_pass),
+        // （2） 「在其他玩家使用角色/团技能的[主]效果或使用手牌的[手]效果时你可以使用4个
+        // [火罐]将其抵消」 -- a [反击] from the bound skill (always in play), so it
+        // must be offered from the field (`COUNTERACT_FROM_FIELD`, the same shape
+        // as 冰川纱夜（2）'s move-length counteraction).
         On::Counteract(&[ChainKind::Card, ChainKind::SkillUsed], "", Some(can_negate), negate),
     ],
 )
+    .props(&[
+        (prop::COUNTERACT_FROM_FIELD, 1),
+        // One cancel per activation: the skill stays in play, so without a
+        // group reservation the ring would re-offer it after the declaration
+        // (the seat keeps the floor until it passes).
+        (prop::COUNTERACT_GROUP, 1),
+    ])
     .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
 
 fn legacy_mine(player_id: i32) -> bool {
@@ -104,14 +115,10 @@ fn can_negate(player_id: i32) -> bool {
 }
 
 /// （2）「将其抵消，然后你获得500资金且被抵消的玩家获得2000资金」.
+///
+/// The [反击] window's play-vs-skip *is* the 「你可以使用」 choice; declaring
+/// the counteraction spends the 4 [火罐] and voids the effect. No extra confirm.
 fn negate(player_id: i32) -> card_sdk::Asked {
-    if !ctx::ask_yes(
-        player_id,
-        &Msg::new(key!("tae_police_title")),
-        &Msg::new(key!("tae_police_ask")),
-    )? {
-        return Ok(());
-    }
     if !ctx::spend_fire(player_id, 4, &Msg::new(key!("tae_police_spend")))? {
         return Ok(());
     }

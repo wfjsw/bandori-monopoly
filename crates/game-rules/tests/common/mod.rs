@@ -509,12 +509,24 @@ impl Table {
             .map(|k| k as i32)
     }
 
-    /// Is the open prompt a [反击] window offering `card`?
+    /// Does the open prompt's title or text mention `needle`? For `ask_yes`
+    /// prompts the question lives there -- the options are bare `ask.yes` /
+    /// `ask.no` and never name the asker.
+    pub fn prompt_refers(&self, needle: &str) -> bool {
+        self.prompt().is_some_and(|p| {
+            format!("{:?}", p.title).contains(needle) || format!("{:?}", p.text).contains(needle)
+        })
+    }
+
+    /// Is the open prompt a [反击] window offering `card`? Matches both the
+    /// hand-card label (`ask.counteract.play`) and the field-skill label
+    /// (`ask.counteract.skill`).
     pub fn counteract_offered(&self, card: &str) -> bool {
         self.prompt().is_some_and(|p| {
             p.title.key() == "ask.counteract.title"
                 && p.options.iter().any(|o| {
-                    o.key() == "ask.counteract.play" && format!("{o:?}").contains(card)
+                    (o.key() == "ask.counteract.play" || o.key() == "ask.counteract.skill")
+                        && format!("{o:?}").contains(card)
                 })
         })
     }
