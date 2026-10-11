@@ -303,9 +303,5 @@ per-tile [经过] is exercised via CiRCLE (G-MOVE-06) and the LOCK scenario.
 
 (Empty -- no genuine engine discrepancy was left red. G-MOVE-04's earlier
 red was a **test misreading** of LOCK's timing (「在触发结算前」), not an
-engine gap; the scenario now pins the determined part.)
-
-
-
-(Empty so far -- scenario failures that are genuine engine gaps land here
-when the suite is red.)
+engine gap; the scenario now pins the determined part. Scenario failures
+that are genuine engine gaps land here with the clause ID and one line.)
