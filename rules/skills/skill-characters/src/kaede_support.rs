@@ -40,33 +40,49 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
     "skill:八幡海铃:熟练的支援贝斯手",
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
-        On::Hook(&[HookKind::TurnStartBefore], "actor != owner", None, offer_support),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        // 状态1's offer: another player's turn start, not in 状态2, and the
+        // per-payer 「不会被该效果再次收款」 latch has expired. The latch key is
+        // dynamic (`skill.kaedeSupport.cooldown.<seat>`), so it is the residual.
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            "actor != owner && slot('skillState') != 2",
+            Some(offer_support_open),
+            offer_support,
+        ),
+        On::Hook(
+            &[HookKind::TurnStartBefore],
+            "actor == owner && slot('skillState') != 2",
+            None,
+            at_turn_start,
+        ),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
         On::Play("", Some(can_enter_two), enter_two),
         On::Hook(
             &[HookKind::PayMul],
             "slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0",
-            None,
+            Some(split_rent_applies),
             split_rent,
         ),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0, 3]);
 
+/// Residual guard for [`split_rent`]: the tile is one of 状态2's named deeds.
+/// The SPLIT marker is keyed on the tile (a dynamic state key), so it is not
+/// CEL (docs/GUARDS.md §4.2).
+fn split_rent_applies(player_id: i32) -> bool {
+    let t = ctx::trigger::tile();
+    state::get(player_id, &format!("{}{}", SPLIT, t)) >= 0
+}
+
 /// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
 /// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0` is
-/// the pre; the SPLIT marker is keyed on the tile (a dynamic state key) and
-/// stays.
+/// the pre and [`split_rent_applies`] the residual.
 fn split_rent(player_id: i32) -> card_sdk::Asked {
-    let t = ctx::trigger::tile();
-    if state::get(player_id, &format!("{}{}", SPLIT, t)) < 0 {
-        // the marker is keyed on the tile; a named deed is the one that was bought in
-        return Ok(());
-    }
     let amount = ctx::trigger::value();
     let half = amount / 2;
     if half <= 0 {
+        // `value > 0` admits 1, whose half is 0 -- nothing to split.
         return Ok(());
     }
     // 「均分」 -- the payer's outlay is unchanged; the owner's take is halved and
@@ -80,6 +96,15 @@ fn split_rent(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`offer_support`]: the per-payer cooldown latch has
+/// expired. The key is `skill.kaedeSupport.cooldown.<seat>` (dynamic), so it
+/// stays out of CEL.
+fn offer_support_open(player_id: i32) -> bool {
+    let other = ctx::trigger::player_id();
+    let key = format!("{}{}", COOLDOWN, other);
+    state::get(player_id, &key) <= ctx::turn_key()
+}
+
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
@@ -91,16 +116,10 @@ fn declare_cap(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 状态1's offer, on the *other* player's turn start.
+/// `actor != owner && slot('skillState') != 2` is the pre and
+/// [`offer_support_open`] the residual (the cooldown latch).
 fn offer_support(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return Ok(());
-    }
     let other = ctx::trigger::player_id();
-    // 「他们不会被该效果再次收款」 -- a latch the previous use set.
-    let key = format!("{}{}", COOLDOWN, other);
-    if state::get(player_id, &key) > ctx::turn_key() {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         other,
         &Msg::new(key!("kaede_support_title")),
@@ -170,10 +189,8 @@ fn offer_support(player_id: i32) -> card_sdk::Asked {
 
 /// 「每两个回合没有玩家发动该技能，你在回合开始时获得1火罐…若达到上限，可在你的
 /// 回合开始时选择进入状态2」.
+/// `actor == owner && slot('skillState') != 2` is the pre.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return Ok(());
-    }
     let n = state::get(player_id, REST) + 1;
     state::set(player_id, REST, n);
     if n >= 2 {

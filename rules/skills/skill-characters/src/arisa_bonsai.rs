@@ -23,7 +23,14 @@ pub const ARISA_BONSAI: CardDef = CardDef::new(
     &[
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Event], "actor != owner && tile.id == tile_named('流星堂')", None, on_event),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
+        // （2）: the turn's main move walked past 流星堂 and did not end there,
+        // and the pass latch is armed. The named tile must exist (residual).
+        On::Hook(
+            &[HookKind::TurnEnd],
+            "actor == owner && pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0",
+            Some(station_exists),
+            at_turn_end,
+        ),
         On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('流星堂')", None, on_pass),
     ],
 )
@@ -45,22 +52,16 @@ fn on_event(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`at_turn_end`]: 流星堂 is on the board.
+fn station_exists(_player_id: i32) -> bool {
+    station() >= 0
+}
+
 /// （2）「回合结束时如果本回合的[主要移动][经过]"流星堂"且[移动终点]不为
 /// "流星堂"时抽取一个视为在"流星堂"抽取的事件并获得一个[火罐]」.
+/// `pos(owner) != tile_named('流星堂') && slot('skill.arisa.passedStation') != 0`
+/// is the pre; [`station_exists`] the residual.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    let st = station();
-    if st < 0 {
-        return Ok(());
-    }
-    // 「[经过]"流星堂"」 and 「[移动终点]不为"流星堂"」 -- the turn's main move
-    // walked past the station and did not end there. `main_steps` is how far it
-    // went; the endpoint is where the player now stands.
-    if ctx::player_pos(player_id) == st {
-        return Ok(());
-    }
-    if ctx::slot(player_id, "skill.arisa.passedStation") == 0 {
-        return Ok(());
-    }
     ctx::set_slot(player_id, "skill.arisa.passedStation", 0);
     // 「抽取一个视为在"流星堂"抽取的事件」 -- the draw is tagged as the
     // station's, which is what the `event` hook above reads.

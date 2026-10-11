@@ -37,10 +37,19 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         On::Hook(
             &[HookKind::TurnEnd],
             "actor == owner && slot('skillState') != 2",
-            None,
+            Some(fire_at_cap),
             at_turn_end,
         ),
-        On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end_exit),
+        // 「你退出状态2后，被你翻面的卡自动翻回」 -- only while out of 状态2
+        // with a non-empty flip list. Both are player-state reads (`skillState`
+        // and the `skill.mumei.flipped` count), so the entry does not activate
+        // (and so does not flash) when there is nothing to sweep.
+        On::Hook(
+            &[HookKind::TurnEnd],
+            "actor == owner && slot('skillState') != 2 && slot('skill.mumei.flipped') > 0",
+            None,
+            at_turn_end_exit,
+        ),
     ],
 )
     .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0]);
@@ -76,13 +85,17 @@ fn on_pay_add(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`at_turn_end`]: the pot is at its cap. `state::max` is
+/// not in the CEL schema (docs/GUARDS.md §4.2), so the compare stays here.
+fn fire_at_cap(player_id: i32) -> bool {
+    state::get(player_id, state_key::FIRE) >= state::max(player_id, state_key::FIRE)
+}
+
 /// The turn-end tick also catches a pot that filled outside a payment.
-/// `slot('skillState') != 2` is the pre; the cap compare needs `state::max`
-/// and stays.
+/// `slot('skillState') != 2` is the pre and [`fire_at_cap`] the residual -- the
+/// body is the transition itself.
 fn at_turn_end(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::FIRE) >= state::max(player_id, state_key::FIRE) {
-        enter_two(player_id);
-    }
+    enter_two(player_id);
     Ok(())
 }
 
@@ -109,14 +122,9 @@ fn enter_two(player_id: i32) {
 
 /// 「你退出状态2后，被你翻面的卡自动翻回」 -- whatever clears `skillState`
 /// (the band skill's fire-pot drain) leaves 状态2 at a turn end, so the sweep
-/// runs here and catches it.
+/// runs here and catches it. `slot('skillState') != 2 && slot('skill.mumei.flipped') > 0`
+/// is the pre.
 fn at_turn_end_exit(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, state_key::SKILL_STATE) == 2 {
-        return Ok(());
-    }
-    if state::get(player_id, FLIPPED) <= 0 {
-        return Ok(());
-    }
     for (uid, _c) in ctx::field_instances(player_id) {
         if ctx::is_immune_at(uid) {
             ctx::set_face_down_at(uid, false);

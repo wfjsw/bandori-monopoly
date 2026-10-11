@@ -44,7 +44,16 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             on_plan,
         ),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::Settle], "", Some(any), on_settle),
+        // 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- the
+        // settle that marks the latch is the owner's own settle onto one of the
+        // three named tiles. Both facts are CEL (`actor == owner` and the three
+        // `tile_named` ids), so a reject runs no body (and so posts no flash).
+        On::Hook(
+            &[HookKind::Settle],
+            "actor == owner && (tile.id == tile_named('小豆岛') || tile.id == tile_named('武道馆') || tile.id == tile_named('旧古河庭园'))",
+            None,
+            on_settle,
+        ),
         // 状态2 「主动移动经过任何玩家」 -- 行动阶段 12 [经过]
         // (`SETTLE-STAGES.md` §4 M4): the step onto a tile a player stands on,
         // not the end-tile [重叠]. The other player is read off the tile.
@@ -55,7 +64,14 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
             on_pass_player,
         ),
         // 状态2 「每次成功收取后可选择在[触发结算]前额外移动1d6」.
-        On::Hook(&[HookKind::SettleBefore], "slot('skillState') == 2", None, before_settle),
+        // 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」 -- the
+        // 4-shot cap is `slot('skill.uikaImprisoned.bonus') < 4`.
+        On::Hook(
+            &[HookKind::SettleBefore],
+            "slot('skillState') == 2 && slot('skill.uikaImprisoned.bonus') < 4",
+            None,
+            before_settle,
+        ),
     ],
 )
     .legacy(&[(0, legacy_mine), (2, legacy_mine)]).silent(&[2, 3]);
@@ -67,10 +83,6 @@ fn legacy_mine(player_id: i32) -> bool {
 /// G4: kept as a callable alias for in-body uses of the old guard.
 fn mine(player_id: i32) -> bool {
     legacy_mine(player_id)
-}
-
-fn any(_player_id: i32) -> bool {
-    true
 }
 
 /// 状态1's entry offer, and 状态2's cap.
@@ -116,16 +128,12 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// 「若你自从上一次经过CiRCLE后未在任何[回忆地块]…触发结算」 -- settling on one
-/// sets the latch.
+/// sets the latch. `actor == owner` and the three named tiles are the condition.
 fn on_settle(player_id: i32) -> card_sdk::Asked {
-    if !mine(player_id) {
-        return Ok(());
-    }
-    let t = ctx::trigger::tile();
-    if t >= 0 && MEMORY.iter().any(|&n| t == ctx::tile_named(n)) {
-        state::set(player_id, DIRTY, 1);
-        state::set(player_id, MEMO_DIRTY, 1);
-    }
+    debug_assert!(mine(player_id));
+    debug_assert!(MEMORY.iter().any(|&n| ctx::trigger::tile() == ctx::tile_named(n)));
+    state::set(player_id, DIRTY, 1);
+    state::set(player_id, MEMO_DIRTY, 1);
     Ok(())
 }
 
@@ -156,9 +164,8 @@ fn on_pass_player(player_id: i32) -> card_sdk::Asked {
 
 /// 状态2: 「每次成功收取后可选择在[触发结算]前额外移动1d6（最多4次）」.
 fn before_settle(player_id: i32) -> card_sdk::Asked {
-    if state::get(player_id, BONUS) >= 4 {
-        return Ok(());
-    }
+    // `slot('skill.uikaImprisoned.bonus') < 4` is the pre.
+    debug_assert!(state::get(player_id, BONUS) < 4);
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("uika_imprisoned_title")),

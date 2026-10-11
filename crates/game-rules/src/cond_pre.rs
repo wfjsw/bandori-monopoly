@@ -1507,6 +1507,14 @@ pub const SLOT_NAMES: &[&str] = &[
     "detour_next_roll",
     // `sayo_thorns` / `sayo_play` once-per-turn lock (`state::set(player_id, USED, turn_key)`).
     "skill.sayoThorns.used",
+    // `mumei_streamer` flip count (`state::set(player_id, FLIPPED, n)`).
+    "skill.mumei.flipped",
+    // `hina_lottery` borrowed-skill index (`state::set(player_id, BORROWED, k)`).
+    "skill.hinaLottery.borrowed",
+    // `arisa_bonsai` passed-station latch (`ctx::set_slot(player_id, …, 1)`).
+    "skill.arisa.passedStation",
+    // `uika_imprisoned` 1d6 bonus count (`state::set(player_id, BONUS, n)`).
+    "skill.uikaImprisoned.bonus",
 ];
 
 /// Fill the per-candidate slot / token tables a condition may read

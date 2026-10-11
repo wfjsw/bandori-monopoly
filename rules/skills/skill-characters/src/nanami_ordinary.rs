@@ -19,7 +19,7 @@
 //! invoked skill's cost, not a rule -- the sheet's `思路` column is play advice
 //! and is not implemented.
 
-use card_sdk::abi::{state_key, HookKind};
+use card_sdk::abi::HookKind;
 use card_sdk::ctx::{self, state};
 use card_sdk::{key, CardDef, Msg, On};
 
@@ -48,7 +48,17 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         On::Play("", Some(can_use), use_skill),
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
-        On::Hook(&[HookKind::SkillUsed], "", Some(any), on_skill),
+        // （2）'s applicability is the condition + residual: another player's
+        // skill use, a skill id on the trigger, a free pot, and (at 3+ alive)
+        // no mark of that kind yet. The CD is a dynamic per-skill state key
+        // (`skill.nanamiOrdinary.cd:<skill id>`), so it stays the residual
+        // (docs/GUARDS.md §4.2). A reject runs no body and so posts no flash.
+        On::Hook(
+            &[HookKind::SkillUsed],
+            "actor != owner && trigger_card != 0 && fire(owner) >= 1",
+            Some(on_skill_applies),
+            on_skill,
+        ),
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
@@ -58,7 +68,28 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
-fn any(_player_id: i32) -> bool {
+/// Residual guard for [`on_skill`]: the CD and the 「每种角色标记上限1」 cap.
+/// Pure reads -- the same instant as the body (`run_hook` runs both on one
+/// store). `actor != owner && trigger_card != 0 && fire(owner) >= 1` is the
+/// condition.
+fn on_skill_applies(player_id: i32) -> bool {
+    let Some(id) = ctx::trigger::cards().into_iter().next() else {
+        return false;
+    };
+    if id.is_empty() {
+        return false;
+    }
+    // 「该技能对被动技能存在3回合CD」 -- a per-kind cooldown.
+    if state::get(player_id, &cd_key(&id)) > 0 {
+        return false;
+    }
+    // 「当场上存活玩家数量大于等于3时：每种角色标记上限1」
+    let alive = (0..ctx::player_count())
+        .filter(|&p| !ctx::player_out(p))
+        .count() as i32;
+    if alive >= 3 && ctx::tok(player_id, &mark_name(&id)) >= 1 {
+        return false;
+    }
     true
 }
 
@@ -75,32 +106,18 @@ fn on_pass(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「当有玩家在使用角色技能时，你可以支付一个火罐得到一个该角色的标记」.
+/// `actor != owner && trigger_card != 0 && fire(owner) >= 1` plus
+/// [`on_skill_applies`] decide applicability; the body is the offer.
 fn on_skill(player_id: i32) -> card_sdk::Asked {
-    let src = ctx::trigger::player_id();
-    if src == player_id {
-        return Ok(());
-    }
     let Some(id) = ctx::trigger::cards().into_iter().next() else {
+        debug_assert!(false, "on_skill_applies admitted but the trigger has no skill id");
         return Ok(());
     };
     if id.is_empty() {
+        debug_assert!(false, "on_skill_applies admitted but the skill id is empty");
         return Ok(());
     }
     let cd = cd_key(&id);
-    // 「该技能对被动技能存在3回合CD」 -- a per-kind cooldown.
-    if state::get(player_id, &cd) > 0 {
-        return Ok(());
-    }
-    if state::get(player_id, state_key::FIRE) < 1 {
-        return Ok(());
-    }
-    // 「当场上存活玩家数量大于等于3时：每种角色标记上限1」
-    let alive = (0..ctx::player_count())
-        .filter(|&p| !ctx::player_out(p))
-        .count() as i32;
-    if alive >= 3 && ctx::tok(player_id, &mark_name(&id)) >= 1 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("nanami_ordinary_title")),

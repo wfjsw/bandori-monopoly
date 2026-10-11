@@ -27,16 +27,19 @@ fn color_for(player_id: i32) -> String {
     format!("{}{}", prop::COLOR_FOR_PREFIX, player_id)
 }
 
-/// The tile the clause names out.
-fn is_bathhouse(t: i32) -> bool {
-    t >= 0 && t == ctx::tile_named("旭汤澡堂")
-}
-
 pub const ASAHI_AIM: CardDef = CardDef::new(
     "skill:朝日六花:瞄准目标",
     &[
-        On::Hook(&[HookKind::Bought], "actor == owner && slot('skill.asahiAim.first') == 0", None, on_bought),
-        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, None, at_turn_start),
+        // （1）「非"旭汤澡堂"或任意"Live House"」 -- the tile is a real buy,
+        // not the bathhouse. `is_live_house_for` is the per-player colour check
+        // (not CEL's tile-kind `is_live_house`), so it is the residual.
+        On::Hook(
+            &[HookKind::Bought],
+            "actor == owner && slot('skill.asahiAim.first') == 0 && tile.id >= 0 && tile.id != tile_named('旭汤澡堂')",
+            Some(not_live_house_for_me),
+            on_bought,
+        ),
+        On::Hook(&[HookKind::TurnStartBefore], card_sdk::pre::MINE, Some(owns_bath_with_lh), at_turn_start),
     ],
 )
     .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
@@ -45,12 +48,29 @@ fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
 }
 
+/// Residual guard for [`on_bought`]: the tile is not already a Live House for
+/// this player (`ctx::is_live_house_for` -- per-player colour, not CEL's
+/// tile-kind `is_live_house`).
+fn not_live_house_for_me(player_id: i32) -> bool {
+    !ctx::is_live_house_for(player_id, ctx::trigger::tile())
+}
+
+/// Residual guard for [`at_turn_start`]: the owner holds 旭汤澡堂 and still has
+/// an initial Live House. Both are derived scans (named-tile owner + owned-tile
+/// group), outside the CEL schema (docs/GUARDS.md §4.2).
+fn owns_bath_with_lh(player_id: i32) -> bool {
+    let bath = ctx::tile_named("旭汤澡堂");
+    if bath < 0 || ctx::tile_owner(bath) != player_id {
+        return false;
+    }
+    ctx::owned_tiles(player_id)
+        .into_iter()
+        .any(|t| is_initial_livehouse(t))
+}
+
 /// （1）「你购买的第一个非"旭汤澡堂"或任意"Live House"格子获得"Live House"的颜色」.
 fn on_bought(player_id: i32) -> card_sdk::Asked {
     let t = ctx::trigger::tile();
-    if t < 0 || is_bathhouse(t) || ctx::is_live_house_for(player_id, t) {
-        return Ok(());
-    }
     state::set(player_id, DONE, 1);
     // 「获得"Live House"的颜色」 -- the `colorFor:<p>` tile prop on the tile's
     // board instance: group 6 for this player.
@@ -63,18 +83,9 @@ fn on_bought(player_id: i32) -> card_sdk::Asked {
 }
 
 /// （2）「在你有初始"Live House"格子时你拥有的"旭汤澡堂"格子获得"Live House"的颜色」
-/// -- restated each turn while the condition holds.
+/// -- restated each turn while [`owns_bath_with_lh`] holds.
 fn at_turn_start(player_id: i32) -> card_sdk::Asked {
     let bath = ctx::tile_named("旭汤澡堂");
-    if bath < 0 || ctx::tile_owner(bath) != player_id {
-        return Ok(());
-    }
-    if !ctx::owned_tiles(player_id)
-        .into_iter()
-        .any(|t| is_initial_livehouse(t))
-    {
-        return Ok(());
-    }
     ctx::set_tile_prop(bath, &color_for(player_id), 6);
     Ok(())
 }
