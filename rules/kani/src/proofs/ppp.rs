@@ -73,7 +73,7 @@ pub fn popipa_01_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_POPIPA, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Popipa"), player));
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -111,7 +111,7 @@ pub fn popipa_01_mutant_money_off_by_100() {
     let w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_POPIPA, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Popipa"), player));
     let (logbuf, log_n) = log_slice();
     assert!(
         spec::ppp::popipa_effects_ok_mutant(effects_of(&logbuf, log_n), player),
@@ -142,7 +142,7 @@ pub fn pipopa_01_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_PIPOPA, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:[衍生]Pipopa"), player));
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -167,7 +167,7 @@ pub fn pipopa_01_mutant_money_2000() {
     let w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_PIPOPA, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:[衍生]Pipopa"), player));
     let (logbuf, log_n) = log_slice();
     assert!(
         spec::ppp::pipopa_effects_ok_mutant(effects_of(&logbuf, log_n), player, POPIPAPAPIPOPA_SLOT),
@@ -211,7 +211,7 @@ pub fn signpost_02_lose_1000_at_end_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook("PPP:向着未来的路标", "AtEnd", "", player));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("PPP:向着未来的路标"), "AtEnd", "", player));
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -247,7 +247,7 @@ pub fn signpost_02_mutant_lose_500() {
     let pre_money = w.money[player as usize];
     kani::assume(pre_money >= 1000);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("PPP:向着未来的路标", "AtEnd", "", player));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("PPP:向着未来的路标"), "AtEnd", "", player));
     let (logbuf, log_n) = log_slice();
     assert!(
         spec::ppp::signpost_02_effects_ok_mutant(effects_of(&logbuf, log_n), player),
@@ -281,7 +281,7 @@ pub fn bang_dream_01_crystal_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_BANG_DREAM, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
 
     let post_crystals = world::with_world(|ww| ww.band_crystals[player as usize]);
     assert!(
@@ -304,7 +304,7 @@ pub fn bang_dream_01_mutant_plus_2() {
     let player = w.trig_player;
     let pre_crystals = w.band_crystals[player as usize];
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_BANG_DREAM, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
     let post_crystals = world::with_world(|ww| ww.band_crystals[player as usize]);
     assert!(
         post_crystals == pre_crystals + 2,
@@ -354,7 +354,7 @@ pub fn bang_dream_02_teleport_owned_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_BANG_DREAM, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -397,7 +397,7 @@ pub fn bang_dream_02_mutant_extra_money() {
     let mut w = w;
     w.tiles[t as usize].owner = player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_BANG_DREAM, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:Bang Dream!"), player));
     let (logbuf, log_n) = log_slice();
     assert!(
         spec::ppp::bang_dream_02_log_ok_mutant(effects_of(&logbuf, log_n), player),
@@ -470,11 +470,7 @@ pub fn popipapapipopa_c1_crystal_on_pass_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook_only(
-        spec::ppp::CARD_POPIPAPAPIPOPA,
-        "PassTile",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:[衍生]Popipapapipopa"), "PassTile", player));
 
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
     let (logbuf, log_n) = log_slice();
@@ -500,11 +496,7 @@ pub fn popipapapipopa_c1_mutant_plus_2() {
     let key = crate::intern::intern(CRYSTALS_KEY);
     let pre_crystals = w.key_get(player, key);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        spec::ppp::CARD_POPIPAPAPIPOPA,
-        "PassTile",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:[衍生]Popipapapipopa"), "PassTile", player));
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
     assert!(
         post_crystals == pre_crystals + 2,
@@ -568,11 +560,7 @@ pub fn popipapapipopa_c2_pay_reduce_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::hook_only(
-        spec::ppp::CARD_POPIPAPAPIPOPA,
-        "PayChoose",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:[衍生]Popipapapipopa"), "PayChoose", player));
 
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
     let post_amount = world::with_world(|ww| ww.pay_amount);
@@ -631,11 +619,7 @@ pub fn popipapapipopa_c2_mutant_floor_1() {
     };
     w.key_set(player, key, pre_crystals);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        spec::ppp::CARD_POPIPAPAPIPOPA,
-        "PayChoose",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:[衍生]Popipapapipopa"), "PayChoose", player));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let post_crystals = world::with_world(|ww| ww.key_get(player, key));
     let k = pre_crystals - post_crystals;
@@ -698,11 +682,7 @@ pub fn auction_off_01_blocked_noop() {
     };
 
     // Host `trig_card_is` is a hard 0, so the Drawn body must early-return.
-    invoke::unwrap_done(invoke::hook_only(
-        spec::ppp::CARD_AUCTION_OFF,
-        "Drawn",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:[衍生]拍卖撤下来了"), "Drawn", player));
 
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
@@ -744,7 +724,7 @@ pub fn star_beat_01_layer_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_STAR_BEAT, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:STAR BEAT!"), player));
 
     let post_layers = world::with_world(|ww| ww.key_get(player, key));
     assert!(
@@ -767,7 +747,7 @@ pub fn star_beat_01_mutant_plus_2() {
     let key = crate::intern::intern(spec::ppp::STAR_BEAT_LAYERS_KEY);
     let pre_layers = w.key_get(player, key);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_STAR_BEAT, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:STAR BEAT!"), player));
     let post_layers = world::with_world(|ww| ww.key_get(player, key));
     assert!(
         post_layers == spec::ppp::star_beat_01_layers_after_mutant(pre_layers),
@@ -798,7 +778,7 @@ pub fn wait_aoki_01_place_on_field_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_WAIT_AOKI, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:（有咲）等等等一下"), player));
 
     let (logbuf, log_n) = log_slice();
     let dest = world::with_world(|ww| ww.dest);
@@ -821,7 +801,7 @@ pub fn wait_aoki_01_mutant_banished() {
     let w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_WAIT_AOKI, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:（有咲）等等等一下"), player));
     let (logbuf, log_n) = log_slice();
     assert!(
         spec::ppp::wait_aoki_01_effects_ok_mutant(effects_of(&logbuf, log_n), player, PPP_SLOT),
@@ -855,7 +835,7 @@ pub fn random_star_01_place_and_deck_bottom_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_RANDOM_STAR, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:仓库里的Random Star"), player));
 
     let (logbuf, log_n) = log_slice();
     let dest = world::with_world(|ww| ww.dest);
@@ -893,7 +873,7 @@ pub fn random_star_01_mutant_two_auctions() {
     let mut w = w;
     w.deck_n = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_RANDOM_STAR, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:仓库里的Random Star"), player));
     let deck_n = world::with_world(|ww| ww.deck_n as i32);
     let last = world::with_world(|ww| {
         if ww.deck_n == 0 {
@@ -931,7 +911,7 @@ pub fn star_beat_03_stickers_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_STAR_BEAT, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:STAR BEAT!"), player));
 
     let post_tok = world::with_world(|ww| ww.key_get(player, tok));
     let (logbuf, log_n) = log_slice();
@@ -967,7 +947,7 @@ pub fn star_beat_03_mutant_one_sticker() {
     let tok = crate::intern::intern(spec::ppp::TOK_STAR_STICKER);
     let pre_tok = w.key_get(player, tok);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_STAR_BEAT, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:STAR BEAT!"), player));
     let post_tok = world::with_world(|ww| ww.key_get(player, tok));
     // Force the teleport branch so the book wants +2; the mutant wants +1.
     // With symbolic picks this is a reachable-disagreement: whenever option 1
@@ -1003,11 +983,7 @@ pub fn returns_c4_blocked_residual_noop() {
 
     // CardPlayed hook with the residual gate. Host `trig_cards` is 0, so the
     // residual `on_played_is_general` is false and the body must not run.
-    invoke::unwrap_done(invoke::hook_only(
-        spec::ppp::CARD_RETURNS,
-        "CardPlayed",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PPP:Returns"), "CardPlayed", player));
 
     let post_tok = world::with_world(|ww| ww.key_get(player, tok));
     let (logbuf, log_n) = log_slice();
@@ -1064,7 +1040,7 @@ pub fn name_sky_01_blocked_tile_named() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_NAME_SKY, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:（沙绫）总有一天要给这片天空命名"), player));
     let tile = world::with_world(|ww| {
         if ww.field_n == 0 {
             -999
@@ -1087,7 +1063,7 @@ pub fn name_sky_01_mutant_hill() {
     let w = symbolic_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_NAME_SKY, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:（沙绫）总有一天要给这片天空命名"), player));
     let tile = world::with_world(|ww| {
         if ww.field_n == 0 {
             -999
@@ -1110,7 +1086,7 @@ pub fn everyone_01_blocked_tile_named() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play(spec::ppp::CARD_EVERYONE, player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PPP:（香澄）大家我都喜欢哦"), player));
     let tile = world::with_world(|ww| {
         if ww.field_n == 0 {
             -999

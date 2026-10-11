@@ -19,12 +19,12 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const CARD_MOCA_HALF: &str = "AG:（摩卡）0.5倍速";
-const CARD_SAME_SKY: &str = "AG:朝同一片天空迈进";
-const CARD_COLORS: &str = "AG:无论是何种颜色的夕阳";
-const CARD_SOUL: &str = "AG:绯红之魂";
-const CARD_GLORY: &str = "AG:刻入天穹傲岸的烈光";
-const CARD_ONE_OF_US: &str = "AG:ONE OF US";
+const CARD_MOCA_HALF: usize = crate::card_id!("AG:（摩卡）0.5倍速");
+const CARD_SAME_SKY: usize = crate::card_id!("AG:朝同一片天空迈进");
+const CARD_COLORS: usize = crate::card_id!("AG:无论是何种颜色的夕阳");
+const CARD_SOUL: usize = crate::card_id!("AG:绯红之魂");
+const CARD_GLORY: usize = crate::card_id!("AG:刻入天穹傲岸的烈光");
+const CARD_ONE_OF_US: usize = crate::card_id!("AG:ONE OF US");
 
 fn crystal_name() -> intern::NameId {
     intern::intern(card_sdk::abi::counter::CRYSTALS)
@@ -38,8 +38,8 @@ fn crystals_of(w: &World, player: i32) -> i32 {
     w.key_get(player, crystal_name())
 }
 
-fn slot_of(id: &str) -> u8 {
-    world::card_slot_of(id)
+fn slot_of(id: usize) -> u8 {
+    world::card_slot_of(crate::generated::IDS[id])
 }
 
 // ===========================================================================
@@ -69,7 +69,7 @@ pub fn half_speed_01_place_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play(CARD_MOCA_HALF, player));
+    invoke::unwrap_done(invoke::play_idx(CARD_MOCA_HALF, player));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -97,7 +97,7 @@ pub fn half_speed_01_mutant_is_detected() {
     let w = half_speed_play_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(CARD_MOCA_HALF, player));
+    invoke::unwrap_done(invoke::play_idx(CARD_MOCA_HALF, player));
     let post_crystals = world::with_world(|ww| crystals_of(ww, player));
     assert!(
         !spec::ag::half_speed_01_post_ok_mutant(post_crystals),
@@ -136,7 +136,7 @@ pub fn half_speed_02_decay_iff() {
     // Entry 1 is the TurnEnd hook (`card.placed` pre). Residual is none; the
     // host pre `"card.placed"` is admitted by construction of the entry (the
     // engine only calls it on a placed card). We invoke the body directly.
-    invoke::unwrap_done(invoke::entry(CARD_MOCA_HALF, 1, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_MOCA_HALF, 1, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -162,7 +162,7 @@ pub fn half_speed_02_mutant_is_detected() {
     let player = w.trig_player;
     let key = crystal_key();
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_MOCA_HALF, 1, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_MOCA_HALF, 1, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -193,7 +193,7 @@ fn half_speed_pay_world(amount: i32) -> World {
     // Card is on the field (PayMul pre: `card.placed && value > 0`).
     w.field_n = 1;
     w.field[0].player = player;
-    w.field[0].card = intern::intern(CARD_MOCA_HALF).0;
+    w.field[0].card = intern::intern(crate::generated::IDS[CARD_MOCA_HALF]).0;
     w
 }
 
@@ -210,7 +210,7 @@ pub fn half_speed_04_pay_mul_iff() {
     let pre_amount = amount;
     world::reset_world(w);
     // Entry 3 is PayMul (`actor == owner && card.placed && value > 0`).
-    invoke::unwrap_done(invoke::entry(CARD_MOCA_HALF, 3, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_MOCA_HALF, 3, player));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -246,7 +246,7 @@ pub fn half_speed_04_mutant_is_detected() {
     let w = half_speed_pay_world(amount);
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_MOCA_HALF, 3, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_MOCA_HALF, 3, player));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     assert!(
         post_amount != spec::ag::half_speed_04_amount_mutant(amount),
@@ -273,7 +273,7 @@ fn sky_world(hand_bits: [bool; 8], have_sky: bool) -> World {
         if (slot as usize) < 8 {
             w.hand[slot as usize] = true;
         }
-        world::pile_push(&mut w.hand_pile, &mut w.hand_n, intern::intern(CARD_SAME_SKY).0);
+        world::pile_push(&mut w.hand_pile, &mut w.hand_n, intern::intern(crate::generated::IDS[CARD_SAME_SKY]).0);
     }
     // Deck has room for the optional draw.
     w.deck_n = 4;
@@ -304,7 +304,7 @@ pub fn sky_02_03_play_iff() {
     // After take, hand_n drops by 1 (the sky copy).
     let hand_after_take = other_bits; // hand_n was 1 (sky only) → 0 after take
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_SAME_SKY, 0, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_SAME_SKY, 0, player));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -343,7 +343,7 @@ pub fn sky_02_mutant_is_detected() {
     let player = w.trig_player;
     let n = 3;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_SAME_SKY, 0, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_SAME_SKY, 0, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -366,7 +366,7 @@ pub fn sky_03_draws_one() {
     let w = sky_world(bits, true);
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_SAME_SKY, 0, player));
+    invoke::unwrap_done(invoke::entry_idx(CARD_SAME_SKY, 0, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -410,7 +410,7 @@ pub fn colors_01_02_03_04_play_iff() {
     let w = colors_world();
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(CARD_COLORS, player));
+    invoke::unwrap_done(invoke::play_idx(CARD_COLORS, player));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -502,7 +502,7 @@ pub fn colors_06_pick_to_hand() {
         // the answers queue (used when branch 5 fires).
         w.answers[0] = pick as i32;
         world::reset_world(w);
-        invoke::unwrap_done(invoke::play(CARD_COLORS, player));
+        invoke::unwrap_done(invoke::play_idx(CARD_COLORS, player));
         let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
         let log_n = world::with_world(|ww| ww.log_n);
         let effects = &logbuf[..log_n];
@@ -568,7 +568,7 @@ pub fn soul_01_place_and_load_iff() {
     let card = slot_of(CARD_SOUL);
     let pre_money = money;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(CARD_SOUL, player));
+    invoke::unwrap_done(invoke::play_idx(CARD_SOUL, player));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -606,7 +606,7 @@ pub fn soul_01_mutant_is_detected() {
     let w = soul_play_world(5000);
     let player = w.trig_player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(CARD_SOUL, player));
+    invoke::unwrap_done(invoke::play_idx(CARD_SOUL, player));
     let post_crystals = world::with_world(|ww| crystals_of(ww, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -635,7 +635,7 @@ fn soul_pay_world(amount: i32, crystals: i32, payee: i32) -> World {
     w.trig_target = payee;
     w.field_n = 1;
     w.field[0].player = owner;
-    w.field[0].card = intern::intern(CARD_SOUL).0;
+    w.field[0].card = intern::intern(crate::generated::IDS[CARD_SOUL]).0;
     w.key_set(owner, crystal_name(), crystals);
     w.money = [10_000; MAX_PLAYERS];
     // Yes/no prompt: pre-seat opt_n so the host's ask explores both answers.
@@ -661,7 +661,7 @@ pub fn soul_02_pay_choose_yes_iff() {
     // symbolic_answers is on: cover both, assert only on yes.
     world::reset_world(w);
     // Entry 1 is PayChoose (residual `is_placed && actor == owner`).
-    invoke::unwrap_done(invoke::entry(CARD_SOUL, 1, owner));
+    invoke::unwrap_done(invoke::entry_idx(CARD_SOUL, 1, owner));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     let post_crystals = world::with_world(|ww| crystals_of(ww, owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -698,7 +698,7 @@ pub fn soul_02_mutant_is_detected() {
     w.symbolic_answers = false;
     w.answers[0] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_SOUL, 1, owner));
+    invoke::unwrap_done(invoke::entry_idx(CARD_SOUL, 1, owner));
     let post_amount = world::with_world(|ww| ww.pay_amount);
     assert!(
         post_amount != spec::ag::soul_02_amount_mutant(amount),
@@ -724,7 +724,7 @@ pub fn soul_03_skill_used_iff() {
         w.trig_player = owner;
         w.field_n = 1;
         w.field[0].player = owner;
-        w.field[0].card = intern::intern(CARD_SOUL).0;
+        w.field[0].card = intern::intern(crate::generated::IDS[CARD_SOUL]).0;
         w.key_set(owner, crystal_name(), crystals);
         w
     };
@@ -732,7 +732,7 @@ pub fn soul_03_skill_used_iff() {
     let key = crystal_key();
     world::reset_world(w);
     // Entry 2 is SkillUsed (residual: placed && actor==owner && crystals>0).
-    invoke::unwrap_done(invoke::entry(CARD_SOUL, 2, owner));
+    invoke::unwrap_done(invoke::entry_idx(CARD_SOUL, 2, owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -789,7 +789,7 @@ pub fn glory_02_03_swap_iff() {
     // Residual `can_counteract` requires someone on `trigger::tile()`.
     // Invoke the body (entry 0) directly — the residual is a derived list
     // (players_on), not the host pre (`pre::MINE`).
-    invoke::unwrap_done(invoke::entry(CARD_GLORY, 0, user));
+    invoke::unwrap_done(invoke::entry_idx(CARD_GLORY, 0, user));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -823,7 +823,7 @@ pub fn glory_mutant_is_detected() {
     let other = 1i32;
     let w = glory_world(user, other, &[(2, 2600)], &[(3, 3200)]);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(CARD_GLORY, 0, user));
+    invoke::unwrap_done(invoke::entry_idx(CARD_GLORY, 0, user));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -864,7 +864,7 @@ pub fn one_of_us_01_place_iff() {
     w.symbolic_answers = true;
     w.dest = 2;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(CARD_ONE_OF_US, player));
+    invoke::unwrap_done(invoke::play_idx(CARD_ONE_OF_US, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];

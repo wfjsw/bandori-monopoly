@@ -56,7 +56,7 @@ pub fn kkr_pay_10000_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:（kkr）前往笑容集结的地方！", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（kkr）前往笑容集结的地方！"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -84,7 +84,7 @@ pub fn kkr_place_on_circle_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:（kkr）前往笑容集结的地方！", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（kkr）前往笑容集结的地方！"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // (02): the card lands on CiRCLE. Under the host, `place_card_on` logs
@@ -128,7 +128,7 @@ pub fn kkr_mutant_pay_1000() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:（kkr）前往笑容集结的地方！", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（kkr）前往笑容集结的地方！"), player));
     let post = world::snapshot();
     assert!(
         post.money[player as usize] == pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
@@ -145,7 +145,7 @@ pub fn kkr_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:（kkr）前往笑容集结的地方！", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（kkr）前往笑容集结的地方！"), player));
     let post = world::snapshot();
     assert!(
         post.money[player as usize] != pre.money[player as usize] - spec::hhw::kkr_01_amount_mutant(),
@@ -168,7 +168,7 @@ pub fn athletic_place_three_crystals_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:运动的天赋", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:运动的天赋"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -221,7 +221,7 @@ pub fn athletic_turn_end_decay_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("HHW:运动的天赋", "Hook", "TurnEnd", player));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("HHW:运动的天赋"), "Hook", "TurnEnd", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -263,7 +263,7 @@ pub fn athletic_decay_to_zero_discards() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("HHW:运动的天赋", "Hook", "TurnEnd", player));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("HHW:运动的天赋"), "Hook", "TurnEnd", player));
     let crystals = world::with_world(|w| w.key_get(player, crate::intern::intern("crystals")));
     // Decay takes 1 → 0. The book then 「置入弃牌堆」. The crystals-changed
     // hook is a separate entry; this harness pins the decay half. The
@@ -296,12 +296,7 @@ pub fn athletic_empty_discards() {
     w.trig_value = -1;
     w.key_set(player, crate::intern::intern("crystals"), 0);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook(
-        "HHW:运动的天赋",
-        "Hook",
-        "CounterChanged",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("HHW:运动的天赋"), "Hook", "CounterChanged", player));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // Book: the card is put into the discard. Observable: UnplaceCard and/or
@@ -356,7 +351,7 @@ pub fn believe_cost_800_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:因为我一直相信着你", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:因为我一直相信着你"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -382,7 +377,7 @@ pub fn believe_discard_one_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:因为我一直相信着你", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:因为我一直相信着你"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -406,7 +401,7 @@ pub fn believe_mutant_is_detected() {
     w.money[player as usize] = 5_000;
     let pre_money = w.money[player as usize];
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("HHW:因为我一直相信着你", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:因为我一直相信着你"), player));
     let post = world::snapshot();
     assert!(
         post.money[player as usize] != pre_money - spec::hhw::believe_02_amount_paid_mutant(pre_money),
@@ -439,7 +434,7 @@ pub fn backstage_pays_1000_per_discard_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:出发！后台之旅！", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:出发！后台之旅！"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -475,7 +470,7 @@ pub fn backstage_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:出发！后台之旅！", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:出发！后台之旅！"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -509,7 +504,7 @@ pub fn balloon_teleports_to_a_chosen_result_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:热气球演出", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:热气球演出"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -576,7 +571,7 @@ pub fn hagumi_over_60_gains_and_draws_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("HHW:（育美）", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("HHW:（育美）"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];

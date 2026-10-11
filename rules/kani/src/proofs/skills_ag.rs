@@ -10,8 +10,8 @@ use crate::invoke;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const SKILL_RAN: &str = "skill:美竹兰:叛逆的红挑染";
-const SKILL_MOCA: &str = "skill:青叶摩卡:我行我素";
+const SKILL_RAN: usize = crate::card_id!("skill:美竹兰:叛逆的红挑染");
+const SKILL_MOCA: usize = crate::card_id!("skill:青叶摩卡:我行我素");
 const REST_TURNS: &str = "skill.afterglow.restTurns";
 const BAND_AFTERGLOW: &str = "Afterglow";
 
@@ -67,7 +67,7 @@ pub fn firepot_01_tick_iff() {
     // Entry 2 is the TurnEnd hook with residual `afterglow`
     // (`trigger::player_id() == player_id && in_band(player_id, "Afterglow")`).
     // Both hold by construction.
-    invoke::unwrap_done(invoke::entry(SKILL_RAN, 2, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 2, player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -164,7 +164,7 @@ pub fn moca_02_teleport_iff() {
     let src = 1i32;
     world::reset_world(w);
     // Entry 2 is CardPlayed (residual `other`: actor != owner). Held by setup.
-    invoke::unwrap_done(invoke::entry(SKILL_MOCA, 2, owner));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_MOCA, 2, owner));
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -215,7 +215,7 @@ pub fn moca_02_mutant_is_detected() {
     w.symbolic_answers = false;
     w.answers[0] = 0; // yes
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(SKILL_MOCA, 2, owner));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_MOCA, 2, owner));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -249,7 +249,7 @@ pub fn ran_02_spend_fire_iff() {
     w.band_id[player as usize] = band_key();
     world::reset_world(w);
     // Entry 0 is the (2) Play (`can_use` residual: not skill_blocked, fire ≥ 1).
-    invoke::unwrap_done(invoke::entry(SKILL_RAN, 0, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
@@ -277,7 +277,7 @@ pub fn ran_02_mutant_is_detected() {
     w.fire_max = [1, 1, 1, 1];
     w.band_id[player as usize] = band_key();
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(SKILL_RAN, 0, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_RAN, 0, player));
     let post_fire = world::with_world(|ww| ww.fire[player as usize]);
     assert!(post_fire == 0, "card spends exactly 1");
     assert!(post_fire != 1 - 2, "mutant (spend 2) is impossible from fire=1");

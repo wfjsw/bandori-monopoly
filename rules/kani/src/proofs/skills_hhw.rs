@@ -59,12 +59,7 @@ pub fn kokoro_01_opening_1000_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:弦卷心:弦卷集团",
-        "Hook",
-        "",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -95,7 +90,7 @@ pub fn kokoro_01_mutant_500() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "", owner));
     let post = world::snapshot();
     assert!(
         post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
@@ -113,7 +108,7 @@ pub fn kokoro_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "", owner));
     let post = world::snapshot();
     assert!(
         post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_01_amount_mutant(),
@@ -165,7 +160,7 @@ pub fn kokoro_02_circle_pass_1500_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "Pass", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -207,7 +202,7 @@ pub fn kokoro_02_mutant_2000() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "Pass", owner));
     let post = world::snapshot();
     assert!(
         post.money[owner as usize] == pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
@@ -224,7 +219,7 @@ pub fn kokoro_02_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("skill:弦卷心:弦卷集团", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:弦卷心:弦卷集团"), "Hook", "Pass", owner));
     let post = world::snapshot();
     assert!(
         post.money[owner as usize] != pre.money[owner as usize] + spec::skills_hhw::kokoro_02_amount_mutant(),
@@ -264,7 +259,7 @@ pub fn misaki_skill_01_pass_fire_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("skill:奥泽美咲:另一个我", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:奥泽美咲:另一个我"), "Hook", "Pass", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -306,7 +301,7 @@ pub fn misaki_skill_01_mutant_is_detected() {
     w.fire[owner as usize] = 0;
     let pre_fire = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("skill:奥泽美咲:另一个我", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:奥泽美咲:另一个我"), "Hook", "Pass", owner));
     let post = world::snapshot();
     assert!(
         post.fire[owner as usize] != spec::skills_hhw::misaki_skill_01_gain_mutant(pre_fire),
@@ -337,7 +332,7 @@ pub fn kaoru_01_pot_arm_iff() {
         world::snapshot()
     };
     // `On::Hook(Pass)` with `card_sdk::pre::MINE`.
-    invoke::unwrap_done(invoke::hook("skill:濑田薰:梦幻的王子殿下", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:濑田薰:梦幻的王子殿下"), "Hook", "Pass", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -371,7 +366,7 @@ pub fn kaoru_01_mutant_is_detected() {
     let mut w = symbolic_pass_world(owner, -1);
     w.fire[owner as usize] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook("skill:濑田薰:梦幻的王子殿下", "Hook", "Pass", owner));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:濑田薰:梦幻的王子殿下"), "Hook", "Pass", owner));
     let post = world::snapshot();
     // Mutant demands GainFire + a second effect (both arms at once).
     let (logbuf, log_n) = effects_of();
@@ -406,12 +401,7 @@ pub fn band_01_declined_is_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:Hello, Happy World!:传播笑容",
-        "Hook",
-        "PayChoose",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:Hello, Happy World!:传播笑容"), "Hook", "PayChoose", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -440,12 +430,7 @@ pub fn band_01_accepted_doubles_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook(
-        "skill:Hello, Happy World!:传播笑容",
-        "Hook",
-        "PayChoose",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:Hello, Happy World!:传播笑容"), "Hook", "PayChoose", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -496,12 +481,7 @@ pub fn band_01_mutant_is_detected() {
     w.answers[0] = 1;
     let pre_amount = w.pay_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook(
-        "skill:Hello, Happy World!:传播笑容",
-        "Hook",
-        "PayChoose",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("skill:Hello, Happy World!:传播笑容"), "Hook", "PayChoose", owner));
     let post = world::snapshot();
     assert!(
         post.pay_amount != spec::skills_hhw::band_01_amount_mutant(pre_amount),

@@ -80,7 +80,7 @@ pub fn band_starts_in_state1() {
         world::snapshot()
     };
     // Entry 1 = On::Hook(TurnStartBefore) `at_turn_start`.
-    invoke::unwrap_done(invoke::entry("skill:Ave Mujica:假面之下的真实", 1, user));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Ave Mujica:假面之下的真实"), 1, user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -175,7 +175,7 @@ pub fn band_state2_bend_hook_rewrites_amount() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry("skill:Ave Mujica:假面之下的真实", 2, user));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Ave Mujica:假面之下的真实"), 2, user));
     let post = world::snapshot();
 
     kani::cover!(pre_amount > 0, "positive amount");
@@ -203,7 +203,7 @@ pub fn band_state2_bend_mutant_is_detected() {
     let user = w.trig_player;
     let pre_amount = w.pay_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry("skill:Ave Mujica:假面之下的真实", 2, user));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:Ave Mujica:假面之下的真实"), 2, user));
     let post = world::snapshot();
     if pre_amount > 0 && pre_amount != (pre_amount * 3 + 1) / 2 {
         assert!(

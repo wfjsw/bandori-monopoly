@@ -62,7 +62,7 @@ pub fn resolve_play_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:[衍生] 觉悟", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:[衍生] 觉悟"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -88,7 +88,7 @@ pub fn resolve_play_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:[衍生] 觉悟", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:[衍生] 觉悟"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -113,7 +113,7 @@ pub fn resolve_play_mutant_2000() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:[衍生] 觉悟", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:[衍生] 觉悟"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     assert!(
@@ -146,7 +146,7 @@ pub fn cookie_pay_iff() {
     };
     // Gate: discard non-empty (the book's condition). Invoke the body directly
     // -- the `cant_play` gate is covered by the non-empty discard assumption.
-    invoke::unwrap_done(invoke::play("R:曲奇时间", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:曲奇时间"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -178,7 +178,7 @@ pub fn cookie_pay_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:曲奇时间", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:曲奇时间"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let wrong = spec::cookie_pay_amount_mutant(x);
@@ -202,7 +202,7 @@ pub fn sprechchor_pay_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:Sprechchor", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:Sprechchor"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -243,7 +243,7 @@ pub fn sprechchor_pay_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:Sprechchor", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:Sprechchor"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let n = match effects.first() {
@@ -280,7 +280,7 @@ pub fn ako_dark_offhand_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("R:（亚子）黑暗大魔姬亚子", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("R:（亚子）黑暗大魔姬亚子"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -311,7 +311,7 @@ pub fn ako_dark_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("R:（亚子）黑暗大魔姬亚子", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("R:（亚子）黑暗大魔姬亚子"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let two = spec::ako_dark_stun_n_mutant();
@@ -340,7 +340,7 @@ pub fn fire_bird_place_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:Fire bird", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:Fire bird"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -369,7 +369,7 @@ pub fn fire_bird_place_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:Fire bird", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:Fire bird"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let card = crate::world::card_slot_of("R:Fire bird");
@@ -399,7 +399,7 @@ pub fn fire_bird_burn_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry("R:Fire bird", 1, player));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("R:Fire bird"), 1, player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -425,7 +425,7 @@ pub fn fire_bird_burn_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry("R:Fire bird", 1, player));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("R:Fire bird"), 1, player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     assert!(
@@ -452,7 +452,7 @@ pub fn nfo_face1_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:NFO", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:NFO"), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -488,7 +488,7 @@ pub fn nfo_face1_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:NFO", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:NFO"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let face1 = log_n == 1
@@ -512,7 +512,7 @@ pub fn nfo_stay_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("R:NFO", "AtEnd", "", player));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("R:NFO"), "AtEnd", "", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
@@ -537,7 +537,7 @@ pub fn nfo_stay_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook("R:NFO", "AtEnd", "", player));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("R:NFO"), "AtEnd", "", player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let two = spec::nfo_stay_n_mutant();
@@ -571,7 +571,7 @@ pub fn student_council_add_resolve_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("R:学生会的检查", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("R:学生会的检查"), player));
     let post = world::snapshot();
     let post_deck_n = world::with_world(|ww| ww.deck_n as i32);
 
@@ -602,7 +602,7 @@ pub fn student_council_add_resolve_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("R:学生会的检查", player));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("R:学生会的检查"), player));
     let post_deck_n = world::with_world(|ww| ww.deck_n as i32);
     assert!(
         post_deck_n != 2,
@@ -626,7 +626,7 @@ pub fn ringing_bloom_place_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:（燐子）Ringing Bloom", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:（燐子）Ringing Bloom"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     let card = crate::world::card_slot_of("R:（燐子）Ringing Bloom");
@@ -648,7 +648,7 @@ pub fn ringing_bloom_place_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("R:（燐子）Ringing Bloom", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("R:（燐子）Ringing Bloom"), player));
     let (logbuf, log_n) = effects_of();
     let effects = &slice_of(logbuf, log_n)[..log_n];
     assert!(

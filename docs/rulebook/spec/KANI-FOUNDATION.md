@@ -134,6 +134,31 @@ Constants (`state::TURN_END`, `state::VALUE`, …) are arguments.
   `trig_move_tag`, `trig_move_main`, `trig_move_dir`, `trig_move_remaining`,
   `trig_move_from`, `trig_move_total`, `trig_move_roll`,
   `trig_deal_owner`, `trig_deal_houses`, `trig_deal_mortgaged`.
+
+### Hostops-2 model (2026-10-11) — see `kani/HOSTOPS-ROUND2.md`
+
+* **Indexed invoke (required in proofs).** `invoke::play_idx(card_id!("…"), p)`
+  and friends. `invoke::find` / string `play` / `entry` are **native-only** —
+  the `RULESET` string scan is a CBMC unwinding cliff. Regenerate the table
+  with `tools/kani/gen_card_ids.py`; rewrite call sites with
+  `tools/kani/migrate_invoke_idx.py`.
+* `state_set` field column: `a3` = 0 VALUE / 1 MAX / 2 MIN / 3 EXPIRES,
+  `a4` = value (the old model wrote the field id as the value).
+* `play_doubled` default is `-1` (no doubling); `ctx::n(k,v)` only doubles
+  when the slot equals `k`.
+* No-arg `trig_set_cancelled` / `trig_set_negate_effect`: the call **is** the
+  effect (`sys_kani` packs `[0;6]` — never read `a0`).
+* `tile_named` resolves every `board.json` name (`board::TILE_NAMES`).
+* `neighbor` returns a **living seat** in turn order, not a board tile.
+* stay / stun / exile are three fields (`key::STAY` / `STUN` / `EXILE` +
+  `EXILE_TO`). `give_extra_turn` only records; scheduling is PROTOCOL.
+* `add_counter*` clamps `(was+n).max(0)` then `min(max)` when `max > 0`;
+  `gain_fire` clamps at `fire_max`.
+* `is_shop` = buyable (property|ring) ∧ `group == 10`.
+* `shuffle_into_deck` is a multiset move of hand/discard into draw
+  (order symbolic / irrelevant).
+* `place_card_on` ABI is `[player, tile, cp, cl, ptr, len]` — card name at
+  `(a2,a3)`, landing tile at `a1`.
 * **Protocol stubs** = modeled arms that only return `0` (move plan, offers /
   buy / build, multi-turn settle). They never hit `unmodeled`, so coverage
   counts them as modeled — but a clause that needs their *real* scheduling

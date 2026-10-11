@@ -65,7 +65,7 @@ pub fn black_bday_low_pays_800_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:黑色生日", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:黑色生日"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -96,7 +96,7 @@ pub fn black_bday_high_pays_400_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:黑色生日", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:黑色生日"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -120,7 +120,7 @@ pub fn black_bday_low_mutant_is_detected() {
     let user = w.trig_player;
     let other = 1i32;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("Mujica:黑色生日", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:黑色生日"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // Card matches the true spec (800) and therefore must NOT match 801.
@@ -139,7 +139,7 @@ pub fn black_bday_low_mutant_panics() {
     let user = w.trig_player;
     let other = 1i32;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("Mujica:黑色生日", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:黑色生日"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
@@ -206,7 +206,7 @@ pub fn heart_rain_fallback_stun_and_money_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:心の雨", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:心の雨"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -243,7 +243,7 @@ pub fn heart_rain_in_window_roll_stay_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:心の雨", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:心の雨"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -294,7 +294,7 @@ pub fn dice_cast_places_on_own_field_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:骰子已经掷下", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:骰子已经掷下"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -319,7 +319,7 @@ pub fn dice_cast_mutant_extra_money_is_detected() {
     w.trig_player = user;
     w.turn_key = 7;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("Mujica:骰子已经掷下", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:骰子已经掷下"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
@@ -349,7 +349,7 @@ pub fn sparkler_places_two_crystals_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:燃尽前的线香花火", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:燃尽前的线香花火"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -372,7 +372,7 @@ pub fn sparkler_crystal_count_mutant_is_detected() {
     let user = 0i32;
     w.trig_player = user;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("Mujica:燃尽前的线香花火", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:燃尽前的线香花火"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
@@ -403,7 +403,7 @@ pub fn sparkler_last_crystal_stun_two_iff() {
         world::snapshot()
     };
     // Entry 2 = On::Hook(CounterChanged) `on_crystals_changed`.
-    invoke::unwrap_done(invoke::entry("Mujica:燃尽前的线香花火", 2, user));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mujica:燃尽前的线香花火"), 2, user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -430,7 +430,7 @@ pub fn sparkler_last_crystal_mutant_is_detected() {
     let user = 0i32;
     w.trig_player = user;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry("Mujica:燃尽前的线香花火", 2, user));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("Mujica:燃尽前的线香花火"), 2, user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
@@ -484,7 +484,7 @@ pub fn doll_garden_pay_amount_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:人偶的箱庭", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:人偶的箱庭"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -507,7 +507,7 @@ pub fn doll_garden_pay_amount_mutant_is_detected() {
     let user = w.trig_player;
     let x = 10i32;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("Mujica:人偶的箱庭", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:人偶的箱庭"), user));
     let post = world::snapshot();
     assert!(
         post.money[1] != 5_000 - spec::mujica::doll_garden_pay_amount_mutant(x),
@@ -583,7 +583,7 @@ pub fn nyamu_places_on_field_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:（喵梦）", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:（喵梦）"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -616,7 +616,7 @@ pub fn umiri_places_on_next_actors_field_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:（海铃）", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:（海铃）"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -648,7 +648,7 @@ pub fn mortis_nothing_to_copy_is_inert() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("Mujica:（睦/mortis）表演的本能", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("Mujica:（睦/mortis）表演的本能"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];

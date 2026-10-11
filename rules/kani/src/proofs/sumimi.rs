@@ -46,11 +46,9 @@ fn effects_of(logbuf: &[Effect; 24], log_n: usize) -> &[Effect] {
 }
 
 /// Play gate of a `On::Play(_, Some(gate), _)` entry. `true` = playable.
-fn play_gate_allows(id: &str, player: i32) -> bool {
-    let card = match invoke::find(id) {
-        Some(c) => c,
-        None => return false,
-    };
+/// `idx` is a `crate::card_id!` index (no string scan).
+fn play_gate_allows(idx: usize, player: i32) -> bool {
+    let card = invoke::by_idx(idx);
     for on in card.on.iter() {
         if let card_sdk::On::Play(_, gate, _) = on {
             return match gate {
@@ -68,7 +66,7 @@ fn play_gate_allows(id: &str, player: i32) -> bool {
 //  （若你的资金为3000以上则无效果）」
 // ===========================================================================
 
-const IDOLBAND: &str = "Sumimi:兼顾偶像与乐队";
+const IDOLBAND: usize = crate::card_id!("Sumimi:兼顾偶像与乐队");
 
 fn idolband_world(redeemed: i32) -> World {
     let mut w = base_world();
@@ -112,7 +110,7 @@ pub fn idolband_reset_iff() {
         return;
     }
 
-    invoke::unwrap_done(invoke::play(IDOLBAND, player));
+    invoke::unwrap_done(invoke::play_idx(IDOLBAND, player));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -150,7 +148,7 @@ pub fn idolband_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play(IDOLBAND, player));
+    invoke::unwrap_done(invoke::play_idx(IDOLBAND, player));
     let post = world::snapshot();
     let pre_money = pre.money[player as usize];
     let wrong = spec::sumimi::idolband_post_money_mutant(pre_money);
@@ -168,7 +166,7 @@ pub fn idolband_mutant_is_detected() {
 // Isolation: the turn-start pot placement (clause (2)) is a different entry.
 // ===========================================================================
 
-const HINA: &str = "skill:三角初华（Sumimi）:成为偶像";
+const HINA: usize = crate::card_id!("skill:三角初华（Sumimi）:成为偶像");
 
 /// C-SUMIMI-hina-01 iff: pass CiRCLE → +1 [火罐] under the hold cap.
 #[kani::proof]
@@ -212,7 +210,7 @@ pub fn hina_01_pass_circle_iff() {
     kani::cover!(pre_fire < cap, "under cap (gain applies)");
     kani::cover!(pre_fire >= cap, "at/over cap (global hold-cap forbids)");
 
-    invoke::unwrap_done(invoke::hook_only(HINA, "Pass", player));
+    invoke::unwrap_done(invoke::hook_only_idx(HINA, "Pass", player));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -248,7 +246,7 @@ pub fn hina_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(HINA, "Pass", player));
+    invoke::unwrap_done(invoke::hook_only_idx(HINA, "Pass", player));
     let post = world::snapshot();
     let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre.fire[player as usize], spec::sumimi::FIRE_CAP_SUMIMI);
     assert!(
@@ -264,7 +262,7 @@ pub fn hina_01_mutant_is_detected() {
 // C-SUMIMI-childhood-01 (move start = 小豆岛) is PROTOCOL-LEVEL (plan stub).
 // ===========================================================================
 
-const CHILDHOOD: &str = "Sumimi:(初华（Sumimi）)儿时玩伴的鼓励";
+const CHILDHOOD: usize = crate::card_id!("Sumimi:(初华（Sumimi）)儿时玩伴的鼓励");
 
 /// C-SUMIMI-childhood-02 iff: after the re-based move, +1 [火罐].
 #[kani::proof]
@@ -302,7 +300,7 @@ pub fn childhood_02_fire_iff() {
     kani::cover!(pre_fire < cap, "under cap");
     kani::cover!(pre_fire >= cap, "at cap");
 
-    invoke::unwrap_done(invoke::hook_only(CHILDHOOD, "MoveAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(CHILDHOOD, "MoveAfter", player));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -333,7 +331,7 @@ pub fn childhood_02_mutant_is_detected() {
     w.trig_player = player;
     w.fire[player as usize] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(CHILDHOOD, "MoveAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(CHILDHOOD, "MoveAfter", player));
     let post = world::snapshot();
     let wrong = spec::sumimi::childhood_fire_post(0, spec::sumimi::FIRE_CAP_SUMIMI) + 1;
     assert!(
@@ -348,7 +346,7 @@ pub fn childhood_02_mutant_is_detected() {
 // (2)/(3) are PROTOCOL-LEVEL (multi-act pass window).
 // ===========================================================================
 
-const TWODONUTS: &str = "Sumimi:一人两个甜甜圈";
+const TWODONUTS: usize = crate::card_id!("Sumimi:一人两个甜甜圈");
 
 #[kani::proof]
 #[kani::unwind(24)]
@@ -361,7 +359,7 @@ pub fn twodonuts_01_exile_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play(TWODONUTS, player));
+    invoke::unwrap_done(invoke::play_idx(TWODONUTS, player));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -385,7 +383,7 @@ pub fn twodonuts_01_mutant_is_detected() {
     kani::assume(player >= 0 && player < w.n_players);
     w.trig_player = player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(TWODONUTS, player));
+    invoke::unwrap_done(invoke::play_idx(TWODONUTS, player));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     // Mutant: no exile grant at all. The card does grant — disagreement is live.
@@ -401,7 +399,7 @@ pub fn twodonuts_01_mutant_is_detected() {
 // what this harness pins. C-SUMIMI-twoinone-02 is PROTOCOL-LEVEL.
 // ===========================================================================
 
-const TWOINONE: &str = "Sumimi:Sumimi是二人一体的";
+const TWOINONE: usize = crate::card_id!("Sumimi:Sumimi是二人一体的");
 
 #[kani::proof]
 #[kani::unwind(24)]
@@ -425,7 +423,7 @@ pub fn twoinone_01b_fire_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play(TWOINONE, player));
+    invoke::unwrap_done(invoke::play_idx(TWOINONE, player));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -459,7 +457,7 @@ pub fn twoinone_01b_mutant_is_detected() {
     let wrong = to + 1;
     let fire_key = intern::intern(card_sdk::abi::state_key::FIRE).0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(TWOINONE, player));
+    invoke::unwrap_done(invoke::play_idx(TWOINONE, player));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let mut saw_wrong = false;

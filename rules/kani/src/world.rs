@@ -106,6 +106,9 @@ pub const TOK_PP_NEG: &str = "P✽P粉丝(反)";
 pub const RENT_HOUSES: &str = "rentHouses";
 
 pub const TILE_SHOP_NAME: &str = "江户川乐器店";
+/// Named on-card counters (`game_core::state::counter`).
+pub const COUNTER_CRYSTALS: &str = "crystals";
+pub const COUNTER_CP: &str = "cp";
 /// The pilot used `TILE_SHOP = 3` against a fake 8-tile board; keep that
 /// constant for `teleport.rs` / `spec.rs` compatibility and also expose the
 /// real board index.
@@ -231,6 +234,10 @@ pub enum Effect {
         player: i32,
         n: i32,
         to: i32,
+    },
+    /// `give_extra_turn` — queue a second turn (scheduling is PROTOCOL).
+    GiveExtraTurn {
+        player: i32,
     },
     PlaceCard {
         player: i32,
@@ -496,6 +503,15 @@ pub struct World {
     pub fire: [i32; MAX_PLAYERS],
     pub fire_max: [i32; MAX_PLAYERS],
     pub stay: [i32; MAX_PLAYERS],
+    /// [眩晕] layers (`key::STUN`) — distinct from [`Self::stay`].
+    pub stun: [i32; MAX_PLAYERS],
+    /// [除外] layers (`key::EXILE`) + destination (`key::EXILE_TO`).
+    pub exile: [i32; MAX_PLAYERS],
+    pub exile_to: [i32; MAX_PLAYERS],
+    /// Extra turns queued by `give_extra_turn` (scheduling is PROTOCOL).
+    pub extra_turns: [bool; MAX_PLAYERS],
+    /// `ctx::n(k,v)` doubling slot. `-1` = no doubling (engine `None`).
+    pub play_doubled: i32,
     pub character_id: [u16; MAX_PLAYERS],
     pub band_id: [u16; MAX_PLAYERS],
     /// Generic per-player named counters (tokens, held, state).
@@ -590,7 +606,8 @@ pub struct World {
     /// predicate should set this from their own fixture.
     pub between_seat: [i32; MAX_PLAYERS],
 
-    // ---- prompt state ----
+    
+// ---- prompt state ----
     pub opt_n: i32,
     pub next_answer: usize,
     pub answers: [i32; MAX_ANSWERS],
@@ -607,6 +624,14 @@ pub struct World {
     pub unmodeled_op: i32,
 }
 
+fn player_idx(player: i32) -> usize {
+    if player >= 0 && (player as usize) < MAX_PLAYERS {
+        player as usize
+    } else {
+        0
+    }
+}
+
 impl World {
     pub fn new() -> Self {
         Self {
@@ -617,6 +642,11 @@ impl World {
             fire: [0; MAX_PLAYERS],
             fire_max: [3; MAX_PLAYERS],
             stay: [0; MAX_PLAYERS],
+            stun: [0; MAX_PLAYERS],
+            exile: [0; MAX_PLAYERS],
+            exile_to: [-1; MAX_PLAYERS],
+            extra_turns: [false; MAX_PLAYERS],
+            play_doubled: -1,
             character_id: [u16::MAX; MAX_PLAYERS],
             band_id: [u16::MAX; MAX_PLAYERS],
             player_keys: [NameMap::new(); MAX_PLAYERS],
@@ -735,6 +765,82 @@ impl World {
 
     /// Keep `fans_pos` / `fans_neg` / `hand_resonance` in sync with the
     /// generic map when those well-known keys are written.
+
+    // ---- state MIN / MAX / EXPIRES columns (hostfns `state_set` field 1/2/3) ----
+    /// Declared MAX for `key` (0 = none). Stored beside the value.
+    pub fn key_max(&self, player: i32, key: NameId) -> i32 {
+        let p = player_idx(player);
+        let id = NameId(key.0.wrapping_add(0x8000));
+        self.player_keys[p].get(id)
+    }
+    pub fn key_min(&self, player: i32, key: NameId) -> i32 {
+        let p = player_idx(player);
+        let id = NameId(key.0.wrapping_add(0x4000));
+        self.player_keys[p].get(id)
+    }
+    /// `Tick` code: 0 none / 1 TurnStart / 2 TurnEnd (hostfns field 3).
+    pub fn key_expires(&self, player: i32, key: NameId) -> i32 {
+        let p = player_idx(player);
+        let id = NameId(key.0.wrapping_add(0x2000));
+        self.player_keys[p].get(id)
+    }
+    pub fn key_set_max(&mut self, player: i32, key: NameId, v: i32) {
+        let p = player_idx(player);
+        let id = NameId(key.0.wrapping_add(0x8000));
+        self.player_keys[p].set(id, v);
+    }
+    pub fn key_set_min(&mut self, player: i32, key: NameId, v: i32) {
+        let p = player_idx(player);
+        let id = NameId(key.0.wrapping_add(0x4000));
+        self.player_keys[p].set(id, v);
+    }
+    pub fn key_set_expires(&mut self, player: i32, key: NameId, v: i32) {
+        let p = player_idx(player);
+        let id = NameId(key.0.wrapping_add(0x2000));
+        self.player_keys[p].set(id, v);
+    }
+
+    // ---- field-instance counters (uid-addressed) ----
+    pub fn field_crystals(&self, uid: i32) -> i32 {
+        self.field_slot(uid).map(|f| f.crystals).unwrap_or(0)
+    }
+    pub fn set_field_crystals(&mut self, uid: i32, v: i32) {
+        if let Some(f) = self.field_slot_mut(uid) {
+            f.crystals = v;
+        }
+    }
+    pub fn field_cp(&self, uid: i32) -> i32 {
+        self.field_slot(uid).map(|f| f.props.get(NameId(1))).unwrap_or(0)
+    }
+    pub fn field_counter(&self, uid: i32, key: NameId) -> i32 {
+        self.field_slot(uid).map(|f| f.props.get(key)).unwrap_or(0)
+    }
+    pub fn set_field_counter(&mut self, uid: i32, key: NameId, v: i32) {
+        if let Some(f) = self.field_slot_mut(uid) {
+            f.props.set(key, v);
+        }
+    }
+    fn field_slot(&self, uid: i32) -> Option<&FieldCard> {
+        let mut i = 0usize;
+        while i < self.field_n as usize {
+            if self.field[i].uid == uid {
+                return Some(&self.field[i]);
+            }
+            i += 1;
+        }
+        None
+    }
+    fn field_slot_mut(&mut self, uid: i32) -> Option<&mut FieldCard> {
+        let mut i = 0usize;
+        while i < self.field_n as usize {
+            if self.field[i].uid == uid {
+                return Some(&mut self.field[i]);
+            }
+            i += 1;
+        }
+        None
+    }
+
     pub fn sync_views(&mut self) {
         let pos_id = intern::intern(TOK_PP_POS);
         let neg_id = intern::intern(TOK_PP_NEG);
@@ -925,6 +1031,8 @@ pub struct Snapshot {
     pub pos: [i32; MAX_PLAYERS],
     pub fire: [i32; MAX_PLAYERS],
     pub stay: [i32; MAX_PLAYERS],
+    pub stun: [i32; MAX_PLAYERS],
+    pub exile: [i32; MAX_PLAYERS],
     pub fans_pos: [i32; MAX_PLAYERS],
     pub fans_neg: [i32; MAX_PLAYERS],
     pub hand_resonance: [i32; MAX_PLAYERS],
@@ -945,6 +1053,8 @@ pub fn snapshot() -> Snapshot {
             pos: w.pos,
             fire: w.fire,
             stay: w.stay,
+            stun: w.stun,
+            exile: w.exile,
             fans_pos: w.fans_pos,
             fans_neg: w.fans_neg,
             hand_resonance: w.hand_resonance,

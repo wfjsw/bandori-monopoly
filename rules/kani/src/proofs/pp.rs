@@ -93,7 +93,7 @@ pub fn same_dream_01_band_plus_3_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("PP:同一个梦想", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -163,7 +163,7 @@ pub fn same_dream_02_money_mutant_is_detected() {
     let pre_band = 0;
     w.band_crystals[user as usize] = pre_band;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:同一个梦想", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:同一个梦想"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     let gained: i32 = effects
@@ -195,7 +195,7 @@ pub fn title_idol_01_band_plus_2_iff() {
     kani::assume(pre_band >= 0 && pre_band <= 50);
     w.band_crystals[user as usize] = pre_band;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:TITLE IDOL", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     // Step 1 is unconditional +2. Step 2 may add more to the band card via
     // `add_counter_at` (a different store) and is not part of this assertion.
@@ -216,7 +216,7 @@ pub fn title_idol_01_mutant_is_detected() {
     kani::assume(pre_band >= 0 && pre_band <= 50);
     w.band_crystals[user as usize] = pre_band;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:TITLE IDOL", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:TITLE IDOL"), user));
     let band = band_crystals_of(user);
     assert!(
         band != spec::pp::title_idol_01_band_after_mutant(pre_band),
@@ -259,7 +259,7 @@ pub fn seeyou_01_gate_iff() {
     }
     // Gate admits: run the play and check the (1) half did not mutate fans
     // beyond the [手] effect (separately proved in seeyou_03).
-    invoke::unwrap_done(invoke::play("PP:[衍生]明天见", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let (ex, nx) = spec::pp::seeyou_03_post(up, down);
     assert!(
@@ -283,7 +283,7 @@ pub fn seeyou_03_flip_iff() {
     let down = w.fans_neg[user as usize];
     kani::assume(spec::pp::seeyou_01_gate_ok(up, down));
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:[衍生]明天见", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     let (ex_up, ex_down) = spec::pp::seeyou_03_post(up, down);
@@ -323,7 +323,7 @@ pub fn seeyou_03_mutant_is_detected() {
     // Use a different mutant: flip `down + 1` capped nowhere.
     kani::assume(down >= 1);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:[衍生]明天见", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]明天见"), user));
     let post = world::snapshot();
     let flip = spec::pp::seeyou_03_flip(up, down);
     // Detect an off-by-one high: card flips `flip`, mutant wants `flip + 1`.
@@ -348,7 +348,7 @@ pub fn together_01_x_formula_iff() {
     let up = w.fans_pos[user as usize];
     let down = w.fans_neg[user as usize];
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:有你与我在这里共度", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
     let post = world::snapshot();
     let flip = spec::pp::together_01_flip(up, down);
     let x = spec::pp::together_01_x(up, down);
@@ -381,7 +381,7 @@ pub fn together_01_mutant_is_detected() {
     kani::assume(up < down);
     kani::assume(spec::pp::ceil_half(down - up) != 1);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:有你与我在这里共度", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:有你与我在这里共度"), user));
     let post = world::snapshot();
     let real = post.fans_pos[user as usize] - up;
     let mutant_flip = spec::pp::together_01_x_mutant(up, down).min(down).max(0);
@@ -412,7 +412,7 @@ pub fn guide_01_band_and_crystals_iff() {
     let up = w.fans_pos[user as usize];
     let down = w.fans_neg[user as usize];
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:练习生解密指南", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let band = band_crystals_of(user);
     assert!(
         band == spec::pp::guide_01_band_after(pre_band),
@@ -446,7 +446,7 @@ pub fn guide_01_mutant_is_detected() {
     kani::assume(owned % 3 != 0 && owned >= 1);
     w.band_crystals[user as usize] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:练习生解密指南", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:练习生解密指南"), user));
     let cry = card_crystals_of_player(user, crate::intern::intern(CRYSTALS));
     assert!(
         cry != spec::pp::guide_01_crystals_mutant(up, down),
@@ -467,7 +467,7 @@ pub fn eve_bushido_01_gain_iff() {
     let mut w = symbolic_play_world();
     let user = any_player_in(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:[若宫伊芙]属于我的武士道！", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -510,7 +510,7 @@ pub fn no_expect_02_place_deck_draw_iff() {
     let mut w = symbolic_play_world();
     let user = any_player_in(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:不要背负期待", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
     let post = world::snapshot();
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
@@ -538,7 +538,7 @@ pub fn first_accident_01_place_deck_draw_iff() {
     let mut w = symbolic_play_world();
     let user = any_player_in(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:初次演出事故", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     assert!(
@@ -683,7 +683,7 @@ pub fn eve_bushido_04_crystal_per_draw_iff() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::entry("PP:[若宫伊芙]属于我的武士道！", 1, me)  /* Hook Drew */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
         cry == spec::pp::eve_bushido_04_crystals(pre),
@@ -716,7 +716,7 @@ pub fn eve_bushido_04_noop_when_zero_draw() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::entry("PP:[若宫伊芙]属于我的武士道！", 1, me)  /* Hook Drew */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:[若宫伊芙]属于我的武士道！"), 1, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(cry == pre, "C-PP-eve-bushido-04: zero-value draw is a no-op");
 }
@@ -750,7 +750,7 @@ pub fn guide_04_turn_end_crystal_iff() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::hook_only("PP:练习生解密指南", "TurnEnd", me));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:练习生解密指南"), "TurnEnd", me));
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
         cry == spec::pp::guide_04_crystals(pre),
@@ -791,7 +791,7 @@ pub fn dream_ahead_01_crystal_per_draw_iff() {
         };
         ww.field_n = 1;
     });
-    invoke::unwrap_done(invoke::entry("PP:梦在前方，结彩当下", 2, me)  /* Hook Drew */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("PP:梦在前方，结彩当下"), 2, me)  /* Hook Drew */);
     let cry = world::with_world(|ww| ww.key_get(me, crate::intern::intern("奇迹水晶")));
     assert!(
         cry == spec::pp::dream_ahead_01_crystals(pre),
@@ -815,7 +815,7 @@ pub fn shine_again_00_immune_iff() {
     let mut w = symbolic_play_world();
     let user = any_player_in(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:再次闪耀", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:再次闪耀"), user));
     let immune = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user && ww.field[i].immune)
     });
@@ -835,7 +835,7 @@ pub fn no_expect_01_immune_iff() {
     let mut w = symbolic_play_world();
     let user = any_player_in(&w);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:不要背负期待", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:不要背负期待"), user));
     let placed = world::with_world(|ww| {
         (0..ww.field_n as usize).any(|i| ww.field[i].player == user)
     });
@@ -855,7 +855,7 @@ pub fn jennifer_01_place_other_iff() {
     // Isolation: at least one other living player exists.
     kani::assume(w.n_players >= 2);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:找回珍妮弗", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:找回珍妮弗"), user));
     let owner = world::with_world(|ww| {
         let mut o = -1;
         let mut i = 0;
@@ -912,7 +912,7 @@ pub fn ranger_01_02_steps_by_count_iff() {
         i += 1;
     }
     let pre_money = world::with_world(|ww| ww.money[user as usize]);
-    invoke::unwrap_done(invoke::play("PP:[衍生]魔法战队Pastel✽Ranger", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[衍生]魔法战队Pastel✽Ranger"), user));
     let post_money = world::with_world(|ww| ww.money[user as usize]);
     let band = band_crystals_of(user);
     let count = others + 1; // the Ranger itself
@@ -947,7 +947,7 @@ pub fn flower_01_place_on_tile_iff() {
     w.tiles[1].owner = user;
     w.tiles[2].owner = user;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:可爱又强壮的花朵", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:可爱又强壮的花朵"), user));
     let band = band_crystals_of(user);
     assert!(
         band == spec::pp::flower_01_band_after(pre_band),
@@ -984,7 +984,7 @@ pub fn chisato_mask_01_total_iff() {
     let user = any_player_in(&w);
     kani::assume(w.n_players >= 2);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("PP:[白鹭千圣]微笑的铁假面", user));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:[白鹭千圣]微笑的铁假面"), user));
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];
     // OPEN-分摊: only the 2000 total toward the user is determined.
@@ -1030,7 +1030,7 @@ pub fn first_accident_02_blocks_pp_skill_2_iff() {
     w.pay_amount = pre_amount;
     world::reset_world(w);
     // 1) play 初次演出事故 — sets the skillBlock token
-    invoke::unwrap_done(invoke::play("PP:初次演出事故", me));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("PP:初次演出事故"), me));
     let blocked = world::with_world(|ww| {
         ww.key_get(me, crate::intern::intern("skillBlock:Pastel✽Palettes")) > 0
             || ww.key_get(me, crate::intern::intern("skillBlock")) > 0
@@ -1040,7 +1040,7 @@ pub fn first_accident_02_blocks_pp_skill_2_iff() {
 
     // 2) 丸山彩 (2) must refuse
     let pre_amount2 = world::with_world(|ww| ww.pay_amount);
-    invoke::unwrap_done(invoke::entry("skill:丸山彩:With~", 1, me)  /* Hook PayTotalAdd */);
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("skill:丸山彩:With~"), 1, me)  /* Hook PayTotalAdd */);
     let post = world::snapshot();
     assert!(
         post.pay_amount == pre_amount2,
@@ -1091,7 +1091,7 @@ pub fn shine_again_01_rescue_iff() {
     // Host model of `is_buyable` / `tile_price` / `tile_group` is partial;
     // the body's rescue is: +1 positive fan and gain price/5.
     let pre_fans = world::with_world(|ww| ww.fans_pos[me as usize]);
-    invoke::unwrap_done(invoke::hook_only("PP:再次闪耀", "PayChoose", me));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("PP:再次闪耀"), "PayChoose", me));
     let post_fans = world::with_world(|ww| ww.fans_pos[me as usize]);
     let (logbuf, log_n) = effects_of();
     let effects = &logbuf[..log_n];

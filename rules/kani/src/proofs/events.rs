@@ -72,7 +72,7 @@ pub fn duobang_01_02_two_player_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:对邦", drawer));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:对邦"), drawer));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -133,7 +133,7 @@ pub fn duobang_01_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:对邦", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:对邦"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -186,7 +186,7 @@ pub fn tears_01_same_colour_next_pays_700() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:泪水的含义", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:泪水的含义"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -223,7 +223,7 @@ pub fn tears_02_different_colour_current_pays_300() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:泪水的含义", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:泪水的含义"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -252,7 +252,7 @@ pub fn tears_mutant_is_detected() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:泪水的含义", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:泪水的含义"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -295,7 +295,7 @@ pub fn pico_swap_01_rotates_positions() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:PICO灵魂交换", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:PICO灵魂交换"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -322,7 +322,7 @@ pub fn pico_swap_02_skips_exiled_players() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:PICO灵魂交换", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:PICO灵魂交换"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -348,7 +348,7 @@ pub fn pico_swap_mutant_is_detected() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:PICO灵魂交换", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:PICO灵魂交换"), 0));
     let post = world::snapshot();
     // Latched: 2 lands on 10 (0's pre). Cascade mutant: 2 lands on 20 (0's post).
     assert!(
@@ -377,7 +377,7 @@ pub fn moca_01_activation_keeps_the_card() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:Forbidden Moca", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:Forbidden Moca"), 0));
     let post = world::snapshot();
     let dest = world::with_world(|w| w.dest);
     let logbuf = effects_of();
@@ -404,7 +404,7 @@ pub fn moca_02_expiry_tick_files_away() {
         world::reset_world(w);
     }
     // Expiry entry (「在你的下个回合结束时永久移除此事件」).
-    invoke::unwrap_done(invoke::hook("event:Forbidden Moca", "AtEnd", "", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:Forbidden Moca"), "AtEnd", "", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -422,7 +422,7 @@ pub fn moca_02_mutant_is_detected() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::hook("event:Forbidden Moca", "AtEnd", "", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:Forbidden Moca"), "AtEnd", "", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -447,7 +447,7 @@ pub fn aao_01_activation_keeps_the_card() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:A！A！O！", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:A！A！O！"), 0));
     let post = world::snapshot();
     let dest = world::with_world(|w| w.dest);
     assert!(
@@ -463,7 +463,7 @@ pub fn aao_01_expiry_tick_files_away() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::hook("event:A！A！O！", "AtEnd", "", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:A！A！O！"), "AtEnd", "", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -484,7 +484,7 @@ pub fn aao_02_hand_veto_is_armed() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:A！A！O！", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:A！A！O！"), 0));
     let dest = world::with_world(|w| w.dest);
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -521,7 +521,7 @@ pub fn front_or_back_02_same_half_share() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:前场队还是后场队？", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:前场队还是后场队？"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -559,7 +559,7 @@ pub fn front_or_back_01_equal_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:前场队还是后场队？", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:前场队还是后场队？"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -616,7 +616,7 @@ pub fn front_or_back_mutant_swapped_is_detected() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:前场队还是后场队？", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:前场队还是后场队？"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -670,7 +670,7 @@ pub fn ex_quest_01_rolls_and_files() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:EX任务挑战", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:EX任务挑战"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -702,7 +702,7 @@ pub fn habinel_01_grants_exiles() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:前往哈比内尔王国旅游", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:前往哈比内尔王国旅游"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -738,7 +738,7 @@ pub fn never_ends_01_noop_blocked_host() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:一切不会结束", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:一切不会结束"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -788,7 +788,7 @@ pub fn chart_rush_01_spends_fire() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:冲榜", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:冲榜"), 0));
     let post = world::snapshot();
 
     kani::cover!(pre.fire[0] == 0 && pre.fire[1] == 0, "no pots");
@@ -811,7 +811,7 @@ pub fn chart_rush_02_yes_2000() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:冲榜", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:冲榜"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -866,7 +866,7 @@ pub fn chart_rush_02_no_draw() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:冲榜", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:冲榜"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -906,7 +906,7 @@ pub fn chart_rush_mutant_off_by_one() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:冲榜", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:冲榜"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -941,12 +941,7 @@ pub fn marina_box_02_decline_is_noop() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook(
-        "event:麻里奈小姐的礼物箱",
-        "Hook",
-        "PassTile",
-        0,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Hook", "PassTile", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -993,12 +988,7 @@ pub fn marina_box_02_mutant_always_pays() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::hook(
-        "event:麻里奈小姐的礼物箱",
-        "Hook",
-        "PassTile",
-        0,
-    ));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:麻里奈小姐的礼物箱"), "Hook", "PassTile", 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1024,17 +1014,19 @@ pub fn marina_box_02_mutant_always_pays() {
 // ===========================================================================
 
 /// Shared: run Play and assert keep + empty money/pos frame.
-fn assert_activation_keep(id: &str) {
+/// `idx` is a `crate::card_id!` index (no string scan).
+fn assert_activation_keep(idx: usize) {
     let w = base_world();
     let pre = {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play(id, 0));
+    invoke::unwrap_done(invoke::event_play_idx(idx, 0));
     let dest = world::with_world(|w| w.dest);
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
+    let id = crate::generated::IDS[idx];
     assert!(
         spec::events::permanent_keep(dest),
         "{id}: 「放置于场地中央」 keeps the card (dest=Field)"
@@ -1051,7 +1043,7 @@ fn assert_activation_keep(id: &str) {
 #[kani::proof]
 #[kani::unwind(16)]
 pub fn hallucination_01_activation_keeps() {
-    assert_activation_keep("event:幻觉来了");
+    assert_activation_keep(crate::card_id!("event:幻觉来了"));
 }
 
 /// Expiry tick: TurnStartBefore body. `prop(DRAWER)` is 0 (set_prop no-op),
@@ -1064,7 +1056,7 @@ pub fn hallucination_01_expiry_tick() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::entry("event:幻觉来了", 2, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:幻觉来了"), 2, 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1086,7 +1078,7 @@ pub fn hallucination_01_expiry_tick() {
 #[kani::proof]
 #[kani::unwind(16)]
 pub fn pool_bug_01_activation_keeps() {
-    assert_activation_keep("event:卡池BUG");
+    assert_activation_keep(crate::card_id!("event:卡池BUG"));
 }
 
 /// E-pool-bug-02: the Event hook files the card away.
@@ -1096,7 +1088,7 @@ pub fn pool_bug_02_expiry_on_next_event() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::entry("event:卡池BUG", 1, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:卡池BUG"), 1, 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1119,7 +1111,7 @@ pub fn pool_bug_03_blocks_expensive_build() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::entry("event:卡池BUG", 2, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:卡池BUG"), 2, 0));
     let cancelled = world::with_world(|w| w.trig_cancelled);
     assert!(
         spec::events::pool_bug_03_cancelled(cancelled),
@@ -1133,7 +1125,7 @@ pub fn pool_bug_03_blocks_expensive_build() {
     {
         world::reset_world(w2);
     }
-    invoke::unwrap_done(invoke::entry("event:卡池BUG", 2, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:卡池BUG"), 2, 0));
     let cancelled2 = world::with_world(|w| w.trig_cancelled);
     assert!(!cancelled2, "E-pool-bug-03: cheap builds are not vetoed");
 }
@@ -1147,7 +1139,7 @@ pub fn pool_bug_03_blocks_expensive_build() {
 #[kani::proof]
 #[kani::unwind(16)]
 pub fn bangdream_chan_01_activation_keeps() {
-    assert_activation_keep("event:元祖！邦多利酱");
+    assert_activation_keep(crate::card_id!("event:元祖！邦多利酱"));
 }
 
 /// Expiry tick cannot fire: `prop(TURNS)` stays 0 (set_prop stub), so
@@ -1162,7 +1154,7 @@ pub fn bangdream_chan_01_expiry_blocked_by_set_prop() {
         world::reset_world(w);
     }
     // On:: index 1 = TurnStartBefore.
-    invoke::unwrap_done(invoke::entry("event:元祖！邦多利酱", 1, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:元祖！邦多利酱"), 1, 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1180,7 +1172,7 @@ pub fn bangdream_chan_01_expiry_blocked_by_set_prop() {
 #[kani::proof]
 #[kani::unwind(16)]
 pub fn surprise_duel_01_activation_keeps() {
-    assert_activation_keep("event:意外的对邦");
+    assert_activation_keep(crate::card_id!("event:意外的对邦"));
 }
 
 #[kani::proof]
@@ -1191,7 +1183,7 @@ pub fn surprise_duel_02_expiry_blocked_by_set_prop() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::entry("event:意外的对邦", 2, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:意外的对邦"), 2, 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1216,7 +1208,7 @@ pub fn heat_head_01_activation_phase_up() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:超燃甩头", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-heat-head: keep (dest=Field)");
     let crystals_key = intern::intern("crystals");
@@ -1232,15 +1224,15 @@ pub fn heat_head_03_phase_end_files_away() {
         world::reset_world(base_world());
     }
     // Arm phase 1 the way Play does (set_crystals writes trig_player's key).
-    invoke::unwrap_done(invoke::event_play("event:超燃甩头", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:超燃甩头"), 0));
     // First AtEnd: phase 1 → 2.
-    invoke::unwrap_done(invoke::hook("event:超燃甩头", "AtEnd", "", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:超燃甩头"), "AtEnd", "", 0));
     let crystals_key = intern::intern("crystals");
     let phase = world::with_world(|w| w.key_get(0, crystals_key));
     assert!(phase == 2, "E-heat-head-02: first turn end arms phase 2");
     // Second AtEnd: expire.
     let n0 = log_n_of();
-    invoke::unwrap_done(invoke::hook("event:超燃甩头", "AtEnd", "", 0));
+    invoke::unwrap_done(invoke::hook_idx(crate::card_id!("event:超燃甩头"), "AtEnd", "", 0));
     let logbuf = effects_of();
     let n1 = log_n_of();
     let effects = &effects_slice(&logbuf, n1)[n0..];
@@ -1267,7 +1259,7 @@ pub fn fix_note_01_activation_keeps() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:修复公告", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:修复公告"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(
         spec::events::fix_note_01_keep(dest),
@@ -1288,7 +1280,7 @@ pub fn end_it_all_01_three_picks_and_keep() {
         world::reset_world(w);
     }
     let before = world::with_world(|w| w.next_answer);
-    invoke::unwrap_done(invoke::event_play("event:让我来结束一切", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:让我来结束一切"), 0));
     let after = world::with_world(|w| w.next_answer);
     let dest = world::with_world(|w| w.dest);
     let picks = after.saturating_sub(before);
@@ -1312,7 +1304,7 @@ pub fn end_it_all_01_three_picks_counted() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:让我来结束一切", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:让我来结束一切"), 0));
     let after = world::with_world(|w| w.next_answer);
     assert!(
         spec::events::end_it_all_01_picked_three(after),
@@ -1353,7 +1345,7 @@ pub fn embers_01_places_copies() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:火种燃尽之后会怎么样呢？", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-embers: keep");
     let logbuf = effects_of();
@@ -1387,9 +1379,9 @@ pub fn embers_03_settle_costs_ten_per_copy() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:火种燃尽之后会怎么样呢？", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 0));
     let n0 = log_n_of();
-    invoke::unwrap_done(invoke::entry("event:火种燃尽之后会怎么样呢？", 2, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 2, 0));
     let logbuf = effects_of();
     let n1 = log_n_of();
     let effects = &effects_slice(&logbuf, n1)[n0..];
@@ -1413,14 +1405,14 @@ pub fn embers_04_clear_on_exile_blocked() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:火种燃尽之后会怎么样呢？", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 0));
     let marks_before = world::with_world(|w| w.marks_n);
     // Exile hook (On:: index 3) with TriggerKind::Exile = 21.
     world::with_world_mut(|w| {
         w.trig_kind = 21;
         w.trig_player = 0;
     });
-    invoke::unwrap_done(invoke::entry("event:火种燃尽之后会怎么样呢？", 3, 0));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("event:火种燃尽之后会怎么样呢？"), 3, 0));
     let marks_after = world::with_world(|w| w.marks_n);
     // remove_marks is a stub: marks survive. Book says they leave.
     assert!(
@@ -1443,7 +1435,7 @@ pub fn bear_cookie_01_push_is_protocol() {
     {
         world::reset_world(base_world());
     }
-    invoke::unwrap_done(invoke::event_play("event:发送熊饼表情", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:发送熊饼表情"), 0));
     // Book: derived 冲榜 on the event-deck top. The stub cannot push —
     // this assertion is expected to FAIL (PROTOCOL-LEVEL, not a body bug).
     let deck_top = world::with_world(|w| {
@@ -1475,7 +1467,7 @@ pub fn lost_chase_rolls_and_pushes_stub() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:迷子的追逐", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:迷子的追逐"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1504,7 +1496,7 @@ pub fn lost_chase_end_it_all_guard() {
     }
     let active = world::with_world(|w| w.events_n) > 0;
     assert!(active, "setup: 让我来结束一切 is up");
-    invoke::unwrap_done(invoke::event_play("event:迷子的追逐", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:迷子的追逐"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1535,7 +1527,7 @@ pub fn lulu_01_pay_500_leg() {
     }
     // ask_yes with no options: n=1 under symbolic answers ⇒ always yes.
     // Force both legs via concrete answers in the companion below.
-    invoke::unwrap_done(invoke::event_play("event:很噜的感觉", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:很噜的感觉"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1577,7 +1569,7 @@ pub fn lulu_02_decline_leaves_put() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:很噜的感觉", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:很噜的感觉"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -1603,7 +1595,7 @@ pub fn school_time_01_exile_leg() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:上学时间", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:上学时间"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1634,7 +1626,7 @@ pub fn kizuna_01_teleport_and_exile() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:Kizuna Music", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:Kizuna Music"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);
@@ -1671,7 +1663,7 @@ pub fn circle_rebuild_01_activation_five_crystals() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:协助CiRCLE重建", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:协助CiRCLE重建"), 0));
     let dest = world::with_world(|w| w.dest);
     assert!(dest == 2, "E-circle-rebuild-01: keep");
     let crystals_key = intern::intern("crystals");
@@ -1701,7 +1693,7 @@ pub fn estate_02_all_pass_no_pay() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:弦卷集团地产开发", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:弦卷集团地产开发"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -1729,7 +1721,7 @@ pub fn estate_01_auction_pay() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:弦卷集团地产开发", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:弦卷集团地产开发"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -1764,7 +1756,7 @@ pub fn this_hand_01_move_is_protocol() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::event_play("event:这只手我不会放开", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:这只手我不会放开"), 0));
     let post = world::snapshot();
     let logbuf = effects_of();
     let n_log = log_n_of();
@@ -1808,7 +1800,7 @@ pub fn asukayama_02_status_spread_blocked_neighbor() {
     {
         world::reset_world(w);
     }
-    invoke::unwrap_done(invoke::event_play("event:飞鸟山之战", 0));
+    invoke::unwrap_done(invoke::event_play_idx(crate::card_id!("event:飞鸟山之战"), 0));
     let logbuf = effects_of();
     let n_log = log_n_of();
     let effects = effects_slice(&logbuf, n_log);

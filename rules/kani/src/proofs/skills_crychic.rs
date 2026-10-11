@@ -77,10 +77,7 @@ pub fn tomoriskill_02_spend_iff() {
     // Entry 0 is `On::Play` (the skill press). `can_use` is the Some(...) gate
     // the engine consults; under Kani we invoke the body directly and pin the
     // gate's pre in the assumes above.
-    invoke::unwrap_done(invoke::play(
-        "skill:高松灯（CRYCHIC）:跌跌撞撞...",
-        player,
-    ));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("skill:高松灯（CRYCHIC）:跌跌撞撞..."), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -118,10 +115,7 @@ pub fn tomoriskill_02_mutant_is_detected() {
     w.key_set(player, fire_key, 1);
     w.key_set(player, stay_key, 1);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play(
-        "skill:高松灯（CRYCHIC）:跌跌撞撞...",
-        player,
-    ));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("skill:高松灯（CRYCHIC）:跌跌撞撞..."), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -169,11 +163,7 @@ pub fn soyoskill_01_cancel_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:长崎素世（CRYCHIC）:雨中祈晴",
-        "PayChoose",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:长崎素世（CRYCHIC）:雨中祈晴"), "PayChoose", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -225,11 +215,7 @@ pub fn soyoskill_01_decline_noop() {
     w.next_answer = 0;
 
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:长崎素世（CRYCHIC）:雨中祈晴",
-        "PayChoose",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:长崎素世（CRYCHIC）:雨中祈晴"), "PayChoose", owner));
     let (logbuf, log_n) = effects();
     assert!(
         spec::skills_crychic::soyoskill_01_noop_log_ok(&logbuf[..log_n]),
@@ -253,11 +239,7 @@ pub fn soyoskill_01_mutant_is_detected() {
     w.answers[0] = 0;
     w.next_answer = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:长崎素世（CRYCHIC）:雨中祈晴",
-        "PayChoose",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:长崎素世（CRYCHIC）:雨中祈晴"), "PayChoose", owner));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -290,11 +272,7 @@ pub fn band_01_hand_limit_host_gap() {
     kani::assume(w.hand_n >= 0 && w.hand_n <= 8);
 
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:CRYCHIC:美好的往日幻影",
-        "TurnStartBefore",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:CRYCHIC:美好的往日幻影"), "TurnStartBefore", player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
@@ -355,11 +333,7 @@ pub fn band_03_crystal_on_four_to_five_iff() {
         world::snapshot()
     };
     let pre_crystals = key_get(player, crystal_key);
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:CRYCHIC:美好的往日幻影",
-        "Drawn",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:CRYCHIC:美好的往日幻影"), "Drawn", player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     let post_crystals = key_get(player, crystal_key);
@@ -393,11 +367,7 @@ pub fn band_03_no_crossing_noop() {
     let seen_key = intern::intern("skill.crychic.seen");
     w.key_set(player, seen_key, 3);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:CRYCHIC:美好的往日幻影",
-        "Drawn",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:CRYCHIC:美好的往日幻影"), "Drawn", player));
     let (logbuf, log_n) = effects();
     // SEEN rewrite is still a SetState; the crystal AddCounter must be absent.
     let has_crystal = logbuf[..log_n]
@@ -422,11 +392,7 @@ pub fn band_03_mutant_is_detected() {
     w.key_set(player, seen_key, 4);
     let crystal_key = intern::intern("crystals");
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(
-        "skill:CRYCHIC:美好的往日幻影",
-        "Drawn",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("skill:CRYCHIC:美好的往日幻影"), "Drawn", player));
     let (logbuf, log_n) = effects();
     // Filter to the AddCounter for the crystal key (no Vec under Kani).
     let mut crystal_effects = [Effect::AddCounter { owner: -1, key: 0, n: 0 }; 4];

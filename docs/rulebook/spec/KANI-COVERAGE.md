@@ -372,3 +372,13 @@ Columns: `unit | id | ops used | all ops modeled? | blocked-by`.
 Maintenance: regenerate by grepping `ctx::` in the guest crates and matching
 resolved `Op` names against `rules/kani/src/host.rs::dispatch` arms. Keep this
 file next to `KANI-FOUNDATION.md`; the foundation doc carries only the summary.
+
+## Hostops-2 (2026-10-11)
+
+`tile_named`, `state_set` packing, `play_doubled`, `trig_set_cancelled` /
+`trig_set_negate_effect`, `is_shop`, `neighbor`, stay/stun/exile split,
+`add_counter` max, `gain_fire` cap, `shuffle_into_deck`, and
+`place_card_on` are now modelled — see `kani/HOSTOPS-ROUND2.md` for the
+per-op table and which unit rows those unblock. String-keyed `invoke::find`
+is gone from proofs (`card_id!` + `*_idx`); remaining cliffs are `String`/
+`Vec` memcmp inside card bodies and move-plan / `rent_of` / name-list ops.

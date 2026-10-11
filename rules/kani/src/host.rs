@@ -191,24 +191,20 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         // ---- tiles (static data from board.json + runtime state) ----
         Op::tile_count => world::TILE_COUNT as i64,
         Op::tile_named => {
-            // Real board: resolve by name. 「江户川乐器店」 is board.json
-            // index 31 → engine position 30 (0-based).
+            // Real board: `data.tiles.iter().position(|t| t.name == name)`
+            // (hostfns `tile_named`). Every `board.json` name resolves; unknown
+            // names are -1.
+            let bytes = card_sdk::native::read(a0, a1.max(0) as usize);
+            let mut found = board::tile_named_bytes(&bytes);
+            // Pilot boards (all `pos < 8`) keep the stub-shop index so the
+            // money/teleport pilots against the 8-tile fixture still work.
             if name_eq(a0, a1, TILE_SHOP_NAME) {
-                // Pilot proofs use the 0-based TILE_SHOP=3 constant against a
-                // stub board; the general model reports the real board index
-                // when the world was built with the real board (`pos` in 1..=60),
-                // otherwise the pilot constant.
                 let pilot = world::with_world(|w| w.pos.iter().all(|&p| p < 8));
                 if pilot {
-                    TILE_SHOP as i64
-                } else {
-                    world::TILE_SHOP_BOARD as i64
+                    found = TILE_SHOP;
                 }
-            } else {
-                // Generic: scan interned tile names stored in a side table is
-                // out of scope; unknown names are -1 (hostfns `tile_named`).
-                -1
             }
+            found as i64
         }
         Op::tile_owner => world::with_world(|w| w.tiles[tile_idx(a0)].owner) as i64,
         Op::tile_group => {
@@ -388,9 +384,23 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             d as i64
         }
         Op::neighbor => {
-            let pos = world::with_world(|w| w.pos[player_idx(a0)]);
-            let dir = if a1 == 0 { 1 } else { -1 };
-            ((pos + dir).rem_euclid(60)) as i64
+            // hostfns `neighbor`: the next **present** player in turn order,
+            // wrapping. `dir < 0` walks backwards. Not a board tile.
+            let n = MAX_PLAYERS as i32;
+            let dir = if a1 < 0 { -1 } else { 1 };
+            let mut found = -1i32;
+            let mut j = 1i32;
+            while j < n {
+                let k = ((a0 + dir * j).rem_euclid(n) + n).rem_euclid(n);
+                let present = world::with_world(|w| {
+                    (k as usize) < w.n_players as usize && !w.out[k as usize]
+                });
+                if present {
+                    found = k;
+                }
+                j += 1;
+            }
+            found as i64
         }
         Op::tile_steps_ahead => {
             let pos = world::with_world(|w| w.pos[player_idx(a0)]);
@@ -843,8 +853,52 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 ok as i64
             })
         }
-        Op::shuffle_into_deck => 0,
-        Op::place_card_at | Op::place_card_on => {
+        Op::shuffle_into_deck => {
+            // Engine: move `hand` / `discard` into `draw` and shuffle. Order is
+            // symbolic/irrelevant — model as a multiset move (task B8).
+            let do_hand = a1 != 0;
+            let do_discard = a2 != 0;
+            world::with_world_mut(|w| {
+                let mut moved = 0i32;
+                if do_hand {
+                    let mut i = 0usize;
+                    while i < w.hand_n as usize {
+                        let id = w.hand_pile[i];
+                        if id != u16::MAX {
+                            let di = w.deck_n as usize;
+                            if di < world::MAX_CARDS {
+                                w.deck_pile[di] = id;
+                                w.deck_n += 1;
+                                moved += 1;
+                            }
+                            w.hand_pile[i] = u16::MAX;
+                        }
+                        i += 1;
+                    }
+                    w.hand_n = 0;
+                }
+                if do_discard {
+                    let mut i = 0usize;
+                    while i < w.discard_n as usize {
+                        let id = w.discard_pile[i];
+                        if id != u16::MAX {
+                            let di = w.deck_n as usize;
+                            if di < world::MAX_CARDS {
+                                w.deck_pile[di] = id;
+                                w.deck_n += 1;
+                                moved += 1;
+                            }
+                            w.discard_pile[i] = u16::MAX;
+                        }
+                        i += 1;
+                    }
+                    w.discard_n = 0;
+                }
+                moved as i64
+            })
+        }
+        Op::place_card_at => {
+            // ABI `[player, cp, cl, ptr, len, 0]` — card name at (a1, a2).
             let id = card_u16(a1, a2);
             let slot = card_slot(a1, a2);
             world::with_world_mut(|w| {
@@ -869,6 +923,39 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 w.push(Effect::PlaceCard {
                     player: a0,
                     dest,
+                    card: slot,
+                });
+                uid as i64
+            })
+        }
+        Op::place_card_on => {
+            // ABI `[player, tile, cp, cl, ptr, len]` — card name at (a2, a3),
+            // landing tile at a1 (HHW kkr-02 「放置在CiRCLE」). The old arm
+            // read the name from (a1, a2) = (tile, cp) and used `dest`.
+            let tile = a1;
+            let id = card_u16(a2, a3);
+            let slot = card_slot(a2, a3);
+            world::with_world_mut(|w| {
+                let uid = w.next_uid;
+                w.next_uid += 1;
+                w.last_uid = uid;
+                let fi = w.field_n as usize;
+                if fi < world::MAX_FIELD {
+                    w.field[fi] = world::FieldCard {
+                        uid,
+                        card: id,
+                        player: a0,
+                        tile,
+                        face_down: false,
+                        immune: false,
+                        crystals: 0,
+                        props: world::NameMap::new(),
+                    };
+                    w.field_n += 1;
+                }
+                w.push(Effect::PlaceCard {
+                    player: a0,
+                    dest: tile,
                     card: slot,
                 });
                 uid as i64
@@ -1035,43 +1122,148 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             }
         }
         Op::set_self_prop | Op::set_prop_at | Op::set_tile_prop => {
-            let key = if op == Op::set_tile_prop {
-                name_id(a1, a2)
-            } else {
-                name_id(a1, a2)
-            };
-            let val = if op == Op::set_tile_prop { a3 } else { a2 };
+            // hostfns: `set_self_prop(kp, kl, v)` writes the running instance's
+            // prop; `set_tile_prop(tile, kp, kl, v)` writes the tile's. The old
+            // model only wrote the tile prop (`set_self_prop` was a no-op).
+            let key = name_id(a1, a2);
             if op == Op::set_tile_prop {
+                let val = a3;
                 world::with_world_mut(|w| {
                     w.tiles[tile_idx(a0)].props.set(key, val);
+                });
+            } else if op == Op::set_self_prop {
+                // `set_self_prop(kp, kl, v)` — packing is [kp, kl, v, 0, 0, 0]
+                // so a2 is the key-len and a3 is the value? sys_kani:
+                // `set_self_prop(kp, kl, v)` → [kp, kl, v, 0, 0, 0].
+                // name_id takes (ptr,len) = (a1,a2) only when a1 is ptr.
+                // Real packing: a0=kp, a1=kl, a2=v.
+                let key = name_id(a0, a1);
+                let val = a2;
+                world::with_world_mut(|w| {
+                    if w.field_n > 0 {
+                        let i = (w.field_n as usize) - 1;
+                        w.field[i].props.set(key, val);
+                    }
+                });
+            } else {
+                // set_prop_at(uid, kp, kl, v)
+                let key = name_id(a1, a2);
+                let val = a3;
+                let uid = a0;
+                world::with_world_mut(|w| {
+                    let mut i = 0usize;
+                    while i < w.field_n as usize {
+                        if w.field[i].uid == uid {
+                            w.field[i].props.set(key, val);
+                        }
+                        i += 1;
+                    }
                 });
             }
             0
         }
-        Op::counter_self | Op::counter_at | Op::card_counter => {
+        Op::counter_self | Op::card_counter => {
             let key = name_id(a0, a1);
-            world::with_world(|w| w.key_get(w.trig_player, key)) as i64
+            world::with_world(|w| {
+                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.field_crystals(w.last_uid)
+                } else {
+                    w.key_get(w.trig_player, key)
+                }
+            }) as i64
         }
-        Op::add_counter_self | Op::add_counter_at | Op::add_card_counter => {
+        Op::counter_at => {
+            // `counter_at(uid, np, nl)` — the **uid** instance's counter.
+            let uid = a0;
+            let key = name_id(a1, a2);
+            world::with_world(|w| {
+                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.field_crystals(uid)
+                } else {
+                    w.field_counter(uid, key)
+                }
+            }) as i64
+        }
+        Op::add_counter_self | Op::add_card_counter => {
+            // `(was+n).clamp(0,max)` when `max > 0`, else floor at 0.
             let key = name_id(a0, a1);
             let n = a2;
+            let max = a3;
             world::with_world_mut(|w| {
                 let p = w.trig_player;
-                let v = w.key_add(p, key, n);
+                let was = if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.field_crystals(w.last_uid)
+                } else {
+                    w.key_get(p, key)
+                };
+                let mut now = was + n;
+                if now < 0 {
+                    now = 0;
+                }
+                if max > 0 && now > max {
+                    now = max;
+                }
+                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.set_field_crystals(w.last_uid, now);
+                } else {
+                    w.key_set(p, key, now);
+                }
                 w.push(Effect::AddCounter {
                     owner: p,
                     key: key.0,
-                    n,
+                    n: now - was,
                 });
-                v as i64
+                now as i64
+            })
+        }
+        Op::add_counter_at => {
+            // `add_counter_at(uid, np, nl, n, max)` — same clamp on `uid`.
+            let uid = a0;
+            let key = name_id(a1, a2);
+            let n = a3;
+            let max = a4;
+            world::with_world_mut(|w| {
+                let was = if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.field_crystals(uid)
+                } else {
+                    w.field_counter(uid, key)
+                };
+                let mut now = was + n;
+                if now < 0 {
+                    now = 0;
+                }
+                if max > 0 && now > max {
+                    now = max;
+                }
+                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.set_field_crystals(uid, now);
+                } else {
+                    w.set_field_counter(uid, key, now);
+                }
+                w.push(Effect::AddCounter {
+                    owner: uid,
+                    key: key.0,
+                    n: now - was,
+                });
+                now as i64
             })
         }
         Op::set_counter_self => {
             let key = name_id(a0, a1);
+            let v = a2;
             world::with_world_mut(|w| {
-                w.key_set(w.trig_player, key, a2);
+                if key == intern::intern(world::COUNTER_CRYSTALS) {
+                    w.set_field_crystals(w.last_uid, v);
+                } else {
+                    w.key_set(w.trig_player, key, v);
+                }
+                w.push(Effect::AddCounter {
+                    owner: w.trig_player,
+                    key: key.0,
+                    n: v,
+                });
             });
-            a2 as i64
+            v as i64
         }
         Op::count_held | Op::count_held_name => {
             // count_held_name(name_ptr, name_len, player)
@@ -1121,11 +1313,61 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             0
         }
-        Op::state_get | Op::slot => {
+        Op::state_get => {
+            // hostfns `state_get(player, ptr, len, field)`: field 1/2/3 read
+            // the declared MAX / MIN / EXPIRES column; anything else is VALUE.
+            let key = name_id(a1, a2);
+            let field = a3;
+            world::with_world(|w| match field {
+                1 => w.key_max(a0, key),
+                2 => w.key_min(a0, key),
+                3 => w.key_expires(a0, key),
+                _ => w.key_get(a0, key),
+            }) as i64
+        }
+        Op::slot => {
             let key = name_id(a1, a2);
             world::with_world(|w| w.key_get(a0, key)) as i64
         }
-        Op::state_set | Op::set_slot => {
+        Op::state_set => {
+            // hostfns `state_set(player, ptr, len, field, v)`:
+            //   a3 = field (0 value / 1 max / 2 min / 3 expires), a4 = v.
+            // The old model wrote a3 as the value and dropped a4.
+            let key = name_id(a1, a2);
+            let field = a3;
+            let v = a4;
+            world::with_world_mut(|w| {
+                let out = match field {
+                    1 => {
+                        w.key_set_max(a0, key, v);
+                        v
+                    }
+                    2 => {
+                        w.key_set_min(a0, key, v);
+                        v
+                    }
+                    3 => {
+                        w.key_set_expires(a0, key, v);
+                        v
+                    }
+                    _ => {
+                        w.key_set(a0, key, v);
+                        v
+                    }
+                };
+                if field == 0 {
+                    w.push(Effect::SetState {
+                        player: a0,
+                        key: key.0,
+                        n: v,
+                    });
+                }
+                out
+            }) as i64
+        }
+        Op::set_slot => {
+            // `set_slot(player, ptr, len, v)` — a3 is the value (sugar for
+            // `state_set` field 0).
             let key = name_id(a1, a2);
             world::with_world_mut(|w| {
                 w.key_set(a0, key, a3);
@@ -1186,19 +1428,29 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         Op::fire => world::with_world(|w| w.fire[player_idx(a0)]) as i64,
         Op::fire_max => world::with_world(|w| w.fire_max[player_idx(a0)]) as i64,
         Op::gain_fire => {
-            if a1 <= 0 {
-                return 0;
-            }
+            // engine `gain_fire`: `got = n.clamp(0, (fire_max - fire).max(0))`;
+            // 0 when out / n<=0 / cap<=0. Returns the amount gained.
             world::with_world_mut(|w| {
-                if (a0 as usize) < MAX_PLAYERS {
-                    w.fire[a0 as usize] = w.fire[a0 as usize].saturating_add(a1);
+                let p = player_idx(a0);
+                let n = a1;
+                if n <= 0 || w.out[p] {
+                    return 0;
                 }
+                let cap = w.fire_max[p];
+                if cap <= 0 {
+                    return 0;
+                }
+                let got = n.clamp(0, (cap - w.fire[p]).max(0));
+                if got <= 0 {
+                    return 0;
+                }
+                w.fire[p] += got;
                 w.push(Effect::GainFire {
                     player: a0,
-                    n: a1,
+                    n: got,
                 });
-            });
-            a1 as i64
+                got as i64
+            })
         }
         Op::add_fire_max => {
             world::with_world_mut(|w| {
@@ -1219,6 +1471,14 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
                 }
             })
         }
+        // `ctx::n(k, v)` doubles when `play_doubled() == k`. Default is
+        // **no doubling** (`-1` / `None` in the engine) — the old stub returned
+        // 0, so `n(0, 600)` wrongly yielded 1200.
+        Op::play_doubled => world::with_world(|w| w.play_doubled) as i64,
+        Op::set_play_doubled => {
+            world::with_world_mut(|w| w.play_doubled = a0);
+            0
+        }
         Op::give_stay => {
             world::with_world_mut(|w| {
                 if (a0 as usize) < MAX_PLAYERS {
@@ -1232,9 +1492,10 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::give_stun => {
+            // Separate from [停留] (`key::STUN` vs `key::STAY` in the engine).
             world::with_world_mut(|w| {
                 if (a0 as usize) < MAX_PLAYERS {
-                    w.stay[a0 as usize] = w.stay[a0 as usize].saturating_add(a1);
+                    w.stun[a0 as usize] = (w.stun[a0 as usize] + a1).max(0);
                 }
                 w.push(Effect::GiveStun {
                     player: a0,
@@ -1244,7 +1505,12 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             0
         }
         Op::give_exile => {
+            // `key::EXILE` layers + `key::EXILE_TO` target (decay is protocol).
             world::with_world_mut(|w| {
+                if (a0 as usize) < MAX_PLAYERS {
+                    w.exile[a0 as usize] = (w.exile[a0 as usize] + a1).max(0);
+                    w.exile_to[a0 as usize] = a2;
+                }
                 w.push(Effect::GiveExile {
                     player: a0,
                     n: a1,
@@ -1253,11 +1519,25 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
             });
             0
         }
-        Op::give_extra_turn => 0,
+        Op::give_extra_turn => {
+            // Recorded so the protocol can schedule it. Scheduling is
+            // PROTOCOL-LEVEL (the turn engine owns the extra-turn queue).
+            world::with_world_mut(|w| {
+                if a0 >= 0 && (a0 as usize) < MAX_PLAYERS {
+                    w.extra_turns[a0 as usize] = true;
+                }
+                w.push(Effect::GiveExtraTurn { player: a0 });
+            });
+            0
+        }
         Op::stay_of => world::with_world(|w| w.stay[player_idx(a0)]) as i64,
-        Op::stun_of => world::with_world(|w| w.stay[player_idx(a0)]) as i64,
-        Op::exile_of => 0,
-        Op::cant_move => world::with_world(|w| (w.stay[player_idx(a0)] > 0) as i64),
+        Op::stun_of => world::with_world(|w| w.stun[player_idx(a0)]) as i64,
+        Op::exile_of => world::with_world(|w| w.exile[player_idx(a0)]) as i64,
+        Op::cant_move => world::with_world(|w| {
+            (w.stay[player_idx(a0)] > 0
+                || w.stun[player_idx(a0)] > 0
+                || w.exile[player_idx(a0)] > 0) as i64
+        }),
         Op::abnormal_count => world::with_world(|w| {
             let mut n = 0;
             let mut p = 0;
@@ -1420,12 +1700,15 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         }
         Op::trig_set_reason | Op::trig_set_cancelled | Op::trig_set_negate_effect
         | Op::trig_set_spare => {
+            // No-arg setters: `sys_kani` packs `[0;6]`. The call **is** the
+            // effect (hostfns `trig_set_cancelled` / `trig_set_negate_effect`
+            // take no value). Do not read a0.
             world::with_world_mut(|w| {
                 if op == Op::trig_set_cancelled {
-                    w.trig_cancelled = a0 != 0;
+                    w.trig_cancelled = true;
                 }
                 if op == Op::trig_set_negate_effect {
-                    w.trig_negate = a0 != 0;
+                    w.trig_negate = true;
                 }
             });
             0
@@ -1453,7 +1736,7 @@ pub fn dispatch(op: Op, a: Args) -> i64 {
         | Op::move_parity | Op::move_resolve | Op::move_steps | Op::move_remaining
         | Op::move_total | Op::move_dir | Op::fixed_roll | Op::do_move_roll
         | Op::turn_main_steps | Op::turn_rolls | Op::turn_snap | Op::turn_start_pos
-        | Op::play_doubled | Op::schedule_turn_end | Op::linger | Op::gate
+        | Op::schedule_turn_end | Op::linger | Op::gate
         | Op::targeted_count => 0,
 
         // ---- offers / buy / build (PROTOCOL-LEVEL) ----

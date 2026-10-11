@@ -38,11 +38,11 @@ use rules_cond_ir::vars::VarId;
 // Shared setup helpers (local to this unit — shared files stay untouched)
 // ---------------------------------------------------------------------------
 
-const SKILL_BAND: &str = "skill:Morfonica:振翅高飞的练习曲";
-const SKILL_TOUKO: &str = "skill:桐谷透子:天上天下，唯我独尊";
-const SKILL_NANAMI: &str = "skill:广町七深:这是很普通的事吧？";
-const SKILL_YURI: &str = "skill:八潮瑠唯:正论暴击";
-const SKILL_TSUKUSHI: &str = "skill:二叶筑紫:交给班长吧";
+const SKILL_BAND: usize = crate::card_id!("skill:Morfonica:振翅高飞的练习曲");
+const SKILL_TOUKO: usize = crate::card_id!("skill:桐谷透子:天上天下，唯我独尊");
+const SKILL_NANAMI: usize = crate::card_id!("skill:广町七深:这是很普通的事吧？");
+const SKILL_YURI: usize = crate::card_id!("skill:八潮瑠唯:正论暴击");
+const SKILL_TSUKUSHI: usize = crate::card_id!("skill:二叶筑紫:交给班长吧");
 
 const KEY_TAKEN: &str = "skill.morfonica.moneyTaken";
 const KEY_YURI_X: &str = "skill.yuriCrit.x";
@@ -143,7 +143,7 @@ pub fn band_01_draw_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(SKILL_BAND, "PayAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_BAND, "PayAfter", player));
     kani::cover!(true, "body returned");
 
     let (logbuf, log_n) = effects();
@@ -186,7 +186,7 @@ pub fn band_01_noop_below_or_gain() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(SKILL_BAND, "PayAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_BAND, "PayAfter", player));
     kani::cover!(true, "body returned");
     let (_logbuf, log_n) = effects();
     assert!(log_n == 0, "C-MOR-band-01 noop: log must stay empty");
@@ -206,7 +206,7 @@ pub fn band_01_mutant_is_detected() {
     let target = w.trig_target;
     let value = w.pay_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(SKILL_BAND, "PayAfter", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_BAND, "PayAfter", player));
     kani::cover!(true, "body returned");
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -271,7 +271,7 @@ pub fn band_02_cycle_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(SKILL_BAND, 1, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_BAND, 1, player));
     kani::cover!(true, "body returned");
 
     let (logbuf, log_n) = effects();
@@ -312,7 +312,7 @@ pub fn band_02_noop_card_option() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry(SKILL_BAND, 1, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_BAND, 1, player));
     kani::cover!(true, "body returned");
     let (_logbuf, log_n) = effects();
     assert!(log_n == 0, "C-MOR-band-02 noop: log empty on card option");
@@ -332,7 +332,7 @@ pub fn band_02_mutant_is_detected() {
     let taken = w.key_get(player, intern::intern(KEY_TAKEN));
     kani::assume(taken == 0); // first of the cycle → 1000, mutant says 1500
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(SKILL_BAND, 1, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_BAND, 1, player));
     kani::cover!(true, "body returned");
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -373,7 +373,7 @@ fn symbolic_pass_world() -> World {
 /// book and the current Kani host agree (`GainFire{1}`); at-cap the book is a
 /// no-op but Kani `gain_fire` still logs — that leg is **BLOCKED-HOST** and
 /// only covered, not asserted against the book.
-fn pass_gain_iff(skill: &str, fire_max_pin: i32, label: &str) {
+fn pass_gain_iff(skill: usize, fire_max_pin: i32, label: &str) {
     let mut w = symbolic_pass_world();
     // Pin the seat's fire-pot cap to the quote's 「上限」.
     let player0 = w.trig_player;
@@ -395,7 +395,7 @@ fn pass_gain_iff(skill: &str, fire_max_pin: i32, label: &str) {
     };
 
     // Body entry: the Pass hook. (hook_kind_name maps `Pass`.)
-    invoke::unwrap_done(invoke::hook_only(skill, "Pass", player));
+    invoke::unwrap_done(invoke::hook_only_idx(skill, "Pass", player));
     kani::cover!(true, "body returned");
 
     let (logbuf, log_n) = effects();
@@ -493,7 +493,7 @@ pub fn touko_01_mutant_is_detected() {
     w.trig_tile = circle;
     let player = player0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(SKILL_TOUKO, "Pass", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_TOUKO, "Pass", player));
     kani::cover!(true, "body returned");
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -560,7 +560,7 @@ pub fn rui_crit_02_roll_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(SKILL_YURI, "PayChoose", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_YURI, "PayChoose", player));
     kani::cover!(true, "body returned");
 
     let (logbuf, log_n) = effects();
@@ -621,7 +621,7 @@ pub fn rui_crit_02_noop() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(SKILL_YURI, "PayChoose", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_YURI, "PayChoose", player));
     kani::cover!(true, "body returned");
     let (_logbuf, log_n) = effects();
     assert!(log_n == 0, "C-MOR-rui-crit-02 noop: log empty at amount 0");
@@ -645,7 +645,7 @@ pub fn rui_crit_02_mutant_is_detected() {
     w.key_set(player, key, 1);
     kani::assume(w.pay_amount > 0);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(SKILL_YURI, "PayChoose", player));
+    invoke::unwrap_done(invoke::hook_only_idx(SKILL_YURI, "PayChoose", player));
     kani::cover!(true, "body returned");
     let x_after = world::with_world(|ww| ww.key_get(player, key));
     // Post X is 0 (book hit, inclusive at n == 1) or 2 (miss).
@@ -724,7 +724,7 @@ pub fn tsukushi_01_redirect_iff() {
         world::snapshot()
     };
     // Entry index 2 = the `mine` PayChoose hook (`on_gain`).
-    invoke::unwrap_done(invoke::entry(SKILL_TSUKUSHI, 2, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_TSUKUSHI, 2, player));
     kani::cover!(true, "body returned");
 
     let (logbuf, log_n) = effects();
@@ -787,7 +787,7 @@ pub fn tsukushi_01_mutant_is_detected() {
     }
     let amount = w.pay_amount;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(SKILL_TSUKUSHI, 2, player));
+    invoke::unwrap_done(invoke::entry_idx(SKILL_TSUKUSHI, 2, player));
     kani::cover!(true, "body returned");
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -888,7 +888,7 @@ pub fn tsukushi_03_sweep_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::skill_play(SKILL_TSUKUSHI, player));
+    invoke::unwrap_done(invoke::skill_play_idx(SKILL_TSUKUSHI, player));
     kani::cover!(true, "body returned");
 
     let (logbuf, log_n) = effects();
@@ -940,7 +940,7 @@ pub fn tsukushi_03_mutant_is_detected() {
     w.key_set(player, rk, 200); // at floor: book stays 200, mutant → 0
     let pre_rate = 200;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::skill_play(SKILL_TSUKUSHI, player));
+    invoke::unwrap_done(invoke::skill_play_idx(SKILL_TSUKUSHI, player));
     kani::cover!(true, "body returned");
     let post_rate = world::with_world(|ww| ww.key_get(player, rk));
     let book = spec::tsukushi_03_rate_after(pre_rate);

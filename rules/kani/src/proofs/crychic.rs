@@ -76,7 +76,7 @@ pub fn soyoreturn_02_hand_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("CRYCHIC:（soyo）回到曾经", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:（soyo）回到曾经"), player));
 
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
@@ -106,7 +106,7 @@ pub fn soyoreturn_02_mutant_is_detected() {
     let player = any_seat(w.n_players);
     w.trig_player = player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("CRYCHIC:（soyo）回到曾经", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:（soyo）回到曾经"), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
@@ -161,10 +161,7 @@ pub fn vocalist_01_waive_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract(
-        "CRYCHIC:主唱太拼命了",
-        owner,
-    ));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("CRYCHIC:主唱太拼命了"), owner));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -192,7 +189,7 @@ pub fn vocalist_01_mutant_is_detected() {
     w.trig_value = 5000;
     w.pay_amount = 5000;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::counteract("CRYCHIC:主唱太拼命了", owner));
+    invoke::unwrap_done(invoke::counteract_idx(crate::card_id!("CRYCHIC:主唱太拼命了"), owner));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(spec::crychic::vocalist_01_log_ok(effects), "card matches book");
@@ -217,7 +214,7 @@ pub fn grab_01_stay_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("CRYCHIC:想要抓住...", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:想要抓住..."), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -253,7 +250,7 @@ pub fn grab_01_mutant_is_detected() {
     w.trig_player = player;
     let passer_key = intern::intern("want_to_grab_passer").0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("CRYCHIC:想要抓住...", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:想要抓住..."), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -283,7 +280,7 @@ pub fn debut_02_turn_end_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::entry("CRYCHIC:初演大成功", 1, player));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("CRYCHIC:初演大成功"), 1, player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -314,7 +311,7 @@ pub fn debut_02_mutant_is_detected() {
     w.trig_player = player;
     w.band_crystals[player as usize] = 0;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry("CRYCHIC:初演大成功", 1, player));
+    invoke::unwrap_done(invoke::entry_idx(crate::card_id!("CRYCHIC:初演大成功"), 1, player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(spec::crychic::debut_02_log_ok(effects, player), "card matches book");
@@ -332,7 +329,7 @@ pub fn debut_01_play_logs_nothing() {
     let player = any_seat(w.n_players);
     w.trig_player = player;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("CRYCHIC:初演大成功", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:初演大成功"), player));
     let (logbuf, log_n) = effects();
     assert!(
         spec::crychic::debut_01_log_ok(&logbuf[..log_n]),
@@ -359,7 +356,7 @@ pub fn ifonly_01_cashout_iff() {
         world::snapshot()
     };
     let field0 = field_n();
-    invoke::unwrap_done(invoke::play("CRYCHIC:如果能一直持续下去...", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:如果能一直持续下去..."), player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -394,7 +391,7 @@ pub fn ifonly_01_mutant_is_detected() {
     w.trig_player = player;
     w.band_crystals[player as usize] = 2;
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("CRYCHIC:如果能一直持续下去...", player));
+    invoke::unwrap_done(invoke::play_idx(crate::card_id!("CRYCHIC:如果能一直持续下去..."), player));
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
@@ -466,11 +463,7 @@ pub fn ifonly_02_discard_at_seven_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "CRYCHIC:如果能一直持续下去...",
-        "",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("CRYCHIC:如果能一直持续下去..."), "", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
@@ -511,11 +504,7 @@ pub fn soyoreturn_01_branch2_iff() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::hook_only(
-        "CRYCHIC:（soyo）回到曾经",
-        "Drawn",
-        player,
-    ));
+    invoke::unwrap_done(invoke::hook_only_idx(crate::card_id!("CRYCHIC:（soyo）回到曾经"), "Drawn", player));
     let post = world::snapshot();
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];

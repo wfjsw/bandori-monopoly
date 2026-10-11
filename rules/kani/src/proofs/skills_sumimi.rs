@@ -10,7 +10,7 @@ use crate::ir_fill;
 use crate::spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
 
-const BAND: &str = "skill:Sumimi:人气偶像组合";
+const BAND: usize = crate::card_id!("skill:Sumimi:人气偶像组合");
 const MANA: &str = "skill:纯田真奈:甜甜圈爱好者";
 
 fn base_world() -> World {
@@ -77,7 +77,7 @@ pub fn band_02_rent_bonus_iff() {
     kani::cover!(crystals > 0, "crystals > 0 (bonus applies)");
     kani::cover!(crystals == 0, "crystals == 0 (no-op)");
 
-    invoke::unwrap_done(invoke::hook_only(BAND, "PayMul", owner));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND, "PayMul", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -115,7 +115,7 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     let ckey = intern::intern("crystals");
     w.key_set(owner, ckey, 3);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(BAND, "PayMul", owner));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND, "PayMul", owner));
     let post = world::snapshot();
     let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
     kani::cover!(post.pay_amount != wrong, "disagreement live");
@@ -178,7 +178,7 @@ pub fn band_01_clear_iff() {
     }
 
     assert!(admitted, "clear half must be admitted when GOT == 0");
-    invoke::unwrap_done(invoke::hook_only(BAND, "TurnEndBefore", owner));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND, "TurnEndBefore", owner));
     let post = world::snapshot();
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
@@ -204,7 +204,7 @@ pub fn band_01_clear_mutant_is_detected() {
     let ckey = intern::intern("crystals");
     w.key_set(owner, ckey, 3);
     world::reset_world(w);
-    invoke::unwrap_done(invoke::hook_only(BAND, "TurnEndBefore", owner));
+    invoke::unwrap_done(invoke::hook_only_idx(BAND, "TurnEndBefore", owner));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     let wrong = spec::sumimi::band_crystal_clear_ok_mutant(effects, owner, ckey.0, 3);
