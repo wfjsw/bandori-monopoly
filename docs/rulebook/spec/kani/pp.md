@@ -32,8 +32,9 @@ Two of them (`C-PP-aya-haruka-01/02`) are pilot-owned and already proven.
 | harness written (PROVEN\* pending slot) | 30 | see per-row harness names |
 | **total** | **74** | |
 
-Harness inventory (unit `pp` + `skills_pp`): 40 `#[kani::proof]` functions
-(pure formulas + body iff + no-op + mutant companions).
+Harness inventory (unit `pp` + `skills_pp`): 43 `#[kani::proof]` functions
+(30 in `proofs/pp.rs`, 13 in `proofs/skills_pp.rs`) — pure formulas, body
+iff, no-op, and mutant companions.
 
 ---
 
@@ -94,7 +95,7 @@ Harness inventory (unit `pp` + `skills_pp`): 40 `#[kani::proof]` functions
 | C-PP-dream-ahead-00 | game-start auto place, hand -1 | PROTOCOL-LEVEL | — | — | game-start deal scheduling | — |
 | C-PP-dream-ahead-01 | crystal per draw, cap 5, overflow X | PROVEN* (pre<5) | `dream_ahead_01_crystal_per_draw_iff` | pending | host `add_counter` ignores `max` (cap-5) | — |
 | C-PP-dream-ahead-02 | no build, hand limit -1 | PROVEN* (continuous prop) | — | prop on CardDef | — | — |
-| C-PP-dream-ahead-03 | extra rent owned×X + MIN(X×30,300) | PROVEN* (formula) | `dream_ahead_03_formula` | pending | settle context is PROTOCOL | — |
+| C-PP-dream-ahead-03 | extra rent owned×X + MIN(X×30,300) | PROVEN (formula) | `dream_ahead_03_formula` | SUCCESSFUL 3.6s | settle context is PROTOCOL | — |
 | C-PP-dream-ahead-04 | [共鸣][反击] turn-end buy | OPEN | — | — | [可购买格子] set undefined | OPEN-共鸣 |
 | C-PP-guide-01 | band +3, place, owned/3 crystals | PROVEN* | `guide_01_band_and_crystals_iff`, `guide_01_mutant_is_detected` | pending | | OPEN-div |
 | C-PP-guide-02 | mark from deck colours | OPEN | — | — | mark vocabulary unprinted | OPEN-mark |
