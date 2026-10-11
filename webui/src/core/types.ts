@@ -126,6 +126,10 @@ export interface MatchEvent {
    *  「无事发生」 / 「被…无效」 notes and the flash's one-line summary. Absent
    *  on old records. */
   results?: Msg[];
+  /** The field instance (`FieldCard.uid`) of a `card` activation whose card
+   *  was in play at the time; absent / -1 otherwise (hand play, skill, event,
+   *  old records). */
+  uid?: number;
 }
 /** C# `MovePlan` -- the movement the current turn is taking. `reach[k]` is the
  * tile after k+1 steps; `steps` is how far along it the seat has got. */
