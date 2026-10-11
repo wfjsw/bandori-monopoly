@@ -196,9 +196,33 @@ fi
 # ---------------------------------------------------------------------------
 # Run one harness
 # ---------------------------------------------------------------------------
+# Machine-wide concurrency cap shared by EVERY run.sh invocation on this box
+# (several agents run proofs at once; CBMC peaks at several GB each and the box
+# has 16 GB). A slot is an flock on $KANI_SLOT_DIR/slotN held for the harness's
+# lifetime; the per-harness timeout starts only after the slot is acquired.
+KANI_GLOBAL_SLOTS="${KANI_GLOBAL_SLOTS:-3}"
+KANI_SLOT_DIR="${KANI_SLOT_DIR:-$HOME/.kani-slots}"
+mkdir -p "$KANI_SLOT_DIR"
+
+acquire_slot() {
+  local i fd
+  while true; do
+    for ((i = 0; i < KANI_GLOBAL_SLOTS; i++)); do
+      exec {fd}>"$KANI_SLOT_DIR/slot$i"
+      if flock -n "$fd"; then
+        SLOT_FD="$fd"
+        return 0
+      fi
+      exec {fd}>&-
+    done
+    sleep 3
+  done
+}
+
 run_one() {
   local unit="$1" name="$2" log="$3"
   local start end dt verdict exit_code
+  acquire_slot
   start=$(date +%s.%N)
 
   # cargo kani from the worktree root; exact flags per KANI.md §1
