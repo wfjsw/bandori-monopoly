@@ -24,8 +24,21 @@ pub const CHANGE_WORLD: CardDef = CardDef::new(
             None,
             pass_tile,
         ),
-        On::Hook(&[HookKind::PayAdd], "card.placed && pay_is_rent && target == owner", None, pay_choose),
-        On::Hook(&[HookKind::PayAfter], "card.placed && pay_is_rent && target == owner", None, pay_after),
+        // 「此地块的下一次收费」 -- the rent on *this* card's tile, with a
+        // house count `n` to scale by. Tile match + houses are derived scans
+        // (self_tile / houses_of), residual (docs/GUARDS.md §4.2).
+        On::Hook(
+            &[HookKind::PayAdd],
+            "card.placed && pay_is_rent && target == owner",
+            Some(on_card_tile_with_houses),
+            pay_choose,
+        ),
+        On::Hook(
+            &[HookKind::PayAfter],
+            "card.placed && pay_is_rent && target == owner",
+            Some(on_card_tile_with_houses),
+            pay_after,
+        ),
     ],
 );
 
@@ -118,17 +131,26 @@ fn pass_tile(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Residual guard for [`pay_choose`] / [`pay_after`]: the rent is on the card's
+/// own tile and that tile still has houses (`n` in `50*(y+1)*n`).
+///
+/// 规则书（docs/rulebook/cards.json, id `RAS:Change the world`）:
+/// > 此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，
+/// > n为此卡放置格上房屋层数
+///
+/// 「此地块」 is the card's placement tile; with `n == 0` the clause is
+/// vacuous, so there is no rent bonus (and no discard trigger) to apply.
+fn on_card_tile_with_houses(_player_id: i32) -> bool {
+    let tile = ctx::self_tile().unwrap_or(-1);
+    tile >= 0 && trigger::tile() == tile && ctx::houses_of(tile) > 0
+}
+
 /// C# `CardChangeWorld.PayAdd` -- when rent on the card's tile is paid to the
 /// card's owner, the rent grows by `50 * (Crystals + 1) * houses[Tile]`.
+/// Applicability is `on_card_tile_with_houses`.
 fn pay_choose(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::self_tile().unwrap_or(-1);
-    if tile < 0 || trigger::tile() != tile {
-        return Ok(());
-    }
     let houses = ctx::houses_of(tile);
-    if houses <= 0 {
-        return Ok(());
-    }
     // 规则书: 「此地块的下一次收费增加50*（y+1）*n且触发时获得等量资金，y为奇迹水晶数量，n为此卡放置格上房屋层数」
     // -- C# `Bonus() = 50 * (Crystals + 1) * houses[Tile]`, added to `p.amount`.
     let bonus = 50 * (ctx::crystals() + 1) * houses;
@@ -146,17 +168,11 @@ fn pay_choose(player_id: i32) -> card_sdk::Asked {
 }
 
 /// C# `CardChangeWorld.PayAfter` -- the pay that carried the bonus discards the
-/// card.
-/// Pure guard for [`pay_after`] -- the activation gate. `false`
-/// means the card is not activated at all.
+/// card. Applicability is `on_card_tile_with_houses`.
 fn pay_after(player_id: i32) -> card_sdk::Asked {
     // 规则书: 「触发后将该卡放入弃牌堆」 -- C# `PayAfter` fires when the pay
-    // carried the `changeWorld` tag (i.e. `PayAdd` ran). Re-check the same
-    // conditions: rent on the card's tile to the card's owner with a nonzero bonus.
-    let tile = ctx::self_tile().unwrap_or(-1);
-    if tile < 0 || trigger::tile() != tile || ctx::houses_of(tile) <= 0 {
-        return Ok(());
-    }
+    // carried the `changeWorld` tag (i.e. `PayAdd` ran). Applicability is the
+    // shared residual `on_card_tile_with_houses`.
     ctx::set_dest(ctx::Dest::Graveyard);
     ctx::log(
         player_id,

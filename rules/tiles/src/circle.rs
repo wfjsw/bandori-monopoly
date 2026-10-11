@@ -74,6 +74,15 @@ fn pass_pays(_owner: i32) -> bool {
     if start >= 0 && ctx::is_circle(start) && ctx::is_circle(me) {
         return false;
     }
+    // A walk-scoped / per-player veto on one of the mover's own field
+    // instances is read but not consumed -- the source disarms it. Pure
+    // predicate before the reward prompt: suppress the entry (no flash) when
+    // the mover cannot earn [CiRCLE奖励] at all.
+    for (uid, _) in ctx::field_instances(mover) {
+        if ctx::prop_at(uid, prop::NO_REWARD) > 0 {
+            return false;
+        }
+    }
     true
 }
 
@@ -119,7 +128,10 @@ pub fn settle_reward(mover: i32, landing: bool) -> card_sdk::Asked {
         return Ok(());
     }
     // A walk-scoped / per-player veto on one of the mover's own field
-    // instances is read but not consumed -- the source disarms it.
+    // instances is read but not consumed -- the source disarms it. The
+    // `PassTile` entry's residual (`pass_pays`) already rejects this, so the
+    // prompt never appears on that path; this copy keeps the landing / event
+    // callers of `settle_reward` honest.
     for (uid, _) in ctx::field_instances(mover) {
         if ctx::prop_at(uid, prop::NO_REWARD) > 0 {
             return Ok(());

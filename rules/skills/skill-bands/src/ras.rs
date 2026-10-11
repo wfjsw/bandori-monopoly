@@ -55,14 +55,35 @@ fn at_turn_start_reset(player_id: i32) -> card_sdk::Asked {
     Ok(())
 }
 
+/// Owned Live Houses the （2） teleport can land on. Residual-only (per-player
+/// colour via `is_live_house_for`, outside the CEL schema -- docs/GUARDS.md §4.2).
+fn owned_livehouses(player_id: i32) -> alloc::vec::Vec<i32> {
+    ctx::owned_tiles(player_id)
+        .into_iter()
+        .filter(|&u| ctx::is_live_house_for(player_id, u))
+        .collect()
+}
+
 /// Residual guard for the （2） teleport offer: still standing on the
-/// remembered livehouse. Derived scan (docs/GUARDS.md §4.2).
+/// remembered livehouse, and owning at least one Live House to teleport to.
+/// Derived scan (docs/GUARDS.md §4.2).
+///
+/// 规则书（band sheet, RAISE A SUILEN）:
+/// > （2）因该技能以外的效果在livehouse格子[触发结算]时，若你的下回合开始时
+/// > 仍在那个格子上，你的下一次主要移动可变为传送至你拥有的一个livehouse格子。
+///
+/// The offer is 「可变为传送至你拥有的一个livehouse格子」 -- it exists only when
+/// such a destination exists. A player who owns no Live House has nothing the
+/// offer can name, so the entry must not activate (no prompt, no flash, no log).
 fn still_on_remembered(player_id: i32) -> bool {
     let t = state::get(player_id, ON_HOUSE);
-    t >= 0 && ctx::player_pos(player_id) == t
+    t >= 0
+        && ctx::player_pos(player_id) == t
+        && owned_livehouses(player_id).first().is_some()
 }
 
 /// （2）「若你的下回合开始时仍在那个格子上」 -- the teleport offer.
+/// Destination presence is the residual guard's job; this body only picks one.
 fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
     let t = state::get(player_id, ON_HOUSE);
     if !ctx::ask_yes(
@@ -73,11 +94,8 @@ fn at_turn_start_offer(player_id: i32) -> card_sdk::Asked {
         return Ok(());
     }
     // 「你的下一次主要移动可变为传送至你拥有的一个livehouse格子」
-    let houses: alloc::vec::Vec<i32> = ctx::owned_tiles(player_id)
-        .into_iter()
-        .filter(|&u| ctx::is_live_house_for(player_id, u))
-        .collect();
-    let Some(&to) = houses.first() else {
+    let Some(&to) = owned_livehouses(player_id).first() else {
+        // Guard already admitted a destination; keep the accept path total.
         return Ok(());
     };
     plan::set_kind(card_sdk::abi::MoveKind::Teleport);

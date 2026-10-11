@@ -49,8 +49,19 @@ pub const RETURNS: CardDef = CardDef::new(
             Some(on_played_is_general),
             on_played,
         ),
-        On::Hook(&[card_sdk::abi::HookKind::TurnStartBefore], card_sdk::pre::MINE, None, choose_band),
-        On::Hook(&[HookKind::DeckBeforeGame], "", None, deck_before_game),
+        // [持续]（2）「每回合开始时选择一个其他存活玩家的团卡」 -- the offer
+        // exists only while Returns is placed and some other survivor has a
+        // band card to borrow. Derived scans (pool + `is_placed`), residual.
+        On::Hook(
+            &[card_sdk::abi::HookKind::TurnStartBefore],
+            card_sdk::pre::MINE,
+            Some(choose_band_applies),
+            choose_band,
+        ),
+        // [特]（1）「如果此卡被加入初始卡组则卡组卡数添加8」 -- the +8 is
+        // unconditional on the rulebook, but the pick prompt only exists when
+        // the pool can feed eight draws. Empty pool = no offer, no flash.
+        On::Hook(&[HookKind::DeckBeforeGame], "", Some(deck_pool_ready), deck_before_game),
         On::Hook(
             &[HookKind::DeckAtGameStart],
             "trigger_card == card.id",
@@ -133,10 +144,8 @@ fn pool_for(player_id: i32) -> Vec<String> {
 /// C# `CardReturns.DeckBeforeGame` -> `AddEight`: eight ids from `DeckRules.Pool`
 /// go into the draw pile (prompted pick or random), then the pile is shuffled.
 fn deck_before_game(player_id: i32) -> card_sdk::Asked {
+    // `deck_pool_ready` is the residual guard; an empty pool never reaches here.
     let mut pool = pool_for(player_id);
-    if pool.is_empty() {
-        return Ok(());
-    }
     // C# `H.AskYes(..., "卡组里有「Returns」：卡组的卡数 +8。要自己从卡池里选 8 张
     // 加入抽卡区吗？（不选就随机）")`.
     let pick = ctx::ask_yes(
@@ -294,11 +303,38 @@ fn band_of(p: i32) -> &'static str {
     ""
 }
 
+/// Other surviving players who hold a band card -- the borrow pool.
+fn band_pool(player_id: i32) -> alloc::vec::Vec<i32> {
+    ctx::others(player_id)
+        .into_iter()
+        .filter(|&p| !ctx::player_out(p) && !band_of(p).is_empty())
+        .collect()
+}
+
+/// Residual guard for the per-turn borrow offer ([持续]（2）).
+///
+/// 规则书（docs/rulebook/cards.json, id `PPP:Returns`）:
+/// > （2）[拥有者]每回合开始时选择一个其他存活玩家的团卡，如果和当前因此卡
+/// > 获得的团卡不一样则替换并移除上面的所有[奇迹水晶]。
+///
+/// 「选择一个其他存活玩家的团卡」 names a non-empty set; with no other
+/// survivor holding a band card there is nothing to choose, so the offer does
+/// not exist (no prompt, no flash). `is_placed` is the card being in play.
+fn choose_band_applies(player_id: i32) -> bool {
+    ctx::is_placed() && !band_pool(player_id).is_empty()
+}
+
+/// Residual guard for the starting-deck +8 pick prompt ([特]（1）).
+///
+/// 规则书: 「如果此卡被加入初始卡组则卡组卡数添加8。」 -- the +8 draws from
+/// the card pool; an empty pool cannot feed the prompt (or the eight draws).
+fn deck_pool_ready(player_id: i32) -> bool {
+    !pool_for(player_id).is_empty()
+}
+
 /// （2）「每回合开始时选择一个其他存活玩家的团卡…替换并移除上面的所有[奇迹水晶]」.
+/// Applicability is `choose_band_applies`.
 fn choose_band(player_id: i32) -> card_sdk::Asked {
-    if !ctx::is_placed() {
-        return Ok(());
-    }
     borrow_band(player_id)
 }
 
@@ -306,11 +342,13 @@ fn choose_band(player_id: i32) -> card_sdk::Asked {
 /// ([持续]（2）). The borrowed band sits **beside** the owner's own Poppin'
 /// Party band card (ruling 2026-10-06): only a previously borrowed band is
 /// replaced, never the PPP one.
+///
+/// The pool-empty early-out stays here: `deck_at_game_start` calls this after
+/// the mandatory placement side effects (take/field/token), so lifting it to
+/// that entry's residual would skip the placement when the pool is empty --
+/// more than the offer's existence. `choose_band`'s entry is guarded instead.
 fn borrow_band(player_id: i32) -> card_sdk::Asked {
-    let pool: alloc::vec::Vec<i32> = ctx::others(player_id)
-        .into_iter()
-        .filter(|&p| !ctx::player_out(p) && !band_of(p).is_empty())
-        .collect();
+    let pool = band_pool(player_id);
     if pool.is_empty() {
         return Ok(());
     }
