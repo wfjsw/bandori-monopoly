@@ -29,12 +29,22 @@ Two of them (`C-PP-aya-haruka-01/02`) are pilot-owned and already proven.
 | PROTOCOL-LEVEL | 10 | multi-turn / [反击] / settle / move-plan |
 | BLOCKED-HOST | 6 | `card_text_mentions`, `add_counter` max, `trig_move_roll`, `field_instances` buffer |
 | OPEN | 24 | text undefined (共鸣 / 分摊 / mark / …) |
-| harness written (PROVEN\* pending slot) | 30 | see per-row harness names |
+| harness written, verdict pending slot | 29 | shared-box 3-slot cap flooded (150+ waiters); 1 formula harness completed |
 | **total** | **74** | |
 
 Harness inventory (unit `pp` + `skills_pp`): 43 `#[kani::proof]` functions
 (30 in `proofs/pp.rs`, 13 in `proofs/skills_pp.rs`) — pure formulas, body
 iff, no-op, and mutant companions.
+
+### Runner verdicts completed
+
+| harness | verdict | time |
+|---|---|---:|
+| `dream_ahead_03_formula` | SUCCESSFUL | 3.6 s |
+
+Remaining harnesses compile under `cargo kani` (checked) and are queued
+behind the machine-wide 3-slot cap (`~/.kani-slots`). Re-run with:
+`CARGO_TARGET_DIR=/home/monopoly/kani-target-pp bash tools/kani/run.sh --unit pp`.
 
 ---
 
