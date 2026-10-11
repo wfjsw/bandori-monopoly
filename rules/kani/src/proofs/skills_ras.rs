@@ -7,9 +7,29 @@
 //! (unmodeled) cap does not bind. The printed cap itself is BLOCKED-HOST.
 
 use crate::host;
-use crate::invoke;
 use crate::spec::skills_ras as spec;
 use crate::world::{self, Effect, World, MAX_PLAYERS};
+
+/// Call an `On` body without the registry string scan (memcmp cliff).
+fn body_of(on: &card_sdk::On) -> fn(i32) -> card_sdk::Asked {
+    match on {
+        card_sdk::On::Play(_, _, f)
+        | card_sdk::On::Counteract(_, _, _, f)
+        | card_sdk::On::Hook(_, _, _, f)
+        | card_sdk::On::Gate(_, _, _, f)
+        | card_sdk::On::RollPlan(_, _, f)
+        | card_sdk::On::AtEnd(_, _, f)
+        | card_sdk::On::Settle(_, _, f)
+        | card_sdk::On::Message(_, _, _, f) => *f,
+    }
+}
+
+fn unwrap_done(r: card_sdk::Asked) {
+    match r {
+        Ok(()) => {}
+        Err(_) => panic!("unexpected EXIT_NEED_INPUT"),
+    }
+}
 
 fn symbolic_fire_world() -> World {
     host::install();
@@ -43,11 +63,9 @@ pub fn masking_01_fire_gain_leaf() {
     };
 
     // Hook entry 2 is `on_pass` (see `skill:佐藤益木` registration order).
-    invoke::unwrap_done(invoke::entry(
-        "skill:佐藤益木:与燃烧的红色一起驰骋",
-        2,
-        player,
-    ));
+    unwrap_done(body_of(
+        &skill_characters::sato_red::SATO_RED.on[2],
+    )(player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -80,11 +98,9 @@ pub fn rio_01_fire_gain_leaf() {
     };
 
     // Hook entry 1 is `on_pass` (see `skill:和奏瑞依` registration order).
-    invoke::unwrap_done(invoke::entry(
-        "skill:和奏瑞依:一次又一次竭尽全力",
-        1,
-        player,
-    ));
+    unwrap_done(body_of(
+        &skill_characters::raise_effort::RAISE_EFFORT.on[1],
+    )(player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -111,11 +127,9 @@ pub fn fire_pass_gain_mutant_is_detected() {
     kani::assume(player >= 0 && player < w.n_players);
 
     world::reset_world(w);
-    invoke::unwrap_done(invoke::entry(
-        "skill:佐藤益木:与燃烧的红色一起驰骋",
-        2,
-        player,
-    ));
+    unwrap_done(body_of(
+        &skill_characters::sato_red::SATO_RED.on[2],
+    )(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];

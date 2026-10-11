@@ -7,9 +7,31 @@
 //! is not part of the frame.
 
 use crate::host;
-use crate::invoke;
 use crate::spec::ras as spec;
 use crate::world::{self, Effect, World, MAX_CARDS, MAX_PLAYERS};
+
+/// Call an `On` body without the registry string scan (`invoke::find` is a
+/// memcmp cliff under CBMC). The unmodified `fn(i32) -> Asked` is taken from
+/// the exported `CardDef`.
+fn body_of(on: &card_sdk::On) -> fn(i32) -> card_sdk::Asked {
+    match on {
+        card_sdk::On::Play(_, _, f)
+        | card_sdk::On::Counteract(_, _, _, f)
+        | card_sdk::On::Hook(_, _, _, f)
+        | card_sdk::On::Gate(_, _, _, f)
+        | card_sdk::On::RollPlan(_, _, f)
+        | card_sdk::On::AtEnd(_, _, f)
+        | card_sdk::On::Settle(_, _, f)
+        | card_sdk::On::Message(_, _, _, f) => *f,
+    }
+}
+
+fn unwrap_done(r: card_sdk::Asked) {
+    match r {
+        Ok(()) => {}
+        Err(_) => panic!("unexpected EXIT_NEED_INPUT"),
+    }
+}
 
 // ===========================================================================
 // C-RAS-unstoppable-card-03
@@ -50,7 +72,7 @@ pub fn unstoppable_card_03_money_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("RAS:UNSTOPPABLE", player));
+    unwrap_done(body_of(&card_ras::unstoppable::UNSTOPPABLE.on[0])(player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -110,7 +132,7 @@ pub fn unstoppable_card_03_money_noop_when_out() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("RAS:UNSTOPPABLE", player));
+    unwrap_done(body_of(&card_ras::unstoppable::UNSTOPPABLE.on[0])(player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -137,7 +159,7 @@ pub fn unstoppable_card_03_money_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::play("RAS:UNSTOPPABLE", player));
+    unwrap_done(body_of(&card_ras::unstoppable::UNSTOPPABLE.on[0])(player));
     let post = world::snapshot();
     let gained = post.money[player as usize] - pre.money[player as usize];
 
@@ -203,7 +225,7 @@ pub fn riot_02_03_cycle_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::counteract("RAS:R. I. O. T.", holder));
+    unwrap_done(body_of(&card_ras::riot::RIOT.on[0])(holder));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -245,7 +267,7 @@ pub fn riot_03_extra_draw_mutant_is_detected() {
         world::reset_world(w);
         world::snapshot()
     };
-    invoke::unwrap_done(invoke::counteract("RAS:R. I. O. T.", holder));
+    unwrap_done(body_of(&card_ras::riot::RIOT.on[0])(holder));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
@@ -344,7 +366,7 @@ pub fn pareo_01_marks_iff() {
         world::snapshot()
     };
 
-    invoke::unwrap_done(invoke::play("RAS:（PAREO）渐渐远去的你", player));
+    unwrap_done(body_of(&card_ras::pareo_far::PAREO_FAR.on[0])(player));
 
     let post = world::snapshot();
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
@@ -383,7 +405,7 @@ pub fn pareo_01_marks_mutant_is_detected() {
     w.key_set(player, crate::intern::intern("PAREO标记"), 0);
 
     world::reset_world(w);
-    invoke::unwrap_done(invoke::play("RAS:（PAREO）渐渐远去的你", player));
+    unwrap_done(body_of(&card_ras::pareo_far::PAREO_FAR.on[0])(player));
     let logbuf: [Effect; 24] = world::with_world(|ww| ww.log);
     let log_n = world::with_world(|ww| ww.log_n);
     let effects = &logbuf[..log_n];
