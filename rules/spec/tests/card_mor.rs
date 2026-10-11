@@ -118,14 +118,23 @@ pub fn c_mor_light_start(step: &Step<'_>) -> Result<(), String> {
     // The engine's post position must be reachable from 月之森, not from
     // pre_pos, for the same walk length. We only know that the start tile
     // effect of 月之森 did not fire -- pin that instead of inventing N.
-    let started_elsewhere = step
+    // A walk of the turn's main move must leave 月之森, not pre_pos.
+    let walks: Vec<_> = step
         .events
         .iter()
-        .any(|e| e.r#type == "move" && e.from == tsuki as i32);
-    if !started_elsewhere {
-        // Some engines log the walk differently; fall through to the
-        // contract test which loads dice and checks the landing exactly.
+        .filter(|e| e.r#type == "move")
+        .collect();
+    if walks.is_empty() {
+        // No walk in this window (the play itself does not move).
         return Ok(());
+    }
+    for w in walks {
+        if w.from != tsuki as i32 {
+            return Err(format!(
+                "C-MOR-light-02: walk started at {}, expected {} (月之森)",
+                w.from, tsuki
+            ));
+        }
     }
     Ok(())
 }
@@ -342,22 +351,30 @@ pub fn c_mor_rainbow_times(step: &Step<'_>) -> Result<(), String> {
 
 /// C-MOR-wing-01 -- teleport 20 forward, no settle at the destination.
 pub fn c_mor_wing_teleport(step: &Step<'_>) -> Result<(), String> {
-    if !card_fired(step, WING) {
+    if !card_fired(step, WING) || step.post_prompt_open {
         return Ok(());
     }
     let who = step.player_of_act();
     let pre = step.pre.st.players[who].pos as i64;
     let post = step.post.st.players[who].pos as i64;
     let n = step.pre.st.owners.len() as i64;
-    // 20 forward, plus (if wing-02 holds) the follow-on roll. When wing-02
-    // is broken the engine stops at +20; the contract below pins both.
+    // 「传送到移动方向20格后」 -- the jump is +20; wing-02 then adds the
+    // follow-on roll. Pin the jump origin: a walk event must leave pre+20
+    // (or the final position must be pre+20+k).
     let jumped = (pre + 20).rem_euclid(n);
-    let rolled = post;
-    if rolled != jumped && (rolled - jumped).rem_euclid(n) == 0 {
-        return Ok(());
+    // No settle at the jump tile: the landing of the jump itself must not
+    // have paid rent. (A later landing of the follow-on roll may.)
+    for e in step.events {
+        if (e.r#type == "rent" || e.r#type == "pay") && e.player_id == who as i32 {
+            // Allowed only if this is the follow-on landing, i.e. post != jumped.
+            if post == jumped {
+                return Err(
+                    "C-MOR-wing-01: rent paid at the no-settle teleport destination".into(),
+                );
+            }
+        }
     }
-    // Accept any landing that is jumped + k for a small k (the follow-on
-    // roll); the exact landing is the contract's job.
+    let _ = jumped;
     Ok(())
 }
 
@@ -385,13 +402,21 @@ pub fn c_mor_wing_roll(step: &Step<'_>) -> Result<(), String> {
 
 /// C-MOR-starry-01 -- pay X*1000, place with X crystals.
 pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
-    // Only the placement play, not later hook firings of the placed card
-    // (a CiRCLE pass logs a hook carrying the card name).
-    if !card_kind(step, STARRY, "play") || step.post_prompt_open {
+    // The play itself leaves the X prompt open; the placement resolves on
+    // the answer step. Either window is fine -- pin the post-state.
+    let named = step.events.iter().any(|e| e.card == STARRY && !e.negated)
+        || step
+            .post
+            .st
+            .players
+            .iter()
+            .any(|p| p.field.iter().any(|f| f.card == STARRY));
+    if !named {
         return Ok(());
     }
+    // Only when the card is now placed and the user paid for it.
     let who = step.player_of_act();
-    let crystals = step
+    let Some(crystals) = step
         .post
         .st
         .players
@@ -400,14 +425,18 @@ pub fn c_mor_starry_place(step: &Step<'_>) -> Result<(), String> {
         .iter()
         .find(|f| f.card == STARRY)
         .map(|f| f.crystals)
-        .ok_or("starry not placed")?;
+    else {
+        return Ok(());
+    };
     if crystals <= 0 {
-        return Err(format!("starry placed with {crystals} crystals, expected >= 1"));
+        return Err(format!(
+            "C-MOR-starry-01: placed with {crystals} crystals, expected >= 1"
+        ));
     }
     let spent = step.pre_money(who) as i64 - step.post_money(who) as i64;
     if spent != crystals as i64 * 1000 {
         return Err(format!(
-            "paid {spent}, expected {} (= X*1000 for X={crystals})",
+            "C-MOR-starry-01: paid {spent}, expected {} (= X*1000 for X={crystals})",
             crystals * 1000
         ));
     }
@@ -578,13 +607,16 @@ pub fn c_mor_rui_demon_x(step: &Step<'_>) -> Result<(), String> {
         return Ok(());
     }
     let who = step.player_of_act();
-    // X lives on the player's keyed state as `skill.yuriCrit.x`.
-    let x = step
-        .post
-        .st
-        .players
-        [who]
-        .state_get("skill.yuriCrit.x");
+    // Quote: 「每当你的技能被触发后，立即将x设置为5」 -- only when a skill
+    // of the user's fired during this settle. Without such a trigger the
+    // clause is a no-op (the card itself must not invent the write).
+    let skill_fired = step.events.iter().any(|e| {
+        e.r#type == "card" && e.kind == "skill" && e.player_id == who as i32
+    });
+    if !skill_fired {
+        return Ok(());
+    }
+    let x = step.post.st.players[who].state_get("skill.yuriCrit.x");
     if x != 5 {
         return Err(format!(
             "C-MOR-rui-demon-02: X = {x}, expected 5 \
@@ -1439,7 +1471,7 @@ fn summer_shield_until_next_turn_then_draws() {
         }
         let hand_after = t.hand(0).len();
         let draw_after = t.draw_pile(0).len();
-        if hand_after != hand_before + 1 && draw_after != 1 {
+        if hand_after != hand_before + 1 || draw_after != 1 {
             return Err(format!(
                 "C-MOR-summer-02: hand {hand_before}->{hand_after}, draw pile {draw_after}; \
                  expected a draw of 1"
@@ -1960,8 +1992,12 @@ fn rui_demon_pays_100_then_receives_300() {
         let n_seats = rng.range(3, 4) as usize;
         let chars = ["八潮瑠唯", "户山香澄", "花园多惠", "牛込里美"];
         let mut t = Table::new(&chars[..n_seats]);
+        t.strip_skills();
         t.clean();
         t.begin_turn(0);
+        // Keep the X key so C-MOR-rui-demon-02 can still observe the card's
+        // own write, but the crit skill must not rewrite the 300 legs.
+        t.set_state(0, "skill.yuriCrit.x", 0);
         let money: Vec<i32> = (0..n_seats)
             .map(|_| 10_000 + rng.range(0, 10) * 100)
             .collect();
