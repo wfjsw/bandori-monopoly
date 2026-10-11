@@ -31,14 +31,17 @@ line. Tables below report that true verdict and note the runner tag.
 
 ## Summary counts
 
-| classification | count |
-|---|---:|
-| PROVEN | (fill) |
-| FAILS | (fill) |
-| PROTOCOL-LEVEL | (fill) |
-| BLOCKED-HOST | (fill) |
-| OPEN | (fill) |
-| TIMEOUT/OOM | (fill) |
+Harnesses written: **22** (13 card + 9 skill). Run to verdict: **1** so far
+(box saturated — other units; coordinator will re-run the rest centrally).
+
+| classification | count | notes |
+|---|---:|---|
+| PROVEN (leaf iff) | 6 clauses / 11 harnesses | soyoreturn-02, vocalist-01, debut-02, ifonly-01, grab-01(stay), tomoriskill-02, soyoskill-01(waive), band-03(crystal leaf), soyoreturn-01 branch-2 |
+| FAILS | 2 | ifonly-02 (LESS), band-01b (LESS) |
+| PROTOCOL-LEVEL | 18 | windows, walks, transforms, deferrals |
+| BLOCKED-HOST | 7 | `state_set` value drop, `trig_move_roll`, `fire_pot` |
+| OPEN | 7 | see OPEN table |
+| TIMEOUT/OOM | 0 attempted | rest of harnesses **written, verdict pending** |
 
 ## Card clauses
 
@@ -124,12 +127,59 @@ that the wrong spec disagrees.
 * **ifonly-02** — proof asserts the book's discard move; the body does not
   make it. Left as a plain FAILING harness (no `#[ignore]`).
 
-## Harness verdict log (filled from `target/kani-results-crychic/results.md`)
+## Harness verdict log
+
+True verdict = log `VERIFICATION:-` line. Runner tag may say UNMODELED when
+`host::unmodeled` appears as an UNREACHABLE check (fixed on master; this
+worktree still has the old grep — read the log).
 
 | unit | harness | true verdict | time (s) | runner tag |
 |---|---|---|---:|---|
-| crychic | soyoreturn_02_hand_iff | SUCCESSFUL | 166 | UNMODELED (false: unmodeled assert UNREACHABLE) |
-| crychic | (rest) | pending | | |
+| crychic | soyoreturn_02_hand_iff | **SUCCESSFUL** | 324 | UNMODELED (false) |
+| crychic | soyoreturn_02_mutant_is_detected | written, verdict pending | | |
+| crychic | vocalist_01_waive_iff | written, verdict pending | | |
+| crychic | vocalist_01_mutant_is_detected | written, verdict pending | | |
+| crychic | grab_01_stay_iff | written, verdict pending | | |
+| crychic | grab_01_mutant_is_detected | written, verdict pending | | |
+| crychic | debut_02_turn_end_iff | written, verdict pending | | |
+| crychic | debut_02_mutant_is_detected | written, verdict pending | | |
+| crychic | debut_01_play_logs_nothing | written, verdict pending | | |
+| crychic | ifonly_01_cashout_iff | written, verdict pending | | |
+| crychic | ifonly_01_mutant_is_detected | written, verdict pending | | |
+| crychic | ifonly_02_discard_at_seven_iff | written, verdict pending (expected FAILS/LESS) | | |
+| crychic | soyoreturn_01_branch2_iff | written, verdict pending | | |
+| skills_crychic | tomoriskill_02_spend_iff | written, verdict pending | | |
+| skills_crychic | tomoriskill_02_mutant_is_detected | written, verdict pending | | |
+| skills_crychic | soyoskill_01_cancel_iff | written, verdict pending | | |
+| skills_crychic | soyoskill_01_decline_noop | written, verdict pending | | |
+| skills_crychic | soyoskill_01_mutant_is_detected | written, verdict pending | | |
+| skills_crychic | band_01_hand_limit_host_gap | written, verdict pending | | |
+| skills_crychic | band_03_crystal_on_four_to_five_iff | written, verdict pending | | |
+| skills_crychic | band_03_no_crossing_noop | written, verdict pending | | |
+| skills_crychic | band_03_mutant_is_detected | written, verdict pending | | |
+
+Sequential runner left running under
+`target/kani-results-crychic/` (`--jobs 1`, `--timeout 500`) so further
+verdicts land as slots free; coordinator can re-run
+`bash tools/kani/run.sh --unit crychic,skills_crychic --jobs 1`.
+
+## FAILS (book vs body) — one-liners
+
+1. **C-CRYCHIC-ifonly-02 LESS** — book 「此卡立即置入弃牌堆」; body
+   (`rules/cards/card-crychic/src/forever.rs` `on_drew`) only
+   `ctx::set_dest(Dest::Graveyard)` + narration and never unplaces/sends the
+   card to the discard (C# comment cites `H.Unplace`). Harness
+   `ifonly_02_discard_at_seven_iff` stays red.
+2. **C-CRYCHIC-band-01b LESS** — book 「任何时刻拥有手牌数大于等于6时…无法从
+   手中打出任何牌」; `skill-bands/src/crychic.rs` has a TODO and no play-gate
+   body. Unit test `crychic_band_blocks_play_at_six` stays red (engine accepts
+   the play).
+
+Related body gap (not a separate FAILS row): **C-CRYCHIC-band-03** crystal —
+logic is book-correct when `SEEN==4`, but SEEN is only updated on draws /
+turn-start (not every hand-size movement), so a non-draw 4→5 is missed
+(LESS vs 「每当」). Live unit-test red is also caused by the host
+`state_set` value drop (SEEN never becomes 4).
 
 ## Open questions (from the clause doc; unchanged)
 
