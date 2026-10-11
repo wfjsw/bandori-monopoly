@@ -1686,6 +1686,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rules-kani"
+version = "0.1.0"
+dependencies = [
+ "card-mygo",
+ "card-pp",
+ "card-ppp",
+ "card-sdk",
+ "postcard",
+ "serde",
+]
+
+[[package]]
 name = "rules-native"
 version = "0.1.0"
 dependencies = [

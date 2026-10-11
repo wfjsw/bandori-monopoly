@@ -36,6 +36,11 @@ use alloc::vec::Vec;
 pub mod abi;
 pub mod msg;
 
+/// Host-import dispatch used by the Kani verifier crate (see module docs).
+/// Compiled always so `rules-kani` typechecks outside `cargo kani`; production
+/// builds never call it (`sys` still uses the `extern` block).
+pub mod kani_host;
+
 /// Native-only: how guest buffers cross the ABI on a 64-bit build (wasm32 uses
 /// real 32-bit pointers; see the module docs).
 #[cfg(not(target_arch = "wasm32"))]

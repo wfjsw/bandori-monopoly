@@ -10,6 +10,18 @@
 // `C-unwind` on native so a host import can abort the run with a panic
 // that `rules-native`'s `catch_unwind` turns into "this card is out"
 // (the sandbox trap contract). Same calling convention as `C` on wasm32.
+// Kani cannot resolve these as foreign imports to host shims (kani#2423),
+// and `extern "C-unwind"` monomorphizes `catch_unwind`, which ICEs
+// kani-compiler 0.68.0. Under `cfg(kani)` the same names are ordinary Rust
+// (see `sys_kani.rs`) dispatching through [`crate::kani_host`].
+#[cfg(kani)]
+#[path = "sys_kani.rs"]
+mod imp;
+#[cfg(kani)]
+pub use imp::*;
+
+#[cfg(not(kani))]
+mod abi {
 #[cfg_attr(target_arch = "wasm32", link(wasm_import_module = "bandori"))]
 extern "C-unwind" {
     // dice & log
@@ -672,3 +684,8 @@ extern "C-unwind" {
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_card_face_down")]
     pub fn card_face_down(player_id: i32, cp: i32, cl: i32) -> i32;
 }
+
+} // mod abi
+
+#[cfg(not(kani))]
+pub use abi::*;
