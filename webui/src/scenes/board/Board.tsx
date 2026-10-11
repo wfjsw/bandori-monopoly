@@ -157,7 +157,7 @@ export function Board({ sess }: { sess: GameSession }) {
           {/* The cards in play, as a top-docked card row over this column's
               upper edge (under the FX layer). The board's roll-zone die takes
               the roll action from the old side-column button. */}
-          <FieldSheet m={m} />
+          <FieldSheet m={m} pulse={anim.pulse} />
           <div className={s.mapSlot}>
             <Ring
               m={m}
