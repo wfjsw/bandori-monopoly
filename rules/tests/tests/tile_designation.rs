@@ -12,6 +12,7 @@
 mod common;
 use common::*;
 
+use game_core::msg::Arg;
 use game_core::state::{mark_category, mark_kind, FieldCard, TileMark};
 
 const FUJIMI: usize = 11; // 富士见坂, price 600
@@ -142,5 +143,67 @@ fn no_road_designation_mark_appears_and_dies_with_the_card() {
         designates_on(&t, 10, uid).is_empty(),
         "designation died with the card: {:?}",
         t.marks()
+    );
+}
+// =====================================================================
+// Placement logs never speak a raw mark key
+// =====================================================================
+
+/// `log.outcome.mark_*` / `log.outcome.designate` must not print a wire kind
+/// (`mark:*` / `cards:…`) as plain text. Designations use the readable
+/// `log.outcome.designate` line; every other kind rides a nested `Msg` the
+/// view resolves (or a display name like 「育美标记」).
+#[test]
+fn placement_logs_never_speak_a_raw_mark_key() {
+    let mut t = Table::vanilla(2);
+    t.set_character_raw(0, "美竹兰");
+    t.set_character_raw(1, "青叶摩卡");
+    t.own(0, &[HILL]);
+    t.own(1, &[FUJIMI]);
+    t.give_play(0, "AG:ONE OF US").unwrap();
+    let k = t.option("PlayerId(1)").expect("partner prompt");
+    t.answer(0, k).unwrap();
+    t.answer_tile(0, HILL).unwrap();
+    t.answer_tile(0, FUJIMI).unwrap();
+    skip_all(&mut t);
+
+    let mut saw_designate = false;
+    for e in t.events_since(0) {
+        let key = e.msg.key().to_string();
+        if !key.starts_with("log.outcome.mark") && key != "log.outcome.designate" {
+            continue;
+        }
+        // Designation placement is the readable line, never mark_add + kind.
+        if key == "log.outcome.designate" {
+            saw_designate = true;
+        }
+        if key == "log.outcome.mark_add" {
+            let kind = e.msg.a.get("kind");
+            let raw = match kind {
+                Some(Arg::Text(s)) => s.clone(),
+                Some(Arg::Msg(m)) => m.key().to_string(),
+                _ => String::new(),
+            };
+            assert!(
+                !raw.starts_with("mark:"),
+                "mark_add must not carry a raw mark:* key: {raw:?} ({:?})",
+                e.msg
+            );
+        }
+        // No plain-text argument may be a raw namespace key.
+        for (name, arg) in e.msg.a.iter() {
+            if let Arg::Text(s) = arg {
+                assert!(
+                    !(s.starts_with("mark:") || s.starts_with("cards:")),
+                    "raw key in text arg {name}={s:?} of {}",
+                    key
+                );
+            }
+        }
+    }
+    assert!(
+        saw_designate,
+        "the designation placement speaks log.outcome.designate: {:?}",
+        t.recent_keys(30)
     );
 }

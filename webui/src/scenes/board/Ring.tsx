@@ -372,11 +372,14 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
                     const cp = x.category === "cp";
                     const des = x.category === "designate";
                     const desTitle = des ? cardTitle(x.card) : "";
+                    // A player mark's `kind` is a display name or an i18n key
+                    // (`cards:…`); never show the raw key.
+                    const kindLabel = fmtMsg({ k: x.kind }, namesOf(S)) || x.kind;
                     const title = cp
                       ? (x.count > 1 ? `${tr("board.markCp")} ×${x.count}` : tr("board.markCp"))
                       : des
                         ? (x.count > 1 ? `${desTitle} ×${x.count}` : desTitle)
-                        : (x.count > 1 ? `${x.kind} ×${x.count}` : x.kind);
+                        : (x.count > 1 ? `${kindLabel} ×${x.count}` : kindLabel);
                     const desInk = des && x.owner >= 0 && isLight(m.colorOf(x.owner)) ? "#17221e" : undefined;
                     return (
                       <span
@@ -401,7 +404,7 @@ export function Ring({ m, anim, pickable, onTile, roll }: RingProps) {
                           x.note ? fmtMsg(x.note, namesOf(S)) : "",
                         ])}
                         onMouseLeave={hideTip}
-                      >{cp ? "CP" : des ? shortMarkName(desTitle) : x.kind.slice(0, 1)}</span>
+                      >{cp ? "CP" : des ? shortMarkName(desTitle) : (kindLabel.trim()[0] ?? "•")}</span>
                     );
                   })}
                   {embers > 0 && (
