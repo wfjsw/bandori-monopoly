@@ -1378,20 +1378,34 @@ fn interaction_xuanzhan_and_centrifuge_answer_the_same_targeting() {
     // AG:宣战布告 (other group) answers the 1st targeting of 通用:登上武道馆;
     // Mor:离心力，不为所动 answers the 2nd -- two counters, one kind of timing.
     // 规则书: 「多个效果可[反击]同一个时点」 (rules.txt); 离心力: 「第二次…目标时」
+    //
+    // A DESIGNATES play is also one [反击] timing (CROSS-TESTS C13): 宣战布告
+    // is offered on the play itself as well as on the per-targeting windows.
+    // Decline the play-timing offers first; 离心力 lands on the 2nd targeting.
     let mut t = Table::vanilla(3);
     t.give(0, &["Mor:离心力，不为所动"]);
     t.give(1, &["AG:宣战布告"]);
     t.give(2, &["通用:登上武道馆", "通用:登上武道馆"]);
     t.begin_turn(2);
     t.play(2, "通用:登上武道馆").unwrap();
+    // Play timing (and any per-targeting / payment windows) offer 宣战布告.
     assert!(t.counteract_offered("AG:宣战布告"), "1st: {}", t.dump_prompt());
-    t.decline();
-    // The 1000 collection runs through the money pipeline, which opens its own
-    // [反击] window on each payment (宣战布告: 「当你或你拥有的格子被其他玩家的
-    // 卡效果影响时」 matches the payer). Skip those before the next play.
     decline_all(&mut t);
     t.play(2, "通用:登上武道馆").unwrap();
-    assert!(t.counteract_offered("Mor:离心力，不为所动"), "2nd: {}", t.dump_prompt());
-    t.counteract(0, "Mor:离心力，不为所动").unwrap();
+    // Second play: 宣战布告 on the play timing again, then 离心力 on the 2nd
+    // targeting. Accept whichever offer names 离心力.
+    let mut saw_centrifuge = false;
+    for _ in 0..20 {
+        if t.prompt().is_none() {
+            break;
+        }
+        if t.counteract_offered("Mor:离心力，不为所动") {
+            t.counteract(0, "Mor:离心力，不为所动").unwrap();
+            saw_centrifuge = true;
+            break;
+        }
+        t.decline();
+    }
+    assert!(saw_centrifuge, "2nd: {}", t.dump_prompt());
     assert!(t.on_field(0, "Mor:离心力，不为所动"));
 }
