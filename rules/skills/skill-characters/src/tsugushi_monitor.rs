@@ -42,17 +42,33 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
     ],
 ).silent(&[1]);
 
+/// Residual guard for [`on_gain`]: the payee is the owner and some other
+/// survivor exists to redirect to. 「可以改为指定场上除你以外的一个角色」.
 fn mine(player_id: i32) -> bool {
     // （1）「当你获得资金」 -- the skill fires on *receiving* money, so the
     // hook's `target` (the payee) is the skill owner. A print carries
     // `target = me`, `player_id = -1`.
-    ctx::trigger::target() == player_id && ctx::trigger::value() > 0
+    ctx::trigger::target() == player_id
+        && ctx::trigger::value() > 0
+        && (0..ctx::player_count()).any(|p| p != player_id && !ctx::player_out(p))
 }
 
+/// Residual guard for [`on_theirs`]: someone else received money, holds an
+/// X mark, and the draw-cap carve-out (「对"抽牌"动作发动时必须翻面记录数字
+/// 为2200及以上的标记」) is satisfied.
 fn other(player_id: i32) -> bool {
     // （2）「当有角色获得金钱」 -- someone *else* received money.
     let t = ctx::trigger::target();
-    t >= 0 && t != player_id && ctx::trigger::value() > 0
+    if t < 0 || t == player_id || ctx::trigger::value() <= 0 {
+        return false;
+    }
+    // 「你可以将对方的X标记翻面」 -- the mark is the offer's object.
+    if ctx::tok(t, UP) < 1 {
+        return false;
+    }
+    // 「此效果对"抽牌"动作发动时必须翻面记录数字为2200及以上的标记」
+    let recorded = state::get(player_id, &rec_key(t));
+    !(recorded < 2200 && ctx::slot(player_id, "skill.tsugushi.isDraw") != 0)
 }
 
 /// The per-lap rate starts at 800 and drops by 200 per (3), floored at 200.
@@ -68,15 +84,9 @@ fn declare(player_id: i32) -> card_sdk::Asked {
 /// 发送给对方一个X（占位）标记并记录…数量」.
 fn on_gain(player_id: i32) -> card_sdk::Asked {
     let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
     let others: alloc::vec::Vec<i32> = (0..ctx::player_count())
         .filter(|&p| p != player_id && !ctx::player_out(p))
         .collect();
-    if others.is_empty() {
-        return Ok(());
-    }
     // 「可以改为指定场上除你以外的一个角色」 -- the 「可以」 is a yes/no first
     // (`tsugushi_ask`: 「改为指定另一名角色进行该动作？」), then one pick over the
     // other players (`tsugushi_who`: 「指定哪名角色？」). Declining the yes/no
@@ -124,23 +134,10 @@ fn on_gain(player_id: i32) -> card_sdk::Asked {
 /// （2）「当有角色获得金钱或抽卡时，你可以将对方的X标记翻面并代替其进行一次该动作」.
 fn on_theirs(player_id: i32) -> card_sdk::Asked {
     // 「当有角色获得金钱」 -- the gainer is the payee (`target`), not `player_id`
-    // (which is the payer, -1 on a print).
+    // (which is the payer, -1 on a print). Applicability is `other`.
     let src = ctx::trigger::target();
-    if src < 0 || src == player_id {
-        return Ok(());
-    }
-    if ctx::tok(src, UP) < 1 {
-        return Ok(());
-    }
     let recorded = state::get(player_id, &rec_key(src));
     let amount = ctx::trigger::value();
-    if amount <= 0 {
-        return Ok(());
-    }
-    // 「此效果对"抽牌"动作发动时必须翻面记录数字为2200及以上的标记」
-    if recorded < 2200 && ctx::slot(player_id, "skill.tsugushi.isDraw") != 0 {
-        return Ok(());
-    }
     if !ctx::ask_yes(
         player_id,
         &Msg::new(key!("tsugushi_title")),
