@@ -64,9 +64,11 @@ pub fn observe(
     clauses: &[Clause],
 ) -> Observed {
     // Pre-image and event mark. `world()` is read-only and legal even with a
-    // prompt pending or a routine halted mid-effect.
+    // prompt pending or a routine halted mid-effect. The live prompt lives on
+    // the host, not in `World`, so capture it alongside.
     let pre = m.world().clone();
     let mark = m.world().recent.back().map_or(0, |e| e.id);
+    let pre_prompt_open = m.state().prompt.id != 0;
 
     // The input itself. A rejected input is still a step (a no-op one).
     let net = act.to_net();
@@ -81,12 +83,15 @@ pub fn observe(
     let post = m.world();
     let events = m.events_since(mark);
     let data = m.data();
+    let post_prompt_open = m.state().prompt.id != 0;
     let step = Step {
         pre: &pre,
         post,
         events: &events,
         act: &act,
         data: data.as_ref(),
+        pre_prompt_open,
+        post_prompt_open,
     };
     let violations = check(&step, clauses);
     Observed {

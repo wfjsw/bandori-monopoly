@@ -58,7 +58,7 @@ pub fn g_general_10draw_money(step: &Step<'_>) -> Result<(), String> {
     if !played {
         return Ok(());
     }
-    let who = step.act.who() as usize;
+    let who = step.player_of_act();
     let delta = step.post_money(who) as i64 - step.pre_money(who) as i64;
     if delta != -1500 {
         return Err(format!(
@@ -74,7 +74,7 @@ pub fn card_10draw_frame(step: &Step<'_>) -> Result<(), String> {
     if !played {
         return Ok(());
     }
-    let who = step.act.who();
+    let who = step.player_of_act();
     let allowed = [
         format!("money:P{who}"),
         format!("hand:P{who}"),

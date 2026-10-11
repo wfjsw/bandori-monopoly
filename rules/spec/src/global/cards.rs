@@ -7,7 +7,7 @@ use spec_kit::{Clause, Step};
 /// Card-zone clauses.
 pub const CLAUSES: &[Clause] = &[G_CARDS_01];
 
-/// Hand never exceeds handLimit at rest.
+/// An act must not leave a hand over its limit.
 ///
 /// * **ID:** G-CARDS-01
 /// * **Source:** `rulebook-doc.md:126`
@@ -16,8 +16,12 @@ pub const CLAUSES: &[Clause] = &[G_CARDS_01];
 ///   `post` world is the rest state a player sees).
 /// * **Condition:** a player's hand-limit counter is the engine's
 ///   `handLimit` state (default 5, raised / lowered by effects). A limit of
-///   `NO_HAND_LIMIT` (`i32::MAX`) means uncapped.
-/// * **Effect:** no player's private hand length exceeds their limit.
+///   `NO_HAND_LIMIT` (`i32::MAX`) means uncapped. The player was **at or
+///   under** the limit in `pre` -- an arranged over-limit hand is a
+///   non-canonical setup and is not this act's fault. No prompt is open in
+///   `post` (the step is at rest; a discard decision may be the prompt).
+/// * **Effect:** the player's private hand length is at most the limit in
+///   `post`.
 /// * **Frame:** n/a (pure read).
 /// * **Rulings & OPEN:** 「立刻」 means the discard happens inside the same
 ///   transition as the draw that overflowed -- so a check on the settled
@@ -32,20 +36,29 @@ const G_CARDS_01: Clause = Clause::new(
     g_cards_01,
 );
 
-/// Executable form of [`G_CARDS_01`].
+/// Executable form of [`G_CARDS-01`].
 pub fn g_cards_01(step: &Step<'_>) -> Result<(), String> {
+    // A prompt means the step stopped mid-decision (the discard choice may be
+    // the prompt). "At rest" is the post-prompt state this clause is about.
+    if step.post_prompt_open {
+        return Ok(());
+    }
     for (i, p) in step.post.st.players.iter().enumerate() {
-        let limit = p.hand_limit();
-        let Some(limit) = limit else {
+        let Some(limit) = p.hand_limit() else {
             continue;
         };
         if limit == game_core::state::key::NO_HAND_LIMIT {
             continue;
         }
-        let held = step.post_hand_len(i);
-        if held > limit as usize {
+        let limit = limit as usize;
+        let pre = step.pre_hand_len(i);
+        let post = step.post_hand_len(i);
+        // Arrange writes (and a previous failing act) may already be over.
+        // Only an act that *starts* legal and *ends* over is this clause's
+        // finding.
+        if pre <= limit && post > limit {
             return Err(format!(
-                "player {i} holds {held} cards, over handLimit {limit}"
+                "player {i} went from {pre} to {post} cards, over handLimit {limit}"
             ));
         }
     }

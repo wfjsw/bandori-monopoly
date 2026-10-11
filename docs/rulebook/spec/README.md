@@ -167,7 +167,34 @@ Consolidated from the area docs. Book gaps that clauses must not invent:
 Any clause that depends on one of these records the OPEN id in its
 **Rulings & OPEN** field and specifies only what the text determines.
 
+## Gotchas (read before writing a clause)
+
+* **`StepAct::who` is an engine member id, not a seat index.** Use
+  [`Step::player_of_act`] (`step.player_of_act()`) to resolve it. The Table
+  harness seats player `k` as member `k + 1`, but always look the member up.
+* **The live prompt is not in `World`.** `Step::pre_prompt_open` /
+  `post_prompt_open` carry it. A clause about "at rest" must skip when
+  `post_prompt_open` is true -- the step stopped mid-decision.
+* **Arranged states are non-canonical.** `Table` setters and `fuzz::arrange`
+  write whatever the test asks for (over-limit hands, odd statuses). Only
+  transitions are observed; never check the arranged pre-state itself. A
+  clause that reads an absolute `post` invariant should also require the same
+  fact held in `pre`, or skip when `pre` is already broken.
+* **The event tail is capped at 400 entries** (`EVENT_KEEP`). Read per-act
+  windows (`Step::events`); never walk further back.
+* **Cards have no instance identity** (`Hidden.hand` is `Vec<String>`).
+  Exactly-one-zone can only be checked as a multiset.
+* **`world_mut` is only legal at rest** (no pending routine). The observer
+  never calls it; arrange setters do, so never arrange while a routine is
+  pending.
+* **Bankruptcy and auction money have no ledger legs.** `G-MONEY-01` and
+  friends skip those windows.
+
 ## Findings
 
-(Empty for now. Units append here and in their area docs; the coordinator
-consolidates into `docs/rulebook/TEST-FINDINGS.md`.)
+* **G-CARDS-01** (genuine, stays failing): human seats sit over `handLimit`
+  after a draw; only bots auto-discard. Book says discard down immediately.
+  Detail in `docs/rulebook/spec/global/cards.md` § Findings.
+
+(Units append here and in their area docs; the coordinator consolidates into
+`docs/rulebook/TEST-FINDINGS.md`.)

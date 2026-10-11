@@ -110,9 +110,31 @@ pub struct Step<'a> {
     pub act: &'a StepAct,
     /// Static data (tiles, cards, characters, events, match rules).
     pub data: &'a GameData,
+    /// A prompt was waiting **before** the input. The live prompt lives on the
+    /// host (`Match`), not in [`World`], so it is captured alongside the step.
+    pub pre_prompt_open: bool,
+    /// A prompt is waiting **after** the settle loop. A clause about "at
+    /// rest" must skip when this is true -- the step stopped mid-decision.
+    pub post_prompt_open: bool,
 }
 
 impl Step<'_> {
+    /// Seat index of the player who sent [`self.act`](StepAct).
+    ///
+    /// `StepAct::who` is the engine **member** id, not a player index. The
+    /// game harness seats player `k` as member `k + 1`, but always look the
+    /// member up rather than assuming -- a reordered roster would silently
+    /// check the wrong seat.
+    pub fn player_of_act(&self) -> usize {
+        let member = self.act.who();
+        self.pre
+            .st
+            .players
+            .iter()
+            .position(|p| p.member == member)
+            .unwrap_or_else(|| panic!("no player for member {member}"))
+    }
+
     /// Message keys of this step's events (see [`event_key`]), for violation
     /// reports and assertion messages.
     pub fn event_keys(&self) -> Vec<String> {

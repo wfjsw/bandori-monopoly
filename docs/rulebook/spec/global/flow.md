@@ -17,17 +17,16 @@ Note: the 回合流程 table rows 1-3 are corrupt in the book; use **行动阶�
 * **ID:** `G-FLOW-01`
 * **Source:** `rulebook-doc.md:132`
 * **Quote:** 「玩家在运营阶段可在非执行任何效果的时候进入移动阶段。移动阶段中需进行1次[主要移动]。基础[主要移动]为**投掷1d20**，在地图上顺时针移动投掷结果数量的格子，到达[移动终点]后需进行[结算]。[主要移动]和所需[结算]完成后进入结束阶段。」
-* **Trigger:** an observed input that performs a main move (the engine's
-  `turn.main_moved` latch flips in this step).
-* **Condition:** `pre.turn.main_moved` is already true (the main move already
-  happened this turn).
-* **Effect:** the latch does not flip again inside the same turn -- a second
-  main move is refused / no-op'd.
-* **Frame:** n/a (read of the turn latch).
+* **Trigger:** an observed input that is a `roll` command, or any input that
+  touches the `turn.main_moved` latch.
+* **Condition:** `pre.turn.main_moved` is already true in the same turn.
+* **Effect:** the latch does not reset mid-turn, and a second `roll` command
+  does not move the player (the engine must refuse it / no-op it).
+* **Frame:** n/a (read of the turn latch and `pos`).
 * **Rulings & OPEN:** 「移动阶段中需进行1次」 is the "exactly one" that makes a
-  second attempt illegal. Card-driven extra moves are 「[强制移动]」 /
-  「[传送]」 and are *not* [主要移动] -- they are unit 4 and unit 6's shared
-  edge. This example only guards the latch.
+  second attempt illegal. Card-driven dice (a card's 「投掷3d10」) are **not**
+  a `roll` command and are out of scope. Card-driven extra moves are
+  「[强制移动]」 / 「[传送]」 and are unit 4 and unit 6's shared edge.
 * **Executable:** `rules_spec::global::flow::g_flow_01`.
 
 ---
