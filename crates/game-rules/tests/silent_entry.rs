@@ -74,27 +74,40 @@ fn silent_entry_produces_no_card_event_and_the_sibling_still_flashes() {
     );
 }
 
-/// A silent body that nests a real activation: the nested card still flashes
-/// (and the silent outer body posts no header of its own).
+/// A silent body that triggers another card's hook through the engine: the
+/// triggered hook still announces normally (the flag hides only the silent
+/// entry's own flash).
+///
+/// `TEST:silentPay`'s silent settle body gains money; that runs the money
+/// pipeline's `payTotalAdd` stage, which fires `TEST:totalCut`'s hook.
 #[test]
 fn nested_activation_from_a_silent_body_still_announces() {
     let mut t = Table::vanilla(2);
-    let mark = place_and_land(&mut t, "TEST:silentNest");
+    t.set_hand(0, &[]);
+    t.set_hand(1, &[]);
+    t.place_raw(0, "TEST:totalCut");
+    t.give_play(0, "TEST:silentPay").unwrap();
+    drain(&mut t);
+    let mark = t.mark();
+    t.set_pos(0, 0);
+    t.dice(&[3]);
+    t.roll(0).unwrap();
+    drain(&mut t);
     // The silent outer body posts nothing.
     assert!(
-        activations_since(&t, mark, "TEST:silentNest").is_empty(),
+        activations_since(&t, mark, "TEST:silentPay").is_empty(),
         "the silent outer body must not flash: {}",
         t.recent_keys(30).join(", ")
     );
-    // The nested `TEST:echo` play announces normally.
-    let nested = activations_since(&t, mark, "TEST:echo");
+    // The hook the gain triggered still announces.
+    let nested = activations_since(&t, mark, "TEST:totalCut");
     assert_eq!(
         nested.len(),
         1,
-        "the nested activation still flashes: {}",
+        "the triggered hook still flashes: {}",
         t.recent_keys(30).join(", ")
     );
-    assert_eq!(nested[0].kind, "play", "a nested play is a play activation");
+    assert_eq!(nested[0].kind, "hook", "a field hook is a hook activation");
 }
 
 /// A silent body that pays: no flash, but the debug guard records the

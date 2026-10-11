@@ -44,6 +44,31 @@ fn record_silent_visible(card_id: &str, what: &str) {
     SILENT_VISIBLE.with(|v| v.borrow_mut().push((card_id.to_string(), what.to_string())));
 }
 
+/// Is this host request a **visible effect** a silent entry must not produce?
+/// `Some(what)` for the pay/move/draw/build class; `None` for setup (gates,
+/// targeting, linger) and for nested activations (`play_card` / `invoke_skill`
+/// are not host requests -- they announce on their own).
+fn visible_host_request(req: &HostRequest) -> Option<&'static str> {
+    match req {
+        HostRequest::Pay { .. } | HostRequest::PayTotal { .. } | HostRequest::PayRent { .. } => {
+            Some("pay/gain/transfer")
+        }
+        HostRequest::Move { .. } | HostRequest::Teleport { .. } => Some("move"),
+        HostRequest::Draw { .. } | HostRequest::DrawEvent { .. } => Some("draw"),
+        HostRequest::Build { .. }
+        | HostRequest::OfferBuild { .. }
+        | HostRequest::OfferBuildOne { .. }
+        | HostRequest::Mortgage { .. }
+        | HostRequest::OfferBuy { .. }
+        | HostRequest::OfferForceBuy { .. }
+        | HostRequest::Buy { .. }
+        | HostRequest::Acquire { .. }
+        | HostRequest::AgentOffer { .. } => Some("buy/build"),
+        HostRequest::SettleAt { .. } => Some("settle"),
+        _ => None,
+    }
+}
+
 /// Take the recorded silent-entry violations (`card id`, `what it produced`)
 /// since the last call. Used by tests that pin the debug guard.
 pub fn take_silent_visible() -> Vec<(String, String)> {
@@ -2715,7 +2740,21 @@ impl<M: CardModules> RulesBridge<M> {
                             return Err(game_core::engine::Halt::suspended());
                         }
                     }
+                    let req_is_visible = visible_host_request(&req);
                     let v = self.apply_host_request(cx, req, &run.linger_props, call, card_id)?;
+                    // Debug guard: a silent entry must not produce a visible
+                    // effect through the host either (`ctx::gain` and kin are
+                    // host requests, not Run-local logs).
+                    if silent_body.get() {
+                        if let Some(what) = req_is_visible {
+                            record_silent_visible(card_id, what);
+                            debug_assert!(
+                                card_id.starts_with("TEST:"),
+                                "silent entry on {card_id} produced a visible host effect ({what}); \
+                                 `CardDef::silent` must not hide a real effect"
+                            );
+                        }
+                    }
                     // Group the host-effect events under this activation.
                     cx.stamp_parent_since(live_before, activation_id);
                     if pile_base.is_some() {
