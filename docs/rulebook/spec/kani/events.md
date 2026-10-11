@@ -105,7 +105,7 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | E-end-it-all-02 | 在场时迷子不再推让我来结束一切 | PROVEN | `end_it_all_02_*` | TBD | `event_is_active` modeled | — |
 | E-never-ends-01 | 1d4 → 传送到对应RiNG +1除外 | BLOCKED-HOST | `never_ends_01_noop_under_stub_tile_named` | TBD | `tile_named("RiNG {n}")` → -1; body early-returns | — |
 
-## Summary counts (clause-level; verdicts pending CBMC run)
+## Summary counts (clause-level)
 
 | classification | count | notes |
 |---|---:|---|
@@ -117,6 +117,18 @@ Specs: `rules/kani/src/spec/events.rs` · Proofs: `rules/kani/src/proofs/events.
 | cannot test | 4 | skin, clocks, shout, fire-pot skill gate |
 
 55 harnesses in `proofs/events.rs`. Full per-clause table above.
+
+## CBMC run status
+
+- Runner: `tools/kani/run.sh --unit events` (`CARGO_TARGET_DIR=/home/monopoly/kani-target-events`).
+- First batch compile errors (`spec::` vs `spec::events::`, `MAX_LOG=24`) are fixed.
+- A 3-harness probe (`moca_02_expiry_tick_files_away`, `aao_01_expiry_tick_files_away`, `duobang_01_02_two_player_iff`) sat in `acquire_slot` for 30+ minutes: the box had **20 CBMC / 41 slot-waiters** at 22:00 UTC (2026-10-11), well over `KANI_GLOBAL_SLOTS=3`. No new verdicts landed in this window.
+- The earlier `moca_02_expiry_tick_files_away` FAILED at 12s is the **pre-fix compile error log**, not a proof failure.
+- Re-run from the worktree when the box is quiet:
+  ```sh
+  export CARGO_TARGET_DIR=/home/monopoly/kani-target-events CARGO_BUILD_JOBS=4
+  bash tools/kani/run.sh --unit events --timeout 900 --jobs 1
+  ```
 
 ## Findings
 
