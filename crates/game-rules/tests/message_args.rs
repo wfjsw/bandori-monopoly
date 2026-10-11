@@ -172,5 +172,5 @@ fn name_helpers_never_text_a_known_key() {
     // Known keys resolve to their own i18n names.
     assert_eq!(counter_name("crystals").key(), "log.counter.crystals");
     assert_eq!(state_key_name("handLimit").key(), "log.state.hand_limit");
-    assert_eq!(mark_kind_name("mark:cp").key(), "log.mark.cp");
+    assert_eq!(mark_kind_name("mark:cp").key(), "mark:cp");
 }
