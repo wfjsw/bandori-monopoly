@@ -333,12 +333,14 @@ fn l03_rent_through_every_modifier() {
 // 规则书: 无法将视线移开 forces a walk; 练习室里的风暴 remote-settles 50;
 // then the counter and the original card resolve.
 // RULING: whether the link's extra half applies inside the scaled settlement.
-#[ignore = "DISCREPANCY: 无法将视线移开 cannot be played as the counter (err.play_phase)"]
 #[test]
 fn l04_forced_move_into_remote_settle() {
     let mut t = Table::new(&["千早爱音", "花园多惠", "青叶摩卡"]);
     t.clean();
     t.begin_turn(0);
+    while t.prompt().is_some() {
+        t.decline();
+    }
     let t49 = tile("银河拉面馆");
     let t50 = tile("Live House Galaxy");
     let t52 = tile("旭汤澡堂");
@@ -351,6 +353,9 @@ fn l04_forced_move_into_remote_settle() {
     t.set_pos(1, 48);
     t.give(1, &["AG:宣战布告"]);
     t.give(0, &["通用:登上武道馆", "Mujica:无法将视线移开"]);
+    // Anon Tokyo consumes the main move (step becomes 结束). The scenario then
+    // plays 武道馆 as a fresh OPS action -- restore the stage.
+    t.m.world_mut().st.step = game_core::state::stage::OPS;
 
     // 1. P0 plays 武道馆.
     t.play(0, "通用:登上武道馆").unwrap();
@@ -372,6 +377,7 @@ fn l04_forced_move_into_remote_settle() {
         }
         t.decline();
     }
+    // Steps (ask.intOption n=4) then direction (fallback 0 = forward).
     loop {
         let Some(_) = t.prompt() else { break };
         let k = t.option("4").or_else(|| t.option("前"));
@@ -410,12 +416,14 @@ fn l04_forced_move_into_remote_settle() {
 // the ring starts with the initial user of the skill use).
 // RULING: whether P1 still gets the mark and P2 still teleports when the use
 // is cancelled; whether P0's fire is refunded.
-#[ignore = "DISCREPANCY: 花园多惠 (2) cancel window never opens; P0's teleport resolves (pos 10 not 5)"]
 #[test]
 fn l05_one_skill_several_counteractions() {
     let mut t = Table::new(&["户山香澄", "广町七深", "青叶摩卡", "花园多惠"]);
     t.clean();
     t.begin_turn(0);
+    while t.prompt().is_some() {
+        t.decline();
+    }
     t.set_fire(0, 1, 1);
     t.set_fire(1, 2, 2);
     t.set_fire(2, 1, 1);
@@ -424,21 +432,20 @@ fn l05_one_skill_several_counteractions() {
     t.set_pos(0, 5);
     let sid = t.skill_id(0, "非凡之星");
     t.skill(0, &sid).unwrap();
-    // Counteractions: P1 (2) mark, P2 (2) teleport, P3 (2) cancel.
+    // Counteractions: P3 (2) cancel (花园多惠). Hooks (广町七深 mark / 青叶摩卡
+    // teleport) run after the window and only if the use was not cancelled.
     let mut seen = vec![];
     loop {
         let Some(_) = t.prompt() else { break };
         let dump = t.dump_prompt();
         seen.push(dump.clone());
-        let cancel = t.option("花园多惠").or_else(|| t.option("抵消"));
-        let mark = t.option("广町七深").or_else(|| t.option("标记"));
-        let tp = t.option("青叶摩卡").or_else(|| t.option("传送"));
-        if let Some(k) = cancel {
-            t.answer(3, k).unwrap();
-        } else if let Some(k) = mark {
-            t.answer(1, k).unwrap();
-        } else if let Some(k) = tp {
-            t.answer(2, k).unwrap();
+        if t.counteract_offered("花园多惠") || t.option("花园多惠").is_some() {
+            t.counteract(3, "花园多惠").unwrap();
+        } else if t.prompt_refers("广町七深") || t.prompt_refers("nanami") {
+            // Hook offer: ask_yes, option 0 = yes.
+            t.answer(1, 0).unwrap();
+        } else if t.prompt_refers("青叶摩卡") || t.prompt_refers("moca") {
+            t.answer(2, 0).unwrap();
         } else {
             t.decline();
         }

@@ -634,7 +634,7 @@ fn c12_exist_vs_summer_camp() {
 
 // 规则书: counters to one timing resolve newest first (ruling on 89).
 // R.I.O.T.: 所有玩家将所有手牌放至弃牌堆，并抽等量的卡，你额外抽1张卡.
-#[ignore = "DISCREPANCY: with R.I.O.T. + 宣战布告 on one timing, P0 ends at 12000 (the 500 payment is missing) instead of 11500"]
+#[ignore = "DISCREPANCY: R.I.O.T. + 宣战布告 on one timing loses the 500 (nested transfer inside the counter body returns 0; hands/draws land)"]
 #[test]
 fn c13_riot_and_war_declaration() {
     let mut t = Table::vanilla(3);
@@ -659,6 +659,12 @@ fn c13_riot_and_war_declaration() {
     }
     // Newest first: 宣战布告 (P2) resolves first, then R.I.O.T. (P1), then X.
     // After R.I.O.T.: P0 hand 2, P1 hand 1+1, P2 hand 3+1 (redrawn same count).
+    eprintln!(
+        "c13 record: money={}/{}/{} (want 11500/9000/9500)",
+        t.money(0),
+        t.money(1),
+        t.money(2)
+    );
     assert_eq!(t.hand(0).len(), 2, "P0: {:?}", t.hand(0));
     assert_eq!(t.hand(1).len(), 2, "P1 = 1 + 1: {:?}", t.hand(1));
     assert_eq!(t.hand(2).len(), 4, "P2 = 3 + 1: {:?}", t.hand(2));
@@ -674,7 +680,6 @@ fn c13_riot_and_war_declaration() {
 // =====================================================================
 
 // 规则书: 骰子已经掷下: 「本回合内所有其他玩家无法从手牌中使用[反击]，回合结束后放入弃牌堆」.
-#[ignore = "DISCREPANCY: 骰子已经掷下 is placed twice and does not shut the counter windows"]
 #[test]
 fn c14_dice_cast_shuts_windows() {
     let mut t = Table::vanilla(2);
@@ -685,6 +690,14 @@ fn c14_dice_cast_shuts_windows() {
     while t.prompt().is_some() {
         t.decline();
     }
+    // Placed exactly once (the play + own-counteract follow-up must not
+    // double-place).
+    let n = t
+        .field_ids(0)
+        .iter()
+        .filter(|c| c.as_str() == "Mujica:骰子已经掷下")
+        .count();
+    assert_eq!(n, 1, "placed once: {:?}", t.field_ids(0));
     t.play(0, "通用:登上武道馆").unwrap();
     assert!(
         t.prompt().is_none(),
@@ -739,7 +752,6 @@ fn c15_dice_cast_itself_countered() {
 // =====================================================================
 
 // 规则书: 无法将视线移开: 「当有玩家对你使用[反击]后立即使用…强制移动1~4…并[触发结算]」.
-#[ignore = "DISCREPANCY: 无法将视线移开 does not force the counter-user to move"]
 #[test]
 fn c16_cannot_look_away_answers_a_counter() {
     let mut t = Table::vanilla(2);
@@ -764,11 +776,11 @@ fn c16_cannot_look_away_answers_a_counter() {
         }
         t.decline();
     }
-    // Choose forward 2 (the move prompt).
+    // The forced walk: pick 2 steps (`ask.intOption` n=2), then 前进. The
+    // direction's fallback is option 0 (forward), so a decline there is fine.
     loop {
         let Some(_) = t.prompt() else { break };
         let p = t.expect_prompt();
-        // options / items describing 1..4
         let k = t.option("2").or_else(|| {
             p.items
                 .iter()
@@ -784,7 +796,10 @@ fn c16_cannot_look_away_answers_a_counter() {
     }
     // P1 moved 2 and settled; then 宣战布告; then 武道馆.
     assert_eq!(t.pos(1), 2, "P1 moved forward 2");
-    let x = ceil10(2000 / 2);
+    // 规则书: X = 2000 ÷ 「[使用者]以外的[存活]玩家数量」 向上取整10. Two
+    // players, so the divisor is 1 (the old `2000 / 2` assumed a 3-player
+    // table).
+    let x = ceil10(2000 / 1);
     assert_eq!(t.money(0), 10_000 - 500 + x);
     assert_eq!(t.money(1), 10_000 + 500 - x);
 }
@@ -1088,7 +1103,6 @@ fn c23_manas_counter_with_a_joiner() {
 
 // 规则书: 花园多惠 (2): 「在其他玩家使用…手牌的[手]效果时你可以使用4个[火罐]将其抵消，
 // 然后你获得500资金且被抵消的玩家获得2000资金」.
-#[ignore = "DISCREPANCY: 花园多惠 (2) never opens a cancel window for a hand effect; the card resolves normally"]
 #[test]
 fn c24_hanae_cancels_a_hand_effect() {
     let mut t = Table::new(&["户山香澄", "花园多惠"]);
@@ -1098,12 +1112,9 @@ fn c24_hanae_cancels_a_hand_effect() {
     t.give_play(0, "通用:登上武道馆").unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        // 花园多惠's (2) is a skill counteraction.
-        let k = t.option("花园多惠").or_else(|| t.option("cancel")).or_else(|| t.option("抵消"));
-        if let Some(k) = k {
-            t.answer(1, k).unwrap();
-        } else if t.counteract_offered("通用:登上武道馆") {
-            t.decline();
+        // 花园多惠's (2) is a field skill [反击] (`ask.counteract.skill`).
+        if t.counteract_offered("花园多惠") || t.option("花园多惠").is_some() {
+            t.counteract(1, "花园多惠").unwrap();
         } else {
             eprintln!("c24 prompt: {}", t.dump_prompt());
             t.decline();
@@ -1122,7 +1133,6 @@ fn c24_hanae_cancels_a_hand_effect() {
 
 // 规则书: 花园多惠 (2) vs 户山香澄 (2) teleport.
 // RULING: whether P0's fire is refunded.
-#[ignore = "DISCREPANCY: 花园多惠 (2) never opens a cancel window for a skill use; the teleport resolves"]
 #[test]
 fn c25_hanae_vs_skill_main() {
     let mut t = Table::new(&["户山香澄", "花园多惠"]);
@@ -1137,18 +1147,11 @@ fn c25_hanae_vs_skill_main() {
     t.skill(0, &sid).unwrap();
     loop {
         let Some(_) = t.prompt() else { break };
-        let k = t.option("花园多惠").or_else(|| t.option("cancel")).or_else(|| t.option("抵消"));
-        if let Some(k) = k {
-            t.answer(1, k).unwrap();
+        if t.counteract_offered("花园多惠") || t.option("花园多惠").is_some() {
+            t.counteract(1, "花园多惠").unwrap();
         } else {
             eprintln!("c25 prompt: {}", t.dump_prompt());
-            // try to pick tile 10 for the teleport if asked
-            let p = t.expect_prompt();
-            if let Some(k) = p.items.iter().position(|s| s == "10") {
-                t.answer(0, k as i32).unwrap();
-            } else {
-                t.decline();
-            }
+            t.decline();
         }
     }
     eprintln!(
@@ -1203,12 +1206,16 @@ fn c26_immunity_vs_crystal_mover() {
 
 // 规则书: 欢迎来到ave mujica的世界 (2): 「当有其他玩家切换状态时，你与所有本回合切换了状态的玩家同时切换一次状态」.
 // RULING: whether a player with no state 2 is unaffected.
-#[ignore = "DISCREPANCY: 欢迎来到ave mujica的世界 (1) cannot be played (err.play_phase)"]
 #[test]
 fn c27_welcome_state_switch() {
     let mut t = Table::new(&["三角初华", "若叶睦", "丰川祥子"]);
     t.clean();
     t.begin_turn(0);
+    // Turn-start skill hooks (若叶睦 / 丰川祥子) may leave a prompt open; a
+    // busy match refuses `play` with `err.play_phase`. Drain before playing.
+    while t.prompt().is_some() {
+        t.decline();
+    }
     t.give(2, &["Mujica:欢迎来到ave mujica的世界"]);
     // P0 plays (1) to switch P1's state. Record what happens.
     t.give_play(0, "Mujica:欢迎来到ave mujica的世界").unwrap();
