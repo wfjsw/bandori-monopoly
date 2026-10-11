@@ -1445,15 +1445,46 @@ pub fn raise(player_id: i32, kind: TriggerKind, value: i32) -> Result<bool, Prom
     asked(unsafe { sys::raise(player_id, kind as i32, value) }).map(|v| v != 0)
 }
 
+// ---------------------------------------------------------- status hosts
+// These are the `rules/status` hosts' **engine services**, not the
+// card-facing API. Cards call `rules_status::{stay,stun,exile,fire}::*`
+// (`docs/STATUS-HOSTS.md`). `give_*` keep their names because they open the
+// abnormal [反击] window (`abnormal_gate`) -- a generic `apply_abnormal`
+// would replace them; until then this is the one place game vocabulary sits
+// in card-sdk, marked hidden so it is not the documented surface.
+// TODO(ABI): genericize to `apply_abnormal` + `marker::gain_capped` /
+// `marker::spend` and delete these (HOST-09/10 style dead-surface removal).
+
+/// 火罐 held. Prefer `rules_status::fire::get`.
+#[doc(hidden)]
+pub fn fire(player_id: i32) -> i32 {
+    unsafe { sys::fire(player_id) }
+}
+
+#[doc(hidden)]
+pub fn fire_max(player_id: i32) -> i32 {
+    unsafe { sys::fire_max(player_id) }
+}
+
+/// Gain fire pots, capped by the player's own cap.
+#[doc(hidden)]
+pub fn gain_fire(player_id: i32, n: i32, why: &Msg) -> Result<i32, Prompt> {
+    let (p, l) = mj(why);
+    asked(unsafe { sys::gain_fire(player_id, n, p, l) })
+}
+
+#[doc(hidden)]
 pub fn give_stay(player_id: i32, n: i32) {
     unsafe { sys::give_stay(player_id, n) }
 }
 
+#[doc(hidden)]
 pub fn give_stun(player_id: i32, n: i32) {
     unsafe { sys::give_stun(player_id, n) }
 }
 
 /// Give `[除外]` layers to the player, returning them after.
+#[doc(hidden)]
 pub fn give_exile(player_id: i32, n: i32, to: i32) {
     unsafe { sys::give_exile(player_id, n, to) }
 }
@@ -1463,13 +1494,22 @@ pub fn give_extra_turn(player_id: i32) {
     unsafe { sys::give_extra_turn(player_id) }
 }
 
+/// Generic turn verb: clear the `skip_move` latch if it is `player_id`'s
+/// turn. The `status:stay` count-changed clause (`docs/STATUS-HOSTS.md`)
+/// calls this when the last [停留] layer drops.
+pub fn clear_move_skip(player_id: i32) {
+    unsafe { sys::clear_move_skip(player_id) }
+}
+
 /// Can the player pay? Not out, not stunned, not exiled.
+#[doc(hidden)]
 pub fn can_pay(player_id: i32) -> bool {
     unsafe { sys::can_pay(player_id) != 0 }
 }
 
 /// `None` when the player may still make this turn's main
 /// move, else the shared refusal (`status.move_*` messages).
+#[doc(hidden)]
 pub fn cant_move(player_id: i32) -> Option<Msg> {
     match unsafe { sys::cant_move(player_id) } {
         0 => None,
@@ -1487,17 +1527,32 @@ pub fn card_move(player_id: i32) -> bool {
     unsafe { sys::card_move(player_id) != 0 }
 }
 
+/// Spend `n` [火罐]; false when the player has fewer. Logs
+/// the spend (`why` is the reason message).
+///
+/// Marker window (user ruling 2026-10-07): `markerSpend` opens **before** the
+/// fire moves and may cancel it (`Err(Prompt)` to pause, `Ok(false)` when a
+/// counteraction cancelled the link).
+#[doc(hidden)]
+pub fn spend_fire(player_id: i32, n: i32, why: &Msg) -> Result<bool, Prompt> {
+    let (p, l) = mj(why);
+    asked(unsafe { sys::spend_fire(player_id, n, p, l) }).map(|v| v != 0)
+}
+
 /// `[停留]` layers on the player.
+#[doc(hidden)]
 pub fn stay_of(player_id: i32) -> i32 {
     unsafe { sys::stay_of(player_id) }
 }
 
 /// `[晕眩]` layers on the player.
+#[doc(hidden)]
 pub fn stun_of(player_id: i32) -> i32 {
     unsafe { sys::stun_of(player_id) }
 }
 
 /// `[除外]` layers on the player (mirrors [`stun_of`]).
+#[doc(hidden)]
 pub fn exile_of(player_id: i32) -> i32 {
     unsafe { sys::exile_of(player_id) }
 }
@@ -2106,6 +2161,13 @@ pub fn set_next_steps(player_id: i32, n: i32) {
 /// Steps this turn's [主要移动] walked (0 = none yet).
 pub fn turn_main_steps() -> i32 {
     unsafe { sys::turn_main_steps() }
+}
+
+/// Raise (or, negative, lower) `player_id`'s [火罐] cap;
+/// returns the new cap.
+#[doc(hidden)]
+pub fn add_fire_max(player_id: i32, n: i32) -> i32 {
+    unsafe { sys::add_fire_max(player_id, n) }
 }
 
 /// The trigger a counteraction is being checked against.

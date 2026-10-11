@@ -345,6 +345,11 @@ extern "C-unwind" {
     pub fn give_exile(player_id: i32, n: i32, to: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_give_extra_turn")]
     pub fn give_extra_turn(player_id: i32);
+    /// Generic turn verb: clear the `skip_move` latch if it is `player_id`'s
+    /// turn. The `status:stay` count-changed clause calls this; the engine
+    /// names no status.
+    #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_clear_move_skip")]
+    pub fn clear_move_skip(player_id: i32);
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_can_pay")]
     pub fn can_pay(player_id: i32) -> i32;
     #[cfg_attr(not(target_arch = "wasm32"), link_name = "bandori_cant_move")]

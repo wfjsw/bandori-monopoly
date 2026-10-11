@@ -330,21 +330,24 @@ up in Phase D, keep the accessors and note `TODO(规则书)` / `TODO(ABI)` here.
 
 ### 3.7 ABI / save / replay
 
-* Phase B: old `ctx::{give_stay, ...}` still work (host-backed shims or
-  engine-backed behind the same wire names). Suite green. No ABI bump.
-* Phase C: after all ~177 call sites migrate, the old guest imports
-  (`bandori_give_stay`, `bandori_give_stun`, `bandori_give_exile`,
-  `bandori_gain_fire`, `bandori_spend_fire`, `bandori_add_fire_max`,
-  `bandori_stay_of`, `bandori_stun_of`, `bandori_exile_of`,
-  `bandori_can_pay`, `bandori_cant_move`, `bandori_give_extra_turn`) are
-  removed from the ABI -- **dead-surface removal like HOST-09/10**. Bump
-  `card_sdk::abi::ABI_VERSION` (53 -> 54). Add the docs note in the style of
-  the v53 one (`docs/rulebook/TEST-FINDINGS.md` § Host-ABI batch).
+* Phase B: old `ctx::{give_stay, ...}` still work (host-backed shims). Suite
+  green. No ABI bump.
+* Phase C batch 1 (done): every card / skill / tile / event / fixture call
+  site now goes through `rules_status::{stay,stun,exile,fire}::*` or the
+  generic gate readers. No card names `ctx::give_stay` etc.
+* Phase C batch 2 (leftover): the old guest imports stay for now, marked
+  `#[doc(hidden)]`, because `give_stay` / `give_stun` / `give_exile` open the
+  abnormal [反击] window (`abnormal_gate`) and `gain_fire` / `spend_fire` /
+  `add_fire_max` own the cap / log / `markerSpend` service. They are the
+  **status hosts' engine services**, not the card-facing API.
+  TODO(ABI): genericize to `apply_abnormal(p, AbKind, n, to)` +
+  `marker::{gain_capped,spend}` + `clear_move_skip`, then delete the
+  game-named imports (HOST-09/10 dead-surface removal) and bump
+  `ABI_VERSION` 53 -> 54.
+* `give_extra_turn` stays an engine verb (turn order, not a marker).
 * `SAVE_VERSION` bumps only if the serialized `MatchState` shape changes.
   Keeping `MatchPlayer.state` as storage means **no save bump** in the
-  default plan. A gate bitset on `MatchPlayer` is additive
-  (serde-default) -- still no bump required, but note it in the ABI log if
-  the public view grows a field.
+  default plan. Gates are derived (not stored) -- no shape change.
 * Replays stay backward compatible: archived engine bundles keep replaying
   old records; do not break the record / save wire.
 
@@ -458,13 +461,13 @@ One commit per batch.
 
 ## 7. API diff (target)
 
-### Gone from `card-sdk` (after Phase C)
+### Hidden in `card-sdk` (host services; cards must not call)
 
 `ctx::fire`, `ctx::fire_max`, `ctx::gain_fire`, `ctx::spend_fire`,
-`ctx::give_stay`, `ctx::give_stun`, `ctx::give_exile`, `ctx::give_extra_turn`,
+`ctx::give_stay`, `ctx::give_stun`, `ctx::give_exile`,
 `ctx::stay_of`, `ctx::stun_of`, `ctx::exile_of`, `ctx::can_pay`,
-`ctx::cant_move`, `ctx::add_fire_max`, and the matching
-`ctx::sys::bandori_*` imports.
+`ctx::cant_move`, `ctx::add_fire_max` -- `#[doc(hidden)]`, called only by
+`rules/status`. `ctx::give_extra_turn` stays a documented engine verb.
 
 ### In `rules/status` (new)
 
