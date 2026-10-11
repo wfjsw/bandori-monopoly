@@ -1,0 +1,16 @@
+[package]
+name = "rules-spec"
+version.workspace = true
+edition.workspace = true
+description = "Game-specific formal-verification harness and clause tables for the BanG Dream Monopoly rulebook. Depends on the generic crates/spec-kit; host-only (not a member of the rules/ wasm workspace)."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+game-core = { path = "../../crates/game-core" }
+game-rules = { path = "../../crates/game-rules" }
+spec-kit = { path = "../../crates/spec-kit" }
+serde_json = { workspace = true }
+
+[dev-dependencies]

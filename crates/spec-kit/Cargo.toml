@@ -1,0 +1,12 @@
+[package]
+name = "spec-kit"
+version.workspace = true
+edition.workspace = true
+description = "Generic formal-verification kit: clauses over one engine transition (pre-world, post-world, events, act). No game vocabulary -- the game-specific harness lives in rules/spec."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+game-core = { path = "../game-core" }
+serde_json = { workspace = true }
