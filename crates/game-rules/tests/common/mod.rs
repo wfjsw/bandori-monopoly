@@ -1,13 +1,23 @@
-//! Shared harness for the rulebook integration tests (`tests/rb_*.rs`).
+//! Minimal harness for the engine-universal integration tests in this
+//! directory (chain / counteraction windows, activation log, movement events,
+//! settle-stack, ruleset loader, …).
 //!
-//! Black-box: a real [`Match`] running the shipped card modules, driven the way
-//! a client drives it (`act` commands, prompt answers), with the board arranged
-//! through the `world_mut` test seam. Every player is a human in a Solo match,
-//! so nothing happens on its own -- no bot turns, no prompt time-outs -- and a
-//! [反击] window is offered to whoever holds an eligible card.
+//! Black-box: a real [`Match`] driven the way a client drives it (`act`
+//! commands, prompt answers), with the board arranged through the `world_mut`
+//! test seam. Every player is a human in a Solo match, so nothing happens on
+//! its own -- no bot turns, no prompt time-outs -- and a [反击] window is
+//! offered to whoever holds an eligible card.
 //!
 //! Seats are fixed: player `k` is member `k + 1` and sits in seat `k`, so every
 //! `who` below is both the player number and the engine's player id.
+//!
+//! Test bodies here name only `TEST:*` fixtures (`rules/fixtures/test-cards`).
+//! The match still boots a real opening deal, so the loader also stages
+//! `dist/cards`; `clean()` wipes the deal before each test. A fixtures-only
+//! boot is the long-term ideal (see docs/rulebook/TEST-FINDINGS.md).
+//!
+//! The game-specific suite (shipped cards / skills / this game's rulebook
+//! clauses) lives in `rules/tests/tests/` on the full harness there.
 //!
 //! Build the modules first: `node tools/build-ruleset.mjs`.
 #![allow(dead_code)]

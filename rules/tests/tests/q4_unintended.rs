@@ -10,7 +10,7 @@
 //! 6. bystander / seat invariance      (`q4::seat`)
 //!
 //! The default run stays green by skipping signatures already filed in
-//! [`q4::KNOWN_FINDINGS`] (see `tests/rb_unintended_found.rs`), the same way
+//! [`q4::KNOWN_FINDINGS`] (see `rules/tests/tests/unintended_found.rs`), the same way
 //! the interaction fuzzer does. `Q4_SEEDS` / `Q4_SAMPLE` / `Q4_PAIRS` widen
 //! the sweep; the default is the ~2 minute band.
 //!
@@ -135,7 +135,7 @@ impl Sweep {
 }
 
 /// The whole Q4 sweep. Green by default: findings that reproduce are listed
-/// with `--nocapture` and held in `tests/rb_unintended_found.rs` behind
+/// with `--nocapture` and held in `rules/tests/tests/unintended_found.rs` behind
 /// `#[ignore]`, and any signature already in `q4::KNOWN_FINDINGS` is skipped.
 #[test]
 fn q4_unintended_interactions() {
@@ -176,8 +176,8 @@ fn q4_print_coverage_section() {
     let s = sweep();
     println!("## Unintended interactions");
     println!();
-    println!("Method: see `crates/game-rules/tests/q4_unintended.rs` and the");
-    println!("modules under `crates/game-rules/tests/q4/`. Black-box: `rules/cards/`,");
+    println!("Method: see `rules/tests/tests/q4_unintended.rs` and the");
+    println!("modules under `rules/tests/tests/q4/`. Black-box: `rules/cards/`,");
     println!("`rules/skills/`, `rules/fixtures/` and `target/scratch/tainted/` were");
     println!("never opened.");
     println!();
