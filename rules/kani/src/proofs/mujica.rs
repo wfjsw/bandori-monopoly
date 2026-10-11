@@ -411,7 +411,12 @@ pub fn sparkler_last_crystal_stun_two_iff() {
     kani::cover!(true, "last-crystal body");
     assert!(
         spec::mujica::sparkler_last_crystal_effects(effects, user),
-        "C-MUJICA-花火-03: UnplaceCard + GiveStun(user, 2)"
+        "C-MUJICA-花火-03: GiveStun(user, 2)"
+    );
+    let dest = world::with_world(|ww| ww.dest);
+    assert!(
+        spec::mujica::sparkler_last_crystal_dest(dest),
+        "C-MUJICA-花火-03: dest becomes Graveyard"
     );
     assert!(post.stay[0] == pre.stay[0] + 2, "user gains 2 stun layers");
 }
@@ -511,68 +516,42 @@ pub fn doll_garden_pay_amount_mutant_is_detected() {
 }
 
 // ===========================================================================
-// C-MUJICA-欢迎-02 (happy path)
+// C-MUJICA-欢迎-02
 // 「转换任意一名玩家的状态（若指定了不存在状态2的玩家则无效果）」
-// 「状态」 = skillState 1 ↔ 2. Isolation: the designated player has 状态2
-// (skillState = 1). Prompt: freeze the pick to the other player.
+// 「状态」 = skillState 1 ↔ 2.
+//
+// The play body designates a player via `ctx::target(who)`. Under the Kani
+// host `Op::target` always returns 0 (structure stub), so the designated
+// seat cannot be modeled — BLOCKED-HOST (`target`). What is proved here is
+// the clause's determinate toggle arithmetic and the required no-op when
+// the target has no 状态2. The engine's two known gaps (user not offered;
+// non-状态2 seat still toggled) are the contract findings in the unit table.
 // ===========================================================================
 
-fn welcome_world(designee_state: i32) -> World {
-    let mut w = install_and_new();
-    w.n_players = 2;
-    for p in 0..MAX_PLAYERS {
-        w.out[p] = false;
-    }
-    let user = 0i32;
-    w.trig_player = user;
-    // Designate player 1 (the only other seat).
-    w.symbolic_answers = false;
-    w.answers[0] = 1; // ask_player pick
-    // skillState of the designee.
-    let key = crate::intern::intern("skillState");
-    w.key_set(1, key, designee_state);
-    w
-}
-
+/// Pure toggle: 1↔2 when 状态2 exists; otherwise no-op.
 #[kani::proof]
-#[kani::unwind(32)]
-pub fn welcome_toggle_designated_state_iff() {
-    let w = welcome_world(1);
-    let user = w.trig_player;
-    let skill_state_key = crate::intern::intern("skillState").0;
-    let pre_state = world::with_world(|ww| ww.key_get(1, crate::intern::intern("skillState")));
-    let pre = {
-        world::reset_world(w);
-        world::snapshot()
-    };
-    let _ = user;
-    invoke::unwrap_done(invoke::play("Mujica:欢迎来到ave mujica的世界", user));
-    let post = world::snapshot();
-    let (logbuf, log_n) = effects_of();
-    let effects = &logbuf[..log_n];
-    let post_state = world::with_world(|ww| ww.key_get(1, crate::intern::intern("skillState")));
-
-    kani::cover!(pre_state == 1, "designee in 状态1 → 状态2");
-    kani::cover!(pre_state == 2, "designee in 状态2 → 状态1");
-    assert!(
-        post_state == spec::mujica::welcome_next_state(pre_state, true),
-        "C-MUJICA-欢迎-02: skillState toggles 1↔2"
-    );
-    assert!(
-        spec::mujica::welcome_toggle_effects(effects, 1, post_state, skill_state_key)
-            || effects
-                .iter()
-                .any(|e| matches!(e, Effect::SetState { player: 1, n, .. } if *n == post_state)),
-        "C-MUJICA-欢迎-02: SetState on the designated player"
-    );
-    assert!(post.money == pre.money, "frame: money");
-    assert!(post.pos == pre.pos, "frame: pos");
+#[kani::unwind(8)]
+pub fn welcome_toggle_arithmetic_iff() {
+    let cur: i32 = kani::any();
+    kani::assume((0..=2).contains(&cur));
+    let has_state2: bool = kani::any();
+    kani::cover!(cur == 1 && has_state2, "1 → 2");
+    kani::cover!(cur == 2 && has_state2, "2 → 1");
+    kani::cover!(!has_state2, "no 状态2 → no-op");
+    let to = spec::mujica::welcome_next_state(cur, has_state2);
+    if has_state2 {
+        assert!(
+            to == if cur == 1 { 2 } else if cur == 2 { 1 } else { cur },
+            "C-MUJICA-欢迎-02: skillState toggles 1↔2"
+        );
+    } else {
+        assert!(to == cur, "C-MUJICA-欢迎-02: no 状态2 → no effect");
+    }
 }
 
 /// MUTANT: toggle always flips even without 状态2 (the known engine gap).
-/// A player whose skillState is neither 1 nor 2 must be a no-op.
 #[kani::proof]
-#[kani::unwind(24)]
+#[kani::unwind(8)]
 pub fn welcome_no_state2_mutant_is_detected() {
     assert!(
         spec::mujica::welcome_next_state(0, false) == 0,

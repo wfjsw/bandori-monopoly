@@ -41,11 +41,11 @@ face-down/immune untracked, `add_counter_at` ignores uid, `stun_of` aliases
 | C-MUJICA-视线-02 | 「视为其主要移动」 | PROTOCOL-LEVEL | — | — | `main_moved` scheduling | — |
 | C-MUJICA-视线-03 | 「（此卡可作为[反击]…）」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-欢迎-01 | 「选择以下效果其一发动」 | PROTOCOL-LEVEL | — | — | (2) is a [反击] branch | — |
-| C-MUJICA-欢迎-02 | 「转换任意一名玩家的状态（…无效果）」 | FAILS (happy path PROVEN) | `welcome_toggle_designated_state_iff`, `welcome_no_state2_mutant_is_detected` | see run table | **WRONG**: engine prompt omits the user (「任意一名」 includes self); **WRONG**: engine toggles a non-状态2 seat (required no-op) | — |
+| C-MUJICA-欢迎-02 | 「转换任意一名玩家的状态（…无效果）」 | BLOCKED-HOST + FAILS | `welcome_toggle_arithmetic_iff`, `welcome_no_state2_mutant_is_detected` | see run table | **BLOCKED-HOST** `Op::target` returns 0 always (cannot designate). **WRONG** (engine): prompt omits the user (「任意一名」 includes self); toggles a non-状态2 seat (required no-op). | — |
 | C-MUJICA-欢迎-03 | 「[反击] 当有其他玩家切换状态时…」 | PROTOCOL-LEVEL | — | — | counteraction window | — |
 | C-MUJICA-花火-01 | 「放置于场上并放置2个奇迹水晶」 | PROVEN | `sparkler_places_two_crystals_iff`, `sparkler_crystal_count_mutant_is_detected` | see run table | — | — |
 | C-MUJICA-花火-02 | 「回合结束后自动移除一个…并…额外回合」 | BLOCKED-HOST / OPEN | `sparkler_burn` (partial) | — | `give_extra_turn` is a silent stub (no Effect); crystal removal is recordable | OPEN-花火额外回合 |
-| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body) / PROTOCOL (tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun; engine leaves 1 after the turn-end layer tick (FAILS in contracts) | OPEN-花火眩晕掉层 |
+| C-MUJICA-花火-03 | 「最后一个…置入弃牌堆并立刻…2层[眩晕]」 | PROVEN (body stun) / PROTOCOL (discard motion + tick order) | `sparkler_last_crystal_stun_two_iff`, `sparkler_last_crystal_mutant_is_detected` | see run table | body grants 2 stun via `give_stun(2)` and `set_dest(Graveyard)` (no `UnplaceCard` Effect). Engine leaves 1 after the turn-end layer tick (FAILS in contracts). | OPEN-花火眩晕掉层 |
 | C-MUJICA-祥移动-01 | 「强制一名玩家…移动3格并[触发结算]」 | PROTOCOL-LEVEL | — | — | `card_move` stub; walk not simulated | OPEN-触发结算 |
 | C-MUJICA-祥移动-02 | 「（可在掷骰前…代替主要移动）」 | PROTOCOL-LEVEL | — | — | `main_moved` | — |
 | C-MUJICA-祥移动-03 | 「支付价格减半」 | PROTOCOL-LEVEL | — | — | settle chain; `plan::set_pay_factor` stub | OPEN-取整 |

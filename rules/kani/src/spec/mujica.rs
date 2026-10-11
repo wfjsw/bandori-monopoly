@@ -195,12 +195,18 @@ pub fn sparkler_place_effects(effects: &[Effect], player: i32, card: u8) -> bool
     placed && crystals == 1
 }
 
-/// Last-crystal body: card leaves play for the discard and the user gains
-/// **2** [眩晕] layers, immediately.
+/// Last-crystal body: the user gains **2** [眩晕] layers, immediately.
+/// 「置入弃牌堆」 is expressed by the body as `set_dest(Graveyard)`; the host
+/// records that as the `dest` field and does **not** push an `UnplaceCard`
+/// effect (see unit table — discard motion itself is PROTOCOL-LEVEL).
 pub fn sparkler_last_crystal_effects(effects: &[Effect], user: i32) -> bool {
-    effects.len() == 2
-        && matches!(effects[0], Effect::UnplaceCard { .. })
-        && matches!(effects[1], Effect::GiveStun { player: p, n } if p == user && n == 2)
+    effects.len() == 1
+        && matches!(effects[0], Effect::GiveStun { player: p, n } if p == user && n == 2)
+}
+
+/// Dest flag after the last-crystal body: Graveyard (1).
+pub fn sparkler_last_crystal_dest(dest_after: i32) -> bool {
+    dest_after == 1
 }
 
 /// Turn-end burn body: one crystal removed. The extra-turn grant is a
@@ -212,9 +218,8 @@ pub fn sparkler_burn_effects(effects: &[Effect], _user: i32) -> bool {
 
 /// MUTANT: last crystal grants 1 stun, not 2.
 pub fn sparkler_last_crystal_effects_mutant(effects: &[Effect], user: i32) -> bool {
-    effects.len() == 2
-        && matches!(effects[0], Effect::UnplaceCard { .. })
-        && matches!(effects[1], Effect::GiveStun { player: p, n } if p == user && n == 1)
+    effects.len() == 1
+        && matches!(effects[0], Effect::GiveStun { player: p, n } if p == user && n == 1)
 }
 
 // ===========================================================================
