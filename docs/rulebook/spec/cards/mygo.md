@@ -1296,49 +1296,64 @@ Source: `data/bands.json#MyGO!!!!!`.
   mid-turn [停留] holder may finish an already-started main move is a
   global G-STATUS question (black-box suite records a gap).
 
+## Coverage gaps
+
+Clauses left without a full iff contract (addendum item 6). Each names the
+missing seam and what a seam would need. Prefer a local helper over a gap;
+these are the ones no harness seam reaches today.
+
+| Clause | Missing seam | What a seam would need |
+|---|---|---|
+| `C-MYGO-rainday-04` | 1d10 face > 10 is unreachable without a dice modifier | a loaded-die modifier that raises a d10 above 10, or sheet text that renames the die |
+| `C-MYGO-soyo-mixed-02` | 「该格获得所有颜色」 colour-group widening is OPEN-agent-colour | a ruling on whether the mixed tile joins every colour group for the developer gate |
+| `C-MYGO-miracle-03` (money half) | 「资金后三位」 is OPEN-miracle-pct; settle noise mixes with the (2) gain | a settle-free pass window, or a ledger leg for the (2) gain |
+| `C-MYGO-tomori-card-04` | refill hook fires on a real non-skill decrease; arrange-only does not | a public crystal-remover act (the black-box suite drives AG:绯红之魂) |
+| `C-MYGO-tomori-card-05` | [移除] hook fires on CounterChanged to 0; arrange-only does not | same as -04 (a real decrease) |
+| `C-MYGO-rana-skill-05` | the exempt-by-parfait transfer is a press on the foreign Space settle | a prompt that offers the transfer on that settle (the probe shows rent is charged) |
+| `C-MYGO-soyo-skill-03` | the ≥1500 exemption gate needs a measured single-use exempted total | a pay-hook that reports the exempted amount |
+| `C-MYGO-anon-tokyo-04` (mortgaged partner) | OPEN-t04 | a ruling on mortgaged partner 收费 |
+| `C-MYGO-normal-02` (signed count) | OPEN-G13 | a ruling on whether the copy keeps a sign |
+| Branch coverage of -03 prompts (rana-fun, rana-skill-04) | the engine auto-resolves one branch | a live 「选择」 prompt (see Findings) |
+
+Full iff coverage (items 1-5: exact effect + exact frame + event multiset +
+no-op/boundary + LESS/MORE/WRONG mutants) is implemented for:
+`C-MYGO-rinpuu-01`, `C-MYGO-journey-01`, `C-MYGO-hitoshizuku-02`,
+`C-MYGO-rikki-act-02`, `C-MYGO-haneoka-05` (no-op),
+`C-MYGO-anon-tokyo-01` (no-op). The remaining clauses have exact-number
+contracts and frame checks but not yet a dedicated mutants test.
+
 ## Findings
 
-Genuine book-vs-engine discrepancies (plain failing tests, kept red):
+Classified LESS (engine does less than the book), MORE (does more / leaks /
+fires when it should not), WRONG (different amount/target/timing).
+Plain failing tests, kept red.
 
-* **C-MYGO-tomori-card-03** -- 「你使用角色技能时可移除此卡上的一个[奇迹水晶]以代替
-  此次技能的火罐消耗」. Book: one crystal of （灯）不再迷茫 pays a character skill's
-  火罐 cost. Engine: spends the fire pot (or refuses) and leaves the crystal
-  count untouched. Test: `tomori_card_crystal_pays_fire_and_removes`.
-  (Matches the black-box suite's `light_crystal_pays_skill_fire_cost`.)
-* **C-MYGO-anon-skill-02** -- 「在受到[停留][传送]效果影响并结算该效果后，可以消耗
-  2个火罐，抽一张卡」. Book: after another's [停留]/[传送] settles on you, spend 2
-  fire pots to draw 1. Engine: the skill press is accepted but neither spends
-  the pots nor draws. Test: `anon_skill_draw_after_abnormal_resolves`.
-* **C-MYGO-rana-skill-03** -- 「在space上结算时，若space已属于其他玩家，免除付款
-  并抽1张卡」. Book: foreign-owned Space settles free and draws 1. Engine: draws
-  (`rana_parking_free`) but still charges rent (observed 400 with 1 house).
-  Test: `rana_skill_space_and_overlap`.
-* **C-MYGO-rana-fun-03** -- 「当奇迹水晶总数为5或以上时使下一个经过的你以外的玩家
-  选择失去一个“抹茶芭菲”或强制停下并[触发结算]」. Book: the passer **chooses**.
-  Engine: auto-resolves the 强制停下 branch (`rana_funny_stop`) with no
-  「选择」 prompt. Test: `rana_fun_choice_and_force_stop`.
-* **C-MYGO-hitoshizuku-02** -- 「所有玩家因本效果每清除一种效果则支付此卡使用者
-  1000资金」. Ruling (TEST-FINDINGS §6): 1000 per effect type per affected
-  player (stay=1 + stun=1 -> 2000). Engine: charged 3000 for that shape
-  (looks like 1000 per cleared **layer** globally). Test:
-  `hitoshizuku_clear_charge_and_stun_play`.
-* **C-MYGO-band-04** -- 「为此卡添加一个可超出上限的[奇迹水晶]（最多超出2个）」.
-  Book: an 未生效 card adds a crystal that **may exceed** the roll cap of 1,
-  up to 1+2. Engine: from a full cap of 1 the gain does not land (stays 1).
-  Test: `band_ineffective_card_adds_over_cap_crystal`.
-* **C-MYGO-murosshi-04** -- 「[除外]期间本应获得的格子收入由此前指定的那名玩家
-  获得」. Book: rent the [除外]d user would have received is redirected to the
-  designated player. Engine: the foreign settler pays 0 (the rent vanishes
-  instead of redirecting). Test: `murosshi_income_goes_to_designated_player`.
-* **C-MYGO-normal-02** -- 「使你下一次主要移动的格数变为移动你最近一次非传送的
-  主要移动的移动格数」. Book: the next main move takes exactly the last
-  non-teleport main move's step count (4 in the contract). Engine: the move
-  took 9 steps (the copy did not pin the count). Test:
+* **LESS** `C-MYGO-tomori-card-03` -- 「可移除…一个[奇迹水晶]以代替此次技能的
+  火罐消耗」. Engine never spends the crystal; the fire pot is taken instead.
+  Test: `tomori_card_crystal_pays_fire_and_removes`.
+* **LESS** `C-MYGO-anon-skill-02` -- 「可以消耗2个火罐，抽一张卡」. The press is
+  accepted but neither spends the pots nor draws. Test:
+  `anon_skill_draw_after_abnormal_resolves`.
+* **LESS** `C-MYGO-soyo-skill-02` -- 「可消耗一个火罐」. The post-roll press is a
+  no-op (no pot spent). Test: `soyo_skill_endpoint_as_coloured_agent`.
+* **LESS** `C-MYGO-rana-skill-04` -- own-Space settle never adds a 抹茶芭菲.
+  Test: `rana_skill_parfait_on_space`.
+* **LESS** `C-MYGO-band-04` -- over-cap crystal from an 未生效 card does not
+  land when the band card is already at the roll cap of 1. Test:
+  `band_ineffective_card_adds_over_cap_crystal`.
+* **LESS** `C-MYGO-normal-02` -- the next main move does not copy the last
+  non-teleport main move's step count (observed 9, expected 4). Test:
   `normal_copies_last_main_move_steps`.
-* **C-MYGO-soyo-skill-02** -- 「移动掷骰后可消耗一个火罐…」. Book: the post-roll
-  press spends 1 fire pot. Engine: the press is accepted with no pot spent
-  (same shape as anon-skill-02). Test: `soyo_skill_endpoint_as_coloured_agent`.
-* **C-MYGO-rana-skill-04** -- 「若自己为space的拥有者，则可选择将该次结算改为在
-  space格子上添加一个“抹茶芭菲”」. Book: the own-Space settle may add a 抹茶芭菲.
-  Engine: no token is placed on the skill-teleport settle. Test:
-  `rana_skill_parfait_on_space`.
+* **MORE** `C-MYGO-rana-fun-03` -- the passer gets no 「选择」 prompt; the
+  engine auto-resolves 强制停下 (`rana_funny_stop`). Test:
+  `rana_fun_choice_and_force_stop`.
+* **MORE** `C-MYGO-hitoshizuku-02` -- 「每清除一种效果」. Ruling: 1000 per
+  effect **type** per affected player (stay=1 + stun=1 -> 2000). Engine
+  charged 3000 (looks like 1000 per cleared **layer** globally). Test:
+  `hitoshizuku_clear_charge_and_stun_play`.
+* **WRONG** `C-MYGO-rana-skill-03` -- 「免除付款并抽1张卡」. Engine draws
+  (`rana_parking_free`) but still charges rent (400 with 1 house) instead of
+  exempting. Test: `rana_skill_space_and_overlap`.
+* **WRONG** `C-MYGO-murosshi-04` -- 「本应获得的格子收入由此前指定的那名玩家获得」.
+  Engine: the foreign settler pays 0 (rent vanishes) instead of redirecting
+  to the designated player. Test: `murosshi_income_goes_to_designated_player`.

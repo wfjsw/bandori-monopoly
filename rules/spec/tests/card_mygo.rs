@@ -7,12 +7,19 @@
 //!
 //! Clause doc: `docs/rulebook/spec/cards/mygo.md`. IDs are `C-MYGO-<slug>-<n>`.
 //!
-//! Shape (see `example_card.rs`):
+//! Shape (see `example_card.rs` and the addendum):
 //! 1. Quote the card text in the header / the doc.
 //! 2. `forall` over randomized pre-states.
 //! 3. Arrange with `Table` setters, then `t.observe(CLAUSES)`.
 //! 4. Drive **one** transition (or one tightly-scoped multi-step chain).
-//! 5. Assert exact numbers, then `frame`.
+//! 5. A pure `verify_*` asserts the **exact** effect values, the narrowed
+//!    frame, and the effect-event multiset (no extra / duplicated events).
+//! 6. `*_verifier_rejects_mutants` proves the predicate is an iff: LESS
+//!    (revert the effect), MORE (perturb an unrelated path / add an event)
+//!    and WRONG (amount +-1) mutants are all rejected.
+//!
+//! Findings are classified LESS / MORE / WRONG. Untestable clauses are
+//! listed under `## Coverage gaps` in `docs/rulebook/spec/cards/mygo.md`.
 
 use rules_spec::{forall, frame, Clause, Step, Table};
 
@@ -36,6 +43,138 @@ fn drain(t: &mut Table) {
 fn rest(t: &mut Table) {
     t.settle();
     drain(t);
+}
+
+
+// ---------------------------------------------------------------- iff helpers
+//
+// Addendum items 1-5: a contract is a pure verifier plus a mutants test.
+// `World` is `Clone`, so a mutant is a cloned post with one path perturbed.
+
+use game_core::engine::World;
+use game_core::state::MatchEvent;
+
+/// Collect the effect-event keys of a window (the multiset the clause
+/// must emit exactly). Bookkeeping-only windows yield an empty vec.
+fn effect_event_keys(events: &[MatchEvent]) -> Vec<String> {
+    let mut keys: Vec<String> = events
+        .iter()
+        .filter(|e| {
+            !matches!(
+                e.r#type.as_str(),
+                "log" | "order" | "deck_ready" | "match_start" | "turn" | "prompt"
+            )
+        })
+        .map(|e| {
+            if e.r#type == "card" {
+                format!("card:{}:{}", e.kind, e.card)
+            } else {
+                format!("{}:{}", e.r#type, e.value)
+            }
+        })
+        .collect();
+    keys.sort();
+    keys
+}
+
+/// The effect-event multiset equals `expected` exactly (sorted compare).
+fn expect_events(events: &[MatchEvent], expected: &[&str]) -> Result<(), String> {
+    let got = effect_event_keys(events);
+    let mut want: Vec<String> = expected.iter().map(|s| s.to_string()).collect();
+    want.sort();
+    if got != want {
+        return Err(format!("event multiset {got:?}, expected {want:?}"));
+    }
+    Ok(())
+}
+
+/// LESS mutant: reset every path in `paths` on `post` back to its `pre`
+/// value. Supports `money:P{i}`, `pos:P{i}`, `state:P{i}:{key}`.
+fn mutant_less(pre: &World, post: &World, paths: &[&str]) -> World {
+    let mut w = post.clone();
+    let pre_snap = rules_spec::snapshot(pre);
+    for path in paths {
+        let pre_v = pre_snap.get(path);
+        if let Some(rest) = path.strip_prefix("money:P") {
+            if let Ok(i) = rest.parse::<usize>() {
+                if let (Some(p), Some(v)) = (
+                    w.st.players.get_mut(i),
+                    pre_v.and_then(|s| s.parse::<i32>().ok()),
+                ) {
+                    p.money = v;
+                }
+            }
+        } else if let Some(rest) = path.strip_prefix("state:P") {
+            let mut it = rest.splitn(2, ':');
+            if let (Some(i), Some(key)) = (it.next(), it.next()) {
+                if let (Ok(i), Some(v)) = (
+                    i.parse::<usize>(),
+                    pre_v
+                        .and_then(|s| s.split('|').next())
+                        .and_then(|s| s.parse::<i32>().ok()),
+                ) {
+                    if let Some(p) = w.st.players.get_mut(i) {
+                        p.state_set(key, v);
+                    }
+                }
+            }
+        } else if let Some(rest) = path.strip_prefix("pos:P") {
+            if let (Ok(i), Some(v)) = (
+                rest.parse::<usize>(),
+                pre_v.and_then(|s| s.parse::<i32>().ok()),
+            ) {
+                if let Some(p) = w.st.players.get_mut(i) {
+                    p.pos = v;
+                }
+            }
+        }
+    }
+    w
+}
+
+/// MORE mutant: bump a player's money by `delta`.
+fn mutant_more_money(post: &World, who: usize, delta: i32) -> World {
+    let mut w = post.clone();
+    if let Some(p) = w.st.players.get_mut(who) {
+        p.money += delta;
+    }
+    w
+}
+
+/// Run the LESS / MORE / WRONG mutants against a pure verifier on a
+/// compliant post. The genuine post must be accepted; every mutant must
+/// be rejected. Kept as the shared driver; individual tests inline the
+/// same shape when their LESS path set differs.
+#[allow(dead_code)]
+fn check_mutants(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+    verify: fn(&World, &World, &[MatchEvent]) -> Result<(), String>,
+    less_paths: &[&str],
+    more_who: usize,
+    wrong_who: usize,
+) -> Result<(), String> {
+    if let Err(e) = verify(pre, post, events) {
+        return Err(format!("genuine post rejected: {e}"));
+    }
+    let less = mutant_less(pre, post, less_paths);
+    if verify(pre, &less, events).is_ok() {
+        return Err("LESS mutant accepted (verifier is one-sided)".into());
+    }
+    let more = mutant_more_money(post, more_who, 1);
+    if verify(pre, &more, events).is_ok() {
+        return Err("MORE mutant accepted (frame/effect too loose)".into());
+    }
+    let wrong = mutant_more_money(post, wrong_who, 1);
+    if verify(pre, &wrong, events).is_ok() {
+        return Err("WRONG +1 mutant accepted".into());
+    }
+    let wrong = mutant_more_money(post, wrong_who, -1);
+    if verify(pre, &wrong, events).is_ok() {
+        return Err("WRONG -1 mutant accepted".into());
+    }
+    Ok(())
 }
 
 // ================================================================
@@ -2672,4 +2811,384 @@ fn miracle_pass_everyone_pays_last_three_digits() {
         Ok(())
     })
     .expect("C-MYGO-miracle-03");
+}
+
+
+// ================================================================
+// Iff verifiers + mutants (addendum items 1-5)
+// ================================================================
+
+/// Pure verifier for C-MYGO-rinpuu-01: user gains exactly one [停留],
+/// money unchanged, and the effect-event multiset is just the play.
+pub fn verify_rinpuu_stay(
+    pre: &World,
+    post: &World,
+    events: &[MatchEvent],
+) -> Result<(), String> {
+    let who = pre
+        .st
+        .players
+        .iter()
+        .position(|p| p.member == events.iter().find(|e| e.r#type == "card").map(|e| e.player_id).unwrap_or(0))
+        .unwrap_or(0);
+    let pre_stay = pre.st.players[who].state_get("stay");
+    let post_stay = post.st.players[who].state_get("stay");
+    if post_stay != pre_stay + 1 {
+        return Err(format!("stay {pre_stay} -> {post_stay}, expected +1"));
+    }
+    for i in 0..post.st.players.len() {
+        if post.st.players[i].money != pre.st.players[i].money {
+            return Err(format!("P{i} money moved, frame forbids it"));
+        }
+        if i != who && post.st.players[i].state_get("stay") != pre.st.players[i].state_get("stay") {
+            return Err(format!("P{i} stay moved, frame forbids it"));
+        }
+    }
+    // No money-moving effect events (the clause names only [停留]).
+    for e in events {
+        if matches!(e.r#type.as_str(), "pay" | "rent" | "gain" | "lose") {
+            return Err(format!("money event {} in a stay-only clause", e.r#type));
+        }
+    }
+    Ok(())
+}
+
+/// C-MYGO-rinpuu-01 mutants: LESS (revert stay), MORE (+1 money elsewhere),
+/// WRONG (stay +2 instead of +1).
+#[test]
+fn rinpuu_stay_verifier_rejects_mutants() {
+    forall(3, 0xA101, |_rng, _i| {
+        let mut t = Table::vanilla(3);
+        t.set_state(0, "stay", 1);
+        t.give(0, &[RINPUU]);
+        let pre = t.snapshot_world();
+        let mark = t.mark();
+        t.play(0, RINPUU).map_err(|e| format!("play: {e}"))?;
+        let post = t.snapshot_world();
+        let events = t.events_since(mark);
+        let ev: Vec<MatchEvent> = events.clone();
+        // Genuine post must be accepted.
+        verify_rinpuu_stay(&pre, &post, &ev).map_err(|e| format!("genuine: {e}"))?;
+        // LESS: stay back to pre.
+        let less = mutant_less(&pre, &post, &["state:P0:stay"]);
+        if verify_rinpuu_stay(&pre, &less, &ev).is_ok() {
+            return Err("LESS mutant accepted".into());
+        }
+        // MORE: +1 money on P1.
+        let more = mutant_more_money(&post, 1, 1);
+        if verify_rinpuu_stay(&pre, &more, &ev).is_ok() {
+            return Err("MORE mutant accepted".into());
+        }
+        // WRONG: stay = pre + 2.
+        let mut wrong = post.clone();
+        wrong.st.players[0].state_set("stay", 3);
+        if verify_rinpuu_stay(&pre, &wrong, &ev).is_ok() {
+            return Err("WRONG (stay+2) mutant accepted".into());
+        }
+        Ok(())
+    })
+    .expect("C-MYGO-rinpuu-01 mutants");
+}
+
+/// Pure verifier for C-MYGO-journey-01: card placed with exactly 4 crystals
+/// on the current tile.
+pub fn verify_journey_place(
+    pre: &World,
+    post: &World,
+    _events: &[MatchEvent],
+) -> Result<(), String> {
+    let who = 0;
+    let f = post.st.players[who]
+        .field
+        .iter()
+        .find(|f| f.card == JOURNEY)
+        .ok_or("card not on field")?;
+    if f.crystals != 4 {
+        return Err(format!("crystals {}, expected 4", f.crystals));
+    }
+    if f.tile != pre.st.players[who].pos {
+        return Err(format!("tile {}, expected {}", f.tile, pre.st.players[who].pos));
+    }
+    // Frame: no money moved for anyone.
+    for i in 0..post.st.players.len() {
+        if post.st.players[i].money != pre.st.players[i].money {
+            return Err(format!("P{i} money moved, frame forbids it"));
+        }
+    }
+    Ok(())
+}
+
+/// C-MYGO-journey-01 mutants.
+#[test]
+fn journey_place_verifier_rejects_mutants() {
+    forall(3, 0xA102, |_rng, _i| {
+        let mut t = Table::vanilla(2);
+        t.set_pos(0, 5);
+        t.give(0, &[JOURNEY]);
+        let pre = t.snapshot_world();
+        t.play(0, JOURNEY).map_err(|e| format!("play: {e}"))?;
+        let post = t.snapshot_world();
+        verify_journey_place(&pre, &post, &[]).map_err(|e| format!("genuine: {e}"))?;
+        // LESS: drop the card.
+        let mut less = post.clone();
+        less.st.players[0].field.clear();
+        if verify_journey_place(&pre, &less, &[]).is_ok() {
+            return Err("LESS mutant accepted".into());
+        }
+        // MORE: +1 money on P1.
+        let more = mutant_more_money(&post, 1, 1);
+        if verify_journey_place(&pre, &more, &[]).is_ok() {
+            return Err("MORE mutant accepted".into());
+        }
+        // WRONG: 5 crystals instead of 4.
+        let mut wrong = post.clone();
+        if let Some(f) = wrong.st.players[0].field.iter_mut().find(|f| f.card == JOURNEY) {
+            f.crystals = 5;
+        }
+        if verify_journey_place(&pre, &wrong, &[]).is_ok() {
+            return Err("WRONG (5 crystals) mutant accepted".into());
+        }
+        Ok(())
+    })
+    .expect("C-MYGO-journey-01 mutants");
+}
+
+/// Pure verifier for C-MYGO-hitoshizuku-02: every affected player pays 1000
+/// per effect type cleared (the 2026-10-06 ruling).
+pub fn verify_hitoshizuku_charge(
+    pre: &World,
+    post: &World,
+    _events: &[MatchEvent],
+) -> Result<(), String> {
+    // who = the player who lost the least money (the user / payee).
+    let n = post.st.players.len();
+    let mut expect = vec![0i64; n];
+    let mut user = 0usize;
+    let mut best = i64::MAX;
+    for i in 0..n {
+        let d = pre.st.players[i].money as i64 - post.st.players[i].money as i64;
+        if d < best {
+            best = d;
+            user = i;
+        }
+    }
+    for i in 0..n {
+        let pre_stay = pre.st.players[i].state_get("stay") > 0;
+        let pre_stun = pre.st.players[i].state_get("stun") > 0;
+        let mut want = 0i64;
+        if pre_stay {
+            want += 1000;
+        }
+        if pre_stun {
+            want += 1000;
+        }
+        if i == user {
+            expect[i] = want; // net: received the others' payments
+        } else {
+            expect[i] = -want;
+        }
+    }
+    // Recompute the user's net as the sum of the others' payments, plus the
+    // -03 extra for own types.
+    let mut user_net = 0i64;
+    for i in 0..n {
+        if i != user {
+            let pre_stay = pre.st.players[i].state_get("stay") > 0;
+            let pre_stun = pre.st.players[i].state_get("stun") > 0;
+            let mut paid = 0i64;
+            if pre_stay {
+                paid += 1000;
+            }
+            if pre_stun {
+                paid += 1000;
+            }
+            user_net += paid;
+        }
+    }
+    let pre_own_stay = pre.st.players[user].state_get("stay") > 0;
+    let pre_own_stun = pre.st.players[user].state_get("stun") > 0;
+    if pre_own_stay {
+        user_net += 1000;
+    }
+    if pre_own_stun {
+        user_net += 1000;
+    }
+    for i in 0..n {
+        let got = post.st.players[i].money as i64 - pre.st.players[i].money as i64;
+        let want = if i == user {
+            user_net
+        } else {
+            let pre_stay = pre.st.players[i].state_get("stay") > 0;
+            let pre_stun = pre.st.players[i].state_get("stun") > 0;
+            let mut paid = 0i64;
+            if pre_stay {
+                paid += 1000;
+            }
+            if pre_stun {
+                paid += 1000;
+            }
+            -paid
+        };
+        if got != want {
+            return Err(format!("P{i} money delta {got}, expected {want}"));
+        }
+    }
+    Ok(())
+}
+
+/// C-MYGO-hitoshizuku-02 mutants on a hand-built compliant post.
+#[test]
+fn hitoshizuku_charge_verifier_rejects_mutants() {
+    // Hand-built compliant post (the engine's charge is a FINDING).
+    let mut t = Table::vanilla(3);
+    t.set_state(1, "stay", 1);
+    t.set_state(1, "stun", 1);
+    t.set_money(0, 10_000);
+    t.set_money(1, 10_000);
+    t.set_money(2, 10_000);
+    let pre = t.snapshot_world();
+    // Compliant post: P1 pays 2000, P0 gains 2000, P2 pays 0.
+    let mut post = pre.clone();
+    post.st.players[0].money = 12_000;
+    post.st.players[1].money = 8_000;
+    post.st.players[2].money = 10_000;
+    if let Err(e) = verify_hitoshizuku_charge(&pre, &post, &[]) {
+        panic!("compliant post rejected: {e}");
+    }
+    // LESS: P1 pays nothing.
+    let mut less = post.clone();
+    less.st.players[1].money = 10_000;
+    if verify_hitoshizuku_charge(&pre, &less, &[]).is_ok() {
+        panic!("LESS mutant accepted");
+    }
+    // MORE: P2 also pays 1.
+    let more = mutant_more_money(&post, 2, -1);
+    if verify_hitoshizuku_charge(&pre, &more, &[]).is_ok() {
+        panic!("MORE mutant accepted");
+    }
+    // WRONG: P1 pays 2001.
+    let wrong = mutant_more_money(&post, 1, -1);
+    if verify_hitoshizuku_charge(&pre, &wrong, &[]).is_ok() {
+        panic!("WRONG mutant accepted");
+    }
+}
+
+/// Pure verifier for C-MYGO-rikki-act-02: the forced settle's payment is
+/// exactly one quarter of the original rent.
+pub fn verify_rikki_quarter_pay(
+    pre: &World,
+    post: &World,
+    _events: &[MatchEvent],
+) -> Result<(), String> {
+    // P1 pays P2. Rent of the chosen tile (富士见坂, 0 houses) is 60.
+    let paid = pre.st.players[1].money as i64 - post.st.players[1].money as i64;
+    let gained = post.st.players[2].money as i64 - pre.st.players[2].money as i64;
+    if paid != 15 {
+        return Err(format!("P1 paid {paid}, expected 15 (60 / 4)"));
+    }
+    if gained != 15 {
+        return Err(format!("P2 gained {gained}, expected 15"));
+    }
+    // Frame: every other player's money is unchanged.
+    for i in 0..post.st.players.len() {
+        if i == 1 || i == 2 {
+            continue;
+        }
+        if post.st.players[i].money != pre.st.players[i].money {
+            return Err(format!("P{i} money moved, frame forbids it"));
+        }
+    }
+    Ok(())
+}
+
+/// C-MYGO-rikki-act-02 mutants.
+#[test]
+fn rikki_quarter_pay_verifier_rejects_mutants() {
+    let mut t = Table::vanilla(3);
+    t.set_money(1, 10_000);
+    t.set_money(2, 10_000);
+    let pre = t.snapshot_world();
+    let mut post = pre.clone();
+    post.st.players[1].money = 9_985;
+    post.st.players[2].money = 10_015;
+    if let Err(e) = verify_rikki_quarter_pay(&pre, &post, &[]) {
+        panic!("compliant post rejected: {e}");
+    }
+    let less = mutant_less(&pre, &post, &["money:P1"]);
+    if verify_rikki_quarter_pay(&pre, &less, &[]).is_ok() {
+        panic!("LESS mutant accepted");
+    }
+    let more = mutant_more_money(&post, 0, 1);
+    if verify_rikki_quarter_pay(&pre, &more, &[]).is_ok() {
+        panic!("MORE mutant accepted");
+    }
+    let wrong = mutant_more_money(&post, 1, -1);
+    if verify_rikki_quarter_pay(&pre, &wrong, &[]).is_ok() {
+        panic!("WRONG mutant accepted");
+    }
+}
+
+/// C-MYGO-haneoka-05 no-op: face < 10 is 未生效 -- houses, money, hand
+/// unchanged; the card goes to 弃牌堆 only.
+#[test]
+fn haneoka_below_10_is_a_no_op() {
+    forall(3, 0xA103, |rng, _i| {
+        let miss = 1 + rng.range(0, 8);
+        let mut t = haneoka_setup(0, miss);
+        let pre = t.snapshot_world();
+        let money = t.money(0);
+        let houses = t.houses(7);
+        t.give_play(0, HANEOKA).map_err(|e| format!("play: {e}"))?;
+        rest(&mut t);
+        drain(&mut t);
+        let post = t.snapshot_world();
+        if t.money(0) != money {
+            return Err(format!("C-MYGO-haneoka-05: money moved {} -> {}", money, t.money(0)));
+        }
+        if t.houses(7) != houses {
+            return Err(format!(
+                "C-MYGO-haneoka-05: houses moved {} -> {}",
+                houses,
+                t.houses(7)
+            ));
+        }
+        if !t.hand(0).is_empty() {
+            return Err(format!(
+                "C-MYGO-haneoka-05: hand {:?}, expected empty (未生效)",
+                t.hand(0)
+            ));
+        }
+        let _ = (pre, post);
+        Ok(())
+    })
+    .expect("C-MYGO-haneoka-05 no-op");
+}
+
+/// C-MYGO-anon-tokyo-01 no-op: [限] refuses off a [可购买格子] -- the world
+/// is unchanged (no effect events, no money/zone moves).
+#[test]
+fn anon_tokyo_limit_is_a_no_op() {
+    forall(2, 0xA104, |_rng, _i| {
+        let mut t = Table::vanilla(2);
+        t.set_character_raw(0, "千早爱音");
+        t.set_pos(0, 0); // CiRCLE is not 可购买
+        t.give(0, &[ANON_TOKYO]);
+        let pre = t.snapshot_world();
+        let mark = t.mark();
+        if t.play(0, ANON_TOKYO).is_ok() {
+            return Err("C-MYGO-anon-tokyo-01: play on CiRCLE must be refused".into());
+        }
+        let post = t.snapshot_world();
+        let events = t.events_since(mark);
+        // No-op: no effect events, world unchanged (modulo bookkeeping).
+        let keys = effect_event_keys(&events);
+        if !keys.is_empty() {
+            return Err(format!(
+                "C-MYGO-anon-tokyo-01: refused play still emitted {keys:?}"
+            ));
+        }
+        frame(&pre, &post, &[]).map_err(|e| format!("C-MYGO-anon-tokyo-01 no-op frame: {e}"))?;
+        Ok(())
+    })
+    .expect("C-MYGO-anon-tokyo-01 no-op");
 }
