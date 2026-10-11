@@ -942,6 +942,63 @@ pub fn count_on_tile(kind: &str, tile: i32) -> i32 {
     )
 }
 
+// -- tile designations ([指定] a tile / 地契 / 地块 while this rule is in play) --
+// A designation is a mark of the dedicated [`abi::mark::DESIGNATE_CATEGORY`],
+// owned by the designating instance (`instance` = `self_uid()`, `src` = this
+// run). It dies with the instance (`destroy_instance_units`), so 「指定」
+// lasting while the card / skill is in play is one mark and one cleanup path.
+// Generic: no game-specific names live in card-sdk.
+
+/// Record that **this** instance designates `tile` (「指定」 that tile / 地契 /
+/// 地块). `owner` is the designating seat (the label's colour in the view);
+/// `note` explains the pick. One row per call ([`abi::Stack::Fresh`]), so a
+/// card that designates several tiles stacks one label each. Returns the
+/// count on the new row (1, or 0 when `tile` is off-board).
+pub fn designate_tile(tile: i32, owner: i32, note: &Msg) -> i32 {
+    place_mark(
+        tile,
+        crate::abi::mark::DESIGNATE_KIND,
+        crate::abi::mark::DESIGNATE_CATEGORY,
+        owner,
+        self_uid(),
+        1,
+        note,
+        crate::abi::Stack::Fresh,
+    )
+}
+
+/// Drop **this** instance's designation mark(s) on `tile` (the designation
+/// ended early -- the card is still in play). Returns rows removed. When the
+/// instance itself leaves the field, `destroy_instance_units` already clears
+/// every designation; call this only for an early end.
+pub fn undesignate_tile(tile: i32) -> i32 {
+    remove_marks(
+        tile,
+        &crate::abi::MarkFilter::any()
+            .category(crate::abi::mark::DESIGNATE_CATEGORY)
+            .instance(self_uid()),
+    )
+}
+
+/// Tiles **this** instance currently designates (one entry per tile that
+/// carries at least one of its designation marks).
+pub fn designated_tiles() -> alloc::vec::Vec<i32> {
+    let f = crate::abi::MarkFilter::any()
+        .category(crate::abi::mark::DESIGNATE_CATEGORY)
+        .instance(self_uid());
+    (0..tile_count()).filter(|&t| count_marks(t, &f) > 0).collect()
+}
+
+/// Does **this** instance currently designate `tile`?
+pub fn designates(tile: i32) -> bool {
+    count_marks(
+        tile,
+        &crate::abi::MarkFilter::any()
+            .category(crate::abi::mark::DESIGNATE_CATEGORY)
+            .instance(self_uid()),
+    ) > 0
+}
+
 /// Units of **this** instance's counter `name` held by `player_id`.
 pub fn count_held(name: &str, player_id: i32) -> i32 {
     let (p, l) = s(name);

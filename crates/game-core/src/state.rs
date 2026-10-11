@@ -1179,6 +1179,10 @@ pub mod mark_category {
     /// [CP点] -- 「放置于路面上的指示物」. Neutral: `owner` is always
     /// [`super::BOARD_OWNER`], never a seat.
     pub const CP: &str = "cp";
+    /// A [指定] of tiles by a field card / skill while it is in play. Owned by
+    /// the designating instance; dies with it. `owner` is the designating
+    /// seat (label colour). Mirrors `card_sdk::abi::mark::DESIGNATE_CATEGORY`.
+    pub const DESIGNATE: &str = "designate";
 }
 
 /// Well-known tile-mark kinds (the i18n key / stable id on `TileMark::kind`).
@@ -1187,6 +1191,10 @@ pub mod mark_kind {
     /// The [CP点] mark's stable kind. Its display label comes from the
     /// category (「CP点」), not from this string.
     pub const CP: &str = "mark:cp";
+    /// The designation mark's stable kind. Display comes from
+    /// [`TileMark::card`] (the designating card id). Mirrors
+    /// `card_sdk::abi::mark::DESIGNATE_KIND`.
+    pub const DESIGNATE: &str = "mark:designate";
 }
 
 

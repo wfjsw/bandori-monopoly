@@ -190,6 +190,7 @@ holders: `PP:不要背负期待`, `PP:梦在前方，结彩当下`, `PP:练习�
 | targeting | `target`, `target_all`, `target_tile`, `targeted_count`, `designations` (the **static targeting query** -- which players the play being resolved designates, C# `H.Db.Card(id).Targeting` + `H.Others`; empty when it names nobody), `cancel_designation` / `designation_cancelled` (per-pair cancel, C# `play.Tags["immune"+seat]` -- one designation drops, the rest land) |
 | hand & deck | `draw`, `add_to_hand`, `add_to_deck`, `to_discard`, `hand_count`, `hand_size`, `discard_count`, `deck_count`, `discard_size`, `discard_from_hand`, `sweep_to_deck`, `add_to_deck_at` (`DeckPos::{Top,Bottom,Random}`), `cards_in(player_id, CardPile)` (list a pile; deck top first), `take_card(player_id, CardPile, id)` / `take_from_hand` (remove without discarding) |
 | marks & tokens | `place_mark`, `place_mark_new`, `count_marks`, `bump_mark`, `remove_marks`, `mark_src_at`, `count_held`, `add_held`, `move_units`, `tok`, `set_tok`, `add_tok` -- every mark / token is a unit of the creating instance's named counter (`MarkFilter` selects by kind / category / owner / src / instance); see 「Named counters and bound units」 |
+| tile designations | `designate_tile`, `undesignate_tile`, `designated_tiles`, `designates` -- a [指定] of tiles while a field card / skill is in play is a mark of [`abi::mark::DESIGNATE_CATEGORY`] owned by that instance (see 「Tile designations」) |
 | named counters (ABI v50) | `counter` / `add_counter` / `set_counter` (this instance), `counter_at` / `add_counter_at` (by uid), `card_counter` / `add_card_counter` (a placed card by id). Wire names `cp` / `crystals` map to `FieldCard::cp` / `FieldCard::crystals`; anything else lives in `FieldCard::counters`. The old CP helpers (`place_cp` / `count_cp` / `clear_cp` / `add_cp` / `cp_attached`) are **gone** -- use the mark / counter API, and see 「Cross-card messages」 for the 该清CP了 ↔ `mark:cp` shape |
 | per-player slots | `slot`, `set_slot`, `inc_slot` |
 | pots & status | `band_crystals`, `add_band_crystals` (「乐队卡 / 团卡」 crystals = the band-skill field instance's `crystals`, i.e. its named `'crystals'` counter), `fire`, `fire_max`, `gain_fire`, `spend_fire`, `give_stay`, `give_stun`, `give_exile`, `give_extra_turn`, `stay_of`, `stun_of` |
@@ -268,6 +269,35 @@ One `CounterChanged` hook (wire names `counterChanged`|`crystalsChanged`|
 `Trigger.name` = the counter name and `Trigger.value` = the signed delta.
 「…时」 clauses on a count (「此卡上不再拥有[奇迹水晶]时」, 通用:该清CP了's
 graveyard rule) live in one event handler on that hook, not at each spend site.
+
+## Tile designations ([指定] a tile)
+
+A field card / skill that 「指定…格子 / 地契 / 地块」 while it is in play records
+each pick as a **designation mark**: `mark_category::DESIGNATE`
+(`"designate"`), `mark_kind::DESIGNATE` (`"mark:designate"`), `owner` = the
+designating seat (the label's colour), `instance`/`src` = the designating
+card or skill uid. `TileMark.card` is the designating card id (filled from
+the instance), which is what the board label and tooltip show.
+
+Lifetime matches 「指定」 lasting while the card is in play: the mark is a unit
+of the designating instance's counter, so `destroy_instance_units` clears it
+when that instance leaves the field. A designation that ends **earlier** (a
+state exit, a turn boundary) calls `ctx::undesignate_tile` at that point.
+
+```rust
+ctx::designate_tile(tile, player_id, &Msg::new(key!("note")))?;
+// later, if the designation ends before the card does:
+ctx::undesignate_tile(tile);
+// the pick as the source of truth:
+if ctx::designates(tile) { .. }
+for t in ctx::designated_tiles() { .. }
+```
+
+`designate_tile` is sugar over `place_mark` with the designation category and
+`Stack::Fresh` (one label per pick). Prefer it over ad-hoc slots / state keys
+when the mark can be the source of truth; where the rule needs a value the
+mark does not carry (a counterpart player, an engine-owned return tile), keep
+that storage and add the mark as the displayed record.
 
 ## Cross-card messages (ABI v51)
 
