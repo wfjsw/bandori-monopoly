@@ -947,13 +947,29 @@ impl CardWorld for Run {
             .place_mark(me, kind, category, tile, owner, src, count, note, fresh);
         if uid >= 0 && count > 0 {
             let who = self.trigger.player_id;
-            self.outcome(
-                who,
-                Msg::new("log.outcome.mark_add")
-                    .tile("tile", tile)
-                    .text("kind", kind.to_string())
-                    .i("n", count as i64),
-            );
+            // A [指定] never prints its wire kind (`mark:designate`) -- the
+            // player sees the readable outcome 「指定了 {{tile}}」. Other kinds
+            // keep the generic placement line (the view resolves their i18n
+            // key; `mark:cp` is labelled from its category).
+            if category == game_core::state::mark_category::DESIGNATE {
+                self.outcome(
+                    who,
+                    Msg::new("log.outcome.designate")
+                        .tile("tile", tile)
+                        .i("n", count as i64),
+                );
+            } else {
+                // `kind` is a display name or an i18n key (`cards:…`).
+                // Nested Msg: the view resolves keys and falls back to the
+                // literal, so a raw key never reaches the player.
+                self.outcome(
+                    who,
+                    Msg::new("log.outcome.mark_add")
+                        .tile("tile", tile)
+                        .msg("kind", Msg::new(kind))
+                        .i("n", count as i64),
+                );
+            }
         }
         uid
     }
@@ -978,7 +994,7 @@ impl CardWorld for Run {
                 who,
                 Msg::new(key)
                     .tile("tile", tile)
-                    .text("kind", String::new())
+                    .msg("kind", Msg::new("log.mark.generic"))
                     .i("n", got.abs() as i64),
             );
         }

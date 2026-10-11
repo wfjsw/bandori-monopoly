@@ -166,7 +166,19 @@ fn check(player_id: i32) -> card_sdk::Asked {
         .unwrap_or(-1);
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, ID, &Msg::new(key!("guerrilla_note")));
-    ctx::set_slot(player_id, "guerrilla_tile", best);
+    // 规则书[特]: 「指定你拥有的一个最贵的地契」 -- the lasting [指定] while this
+    // card is in play is a designation mark on that deed (owned by this field
+    // instance). The old `guerrilla_tile` slot was write-only (nothing read it);
+    // the functional effect is the `colorFor:<seat>` tile prop below.
+    if best >= 0 {
+        ctx::designate_tile(
+            best,
+            player_id,
+            &Msg::new(key!("guerrilla_revived"))
+                .player_id("who", player_id)
+                .tile("tile", best),
+        );
+    }
     ctx::log(
         player_id,
         &Msg::new(key!("guerrilla_revived"))

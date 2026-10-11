@@ -31,7 +31,9 @@ const REST: &str = "skill.kaedeSupport.rest";
 /// 「直到这两名玩家的下回合结束…他们不会被该效果再次收款」 -- per-payer latch,
 /// keyed on the turn it expires.
 const COOLDOWN: &str = "skill.kaedeSupport.cooldown.";
-/// Tiles named in 状态2, as `"<tile>:<owner>"` markers this skill splits income on.
+/// Tiles named in 状态2, as `"<tile>:<owner>"` markers this skill splits income
+/// on. The counterpart owner rides here (the designation mark cannot hold it);
+/// the mark is the displayed [指定] record (see `enter_two`).
 const SPLIT: &str = "skill.kaedeSupport.split.";
 
 pub const KAEDE_SUPPORT: CardDef = CardDef::new(
@@ -251,6 +253,25 @@ fn enter_two(player_id: i32) -> card_sdk::Asked {
         )?;
         // 「直到状态2结束为止，你与对方均分那些地契收取的资金」
         state::set(player_id, &format!("{}{}", SPLIT, t), owner);
+        // 规则书[状态2]: 「指定其他人的X个地契…直到状态2结束为止」 -- the lasting
+        // [指定] while this skill is in 状态2 is a designation mark per deed
+        // (displayed record). The SPLIT key stays the functional storage: it also
+        // carries the counterpart `owner`, a value the mark does not hold.
+        //
+        // TODO(规则书): the designation (and the SPLIT key) outlives 状态2.
+        // The only exit is the band skill's fire-pot drain
+        // (`skill_bands::ave_mujica` `at_turn_end`, SKILL_STATE 2 -> 1), which
+        // does not clear the SPLIT keys -- and that rule cannot see them. The
+        // split itself is gated on `slot('skillState') == 2`, so behaviour is
+        // unchanged; the marks (and keys) linger as stale labels until this
+        // skill instance is destroyed. Clearing them needs a hook on the state
+        // exit (or an undesignate pass here on a turn-end check), which the
+        // sheet's 「直到状态2结束为止」 does not yet pin down.
+        ctx::designate_tile(
+            t,
+            player_id,
+            &Msg::new(key!("kaede_support_deed")),
+        );
     }
     // 「每通过此法消耗4个火罐，你抽1卡」
     let draws = x / 4;
@@ -284,3 +305,5 @@ fn other_deeds(player_id: i32) -> Vec<i32> {
 // TODO(规则书)[judgement]: 状态2's exit -- the sheet gives none (「直到状态2结束
 //   为止」 with no clause that ends it). Contrast 三角初华's fire-pot cap and
 //   若叶睦's hand-size rule. Without an exit, the split is permanent once named.
+//   (The band skill's fire-pot drain is the engine's stand-in exit; it does not
+//   clear the SPLIT keys or the designation marks -- see `enter_two`.)

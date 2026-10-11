@@ -7,12 +7,27 @@
 //! 2. **no-op** — when the trigger/condition is false, the log is empty and
 //!    the frame is unchanged;
 //! 3. **covers** — `kani::cover!` on each branch;
-//! 4. **mutant** — `#[kani::should_panic]` variant whose spec is deliberately
-//!    wrong, so the iff proof is non-vacuous.
+//! 4. **mutant** — a harness whose spec is deliberately wrong, so the iff
+//!    proof is non-vacuous (prefer a reachable-disagreement companion; keep
+//!    `#[kani::should_panic]` only when it actually works).
 //!
-//! [`clause_proof!`] emits the harness function skeleton; the author fills
-//! the body. [`unit_mod!`] pre-creates the empty per-unit modules so 20
-//! parallel authors never edit shared `mod.rs` files.
+//! ## Standard proof shape
+//!
+//! ```ignore
+//! let id = guard_id!("actor == owner && value > 0");
+//! let w = symbolic_world();
+//! let ctx = ir_fill::fill_from_world(&w, owner, card, placed, tile, &ov);
+//! let admitted = guard!(id, &ctx);
+//! if admitted {
+//!     // run the unmodified card body
+//!     // assert post == spec(pre) ∧ effect log exact ∧ frame unchanged
+//! } else {
+//!     // assert the world is untouched (no-op)
+//! }
+//! ```
+//!
+//! The guard id is a **const** (`guard_id!`), so CBMC never walks a string
+//! table. See [`crate::shim`] for `guard!` / `guard_id!` / `guard_assumed!`.
 
 /// Emit a named proof harness with the standard attributes.
 ///
@@ -37,7 +52,9 @@ macro_rules! clause_proof {
     };
 }
 
-/// Emit a `#[kani::should_panic]` mutant harness.
+/// Emit a mutant harness. Prefer a reachable-disagreement companion
+/// (`*_mutant_is_detected`) over `#[kani::should_panic]` when the tooling
+/// quirk bites (see COND-SINGLE-SOURCE.md §10).
 #[macro_export]
 macro_rules! clause_mutant {
     (

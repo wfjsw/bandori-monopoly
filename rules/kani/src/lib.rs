@@ -8,6 +8,7 @@
 //! * [`invoke`] -- registry lookup of shipped `CardDef` / skill / event entries.
 //! * [`spec`] -- reference specifications written FROM the clause docs only.
 //! * [`harness`] / [`shim`] -- clause-proof kit and temporary guard assumes.
+//! * [`generated`] / [`ir_fill`] -- single-source guard IRs + World → IrCtx.
 //! * [`proofs`] -- `#[kani::proof]` harnesses asserting card == spec (iff).
 
 #![allow(dead_code)]
@@ -20,6 +21,8 @@ pub mod invoke;
 pub mod shim;
 pub mod spec;
 pub mod world;
+pub mod generated;
+pub mod ir_fill;
 
 #[cfg(kani)]
 pub mod proofs;

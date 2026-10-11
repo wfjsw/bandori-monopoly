@@ -428,6 +428,19 @@ pub mod mark {
     /// The [CP点] mark's stable `kind`. Mirrors
     /// `game_core::state::mark_kind::CP`.
     pub const CP_KIND: &str = "mark:cp";
+
+    /// Tile-mark **category**: a [指定] of one or more tiles by a field card /
+    /// skill while it is in play (「指定…格子 / 地契 / 地块」). The mark is owned
+    /// by the designating instance (`instance` = that card or skill uid) and
+    /// dies with it (`destroy_instance_units`), so the label leaves the board
+    /// when the designating rule does. `owner` is the designating seat (the
+    /// label's colour); `card` on the row is the designating card id for
+    /// display. Mirrors `game_core::state::mark_category::DESIGNATE`.
+    pub const DESIGNATE_CATEGORY: &str = "designate";
+    /// The designation mark's stable `kind`. Its display label comes from the
+    /// designating card (`TileMark.card`), not from this string. Mirrors
+    /// `game_core::state::mark_kind::DESIGNATE`.
+    pub const DESIGNATE_KIND: &str = "mark:designate";
     /// Mark-filter sentinel: any owner / any src / any instance.
     pub const ANY: i32 = -2;
 }

@@ -58,7 +58,9 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     let tile = ctx::player_pos(who);
     // 规则书: 「获得2层[除外]并在[除外]层数归0后[传送]至该格子」
     // `H.GiveExile(seat, 2, tile)` stores the return Ok(tile); the engine teleports
-    // there when the last layer ticks away.
+    // there when the last layer ticks away. That engine-owned return stays the
+    // functional storage -- it is what the exile tick reads -- so it is **not**
+    // replaced by a designation mark.
     ctx::give_exile(player_id, 2, tile);
     // 规则书: 「视为当回合的主要移动」 -- C# `H.SetV(i, "exileMain", 1)`. The
     // engine's exile tick reads this slot and consumes the turn's main move.
@@ -81,6 +83,21 @@ fn no_road(player_id: i32) -> card_sdk::Asked {
     ctx::set_dest(ctx::Dest::Field);
     ctx::place_card(player_id, "MyGO:无路矢", &Msg::new(key!("no_road_log")));
     ctx::set_slot(player_id, "noRoad.who", who);
+    // 规则书: 「指定场上自己以外的一位玩家所在格子」 -- the lasting [指定] while
+    // this field stand-in is in play is a designation mark on that tile (the
+    // board label for 「被指定的那格」). The exile return above stays engine-side
+    // (the exile tick owns the teleport); this mark is the displayed record and
+    // dies with the card (`destroy_instance_units`) when it leaves the field
+    // after the exile. The card is not unplaced early (the `exile > 0` guard on
+    // `redirect` only stops the hook), so no `undesignate_tile` here.
+    ctx::designate_tile(
+        tile,
+        player_id,
+        &Msg::new(key!("no_road_log"))
+            .tile("tile", tile)
+            .player_id("who", who)
+            .card("card", "MyGO:无路矢"),
+    );
     Ok(())
 }
 

@@ -43,7 +43,9 @@ rules/kani::board            static 60-tile board from data/board.json
 | **host** | `rules/kani/src/host.rs` | `bandori_*` backend: one `dispatch(Op, Args) -> i64`. Unmodeled → loud fail |
 | **invoke** | `rules/kani/src/invoke.rs` | registry lookup of shipped `CardDef` / skill / event; calls the unmodified `On` body |
 | **harness kit** | `rules/kani/src/harness.rs` | `clause_proof!`, `clause_mutant!`, `assert_frame!`, `cover_both!`, `any_player`, `any_in` |
-| **shim** | `rules/kani/src/shim.rs` | `guard_assumed!` — temporary host-side guard assume (greppable) |
+| **shim** | `rules/kani/src/shim.rs` | `guard!` / `guard_id!` — real single-source guard verdict; `guard_assumed!` only for non-lowerable leftovers (greppable) |
+| **guard IR** | `rules/kani/src/generated/cond_irs.rs` | 139 lowered CEL guards + const ids (`BY_ID`) |
+| **ir_fill** | `rules/kani/src/ir_fill.rs` | general World → `IrCtx` (every field filled or documented) |
 | **spec units** | `rules/kani/src/spec/<unit>.rs` | reference specs FROM the clause docs only |
 | **proof units** | `rules/kani/src/proofs/<unit>.rs` | `#[kani::proof]` harnesses |
 | **generic SDK** | `rules/card-sdk/src/kani_host.rs`, `ctx/sys_kani.rs` | `cfg(kani)` dispatch of every import; no game words |
@@ -162,9 +164,12 @@ Constants (`state::TURN_END`, `state::VALUE`, …) are arguments.
 6. **Assert iff**: `post == spec(pre)` **and** `effect_log == exactly(spec_effects)`
    **and** (false trigger) log empty / frame unchanged.
 7. **`kani::cover!` every branch** (poorest / not-poorest, pick A / pick B).
-8. **MUTANT**: a `#[kani::should_panic]` harness whose spec is deliberately
-   wrong (off-by-one, extra effect, two cards instead of one). If the mutant
-   does *not* fail, the iff proof is vacuous — fix it.
+8. **MUTANT**: a harness whose spec is deliberately wrong (off-by-one,
+   extra effect, two cards instead of one). Prefer a **reachable-disagreement**
+   companion (`*_mutant_is_detected`: assert card ≠ wrong-spec) and/or
+   `kani::cover!` of the disagreement; keep `#[kani::should_panic]` only if it
+   actually reports SUCCESSFUL (panic as expected). If the mutant does *not*
+   fail, the iff proof is vacuous — fix it.
 9. **Run** `tools/kani/run.sh --unit <unit> --harness <name>` and paste the
    verdict into your unit table.
 
@@ -190,8 +195,9 @@ the attributes above) or write `#[kani::proof]` directly like the pilots.
 > 将金额降低X（最低0）；X为100，如果[拥有者]拥有至少10个[P✽P粉丝]则X添加100。」
 
 **Card:** `PP:[丸山彩]憧憬的前方` — `On::Hook(PayAdd)` (unmodified).
-**Host pre** (`value > 0`) is **not** run under Kani: `guard_assumed!` /
-`kani::assume`. **Isolation:** no `PP:[衍生]共鸣` in hand so clause (2)’s
+**Host pre** (`value > 0`) is the **single-source guard** `"actor == owner && value > 0"`.
+Under Kani it is evaluated via the lowered IR (`guard_id!` + `guard!`) —
+**never** `assume`d. **Isolation:** no `PP:[衍生]共鸣` in hand so clause (2)’s
 stacked 1500 shave cannot fire.
 
 ### Spec (`rules/kani/src/spec/pilot.rs`, keep the shape for new units)
@@ -225,8 +231,19 @@ pub fn aya_haruka_02_shave_iff() {
     let w = symbolic_pay_world();          // N∈2..=4, money/out/fans symbolic
     let owner = w.trig_player;
     let pre_amount = w.pay_amount;
-    let pre = { world::reset_world(w); world::snapshot() };
 
+    // single-source guard: the real CEL string, const id, no assume
+    let gid = guard_id!("actor == owner && value > 0");
+    let ctx = ir_fill::fill_pay_add(&w, owner);
+    let admitted = guard!(gid, &ctx);
+    kani::cover!(admitted, "guard admits");
+    kani::cover!(!admitted, "guard rejects");
+    if !admitted {
+        // host would not call the body; world untouched
+        return;
+    }
+
+    let pre = { world::reset_world(w); world::snapshot() };
     invoke::unwrap_done(invoke::aya_longing_pay_add(owner));   // unmodified body
 
     let post = world::snapshot();
@@ -346,12 +363,13 @@ pub fn aya_haruka_01_mutant_two_cards() {
 }
 ```
 
-**Pilot status:** architecture complete (symbolic answers, exact-log
-equivalence, empty-discard case, mutant). The pilot harnesses were still
-blocked at deadline by `String`/`memcmp` inside the unmodified play body
-(`ids.contains(&c)` — see `KANI.md` §5). Finishing them is an unwind /
-interned-str problem, not a proof-design problem. Treat a still-blocked
-prompt as **blocked**, not as evidence against the card.
+**Pilot status:** `aya_haruka_01_empty_discard` **SUCCESSFUL** (~125 s) on the
+general world. The all-picks / mutant harnesses use strategy (a): a frozen
+2-card discard of distinct interned ids + a symbolic pick index, plus a
+1-byte interned-str facade under `cfg(kani)` so `ids.contains(&String)`
+degrades to a 1-byte compare (see `rules/card-sdk/src/ctx.rs` `cards_in`).
+If a harness is still **blocked**, that is a CBMC cliff, not evidence against
+the card.
 
 ---
 
@@ -440,7 +458,7 @@ the row stays visible.
 |---|---|---|---|
 | multi-turn chains, [反击] windows, settle pipelines | engine scheduling is a concurrent replay-with-abort protocol | TLA+ / Alloy / SMT (Z3) over the chain/settle protocol (`docs/ENGINE.md`), with Kani leaf refinement | **PROTOCOL-LEVEL** |
 | unbounded loops / “all future turns” | model is N≤4 and every loop is a fixed bound | inductive invariants (Kani loop contracts, experimental) | **PROTOCOL-LEVEL** |
-| CEL guard strings | compiled at ruleset build; Kani does not evaluate them | harness `assume`s the host pre; the clause’s own Condition is the proof obligation on the body | `guard_assumed!` |
+| CEL guard strings | ~~compiled at ruleset build; Kani does not evaluate them~~ **resolved**: the lowered IR evaluates the same string under Kani | `guard_id!` + `guard!` against `ir_fill::fill_from_world` (no `assume`) | — (use `guard!`) |
 | wasm-only paths (bump allocator, wasmi) | not modelled | native `rules-native` semantics are the stand-in (same Rust) | note in unit table |
 | needs an unmodeled `Op` | `host.rs` catch-all | add a real `dispatch` arm (read `crates/game-rules/src/hostfns.rs` first) | **blocked-by** `Op` |
 | needs a protocol stub’s real semantics | arm returns `0` on purpose | see `KANI.md` §6 | **PROTOCOL-LEVEL** |
@@ -448,18 +466,37 @@ the row stays visible.
 Cite `KANI.md` §6 in the unit table row. Isolation assumes for stacked hooks
 go in the module docs **and** as `kani::assume` — never hidden.
 
-### `guard_assumed!` (temporary)
+### `guard!` / `guard_id!` (the real path)
 
 ```rust
-// Clause condition: `value > 0` (host pre) ∧ `poorest` (card residual).
-guard_assumed!(value > 0, "C-PP-aya-haruka-02 host pre");
+// Clause condition: `actor == owner && value > 0` (host pre) ∧ `poorest` (card residual).
+let gid = guard_id!("actor == owner && value > 0"); // const id, compile-checked
+let ctx = ir_fill::fill_from_world(&w, owner, card, placed, tile, &ov);
+let admitted = guard!(gid, &ctx);   // real single-source verdict
+if admitted {
+    // unmodified body; assert post == spec(pre)
+} else {
+    // world untouched (no-op)
+}
+```
+
+`guard_id!` resolves at **const time** via a literal-matching macro emitted
+by `gen_cond_ir`; an unknown string is a **compile error**. `guard!` indexes
+`generated::BY_ID[id]` — never a 139-way string scan (that is a CBMC
+unwinding / OOM cliff). `guard_by_src` remains for host-side tests only.
+
+### `guard_assumed!` (leftovers only)
+
+```rust
+// ONLY for a guard that gen_cond_ir cannot lower. List it here.
+guard_assumed!(/* residual not in the CEL string */, "why");
 ```
 
 Expands to `kani::assume` under `cfg(kani)`; native build is a no-op that
 still typechecks. Greppable: `guard_assumed!` (marker
-`crate::GUARD_ASSUMED_MARKER`). **Only** for host-side pres the engine
-evaluates outside the card body — never to hide a condition the proof is
-supposed to establish. Delete the module once `cond-single` lands.
+`crate::GUARD_ASSUMED_MARKER`). **Current leftover list: (none)** — every
+inventory guard that the pilots need lowers. Do not use this to hide a
+condition the proof is supposed to establish.
 
 ---
 
@@ -468,14 +505,15 @@ supposed to establish. Delete the module once `cond-single` lands.
 | macro / fn | purpose |
 |---|---|
 | `clause_proof! { attrs; fn name() { body } }` | expand attrs + `#[kani::proof]` |
-| `clause_mutant! { … }` | same + `#[kani::should_panic]` |
+| `clause_mutant! { … }` | same + `#[kani::should_panic]` (prefer a reachable-disagreement companion) |
 | `assert_frame!(pre, post, field…)` | every listed `Snapshot` field unchanged |
 | `cover_both!(cond, "yes", "no")` | `kani::cover!` both sides |
 | `any_player(n) -> i32` | symbolic player in `0..n` |
 | `any_in(lo, hi) -> i32` | symbolic i32 in `lo..=hi` |
 | `unit_mod!(a, b, …)` | declare unit modules (already done in `mod.rs`) |
 
-`rules/kani/src/shim.rs`: `guard_assumed!(cond, why)`, `GUARD_ASSUMED_MARKER`.
+`rules/kani/src/shim.rs`: `guard_id!("src")` (const id), `guard!(id, &ctx)`,
+`guard_assumed!(cond, why)` (leftovers only), `GUARD_ASSUMED_MARKER`.
 
 ---
 

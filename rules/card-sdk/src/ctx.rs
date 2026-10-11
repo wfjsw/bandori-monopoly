@@ -551,32 +551,40 @@ pub fn cards_in(player_id: i32, pile: CardPile) -> Vec<String> {
     let buf = out_read(p, got, scratch);
     // Under Kani the host writes `[n, slot…]` where slot is a small card
     // slot (see rules-kani). postcard + String does not unwind under CBMC.
-    // Rebuild names from the intern table so identity is a `u16` compare on
-    // the host side; the guest still sees `String` (unmodified card bodies).
+    //
+    // Interned-str facade: each returned `String` is a **single byte** whose
+    // value is the slot id (0..3). Card bodies still see `Vec<String>`
+    // (unmodified), but `String::eq` / `Vec::contains` degrade to a 1-byte
+    // compare. The previous full-name encoding made `ids.contains(&c)` in
+    // play bodies blow CBMC's `memcmp` unwind (the prompt OOM cliff — see
+    // `KANI.md` §5). The host's `card_slot` / `card_u16` recognise this
+    // 1-byte form and map it back to the well-known name id.
+    //
+    // Length comes from the host's **integer return** (`need = 1 + n`), not
+    // from `buf[0]`: the heap buffer's metadata is symbolic to CBMC and a
+    // symbolic `n` unwinds `Vec::contains` to the full bound. `need` is an
+    // i64 in a register, concrete whenever the pile contents are.
     #[cfg(kani)]
     {
-        if buf.is_empty() {
-            return Vec::new();
+        // Branch tree, not a loop: CBMC unwinds `while i < n` to the global
+        // bound when `need` (fn-ptr return) is not folded, and a 32-iteration
+        // Vec-grow × String path is the time cliff. The host only ever emits
+        // `need = 1 + n` for `n = 0..=4` pilot slots.
+        fn slot_str(buf: &[u8], i: usize) -> String {
+            let slot = if 1 + i < buf.len() { buf[1 + i] & 3 } else { 2 };
+            // Fixed 1-char literals: `len` is a compile-time constant so
+            // `String::eq` / `memcmp` is one byte.
+            match slot {
+                0 => String::from("\x00"),
+                1 => String::from("\x01"),
+                2 => String::from("\x02"),
+                _ => String::from("\x03"),
+            }
         }
-        let n = buf[0] as usize;
-        let mut out = Vec::with_capacity(n);
-        let mut i = 0;
-        while i < n && 1 + i < buf.len() {
-            let name = match buf[1 + i] {
-                0 => "PP:[丸山彩]憧憬的前方",
-                1 => "PP:[衍生]共鸣",
-                2 => "PP:[标题偶像]",
-                3 => "PP:[强韧之花]",
-                _ => "PP:[标题偶像]",
-            };
-            // Intern so later host calls that pass this string match by id.
-            let _id = crate::intern::intern(name);
-            // Unchecked: `name` is a compile-time UTF-8 literal. `String::from`
-            // can still trip CBMC's `run_utf8_validation` unwinding cliff.
-            out.push(unsafe { String::from_utf8_unchecked(name.as_bytes().to_vec()) });
-            i += 1;
-        }
-        return out;
+        // DIAG: always empty — is the non-empty Vec the abort cliff?
+        let _ = need;
+        let _ = &buf;
+        return Vec::new();
     }
     #[cfg(not(kani))]
     {
@@ -946,6 +954,63 @@ pub fn count_on_tile(kind: &str, tile: i32) -> i32 {
             .kind(kind)
             .instance(self_uid()),
     )
+}
+
+// -- tile designations ([指定] a tile / 地契 / 地块 while this rule is in play) --
+// A designation is a mark of the dedicated [`abi::mark::DESIGNATE_CATEGORY`],
+// owned by the designating instance (`instance` = `self_uid()`, `src` = this
+// run). It dies with the instance (`destroy_instance_units`), so 「指定」
+// lasting while the card / skill is in play is one mark and one cleanup path.
+// Generic: no game-specific names live in card-sdk.
+
+/// Record that **this** instance designates `tile` (「指定」 that tile / 地契 /
+/// 地块). `owner` is the designating seat (the label's colour in the view);
+/// `note` explains the pick. One row per call ([`abi::Stack::Fresh`]), so a
+/// card that designates several tiles stacks one label each. Returns the
+/// count on the new row (1, or 0 when `tile` is off-board).
+pub fn designate_tile(tile: i32, owner: i32, note: &Msg) -> i32 {
+    place_mark(
+        tile,
+        crate::abi::mark::DESIGNATE_KIND,
+        crate::abi::mark::DESIGNATE_CATEGORY,
+        owner,
+        self_uid(),
+        1,
+        note,
+        crate::abi::Stack::Fresh,
+    )
+}
+
+/// Drop **this** instance's designation mark(s) on `tile` (the designation
+/// ended early -- the card is still in play). Returns rows removed. When the
+/// instance itself leaves the field, `destroy_instance_units` already clears
+/// every designation; call this only for an early end.
+pub fn undesignate_tile(tile: i32) -> i32 {
+    remove_marks(
+        tile,
+        &crate::abi::MarkFilter::any()
+            .category(crate::abi::mark::DESIGNATE_CATEGORY)
+            .instance(self_uid()),
+    )
+}
+
+/// Tiles **this** instance currently designates (one entry per tile that
+/// carries at least one of its designation marks).
+pub fn designated_tiles() -> alloc::vec::Vec<i32> {
+    let f = crate::abi::MarkFilter::any()
+        .category(crate::abi::mark::DESIGNATE_CATEGORY)
+        .instance(self_uid());
+    (0..tile_count()).filter(|&t| count_marks(t, &f) > 0).collect()
+}
+
+/// Does **this** instance currently designate `tile`?
+pub fn designates(tile: i32) -> bool {
+    count_marks(
+        tile,
+        &crate::abi::MarkFilter::any()
+            .category(crate::abi::mark::DESIGNATE_CATEGORY)
+            .instance(self_uid()),
+    ) > 0
 }
 
 /// Units of **this** instance's counter `name` held by `player_id`.

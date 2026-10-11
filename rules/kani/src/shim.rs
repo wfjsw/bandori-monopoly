@@ -1,32 +1,59 @@
-//! Temporary shims for pieces of the engine that are **not** run under Kani.
+//! Guard evaluation shims for Kani harnesses.
 //!
-//! ## `guard_assumed!`
+//! ## `guard!` / `guard_id!` (the real path)
 //!
-//! Host-side guard/condition strings (CEL, `docs/GUARDS.md`) are compiled by
-//! the engine and evaluated natively. Kani does **not** evaluate them. Until
-//! the single-source condition evaluator (branch `cond-single`) lands, a
-//! harness states the condition as an `assume` and proves the residual body
-//! against the clause's own Condition.
-//!
-//! Every use site is greppable: `guard_assumed!`. Delete this module once
-//! `cond-single` replaces the guard `assume` with the real evaluator; then
-//! each site becomes a plain `kani::assume` of the condition's truth, or a
-//! call into the evaluator.
+//! Host-side guard/condition strings (CEL, `docs/GUARDS.md`) have a single
+//! source of truth: the `&'static str` on the `On::*` entry. Under Kani we
+//! evaluate the **lowered IR** of that string against an [`IrCtx`] filled
+//! from the symbolic world — never `assume` the condition.
 //!
 //! ```ignore
-//! // Clause condition: `value > 0` (host pre) ∧ `poorest` (card residual).
-//! guard_assumed!(value > 0, "C-PP-aya-haruka-02 host pre");
+//! let id = guard_id!("actor == owner && value > 0"); // const, compile-checked
+//! let admitted = guard!(id, &ctx);
 //! ```
 //!
-//! **Do not** use this to hide a clause condition that the proof is supposed
-//! to establish. Only for the host-side pre that the engine evaluates outside
-//! the card body.
+//! * [`guard_id!`] resolves at **const time** (unknown string = compile
+//!   error via `guard_id_const`).
+//! * [`guard!`] indexes `generated::BY_ID[id]` — never a 139-way string
+//!   compare (that is a CBMC unwinding / OOM cliff).
+//!
+//! ## `guard_assumed!` (temporary, greppable)
+//!
+//! **Only** for guards that genuinely do not lower. Every use site is
+//! greppable: `guard_assumed!`. There should be none or few after
+//! `cond-single` landed; list any remainder in `KANI-FOUNDATION.md`.
+//!
+//! **Do not** use it to hide a clause condition that the proof is supposed
+//! to establish.
+
+/// `guard_id!` is **generated** (`#[macro_export]` in
+/// `generated/cond_irs.rs`) so its literal-match arms live in the same macro
+/// the user calls. See that file / `gen_cond_ir`.
+///
+/// ```ignore
+/// let id = guard_id!("actor == owner && value > 0"); // compile-checked
+/// ```
+
+/// Evaluate a single-source guard by const id against `ctx`.
+///
+/// Returns `bool` — the host root rule (any evaluation error = false).
+///
+/// ```ignore
+/// let admitted = guard!(guard_id!("actor == owner && value > 0"), &ctx);
+/// let admitted = guard!(id, &ctx);
+/// ```
+#[macro_export]
+macro_rules! guard {
+    ($id:expr, $ctx:expr) => {
+        $crate::generated::cond_irs::eval_id($id, $ctx)
+    };
+}
 
 /// Assert (under Kani) or document (native) that a host-side guard holds.
 ///
-/// Expands to `kani::assume(cond)` in proofs. Outside `cfg(kani)` it is a
-/// no-op that still evaluates `cond` for side-effect-free syntax, so the same
-/// harness file typechecks in `cargo check`.
+/// **Deprecated for lowerable guards** — use [`guard!`] instead. Kept only
+/// for guards that `gen_cond_ir` cannot lower. Greppable:
+/// `guard_assumed!`.
 #[macro_export]
 macro_rules! guard_assumed {
     ($cond:expr, $why:expr) => {{

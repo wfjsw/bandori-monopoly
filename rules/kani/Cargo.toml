@@ -31,6 +31,8 @@ skill-characters = { path = "../skills/skill-characters" }
 rules-tiles = { path = "../tiles" }
 rules-tile-marks = { path = "../tile_marks" }
 rules-events = { path = "../events" }
+# Single-source guard IR (heap-free; the translator output).
+rules-cond-ir = { path = "../cond-ir" }
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 serde = { workspace = true }
 

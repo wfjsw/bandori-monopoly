@@ -123,14 +123,31 @@ fn play(player_id: i32) -> card_sdk::Asked {
             .tile("a", a)
             .tile("b", b),
     );
-    // C# `card.Mem["partner"]` / `["mine"]` / `["theirs"]` -- the pair rides
-    // per-player slots (the card is placed at `player_id`, so the slot namespace is
-    // the card's) where the persistent hooks below can see it.
-    // Stored as `+1` so player 0 / tile 0 survive the zero-terminated slot table
-    // (an unset slot reads back as -1).
+    // C# `card.Mem["partner"]` -- the partner rides a per-player slot (the card
+    // is placed at `player_id`, so the slot namespace is the card's) where the
+    // persistent hooks below can see it. Stored as `+1` so player 0 survives the
+    // zero-terminated slot table (an unset slot reads back as -1).
     ctx::set_slot(player_id, "one_of_us_partner", partner + 1);
-    ctx::set_slot(player_id, "one_of_us_mine", a + 1);
-    ctx::set_slot(player_id, "one_of_us_theirs", b + 1);
+    // 规则书: 「指定双方各一块地契」 -- the pair of deeds is the lasting [指定]
+    // while this card is in play: one designation mark per deed, owned by this
+    // field instance (dies with the card via `destroy_instance_units`). This
+    // replaces the old `one_of_us_mine` / `one_of_us_theirs` tile slots.
+    ctx::designate_tile(
+        a,
+        player_id,
+        &Msg::new(key!("one_of_us_note"))
+            .player_id("who", partner)
+            .tile("a", a)
+            .tile("b", b),
+    );
+    ctx::designate_tile(
+        b,
+        player_id,
+        &Msg::new(key!("one_of_us_note"))
+            .player_id("who", partner)
+            .tile("a", a)
+            .tile("b", b),
+    );
     // 规则书: 「触发结算收益平分…（先在地契原主人方结算完成，之后被分享方资金
     // 直接增加，不受其他任何效果影响）」 -- the split is `measure_rent` +
     // `share_at_resolved` below: the settle completes at the original owner
@@ -148,10 +165,10 @@ fn play(player_id: i32) -> card_sdk::Asked {
 }
 
 /// Is `tile` one of the pair's designated deeds?
-fn designated(owner: i32, tile: i32) -> bool {
-    tile >= 0
-        && (tile == ctx::slot(owner, "one_of_us_mine") - 1
-            || tile == ctx::slot(owner, "one_of_us_theirs") - 1)
+/// The source of truth is this instance's [指定] marks
+/// (`ctx::designates`, one per deed placed in `play`).
+fn designated(tile: i32) -> bool {
+    tile >= 0 && ctx::designates(tile)
 }
 
 /// Measure the rent income a designated deed just produced (`Fx.PayAfter`).
@@ -159,8 +176,8 @@ fn designated(owner: i32, tile: i32) -> bool {
 /// is exact. Recorded on a slot; `share_at_resolved` spends it.
 /// Residual guard for [`measure_rent`] -- the designated-tile check is a
 /// derived lookup (GUARDS.md §6).
-fn measure_rent_guard(owner: i32) -> bool {
-    designated(owner, trigger::tile())
+fn measure_rent_guard(_owner: i32) -> bool {
+    designated(trigger::tile())
 }
 
 fn measure_rent(owner: i32) -> card_sdk::Asked {
@@ -181,7 +198,7 @@ fn share_at_resolved(owner: i32) -> card_sdk::Asked {
     if income <= 0 {
         return Ok(());
     }
-    if !designated(owner, trigger::tile()) {
+    if !designated(trigger::tile()) {
         return Ok(());
     }
     // 「触发结算收益平分」 -- half the settle income to the partner. The
@@ -233,9 +250,11 @@ fn before_out(owner: i32) -> card_sdk::Asked {
     if ctx::player_out(survivor) && survivor != out {
         return Ok(());
     }
-    let mine = ctx::slot(owner, "one_of_us_mine") - 1;
-    let theirs = ctx::slot(owner, "one_of_us_theirs") - 1;
-    for t in [mine, theirs] {
+    // The pair's designated deeds -- this instance's [指定] marks (one per
+    // deed). Same iteration the old `one_of_us_mine` / `one_of_us_theirs` slots
+    // did; the marks stay as the record of 「两张被指定地契」 (the pair is done
+    // once `one_of_us_partner` is cleared below, so nothing re-reads them).
+    for t in ctx::designated_tiles() {
         // C# `owners[num2] == player_id` -> `owners[num2] = num`.
         if t >= 0 && ctx::tile_owner(t) == out {
             ctx::set_owner(t, survivor);

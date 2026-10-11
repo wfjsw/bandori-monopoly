@@ -75,6 +75,14 @@ function Deed({ sess, i, close }: { sess: GameSession; i: number; close: () => v
   const marks = (S.marks ?? []).filter((x) => x.tile === i).map((x) => {
     const who = x.owner >= 0 ? tr("deed.markOwner", { who: names.playerId(x.owner) }) : "";
     const note = x.note?.k ? fmtMsg(x.note, names) : "";
+    if (x.category === "designate") {
+      // A [指定] names its designating card and seat (never `x.kind`).
+      const head =
+        x.owner >= 0
+          ? tr("deed.markDesignate", { who: names.playerId(x.owner), card: tr("common.quotes", { x: cardTitle(x.card) }) })
+          : tr("common.quotes", { x: cardTitle(x.card) });
+      return `${head}${x.count > 1 ? ` ×${x.count}` : ""}${note ? tr("common.paren", { x: note }) : ""}`;
+    }
     return x.kind === "card"
       ? `${who}${tr("common.quotes", { x: cardTitle(x.card) })}${note ? tr("common.noteColon", { x: note }) : ""}`
       : `${who}${fmtMsg({ k: x.kind }, names)}${x.count > 1 ? ` ×${x.count}` : ""}${note ? tr("common.paren", { x: note }) : ""}`;

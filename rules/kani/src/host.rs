@@ -58,6 +58,11 @@ fn name_id(handle: i32, len: i32) -> NameId {
 
 fn card_slot(handle: i32, len: i32) -> u8 {
     let b = card_sdk::native::read(handle, len.max(0) as usize);
+    // Kani interned-str facade from `ctx::cards_in`: a single byte whose
+    // value IS the slot (0..3). See `card-sdk/src/ctx.rs` `cards_in`.
+    if b.len() == 1 && b[0] < 4 {
+        return b[0];
+    }
     // Byte-compare against the four pilot card names.
     if name_eq(handle, len, world::CARD_AYA) {
         0
@@ -74,6 +79,11 @@ fn card_slot(handle: i32, len: i32) -> u8 {
 }
 
 fn card_u16(handle: i32, len: i32) -> u16 {
+    let b = card_sdk::native::read(handle, len.max(0) as usize);
+    // Kani interned-str facade: 1-byte slot → interned well-known name id.
+    if b.len() == 1 && b[0] < 4 {
+        return intern::intern(world::card_id_str(b[0])).0;
+    }
     let id = name_id(handle, len);
     id.0
 }
