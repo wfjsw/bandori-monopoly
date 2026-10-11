@@ -604,3 +604,50 @@ pub fn student_council_add_resolve_mutant_is_detected() {
         "mutant: deck did not grow by 2"
     );
 }
+
+// ===========================================================================
+// C-R-Ringing Bloom-01 -- place on own field
+// 「（1）将此卡放置于自身场上」
+// Clauses 02/03 are the rent pipeline (PROTOCOL-LEVEL).
+// ===========================================================================
+
+/// IFF: the play places the card on the user's field.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn ringing_bloom_place_iff() {
+    let mut w = base_world();
+    let player = w.trig_player;
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::play("R:（燐子）Ringing Bloom", player));
+    let (logbuf, log_n) = effects_of();
+    let effects = &slice_of(logbuf, log_n)[..log_n];
+    let card = crate::world::card_slot_of("R:（燐子）Ringing Bloom");
+
+    kani::cover!(log_n == 1, "place");
+    assert!(
+        spec::ringing_bloom_place_log_ok(effects, player, card),
+        "C-R-Ringing Bloom-01: exactly PlaceCard on the user's field"
+    );
+}
+
+/// MUTANT companion.
+#[kani::proof]
+#[kani::unwind(24)]
+pub fn ringing_bloom_place_mutant_is_detected() {
+    let mut w = base_world();
+    let player = w.trig_player;
+    let _pre = {
+        world::reset_world(w);
+        world::snapshot()
+    };
+    invoke::unwrap_done(invoke::play("R:（燐子）Ringing Bloom", player));
+    let (logbuf, log_n) = effects_of();
+    let effects = &slice_of(logbuf, log_n)[..log_n];
+    assert!(
+        !spec::ringing_bloom_place_log_ok_mutant(effects, player),
+        "mutant: not a two-PlaceCard body"
+    );
+}

@@ -308,6 +308,31 @@ pub fn fire_bird_burn_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
 }
 
 // ===========================================================================
+// C-R-Ringing Bloom-01 -- place on own field
+// 「（1）将此卡放置于自身场上」
+// ===========================================================================
+
+/// Exactly one PlaceCard on the user's field (Dest::Field = 2).
+pub fn ringing_bloom_place_log_ok(effects: &[Effect], player: i32, card: u8) -> bool {
+    effects.len() == 1
+        && matches!(
+            effects[0],
+            Effect::PlaceCard {
+                player: p,
+                dest: 2,
+                card: c
+            } if p == player && c == card
+        )
+}
+
+/// MUTANT: two PlaceCards.
+pub fn ringing_bloom_place_log_ok_mutant(effects: &[Effect], player: i32) -> bool {
+    effects.len() == 2
+        && matches!(effects[0], Effect::PlaceCard { player: p, .. } if p == player)
+        && matches!(effects[1], Effect::PlaceCard { player: p, .. } if p == player)
+}
+
+// ===========================================================================
 // C-R-Fire bird-04 -- discard on empty crystals
 // 「奇迹水晶耗尽时将此卡放入弃牌堆」
 // Classified against the CounterChanged hook. Determined post: the instance

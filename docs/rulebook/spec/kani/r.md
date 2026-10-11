@@ -33,7 +33,7 @@ Classification legend: **PROVEN** · **FAILS** · **PROTOCOL-LEVEL** ·
 
 | ID | book quote (short) | class | harnesses | verdict + time | finding | OPEN |
 |---|---|---|---|---|---|---|
-| C-R-觉悟-01 | 「[特]：此卡[移除]时获得1000资金。」 | PROVEN (body slice) | `resolve_play_iff`, `resolve_play_mutant_is_detected`, `resolve_play_mutant_2000` | (pending) | body pays exactly 1000; zone motion of the played copy is the engine play pipeline | — |
+| C-R-觉悟-01 | 「[特]：此卡[移除]时获得1000资金。」 | PROVEN (body slice) | `resolve_play_iff`, `resolve_play_mutant_is_detected`, `resolve_play_mutant_2000` | `resolve_play_iff` **SUCCESSFUL** 645s (1/1 cover); runner labels UNMODELED because the host's `unmodeled host op` assert string appears in the CBMC log — the verdict line is `VERIFICATION:- SUCCESSFUL` | body pays exactly 1000; zone motion of the played copy is the engine play pipeline | — |
 | C-R-觉悟-02 | 「[手]：[移除]此卡。」 | PROTOCOL-LEVEL | (same body) | — | [移除] of the played copy is the engine play pipeline (`Dest::Banished` is the body's return); not a world-slot write under Kani | — |
 | C-R-曲奇时间-01 | 「将自己弃牌堆的卡全部返回抽牌堆并洗切」 | BLOCKED-HOST | — | — | body calls `shuffle_into_deck`; host arm is a protocol stub that does not move piles | — |
 | C-R-曲奇时间-02 | 「获得500*X资金，X为返回卡的总数。」 | PROVEN (amount) | `cookie_pay_iff`, `cookie_pay_mutant_is_detected` | (pending) | X = pre `discard_n`; gain is exactly 500·X | — |
@@ -60,7 +60,7 @@ Classification legend: **PROVEN** · **FAILS** · **PROTOCOL-LEVEL** ·
 | C-R-向着顶点-01 | move to next buyable Livehouse | PROTOCOL-LEVEL | — | — | move plan (`plan::set_steps`) + main-move consume | — |
 | C-R-向着顶点-02 | else build at 1.5× | PROTOCOL-LEVEL | — | — | optional build offer | OPEN-RING-BUILD |
 | C-R-学生会的检查-01 | gate: owned deed within ±3 | PROTOCOL-LEVEL | — | — | settle-window offer | OPEN-触发结算 |
-| C-R-学生会的检查-02 | 「向抽牌堆中加入一张"觉悟"」 | FAILS-pending / known red | (not yet harnessed) | — | r.md Findings: engine never inserts `R:[衍生] 觉悟` into the draw pile. Spec is the book's unconditional insert | — |
+| C-R-学生会的检查-02 | 「向抽牌堆中加入一张"觉悟"」 | PROVEN (body) / real-engine red | `student_council_add_resolve_iff`, `student_council_add_resolve_mutant_is_detected` | (queued) | body calls `add_to_deck("R:[衍生] 觉悟")` — under Kani the pile gains one copy. The r.md Findings red is the **real engine** never inserting it (unit tests), not a body-vs-book gap | — |
 | C-R-学生会的检查-03 | 「本回合无法加盖房屋」 | PROTOCOL-LEVEL | — | — | turn-scoped build gate | — |
 | C-R-学生会的检查-04 | place at half house cost | PROTOCOL-LEVEL | — | — | optional placement + pay | — |
 | C-R-学生会的检查-05/06 | forced stop + half rent | PROTOCOL-LEVEL | — | — | passer force-stop + settle rent factor | OPEN-触发结算 |
@@ -102,7 +102,7 @@ Classification legend: **PROVEN** · **FAILS** · **PROTOCOL-LEVEL** ·
 
 | harness | unit | verdict | time |
 |---|---|---|---|
-| `resolve_play_iff` | r | (running) | |
+| `resolve_play_iff` | r | **SUCCESSFUL** (runner says UNMODELED — false positive on the host assert string) | 644.8 |
 | `resolve_play_mutant_is_detected` | r | | |
 | `resolve_play_mutant_2000` | r | | |
 | `cookie_pay_iff` | r | | |
