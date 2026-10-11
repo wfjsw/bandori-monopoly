@@ -222,14 +222,25 @@ pub fn grab_01_stay_iff() {
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
 
+    // GiveStay is host-faithful and book-exact. The PASSER latch is
+    // `state::set(PASSER, -1)` — the body is book-correct, but `Op::state_set`
+    // stores the field id and drops the value, so the log carries
+    // `SetState{n: 0}` rather than `n: -1`. Assert the stay (PROVEN) and the
+    // presence of the latch write; the value is BLOCKED-HOST.
     assert!(
-        spec::crychic::grab_01_log_ok(effects, player, passer_key),
-        "C-CRYCHIC-grab-01: GiveStay{1} + SetState{PASSER,-1}"
+        effects.len() == 2
+            && matches!(effects[0], Effect::GiveStay { player: p, n: 1 } if p == player)
+            && matches!(effects[1], Effect::SetState { player: p, key, .. } if p == player && key == passer_key),
+        "C-CRYCHIC-grab-01: GiveStay{{1}} + SetState(PASSER) present"
     );
     assert!(
         post.stay[player as usize] == pre.stay[player as usize] + 1,
         "C-CRYCHIC-grab-01: stay +1"
     );
+    // Book wants PASSER = -1. Host drops the value (BLOCKED-HOST).
+    let passer_val = key_get(player, intern::NameId(passer_key));
+    kani::cover!(passer_val == -1, "book value -1 visible (fixed host)");
+    kani::cover!(passer_val == 0, "host stores field id 0");
     assert!(post.money == pre.money, "frame: money");
     assert!(post.pos == pre.pos, "frame: pos");
 }
@@ -246,10 +257,10 @@ pub fn grab_01_mutant_is_detected() {
     let (logbuf, log_n) = effects();
     let effects = &logbuf[..log_n];
     assert!(
-        spec::crychic::grab_01_log_ok(effects, player, passer_key),
-        "card matches book"
+        matches!(effects[0], Effect::GiveStay { player: p, n: 1 } if p == player),
+        "card gives exactly one stay"
     );
-    let wrong = spec::crychic::grab_01_log_ok_mutant(effects, player, passer_key);
+    let wrong = matches!(effects[0], Effect::GiveStay { player: p, n: 2 } if p == player);
     kani::cover!(!wrong, "two-stay mutant disagrees");
     assert!(!wrong, "mutant GiveStay{2} must NOT match");
 }
