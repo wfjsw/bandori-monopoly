@@ -86,8 +86,8 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-phantom-02 | 「向一名玩家场上放置一个怪盗标记」 | P (spec) | (spec only) | — | own field is OPEN | — |
 | C-HHW-phantom-03 | 「经过该玩家时使自己强制停下并触发结算」 | PROTO | — | — | — | OPEN-HHW-触发结算 |
 | C-HHW-phantom-04 | 「主要移动改为投掷1d2…1d10」 | PROTO | — | — | — | multi-act path rewrite |
-| C-HHW-kokoro-01 | 「开局时获得1000资金」 | P | `kokoro_01_opening_1000_iff` | **running / pending** | — | 「开局时」 latched at first TurnStartBefore |
-| C-HHW-kokoro-02 | 「[经过]CiRCLE时额外获得1500资金」 | P | `kokoro_02_circle_pass_1500_iff` | pending | — | — |
+| C-HHW-kokoro-01 | 「开局时获得1000资金」 | P | `kokoro_01_opening_1000_iff` | **SUCCESSFUL** 227.6s | — | 「开局时」 latched at first TurnStartBefore |
+| C-HHW-kokoro-02 | 「[经过]CiRCLE时额外获得1500资金」 | P | `kokoro_02_circle_pass_1500_iff`, `kokoro_02_noop_non_circle` | **SUCCESSFUL** 241.0s / 62.2s | — | — |
 | C-HHW-kaoru-01 | 「不存在[怪盗标记]…获得1火罐…存在…移除一个」 | F (known) | `kaoru_01_pot_arm_iff` | pending | **FINDING**: body's mark-existence check does not see the counter the card plants; 3-step walk granted +3 fire and left the mark (TEST-FINDINGS) | — |
 | C-HHW-kaoru-02 | 「消耗7火罐…放置3个[怪盗标记]」 | F (known) | (not scripted this pass) | — | **FINDING**: press spends 7 fire and places **0** marks | — |
 | C-HHW-kaoru-03 | 「非传送的主要移动不会经过…格子」 | PROTO | — | — | — | whole-walk shape |
@@ -103,7 +103,7 @@ Legend: **P**=PROVEN, **F**=FAILS(finding), **B**=BLOCKED-HOST, **PROTO**=PROTOC
 | C-HHW-misaki-skill-02 | 「可将弦卷集团额外视为CiRCLE」 | PROTO | — | — | — | tile-kind override missing |
 | C-HHW-misaki-skill-03 | 「消耗一个火罐…额外1d10…视为[传送]」 | PROTO | — | — | — | — |
 | C-HHW-misaki-skill-04 | 「获得一层…[除外]」 | P (spec) / PROTO | (Play body) | — | — | — |
-| C-HHW-band-01 | 「可选择支付双倍价格…奇迹水晶」 | P | `band_01_declined_is_noop`, `band_01_accepted_doubles_iff` | pending | — | OPEN-HHW-BAND-RECORD |
+| C-HHW-band-01 | 「可选择支付双倍价格…奇迹水晶」 | P | `band_01_declined_is_noop` (SUCCESSFUL 245.5s), `band_01_accepted_doubles_iff` (pending) | partial | — | OPEN-HHW-BAND-RECORD |
 | C-HHW-band-02 | 「移除一个奇迹水晶，记录该次收款的价格」 | P (spec) | (spec only) | — | — | OPEN-HHW-BAND-RECORD |
 | C-HHW-band-03 | 「从盖房花费中减去所记录的数字…归零」 | O / PROTO | — | — | — | needs a legal build window |
 
@@ -114,7 +114,12 @@ Machine-wide slot cap: 3 concurrent CBMC; queueing is normal.
 
 | harness | unit | verdict | time |
 |---|---|---|---|
-| `kokoro_01_opening_1000_iff` | skills_hhw | pending | — |
+| `kokoro_01_opening_1000_iff` | skills_hhw | **SUCCESSFUL** (CBMC `VERIFICATION:- SUCCESSFUL`; runner tags UNMODELED only because `unmodeled host op` appears in the linked `host::unmodeled` assertion text — the arm is unreachable here) | 227.6s |
+| `kokoro_02_circle_pass_1500_iff` | skills_hhw | **SUCCESSFUL** (same runner tag quirk) | 241.0s |
+| `kokoro_02_noop_non_circle` | skills_hhw | **SUCCESSFUL** | 62.2s |
+| `band_01_declined_is_noop` | skills_hhw | **SUCCESSFUL** | 245.5s |
+| `hhw_smoke_cover` | hhw | **SUCCESSFUL** | 6.7s |
+| `skills_hhw_smoke_cover` | skills_hhw | **SUCCESSFUL** | 5.2s |
 | `kokoro_01_mutant_500` | skills_hhw | pending | — |
 | `kokoro_01_mutant_is_detected` | skills_hhw | pending | — |
 | `kokoro_01_noop_when_latch_set` | skills_hhw | pending | — |
