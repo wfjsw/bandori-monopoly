@@ -64,10 +64,14 @@ fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() || a.len() > MAX_NAME {
         return false;
     }
+    // Loop only over the actual length (already bounded by MAX_NAME). A
+    // fixed 64-iteration compare is an unwinding cliff when intern runs
+    // once per name lookup inside a card body.
+    let n = a.len();
     let mut i = 0usize;
     let mut ok = true;
-    while i < MAX_NAME {
-        if i < a.len() && a[i] != b[i] {
+    while i < n {
+        if a[i] != b[i] {
             ok = false;
         }
         i += 1;
