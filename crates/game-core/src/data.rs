@@ -160,6 +160,22 @@ pub fn mark_rule_ids() -> &'static [&'static str] {
     &["mark:cp"]
 }
 
+/// Board-wide **status-host** rules (`status:*`) -- one instance each on the
+/// neutral board owner, governing no single tile. Each is the creating rule
+/// of its status counter (`rules/status`, `docs/STATUS-HOSTS.md`): wear-off,
+/// clamping, gates and clauses. Sibling of [`mark_rule_ids`]; `bind_tiles`
+/// places them on the same path.
+pub fn status_rule_ids() -> &'static [&'static str] {
+    &[
+        "status:stay",
+        "status:stun",
+        "status:exile",
+        "status:fire",
+        "status:unstoppable",
+        "status:no_hand",
+    ]
+}
+
 /// One card row from `cards.json`.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]

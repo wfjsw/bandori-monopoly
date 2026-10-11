@@ -34,6 +34,7 @@ dependencies = [
  "card-sdk",
  "card-sumimi",
  "rules-events",
+ "rules-status",
  "rules-tile-marks",
  "rules-tiles",
  "skill-bands",
@@ -216,6 +217,13 @@ dependencies = [
  "rules-tiles",
  "ruleset-core",
  "serde_json",
+]
+
+[[package]]
+name = "rules-status"
+version = "0.1.0"
+dependencies = [
+ "card-sdk",
 ]
 
 [[package]]

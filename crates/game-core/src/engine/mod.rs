@@ -630,12 +630,12 @@ impl Match {
             st.can_build_here = false;
             st.can_roll_here = false;
             st.can_end_here = false;
-            // `Cx::can_pay` (not out / stunned / exiled), without building a Cx
+            // `Cx::can_pay` (the status hosts' pay gate), without building a Cx
             // (which would clone the world -- this runs inside rollouts).
             let can_pay = st
                 .players
                 .get(ti)
-                .map(|p| !p.out() && !p.stunned() && p.exile() == 0)
+                .map(|p| !p.out() && p.status_gates().pay)
                 .unwrap_or(false);
             if st.step == stage::END
                 && !st.bought
@@ -1601,7 +1601,7 @@ impl Match {
             .iter()
             .map(|&s| {
                 let x = &self.world.st.players[s];
-                !x.out() && !x.stunned() && x.exile() == 0
+                !x.out() && x.status_gates().pay
             })
             .collect();
         // Standard's bid step / nudge read the seat's `StrategyParams`

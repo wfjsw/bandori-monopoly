@@ -252,6 +252,23 @@ Implementation sketch (Phase B):
 * `cx.rs` `can_pay` / `blocked`, `mod.rs` the alive-seat filters, `play.rs`
   the turn-start / payee / teleport gates, `ops.rs` ~1013 all read gates.
 
+**Adjustment (Phase B, recorded).** The sketch said «hosts set the gates».
+The code proves the gates cannot live only on wasm hosts: `tick_state` and
+the turn flow run **outside a card run**, so a host hook cannot update them
+in time for `turn_start`'s stun / stay checks. So:
+
+* Gates are **derived**, not stored: `MatchPlayer::status_gates() ->
+  StatusGates` (`game-core/src/state.rs`) computes `act` / `move` / `pay` /
+  `on_board` / `targetable` from the counters the hosts own.
+* That function is the hosts' clause, kept engine-side for timing. The
+  names stay / stun / exile appear **only** there and in `rules/status`.
+* Policy sites read `status_gates()` and no longer branch on
+  `stunned()` / `exile()` / `stay()`.
+* `World::stay_unlatch` is the `status:stay` count-changed clause
+  (un-skip on last layer); `give_stay` and `end_turn`'s `tick_state` call
+  it. A true `CounterChanged` hook on the state key is the Phase C shape
+  once state writes raise one.
+
 **Generic turn-flow verbs** the hosts drive (and cards may call via
 `ctx::turn`):
 

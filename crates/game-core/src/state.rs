@@ -590,6 +590,24 @@ impl BotMentality {
     }
 }
 
+/// Generic **player gates** derived from the status hosts' counters
+/// (`docs/STATUS-HOSTS.md` §3.4). The engine reads these at policy sites
+/// instead of naming stay / stun / exile. `true` = the door is open.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StatusGates {
+    /// [主动] skills and [手] effects (rules.txt 49/50).
+    pub act: bool,
+    /// This turn's [主要移动] / non-[传送] move effects (rules.txt 47).
+    pub r#move: bool,
+    /// May receive payment (rules.txt 49/50).
+    pub pay: bool,
+    /// The piece stands on a board square (rules.txt 50 「不失为存在于任何格子上」
+    /// is the *negation* -- exiled pieces are off-board).
+    pub on_board: bool,
+    /// May be [指定]d (rules.txt 50 「不能被[指定]」).
+    pub targetable: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct MatchPlayer {
@@ -836,6 +854,34 @@ impl MatchPlayer {
 
     pub fn unstoppable(&self) -> i32 {
         self.state_get(key::UNSTOPPABLE)
+    }
+
+    /// The **status hosts'** gate clause, derived from the counters they own
+    /// (`docs/STATUS-HOSTS.md` §3.4). The engine reads these gates at policy
+    /// sites and stops naming stay / stun / exile there. Derivation lives
+    /// here -- not on a wasm host -- because `tick_state` and the turn flow
+    /// run outside a card run; the names appear only in this function and in
+    /// `rules/status`.
+    pub fn status_gates(&self) -> StatusGates {
+        let stay = self.stay();
+        let stun = self.stun() + self.stun_start();
+        let exile = self.exile();
+        let unstoppable = self.unstoppable();
+        StatusGates {
+            // [晕眩] 「无法使用[主动]技能和手卡的[手]效果」 +
+            // [除外] same + 「玩家技能…停止生效」.
+            act: stun <= 0 && exile <= 0,
+            // [无法移动] (rules.txt 47) via stay (unless [不可阻挡]
+            // 「无视已存在的[停留]」), stun, exile.
+            r#move: !(exile > 0 || stun > 0 || (stay > 0 && unstoppable <= 0)),
+            // [晕眩] / [除外] 「无法收付款」.
+            pay: stun <= 0 && exile <= 0,
+            // [除外] 「玩家棋子不失为存在于任何格子上」 -- inverted: the piece
+            // is *not* on a board square while exiled.
+            on_board: exile <= 0,
+            // [除外] 「不能被[指定]」.
+            targetable: exile <= 0,
+        }
     }
 
     /// Hand size limit: the `handLimit` state (base 5, cards may cut or lift
