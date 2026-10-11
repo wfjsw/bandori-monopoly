@@ -313,12 +313,19 @@ fn early_stop_never_runs_past_the_budget_and_reports_itself() {
 
 #[test]
 fn early_stop_stops_no_later_than_the_full_budget_search() {
-    // Strength-safe direction: the early-stop rule may only *remove* work
-    // (stop at or before the budget), never add it. Same seed, same budget.
+    // Strength-safe direction: the early-stop rule may only *remove* work,
+    // never add it. Deterministic form (TOOL-01): the **iteration cap** is
+    // the shared stopping rule and the wall budget is wide, so the
+    // full-budget run is exactly `cap` iterations and the early-stop run is
+    // at most that. The old shape compared two separate 200 ms wall-clock
+    // searches (`on.iterations <= off.iterations` plus `off.elapsed >= 190ms`)
+    // and was flaky under load (~1 in 3).
     let (m, member) = parked();
     let seat = seat_of(&m, member);
+    let cap = 24u64;
     let cfg = |early: bool| SearchConfig {
-        budget: Duration::from_millis(200),
+        budget: Duration::from_secs(60),
+        max_iterations: cap,
         seed: 9,
         early_stop: early,
         min_iterations: 2,
@@ -326,13 +333,14 @@ fn early_stop_stops_no_later_than_the_full_budget_search() {
     };
     let on = Ismcts::new().search(&mut sim_of(&m, member), seat, cfg(true));
     let off = Ismcts::new().search(&mut sim_of(&m, member), seat, cfg(false));
+    assert_eq!(off.iterations, cap, "the full-budget run hit the cap: {off:?}");
     assert!(
         on.iterations <= off.iterations,
         "early stop added work: {on} > {off}",
         on = on.iterations,
         off = off.iterations
     );
-    assert!(off.elapsed >= Duration::from_millis(190), "the full-budget run ran its budget");
+    assert_eq!(on.action, off.action, "same seed, same pick");
 }
 
 // ------------------------------------------------- speculative next decision

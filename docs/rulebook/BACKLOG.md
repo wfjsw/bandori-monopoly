@@ -1355,6 +1355,23 @@ Sort: severity, then class. One item = one root cause; every file:line / test is
   - `ctx.rs` + `docs/PURCHASE.md` — "One `HostRequest::Quote`"
   - `hostfns.rs` — "commit re-quotes" justification for a native quote
 
+## TOOL-01 — `root_parallel::early_stop_stops_no_later_than_the_full_budget_search` is flaky
+- **status**: **fixed** (2026-10-11, `backlog-host-abi-a`, `fix: TOOL-01 …`) —
+  the test compared two separate 200 ms wall-clock searches
+  (`on.iterations <= off.iterations` + `off.elapsed >= 190ms`) and failed
+  ~1 in 3 under load. It now pins a shared **iteration cap** (24) with a
+  wide wall budget: the full-budget run must hit the cap, the early-stop
+  run must not exceed it, and same seed ⇒ same pick. No wall-clock
+  assertion left.
+- **kind**: tooling gap
+- **class**: A
+- **severity**: low (CI / agent runs under load)
+- **suggested batch**: tooling
+- **locations**
+  - `crates/bot-core/tests/root_parallel.rs` `early_stop_stops_no_later_than_the_full_budget_search`
+  - sibling `early_stop_is_off_in_deterministic_mode_and_the_iteration_cap_binds` (iteration cap ⇒ `early_stop` cannot fire)
+- **expected**: deterministic stopping rule (iteration budget), assert on the decision rule rather than timing. **Confirmed.**
+
 ## HOST-13 — `HostRequest::AgentOffer` drops `agent`
 - **kind**: ABI defect
 - **class**: C (keep for audit log?)
