@@ -63,29 +63,63 @@ fn card_slot(handle: i32, len: i32) -> u8 {
     if b.len() == 1 && b[0] < 4 {
         return b[0];
     }
-    // Byte-compare against the four pilot card names.
-    if name_eq(handle, len, world::CARD_AYA) {
-        0
-    } else if name_eq(handle, len, world::CARD_RESONANCE) {
-        1
-    } else if name_eq(handle, len, world::CARD_OTHER) {
-        2
-    } else if name_eq(handle, len, world::CARD_EXTRA) {
-        3
-    } else {
-        let _ = b;
-        2
+    // Length + one CJK discriminator byte. `name_eq`'s 29-byte loop is an
+    // unwind-cut under CBMC: `place_card("PP:[丸山彩]憧憬的前方")` never
+    // returned and every prompt proof was vacuous. The four pilot names are
+    // distinguished by len (29 = AYA) or by `b[4]` (first CJK byte after
+    // "PP:["): 衍=0xE8, 标=0xE6, 强=0xE5.
+    match b.len() {
+        29 => 0,
+        17 => match b.get(4).copied().unwrap_or(0) {
+            0xE8 => 1,
+            0xE6 => 2,
+            0xE5 => 3,
+            _ => 2,
+        },
+        _ => {
+            // Fall back to the real compare for other names (short ones only).
+            if name_eq(handle, len, world::CARD_AYA) {
+                0
+            } else if name_eq(handle, len, world::CARD_RESONANCE) {
+                1
+            } else if name_eq(handle, len, world::CARD_OTHER) {
+                2
+            } else if name_eq(handle, len, world::CARD_EXTRA) {
+                3
+            } else {
+                2
+            }
+        }
     }
 }
 
 fn card_u16(handle: i32, len: i32) -> u16 {
     let b = card_sdk::native::read(handle, len.max(0) as usize);
-    // Kani interned-str facade: 1-byte slot → interned well-known name id.
+    // 1-byte interned-str facade from `ctx::cards_in`.
     if b.len() == 1 && b[0] < 4 {
-        return intern::intern(world::card_id_str(b[0])).0;
+        return if b[0] == 0 {
+            0 // AYA: synthetic, never intern the 29-byte name
+        } else {
+            intern::intern(world::card_id_str(b[0])).0
+        };
     }
-    let id = name_id(handle, len);
-    id.0
+    // Never `intern` a 29-byte name under Kani — `intern_bytes`'s compare
+    // is an unwind-cut and `place_card` never returned. AYA's field id can
+    // be a synthetic 0; pile identity for the prompt proofs is OTHER/EXTRA
+    // (17-byte names, intern is fine).
+    if b.len() == 29 {
+        return 0; // AYA
+    }
+    if b.len() == 17 {
+        let slot = match b.get(4).copied().unwrap_or(0) {
+            0xE8 => 1u8,
+            0xE6 => 2,
+            0xE5 => 3,
+            _ => 2,
+        };
+        return intern::intern(world::card_id_str(slot)).0;
+    }
+    name_id(handle, len).0
 }
 
 fn player_idx(p: i32) -> usize {
