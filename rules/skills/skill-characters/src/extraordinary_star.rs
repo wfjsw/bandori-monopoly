@@ -41,7 +41,7 @@ pub const EXTRAORDINARY_STAR: CardDef = CardDef::new(
         // hook's applicability (the residual guard), not its effect.
         On::Hook(&[HookKind::Settle], "", Some(on_settle_applies), on_settle),
     ],
-);
+).silent(&[1]);
 
 /// 「初始0，上限1」 -- this skill states the fire-pot cap. It is a *consumer*
 /// deciding the bound; the engine only holds it.

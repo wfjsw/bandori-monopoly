@@ -58,7 +58,7 @@ pub const UIKA_IMPRISONED: CardDef = CardDef::new(
         On::Hook(&[HookKind::SettleBefore], "slot('skillState') == 2", None, before_settle),
     ],
 )
-    .legacy(&[(0, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(0, legacy_mine), (2, legacy_mine)]).silent(&[2, 3]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

@@ -34,7 +34,7 @@ pub const LISA_GODDESS: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], "actor == owner && is_circle(tile.id)", None, on_pass),
     ],
 )
-    .legacy(&[(2, legacy_mine)]);
+    .legacy(&[(2, legacy_mine)]).silent(&[1]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

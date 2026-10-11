@@ -33,7 +33,7 @@ pub const WANT_TO_GRAB: CardDef = CardDef::new(
         On::Hook(&[HookKind::PassPlayer], "actor != owner && actor >= 0", None, on_pass),
         On::Hook(&[HookKind::SettleBefore], "", None, grab),
     ],
-);
+).silent(&[1]);
 
 fn want_to_grab(player_id: i32) -> card_sdk::Asked {
     // 规则书（1）: 「获得一层[停留]。」

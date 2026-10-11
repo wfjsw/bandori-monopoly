@@ -23,7 +23,7 @@ pub const ANON_RESTART: CardDef = CardDef::new(
         On::Hook(&[HookKind::Abnormal], card_sdk::pre::MINE, None, on_abnormal),
     ],
 )
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

@@ -45,7 +45,7 @@ pub const SAKIKO_LIFE: CardDef = CardDef::new(
         On::Hook(&[HookKind::Abnormal], "target == owner", Some(im_hit), on_abnormal),
     ],
 )
-    .legacy(&[(1, legacy_mine)]);
+    .legacy(&[(1, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

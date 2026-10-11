@@ -52,7 +52,7 @@ pub const NANAMI_ORDINARY: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, tick),
     ],
 )
-    .legacy(&[(2, legacy_mine), (4, legacy_mine)]);
+    .legacy(&[(2, legacy_mine), (4, legacy_mine)]).silent(&[1, 4]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

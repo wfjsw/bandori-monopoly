@@ -11,7 +11,7 @@
 
 use card_sdk::abi::{state_key, HookKind};
 use card_sdk::ctx::{self, state};
-use card_sdk::{key, CardDef, Msg, On};
+use card_sdk::{CardDef, On};
 
 const DONE: &str = "skill.roselia.first";
 
@@ -28,7 +28,7 @@ pub const ROSELIA: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], "actor == owner && slot('skill.roselia.first') != 0", None, at_turn_start),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
@@ -57,13 +57,11 @@ fn half_price(player_id: i32) -> card_sdk::Asked {
 }
 
 fn on_bought(player_id: i32) -> card_sdk::Asked {
-    
     let t = ctx::trigger::tile();
     if t < 0 || ctx::tile_group(t) == LIVE {
         return Ok(());
     }
     state::set(player_id, DONE, 1);
-    ctx::log(player_id, &Msg::new(key!("roselia_first")).tile("tile", t));
     Ok(())
 }
 

@@ -51,7 +51,7 @@ pub const RANA_PARKING: CardDef = CardDef::new(
     ],
 )
     .labels(&[(2, "（1）"), (3, "（2）"), (4, "（2）"), (5, "（3）")])
-    .legacy(&[(2, legacy_mine), (5, legacy_mine)]);
+    .legacy(&[(2, legacy_mine), (5, legacy_mine)]).silent(&[1]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

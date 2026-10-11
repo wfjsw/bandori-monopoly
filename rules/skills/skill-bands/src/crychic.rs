@@ -32,7 +32,7 @@ pub const CRYCHIC: CardDef = CardDef::new(
         On::Play("", Some(can_transform), transform_now),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

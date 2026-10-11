@@ -33,7 +33,7 @@ pub const RAISE_EFFORT: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

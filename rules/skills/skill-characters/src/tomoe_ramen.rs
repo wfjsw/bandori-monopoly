@@ -36,7 +36,7 @@ pub const TOMOE_RAMEN: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore, HookKind::DeckAtGameStart], "", None, declare_cap),
         On::Hook(&[HookKind::TurnEnd], "", Some(afterglow), tick),
     ],
-);
+).silent(&[1]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")

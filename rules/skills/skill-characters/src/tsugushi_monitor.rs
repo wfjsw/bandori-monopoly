@@ -40,7 +40,7 @@ pub const TSUGUSHI_MONITOR: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayChoose], "", Some(mine), on_gain),
         On::Hook(&[HookKind::PayChoose], "", Some(other), on_theirs),
     ],
-);
+).silent(&[1]);
 
 fn mine(player_id: i32) -> bool {
     // （1）「当你获得资金」 -- the skill fires on *receiving* money, so the

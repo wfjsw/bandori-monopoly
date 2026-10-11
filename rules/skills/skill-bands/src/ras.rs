@@ -28,7 +28,7 @@ pub const RAS: CardDef = CardDef::new(
         On::Hook(&[HookKind::Settle], card_sdk::pre::MINE, None, on_settle),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[2]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

@@ -28,7 +28,7 @@ pub const TAMADE_PRODUCER: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(0, legacy_mine), (1, legacy_mine), (2, legacy_mine)]).silent(&[1, 2]);
 
 /// Only this player's own business -- the skill is theirs, not the table's.
 fn legacy_mine(player_id: i32) -> bool {

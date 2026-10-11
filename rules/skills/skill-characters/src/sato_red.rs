@@ -31,7 +31,7 @@ pub const SATO_RED: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(2, legacy_mine)]);
+    .legacy(&[(2, legacy_mine)]).silent(&[1]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

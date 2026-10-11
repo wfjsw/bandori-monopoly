@@ -22,7 +22,7 @@ pub const SAAYA_SKY: CardDef = CardDef::new(
         On::Hook(&[HookKind::PassTile], "actor == owner && card.placed", None, pass_tile),
         On::Hook(&[HookKind::TurnEndAfter], "card.placed && slot('saaya_sky_passed') != 0", None, turn_end_after),
     ],
-);
+).silent(&[1]);
 
 /// Where the card's tile is written down (C# `Tile` on the placed card).
 /// C# `CardSaayaSky._passed` -- the user walked past the card this turn.

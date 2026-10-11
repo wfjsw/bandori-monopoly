@@ -41,7 +41,7 @@ pub const LOCK_DREAM: CardDef = CardDef::new(
             settle_before,
         ),
     ],
-);
+).silent(&[2]);
 
 /// C# `m.Tags["lockStation"]` -- the owner's main move passed Bandori车站.
 const SLOT_TAG: &str = "lock_dream_tag";

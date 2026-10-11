@@ -31,7 +31,7 @@ pub const YURI_CRIT: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnStartBefore], "", None, declare),
         On::Hook(&[HookKind::PayChoose], "", Some(mine), on_pay),
     ],
-);
+).silent(&[0]);
 
 fn mine(player_id: i32) -> bool {
     // 「获得或失去资金」 -- the skill fires on either side of a money move:

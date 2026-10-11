@@ -35,7 +35,7 @@ pub const MOCA_SELF: CardDef = CardDef::new(
         On::Hook(&[HookKind::CardPlayed], "", Some(other), on_card),
         On::Hook(&[HookKind::SkillUsed], "", Some(other), on_skill),
     ],
-);
+).silent(&[0]);
 
 fn afterglow(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id && ctx::in_band(player_id, "Afterglow")

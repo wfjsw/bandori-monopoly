@@ -25,7 +25,7 @@ pub const ONE_OF_US: CardDef = CardDef::new(
         On::Hook(&[HookKind::PayAfter], "card.placed && slot('one_of_us_partner') > 0 && pay_is_rent && value > 0", Some(measure_rent_guard), measure_rent),
         On::Hook(&[HookKind::TileResolved], "card.placed && slot('one_of_us_partner') > 0", None, share_at_resolved),
     ],
-);
+).silent(&[2]);
 
 fn owns_shop(player_id: i32) -> bool {
     // C# `H.OwnedBy(p).Any(H.IsShop)`.

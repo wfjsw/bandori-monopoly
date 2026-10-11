@@ -61,7 +61,7 @@ pub const MANA_DONUT: CardDef = CardDef::new(
         // No `TurnEnd` clear: the two `TurnEnd` layers tick off at the owner's
         // own wear-offs (before the `TurnEnd` hook fires).
     ],
-);
+).silent(&[0, 1]);
 
 /// The TurnStartBefore re-declare only does something when the cap is still
 /// unset (a mid-game placement of the skill). `state::max` is not in the CEL

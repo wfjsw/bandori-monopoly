@@ -52,7 +52,7 @@ pub const KAEDE_SUPPORT: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0, 3]);
 
 /// 「你与对方均分那些地契收取的资金」 -- half to the deed's owner, half here.
 /// `slot('skillState') == 2 && pay_is_rent && value > 0 && tile.id >= 0` is

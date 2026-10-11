@@ -27,7 +27,7 @@ pub const ARISA_BONSAI: CardDef = CardDef::new(
         On::Hook(&[HookKind::Pass], "actor == owner && tile.id == tile_named('流星堂')", None, on_pass),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

@@ -27,7 +27,7 @@ pub const DETOUR: CardDef = CardDef::new(
         On::AtEnd("", None, clear_no_reward),
     ],
 )
-    .legacy(&[(1, legacy_can_counteract)]);
+    .legacy(&[(1, legacy_can_counteract)]).silent(&[3]);
 
 /// G3 audit (GUARDS.md §5.1): the pre-migration guard.
 fn legacy_can_counteract(player_id: i32) -> bool {

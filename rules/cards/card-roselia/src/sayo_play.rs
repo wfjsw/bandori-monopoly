@@ -26,7 +26,7 @@ pub const SAYO_PLAY: CardDef = CardDef::new(
     ],
 )
 .props(&[(prop::COUNTERACT_GROUP, 1)])
-.legacy(&[(0, legacy_can_counteract)]);
+.legacy(&[(0, legacy_can_counteract)]).silent(&[1]);
 
 fn counter_only(_player_id: i32) -> Option<Msg> {
     Some(Msg::new(key!("sayo_play_timing")))

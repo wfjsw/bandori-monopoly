@@ -38,7 +38,7 @@ pub const COUNCIL_CHECK: CardDef = CardDef::new(
         ),
         On::Hook(&[HookKind::SettleAfter], "card.placed", None, settle_after),
     ],
-);
+).silent(&[2]);
 
 /// C# `CardCouncilCheck.Near` -- own deeds within 3 tiles either way (`H.Dist`).
 fn near(player_id: i32) -> Vec<i32> {

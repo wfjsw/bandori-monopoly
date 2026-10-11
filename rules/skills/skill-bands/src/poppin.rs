@@ -64,7 +64,7 @@ pub const POPPIN: CardDef = CardDef::new(
         ),
     ],
 )
-    .legacy(&[(0, legacy_mine), (1, legacy_mine)]);
+    .legacy(&[(0, legacy_mine), (1, legacy_mine)]).silent(&[0]);
 
 /// （3）'s purchase lock. The tile is the entry's condition; whether any
 /// Poppin' Party character is still in the game is [`lock_hill_applies`].

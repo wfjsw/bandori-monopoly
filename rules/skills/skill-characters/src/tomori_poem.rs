@@ -34,7 +34,7 @@ pub const TOMORI_POEM: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], "actor == owner && slot('skill.tomoriPoem.due') != 0", None, at_turn_end),
     ],
 )
-    .legacy(&[(1, legacy_mine), (4, legacy_mine)]);
+    .legacy(&[(1, legacy_mine), (4, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

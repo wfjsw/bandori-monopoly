@@ -34,7 +34,7 @@ pub const NO_EXPECTATION: CardDef = CardDef::new(
 )
 // 规则书[持续]（1）: 「手卡上限数量减1」 -- the `handLimitDelta` property
 // (C# `Card.HandLimitDelta`), continuous while this instance sits on the field.
-.props(&[(prop::HAND_LIMIT_DELTA, -1)]);
+.props(&[(prop::HAND_LIMIT_DELTA, -1)]).silent(&[2]);
 
 /// C# `Mem["stacks"]` -- how many times the pay bend is stacked (2 on place,
 /// +2 per reshuffle).

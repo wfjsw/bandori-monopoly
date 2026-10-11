@@ -43,7 +43,7 @@ pub const MUMEI_STREAMER: CardDef = CardDef::new(
         On::Hook(&[HookKind::TurnEnd], card_sdk::pre::MINE, None, at_turn_end_exit),
     ],
 )
-    .legacy(&[(2, legacy_mine), (3, legacy_mine)]);
+    .legacy(&[(2, legacy_mine), (3, legacy_mine)]).silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id

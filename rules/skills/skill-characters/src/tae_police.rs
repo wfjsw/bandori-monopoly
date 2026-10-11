@@ -44,7 +44,8 @@ pub const TAE_POLICE: CardDef = CardDef::new(
         // (the seat keeps the floor until it passes).
         (prop::COUNTERACT_GROUP, 1),
     ])
-    .legacy(&[(1, legacy_mine), (2, legacy_mine)]);
+    .legacy(&[(1, legacy_mine), (2, legacy_mine)])
+    .silent(&[0]);
 
 fn legacy_mine(player_id: i32) -> bool {
     ctx::trigger::player_id() == player_id
