@@ -119,11 +119,11 @@ pub fn idolband_reset_iff() {
 
     let pre_money = pre.money[player as usize];
     assert!(
-        spec::idolband_money_ok(effects, player, pre_money),
+        spec::sumimi::idolband_money_ok(effects, player, pre_money),
         "C-SUMIMI-idolband-02/03: money path must be a set-to-3000 or a no-op"
     );
     assert!(
-        post.money[player as usize] == spec::idolband_post_money(pre_money),
+        post.money[player as usize] == spec::sumimi::idolband_post_money(pre_money),
         "C-SUMIMI-idolband-02: post money must be exactly 3000 when pre < 3000"
     );
     for p in 0..MAX_PLAYERS {
@@ -153,7 +153,7 @@ pub fn idolband_mutant_is_detected() {
     invoke::unwrap_done(invoke::play(IDOLBAND, player));
     let post = world::snapshot();
     let pre_money = pre.money[player as usize];
-    let wrong = spec::idolband_post_money_mutant(pre_money);
+    let wrong = spec::sumimi::idolband_post_money_mutant(pre_money);
     kani::cover!(pre_money < 3000, "mutant region live");
     assert!(
         post.money[player as usize] != wrong,
@@ -208,7 +208,7 @@ pub fn hina_01_pass_circle_iff() {
     }
 
     let pre_fire = pre.fire[player as usize];
-    let cap = spec::FIRE_CAP_SUMIMI;
+    let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     kani::cover!(pre_fire < cap, "under cap (gain applies)");
     kani::cover!(pre_fire >= cap, "at/over cap (global hold-cap forbids)");
 
@@ -218,11 +218,11 @@ pub fn hina_01_pass_circle_iff() {
     let effects = effects_of(&logbuf, log_n);
 
     assert!(
-        spec::pass_circle_fire_ok(effects, player, pre_fire, cap),
+        spec::sumimi::pass_circle_fire_ok(effects, player, pre_fire, cap),
         "C-SUMIMI-hina-01: effect log must be exactly +1 fire under the cap"
     );
     assert!(
-        post.fire[player as usize] == spec::pass_circle_fire_post(pre_fire, cap),
+        post.fire[player as usize] == spec::sumimi::pass_circle_fire_post(pre_fire, cap),
         "C-SUMIMI-hina-01: post fire must be pre+1 under the cap and unchanged at the cap"
     );
     for p in 0..MAX_PLAYERS {
@@ -250,7 +250,7 @@ pub fn hina_01_mutant_is_detected() {
     };
     invoke::unwrap_done(invoke::hook_only(HINA, "Pass", player));
     let post = world::snapshot();
-    let wrong = spec::pass_circle_fire_post_mutant(pre.fire[player as usize], spec::FIRE_CAP_SUMIMI);
+    let wrong = spec::sumimi::pass_circle_fire_post_mutant(pre.fire[player as usize], spec::sumimi::FIRE_CAP_SUMIMI);
     assert!(
         post.fire[player as usize] != wrong,
         "mutant: card must not match the +2 spec"
@@ -298,7 +298,7 @@ pub fn childhood_02_fire_iff() {
     }
 
     let pre_fire = pre.fire[player as usize];
-    let cap = spec::FIRE_CAP_SUMIMI;
+    let cap = spec::sumimi::FIRE_CAP_SUMIMI;
     kani::cover!(pre_fire < cap, "under cap");
     kani::cover!(pre_fire >= cap, "at cap");
 
@@ -308,11 +308,11 @@ pub fn childhood_02_fire_iff() {
     let effects = effects_of(&logbuf, log_n);
 
     assert!(
-        spec::childhood_fire_ok(effects, player, pre_fire, cap),
+        spec::sumimi::childhood_fire_ok(effects, player, pre_fire, cap),
         "C-SUMIMI-childhood-02: after-move must be exactly +1 fire under the cap"
     );
     assert!(
-        post.fire[player as usize] == spec::childhood_fire_post(pre_fire, cap),
+        post.fire[player as usize] == spec::sumimi::childhood_fire_post(pre_fire, cap),
         "C-SUMIMI-childhood-02: post fire"
     );
     for p in 0..MAX_PLAYERS {
@@ -335,7 +335,7 @@ pub fn childhood_02_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::hook_only(CHILDHOOD, "MoveAfter", player));
     let post = world::snapshot();
-    let wrong = spec::childhood_fire_post(0, spec::FIRE_CAP_SUMIMI) + 1;
+    let wrong = spec::sumimi::childhood_fire_post(0, spec::sumimi::FIRE_CAP_SUMIMI) + 1;
     assert!(
         post.fire[player as usize] != wrong,
         "mutant: after-move is +1, not +2"
@@ -367,7 +367,7 @@ pub fn twodonuts_01_exile_iff() {
     let effects = effects_of(&logbuf, log_n);
 
     assert!(
-        spec::twodonuts_exile_ok(effects, player),
+        spec::sumimi::twodonuts_exile_ok(effects, player),
         "C-SUMIMI-twodonuts-01: exactly one [除外] grant and no money/pos/fire side effects"
     );
     for p in 0..MAX_PLAYERS {
@@ -389,7 +389,7 @@ pub fn twodonuts_01_mutant_is_detected() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
     // Mutant: no exile grant at all. The card does grant — disagreement is live.
-    let wrong = !spec::twodonuts_exile_grant_in(effects, player);
+    let wrong = !spec::sumimi::twodonuts_exile_grant_in(effects, player);
     assert!(!wrong, "mutant: card does grant [除外]");
 }
 
@@ -416,10 +416,10 @@ pub fn twoinone_01b_fire_iff() {
     } else {
         "纯田真奈"
     };
-    w.character_id[player as usize] = intern::intern(name);
+    w.character_id[player as usize] = intern::intern(name).0;
 
-    let to = spec::twoinone_fire_target(is_hina);
-    let fire_key = intern::intern(card_sdk::abi::state_key::FIRE);
+    let to = spec::sumimi::twoinone_fire_target(is_hina);
+    let fire_key = intern::intern(card_sdk::abi::state_key::FIRE).0;
     let pre = {
         world::reset_world(w);
         world::snapshot()
@@ -434,7 +434,7 @@ pub fn twoinone_01b_fire_iff() {
     kani::cover!(!is_hina, "from 纯田真奈 → 三角初华（Sumimi） fire 2");
 
     assert!(
-        spec::twoinone_fire_effects_ok(effects, player, fire_key, to),
+        spec::sumimi::twoinone_fire_effects_ok(effects, player, fire_key, to),
         "C-SUMIMI-twoinone-01b: fire must be set to the other character's 初始火罐数"
     );
     let _ = pre;
@@ -454,10 +454,10 @@ pub fn twoinone_01b_mutant_is_detected() {
     } else {
         "纯田真奈"
     };
-    w.character_id[player as usize] = intern::intern(name);
-    let to = spec::twoinone_fire_target(is_hina);
+    w.character_id[player as usize] = intern::intern(name).0;
+    let to = spec::sumimi::twoinone_fire_target(is_hina);
     let wrong = to + 1;
-    let fire_key = intern::intern(card_sdk::abi::state_key::FIRE);
+    let fire_key = intern::intern(card_sdk::abi::state_key::FIRE).0;
     world::reset_world(w);
     invoke::unwrap_done(invoke::play(TWOINONE, player));
     let (logbuf, log_n) = log_slice();

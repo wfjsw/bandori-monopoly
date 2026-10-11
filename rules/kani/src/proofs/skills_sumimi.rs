@@ -82,9 +82,9 @@ pub fn band_02_rent_bonus_iff() {
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
 
-    let expected = spec::band_rent_bonus_amount(pre_amount, crystals);
+    let expected = spec::sumimi::band_rent_bonus_amount(pre_amount, crystals);
     assert!(
-        spec::band_rent_bonus_log_ok(effects, crystals, expected),
+        spec::sumimi::band_rent_bonus_log_ok(effects, crystals, expected),
         "C-SUMIMI-band-02: exactly one SetPayAmount to pre + crystals*100 (or empty at 0)"
     );
     assert!(
@@ -117,7 +117,7 @@ pub fn band_02_rent_bonus_mutant_is_detected() {
     world::reset_world(w);
     invoke::unwrap_done(invoke::hook_only(BAND, "PayMul", owner));
     let post = world::snapshot();
-    let wrong = spec::band_rent_bonus_amount_mutant(pre_amount, 3);
+    let wrong = spec::sumimi::band_rent_bonus_amount_mutant(pre_amount, 3);
     kani::cover!(post.pay_amount != wrong, "disagreement live");
     assert!(
         post.pay_amount != wrong,
@@ -184,7 +184,7 @@ pub fn band_01_clear_iff() {
     let effects = effects_of(&logbuf, log_n);
 
     assert!(
-        spec::band_crystal_clear_ok(effects, owner, ckey, crystals),
+        spec::sumimi::band_crystal_clear_ok(effects, owner, ckey.0, crystals),
         "C-SUMIMI-band-01 clear: remove every crystal when the latch is clear"
     );
     let _ = pre;
@@ -207,7 +207,7 @@ pub fn band_01_clear_mutant_is_detected() {
     invoke::unwrap_done(invoke::hook_only(BAND, "TurnEndBefore", owner));
     let (logbuf, log_n) = log_slice();
     let effects = effects_of(&logbuf, log_n);
-    let wrong = spec::band_crystal_clear_ok_mutant(effects, owner, ckey, 3);
+    let wrong = spec::sumimi::band_crystal_clear_ok_mutant(effects, owner, ckey.0, 3);
     assert!(!wrong, "mutant: clear removes all crystals, not one");
 }
 
