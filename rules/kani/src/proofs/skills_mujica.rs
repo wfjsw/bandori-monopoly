@@ -87,6 +87,7 @@ pub fn band_starts_in_state1() {
     let now = world::with_world(|ww| ww.key_get(user, skill_state));
 
     kani::cover!(true, "fresh init");
+    assert!(pre_state == 0, "precondition: skillState unset");
     assert!(
         now == spec::skills_mujica::band_initial_state(),
         "C-MUJICA-团技能-00: initial 状态1"

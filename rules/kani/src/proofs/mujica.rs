@@ -263,7 +263,7 @@ pub fn heart_rain_in_window_roll_stay_iff() {
             "C-MUJICA-心の雨-02: exactly one GiveStay for the in-window player"
         );
         assert!(
-            spec::mujica::stay_frame_ok(&pre, &post, &[1], w.n_players),
+            spec::mujica::stay_frame_ok(&pre, &post, &[1], pre.n_players),
             "frame: only the in-window player's stay moves"
         );
     } else {
