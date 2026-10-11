@@ -119,8 +119,10 @@ pub fn is_property(t: &TileData) -> bool {
     t.kind == 1
 }
 
+/// A 「商店街」 deed: buyable and colour group 10 (wasm_rules `is_shop`).
+/// `kind == 5` is only 「江户川乐器店」 — that is **not** the shop predicate.
 pub fn is_shop(t: &TileData) -> bool {
-    t.kind == 5
+    is_property(t) && t.group == 10
 }
 
 pub fn is_ring(t: &TileData) -> bool {
@@ -141,4 +143,129 @@ pub fn is_agent(t: &TileData) -> bool {
 pub fn table_rent(tile: &TileData, houses: i32) -> i32 {
     let h = houses.max(0) as usize;
     tile.rent[h.min(3)]
+}
+/// Every board tile name, in 0-based engine index order (`board.json`).
+/// `tile_named` resolves against this table (hostfns: `Vec::position`).
+pub const TILE_NAMES: [&str; 60] = [
+    "CiRCLE",
+    "购物中心",
+    "天文馆",
+    "水族馆",
+    "主要街道",
+    "偶像经纪公司",
+    "星空齿科",
+    "江户川公园",
+    "RiNG 1",
+    "花咲川女子学院",
+    "羽丘女子学院",
+    "富士见坂",
+    "中心学区",
+    "月之森女子学院",
+    "成为人类桥",
+    "CiRCLE 咖啡厅",
+    "RiNG 2",
+    "周边学区",
+    "白雪学园",
+    "艺术学院高中",
+    "瑟罗希亚国际学校",
+    "DUB MUSIC EXPERIMENT",
+    "加茂川中央中学",
+    "东京外",
+    "大阪中之岛公园",
+    "小豆岛",
+    "微笑号",
+    "米歇尔公园",
+    "弦卷集团",
+    "弦卷豪宅",
+    "江户川乐器店",
+    "Live House",
+    "便利店",
+    "快餐店",
+    "周边精选",
+    "Bandori车站",
+    "RiNG 3",
+    "庆鹏女子大学",
+    "四叶女子大学",
+    "大学路",
+    "武道馆",
+    "梦开始的地方",
+    "Space",
+    "星星小巷",
+    "星之鼓动山丘",
+    "流星堂",
+    "商店街",
+    "羽泽咖啡厅",
+    "山吹面包房",
+    "银河拉面馆",
+    "Live House Galaxy",
+    "北泽精肉店",
+    "旭汤澡堂",
+    "RiNG 4",
+    "六本木大厦",
+    "CHUCHU的公寓",
+    "飞鸟山公园",
+    "旧古河庭园",
+    "广町家画室",
+    "高级住宅区",
+];
+
+/// Resolve a board tile name to its 0-based engine index, or -1.
+/// Mirrors `game_core` `tile_named`: `Vec::position` over `data.tiles`.
+/// The name compare is a bounded byte loop (no `String::eq` / `memcmp`).
+pub fn tile_named(name: &str) -> i32 {
+    let mut i = 0usize;
+    let mut found = -1i32;
+    while i < TILE_NAMES.len() {
+        if str_eq(TILE_NAMES[i], name) {
+            found = i as i32;
+        }
+        i += 1;
+    }
+    found
+}
+
+fn str_eq(a: &str, b: &str) -> bool {
+    let (x, y) = (a.as_bytes(), b.as_bytes());
+    if x.len() != y.len() || x.len() > 64 {
+        return false;
+    }
+    let n = x.len();
+    let mut i = 0usize;
+    let mut ok = true;
+    while i < n {
+        if x[i] != y[i] {
+            ok = false;
+        }
+        i += 1;
+    }
+    ok
+}
+
+/// [`tile_named`] over raw guest bytes (the Kani ABI passes `ptr, len`).
+pub fn tile_named_bytes(name: &[u8]) -> i32 {
+    let mut i = 0usize;
+    let mut found = -1i32;
+    while i < TILE_NAMES.len() {
+        if bytes_eq(TILE_NAMES[i].as_bytes(), name) {
+            found = i as i32;
+        }
+        i += 1;
+    }
+    found
+}
+
+fn bytes_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() || a.len() > 64 {
+        return false;
+    }
+    let n = a.len();
+    let mut i = 0usize;
+    let mut ok = true;
+    while i < n {
+        if a[i] != b[i] {
+            ok = false;
+        }
+        i += 1;
+    }
+    ok
 }
